@@ -276,7 +276,7 @@ option(BUILD_MAIN_DUCKDB_LIBRARY
         TRUE)
 option(EXTENSION_STATIC_BUILD
         "Extension build linking statically with DuckDB. Required for building linux loadable extensions."
-        FALSE)
+        TRUE)
 
 
 set(JEMALLOC_DEFAULT_BUILD FALSE)
@@ -762,7 +762,6 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
   if(WIN32 AND NOT MSVC)
     return()
   endif()
-
   set(TARGET_NAME ${NAME}_loadable_extension)
   # all parameters after output_directory
   set(FILES ${ARGV})
@@ -827,10 +826,6 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
           ".duckdb_extension")
 
   if(MSVC)
-    if (NOT EXTENSION_STATIC_BUILD)
-      target_link_libraries(${TARGET_NAME} delayimp)
-    endif()
-
     set_target_properties(
             ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG
             "${CMAKE_BINARY_DIR}/${OUTPUT_DIRECTORY}")
@@ -838,21 +833,6 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
             ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE
             "${CMAKE_BINARY_DIR}/${OUTPUT_DIRECTORY}")
   endif()
-
-  if(WIN32 AND NOT EXTENSION_STATIC_BUILD)
-    set_target_properties(${TARGET_NAME}
-            PROPERTIES LINK_FLAGS_DEBUG "/DELAYLOAD:duckdb.dll")
-    set(CMAKE_EXE_LINKER_FLAGS_DEBUG
-            "${CMAKE_EXE_LINKER_FLAGS_DEBUG}  /DELAYLOAD:duckdb.dll")
-    set_target_properties(${TARGET_NAME}
-            PROPERTIES LINK_FLAGS_RELEASE "/DELAYLOAD:duckdb.dll")
-    set(CMAKE_EXE_LINKER_FLAGS_RELEASE
-            "${CMAKE_EXE_LINKER_FLAGS_RELEASE}  /DELAYLOAD:duckdb.dll")
-    # This is only strictly required in non-Visual-Studio builds like Ninja:
-    target_link_libraries(${TARGET_NAME}
-            delayimp)
-endif()
-
 endfunction()
 
 function(build_loadable_extension NAME PARAMETERS)

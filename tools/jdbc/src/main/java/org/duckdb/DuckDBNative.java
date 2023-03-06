@@ -63,10 +63,8 @@ public class DuckDBNative {
 	 * the C header. CMake does this as well
 	 */
 
-	// results db_ref database reference object
+	// results ConnectionHolder reference object
 	protected static native ByteBuffer duckdb_jdbc_startup(byte[] path, boolean read_only, Properties props) throws SQLException;
-
-	protected static native void duckdb_jdbc_shutdown(ByteBuffer db_ref);
 
 	// returns conn_ref connection reference object
 	protected static native ByteBuffer duckdb_jdbc_connect(ByteBuffer db_ref) throws SQLException;

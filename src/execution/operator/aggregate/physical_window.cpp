@@ -111,7 +111,7 @@ public:
 				orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, pexpr->Copy(), nullptr);
 			} else {
 				orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, pexpr->Copy(),
-				                    wexpr->partitions_stats[prt_idx]->Copy());
+				                    wexpr->partitions_stats[prt_idx]->ToUnique());
 			}
 			partitions.emplace_back(orders.back().Copy());
 		}

@@ -18,12 +18,15 @@
 namespace duckdb {
 
 struct DataPointer {
+	DataPointer(BaseStatistics stats) : statistics(std::move(stats)) {
+	}
+
 	uint64_t row_start;
 	uint64_t tuple_count;
 	BlockPointer block_pointer;
 	CompressionType compression_type;
 	//! Type-specific statistics of the segment
-	unique_ptr<BaseStatistics> statistics;
+	BaseStatistics statistics;
 };
 
 struct RowGroupPointer {
@@ -32,7 +35,7 @@ struct RowGroupPointer {
 	//! The data pointers of the column segments stored in the row group
 	vector<BlockPointer> data_pointers;
 	//! The per-column statistics of the row group
-	vector<unique_ptr<BaseStatistics>> statistics;
+	vector<BaseStatistics> statistics;
 	//! The versions information of the row group (if any)
 	shared_ptr<VersionNode> versions;
 };

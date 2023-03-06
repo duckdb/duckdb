@@ -213,6 +213,14 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 		}
 		break;
 	}
+	case TableReferenceType::PIVOT: {
+		auto &p_ref = (PivotRef &)ref;
+		EnumerateTableRefChildren(*p_ref.source, callback);
+		for (auto &aggr : p_ref.aggregates) {
+			callback(aggr);
+		}
+		break;
+	}
 	case TableReferenceType::SUBQUERY: {
 		auto &sq_ref = (SubqueryRef &)ref;
 		EnumerateQueryNodeChildren(*sq_ref.subquery->node, callback);
