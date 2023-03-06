@@ -1,13 +1,14 @@
 name: NodeJS
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 2 * * *"
+  repository_dispatch:
   push:
     branches:
       - '**'
       - '!master'
       - '!feature'
+    tags:
+      - '**'
     paths-ignore:
       - '**.md'
       - 'data/**'
@@ -43,6 +44,25 @@ jobs:
     runs-on: ubuntu-20.04
     env:
       DUCKDB_NODE_BUILD_CACHE: 0
+    strategy:
+      matrix:
+        node: [ '10', '12', '14', '15', '16', '17', '18', '19' ]
+        isRelease:
+          - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
+        exclude:
+          - isRelease: false
+            node: 12
+          - isRelease: false
+            node: 14
+          - isRelease: false
+            node: 15
+          - isRelease: false
+            node: 16
+          - isRelease: false
+            node: 17
+          - isRelease: false
+            node: 18
+
     steps:
       - uses: actions/checkout@v3
         with:
@@ -69,7 +89,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+          save: ${{ ( github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' ) && ( matrix.node == '19' ) }}
 
       - name: Build DuckDB
         shell: bash
@@ -88,43 +108,9 @@ jobs:
         env:
           npm_config_yes: true
 
-      - name: Node 10
+      - name: Node ${{ matrix.node }}
         shell: bash
-        run: ./scripts/node_build.sh 10
-
-      - name: Node 12
-        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
-        shell: bash
-        run: ./scripts/node_build.sh 12
-
-      - name: Node 14
-        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
-        shell: bash
-        run: ./scripts/node_build.sh 14
-
-      - name: Node 15
-        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
-        shell: bash
-        run: ./scripts/node_build.sh 15
-
-      - name: Node 16
-        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
-        shell: bash
-        run: ./scripts/node_build.sh 16
-
-      - name: Node 17
-        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
-        shell: bash
-        run: ./scripts/node_build.sh 17
-
-      - name: Node 18
-        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
-        shell: bash
-        run: ./scripts/node_build.sh 18
-
-      - name: Node 19
-        shell: bash
-        run: ./scripts/node_build.sh 19
+        run: ./scripts/node_build.sh ${{ matrix.node }}
 
   osx-nodejs:
     if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
@@ -134,6 +120,32 @@ jobs:
     strategy:
       matrix:
         target_arch: [ x64, arm64 ]
+        node: [ '10', '12', '14', '15', '16', '17', '18', '19' ]
+        isRelease:
+          - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
+        exclude:
+          - isRelease: false
+            node: 12
+          - isRelease: false
+            node: 14
+          - isRelease: false
+            node: 15
+          - isRelease: false
+            node: 16
+          - isRelease: false
+            node: 17
+          - isRelease: false
+            node: 18
+          - target_arch: arm64
+            node: 10
+          - target_arch: arm64
+            node: 12
+          - target_arch: arm64
+            node: 14
+          - target_arch: arm64
+            node: 15
+        # these older versions of NodeJS don't have M1 support
+
     env:
       TARGET_ARCH: ${{ matrix.target_arch }}
       DUCKDB_NODE_BUILD_CACHE: 0
@@ -145,8 +157,8 @@ jobs:
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
         with:
-          key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+          key: ${{ github.job }}-${{ matrix.target_arch }}
+          save: ${{ ( github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' ) && ( matrix.node == '19' ) }}
 
       - name: Build DuckDB
         shell: bash
@@ -170,43 +182,10 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
-      # these older versions of NodeJS don't have M1 support
-
-      - name: Node 10
+      - name: Node ${{ matrix.node }}
         if: matrix.target_arch != 'arm64'
         shell: bash
-        run: ./scripts/node_build.sh 10
-
-      - name: Node 12
-        if: matrix.target_arch != 'arm64'
-        shell: bash
-        run: ./scripts/node_build.sh 12
-
-      - name: Node 14
-        if: matrix.target_arch != 'arm64'
-        shell: bash
-        run: ./scripts/node_build.sh 14
-
-      - name: Node 15
-        if: matrix.target_arch != 'arm64'
-        shell: bash
-        run: ./scripts/node_build.sh 15
-
-      - name: Node 16
-        shell: bash
-        run: ./scripts/node_build.sh 16
-
-      - name: Node 17
-        shell: bash
-        run: ./scripts/node_build.sh 17
-
-      - name: Node 18
-        shell: bash
-        run: ./scripts/node_build.sh 18
-
-      - name: Node 19
-        shell: bash
-        run: ./scripts/node_build.sh 19
+        run: ./scripts/node_build.sh ${{ matrix.node }}
 
   win-nodejs:
     name: node.js Windows

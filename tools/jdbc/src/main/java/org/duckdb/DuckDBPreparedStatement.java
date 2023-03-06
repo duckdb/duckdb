@@ -44,6 +44,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 	private boolean returnsChangedRows = false;
 	private boolean returnsNothing = false;
 	private boolean returnsResultSet = false;
+	boolean closeOnCompletion = false;
 	private Object[] params = new Object[0];
 	private DuckDBResultSetMetaData meta = null;
 
@@ -506,12 +507,14 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
 	@Override
 	public void closeOnCompletion() throws SQLException {
-		throw new SQLFeatureNotSupportedException("closeOnCompletion");
+		if (isClosed()) throw new SQLException("Statement is closed");
+		closeOnCompletion = true;
 	}
 
 	@Override
 	public boolean isCloseOnCompletion() throws SQLException {
-		return false;
+		if (isClosed()) throw new SQLException("Statement is closed");
+		return closeOnCompletion;
 	}
 
 	@Override

@@ -1180,6 +1180,37 @@ joined_table:
 					n->location = @2;
 					$$ = n;
 				}
+            | table_ref ANTI JOIN table_ref join_qual
+                {
+                    /* ANTI JOIN is a filter */
+                    PGJoinExpr *n = makeNode(PGJoinExpr);
+                    n->jointype = PG_JOIN_ANTI;
+                    n->isNatural = false;
+                    n->larg = $1;
+                    n->rarg = $4;
+                    if ($5 != NULL && IsA($5, PGList))
+                        n->usingClause = (PGList *) $5; /* USING clause */
+                    else
+                        n->quals = $5; /* ON clause */
+                    n->location = @2;
+                    $$ = n;
+                }
+           | table_ref SEMI JOIN table_ref join_qual
+               {
+                   /* SEMI JOIN is also a filter */
+                   PGJoinExpr *n = makeNode(PGJoinExpr);
+                   n->jointype = PG_JOIN_SEMI;
+                   n->isNatural = false;
+                   n->larg = $1;
+                   n->rarg = $4;
+                   if ($5 != NULL && IsA($5, PGList))
+                       n->usingClause = (PGList *) $5; /* USING clause */
+                   else
+                       n->quals = $5; /* ON clause */
+                   n->location = @2;
+                   n->location = @2;
+                   $$ = n;
+               }
 		;
 
 alias_clause:
@@ -1245,6 +1276,8 @@ func_alias_clause:
 join_type:	FULL join_outer							{ $$ = PG_JOIN_FULL; }
 			| LEFT join_outer						{ $$ = PG_JOIN_LEFT; }
 			| RIGHT join_outer						{ $$ = PG_JOIN_RIGHT; }
+			| SEMI          						{ $$ = PG_JOIN_SEMI; }
+			| ANTI          						{ $$ = PG_JOIN_ANTI; }
 			| INNER_P								{ $$ = PG_JOIN_INNER; }
 		;
 

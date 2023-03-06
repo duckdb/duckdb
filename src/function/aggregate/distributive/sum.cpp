@@ -2,7 +2,6 @@
 #include "duckdb/function/aggregate/sum_helpers.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/decimal.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/function/aggregate/algebraic_functions.hpp"
 
@@ -72,30 +71,29 @@ struct HugeintSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd
 };
 
 unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggregateExpression &expr,
-                                             FunctionData *bind_data, vector<unique_ptr<BaseStatistics>> &child_stats,
-                                             NodeStatistics *node_stats) {
-	if (child_stats[0] && node_stats && node_stats->has_max_cardinality) {
-		auto &numeric_stats = (NumericStatistics &)*child_stats[0];
-		if (numeric_stats.min.IsNull() || numeric_stats.max.IsNull()) {
+                                             AggregateStatisticsInput &input) {
+	if (input.node_stats && input.node_stats->has_max_cardinality) {
+		auto &numeric_stats = input.child_stats[0];
+		if (!NumericStats::HasMinMax(numeric_stats)) {
 			return nullptr;
 		}
-		auto internal_type = numeric_stats.min.type().InternalType();
+		auto internal_type = numeric_stats.GetType().InternalType();
 		hugeint_t max_negative;
 		hugeint_t max_positive;
 		switch (internal_type) {
 		case PhysicalType::INT32:
-			max_negative = numeric_stats.min.GetValueUnsafe<int32_t>();
-			max_positive = numeric_stats.max.GetValueUnsafe<int32_t>();
+			max_negative = NumericStats::Min(numeric_stats).GetValueUnsafe<int32_t>();
+			max_positive = NumericStats::Max(numeric_stats).GetValueUnsafe<int32_t>();
 			break;
 		case PhysicalType::INT64:
-			max_negative = numeric_stats.min.GetValueUnsafe<int64_t>();
-			max_positive = numeric_stats.max.GetValueUnsafe<int64_t>();
+			max_negative = NumericStats::Min(numeric_stats).GetValueUnsafe<int64_t>();
+			max_positive = NumericStats::Max(numeric_stats).GetValueUnsafe<int64_t>();
 			break;
 		default:
 			throw InternalException("Unsupported type for propagate sum stats");
 		}
-		auto max_sum_negative = max_negative * hugeint_t(node_stats->max_cardinality);
-		auto max_sum_positive = max_positive * hugeint_t(node_stats->max_cardinality);
+		auto max_sum_negative = max_negative * hugeint_t(input.node_stats->max_cardinality);
+		auto max_sum_positive = max_positive * hugeint_t(input.node_stats->max_cardinality);
 		if (max_sum_positive >= NumericLimits<int64_t>::Maximum() ||
 		    max_sum_negative <= NumericLimits<int64_t>::Minimum()) {
 			// sum can potentially exceed int64_t bounds: use hugeint sum
