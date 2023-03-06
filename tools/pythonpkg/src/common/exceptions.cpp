@@ -77,6 +77,7 @@ void RegisterExceptions(const py::module &m) {
 
 			e.attr("status_code") = httpe.GetStatusCode();
 			e.attr("response") = py::str(httpe.GetResponse());
+			e.attr("reason") = py::str(httpe.GetReason());
 			auto headers = py::dict();
 			for (const auto &item : httpe.GetHeaders()) {
 				headers[py::str(item.first)] = item.second;
