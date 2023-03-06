@@ -6,8 +6,9 @@
 import typing
 # stubgen override - missing import of Set
 from typing import Any, ClassVar, Set, Optional
+from io import StringIO, TextIOBase
 
-from typing import overload, Dict, List
+from typing import overload, Dict, List, Union
 import pandas
 # stubgen override - unfortunately we need this for version checks
 import sys
@@ -76,7 +77,7 @@ class DuckDBPyConnection:
     ) -> DuckDBPyRelation: ...
     def read_csv(
         self,
-        path_or_buffer: object,
+        path_or_buffer: Union[str, StringIO, TextIOBase],
         header: Optional[bool | int] = None,
         compression: Optional[str] = None,
         sep: Optional[str] = None,
@@ -370,7 +371,7 @@ def read_json(
     connection: DuckDBPyConnection = ...
 ) -> DuckDBPyRelation: ...
 def read_csv(
-    path_or_buffer: object,
+    path_or_buffer: Union[str, StringIO, TextIOBase],
     header: Optional[bool | int] = None,
     compression: Optional[str] = None,
     sep: Optional[str] = None,
