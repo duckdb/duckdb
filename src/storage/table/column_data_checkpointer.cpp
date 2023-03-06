@@ -218,16 +218,15 @@ void ColumnDataCheckpointer::WritePersistentSegments() {
 		D_ASSERT(segment->segment_type == ColumnSegmentType::PERSISTENT);
 
 		// set up the data pointer directly using the data from the persistent segment
-		DataPointer pointer;
+		DataPointer pointer(segment->stats.statistics.Copy());
 		pointer.block_pointer.block_id = segment->GetBlockId();
 		pointer.block_pointer.offset = segment->GetBlockOffset();
 		pointer.row_start = segment->start;
 		pointer.tuple_count = segment->count;
 		pointer.compression_type = segment->function->type;
-		pointer.statistics = segment->stats.statistics->Copy();
 
 		// merge the persistent stats into the global column stats
-		state.global_stats->Merge(*segment->stats.statistics);
+		state.global_stats->Merge(segment->stats.statistics);
 
 		// directly append the current segment to the new tree
 		state.new_tree.AppendSegment(std::move(nodes[segment_idx].node));

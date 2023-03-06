@@ -24,10 +24,7 @@ void TableDataReader::ReadTableData() {
 	D_ASSERT(!columns.empty());
 
 	// deserialize the total table statistics
-	info.data->column_stats.reserve(columns.PhysicalColumnCount());
-	for (auto &col : columns.Physical()) {
-		info.data->column_stats.push_back(BaseStatistics::Deserialize(reader, col.Type()));
-	}
+	info.data->table_stats.Deserialize(reader, columns);
 
 	// deserialize each of the individual row groups
 	auto row_group_count = reader.Read<uint64_t>();
