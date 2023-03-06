@@ -3,11 +3,14 @@
 # generated. These should be annotated with a comment like
 # # stubgen override
 # to help the sanity of maintainers.
+
+# We also run this in python3.7, where this is needed
+from typing_extensions import Literal
 import typing
 # stubgen override - missing import of Set
 from typing import Any, ClassVar, Set, Optional
 
-from typing import overload, Dict, List, Literal
+from typing import overload, Dict, List
 import pandas
 # stubgen override - unfortunately we need this for version checks
 import sys
