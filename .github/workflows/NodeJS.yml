@@ -43,25 +43,51 @@ jobs:
     name: node.js Linux
     runs-on: ubuntu-20.04
     env:
+      TARGET_ARCH: ${{ matrix.target_arch }}
       DUCKDB_NODE_BUILD_CACHE: 0
     strategy:
       matrix:
         node: [ '10', '12', '14', '15', '16', '17', '18', '19' ]
+        target_arch: [ x64, arm64 ]
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
         exclude:
           - isRelease: false
             node: 12
+            target_arch: x64
           - isRelease: false
             node: 14
+            target_arch: x64
           - isRelease: false
             node: 15
+            target_arch: x64
           - isRelease: false
             node: 16
+            target_arch: x64
           - isRelease: false
             node: 17
+            target_arch: x64
           - isRelease: false
             node: 18
+            target_arch: x64
+          - isRelease: false
+            node: 12
+            target_arch: arm64
+          - isRelease: false
+            node: 14
+            target_arch: arm64
+          - isRelease: false
+            node: 15
+            target_arch: arm64
+          - isRelease: false
+            node: 16
+            target_arch: arm64
+          - isRelease: false
+            node: 17
+            target_arch: arm64
+          - isRelease: false
+            node: 18
+            target_arch: arm64
 
     steps:
       - uses: actions/checkout@v3
