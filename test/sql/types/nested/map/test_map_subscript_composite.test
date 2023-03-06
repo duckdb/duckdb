@@ -132,3 +132,23 @@ from (SELECT a%4 as grp, list([a]) as lsta, list(a) as lstb FROM range(7) tbl(a)
 1	{[1]=1, [5]=5}	[NULL]
 2	{[2]=2, [6]=6}	[]
 3	{[3]=3}	[]
+
+# Doubly nested lists
+query I
+select map([3, 2, 1],
+[
+	[
+		[4],
+		[4]
+	],
+	[
+		[4,3]
+	],
+	[
+		[3,3,3],
+		[2],
+		[NULL, 3, 2]
+	]
+])[1]
+----
+[[[3, 3, 3], [2], [NULL, 3, 2]]]

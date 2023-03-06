@@ -25,13 +25,9 @@ void FillResult(Vector &map, Vector &offsets, Vector &result, idx_t count) {
 		idx_t offset_idx = offset_data.sel->get_index(row);
 		auto offset = ((int32_t *)offset_data.data)[offset_idx];
 
+		// Get the current size of the list, for the offset
+		idx_t current_offset = ListVector::GetListSize(result);
 		if (!offset) {
-			// 'key' was not found in the keys list of the map
-			// FIXME: does this need to have the selection vector applied??
-			result_data.validity.SetInvalid(row);
-
-			// Get the current size of the list, for the offset
-			idx_t current_offset = ListVector::GetListSize(result);
 			// Set the entry data for this result row
 			idx_t result_index = result_data.sel->get_index(row);
 			auto &entry = ((list_entry_t *)result_data.data)[result_index];
@@ -39,15 +35,15 @@ void FillResult(Vector &map, Vector &offsets, Vector &result, idx_t count) {
 			entry.offset = current_offset;
 			continue;
 		}
-		// Get the current size of the list, for the offset
-		idx_t current_offset = ListVector::GetListSize(result);
+		// All list indices start at 1, reduce by 1 to get the actual index
+		offset--;
 
 		// Get the 'values' list entry corresponding to the offset
 		idx_t value_index = map_data.sel->get_index(row);
 		auto &value_list_entry = ((list_entry_t *)map_data.data)[value_index];
 
 		// Add the values to the result
-		idx_t list_offset = value_list_entry.offset + (offset - 1);
+		idx_t list_offset = value_list_entry.offset + offset;
 		// All keys are unique, only one will ever match
 		idx_t length = 1;
 		ListVector::Append(result, values_entries, length + list_offset, list_offset);
