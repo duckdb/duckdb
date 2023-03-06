@@ -44,15 +44,16 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 
 	if (pattern.Regexp()->op() == duckdb_re2::kRegexpLiteralString ||
 	    pattern.Regexp()->op() == duckdb_re2::kRegexpLiteral) {
+		string min;
+		string max;
+		pattern.PossibleMatchRange(&min, &max, patt_str.size());
+		if (min != max) {
+			return nullptr;
+		}
 		auto contains = make_unique<BoundFunctionExpression>(root->return_type, ContainsFun::GetFunction(),
 		                                                     std::move(root->children), nullptr);
 
-		if (patt_str.size() == 3 && patt_str[0] == '[' && patt_str[2] == ']') {
-			// '[A]' is seen as equivalent to 'A' by RE2,
-			// we need to remove the brackets to forward this to 'contains'
-			patt_str = string(1, patt_str[1]);
-		}
-		contains->children[1] = make_unique<BoundConstantExpression>(Value(std::move(patt_str)));
+		contains->children[1] = make_unique<BoundConstantExpression>(Value(std::move(min)));
 		return std::move(contains);
 	}
 	return nullptr;
