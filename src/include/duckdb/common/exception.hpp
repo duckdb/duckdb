@@ -13,6 +13,7 @@
 #include "duckdb/common/exception_format_value.hpp"
 #include "duckdb/common/vector.hpp"
 
+#include <map>
 #include <stdexcept>
 
 namespace duckdb {
@@ -290,7 +291,7 @@ public:
 
 	template <class RESPONSE, typename ResponseShape<decltype(RESPONSE::status)>::status = 0, typename... ARGS>
 	explicit HTTPException(RESPONSE &response, const string &msg, ARGS... params)
-	    : HTTPException(response.status, response.body, msg, params...) {
+	    : HTTPException(response.status, response.body, response.headers, msg, params...) {
 	}
 
 	template <typename>
@@ -299,19 +300,24 @@ public:
 	};
 	template <class RESPONSE, typename ResponseWrapperShape<decltype(RESPONSE::code)>::code = 0, typename... ARGS>
 	explicit HTTPException(RESPONSE &response, const string &msg, ARGS... params)
-	    : HTTPException(response.code, response.error, msg, params...) {
+	    : HTTPException(response.code, response.error, response.headers, msg, params...) {
 	}
 
-	template <typename... ARGS>
-	explicit HTTPException(int status_code, string response, const string &msg, ARGS... params)
+	template <typename HEADERS, typename... ARGS>
+	explicit HTTPException(int status_code, string response, HEADERS headers, const string &msg, ARGS... params)
 	    : IOException(ExceptionType::HTTP, ConstructMessage(msg, params...)), status_code(status_code),
 	      response(std::move(response)) {
+		this->headers.insert(headers.begin(), headers.end());
+		D_ASSERT(this->headers.size() > 0);
 	}
 
 	std::shared_ptr<Exception> Copy() const {
-		return make_shared<HTTPException>(status_code, response, RawMessage());
+		return make_shared<HTTPException>(status_code, response, headers, RawMessage());
 	}
 
+	const std::multimap<std::string, std::string> GetHeaders() const {
+		return headers;
+	}
 	int GetStatusCode() const {
 		return status_code;
 	}
@@ -319,9 +325,14 @@ public:
 		return response;
 	}
 
+	void Throw() const {
+		throw HTTPException(status_code, response, headers, RawMessage());
+	}
+
 private:
 	int status_code;
 	string response; // we can keep a copy for the user
+	std::multimap<string, string> headers;
 };
 
 class SerializationException : public Exception {

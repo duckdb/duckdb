@@ -77,6 +77,11 @@ void RegisterExceptions(const py::module &m) {
 
 			e.attr("status_code") = httpe.GetStatusCode();
 			e.attr("response") = py::str(httpe.GetResponse());
+			auto headers = py::dict();
+			for (const auto &item : httpe.GetHeaders()) {
+				headers[py::str(item.first)] = item.second;
+			}
+			e.attr("headers") = std::move(headers);
 
 			// "throw" exception object
 			PyErr_SetObject(HTTP_EXCEPTION.ptr(), e.ptr());

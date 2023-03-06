@@ -41,3 +41,5 @@ def test_http_exception(require):
         connection.execute("SELECT * FROM PARQUET_SCAN('https://example.com/userdata1.parquet')")
 
     assert exc.value.status_code == 404
+    assert exc.value.headers
+    assert 'example.com' in exc.value.headers["host"]
