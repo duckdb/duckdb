@@ -2,12 +2,13 @@ from fsspec import filesystem, AbstractFileSystem
 from fsspec.implementations.memory import MemoryFileSystem
 from shutil import copyfileobj
 from io import StringIO, TextIOBase
+from typing import Union
 
 # Shamelessly stolen from pandas
 class BytesIOWrapper:
 	# Wrapper that wraps a StringIO buffer and reads bytes from it
 	# Created for compat with pyarrow read_csv
-	def __init__(self, buffer: StringIO | TextIOBase, encoding: str = "utf-8") -> None:
+	def __init__(self, buffer: Union[StringIO, TextIOBase], encoding: str = "utf-8") -> None:
 		self.buffer = buffer
 		self.encoding = encoding
 		# Because a character can be represented by more than 1 byte,
