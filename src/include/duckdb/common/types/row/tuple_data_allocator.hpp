@@ -63,10 +63,11 @@ public:
 
 public:
 	//! Builds out the chunks for next append, given the metadata in the append state
-	void Build(TupleDataAppendState &append_state, idx_t count, TupleDataSegment &segment);
+	void Build(TupleDataSegment &segment, TupleDataManagementState &pin_state, TupleDataChunkState &chunk_state,
+	           idx_t initial_offset, idx_t count);
 	//! Initializes a chunk, making its pointers valid
-	void InitializeChunkState(TupleDataManagementState &state, TupleDataSegment &segment, idx_t chunk_idx,
-	                          bool init_heap);
+	void InitializeChunkState(TupleDataSegment &segment, TupleDataManagementState &pin_state,
+	                          TupleDataChunkState &chunk_state, idx_t chunk_idx, bool init_heap);
 	//! Releases or stores any handles in the management state that are no longer required
 	void ReleaseOrStoreHandles(TupleDataManagementState &state, TupleDataSegment &segment, TupleDataChunk &chunk) const;
 	//! Releases or stores ALL handles in the management state
@@ -74,14 +75,12 @@ public:
 
 private:
 	//! Builds out a single part (grabs the lock)
-	TupleDataChunkPart BuildChunkPart(TupleDataManagementState &state, idx_t offset, idx_t count);
+	TupleDataChunkPart BuildChunkPart(TupleDataManagementState &pin_state, TupleDataChunkState &chunk_state,
+	                                  idx_t offset, idx_t count);
 	//! Internal function for InitializeChunkState
-	void InitializeChunkStateInternal(TupleDataManagementState &state, bool init_heap_pointers, bool init_heap_sizes,
+	void InitializeChunkStateInternal(TupleDataManagementState &pin_state, TupleDataChunkState &chunk_state,
+	                                  idx_t offset, bool init_heap_pointers, bool init_heap_sizes,
 	                                  vector<TupleDataChunkPart *> &parts);
-	//! Recomputes the heap pointers if the heap block changed
-	static void RecomputeHeapPointers(const data_ptr_t old_base_heap_ptr, const data_ptr_t new_base_heap_ptr,
-	                                  const data_ptr_t row_locations[], const idx_t offset, const idx_t count,
-	                                  const TupleDataLayout &layout, const idx_t base_col_offset);
 	//! Internal function for ReleaseOrStoreHandles
 	static void ReleaseOrStoreHandlesInternal(unordered_map<uint32_t, BufferHandle> &handles,
 	                                          const unordered_set<uint32_t> &block_ids, TupleDataSegment &segment,

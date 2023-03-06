@@ -127,8 +127,8 @@ private:
 	//! Get the next segment/chunk index for the scan
 	bool NextScanIndex(TupleDataScanState &scan_state, idx_t &segment_index, idx_t &chunk_index) const;
 	//! Scans the chunk at the given segment/chunk indices
-	void ScanAtIndex(TupleDataManagementState &chunk_state, const vector<column_t> &column_ids, idx_t segment_index,
-	                 idx_t chunk_index, DataChunk &result);
+	void ScanAtIndex(TupleDataManagementState &pin_state, TupleDataChunkState &chunk_state,
+	                 const vector<column_t> &column_ids, idx_t segment_index, idx_t chunk_index, DataChunk &result);
 
 	//! Verify counts of the segments in this collection
 	void Verify() const;

@@ -27,13 +27,17 @@ struct TupleDataManagementState {
 	unordered_map<uint32_t, BufferHandle> row_handles;
 	unordered_map<uint32_t, BufferHandle> heap_handles;
 	TupleDataPinProperties properties = TupleDataPinProperties::INVALID;
+};
+
+struct TupleDataChunkState {
 	Vector row_locations = Vector(LogicalType::POINTER);
 	Vector heap_locations = Vector(LogicalType::POINTER);
 	Vector heap_sizes = Vector(LogicalType::UBIGINT);
 };
 
 struct TupleDataAppendState {
-	TupleDataManagementState chunk_state;
+	TupleDataManagementState pin_state;
+	TupleDataChunkState chunk_state;
 	vector<UnifiedVectorFormat> vector_data;
 	vector<column_t> column_ids;
 };
@@ -49,8 +53,9 @@ enum class TupleDataScanProperties : uint8_t {
 };
 
 struct TupleDataScanState {
-	TupleDataManagementState chunk_state;
-	idx_t segment_index;
+	TupleDataManagementState pin_state;
+	TupleDataChunkState chunk_state;
+	idx_t segment_index = DConstants::INVALID_INDEX;
 	idx_t chunk_index;
 	TupleDataScanProperties properties = TupleDataScanProperties::INVALID;
 	vector<column_t> column_ids;
@@ -62,8 +67,7 @@ struct TupleDataParallelScanState {
 };
 
 struct TupleDataLocalScanState {
-	TupleDataManagementState chunk_state;
-	idx_t segment_index = DConstants::INVALID_INDEX;
+	TupleDataScanState scan_state;
 };
 
 } // namespace duckdb

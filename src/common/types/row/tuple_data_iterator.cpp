@@ -10,7 +10,7 @@ TupleDataChunkIterator::TupleDataChunkIterator(TupleDataCollection &collection_p
 TupleDataChunkIterator::TupleDataChunkIterator(TupleDataCollection &collection_p, TupleDataPinProperties properties,
                                                idx_t chunk_idx_from, idx_t chunk_idx_to, bool init_heap_p)
     : collection(collection_p), init_heap(init_heap_p) {
-	state.chunk_state.properties = properties;
+	state.pin_state.properties = properties;
 	D_ASSERT(chunk_idx_from < chunk_idx_to);
 	D_ASSERT(chunk_idx_to <= collection.ChunkCount());
 	idx_t overall_chunk_index = 0;
@@ -34,7 +34,7 @@ TupleDataChunkIterator::TupleDataChunkIterator(TupleDataCollection &collection_p
 
 void TupleDataChunkIterator::InitializeCurrentChunk() {
 	auto &segment = collection.segments[current_segment_idx];
-	segment.allocator->InitializeChunkState(state.chunk_state, segment, current_chunk_idx, init_heap);
+	segment.allocator->InitializeChunkState(segment, state.pin_state, state.chunk_state, current_chunk_idx, init_heap);
 }
 
 bool TupleDataChunkIterator::Next() {
@@ -46,7 +46,7 @@ bool TupleDataChunkIterator::Next() {
 	if (!collection.NextScanIndex(state, current_segment_idx, current_chunk_idx) ||
 	    (current_segment_idx == end_segment_idx && current_chunk_idx == end_chunk_idx)) {
 		// Drop pins / store them if TupleDataPinProperties::KEEP_EVERYTHING_PINNED
-		collection.FinalizeChunkState(state.chunk_state);
+		collection.FinalizeChunkState(state.pin_state);
 		return false;
 	}
 
