@@ -44,16 +44,17 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 
 	if (pattern.Regexp()->op() == duckdb_re2::kRegexpLiteralString ||
 	    pattern.Regexp()->op() == duckdb_re2::kRegexpLiteral) {
-		string min;
-		string max;
-		pattern.PossibleMatchRange(&min, &max, patt_str.size());
-		if (min != max) {
-			return nullptr;
-		}
 		auto contains = make_unique<BoundFunctionExpression>(root->return_type, ContainsFun::GetFunction(),
 		                                                     std::move(root->children), nullptr);
 
-		contains->children[1] = make_unique<BoundConstantExpression>(Value(std::move(min)));
+		string min;
+		string max;
+		pattern.PossibleMatchRange(&min, &max, patt_str.size());
+		if (min == max) {
+			contains->children[1] = make_unique<BoundConstantExpression>(Value(std::move(min)));
+		} else {
+			contains->children[1] = make_unique<BoundConstantExpression>(Value(std::move(patt_str)));
+		}
 		return std::move(contains);
 	}
 	return nullptr;
