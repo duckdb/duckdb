@@ -61,10 +61,6 @@ public:
 	time_t last_modified;
 	bool range_read = true;
 
-	// For regular - Get
-	shared_ptr<char> data;
-	uint64_t capacity;
-
 	// Read info
 	idx_t buffer_available;
 	idx_t buffer_idx;
@@ -76,7 +72,7 @@ public:
 	unique_ptr<data_t[]> read_buffer;
 	constexpr static idx_t READ_BUFFER_LEN = 1000000;
 
-	HTTPStats *stats;
+	HTTPState *state;
 
 public:
 	void Close() override {

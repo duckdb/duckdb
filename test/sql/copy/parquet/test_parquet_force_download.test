@@ -52,7 +52,7 @@ statement ok
 SET force_download=true;
 
 statement ok
-PRAGMA threads=4
+PRAGMA threads=10
 
 statement ok
 PRAGMA verify_parallelism
@@ -63,16 +63,24 @@ create table user_info as SELECT * FROM PARQUET_SCAN('https://raw.githubusercont
 statement ok
 COPY (from user_info) TO 's3://test-bucket/row-user-data.parquet' (FORMAT PARQUET,  ROW_GROUP_SIZE 10);
 
-query I
-SELECT count(*) FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet')
-----
-1000
+#statement ok
+#COPY (from user_info limit 100) TO 's3://test-bucket/row-user-data_1.parquet' (FORMAT PARQUET,  ROW_GROUP_SIZE 10);
 
 query II
 explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet')
 ----
 analyzed_plan	<REGEX>:.*GET: 1.*
 
+
+query I
+SELECT count(*) FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet')
+----
+1000
+
+query I
+SELECT count(*) FROM PARQUET_SCAN('s3://test-bucket/row-user-data_1.parquet')
+----
+100
 
 statement ok
 SET force_download=false;
@@ -86,3 +94,29 @@ query II
 explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet')
 ----
 analyzed_plan	<REGEX>:.*GET: 3.*
+
+statement ok
+SET force_download=true;
+
+query I
+SELECT count(*) FROM (SELECT * FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet') union all select * from PARQUET_SCAN('s3://test-bucket/row-user-data_1.parquet'))  as t
+----
+1100
+
+query II
+explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet') union all select id, first_name, last_name, email from PARQUET_SCAN('s3://test-bucket/row-user-data_1.parquet')
+----
+analyzed_plan	<REGEX>:.*GET: 2.*
+
+statement ok
+SET force_download=false;
+
+query I
+SELECT count(*) FROM (SELECT * FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet') union all select * from PARQUET_SCAN('s3://test-bucket/row-user-data_1.parquet')) as t
+----
+1100
+
+query II
+explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet') union all select id, first_name, last_name, email from PARQUET_SCAN('s3://test-bucket/row-user-data_1.parquet')
+----
+analyzed_plan	<REGEX>:.*GET: 6.*
