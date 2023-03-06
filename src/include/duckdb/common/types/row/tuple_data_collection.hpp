@@ -48,14 +48,19 @@ public:
 	void InitializeAppend(TupleDataAppendState &append_state, vector<column_t> column_ids,
 	                      TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE);
 	//! Append a DataChunk directly to this TupleDataCollection - calls InitializeAppend and Append internally
-	void Append(DataChunk &new_chunk);
+	void Append(DataChunk &new_chunk, const SelectionVector &sel = *FlatVector::IncrementalSelectionVector(),
+	            idx_t append_count = DConstants::INVALID_INDEX);
 	//! Append a DataChunk directly to this TupleDataCollection - calls InitializeAppend and Append internally
-	void Append(DataChunk &new_chunk, vector<column_t> column_ids);
+	void Append(DataChunk &new_chunk, vector<column_t> column_ids,
+	            const SelectionVector &sel = *FlatVector::IncrementalSelectionVector(),
+	            idx_t append_count = DConstants::INVALID_INDEX);
 	//! Append a DataChunk to this TupleDataCollection using the specified append state
-	void Append(TupleDataAppendState &append_state, DataChunk &new_chunk);
+	void Append(TupleDataAppendState &append_state, DataChunk &new_chunk,
+	            const SelectionVector &sel = *FlatVector::IncrementalSelectionVector(),
+	            idx_t append_count = DConstants::INVALID_INDEX);
 	//! Scatters the given Vector to the given column id to the rows in the specified append state
-	void Scatter(TupleDataAppendState &append_state, Vector &source, const column_t column_id, const idx_t append_count,
-	             const SelectionVector &sel);
+	void Scatter(TupleDataAppendState &append_state, Vector &source, const column_t column_id,
+	             const SelectionVector &append_sel, const idx_t append_count, const idx_t original_count);
 	//! Finalizes the append state, releasing or storing blo
 	void FinalizeAppendState(TupleDataAppendState &append_state);
 	//! Appends the other TupleDataCollection to this, destroying the other data collection
@@ -82,15 +87,16 @@ public:
 	//! Scans a DataChunk from the TupleDataCollection
 	bool Scan(TupleDataParallelScanState &gstate, TupleDataLocalScanState &lstate, DataChunk &result);
 	//! Gathers a DataChunk from the TupleDataCollection, given the specific row locations (requires full pin)
-	void Gather(Vector &row_locations, const SelectionVector &sel, const idx_t scan_count, DataChunk &result) const;
+	void Gather(Vector &row_locations, const SelectionVector &scan_sel, const idx_t scan_count, DataChunk &result,
+	            const SelectionVector &target_sel) const;
 	//! Gathers a DataChunk (only the columns given by column_ids) from the TupleDataCollection,
 	//! given the specific row locations (requires full pin)
-	void Gather(Vector &row_locations, const SelectionVector &sel, const vector<column_t> &column_ids,
-	            const idx_t scan_count, DataChunk &result) const;
+	void Gather(Vector &row_locations, const SelectionVector &scan_sel, const idx_t scan_count,
+	            const vector<column_t> &column_ids, DataChunk &result, const SelectionVector &target_sel) const;
 	//! Gathers a Vector (from the given column id) from the TupleDataCollection
 	//! given the specific row locations (requires full pin)
-	void Gather(Vector &row_locations, const SelectionVector &sel, const column_t column_id, const idx_t scan_count,
-	            Vector &result) const;
+	void Gather(Vector &row_locations, const SelectionVector &sel, const idx_t scan_count, const column_t column_id,
+	            Vector &result, const SelectionVector &target_sel) const;
 
 	//! TODO:
 	void Pin();
@@ -110,10 +116,12 @@ private:
 	//! Gets the gather function for the given column index
 	static TupleDataGatherFunction GetGatherFunction(const TupleDataLayout &layout, idx_t col_idx);
 	//! Computes the heap sizes for the new DataChunk that will be appended
-	static void ComputeHeapSizes(TupleDataAppendState &append_state, DataChunk &new_chunk);
+	static void ComputeHeapSizes(TupleDataAppendState &append_state, DataChunk &new_chunk,
+	                             const SelectionVector &append_sel, const idx_t append_count);
 	//! Computes the heap sizes for the specific Vector that will be appended
 	static void ComputeHeapSizes(Vector &heap_sizes_v, Vector &source_v, UnifiedVectorFormat &source,
-	                             const idx_t count);
+	                             const SelectionVector &append_sel, const idx_t append_count,
+	                             const idx_t original_count);
 	//! Releases or stores ALL handles in the management state - called after finishing append
 	void FinalizeChunkState(TupleDataManagementState &state);
 	//! Get the next segment/chunk index for the scan
