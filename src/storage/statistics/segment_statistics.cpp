@@ -4,19 +4,10 @@
 
 namespace duckdb {
 
-SegmentStatistics::SegmentStatistics(LogicalType type) : type(std::move(type)) {
-	Reset();
+SegmentStatistics::SegmentStatistics(LogicalType type) : statistics(BaseStatistics::CreateEmpty(std::move(type))) {
 }
 
-SegmentStatistics::SegmentStatistics(LogicalType type, unique_ptr<BaseStatistics> stats)
-    : type(std::move(type)), statistics(std::move(stats)) {
-	if (!statistics) {
-		Reset();
-	}
-}
-
-void SegmentStatistics::Reset() {
-	statistics = BaseStatistics::CreateEmpty(type, StatisticsType::LOCAL_STATS);
+SegmentStatistics::SegmentStatistics(BaseStatistics stats) : statistics(std::move(stats)) {
 }
 
 } // namespace duckdb

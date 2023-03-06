@@ -29,8 +29,8 @@ final class LogicalType {
   
   private let ptr = UnsafeMutablePointer<duckdb_logical_type?>.allocate(capacity: 1)
   
-  init(result: QueryResult, index: DBInt) {
-    self.ptr.pointee = result.withCResult { duckdb_column_logical_type($0, index) }
+  init(_ body: () -> duckdb_logical_type?) {
+    self.ptr.pointee = body()
   }
   
   deinit {
@@ -43,8 +43,10 @@ final class LogicalType {
     return ctypeid.asTypeID
   }
   
-  func withCLogicalType<T>(_ body: (duckdb_logical_type?) throws -> T) rethrows -> T {
-    try body(ptr.pointee)
+  var underlyingDataType: DBTypeID {
+    guard dataType == .enum else { return dataType }
+    let ctypeid = duckdb_enum_internal_type(ptr.pointee)
+    return ctypeid.asTypeID
   }
 }
 
@@ -66,5 +68,24 @@ extension LogicalType {
       scale: duckdb_decimal_scale(ptr.pointee),
       storageType: internalStorageType.asTypeID
     )
+  }
+}
+
+// MARK: - Struct
+
+extension LogicalType {
+  
+  static let structCompatibleTypes = [DBTypeID.struct, .map]
+  
+  var structMemberNames: [String]? {
+    guard Self.structCompatibleTypes.contains(dataType) else { return nil }
+    let memberCount = duckdb_struct_type_child_count(ptr.pointee)
+    var names = [String]()
+    for i in 0..<memberCount {
+      let cStr = duckdb_struct_type_child_name(ptr.pointee, i)!
+      names.append(String(cString: cStr))
+      duckdb_free(cStr)
+    }
+    return names
   }
 }

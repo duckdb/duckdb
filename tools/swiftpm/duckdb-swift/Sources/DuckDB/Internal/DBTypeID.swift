@@ -24,7 +24,7 @@
 
 @_implementationOnly import Cduckdb
 
-struct DBTypeID: RawRepresentable, Equatable {
+struct DBTypeID: RawRepresentable, Hashable, Equatable {
   let rawValue: UInt32
   init(rawValue: UInt32) {
     self.rawValue = rawValue

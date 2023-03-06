@@ -24,7 +24,7 @@
 
 @_implementationOnly import Cduckdb
 
-public struct Timestamp: Hashable, Equatable {
+public struct Timestamp: Hashable, Equatable, Codable {
   var microseconds: Int64
 }
 
