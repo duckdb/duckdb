@@ -29,6 +29,7 @@ struct DataTableInfo;
 class ExpressionExecutor;
 class RowGroupWriter;
 class UpdateSegment;
+class TableStatistics;
 class TableStorageInfo;
 class Vector;
 struct ColumnCheckpointState;
@@ -38,7 +39,7 @@ struct VersionNode;
 
 struct RowGroupWriteData {
 	vector<unique_ptr<ColumnCheckpointState>> states;
-	vector<unique_ptr<BaseStatistics>> statistics;
+	vector<BaseStatistics> statistics;
 };
 
 class RowGroup : public SegmentBase {
@@ -69,7 +70,7 @@ private:
 	//! The column data of the row_group
 	vector<shared_ptr<ColumnData>> columns;
 	//! The segment statistics for each of the columns
-	vector<shared_ptr<SegmentStatistics>> stats;
+	vector<SegmentStatistics> stats;
 
 public:
 	DatabaseInstance &GetDatabase();
@@ -132,7 +133,7 @@ public:
 	idx_t Delete(TransactionData transaction, DataTable *table, row_t *row_ids, idx_t count);
 
 	RowGroupWriteData WriteToDisk(PartialBlockManager &manager, const vector<CompressionType> &compression_types);
-	RowGroupPointer Checkpoint(RowGroupWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats);
+	RowGroupPointer Checkpoint(RowGroupWriter &writer, TableStatistics &global_stats);
 	static void Serialize(RowGroupPointer &pointer, Serializer &serializer);
 	static RowGroupPointer Deserialize(Deserializer &source, const ColumnList &columns);
 

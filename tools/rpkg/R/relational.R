@@ -172,7 +172,7 @@ rel_inner_join <- function(left, right, conds) {
   rel_join(left, right, conds, "inner")
 }
 
-rel_join <- function(left, right, conds, join = c("inner", "left", "right", "outer")) {
+rel_join <- function(left, right, conds, join = c("inner", "left", "right", "outer", "cross", "semi", "anti")) {
   join <- match.arg(join)
   rapi_rel_join(left, right, conds, join)
 }
