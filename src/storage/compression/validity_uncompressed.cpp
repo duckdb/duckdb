@@ -2,7 +2,7 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/table/append_state.hpp"
-#include "duckdb/storage/statistics/validity_statistics.hpp"
+
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/function/compression_function.hpp"
@@ -410,14 +410,14 @@ unique_ptr<CompressedSegmentState> ValidityInitSegment(ColumnSegment &segment, b
 idx_t ValidityAppend(CompressionAppendState &append_state, ColumnSegment &segment, SegmentStatistics &stats,
                      UnifiedVectorFormat &data, idx_t offset, idx_t vcount) {
 	D_ASSERT(segment.GetBlockOffset() == 0);
-	auto &validity_stats = (ValidityStatistics &)*stats.statistics;
+	auto &validity_stats = stats.statistics;
 
 	auto max_tuples = segment.SegmentSize() / ValidityMask::STANDARD_MASK_SIZE * STANDARD_VECTOR_SIZE;
 	idx_t append_count = MinValue<idx_t>(vcount, max_tuples - segment.count);
 	if (data.validity.AllValid()) {
 		// no null values: skip append
 		segment.count += append_count;
-		validity_stats.has_no_null = true;
+		validity_stats.SetHasNoNull();
 		return append_count;
 	}
 
@@ -426,9 +426,9 @@ idx_t ValidityAppend(CompressionAppendState &append_state, ColumnSegment &segmen
 		auto idx = data.sel->get_index(offset + i);
 		if (!data.validity.RowIsValidUnsafe(idx)) {
 			mask.SetInvalidUnsafe(segment.count + i);
-			validity_stats.has_null = true;
+			validity_stats.SetHasNull();
 		} else {
-			validity_stats.has_no_null = true;
+			validity_stats.SetHasNoNull();
 		}
 	}
 	segment.count += append_count;

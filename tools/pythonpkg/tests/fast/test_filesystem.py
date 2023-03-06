@@ -146,7 +146,6 @@ class TestPythonFilesystem:
 
         local = fs.LocalFileSystem()
         local_fsspec = ArrowFSWrapper(local, skip_instance_cache=True)
-        local_fsspec.protocol = "local"
         # posix calls here required as ArrowFSWrapper only supports url-like paths (not Windows paths)
         filename = str(PurePosixPath(tmp_path.as_posix()) / "test.csv")
         with local_fsspec.open(filename, mode='w') as f:

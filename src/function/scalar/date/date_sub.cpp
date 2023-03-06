@@ -9,7 +9,6 @@
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
 
 namespace duckdb {
 
