@@ -486,13 +486,13 @@ test_that("R semantics for adding NaNs is respected", {
    expect_true(is.na(res[[1]]))
 })
 
-
 test_that("R semantics for arithmetics sum function are respected", {
    dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
-   test_df_a <- rel_from_df(con, data.frame(a=c(1:5, NaN)))
-   sum_rel <- rapi_expr_function("sum", list(expr_reference("a")))
-   ans <- rapi_rel_aggregate(test_df_a, list(), list(sum_rel))
-   res <- rapi_rel_to_df(ans)
+   test_df_a <- duckdb:::rel_from_df(con, data.frame(a=c(1:5)))
+   sum_rel <- duckdb:::expr_function("sum", list(duckdb:::expr_reference("a")))
+   ans <- duckdb:::rel_aggregate(test_df_a, list(), list(sum_rel))
+   res <- duckdb:::rel_to_altrep(ans)
    expect_true(is.na(res[[1]]))
 })
+
 

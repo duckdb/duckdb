@@ -225,6 +225,26 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 	return make_external_prot<RelationWrapper>("duckdb_relation", prot, res);
 }
 
+static WindowBoundary StringToWindowBoundary(string &window_boundary) {
+	if (window_boundary == "unbounded_preceding") {
+		return WindowBoundary::UNBOUNDED_PRECEDING;
+	} else if (window_boundary == "unbounded_following") {
+		return WindowBoundary::UNBOUNDED_FOLLOWING;
+	} else if (window_boundary == "current_row_range") {
+		return WindowBoundary::CURRENT_ROW_RANGE;
+	} else if (window_boundary == "current_row_rows") {
+		return WindowBoundary::CURRENT_ROW_ROWS;
+	} else if (window_boundary == "expr_preceding_rows") {
+		return WindowBoundary::EXPR_PRECEDING_ROWS;
+	} else if (window_boundary == "expr_following_rows") {
+		return WindowBoundary::EXPR_FOLLOWING_ROWS;
+	} else if (window_boundary == "expr_preceding_range") {
+		return WindowBoundary::EXPR_PRECEDING_RANGE;
+	} else {
+		return WindowBoundary::EXPR_FOLLOWING_RANGE;
+	}
+}
+
 [[cpp11::register]] SEXP rapi_expr_window(duckdb::expr_extptr_t window_function, list partitions,
                                           std::string window_boundary_start, std::string window_boundary_end,
                                           list start_exprs, list end_exprs, list offset_exprs, list default_exprs) {
