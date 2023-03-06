@@ -46,7 +46,7 @@ extension duckdb_pending_state {
 // MARK: - Type ID
 
 extension duckdb_type {
-  var asTypeID: DBTypeID { .init(rawValue: rawValue) }
+  var asTypeID: DatabaseType { .init(rawValue: rawValue) }
 }
 
 // MARK: - String
