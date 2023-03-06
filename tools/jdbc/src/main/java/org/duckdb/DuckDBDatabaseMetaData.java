@@ -629,13 +629,17 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public ResultSet getCatalogs() throws SQLException {
-		return conn.createStatement().executeQuery(
+		Statement statement = conn.createStatement();
+		statement.closeOnCompletion();
+		return statement.executeQuery(
 				"SELECT DISTINCT catalog_name AS 'TABLE_CAT' FROM information_schema.schemata ORDER BY \"TABLE_CAT\"");
 	}
 
 	@Override
 	public ResultSet getSchemas() throws SQLException {
-		return conn.createStatement().executeQuery(
+		Statement statement = conn.createStatement();
+		statement.closeOnCompletion();
+		return statement.executeQuery(
 				"SELECT schema_name AS 'TABLE_SCHEM', catalog_name AS 'TABLE_CATALOG' FROM information_schema.schemata ORDER BY \"TABLE_CATALOG\", \"TABLE_SCHEM\"");
 	}
 
@@ -682,6 +686,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 		if (schemaPattern != null && !schemaPattern.isEmpty()) {
 			ps.setString(++paramIndex, schemaPattern);
 		}
+		ps.closeOnCompletion();
 		return ps.executeQuery();
 	}
 
@@ -703,7 +708,9 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 			}
 		}
 		stringBuilder.append("\nORDER BY TABLE_TYPE");
-		return conn.createStatement().executeQuery(stringBuilder.toString());
+		Statement statement = conn.createStatement();
+		statement.closeOnCompletion();
+		return statement.executeQuery(stringBuilder.toString());
 	}
 
 	@Override
@@ -794,7 +801,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 			  ps.setString(paramOffset + i, types[i]);
 			}
 		}
-
+		ps.closeOnCompletion();
 		return ps.executeQuery();
 	}
 
@@ -836,6 +843,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 		ps.setString(2, schemaPattern);
 		ps.setString(3, tableNamePattern);
 		ps.setString(4, columnNamePattern);
+		ps.closeOnCompletion();
 		return ps.executeQuery();
 
 	}
@@ -855,13 +863,17 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 	@Override
 	public ResultSet getProcedures(String catalog, String schemaPattern, String procedureNamePattern)
 			throws SQLException {
-		return conn.createStatement().executeQuery("SELECT NULL WHERE FALSE");
+		Statement statement = conn.createStatement();
+		statement.closeOnCompletion();
+		return statement.executeQuery("SELECT NULL WHERE FALSE");
 	}
 
 	@Override
 	public ResultSet getProcedureColumns(String catalog, String schemaPattern, String procedureNamePattern,
 			String columnNamePattern) throws SQLException {
-		return conn.createStatement().executeQuery("SELECT NULL WHERE FALSE");
+		Statement statement = conn.createStatement();
+		statement.closeOnCompletion();
+		return statement.executeQuery("SELECT NULL WHERE FALSE");
 	}
 
 	@Override
@@ -907,7 +919,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 		}
 		// table name param
 		pw.append("AND table_name = ?").append(lineSeparator());
-		
+
 		pw.append(")").append(lineSeparator());
 		pw.append("SELECT \"TABLE_CAT\"").append(lineSeparator());
 		pw.append(", \"TABLE_SCHEM\"").append(lineSeparator());
@@ -918,10 +930,10 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 		pw.append(", \"PK_NAME\"").append(lineSeparator());
 		pw.append("FROM constraint_columns").append(lineSeparator());
 		pw.append("ORDER BY \"TABLE_CAT\", \"TABLE_SCHEM\", \"TABLE_NAME\", \"KEY_SEQ\"").append(lineSeparator());
-		
+
 		int paramIndex = 1;
 		PreparedStatement ps = conn.prepareStatement(pw.toString());
-		
+
 		if (catalog != null && !catalog.isEmpty()) {
 			ps.setString(paramIndex++, catalog);
 		}
@@ -929,6 +941,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 			ps.setString(paramIndex++, schema);
 		}
 		ps.setString(paramIndex++, table);
+		ps.closeOnCompletion();
 		return ps.executeQuery();
 	}
 
@@ -1183,7 +1196,9 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 	@Override
 	public ResultSet getFunctionColumns(String catalog, String schemaPattern, String functionNamePattern,
 			String columnNamePattern) throws SQLException {
-		return conn.createStatement().executeQuery("SELECT NULL WHERE FALSE");
+		Statement statement = conn.createStatement();
+		statement.closeOnCompletion();
+		return statement.executeQuery("SELECT NULL WHERE FALSE");
 	}
 
 	@Override
