@@ -726,3 +726,10 @@ jobs:
       run:  |
           python scripts/amalgamation.py --extended
           clang++ -std=c++17 -Isrc/amalgamation src/amalgamation/duckdb.cpp -emit-llvm -S -O0
+
+    - name: Generate Amalgamation x8
+      shell: bash
+      run:  |
+          python scripts/amalgamation.py --extended --splits=8
+          clang++ -std=c++17 -Isrc/amalgamation src/amalgamation/duckdb*.cpp -emit-llvm -S -O0
+          clang++ *.ll -O0 -v  -Wl,-bundle
