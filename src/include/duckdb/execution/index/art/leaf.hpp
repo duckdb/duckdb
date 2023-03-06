@@ -55,7 +55,7 @@ public:
 	//! Returns whether this leaf is inlined
 	bool IsInlined() const;
 	//! Get the row ID at pos
-	uint8_t GetRowId(ART &art, const idx_t &position) const;
+	row_t GetRowId(ART &art, const idx_t &position) const;
 	//! Returns the position of a row ID, and an invalid index, if the leaf does not contain the row ID
 	idx_t FindRowId(ART &art, idx_t &position, const row_t &row_id) const;
 

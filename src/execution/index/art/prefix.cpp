@@ -44,6 +44,7 @@ void Prefix::Initialize(ART &art, const Key &key, const uint32_t &depth, const u
 	}
 
 	// prefix cannot be inlined, copy to segment(s)
+	count = 0;
 	data.position = PrefixSegment::New(art);
 	auto segment = PrefixSegment::Initialize(art, data.position);
 	for (idx_t i = 0; i < count_p; i++) {
@@ -226,7 +227,7 @@ uint8_t Prefix::Reduce(ART &art, const idx_t &n) {
 		return new_first_byte;
 	}
 
-	// inlined, just move bytes
+	// was inlined, just move bytes
 	if (IsInlined()) {
 		for (idx_t i = 0; i < new_count; i++) {
 			data.inlined[i] = data.inlined[i + n + 1];
@@ -235,26 +236,38 @@ uint8_t Prefix::Reduce(ART &art, const idx_t &n) {
 		return new_first_byte;
 	}
 
-	// iterate all segments and copy/shift their data
-	auto segment = PrefixSegment::Get(art, data.position);
-	auto position = data.position;
-	auto remaining = count;
 	count = 0;
+	auto start = n + 1;
+	auto offset = start % ARTNode::PREFIX_SEGMENT_SIZE;
+	auto remaining = new_count;
 
-	while (position) {
-		auto other_segment = PrefixSegment::Get(art, position);
-		auto copy_count = ARTNode::PREFIX_SEGMENT_SIZE < remaining ? ARTNode::PREFIX_SEGMENT_SIZE : remaining;
+	// get the source segment, i.e., the segment that contains the byte at start
+	auto source_segment = PrefixSegment::Get(art, data.position);
+	for (idx_t i = 0; i < start / ARTNode::PREFIX_SEGMENT_SIZE; i++) {
+		D_ASSERT(source_segment->next != DConstants::INVALID_INDEX);
+		source_segment = PrefixSegment::Get(art, source_segment->next);
+	}
+
+	// iterate all segments and copy/shift their data
+	auto destination_segment = PrefixSegment::Get(art, data.position);
+	while (true) {
+		auto copy_count = ARTNode::PREFIX_SEGMENT_SIZE - offset;
+		copy_count = copy_count < remaining ? copy_count : remaining;
 
 		// now copy/shift the data
-		for (idx_t i = 0; i < copy_count; i++) {
-			segment = segment->Append(art, count, other_segment->bytes[i]);
+		for (idx_t i = offset; i < offset + copy_count; i++) {
+			destination_segment = destination_segment->Append(art, count, source_segment->bytes[i]);
 		}
 
 		// adjust the loop variables
-		position = other_segment->next;
+		offset = 0;
 		remaining -= copy_count;
+		if (remaining == 0) {
+			break;
+		}
+		D_ASSERT(source_segment->next != DConstants::INVALID_INDEX);
+		source_segment = PrefixSegment::Get(art, source_segment->next);
 	}
-	D_ASSERT(remaining == 0);
 	return new_first_byte;
 }
 
@@ -311,7 +324,7 @@ void Prefix::Serialize(ART &art, MetaBlockWriter &writer) {
 		return;
 	}
 
-	D_ASSERT(data.position);
+	D_ASSERT(data.position != DConstants::INVALID_INDEX);
 	auto position = data.position;
 	auto remaining = count;
 
@@ -341,6 +354,7 @@ void Prefix::Deserialize(ART &art, MetaBlockReader &reader) {
 	}
 
 	// copy into segments
+	count = 0;
 	data.position = PrefixSegment::New(art);
 	auto segment = PrefixSegment::Initialize(art, data.position);
 	for (idx_t i = 0; i < count_p; i++) {

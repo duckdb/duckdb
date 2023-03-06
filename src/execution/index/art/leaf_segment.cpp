@@ -47,7 +47,7 @@ LeafSegment *LeafSegment::Append(ART &art, uint32_t &count, const row_t &row_id)
 LeafSegment *LeafSegment::GetTail(ART &art) {
 	auto segment = this;
 	auto position = next;
-	while (next != DConstants::INVALID_INDEX) {
+	while (position != DConstants::INVALID_INDEX) {
 		segment = LeafSegment::Get(art, position);
 		position = segment->next;
 	}

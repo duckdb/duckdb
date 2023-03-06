@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cstring>
 #include <ctgmath>
+#include <iostream>
 
 namespace duckdb {
 
@@ -1070,10 +1071,12 @@ bool ART::MergeIndexes(IndexLock &state, Index *other_index) {
 //===--------------------------------------------------------------------===//
 
 string ART::ToString() {
+	string str = "[empty]";
 	if (tree) {
-		return tree.ToString(*this);
+		str = tree.ToString(*this);
 	}
-	return "[empty]";
+	std::cout << str;
+	return str;
 }
 
 } // namespace duckdb

@@ -32,10 +32,8 @@ void ARTNode::Free(ART &art, ARTNode &node) {
 
 		node.GetPrefix(art)->Free(art);
 
-		auto position = node.pointer & FixedSizeAllocator::FIRST_BYTE_TO_ZERO;
-		auto type = node.DecodeARTNodeType();
-
 		// free the children of the node
+		auto type = node.DecodeARTNodeType();
 		switch (type) {
 		case ARTNodeType::LEAF:
 			Leaf::Free(art, node);
@@ -57,11 +55,12 @@ void ARTNode::Free(ART &art, ARTNode &node) {
 		}
 
 		// free the node itself
+		auto position = node.pointer & FixedSizeAllocator::FIRST_BYTE_TO_ZERO;
 		D_ASSERT(art.nodes.find(type) != art.nodes.end());
-		return art.nodes.at(type).Free(position);
+		art.nodes.at(type).Free(position);
 	}
 
-	// just overwrite with an empty ART node, if a swizzled pointer
+	// overwrite with an empty ART node
 	node = ARTNode();
 }
 

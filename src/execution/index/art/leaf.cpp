@@ -262,7 +262,7 @@ bool Leaf::IsInlined() const {
 	return count <= 1;
 }
 
-uint8_t Leaf::GetRowId(ART &art, const idx_t &position) const {
+row_t Leaf::GetRowId(ART &art, const idx_t &position) const {
 
 	D_ASSERT(position < count);
 	if (IsInlined()) {
@@ -276,7 +276,7 @@ uint8_t Leaf::GetRowId(ART &art, const idx_t &position) const {
 		segment = LeafSegment::Get(art, segment->next);
 	}
 
-	return segment->row_ids[position % ARTNode::PREFIX_SEGMENT_SIZE];
+	return segment->row_ids[position % ARTNode::LEAF_SEGMENT_SIZE];
 }
 
 idx_t Leaf::FindRowId(ART &art, idx_t &position, const row_t &row_id) const {
@@ -325,7 +325,7 @@ string Leaf::ToString(ART &art) {
 		remaining -= to_string_count;
 		position = segment->next;
 	}
-	return str + "]";
+	return str + "] \n";
 }
 
 BlockPointer Leaf::Serialize(ART &art, MetaBlockWriter &writer) {
