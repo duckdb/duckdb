@@ -148,7 +148,7 @@ class TestPythonFilesystem:
             _strip_protocol = classmethod(AbstractFileSystem._strip_protocol.__func__)
 
         local = fs.LocalFileSystem()
-        local_fsspec = ExtendedArrowFSWrapper(local, skip_instance_cache=True)
+        local_fsspec = ArrowFSWrapper(local, skip_instance_cache=True)
         # posix calls here required as ArrowFSWrapper only supports url-like paths (not Windows paths)
         filename = str(PurePosixPath(tmp_path.as_posix()) / "test.csv")
         with local_fsspec.open(filename, mode='w') as f:
