@@ -59,12 +59,20 @@ PRAGMA verify_parallelism
 
 statement ok
 create table user_info as SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
+UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
+UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
+UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
+UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
+UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
+UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
+UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
+UNION ALL SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
 
 statement ok
-COPY (from user_info) TO 's3://test-bucket/row-user-data.parquet' (FORMAT PARQUET,  ROW_GROUP_SIZE 10);
+COPY (from user_info) TO 's3://test-bucket/row-user-data.parquet' (FORMAT PARQUET,  ROW_GROUP_SIZE 2048);
 
-#statement ok
-#COPY (from user_info limit 100) TO 's3://test-bucket/row-user-data_1.parquet' (FORMAT PARQUET,  ROW_GROUP_SIZE 10);
+statement ok
+COPY (from user_info limit 100) TO 's3://test-bucket/row-user-data_1.parquet' (FORMAT PARQUET,  ROW_GROUP_SIZE 2048);
 
 query II
 explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet')
@@ -75,7 +83,7 @@ analyzed_plan	<REGEX>:.*GET: 1.*
 query I
 SELECT count(*) FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet')
 ----
-1000
+9000
 
 query I
 SELECT count(*) FROM PARQUET_SCAN('s3://test-bucket/row-user-data_1.parquet')
@@ -88,12 +96,12 @@ SET force_download=false;
 query I
 SELECT count(*) FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet')
 ----
-1000
+9000
 
 query II
 explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet')
 ----
-analyzed_plan	<REGEX>:.*GET: 3.*
+analyzed_plan	<REGEX>:.*GET: 5.*
 
 statement ok
 SET force_download=true;
@@ -101,7 +109,7 @@ SET force_download=true;
 query I
 SELECT count(*) FROM (SELECT * FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet') union all select * from PARQUET_SCAN('s3://test-bucket/row-user-data_1.parquet'))  as t
 ----
-1100
+9100
 
 query II
 explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet') union all select id, first_name, last_name, email from PARQUET_SCAN('s3://test-bucket/row-user-data_1.parquet')
@@ -114,9 +122,9 @@ SET force_download=false;
 query I
 SELECT count(*) FROM (SELECT * FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet') union all select * from PARQUET_SCAN('s3://test-bucket/row-user-data_1.parquet')) as t
 ----
-1100
+9100
 
 query II
 explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet') union all select id, first_name, last_name, email from PARQUET_SCAN('s3://test-bucket/row-user-data_1.parquet')
 ----
-analyzed_plan	<REGEX>:.*GET: 6.*
+analyzed_plan	<REGEX>:.*GET: 8.*
