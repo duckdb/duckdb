@@ -67,8 +67,6 @@ test_that("uppercase data frames are queryable", {
   duckdb_unregister(con, "My_Mtcars")
 })
 
-
-
 test_that("experimental string handling works", {
   con <- dbConnect(duckdb())
   on.exit(dbDisconnect(con, shutdown = TRUE))
@@ -79,7 +77,6 @@ test_that("experimental string handling works", {
   expect_equal(df, dbGetQuery(con, "SELECT a::STRING a FROM df"))
   expect_equal(df, dbGetQuery(con, "SELECT a FROM df"))
 })
-
 
 test_that("We can perform regex functions on R strings ", {
   con <- dbConnect(duckdb())
