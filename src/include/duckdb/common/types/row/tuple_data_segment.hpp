@@ -34,7 +34,6 @@ public:
 	data_ptr_t base_heap_ptr;
 	//! Size of the last heap row (for all but the last we can infer the size from the pointer difference)
 	uint32_t total_heap_size;
-	uint32_t last_heap_size;
 	//! Tuple count for this chunk part
 	uint32_t count;
 };

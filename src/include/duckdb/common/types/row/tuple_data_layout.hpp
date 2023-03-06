@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/types/row/row_layout.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
 #include "duckdb/planner/expression.hpp"
@@ -78,9 +79,11 @@ public:
 	inline bool AllConstant() const {
 		return all_constant;
 	}
-	inline idx_t GetHeapOffset() const {
-		return heap_offset;
+	inline idx_t GetHeapSizeOffset() const {
+		return heap_size_offset;
 	}
+	//! RowLayout for compatibility reasons (mostly compatible - slight differences)
+	RowLayout GetRowLayout() const;
 
 private:
 	//! The types of the data columns
@@ -101,8 +104,8 @@ private:
 	vector<idx_t> offsets;
 	//! Whether all columns in this layout are constant size
 	bool all_constant;
-	//! Offset to the heap offset
-	idx_t heap_offset;
+	//! Offset to the heap size of every row
+	idx_t heap_size_offset;
 };
 
 } // namespace duckdb

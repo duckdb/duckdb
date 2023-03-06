@@ -17,6 +17,8 @@ namespace duckdb {
 
 class RowLayout {
 public:
+	friend class TupleDataLayout;
+
 	using Aggregates = vector<AggregateObject>;
 	using ValidityBytes = TemplatedValidityMask<uint8_t>;
 

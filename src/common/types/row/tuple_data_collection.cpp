@@ -147,21 +147,29 @@ void TupleDataCollection::Append(TupleDataAppendState &append_state, DataChunk &
 		ComputeHeapSizes(append_state, new_chunk);
 	}
 
-	const auto chunk_count = new_chunk.size();
-	segments.back().allocator->Build(append_state, chunk_count, segments.back());
+	const auto append_count = new_chunk.size();
+	segments.back().allocator->Build(append_state, append_count, segments.back());
 
 	// Set the validity mask for each row before inserting data
 	auto row_locations = FlatVector::GetData<data_ptr_t>(append_state.chunk_state.row_locations);
-	for (idx_t i = 0; i < chunk_count; ++i) {
+	for (idx_t i = 0; i < append_count; ++i) {
 		ValidityBytes(row_locations[i]).SetAllValid(layout.ColumnCount());
+	}
+
+	// Set the heap size for each row
+	const auto heap_size_offset = layout.GetHeapSizeOffset();
+	const auto heap_sizes = FlatVector::GetData<idx_t>(append_state.chunk_state.heap_sizes);
+	for (idx_t i = 0; i < append_count; i++) {
+		Store<uint32_t>(heap_sizes[i], row_locations[i] + heap_size_offset);
 	}
 
 	// Write the data
 	for (const auto &col_idx : append_state.column_ids) {
-		Scatter(append_state, new_chunk.data[col_idx], col_idx, chunk_count, *FlatVector::IncrementalSelectionVector());
+		Scatter(append_state, new_chunk.data[col_idx], col_idx, append_count,
+		        *FlatVector::IncrementalSelectionVector());
 	}
 
-	count += chunk_count;
+	count += append_count;
 	Verify();
 }
 

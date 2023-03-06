@@ -74,7 +74,7 @@ private:
 	//! Builds out a single part (grabs the lock)
 	TupleDataChunkPart BuildChunkPart(TupleDataManagementState &state, idx_t offset, idx_t count);
 	//! Internal function for InitializeChunkState
-	void InitializeChunkStateInternal(TupleDataManagementState &state, bool compute_heap_sizes, bool init_heap_pointers,
+	void InitializeChunkStateInternal(TupleDataManagementState &state, bool init_heap_pointers, bool init_heap_sizes,
 	                                  vector<TupleDataChunkPart *> &parts);
 	//! Recomputes the heap pointers if the heap block changed
 	static void RecomputeHeapPointers(const data_ptr_t old_base_heap_ptr, const data_ptr_t new_base_heap_ptr,

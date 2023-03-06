@@ -54,7 +54,6 @@ void TupleDataChunk::MergeLastChunkPart() {
 	    last_part.base_heap_ptr == second_to_last_part.base_heap_ptr) {
 		// These parts have the same row and heap blocks - merge them
 		second_to_last_part.total_heap_size += last_part.total_heap_size;
-		second_to_last_part.last_heap_size = last_part.last_heap_size;
 		second_to_last_part.count += last_part.count;
 		parts.pop_back();
 	}

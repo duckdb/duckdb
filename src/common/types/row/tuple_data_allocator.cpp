@@ -119,9 +119,6 @@ TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataManagementState &
 			result.total_heap_size += heap_size;
 		}
 
-		// Set the size of the last heap row (all other sizes can be inferred from the pointer difference)
-		result.last_heap_size = heap_sizes[offset + result.count - 1];
-
 		// Mark this portion of the heap block as filled
 		heap_blocks.back().size += result.total_heap_size;
 	}
@@ -151,8 +148,8 @@ void TupleDataAllocator::InitializeChunkState(TupleDataManagementState &state, T
 	InitializeChunkStateInternal(state, init_heap, init_heap, parts);
 }
 
-void TupleDataAllocator::InitializeChunkStateInternal(TupleDataManagementState &state, bool compute_heap_sizes,
-                                                      bool init_heap_pointers, vector<TupleDataChunkPart *> &parts) {
+void TupleDataAllocator::InitializeChunkStateInternal(TupleDataManagementState &state, bool init_heap_pointers,
+                                                      bool init_heap_sizes, vector<TupleDataChunkPart *> &parts) {
 	auto row_locations = FlatVector::GetData<data_ptr_t>(state.row_locations);
 	auto heap_sizes = FlatVector::GetData<idx_t>(state.heap_sizes);
 	auto heap_locations = FlatVector::GetData<data_ptr_t>(state.heap_locations);
@@ -182,13 +179,13 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataManagementState &
 				}
 			}
 
-			if (compute_heap_sizes) {
-				// Compute the heap sizes using the offset diff - last one is stored in the TupleDataChunkPart
-				for (idx_t i = 0; i < next - 1; i++) {
+			if (init_heap_sizes) {
+				// Read the heap sizes from the rows
+				const auto heap_size_offset = layout.GetHeapSizeOffset();
+				for (idx_t i = 0; i < next; i++) {
 					auto idx = offset + i;
-					heap_sizes[idx] = Load<uint32_t>(row_locations[i + 1]) - Load<uint32_t>(row_locations[i]);
+					heap_sizes[idx] = Load<uint32_t>(row_locations[idx] + heap_size_offset);
 				}
-				heap_sizes[offset + next - 1] = part->last_heap_size;
 			}
 
 			if (init_heap_pointers) {
@@ -197,15 +194,6 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataManagementState &
 				for (idx_t i = 1; i < next; i++) {
 					auto idx = offset + i;
 					heap_locations[idx] = heap_locations[idx - 1] + heap_sizes[idx - 1];
-				}
-
-				if (!compute_heap_sizes) {
-					// Set the offset from the base heap pointer in each row
-					const auto heap_offset = layout.GetHeapOffset();
-					for (idx_t i = 0; i < next; i++) {
-						auto idx = offset + i;
-						Store<uint32_t>(heap_locations[idx] - base_heap_ptr, row_locations[idx] + heap_offset);
-					}
 				}
 			}
 		}

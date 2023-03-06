@@ -214,8 +214,9 @@ static void TemplatedMatchList(Vector &col, Vector &rows, SelectionVector &sel, 
                                idx_t &no_match_count) {
 	throw NotImplementedException("TupleDataLayout in TemplatedMatchList");
 	// Gather a dense Vector containing the column values being matched
+	auto row_layout = layout.GetRowLayout();
 	Vector key(col.GetType());
-	//	RowOperations::Gather(rows, sel, key, *FlatVector::IncrementalSelectionVector(), count, layout, col_no);
+	RowOperations::Gather(rows, sel, key, *FlatVector::IncrementalSelectionVector(), count, row_layout, col_no);
 
 	// Densify the input column
 	Vector sliced(col, sel, count);
@@ -297,9 +298,8 @@ static void TemplatedMatchOp(Vector &vec, UnifiedVectorFormat &col, const TupleD
 		                                       original_count);
 		break;
 	case PhysicalType::LIST:
-		throw NotImplementedException("Nested match TODO!");
-		//		TemplatedMatchNested<OP, NO_MATCH_SEL>(vec, rows, sel, count, layout, col_no, no_match, no_match_count);
-		//		break;
+		TemplatedMatchList<OP, NO_MATCH_SEL>(vec, rows, sel, count, layout, col_no, no_match, no_match_count);
+		break;
 	default:
 		throw InternalException("Unsupported column type for RowOperations::Match");
 	}

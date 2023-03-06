@@ -5,7 +5,7 @@
 namespace duckdb {
 
 TupleDataLayout::TupleDataLayout()
-    : flag_width(0), data_width(0), aggr_width(0), row_width(0), all_constant(true), heap_offset(0) {
+    : flag_width(0), data_width(0), aggr_width(0), row_width(0), all_constant(true), heap_size_offset(0) {
 }
 
 void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggregates_p, bool align, bool heap_offset_p) {
@@ -37,7 +37,7 @@ void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggrega
 
 	// This enables pointer swizzling for out-of-core computation.
 	if (heap_offset_p && !all_constant) {
-		heap_offset = row_width;
+		heap_size_offset = row_width;
 		row_width += sizeof(uint32_t);
 	}
 
@@ -92,6 +92,20 @@ void TupleDataLayout::Initialize(vector<LogicalType> types_p, bool align, bool h
 
 void TupleDataLayout::Initialize(Aggregates aggregates_p, bool align, bool heap_offset_p) {
 	Initialize(vector<LogicalType>(), std::move(aggregates_p), align, heap_offset_p);
+}
+
+RowLayout TupleDataLayout::GetRowLayout() const {
+	RowLayout result;
+	result.types = types;
+	result.aggregates = aggregates;
+	result.flag_width = flag_width;
+	result.data_width = data_width;
+	result.aggr_width = aggr_width;
+	result.row_width = row_width;
+	result.offsets = offsets;
+	result.all_constant = all_constant;
+	result.heap_pointer_offset = heap_size_offset;
+	return result;
 }
 
 } // namespace duckdb
