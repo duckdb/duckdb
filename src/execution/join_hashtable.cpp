@@ -227,40 +227,24 @@ void JoinHashTable::Build(TupleDataAppendState &append_state, DataChunk &keys, D
 	Vector hash_values(LogicalType::HASH);
 	Hash(keys, *current_sel, added_count, hash_values);
 
-	// build a chunk so we can handle nested types that need more than Orrification
+	// build a chunk to append to the data collection [keys, payload, (optional "found" boolean), hash]
 	DataChunk source_chunk;
 	source_chunk.InitializeEmpty(layout.GetTypes());
-
-	vector<UnifiedVectorFormat> source_data;
-	source_data.reserve(layout.ColumnCount());
-
-	// serialize the keys to the key locations
 	for (idx_t i = 0; i < keys.ColumnCount(); i++) {
 		source_chunk.data[i].Reference(keys.data[i]);
-		source_data.emplace_back(std::move(key_data[i]));
 	}
-	// now serialize the payload
+	idx_t col_offset = keys.ColumnCount();
 	D_ASSERT(build_types.size() == payload.ColumnCount());
 	for (idx_t i = 0; i < payload.ColumnCount(); i++) {
-		source_chunk.data[source_data.size()].Reference(payload.data[i]);
-		UnifiedVectorFormat pdata;
-		payload.data[i].ToUnifiedFormat(payload.size(), pdata);
-		source_data.emplace_back(std::move(pdata));
+		source_chunk.data[col_offset + i].Reference(payload.data[i]);
 	}
+	col_offset += payload.ColumnCount();
 	if (IsRightOuterJoin(join_type)) {
 		// for FULL/RIGHT OUTER joins initialize the "found" boolean to false
-		source_chunk.data[source_data.size()].Reference(vfound);
-		UnifiedVectorFormat fdata;
-		vfound.ToUnifiedFormat(keys.size(), fdata);
-		source_data.emplace_back(std::move(fdata));
+		source_chunk.data[col_offset].Reference(vfound);
+		col_offset++;
 	}
-
-	// serialise the hashes at the end
-	source_chunk.data[source_data.size()].Reference(hash_values);
-	UnifiedVectorFormat hdata;
-	hash_values.ToUnifiedFormat(keys.size(), hdata);
-	source_data.emplace_back(std::move(hdata));
-
+	source_chunk.data[col_offset].Reference(hash_values);
 	source_chunk.SetCardinality(keys);
 
 	data_collection->Append(append_state, source_chunk);
@@ -270,7 +254,7 @@ template <bool PARALLEL>
 static inline void InsertHashesLoop(atomic<data_ptr_t> pointers[], const hash_t indices[], const idx_t count,
                                     const data_ptr_t key_locations[], const idx_t pointer_offset) {
 	for (idx_t i = 0; i < count; i++) {
-		auto index = indices[i];
+		const auto index = indices[i];
 		if (PARALLEL) {
 			data_ptr_t head;
 			do {

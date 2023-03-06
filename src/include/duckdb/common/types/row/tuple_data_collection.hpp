@@ -24,9 +24,9 @@ class TupleDataCollection {
 	friend class TupleDataChunkIterator;
 
 public:
-	//! Constructs a buffer-managed tuple data collection with the specified layout
+	//! Constructs a TupleDataCollection with the specified layout
 	TupleDataCollection(BufferManager &buffer_manager, TupleDataLayout layout);
-	//! TODO:
+	//! Constructs a TupleDataCollection with the same (shared) allocator
 	explicit TupleDataCollection(shared_ptr<TupleDataAllocator> allocator);
 
 	~TupleDataCollection();
@@ -41,19 +41,19 @@ public:
 	//! The size (in bytes) of the blocks held by this tuple data collection
 	idx_t SizeInBytes() const;
 
-	//! Initializes an Append state - useful for optimizing many appends made to the same tuple data collection TODO
+	//! Initializes an Append state - useful for optimizing many appends made to the same tuple data collection
 	void InitializeAppend(TupleDataAppendState &append_state,
 	                      TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE);
-	//! Initializes an Append state - useful for optimizing many appends made to the same tuple data collection TODO
+	//! Initializes an Append state - useful for optimizing many appends made to the same tuple data collection
 	void InitializeAppend(TupleDataAppendState &append_state, vector<column_t> column_ids,
 	                      TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE);
 	//! Append a DataChunk directly to this TupleDataCollection - calls InitializeAppend and Append internally
 	void Append(DataChunk &new_chunk);
-	//! Append a DataChunk directly to this TupleDataCollection - calls InitializeAppend and Append internally TODO
+	//! Append a DataChunk directly to this TupleDataCollection - calls InitializeAppend and Append internally
 	void Append(DataChunk &new_chunk, vector<column_t> column_ids);
 	//! Append a DataChunk to this TupleDataCollection using the specified append state
 	void Append(TupleDataAppendState &append_state, DataChunk &new_chunk);
-	//! TODO:
+	//! Scatters the given Vector to the given column id to the rows in the specified append state
 	void Scatter(TupleDataAppendState &append_state, Vector &source, const column_t column_id, const idx_t append_count,
 	             const SelectionVector &sel);
 	//! Finalizes the append state, releasing or storing blo
@@ -61,8 +61,8 @@ public:
 	//! Appends the other TupleDataCollection to this, destroying the other data collection
 	void Combine(TupleDataCollection &other);
 
-	//! Initializes a chunk with the correct types that can be used to call Scan
-	void InitializeScanChunk(DataChunk &chunk) const;
+	//! Initializes a chunk with the correct types that can be used to call Append/Scan
+	void InitializeChunk(DataChunk &chunk) const;
 	//! Initializes a chunk with the correct types for a given scan state
 	void InitializeScanChunk(TupleDataScanState &state, DataChunk &chunk) const;
 	//! Initializes a Scan state for scanning all columns
@@ -81,12 +81,14 @@ public:
 	bool Scan(TupleDataScanState &state, DataChunk &result);
 	//! Scans a DataChunk from the TupleDataCollection
 	bool Scan(TupleDataParallelScanState &gstate, TupleDataLocalScanState &lstate, DataChunk &result);
-	//! TODO
+	//! Gathers a DataChunk from the TupleDataCollection, given the specific row locations (requires full pin)
 	void Gather(Vector &row_locations, const SelectionVector &sel, const idx_t scan_count, DataChunk &result) const;
-	//! Scans a DataChunk from the TupleDataCollection TODO
+	//! Gathers a DataChunk (only the columns given by column_ids) from the TupleDataCollection,
+	//! given the specific row locations (requires full pin)
 	void Gather(Vector &row_locations, const SelectionVector &sel, const vector<column_t> &column_ids,
 	            const idx_t scan_count, DataChunk &result) const;
-	//! TODO:
+	//! Gathers a Vector (from the given column id) from the TupleDataCollection
+	//! given the specific row locations (requires full pin)
 	void Gather(Vector &row_locations, const SelectionVector &sel, const column_t column_id, const idx_t scan_count,
 	            Vector &result) const;
 
@@ -101,22 +103,22 @@ public:
 	void Print();
 
 private:
-	//! TODO:
+	//! Initializes the TupleDataCollection (called by the constructors)
 	void Initialize();
-	//! TODO:
+	//! Gets the scatter function for the given column index
 	static TupleDataScatterFunction GetScatterFunction(const TupleDataLayout &layout, idx_t col_idx);
-	//! TODO:
+	//! Gets the gather function for the given column index
 	static TupleDataGatherFunction GetGatherFunction(const TupleDataLayout &layout, idx_t col_idx);
-	//! TODO:
+	//! Computes the heap sizes for the new DataChunk that will be appended
 	static void ComputeHeapSizes(TupleDataAppendState &append_state, DataChunk &new_chunk);
-	//! TODO:
+	//! Computes the heap sizes for the specific Vector that will be appended
 	static void ComputeHeapSizes(Vector &heap_sizes_v, Vector &source_v, UnifiedVectorFormat &source,
 	                             const idx_t count);
-	//! TODO
+	//! Releases or stores ALL handles in the management state - called after finishing append
 	void FinalizeChunkState(TupleDataManagementState &state);
-	//! TODO:
+	//! Get the next segment/chunk index for the scan
 	bool NextScanIndex(TupleDataScanState &scan_state, idx_t &segment_index, idx_t &chunk_index) const;
-	//! TODO:
+	//! Scans the chunk at the given segment/chunk indices
 	void ScanAtIndex(TupleDataManagementState &chunk_state, const vector<column_t> &column_ids, idx_t segment_index,
 	                 idx_t chunk_index, DataChunk &result);
 

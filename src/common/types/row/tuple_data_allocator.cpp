@@ -39,12 +39,7 @@ void TupleDataAllocator::Build(TupleDataAppendState &append_state, idx_t count, 
 	D_ASSERT(this == segment.allocator.get());
 	auto &chunks = segment.chunks;
 	if (!chunks.empty()) {
-		if (chunks.back().count == STANDARD_VECTOR_SIZE) {
-			static TupleDataChunk DUMMY_CHUNK;
-			ReleaseOrStoreHandles(append_state.chunk_state, segment, DUMMY_CHUNK);
-		} else {
-			ReleaseOrStoreHandles(append_state.chunk_state, segment, chunks.back());
-		}
+		ReleaseOrStoreHandles(append_state.chunk_state, segment, chunks.back());
 	}
 
 	// Build the chunk parts for the incoming data
@@ -250,6 +245,13 @@ void TupleDataAllocator::ReleaseOrStoreHandles(TupleDataManagementState &state, 
 	ReleaseOrStoreHandlesInternal(state.row_handles, chunk.row_block_ids, segment, state.properties);
 	if (!layout.AllConstant()) {
 		ReleaseOrStoreHandlesInternal(state.heap_handles, chunk.heap_block_ids, segment, state.properties);
+	}
+}
+
+void TupleDataAllocator::ReleaseOrStoreHandles(TupleDataManagementState &state, TupleDataSegment &segment) const {
+	if (state.properties == TupleDataPinProperties::KEEP_EVERYTHING_PINNED) {
+		static TupleDataChunk DUMMY_CHUNK;
+		ReleaseOrStoreHandles(state, segment, DUMMY_CHUNK);
 	}
 }
 

@@ -215,13 +215,6 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState
 		ht.Build(lstate.append_state, lstate.join_keys, lstate.build_chunk);
 	}
 
-	// swizzle if we reach memory limit
-	//	auto approx_ptr_table_size = ht.Count() * 3 * sizeof(data_ptr_t);
-	//	if (can_go_external && ht.SizeInBytes() + approx_ptr_table_size >= gstate.sink_memory_per_thread) {
-	//		lstate.hash_table->SwizzleBlocks();
-	//		gstate.external = true;
-	//	}
-
 	return SinkResultType::NEED_MORE_INPUT;
 }
 

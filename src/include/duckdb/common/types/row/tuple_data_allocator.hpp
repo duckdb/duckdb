@@ -67,8 +67,10 @@ public:
 	//! Initializes a chunk, making its pointers valid
 	void InitializeChunkState(TupleDataManagementState &state, TupleDataSegment &segment, idx_t chunk_idx,
 	                          bool init_heap);
-	//! Releases or stores any handles that are no longer required
+	//! Releases or stores any handles in the management state that are no longer required
 	void ReleaseOrStoreHandles(TupleDataManagementState &state, TupleDataSegment &segment, TupleDataChunk &chunk) const;
+	//! Releases or stores ALL handles in the management state
+	void ReleaseOrStoreHandles(TupleDataManagementState &state, TupleDataSegment &segment) const;
 
 private:
 	//! Builds out a single part (grabs the lock)

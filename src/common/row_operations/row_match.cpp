@@ -212,7 +212,6 @@ template <class OP, bool NO_MATCH_SEL>
 static void TemplatedMatchList(Vector &col, Vector &rows, SelectionVector &sel, idx_t &count,
                                const TupleDataLayout &layout, const idx_t col_no, SelectionVector *no_match,
                                idx_t &no_match_count) {
-	throw NotImplementedException("TupleDataLayout in TemplatedMatchList");
 	// Gather a dense Vector containing the column values being matched
 	auto row_layout = layout.GetRowLayout();
 	Vector key(col.GetType());

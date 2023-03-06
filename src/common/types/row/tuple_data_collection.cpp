@@ -53,7 +53,6 @@ void TupleDataCollection::Initialize() {
 	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
 		scatter_functions.emplace_back(GetScatterFunction(layout, col_idx));
 	}
-
 	gather_functions.reserve(layout.ColumnCount());
 	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
 		gather_functions.emplace_back(GetGatherFunction(layout, col_idx));
@@ -152,15 +151,17 @@ void TupleDataCollection::Append(TupleDataAppendState &append_state, DataChunk &
 
 	// Set the validity mask for each row before inserting data
 	auto row_locations = FlatVector::GetData<data_ptr_t>(append_state.chunk_state.row_locations);
-	for (idx_t i = 0; i < append_count; ++i) {
+	for (idx_t i = 0; i < append_count; i++) {
 		ValidityBytes(row_locations[i]).SetAllValid(layout.ColumnCount());
 	}
 
-	// Set the heap size for each row
-	const auto heap_size_offset = layout.GetHeapSizeOffset();
-	const auto heap_sizes = FlatVector::GetData<idx_t>(append_state.chunk_state.heap_sizes);
-	for (idx_t i = 0; i < append_count; i++) {
-		Store<uint32_t>(heap_sizes[i], row_locations[i] + heap_size_offset);
+	if (!layout.AllConstant()) {
+		// Set the heap size for each row
+		const auto heap_size_offset = layout.GetHeapSizeOffset();
+		const auto heap_sizes = FlatVector::GetData<idx_t>(append_state.chunk_state.heap_sizes);
+		for (idx_t i = 0; i < append_count; i++) {
+			Store<uint32_t>(heap_sizes[i], row_locations[i] + heap_size_offset);
+		}
 	}
 
 	// Write the data
@@ -208,7 +209,7 @@ void TupleDataCollection::Combine(TupleDataCollection &other) {
 	Verify();
 }
 
-void TupleDataCollection::InitializeScanChunk(DataChunk &chunk) const {
+void TupleDataCollection::InitializeChunk(DataChunk &chunk) const {
 	chunk.Initialize(allocator->GetAllocator(), layout.GetTypes());
 }
 
@@ -538,10 +539,7 @@ TupleDataScatterFunction TupleDataCollection::GetScatterFunction(const TupleData
 }
 
 void TupleDataCollection::FinalizeChunkState(TupleDataManagementState &state) {
-	if (state.properties == TupleDataPinProperties::KEEP_EVERYTHING_PINNED) {
-		static TupleDataChunk DUMMY_CHUNK;
-		allocator->ReleaseOrStoreHandles(state, segments.back(), DUMMY_CHUNK);
-	}
+	allocator->ReleaseOrStoreHandles(state, segments.back());
 }
 
 bool TupleDataCollection::NextScanIndex(TupleDataScanState &state, idx_t &segment_index, idx_t &chunk_index) const {
@@ -742,7 +740,7 @@ void TupleDataCollection::Unpin() {
 
 string TupleDataCollection::ToString() {
 	DataChunk chunk;
-	InitializeScanChunk(chunk);
+	InitializeChunk(chunk);
 
 	TupleDataScanState scan_state;
 	InitializeScan(scan_state);
