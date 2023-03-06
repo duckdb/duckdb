@@ -40,6 +40,8 @@ def test_http_exception(require):
     with raises(duckdb.HTTPException) as exc:
         connection.execute("SELECT * FROM PARQUET_SCAN('https://example.com/userdata1.parquet')")
 
-    assert exc.value.status_code == 404
-    assert exc.value.headers
-    assert 'example.com' in exc.value.headers["host"]
+    value = exc.value
+    assert value.status_code == 404
+    assert value.reason == 'Not Found'
+    assert value.body == 'NOT YET SUPPORTED'
+    assert 'Content-Length' in value.headers
