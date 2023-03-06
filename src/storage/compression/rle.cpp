@@ -1,5 +1,5 @@
 #include "duckdb/function/compression/compression.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
+
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/config.hpp"
@@ -175,7 +175,7 @@ struct RLECompressState : public CompressionState {
 
 		// update meta data
 		if (WRITE_STATISTICS && !is_null) {
-			NumericStatistics::Update<T>(current_segment->stats, value);
+			NumericStats::Update<T>(current_segment->stats.statistics, value);
 		}
 		current_segment->count += count;
 

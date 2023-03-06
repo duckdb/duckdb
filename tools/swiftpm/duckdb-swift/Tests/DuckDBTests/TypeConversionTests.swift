@@ -234,6 +234,172 @@ final class TypeConversionTests: XCTestCase {
     ]
     try extractTest(testColumnName: "dec38_10", expected: expected) { $0.cast(to: Decimal.self) }
   }
+  
+  func test_extract_from_enum_small() throws {
+    enum SmallEnum: UInt8, RawRepresentable, Decodable {
+      case duckDuckEnum
+      case goose
+    }
+    let expected = [SmallEnum.duckDuckEnum, .goose, nil]
+    try extractTest(
+      testColumnName: "small_enum", expected: expected) { $0.cast(to: SmallEnum.self) }
+  }
+  
+  func test_extract_from_enum_medium() throws {
+    enum SmallEnum: UInt16, RawRepresentable, Decodable {
+      case enum0
+      case enum299 = 299
+    }
+    let expected = [SmallEnum.enum0, .enum299, nil]
+    try extractTest(
+      testColumnName: "medium_enum", expected: expected) { $0.cast(to: SmallEnum.self) }
+  }
+  
+  func test_extract_from_enum_large() throws {
+    enum SmallEnum: UInt32, RawRepresentable, Decodable {
+      case enum0
+      case enum69_999 = 69_999
+    }
+    let expected = [SmallEnum.enum0, .enum69_999, nil]
+    try extractTest(
+      testColumnName: "large_enum", expected: expected) { $0.cast(to: SmallEnum.self) }
+  }
+  
+  func test_extract_from_int_array() throws {
+    let expected = [[], [Int32(42), 999, nil, nil, -42], nil]
+    try extractTest(testColumnName: "int_array", expected: expected) { $0.cast(to: [Int32?].self) }
+  }
+  
+  func test_extract_from_double_array() throws {
+    // We need this contraption to work around .nan != .nan
+    enum DoubleBox: Equatable {
+      case normal(Double?)
+      case nan
+      init(_ source: Double?) {
+        switch source {
+        case let source? where source.isNaN:
+          self = .nan
+        case let source:
+          self = .normal(source)
+        }
+      }
+    }
+    let source = [[], [Double(42), .nan, .infinity, -.infinity, nil, -42], nil]
+    let expected = source.map { $0?.map(DoubleBox.init(_:)) }
+    let connection = try Database(store: .inMemory).connect()
+    let result = try connection.query("SELECT double_array FROM test_all_types();")
+    let column = result[0].cast(to: [Double?].self)
+    for (index, item) in expected.enumerated() {
+      XCTAssertEqual(column[DBInt(index)]?.map(DoubleBox.init(_:)), item)
+    }
+  }
+  
+  func test_extract_from_date_array() throws {
+    let expected = [
+      [],
+      [
+        Date(components: .init(year: 1970, month: 01, day: 01)),
+        Date(days: 2147483647),
+        Date(days: -2147483647),
+        nil,
+        Date(components: .init(year: 2022, month: 05, day: 12)),
+      ],
+      nil
+    ]
+    try extractTest(
+      testColumnName: "date_array", expected: expected
+    ) { $0.cast(to: [DuckDB.Date?].self) }
+  }
+  
+  func test_extract_from_timestamptz_array() throws {
+    let t1 = Timestamp.Components(
+      year: 1970, month: 01, day: 01, hour: 0, minute: 0, second: 0, microsecond: 0)
+    let t2 = Timestamp.Components(
+      year: 2022, month: 05, day: 12, hour: 23, minute: 23, second: 45, microsecond: 0)
+    let expected = [
+      [],
+      [
+        Timestamp(components: t1),
+        Timestamp(microseconds: 9223372036854775807),
+        Timestamp(microseconds: -9223372036854775807),
+        nil,
+        Timestamp(components: t2),
+      ],
+      nil
+    ]
+    try extractTest(
+      testColumnName: "timestamptz_array", expected: expected
+    ) { $0.cast(to: [Timestamp?].self) }
+  }
+  
+  func test_extract_from_varchar_array() throws {
+    let expected = [[], ["🦆🦆🦆🦆🦆🦆", "goose", nil, ""], nil]
+    try extractTest(
+      testColumnName: "varchar_array", expected: expected
+    ) { $0.cast(to: [String?].self) }
+  }
+  
+  func test_extract_from_nested_int_array() throws {
+    let expected = [
+      [],
+      [[], [Int32(42), 999, nil, nil, -42], nil, [], [42, 999, nil, nil, -42]],
+      nil
+    ]
+    try extractTest(
+      testColumnName: "nested_int_array", expected: expected
+    ) { $0.cast(to: [[Int32?]?].self) }
+  }
+  
+  func test_extract_from_struct() throws {
+    struct TestStruct: Decodable, Equatable {
+      var a: Int32? = nil
+      var b: String? = nil
+    }
+    let expected = [
+      TestStruct(),
+      TestStruct(a: 42, b: "🦆🦆🦆🦆🦆🦆"),
+      nil
+    ]
+    try extractTest(testColumnName: "struct", expected: expected) { $0.cast(to: TestStruct.self) }
+  }
+  
+  func test_extract_from_struct_of_arrays() throws {
+    struct TestStruct: Decodable, Equatable {
+      var a: [Int32?]? = nil
+      var b: [String?]? = nil
+    }
+    let expected = [
+      TestStruct(a: nil, b: nil),
+      TestStruct(a: [42, 999, nil, nil, -42], b:  ["🦆🦆🦆🦆🦆🦆", "goose", nil, ""]),
+      nil
+    ]
+    try extractTest(
+      testColumnName: "struct_of_arrays", expected: expected) { $0.cast(to: TestStruct.self) }
+  }
+  
+  func test_extract_from_array_of_structs() throws {
+    struct TestStruct: Decodable, Equatable {
+      var a: Int32? = nil
+      var b: String? = nil
+    }
+    let expected = [
+      [],
+      [TestStruct(a: nil, b: nil), TestStruct(a: 42, b: "🦆🦆🦆🦆🦆🦆"), nil],
+      nil
+    ]
+    try extractTest(
+      testColumnName: "array_of_structs", expected: expected) { $0.cast(to: [TestStruct?].self) }
+  }
+  
+  func test_extract_from_map() throws {
+    let expected = [
+      Dictionary(),
+      Dictionary(uniqueKeysWithValues: [("key1", "🦆🦆🦆🦆🦆🦆"), ("key2", "goose")]),
+      nil
+    ]
+    try extractTest(
+      testColumnName: "map", expected: expected) { $0.cast(to: [String: String].self) }
+  }
 }
 
 private extension TypeConversionTests {

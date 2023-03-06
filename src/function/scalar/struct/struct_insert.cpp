@@ -3,7 +3,7 @@
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb/storage/statistics/struct_statistics.hpp"
+#include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
@@ -81,22 +81,19 @@ static unique_ptr<FunctionData> StructInsertBind(ClientContext &context, ScalarF
 unique_ptr<BaseStatistics> StructInsertStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
-	if (child_stats.empty() || !child_stats[0]) {
-		return nullptr;
-	}
-	auto &existing_struct_stats = (StructStatistics &)*child_stats[0];
-	auto new_struct_stats = make_unique<StructStatistics>(expr.return_type);
+	auto new_struct_stats = StructStats::CreateUnknown(expr.return_type);
 
-	for (idx_t i = 0; i < existing_struct_stats.child_stats.size(); i++) {
-		new_struct_stats->child_stats[i] =
-		    existing_struct_stats.child_stats[i] ? existing_struct_stats.child_stats[i]->Copy() : nullptr;
+	auto existing_count = StructType::GetChildCount(child_stats[0].GetType());
+	auto existing_stats = StructStats::GetChildStats(child_stats[0]);
+	for (idx_t i = 0; i < existing_count; i++) {
+		StructStats::SetChildStats(new_struct_stats, i, existing_stats[i]);
 	}
-
-	auto offset = new_struct_stats->child_stats.size() - child_stats.size();
+	auto new_count = StructType::GetChildCount(expr.return_type);
+	auto offset = new_count - child_stats.size();
 	for (idx_t i = 1; i < child_stats.size(); i++) {
-		new_struct_stats->child_stats[offset + i] = child_stats[i] ? child_stats[i]->Copy() : nullptr;
+		StructStats::SetChildStats(new_struct_stats, offset + i, child_stats[i]);
 	}
-	return std::move(new_struct_stats);
+	return new_struct_stats.ToUnique();
 }
 
 void StructInsertFun::RegisterFunction(BuiltinFunctions &set) {
