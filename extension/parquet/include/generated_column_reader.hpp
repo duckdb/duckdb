@@ -29,17 +29,7 @@ public:
 	           Vector &result) override;
 
 	unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns) override {
-		switch (type.id()) {
-		case LogicalTypeId::VARCHAR: {
-			auto string_stats = make_unique<StringStatistics>(type, StatisticsType::LOCAL_STATS);
-			string string = constant.ToString();
-			string_stats->Update(string);
-			string_stats->max_string_length = string.length();
-			return std::move(string_stats);
-		}
-		default:
-			return nullptr;
-		}
+		return BaseStatistics::FromConstant(constant).ToUnique();
 	};
 
 	void InitializeRead(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns,

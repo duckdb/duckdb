@@ -449,6 +449,9 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 		dependencies.push_back(
 		    make_shared<PythonDependencies>(make_unique<RegisteredArrow>(std::move(stream_factory), python_object)));
 		connection->context->external_dependencies[name] = std::move(dependencies);
+	} else if (DuckDBPyRelation::IsRelation(python_object)) {
+		auto pyrel = py::cast<DuckDBPyRelation *>(python_object);
+		pyrel->CreateView(name, true);
 	} else {
 		auto py_object_type = string(py::str(python_object.get_type().attr("__name__")));
 		throw InvalidInputException("Python Object %s not suitable to be registered as a view", py_object_type);

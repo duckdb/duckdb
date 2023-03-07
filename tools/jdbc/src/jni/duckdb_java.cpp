@@ -243,23 +243,44 @@ static jobject decode_charbuffer_to_jstring(JNIEnv *env, const char *d_str, idx_
 	return j_str;
 }
 
+/**
+ * Associates a duckdb::Connection with a duckdb::DuckDB. The DB may be shared amongst many ConnectionHolders, but the
+ * Connection is unique to this holder. Every Java DuckDBConnection has exactly 1 of these holders, and they are never
+ * shared. The holder is freed when the DuckDBConnection is closed. When the last holder sharing a DuckDB is freed, the
+ * DuckDB is released as well.
+ */
+struct ConnectionHolder {
+	const shared_ptr<duckdb::DuckDB> db;
+	const unique_ptr<duckdb::Connection> connection;
+
+	ConnectionHolder(shared_ptr<duckdb::DuckDB> _db) : db(_db), connection(make_unique<duckdb::Connection>(*_db)) {
+	}
+};
+
+/**
+ * Throws a SQLException and returns nullptr if a valid Connection can't be retrieved from the buffer.
+ */
 static Connection *get_connection(JNIEnv *env, jobject conn_ref_buf) {
-	if (conn_ref_buf) {
-		auto conn_ref = (Connection *)env->GetDirectBufferAddress(conn_ref_buf);
-		if (conn_ref && conn_ref->context) {
-			return conn_ref;
-		}
+	if (!conn_ref_buf) {
+		env->ThrowNew(J_SQLException, "Invalid connection");
+		return nullptr;
+	}
+	auto conn_holder = (ConnectionHolder *)env->GetDirectBufferAddress(conn_ref_buf);
+	if (!conn_holder) {
+		env->ThrowNew(J_SQLException, "Invalid connection");
+		return nullptr;
+	}
+	auto conn_ref = conn_holder->connection.get();
+	if (!conn_ref || !conn_ref->context) {
+		env->ThrowNew(J_SQLException, "Invalid connection");
+		return nullptr;
 	}
 
-	env->ThrowNew(J_SQLException, "Invalid connection");
-	return nullptr;
+	return conn_ref;
 }
 
 //! The database instance cache, used so that multiple connections to the same file point to the same database object
 duckdb::DBInstanceCache instance_cache;
-std::mutex db_map_lock;
-//! A map of pointer to shared_ptr, to ensure we keep the DuckDB object alive
-std::unordered_map<duckdb::DuckDB *, shared_ptr<duckdb::DuckDB>> db_map;
 
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNIEnv *env, jclass, jbyteArray database_j,
                                                                              jboolean read_only, jobject props) {
@@ -294,11 +315,9 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNI
 		}
 		bool cache_instance = database != ":memory:" && !database.empty();
 		auto shared_db = instance_cache.GetOrCreateInstance(database, config, cache_instance);
-		auto db = shared_db.get();
-		std::lock_guard<std::mutex> lock(db_map_lock);
-		db_map[db] = std::move(shared_db);
+		auto conn_holder = new ConnectionHolder(shared_db);
 
-		return env->NewDirectByteBuffer(db, 0);
+		return env->NewDirectByteBuffer(conn_holder, 0);
 	} catch (exception &e) {
 		env->ThrowNew(J_SQLException, e.what());
 		return nullptr;
@@ -306,18 +325,11 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNI
 	return nullptr;
 }
 
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1shutdown(JNIEnv *env, jclass, jobject db_ref_buf) {
-	auto db_ref = (DuckDB *)env->GetDirectBufferAddress(db_ref_buf);
-	if (db_ref) {
-		std::lock_guard<std::mutex> lock(db_map_lock);
-		db_map.erase(db_ref);
-	}
-}
-
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1connect(JNIEnv *env, jclass, jobject db_ref_buf) {
-	auto db_ref = (DuckDB *)env->GetDirectBufferAddress(db_ref_buf);
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1connect(JNIEnv *env, jclass,
+                                                                             jobject conn_ref_buf) {
+	auto conn_ref = (ConnectionHolder *)env->GetDirectBufferAddress(conn_ref_buf);
 	try {
-		auto conn = new Connection(*db_ref);
+		auto conn = new ConnectionHolder(conn_ref->db);
 		return env->NewDirectByteBuffer(conn, 0);
 	} catch (exception &e) {
 		env->ThrowNew(J_SQLException, e.what());
@@ -356,25 +368,25 @@ JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1catalo
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1auto_1commit(JNIEnv *env, jclass,
                                                                                     jobject conn_ref_buf,
                                                                                     jboolean auto_commit) {
-	auto conn_ref = (Connection *)env->GetDirectBufferAddress(conn_ref_buf);
-	if (!conn_ref || !conn_ref->context) {
-		env->ThrowNew(J_SQLException, "Invalid connection");
+	auto conn_ref = get_connection(env, conn_ref_buf);
+	if (!conn_ref) {
+		return;
 	}
 	conn_ref->context->RunFunctionInTransaction([&]() { conn_ref->SetAutoCommit(auto_commit); });
 }
 
 JNIEXPORT jboolean JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1auto_1commit(JNIEnv *env, jclass,
                                                                                         jobject conn_ref_buf) {
-	auto conn_ref = (Connection *)env->GetDirectBufferAddress(conn_ref_buf);
+	auto conn_ref = get_connection(env, conn_ref_buf);
 	if (!conn_ref) {
-		env->ThrowNew(J_SQLException, "Invalid connection");
+		return false;
 	}
 	return conn_ref->IsAutoCommit();
 }
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1disconnect(JNIEnv *env, jclass,
                                                                              jobject conn_ref_buf) {
-	auto conn_ref = (Connection *)env->GetDirectBufferAddress(conn_ref_buf);
+	auto conn_ref = (ConnectionHolder *)env->GetDirectBufferAddress(conn_ref_buf);
 	if (conn_ref) {
 		delete conn_ref;
 	}
@@ -388,9 +400,8 @@ struct StatementHolder {
 
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNIEnv *env, jclass, jobject conn_ref_buf,
                                                                              jbyteArray query_j) {
-	auto conn_ref = (Connection *)env->GetDirectBufferAddress(conn_ref_buf);
+	auto conn_ref = get_connection(env, conn_ref_buf);
 	if (!conn_ref) {
-		env->ThrowNew(J_SQLException, "Invalid connection");
 		return nullptr;
 	}
 
@@ -807,9 +818,8 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1create_1app
                                                                                       jbyteArray schema_name_j,
                                                                                       jbyteArray table_name_j) {
 
-	auto conn_ref = (Connection *)env->GetDirectBufferAddress(conn_ref_buf);
-	if (!conn_ref || !conn_ref->context) {
-		env->ThrowNew(J_SQLException, "Invalid connection");
+	auto conn_ref = get_connection(env, conn_ref_buf);
+	if (!conn_ref) {
 		return nullptr;
 	}
 	auto schema_name = byte_array_to_string(env, schema_name_j);

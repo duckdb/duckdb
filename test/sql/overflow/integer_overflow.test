@@ -12,12 +12,16 @@ SELECT 100::TINYINT + 1::TINYINT
 
 statement error
 SELECT 100::TINYINT + 50::TINYINT
+----
+Out of Range Error: Overflow
 
 statement ok
 SELECT 0::TINYINT + -127::TINYINT
 
 statement error
 SELECT -2::TINYINT + -127::TINYINT
+----
+Out of Range Error: Overflow
 
 # smallint
 statement ok
@@ -25,12 +29,16 @@ SELECT 30000::SMALLINT + 1::SMALLINT
 
 statement error
 SELECT 30000::SMALLINT + 5000::SMALLINT
+----
+Out of Range Error: Overflow
 
 statement ok
 SELECT 0::SMALLINT + -32767::SMALLINT
 
 statement error
 SELECT -2::SMALLINT + -32767::SMALLINT
+----
+Out of Range Error: Overflow
 
 # integer
 statement ok
@@ -38,12 +46,16 @@ SELECT 2147483640::INTEGER + 1::INTEGER
 
 statement error
 SELECT 2147483640::INTEGER + 5000::INTEGER
+----
+Out of Range Error: Overflow
 
 statement ok
 SELECT 0::INTEGER + -2147483647::INTEGER
 
 statement error
 SELECT -2::INTEGER + -2147483647::INTEGER
+----
+Out of Range Error: Overflow
 
 # bigint
 statement ok
@@ -51,12 +63,16 @@ SELECT 9223372036854775800::BIGINT + 1::BIGINT
 
 statement error
 SELECT 9223372036854775800::BIGINT + 5000::BIGINT
+----
+Out of Range Error: Overflow
 
 statement ok
 SELECT 0::BIGINT + -9223372036854775807::BIGINT
 
 statement error
 SELECT -2::BIGINT + -9223372036854775808::BIGINT
+----
+Conversion Error
 
 # subtraction
 # tinyint
@@ -65,12 +81,16 @@ SELECT -100::TINYINT - 1::TINYINT
 
 statement error
 SELECT -100::TINYINT - 50::TINYINT
+----
+Out of Range Error: Overflow
 
 statement ok
 SELECT 0::TINYINT - 127::TINYINT
 
 statement error
 SELECT -2::TINYINT - 127::TINYINT
+----
+Out of Range Error: Overflow
 
 # smallint
 statement ok
@@ -78,12 +98,16 @@ SELECT -30000::SMALLINT - 1::SMALLINT
 
 statement error
 SELECT -30000::SMALLINT - 5000::SMALLINT
+----
+Out of Range Error: Overflow
 
 statement ok
 SELECT 0::SMALLINT - 32767::SMALLINT
 
 statement error
 SELECT -2::SMALLINT - 32767::SMALLINT
+----
+Out of Range Error: Overflow
 
 # integer
 statement ok
@@ -91,12 +115,16 @@ SELECT -2147483640::INTEGER - 1::INTEGER
 
 statement error
 SELECT -2147483640::INTEGER - 5000::INTEGER
+----
+Out of Range Error: Overflow
 
 statement ok
 SELECT 0::INTEGER - 2147483647::INTEGER
 
 statement error
 SELECT -2::INTEGER - 2147483647::INTEGER
+----
+Out of Range Error: Overflow
 
 # bigint
 statement ok
@@ -104,12 +132,16 @@ SELECT -9223372036854775800::BIGINT - 1::BIGINT
 
 statement error
 SELECT -9223372036854775800::BIGINT - 5000::BIGINT
+----
+Out of Range Error: Overflow
 
 statement ok
 SELECT 0::BIGINT - 9223372036854775807::BIGINT
 
 statement error
 SELECT -2::BIGINT - 9223372036854775807::BIGINT
+----
+Out of Range Error: Overflow
 
 # multiplication
 # tinyint
@@ -118,6 +150,8 @@ SELECT 50::TINYINT * 2::TINYINT
 
 statement error
 SELECT 50::TINYINT * 3::TINYINT
+----
+Out of Range Error: Overflow
 
 statement ok
 SELECT -1::TINYINT * 127::TINYINT
@@ -127,6 +161,8 @@ SELECT -2::TINYINT * 64::TINYINT
 
 statement error
 SELECT -2::TINYINT * 65::TINYINT
+----
+Out of Range Error: Overflow
 
 # smallint
 statement ok
@@ -134,6 +170,8 @@ SELECT 15000::SMALLINT * 2::SMALLINT
 
 statement error
 SELECT 15000::SMALLINT * 3::SMALLINT
+----
+Out of Range Error: Overflow
 
 statement ok
 SELECT -1::SMALLINT * 32767::SMALLINT
@@ -143,6 +181,8 @@ SELECT -2::SMALLINT * 16384::SMALLINT
 
 statement error
 SELECT -2::SMALLINT * 16385::SMALLINT
+----
+Out of Range Error: Overflow
 
 # integer
 statement ok
@@ -150,6 +190,8 @@ SELECT 1073741820::INTEGER * 2::INTEGER
 
 statement error
 SELECT 1073741820::INTEGER * 3::INTEGER
+----
+Out of Range Error: Overflow
 
 statement ok
 SELECT -1::INTEGER * 2147483647::INTEGER
@@ -159,6 +201,8 @@ SELECT -2::INTEGER * 1073741824::INTEGER
 
 statement error
 SELECT -2::INTEGER * 1073741825::INTEGER
+----
+Out of Range Error: Overflow
 
 # bigint
 statement ok
@@ -166,9 +210,13 @@ SELECT 4611686018427387900::BIGINT * 2::BIGINT
 
 statement error
 SELECT 4611686018427387900::BIGINT * 3::BIGINT
+----
+Out of Range Error: Overflow
 
 statement ok
 SELECT -1::BIGINT * 9223372036854775807::BIGINT
 
 statement error
 SELECT -2::BIGINT * 4611686018427387905::BIGINT
+----
+Out of Range Error: Overflow

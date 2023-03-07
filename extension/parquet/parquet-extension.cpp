@@ -368,7 +368,10 @@ public:
 		if (!config.options.enable_external_access) {
 			throw PermissionException("Scanning Parquet files is disabled through configuration");
 		}
-		auto file_name = input.inputs[0].GetValue<string>();
+		if (input.inputs[0].IsNull()) {
+			throw ParserException("Parquet reader cannot take NULL list as parameter");
+		}
+		auto file_name = StringValue::Get(input.inputs[0]);
 		ParquetOptions parquet_options(context);
 		for (auto &kv : input.named_parameters) {
 			auto loption = StringUtil::Lower(kv.first);
@@ -395,10 +398,16 @@ public:
 		if (!config.options.enable_external_access) {
 			throw PermissionException("Scanning Parquet files is disabled through configuration");
 		}
+		if (input.inputs[0].IsNull()) {
+			throw ParserException("Parquet reader cannot take NULL list as parameter");
+		}
 		FileSystem &fs = FileSystem::GetFileSystem(context);
 		vector<string> files;
 		for (auto &val : ListValue::GetChildren(input.inputs[0])) {
-			auto glob_files = ParquetGlob(fs, val.ToString(), context);
+			if (val.IsNull()) {
+				throw ParserException("Parquet reader cannot take NULL input as parameter");
+			}
+			auto glob_files = ParquetGlob(fs, StringValue::Get(val), context);
 			files.insert(files.end(), glob_files.begin(), glob_files.end());
 		}
 		if (files.empty()) {
