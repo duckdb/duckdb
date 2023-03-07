@@ -1,7 +1,8 @@
 # name: test/sql/copy/csv/glob/read_csv_glob_crawl.test
 # description: Test crawling CSVs
-# files from: 'test/sql/copy/csv/data/glob/crawl/'
 # group: [glob]
+
+# files from: 'test/sql/copy/csv/data/glob/crawl/'
 
 statement ok
 PRAGMA enable_verification
