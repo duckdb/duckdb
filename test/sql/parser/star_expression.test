@@ -11,17 +11,16 @@ CREATE TABLE integers AS SELECT 42 i, 84 j UNION ALL SELECT 13, 14
 statement error
 SELECT * FROM integers WHERE *
 ----
-not supported
+Use COLUMNS(*) instead
 
 statement error
 SELECT * FROM integers WHERE * IS NOT NULL
 ----
-not supported
+Use COLUMNS(*) instead
 
-statement error
-SELECT * FROM integers WHERE COLUMNS(*) IS NOT NULL
+query II
+SELECT * FROM integers WHERE COLUMNS(*) IS NULL ORDER BY ALL
 ----
-not supported
 
 statement error
 SELECT * FROM integers GROUP BY COLUMNS(*)
