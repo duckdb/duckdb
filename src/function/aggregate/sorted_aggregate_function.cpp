@@ -4,6 +4,7 @@
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/parser/expression_map.hpp"
 
 namespace duckdb {
 
@@ -364,11 +365,34 @@ struct SortedAggregateFunction {
 	}
 };
 
-void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateExpression &expr) {
+void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateExpression &expr,
+                                         const vector<unique_ptr<Expression>> &groups) {
 	if (!expr.order_bys || expr.order_bys->orders.empty() || expr.children.empty()) {
 		// not a sorted aggregate: return
 		return;
 	}
+	// for each ORDER BY - check if it is actually necessary
+	// expressions that are in the groups do not need to be ORDERED BY
+	// `ORDER BY` on a group has no effect, because for each aggregate, the group is unique
+	// similarly, we only need to ORDER BY each aggregate once
+	expression_set_t seen_expressions;
+	for (auto &target : groups) {
+		seen_expressions.insert(target.get());
+	}
+	vector<BoundOrderByNode> new_order_nodes;
+	for (auto &order_node : expr.order_bys->orders) {
+		if (seen_expressions.find(order_node.expression.get()) != seen_expressions.end()) {
+			// we do not need to order by this node
+			continue;
+		}
+		seen_expressions.insert(order_node.expression.get());
+		new_order_nodes.push_back(std::move(order_node));
+	}
+	if (new_order_nodes.empty()) {
+		expr.order_bys.reset();
+		return;
+	}
+	expr.order_bys->orders = std::move(new_order_nodes);
 	auto &bound_function = expr.function;
 	auto &children = expr.children;
 	auto &order_bys = *expr.order_bys;

@@ -16,8 +16,24 @@ SELECT FIRST(i ORDER BY i) FROM integers
 ----
 10
 
+# ordering by the same aggregate multiple times has no effect
+query I
+SELECT FIRST(i ORDER BY i, i, i) FROM integers
+----
+10
+
+query I
+SELECT FIRST(i ORDER BY i, i DESC, i) FROM integers
+----
+10
+
 query I
 SELECT FIRST(i ORDER BY i DESC) FROM integers
+----
+30
+
+query I
+SELECT FIRST(i ORDER BY i DESC, i ASC) FROM integers
 ----
 30
 
@@ -28,6 +44,13 @@ SELECT FIRST(i ORDER BY i), FIRST(i ORDER BY i DESC) FROM integers
 
 query II
 SELECT grp, FIRST(i ORDER BY i) FROM integers GROUP BY grp ORDER BY ALL
+----
+1	10
+2	15
+
+# ordering by the group has no effect
+query II
+SELECT grp, FIRST(i ORDER BY grp, i, grp DESC, i DESC) FROM integers GROUP BY grp ORDER BY ALL
 ----
 1	10
 2	15

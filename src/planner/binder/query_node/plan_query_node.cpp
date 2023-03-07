@@ -32,11 +32,9 @@ unique_ptr<LogicalOperator> Binder::VisitQueryNode(BoundQueryNode &node, unique_
 					distinct.order_by = std::move(order_by);
 				}
 			}
-			if (!bound.orders.empty()) {
-				auto order = make_unique<LogicalOrder>(std::move(bound.orders));
-				order->AddChild(std::move(root));
-				root = std::move(order);
-			}
+			auto order = make_unique<LogicalOrder>(std::move(bound.orders));
+			order->AddChild(std::move(root));
+			root = std::move(order);
 			break;
 		}
 		case ResultModifierType::LIMIT_MODIFIER: {

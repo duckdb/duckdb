@@ -1,0 +1,38 @@
+# name: test/optimizer/ordered_aggregate.test
+# description: Test ORDER BY in AGGREGATE clause optimizations
+# group: [optimizer]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(grp INTEGER, i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1, 10), (2, 15), (1, 30), (2, 20)
+
+# duplicate expressions are removed
+query I nosort order_by_agg
+EXPLAIN SELECT FIRST(i ORDER BY i) FROM integers
+----
+
+query I nosort order_by_agg
+EXPLAIN SELECT FIRST(i ORDER BY i, i, i) FROM integers
+----
+
+query I nosort order_by_agg
+EXPLAIN SELECT FIRST(i ORDER BY i, i DESC, i DESC NULLS FIRST) FROM integers
+----
+
+# groups are removed
+query I nosort order_by_agg_grp
+EXPLAIN SELECT grp, FIRST(i ORDER BY i) FROM integers GROUP BY grp ORDER BY grp
+----
+
+query I nosort order_by_agg_grp
+EXPLAIN SELECT grp, FIRST(i ORDER BY grp, i) FROM integers GROUP BY grp ORDER BY grp
+----
+
+query I nosort order_by_agg_grp
+EXPLAIN SELECT grp, FIRST(i ORDER BY grp, i, grp DESC, i DESC) FROM integers GROUP BY grp ORDER BY grp
+----
