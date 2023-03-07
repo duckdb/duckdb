@@ -63,8 +63,11 @@ static void TemplatedContainsOrPosition(DataChunk &args, Vector &result, bool is
 			} else {
 				// FIXME: using Value is less efficient than modifying the vector comparison code
 				// to more efficiently compare nested types
-				auto lvalue = child_vector.GetValue(child_value_idx);
-				auto rvalue = value_vector.GetValue(value_index);
+
+				// Note: When using GetValue we don't first apply the selection vector
+				// because it is already done inside GetValue
+				auto lvalue = child_vector.GetValue(list_entry.offset + child_idx);
+				auto rvalue = value_vector.GetValue(i);
 				if (Value::NotDistinctFrom(lvalue, rvalue)) {
 					result_entries[i] = OP::UpdateResultEntries(child_idx);
 					break; // Found value in list, no need to look further

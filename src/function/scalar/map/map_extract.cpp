@@ -27,7 +27,7 @@ void FillResult(Vector &map, Vector &offsets, Vector &result, idx_t count) {
 
 		// Get the current size of the list, for the offset
 		idx_t current_offset = ListVector::GetListSize(result);
-		if (!offset) {
+		if (!offset_data.validity.RowIsValid(offset_idx) || !offset) {
 			// Set the entry data for this result row
 			idx_t result_index = result_data.sel->get_index(row);
 			auto &entry = ((list_entry_t *)result_data.data)[result_index];
