@@ -62,11 +62,15 @@ void append_boolean(append_info info, int32_t value) {
 // value is a Julian date
 // FIXME: direct int conversion, offsets should be constant
 void append_date(append_info info, int64_t value) {
-	date_t dTemp;
-	jtodt(&dTemp, (int)value);
-	auto ddate = duckdb::Date::FromDate(dTemp.year, dTemp.month, dTemp.day);
 	auto append_info = (tpcds_append_information *)info;
-	append_info->appender.Append<duckdb::date_t>(ddate);
+	if (value < 0) {
+		append_info->appender.Append(nullptr);
+	} else {
+		date_t dTemp;
+		jtodt(&dTemp, (int)value);
+		auto ddate = duckdb::Date::FromDate(dTemp.year, dTemp.month, dTemp.day);
+		append_info->appender.Append<duckdb::date_t>(ddate);
+	}
 }
 
 void append_decimal(append_info info, decimal_t *val) {
