@@ -525,7 +525,9 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 	InitializeClient();
 	auto &hfs = (HTTPFileSystem &)file_system;
 	state = HTTPState::TryGetState(opener);
-	D_ASSERT(state);
+	if (!state) {
+		throw InternalException("State was not defined in this HTTP File Handle");
+	}
 	auto &cached_file = state->cached_files[path];
 
 	HTTPMetadataCache *current_cache = TryGetMetadataCache(opener, hfs);
