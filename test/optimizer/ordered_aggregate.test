@@ -36,3 +36,49 @@ EXPLAIN SELECT grp, FIRST(i ORDER BY grp, i) FROM integers GROUP BY grp ORDER BY
 query I nosort order_by_agg_grp
 EXPLAIN SELECT grp, FIRST(i ORDER BY grp, i, grp DESC, i DESC) FROM integers GROUP BY grp ORDER BY grp
 ----
+
+# now with no remaining aggregates
+query I nosort order_by_none
+EXPLAIN SELECT grp, FIRST(i) FROM integers GROUP BY grp ORDER BY grp
+----
+
+query I nosort order_by_none
+EXPLAIN SELECT grp, FIRST(i ORDER BY grp) FROM integers GROUP BY grp ORDER BY grp
+----
+
+query I nosort order_by_none
+EXPLAIN SELECT grp, FIRST(i ORDER BY grp, grp DESC, grp DESC NULLS FIRST) FROM integers GROUP BY grp ORDER BY grp
+----
+
+# ORDER BY is removed from aggregates for which it has no effect
+query I nosort order_by_min
+EXPLAIN SELECT MIN(i) FROM integers
+----
+
+query I nosort order_by_min
+EXPLAIN SELECT MIN(i ORDER BY i) FROM integers
+----
+
+query I nosort order_by_max
+EXPLAIN SELECT MAX(i) FROM integers
+----
+
+query I nosort order_by_max
+EXPLAIN SELECT MAX(i ORDER BY i) FROM integers
+----
+
+query I nosort order_by_median
+EXPLAIN SELECT MEDIAN(i) FROM integers
+----
+
+query I nosort order_by_median
+EXPLAIN SELECT MEDIAN(i ORDER BY i) FROM integers
+----
+
+query I nosort order_by_sum
+EXPLAIN SELECT SUM(i) FROM integers
+----
+
+query I nosort order_by_sum
+EXPLAIN SELECT SUM(i ORDER BY i) FROM integers
+----
