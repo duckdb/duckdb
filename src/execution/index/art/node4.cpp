@@ -122,11 +122,12 @@ void Node4::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
 	if (n4->count == 1) {
 
 		// get only child and concatenate prefixes
-		auto child = n4->GetChild(0);
-		child->GetPrefix(art)->Concatenate(art, n4->key[0], *node.GetPrefix(art));
+		auto child = *n4->GetChild(0);
+		child.GetPrefix(art)->Concatenate(art, n4->key[0], *node.GetPrefix(art));
+		n4->count--;
 
 		ARTNode::Free(art, node);
-		node = *child;
+		node = child;
 	}
 }
 

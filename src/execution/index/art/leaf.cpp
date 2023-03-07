@@ -100,15 +100,16 @@ void Leaf::InitializeMerge(ART &art, const idx_t &buffer_count) {
 		return;
 	}
 
-	auto position = row_ids.position;
+	auto segment = LeafSegment::Get(art, row_ids.position);
 	D_ASSERT((row_ids.position & 0xffff0000) == ((row_ids.position + buffer_count) & 0xffff0000));
 	row_ids.position += buffer_count;
 
+	auto position = segment->next;
 	while (position != DConstants::INVALID_INDEX) {
-		auto segment = LeafSegment::Get(art, position);
-		position = segment->next;
 		D_ASSERT((segment->next & 0xffff0000) == ((segment->next + buffer_count) & 0xffff0000));
 		segment->next += buffer_count;
+		segment = LeafSegment::Get(art, position);
+		position = segment->next;
 	}
 }
 
@@ -208,10 +209,11 @@ void Leaf::Remove(ART &art, const row_t &row_id) {
 
 	// find the row ID, and the segment containing that row ID
 	auto position = row_ids.position;
-	auto row_id_position = FindRowId(art, position, row_id);
-	if (row_id_position == DConstants::INVALID_INDEX) {
+	auto start = FindRowId(art, position, row_id);
+	if (start == (uint32_t)DConstants::INVALID_INDEX) {
 		return;
 	}
+	start++;
 
 	// iterate all remaining segments and move the row IDs one field to the left
 	LeafSegment *prev_segment = nullptr;
@@ -223,13 +225,16 @@ void Leaf::Remove(ART &art, const row_t &row_id) {
 			prev_segment->row_ids[ARTNode::LEAF_SEGMENT_SIZE - 1] = segment->row_ids[0];
 		}
 
+		// calculate how to move the data: min ((count - 1) - (start + 1), (SEGMENT_COUNT - 1) - (start + 1))
+		start = start % ARTNode::LEAF_SEGMENT_SIZE;
+		auto len = std::min(count, ARTNode::LEAF_SEGMENT_SIZE - start);
+
 		// move the data
-		auto start = row_id_position % ARTNode::LEAF_SEGMENT_SIZE;
-		auto len = std::min(count - row_id_position + 1, (idx_t)ARTNode::LEAF_SEGMENT_SIZE);
-		memmove(segment->row_ids + start, segment->row_ids + start + 1, len);
+		D_ASSERT(start > 0);
+		memmove(segment->row_ids + start - 1, segment->row_ids + start, len);
 
 		// adjust loop variables
-		row_id_position += len;
+		start += len;
 		prev_segment = segment;
 		position = segment->next;
 	}
@@ -279,7 +284,7 @@ row_t Leaf::GetRowId(ART &art, const idx_t &position) const {
 	return segment->row_ids[position % ARTNode::LEAF_SEGMENT_SIZE];
 }
 
-idx_t Leaf::FindRowId(ART &art, idx_t &position, const row_t &row_id) const {
+uint32_t Leaf::FindRowId(ART &art, idx_t &position, const row_t &row_id) const {
 	D_ASSERT(!IsInlined());
 
 	auto next_position = position;
@@ -301,12 +306,12 @@ idx_t Leaf::FindRowId(ART &art, idx_t &position, const row_t &row_id) const {
 		remaining -= search_count;
 		next_position = segment->next;
 	}
-	return DConstants::INVALID_INDEX;
+	return (uint32_t)DConstants::INVALID_INDEX;
 }
 
 string Leaf::ToString(ART &art) {
 
-	string str = "Leaf: [";
+	string str = "Leaf (" + to_string(count) + "): [";
 
 	if (IsInlined()) {
 		str += to_string(row_ids.inlined);
@@ -320,7 +325,7 @@ string Leaf::ToString(ART &art) {
 		auto to_string_count = ARTNode::LEAF_SEGMENT_SIZE < remaining ? ARTNode::LEAF_SEGMENT_SIZE : remaining;
 
 		for (idx_t i = 0; i < to_string_count; i++) {
-			str += i == 0 ? to_string(segment->row_ids[i]) : ", " + to_string(segment->row_ids[i]);
+			str += remaining == count ? to_string(segment->row_ids[i]) : ", " + to_string(segment->row_ids[i]);
 		}
 		remaining -= to_string_count;
 		position = segment->next;

@@ -57,7 +57,7 @@ public:
 	//! Get the row ID at pos
 	row_t GetRowId(ART &art, const idx_t &position) const;
 	//! Returns the position of a row ID, and an invalid index, if the leaf does not contain the row ID
-	idx_t FindRowId(ART &art, idx_t &position, const row_t &row_id) const;
+	uint32_t FindRowId(ART &art, idx_t &position, const row_t &row_id) const;
 
 	//! Returns the string representation of a leaf
 	string ToString(ART &art);
