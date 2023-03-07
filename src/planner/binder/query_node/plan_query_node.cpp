@@ -4,6 +4,7 @@
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_limit_percent.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
 
 namespace duckdb {
 
@@ -20,9 +21,22 @@ unique_ptr<LogicalOperator> Binder::VisitQueryNode(BoundQueryNode &node, unique_
 		}
 		case ResultModifierType::ORDER_MODIFIER: {
 			auto &bound = (BoundOrderModifier &)*mod;
-			auto order = make_unique<LogicalOrder>(std::move(bound.orders));
-			order->AddChild(std::move(root));
-			root = std::move(order);
+			unique_ptr<BoundOrderModifier> order_by;
+			if (root->type == LogicalOperatorType::LOGICAL_DISTINCT) {
+				auto &distinct = (LogicalDistinct &)*root;
+				if (!distinct.distinct_targets.empty()) {
+					order_by = make_unique<BoundOrderModifier>();
+					for (auto &order_node : bound.orders) {
+						order_by->orders.push_back(order_node.Copy());
+					}
+					distinct.order_by = std::move(order_by);
+				}
+			}
+			if (!bound.orders.empty()) {
+				auto order = make_unique<LogicalOrder>(std::move(bound.orders));
+				order->AddChild(std::move(root));
+				root = std::move(order);
+			}
 			break;
 		}
 		case ResultModifierType::LIMIT_MODIFIER: {

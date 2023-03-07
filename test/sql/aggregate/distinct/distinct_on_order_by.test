@@ -1,0 +1,75 @@
+# name: test/sql/aggregate/distinct/distinct_on_order_by.test
+# description: Test DISTINCT ON ORDER BY
+# group: [distinct]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER, k INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (2, 3, 5), (4, 5, 6), (2, 7, 6)
+
+query II
+SELECT DISTINCT ON (i) i, j FROM integers ORDER BY i, j DESC;
+----
+2	7
+4	5
+
+query II
+SELECT DISTINCT ON (i) i, j FROM integers ORDER BY i, j;
+----
+2	3
+4	5
+
+# we don't need to ORDER BY i
+query II
+SELECT DISTINCT ON (i) i, j FROM integers ORDER BY j DESC;
+----
+2	7
+4	5
+
+query II
+SELECT DISTINCT ON (i) i, j FROM integers ORDER BY j;
+----
+2	3
+4	5
+
+# DISTINCT ON in correlated subqueries
+query III
+SELECT i, j, (SELECT DISTINCT ON(i) j) AS k FROM integers ORDER BY i, j;
+----
+2	3	3
+2	7	7
+4	5	5
+
+query III
+SELECT i, j, (SELECT DISTINCT ON(i) j ORDER BY i, j DESC) AS k FROM integers ORDER BY i, j;
+----
+2	3	3
+2	7	7
+4	5	5
+
+query III
+SELECT i, j, (SELECT DISTINCT ON(i) j ORDER BY i, k) AS k FROM integers ORDER BY i, j;
+----
+2	3	3
+2	7	7
+4	5	5
+
+# DISTINCT ON with multiple parameters
+statement ok
+INSERT INTO integers VALUES (2, 3, 7), (4, 5, 11)
+
+query III
+SELECT DISTINCT ON(i) i, j, k FROM integers ORDER BY i, j ASC, k ASC
+----
+2	3	5
+4	5	6
+
+query III
+SELECT DISTINCT ON(i) i, j, k FROM integers ORDER BY i, j ASC, k DESC
+----
+2	3	7
+4	5	11
