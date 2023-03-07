@@ -21,6 +21,10 @@ bool Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpressi
 				    "STAR expression is only allowed as the root element of an expression. Use COLUMNS(*) instead.");
 			}
 			// star expression inside a COLUMNS - convert to a constant list
+			if (!current_star->replace_list.empty()) {
+				throw BinderException(
+				    "STAR expression with REPLACE list is only allowed as the root element of COLUMNS");
+			}
 			vector<unique_ptr<ParsedExpression>> star_list;
 			bind_context.GenerateAllColumnExpressions(*current_star, star_list);
 
@@ -33,7 +37,7 @@ bool Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpressi
 			expr = make_unique<ConstantExpression>(Value::LIST(LogicalType::VARCHAR, values));
 			return true;
 		}
-		if (current_star->columns && in_columns) {
+		if (in_columns) {
 			throw BinderException("COLUMNS expression is not allowed inside another COLUMNS expression");
 		}
 		in_columns = true;
@@ -86,13 +90,17 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 		// two options:
 		// VARCHAR parameter <- this is a regular expression
 		// LIST of VARCHAR parameters <- this is a set of columns
-		if (star->expr->HasParameter()) {
-			// cannot resolve parameters here
-			throw ParameterNotResolvedException();
-		}
 		TableFunctionBinder binder(*this, context);
 		auto child = star->expr->Copy();
 		auto result = binder.Bind(child);
+		if (!result->IsFoldable()) {
+			// cannot resolve parameters here
+			if (star->expr->HasParameter()) {
+				throw ParameterNotResolvedException();
+			} else {
+				throw BinderException("Unsupported expression in COLUMNS");
+			}
+		}
 		auto val = ExpressionExecutor::EvaluateScalar(context, *result);
 		if (val.type().id() == LogicalTypeId::VARCHAR) {
 			// regex

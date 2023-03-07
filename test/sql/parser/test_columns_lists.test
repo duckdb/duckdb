@@ -39,6 +39,12 @@ SELECT COLUMNS([x for x in (* EXCLUDE (i))]) FROM integers
 84
 14
 
+# star with replace
+statement error
+SELECT COLUMNS([x for x in (* REPLACE (i AS i))]) FROM integers
+----
+only allowed as the root element
+
 # multiple columns that are the same works
 query I
 SELECT COLUMNS(['i']) + COLUMNS(['i']) FROM integers

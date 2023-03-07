@@ -41,6 +41,12 @@ unique_ptr<ParsedExpression> Transformer::TransformStarExpression(duckdb_libpgqu
 		D_ASSERT(result->exclude_list.empty());
 		D_ASSERT(result->replace_list.empty());
 		result->expr = TransformExpression(star->expr);
+		if (star->columns && result->expr->type == ExpressionType::STAR) {
+			auto child_star = (StarExpression *)result->expr.get();
+			result->exclude_list = std::move(child_star->exclude_list);
+			result->replace_list = std::move(child_star->replace_list);
+			result->expr.reset();
+		}
 	}
 	result->columns = star->columns;
 	result->query_location = star->location;
