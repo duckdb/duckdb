@@ -73,7 +73,7 @@ void TupleDataAllocator::Build(TupleDataSegment &segment, TupleDataManagementSta
 
 	// To reduce metadata, we try to merge chunk parts where possible
 	// Due to the way chunk parts are constructed, only the last part of the first chunk is eligible for merging
-	segment.chunks[chunk_part_indices[0].first].MergeLastChunkPart();
+	segment.chunks[chunk_part_indices[0].first].MergeLastChunkPart(layout);
 
 	segment.Verify();
 }

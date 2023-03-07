@@ -53,7 +53,7 @@ public:
 	//! Add a part to this chunk
 	void AddPart(TupleDataChunkPart &&part);
 	//! Tries to merge the last chunk part into the second-to-last one
-	void MergeLastChunkPart();
+	void MergeLastChunkPart(const TupleDataLayout &layout);
 	//! Verify counts of the parts in this chunk
 	void Verify() const;
 

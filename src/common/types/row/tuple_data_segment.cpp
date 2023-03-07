@@ -42,19 +42,33 @@ void TupleDataChunk::Verify() const {
 #endif
 }
 
-void TupleDataChunk::MergeLastChunkPart() {
+void TupleDataChunk::MergeLastChunkPart(const TupleDataLayout &layout) {
 	if (parts.size() < 2) {
 		return;
 	}
 
-	auto &second_to_last_part = parts[parts.size() - 2];
-	auto &last_part = parts[parts.size() - 1];
-	if (last_part.row_block_index == second_to_last_part.row_block_index &&
-	    last_part.heap_block_index == second_to_last_part.heap_block_index &&
-	    last_part.base_heap_ptr == second_to_last_part.base_heap_ptr) {
-		// These parts have the same row and heap blocks - merge them
-		second_to_last_part.total_heap_size += last_part.total_heap_size;
-		second_to_last_part.count += last_part.count;
+	auto &second_to_last = parts[parts.size() - 2];
+	auto &last = parts[parts.size() - 1];
+
+	auto rows_align =
+	    last.row_block_index == second_to_last.row_block_index &&
+	    last.row_block_offset == second_to_last.row_block_offset + second_to_last.count * layout.GetRowWidth();
+
+	if (!rows_align) { // If rows don't align we can never merge
+		return;
+	}
+
+	if (layout.AllConstant()) { // No heap and rows align - merge
+		second_to_last.count += last.count;
+		parts.pop_back();
+		return;
+	}
+
+	if (last.heap_block_index == second_to_last.heap_block_index &&
+	    last.heap_block_offset == second_to_last.heap_block_index + second_to_last.total_heap_size &&
+	    last.base_heap_ptr == second_to_last.base_heap_ptr) { // There is a heap and it aligns - merge
+		second_to_last.total_heap_size += last.total_heap_size;
+		second_to_last.count += last.count;
 		parts.pop_back();
 	}
 }
