@@ -9,7 +9,7 @@ statement ok
 CREATE TABLE integers(i INTEGER, j INTEGER, k INTEGER);
 
 statement ok
-INSERT INTO integers VALUES (2, 3, 5), (4, 5, 6), (2, 7, 6)
+INSERT INTO integers VALUES (2, 3, 5), (4, 5, 6), (2, 7, 6);
 
 query II
 SELECT DISTINCT ON (i) i, j FROM integers ORDER BY i, j DESC;
@@ -60,7 +60,7 @@ SELECT i, j, (SELECT DISTINCT ON(i) j ORDER BY i, k) AS k FROM integers ORDER BY
 
 # DISTINCT ON with multiple parameters
 statement ok
-INSERT INTO integers VALUES (2, 3, 7), (4, 5, 11)
+INSERT INTO integers VALUES (2, 3, 7), (4, 5, 11);
 
 query III
 SELECT DISTINCT ON(i) i, j, k FROM integers ORDER BY i, j ASC, k ASC
@@ -73,6 +73,28 @@ SELECT DISTINCT ON(i) i, j, k FROM integers ORDER BY i, j ASC, k DESC
 ----
 2	3	7
 4	5	11
+
+# DISTINCT ON with NULL values
+statement ok
+INSERT INTO integers VALUES (2, NULL, 27), (4, 88, NULL);
+
+query III
+SELECT DISTINCT ON(i) i, j, k FROM integers ORDER BY i, j NULLS FIRST, k DESC NULLS LAST;
+----
+2	NULL	27
+4	5	11
+
+query III
+SELECT DISTINCT ON(i) i, j, k FROM integers ORDER BY i, j NULLS FIRST, k NULLS FIRST;
+----
+2	NULL	27
+4	5	6
+
+query III
+SELECT DISTINCT ON(i) i, j, k FROM integers ORDER BY i, k NULLS FIRST, j NULLS FIRST;
+----
+2	3	5
+4	88	NULL
 
 # examples from the original issue
 statement ok

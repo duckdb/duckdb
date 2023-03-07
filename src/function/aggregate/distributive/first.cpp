@@ -237,7 +237,7 @@ AggregateFunction GetDecimalFirstFunction(const LogicalType &type) {
 }
 
 template <bool LAST, bool SKIP_NULLS>
-static AggregateFunction GetFirstFunction(const LogicalType &type) {
+static AggregateFunction GetFirstFunctionInternal(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return GetFirstAggregateTemplated<int8_t, LAST, SKIP_NULLS>(type);
@@ -291,6 +291,13 @@ static AggregateFunction GetFirstFunction(const LogicalType &type) {
 		                         AggregateFunction::StateDestroy<FirstStateVector, OP>, nullptr, nullptr);
 	}
 	}
+}
+
+template <bool LAST, bool SKIP_NULLS>
+static AggregateFunction GetFirstFunction(const LogicalType &type) {
+	auto function = GetFirstFunctionInternal<LAST, SKIP_NULLS>(type);
+	function.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	return function;
 }
 
 AggregateFunction FirstFun::GetFunction(const LogicalType &type) {
