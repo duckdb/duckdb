@@ -3,7 +3,7 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
 #include "duckdb/common/types/bit.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 
@@ -171,22 +171,15 @@ idx_t BitStringAggOperation::GetRange(hugeint_t min, hugeint_t max) {
 }
 
 unique_ptr<BaseStatistics> BitstringPropagateStats(ClientContext &context, BoundAggregateExpression &expr,
-                                                   FunctionData *bind_data,
-                                                   vector<unique_ptr<BaseStatistics>> &child_stats,
-                                                   NodeStatistics *node_stats) {
+                                                   AggregateStatisticsInput &input) {
 
-	if (child_stats[0]) {
-		auto &numeric_stats = (NumericStatistics &)*child_stats[0];
-		if (numeric_stats.min.IsNull() || numeric_stats.max.IsNull()) {
-			return nullptr;
-		}
-		auto bind_agg_data = (BitstringAggBindData *)bind_data;
-		bind_agg_data->min = numeric_stats.min;
-		bind_agg_data->max = numeric_stats.max;
-	} else {
+	if (!NumericStats::HasMinMax(input.child_stats[0])) {
 		throw BinderException("Could not retrieve required statistics. Alternatively, try by providing the statistics "
 		                      "explicitly: BITSTRING_AGG(col, min, max) ");
 	}
+	auto bind_agg_data = (BitstringAggBindData *)input.bind_data;
+	bind_agg_data->min = NumericStats::Min(input.child_stats[0]);
+	bind_agg_data->max = NumericStats::Max(input.child_stats[0]);
 	return nullptr;
 }
 

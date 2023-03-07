@@ -8,8 +8,10 @@ describe('exec', function() {
     });
 
     it("doesn't crash on a syntax error", function(done) {
-        db.exec("syntax error", function(err: null | Error) {
+        db.exec("syntax error", function(err: null | duckdb.DuckDbError) {
             assert.notEqual(err, null, "Expected an error")
+            assert.equal(err?.errorType, 'Parser');
+            assert.ok(err?.message.startsWith('Parser Error: syntax error at or near "syntax"'))
             done();
         });
     });

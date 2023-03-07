@@ -1,9 +1,7 @@
 #include "duckdb/storage/table/update_segment.hpp"
 
 #include "duckdb/storage/statistics/distinct_statistics.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
-#include "duckdb/storage/statistics/string_statistics.hpp"
-#include "duckdb/storage/statistics/validity_statistics.hpp"
+
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/update_info.hpp"
@@ -55,7 +53,7 @@ UpdateSegment::~UpdateSegment() {
 }
 
 void UpdateSegment::ClearUpdates() {
-	stats.Reset();
+	stats.statistics.Copy(BaseStatistics::CreateEmpty(stats.statistics.GetType()));
 	root.reset();
 	heap.Destroy();
 }
@@ -905,17 +903,17 @@ static UpdateSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalTyp
 //===--------------------------------------------------------------------===//
 unique_ptr<BaseStatistics> UpdateSegment::GetStatistics() {
 	lock_guard<mutex> stats_guard(stats_lock);
-	return stats.statistics->Copy();
+	return stats.statistics.ToUnique();
 }
 
 idx_t UpdateValidityStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t count,
                                SelectionVector &sel) {
 	auto &mask = FlatVector::Validity(update);
-	auto &validity = (ValidityStatistics &)*stats.statistics;
-	if (!mask.AllValid() && !validity.has_null) {
+	auto &validity = stats.statistics;
+	if (!mask.AllValid() && !validity.CanHaveNull()) {
 		for (idx_t i = 0; i < count; i++) {
 			if (!mask.RowIsValid(i)) {
-				validity.has_null = true;
+				validity.SetHasNull();
 				break;
 			}
 		}
@@ -932,7 +930,7 @@ idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics
 
 	if (mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			NumericStatistics::Update<T>(stats, update_data[i]);
+			NumericStats::Update<T>(stats.statistics, update_data[i]);
 		}
 		sel.Initialize(nullptr);
 		return count;
@@ -942,7 +940,7 @@ idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics
 		for (idx_t i = 0; i < count; i++) {
 			if (mask.RowIsValid(i)) {
 				sel.set_index(not_null_count++, i);
-				NumericStatistics::Update<T>(stats, update_data[i]);
+				NumericStats::Update<T>(stats.statistics, update_data[i]);
 			}
 		}
 		return not_null_count;
@@ -955,7 +953,7 @@ idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, V
 	auto &mask = FlatVector::Validity(update);
 	if (mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			((StringStatistics &)*stats.statistics).Update(update_data[i]);
+			StringStats::Update(stats.statistics, update_data[i]);
 			if (!update_data[i].IsInlined()) {
 				update_data[i] = segment->GetStringHeap().AddBlob(update_data[i]);
 			}
@@ -968,7 +966,7 @@ idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, V
 		for (idx_t i = 0; i < count; i++) {
 			if (mask.RowIsValid(i)) {
 				sel.set_index(not_null_count++, i);
-				((StringStatistics &)*stats.statistics).Update(update_data[i]);
+				StringStats::Update(stats.statistics, update_data[i]);
 				if (!update_data[i].IsInlined()) {
 					update_data[i] = segment->GetStringHeap().AddBlob(update_data[i]);
 				}

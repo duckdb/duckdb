@@ -19,7 +19,7 @@ BoundOrderByNode::BoundOrderByNode(OrderType type, OrderByNullType null_order, u
 
 BoundOrderByNode BoundOrderByNode::Copy() const {
 	if (stats) {
-		return BoundOrderByNode(type, null_order, expression->Copy(), stats->Copy());
+		return BoundOrderByNode(type, null_order, expression->Copy(), stats->ToUnique());
 	} else {
 		return BoundOrderByNode(type, null_order, expression->Copy());
 	}
