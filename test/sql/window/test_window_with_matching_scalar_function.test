@@ -1,5 +1,5 @@
 # name: test/sql/window/test_window_with_matching_scalar_function.test
-# description: When a scalar macro function with the same name as an aggregate function exists, make sure bind_window returns the aggregate funciton
+# description: When a scalar macro function with the same name as an aggregate function exists, make sure bind_window returns the aggregate function
 # group: [window]
 
 statement ok
