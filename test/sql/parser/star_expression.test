@@ -43,20 +43,16 @@ SELECT * FROM integers GROUP BY i HAVING COLUMNS(*)>42
 ----
 not supported
 
-statement error
+query II
 SELECT * FROM integers ORDER BY *, *
 ----
-not supported
+13	14
+42	84
 
 statement error
 SELECT * FROM integers ORDER BY * + 42
 ----
-not supported
-
-statement error
-SELECT * FROM integers ORDER BY * + 42
-----
-not supported
+only allowed as the root element
 
 statement error
 INSERT INTO integers VALUES (*, *)

@@ -136,30 +136,39 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 			auto bound_order = make_unique<BoundOrderModifier>();
 			auto &config = DBConfig::GetConfig(context);
 			D_ASSERT(!order.orders.empty());
+			auto &order_binders = order_binder.GetBinders();
 			if (order.orders.size() == 1 && order.orders[0].expression->type == ExpressionType::STAR) {
-				// ORDER BY ALL
-				// replace the order list with the maximum order by count
-				auto order_type = order.orders[0].type;
-				auto null_order = order.orders[0].null_order;
+				auto star = (StarExpression *)order.orders[0].expression.get();
+				if (star->exclude_list.empty() && star->replace_list.empty() && !star->expr) {
+					// ORDER BY ALL
+					// replace the order list with the all elements in the SELECT list
+					auto order_type = order.orders[0].type;
+					auto null_order = order.orders[0].null_order;
 
-				vector<OrderByNode> new_orders;
-				for (idx_t i = 0; i < order_binder.MaxCount(); i++) {
-					new_orders.emplace_back(order_type, null_order,
-					                        make_unique<ConstantExpression>(Value::INTEGER(i + 1)));
+					vector<OrderByNode> new_orders;
+					for (idx_t i = 0; i < order_binder.MaxCount(); i++) {
+						new_orders.emplace_back(order_type, null_order,
+						                        make_unique<ConstantExpression>(Value::INTEGER(i + 1)));
+					}
+					order.orders = std::move(new_orders);
 				}
-				order.orders = std::move(new_orders);
 			}
 			for (auto &order_node : order.orders) {
-				auto order_expression = BindOrderExpression(order_binder, std::move(order_node.expression));
-				if (!order_expression) {
-					continue;
-				}
+				vector<unique_ptr<ParsedExpression>> order_list;
+				order_binders[0]->ExpandStarExpression(std::move(order_node.expression), order_list);
+
 				auto type =
 				    order_node.type == OrderType::ORDER_DEFAULT ? config.options.default_order_type : order_node.type;
 				auto null_order = order_node.null_order == OrderByNullType::ORDER_DEFAULT
 				                      ? config.options.default_null_order
 				                      : order_node.null_order;
-				bound_order->orders.emplace_back(type, null_order, std::move(order_expression));
+				for (auto &order_expr : order_list) {
+					auto bound_expr = BindOrderExpression(order_binder, std::move(order_expr));
+					if (!bound_expr) {
+						continue;
+					}
+					bound_order->orders.emplace_back(type, null_order, std::move(bound_expr));
+				}
 			}
 			if (!bound_order->orders.empty()) {
 				bound_modifier = std::move(bound_order);

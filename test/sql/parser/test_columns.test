@@ -80,14 +80,14 @@ statement error
 SELECT (SELECT COLUMNS(*)) FROM integers
 
 # COLUMNS in order by clause
-query II
-SELECT * FROM integers ORDER BY COLUMNS('index[0-9]');
+query III
+SELECT * FROM grouped_table ORDER BY COLUMNS('index[0-9]');
 ----
-13	14
-42	84
+2	13	14
+1	42	84
 
-query II
-SELECT * FROM integers ORDER BY COLUMNS(*);
+query III
+SELECT * FROM grouped_table ORDER BY COLUMNS(*);
 ----
-13	14
-42	84
+1	42	84
+2	13	14

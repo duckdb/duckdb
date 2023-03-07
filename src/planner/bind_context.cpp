@@ -322,7 +322,7 @@ bool BindContext::CheckExclusionList(StarExpression &expr, Binding *binding, con
 void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
                                                vector<unique_ptr<ParsedExpression>> &new_select_list) {
 	if (bindings_list.empty()) {
-		throw BinderException("SELECT * expression without FROM clause!");
+		throw BinderException("* expression without FROM clause!");
 	}
 	case_insensitive_set_t excluded_columns;
 	if (expr.relation_name.empty()) {
