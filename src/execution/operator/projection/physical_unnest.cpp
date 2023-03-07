@@ -252,6 +252,51 @@ unique_ptr<OperatorState> PhysicalUnnest::GetState(ExecutionContext &context,
 	return make_unique<UnnestOperatorState>(context.client, select_list);
 }
 
+static void UnnestLists(UnnestOperatorState &state, DataChunk &chunk, idx_t col_offset, idx_t this_chunk_len) {
+	// unnest the lists
+	for (idx_t col_idx = 0; col_idx < state.list_data.ColumnCount(); col_idx++) {
+
+		auto &result_vector = chunk.data[col_idx + col_offset];
+
+		if (state.list_data.data[col_idx].GetType() == LogicalType::SQLNULL) {
+			// UNNEST(NULL)
+			chunk.SetCardinality(0);
+			break;
+		}
+
+		auto &vector_data = state.list_vector_data[col_idx];
+		auto current_idx = vector_data.sel->get_index(state.current_row);
+
+		if (!vector_data.validity.RowIsValid(current_idx)) {
+			UnnestNull(0, this_chunk_len, result_vector);
+			continue;
+		}
+
+		auto list_data = (list_entry_t *)vector_data.data;
+		auto list_entry = list_data[current_idx];
+
+		idx_t list_count = 0;
+		if (state.list_position < list_entry.length) {
+			// there are still list_count elements to unnest
+			list_count = MinValue<idx_t>(this_chunk_len, list_entry.length - state.list_position);
+
+			auto &list_vector = state.list_data.data[col_idx];
+			auto &child_vector = ListVector::GetEntry(list_vector);
+			auto list_size = ListVector::GetListSize(list_vector);
+			auto &child_vector_data = state.list_child_data[col_idx];
+
+			auto base_offset = list_entry.offset + state.list_position;
+			UnnestVector(child_vector_data, child_vector, list_size, base_offset, base_offset + list_count,
+			             result_vector);
+		}
+
+		// fill the rest with NULLs
+		if (list_count != this_chunk_len) {
+			UnnestNull(list_count, this_chunk_len, result_vector);
+		}
+	}
+}
+
 OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                    OperatorState &state_p,
                                                    const vector<unique_ptr<Expression>> &select_list,
@@ -286,7 +331,7 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 		// if we include other projection input columns, e.g. SELECT 1, UNNEST([1, 2]);, then
 		// we need to add them as a constant vector to the resulting chunk
 		// FIXME: emit multiple unnested rows. Currently, we never emit a chunk containing multiple unnested input rows,
-		//  so setting a constant vector for the value at state.current_row is fine
+		// so setting a constant vector for the value at state.current_row is fine
 		idx_t col_offset = 0;
 		if (include_input) {
 			for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
@@ -295,51 +340,7 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 			col_offset = input.ColumnCount();
 		}
 
-		// unnest the lists
-		for (idx_t col_idx = 0; col_idx < state.list_data.ColumnCount(); col_idx++) {
-
-			auto &result_vector = chunk.data[col_idx + col_offset];
-
-			if (state.list_data.data[col_idx].GetType() == LogicalType::SQLNULL) {
-				// UNNEST(NULL)
-				chunk.SetCardinality(0);
-				break;
-
-			} else {
-
-				auto &vector_data = state.list_vector_data[col_idx];
-				auto current_idx = vector_data.sel->get_index(state.current_row);
-
-				if (!vector_data.validity.RowIsValid(current_idx)) {
-					UnnestNull(0, this_chunk_len, result_vector);
-
-				} else {
-
-					auto list_data = (list_entry_t *)vector_data.data;
-					auto list_entry = list_data[current_idx];
-
-					idx_t list_count = 0;
-					if (state.list_position < list_entry.length) {
-						// there are still list_count elements to unnest
-						list_count = MinValue<idx_t>(this_chunk_len, list_entry.length - state.list_position);
-
-						auto &list_vector = state.list_data.data[col_idx];
-						auto &child_vector = ListVector::GetEntry(list_vector);
-						auto list_size = ListVector::GetListSize(list_vector);
-						auto &child_vector_data = state.list_child_data[col_idx];
-
-						auto base_offset = list_entry.offset + state.list_position;
-						UnnestVector(child_vector_data, child_vector, list_size, base_offset, base_offset + list_count,
-						             result_vector);
-					}
-
-					// fill the rest with NULLs
-					if (list_count != this_chunk_len) {
-						UnnestNull(list_count, this_chunk_len, result_vector);
-					}
-				}
-			}
-		}
+		UnnestLists(state, chunk, col_offset, this_chunk_len);
 
 		chunk.Verify();
 
