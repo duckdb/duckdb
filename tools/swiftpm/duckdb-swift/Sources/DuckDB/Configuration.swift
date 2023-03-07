@@ -33,6 +33,26 @@ public extension Database {
   /// using PRAGMA statements as well. The configuration object should be
   /// created, filled with values using ``setValue(_:forKey:)`` and passed to
   /// ``Database/init(store:configuration:)``
+  ///
+  /// The following example sets up an in-memory database with some
+  /// configuration options set
+  ///
+  /// ```swift
+  /// do {
+    /// let configuration = Configuration()
+  ///   configuration.setValue("READ_WRITE", forKey: "access_mode")
+  ///   configuration.setValue("8", forKey: "threads")
+  ///   configuration.setValue("8GB", forKey: "max_memory")
+  ///   configuration.setValue("DESC", forKey: "default_order")
+  ///   let database = try Database(store: .inMemory, configuration: configuration)
+  ///   let connection = try database.connect()
+  /// }
+  /// catch {
+  ///   // handle error
+  /// }
+  /// ```
+  /// Use ``Database/Configuration/options`` to see the full list of available
+  /// configuration options.
   final class Configuration {
     
     private let ptr = UnsafeMutablePointer<duckdb_config?>.allocate(capacity: 1)

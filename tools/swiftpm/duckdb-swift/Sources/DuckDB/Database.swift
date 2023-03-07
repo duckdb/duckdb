@@ -30,10 +30,30 @@ public typealias DBInt = UInt64
 
 /// An object representing a DuckDB database
 ///
-/// A Database can be initialized using a local file store, or alternatively,
-/// using an in-memory store. Note that for an in-memory database no data is
-/// persisted to disk (i.e. all data is lost when you exit the process).
-public final class Database {
+/// To use DuckDB, you must first initialize a DuckDB ``Database``.
+/// ``Database/init(store:configuration:)`` takes as parameter the database
+/// store type. The ``Database/Store/inMemory`` option can be used to create an
+/// in-memory database. Note that for an in-memory database no data is persisted
+/// to disk (i.e. all data is lost when you exit the process).
+///
+/// With the ``Database`` instantiated, you can create one or many DuckDB
+/// ``Connection`` instances using ``Database/connect()``. As individual
+/// connections are locked during querying it is recommended that in contexts
+/// where blocking is undesirable, connections should be accessed
+/// asynchronously through an actor or via a background queue.
+///
+/// The following example creates a new in-memory database and connects to it.
+///
+/// ```swift
+/// do {
+///   let database = try Database(store: .inMemory)
+///   let connection = try database.connect()
+/// }
+/// catch {
+///   // handle error
+/// }
+/// ```
+public final class Database: Sendable {
   
   /// Duck DB database store type
   public enum Store {
