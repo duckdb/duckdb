@@ -138,7 +138,7 @@ public:
 
 typedef unique_ptr<FunctionData> (*table_function_bind_t)(ClientContext &context, TableFunctionBindInput &input,
                                                           vector<LogicalType> &return_types, vector<string> &names);
-typedef unique_ptr<LogicalOperator> (*table_function_bind_replace_t)(ClientContext &context, const FunctionData *bind_data, BindContext& bind_context, Binder& binder);
+typedef unique_ptr<TableRef> (*table_function_bind_replace_t)(ClientContext &context, TableFunctionBindInput &input);
 typedef unique_ptr<GlobalTableFunctionState> (*table_function_init_global_t)(ClientContext &context,
                                                                              TableFunctionInitInput &input);
 typedef unique_ptr<LocalTableFunctionState> (*table_function_init_local_t)(ExecutionContext &context,
@@ -188,8 +188,9 @@ public:
 	//! This function is used for determining the return type of a table producing function and returning bind data
 	//! The returned FunctionData object should be constant and should not be changed during execution.
 	table_function_bind_t bind;
-	//! (Optional) bind query plan function
-	//! This function allows overwriting the default LogicalGet that is inserted into the query plan with a custom plan
+	//! (Optional) Bind replace function
+	//! This function replaces the regular bind function. Allows manipulating plan essentially replacing the table
+	//! function with a generic expression that returns a table.
 	table_function_bind_replace_t bind_replace = nullptr;
 	//! (Optional) global init function
 	//! Initialize the global operator state of the function.
