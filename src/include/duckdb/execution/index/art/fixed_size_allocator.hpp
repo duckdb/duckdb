@@ -18,9 +18,11 @@ struct CustomLess {
 		// compare buffer IDs: offset and first byte to zero
 		if ((left & 0x00000000FFFFFFFF) < (right & 0x00000000FFFFFFFF)) {
 			return true;
+		} else if ((left & 0x00000000FFFFFFFF) == (right & 0x00000000FFFFFFFF)) {
+			// compare offsets: buffer ID and first byte to zero
+			return ((left & 0x00FFFFFF00000000) < (right & 0x00FFFFFF00000000));
 		}
-		// compare offsets: buffer ID and first byte to zero
-		return ((left & 0x00FFFFFF00000000) < (right & 0x00FFFFFF00000000));
+		return false;
 	}
 };
 

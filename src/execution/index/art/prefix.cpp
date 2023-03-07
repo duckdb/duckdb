@@ -57,7 +57,7 @@ void Prefix::Initialize(ART &art, const Key &key, const uint32_t &depth, const u
 
 void Prefix::Initialize(ART &art, const Prefix &other, const uint32_t &count_p) {
 
-	D_ASSERT(other.count < count_p);
+	D_ASSERT(count_p <= other.count);
 
 	// copy inlined data
 	if (other.IsInlined()) {
@@ -66,7 +66,8 @@ void Prefix::Initialize(ART &art, const Prefix &other, const uint32_t &count_p) 
 		return;
 	}
 
-	// get the first segment
+	// initialize the count and get the first segment
+	count = 0;
 	data.position = PrefixSegment::New(art);
 	auto segment = PrefixSegment::Initialize(art, data.position);
 
@@ -79,15 +80,16 @@ void Prefix::Initialize(ART &art, const Prefix &other, const uint32_t &count_p) 
 		auto other_segment = PrefixSegment::Get(art, position);
 		auto copy_count = ARTNode::PREFIX_SEGMENT_SIZE < remaining ? ARTNode::PREFIX_SEGMENT_SIZE : remaining;
 
-		// adjust the loop variables
-		position = other_segment->next;
-		remaining -= copy_count;
-
-		// now copy the data
+		// copy the data
 		for (idx_t i = 0; i < copy_count; i++) {
 			segment = segment->Append(art, count, other_segment->bytes[i]);
 		}
+
+		// adjust the loop variables
+		position = other_segment->next;
+		remaining -= copy_count;
 	}
+	D_ASSERT(count == count_p);
 }
 
 void Prefix::Vacuum(ART &art) {
@@ -120,13 +122,15 @@ void Prefix::InitializeMerge(ART &art, const idx_t &buffer_count) {
 	}
 
 	auto position = data.position;
-	D_ASSERT((data.position & 0xffff0000) == ((data.position + buffer_count) & 0xffff0000));
+	D_ASSERT((data.position & FixedSizeAllocator::BUFFER_ID_TO_ZERO) ==
+	         ((data.position + buffer_count) & FixedSizeAllocator::BUFFER_ID_TO_ZERO));
 	data.position += buffer_count;
 
 	while (position != DConstants::INVALID_INDEX) {
 		auto segment = PrefixSegment::Get(art, position);
 		position = segment->next;
-		D_ASSERT((segment->next & 0xffff0000) == ((segment->next + buffer_count) & 0xffff0000));
+		D_ASSERT((segment->next & FixedSizeAllocator::BUFFER_ID_TO_ZERO) ==
+		         ((segment->next + buffer_count) & FixedSizeAllocator::BUFFER_ID_TO_ZERO));
 		segment->next += buffer_count;
 	}
 }

@@ -25,8 +25,10 @@ ARTNode ARTNode::New(ART &art, const ARTNodeType &type) {
 
 void ARTNode::Free(ART &art, ARTNode &node) {
 
-	// recursively free all nodes that are in-memory, and skip swizzled nodes
-	D_ASSERT(node);
+	// recursively free all nodes that are in-memory, and skip swizzled and empty nodes
+	if (!node) {
+		return;
+	}
 
 	if (!node.IsSwizzled()) {
 
@@ -567,7 +569,7 @@ bool ARTNode::ResolvePrefixes(ART &art, ARTNode &other) {
 	D_ASSERT(other);
 
 	// make sure that r_node has the longer (or equally long) prefix
-	if (this->GetPrefix(art)->count > other.GetPrefix(art)->count) {
+	if (GetPrefix(art)->count > other.GetPrefix(art)->count) {
 		std::swap(*this, other);
 	}
 
@@ -681,7 +683,6 @@ bool ARTNode::MergeInternal(ART &art, ARTNode &other) {
 		}
 	}
 
-	D_ASSERT(r_node.GetNextPos(art, DConstants::INVALID_INDEX) == DConstants::INVALID_INDEX);
 	ARTNode::Free(art, r_node);
 	return true;
 }

@@ -101,12 +101,14 @@ void Leaf::InitializeMerge(ART &art, const idx_t &buffer_count) {
 	}
 
 	auto segment = LeafSegment::Get(art, row_ids.position);
-	D_ASSERT((row_ids.position & 0xffff0000) == ((row_ids.position + buffer_count) & 0xffff0000));
+	D_ASSERT((row_ids.position & FixedSizeAllocator::BUFFER_ID_TO_ZERO) ==
+	         ((row_ids.position + buffer_count) & FixedSizeAllocator::BUFFER_ID_TO_ZERO));
 	row_ids.position += buffer_count;
 
 	auto position = segment->next;
 	while (position != DConstants::INVALID_INDEX) {
-		D_ASSERT((segment->next & 0xffff0000) == ((segment->next + buffer_count) & 0xffff0000));
+		D_ASSERT((segment->next & FixedSizeAllocator::BUFFER_ID_TO_ZERO) ==
+		         ((segment->next + buffer_count) & FixedSizeAllocator::BUFFER_ID_TO_ZERO));
 		segment->next += buffer_count;
 		segment = LeafSegment::Get(art, position);
 		position = segment->next;
@@ -147,14 +149,14 @@ void Leaf::Merge(ART &art, ARTNode &other) {
 		auto other_segment = LeafSegment::Get(art, position);
 		auto copy_count = ARTNode::LEAF_SEGMENT_SIZE < remaining ? ARTNode::LEAF_SEGMENT_SIZE : remaining;
 
-		// adjust the loop variables
-		position = other_segment->next;
-		remaining -= copy_count;
-
-		// now copy the data
+		// copy the data
 		for (idx_t i = 0; i < copy_count; i++) {
 			segment = segment->Append(art, count, other_segment->row_ids[i]);
 		}
+
+		// adjust the loop variables
+		position = other_segment->next;
+		remaining -= copy_count;
 	}
 	D_ASSERT(remaining == 0);
 
@@ -311,26 +313,26 @@ uint32_t Leaf::FindRowId(ART &art, idx_t &position, const row_t &row_id) const {
 
 string Leaf::ToString(ART &art) {
 
-	string str = "Leaf (" + to_string(count) + "): [";
-
 	if (IsInlined()) {
-		str += to_string(row_ids.inlined);
-		return str + "]";
+		return "Leaf (" + to_string(count) + "): [" + to_string(row_ids.inlined) + "]";
 	}
 
 	auto position = row_ids.position;
 	auto remaining = count;
+	string str = "";
+	uint32_t this_count = 0;
 	while (position != DConstants::INVALID_INDEX) {
 		auto segment = LeafSegment::Get(art, position);
 		auto to_string_count = ARTNode::LEAF_SEGMENT_SIZE < remaining ? ARTNode::LEAF_SEGMENT_SIZE : remaining;
 
 		for (idx_t i = 0; i < to_string_count; i++) {
-			str += remaining == count ? to_string(segment->row_ids[i]) : ", " + to_string(segment->row_ids[i]);
+			str += ", " + to_string(segment->row_ids[i]);
+			this_count++;
 		}
 		remaining -= to_string_count;
 		position = segment->next;
 	}
-	return str + "] \n";
+	return "Leaf (" + to_string(this_count) + ", " + to_string(count) + "): [" + str + "] \n";
 }
 
 BlockPointer Leaf::Serialize(ART &art, MetaBlockWriter &writer) {

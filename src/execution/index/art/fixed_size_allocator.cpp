@@ -38,11 +38,13 @@ idx_t FixedSizeAllocator::New() {
 	D_ASSERT(!free_list.empty());
 	auto position = *free_list.begin();
 	free_list.erase(free_list.begin());
+	D_ASSERT(free_list.size() <= buffers.size() * offsets_per_buffer);
 	return position;
 }
 
 void FixedSizeAllocator::Free(const idx_t &position) {
 	free_list.insert(position);
+	D_ASSERT(free_list.size() <= buffers.size() * offsets_per_buffer);
 }
 
 template <class T>
@@ -67,6 +69,7 @@ void FixedSizeAllocator::Merge(FixedSizeAllocator &other) {
 	if (!buffer_count) {
 		free_list = other.free_list;
 		other.free_list.clear();
+		D_ASSERT(free_list.size() <= buffers.size() * offsets_per_buffer);
 		return;
 	}
 
@@ -77,6 +80,7 @@ void FixedSizeAllocator::Merge(FixedSizeAllocator &other) {
 		free_list.insert(position);
 	}
 	other.free_list.clear();
+	D_ASSERT(free_list.size() <= buffers.size() * offsets_per_buffer);
 }
 
 bool FixedSizeAllocator::InitializeVacuum() {
@@ -99,10 +103,7 @@ void FixedSizeAllocator::FinalizeVacuum() {
 	auto lower_bound_it = free_list.lower_bound(lower_bound);
 	free_list.erase(lower_bound_it, free_list.end());
 
-	// ensure that finalizing was successful
-	if (InitializeVacuum()) {
-		throw InternalException("Failed to finalize vacuum operation");
-	}
+	D_ASSERT(free_list.size() <= buffers.size() * offsets_per_buffer);
 }
 
 bool FixedSizeAllocator::NeedsVacuum(const idx_t &position) const {

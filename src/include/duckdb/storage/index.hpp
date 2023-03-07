@@ -109,12 +109,14 @@ public:
 
 	//! Increases the in-memory size value
 	inline void IncreaseMemorySize(idx_t size) {
-		memory_size += size;
+	    // TODO
+	    //		memory_size += size;
 	};
 	//! Decreases the in-memory size value
 	inline void DecreaseMemorySize(idx_t size) {
-		D_ASSERT(memory_size >= size);
-		memory_size -= size;
+	    // TODO
+	    //		D_ASSERT(memory_size >= size);
+	    //		memory_size -= size;
 	};
 
 	//! Returns true if the index is affected by updates on the specified column IDs, and false otherwise
