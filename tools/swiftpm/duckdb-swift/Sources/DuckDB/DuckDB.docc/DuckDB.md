@@ -4,6 +4,9 @@ DuckDB is an in-process SQL OLAP database management system
 
 ## Overview
 
-The DuckDB Swift package provides a native Swift interface for creating and 
-querying DuckDB databases. For a full overview of DuckDB's' capabilities please
-visit the [DuckDB website](https://www.duckdb.org).
+DuckDB is a high-performance analytical database system. It is designed to be 
+fast, reliable and easy to use. DuckDB provides a rich SQL dialect, with 
+support far beyond basic SQL. DuckDB supports arbitrary and nested correlated 
+subqueries, window functions, collations, complex types (arrays, structs), and 
+more. For more information on the goals of DuckDB, please refer to the [Why 
+DuckDB page](https://duckdb.org/why_duckdb) on our website.
