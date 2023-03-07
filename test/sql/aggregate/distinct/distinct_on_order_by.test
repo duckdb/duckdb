@@ -74,7 +74,7 @@ SELECT DISTINCT ON(i) i, j, k FROM integers ORDER BY i, j ASC, k DESC
 2	3	7
 4	5	11
 
-# more test cases
+# examples from the original issue
 statement ok
 create table foo(a real, b real);
 
@@ -92,3 +92,48 @@ select distinct on(a) a, b from foo order by b desc;
 ----
 1	420
 2	420
+
+statement ok
+CREATE TABLE example (
+    id               INT,
+    person_id        INT,
+    address_id       INT,
+    effective_date   DATE
+);
+
+statement ok
+INSERT INTO
+    example (id, person_id, address_id, effective_date)
+VALUES
+    (1, 2, 1, '2000-01-01'),  -- Moved to first house
+    (5, 2, 2, '2004-08-19'),  -- Went to uni
+    (9, 2, 1, '2007-06-12'),  -- Moved back home
+    (2, 4, 3, '2007-05-18'),  -- Moved to first house
+    (3, 4, 4, '2016-02-09')   -- Moved to new house
+;
+
+query IIII
+SELECT DISTINCT ON (person_id)
+    *
+FROM
+    example
+ORDER BY
+    person_id,
+    effective_date ASC
+;
+----
+1	2	1	2000-01-01
+2	4	3	2007-05-18
+
+query IIII
+SELECT DISTINCT ON (person_id)
+    *
+FROM
+    example
+ORDER BY
+    person_id,
+    effective_date DESC
+;
+----
+9	2	1	2007-06-12
+3	4	4	2016-02-09
