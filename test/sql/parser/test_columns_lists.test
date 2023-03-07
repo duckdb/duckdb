@@ -20,6 +20,13 @@ SELECT COLUMNS([x for x in (*) if x <> 'integers.i']) FROM integers
 84
 14
 
+# short-hand, allow directly specifying the lambda
+query I
+SELECT COLUMNS(x -> x <> 'integers.i') FROM integers
+----
+84
+14
+
 query I
 SELECT COLUMNS([x for x in (*) if x SIMILAR TO '.*i']) FROM integers
 ----
@@ -86,6 +93,19 @@ statement error
 SELECT COLUMNS(['integers2.i']) FROM integers
 ----
 "integers2" not found
+
+# COLUMNS and joins
+query I
+SELECT COLUMNS([x for x in (*) if x LIKE '%i']) FROM integers i1 JOIN integers i2 USING (i)
+----
+42
+13
+
+query II
+SELECT COLUMNS([x for x in (*) if x LIKE '%i']) FROM integers i1 JOIN integers i2 ON (i1.i=i2.i)
+----
+42	42
+13	13
 
 # wrong parameter type
 statement error
