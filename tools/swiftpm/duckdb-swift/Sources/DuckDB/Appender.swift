@@ -74,8 +74,8 @@ public final class Appender {
   /// called to indicate that the row is ready to be added to the database.
   ///
   /// - Parameter value: the value to append
-  /// - Throws: ``DatabaseError/appenderFailedToAppendItem(reason:)``
-  ///   if a value of this type was not expected in the appender's current state
+  /// - Throws: ``DatabaseError/appenderFailedToEndRow(reason:)``
+  ///   if the row could not be completed in its current state
   public func endRow() throws {
     let status = duckdb_appender_end_row(ptr.pointee)
     guard .success == status else {
