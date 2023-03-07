@@ -20,6 +20,12 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 	idx_t remaining = bind_data.sample_size;
 	while (remaining != 0) {
 		allocator.Reset();
+
+		if (gstate.file_index >= 10) {
+			// We really shouldn't open more than 10 files when sampling
+			break;
+		}
+
 		auto read_count = lstate.ReadNext(gstate);
 		if (lstate.scan_count > 1) {
 			more_than_one = true;
@@ -46,11 +52,6 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 		node.InitializeCandidateTypes(bind_data.max_depth);
 		node.RefineCandidateTypes(values, next, string_vector, allocator, bind_data.date_format_map);
 		remaining -= next;
-
-		if (gstate.file_index == 10) {
-			// We really shouldn't open more than 10 files when sampling
-			break;
-		}
 	}
 	bind_data.type = original_scan_type;
 
