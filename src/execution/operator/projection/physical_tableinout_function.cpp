@@ -4,12 +4,10 @@ namespace duckdb {
 
 class TableInOutLocalState : public OperatorState {
 public:
-	TableInOutLocalState() : row_index(0), new_row(true) {
+	TableInOutLocalState() {
 	}
 
 	unique_ptr<LocalTableFunctionState> local_state;
-	idx_t row_index;
-	bool new_row;
 	DataChunk input_chunk;
 };
 
@@ -61,42 +59,61 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 		// straightforward case - no need to project input
 		return function.in_out_function(context, data, input, chunk);
 	}
-	// when project_input is set we execute the input function row-by-row
-	if (state.new_row) {
-		if (state.row_index >= input.size()) {
-			// finished processing this chunk
-			state.new_row = true;
-			state.row_index = 0;
-			return OperatorResultType::NEED_MORE_INPUT;
-		}
-		// we are processing a new row: fetch the data for the current row
-		D_ASSERT(input.ColumnCount() == state.input_chunk.ColumnCount());
-		// set up the input data to the table in-out function
-		for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
-			ConstantVector::Reference(state.input_chunk.data[col_idx], input.data[col_idx], state.row_index, 1);
-		}
-		state.input_chunk.SetCardinality(1);
-		state.row_index++;
-		state.new_row = false;
+
+	// Create a duplicate of 'chunk' that contains one extra column
+	// this column is used to register the relation between input tuple -> output tuple(s)
+	DataChunk intermediate_chunk;
+	vector<LogicalType> intermediate_types = chunk.GetTypes();
+	intermediate_types.push_back(LogicalType::USMALLINT);
+	intermediate_chunk.InitializeEmpty(intermediate_types);
+
+	const auto base_columns = chunk.ColumnCount() - projected_input.size();
+	for (idx_t i = 0; i < base_columns; i++) {
+		intermediate_chunk.data[i].Reference(chunk.data[i]);
 	}
-	// set up the output data in "chunk"
-	D_ASSERT(chunk.ColumnCount() > projected_input.size());
-	D_ASSERT(state.row_index > 0);
-	idx_t base_idx = chunk.ColumnCount() - projected_input.size();
+	intermediate_chunk.data[base_columns].Initialize();
+	intermediate_chunk.SetCardinality(chunk.size());
+
+	auto result = function.in_out_function(context, data, input, intermediate_chunk);
+	chunk.SetCardinality(intermediate_chunk.size());
+
+	for (idx_t i = 0; i < base_columns; i++) {
+		chunk.data[i].Reference(intermediate_chunk.data[i]);
+	}
+
+	auto &mapping_column = intermediate_chunk.data[base_columns];
+	D_ASSERT(mapping_column.GetVectorType() == VectorType::FLAT_VECTOR);
+	UnifiedVectorFormat mapping_data;
+	mapping_column.ToUnifiedFormat(intermediate_chunk.size(), mapping_data);
+	D_ASSERT(mapping_data.validity.AllValid());
+	auto mapping_array = (uint32_t *)mapping_data.data;
+
+	SelectionVector sel_vec;
+	sel_vec.Initialize(intermediate_chunk.size());
+	// Create a selection vector that maps from output row -> input row
+	for (idx_t i = 0; i < intermediate_chunk.size(); i++) {
+		// The index in the input column that produced this output tuple
+		const auto input_row = mapping_array[i];
+		D_ASSERT(input_row < STANDARD_VECTOR_SIZE);
+		sel_vec.set_index(0, input_row);
+	}
+
+	// Add the projected columns, and apply the selection vector
 	for (idx_t project_idx = 0; project_idx < projected_input.size(); project_idx++) {
 		auto source_idx = projected_input[project_idx];
-		auto target_idx = base_idx + project_idx;
-		ConstantVector::Reference(chunk.data[target_idx], input.data[source_idx], state.row_index - 1, 1);
+		D_ASSERT(source_idx < input.data.size());
+		auto target_idx = base_columns + project_idx;
+
+		auto &target_column = chunk.data[target_idx];
+		auto &source_column = input.data[source_idx];
+
+		// Reference the original
+		target_column.Reference(source_column);
+		// And slice, to rearrange which index points to which tuple
+		target_column.Slice(sel_vec, intermediate_chunk.size());
 	}
-	auto result = function.in_out_function(context, data, state.input_chunk, chunk);
-	if (result == OperatorResultType::FINISHED) {
-		return result;
-	}
-	if (result == OperatorResultType::NEED_MORE_INPUT) {
-		// we finished processing this row: move to the next row
-		state.new_row = true;
-	}
-	return OperatorResultType::HAVE_MORE_OUTPUT;
+
+	return result;
 }
 
 OperatorFinalizeResultType PhysicalTableInOutFunction::FinalExecute(ExecutionContext &context, DataChunk &chunk,
@@ -107,6 +124,7 @@ OperatorFinalizeResultType PhysicalTableInOutFunction::FinalExecute(ExecutionCon
 	if (!projected_input.empty()) {
 		throw InternalException("FinalExecute not supported for project_input");
 	}
+	D_ASSERT(RequiresFinalExecute());
 	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
 	return function.in_out_function_final(context, data, chunk);
 }
