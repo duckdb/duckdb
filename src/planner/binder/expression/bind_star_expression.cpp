@@ -104,6 +104,9 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 		auto val = ExpressionExecutor::EvaluateScalar(context, *result);
 		if (val.type().id() == LogicalTypeId::VARCHAR) {
 			// regex
+			if (val.IsNull()) {
+				throw BinderException("COLUMNS does not support NULL as regex argument");
+			}
 			auto &regex_str = StringValue::Get(val);
 			duckdb_re2::RE2 regex(regex_str);
 			if (!regex.error().empty()) {
@@ -126,12 +129,12 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 		} else if (val.type().id() == LogicalTypeId::LIST &&
 		           ListType::GetChildType(val.type()).id() == LogicalTypeId::VARCHAR) {
 			// list of varchar columns
-			auto &children = ListValue::GetChildren(val);
-			if (children.empty()) {
+			if (val.IsNull() || ListValue::GetChildren(val).empty()) {
 				auto err =
 				    StringUtil::Format("Star expression \"%s\" resulted in an empty set of columns", star->ToString());
 				throw BinderException(FormatError(*star, err));
 			}
+			auto &children = ListValue::GetChildren(val);
 			vector<unique_ptr<ParsedExpression>> new_list;
 			for (auto &child : children) {
 				auto qname = QualifiedName::Parse(StringValue::Get(child));

@@ -20,6 +20,12 @@ SELECT COLUMNS([x for x in (*) if x <> 'integers.i']) FROM integers
 84
 14
 
+query I
+SELECT COLUMNS([x for x in (*) if x SIMILAR TO '.*i']) FROM integers
+----
+42
+13
+
 query II
 SELECT COLUMNS(['i', 'i']) FROM integers
 ----
@@ -38,12 +44,6 @@ SELECT COLUMNS([x for x in (* EXCLUDE (i))]) FROM integers
 ----
 84
 14
-
-# star with replace
-statement error
-SELECT COLUMNS([x for x in (* REPLACE (i AS i))]) FROM integers
-----
-only allowed as the root element
 
 # multiple columns that are the same works
 query I
@@ -82,14 +82,45 @@ SELECT COLUMNS(['k']) FROM integers
 ----
 not found in FROM clause
 
+statement error
+SELECT COLUMNS(['integers2.i']) FROM integers
+----
+"integers2" not found
+
 # wrong parameter type
 statement error
 SELECT COLUMNS([43]) FROM integers
 ----
 VARCHAR argument
 
+statement error
+SELECT COLUMNS([NULL]) FROM integers
+----
+VARCHAR argument
+
+statement error
+SELECT COLUMNS([]::VARCHAR[]) FROM integers
+----
+empty set of columns
+
+statement error
+SELECT COLUMNS(NULL::VARCHAR[]) FROM integers
+----
+empty set of columns
+
+statement error
+SELECT COLUMNS(NULL::VARCHAR) FROM integers
+----
+does not support NULL
+
 # different columns
 statement error
 SELECT COLUMNS(['i']) + COLUMNS(['j']) FROM integers
 ----
 Multiple different STAR/COLUMNS in the same expression are not supported
+
+# star with replace
+statement error
+SELECT COLUMNS([x for x in (* REPLACE (i AS i))]) FROM integers
+----
+only allowed as the root element
