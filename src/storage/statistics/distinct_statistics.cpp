@@ -7,23 +7,18 @@
 
 namespace duckdb {
 
-DistinctStatistics::DistinctStatistics()
-    : BaseStatistics(LogicalType::INVALID, StatisticsType::LOCAL_STATS), log(make_unique<HyperLogLog>()),
-      sample_count(0), total_count(0) {
+DistinctStatistics::DistinctStatistics() : log(make_unique<HyperLogLog>()), sample_count(0), total_count(0) {
 }
 
 DistinctStatistics::DistinctStatistics(unique_ptr<HyperLogLog> log, idx_t sample_count, idx_t total_count)
-    : BaseStatistics(LogicalType::INVALID, StatisticsType::LOCAL_STATS), log(std::move(log)),
-      sample_count(sample_count), total_count(total_count) {
+    : log(std::move(log)), sample_count(sample_count), total_count(total_count) {
 }
 
-unique_ptr<BaseStatistics> DistinctStatistics::Copy() const {
+unique_ptr<DistinctStatistics> DistinctStatistics::Copy() const {
 	return make_unique<DistinctStatistics>(log->Copy(), sample_count, total_count);
 }
 
-void DistinctStatistics::Merge(const BaseStatistics &other_p) {
-	BaseStatistics::Merge(other_p);
-	auto &other = (const DistinctStatistics &)other_p;
+void DistinctStatistics::Merge(const DistinctStatistics &other) {
 	log = log->Merge(*other.log);
 	sample_count += other.sample_count;
 	total_count += other.total_count;

@@ -3,8 +3,10 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/list.hpp"
+#include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
@@ -13,7 +15,6 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_sample.hpp"
-#include "duckdb/parser/parsed_expression_iterator.hpp"
 
 #include <algorithm>
 
@@ -170,8 +171,12 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	case TableReferenceType::EXPRESSION_LIST:
 		result = Bind((ExpressionListRef &)ref);
 		break;
+	case TableReferenceType::PIVOT:
+		result = Bind((PivotRef &)ref);
+		break;
 	case TableReferenceType::CTE:
 	case TableReferenceType::INVALID:
+	default:
 		throw InternalException("Unknown table ref type");
 	}
 	result->sample = std::move(ref.sample);
@@ -203,6 +208,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 		root = CreatePlan((BoundCTERef &)ref);
 		break;
 	case TableReferenceType::INVALID:
+	default:
 		throw InternalException("Unsupported bound table ref type");
 	}
 	// plan the sample clause
