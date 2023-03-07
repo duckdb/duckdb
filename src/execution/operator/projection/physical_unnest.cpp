@@ -344,6 +344,13 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 
 		chunk.Verify();
 
+		// Register which input tuple produced the input tuples
+		auto &relation_vec = chunk.data[state.list_data.ColumnCount() + col_offset];
+		auto relation_data = FlatVector::GetData<uint32_t>(relation_vec);
+		for (idx_t i = 0; i < this_chunk_len; i++) {
+			relation_data[i] = state.current_row;
+		}
+
 		state.list_position += this_chunk_len;
 		if (state.list_position == state.longest_list_length) {
 			state.current_row++;

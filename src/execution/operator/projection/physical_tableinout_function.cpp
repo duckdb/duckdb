@@ -62,12 +62,15 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 
 	// Create a duplicate of 'chunk' that contains one extra column
 	// this column is used to register the relation between input tuple -> output tuple(s)
+	const auto base_columns = chunk.ColumnCount() - projected_input.size();
+
 	DataChunk intermediate_chunk;
-	vector<LogicalType> intermediate_types = chunk.GetTypes();
+	auto chunk_types = chunk.GetTypes();
+	vector<LogicalType> intermediate_types;
+	intermediate_types.insert(intermediate_types.end(), chunk_types.begin(), chunk_types.begin() + base_columns);
 	intermediate_types.push_back(LogicalType::USMALLINT);
 	intermediate_chunk.InitializeEmpty(intermediate_types);
 
-	const auto base_columns = chunk.ColumnCount() - projected_input.size();
 	for (idx_t i = 0; i < base_columns; i++) {
 		intermediate_chunk.data[i].Reference(chunk.data[i]);
 	}
@@ -95,7 +98,7 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 		// The index in the input column that produced this output tuple
 		const auto input_row = mapping_array[i];
 		D_ASSERT(input_row < STANDARD_VECTOR_SIZE);
-		sel_vec.set_index(0, input_row);
+		sel_vec.set_index(i, input_row);
 	}
 
 	// Add the projected columns, and apply the selection vector
