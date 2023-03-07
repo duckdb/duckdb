@@ -37,7 +37,7 @@ import Foundation
 ///   let connection: Connection = ...
 ///   let statement = try PreparedStatement(
 ///     connection: connection,
-///     query: 'SELECT $1 from $2'
+///     query: "SELECT $1 from $2"
 ///   )
 ///   try statement.bind("last_name")
 ///   try statement.bind("employees")
