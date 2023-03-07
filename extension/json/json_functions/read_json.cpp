@@ -21,7 +21,7 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 	while (remaining != 0) {
 		allocator.Reset();
 
-		if (gstate.file_index == 10) {
+		if (gstate.file_index >= 10) {
 			// We really shouldn't open more than 10 files when sampling
 			break;
 		}
