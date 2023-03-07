@@ -209,7 +209,6 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 
 	// Bind any sort columns, unless the aggregate is order-insensitive
 	unique_ptr<BoundOrderModifier> order_bys;
-	;
 	if (!aggr.order_bys->orders.empty()) {
 		order_bys = make_unique<BoundOrderModifier>();
 		auto &config = DBConfig::GetConfig(context);
