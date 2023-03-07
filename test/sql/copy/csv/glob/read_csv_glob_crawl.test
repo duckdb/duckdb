@@ -1,0 +1,131 @@
+# name: test/sql/copy/csv/glob/read_csv_glob_crawl.test
+# description: Test crawling CSVs
+# files from: 'test/sql/copy/csv/data/glob/crawl/'
+# group: [glob]
+
+statement ok
+PRAGMA enable_verification
+
+# simple crawling
+# example from:	https://stackoverflow.com/a/66744400
+query II
+SELECT * FROM read_csv('test/sql/copy/csv/data/glob/crawl/stackoverflow/**/*.csv', auto_detect=1) ORDER BY 2;
+----
+0	0
+1	1
+2	2
+3	3
+2	4
+3	5
+
+# test with nested same name dirs
+query I
+SELECT * FROM read_csv('test/sql/copy/csv/data/glob/crawl/samename/**/*.csv', auto_detect=1);
+----
+42
+42
+42
+42
+42
+42
+42
+42
+
+#	structured with:
+#	mkdir -p d/{d00,d01,d02}/{d10,d11,d12}/{d20,d21,d22}/mid/{d40,d41,d42} 
+# 	touch file.csv {d00,d01,d02}/file.csv && touch {d00,d01,d02}/{d10,d11,d12}/file.csv && touch {d00,d01,d02}/{d10,d11,d12}/{d20,d21,d22}/file.csv && touch {d00,d01,d02}/{d10,d11,d12}/{d20,d21,d22}/mid/file.csv && touch {d00,d01,d02}/{d10,d11,d12}/{d20,d21,d22}/mid/{d40,d41,d42}/file.csv
+
+query I
+SELECT count(*) FROM read_csv('test/sql/copy/csv/data/glob/crawl/d/**/*.csv', auto_detect=1);
+----
+148
+
+query I
+SELECT count(*) FROM glob('test/sql/copy/csv/data/glob/crawl/d/**');
+----
+148
+
+query I
+SELECT count(*) FROM glob('test/sql/copy/csv/data/glob/crawl/d/**/mid/*.csv');
+----
+27
+
+query I
+SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/**/mid/*.csv';
+----
+27
+
+query I
+SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/**/mid/*/*.csv';
+----
+81
+
+query I
+SELECT count(*) FROM glob('test/sql/copy/csv/data/glob/crawl/d/**/mid/*/');
+----
+81
+
+query I
+SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/**/mid/**/*.csv';
+----
+108
+
+query I
+SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/**/???/*/*.csv';
+----
+144
+
+query I
+SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/*/???/**/*.csv';
+----
+144
+
+statement error
+SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/*/mid/**/*.csv';
+----
+IO Error: No files found that match the pattern "test/sql/copy/csv/data/glob/crawl/d/*/mid/**/*.csv"
+
+query I
+SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/*/*/*/mid/**/*.csv';
+----
+108
+
+query I
+SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/**/???/*.csv';
+----
+147
+
+query I
+SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/*/???/*.csv';
+----
+9
+
+query I
+SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/**/*/**/*.csv';
+----
+615
+
+query I
+SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/**/d2?/*/*.csv';
+----
+27
+
+query I
+SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/*/*/d2?/**/*.csv';
+----
+135
+
+query I
+SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/**/d?0/*.csv';
+----
+40
+
+query I
+SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/*/**/d?0/*.csv';
+----
+39
+
+query I
+SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/**/**/**/**/*.csv';
+----
+6124
