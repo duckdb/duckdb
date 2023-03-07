@@ -14,9 +14,9 @@ using ScanStructure = JoinHashTable::ScanStructure;
 using ProbeSpill = JoinHashTable::ProbeSpill;
 using ProbeSpillLocalState = JoinHashTable::ProbeSpillLocalAppendState;
 
-JoinHashTable::JoinHashTable(BufferManager &buffer_manager, const vector<JoinCondition> &conditions,
+JoinHashTable::JoinHashTable(BufferManager &buffer_manager_p, const vector<JoinCondition> &conditions_p,
                              vector<LogicalType> btypes, JoinType type_p)
-    : buffer_manager(buffer_manager), conditions(conditions), build_types(std::move(btypes)), entry_size(0),
+    : buffer_manager(buffer_manager_p), conditions(conditions_p), build_types(std::move(btypes)), entry_size(0),
       tuple_size(0), vfound(Value::BOOLEAN(false)), join_type(type_p), finalized(false), has_null(false),
       external(false), radix_bits(4), tuples_per_round(0), partition_start(0), partition_end(0) {
 	for (auto &condition : conditions) {

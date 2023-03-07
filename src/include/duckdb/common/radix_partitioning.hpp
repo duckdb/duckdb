@@ -118,27 +118,8 @@ protected:
 	//===--------------------------------------------------------------------===//
 	// Radix Partitioning interface implementation
 	//===--------------------------------------------------------------------===//
-	idx_t BufferSize() const override {
-		switch (radix_bits) {
-		case 1:
-		case 2:
-		case 3:
-		case 4:
-			return GetBufferSize(1 << 1);
-		case 5:
-			return GetBufferSize(1 << 2);
-		case 6:
-			return GetBufferSize(1 << 3);
-		default:
-			return GetBufferSize(1 << 4);
-		}
-	}
 	void InitializeAppendStateInternal(PartitionedTupleDataAppendState &state) const override;
 	void ComputePartitionIndices(PartitionedTupleDataAppendState &state, DataChunk &input) override;
-
-	static constexpr idx_t GetBufferSize(idx_t div) {
-		return STANDARD_VECTOR_SIZE / div == 0 ? 1 : STANDARD_VECTOR_SIZE / div;
-	}
 
 private:
 	//! The number of radix bits

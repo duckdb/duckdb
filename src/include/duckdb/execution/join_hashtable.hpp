@@ -209,6 +209,8 @@ private:
 	idx_t PrepareKeys(DataChunk &keys, unique_ptr<UnifiedVectorFormat[]> &key_data, const SelectionVector *&current_sel,
 	                  SelectionVector &sel, bool build_side);
 
+	//! TODO
+	unique_ptr<PartitionedTupleData> sink_collection;
 	//! The DataCollection holding the main data of the hash table
 	unique_ptr<TupleDataCollection> data_collection;
 	//! The hash map of the HT, created after finalization

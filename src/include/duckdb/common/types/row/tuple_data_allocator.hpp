@@ -16,7 +16,7 @@ namespace duckdb {
 struct TupleDataSegment;
 struct TupleDataChunk;
 struct TupleDataChunkPart;
-struct TupleDataManagementState;
+struct TupleDataPinState;
 struct TupleDataAppendState;
 
 struct TupleDataBlock {
@@ -63,36 +63,36 @@ public:
 
 public:
 	//! Builds out the chunks for next append, given the metadata in the append state
-	void Build(TupleDataSegment &segment, TupleDataManagementState &pin_state, TupleDataChunkState &chunk_state,
+	void Build(TupleDataSegment &segment, TupleDataPinState &pin_state, TupleDataChunkState &chunk_state,
 	           idx_t initial_offset, idx_t count);
 	//! Initializes a chunk, making its pointers valid
-	void InitializeChunkState(TupleDataSegment &segment, TupleDataManagementState &pin_state,
-	                          TupleDataChunkState &chunk_state, idx_t chunk_idx, bool init_heap);
+	void InitializeChunkState(TupleDataSegment &segment, TupleDataPinState &pin_state, TupleDataChunkState &chunk_state,
+	                          idx_t chunk_idx, bool init_heap);
 	//! Releases or stores any handles in the management state that are no longer required
-	void ReleaseOrStoreHandles(TupleDataManagementState &state, TupleDataSegment &segment, TupleDataChunk &chunk) const;
+	void ReleaseOrStoreHandles(TupleDataPinState &state, TupleDataSegment &segment, TupleDataChunk &chunk) const;
 	//! Releases or stores ALL handles in the management state
-	void ReleaseOrStoreHandles(TupleDataManagementState &state, TupleDataSegment &segment) const;
+	void ReleaseOrStoreHandles(TupleDataPinState &state, TupleDataSegment &segment) const;
 
 private:
 	//! Builds out a single part (grabs the lock)
-	TupleDataChunkPart BuildChunkPart(TupleDataManagementState &pin_state, TupleDataChunkState &chunk_state,
-	                                  idx_t offset, idx_t count);
+	TupleDataChunkPart BuildChunkPart(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state, idx_t offset,
+	                                  idx_t count);
 	//! Internal function for InitializeChunkState
-	void InitializeChunkStateInternal(TupleDataManagementState &pin_state, TupleDataChunkState &chunk_state,
-	                                  idx_t offset, bool init_heap_pointers, bool init_heap_sizes,
+	void InitializeChunkStateInternal(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state, idx_t offset,
+	                                  bool init_heap_pointers, bool init_heap_sizes,
 	                                  vector<TupleDataChunkPart *> &parts);
 	//! Internal function for ReleaseOrStoreHandles
 	static void ReleaseOrStoreHandlesInternal(unordered_map<uint32_t, BufferHandle> &handles,
 	                                          const unordered_set<uint32_t> &block_ids, TupleDataSegment &segment,
 	                                          TupleDataPinProperties properties);
 	//! Pins the given row block
-	void PinRowBlock(TupleDataManagementState &state, const uint32_t row_block_index);
+	void PinRowBlock(TupleDataPinState &state, const uint32_t row_block_index);
 	//! Pins the given heap block
-	void PinHeapBlock(TupleDataManagementState &state, const uint32_t heap_block_index);
+	void PinHeapBlock(TupleDataPinState &state, const uint32_t heap_block_index);
 	//! Gets the pointer to the rows for the given chunk part
-	data_ptr_t GetRowPointer(TupleDataManagementState &state, const TupleDataChunkPart &part);
+	data_ptr_t GetRowPointer(TupleDataPinState &state, const TupleDataChunkPart &part);
 	//! Gets the base pointer to the heap for the given chunk part
-	data_ptr_t GetBaseHeapPointer(TupleDataManagementState &state, const TupleDataChunkPart &part);
+	data_ptr_t GetBaseHeapPointer(TupleDataPinState &state, const TupleDataChunkPart &part);
 
 private:
 	//! The lock (for shared allocations)

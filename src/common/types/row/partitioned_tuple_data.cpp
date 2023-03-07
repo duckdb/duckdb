@@ -29,14 +29,14 @@ PartitionedTupleData::~PartitionedTupleData() {
 
 void PartitionedTupleData::InitializeAppendState(PartitionedTupleDataAppendState &state) const {
 	state.partition_sel.Initialize();
-	state.slice_chunk.Initialize(context, layout.GetTypes());
-	InitializeAppendStateInternal(state);
-}
 
-unique_ptr<DataChunk> PartitionedTupleData::CreatePartitionBuffer() const {
-	auto result = make_unique<DataChunk>();
-	result->Initialize(BufferManager::GetBufferManager(context).GetBufferAllocator(), layout.GetTypes(), BufferSize());
-	return result;
+	vector<column_t> column_ids;
+	column_ids.reserve(layout.ColumnCount());
+	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
+		column_ids.emplace_back(col_idx);
+	}
+
+	InitializeAppendStateInternal(state);
 }
 
 void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, DataChunk &input) {
@@ -70,8 +70,8 @@ void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, DataCh
 	if (partition_entries.size() == 1) {
 		const auto &partition_index = partition_entries.begin()->first;
 		auto &partition = *partitions[partition_index];
-		auto &partition_append_state = state.partition_append_states[partition_index];
-		partition.Append(*partition_append_state, input);
+		auto &partition_pin_state = *state.partition_pin_states[partition_index];
+		partition.Append(partition_pin_state, state.chunk_state, input);
 		return;
 	}
 
@@ -91,52 +91,38 @@ void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, DataCh
 		all_partitions_sel[partition_offset++] = i;
 	}
 
-	// Loop through the partitions to append the new data to the partition buffers, and flush the buffers if necessary
-	SelectionVector partition_sel;
+	TupleDataCollection::ToUnifiedFormat(state.chunk_state, input);
+
+	// Compute the heap sizes for the whole chunk
+	if (!layout.AllConstant()) {
+		TupleDataCollection::ComputeHeapSizes(state.chunk_state, input, all_partitions_sel, input.size());
+	}
+
 	for (auto &pc : partition_entries) {
 		const auto &partition_index = pc.first;
 
-		// Partition, buffer, and append state for this partition index
+		// Partition, and pin state for this partition index
 		auto &partition = *partitions[partition_index];
-		auto &partition_buffer = *state.partition_buffers[partition_index];
-		auto &partition_append_state = state.partition_append_states[partition_index];
+		auto &partition_pin_state = *state.partition_pin_states[partition_index];
 
-		// Length and offset into the selection vector for this chunk, for this partition
+		// Length and offset for this partition
 		const auto &partition_entry = pc.second;
 		const auto &partition_length = partition_entry.length;
 		const auto partition_offset = partition_entry.offset - partition_length;
 
-		// Create a selection vector for this partition using the offset into the single selection vector
-		partition_sel.Initialize(all_partitions_sel.data() + partition_offset);
-
-		if (partition_length >= HalfBufferSize()) {
-			// Slice the input chunk using the selection vector
-			state.slice_chunk.Reset();
-			state.slice_chunk.Slice(input, partition_sel, partition_length);
-
-			// Append it to the partition directly
-			partition.Append(*partition_append_state, state.slice_chunk);
-		} else {
-			// Append the input chunk to the partition buffer using the selection vector
-			partition_buffer.Append(input, false, &partition_sel, partition_length);
-
-			if (partition_buffer.size() >= HalfBufferSize()) {
-				// Next batch won't fit in the buffer, flush it to the partition
-				partition.Append(*partition_append_state, partition_buffer);
-				partition_buffer.Reset();
-				partition_buffer.SetCapacity(BufferSize());
-			}
-		}
+		// Build out the buffer space for this partition
+		partition.Build(partition_pin_state, state.chunk_state, partition_offset, partition_length);
 	}
+
+	// Now scatter everything in one go
+	partitions[0]->Scatter(state.chunk_state, input, all_partitions_sel, input.size());
 }
 
 void PartitionedTupleData::FlushAppendState(PartitionedTupleDataAppendState &state) {
-	for (idx_t i = 0; i < state.partition_buffers.size(); i++) {
-		auto &partition_buffer = *state.partition_buffers[i];
-		if (partition_buffer.size() > 0) {
-			partitions[i]->Append(partition_buffer);
-			partition_buffer.Reset();
-		}
+	for (idx_t partition_index = 0; partition_index < partitions.size(); partition_index++) {
+		auto &partition = *partitions[partition_index];
+		auto &partition_pin_state = *state.partition_pin_states[partition_index];
+		partition.FinalizePinState(partition_pin_state);
 	}
 }
 

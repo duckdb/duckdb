@@ -500,19 +500,17 @@ RadixPartitionedTupleData::~RadixPartitionedTupleData() {
 
 void RadixPartitionedTupleData::InitializeAppendStateInternal(PartitionedTupleDataAppendState &state) const {
 	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
-	state.partition_buffers.reserve(num_partitions);
-	state.partition_append_states.reserve(num_partitions);
+	state.partition_pin_states.reserve(num_partitions);
+	state.chunk_state.vector_data.reserve(partitions[0]->GetLayout().ColumnCount());
 	for (idx_t i = 0; i < num_partitions; i++) {
 		// TODO only initialize the append if partition idx > ...
-		state.partition_append_states.emplace_back(make_unique<TupleDataAppendState>());
-		partitions[i]->InitializeAppend(*state.partition_append_states[i]);
-		state.partition_buffers.emplace_back(CreatePartitionBuffer());
+		state.partition_pin_states.emplace_back(make_unique<TupleDataPinState>());
+		state.partition_pin_states.back()->properties = TupleDataPinProperties::UNPIN_AFTER_DONE;
 	}
 }
 
 void RadixPartitionedTupleData::ComputePartitionIndices(PartitionedTupleDataAppendState &state, DataChunk &input) {
 	D_ASSERT(partitions.size() == RadixPartitioning::NumberOfPartitions(radix_bits));
-	D_ASSERT(state.partition_buffers.size() == RadixPartitioning::NumberOfPartitions(radix_bits));
 	RadixBitsSwitch<ComputePartitionIndicesFunctor, void>(radix_bits, input.data[hash_col_idx], state.partition_indices,
 	                                                      input.size());
 }

@@ -35,7 +35,7 @@ const TupleDataLayout &TupleDataAllocator::GetLayout() {
 	return layout;
 }
 
-void TupleDataAllocator::Build(TupleDataSegment &segment, TupleDataManagementState &pin_state,
+void TupleDataAllocator::Build(TupleDataSegment &segment, TupleDataPinState &pin_state,
                                TupleDataChunkState &chunk_state, idx_t initial_offset, idx_t count) {
 	D_ASSERT(this == segment.allocator.get());
 	auto &chunks = segment.chunks;
@@ -78,8 +78,8 @@ void TupleDataAllocator::Build(TupleDataSegment &segment, TupleDataManagementSta
 	segment.Verify();
 }
 
-TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataManagementState &pin_state,
-                                                      TupleDataChunkState &chunk_state, idx_t offset, idx_t count) {
+TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state,
+                                                      idx_t offset, idx_t count) {
 	TupleDataChunkPart result;
 
 	lock_guard<mutex> guard(lock);
@@ -127,7 +127,7 @@ TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataManagementState &
 	return result;
 }
 
-void TupleDataAllocator::InitializeChunkState(TupleDataSegment &segment, TupleDataManagementState &pin_state,
+void TupleDataAllocator::InitializeChunkState(TupleDataSegment &segment, TupleDataPinState &pin_state,
                                               TupleDataChunkState &chunk_state, idx_t chunk_idx, bool init_heap) {
 	D_ASSERT(this == segment.allocator.get());
 	D_ASSERT(chunk_idx < segment.chunks.size());
@@ -184,9 +184,8 @@ static inline void RecomputeHeapPointers(const data_ptr_t old_heap_ptr, const da
 	}
 }
 
-void TupleDataAllocator::InitializeChunkStateInternal(TupleDataManagementState &pin_state,
-                                                      TupleDataChunkState &chunk_state, idx_t offset,
-                                                      bool init_heap_pointers, bool init_heap_sizes,
+void TupleDataAllocator::InitializeChunkStateInternal(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state,
+                                                      idx_t offset, bool init_heap_pointers, bool init_heap_sizes,
                                                       vector<TupleDataChunkPart *> &parts) {
 	auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
 	auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
@@ -240,7 +239,7 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataManagementState &
 	D_ASSERT(offset <= STANDARD_VECTOR_SIZE);
 }
 
-void TupleDataAllocator::ReleaseOrStoreHandles(TupleDataManagementState &pin_state, TupleDataSegment &segment,
+void TupleDataAllocator::ReleaseOrStoreHandles(TupleDataPinState &pin_state, TupleDataSegment &segment,
                                                TupleDataChunk &chunk) const {
 	if (pin_state.properties == TupleDataPinProperties::ALREADY_PINNED) {
 		return;
@@ -251,7 +250,7 @@ void TupleDataAllocator::ReleaseOrStoreHandles(TupleDataManagementState &pin_sta
 	}
 }
 
-void TupleDataAllocator::ReleaseOrStoreHandles(TupleDataManagementState &pin_state, TupleDataSegment &segment) const {
+void TupleDataAllocator::ReleaseOrStoreHandles(TupleDataPinState &pin_state, TupleDataSegment &segment) const {
 	if (pin_state.properties == TupleDataPinProperties::KEEP_EVERYTHING_PINNED) {
 		static TupleDataChunk DUMMY_CHUNK;
 		ReleaseOrStoreHandles(pin_state, segment, DUMMY_CHUNK);
@@ -288,7 +287,7 @@ void TupleDataAllocator::ReleaseOrStoreHandlesInternal(unordered_map<uint32_t, B
 	} while (found_handle);
 }
 
-void TupleDataAllocator::PinRowBlock(TupleDataManagementState &pin_state, const uint32_t row_block_index) {
+void TupleDataAllocator::PinRowBlock(TupleDataPinState &pin_state, const uint32_t row_block_index) {
 	if (pin_state.row_handles.find(row_block_index) == pin_state.row_handles.end()) {
 		shared_ptr<BlockHandle> handle;
 		{
@@ -300,7 +299,7 @@ void TupleDataAllocator::PinRowBlock(TupleDataManagementState &pin_state, const 
 	}
 }
 
-void TupleDataAllocator::PinHeapBlock(TupleDataManagementState &pin_state, const uint32_t heap_block_index) {
+void TupleDataAllocator::PinHeapBlock(TupleDataPinState &pin_state, const uint32_t heap_block_index) {
 	if (pin_state.heap_handles.find(heap_block_index) == pin_state.heap_handles.end()) {
 		shared_ptr<BlockHandle> handle;
 		{
@@ -312,12 +311,12 @@ void TupleDataAllocator::PinHeapBlock(TupleDataManagementState &pin_state, const
 	}
 }
 
-data_ptr_t TupleDataAllocator::GetRowPointer(TupleDataManagementState &pin_state, const TupleDataChunkPart &part) {
+data_ptr_t TupleDataAllocator::GetRowPointer(TupleDataPinState &pin_state, const TupleDataChunkPart &part) {
 	PinRowBlock(pin_state, part.row_block_index);
 	return pin_state.row_handles[part.row_block_index].Ptr() + part.row_block_offset;
 }
 
-data_ptr_t TupleDataAllocator::GetBaseHeapPointer(TupleDataManagementState &pin_state, const TupleDataChunkPart &part) {
+data_ptr_t TupleDataAllocator::GetBaseHeapPointer(TupleDataPinState &pin_state, const TupleDataChunkPart &part) {
 	PinHeapBlock(pin_state, part.heap_block_index);
 	return pin_state.heap_handles[part.heap_block_index].Ptr();
 }

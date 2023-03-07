@@ -22,10 +22,9 @@ public:
 public:
 	Vector partition_indices;
 	SelectionVector partition_sel;
-	DataChunk slice_chunk;
 
-	vector<unique_ptr<DataChunk>> partition_buffers;
-	vector<unique_ptr<TupleDataAppendState>> partition_append_states;
+	vector<unique_ptr<TupleDataPinState>> partition_pin_states;
+	TupleDataChunkState chunk_state;
 };
 
 enum class PartitionedTupleDataType : uint8_t {
@@ -63,10 +62,6 @@ protected:
 	//===--------------------------------------------------------------------===//
 	// Partitioning type implementation interface
 	//===--------------------------------------------------------------------===//
-	//! Size of the buffers in the append states for this type of partitioning (default 128)
-	virtual idx_t BufferSize() const {
-		return MinValue<idx_t>(128, STANDARD_VECTOR_SIZE);
-	}
 	//! Initialize a PartitionedTupleDataAppendState for this type of partitioning (optional)
 	virtual void InitializeAppendStateInternal(PartitionedTupleDataAppendState &state) const {
 	}
@@ -82,24 +77,17 @@ protected:
 	PartitionedTupleData(PartitionedTupleDataType type, ClientContext &context, TupleDataLayout layout);
 	PartitionedTupleData(const PartitionedTupleData &other);
 
-	//! If the buffer is half full, we append to the partition
-	inline idx_t HalfBufferSize() const {
-		D_ASSERT((BufferSize() & (BufferSize() - 1)) == 0); // BufferSize should be a power of two
-		return BufferSize() / 2;
-	}
 	//! Create a new shared allocator
 	void CreateAllocator();
 	//! Create a collection for a specific a partition
 	unique_ptr<TupleDataCollection> CreatePartitionCollection(idx_t partition_index) const {
 		return make_unique<TupleDataCollection>(allocators->allocators[partition_index]);
 	}
-	//! Create a DataChunk used for buffering appends to the partition
-	unique_ptr<DataChunk> CreatePartitionBuffer() const;
 
 protected:
 	PartitionedTupleDataType type;
 	ClientContext &context;
-	TupleDataLayout layout;
+	const TupleDataLayout layout;
 
 	mutex lock;
 	shared_ptr<PartitionTupleDataAllocators> allocators;
