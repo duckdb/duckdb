@@ -192,7 +192,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	unique_ptr<FunctionData> bind_info;
 	if (window.type == ExpressionType::WINDOW_AGGREGATE) {
 		//  Look up the aggregate function in the catalog
-		if (window.catalog == "" && window.schema == "") {
+		if (window.catalog.empty() && window.schema.empty()) {
 			window.catalog = "system";
 			window.schema = "main";
 		}
