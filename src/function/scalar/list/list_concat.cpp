@@ -3,8 +3,6 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/storage/statistics/list_statistics.hpp"
-#include "duckdb/storage/statistics/validity_statistics.hpp"
 
 namespace duckdb {
 
@@ -108,14 +106,11 @@ static unique_ptr<FunctionData> ListConcatBind(ClientContext &context, ScalarFun
 static unique_ptr<BaseStatistics> ListConcatStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	D_ASSERT(child_stats.size() == 2);
-	if (!child_stats[0] || !child_stats[1]) {
-		return nullptr;
-	}
 
-	auto &left_stats = (ListStatistics &)*child_stats[0];
-	auto &right_stats = (ListStatistics &)*child_stats[1];
+	auto &left_stats = child_stats[0];
+	auto &right_stats = child_stats[1];
 
-	auto stats = left_stats.Copy();
+	auto stats = left_stats.ToUnique();
 	stats->Merge(right_stats);
 
 	return stats;

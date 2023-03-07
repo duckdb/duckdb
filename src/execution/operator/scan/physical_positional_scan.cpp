@@ -12,13 +12,28 @@ namespace duckdb {
 PhysicalPositionalScan::PhysicalPositionalScan(vector<LogicalType> types, unique_ptr<PhysicalOperator> left,
                                                unique_ptr<PhysicalOperator> right)
     : PhysicalOperator(PhysicalOperatorType::POSITIONAL_SCAN, std::move(types),
-                       MinValue(left->estimated_cardinality, right->estimated_cardinality)) {
+                       MaxValue(left->estimated_cardinality, right->estimated_cardinality)) {
 
 	// Manage the children ourselves
-	D_ASSERT(left->type == PhysicalOperatorType::TABLE_SCAN);
-	D_ASSERT(right->type == PhysicalOperatorType::TABLE_SCAN);
-	child_tables.emplace_back(std::move(left));
-	child_tables.emplace_back(std::move(right));
+	if (left->type == PhysicalOperatorType::TABLE_SCAN) {
+		child_tables.emplace_back(std::move(left));
+	} else if (left->type == PhysicalOperatorType::POSITIONAL_SCAN) {
+		auto &left_scan = (PhysicalPositionalScan &)*left;
+		child_tables = std::move(left_scan.child_tables);
+	} else {
+		throw InternalException("Invalid left input for PhysicalPositionalScan");
+	}
+
+	if (right->type == PhysicalOperatorType::TABLE_SCAN) {
+		child_tables.emplace_back(std::move(right));
+	} else if (right->type == PhysicalOperatorType::POSITIONAL_SCAN) {
+		auto &right_scan = (PhysicalPositionalScan &)*right;
+		auto &right_tables = right_scan.child_tables;
+		child_tables.reserve(child_tables.size() + right_tables.size());
+		std::move(right_tables.begin(), right_tables.end(), std::back_inserter(child_tables));
+	} else {
+		throw InternalException("Invalid right input for PhysicalPositionalScan");
+	}
 }
 
 class PositionalScanGlobalSourceState : public GlobalSourceState {

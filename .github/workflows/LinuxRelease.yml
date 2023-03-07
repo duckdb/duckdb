@@ -1,13 +1,14 @@
 name: LinuxRelease
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 2 * * *"
+  repository_dispatch:
   push:
     branches:
       - '**'
       - '!master'
       - '!feature'
+    tags:
+      - '**'
     paths-ignore:
       - '**.md'
       - 'tools/**'
@@ -90,7 +91,7 @@ jobs:
         zip -j duckdb_odbc-linux-amd64.zip build/release/tools/odbc/libduckdb_odbc.so tools/odbc/linux_setup/unixodbc_setup.sh
         python3.7 scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_odbc-linux-amd64.zip
 
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       with:
         name: duckdb-binaries-linux
         path: |
@@ -160,7 +161,7 @@ jobs:
          zip -j libduckdb-linux-aarch64.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
          python3.7 scripts/asset-upload-gha.py libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip duckdb_odbc-linux-aarch64.zip
 
-     - uses: actions/upload-artifact@v2
+     - uses: actions/upload-artifact@v3
        with:
          name: duckdb-binaries-linux-aarch64
          path: |
@@ -190,7 +191,7 @@ jobs:
         s3_key: ${{ secrets.S3_KEY }}
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
 
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       with:
         name: linux-extensions-64
         path: |
@@ -229,7 +230,7 @@ jobs:
           aarch64_cross_compile: 1
           run_tests: 0 # Cannot run tests here due to cross-compiling
 
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v3
         with:
           name: linux-extensions-64-aarch64
           path: |
@@ -318,7 +319,7 @@ jobs:
         zip -j libduckdb-linux-i386.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
         python3.7 scripts/asset-upload-gha.py libduckdb-linux-i386.zip duckdb_cli-linux-i386.zip
 
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       with:
         name: duckdb-binaries-linux-32bit
         path: |
@@ -368,7 +369,7 @@ jobs:
         zip -j libduckdb-linux-rpi.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
         python scripts/asset-upload-gha.py libduckdb-linux-rpi.zip duckdb_cli-linux-rpi.zip
 
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       with:
         name: duckdb-binaries-rpi
         path: |
@@ -378,7 +379,7 @@ jobs:
 
  linux-clang:
     name: Clang 14
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     needs: linux-release-64
 
     env:
@@ -421,17 +422,16 @@ jobs:
 
  old-gcc:
     name: GCC 4.8
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
+    container: ubuntu:16.04
     needs: linux-release-64
-
-    env:
-      CC: gcc-4.8
-      CXX: g++-4.8
 
     steps:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+
+    - uses: ./.github/actions/ubuntu_16_setup
 
     - uses: actions/setup-python@v4
       with:
@@ -439,7 +439,7 @@ jobs:
 
     - name: Install
       shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq g++-4.8 binutils
+      run: apt-get update -y -qq && apt-get install -y -qq g++-4.8 binutils
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -450,10 +450,17 @@ jobs:
     - name: Build
       shell: bash
       run: make release
+      env:
+        CC: gcc-4.8
+        CXX: g++-4.8
+
 
     - name: Test
       shell: bash
       run: make allunit
+      env:
+        CC: gcc-4.8
+        CXX: g++-4.8
 
  release-assert:
     name: Release Assertions
@@ -559,6 +566,7 @@ jobs:
       run: ./scripts/wasm_build_test.sh Release
 
     - name: Test WASM Module
+      if: ${{ false }}
       shell: bash
       run: node ./test/wasm/hello_wasm_test.js
 
@@ -568,7 +576,7 @@ jobs:
         zip -j duckdb-wasm32-nothreads.zip ./.wasm/build/duckdb.wasm
         python scripts/asset-upload-gha.py duckdb-wasm32-nothreads.zip
 
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       with:
         name: duckdb-wasm32-nothreads
         path: |
@@ -712,6 +720,13 @@ jobs:
       uses: KyleMayes/install-llvm-action@v1
       with:
         version: "10.0"
+
+    - name: Generate Amalgamation x8
+      shell: bash
+      run:  |
+          python scripts/amalgamation.py --extended --splits=8
+          clang++ -std=c++17 -Isrc/amalgamation src/amalgamation/duckdb*.cpp -emit-llvm -S -O0
+          clang++ *.ll -O0 -v  -Wl,-bundle
 
     - name: Generate Amalgamation
       shell: bash

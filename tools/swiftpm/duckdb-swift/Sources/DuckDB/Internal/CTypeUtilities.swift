@@ -25,6 +25,13 @@
 @_implementationOnly import Cduckdb
 import Foundation
 
+// MARK: - Type Layouts
+
+struct duckdb_list_entry_t {
+  let offset: UInt64
+  let length: UInt64
+}
+
 extension duckdb_state {
   static let success = duckdb_state(0)
   static let failure = duckdb_state(1)
@@ -68,6 +75,10 @@ extension duckdb_string {
 // MARK: - Huge Int
 
 extension duckdb_hugeint {
+  
+  init(_ source: IntHuge) {
+    self = duckdb_hugeint(lower: source.low, upper: source.high)
+  }
   
   var asIntHuge: IntHuge { .init(high: upper, low: lower) }
   
@@ -168,6 +179,11 @@ extension duckdb_timestamp_struct {
 
 extension duckdb_interval {
   
+  init(interval: Interval) {
+    self = duckdb_interval(
+      months: interval.months, days: interval.days, micros: interval.microseconds)
+  }
+  
   var asInterval: Interval {
     Interval(months: months, days: days, microseconds: micros)
   }
@@ -192,5 +208,71 @@ extension duckdb_blob {
       }
       return Data(bytes: blobPtr, count: Int(contentsSize))
     }
+  }
+}
+
+// MARK: - Decimal
+
+extension duckdb_decimal {
+  
+  private static let scaleLimit = 38
+  
+  init(_ source: Decimal) throws {    
+    let mantissaLimit = source.isSignMinus ? 1 + UIntHuge(IntHuge.max) : UIntHuge(IntHuge.max)
+    var scale: Int
+    var mantissa: UIntHuge
+    if source.exponent > 0 {
+      let exponent = UIntHuge(source.exponent)
+      let (out, overflow) = source.hugeMantissa.multipliedReportingOverflow(by: exponent)
+      guard overflow == false else { throw DatabaseError.decimalUnrepresentable }
+      mantissa = out
+      scale = 0
+    }
+    else {
+      scale = -source.exponent
+      mantissa = source.hugeMantissa
+      while scale > Self.scaleLimit {
+        mantissa /= 10
+        scale -= 1
+      }
+      while scale > 0, mantissa > mantissaLimit {
+        mantissa /= 10
+        scale -= 1
+      }
+    }
+    guard mantissa <= mantissaLimit else {
+      throw DatabaseError.decimalUnrepresentable
+    }
+    guard mantissa > 0 else {
+      self = duckdb_decimal(width: 0, scale: 0, value: .init(lower: 0, upper: 0))
+      return
+    }
+    let value = source.isSignMinus
+      ? IntHuge.min + IntHuge(mantissaLimit - mantissa) : IntHuge(mantissa)
+    self = duckdb_decimal(width: 38, scale: .init(scale), value: .init(value))
+  }
+}
+
+fileprivate extension Decimal {
+  
+  var hugeMantissa: UIntHuge {
+    let components = [
+      _mantissa.0, _mantissa.1, _mantissa.2, _mantissa.3,
+      _mantissa.4, _mantissa.5, _mantissa.6, _mantissa.7
+    ]
+    var mantissa = UIntHuge(0)
+    for i in 0..<Int(_length) {
+      mantissa += UIntHuge(components[i]) << (i * 16)
+    }
+    return mantissa
+  }
+}
+
+// MARK: - Vector
+
+extension duckdb_vector {
+  
+  var logicalType: LogicalType {
+    LogicalType { duckdb_vector_get_column_type(self) }
   }
 }

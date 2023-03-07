@@ -23,7 +23,17 @@
 //  IN THE SOFTWARE.
 
 enum DatabaseError: Error {
-  case failedToOpenDatabase(reason: String?)
-  case failedToOpenConnection
-  case queryError(reason: String?)
+  case decimalUnrepresentable
+  case appenderFailedToAppendItem(reason: String?)
+  case appenderFailedToEndRow(reason: String?)
+  case appenderFailedToFlush(reason: String?)
+  case appenderFailedToInitialize(reason: String?)
+  case connectionFailedToInitialize
+  case connectionQueryError(reason: String?)
+  case databaseFailedToInitialize(reason: String?)
+  case preparedStatementFailedToInitialize(reason: String?)
+  case preparedStatementFailedToBindParameter(reason: String?)
+  case preparedStatementQueryError(reason: String?)
+  case valueNotFound(Any.Type)
+  case typeMismatch(Any.Type)
 }

@@ -1,14 +1,22 @@
 name: Swift
 on:
-  schedule:
-    - cron: "0 2 * * *"
+  workflow_dispatch:
+  repository_dispatch:
   push:
     branches:
       - '**'
       - '!master'
       - '!feature'
+    tags:
+      - '**'
     paths-ignore:
       - '**.md'
+      - 'examples/**'
+      - 'test/**'
+      - 'tools/**'
+      - '!tools/swiftpm/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Swift.yml'
   pull_request:
     paths-ignore:
       - '**.md'
@@ -39,7 +47,10 @@ jobs:
     steps:
 
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
+        with:
+          # we need tags for the ubiquity build script to run without errors
+          fetch-depth: '0'
 
       - name: Prepare Package
         run: python3 tools/swiftpm/create_package.py tools/swiftpm

@@ -29,6 +29,17 @@ struct AggregateInputData {
 	Allocator &allocator;
 };
 
+struct AggregateStatisticsInput {
+	AggregateStatisticsInput(FunctionData *bind_data_p, vector<BaseStatistics> &child_stats_p,
+	                         NodeStatistics *node_stats_p)
+	    : bind_data(bind_data_p), child_stats(child_stats_p), node_stats(node_stats_p) {
+	}
+
+	FunctionData *bind_data;
+	vector<BaseStatistics> &child_stats;
+	NodeStatistics *node_stats;
+};
+
 //! The type used for sizing hashed aggregate function states
 typedef idx_t (*aggregate_size_t)();
 //! The type used for initializing hashed aggregate function states
@@ -43,9 +54,7 @@ typedef void (*aggregate_finalize_t)(Vector &state, AggregateInputData &aggr_inp
                                      idx_t offset);
 //! The type used for propagating statistics in aggregate functions (optional)
 typedef unique_ptr<BaseStatistics> (*aggregate_statistics_t)(ClientContext &context, BoundAggregateExpression &expr,
-                                                             FunctionData *bind_data,
-                                                             vector<unique_ptr<BaseStatistics>> &child_stats,
-                                                             NodeStatistics *node_stats);
+                                                             AggregateStatisticsInput &input);
 //! Binds the scalar function and creates the function data
 typedef unique_ptr<FunctionData> (*bind_aggregate_function_t)(ClientContext &context, AggregateFunction &function,
                                                               vector<unique_ptr<Expression>> &arguments);
