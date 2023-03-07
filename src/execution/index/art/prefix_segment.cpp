@@ -10,6 +10,7 @@ PrefixSegment::PrefixSegment() : next(0) {
 void PrefixSegment::Free(ART &art, const idx_t &position) {
 	D_ASSERT(art.nodes.find(ARTNodeType::PREFIX_SEGMENT) != art.nodes.end());
 	art.nodes.at(ARTNodeType::PREFIX_SEGMENT).Free(position);
+	art.DecreaseMemorySize(sizeof(PrefixSegment));
 }
 
 idx_t PrefixSegment::New(ART &art) {

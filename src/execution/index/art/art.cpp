@@ -466,7 +466,6 @@ bool ART::Insert(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id
 		return true;
 	}
 
-	auto node_prefix = node.GetPrefix(*this);
 	if (node.DecodeARTNodeType() == ARTNodeType::LEAF) {
 		// add a row ID to a leaf, if they have the same key
 		auto leaf = node.Get<Leaf>(*this);
@@ -490,7 +489,7 @@ bool ART::Insert(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id
 		auto new_n4 = Node4::Initialize(*this, new_n4_node);
 		new_n4->prefix.Initialize(*this, key, depth, new_prefix_length);
 
-		auto key_byte = node_prefix->Reduce(*this, new_prefix_length);
+		auto key_byte = node.GetPrefix(*this)->Reduce(*this, new_prefix_length);
 		Node4::InsertChild(*this, new_n4_node, key_byte, node);
 
 		auto leaf_node = ARTNode::New(*this, ARTNodeType::LEAF);
@@ -502,17 +501,17 @@ bool ART::Insert(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id
 	}
 
 	// handle prefix of inner node
-	if (node_prefix->count) {
+	if (node.GetPrefix(*this)->count) {
 
-		auto mismatch_position = node_prefix->KeyMismatchPosition(*this, key, depth);
-		if (mismatch_position != node_prefix->count) {
+		auto mismatch_position = node.GetPrefix(*this)->KeyMismatchPosition(*this, key, depth);
+		if (mismatch_position != node.GetPrefix(*this)->count) {
 
 			// prefix differs, create new node
 			auto new_n4_node = ARTNode::New(*this, ARTNodeType::NODE_4);
 			auto new_n4 = Node4::Initialize(*this, new_n4_node);
 			new_n4->prefix.Initialize(*this, key, depth, mismatch_position);
 
-			auto key_byte = node_prefix->Reduce(*this, mismatch_position);
+			auto key_byte = node.GetPrefix(*this)->Reduce(*this, mismatch_position);
 			Node4::InsertChild(*this, new_n4_node, key_byte, node);
 
 			auto leaf_node = ARTNode::New(*this, ARTNodeType::LEAF);
@@ -522,7 +521,7 @@ bool ART::Insert(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id
 			node = new_n4_node;
 			return true;
 		}
-		depth += node_prefix->count;
+		depth += node.GetPrefix(*this)->count;
 	}
 
 	// recurse

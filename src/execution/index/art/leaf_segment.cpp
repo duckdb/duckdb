@@ -7,6 +7,7 @@ namespace duckdb {
 void LeafSegment::Free(ART &art, const idx_t &position) {
 	D_ASSERT(art.nodes.find(ARTNodeType::LEAF_SEGMENT) != art.nodes.end());
 	art.nodes.at(ARTNodeType::LEAF_SEGMENT).Free(position);
+	art.DecreaseMemorySize(sizeof(LeafSegment));
 }
 
 idx_t LeafSegment::New(ART &art) {

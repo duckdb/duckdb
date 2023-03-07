@@ -50,6 +50,7 @@ void Prefix::Initialize(ART &art, const Key &key, const uint32_t &depth, const u
 	for (idx_t i = 0; i < count_p; i++) {
 		segment = segment->Append(art, count, key.data[depth + i]);
 	}
+	D_ASSERT(count == count_p);
 
 	// NOTE: we do not increase the memory size for a prefix, because a prefix is assumed to be part
 	// of another node, and already accounted for when tracking the memory size of that node
@@ -234,6 +235,7 @@ uint8_t Prefix::Reduce(ART &art, const idx_t &n) {
 
 	// was inlined, just move bytes
 	if (IsInlined()) {
+		// TODO: use memmove
 		for (idx_t i = 0; i < new_count; i++) {
 			data.inlined[i] = data.inlined[i + n + 1];
 		}
@@ -273,6 +275,12 @@ uint8_t Prefix::Reduce(ART &art, const idx_t &n) {
 		D_ASSERT(source_segment->next != DConstants::INVALID_INDEX);
 		source_segment = PrefixSegment::Get(art, source_segment->next);
 	}
+
+	// possibly inline the data
+	if (IsInlined()) {
+		MoveSegmentToInlined(art);
+	}
+
 	return new_first_byte;
 }
 
@@ -295,10 +303,9 @@ uint8_t Prefix::GetByte(ART &art, const idx_t &position) const {
 
 uint32_t Prefix::KeyMismatchPosition(ART &art, const Key &key, const uint32_t &depth) const {
 
-	D_ASSERT(depth + count < key.len);
-
 	// FIXME: inefficient, because GetByte always traverses all segments
 	for (idx_t position = 0; position < count; position++) {
+		D_ASSERT(depth + position < key.len);
 		if (key[depth + position] != GetByte(art, position)) {
 			return position;
 		}
@@ -381,6 +388,20 @@ void Prefix::MoveInlinedToSegment(ART &art) {
 	D_ASSERT(ARTNode::PREFIX_SEGMENT_SIZE >= ARTNode::PREFIX_INLINE_BYTES);
 	memmove(segment->bytes, data.inlined, count);
 	data.position = position;
+}
+
+void Prefix::MoveSegmentToInlined(ART &art) {
+	D_ASSERT(IsInlined());
+	D_ASSERT(data.position != DConstants::INVALID_INDEX);
+
+	auto position = data.position;
+	auto segment = PrefixSegment::Get(art, data.position);
+
+	// move data
+	memmove(data.inlined, segment->bytes, count);
+
+	// free segment
+	PrefixSegment::Free(art, position);
 }
 
 } // namespace duckdb

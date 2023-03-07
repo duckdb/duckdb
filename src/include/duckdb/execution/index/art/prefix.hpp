@@ -79,6 +79,8 @@ private:
 	//! Moves all inlined bytes onto a prefix segment, does not change the size
 	//! so this will be an (temporarily) invalid prefix
 	void MoveInlinedToSegment(ART &art);
+	//! Inlines up to eight bytes on the first prefix segment
+	void MoveSegmentToInlined(ART &art);
 };
 
 } // namespace duckdb
