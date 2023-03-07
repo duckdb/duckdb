@@ -76,8 +76,10 @@ enum class ExceptionType {
 	PERMISSION = 34,      // insufficient permissions
 	PARAMETER_NOT_RESOLVED = 35, // parameter types could not be resolved
 	PARAMETER_NOT_ALLOWED = 36,  // parameter types not allowed
-	DEPENDENCY = 37              // dependency
+	DEPENDENCY = 37,             // dependency
+	HTTP = 38
 };
+class HTTPException;
 
 class Exception : public std::exception {
 public:
@@ -91,7 +93,12 @@ public:
 	DUCKDB_API const string &RawMessage() const;
 
 	DUCKDB_API static string ExceptionTypeToString(ExceptionType type);
-	[[noreturn]] DUCKDB_API static void ThrowAsTypeWithMessage(ExceptionType type, const string &message);
+	[[noreturn]] DUCKDB_API static void ThrowAsTypeWithMessage(ExceptionType type, const string &message,
+	                                                           const std::shared_ptr<Exception> &original);
+	virtual std::shared_ptr<Exception> Copy() const {
+		return make_shared<Exception>(type, raw_message_);
+	}
+	DUCKDB_API const HTTPException &AsHTTPException() const;
 
 	template <typename... Args>
 	static string ConstructMessage(const string &msg, Args... params) {
@@ -256,6 +263,8 @@ public:
 class IOException : public Exception {
 public:
 	DUCKDB_API explicit IOException(const string &msg);
+	DUCKDB_API explicit IOException(ExceptionType exception_type, const string &msg) : Exception(exception_type, msg) {
+	}
 
 	template <typename... Args>
 	explicit IOException(const string &msg, Args... params) : IOException(ConstructMessage(msg, params...)) {
@@ -270,6 +279,33 @@ public:
 	explicit MissingExtensionException(const string &msg, Args... params)
 	    : IOException(ConstructMessage(msg, params...)) {
 	}
+};
+
+class HTTPException : public IOException {
+public:
+	DUCKDB_API explicit HTTPException(int status_code, string response, const string &msg)
+	    : IOException(ExceptionType::HTTP, msg), status_code(status_code), response(std::move(response)) {
+	}
+
+	template <typename... ARGS>
+	explicit HTTPException(int status_code, string response, const string &msg, ARGS... params)
+	    : HTTPException(status_code, std::move(response), ConstructMessage(msg, params...)) {
+	}
+
+	std::shared_ptr<Exception> Copy() const {
+		return make_shared<HTTPException>(status_code, response, RawMessage());
+	}
+
+	int GetStatusCode() const {
+		return status_code;
+	}
+	const string &GetResponse() const {
+		return response;
+	}
+
+private:
+	int status_code;
+	string response; // we can keep a copy for the user
 };
 
 class SerializationException : public Exception {

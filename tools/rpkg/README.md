@@ -25,6 +25,9 @@ DUCKDB_R_EXTENSIONS=tpch R CMD INSTALL .
 
 ## Development
 
+To build the R package, you first need to install the dependencies, these are located in `tools/rpkg/dependencies.R`
+Navigate over to the `tools/rpkg` folder and run `Rscript dependencies.R`
+
 For development, setting the `DUCKDB_R_DEBUG` environment variable enables incremental debugging builds for the R package.
 
 ```sh

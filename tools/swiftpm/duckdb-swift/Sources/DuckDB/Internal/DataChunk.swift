@@ -32,7 +32,7 @@ final class DataChunk {
   
   private let ptr = UnsafeMutablePointer<duckdb_data_chunk?>.allocate(capacity: 1)
   
-  init(result: QueryResult, index: DBInt) {
+  init(result: ResultSet, index: DBInt) {
     self.ptr.pointee = result.withCResult { duckdb_result_get_chunk($0.pointee, index)! }
   }
   
@@ -41,7 +41,7 @@ final class DataChunk {
     ptr.deallocate()
   }
   
-  func withCVector<T>(at index: DBInt, _ body: (duckdb_vector) throws -> T) rethrows -> T {
-    try body(duckdb_data_chunk_get_vector(ptr.pointee, index))
+  func withVector<T>(at index: DBInt, _ body: (Vector) throws -> T) rethrows -> T {
+    try body(Vector(duckdb_data_chunk_get_vector(ptr.pointee, index), count: Int(count)))
   }
 }

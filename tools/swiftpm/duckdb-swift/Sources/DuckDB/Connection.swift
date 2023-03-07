@@ -24,11 +24,29 @@
 
 @_implementationOnly import Cduckdb
 
+/// An object representing a connection to a DuckDB database
+///
+/// A connection through which a database can be queried
+///
+/// For each database, you can create one or many connections using
+/// ``Database/connect()``.
+///
+/// Querying a connection is a blocking operation, and
+/// individual connections are locked during querying. It is therefore
+/// recommended that connections are accessed via a background queue or
+/// through an actor.
 public final class Connection {
 
   private let database: Database
   private let ptr = UnsafeMutablePointer<duckdb_connection?>.allocate(capacity: 1)
 
+  /// Creates a new connection
+  ///
+  /// Instantiates a connection through which a database can be queried
+  ///
+  /// - Parameter database: the database to connect to
+  /// - Throws: ``DatabaseError/connectionFailedToInitialize`` if the connection
+  ///   failed to instantiate
   public init(database: Database) throws {
     self.database = database
     let status = database.withCDatabase { duckdb_connect($0, ptr) }
@@ -40,10 +58,29 @@ public final class Connection {
     ptr.deallocate()
   }
   
-  public func query(_ sql: String) throws -> QueryResult {
-    try QueryResult(connection: self, sql: sql)
+  /// Perform a database query
+  ///
+  /// Takes a raw SQL statement and passes it to the database engine for
+  /// execution, returning the result.
+  ///
+  /// - Note: This is a blocking operation
+  /// - Parameter sql: the query string as SQL
+  /// - Throws: ``DatabaseError/connectionQueryError(reason:)`` if the query
+  ///   did not execute successfully
+  /// - Returns: a query result set
+  public func query(_ sql: String) throws -> ResultSet {
+    try ResultSet(connection: self, sql: sql)
   }
   
+  /// Execute a database query
+  ///
+  /// Takes a raw SQL statement and passes it to the database engine for
+  /// execution, ignoring the result.
+  ///
+  /// - Note: This is a blocking operation
+  /// - Parameter sql: the query string as SQL
+  /// - Throws: ``DatabaseError/connectionQueryError(reason:)`` if the query
+  ///   did not execute successfully
   public func execute(_ sql: String) throws {
     let status = sql.withCString { queryStrPtr in
       duckdb_query(ptr.pointee, queryStrPtr, nil)

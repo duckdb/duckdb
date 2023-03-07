@@ -15,6 +15,8 @@
 #include "duckdb_python/pandas_type.hpp"
 #include "duckdb_python/registered_py_object.hpp"
 #include "duckdb_python/pyresult.hpp"
+#include "duckdb/parser/statement/explain_statement.hpp"
+#include "duckdb_python/explain_enum.hpp"
 
 namespace duckdb {
 
@@ -244,7 +246,7 @@ public:
 	string ToString();
 	void Print();
 
-	string Explain();
+	string Explain(ExplainType type);
 
 	static bool IsRelation(const py::object &object);
 

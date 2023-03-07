@@ -25,6 +25,13 @@
 @_implementationOnly import Cduckdb
 import Foundation
 
+// MARK: - Type Layouts
+
+struct duckdb_list_entry_t {
+  let offset: UInt64
+  let length: UInt64
+}
+
 extension duckdb_state {
   static let success = duckdb_state(0)
   static let failure = duckdb_state(1)
@@ -39,7 +46,7 @@ extension duckdb_pending_state {
 // MARK: - Type ID
 
 extension duckdb_type {
-  var asTypeID: DBTypeID { .init(rawValue: rawValue) }
+  var asTypeID: DatabaseType { .init(rawValue: rawValue) }
 }
 
 // MARK: - String
@@ -258,5 +265,14 @@ fileprivate extension Decimal {
       mantissa += UIntHuge(components[i]) << (i * 16)
     }
     return mantissa
+  }
+}
+
+// MARK: - Vector
+
+extension duckdb_vector {
+  
+  var logicalType: LogicalType {
+    LogicalType { duckdb_vector_get_column_type(self) }
   }
 }

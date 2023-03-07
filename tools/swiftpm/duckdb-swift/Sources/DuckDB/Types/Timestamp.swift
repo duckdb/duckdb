@@ -24,26 +24,44 @@
 
 @_implementationOnly import Cduckdb
 
-public struct Timestamp: Hashable, Equatable {
-  var microseconds: Int64
+/// A point in absolute time
+///
+/// Timestamps represent points in absolute time, usually called instants.
+/// DuckDB represents instants as the number of microseconds (µs) since
+/// `1970-01-01 00:00:00+00`.
+public struct Timestamp: Hashable, Equatable, Codable {
+  /// microseconds (µs) since `1970-01-01 00:00:00+00`.
+  public var microseconds: Int64
 }
 
 public extension Timestamp {
   
+  /// The components of a ``Timestamp`` decomposed into its constituent parts
+  ///
+  /// A type to facilate the conversion between nominal units of year, month,
+  /// day, hours, minutes, seconds and microseconds into the underlying DuckDB
+  /// ``Timestamp`` representation of microseconds (µs) since
+  /// `1970-01-01 00:00:00+00`.
   struct Components: Hashable, Equatable {
+    /// Date components
     public var date: Date.Components
+    /// Time components
     public var time: Time.Components
   }
   
+  /// Creates a new instance from the given timestamp components
+  ///
+  /// - Parameter components: the components of the timestamp to be instantiated
   init(components: Components) {
     let ctimestampstruct = duckdb_to_timestamp(duckdb_timestamp_struct(components: components))
     self = ctimestampstruct.asTimestamp
   }
   
+  /// Timestamp components
   var components: Components { Components(self) }
 }
 
-public extension Timestamp.Components {
+private extension Timestamp.Components {
   
   init(_ timestamp: Timestamp) {
     let ctimestamp = duckdb_timestamp(timestamp: timestamp)

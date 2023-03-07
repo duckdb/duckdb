@@ -199,5 +199,6 @@ TEST_CASE("Test ARRAY_AGG with ORDER BY", "[api][array_agg]") {
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO t2 VALUES (1,1,1), (1,2,2), (2,1,3), (2,2,4)"));
 
 	auto result = con.Query("select a, array_agg(c ORDER BY b) from t2 GROUP BY a");
+	REQUIRE(!result->HasError());
 	REQUIRE(result->names[1] == "array_agg(c ORDER BY b)");
 }

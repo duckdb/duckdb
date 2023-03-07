@@ -17,6 +17,7 @@
 #include "duckdb/common/named_parameter_map.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/external_dependencies.hpp"
+#include "duckdb/parser/statement/explain_statement.hpp"
 
 #include <memory>
 
@@ -66,7 +67,7 @@ public:
 	DUCKDB_API unique_ptr<QueryResult> Query(const string &name, const string &sql);
 
 	//! Explain the query plan of this relation
-	DUCKDB_API unique_ptr<QueryResult> Explain();
+	DUCKDB_API unique_ptr<QueryResult> Explain(ExplainType type = ExplainType::EXPLAIN_STANDARD);
 
 	DUCKDB_API virtual unique_ptr<TableRef> GetTableRef();
 	DUCKDB_API virtual bool IsReadOnly() {
