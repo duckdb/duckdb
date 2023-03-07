@@ -211,32 +211,35 @@ void Leaf::Remove(ART &art, const row_t &row_id) {
 
 	// find the row ID, and the segment containing that row ID
 	auto position = row_ids.position;
-	auto start = FindRowId(art, position, row_id);
-	if (start == (uint32_t)DConstants::INVALID_INDEX) {
+	auto copy_idx = FindRowId(art, position, row_id);
+	if (copy_idx == (uint32_t)DConstants::INVALID_INDEX) {
 		return;
 	}
-	start++;
+	copy_idx++;
 
 	// iterate all remaining segments and move the row IDs one field to the left
 	LeafSegment *prev_segment = nullptr;
-	while (position != DConstants::INVALID_INDEX) {
+	while (copy_idx < count) {
 
+		D_ASSERT(position != DConstants::INVALID_INDEX);
 		auto segment = LeafSegment::Get(art, position);
 		if (prev_segment) {
 			// this segment has at least one element, and we need to copy it into the previous segment
 			prev_segment->row_ids[ARTNode::LEAF_SEGMENT_SIZE - 1] = segment->row_ids[0];
+			copy_idx++;
 		}
 
-		// calculate how to move the data: min ((count - 1) - (start + 1), (SEGMENT_COUNT - 1) - (start + 1))
-		start = start % ARTNode::LEAF_SEGMENT_SIZE;
-		auto len = std::min(count, ARTNode::LEAF_SEGMENT_SIZE - start);
+		auto copy_count = count - copy_idx - 1;
+		if (ARTNode::LEAF_SEGMENT_SIZE - 1 < copy_count) {
+			copy_count = ARTNode::LEAF_SEGMENT_SIZE - 1;
+		}
 
-		// move the data
-		D_ASSERT(start > 0);
-		memmove(segment->row_ids + start - 1, segment->row_ids + start, len);
+		for (idx_t i = 0; i < copy_count; i++) {
+			segment->row_ids[i] = segment->row_ids[i + 1];
+			copy_idx++;
+		}
 
 		// adjust loop variables
-		start += len;
 		prev_segment = segment;
 		position = segment->next;
 	}

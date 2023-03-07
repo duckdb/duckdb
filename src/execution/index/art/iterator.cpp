@@ -151,14 +151,14 @@ bool Iterator::Next() {
 		if (top.position != DConstants::INVALID_INDEX) {
 			// add key-byte of the new node
 			PushKey(node, top.position);
-			auto next_node = node.GetChild(*art, top.position);
+			auto next_node = *node.GetChild(*art, top.position);
 			// add prefix of new node
-			auto next_node_prefix = node.GetPrefix(*art);
+			auto next_node_prefix = next_node.GetPrefix(*art);
 			for (idx_t i = 0; i < next_node_prefix->count; i++) {
 				cur_key.Push(next_node_prefix->GetByte(*art, i));
 			}
 			// next node found: push it
-			nodes.push(IteratorEntry(*next_node, DConstants::INVALID_INDEX));
+			nodes.push(IteratorEntry(next_node, DConstants::INVALID_INDEX));
 		} else {
 			// no node found: move up the tree and Pop prefix and key of current node
 			PopNode();

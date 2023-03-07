@@ -98,7 +98,7 @@ void Prefix::Vacuum(ART &art) {
 		return;
 	}
 
-	// first position has special treatment because we don't obtain it from a leaf segment
+	// first position has special treatment because we don't obtain it from a prefix segment
 	D_ASSERT(art.nodes.find(ARTNodeType::PREFIX_SEGMENT) != art.nodes.end());
 	auto &allocator = art.nodes.at(ARTNodeType::PREFIX_SEGMENT);
 	if (allocator.NeedsVacuum(data.position)) {
@@ -121,17 +121,18 @@ void Prefix::InitializeMerge(ART &art, const idx_t &buffer_count) {
 		return;
 	}
 
-	auto position = data.position;
+	auto segment = PrefixSegment::Get(art, data.position);
 	D_ASSERT((data.position & FixedSizeAllocator::BUFFER_ID_TO_ZERO) ==
 	         ((data.position + buffer_count) & FixedSizeAllocator::BUFFER_ID_TO_ZERO));
 	data.position += buffer_count;
 
+	auto position = segment->next;
 	while (position != DConstants::INVALID_INDEX) {
-		auto segment = PrefixSegment::Get(art, position);
-		position = segment->next;
 		D_ASSERT((segment->next & FixedSizeAllocator::BUFFER_ID_TO_ZERO) ==
 		         ((segment->next + buffer_count) & FixedSizeAllocator::BUFFER_ID_TO_ZERO));
 		segment->next += buffer_count;
+		segment = PrefixSegment::Get(art, position);
+		position = segment->next;
 	}
 }
 
