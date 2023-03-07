@@ -192,6 +192,10 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	unique_ptr<FunctionData> bind_info;
 	if (window.type == ExpressionType::WINDOW_AGGREGATE) {
 		//  Look up the aggregate function in the catalog
+		if (window.catalog == "" && window.schema == "") {
+			window.catalog = "system";
+			window.schema = "main";
+		}
 		auto func = Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, window.catalog, window.schema,
 		                                                             window.function_name, false, error_context);
 		D_ASSERT(func->type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
