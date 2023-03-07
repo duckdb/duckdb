@@ -73,3 +73,22 @@ SELECT DISTINCT ON(i) i, j, k FROM integers ORDER BY i, j ASC, k DESC
 ----
 2	3	7
 4	5	11
+
+# more test cases
+statement ok
+create table foo(a real, b real);
+
+statement ok
+insert into foo values (1, 69), (1, 420), (2, 69), (2, 420);
+
+query II
+select distinct on(a) a, b from foo order by b asc;
+----
+1	69
+2	69
+
+query II
+select distinct on(a) a, b from foo order by b desc;
+----
+1	420
+2	420
