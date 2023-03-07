@@ -25,11 +25,26 @@
 @_implementationOnly import Cduckdb
 import Foundation
 
-public final class QueryResult {
+/// An object representing a DuckDB result set
+///
+/// A DuckDB result set contains the data returned from the database after a
+/// successful query.
+///
+/// A result set is organized into vertical table slices called columns. Each
+/// column of the result set is accessible by calling the ``subscript(_:)``
+/// method of the result.
+///
+/// Elements of a column can be accessed by casting the column to the native
+/// Swift type that matches the underlying database column type. See ``Column``
+/// for further discussion.
+public final class ResultSet {
   
+  /// The number of chunks in the result set
   public var chunkCount: DBInt { duckdb_result_chunk_count(ptr.pointee) }
+  /// The number of columns in the result set
   public var columnCount: DBInt { duckdb_column_count(ptr) }
   
+  /// The total number of rows in the result set
   lazy private (set) var rowCount = {
     guard chunkCount > 0 else { return DBInt(0) }
     let lastChunk = dataChunk(at: chunkCount - 1)
@@ -61,15 +76,32 @@ public final class QueryResult {
     ptr.deallocate()
   }
   
+  /// Returns a `Void` typed column for the given column index
+  ///
+  /// A `Void` typed column can be cast to a column matching the underlying
+  /// database representation using ``Column/cast(to:)-4376d``. See ``Column``
+  /// for further discussion.
+  ///
+  /// - Parameter columnIndex: the index of the column in the result set
+  /// - Returns: a `Void` typed column
   public subscript(_ columnIndex: DBInt) -> Column<Void> {
     precondition(columnIndex < columnCount)
     return Column(result: self, columnIndex: columnIndex)
   }
   
-  public func columnName(at index: DBInt) -> String {
-    String(cString: duckdb_column_name(ptr, index))
+  /// The underlying column name for the given column index
+  ///
+  /// - Parameter columnIndex: the index of the column in the result set
+  /// - Returns: the name of the column
+  public func columnName(at columnIndex: DBInt) -> String {
+    String(cString: duckdb_column_name(ptr, columnIndex))
   }
   
+  /// The index of the given column name
+  ///
+  /// - Parameter columnName: the name of the column in the result set
+  /// - Returns: the index of the column
+  /// - Complexity: O(n)
   public func index(forColumnName columnName: String) -> DBInt? {
     for i in 0..<columnCount {
       if self.columnName(at: i) == columnName {
@@ -79,9 +111,9 @@ public final class QueryResult {
     return nil
   }
   
-  func columnDataType(at index: DBInt) -> DBTypeID {
+  func columnDataType(at index: DBInt) -> DatabaseType {
     let dataType = duckdb_column_type(ptr, index)
-    return DBTypeID(rawValue: dataType.rawValue)
+    return DatabaseType(rawValue: dataType.rawValue)
   }
   
   func withCResult<T>(_ body: (UnsafeMutablePointer<duckdb_result>) throws -> T) rethrows -> T {
@@ -91,7 +123,7 @@ public final class QueryResult {
 
 // MARK: - Type Casting Transformers
 
-extension QueryResult {
+extension ResultSet {
   
   func transformer(
     forColumn columnIndex: DBInt, to type: Void.Type
@@ -140,7 +172,7 @@ extension QueryResult {
   func transformer(
     forColumn columnIndex: DBInt, to type: Timestamp.Type
   ) -> (DBInt) -> Timestamp? {
-    let columnTypes = [DBTypeID.timestamp_s, .timestamp_ms, .timestamp, .timestamp_ns]
+    let columnTypes = [DatabaseType.timestampS, .timestampMS, .timestamp, .timestampNS]
     return transformer(
       forColumn: columnIndex, to: type, fromTypes: .init(columnTypes)
     ) { try? $0.unwrap(type) }
@@ -181,7 +213,7 @@ extension QueryResult {
 
 // MARK: - Data Extraction Utilities
 
-private extension QueryResult {
+private extension ResultSet {
   
   static let vectorSize = DBInt(duckdb_vector_size())
   
@@ -193,7 +225,7 @@ private extension QueryResult {
   func transformer<T>(
     forColumn columnIndex: DBInt,
     to type: T.Type,
-    fromType columnType: DBTypeID,
+    fromType columnType: DatabaseType,
     _ body: @escaping (Vector.Element) -> T?
   ) -> (DBInt) -> T? {
     transformer(forColumn: columnIndex, to: type, fromTypes: .init([columnType]), body)
@@ -202,7 +234,7 @@ private extension QueryResult {
   func transformer<T>(
     forColumn columnIndex: DBInt,
     to type: T.Type,
-    fromTypes columnTypes: Set<DBTypeID>? = nil,
+    fromTypes columnTypes: Set<DatabaseType>? = nil,
     _ body: @escaping (Vector.Element) -> T?
   ) -> (DBInt) -> T? {
     if let columnTypes {
@@ -226,7 +258,7 @@ private extension QueryResult {
 
 // MARK: - Debug Description
 
-extension QueryResult: CustomDebugStringConvertible {
+extension ResultSet: CustomDebugStringConvertible {
   
   public var debugDescription: String {
     let summary = "chunks: \(chunkCount); rows: \(rowCount); columns: \(columnCount); layout:"

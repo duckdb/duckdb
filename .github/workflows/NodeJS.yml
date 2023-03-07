@@ -112,10 +112,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Update apt
+        shell: bash
+        run: |
+          sudo apt-get update -y
+
       - name: Install requirements
         shell: bash
         run: |
-          sudo apt-get update -y -qq
           sudo apt-get install -y git ninja-build make gcc-multilib g++-multilib wget libssl-dev
 
       - name: Install CMake
@@ -263,7 +267,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Node
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v3
         with:
           node-version: ${{ matrix.node }}
 
