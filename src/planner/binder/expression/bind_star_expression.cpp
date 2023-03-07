@@ -104,7 +104,7 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 			}
 			vector<unique_ptr<ParsedExpression>> new_list;
 			for (idx_t i = 0; i < star_list.size(); i++) {
-				auto &colref = (ColumnRefExpression &)*expr;
+				auto &colref = (ColumnRefExpression &)*star_list[i];
 				if (!RE2::PartialMatch(colref.GetColumnName(), regex)) {
 					continue;
 				}

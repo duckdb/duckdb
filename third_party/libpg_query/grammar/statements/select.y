@@ -513,7 +513,10 @@ sort_clause:
 			| ORDER BY ALL opt_asc_desc opt_nulls_order
 				{
 					PGSortBy *sort = makeNode(PGSortBy);
-					sort->node = (PGNode *) makeNode(PGAStar);
+					PGAStar *star = makeNode(PGAStar);
+					star->columns = true;
+					star->location = @3;
+					sort->node = (PGNode *) star;
 					sort->sortby_dir = $4;
 					sort->sortby_nulls = $5;
 					sort->useOp = NIL;

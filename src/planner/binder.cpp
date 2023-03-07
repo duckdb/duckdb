@@ -438,7 +438,7 @@ void VerifyNotExcluded(ParsedExpression &expr) {
 }
 
 BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry *table,
-                                     idx_t update_table_index, unique_ptr<LogicalOperator> child_operator,
+                                     const string &alias, idx_t update_table_index, unique_ptr<LogicalOperator> child_operator,
                                      BoundStatement result) {
 
 	vector<LogicalType> types;
@@ -457,13 +457,13 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 		column_count++;
 	}
 
-	binder->bind_context.AddBaseTable(update_table_index, table->name, names, types, bound_columns, table, false);
+	binder->bind_context.AddBaseTable(update_table_index, alias.empty() ? table->name : alias, names, types, bound_columns, table, false);
 	ReturningBinder returning_binder(*binder, context);
 
 	vector<unique_ptr<Expression>> projection_expressions;
 	LogicalType result_type;
 	vector<unique_ptr<ParsedExpression>> new_returning_list;
-	ExpandStarExpressions(returning_list, new_returning_list);
+	binder->ExpandStarExpressions(returning_list, new_returning_list);
 	for (auto &returning_expr : new_returning_list) {
 		VerifyNotExcluded(*returning_expr);
 		auto expr = returning_binder.Bind(returning_expr, &result_type);

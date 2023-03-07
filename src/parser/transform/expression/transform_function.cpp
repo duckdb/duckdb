@@ -132,7 +132,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 	if (root->args) {
 		TransformExpressionList(*root->args, children);
 	}
-	if (children.size() == 1 && ExpressionIsEmptyStar(*children[0])) {
+	if (children.size() == 1 && ExpressionIsEmptyStar(*children[0]) && !root->agg_distinct && !root->agg_order) {
 		// COUNT(*) gets translated into COUNT()
 		children.clear();
 	}

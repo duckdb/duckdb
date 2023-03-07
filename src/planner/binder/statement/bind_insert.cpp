@@ -505,7 +505,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		insert->table_index = insert_table_index;
 		unique_ptr<LogicalOperator> index_as_logicaloperator = std::move(insert);
 
-		return BindReturning(std::move(stmt.returning_list), table, insert_table_index,
+		return BindReturning(std::move(stmt.returning_list), table, stmt.table_ref->alias, insert_table_index,
 		                     std::move(index_as_logicaloperator), std::move(result));
 	}
 
