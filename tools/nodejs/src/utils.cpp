@@ -23,7 +23,7 @@ Napi::Object Utils::CreateError(Napi::Env env, duckdb::PreservedError &error) {
 		obj.Set(Napi::String::New(env, "statusCode"), Napi::Number::New(env, e.GetStatusCode()));
 		SetString(obj, "response", e.GetResponseBody());
 		SetString(obj, "reason", e.GetReason());
-		
+
 		auto headers = Napi::Object::New(env);
 		for (const auto &item : e.GetHeaders()) {
 			SetString(headers, item.first, item.second);
