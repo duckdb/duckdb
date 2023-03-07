@@ -9,10 +9,14 @@ statement ok
 CREATE TABLE t1 (a INT, b INT);
 
 statement ok
-INSERT INTO t1 VALUES (1, 1), (2, 1), (1, 2), (4, 2);
+CREATE MACRO "sum"(x) AS (CASE WHEN SUM(x) IS NULL THEN 0 ELSE SUM(x) END);
+
+query I
+SELECT sum(b) OVER () FROM t1;
+----
 
 statement ok
-CREATE MACRO "sum"(x) AS (CASE WHEN SUM(x) IS NULL THEN 0 ELSE SUM(x) END);
+INSERT INTO t1 VALUES (1, 1), (2, 1), (1, 2), (4, 2);
 
 query I
 SELECT sum(b) OVER () FROM t1;
@@ -22,3 +26,33 @@ SELECT sum(b) OVER () FROM t1;
 6
 6
 
+statement ok
+create schema schema2;
+
+statement ok
+create table schema2.table2 (a INT);
+
+statement ok
+INSERT INTO schema2.table2 values (1), (2);
+
+query I
+select sum(a) OVER () from schema2.table2;
+----
+3
+3
+
+statement ok
+ATTACH DATABASE ':memory:' AS db2;
+
+statement ok
+create table db2.table3 (a INT);
+
+statement ok
+INSERT INTO db2.table3 values (1), (2), (3);
+
+query I
+select sum(a) OVER () from db2.table3;
+----
+6
+6
+6
