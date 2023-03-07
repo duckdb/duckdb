@@ -19,8 +19,7 @@
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
-#include "duckdb/planner/expression_binder/aggregate_binder.hpp"
-#include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/parser/expression/conjunction_expression.hpp"
 
 namespace duckdb {
 
@@ -280,6 +279,34 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	return BindSelectNode(statement, std::move(from_table));
 }
 
+void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
+	// expand any expressions in the upper AND recursively
+	if (expr->type == ExpressionType::CONJUNCTION_AND) {
+		auto &conj = (ConjunctionExpression &)*expr;
+		for (auto &child : conj.children) {
+			BindWhereStarExpression(child);
+		}
+		return;
+	}
+	if (expr->type == ExpressionType::STAR) {
+		auto &star = (StarExpression &)*expr;
+		if (!star.columns) {
+			throw ParserException("STAR expression is not allowed in the WHERE clause. Use COLUMNS(*) instead.");
+		}
+	}
+	// expand the stars for this expression
+	vector<unique_ptr<ParsedExpression>> new_conditions;
+	ExpandStarExpression(std::move(expr), new_conditions);
+
+	// set up an AND conjunction between the expanded conditions
+	expr = std::move(new_conditions[0]);
+	for (idx_t i = 1; i < new_conditions.size(); i++) {
+		auto and_conj = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(expr),
+		                                                   std::move(new_conditions[i]));
+		expr = std::move(and_conj);
+	}
+}
+
 unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_ptr<BoundTableRef> from_table) {
 	D_ASSERT(from_table);
 	D_ASSERT(!statement.from_table);
@@ -326,6 +353,9 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 	// first visit the WHERE clause
 	// the WHERE clause happens before the GROUP BY, PROJECTION or HAVING clauses
 	if (statement.where_clause) {
+		// bind any star expressions in the WHERE clause
+		BindWhereStarExpression(statement.where_clause);
+
 		ColumnAliasBinder alias_binder(*result, alias_map);
 		WhereBinder where_binder(*this, context, &alias_binder);
 		unique_ptr<ParsedExpression> condition = std::move(statement.where_clause);
