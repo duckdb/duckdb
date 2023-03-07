@@ -17,6 +17,7 @@ set(ICU_EXTENSION_FILES
     icu-datesub.cpp
     icu-datetrunc.cpp
     icu-makedate.cpp
+    icu-list-range.cpp
     icu-table-range.cpp
     icu-strptime.cpp
     icu-timebucket.cpp
