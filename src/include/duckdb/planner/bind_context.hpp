@@ -141,6 +141,8 @@ public:
 
 	//! Add all the bindings from a BindContext to this BindContext. The other BindContext is destroyed in the process.
 	void AddContext(BindContext other);
+	//! For semi and anti joins we remove the binding context of the right table after binding the condition.
+	void RemoveContext(vector<std::pair<string, duckdb::Binding *>> &other_bindings_list);
 
 	//! Gets a binding of the specified name. Returns a nullptr and sets the out_error if the binding could not be
 	//! found.

@@ -9,7 +9,7 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/checkpoint/string_checkpoint_state.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
-#include "duckdb/storage/statistics/string_statistics.hpp"
+
 #include "duckdb/storage/string_uncompressed.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
@@ -173,8 +173,7 @@ public:
 
 public:
 	static inline void UpdateStringStats(SegmentStatistics &stats, const string_t &new_value) {
-		auto &sstats = (StringStatistics &)*stats.statistics;
-		sstats.Update(new_value);
+		StringStats::Update(stats.statistics, new_value);
 	}
 
 	static void SetDictionary(ColumnSegment &segment, BufferHandle &handle, StringDictionaryContainer dict);
