@@ -21,11 +21,11 @@ namespace duckdb {
 namespace EnumSerializer {
 // String -> Enum
 template <class T>
-static T StringToEnum(const char *value) = delete;
+T StringToEnum(const char *value) = delete;
 
 // Enum -> String
 template <class T>
-static const char *EnumToString(T value) = delete;
+const char *EnumToString(T value) = delete;
 
 //-----------------------------------------------
 // OrderType
