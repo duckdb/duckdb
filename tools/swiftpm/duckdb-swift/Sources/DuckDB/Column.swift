@@ -61,17 +61,22 @@ public struct Column<DataType> {
   
   private let result: ResultSet
   private let columnIndex: DBInt
-  private let itemAt: (DBInt) -> DataType?
+  private let itemAt: @Sendable (DBInt) -> DataType?
   
   init(result: ResultSet, columnIndex: DBInt) where DataType == Void {
     let transformer = result.transformer(forColumn: columnIndex, to: Void.self)
     self.init(result: result, columnIndex: columnIndex, itemAt: transformer)
   }
   
-  init(result: ResultSet, columnIndex: DBInt, itemAt: @escaping (DBInt) -> DataType?) {
+  init(result: ResultSet, columnIndex: DBInt, itemAt: @escaping @Sendable (DBInt) -> DataType?) {
     self.result = result
     self.columnIndex = columnIndex
     self.itemAt = itemAt
+  }
+  
+  /// The name of the table column
+  public var name: String {
+    result.columnName(at: columnIndex)
   }
   
   /// The native Swift type to which the column has been cast
@@ -412,3 +417,8 @@ extension Column: Collection {
   public func index(after i: DBInt) -> DBInt { i + 1 }
   public func index(before i: DBInt) -> DBInt { i - 1 }
 }
+
+// MARK: - Sendable conformance
+
+extension Column: Sendable where DataType: Sendable {}
+
