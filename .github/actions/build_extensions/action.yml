@@ -69,6 +69,9 @@ inputs:
   sqlsmith:
     description: 'Build SQLsmith'
     default: 1
+  inet:
+    description: 'Build INET'
+    default: 1
   out_of_tree_ext:
     description: 'Build Out-Of-Tree Extensions'
     default: 1
@@ -93,6 +96,7 @@ runs:
         BUILD_TPCH: ${{ inputs.tpch }}
         BUILD_TPCDS: ${{ inputs.tpcds }}
         BUILD_FTS: ${{ inputs.fts }}
+        BUILD_INET: ${{ inputs.inet }}
         BUILD_HTTPFS: ${{ inputs.httpfs }}
         BUILD_JSON: ${{ inputs.json }}
         BUILD_EXCEL: ${{ inputs.excel }}
