@@ -63,8 +63,9 @@ OperatorResultType PhysicalTableInOutFunction::ExecuteWithMapping(ExecutionConte
 	DataChunk intermediate_chunk;
 	auto chunk_types = chunk.GetTypes();
 	vector<LogicalType> intermediate_types;
+	intermediate_types.reserve(base_columns + 1);
 	intermediate_types.insert(intermediate_types.end(), chunk_types.begin(), chunk_types.begin() + base_columns);
-	intermediate_types.push_back(LogicalType::UINTEGER);
+	intermediate_types.emplace_back(LogicalType::UINTEGER);
 	intermediate_chunk.InitializeEmpty(intermediate_types);
 
 	for (idx_t i = 0; i < base_columns; i++) {
