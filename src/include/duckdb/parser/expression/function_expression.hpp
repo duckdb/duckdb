@@ -59,9 +59,9 @@ public:
 	void Verify() const override;
 
 public:
-	template <class T, class BASE>
+	template <class T, class BASE, class ORDER_MODIFIER = OrderModifier>
 	static string ToString(const T &entry, const string &schema, const string &function_name, bool is_operator = false,
-	                       bool distinct = false, BASE *filter = nullptr, OrderModifier *order_bys = nullptr,
+	                       bool distinct = false, BASE *filter = nullptr, ORDER_MODIFIER *order_bys = nullptr,
 	                       bool export_state = false, bool add_alias = false) {
 		if (is_operator) {
 			// built-in operator
