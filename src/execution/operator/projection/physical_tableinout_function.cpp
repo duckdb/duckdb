@@ -37,10 +37,23 @@ unique_ptr<OperatorState> PhysicalTableInOutFunction::GetOperatorState(Execution
 		TableFunctionInitInput input(bind_data.get(), column_ids, vector<idx_t>(), nullptr);
 		result->local_state = function.init_local(context, input, gstate.global_state.get());
 	}
-	if (!projected_input.empty() && !function.in_out_mapping) {
-		// If we have to project columns, and the function doesn't provide a mapping from output row -> input row
-		// then we have to execute tuple-at-a-time
-		result->input_chunk.Initialize(context.client, children[0]->types);
+	if (!projected_input.empty()) {
+		if (!function.in_out_mapping) {
+			// If we have to project columns, and the function doesn't provide a mapping from output row -> input row
+			// then we have to execute tuple-at-a-time
+			result->input_chunk.Initialize(context.client, children[0]->types);
+		} else {
+			// Create an empty DataChunk that has room for the input + the mapping vector
+			auto &chunk_types = children[0]->types;
+			vector<LogicalType> intermediate_types;
+			intermediate_types.reserve(chunk_types.size() + 1);
+			intermediate_types.insert(intermediate_types.end(), chunk_types.begin(), chunk_types.end());
+			intermediate_types.emplace_back(LogicalType::UINTEGER);
+			// We initialize this as empty
+			result->input_chunk.InitializeEmpty(intermediate_types);
+			// And only allocate for our mapping vector
+			result->input_chunk.data[chunk_types.size()].Initialize();
+		}
 	}
 	return std::move(result);
 }
@@ -55,30 +68,26 @@ unique_ptr<GlobalOperatorState> PhysicalTableInOutFunction::GetGlobalOperatorSta
 }
 
 OperatorResultType PhysicalTableInOutFunction::ExecuteWithMapping(ExecutionContext &context, DataChunk &input,
-                                                                  DataChunk &chunk, TableFunctionInput &data) const {
+                                                                  DataChunk &chunk, TableInOutLocalState &state,
+                                                                  TableFunctionInput &data) const {
 	// Create a duplicate of 'chunk' that contains one extra column
 	// this column is used to register the relation between input tuple -> output tuple(s)
 	const auto base_columns = chunk.ColumnCount() - projected_input.size();
 
-	DataChunk intermediate_chunk;
-	auto chunk_types = chunk.GetTypes();
-	vector<LogicalType> intermediate_types;
-	intermediate_types.reserve(base_columns + 1);
-	intermediate_types.insert(intermediate_types.end(), chunk_types.begin(), chunk_types.begin() + base_columns);
-	intermediate_types.emplace_back(LogicalType::UINTEGER);
-	intermediate_chunk.InitializeEmpty(intermediate_types);
+	DataChunk &intermediate_chunk = state.input_chunk;
 
+	// Initialize our output chunk
 	for (idx_t i = 0; i < base_columns; i++) {
 		intermediate_chunk.data[i].Reference(chunk.data[i]);
 	}
-	intermediate_chunk.data[base_columns].Initialize();
 	intermediate_chunk.SetCardinality(chunk.size());
 
-	//! Let the function know that we expect it to write a in-out mapping for rowids
+	// Let the function know that we expect it to write an in-out mapping for rowids
 	data.add_in_out_mapping = true;
 	auto result = function.in_out_function(context, data, input, intermediate_chunk);
 	chunk.SetCardinality(intermediate_chunk.size());
 
+	// Move the result into the output chunk
 	for (idx_t i = 0; i < base_columns; i++) {
 		chunk.data[i].Reference(intermediate_chunk.data[i]);
 	}
@@ -162,7 +171,7 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 		return function.in_out_function(context, data, input, chunk);
 	}
 	if (function.in_out_mapping) {
-		return ExecuteWithMapping(context, input, chunk, data);
+		return ExecuteWithMapping(context, input, chunk, state, data);
 	}
 	return ExecuteWithoutMapping(context, input, chunk, gstate, state, data);
 }

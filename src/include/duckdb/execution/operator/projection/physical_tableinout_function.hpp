@@ -42,7 +42,7 @@ public:
 
 private:
 	OperatorResultType ExecuteWithMapping(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-	                                      TableFunctionInput &data) const;
+	                                      TableInOutLocalState &state, TableFunctionInput &data) const;
 	OperatorResultType ExecuteWithoutMapping(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                                         TableInOutGlobalState &gstate, TableInOutLocalState &state,
 	                                         TableFunctionInput &data) const;

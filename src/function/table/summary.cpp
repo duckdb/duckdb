@@ -25,6 +25,12 @@ static OperatorResultType SummaryFunction(ExecutionContext &context, TableFuncti
                                           DataChunk &output) {
 	output.SetCardinality(input.size());
 
+	uint32_t *in_out_mapping = nullptr;
+	if (data_p.add_in_out_mapping) {
+		auto &in_out_vec = output.data[input.ColumnCount()];
+		in_out_mapping = FlatVector::GetData<uint32_t>(in_out_vec);
+	}
+
 	for (idx_t row_idx = 0; row_idx < input.size(); row_idx++) {
 		string summary_val = "[";
 
@@ -36,16 +42,22 @@ static OperatorResultType SummaryFunction(ExecutionContext &context, TableFuncti
 		}
 		summary_val += "]";
 		output.SetValue(0, row_idx, Value(summary_val));
+		if (in_out_mapping) {
+			// Every input row produces 1 output row
+			in_out_mapping[row_idx] = row_idx;
+		}
 	}
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
 		output.data[col_idx + 1].Reference(input.data[col_idx]);
 	}
+
 	return OperatorResultType::NEED_MORE_INPUT;
 }
 
 void SummaryTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction summary_function("summary", {LogicalType::TABLE}, nullptr, SummaryFunctionBind);
 	summary_function.in_out_function = SummaryFunction;
+	summary_function.in_out_mapping = true;
 	set.AddFunction(summary_function);
 }
 
