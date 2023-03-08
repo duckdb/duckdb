@@ -36,6 +36,8 @@ public enum DatabaseError: Error {
   case appenderFailedToInitialize(reason: String?)
   /// Failed to instantiate connection
   case connectionFailedToInitialize
+  /// Failed to set flag on database configuration
+  case configurationFailedToSetFlag
   /// Failed to execute query on connection
   case connectionQueryError(reason: String?)
   /// Failed to instantiate database
