@@ -53,7 +53,7 @@ void BinarySerializer::OnObjectEnd() {
 // Primitive types
 //===--------------------------------------------------------------------===//
 void BinarySerializer::WriteNull() {
-	GetCurrent().Write<ptrdiff_t>(0); // ??
+	GetCurrent().Write<uint64_t>(0); // ??
 }
 
 void BinarySerializer::WriteValue(uint8_t value) {
