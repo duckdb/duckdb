@@ -24,7 +24,8 @@ void BinaryDeserializer::OnListEnd() {
 idx_t BinaryDeserializer::OnMapBegin() {
 	return 0;
 }
-void BinaryDeserializer::OnMapEnd() {}
+void BinaryDeserializer::OnMapEnd() {
+}
 bool BinaryDeserializer::OnOptionalBegin() {
 	return false;
 }

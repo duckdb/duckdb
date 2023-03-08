@@ -241,7 +241,8 @@ struct DataArrays {
 	idx_t type_size;
 	bool is_nested;
 	DataArrays(Vector &vec, data_ptr_t data, VectorBuffer *buffer, idx_t type_size, bool is_nested)
-	    : vec(vec), data(data), buffer(buffer), type_size(type_size), is_nested(is_nested) {}
+	    : vec(vec), data(data), buffer(buffer), type_size(type_size), is_nested(is_nested) {
+	}
 };
 
 void FindChildren(std::vector<DataArrays> &to_resize, VectorBuffer &auxiliary) {

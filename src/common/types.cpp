@@ -1034,7 +1034,8 @@ public:
 		return alias == other_p->alias && EqualsInternal(other_p);
 	}
 	//! Serializes a ExtraTypeInfo to a stand-alone binary blob
-	virtual void Serialize(FieldWriter &writer) const {}
+	virtual void Serialize(FieldWriter &writer) const {
+	}
 	//! Serializes a ExtraTypeInfo to a stand-alone binary blob
 	static void Serialize(ExtraTypeInfo *info, FieldWriter &writer);
 	//! Deserializes a blob back into an ExtraTypeInfo
