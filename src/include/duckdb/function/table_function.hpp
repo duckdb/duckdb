@@ -190,8 +190,8 @@ public:
 	table_function_bind_t bind;
 	//! (Optional) Bind replace function
 	//! This function is called before the regular bind function. It allows returning a TableRef will be used to
-	//! to generate a logical plan that replaces the LogicalGet of a "regular" TableFunction. The BindReplace can can
-	//! also return a nullptr to indicate a regular bind needs to be performed.
+	//! to generate a logical plan that replaces the LogicalGet of a regularly bound TableFunction. The BindReplace can
+	//! also return a nullptr to indicate a regular bind needs to be performed instead.
 	table_function_bind_replace_t bind_replace;
 	//! (Optional) global init function
 	//! Initialize the global operator state of the function.
