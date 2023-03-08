@@ -17,8 +17,12 @@ struct HexStrOperator {
 		auto output = target.GetDataWriteable();
 
 		for (idx_t i = 0; i < size; ++i) {
-			memcpy(output, &StringUtil::BYTE_TO_HEXS[static_cast<idx_t>(data[i]) * 2], 2);
-			output += 2;
+			*output = StringUtil::HEX_UPPER_TABLE[(data[i] >> 4) & 0x0F];
+			output++;
+			*output = StringUtil::HEX_UPPER_TABLE[data[i] & 0x0F];
+			output++;
+			// memcpy(output, &StringUtil::BYTE_TO_HEXS[static_cast<idx_t>(data[i]) * 2], 2);
+			// output += 2;
 		}
 
 		target.Finalize();
@@ -43,19 +47,22 @@ struct FromHexOperator {
 		auto target = StringVector::EmptyString(result, buffer_size);
 		auto output = target.GetDataWriteable();
 
-		// Add a leading zero
-		// 'fff' is equivalent to '0fff'
+		// Treated as a single byte
 		idx_t i = 0;
 		if (size % 2 != 0) {
-			*output = StringUtil::HEX_TO_DIGIT[static_cast<idx_t>(data[i])];
+			*output = StringUtil::GetHexValue(data[i]);
+			// *output = StringUtil::HEX_TO_DIGIT[static_cast<idx_t>(data[i])];
 			i++;
 			output++;
 		}
 
 		for (; i < size; i += 2) {
-			uint8_t byte = (uint8_t)StringUtil::HEX_TO_DIGIT[static_cast<idx_t>(data[i])] * 0x10 +
-			               (uint8_t)StringUtil::HEX_TO_DIGIT[static_cast<idx_t>(data[i + 1])];
-			*output = byte;
+			uint8_t major = StringUtil::GetHexValue(data[i]);
+			uint8_t minor = StringUtil::GetHexValue(data[i + 1]);
+			// uint8_t byte = (uint8_t)StringUtil::HEX_TO_DIGIT[static_cast<idx_t>(data[i])] * 0x10 +
+			//               (uint8_t)StringUtil::HEX_TO_DIGIT[static_cast<idx_t>(data[i + 1])];
+			// *output = byte;
+			*output = (major << 4) | minor;
 			output++;
 		}
 
@@ -80,8 +87,12 @@ struct HexIntegralOperator {
 				continue;
 			}
 			seen_non_zero = true;
-			memcpy(ptr, &StringUtil::BYTE_TO_HEXS[static_cast<idx_t>(byte) * 2], 2);
-			ptr += 2;
+			*ptr = StringUtil::HEX_UPPER_TABLE[(byte >> 4) & 0x0F];
+			ptr++;
+			*ptr = StringUtil::HEX_UPPER_TABLE[byte & 0x0F];
+			ptr++;
+			// memcpy(ptr, &StringUtil::BYTE_TO_HEXS[static_cast<idx_t>(byte) * 2], 2);
+			// ptr += 2;
 			buffer_size += 2;
 		}
 
@@ -113,8 +124,12 @@ struct HexHugeIntOperator {
 				continue;
 			}
 			seen_non_zero = true;
-			memcpy(ptr, &StringUtil::BYTE_TO_HEXS[static_cast<idx_t>(byte) * 2], 2);
-			ptr += 2;
+			*ptr = StringUtil::HEX_UPPER_TABLE[(byte >> 4) & 0x0F];
+			ptr++;
+			*ptr = StringUtil::HEX_UPPER_TABLE[byte & 0x0F];
+			ptr++;
+			// memcpy(ptr, &StringUtil::BYTE_TO_HEXS[static_cast<idx_t>(byte) * 2], 2);
+			// ptr += 2;
 			buffer_size += 2;
 		}
 
@@ -126,8 +141,12 @@ struct HexHugeIntOperator {
 				continue;
 			}
 			seen_non_zero = true;
-			memcpy(ptr, &StringUtil::BYTE_TO_HEXS[static_cast<idx_t>(byte) * 2], 2);
-			ptr += 2;
+			*ptr = StringUtil::HEX_UPPER_TABLE[(byte >> 4) & 0x0F];
+			ptr++;
+			*ptr = StringUtil::HEX_UPPER_TABLE[byte & 0x0F];
+			ptr++;
+			// memcpy(ptr, &StringUtil::BYTE_TO_HEXS[static_cast<idx_t>(byte) * 2], 2);
+			// ptr += 2;
 			buffer_size += 2;
 		}
 
@@ -150,40 +169,15 @@ static void ToHexFunction(DataChunk &args, ExpressionState &state, Vector &resul
 	case PhysicalType::VARCHAR:
 		UnaryExecutor::ExecuteString<string_t, string_t, HexStrOperator>(input, result, count);
 		break;
-	case PhysicalType::BOOL:
-	case PhysicalType::INT8:
-		UnaryExecutor::ExecuteString<int8_t, string_t, HexIntegralOperator>(input, result, count);
-		break;
-	case PhysicalType::INT16:
-		UnaryExecutor::ExecuteString<int16_t, string_t, HexIntegralOperator>(input, result, count);
-		break;
-	case PhysicalType::INT32:
-		UnaryExecutor::ExecuteString<int32_t, string_t, HexIntegralOperator>(input, result, count);
-		break;
 	case PhysicalType::INT64:
 		UnaryExecutor::ExecuteString<int64_t, string_t, HexIntegralOperator>(input, result, count);
 		break;
 	case PhysicalType::INT128:
 		UnaryExecutor::ExecuteString<hugeint_t, string_t, HexHugeIntOperator>(input, result, count);
 		break;
-	case PhysicalType::UINT8:
-		UnaryExecutor::ExecuteString<uint8_t, string_t, HexIntegralOperator>(input, result, count);
-		break;
-	case PhysicalType::UINT16:
-		UnaryExecutor::ExecuteString<uint16_t, string_t, HexIntegralOperator>(input, result, count);
-		break;
-	case PhysicalType::UINT32:
-		UnaryExecutor::ExecuteString<uint32_t, string_t, HexIntegralOperator>(input, result, count);
-		break;
 	case PhysicalType::UINT64:
 		UnaryExecutor::ExecuteString<uint64_t, string_t, HexIntegralOperator>(input, result, count);
 		break;
-	// case PhysicalType::FLOAT:
-	//	UnaryExecutor::ExecuteString<float, string_t, HexIntegralOperator<false>>(input, result, count);
-	//	break;
-	// case PhysicalType::DOUBLE:
-	//	UnaryExecutor::ExecuteString<double, string_t, HexIntegralOperator<false>>(input, result, count);
-	//	break;
 	default:
 		throw NotImplementedException("Specifier type not implemented");
 	}
@@ -200,18 +194,25 @@ static void FromHexFunction(DataChunk &args, ExpressionState &state, Vector &res
 
 void HexFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet to_hex("to_hex");
+	ScalarFunctionSet hex("hex");
 	ScalarFunctionSet from_hex("from_hex");
+	ScalarFunctionSet unhex("unhex");
 
 	to_hex.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, ToHexFunction));
+	hex.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, ToHexFunction));
 
 	for (auto &type : LogicalType::Integral()) {
 		to_hex.AddFunction(ScalarFunction({type}, LogicalType::VARCHAR, ToHexFunction));
+		hex.AddFunction(ScalarFunction({type}, LogicalType::VARCHAR, ToHexFunction));
 	}
 
 	from_hex.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BLOB, FromHexFunction));
+	unhex.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BLOB, FromHexFunction));
 
 	set.AddFunction(to_hex);
+	set.AddFunction(hex);
 	set.AddFunction(from_hex);
+	set.AddFunction(unhex);
 }
 
 } // namespace duckdb

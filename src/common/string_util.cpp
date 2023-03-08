@@ -14,6 +14,8 @@
 
 namespace duckdb {
 
+const char *const StringUtil::HEX_UPPER_TABLE = "0123456789ABCDEF";
+
 const char *const StringUtil::BYTE_TO_HEXS = "000102030405060708090A0B0C0D0E0F"
                                              "101112131415161718191A1B1C1D1E1F"
                                              "202122232425262728292A2B2C2D2E2F"
