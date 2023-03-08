@@ -7,7 +7,7 @@ public:
 	explicit BinarySerializer(unique_ptr<BufferedSerializer> serializer) {
 		stack.emplace_back(std::move(serializer));
 	}
-	vector<const char*> trace;
+	vector<const char *> trace;
 
 	BinaryData GetData();
 
@@ -20,20 +20,23 @@ protected:
 			field_count++;
 		}
 
-		template<class T>
+		template <class T>
 		void Write(T value) {
 			writer->Write<T>(value);
 		}
 
-		explicit BinarySerializerState(unique_ptr<BufferedSerializer> serializer) : writer(std::move(serializer)) {}
-		BinarySerializerState() : field_count(0), writer(make_unique<BufferedSerializer>()) {}
- 	};
+		explicit BinarySerializerState(unique_ptr<BufferedSerializer> serializer) : writer(std::move(serializer)) {
+		}
+		BinarySerializerState() : field_count(0), writer(make_unique<BufferedSerializer>()) {
+		}
+	};
 
 	vector<BinarySerializerState> stack;
-	BinarySerializerState& GetCurrent() { return stack.back(); };
+	BinarySerializerState &GetCurrent() {
+		return stack.back();
+	};
 
-
-	void SetTag(const char* tag) final;
+	void SetTag(const char *tag) final;
 
 	//===--------------------------------------------------------------------===//
 	// Nested Types Hooks

@@ -59,8 +59,6 @@ unique_ptr<TableRef> BaseTableRef::Deserialize(FieldReader &reader) {
 	return std::move(result);
 }
 
-
-
 unique_ptr<TableRef> BaseTableRef::Copy() {
 	auto copy = make_unique<BaseTableRef>();
 

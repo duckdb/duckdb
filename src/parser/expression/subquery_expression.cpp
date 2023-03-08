@@ -72,7 +72,8 @@ unique_ptr<ParsedExpression> SubqueryExpression::Deserialize(ExpressionType type
 	return std::move(expression);
 }
 
-template <> const char* EnumSerializer::EnumToString(SubqueryType value) {
+template <>
+const char *EnumSerializer::EnumToString(SubqueryType value) {
 	switch (value) {
 	case SubqueryType::INVALID:
 		return "INVALID";
@@ -89,7 +90,8 @@ template <> const char* EnumSerializer::EnumToString(SubqueryType value) {
 	}
 }
 
-template <> SubqueryType EnumSerializer::StringToEnum(const char* value) {
+template <>
+SubqueryType EnumSerializer::StringToEnum(const char *value) {
 	if (strcmp(value, "INVALID") == 0) {
 		return SubqueryType::INVALID;
 	} else if (strcmp(value, "SCALAR") == 0) {
@@ -105,7 +107,6 @@ template <> SubqueryType EnumSerializer::StringToEnum(const char* value) {
 	}
 }
 
-
 void SubqueryExpression::FormatSerialize(FormatSerializer &serializer) const {
 	ParsedExpression::FormatSerialize(serializer);
 	serializer.WriteProperty("subquery_type", subquery_type);
@@ -114,7 +115,8 @@ void SubqueryExpression::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("comparison_type", comparison_type);
 }
 
-unique_ptr<ParsedExpression> SubqueryExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
+unique_ptr<ParsedExpression> SubqueryExpression::FormatDeserialize(ExpressionType type,
+                                                                   FormatDeserializer &deserializer) {
 	auto expression = make_unique<SubqueryExpression>();
 	deserializer.ReadProperty("subquery_type", expression->subquery_type);
 	deserializer.ReadProperty("subquery", expression->subquery);

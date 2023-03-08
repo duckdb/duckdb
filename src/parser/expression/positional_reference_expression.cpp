@@ -49,7 +49,6 @@ unique_ptr<ParsedExpression> PositionalReferenceExpression::FormatDeserialize(Ex
                                                                               FormatDeserializer &deserializer) {
 	auto expression = make_unique<PositionalReferenceExpression>(deserializer.ReadProperty<idx_t>("index"));
 	return std::move(expression);
-
 }
 
 } // namespace duckdb

@@ -27,7 +27,7 @@ enum class ResultModifierType : uint8_t {
 };
 
 const char *ToString(ResultModifierType value);
-ResultModifierType ResultModifierFromString(const char* value);
+ResultModifierType ResultModifierFromString(const char *value);
 
 //! A ResultModifier
 class ResultModifier {

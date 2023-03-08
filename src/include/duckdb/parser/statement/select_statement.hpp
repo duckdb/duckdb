@@ -15,7 +15,6 @@
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/common/serializer/format_deserializer.hpp"
 
-
 namespace duckdb {
 
 class QueryNode;
@@ -47,6 +46,5 @@ public:
 
 	void FormatSerialize(FormatSerializer &serializer) const;
 	static unique_ptr<SelectStatement> FormatDeserialize(FormatDeserializer &deserializer);
-
 };
 } // namespace duckdb

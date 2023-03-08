@@ -193,8 +193,8 @@ void SelectNode::Serialize(FieldWriter &writer) const {
 	writer.WriteOptional(qualify);
 }
 
-
-template<> const char* EnumSerializer::EnumToString(AggregateHandling value) {
+template <>
+const char *EnumSerializer::EnumToString(AggregateHandling value) {
 	switch (value) {
 	case AggregateHandling::STANDARD_HANDLING:
 		return "STANDARD_HANDLING";
@@ -207,7 +207,8 @@ template<> const char* EnumSerializer::EnumToString(AggregateHandling value) {
 	}
 }
 
-template<> AggregateHandling EnumSerializer::StringToEnum(const char* value) {
+template <>
+AggregateHandling EnumSerializer::StringToEnum(const char *value) {
 	if (strcmp(value, "STANDARD_HANDLING") == 0) {
 		return AggregateHandling::STANDARD_HANDLING;
 	} else if (strcmp(value, "NO_AGGREGATES_ALLOWED") == 0) {
@@ -218,7 +219,6 @@ template<> AggregateHandling EnumSerializer::StringToEnum(const char* value) {
 		throw NotImplementedException("StringToEnum not implemented for enum value");
 	}
 }
-
 
 void SelectNode::FormatSerialize(FormatSerializer &serializer) const {
 	QueryNode::FormatSerialize(serializer);

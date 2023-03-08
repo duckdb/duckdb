@@ -7,7 +7,8 @@ string JoinTypeToString(JoinType type) {
 	return EnumSerializer::EnumToString(type);
 }
 
-template<> const char* EnumSerializer::EnumToString(JoinType value) {
+template <>
+const char *EnumSerializer::EnumToString(JoinType value) {
 	switch (value) {
 	case JoinType::LEFT:
 		return "LEFT";
@@ -31,7 +32,8 @@ template<> const char* EnumSerializer::EnumToString(JoinType value) {
 	return "INVALID";
 }
 
-template<> JoinType EnumSerializer::StringToEnum(const char *value) {
+template <>
+JoinType EnumSerializer::StringToEnum(const char *value) {
 	if (strcmp(value, "LEFT") == 0) {
 		return JoinType::LEFT;
 	} else if (strcmp(value, "RIGHT") == 0) {
@@ -52,7 +54,6 @@ template<> JoinType EnumSerializer::StringToEnum(const char *value) {
 		throw NotImplementedException("StringToEnum not implemented for enum value");
 	}
 }
-
 
 bool IsLeftOuterJoin(JoinType type) {
 	return type == JoinType::LEFT || type == JoinType::OUTER;

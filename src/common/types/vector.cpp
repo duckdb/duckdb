@@ -1039,58 +1039,58 @@ void Vector::FormatDeserialize(FormatDeserializer &deserializer, idx_t count) {
 	validity.Reset();
 	const auto has_validity = deserializer.ReadProperty<bool>("has_validity");
 	if (has_validity) {
-		validity.Initialize(count);
-		source.ReadData((data_ptr_t)validity.GetData(), validity.ValidityMaskSize(count));
+	    validity.Initialize(count);
+	    source.ReadData((data_ptr_t)validity.GetData(), validity.ValidityMaskSize(count));
 	}
 
 	if (TypeIsConstantSize(type.InternalType())) {
-		// constant size type: read fixed amount of data from
-		auto column_size = GetTypeIdSize(type.InternalType()) * count;
-		auto ptr = unique_ptr<data_t[]>(new data_t[column_size]);
-		source.ReadData(ptr.get(), column_size);
+	    // constant size type: read fixed amount of data from
+	    auto column_size = GetTypeIdSize(type.InternalType()) * count;
+	    auto ptr = unique_ptr<data_t[]>(new data_t[column_size]);
+	    source.ReadData(ptr.get(), column_size);
 
-		VectorOperations::ReadFromStorage(ptr.get(), count, *this);
+	    VectorOperations::ReadFromStorage(ptr.get(), count, *this);
 	} else {
-		switch (type.InternalType()) {
-		case PhysicalType::VARCHAR: {
-			auto strings = FlatVector::GetData<string_t>(*this);
-			for (idx_t i = 0; i < count; i++) {
-				// read the strings
-				auto str = source.Read<string>();
-				// now add the string to the StringHeap of the vector
-				// and write the pointer into the vector
-				if (validity.RowIsValid(i)) {
-					strings[i] = StringVector::AddStringOrBlob(*this, str);
-				}
-			}
-			break;
-		}
-		case PhysicalType::STRUCT: {
-			auto &entries = StructVector::GetEntries(*this);
-			for (auto &entry : entries) {
-				entry->FormatDeserialize(deserializer, count);
-			}
-			break;
-		}
-		case PhysicalType::LIST: {
-			// read the list size
-			auto list_size = deserializer.ReadProperty<idx_t>("list_size");
-			ListVector::Reserve(*this, list_size);
-			ListVector::SetListSize(*this, list_size);
+	    switch (type.InternalType()) {
+	    case PhysicalType::VARCHAR: {
+	        auto strings = FlatVector::GetData<string_t>(*this);
+	        for (idx_t i = 0; i < count; i++) {
+	            // read the strings
+	            auto str = source.Read<string>();
+	            // now add the string to the StringHeap of the vector
+	            // and write the pointer into the vector
+	            if (validity.RowIsValid(i)) {
+	                strings[i] = StringVector::AddStringOrBlob(*this, str);
+	            }
+	        }
+	        break;
+	    }
+	    case PhysicalType::STRUCT: {
+	        auto &entries = StructVector::GetEntries(*this);
+	        for (auto &entry : entries) {
+	            entry->FormatDeserialize(deserializer, count);
+	        }
+	        break;
+	    }
+	    case PhysicalType::LIST: {
+	        // read the list size
+	        auto list_size = deserializer.ReadProperty<idx_t>("list_size");
+	        ListVector::Reserve(*this, list_size);
+	        ListVector::SetListSize(*this, list_size);
 
-			// read the list entry
-			auto list_entries = FlatVector::GetData(*this);
-			source.ReadData(list_entries, count * sizeof(list_entry_t));
+	        // read the list entry
+	        auto list_entries = FlatVector::GetData(*this);
+	        source.ReadData(list_entries, count * sizeof(list_entry_t));
 
-			// deserialize the child vector
-			auto &child = ListVector::GetEntry(*this);
-			child.Deserialize(list_size, source);
+	        // deserialize the child vector
+	        auto &child = ListVector::GetEntry(*this);
+	        child.Deserialize(list_size, source);
 
-			break;
-		}
-		default:
-			throw InternalException("Unimplemented variable width type for Vector::Deserialize!");
-		}
+	        break;
+	    }
+	    default:
+	        throw InternalException("Unimplemented variable width type for Vector::Deserialize!");
+	    }
 	}
 	 */
 

@@ -38,7 +38,7 @@ public:
 	CommonTableExpressionMap Copy() const;
 
 	void FormatSerialize(FormatSerializer &serializer) const;
-	//static void FormatDeserialize(FormatDeserializer &deserializer, CommonTableExpressionMap &ret);
+	// static void FormatDeserialize(FormatDeserializer &deserializer, CommonTableExpressionMap &ret);
 	static CommonTableExpressionMap FormatDeserialize(FormatDeserializer &deserializer);
 };
 

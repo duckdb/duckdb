@@ -82,5 +82,4 @@ unique_ptr<ParsedExpression> CaseExpression::FormatDeserialize(ExpressionType ty
 	return std::move(result);
 }
 
-
 } // namespace duckdb

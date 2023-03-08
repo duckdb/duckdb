@@ -33,11 +33,11 @@ void TableFunctionRef::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<TableRef> TableFunctionRef::FormatDeserialize(FormatDeserializer &deserializer) {
-    auto result = make_unique<TableFunctionRef>();
-    deserializer.ReadProperty("function", result->function);
-    deserializer.ReadProperty("alias", result->alias);
-    deserializer.ReadProperty("column_name_alias", result->column_name_alias);
-    return std::move(result);
+	auto result = make_unique<TableFunctionRef>();
+	deserializer.ReadProperty("function", result->function);
+	deserializer.ReadProperty("alias", result->alias);
+	deserializer.ReadProperty("column_name_alias", result->column_name_alias);
+	return std::move(result);
 }
 
 unique_ptr<TableRef> TableFunctionRef::Deserialize(FieldReader &reader) {

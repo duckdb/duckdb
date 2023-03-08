@@ -19,10 +19,10 @@
 
 namespace duckdb {
 
-
 class FormatSerializer {
 protected:
 	bool serialize_enum_as_string = false;
+
 public:
 	// Pass by value
 	template <class T>
@@ -34,8 +34,8 @@ public:
 
 	// Pass by reference
 	template <class T>
-	typename std::enable_if<!std::is_trivially_copyable<T>::value, void>::type
-	WriteProperty(const char *tag, T &value) {
+	typename std::enable_if<!std::is_trivially_copyable<T>::value, void>::type WriteProperty(const char *tag,
+	                                                                                         T &value) {
 		SetTag(tag);
 		WriteValue(value);
 	}
@@ -80,7 +80,7 @@ public:
 	typename std::enable_if<std::is_trivially_copyable<T>::value && !std::is_enum<T>::value, void>::type
 	WriteOptionalProperty(const char *tag, T ptr) {
 		SetTag(tag);
-		if(ptr == nullptr) {
+		if (ptr == nullptr) {
 			OnOptionalBegin(false);
 			OnOptionalEnd(false);
 		} else {
@@ -92,10 +92,10 @@ public:
 
 	// Optional, by ref (required for unique_ptr)
 	template <class T>
-	typename std::enable_if<!std::is_trivially_copyable<T>::value, void>::type
-	WriteOptionalProperty(const char *tag, T& ptr) {
+	typename std::enable_if<!std::is_trivially_copyable<T>::value, void>::type WriteOptionalProperty(const char *tag,
+	                                                                                                 T &ptr) {
 		SetTag(tag);
-		if(ptr == nullptr) {
+		if (ptr == nullptr) {
 			OnOptionalBegin(false);
 			OnOptionalEnd(false);
 		} else {
@@ -106,7 +106,6 @@ public:
 	}
 
 protected:
-
 	// Unique Pointer Ref
 	template <typename T>
 	void WriteValue(const unique_ptr<T> &ptr) {
@@ -225,27 +224,50 @@ protected:
 	}
 
 	// Hooks for subclasses to override to implement custom behavior
-	virtual void OnListBegin(idx_t count) { (void)count; }
-	virtual void OnListEnd(idx_t count) { (void)count;}
-	virtual void OnMapBegin(idx_t count) { (void)count;}
-	virtual void OnMapEnd(idx_t count) { (void)count;}
-	virtual void OnMapEntryBegin() { }
-	virtual void OnMapEntryEnd() { }
-	virtual void OnMapKeyBegin() { }
-	virtual void OnMapKeyEnd() { }
-	virtual void OnMapValueBegin() { }
-	virtual void OnMapValueEnd() { }
-	virtual void OnOptionalBegin(bool present) { }
-	virtual void OnOptionalEnd(bool present) { }
-	virtual void OnObjectBegin() { }
-	virtual void OnObjectEnd() { }
-	virtual void OnPairBegin() { }
-	virtual void OnPairKeyBegin() { }
-	virtual void OnPairKeyEnd() { }
-	virtual void OnPairValueBegin() { }
-	virtual void OnPairValueEnd() { }
-	virtual void OnPairEnd() { }
-
+	virtual void OnListBegin(idx_t count) {
+		(void)count;
+	}
+	virtual void OnListEnd(idx_t count) {
+		(void)count;
+	}
+	virtual void OnMapBegin(idx_t count) {
+		(void)count;
+	}
+	virtual void OnMapEnd(idx_t count) {
+		(void)count;
+	}
+	virtual void OnMapEntryBegin() {
+	}
+	virtual void OnMapEntryEnd() {
+	}
+	virtual void OnMapKeyBegin() {
+	}
+	virtual void OnMapKeyEnd() {
+	}
+	virtual void OnMapValueBegin() {
+	}
+	virtual void OnMapValueEnd() {
+	}
+	virtual void OnOptionalBegin(bool present) {
+	}
+	virtual void OnOptionalEnd(bool present) {
+	}
+	virtual void OnObjectBegin() {
+	}
+	virtual void OnObjectEnd() {
+	}
+	virtual void OnPairBegin() {
+	}
+	virtual void OnPairKeyBegin() {
+	}
+	virtual void OnPairKeyEnd() {
+	}
+	virtual void OnPairValueBegin() {
+	}
+	virtual void OnPairValueEnd() {
+	}
+	virtual void OnPairEnd() {
+	}
 
 	// Handle primitive types, a serializer needs to implement these.
 	virtual void WriteNull() = 0;

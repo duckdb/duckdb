@@ -323,7 +323,8 @@ bool TypeIsInteger(PhysicalType type) {
 }
 
 // LCOV_EXCL_START
-template <> const char* EnumSerializer::EnumToString(LogicalTypeId value) {
+template <>
+const char *EnumSerializer::EnumToString(LogicalTypeId value) {
 	switch (value) {
 	case LogicalTypeId::BOOLEAN:
 		return "BOOLEAN";
@@ -413,92 +414,93 @@ template <> const char* EnumSerializer::EnumToString(LogicalTypeId value) {
 	return "UNDEFINED";
 }
 
-template<> LogicalTypeId EnumSerializer::StringToEnum(const char *value) {
-	if(strcmp(value, "BOOLEAN") == 0) {
+template <>
+LogicalTypeId EnumSerializer::StringToEnum(const char *value) {
+	if (strcmp(value, "BOOLEAN") == 0) {
 		return LogicalTypeId::BOOLEAN;
-	} else if(strcmp(value, "TINYINT") == 0) {
-        return LogicalTypeId::TINYINT;
-    } else if(strcmp(value, "SMALLINT") == 0) {
-        return LogicalTypeId::SMALLINT;
-    } else if(strcmp(value, "INTEGER") == 0) {
-        return LogicalTypeId::INTEGER;
-    } else if(strcmp(value, "BIGINT") == 0) {
-        return LogicalTypeId::BIGINT;
-    } else if(strcmp(value, "HUGEINT") == 0) {
-        return LogicalTypeId::HUGEINT;
-    } else if(strcmp(value, "UUID") == 0) {
-        return LogicalTypeId::UUID;
-    } else if(strcmp(value, "UTINYINT") == 0) {
-        return LogicalTypeId::UTINYINT;
-    } else if(strcmp(value, "USMALLINT") == 0) {
-        return LogicalTypeId::USMALLINT;
-    } else if(strcmp(value, "UINTEGER") == 0) {
-        return LogicalTypeId::UINTEGER;
-    } else if(strcmp(value, "UBIGINT") == 0) {
-        return LogicalTypeId::UBIGINT;
-    } else if(strcmp(value, "DATE") == 0) {
-        return LogicalTypeId::DATE;
-    } else if(strcmp(value, "TIME") == 0) {
-        return LogicalTypeId::TIME;
-    } else if(strcmp(value, "TIMESTAMP") == 0) {
-        return LogicalTypeId::TIMESTAMP;
-    } else if(strcmp(value, "TIMESTAMP_MS") == 0) {
-        return LogicalTypeId::TIMESTAMP_MS;
-    } else if(strcmp(value, "TIMESTAMP_NS") == 0) {
-        return LogicalTypeId::TIMESTAMP_NS;
-    } else if(strcmp(value, "TIMESTAMP_S") == 0) {
-        return LogicalTypeId::TIMESTAMP_SEC;
-    } else if(strcmp(value, "TIMESTAMP WITH TIME ZONE") == 0) {
-        return LogicalTypeId::TIMESTAMP_TZ;
-    } else if(strcmp(value, "TIME WITH TIME ZONE") == 0) {
-        return LogicalTypeId::TIME_TZ;
-    } else if(strcmp(value, "FLOAT") == 0) {
-        return LogicalTypeId::FLOAT;
-    } else if(strcmp(value, "DOUBLE") == 0) {
-        return LogicalTypeId::DOUBLE;
-    } else if(strcmp(value, "DECIMAL") == 0) {
-        return LogicalTypeId::DECIMAL;
-    } else if(strcmp(value, "VARCHAR") == 0) {
-        return LogicalTypeId::VARCHAR;
-    } else if(strcmp(value, "BLOB") == 0) {
-        return LogicalTypeId::BLOB;
-    } else if(strcmp(value, "CHAR") == 0) {
-        return LogicalTypeId::CHAR;
-    } else if(strcmp(value, "INTERVAL") == 0) {
-        return LogicalTypeId::INTERVAL;
-    } else if(strcmp(value, "NULL") == 0) {
-        return LogicalTypeId::SQLNULL;
-    } else if(strcmp(value, "ANY") == 0) {
-        return LogicalTypeId::ANY;
-    } else if(strcmp(value, "VALIDITY") == 0) {
-        return LogicalTypeId::VALIDITY;
-    } else if(strcmp(value, "STRUCT") == 0) {
-        return LogicalTypeId::STRUCT;
-    } else if(strcmp(value, "LIST") == 0) {
-        return LogicalTypeId::LIST;
-    } else if(strcmp(value, "MAP") == 0) {
-        return LogicalTypeId::MAP;
-    } else if(strcmp(value, "POINTER") == 0) {
-        return LogicalTypeId::POINTER;
-    } else if(strcmp(value, "TABLE") == 0) {
-        return LogicalTypeId::TABLE;
-    } else if(strcmp(value, "LAMBDA") == 0) {
-        return LogicalTypeId::LAMBDA;
-    } else if(strcmp(value, "INVALID") == 0) {
-        return LogicalTypeId::INVALID;
-    } else if(strcmp(value, "UNION") == 0) {
-        return LogicalTypeId::UNION;
-    } else if(strcmp(value, "UNKNOWN") == 0) {
-        return LogicalTypeId::UNKNOWN;
-    } else if(strcmp(value, "ENUM") == 0) {
-        return LogicalTypeId::ENUM;
-    } else if(strcmp(value, "AGGREGATE_STATE") == 0) {
-        return LogicalTypeId::AGGREGATE_STATE;
-    } else if(strcmp(value, "USER") == 0) {
-        return LogicalTypeId::USER;
-    } else if(strcmp(value, "BIT") == 0) {
-        return LogicalTypeId::BIT;
-    } else {
+	} else if (strcmp(value, "TINYINT") == 0) {
+		return LogicalTypeId::TINYINT;
+	} else if (strcmp(value, "SMALLINT") == 0) {
+		return LogicalTypeId::SMALLINT;
+	} else if (strcmp(value, "INTEGER") == 0) {
+		return LogicalTypeId::INTEGER;
+	} else if (strcmp(value, "BIGINT") == 0) {
+		return LogicalTypeId::BIGINT;
+	} else if (strcmp(value, "HUGEINT") == 0) {
+		return LogicalTypeId::HUGEINT;
+	} else if (strcmp(value, "UUID") == 0) {
+		return LogicalTypeId::UUID;
+	} else if (strcmp(value, "UTINYINT") == 0) {
+		return LogicalTypeId::UTINYINT;
+	} else if (strcmp(value, "USMALLINT") == 0) {
+		return LogicalTypeId::USMALLINT;
+	} else if (strcmp(value, "UINTEGER") == 0) {
+		return LogicalTypeId::UINTEGER;
+	} else if (strcmp(value, "UBIGINT") == 0) {
+		return LogicalTypeId::UBIGINT;
+	} else if (strcmp(value, "DATE") == 0) {
+		return LogicalTypeId::DATE;
+	} else if (strcmp(value, "TIME") == 0) {
+		return LogicalTypeId::TIME;
+	} else if (strcmp(value, "TIMESTAMP") == 0) {
+		return LogicalTypeId::TIMESTAMP;
+	} else if (strcmp(value, "TIMESTAMP_MS") == 0) {
+		return LogicalTypeId::TIMESTAMP_MS;
+	} else if (strcmp(value, "TIMESTAMP_NS") == 0) {
+		return LogicalTypeId::TIMESTAMP_NS;
+	} else if (strcmp(value, "TIMESTAMP_S") == 0) {
+		return LogicalTypeId::TIMESTAMP_SEC;
+	} else if (strcmp(value, "TIMESTAMP WITH TIME ZONE") == 0) {
+		return LogicalTypeId::TIMESTAMP_TZ;
+	} else if (strcmp(value, "TIME WITH TIME ZONE") == 0) {
+		return LogicalTypeId::TIME_TZ;
+	} else if (strcmp(value, "FLOAT") == 0) {
+		return LogicalTypeId::FLOAT;
+	} else if (strcmp(value, "DOUBLE") == 0) {
+		return LogicalTypeId::DOUBLE;
+	} else if (strcmp(value, "DECIMAL") == 0) {
+		return LogicalTypeId::DECIMAL;
+	} else if (strcmp(value, "VARCHAR") == 0) {
+		return LogicalTypeId::VARCHAR;
+	} else if (strcmp(value, "BLOB") == 0) {
+		return LogicalTypeId::BLOB;
+	} else if (strcmp(value, "CHAR") == 0) {
+		return LogicalTypeId::CHAR;
+	} else if (strcmp(value, "INTERVAL") == 0) {
+		return LogicalTypeId::INTERVAL;
+	} else if (strcmp(value, "NULL") == 0) {
+		return LogicalTypeId::SQLNULL;
+	} else if (strcmp(value, "ANY") == 0) {
+		return LogicalTypeId::ANY;
+	} else if (strcmp(value, "VALIDITY") == 0) {
+		return LogicalTypeId::VALIDITY;
+	} else if (strcmp(value, "STRUCT") == 0) {
+		return LogicalTypeId::STRUCT;
+	} else if (strcmp(value, "LIST") == 0) {
+		return LogicalTypeId::LIST;
+	} else if (strcmp(value, "MAP") == 0) {
+		return LogicalTypeId::MAP;
+	} else if (strcmp(value, "POINTER") == 0) {
+		return LogicalTypeId::POINTER;
+	} else if (strcmp(value, "TABLE") == 0) {
+		return LogicalTypeId::TABLE;
+	} else if (strcmp(value, "LAMBDA") == 0) {
+		return LogicalTypeId::LAMBDA;
+	} else if (strcmp(value, "INVALID") == 0) {
+		return LogicalTypeId::INVALID;
+	} else if (strcmp(value, "UNION") == 0) {
+		return LogicalTypeId::UNION;
+	} else if (strcmp(value, "UNKNOWN") == 0) {
+		return LogicalTypeId::UNKNOWN;
+	} else if (strcmp(value, "ENUM") == 0) {
+		return LogicalTypeId::ENUM;
+	} else if (strcmp(value, "AGGREGATE_STATE") == 0) {
+		return LogicalTypeId::AGGREGATE_STATE;
+	} else if (strcmp(value, "USER") == 0) {
+		return LogicalTypeId::USER;
+	} else if (strcmp(value, "BIT") == 0) {
+		return LogicalTypeId::BIT;
+	} else {
 		throw NotImplementedException("Unrecognized type LogicalTypeId in EnumSerializer::StringToEnum");
 	}
 }
@@ -945,7 +947,8 @@ enum class ExtraTypeInfoType : uint8_t {
 	USER_TYPE_INFO = 7,
 	AGGREGATE_STATE_TYPE_INFO = 8
 };
-template<> const char* EnumSerializer::EnumToString(ExtraTypeInfoType value) {
+template <>
+const char *EnumSerializer::EnumToString(ExtraTypeInfoType value) {
 	switch (value) {
 	case ExtraTypeInfoType::INVALID_TYPE_INFO:
 		return "INVALID_TYPE_INFO";
@@ -969,30 +972,30 @@ template<> const char* EnumSerializer::EnumToString(ExtraTypeInfoType value) {
 		throw NotImplementedException("ToString not implemented for enum value");
 	}
 }
-template<> ExtraTypeInfoType EnumSerializer::StringToEnum(const char* value) {
+template <>
+ExtraTypeInfoType EnumSerializer::StringToEnum(const char *value) {
 	if (strcmp(value, "INVALID_TYPE_INFO") == 0) {
 		return ExtraTypeInfoType::INVALID_TYPE_INFO;
-	} else if(strcmp(value, "GENERIC_TYPE_INFO") == 0) {
+	} else if (strcmp(value, "GENERIC_TYPE_INFO") == 0) {
 		return ExtraTypeInfoType::GENERIC_TYPE_INFO;
-	} else if(strcmp(value, "DECIMAL_TYPE_INFO") == 0) {
+	} else if (strcmp(value, "DECIMAL_TYPE_INFO") == 0) {
 		return ExtraTypeInfoType::DECIMAL_TYPE_INFO;
-	} else if(strcmp(value, "STRING_TYPE_INFO") == 0) {
+	} else if (strcmp(value, "STRING_TYPE_INFO") == 0) {
 		return ExtraTypeInfoType::STRING_TYPE_INFO;
-	} else if(strcmp(value, "LIST_TYPE_INFO") == 0) {
+	} else if (strcmp(value, "LIST_TYPE_INFO") == 0) {
 		return ExtraTypeInfoType::LIST_TYPE_INFO;
-	} else if(strcmp(value, "STRUCT_TYPE_INFO") == 0) {
+	} else if (strcmp(value, "STRUCT_TYPE_INFO") == 0) {
 		return ExtraTypeInfoType::STRUCT_TYPE_INFO;
-	} else if(strcmp(value, "ENUM_TYPE_INFO") == 0) {
+	} else if (strcmp(value, "ENUM_TYPE_INFO") == 0) {
 		return ExtraTypeInfoType::USER_TYPE_INFO;
-	} else if(strcmp(value, "USER_TYPE_INFO") == 0) {
+	} else if (strcmp(value, "USER_TYPE_INFO") == 0) {
 		return ExtraTypeInfoType::USER_TYPE_INFO;
-	} else if(strcmp(value, "AGGREGATE_STATE_TYPE_INFO") == 0) {
+	} else if (strcmp(value, "AGGREGATE_STATE_TYPE_INFO") == 0) {
 		return ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO;
 	} else {
 		throw NotImplementedException("FromString not implemented for enum value");
 	}
 }
-
 
 struct ExtraTypeInfo {
 	explicit ExtraTypeInfo(ExtraTypeInfoType type) : type(type) {
@@ -1113,10 +1116,10 @@ public:
 	}
 
 	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source) {
-        auto width = source.ReadProperty<uint8_t>("width");
-        auto scale = source.ReadProperty<uint8_t>("scale");
-        return make_shared<DecimalTypeInfo>(width, scale);
-    }
+		auto width = source.ReadProperty<uint8_t>("width");
+		auto scale = source.ReadProperty<uint8_t>("scale");
+		return make_shared<DecimalTypeInfo>(width, scale);
+	}
 
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
 		auto width = reader.ReadRequired<uint8_t>();
@@ -1181,8 +1184,8 @@ public:
 	}
 
 	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source) {
-        auto collation = source.ReadProperty<string>("collation");
-        return make_shared<StringTypeInfo>(std::move(collation));
+		auto collation = source.ReadProperty<string>("collation");
+		return make_shared<StringTypeInfo>(std::move(collation));
 	}
 
 protected:
@@ -1237,8 +1240,8 @@ public:
 	}
 
 	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source) {
-        auto child_type = source.ReadProperty<LogicalType>("child_type");
-        return make_shared<ListTypeInfo>(std::move(child_type));
+		auto child_type = source.ReadProperty<LogicalType>("child_type");
+		return make_shared<ListTypeInfo>(std::move(child_type));
 	}
 
 protected:
@@ -1299,7 +1302,7 @@ public:
 
 	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &deserializer) {
 		auto child_types = deserializer.ReadProperty<child_list_t<LogicalType>>("child_types");
-        return make_shared<StructTypeInfo>(std::move(child_types));
+		return make_shared<StructTypeInfo>(std::move(child_types));
 	}
 
 protected:
@@ -1335,12 +1338,12 @@ public:
 	}
 
 	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source) {
-        auto function_name = source.ReadProperty<string>("function_name");
-        auto return_type = source.ReadProperty<LogicalType>("return_type");
-        auto bound_argument_types = source.ReadProperty<vector<LogicalType>>("bound_argument_types");
-        return make_shared<AggregateStateTypeInfo>(
-            aggregate_state_t(std::move(function_name), std::move(return_type), std::move(bound_argument_types)));
-    }
+		auto function_name = source.ReadProperty<string>("function_name");
+		auto return_type = source.ReadProperty<LogicalType>("return_type");
+		auto bound_argument_types = source.ReadProperty<vector<LogicalType>>("bound_argument_types");
+		return make_shared<AggregateStateTypeInfo>(
+		    aggregate_state_t(std::move(function_name), std::move(return_type), std::move(bound_argument_types)));
+	}
 
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
 		auto &source = reader.GetSource();
@@ -1509,9 +1512,9 @@ public:
 	}
 
 	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source) {
-        auto enum_name = source.ReadProperty<string>("user_type_name");
-        return make_shared<UserTypeInfo>(std::move(enum_name));
-    }
+		auto enum_name = source.ReadProperty<string>("user_type_name");
+		return make_shared<UserTypeInfo>(std::move(enum_name));
+	}
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
@@ -1620,11 +1623,11 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 	}
 
 	static shared_ptr<EnumTypeInfoTemplated> FormatDeserialize(FormatDeserializer &source, uint32_t size) {
-        auto enum_name = source.ReadProperty<string>("enum_name");
-        Vector values_insert_order(LogicalType::VARCHAR, size);
-        values_insert_order.FormatDeserialize(source, size);
-        return make_shared<EnumTypeInfoTemplated>(std::move(enum_name), values_insert_order, size);
-    }
+		auto enum_name = source.ReadProperty<string>("enum_name");
+		Vector values_insert_order(LogicalType::VARCHAR, size);
+		values_insert_order.FormatDeserialize(source, size);
+		return make_shared<EnumTypeInfoTemplated>(std::move(enum_name), values_insert_order, size);
+	}
 
 	string_map_t<T> values;
 };
@@ -1753,7 +1756,7 @@ void ExtraTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 shared_ptr<ExtraTypeInfo> ExtraTypeInfo::FormatDeserialize(FormatDeserializer &deserializer) {
-    auto type = deserializer.ReadProperty<ExtraTypeInfoType>("type");
+	auto type = deserializer.ReadProperty<ExtraTypeInfoType>("type");
 
 	shared_ptr<ExtraTypeInfo> result;
 	switch (type) {

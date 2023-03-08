@@ -22,11 +22,11 @@ struct CaseCheck {
 		serializer.WriteProperty("then_expr", then_expr);
 	}
 
-	static CaseCheck&& FormatDeserialize(FormatDeserializer &deserializer) {
+	static CaseCheck FormatDeserialize(FormatDeserializer &deserializer) {
 		CaseCheck check;
 		deserializer.ReadProperty("when_expr", check.when_expr);
 		deserializer.ReadProperty("then_expr", check.then_expr);
-		return std::move(check);
+		return check;
 	}
 };
 

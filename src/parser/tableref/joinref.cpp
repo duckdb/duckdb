@@ -83,7 +83,8 @@ void JoinRef::Serialize(FieldWriter &writer) const {
 	writer.WriteList<string>(using_columns);
 }
 
-template<> const char* EnumSerializer::EnumToString(JoinRefType value) {
+template <>
+const char *EnumSerializer::EnumToString(JoinRefType value) {
 	switch (value) {
 	case JoinRefType::REGULAR:
 		return "REGULAR";
@@ -95,16 +96,18 @@ template<> const char* EnumSerializer::EnumToString(JoinRefType value) {
 		return "POSITIONAL";
 	default:
 		throw NotImplementedException("ToString not implemented for enum value");
-	}}
+	}
+}
 
-template<> JoinRefType EnumSerializer::StringToEnum(const char *value) {
-	if(strcmp(value, "REGULAR") == 0) {
+template <>
+JoinRefType EnumSerializer::StringToEnum(const char *value) {
+	if (strcmp(value, "REGULAR") == 0) {
 		return JoinRefType::REGULAR;
-	} else if(strcmp(value, "NATURAL") == 0) {
+	} else if (strcmp(value, "NATURAL") == 0) {
 		return JoinRefType::NATURAL;
-	} else if(strcmp(value, "CROSS") == 0) {
+	} else if (strcmp(value, "CROSS") == 0) {
 		return JoinRefType::CROSS;
-	} else if(strcmp(value, "POSITIONAL") == 0) {
+	} else if (strcmp(value, "POSITIONAL") == 0) {
 		return JoinRefType::POSITIONAL;
 	} else {
 		throw NotImplementedException("StringToEnum not implemented for enum value");

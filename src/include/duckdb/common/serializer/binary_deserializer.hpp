@@ -6,7 +6,7 @@ namespace duckdb {
 
 class BinaryDeserializer : public FormatDeserializer {
 private:
-	void SetTag(const char* tag) final;
+	void SetTag(const char *tag) final;
 	//===--------------------------------------------------------------------===//
 	// Nested Types Hooks
 	//===--------------------------------------------------------------------===//
@@ -36,4 +36,4 @@ private:
 	interval_t ReadInterval() final;
 };
 
-}
+} // namespace duckdb

@@ -82,7 +82,8 @@ unique_ptr<QueryNode> SetOperationNode::Deserialize(FieldReader &reader) {
 	return std::move(result);
 }
 
-template<> const char* EnumSerializer::EnumToString(SetOperationType value) {
+template <>
+const char *EnumSerializer::EnumToString(SetOperationType value) {
 	switch (value) {
 	case SetOperationType::NONE:
 		return "NONE";
@@ -99,7 +100,8 @@ template<> const char* EnumSerializer::EnumToString(SetOperationType value) {
 	}
 }
 
-template<> SetOperationType EnumSerializer::StringToEnum(const char *value) {
+template <>
+SetOperationType EnumSerializer::StringToEnum(const char *value) {
 	if (strcmp(value, "NONE") == 0) {
 		return SetOperationType::NONE;
 	} else if (strcmp(value, "UNION") == 0) {

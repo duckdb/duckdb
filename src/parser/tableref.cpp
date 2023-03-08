@@ -53,7 +53,7 @@ void TableRef::Serialize(Serializer &serializer) const {
 	writer.Finalize();
 }
 
-template<>
+template <>
 const char *EnumSerializer::EnumToString(TableReferenceType value) {
 	switch (value) {
 	case TableReferenceType::INVALID:
@@ -77,23 +77,23 @@ const char *EnumSerializer::EnumToString(TableReferenceType value) {
 	}
 }
 
-template<>
+template <>
 TableReferenceType EnumSerializer::StringToEnum(const char *value) {
-	if(strcmp(value, "INVALID") == 0) {
+	if (strcmp(value, "INVALID") == 0) {
 		return TableReferenceType::INVALID;
-	} else if(strcmp(value, "BASE_TABLE") == 0) {
+	} else if (strcmp(value, "BASE_TABLE") == 0) {
 		return TableReferenceType::BASE_TABLE;
-	} else if(strcmp(value, "SUBQUERY") == 0) {
+	} else if (strcmp(value, "SUBQUERY") == 0) {
 		return TableReferenceType::SUBQUERY;
-	} else if(strcmp(value, "JOIN") == 0) {
+	} else if (strcmp(value, "JOIN") == 0) {
 		return TableReferenceType::JOIN;
-	} else if(strcmp(value, "TABLE_FUNCTION") == 0) {
+	} else if (strcmp(value, "TABLE_FUNCTION") == 0) {
 		return TableReferenceType::TABLE_FUNCTION;
-	} else if(strcmp(value, "EXPRESSION_LIST") == 0) {
+	} else if (strcmp(value, "EXPRESSION_LIST") == 0) {
 		return TableReferenceType::EXPRESSION_LIST;
-	} else if(strcmp(value, "CTE") == 0) {
+	} else if (strcmp(value, "CTE") == 0) {
 		return TableReferenceType::CTE;
-	} else if(strcmp(value, "EMPTY") == 0) {
+	} else if (strcmp(value, "EMPTY") == 0) {
 		return TableReferenceType::EMPTY;
 	} else {
 		throw NotImplementedException("FromString not implemented for enum value");

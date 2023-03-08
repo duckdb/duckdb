@@ -5,7 +5,8 @@
 
 namespace duckdb {
 
-template<> const char* EnumSerializer::EnumToString(OrderType value) {
+template <>
+const char *EnumSerializer::EnumToString(OrderType value) {
 	switch (value) {
 	case OrderType::INVALID:
 		return "INVALID";
@@ -20,21 +21,23 @@ template<> const char* EnumSerializer::EnumToString(OrderType value) {
 	}
 }
 
-template<> OrderType EnumSerializer::StringToEnum(const char *value) {
+template <>
+OrderType EnumSerializer::StringToEnum(const char *value) {
 	if (strcmp(value, "INVALID") == 0) {
 		return OrderType::INVALID;
-	} else if(strcmp(value, "ORDER_DEFAULT") == 0) {
+	} else if (strcmp(value, "ORDER_DEFAULT") == 0) {
 		return OrderType::ORDER_DEFAULT;
-	} else if(strcmp(value, "ASCENDING") == 0) {
+	} else if (strcmp(value, "ASCENDING") == 0) {
 		return OrderType::ASCENDING;
-	} else if(strcmp(value, "DESCENDING") == 0) {
+	} else if (strcmp(value, "DESCENDING") == 0) {
 		return OrderType::DESCENDING;
 	} else {
 		throw NotImplementedException("FromString not implemented for enum value");
 	}
 }
 
-template<> const char* EnumSerializer::EnumToString(OrderByNullType value) {
+template <>
+const char *EnumSerializer::EnumToString(OrderByNullType value) {
 	switch (value) {
 	case OrderByNullType::INVALID:
 		return "INVALID";
@@ -49,21 +52,22 @@ template<> const char* EnumSerializer::EnumToString(OrderByNullType value) {
 	}
 }
 
-template<> OrderByNullType EnumSerializer::StringToEnum(const char *value) {
+template <>
+OrderByNullType EnumSerializer::StringToEnum(const char *value) {
 	if (strcmp(value, "INVALID") == 0) {
 		return OrderByNullType::INVALID;
-	} else if(strcmp(value, "ORDER_DEFAULT") == 0) {
+	} else if (strcmp(value, "ORDER_DEFAULT") == 0) {
 		return OrderByNullType::ORDER_DEFAULT;
-	} else if(strcmp(value, "NULLS_FIRST") == 0) {
+	} else if (strcmp(value, "NULLS_FIRST") == 0) {
 		return OrderByNullType::NULLS_FIRST;
-	} else if(strcmp(value, "NULLS_LAST") == 0) {
+	} else if (strcmp(value, "NULLS_LAST") == 0) {
 		return OrderByNullType::NULLS_LAST;
 	} else {
 		throw NotImplementedException("FromString not implemented for enum value");
 	}
 }
 
-template<>
+template <>
 const char *EnumSerializer::EnumToString(ResultModifierType value) {
 	switch (value) {
 	case ResultModifierType::LIMIT_MODIFIER:
@@ -79,7 +83,7 @@ const char *EnumSerializer::EnumToString(ResultModifierType value) {
 	}
 }
 
-template<>
+template <>
 ResultModifierType EnumSerializer::StringToEnum(const char *value) {
 	if (strcmp(value, "LIMIT_MODIFIER") == 0) {
 		return ResultModifierType::LIMIT_MODIFIER;
@@ -337,7 +341,6 @@ void OrderModifier::FormatSerialize(FormatSerializer &serializer) const {
 unique_ptr<ResultModifier> OrderModifier::FormatDeserialize(FormatDeserializer &deserializer) {
 	throw NotImplementedException("err");
 }
-
 
 unique_ptr<ResultModifier> OrderModifier::Deserialize(FieldReader &reader) {
 	auto mod = make_unique<OrderModifier>();

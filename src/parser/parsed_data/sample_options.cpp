@@ -5,19 +5,21 @@
 
 namespace duckdb {
 
-template<> SampleMethod EnumSerializer::StringToEnum(const char *value) {
-	if(strcmp(value, "System") == 0) {
+template <>
+SampleMethod EnumSerializer::StringToEnum(const char *value) {
+	if (strcmp(value, "System") == 0) {
 		return SampleMethod::SYSTEM_SAMPLE;
-	} else if(strcmp(value, "Bernoulli") == 0) {
+	} else if (strcmp(value, "Bernoulli") == 0) {
 		return SampleMethod::BERNOULLI_SAMPLE;
-	} else if(strcmp(value, "Reservoir") == 0) {
+	} else if (strcmp(value, "Reservoir") == 0) {
 		return SampleMethod::RESERVOIR_SAMPLE;
 	} else {
 		throw NotImplementedException("Unrecognized sample method type \"%s\"", value);
 	}
 }
 
-template<> const char* EnumSerializer::EnumToString(SampleMethod value) {
+template <>
+const char *EnumSerializer::EnumToString(SampleMethod value) {
 	switch (value) {
 	case SampleMethod::SYSTEM_SAMPLE:
 		return "System";

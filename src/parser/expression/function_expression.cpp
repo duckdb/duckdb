@@ -135,7 +135,8 @@ void FunctionExpression::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("catalog", catalog);
 }
 
-unique_ptr<ParsedExpression> FunctionExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
+unique_ptr<ParsedExpression> FunctionExpression::FormatDeserialize(ExpressionType type,
+                                                                   FormatDeserializer &deserializer) {
 	auto function_name = deserializer.ReadProperty<string>("function_name");
 	auto schema = deserializer.ReadProperty<string>("schema");
 	auto children = deserializer.ReadProperty<vector<unique_ptr<ParsedExpression>>>("children");

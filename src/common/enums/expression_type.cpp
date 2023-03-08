@@ -5,7 +5,8 @@
 
 namespace duckdb {
 // LCOV_EXCL_START
-template<> const char* EnumSerializer::EnumToString(ExpressionType value) {
+template <>
+const char *EnumSerializer::EnumToString(ExpressionType value) {
 	switch (value) {
 	case ExpressionType::OPERATOR_CAST:
 		return "CAST";
@@ -150,138 +151,139 @@ string ExpressionTypeToString(ExpressionType type) {
 	return EnumSerializer::EnumToString(type);
 }
 
-template <> ExpressionType EnumSerializer::StringToEnum(const char *value) {
-	if(strcmp(value, "CAST") == 0) {
+template <>
+ExpressionType EnumSerializer::StringToEnum(const char *value) {
+	if (strcmp(value, "CAST") == 0) {
 		return ExpressionType::OPERATOR_CAST;
-	} else if(strcmp(value, "NOT") == 0) {
+	} else if (strcmp(value, "NOT") == 0) {
 		return ExpressionType::OPERATOR_NOT;
-	} else if(strcmp(value, "IS_NULL") == 0) {
+	} else if (strcmp(value, "IS_NULL") == 0) {
 		return ExpressionType::OPERATOR_IS_NULL;
-	} else if(strcmp(value, "IS_NOT_NULL") == 0) {
+	} else if (strcmp(value, "IS_NOT_NULL") == 0) {
 		return ExpressionType::OPERATOR_IS_NOT_NULL;
-	} else if(strcmp(value, "EQUAL") == 0) {
+	} else if (strcmp(value, "EQUAL") == 0) {
 		return ExpressionType::COMPARE_EQUAL;
-	} else if(strcmp(value, "NOTEQUAL") == 0) {
+	} else if (strcmp(value, "NOTEQUAL") == 0) {
 		return ExpressionType::COMPARE_NOTEQUAL;
-	} else if(strcmp(value, "LESSTHAN") == 0) {
+	} else if (strcmp(value, "LESSTHAN") == 0) {
 		return ExpressionType::COMPARE_LESSTHAN;
-	} else if(strcmp(value, "GREATERTHAN") == 0) {
+	} else if (strcmp(value, "GREATERTHAN") == 0) {
 		return ExpressionType::COMPARE_GREATERTHAN;
-	} else if(strcmp(value, "LESSTHANOREQUALTO") == 0) {
+	} else if (strcmp(value, "LESSTHANOREQUALTO") == 0) {
 		return ExpressionType::COMPARE_LESSTHANOREQUALTO;
-	} else if(strcmp(value, "GREATERTHANOREQUALTO") == 0) {
+	} else if (strcmp(value, "GREATERTHANOREQUALTO") == 0) {
 		return ExpressionType::COMPARE_GREATERTHANOREQUALTO;
-	} else if(strcmp(value, "IN") == 0) {
+	} else if (strcmp(value, "IN") == 0) {
 		return ExpressionType::COMPARE_IN;
-	} else if(strcmp(value, "DISTINCT_FROM") == 0) {
+	} else if (strcmp(value, "DISTINCT_FROM") == 0) {
 		return ExpressionType::COMPARE_DISTINCT_FROM;
-	} else if(strcmp(value, "NOT_DISTINCT_FROM") == 0) {
+	} else if (strcmp(value, "NOT_DISTINCT_FROM") == 0) {
 		return ExpressionType::COMPARE_NOT_DISTINCT_FROM;
-	} else if(strcmp(value, "AND") == 0) {
+	} else if (strcmp(value, "AND") == 0) {
 		return ExpressionType::CONJUNCTION_AND;
-	} else if(strcmp(value, "OR") == 0) {
+	} else if (strcmp(value, "OR") == 0) {
 		return ExpressionType::CONJUNCTION_OR;
-	} else if(strcmp(value, "CONSTANT") == 0) {
+	} else if (strcmp(value, "CONSTANT") == 0) {
 		return ExpressionType::VALUE_CONSTANT;
-	} else if(strcmp(value, "PARAMETER") == 0) {
+	} else if (strcmp(value, "PARAMETER") == 0) {
 		return ExpressionType::VALUE_PARAMETER;
-	} else if(strcmp(value, "TUPLE") == 0) {
+	} else if (strcmp(value, "TUPLE") == 0) {
 		return ExpressionType::VALUE_TUPLE;
-	} else if(strcmp(value, "TUPLE_ADDRESS") == 0) {
+	} else if (strcmp(value, "TUPLE_ADDRESS") == 0) {
 		return ExpressionType::VALUE_TUPLE_ADDRESS;
-	} else if(strcmp(value, "NULL") == 0) {
+	} else if (strcmp(value, "NULL") == 0) {
 		return ExpressionType::VALUE_NULL;
-	} else if(strcmp(value, "VECTOR") == 0) {
+	} else if (strcmp(value, "VECTOR") == 0) {
 		return ExpressionType::VALUE_VECTOR;
-	} else if(strcmp(value, "SCALAR") == 0) {
+	} else if (strcmp(value, "SCALAR") == 0) {
 		return ExpressionType::VALUE_SCALAR;
-	} else if(strcmp(value, "AGGREGATE") == 0) {
+	} else if (strcmp(value, "AGGREGATE") == 0) {
 		return ExpressionType::AGGREGATE;
-	} else if(strcmp(value, "WINDOW_AGGREGATE") == 0) {
+	} else if (strcmp(value, "WINDOW_AGGREGATE") == 0) {
 		return ExpressionType::WINDOW_AGGREGATE;
-	} else if(strcmp(value, "RANK") == 0) {
+	} else if (strcmp(value, "RANK") == 0) {
 		return ExpressionType::WINDOW_RANK;
-	} else if(strcmp(value, "RANK_DENSE") == 0) {
+	} else if (strcmp(value, "RANK_DENSE") == 0) {
 		return ExpressionType::WINDOW_RANK_DENSE;
-	} else if(strcmp(value, "PERCENT_RANK") == 0) {
+	} else if (strcmp(value, "PERCENT_RANK") == 0) {
 		return ExpressionType::WINDOW_PERCENT_RANK;
-	} else if(strcmp(value, "ROW_NUMBER") == 0) {
+	} else if (strcmp(value, "ROW_NUMBER") == 0) {
 		return ExpressionType::WINDOW_ROW_NUMBER;
-	} else if(strcmp(value, "FIRST_VALUE") == 0) {
+	} else if (strcmp(value, "FIRST_VALUE") == 0) {
 		return ExpressionType::WINDOW_FIRST_VALUE;
-	} else if(strcmp(value, "LAST_VALUE") == 0) {
+	} else if (strcmp(value, "LAST_VALUE") == 0) {
 		return ExpressionType::WINDOW_LAST_VALUE;
-	} else if(strcmp(value, "NTH_VALUE") == 0) {
+	} else if (strcmp(value, "NTH_VALUE") == 0) {
 		return ExpressionType::WINDOW_NTH_VALUE;
-	} else if(strcmp(value, "CUME_DIST") == 0) {
+	} else if (strcmp(value, "CUME_DIST") == 0) {
 		return ExpressionType::WINDOW_CUME_DIST;
-	} else if(strcmp(value, "LEAD") == 0) {
+	} else if (strcmp(value, "LEAD") == 0) {
 		return ExpressionType::WINDOW_LEAD;
-	} else if(strcmp(value, "LAG") == 0) {
+	} else if (strcmp(value, "LAG") == 0) {
 		return ExpressionType::WINDOW_LAG;
-	} else if(strcmp(value, "NTILE") == 0) {
+	} else if (strcmp(value, "NTILE") == 0) {
 		return ExpressionType::WINDOW_NTILE;
-	} else if(strcmp(value, "FUNCTION") == 0) {
+	} else if (strcmp(value, "FUNCTION") == 0) {
 		return ExpressionType::FUNCTION;
-	} else if(strcmp(value, "CASE") == 0) {
+	} else if (strcmp(value, "CASE") == 0) {
 		return ExpressionType::CASE_EXPR;
-	} else if(strcmp(value, "NULLIF") == 0) {
+	} else if (strcmp(value, "NULLIF") == 0) {
 		return ExpressionType::OPERATOR_NULLIF;
-	} else if(strcmp(value, "COALESCE") == 0) {
+	} else if (strcmp(value, "COALESCE") == 0) {
 		return ExpressionType::OPERATOR_COALESCE;
-	} else if(strcmp(value, "ARRAY_EXTRACT") == 0) {
+	} else if (strcmp(value, "ARRAY_EXTRACT") == 0) {
 		return ExpressionType::ARRAY_EXTRACT;
-	} else if(strcmp(value, "ARRAY_SLICE") == 0) {
+	} else if (strcmp(value, "ARRAY_SLICE") == 0) {
 		return ExpressionType::ARRAY_SLICE;
-	} else if(strcmp(value, "STRUCT_EXTRACT") == 0) {
+	} else if (strcmp(value, "STRUCT_EXTRACT") == 0) {
 		return ExpressionType::STRUCT_EXTRACT;
-	} else if(strcmp(value, "SUBQUERY") == 0) {
+	} else if (strcmp(value, "SUBQUERY") == 0) {
 		return ExpressionType::SUBQUERY;
-	} else if(strcmp(value, "STAR") == 0) {
+	} else if (strcmp(value, "STAR") == 0) {
 		return ExpressionType::STAR;
-	} else if(strcmp(value, "PLACEHOLDER") == 0) {
+	} else if (strcmp(value, "PLACEHOLDER") == 0) {
 		return ExpressionType::PLACEHOLDER;
-	} else if(strcmp(value, "COLUMN_REF") == 0) {
+	} else if (strcmp(value, "COLUMN_REF") == 0) {
 		return ExpressionType::COLUMN_REF;
-	} else if(strcmp(value, "FUNCTION_REF") == 0) {
+	} else if (strcmp(value, "FUNCTION_REF") == 0) {
 		return ExpressionType::FUNCTION_REF;
-	} else if(strcmp(value, "TABLE_REF") == 0) {
+	} else if (strcmp(value, "TABLE_REF") == 0) {
 		return ExpressionType::TABLE_REF;
-	} else if(strcmp(value, "CAST") == 0) {
+	} else if (strcmp(value, "CAST") == 0) {
 		return ExpressionType::CAST;
-	} else if(strcmp(value, "COMPARE_NOT_IN") == 0) {
+	} else if (strcmp(value, "COMPARE_NOT_IN") == 0) {
 		return ExpressionType::COMPARE_NOT_IN;
-	} else if(strcmp(value, "COMPARE_BETWEEN") == 0) {
+	} else if (strcmp(value, "COMPARE_BETWEEN") == 0) {
 		return ExpressionType::COMPARE_BETWEEN;
-	} else if(strcmp(value, "COMPARE_NOT_BETWEEN") == 0) {
+	} else if (strcmp(value, "COMPARE_NOT_BETWEEN") == 0) {
 		return ExpressionType::COMPARE_NOT_BETWEEN;
-	} else if(strcmp(value, "VALUE_DEFAULT") == 0) {
+	} else if (strcmp(value, "VALUE_DEFAULT") == 0) {
 		return ExpressionType::VALUE_DEFAULT;
-	} else if(strcmp(value, "BOUND_REF") == 0) {
+	} else if (strcmp(value, "BOUND_REF") == 0) {
 		return ExpressionType::BOUND_REF;
-	} else if(strcmp(value, "BOUND_COLUMN_REF") == 0) {
+	} else if (strcmp(value, "BOUND_COLUMN_REF") == 0) {
 		return ExpressionType::BOUND_COLUMN_REF;
-	} else if(strcmp(value, "BOUND_FUNCTION") == 0) {
+	} else if (strcmp(value, "BOUND_FUNCTION") == 0) {
 		return ExpressionType::BOUND_FUNCTION;
-	} else if(strcmp(value, "BOUND_AGGREGATE") == 0) {
+	} else if (strcmp(value, "BOUND_AGGREGATE") == 0) {
 		return ExpressionType::BOUND_AGGREGATE;
-	} else if(strcmp(value, "GROUPING") == 0) {
+	} else if (strcmp(value, "GROUPING") == 0) {
 		return ExpressionType::GROUPING_FUNCTION;
-	} else if(strcmp(value, "ARRAY_CONSTRUCTOR") == 0) {
+	} else if (strcmp(value, "ARRAY_CONSTRUCTOR") == 0) {
 		return ExpressionType::ARRAY_CONSTRUCTOR;
-	} else if(strcmp(value, "TABLE_STAR") == 0) {
+	} else if (strcmp(value, "TABLE_STAR") == 0) {
 		return ExpressionType::TABLE_STAR;
-	} else if(strcmp(value, "BOUND_UNNEST") == 0) {
+	} else if (strcmp(value, "BOUND_UNNEST") == 0) {
 		return ExpressionType::BOUND_UNNEST;
-	} else if(strcmp(value, "COLLATE") == 0) {
+	} else if (strcmp(value, "COLLATE") == 0) {
 		return ExpressionType::COLLATE;
-	} else if(strcmp(value, "POSITIONAL_REFERENCE") == 0) {
+	} else if (strcmp(value, "POSITIONAL_REFERENCE") == 0) {
 		return ExpressionType::POSITIONAL_REFERENCE;
-	} else if(strcmp(value, "BOUND_LAMBDA_REF") == 0) {
+	} else if (strcmp(value, "BOUND_LAMBDA_REF") == 0) {
 		return ExpressionType::BOUND_LAMBDA_REF;
-	} else if(strcmp(value, "LAMBDA") == 0) {
+	} else if (strcmp(value, "LAMBDA") == 0) {
 		return ExpressionType::LAMBDA;
-	} else if(strcmp(value, "ARROW") == 0) {
+	} else if (strcmp(value, "ARROW") == 0) {
 		return ExpressionType::ARROW;
 	} else {
 		return ExpressionType::INVALID;
@@ -386,7 +388,7 @@ ExpressionType OperatorToExpressionType(const string &op) {
 	return ExpressionType::INVALID;
 }
 
-template<>
+template <>
 const char *EnumSerializer::EnumToString(ExpressionClass value) {
 	switch (value) {
 	case ExpressionClass::INVALID:
@@ -552,6 +554,5 @@ ExpressionClass EnumSerializer::StringToEnum(const char *value) {
 		throw NotImplementedException("Unrecognized ExpressionClass value");
 	}
 }
-
 
 } // namespace duckdb

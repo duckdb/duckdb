@@ -67,7 +67,7 @@ void BinarySerializer::WriteValue(int8_t value) {
 void BinarySerializer::WriteValue(const string &value) {
 	auto len = value.size();
 	GetCurrent().writer->Write<uint32_t>((uint32_t)len);
-	if(len > 0) {
+	if (len > 0) {
 		GetCurrent().writer->WriteData((const_data_ptr_t)value.c_str(), value.size());
 	}
 }
@@ -75,7 +75,7 @@ void BinarySerializer::WriteValue(const string &value) {
 void BinarySerializer::WriteValue(const string_t value) {
 	auto len = value.GetSize();
 	GetCurrent().writer->Write<uint32_t>((uint32_t)len);
-	if(len > 0) {
+	if (len > 0) {
 		GetCurrent().writer->WriteData((const_data_ptr_t)value.GetDataUnsafe(), len);
 	}
 }
@@ -83,7 +83,7 @@ void BinarySerializer::WriteValue(const string_t value) {
 void BinarySerializer::WriteValue(const char *value) {
 	auto len = strlen(value);
 	GetCurrent().writer->Write<uint32_t>((uint32_t)len);
-	if(len > 0) {
+	if (len > 0) {
 		GetCurrent().writer->WriteData((const_data_ptr_t)value, len);
 	}
 }

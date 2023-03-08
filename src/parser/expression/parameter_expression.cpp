@@ -46,7 +46,8 @@ void ParameterExpression::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("parameter_nr", parameter_nr);
 }
 
-unique_ptr<ParsedExpression> ParameterExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
+unique_ptr<ParsedExpression> ParameterExpression::FormatDeserialize(ExpressionType type,
+                                                                    FormatDeserializer &deserializer) {
 	auto expression = make_unique<ParameterExpression>();
 	expression->parameter_nr = deserializer.ReadProperty<idx_t>("parameter_nr");
 	return std::move(expression);

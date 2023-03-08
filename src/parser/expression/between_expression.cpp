@@ -52,7 +52,8 @@ void BetweenExpression::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("upper", *upper);
 }
 
-unique_ptr<ParsedExpression> BetweenExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
+unique_ptr<ParsedExpression> BetweenExpression::FormatDeserialize(ExpressionType type,
+                                                                  FormatDeserializer &deserializer) {
 	auto input = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("input");
 	auto lower = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("lower");
 	auto upper = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("upper");

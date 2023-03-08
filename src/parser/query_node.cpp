@@ -8,7 +8,8 @@
 #include "duckdb/common/serializer/enum_serializer.hpp"
 namespace duckdb {
 
-template<> const char* EnumSerializer::EnumToString(QueryNodeType value) {
+template <>
+const char *EnumSerializer::EnumToString(QueryNodeType value) {
 	switch (value) {
 	case QueryNodeType::SELECT_NODE:
 		return "SELECT_NODE";
@@ -22,7 +23,8 @@ template<> const char* EnumSerializer::EnumToString(QueryNodeType value) {
 		throw NotImplementedException("EnumToString not implemented for enum value");
 	}
 }
-template<> QueryNodeType EnumSerializer::StringToEnum(const char *value) {
+template <>
+QueryNodeType EnumSerializer::StringToEnum(const char *value) {
 	if (strcmp(value, "SELECT_NODE") == 0) {
 		return QueryNodeType::SELECT_NODE;
 	} else if (strcmp(value, "SET_OPERATION_NODE") == 0) {
@@ -233,7 +235,7 @@ unique_ptr<QueryNode> QueryNode::FormatDeserialize(FormatDeserializer &deseriali
 		result = RecursiveCTENode::FormatDeserialize(deserializer);
 		break;
 	default:
-	    throw SerializationException("Could not deserialize Query Node: unknown type!");
+		throw SerializationException("Could not deserialize Query Node: unknown type!");
 	}
 
 	result->type = type;

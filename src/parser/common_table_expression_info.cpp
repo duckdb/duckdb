@@ -14,4 +14,4 @@ unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::FormatDeseriali
 	return result;
 }
 
-}
+} // namespace duckdb

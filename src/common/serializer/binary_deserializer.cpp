@@ -4,22 +4,30 @@
 
 namespace duckdb {
 
-
-void SetTag(const char* tag) {
-    // Ignore, the binary deserializer reads everything in-order anyway
+void SetTag(const char *tag) {
+	// Ignore, the binary deserializer reads everything in-order anyway
 	(void)tag;
 };
 
 //===--------------------------------------------------------------------===//
 // Nested Types Hooks
 //===--------------------------------------------------------------------===//
-void BinaryDeserializer::OnObjectBegin() { }
-void BinaryDeserializer::OnObjectEnd() { }
-idx_t BinaryDeserializer::OnListBegin() { return 0; }
-void BinaryDeserializer::OnListEnd() { }
-idx_t BinaryDeserializer::OnMapBegin() { return 0; };
-void BinaryDeserializer::OnMapEnd() { };
-bool BinaryDeserializer::OnOptionalBegin() { return false; }
+void BinaryDeserializer::OnObjectBegin() {
+}
+void BinaryDeserializer::OnObjectEnd() {
+}
+idx_t BinaryDeserializer::OnListBegin() {
+	return 0;
+}
+void BinaryDeserializer::OnListEnd() {
+}
+idx_t BinaryDeserializer::OnMapBegin() {
+	return 0;
+};
+void BinaryDeserializer::OnMapEnd() {};
+bool BinaryDeserializer::OnOptionalBegin() {
+	return false;
+}
 
 //===--------------------------------------------------------------------===//
 // Primitive Types
@@ -76,4 +84,4 @@ interval_t BinaryDeserializer::ReadInterval() {
 	return interval_t();
 }
 
-}
+} // namespace duckdb

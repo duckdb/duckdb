@@ -139,8 +139,8 @@ void WindowExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteString(catalog);
 }
 
-
-template<> const char* EnumSerializer::EnumToString(WindowBoundary value) {
+template <>
+const char *EnumSerializer::EnumToString(WindowBoundary value) {
 	switch (value) {
 	case WindowBoundary::INVALID:
 		return "INVALID";
@@ -165,8 +165,9 @@ template<> const char* EnumSerializer::EnumToString(WindowBoundary value) {
 	}
 }
 
-template<> WindowBoundary EnumSerializer::StringToEnum(const char *value) {
-	if(strcmp(value, "INVALID") == 0) {
+template <>
+WindowBoundary EnumSerializer::StringToEnum(const char *value) {
+	if (strcmp(value, "INVALID") == 0) {
 		return WindowBoundary::INVALID;
 	} else if (strcmp(value, "UNBOUNDED_PRECEDING") == 0) {
 		return WindowBoundary::UNBOUNDED_PRECEDING;
@@ -207,7 +208,8 @@ void WindowExpression::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("catalog", catalog);
 }
 
-unique_ptr<ParsedExpression> WindowExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
+unique_ptr<ParsedExpression> WindowExpression::FormatDeserialize(ExpressionType type,
+                                                                 FormatDeserializer &deserializer) {
 	auto function_name = deserializer.ReadProperty<string>("function_name");
 	auto schema = deserializer.ReadProperty<string>("schema");
 	auto expr = make_unique<WindowExpression>(type, INVALID_CATALOG, std::move(schema), function_name);
