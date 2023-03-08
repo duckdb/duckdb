@@ -64,7 +64,7 @@ OperatorResultType PhysicalTableInOutFunction::ExecuteWithMapping(ExecutionConte
 	auto chunk_types = chunk.GetTypes();
 	vector<LogicalType> intermediate_types;
 	intermediate_types.insert(intermediate_types.end(), chunk_types.begin(), chunk_types.begin() + base_columns);
-	intermediate_types.push_back(LogicalType::USMALLINT);
+	intermediate_types.push_back(LogicalType::UINTEGER);
 	intermediate_chunk.InitializeEmpty(intermediate_types);
 
 	for (idx_t i = 0; i < base_columns; i++) {
@@ -73,6 +73,7 @@ OperatorResultType PhysicalTableInOutFunction::ExecuteWithMapping(ExecutionConte
 	intermediate_chunk.data[base_columns].Initialize();
 	intermediate_chunk.SetCardinality(chunk.size());
 
+	//! Let the function know that we expect it to write a in-out mapping for rowids
 	data.add_in_out_mapping = true;
 	auto result = function.in_out_function(context, data, input, intermediate_chunk);
 	chunk.SetCardinality(intermediate_chunk.size());
@@ -86,17 +87,10 @@ OperatorResultType PhysicalTableInOutFunction::ExecuteWithMapping(ExecutionConte
 	UnifiedVectorFormat mapping_data;
 	mapping_column.ToUnifiedFormat(intermediate_chunk.size(), mapping_data);
 	D_ASSERT(mapping_data.validity.AllValid());
-	auto mapping_array = (uint32_t *)mapping_data.data;
+	auto mapping_array = (sel_t *)mapping_data.data;
 
-	SelectionVector sel_vec;
-	sel_vec.Initialize(intermediate_chunk.size());
-	// Create a selection vector that maps from output row -> input row
-	for (idx_t i = 0; i < intermediate_chunk.size(); i++) {
-		// The index in the input column that produced this output tuple
-		const auto input_row = mapping_array[i];
-		D_ASSERT(input_row < STANDARD_VECTOR_SIZE);
-		sel_vec.set_index(i, input_row);
-	}
+	// We can directly use this column as a selection vector
+	SelectionVector sel_vec(mapping_array);
 
 	// Add the projected columns, and apply the selection vector
 	for (idx_t project_idx = 0; project_idx < projected_input.size(); project_idx++) {
@@ -107,10 +101,11 @@ OperatorResultType PhysicalTableInOutFunction::ExecuteWithMapping(ExecutionConte
 		auto &target_column = chunk.data[target_idx];
 		auto &source_column = input.data[source_idx];
 
-		// Reference the original
-		target_column.Reference(source_column);
-		// And slice, to rearrange which index points to which tuple
-		target_column.Slice(sel_vec, intermediate_chunk.size());
+		target_column.Slice(source_column, sel_vec, intermediate_chunk.size());
+		// Since our selection vector is using temporary allocated data, we need to
+		// immediately flatten this column, so we don't run the risk of the dictionary vector
+		// outliving the selection vector
+		target_column.Flatten(intermediate_chunk.size());
 	}
 	return result;
 }
@@ -166,7 +161,6 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 		return function.in_out_function(context, data, input, chunk);
 	}
 	if (function.in_out_mapping) {
-		data.add_in_out_mapping = true;
 		return ExecuteWithMapping(context, input, chunk, data);
 	}
 	return ExecuteWithoutMapping(context, input, chunk, gstate, state, data);
