@@ -31,6 +31,7 @@ bool Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpressi
 			bind_context.GenerateAllColumnExpressions(*current_star, star_list);
 
 			vector<Value> values;
+			values.reserve(star_list.size());
 			for (auto &expr : star_list) {
 				values.emplace_back(expr->ToString());
 			}
