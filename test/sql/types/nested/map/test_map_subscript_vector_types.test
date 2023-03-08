@@ -5,22 +5,18 @@
 statement ok
 PRAGMA enable_verification;
 
-query I
+# expected result
+query I nosort correct
+SELECT true as equal
+FROM test_vector_types(NULL::INT[], false) t(c)
+WHERE c IS NOT NULL;
+----
+
+query I nosort correct
 SELECT map([c], [c])[c] = [c] as equal
 FROM test_vector_types(NULL::INT[], false) t(c)
 WHERE c IS NOT NULL;
 ----
-true
-true
-true
-true
-true
-true
-true
-true
-true
-true
-true
 
 # Filter the list for NULLs and duplicates, get the list_position of the last element
 query I nosort expected
