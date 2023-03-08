@@ -39,39 +39,87 @@ env:
   AWS_SECRET_ACCESS_KEY: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
 
 jobs:
+  set-up-npm:
+    name: Set up NPM
+    runs-on: ubuntu-20.04
+    env:
+      DUCKDB_NODE_BUILD_CACHE: 0
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Setup NPM
+        shell: bash
+        run: ./scripts/node_version.sh upload
+        env:
+          DUCKDB_NODE_BUILD_CACHE: 0  # create a standalone package
+          NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
+
   linux-nodejs:
     name: node.js Linux
     runs-on: ubuntu-20.04
+    needs: set-up-npm
     env:
+      TARGET_ARCH: ${{ matrix.target_arch }}
       DUCKDB_NODE_BUILD_CACHE: 0
     strategy:
       matrix:
         node: [ '10', '12', '14', '15', '16', '17', '18', '19' ]
+        target_arch: [ x64, arm64 ]
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
         exclude:
           - isRelease: false
             node: 12
+            target_arch: x64
           - isRelease: false
             node: 14
+            target_arch: x64
           - isRelease: false
             node: 15
+            target_arch: x64
           - isRelease: false
             node: 16
+            target_arch: x64
           - isRelease: false
             node: 17
+            target_arch: x64
           - isRelease: false
             node: 18
+            target_arch: x64
+          - isRelease: false
+            node: 12
+            target_arch: arm64
+          - isRelease: false
+            node: 14
+            target_arch: arm64
+          - isRelease: false
+            node: 15
+            target_arch: arm64
+          - isRelease: false
+            node: 16
+            target_arch: arm64
+          - isRelease: false
+            node: 17
+            target_arch: arm64
+          - isRelease: false
+            node: 18
+            target_arch: arm64
 
     steps:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
+      - name: Update apt
+        shell: bash
+        run: |
+          sudo apt-get update -y
+
       - name: Install requirements
         shell: bash
         run: |
-          sudo apt-get update -y -qq
           sudo apt-get install -y git ninja-build make gcc-multilib g++-multilib wget libssl-dev
 
       - name: Install CMake
@@ -94,7 +142,7 @@ jobs:
 
       - name: Setup
         shell: bash
-        run: ./scripts/node_version.sh upload
+        run: ./scripts/node_version.sh
         env:
           DUCKDB_NODE_BUILD_CACHE: 0  # create a standalone package
           NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
@@ -219,7 +267,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Node
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v3
         with:
           node-version: ${{ matrix.node }}
 
