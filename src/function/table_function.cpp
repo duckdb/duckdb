@@ -32,7 +32,7 @@ TableFunction::TableFunction()
       in_out_function(nullptr), statistics(nullptr), dependency(nullptr), cardinality(nullptr),
       pushdown_complex_filter(nullptr), to_string(nullptr), table_scan_progress(nullptr), get_batch_index(nullptr),
       get_batch_info(nullptr), serialize(nullptr), deserialize(nullptr), projection_pushdown(false),
-      filter_pushdown(false), filter_prune(false) {
+      filter_pushdown(false), filter_prune(false), in_out_mapping(false) {
 }
 
 bool TableFunction::Equal(const TableFunction &rhs) const {

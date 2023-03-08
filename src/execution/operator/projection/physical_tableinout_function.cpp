@@ -4,10 +4,12 @@ namespace duckdb {
 
 class TableInOutLocalState : public OperatorState {
 public:
-	TableInOutLocalState() {
+	TableInOutLocalState() : row_index(0), new_row(true) {
 	}
 
 	unique_ptr<LocalTableFunctionState> local_state;
+	idx_t row_index;
+	bool new_row;
 	DataChunk input_chunk;
 };
 
@@ -35,7 +37,9 @@ unique_ptr<OperatorState> PhysicalTableInOutFunction::GetOperatorState(Execution
 		TableFunctionInitInput input(bind_data.get(), column_ids, vector<idx_t>(), nullptr);
 		result->local_state = function.init_local(context, input, gstate.global_state.get());
 	}
-	if (!projected_input.empty()) {
+	if (!projected_input.empty() && !function.in_out_mapping) {
+		// If we have to project columns, and the function doesn't provide a mapping from output row -> input row
+		// then we have to execute tuple-at-a-time
 		result->input_chunk.Initialize(context.client, children[0]->types);
 	}
 	return std::move(result);
@@ -50,16 +54,8 @@ unique_ptr<GlobalOperatorState> PhysicalTableInOutFunction::GetGlobalOperatorSta
 	return std::move(result);
 }
 
-OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                                       GlobalOperatorState &gstate_p, OperatorState &state_p) const {
-	auto &gstate = (TableInOutGlobalState &)gstate_p;
-	auto &state = (TableInOutLocalState &)state_p;
-	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
-	if (projected_input.empty()) {
-		// straightforward case - no need to project input
-		return function.in_out_function(context, data, input, chunk);
-	}
-
+OperatorResultType PhysicalTableInOutFunction::ExecuteWithMapping(ExecutionContext &context, DataChunk &input,
+                                                                  DataChunk &chunk, TableFunctionInput &data) const {
 	// Create a duplicate of 'chunk' that contains one extra column
 	// this column is used to register the relation between input tuple -> output tuple(s)
 	const auto base_columns = chunk.ColumnCount() - projected_input.size();
@@ -77,6 +73,7 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 	intermediate_chunk.data[base_columns].Initialize();
 	intermediate_chunk.SetCardinality(chunk.size());
 
+	data.add_in_out_mapping = true;
 	auto result = function.in_out_function(context, data, input, intermediate_chunk);
 	chunk.SetCardinality(intermediate_chunk.size());
 
@@ -115,8 +112,64 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 		// And slice, to rearrange which index points to which tuple
 		target_column.Slice(sel_vec, intermediate_chunk.size());
 	}
-
 	return result;
+}
+
+OperatorResultType PhysicalTableInOutFunction::ExecuteWithoutMapping(ExecutionContext &context, DataChunk &input,
+                                                                     DataChunk &chunk, TableInOutGlobalState &gstate,
+                                                                     TableInOutLocalState &state,
+                                                                     TableFunctionInput &data) const {
+	// when project_input is set we execute the input function row-by-row
+	if (state.new_row) {
+		if (state.row_index >= input.size()) {
+			// finished processing this chunk
+			state.new_row = true;
+			state.row_index = 0;
+			return OperatorResultType::NEED_MORE_INPUT;
+		}
+		// we are processing a new row: fetch the data for the current row
+		D_ASSERT(input.ColumnCount() == state.input_chunk.ColumnCount());
+		// set up the input data to the table in-out function
+		for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
+			ConstantVector::Reference(state.input_chunk.data[col_idx], input.data[col_idx], state.row_index, 1);
+		}
+		state.input_chunk.SetCardinality(1);
+		state.row_index++;
+		state.new_row = false;
+	}
+	// set up the output data in "chunk"
+	D_ASSERT(chunk.ColumnCount() > projected_input.size());
+	D_ASSERT(state.row_index > 0);
+	idx_t base_idx = chunk.ColumnCount() - projected_input.size();
+	for (idx_t project_idx = 0; project_idx < projected_input.size(); project_idx++) {
+		auto source_idx = projected_input[project_idx];
+		auto target_idx = base_idx + project_idx;
+		ConstantVector::Reference(chunk.data[target_idx], input.data[source_idx], state.row_index - 1, 1);
+	}
+	auto result = function.in_out_function(context, data, state.input_chunk, chunk);
+	if (result == OperatorResultType::FINISHED) {
+		return result;
+	}
+	if (result == OperatorResultType::NEED_MORE_INPUT) {
+		// we finished processing this row: move to the next row
+		state.new_row = true;
+	}
+	return OperatorResultType::HAVE_MORE_OUTPUT;
+}
+
+OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+                                                       GlobalOperatorState &gstate_p, OperatorState &state_p) const {
+	auto &gstate = (TableInOutGlobalState &)gstate_p;
+	auto &state = (TableInOutLocalState &)state_p;
+	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
+	if (projected_input.empty()) {
+		return function.in_out_function(context, data, input, chunk);
+	}
+	if (function.in_out_mapping) {
+		data.add_in_out_mapping = true;
+		return ExecuteWithMapping(context, input, chunk, data);
+	}
+	return ExecuteWithoutMapping(context, input, chunk, gstate, state, data);
 }
 
 OperatorFinalizeResultType PhysicalTableInOutFunction::FinalExecute(ExecutionContext &context, DataChunk &chunk,

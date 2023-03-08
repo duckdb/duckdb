@@ -14,6 +14,9 @@
 
 namespace duckdb {
 
+class TableInOutLocalState;
+class TableInOutGlobalState;
+
 //! PhysicalWindow implements window functions
 class PhysicalTableInOutFunction : public PhysicalOperator {
 public:
@@ -36,6 +39,13 @@ public:
 	bool RequiresFinalExecute() const override {
 		return function.in_out_function_final;
 	}
+
+private:
+	OperatorResultType ExecuteWithMapping(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+	                                      TableFunctionInput &data) const;
+	OperatorResultType ExecuteWithoutMapping(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+	                                         TableInOutGlobalState &gstate, TableInOutLocalState &state,
+	                                         TableFunctionInput &data) const;
 
 private:
 	//! The table function

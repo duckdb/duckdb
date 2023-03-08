@@ -300,7 +300,7 @@ static void UnnestLists(UnnestOperatorState &state, DataChunk &chunk, idx_t col_
 OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                    OperatorState &state_p,
                                                    const vector<unique_ptr<Expression>> &select_list,
-                                                   bool include_input) {
+                                                   bool include_input, bool add_in_out_mapping) {
 
 	auto &state = (UnnestOperatorState &)state_p;
 
@@ -345,10 +345,12 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 		chunk.Verify();
 
 		// Register which input tuple produced the input tuples
-		auto &relation_vec = chunk.data[state.list_data.ColumnCount() + col_offset];
-		auto relation_data = FlatVector::GetData<uint32_t>(relation_vec);
-		for (idx_t i = 0; i < this_chunk_len; i++) {
-			relation_data[i] = state.current_row;
+		if (add_in_out_mapping) {
+			auto &relation_vec = chunk.data[state.list_data.ColumnCount() + col_offset];
+			auto relation_data = FlatVector::GetData<uint32_t>(relation_vec);
+			for (idx_t i = 0; i < this_chunk_len; i++) {
+				relation_data[i] = state.current_row;
+			}
 		}
 
 		state.list_position += this_chunk_len;

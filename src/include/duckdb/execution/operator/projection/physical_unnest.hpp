@@ -41,7 +41,7 @@ public:
 	//! not set, then the UNNEST behaves as a table function and only emits the unnested data.
 	static OperatorResultType ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                                          OperatorState &state, const vector<unique_ptr<Expression>> &select_list,
-	                                          bool include_input = true);
+	                                          bool include_input = true, bool add_in_out_mapping = false);
 };
 
 } // namespace duckdb
