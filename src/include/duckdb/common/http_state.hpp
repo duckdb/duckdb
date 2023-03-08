@@ -16,8 +16,6 @@
 namespace duckdb {
 
 struct CachedFile {
-	//! Mutex to lock when getting the cached file(Parallel Only)
-	mutex main_mutex;
 	//! Cached Data
 	shared_ptr<char> data;
 	//! Data capacity
@@ -34,6 +32,8 @@ public:
 	atomic<idx_t> post_count {0};
 	atomic<idx_t> total_bytes_received {0};
 	atomic<idx_t> total_bytes_sent {0};
+	//! Mutex to lock when getting the cached file(Parallel Only)
+	mutex cached_files_mutex;
 	//! In case of fully downloading the file, the cached files of this query
 	unordered_map<string, CachedFile> cached_files;
 

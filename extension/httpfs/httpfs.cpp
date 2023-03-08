@@ -528,7 +528,6 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 	if (!state) {
 		throw InternalException("State was not defined in this HTTP File Handle");
 	}
-	auto &cached_file = state->cached_files[path];
 
 	HTTPMetadataCache *current_cache = TryGetMetadataCache(opener, hfs);
 
@@ -545,7 +544,6 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 			if (flags & FileFlags::FILE_FLAGS_READ) {
 				read_buffer = unique_ptr<data_t[]>(new data_t[READ_BUFFER_LEN]);
 			}
-			cached_file.data = value.data;
 			return;
 		}
 
@@ -592,13 +590,14 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 		}
 	}
 	if (length == 0 || http_params.force_download) {
-		{
-			lock_guard<mutex> lock(cached_file.main_mutex);
-			if (!cached_file.finished) {
-				// Try to fully download the file first
-				hfs.GetRequest(*this, path, {});
-				cached_file.finished = true;
-			}
+
+		lock_guard<mutex> lock(state->cached_files_mutex);
+		auto &cached_file = state->cached_files[path];
+
+		if (!cached_file.finished) {
+			// Try to fully download the file first
+			hfs.GetRequest(*this, path, {});
+			cached_file.finished = true;
 		}
 	}
 
@@ -617,7 +616,7 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 	}
 
 	if (should_write_cache) {
-		current_cache->Insert(path, {length, last_modified, cached_file.data});
+		current_cache->Insert(path, {length, last_modified});
 	}
 }
 
