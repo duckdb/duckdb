@@ -1,5 +1,5 @@
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
-#include "duckdb/parser/parsed_data/alter_function_info.hpp"
+#include "duckdb/parser/parsed_data/alter_scalar_function_info.hpp"
 
 namespace duckdb {
 
@@ -27,7 +27,8 @@ unique_ptr<CreateInfo> CreateScalarFunctionInfo::Copy() const {
 }
 
 unique_ptr<AlterInfo> CreateScalarFunctionInfo::GetAlterInfo() const {
-	return make_unique_base<AlterInfo, AddFunctionOverloadInfo>(AlterEntryData(catalog, schema, name, true), functions);
+	return make_unique_base<AlterInfo, AddScalarFunctionOverloadInfo>(AlterEntryData(catalog, schema, name, true),
+	                                                                  functions);
 }
 
 } // namespace duckdb

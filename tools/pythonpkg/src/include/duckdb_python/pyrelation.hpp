@@ -15,6 +15,8 @@
 #include "duckdb_python/pandas_type.hpp"
 #include "duckdb_python/registered_py_object.hpp"
 #include "duckdb_python/pyresult.hpp"
+#include "duckdb/parser/statement/explain_statement.hpp"
+#include "duckdb_python/explain_enum.hpp"
 
 namespace duckdb {
 
@@ -188,6 +190,10 @@ public:
 
 	py::dict FetchNumpy();
 
+	py::dict FetchPyTorch();
+
+	py::dict FetchTF();
+
 	py::dict FetchNumpyInternal(bool stream = false, idx_t vectors_per_chunk = 1);
 
 	DataFrame FetchDFChunk(idx_t vectors_per_chunk, bool date_as_object);
@@ -242,7 +248,7 @@ public:
 	string ToString();
 	void Print();
 
-	string Explain();
+	string Explain(ExplainType type);
 
 	static bool IsRelation(const py::object &object);
 
@@ -258,9 +264,9 @@ private:
 	void AssertResult() const;
 	void AssertResultOpen() const;
 	void AssertRelation() const;
-	void ExecuteOrThrow();
-	unique_ptr<QueryResult> ExecuteInternal();
 	bool ContainsColumnByName(const string &name) const;
+	void ExecuteOrThrow(bool stream_result = false);
+	unique_ptr<QueryResult> ExecuteInternal(bool stream_result = false);
 
 private:
 	shared_ptr<Relation> rel;

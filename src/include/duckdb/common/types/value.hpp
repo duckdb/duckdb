@@ -23,6 +23,7 @@ class CastFunctionSet;
 class Deserializer;
 class Serializer;
 struct GetCastFunctionInput;
+struct ExtraValueInfo;
 
 //! The Value object holds a single arbitrary value of any type that can be
 //! stored in the database.
@@ -279,9 +280,6 @@ private:
 	//! The logical of the value
 	LogicalType type_;
 
-#if DUCKDB_API_VERSION < DUCKDB_API_0_3_2
-public:
-#endif
 	//! Whether or not the value is NULL
 	bool is_null;
 
@@ -307,11 +305,7 @@ public:
 		interval_t interval;
 	} value_;
 
-	//! The value of the object, if it is of a variable size type
-	string str_value;
-
-	vector<Value> struct_value;
-	vector<Value> list_value;
+	shared_ptr<ExtraValueInfo> value_info_;
 
 private:
 	template <class T>

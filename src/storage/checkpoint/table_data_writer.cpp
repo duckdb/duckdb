@@ -5,6 +5,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
+#include "duckdb/storage/table/table_statistics.hpp"
 
 namespace duckdb {
 
@@ -40,14 +41,13 @@ unique_ptr<RowGroupWriter> SingleFileTableDataWriter::GetRowGroupWriter(RowGroup
 	return make_unique<SingleFileRowGroupWriter>(table, checkpoint_manager.partial_block_manager, table_data_writer);
 }
 
-void SingleFileTableDataWriter::FinalizeTable(vector<unique_ptr<BaseStatistics>> &&global_stats, DataTableInfo *info) {
+void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, DataTableInfo *info) {
 	// store the current position in the metadata writer
 	// this is where the row groups for this table start
 	auto pointer = table_data_writer.GetBlockPointer();
 
-	for (auto &stats : global_stats) {
-		stats->Serialize(table_data_writer);
-	}
+	global_stats.Serialize(table_data_writer);
+
 	// now start writing the row group pointers to disk
 	table_data_writer.Write<uint64_t>(row_group_pointers.size());
 	for (auto &row_group_pointer : row_group_pointers) {

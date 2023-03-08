@@ -27,6 +27,7 @@ statement ok
 CREATE TABLE test_1 as (SELECT 1 FROM range(0,5));
 CREATE TABLE test_2 as (SELECT 2 FROM range(0,5));
 CREATE TABLE test_3 as (SELECT 3 FROM range(0,5));
+CREATE TABLE test_4 as (SELECT 4 FROM range(0,5));
 
 statement ok
 COPY test_1 TO 's3://test-bucket-public/url_encode/just because you can doesnt mean you should.parquet' (FORMAT 'parquet');
@@ -79,3 +80,31 @@ query I
 SELECT * FROM "http://test-bucket-public.${DUCKDB_S3_ENDPOINT}/url_encode/just+dont+use+plus+or+spaces+please.parquet" LIMIT 1;
 ----
 2
+
+# Due to our support for query parameters, this will fail
+statement error
+COPY test_4 TO 's3://test-bucket-public/url_encode/question?marks?are?even?worse.parquet' (FORMAT 'parquet');
+----
+Invalid query parameters found.
+
+# Enabling url compatibility mode will disable both Globs and query params
+# allowing a user to query those hard-to-reach files
+statement ok
+SET s3_url_compatibility_mode=true;
+
+statement ok
+COPY test_4 TO 's3://test-bucket-public/url_encode/question?marks?and*stars[and]brackets.parquet' (FORMAT 'parquet');
+
+query I
+SELECT * FROM "s3://test-bucket-public/url_encode/question?marks?and*stars[and]brackets.parquet" LIMIT 1;
+----
+4
+
+# HTTP urls will be encoded here
+query I
+SELECT * FROM "http://test-bucket-public.${DUCKDB_S3_ENDPOINT}/url_encode/question%3Fmarks%3Fand%2Astars%5Band%5Dbrackets.parquet" LIMIT 1;
+----
+4
+
+statement ok
+SET s3_url_compatibility_mode=false;

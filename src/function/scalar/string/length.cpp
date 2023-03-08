@@ -4,7 +4,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/storage/statistics/string_statistics.hpp"
+
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "utf8proc.hpp"
 
@@ -78,11 +78,7 @@ static unique_ptr<BaseStatistics> LengthPropagateStats(ClientContext &context, F
 	auto &expr = input.expr;
 	D_ASSERT(child_stats.size() == 1);
 	// can only propagate stats if the children have stats
-	if (!child_stats[0]) {
-		return nullptr;
-	}
-	auto &sstats = (StringStatistics &)*child_stats[0];
-	if (!sstats.has_unicode) {
+	if (!StringStats::CanContainUnicode(child_stats[0])) {
 		expr.function.function = ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>;
 	}
 	return nullptr;
