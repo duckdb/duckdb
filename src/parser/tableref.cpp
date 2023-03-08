@@ -109,8 +109,7 @@ void TableRef::FormatSerialize(FormatSerializer &serializer) const {
 unique_ptr<TableRef> TableRef::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto type = deserializer.ReadProperty<TableReferenceType>("type");
 	auto alias = deserializer.ReadProperty<string>("alias");
-	unique_ptr<SampleOptions> sample;
-	deserializer.ReadOptionalProperty("sample", sample);
+	auto sample = deserializer.ReadOptionalProperty<unique_ptr<SampleOptions>>("sample", nullptr);
 
 	unique_ptr<TableRef> result;
 
@@ -132,6 +131,9 @@ unique_ptr<TableRef> TableRef::FormatDeserialize(FormatDeserializer &deserialize
 		break;
 	case TableReferenceType::EXPRESSION_LIST:
 		result = ExpressionListRef::FormatDeserialize(deserializer);
+		break;
+	case TableReferenceType::PIVOT:
+		result = PivotRef::FormatDeserialize(deserializer);
 		break;
 	case TableReferenceType::CTE:
 	case TableReferenceType::INVALID:
@@ -167,6 +169,9 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &source) {
 		break;
 	case TableReferenceType::EXPRESSION_LIST:
 		result = ExpressionListRef::Deserialize(reader);
+		break;
+	case TableReferenceType::PIVOT:
+		result = PivotRef::Deserialize(reader);
 		break;
 	case TableReferenceType::CTE:
 	case TableReferenceType::INVALID:

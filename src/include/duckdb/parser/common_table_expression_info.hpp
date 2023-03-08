@@ -20,6 +20,7 @@ struct CommonTableExpressionInfo {
 
 	void FormatSerialize(FormatSerializer &serializer) const;
 	static unique_ptr<CommonTableExpressionInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	unique_ptr<CommonTableExpressionInfo> Copy();
 };
 
 } // namespace duckdb

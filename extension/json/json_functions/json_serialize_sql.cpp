@@ -39,26 +39,26 @@ static unique_ptr<FunctionData> JsonSerializeBind(ClientContext &context, Scalar
 	if (arguments.size() > 1 && arguments.size() < 4) {
 		for(idx_t i = 1; i < arguments.size(); i++) {
 			auto &arg = arguments[i];
-			if (arg->alias == "skip_if_null") {
+			if (arg->alias == "skip_null") {
 				if (arg->HasParameter()) {
 					throw ParameterNotResolvedException();
 				}
 				if (!arg->IsFoldable()) {
-					throw InvalidInputException("skip_if_null argument must be constant");
+					throw InvalidInputException("skip_null argument must be constant");
 				}
 				if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
-					throw InvalidTypeException("skip_if_null argument must be a boolean");
+					throw InvalidTypeException("skip_null argument must be a boolean");
 				}
 				skip_if_null = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
-			} else if(arg->alias == "skip_if_empty") {
+			} else if(arg->alias == "skip_empty") {
 				if (arg->HasParameter()) {
 					throw ParameterNotResolvedException();
 				}
 				if (!arg->IsFoldable()) {
-					throw InvalidInputException("skip_if_empty argument must be constant");
+					throw InvalidInputException("skip_empty argument must be constant");
 				}
 				if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
-					throw InvalidTypeException("skip_if_empty argument must be a boolean");
+					throw InvalidTypeException("skip_empty argument must be a boolean");
 				}
 				skip_if_empty = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
 			}

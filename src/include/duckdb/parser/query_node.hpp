@@ -14,6 +14,7 @@
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/common_table_expression_info.hpp"
 #include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
 
@@ -30,7 +31,7 @@ class CommonTableExpressionMap {
 public:
 	CommonTableExpressionMap();
 
-	unordered_map<string, unique_ptr<CommonTableExpressionInfo>> map;
+	case_insensitive_map_t<unique_ptr<CommonTableExpressionInfo>> map;
 
 public:
 	string ToString() const;

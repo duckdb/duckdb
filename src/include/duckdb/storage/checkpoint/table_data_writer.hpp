@@ -12,6 +12,7 @@
 
 namespace duckdb {
 class DuckTableEntry;
+class TableStatistics;
 
 //! The table data writer is responsible for writing the data of a table to
 //! storage.
@@ -30,7 +31,7 @@ public:
 
 	CompressionType GetColumnCompressionType(idx_t i);
 
-	virtual void FinalizeTable(vector<unique_ptr<BaseStatistics>> &&global_stats, DataTableInfo *info) = 0;
+	virtual void FinalizeTable(TableStatistics &&global_stats, DataTableInfo *info) = 0;
 	virtual unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) = 0;
 
 	virtual void AddRowGroup(RowGroupPointer &&row_group_pointer, unique_ptr<RowGroupWriter> &&writer);
@@ -47,7 +48,7 @@ public:
 	                          MetaBlockWriter &table_data_writer, MetaBlockWriter &meta_data_writer);
 
 public:
-	virtual void FinalizeTable(vector<unique_ptr<BaseStatistics>> &&global_stats, DataTableInfo *info) override;
+	virtual void FinalizeTable(TableStatistics &&global_stats, DataTableInfo *info) override;
 	virtual unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) override;
 
 private:

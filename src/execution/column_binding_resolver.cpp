@@ -1,6 +1,7 @@
 #include "duckdb/execution/column_binding_resolver.hpp"
 
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_create_index.hpp"
 #include "duckdb/planner/operator/logical_delim_join.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
@@ -46,6 +47,11 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		// this operator
 		VisitOperatorChildren(op);
 		bindings = op.GetColumnBindings();
+		auto &any_join = (LogicalAnyJoin &)op;
+		if (any_join.join_type == JoinType::SEMI || any_join.join_type == JoinType::ANTI) {
+			auto right_bindings = op.children[1]->GetColumnBindings();
+			bindings.insert(bindings.end(), right_bindings.begin(), right_bindings.end());
+		}
 		VisitOperatorExpressions(op);
 		return;
 	} else if (op.type == LogicalOperatorType::LOGICAL_CREATE_INDEX) {

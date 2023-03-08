@@ -102,7 +102,7 @@ unique_ptr<Expression> BoundWindowExpression::Copy() {
 	}
 	for (auto &ps : partitions_stats) {
 		if (ps) {
-			new_window->partitions_stats.push_back(ps->Copy());
+			new_window->partitions_stats.push_back(ps->ToUnique());
 		} else {
 			new_window->partitions_stats.push_back(nullptr);
 		}

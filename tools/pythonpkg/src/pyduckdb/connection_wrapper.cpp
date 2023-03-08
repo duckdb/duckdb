@@ -289,6 +289,20 @@ duckdb::pyarrow::Table PyConnectionWrapper::FetchArrow(idx_t chunk_size, shared_
 	return conn->FetchArrow(chunk_size);
 }
 
+py::dict PyConnectionWrapper::FetchPyTorch(shared_ptr<DuckDBPyConnection> conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->FetchPyTorch();
+}
+
+py::dict PyConnectionWrapper::FetchTF(shared_ptr<DuckDBPyConnection> conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->FetchTF();
+}
+
 PolarsDataFrame PyConnectionWrapper::FetchPolars(idx_t chunk_size, shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();

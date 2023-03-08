@@ -1,0 +1,24 @@
+# name: test/fuzzer/pedro/logical_column_index_out_of_range.test
+# description: Issue #5984 (4): Logical column index 1 out of range during natural joins
+# group: [pedro]
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE TABLE t0(c1 INT);
+
+statement ok
+CREATE TABLE t1(c0 INT, c2 INT);
+
+statement ok
+CREATE TABLE t2(c1 INT, c2 INT);
+
+statement ok
+SELECT 1 FROM t1 t2(c1) NATURAL RIGHT JOIN t0, t2 t1(c0) WHERE t2.c2 >= c0;
+
+statement ok
+SELECT 1 FROM t1 t2(c1) NATURAL LEFT JOIN t0, t2 t1(c0) WHERE t2.c2 >= c0;
+
+statement ok
+SELECT 1 FROM t1 t2(c1) NATURAL INNER JOIN t0, t2 t1(c0) WHERE t2.c2 >= c0;

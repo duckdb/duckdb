@@ -11,6 +11,8 @@ CREATE TABLE test (a INTEGER, b INTEGER);
 # insert too large value for domain should cause error
 statement error
 INSERT INTO test VALUES (-1099511627776, 3)
+----
+Conversion Error
 
 statement ok
 INSERT INTO test VALUES (11, 22), (12, 21), (14, 22)
@@ -31,13 +33,19 @@ SELECT b, AVG(a) FROM test GROUP BY b ORDER BY b;
 # cast overflows
 statement error
 SELECT cast(200 AS TINYINT)
+----
+Conversion Error
 
 statement error
 SELECT cast(-129 AS TINYINT)
+----
+Conversion Error
 
 # addition overflow
 statement error
 SELECT cast(100 AS TINYINT) + cast(100 AS TINYINT)
+----
+Out of Range Error: Overflow
 
 # also with tables
 statement ok
@@ -48,6 +56,8 @@ INSERT INTO test2 VALUES (200, 60), (12, 60), (14, 60)
 
 statement error
 SELECT cast(a AS TINYINT) FROM test2
+----
+Conversion Error
 
 query I
 SELECT SUM(b) FROM test2
@@ -57,20 +67,32 @@ SELECT SUM(b) FROM test2
 # subtraction
 statement error
 SELECT 100::TINYINT - -50::TINYINT
+----
+Out of Range Error: Overflow
 
 statement error
 SELECT 100::TINYINT * 2::TINYINT
+----
+Out of Range Error: Overflow
 
 # tables
 statement error
 SELECT 100::TINYINT + b::TINYINT FROM test2
+----
+Out of Range Error: Overflow
 
 statement error
 SELECT 100::TINYINT - -b::TINYINT FROM test2
+----
+Out of Range Error: Overflow
 
 statement error
 SELECT 100::TINYINT * b::TINYINT FROM test2
+----
+Out of Range Error: Overflow
 
 # more complex expressions
 statement error
 SELECT a + b FROM (SELECT cast(100 AS TINYINT) AS a, cast(100 AS TINYINT) AS b) tbl1
+----
+Out of Range Error: Overflow

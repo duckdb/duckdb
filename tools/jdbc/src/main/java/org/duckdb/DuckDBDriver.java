@@ -35,7 +35,7 @@ public class DuckDBDriver implements java.sql.Driver {
 			String prop_clean = prop_val.trim().toLowerCase();
 			read_only = prop_clean.equals("1") || prop_clean.equals("true") || prop_clean.equals("yes");
 		}
-		return new DuckDBConnection(new DuckDBDatabase(url, read_only, info));
+		return DuckDBConnection.newConnection(url, read_only, info);
 	}
 
 	public boolean acceptsURL(String url) throws SQLException {

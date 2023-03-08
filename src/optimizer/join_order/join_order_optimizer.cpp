@@ -152,7 +152,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		// new NULL values in the right side, so pushing this condition through the join leads to incorrect results
 		// for this reason, we just start a new JoinOptimizer pass in each of the children of the join
 
-		// Keep track of all of the filter bindings the new join order optimizer makes
+		// Keep track of all filter bindings the new join order optimizer makes
 		vector<column_binding_map_t<ColumnBinding>> child_binding_maps;
 		idx_t child_bindings_it = 0;
 		for (auto &child : op->children) {
@@ -222,12 +222,25 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		auto proj = (LogicalProjection *)op;
-		// we run the join order optimizer witin the subquery as well
+		// we run the join order optimizer within the subquery as well
 		JoinOrderOptimizer optimizer(context);
 		op->children[0] = optimizer.Optimize(std::move(op->children[0]));
 		// projection, add to the set of relations
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
-		relation_mapping[proj->table_index] = relations.size();
+		auto relation_id = relations.size();
+		// push one child column binding map back.
+		vector<column_binding_map_t<ColumnBinding>> child_binding_maps;
+		child_binding_maps.emplace_back(column_binding_map_t<ColumnBinding>());
+		optimizer.cardinality_estimator.CopyRelationMap(child_binding_maps.at(0));
+		// This logical projection may sit on top of a logical comparison join that has been pushed down
+		// we want to copy the binding info of both tables
+		relation_mapping[proj->table_index] = relation_id;
+		for (auto &binding_info : child_binding_maps.at(0)) {
+			cardinality_estimator.AddRelationToColumnMapping(
+			    ColumnBinding(proj->table_index, binding_info.first.column_index), binding_info.second);
+			cardinality_estimator.AddColumnToRelationMap(binding_info.second.table_index,
+			                                             binding_info.second.column_index);
+		}
 		relations.push_back(std::move(relation));
 		return true;
 	}

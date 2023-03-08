@@ -10,7 +10,7 @@
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
+
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/execution/operator/join/physical_blockwise_nl_join.hpp"
@@ -92,19 +92,21 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	}
 	// with integral internal types
 	for (auto &&join_stat : op.join_stats) {
-		if (!TypeIsInteger(join_stat->type.InternalType()) || join_stat->type.InternalType() == PhysicalType::INT128) {
+		if (!TypeIsInteger(join_stat->GetType().InternalType()) ||
+		    join_stat->GetType().InternalType() == PhysicalType::INT128) {
 			// perfect join not possible for non-integral types or hugeint
 			return;
 		}
 	}
 
 	// and when the build range is smaller than the threshold
-	auto stats_build = reinterpret_cast<NumericStatistics *>(op.join_stats[0].get()); // lhs stats
-	if (stats_build->min.IsNull() || stats_build->max.IsNull()) {
+	auto &stats_build = *op.join_stats[0].get(); // lhs stats
+	if (!NumericStats::HasMinMax(stats_build)) {
 		return;
 	}
 	int64_t min_value, max_value;
-	if (!ExtractNumericValue(stats_build->min, min_value) || !ExtractNumericValue(stats_build->max, max_value)) {
+	if (!ExtractNumericValue(NumericStats::Min(stats_build), min_value) ||
+	    !ExtractNumericValue(NumericStats::Max(stats_build), max_value)) {
 		return;
 	}
 	int64_t build_range;
@@ -113,20 +115,24 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	}
 
 	// Fill join_stats for invisible join
-	auto stats_probe = reinterpret_cast<NumericStatistics *>(op.join_stats[1].get()); // rhs stats
+	auto &stats_probe = *op.join_stats[1].get(); // rhs stats
+	if (!NumericStats::HasMinMax(stats_probe)) {
+		return;
+	}
 
 	// The max size our build must have to run the perfect HJ
 	const idx_t MAX_BUILD_SIZE = 1000000;
-	join_state.probe_min = stats_probe->min;
-	join_state.probe_max = stats_probe->max;
-	join_state.build_min = stats_build->min;
-	join_state.build_max = stats_build->max;
+	join_state.probe_min = NumericStats::Min(stats_probe);
+	join_state.probe_max = NumericStats::Max(stats_probe);
+	join_state.build_min = NumericStats::Min(stats_build);
+	join_state.build_max = NumericStats::Max(stats_build);
 	join_state.estimated_cardinality = op.estimated_cardinality;
 	join_state.build_range = build_range;
-	if (join_state.build_range > MAX_BUILD_SIZE || stats_probe->max.IsNull() || stats_probe->min.IsNull()) {
+	if (join_state.build_range > MAX_BUILD_SIZE) {
 		return;
 	}
-	if (stats_build->min <= stats_probe->min && stats_probe->max <= stats_build->max) {
+	if (NumericStats::Min(stats_build) <= NumericStats::Min(stats_probe) &&
+	    NumericStats::Max(stats_probe) <= NumericStats::Max(stats_build)) {
 		join_state.is_probe_in_domain = true;
 	}
 	join_state.is_build_small = true;
