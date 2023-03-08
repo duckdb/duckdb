@@ -24,6 +24,10 @@
 
 @_implementationOnly import Cduckdb
 
+/// A period of time
+///
+/// Intervals represent a period of time. This period can be measured in a
+/// variety of units, for example years, days, or seconds.
 public struct Interval: Hashable, Equatable {
   public var months: Int32
   public var days: Int32
