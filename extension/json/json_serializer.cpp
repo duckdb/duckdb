@@ -26,7 +26,7 @@ void JsonSerializer::SetTag(const char *tag) {
 // Nested types
 //===--------------------------------------------------------------------===//
 void JsonSerializer::OnOptionalBegin(bool present) {
-	if(!present && !skip_if_null) {
+	if (!present && !skip_if_null) {
 		WriteNull();
 	}
 }
@@ -36,7 +36,7 @@ void JsonSerializer::OnListBegin(idx_t count) {
 	// We always push a value to the stack, we just don't add it as a child to the current value
 	// if skipping empty. Even though it is "unnecessary" to create an empty value just to discard it,
 	// this allows the rest of the code to keep on like normal.
-	if(!(count == 0 && skip_if_empty)) {
+	if (!(count == 0 && skip_if_empty)) {
 		PushValue(new_value);
 	}
 	stack.push_back(new_value);
@@ -49,7 +49,7 @@ void JsonSerializer::OnListEnd(idx_t count) {
 // Serialize maps as arrays of objects with "key" and "value" properties.
 void JsonSerializer::OnMapBegin(idx_t count) {
 	auto new_value = yyjson_mut_arr(doc);
-	if(!(count == 0 && skip_if_empty)) {
+	if (!(count == 0 && skip_if_empty)) {
 		PushValue(new_value);
 	}
 	stack.push_back(new_value);
@@ -76,7 +76,6 @@ void JsonSerializer::OnMapEnd(idx_t count) {
 	stack.pop_back();
 }
 
-
 void JsonSerializer::OnObjectBegin() {
 	auto new_value = yyjson_mut_obj(doc);
 	PushValue(new_value);
@@ -89,10 +88,10 @@ void JsonSerializer::OnObjectEnd() {
 
 	stack.pop_back();
 
-	if(count == 0 && skip_if_empty && !stack.empty()) {
+	if (count == 0 && skip_if_empty && !stack.empty()) {
 		// remove obj from parent since it was empty
 		auto parent = Current();
-		if(yyjson_mut_is_arr(parent)) {
+		if (yyjson_mut_is_arr(parent)) {
 			size_t idx;
 			size_t max;
 			yyjson_mut_val *item;
@@ -103,14 +102,14 @@ void JsonSerializer::OnObjectEnd() {
 				}
 			}
 			yyjson_mut_arr_remove(parent, found);
-		} else if(yyjson_mut_is_obj(parent)) {
+		} else if (yyjson_mut_is_obj(parent)) {
 			size_t idx;
 			size_t max;
 			yyjson_mut_val *item;
 			yyjson_mut_val *key;
-			const char* found;
+			const char *found;
 			yyjson_mut_obj_foreach(parent, idx, max, key, item) {
-				if(item == obj) {
+				if (item == obj) {
 					found = yyjson_mut_get_str(key);
 				}
 			}
@@ -186,7 +185,7 @@ void JsonSerializer::WriteValue(interval_t value) {
 }
 
 void JsonSerializer::WriteValue(const string &value) {
-	if(skip_if_empty && value.empty()) {
+	if (skip_if_empty && value.empty()) {
 		return;
 	}
 	auto val = yyjson_mut_strcpy(doc, value.c_str());
@@ -194,7 +193,7 @@ void JsonSerializer::WriteValue(const string &value) {
 }
 
 void JsonSerializer::WriteValue(const string_t value) {
-	if(skip_if_empty && value.GetSize() == 0) {
+	if (skip_if_empty && value.GetSize() == 0) {
 		return;
 	}
 	auto str = value.GetString();
@@ -203,7 +202,7 @@ void JsonSerializer::WriteValue(const string_t value) {
 }
 
 void JsonSerializer::WriteValue(const char *value) {
-	if(skip_if_empty && (value == nullptr || value[0] == '\0')) {
+	if (skip_if_empty && (value == nullptr || value[0] == '\0')) {
 		return;
 	}
 	auto val = yyjson_mut_strcpy(doc, value);
@@ -214,6 +213,5 @@ void JsonSerializer::WriteValue(bool value) {
 	auto val = yyjson_mut_bool(doc, value);
 	PushValue(val);
 }
-
 
 } // namespace duckdb

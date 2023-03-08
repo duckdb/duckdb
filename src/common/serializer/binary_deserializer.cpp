@@ -7,7 +7,7 @@ namespace duckdb {
 void SetTag(const char *tag) {
 	// Ignore, the binary deserializer reads everything in-order anyway
 	(void)tag;
-};
+}
 
 //===--------------------------------------------------------------------===//
 // Nested Types Hooks

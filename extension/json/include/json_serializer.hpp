@@ -17,7 +17,9 @@ private:
 	bool skip_if_empty = false;
 
 	// Get the current json value
-	inline yyjson_mut_val *Current() { return stack.back(); };
+	inline yyjson_mut_val *Current() {
+		return stack.back();
+	};
 
 	// Either adds a value to the current object with the current tag, or appends it to the current array
 	void PushValue(yyjson_mut_val *val);
