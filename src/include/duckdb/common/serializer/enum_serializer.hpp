@@ -21,17 +21,17 @@ namespace duckdb {
 namespace EnumSerializer {
 // String -> Enum
 template <class T>
-T StringToEnum(const char *value) = delete;
+inline T StringToEnum(const char *value) = delete;
 
 // Enum -> String
 template <class T>
-const char *EnumToString(T value) = delete;
+inline const char *EnumToString(T value) = delete;
 
 //-----------------------------------------------
 // OrderType
 //-----------------------------------------------
 template <>
-OrderType StringToEnum(const char *value) {
+inline OrderType StringToEnum(const char *value) {
 	if (strcmp(value, "INVALID") == 0) {
 		return OrderType::INVALID;
 	} else if (strcmp(value, "ORDER_DEFAULT") == 0) {
@@ -46,7 +46,7 @@ OrderType StringToEnum(const char *value) {
 }
 
 template <>
-const char *EnumToString(OrderType value) {
+inline const char *EnumToString(OrderType value) {
 	switch (value) {
 	case OrderType::INVALID:
 		return "INVALID";
@@ -65,7 +65,7 @@ const char *EnumToString(OrderType value) {
 // OrderByNullType
 //-----------------------------------------------
 template <>
-OrderByNullType StringToEnum(const char *value) {
+inline OrderByNullType StringToEnum(const char *value) {
 	if (strcmp(value, "INVALID") == 0) {
 		return OrderByNullType::INVALID;
 	} else if (strcmp(value, "ORDER_DEFAULT") == 0) {
@@ -80,7 +80,7 @@ OrderByNullType StringToEnum(const char *value) {
 }
 
 template <>
-const char *EnumToString(OrderByNullType value) {
+inline const char *EnumToString(OrderByNullType value) {
 	switch (value) {
 	case OrderByNullType::INVALID:
 		return "INVALID";
@@ -99,7 +99,7 @@ const char *EnumToString(OrderByNullType value) {
 // ResultModifierType
 //-----------------------------------------------
 template <>
-ResultModifierType StringToEnum(const char *value) {
+inline ResultModifierType StringToEnum(const char *value) {
 	if (strcmp(value, "LIMIT_MODIFIER") == 0) {
 		return ResultModifierType::LIMIT_MODIFIER;
 	} else if (strcmp(value, "ORDER_MODIFIER") == 0) {
@@ -114,7 +114,7 @@ ResultModifierType StringToEnum(const char *value) {
 }
 
 template <>
-const char *EnumToString(ResultModifierType value) {
+inline const char *EnumToString(ResultModifierType value) {
 	switch (value) {
 	case ResultModifierType::LIMIT_MODIFIER:
 		return "LIMIT_MODIFIER";
@@ -133,7 +133,7 @@ const char *EnumToString(ResultModifierType value) {
 // ExtraTypeInfoType
 //-----------------------------------------------
 template <>
-ExtraTypeInfoType StringToEnum(const char *value) {
+inline ExtraTypeInfoType StringToEnum(const char *value) {
 	if (strcmp(value, "INVALID_TYPE_INFO") == 0) {
 		return ExtraTypeInfoType::INVALID_TYPE_INFO;
 	} else if (strcmp(value, "GENERIC_TYPE_INFO") == 0) {
@@ -158,7 +158,7 @@ ExtraTypeInfoType StringToEnum(const char *value) {
 }
 
 template <>
-const char *EnumToString(ExtraTypeInfoType value) {
+inline const char *EnumToString(ExtraTypeInfoType value) {
 	switch (value) {
 	case ExtraTypeInfoType::INVALID_TYPE_INFO:
 		return "INVALID_TYPE_INFO";
@@ -187,7 +187,7 @@ const char *EnumToString(ExtraTypeInfoType value) {
 // TableReferenceType
 //-----------------------------------------------
 template <>
-TableReferenceType StringToEnum(const char *value) {
+inline TableReferenceType StringToEnum(const char *value) {
 	if (strcmp(value, "INVALID") == 0) {
 		return TableReferenceType::INVALID;
 	} else if (strcmp(value, "BASE_TABLE") == 0) {
@@ -210,7 +210,7 @@ TableReferenceType StringToEnum(const char *value) {
 }
 
 template <>
-const char *EnumToString(TableReferenceType value) {
+inline const char *EnumToString(TableReferenceType value) {
 	switch (value) {
 	case TableReferenceType::INVALID:
 		return "INVALID";
@@ -237,7 +237,7 @@ const char *EnumToString(TableReferenceType value) {
 // JoinRefType
 //-----------------------------------------------
 template <>
-JoinRefType StringToEnum(const char *value) {
+inline JoinRefType StringToEnum(const char *value) {
 	if (strcmp(value, "REGULAR") == 0) {
 		return JoinRefType::REGULAR;
 	} else if (strcmp(value, "NATURAL") == 0) {
@@ -252,7 +252,7 @@ JoinRefType StringToEnum(const char *value) {
 }
 
 template <>
-const char *EnumToString(JoinRefType value) {
+inline const char *EnumToString(JoinRefType value) {
 	switch (value) {
 	case JoinRefType::REGULAR:
 		return "REGULAR";
@@ -272,7 +272,7 @@ const char *EnumToString(JoinRefType value) {
 //-----------------------------------------------
 
 template <>
-JoinType StringToEnum(const char *value) {
+inline JoinType StringToEnum(const char *value) {
 	if (strcmp(value, "LEFT") == 0) {
 		return JoinType::LEFT;
 	} else if (strcmp(value, "RIGHT") == 0) {
@@ -295,7 +295,7 @@ JoinType StringToEnum(const char *value) {
 }
 
 template <>
-const char *EnumToString(JoinType value) {
+inline const char *EnumToString(JoinType value) {
 	switch (value) {
 	case JoinType::LEFT:
 		return "LEFT";
@@ -324,7 +324,7 @@ const char *EnumToString(JoinType value) {
 //-----------------------------------------------
 
 template <>
-AggregateHandling StringToEnum(const char *value) {
+inline AggregateHandling StringToEnum(const char *value) {
 	if (strcmp(value, "STANDARD_HANDLING") == 0) {
 		return AggregateHandling::STANDARD_HANDLING;
 	} else if (strcmp(value, "NO_AGGREGATES_ALLOWED") == 0) {
@@ -337,7 +337,7 @@ AggregateHandling StringToEnum(const char *value) {
 }
 
 template <>
-const char *EnumToString(AggregateHandling value) {
+inline const char *EnumToString(AggregateHandling value) {
 	switch (value) {
 	case AggregateHandling::STANDARD_HANDLING:
 		return "STANDARD_HANDLING";
@@ -354,7 +354,7 @@ const char *EnumToString(AggregateHandling value) {
 // QueryNodeType
 //-----------------------------------------------
 template <>
-QueryNodeType StringToEnum(const char *value) {
+inline QueryNodeType StringToEnum(const char *value) {
 	if (strcmp(value, "SELECT_NODE") == 0) {
 		return QueryNodeType::SELECT_NODE;
 	} else if (strcmp(value, "SET_OPERATION_NODE") == 0) {
@@ -369,7 +369,7 @@ QueryNodeType StringToEnum(const char *value) {
 }
 
 template <>
-const char *EnumToString(QueryNodeType value) {
+inline const char *EnumToString(QueryNodeType value) {
 	switch (value) {
 	case QueryNodeType::SELECT_NODE:
 		return "SELECT_NODE";
@@ -388,7 +388,7 @@ const char *EnumToString(QueryNodeType value) {
 // SetOperationType
 //-----------------------------------------------
 template <>
-SetOperationType StringToEnum(const char *value) {
+inline SetOperationType StringToEnum(const char *value) {
 	if (strcmp(value, "NONE") == 0) {
 		return SetOperationType::NONE;
 	} else if (strcmp(value, "UNION") == 0) {
@@ -405,7 +405,7 @@ SetOperationType StringToEnum(const char *value) {
 }
 
 template <>
-const char *EnumToString(SetOperationType value) {
+inline const char *EnumToString(SetOperationType value) {
 	switch (value) {
 	case SetOperationType::NONE:
 		return "NONE";
@@ -426,7 +426,7 @@ const char *EnumToString(SetOperationType value) {
 // WindowBoundary
 //-----------------------------------------------
 template <>
-WindowBoundary StringToEnum(const char *value) {
+inline WindowBoundary StringToEnum(const char *value) {
 	if (strcmp(value, "INVALID") == 0) {
 		return WindowBoundary::INVALID;
 	} else if (strcmp(value, "UNBOUNDED_PRECEDING") == 0) {
@@ -451,7 +451,7 @@ WindowBoundary StringToEnum(const char *value) {
 }
 
 template <>
-const char *EnumToString(WindowBoundary value) {
+inline const char *EnumToString(WindowBoundary value) {
 	switch (value) {
 	case WindowBoundary::INVALID:
 		return "INVALID";
@@ -480,7 +480,7 @@ const char *EnumToString(WindowBoundary value) {
 // SubqueryType
 //-----------------------------------------------
 template <>
-SubqueryType StringToEnum(const char *value) {
+inline SubqueryType StringToEnum(const char *value) {
 	if (strcmp(value, "INVALID") == 0) {
 		return SubqueryType::INVALID;
 	} else if (strcmp(value, "SCALAR") == 0) {
@@ -497,7 +497,7 @@ SubqueryType StringToEnum(const char *value) {
 }
 
 template <>
-const char *EnumToString(SubqueryType value) {
+inline const char *EnumToString(SubqueryType value) {
 	switch (value) {
 	case SubqueryType::INVALID:
 		return "INVALID";
@@ -518,7 +518,7 @@ const char *EnumToString(SubqueryType value) {
 // ExpressionType
 //-----------------------------------------------
 template <>
-ExpressionType StringToEnum(const char *value) {
+inline ExpressionType StringToEnum(const char *value) {
 	if (strcmp(value, "CAST") == 0) {
 		return ExpressionType::OPERATOR_CAST;
 	} else if (strcmp(value, "NOT") == 0) {
@@ -657,7 +657,7 @@ ExpressionType StringToEnum(const char *value) {
 }
 
 template <>
-const char *EnumToString(ExpressionType value) {
+inline const char *EnumToString(ExpressionType value) {
 	switch (value) {
 	case ExpressionType::OPERATOR_CAST:
 		return "CAST";
@@ -801,7 +801,7 @@ const char *EnumToString(ExpressionType value) {
 // ExpressionClass
 //-----------------------------------------------
 template <>
-ExpressionClass StringToEnum(const char *value) {
+inline ExpressionClass StringToEnum(const char *value) {
 	if (strcmp(value, "INVALID") == 0) {
 		return ExpressionClass::INVALID;
 	} else if (strcmp(value, "AGGREGATE") == 0) {
@@ -882,7 +882,7 @@ ExpressionClass StringToEnum(const char *value) {
 }
 
 template <>
-const char *EnumToString(ExpressionClass value) {
+inline const char *EnumToString(ExpressionClass value) {
 	switch (value) {
 	case ExpressionClass::INVALID:
 		return "INVALID";
@@ -967,7 +967,7 @@ const char *EnumToString(ExpressionClass value) {
 // SampleMethod
 //-----------------------------------------------
 template <>
-SampleMethod StringToEnum(const char *value) {
+inline SampleMethod StringToEnum(const char *value) {
 	if (strcmp(value, "System") == 0) {
 		return SampleMethod::SYSTEM_SAMPLE;
 	} else if (strcmp(value, "Bernoulli") == 0) {
@@ -980,7 +980,7 @@ SampleMethod StringToEnum(const char *value) {
 }
 
 template <>
-const char *EnumToString(SampleMethod value) {
+inline const char *EnumToString(SampleMethod value) {
 	switch (value) {
 	case SampleMethod::SYSTEM_SAMPLE:
 		return "System";
@@ -997,7 +997,7 @@ const char *EnumToString(SampleMethod value) {
 // LogicalType
 //-----------------------------------------------
 template <>
-LogicalTypeId StringToEnum(const char *value) {
+inline LogicalTypeId StringToEnum(const char *value) {
 	if (strcmp(value, "BOOLEAN") == 0) {
 		return LogicalTypeId::BOOLEAN;
 	} else if (strcmp(value, "TINYINT") == 0) {
@@ -1088,7 +1088,7 @@ LogicalTypeId StringToEnum(const char *value) {
 }
 
 template <>
-const char *EnumToString(LogicalTypeId value) {
+inline const char *EnumToString(LogicalTypeId value) {
 	switch (value) {
 	case LogicalTypeId::BOOLEAN:
 		return "BOOLEAN";
