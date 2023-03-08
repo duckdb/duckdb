@@ -6,7 +6,7 @@ from io import TextIOBase
 
 def is_file_like(obj):
 	# We only care that we can read from the file
-	return hasattr(obj, "read")
+	return hasattr(obj, "read") and hasattr(obj, "seek")
 
 class ModifiedMemoryFileSystem(MemoryFileSystem):
 	protocol = ('DUCKDB_INTERNAL_OBJECTSTORE',)
