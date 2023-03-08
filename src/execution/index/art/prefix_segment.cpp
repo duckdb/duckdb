@@ -1,5 +1,6 @@
 #include "duckdb/execution/index/art/prefix_segment.hpp"
 
+#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_node.hpp"
 
 namespace duckdb {

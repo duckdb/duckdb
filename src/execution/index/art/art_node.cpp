@@ -1,6 +1,14 @@
 #include "duckdb/execution/index/art/art_node.hpp"
 
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
+#include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/art/prefix.hpp"
+#include "duckdb/execution/index/art/leaf.hpp"
+#include "duckdb/execution/index/art/node4.hpp"
+#include "duckdb/execution/index/art/node16.hpp"
+#include "duckdb/execution/index/art/node48.hpp"
+#include "duckdb/execution/index/art/node256.hpp"
 
 namespace duckdb {
 

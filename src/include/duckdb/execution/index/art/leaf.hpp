@@ -10,6 +10,7 @@
 
 #include "duckdb/execution/index/art/art_node.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
+#include "duckdb/execution/index/art/art_key.hpp"
 
 namespace duckdb {
 

@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/execution/index/art/art_node.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
 

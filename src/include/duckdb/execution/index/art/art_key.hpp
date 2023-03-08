@@ -20,10 +20,10 @@ namespace duckdb {
 class Key {
 public:
 	Key();
-	Key(data_ptr_t data, idx_t len);
-	Key(ArenaAllocator &allocator, idx_t len);
+	Key(const data_ptr_t &data, const uint32_t &len);
+	Key(ArenaAllocator &allocator, const uint32_t &len);
 
-	idx_t len;
+	uint32_t len;
 	data_ptr_t data;
 
 public:
@@ -62,7 +62,7 @@ public:
 	bool operator>=(const Key &k) const;
 	bool operator==(const Key &k) const;
 
-	bool ByteMatches(Key &other, idx_t &depth);
+	bool ByteMatches(const Key &other, const uint32_t &depth) const;
 	bool Empty() const;
 	void ConcatenateKey(ArenaAllocator &allocator, Key &concat_key);
 

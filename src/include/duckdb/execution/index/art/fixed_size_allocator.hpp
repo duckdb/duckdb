@@ -10,6 +10,7 @@
 
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 

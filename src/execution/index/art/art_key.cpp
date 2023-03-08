@@ -7,23 +7,23 @@ namespace duckdb {
 Key::Key() : len(0) {
 }
 
-Key::Key(data_ptr_t data, idx_t len) : len(len), data(data) {
+Key::Key(const data_ptr_t &data, const uint32_t &len) : len(len), data(data) {
 }
 
-Key::Key(ArenaAllocator &allocator, idx_t len) : len(len) {
+Key::Key(ArenaAllocator &allocator, const uint32_t &len) : len(len) {
 	data = allocator.Allocate(len);
 }
 
 template <>
 Key Key::CreateKey(ArenaAllocator &allocator, const LogicalType &type, string_t value) {
-	idx_t len = value.GetSize() + 1;
+	uint32_t len = value.GetSize() + 1;
 	auto data = allocator.Allocate(len);
 	memcpy(data, value.GetDataUnsafe(), len - 1);
 
 	// FIXME: rethink this
 	if (type == LogicalType::BLOB || type == LogicalType::VARCHAR) {
 		// indexes cannot contain BLOBs (or BLOBs cast to VARCHARs) that contain null-terminated bytes
-		for (idx_t i = 0; i < len - 1; i++) {
+		for (uint32_t i = 0; i < len - 1; i++) {
 			if (data[i] == '\0') {
 				throw NotImplementedException("Indexes cannot contain BLOBs that contain null-terminated bytes.");
 			}
@@ -48,7 +48,7 @@ void Key::CreateKey(ArenaAllocator &allocator, const LogicalType &type, Key &key
 	// FIXME: rethink this
 	if (type == LogicalType::BLOB || type == LogicalType::VARCHAR) {
 		// indexes cannot contain BLOBs (or BLOBs cast to VARCHARs) that contain null-terminated bytes
-		for (idx_t i = 0; i < key.len - 1; i++) {
+		for (uint32_t i = 0; i < key.len - 1; i++) {
 			if (key.data[i] == '\0') {
 				throw NotImplementedException("Indexes cannot contain BLOBs that contain null-terminated bytes.");
 			}
@@ -64,7 +64,7 @@ void Key::CreateKey(ArenaAllocator &allocator, const LogicalType &type, Key &key
 }
 
 bool Key::operator>(const Key &k) const {
-	for (idx_t i = 0; i < MinValue<idx_t>(len, k.len); i++) {
+	for (uint32_t i = 0; i < MinValue<uint32_t>(len, k.len); i++) {
 		if (data[i] > k.data[i]) {
 			return true;
 		} else if (data[i] < k.data[i]) {
@@ -75,7 +75,7 @@ bool Key::operator>(const Key &k) const {
 }
 
 bool Key::operator<(const Key &k) const {
-	for (idx_t i = 0; i < MinValue<idx_t>(len, k.len); i++) {
+	for (uint32_t i = 0; i < MinValue<uint32_t>(len, k.len); i++) {
 		if (data[i] < k.data[i]) {
 			return true;
 		} else if (data[i] > k.data[i]) {
@@ -86,7 +86,7 @@ bool Key::operator<(const Key &k) const {
 }
 
 bool Key::operator>=(const Key &k) const {
-	for (idx_t i = 0; i < MinValue<idx_t>(len, k.len); i++) {
+	for (uint32_t i = 0; i < MinValue<uint32_t>(len, k.len); i++) {
 		if (data[i] > k.data[i]) {
 			return true;
 		} else if (data[i] < k.data[i]) {
@@ -100,7 +100,7 @@ bool Key::operator==(const Key &k) const {
 	if (len != k.len) {
 		return false;
 	}
-	for (idx_t i = 0; i < len; i++) {
+	for (uint32_t i = 0; i < len; i++) {
 		if (data[i] != k.data[i]) {
 			return false;
 		}
@@ -108,7 +108,7 @@ bool Key::operator==(const Key &k) const {
 	return true;
 }
 
-bool Key::ByteMatches(Key &other, idx_t &depth) {
+bool Key::ByteMatches(const Key &other, const uint32_t &depth) const {
 	return data[depth] == other[depth];
 }
 

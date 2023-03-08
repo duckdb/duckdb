@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/execution/index/art/fixed_size_allocator.hpp"
 #include "duckdb/execution/index/art/swizzleable_pointer.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"

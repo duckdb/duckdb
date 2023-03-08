@@ -1,5 +1,9 @@
 #include "duckdb/execution/index/art/fixed_size_allocator.hpp"
 
+#include "duckdb/common/allocator.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
+
 namespace duckdb {
 FixedSizeAllocator::FixedSizeAllocator(const idx_t &allocation_size)
     : allocation_size(allocation_size), offsets_per_buffer(Storage::BLOCK_ALLOC_SIZE / allocation_size) {
