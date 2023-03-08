@@ -430,7 +430,7 @@ void S3FileSystem::FinalizeMultipartUpload(S3FileHandle &file_handle) {
 	idx_t response_buffer_len = 1000;
 	auto response_buffer = unique_ptr<char[]> {new char[response_buffer_len]};
 
-	string query_param = "uploadId=" +  S3FileSystem::UrlEncode(file_handle.multipart_upload_id, true);
+	string query_param = "uploadId=" + S3FileSystem::UrlEncode(file_handle.multipart_upload_id, true);
 	auto res = s3fs.PostRequest(file_handle, file_handle.path, {}, response_buffer, response_buffer_len,
 	                            (char *)body.c_str(), body.length(), query_param);
 	string result(response_buffer.get(), response_buffer_len);
