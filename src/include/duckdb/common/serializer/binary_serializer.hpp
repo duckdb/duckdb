@@ -34,7 +34,7 @@ protected:
 	vector<BinarySerializerState> stack;
 	BinarySerializerState &GetCurrent() {
 		return stack.back();
-	};
+	}
 
 	void SetTag(const char *tag) final;
 
