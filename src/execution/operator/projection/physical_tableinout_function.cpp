@@ -42,17 +42,6 @@ unique_ptr<OperatorState> PhysicalTableInOutFunction::GetOperatorState(Execution
 			// If we have to project columns, and the function doesn't provide a mapping from output row -> input row
 			// then we have to execute tuple-at-a-time
 			result->input_chunk.Initialize(context.client, children[0]->types);
-		} else {
-			// Create an empty DataChunk that has room for the input + the mapping vector
-			auto &chunk_types = children[0]->types;
-			vector<LogicalType> intermediate_types;
-			intermediate_types.reserve(chunk_types.size() + 1);
-			intermediate_types.insert(intermediate_types.end(), chunk_types.begin(), chunk_types.end());
-			intermediate_types.emplace_back(LogicalType::UINTEGER);
-			// We initialize this as empty
-			result->input_chunk.InitializeEmpty(intermediate_types);
-			// And only allocate for our mapping vector
-			result->input_chunk.data[chunk_types.size()].Initialize();
 		}
 	}
 	return std::move(result);
@@ -74,7 +63,17 @@ OperatorResultType PhysicalTableInOutFunction::ExecuteWithMapping(ExecutionConte
 	// this column is used to register the relation between input tuple -> output tuple(s)
 	const auto base_columns = chunk.ColumnCount() - projected_input.size();
 
-	DataChunk &intermediate_chunk = state.input_chunk;
+	DataChunk intermediate_chunk;
+	// Create an empty DataChunk that has room for the input + the mapping vector
+	auto chunk_types = chunk.GetTypes();
+	vector<LogicalType> intermediate_types;
+	intermediate_types.reserve(base_columns + 1);
+	intermediate_types.insert(intermediate_types.end(), chunk_types.begin(), chunk_types.begin() + base_columns);
+	intermediate_types.emplace_back(LogicalType::UINTEGER);
+	// We initialize this as empty
+	intermediate_chunk.InitializeEmpty(intermediate_types);
+	// And only allocate for our mapping vector
+	intermediate_chunk.data[base_columns].Initialize();
 
 	// Initialize our output chunk
 	for (idx_t i = 0; i < base_columns; i++) {
