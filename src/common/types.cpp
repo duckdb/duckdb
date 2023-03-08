@@ -1076,8 +1076,8 @@ const LogicalType &ListType::GetChildType(const LogicalType &type) {
 	return ((ListTypeInfo &)*info).child_type;
 }
 
-LogicalType LogicalType::LIST(LogicalType child) {
-	auto info = make_shared<ListTypeInfo>(std::move(child));
+LogicalType LogicalType::LIST(const LogicalType &child) {
+	auto info = make_shared<ListTypeInfo>(child);
 	return LogicalType(LogicalTypeId::LIST, std::move(info));
 }
 
@@ -1207,8 +1207,8 @@ idx_t StructType::GetChildCount(const LogicalType &type) {
 	return StructType::GetChildTypes(type).size();
 }
 
-LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {
-	auto info = make_shared<StructTypeInfo>(std::move(children));
+LogicalType LogicalType::STRUCT(const child_list_t<LogicalType> &children) {
+	auto info = make_shared<StructTypeInfo>(children);
 	return LogicalType(LogicalTypeId::STRUCT, std::move(info));
 }
 
@@ -1220,8 +1220,8 @@ LogicalType LogicalType::AGGREGATE_STATE(aggregate_state_t state_type) { // NOLI
 //===--------------------------------------------------------------------===//
 // Map Type
 //===--------------------------------------------------------------------===//
-LogicalType LogicalType::MAP(LogicalType child) {
-	auto info = make_shared<ListTypeInfo>(std::move(child));
+LogicalType LogicalType::MAP(const LogicalType &child) {
+	auto info = make_shared<ListTypeInfo>(child);
 	return LogicalType(LogicalTypeId::MAP, std::move(info));
 }
 
