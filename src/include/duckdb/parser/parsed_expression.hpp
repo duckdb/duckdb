@@ -13,14 +13,14 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/expression_util.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 class Serializer;
 class Deserializer;
 class FieldWriter;
 class FieldReader;
+class FormatDeserializer;
+class FormatSerializer;
 
 //!  The ParsedExpression class is a base class that can represent any expression
 //!  part of a SQL statement.

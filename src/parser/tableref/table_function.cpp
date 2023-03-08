@@ -1,6 +1,8 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 

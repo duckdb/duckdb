@@ -3,8 +3,8 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/tableref/list.hpp"
-#include "duckdb/common/to_string.hpp"
-#include "duckdb/common/serializer/enum_serializer.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 
@@ -51,53 +51,6 @@ void TableRef::Serialize(Serializer &serializer) const {
 	writer.WriteOptional(sample);
 	Serialize(writer);
 	writer.Finalize();
-}
-
-template <>
-const char *EnumSerializer::EnumToString(TableReferenceType value) {
-	switch (value) {
-	case TableReferenceType::INVALID:
-		return "INVALID";
-	case TableReferenceType::BASE_TABLE:
-		return "BASE_TABLE";
-	case TableReferenceType::SUBQUERY:
-		return "SUBQUERY";
-	case TableReferenceType::JOIN:
-		return "JOIN";
-	case TableReferenceType::TABLE_FUNCTION:
-		return "TABLE_FUNCTION";
-	case TableReferenceType::EXPRESSION_LIST:
-		return "EXPRESSION_LIST";
-	case TableReferenceType::CTE:
-		return "CTE";
-	case TableReferenceType::EMPTY:
-		return "EMPTY";
-	default:
-		throw NotImplementedException("ToString not implemented for enum value");
-	}
-}
-
-template <>
-TableReferenceType EnumSerializer::StringToEnum(const char *value) {
-	if (strcmp(value, "INVALID") == 0) {
-		return TableReferenceType::INVALID;
-	} else if (strcmp(value, "BASE_TABLE") == 0) {
-		return TableReferenceType::BASE_TABLE;
-	} else if (strcmp(value, "SUBQUERY") == 0) {
-		return TableReferenceType::SUBQUERY;
-	} else if (strcmp(value, "JOIN") == 0) {
-		return TableReferenceType::JOIN;
-	} else if (strcmp(value, "TABLE_FUNCTION") == 0) {
-		return TableReferenceType::TABLE_FUNCTION;
-	} else if (strcmp(value, "EXPRESSION_LIST") == 0) {
-		return TableReferenceType::EXPRESSION_LIST;
-	} else if (strcmp(value, "CTE") == 0) {
-		return TableReferenceType::CTE;
-	} else if (strcmp(value, "EMPTY") == 0) {
-		return TableReferenceType::EMPTY;
-	} else {
-		throw NotImplementedException("FromString not implemented for enum value");
-	}
 }
 
 void TableRef::FormatSerialize(FormatSerializer &serializer) const {

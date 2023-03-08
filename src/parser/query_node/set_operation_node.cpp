@@ -82,41 +82,6 @@ unique_ptr<QueryNode> SetOperationNode::Deserialize(FieldReader &reader) {
 	return std::move(result);
 }
 
-template <>
-const char *EnumSerializer::EnumToString(SetOperationType value) {
-	switch (value) {
-	case SetOperationType::NONE:
-		return "NONE";
-	case SetOperationType::UNION:
-		return "UNION";
-	case SetOperationType::EXCEPT:
-		return "EXCEPT";
-	case SetOperationType::INTERSECT:
-		return "INTERSECT";
-	case SetOperationType::UNION_BY_NAME:
-		return "UNION_BY_NAME";
-	default:
-		throw NotImplementedException("EnumToString not implemented for enum value");
-	}
-}
-
-template <>
-SetOperationType EnumSerializer::StringToEnum(const char *value) {
-	if (strcmp(value, "NONE") == 0) {
-		return SetOperationType::NONE;
-	} else if (strcmp(value, "UNION") == 0) {
-		return SetOperationType::UNION;
-	} else if (strcmp(value, "EXCEPT") == 0) {
-		return SetOperationType::EXCEPT;
-	} else if (strcmp(value, "INTERSECT") == 0) {
-		return SetOperationType::INTERSECT;
-	} else if (strcmp(value, "UNION_BY_NAME") == 0) {
-		return SetOperationType::UNION_BY_NAME;
-	} else {
-		throw NotImplementedException("StringToEnum not implemented for enum value");
-	}
-}
-
 void SetOperationNode::FormatSerialize(duckdb::FormatSerializer &serializer) const {
 	QueryNode::FormatSerialize(serializer);
 	serializer.WriteProperty("set_op_type", setop_type);

@@ -3,6 +3,9 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/expression_util.hpp"
 
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
+
 namespace duckdb {
 
 ConjunctionExpression::ConjunctionExpression(ExpressionType type)

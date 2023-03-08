@@ -2,7 +2,8 @@
 #include "duckdb/parser/expression_util.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
-#include "duckdb/common/serializer/enum_serializer.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 
@@ -191,33 +192,6 @@ void SelectNode::Serialize(FieldWriter &writer) const {
 	writer.WriteOptional(having);
 	writer.WriteOptional(sample);
 	writer.WriteOptional(qualify);
-}
-
-template <>
-const char *EnumSerializer::EnumToString(AggregateHandling value) {
-	switch (value) {
-	case AggregateHandling::STANDARD_HANDLING:
-		return "STANDARD_HANDLING";
-	case AggregateHandling::NO_AGGREGATES_ALLOWED:
-		return "NO_AGGREGATES_ALLOWED";
-	case AggregateHandling::FORCE_AGGREGATES:
-		return "FORCE_AGGREGATES";
-	default:
-		throw NotImplementedException("ToString not implemented for enum value");
-	}
-}
-
-template <>
-AggregateHandling EnumSerializer::StringToEnum(const char *value) {
-	if (strcmp(value, "STANDARD_HANDLING") == 0) {
-		return AggregateHandling::STANDARD_HANDLING;
-	} else if (strcmp(value, "NO_AGGREGATES_ALLOWED") == 0) {
-		return AggregateHandling::NO_AGGREGATES_ALLOWED;
-	} else if (strcmp(value, "FORCE_AGGREGATES") == 0) {
-		return AggregateHandling::FORCE_AGGREGATES;
-	} else {
-		throw NotImplementedException("StringToEnum not implemented for enum value");
-	}
 }
 
 void SelectNode::FormatSerialize(FormatSerializer &serializer) const {

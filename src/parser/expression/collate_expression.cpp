@@ -3,6 +3,9 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/field_writer.hpp"
 
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
+
 namespace duckdb {
 
 CollateExpression::CollateExpression(string collation_p, unique_ptr<ParsedExpression> child)

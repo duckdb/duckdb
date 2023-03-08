@@ -204,4 +204,5 @@ public:
 		return result;
 	}
 };
+
 } // namespace duckdb

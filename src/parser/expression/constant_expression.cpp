@@ -5,6 +5,9 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
+
 namespace duckdb {
 
 ConstantExpression::ConstantExpression(Value val)

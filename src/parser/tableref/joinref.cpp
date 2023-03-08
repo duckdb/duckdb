@@ -2,7 +2,8 @@
 
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/field_writer.hpp"
-#include "duckdb/common/serializer/enum_serializer.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 
@@ -81,37 +82,6 @@ void JoinRef::Serialize(FieldWriter &writer) const {
 	writer.WriteField<JoinType>(type);
 	writer.WriteField<JoinRefType>(ref_type);
 	writer.WriteList<string>(using_columns);
-}
-
-template <>
-const char *EnumSerializer::EnumToString(JoinRefType value) {
-	switch (value) {
-	case JoinRefType::REGULAR:
-		return "REGULAR";
-	case JoinRefType::NATURAL:
-		return "NATURAL";
-	case JoinRefType::CROSS:
-		return "CROSS";
-	case JoinRefType::POSITIONAL:
-		return "POSITIONAL";
-	default:
-		throw NotImplementedException("ToString not implemented for enum value");
-	}
-}
-
-template <>
-JoinRefType EnumSerializer::StringToEnum(const char *value) {
-	if (strcmp(value, "REGULAR") == 0) {
-		return JoinRefType::REGULAR;
-	} else if (strcmp(value, "NATURAL") == 0) {
-		return JoinRefType::NATURAL;
-	} else if (strcmp(value, "CROSS") == 0) {
-		return JoinRefType::CROSS;
-	} else if (strcmp(value, "POSITIONAL") == 0) {
-		return JoinRefType::POSITIONAL;
-	} else {
-		throw NotImplementedException("StringToEnum not implemented for enum value");
-	}
 }
 
 void JoinRef::FormatSerialize(FormatSerializer &serializer) const {

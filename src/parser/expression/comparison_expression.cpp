@@ -4,6 +4,9 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
+
 namespace duckdb {
 
 ComparisonExpression::ComparisonExpression(ExpressionType type, unique_ptr<ParsedExpression> left,

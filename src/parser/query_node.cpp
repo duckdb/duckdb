@@ -5,38 +5,10 @@
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/field_writer.hpp"
-#include "duckdb/common/serializer/enum_serializer.hpp"
-namespace duckdb {
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
-template <>
-const char *EnumSerializer::EnumToString(QueryNodeType value) {
-	switch (value) {
-	case QueryNodeType::SELECT_NODE:
-		return "SELECT_NODE";
-	case QueryNodeType::SET_OPERATION_NODE:
-		return "SET_OPERATION_NODE";
-	case QueryNodeType::BOUND_SUBQUERY_NODE:
-		return "BOUND_SUBQUERY_NODE";
-	case QueryNodeType::RECURSIVE_CTE_NODE:
-		return "RECURSIVE_CTE_NODE";
-	default:
-		throw NotImplementedException("EnumToString not implemented for enum value");
-	}
-}
-template <>
-QueryNodeType EnumSerializer::StringToEnum(const char *value) {
-	if (strcmp(value, "SELECT_NODE") == 0) {
-		return QueryNodeType::SELECT_NODE;
-	} else if (strcmp(value, "SET_OPERATION_NODE") == 0) {
-		return QueryNodeType::SET_OPERATION_NODE;
-	} else if (strcmp(value, "BOUND_SUBQUERY_NODE") == 0) {
-		return QueryNodeType::BOUND_SUBQUERY_NODE;
-	} else if (strcmp(value, "RECURSIVE_CTE_NODE") == 0) {
-		return QueryNodeType::RECURSIVE_CTE_NODE;
-	} else {
-		throw NotImplementedException("StringToEnum not implemented for string value");
-	}
-}
+namespace duckdb {
 
 CommonTableExpressionMap::CommonTableExpressionMap() {
 }

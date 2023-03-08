@@ -72,41 +72,6 @@ unique_ptr<ParsedExpression> SubqueryExpression::Deserialize(ExpressionType type
 	return std::move(expression);
 }
 
-template <>
-const char *EnumSerializer::EnumToString(SubqueryType value) {
-	switch (value) {
-	case SubqueryType::INVALID:
-		return "INVALID";
-	case SubqueryType::SCALAR:
-		return "SCALAR";
-	case SubqueryType::EXISTS:
-		return "EXISTS";
-	case SubqueryType::NOT_EXISTS:
-		return "NOT_EXISTS";
-	case SubqueryType::ANY:
-		return "ANY";
-	default:
-		throw NotImplementedException("EnumToString not implemented for enum value");
-	}
-}
-
-template <>
-SubqueryType EnumSerializer::StringToEnum(const char *value) {
-	if (strcmp(value, "INVALID") == 0) {
-		return SubqueryType::INVALID;
-	} else if (strcmp(value, "SCALAR") == 0) {
-		return SubqueryType::SCALAR;
-	} else if (strcmp(value, "EXISTS") == 0) {
-		return SubqueryType::EXISTS;
-	} else if (strcmp(value, "NOT_EXISTS") == 0) {
-		return SubqueryType::NOT_EXISTS;
-	} else if (strcmp(value, "ANY") == 0) {
-		return SubqueryType::ANY;
-	} else {
-		throw NotImplementedException("StringToEnum not implemented for enum value");
-	}
-}
-
 void SubqueryExpression::FormatSerialize(FormatSerializer &serializer) const {
 	ParsedExpression::FormatSerialize(serializer);
 	serializer.WriteProperty("subquery_type", subquery_type);
@@ -124,4 +89,5 @@ unique_ptr<ParsedExpression> SubqueryExpression::FormatDeserialize(ExpressionTyp
 	deserializer.ReadProperty("comparison_type", expression->comparison_type);
 	return std::move(expression);
 }
+
 } // namespace duckdb

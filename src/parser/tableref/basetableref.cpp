@@ -2,6 +2,8 @@
 
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 

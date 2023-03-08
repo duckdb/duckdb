@@ -12,12 +12,12 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 class FieldWriter;
 class FieldReader;
+class FormatDeserializer;
+class FormatSerializer;
 
 enum class ResultModifierType : uint8_t {
 	LIMIT_MODIFIER = 1,

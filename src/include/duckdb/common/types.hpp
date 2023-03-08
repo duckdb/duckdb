@@ -276,6 +276,18 @@ enum class LogicalTypeId : uint8_t {
 	UNION = 107
 };
 
+enum class ExtraTypeInfoType : uint8_t {
+	INVALID_TYPE_INFO = 0,
+	GENERIC_TYPE_INFO = 1,
+	DECIMAL_TYPE_INFO = 2,
+	STRING_TYPE_INFO = 3,
+	LIST_TYPE_INFO = 4,
+	STRUCT_TYPE_INFO = 5,
+	ENUM_TYPE_INFO = 6,
+	USER_TYPE_INFO = 7,
+	AGGREGATE_STATE_TYPE_INFO = 8
+};
+
 struct ExtraTypeInfo;
 
 

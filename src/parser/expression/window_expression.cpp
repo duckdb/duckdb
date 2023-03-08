@@ -4,6 +4,10 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/string_util.hpp"
 
+#include "duckdb/common/serializer/enum_serializer.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
+
 namespace duckdb {
 
 WindowExpression::WindowExpression(ExpressionType type, string catalog_name, string schema, const string &function_name)
@@ -137,57 +141,6 @@ void WindowExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteField<bool>(ignore_nulls);
 	writer.WriteOptional(filter_expr);
 	writer.WriteString(catalog);
-}
-
-template <>
-const char *EnumSerializer::EnumToString(WindowBoundary value) {
-	switch (value) {
-	case WindowBoundary::INVALID:
-		return "INVALID";
-	case WindowBoundary::UNBOUNDED_PRECEDING:
-		return "UNBOUNDED_PRECEDING";
-	case WindowBoundary::UNBOUNDED_FOLLOWING:
-		return "UNBOUNDED_FOLLOWING";
-	case WindowBoundary::CURRENT_ROW_RANGE:
-		return "CURRENT_ROW_RANGE";
-	case WindowBoundary::CURRENT_ROW_ROWS:
-		return "CURRENT_ROW_ROWS";
-	case WindowBoundary::EXPR_PRECEDING_ROWS:
-		return "EXPR_PRECEDING_ROWS";
-	case WindowBoundary::EXPR_FOLLOWING_ROWS:
-		return "EXPR_FOLLOWING_ROWS";
-	case WindowBoundary::EXPR_PRECEDING_RANGE:
-		return "EXPR_PRECEDING_RANGE";
-	case WindowBoundary::EXPR_FOLLOWING_RANGE:
-		return "EXPR_FOLLOWING_RANGE";
-	default:
-		throw NotImplementedException("ToString not implemented for enum value");
-	}
-}
-
-template <>
-WindowBoundary EnumSerializer::StringToEnum(const char *value) {
-	if (strcmp(value, "INVALID") == 0) {
-		return WindowBoundary::INVALID;
-	} else if (strcmp(value, "UNBOUNDED_PRECEDING") == 0) {
-		return WindowBoundary::UNBOUNDED_PRECEDING;
-	} else if (strcmp(value, "UNBOUNDED_FOLLOWING") == 0) {
-		return WindowBoundary::UNBOUNDED_FOLLOWING;
-	} else if (strcmp(value, "CURRENT_ROW_RANGE") == 0) {
-		return WindowBoundary::CURRENT_ROW_RANGE;
-	} else if (strcmp(value, "CURRENT_ROW_ROWS") == 0) {
-		return WindowBoundary::CURRENT_ROW_ROWS;
-	} else if (strcmp(value, "EXPR_PRECEDING_ROWS") == 0) {
-		return WindowBoundary::EXPR_PRECEDING_ROWS;
-	} else if (strcmp(value, "EXPR_FOLLOWING_ROWS") == 0) {
-		return WindowBoundary::EXPR_FOLLOWING_ROWS;
-	} else if (strcmp(value, "EXPR_PRECEDING_RANGE") == 0) {
-		return WindowBoundary::EXPR_PRECEDING_RANGE;
-	} else if (strcmp(value, "EXPR_FOLLOWING_RANGE") == 0) {
-		return WindowBoundary::EXPR_FOLLOWING_RANGE;
-	} else {
-		throw NotImplementedException("FromString not implemented for enum value");
-	}
 }
 
 void WindowExpression::FormatSerialize(FormatSerializer &serializer) const {

@@ -6,6 +6,9 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/hash.hpp"
 
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
+
 namespace duckdb {
 
 FunctionExpression::FunctionExpression(string catalog, string schema, const string &function_name,

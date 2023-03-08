@@ -17,17 +17,8 @@ struct CaseCheck {
 	unique_ptr<ParsedExpression> when_expr;
 	unique_ptr<ParsedExpression> then_expr;
 
-	void FormatSerialize(FormatSerializer &serializer) const {
-		serializer.WriteProperty("when_expr", when_expr);
-		serializer.WriteProperty("then_expr", then_expr);
-	}
-
-	static CaseCheck FormatDeserialize(FormatDeserializer &deserializer) {
-		CaseCheck check;
-		deserializer.ReadProperty("when_expr", check.when_expr);
-		deserializer.ReadProperty("then_expr", check.then_expr);
-		return check;
-	}
+	void FormatSerialize(FormatSerializer &serializer) const;
+	static CaseCheck FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 //! The CaseExpression represents a CASE expression in the query
