@@ -17,12 +17,15 @@ expr_reference <- function(name, table = "") {
 
 #' Create a constant expression
 #' @param val the constant value
+#' @param experimental use experimental string representation
 #' @return a constant expression
 #' @noRd
 #' @examples
 #' const_int_expr <- expr_constant(42)
 #' const_str_expr <- expr_constant("Hello, World")
-expr_constant <- rapi_expr_constant
+expr_constant <- function(val, experimental = FALSE) {
+    rapi_expr_constant(val, experimental)
+}
 
 #' Create a function call expression
 #' @param name the function name

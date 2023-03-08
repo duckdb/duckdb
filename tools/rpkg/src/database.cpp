@@ -73,7 +73,7 @@ static bool CastRstringToVarchar(Vector &source, Vector &result, idx_t count, Ca
 	auto &runtime_config = DBConfig::GetConfig(context);
 
 	auto &casts = runtime_config.GetCastFunctions();
-	casts.RegisterCastFunction(RStringsType::Get(), LogicalType::VARCHAR, CastRstringToVarchar);
+	casts.RegisterCastFunction(RStringsType::Get(), LogicalType::VARCHAR, CastRstringToVarchar, 100);
 
 	context.transaction.Commit();
 

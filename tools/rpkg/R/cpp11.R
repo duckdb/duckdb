@@ -36,8 +36,8 @@ rapi_expr_reference <- function(name, table) {
   .Call(`_duckdb_rapi_expr_reference`, name, table)
 }
 
-rapi_expr_constant <- function(val) {
-  .Call(`_duckdb_rapi_expr_constant`, val)
+rapi_expr_constant <- function(val, experimental) {
+  .Call(`_duckdb_rapi_expr_constant`, val, experimental)
 }
 
 rapi_expr_function <- function(name, args) {

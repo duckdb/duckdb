@@ -189,7 +189,7 @@ static cpp11::list construct_retlist(unique_ptr<PreparedStatement> stmt, const s
 	for (idx_t row_idx = 0; row_idx < (size_t)n_rows; ++row_idx) {
 		for (idx_t param_idx = 0; param_idx < (idx_t)params.size(); param_idx++) {
 			SEXP valsexp = params[(size_t)param_idx];
-			auto val = RApiTypes::SexpToValue(valsexp, row_idx);
+			auto val = RApiTypes::SexpToValue(valsexp, row_idx, false);
 			stmt->parameters[param_idx] = val;
 		}
 

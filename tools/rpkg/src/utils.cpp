@@ -99,7 +99,7 @@ static void AppendColumnSegment(SRC *source_data, Vector &result, idx_t count) {
 	}
 }
 
-Value RApiTypes::SexpToValue(SEXP valsexp, R_len_t idx) {
+Value RApiTypes::SexpToValue(SEXP valsexp, R_len_t idx, bool experimental) {
 	auto rtype = RApiTypes::DetectRType(valsexp, false); // TODO
 	switch (rtype) {
 	case RType::LOGICAL: {
@@ -120,8 +120,17 @@ Value RApiTypes::SexpToValue(SEXP valsexp, R_len_t idx) {
 		}
 	}
 	case RType::STRING: {
-		auto str_val = STRING_ELT(ToUtf8(valsexp), idx);
-		return str_val == NA_STRING ? Value(LogicalType::VARCHAR) : Value(CHAR(str_val));
+		if (experimental) {
+			// TODO figure out if we have protect this, at the very least
+			// we need to reference the string somewhere so it does not get garbage collected
+			auto char_ptr = CHAR(STRING_ELT(ToUtf8(valsexp), idx));
+			auto str_val = Value::POINTER((uintptr_t)char_ptr);
+			str_val.GetTypeMutable() = RStringsType::Get();
+			return str_val;
+		} else {
+			auto str_val = STRING_ELT(ToUtf8(valsexp), idx);
+			return str_val == NA_STRING ? Value(LogicalType::VARCHAR) : Value(CHAR(str_val));
+		}
 	}
 	case RType::FACTOR: {
 		auto int_val = INTEGER_POINTER(valsexp)[idx];
