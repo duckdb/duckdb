@@ -130,8 +130,10 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,
 		                                  table_function.function_info.get());
 		if (table_function.bind_replace) {
-			auto new_plan = table_function.bind_replace2(context, bind_input);
-			return CreatePlan(*Bind(*new_plan));
+			auto new_plan = table_function.bind_replace(context, bind_input);
+			if (new_plan != nullptr) {
+				return CreatePlan(*Bind(*new_plan));
+			}
 		}
 		bind_data = table_function.bind(context, bind_input, return_types, return_names);
 		if (table_function.name == "pandas_scan" || table_function.name == "arrow_scan") {
@@ -171,9 +173,8 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 	}
 	// now add the table function to the bind context so its columns can be bound
 	bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->column_ids,
-								  get->GetTable());
-
-	return get;
+	                              get->GetTable());
+	return std::move(get);
 }
 
 unique_ptr<LogicalOperator> Binder::BindTableFunction(TableFunction &function, vector<Value> parameters) {

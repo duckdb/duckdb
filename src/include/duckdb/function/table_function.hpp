@@ -189,9 +189,10 @@ public:
 	//! The returned FunctionData object should be constant and should not be changed during execution.
 	table_function_bind_t bind;
 	//! (Optional) Bind replace function
-	//! This function replaces the regular bind function. Allows manipulating plan essentially replacing the table
-	//! function with a generic expression that returns a table.
-	table_function_bind_replace_t bind_replace = nullptr;
+	//! This function is called before the regular bind function. It allows returning a TableRef will be used to
+	//! to generate a logical plan that replaces the LogicalGet of a "regular" TableFunction. The BindReplace can can
+	//! also return a nullptr to indicate a regular bind needs to be performed.
+	table_function_bind_replace_t bind_replace;
 	//! (Optional) global init function
 	//! Initialize the global operator state of the function.
 	//! The global operator state is used to keep track of the progress in the table function and is shared between
