@@ -84,7 +84,7 @@ public final class ResultSet: Sendable {
   ///
   /// - Parameter columnIndex: the index of the column in the result set
   /// - Returns: a `Void` typed column
-  public subscript(_ columnIndex: DBInt) -> Column<Void> {
+  public func column(at columnIndex: DBInt) -> Column<Void> {
     precondition(columnIndex < columnCount)
     return Column(result: self, columnIndex: columnIndex)
   }
@@ -252,6 +252,44 @@ private extension ResultSet {
       }
     }
   }
+}
+
+// MARK: - Collection conformance
+
+extension ResultSet: RandomAccessCollection {
+  
+  public typealias Element = Column<Void>
+  
+  public struct Iterator: IteratorProtocol {
+    
+    private let result: ResultSet
+    private var position: DBInt
+    
+    init(result: ResultSet) {
+      self.result = result
+      self.position = result.startIndex
+    }
+    
+    public mutating func next() -> Element? {
+      guard position < result.endIndex else { return nil }
+      defer { position += 1 }
+      return .some(result[position])
+    }
+  }
+  
+  public var startIndex: DBInt { 0 }
+  public var endIndex: DBInt { columnCount }
+  
+  public subscript(position: DBInt) -> Column<Void> {
+    column(at: position)
+  }
+  
+  public func makeIterator() -> Iterator {
+    Iterator(result: self)
+  }
+  
+  public func index(after i: DBInt) -> DBInt { i + 1 }
+  public func index(before i: DBInt) -> DBInt { i - 1 }
 }
 
 // MARK: - Debug Description

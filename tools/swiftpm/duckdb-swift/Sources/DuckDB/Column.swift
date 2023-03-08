@@ -382,7 +382,7 @@ public extension Column {
 
 // MARK: - Collection conformance
 
-extension Column: Collection {
+extension Column: RandomAccessCollection {
   
   public typealias Element = DataType?
   
@@ -422,3 +422,8 @@ extension Column: Collection {
 
 extension Column: Sendable where DataType: Sendable {}
 
+// MARK: - Identifiable conformance
+
+extension Column: Identifiable {
+  public var id: String { name }
+}
