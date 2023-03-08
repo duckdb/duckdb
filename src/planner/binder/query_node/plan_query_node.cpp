@@ -21,11 +21,10 @@ unique_ptr<LogicalOperator> Binder::VisitQueryNode(BoundQueryNode &node, unique_
 		}
 		case ResultModifierType::ORDER_MODIFIER: {
 			auto &bound = (BoundOrderModifier &)*mod;
-			unique_ptr<BoundOrderModifier> order_by;
 			if (root->type == LogicalOperatorType::LOGICAL_DISTINCT) {
 				auto &distinct = (LogicalDistinct &)*root;
 				if (!distinct.distinct_targets.empty()) {
-					order_by = make_unique<BoundOrderModifier>();
+					auto order_by = make_unique<BoundOrderModifier>();
 					for (auto &order_node : bound.orders) {
 						order_by->orders.push_back(order_node.Copy());
 					}
