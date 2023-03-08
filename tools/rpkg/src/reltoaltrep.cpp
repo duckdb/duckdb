@@ -209,6 +209,11 @@ static R_altrep_class_t LogicalTypeToAltrepType(const LogicalType &type) {
 	case LogicalTypeId::UUID:
 		return RelToAltrep::string_class;
 	default:
+		// custom string cast for R strings.
+		if (type.HasAlias() && type.GetAlias() == R_STRING_TYPE_NAME) {
+			return RelToAltrep::string_class;
+		}
+
 		cpp11::stop("rel_to_altrep: Unknown column type for altrep: %s", type.ToString().c_str());
 	}
 }
