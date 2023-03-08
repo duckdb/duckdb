@@ -45,3 +45,4 @@ def test_http_exception(require):
     assert value.reason == 'Not Found'
     assert value.body == 'NOT YET SUPPORTED'
     assert 'Content-Length' in value.headers
+
