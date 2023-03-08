@@ -882,9 +882,11 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 
 	// first we will extract all relations from the main plan
 	vector<unique_ptr<LogicalOperator>> extracted_relations;
+	extracted_relations.reserve(relations.size());
 	for (auto &relation : relations) {
 		extracted_relations.push_back(ExtractJoinRelation(*relation));
 	}
+
 	// now we generate the actual joins
 	auto join_tree = GenerateJoins(extracted_relations, node);
 	// perform the final pushdown of remaining filters

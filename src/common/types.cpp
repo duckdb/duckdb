@@ -515,7 +515,7 @@ LogicalType GetUserTypeRecursive(const LogicalType &type, ClientContext &context
 		for (auto &child : StructType::GetChildTypes(type)) {
 			children.emplace_back(child.first, GetUserTypeRecursive(child.second, context));
 		}
-		return LogicalType::STRUCT(std::move(children));
+		return LogicalType::STRUCT(children);
 	}
 	if (type.id() == LogicalTypeId::LIST) {
 		return LogicalType::LIST(GetUserTypeRecursive(ListType::GetChildType(type), context));
@@ -766,12 +766,12 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 	if (type_id == LogicalTypeId::LIST) {
 		// list: perform max recursively on child type
 		auto new_child = MaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right));
-		return LogicalType::LIST(std::move(new_child));
+		return LogicalType::LIST(new_child);
 	}
 	if (type_id == LogicalTypeId::MAP) {
 		// list: perform max recursively on child type
 		auto new_child = MaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right));
-		return LogicalType::MAP(std::move(new_child));
+		return LogicalType::MAP(new_child);
 	}
 	if (type_id == LogicalTypeId::STRUCT) {
 		// struct: perform recursively
@@ -788,7 +788,7 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 			child_types.push_back(make_pair(left_child_types[i].first, std::move(child_type)));
 		}
 
-		return LogicalType::STRUCT(std::move(child_types));
+		return LogicalType::STRUCT(child_types);
 	}
 	if (type_id == LogicalTypeId::UNION) {
 		auto left_member_count = UnionType::GetMemberCount(left);
@@ -1229,7 +1229,7 @@ LogicalType LogicalType::MAP(LogicalType key, LogicalType value) {
 	child_list_t<LogicalType> child_types;
 	child_types.push_back({"key", std::move(key)});
 	child_types.push_back({"value", std::move(value)});
-	return LogicalType::MAP(LogicalType::STRUCT(std::move(child_types)));
+	return LogicalType::MAP(LogicalType::STRUCT(child_types));
 }
 
 const LogicalType &MapType::KeyType(const LogicalType &type) {
@@ -1247,7 +1247,7 @@ const LogicalType &MapType::ValueType(const LogicalType &type) {
 //===--------------------------------------------------------------------===//
 
 LogicalType LogicalType::UNION(child_list_t<LogicalType> members) {
-	D_ASSERT(members.size() > 0);
+	D_ASSERT(!members.empty());
 	D_ASSERT(members.size() <= UnionType::MAX_UNION_MEMBERS);
 	// union types always have a hidden "tag" field in front
 	members.insert(members.begin(), {"", LogicalType::TINYINT});
