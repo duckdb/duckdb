@@ -1,0 +1,120 @@
+# name: test/sql/function/list/icu_generate_series_timestamptz.test
+# description: Test generate_series/range function for TIMESTAMPTZ
+# group: [list]
+
+require icu
+
+statement ok
+SET Calendar = 'gregorian';
+
+statement ok
+SET TimeZone = 'America/Los_Angeles';
+
+# standard generate_series (inclusive bound)
+query I
+SELECT generate_series(timestamptz '2020-01-01', timestamptz '2020-07-01', interval '3' month);
+----
+[2020-01-01 00:00:00-08, 2020-04-01 00:00:00-07, 2020-07-01 00:00:00-07]
+
+# exclusive bound
+query I
+SELECT range(timestamptz '2020-01-01', timestamptz '2020-07-01', interval '3' month);
+----
+[2020-01-01 00:00:00-08, 2020-04-01 00:00:00-07]
+
+# negative interval
+query I
+SELECT generate_series(timestamptz '2020-06-01', timestamptz '2020-01-01', -interval '3' month);
+----
+[2020-06-01 00:00:00-07, 2020-03-01 00:00:00-08]
+
+# start = end
+query I
+SELECT generate_series(timestamptz '2020-01-01', timestamptz '2020-01-01', interval '1' day);
+----
+[2020-01-01 00:00:00-08]
+
+query I
+SELECT range(timestamptz '2020-01-01', timestamptz '2020-01-01', interval '1' day);
+----
+[]
+
+# positive interval but start > end
+query I
+SELECT generate_series(timestamptz '2020-06-01', timestamptz '2020-01-01', interval '3' month);
+----
+[]
+
+# negative interval but start < end
+query I
+SELECT generate_series(timestamptz '2020-01-01', timestamptz '2020-06-01', -interval '3' month);
+----
+[]
+
+# null values
+query I
+SELECT generate_series(NULL, timestamp '2020-06-01', -interval '3' month);
+----
+NULL
+
+query I
+SELECT generate_series(timestamp '2020-01-01', NULL, -interval '3' month);
+----
+NULL
+
+query I
+SELECT generate_series(timestamp '2020-01-01', timestamp '2020-06-01', NULL);
+----
+NULL
+
+
+# > vector size
+query I
+SELECT count(*) FROM (
+	SELECT unnest(generate_series(timestamptz '2000-01-01', timestamptz '2020-06-01', interval '1' day))
+);
+----
+7458
+
+query I
+SELECT generate_series(start, stop, step) FROM (VALUES
+	(timestamptz '2020-01-01', timestamptz '2020-07-01', interval '3' month),
+	(timestamptz '2020-12-04', timestamptz '2020-09-01', interval '-1 month -1 day'),
+	(timestamptz '2020-03-08', timestamptz '2020-03-09', interval '6' hour),
+	(timestamptz '2020-11-02', timestamptz '2020-11-01', interval '-43200' second),
+) AS _(start, stop, step);
+----
+[2020-01-01 00:00:00-08, 2020-04-01 00:00:00-07, 2020-07-01 00:00:00-07]
+[2020-12-04 00:00:00-08, 2020-11-03 00:00:00-08, 2020-10-02 00:00:00-07, 2020-09-01 00:00:00-07]
+[2020-03-08 00:00:00-08, 2020-03-08 07:00:00-07, 2020-03-08 13:00:00-07, 2020-03-08 19:00:00-07]
+[2020-11-02 00:00:00-08, 2020-11-01 12:00:00-08, 2020-11-01 01:00:00-07]
+
+query I
+SELECT range(start, stop, step) FROM (VALUES
+	(timestamptz '2020-01-01', timestamptz '2020-07-01', interval '3' month),
+	(timestamptz '2020-12-04', timestamptz '2020-09-01', interval '-1 month -1 day'),
+	(timestamptz '2020-03-08', timestamptz '2020-03-09', interval '6' hour),
+	(timestamptz '2020-11-02', timestamptz '2020-11-01', interval '-43200' second),
+) AS _(start, stop, step);
+----
+[2020-01-01 00:00:00-08, 2020-04-01 00:00:00-07]
+[2020-12-04 00:00:00-08, 2020-11-03 00:00:00-08, 2020-10-02 00:00:00-07]
+[2020-03-08 00:00:00-08, 2020-03-08 07:00:00-07, 2020-03-08 13:00:00-07, 2020-03-08 19:00:00-07]
+[2020-11-02 00:00:00-08, 2020-11-01 12:00:00-08, 2020-11-01 01:00:00-07]
+
+# mixed sign interval not supported
+statement error
+SELECT generate_series(timestamptz '2020-01-01', timestamptz '2020-06-01', interval '3' month - interval '3' day);
+
+# Infinities will overflow or cause infinite loops so we ban them
+statement error
+SELECT generate_series('294247-01-10'::TIMESTAMPTZ, 'infinity'::TIMESTAMPTZ, INTERVAL '1 DAY');
+
+statement error
+SELECT range('294247-01-10'::TIMESTAMPTZ, 'infinity'::TIMESTAMPTZ, INTERVAL '1 DAY');
+
+statement error
+SELECT generate_series('-infinity'::TIMESTAMPTZ, '290309-12-22 (BC) 00:00:00'::TIMESTAMPTZ, INTERVAL '1 DAY');
+
+statement error
+SELECT range('-infinity'::TIMESTAMPTZ, '290309-12-22 (BC) 00:00:00'::TIMESTAMPTZ, INTERVAL '1 DAY');

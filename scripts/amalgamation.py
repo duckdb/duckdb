@@ -518,8 +518,9 @@ if __name__ == "__main__":
             include_dirs = list_include_dirs()
             print('\n'.join(include_dirs))
             exit(1)
-    if not os.path.exists(amal_dir):
-        os.makedirs(amal_dir)
+    if os.path.exists(amal_dir):
+        shutil.rmtree(amal_dir)
+    os.makedirs(amal_dir)
 
     if nsplits > 1:
         generate_amalgamation_splits(source_file, header_file, nsplits)
