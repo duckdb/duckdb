@@ -23,49 +23,49 @@
 //  IN THE SOFTWARE.
 
 protocol PrimitiveDatabaseValue {
-  static var representedDatabaseTypeID: DBTypeID { get }
+  static var representedDatabaseTypeID: DatabaseType { get }
 }
 
 extension Bool: PrimitiveDatabaseValue {
-  static var representedDatabaseTypeID: DBTypeID { .boolean }
+  static var representedDatabaseTypeID: DatabaseType { .boolean }
 }
 
 extension Int8: PrimitiveDatabaseValue {
-  static var representedDatabaseTypeID: DBTypeID { .tinyint }
+  static var representedDatabaseTypeID: DatabaseType { .tinyint }
 }
 
 extension Int16: PrimitiveDatabaseValue {
-  static var representedDatabaseTypeID: DBTypeID { .smallint }
+  static var representedDatabaseTypeID: DatabaseType { .smallint }
 }
 
 extension Int32: PrimitiveDatabaseValue {
-  static var representedDatabaseTypeID: DBTypeID { .integer }
+  static var representedDatabaseTypeID: DatabaseType { .integer }
 }
 
 extension Int64: PrimitiveDatabaseValue  {
-  static var representedDatabaseTypeID: DBTypeID { .bigint }
+  static var representedDatabaseTypeID: DatabaseType { .bigint }
 }
 
 extension UInt8: PrimitiveDatabaseValue {
-  static var representedDatabaseTypeID: DBTypeID { .utinyint }
+  static var representedDatabaseTypeID: DatabaseType { .utinyint }
 }
 
 extension UInt16: PrimitiveDatabaseValue {
-  static var representedDatabaseTypeID: DBTypeID { .usmallint }
+  static var representedDatabaseTypeID: DatabaseType { .usmallint }
 }
 
 extension UInt32: PrimitiveDatabaseValue {
-  static var representedDatabaseTypeID: DBTypeID { .uinteger }
+  static var representedDatabaseTypeID: DatabaseType { .uinteger }
 }
 
 extension UInt64: PrimitiveDatabaseValue {
-  static var representedDatabaseTypeID: DBTypeID { .ubigint }
+  static var representedDatabaseTypeID: DatabaseType { .ubigint }
 }
 
 extension Float: PrimitiveDatabaseValue {
-  static var representedDatabaseTypeID: DBTypeID { .float }
+  static var representedDatabaseTypeID: DatabaseType { .float }
 }
 
 extension Double: PrimitiveDatabaseValue {
-  static var representedDatabaseTypeID: DBTypeID { .double }
+  static var representedDatabaseTypeID: DatabaseType { .double }
 }

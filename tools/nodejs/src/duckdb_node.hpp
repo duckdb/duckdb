@@ -198,7 +198,8 @@ struct TaskHolder {
 
 class Utils {
 public:
-	static Napi::Value CreateError(Napi::Env env, std::string msg);
+	static Napi::Object CreateError(Napi::Env env, duckdb::PreservedError &e);
+	static Napi::Object CreateError(Napi::Env env, std::string msg);
 	static bool OtherIsInt(Napi::Number source);
 
 	template <class T>
