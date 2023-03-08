@@ -25,4 +25,4 @@ def test_install_non_existent_extension():
     assert value.status_code == 404
     assert value.reason == 'Not Found'
     assert 'Example Domain' in value.body
-    assert value.headers['Accept-Ranges'] == 'bytes'
+    assert 'Content-Length' in value.headers
