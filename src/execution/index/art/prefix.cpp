@@ -195,8 +195,8 @@ void Prefix::Concatenate(ART &art, const uint8_t &byte, Prefix &other) {
 	// overwrite into this prefix
 	if (new_size <= ARTNode::PREFIX_INLINE_BYTES) {
 		// move this.prefix backwards
-		for (idx_t i = 0; i < count; i++) {
-			data.inlined[other.count + 1 + i] = GetByte(art, i);
+		for (idx_t i = count; i > 0; i--) {
+			data.inlined[other.count + 1 + i - 1] = GetByte(art, i - 1);
 		}
 		// copy byte
 		data.inlined[other.count] = byte;

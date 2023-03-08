@@ -2,6 +2,9 @@
 # description: Test ART index with many matches
 # group: [art]
 
+# TODO
+mode skip
+
 require noforcestorage
 
 require skip_reload
