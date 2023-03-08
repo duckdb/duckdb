@@ -351,7 +351,7 @@ BlockPointer Leaf::Serialize(ART &art, MetaBlockWriter &writer) {
 		return block_pointer;
 	}
 
-	D_ASSERT(row_ids.position);
+	D_ASSERT(row_ids.position != DConstants::INVALID_INDEX);
 	auto position = row_ids.position;
 	auto remaining = count;
 
