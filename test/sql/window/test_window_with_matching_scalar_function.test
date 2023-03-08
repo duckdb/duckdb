@@ -2,6 +2,8 @@
 # description: When a scalar macro function with the same name as an aggregate function exists, make sure bind_window returns the aggregate function
 # group: [window]
 
+require skip_reload
+
 statement ok
 PRAGMA enable_verification
 
