@@ -473,6 +473,19 @@ test_that("You can perform the window function percent rank", {
     expect_equal(res, expected_result)
 })
 
+
+test_that("You can perform the window function percent rank", {
+    con <- dbConnect(duckdb::duckdb())
+	  rel_a <- rel_from_df(con, data.frame(a=c(1, 1, 2, 2, 2), b=c(2, 2, 3, 3, 4), d=c(5, 4, 3, 2, 1)))
+    sum_func <- expr_function("sum", list(expr_reference("a")))
+    percent_rank_wind <- expr_window(sum_func)
+    expr_set_alias(percent_rank_wind, "sum(a)")
+    window_proj <- rel_project(rel_a, list(expr_reference("a"), expr_reference("b"), percent_rank_wind))
+    res <- rel_to_altrep(window_proj)
+    expected_result <- data.frame(a=c(1, 1, 2, 2, 2), percent_rank=c(0.0, 0.0, 0.5, 0.5, 0.5))
+    expect_equal(res, expected_result)
+})
+
 # with and without offsets
 test_that("R semantics for adding NaNs is respected", {
    dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
