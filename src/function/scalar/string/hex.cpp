@@ -51,17 +51,14 @@ struct FromHexOperator {
 		idx_t i = 0;
 		if (size % 2 != 0) {
 			*output = StringUtil::GetHexValue(data[i]);
-			// *output = StringUtil::HEX_TO_DIGIT[static_cast<idx_t>(data[i])];
 			i++;
 			output++;
 		}
 
 		for (; i < size; i += 2) {
+            
 			uint8_t major = StringUtil::GetHexValue(data[i]);
 			uint8_t minor = StringUtil::GetHexValue(data[i + 1]);
-			// uint8_t byte = (uint8_t)StringUtil::HEX_TO_DIGIT[static_cast<idx_t>(data[i])] * 0x10 +
-			//               (uint8_t)StringUtil::HEX_TO_DIGIT[static_cast<idx_t>(data[i + 1])];
-			// *output = byte;
 			*output = (major << 4) | minor;
 			output++;
 		}
@@ -80,20 +77,15 @@ struct HexIntegralOperator {
 		idx_t buffer_size = 0;
 
 		bool seen_non_zero = false;
-		for (idx_t offset = sizeof(INPUT_TYPE) * 8; offset >= 8; offset -= 8) {
-			uint8_t byte = (uint8_t)(input >> (offset - 8));
-			// offset == 8: do not continue. The result has at least one byte
-			if (byte == 0 && !seen_non_zero && offset > 8) {
+		for (idx_t offset = sizeof(INPUT_TYPE) * 8; offset >= 4; offset -= 4) {
+            uint8_t byte = (input >> (offset - 4)) & 0x0F;
+			if (byte == 0 && !seen_non_zero && offset > 4) {
 				continue;
 			}
 			seen_non_zero = true;
-			*ptr = StringUtil::HEX_UPPER_TABLE[(byte >> 4) & 0x0F];
+            *ptr = StringUtil::HEX_UPPER_TABLE[byte];
 			ptr++;
-			*ptr = StringUtil::HEX_UPPER_TABLE[byte & 0x0F];
-			ptr++;
-			// memcpy(ptr, &StringUtil::BYTE_TO_HEXS[static_cast<idx_t>(byte) * 2], 2);
-			// ptr += 2;
-			buffer_size += 2;
+            buffer_size++;
 		}
 
 		// Allocate empty space
@@ -117,37 +109,29 @@ struct HexHugeIntOperator {
 		int64_t upper = input.upper;
 
 		bool seen_non_zero = false;
-		for (idx_t offset = 64; offset >= 8; offset -= 8) {
-			uint8_t byte = (uint8_t)(upper >> (offset - 8));
+		for (idx_t offset = 64; offset >= 4; offset -= 4) {
+            uint8_t byte = (upper >> (offset - 4)) & 0x0F;
 
 			if (byte == 0 && !seen_non_zero) {
 				continue;
 			}
 			seen_non_zero = true;
-			*ptr = StringUtil::HEX_UPPER_TABLE[(byte >> 4) & 0x0F];
+            *ptr = StringUtil::HEX_UPPER_TABLE[byte];
 			ptr++;
-			*ptr = StringUtil::HEX_UPPER_TABLE[byte & 0x0F];
-			ptr++;
-			// memcpy(ptr, &StringUtil::BYTE_TO_HEXS[static_cast<idx_t>(byte) * 2], 2);
-			// ptr += 2;
-			buffer_size += 2;
+            buffer_size++;
 		}
 
-		for (idx_t offset = 64; offset >= 8; offset -= 8) {
-			uint8_t byte = (uint8_t)(lower >> (offset - 8));
+		for (idx_t offset = 64; offset >= 4; offset -= 4) {
+			uint8_t byte = (lower >> (offset - 4)) & 0x0F;
 
 			// at least one byte space
-			if (byte == 0 && !seen_non_zero && offset > 8) {
+			if (byte == 0 && !seen_non_zero && offset > 4) {
 				continue;
 			}
 			seen_non_zero = true;
-			*ptr = StringUtil::HEX_UPPER_TABLE[(byte >> 4) & 0x0F];
+            *ptr = StringUtil::HEX_UPPER_TABLE[byte];
 			ptr++;
-			*ptr = StringUtil::HEX_UPPER_TABLE[byte & 0x0F];
-			ptr++;
-			// memcpy(ptr, &StringUtil::BYTE_TO_HEXS[static_cast<idx_t>(byte) * 2], 2);
-			// ptr += 2;
-			buffer_size += 2;
+            buffer_size++;
 		}
 
 		// Allocate empty space
@@ -201,10 +185,14 @@ void HexFun::RegisterFunction(BuiltinFunctions &set) {
 	to_hex.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, ToHexFunction));
 	hex.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, ToHexFunction));
 
-	for (auto &type : LogicalType::Integral()) {
-		to_hex.AddFunction(ScalarFunction({type}, LogicalType::VARCHAR, ToHexFunction));
-		hex.AddFunction(ScalarFunction({type}, LogicalType::VARCHAR, ToHexFunction));
-	}
+    to_hex.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::VARCHAR, ToHexFunction));
+	hex.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::VARCHAR, ToHexFunction));
+
+    to_hex.AddFunction(ScalarFunction({LogicalType::UBIGINT}, LogicalType::VARCHAR, ToHexFunction));
+	hex.AddFunction(ScalarFunction({LogicalType::UBIGINT}, LogicalType::VARCHAR, ToHexFunction));
+
+    to_hex.AddFunction(ScalarFunction({LogicalType::HUGEINT}, LogicalType::VARCHAR, ToHexFunction));
+	hex.AddFunction(ScalarFunction({LogicalType::HUGEINT}, LogicalType::VARCHAR, ToHexFunction));
 
 	from_hex.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BLOB, FromHexFunction));
 	unhex.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BLOB, FromHexFunction));

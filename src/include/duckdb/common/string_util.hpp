@@ -21,8 +21,6 @@ namespace duckdb {
  */
 class StringUtil {
 public:
-	static const char *const BYTE_TO_HEXS;
-	static const char *const HEX_TO_DIGIT;
 	static const char *const HEX_UPPER_TABLE;
 
 public:

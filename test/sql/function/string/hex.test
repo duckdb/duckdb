@@ -15,81 +15,22 @@ SELECT from_hex('6475636B6462');
 ----
 duckdb
 
-# Test at least one byte
-query I
-SELECT to_hex(0::TINYINT);
+query II
+SELECT '', '';
 ----
-00
+(empty)	(empty)
 
-# Test skip leading zero
-query I
-SELECT to_hex(8388609::INT);
+query IIIIIIIIII
+SELECT to_hex(columns('^(.*int|varchar)$')) FROM test_all_types();
 ----
-800001
+FFFFFFFFFFFFFF80	FFFFFFFFFFFF8000	FFFFFFFF80000000	8000000000000000	80000000000000000000000000000001	0	0	0	0	F09FA686F09FA686F09FA686F09FA686F09FA686F09FA686
+7F	7FFF	7FFFFFFF	7FFFFFFFFFFFFFFF	7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF	FF	FFFF	FFFFFFFF	FFFFFFFFFFFFFFFF	676F6F007365
+NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
 
-query I
-SELECT to_hex(32767::SMALLINT);
+query T
+SELECT from_hex(to_hex(columns('^(.*int|varchar)$'))) FROM test_all_types();
 ----
-7FFF
-
-query I
-SELECT to_hex(-32767::SMALLINT);
-----
-8001
-
-# Test hugeint
-query I
-SELECT to_hex(18446744073709551616::HUGEINT);
-----
-010000000000000000
-
-query I
-SELECT to_hex(170141183460469231731687303715884105727);
-----
-7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
-
-query I
-SELECT from_hex('0110');
-----
-\x01\x10
-
-
-# Test '110' == '0110'
-query I
-SELECT from_hex('110');
-----
-\x01\x10
-
-# Test NULL
-statement ok
-CREATE TABLE test (x INT);
-
-statement ok
-INSERT INTO test VALUES (1), (NULL), (2);
-
-query I
-SELECT to_hex(x) FROM test
-----
-01
-NULL
-02
-
-statement ok
-DROP TABLE test
-
-statement ok
-CREATE TABLE test (x VARCHAR);
-
-statement ok
-INSERT INTO test VALUES ('01'), (NULL), ('02');
-
-query I
-SELECT from_hex(x) FROM test
-----
-\x01
-NULL
-\x02
-
-statement ok
-DROP TABLE test
+\xFF\xFF\xFF\xFF\xFF\xFF\xFF\x80	\xFF\xFF\xFF\xFF\xFF\xFF\x80\x00	\xFF\xFF\xFF\xFF\x80\x00\x00\x00	\x80\x00\x00\x00\x00\x00\x00\x00	\x80\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01	\x00	\x00	\x00	\x00	\xF0\x9F\xA6\x86\xF0\x9F\xA6\x86\xF0\x9F\xA6\x86\xF0\x9F\xA6\x86\xF0\x9F\xA6\x86\xF0\x9F\xA6\x86
+@	@\xFF	@\xFF\xFF\xFF	@\xFF\xFF\xFF\xFF\xFF\xFF\xFF	@\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF	\xFF	\xFF\xFF	\xFF\xFF\xFF\xFF	\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF	goo\x00se
+NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
 
