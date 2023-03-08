@@ -47,6 +47,13 @@ public:
 	//! Initializes an Append state - useful for optimizing many appends made to the same tuple data collection
 	void InitializeAppend(TupleDataAppendState &append_state, vector<column_t> column_ids,
 	                      TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE);
+	//! Initializes the Pin state of an Append state
+	//! - useful for optimizing many appends made to the same tuple data collection
+	void InitializeAppend(TupleDataPinState &pin_state,
+	                      TupleDataPinProperties = TupleDataPinProperties::UNPIN_AFTER_DONE);
+	//! Initializes the Chunk state of an Append state
+	//! - useful for optimizing many appends made to the same tuple data collection
+	void InitializeAppend(TupleDataChunkState &chunk_state, vector<column_t> column_ids);
 	//! Append a DataChunk directly to this TupleDataCollection - calls InitializeAppend and Append internally
 	void Append(DataChunk &new_chunk, const SelectionVector &sel = *FlatVector::IncrementalSelectionVector(),
 	            idx_t append_count = DConstants::INVALID_INDEX);
@@ -79,6 +86,9 @@ public:
 	//! Scatters the given Vector to the given column id to the rows in the specified append state
 	void Scatter(TupleDataChunkState &chunk_state, Vector &source, const column_t column_id,
 	             const SelectionVector &append_sel, const idx_t append_count, const idx_t original_count) const;
+	//! Copy rows from input to the built Chunk state
+	void CopyRows(TupleDataChunkState &chunk_state, TupleDataChunkState &input, const SelectionVector &append_sel,
+	              const idx_t append_count) const;
 	//! Finalizes the pin state, releasing or storing blocks
 	void FinalizePinState(TupleDataPinState &pin_state);
 	//! Appends the other TupleDataCollection to this, destroying the other data collection

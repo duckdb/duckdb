@@ -51,12 +51,20 @@ public:
 	void InitializeAppendState(PartitionedTupleDataAppendState &state) const;
 	//! Appends a DataChunk to this PartitionedTupleData
 	void Append(PartitionedTupleDataAppendState &state, DataChunk &input);
+	//! Appends rows to this PartitionedTupleData
+	void Append(PartitionedTupleDataAppendState &state, TupleDataChunkState &input, idx_t count);
 	//! Flushes any remaining data in the append state into this PartitionedTupleData
 	void FlushAppendState(PartitionedTupleDataAppendState &state);
 	//! Combine another PartitionedTupleData into this PartitionedTupleData
 	void Combine(PartitionedTupleData &other);
+	//! Repartition this PartitionedTupleData into the new PartitionedTupleData
+	void Repartition(PartitionedTupleData &new_partitioned_tuple_data);
 	//! Get the partitions in this PartitionedTupleData
 	vector<unique_ptr<TupleDataCollection>> &GetPartitions();
+	//! Get the count of this PartitionedTupleData
+	idx_t Count() const;
+	//! Get the size (in bytes) of this PartitionedTupleData
+	idx_t SizeInBytes() const;
 
 protected:
 	//===--------------------------------------------------------------------===//
@@ -71,14 +79,25 @@ protected:
 	virtual void ComputePartitionIndices(PartitionedTupleDataAppendState &state, DataChunk &input) {
 		throw NotImplementedException("ComputePartitionIndices for this type of PartitionedTupleData");
 	}
+	//! Compute partition indices from rows (similar to function above)
+	virtual void ComputePartitionIndices(Vector &row_locations, idx_t count, Vector &partition_indices) const {
+		throw NotImplementedException("ComputePartitionIndices for this type of PartitionedTupleData");
+	}
 
 protected:
 	//! PartitionedTupleData can only be instantiated by derived classes
-	PartitionedTupleData(PartitionedTupleDataType type, ClientContext &context, TupleDataLayout layout);
+	PartitionedTupleData(PartitionedTupleDataType type, BufferManager &buffer_manager, TupleDataLayout layout);
 	PartitionedTupleData(const PartitionedTupleData &other);
 
 	//! Create a new shared allocator
 	void CreateAllocator();
+	//! Builds a selection vector in the Append state for the partitions
+	//! - returns true if everything belongs to the same partition - stores partition index in single_partition_idx
+	void BuildPartitionSel(PartitionedTupleDataAppendState &state, idx_t count,
+	                       unordered_map<idx_t, list_entry_t> &partition_entries);
+	//! Builds out the buffer space in the partitions
+	void BuildBufferSpace(PartitionedTupleDataAppendState &state,
+	                      const unordered_map<idx_t, list_entry_t> &partition_entries);
 	//! Create a collection for a specific a partition
 	unique_ptr<TupleDataCollection> CreatePartitionCollection(idx_t partition_index) const {
 		return make_unique<TupleDataCollection>(allocators->allocators[partition_index]);
@@ -86,7 +105,7 @@ protected:
 
 protected:
 	PartitionedTupleDataType type;
-	ClientContext &context;
+	BufferManager &buffer_manager;
 	const TupleDataLayout layout;
 
 	mutex lock;

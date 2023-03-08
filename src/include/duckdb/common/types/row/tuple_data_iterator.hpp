@@ -27,6 +27,8 @@ public:
 	void Reset();
 	//! Get the count of the current "DataChunk"
 	idx_t GetCount() const;
+	//! Get the Chunk state of the scan state of this iterator
+	TupleDataChunkState &GetChunkState();
 	//! Get the array holding the row locations
 	data_ptr_t *GetRowLocations();
 	//! Get the array holding the heap locations

@@ -1,18 +1,19 @@
 #include "duckdb/common/types/row/partitioned_tuple_data.hpp"
 
 #include "duckdb/common/radix_partitioning.hpp"
+#include "duckdb/common/types/row/tuple_data_iterator.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
-PartitionedTupleData::PartitionedTupleData(PartitionedTupleDataType type_p, ClientContext &context_p,
+PartitionedTupleData::PartitionedTupleData(PartitionedTupleDataType type_p, BufferManager &buffer_manager_p,
                                            TupleDataLayout layout_p)
-    : type(type_p), context(context_p), layout(std::move(layout_p)),
+    : type(type_p), buffer_manager(buffer_manager_p), layout(std::move(layout_p)),
       allocators(make_shared<PartitionTupleDataAllocators>()) {
 }
 
 PartitionedTupleData::PartitionedTupleData(const PartitionedTupleData &other)
-    : type(other.type), context(other.context), layout(other.layout) {
+    : type(other.type), buffer_manager(other.buffer_manager), layout(other.layout) {
 }
 
 unique_ptr<PartitionedTupleData> PartitionedTupleData::CreateShared() {
@@ -43,9 +44,63 @@ void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, DataCh
 	// Compute partition indices and store them in state.partition_indices
 	ComputePartitionIndices(state, input);
 
-	// Compute the counts per partition
-	const auto count = input.size();
+	// Build the selection vector for the partitions
 	unordered_map<idx_t, list_entry_t> partition_entries;
+	BuildPartitionSel(state, input.size(), partition_entries);
+
+	// Early out: check if everything belongs to a single partition
+	if (partition_entries.size() == 1) {
+		const auto &partition_index = partition_entries.begin()->first;
+		auto &partition = *partitions[partition_index];
+		auto &partition_pin_state = *state.partition_pin_states[partition_index];
+		partition.Append(partition_pin_state, state.chunk_state, input);
+		return;
+	}
+
+	TupleDataCollection::ToUnifiedFormat(state.chunk_state, input);
+
+	// Compute the heap sizes for the whole chunk
+	if (!layout.AllConstant()) {
+		TupleDataCollection::ComputeHeapSizes(state.chunk_state, input, state.partition_sel, input.size());
+	}
+
+	// Build the buffer space
+	BuildBufferSpace(state, partition_entries);
+
+	// Now scatter everything in one go
+	partitions[0]->Scatter(state.chunk_state, input, state.partition_sel, input.size());
+}
+
+void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, TupleDataChunkState &input, idx_t count) {
+	// Compute partition indices and store them in state.partition_indices
+	ComputePartitionIndices(input.row_locations, count, state.partition_indices);
+
+	// Build the selection vector for the partitions
+	unordered_map<idx_t, list_entry_t> partition_entries;
+	BuildPartitionSel(state, count, partition_entries);
+
+	// Reference the input heap sizes
+	state.chunk_state.heap_sizes.Reference(input.heap_sizes);
+
+	// Early out: check if everything belongs to a single partition
+	if (partition_entries.size() == 1) {
+		const auto &partition_index = partition_entries.begin()->first;
+		auto &partition = *partitions[partition_index];
+		auto &partition_pin_state = *state.partition_pin_states[partition_index];
+		partition.Build(partition_pin_state, state.chunk_state, 0, count);
+		partition.CopyRows(state.chunk_state, input, *FlatVector::IncrementalSelectionVector(), count);
+		return;
+	}
+
+	// Build the buffer space
+	BuildBufferSpace(state, partition_entries);
+
+	// Copy the rows
+	partitions[0]->CopyRows(state.chunk_state, input, state.partition_sel, count);
+}
+
+void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &state, idx_t count,
+                                             unordered_map<idx_t, list_entry_t> &partition_entries) {
 	const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
 	switch (state.partition_indices.GetVectorType()) {
 	case VectorType::FLAT_VECTOR:
@@ -68,10 +123,6 @@ void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, DataCh
 
 	// Early out: check if everything belongs to a single partition
 	if (partition_entries.size() == 1) {
-		const auto &partition_index = partition_entries.begin()->first;
-		auto &partition = *partitions[partition_index];
-		auto &partition_pin_state = *state.partition_pin_states[partition_index];
-		partition.Append(partition_pin_state, state.chunk_state, input);
 		return;
 	}
 
@@ -90,14 +141,10 @@ void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, DataCh
 		auto &partition_offset = partition_entries[partition_index].offset;
 		all_partitions_sel[partition_offset++] = i;
 	}
+}
 
-	TupleDataCollection::ToUnifiedFormat(state.chunk_state, input);
-
-	// Compute the heap sizes for the whole chunk
-	if (!layout.AllConstant()) {
-		TupleDataCollection::ComputeHeapSizes(state.chunk_state, input, all_partitions_sel, input.size());
-	}
-
+void PartitionedTupleData::BuildBufferSpace(PartitionedTupleDataAppendState &state,
+                                            const unordered_map<idx_t, list_entry_t> &partition_entries) {
 	for (auto &pc : partition_entries) {
 		const auto &partition_index = pc.first;
 
@@ -113,9 +160,6 @@ void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, DataCh
 		// Build out the buffer space for this partition
 		partition.Build(partition_pin_state, state.chunk_state, partition_offset, partition_length);
 	}
-
-	// Now scatter everything in one go
-	partitions[0]->Scatter(state.chunk_state, input, all_partitions_sel, input.size());
 }
 
 void PartitionedTupleData::FlushAppendState(PartitionedTupleDataAppendState &state) {
@@ -142,13 +186,52 @@ void PartitionedTupleData::Combine(PartitionedTupleData &other) {
 	}
 }
 
+void PartitionedTupleData::Repartition(PartitionedTupleData &new_partitioned_tuple_data) {
+	D_ASSERT(layout.GetTypes() == new_partitioned_tuple_data.layout.GetTypes());
+
+	PartitionedTupleDataAppendState append_state;
+	new_partitioned_tuple_data.InitializeAppendState(append_state);
+
+	// TODO: consume blocks as we go
+	for (idx_t partition_idx = 0; partition_idx < partitions.size(); partition_idx++) {
+		auto &partition = *partitions[partition_idx];
+
+		TupleDataChunkIterator iterator(partition, TupleDataPinProperties::UNPIN_AFTER_DONE, true);
+		auto &chunk_state = iterator.GetChunkState();
+		do {
+			auto count = iterator.GetCount();
+			ComputePartitionIndices(chunk_state.row_locations, count, append_state.partition_indices);
+			Append(append_state, chunk_state, count);
+		} while (iterator.Next());
+
+		partitions[partition_idx] = nullptr;
+	}
+
+	FlushAppendState(append_state);
+}
+
 vector<unique_ptr<TupleDataCollection>> &PartitionedTupleData::GetPartitions() {
 	return partitions;
 }
 
+idx_t PartitionedTupleData::Count() const {
+	idx_t total_count = 0;
+	for (auto &partition : partitions) {
+		total_count += partition->Count();
+	}
+	return total_count;
+}
+
+idx_t PartitionedTupleData::SizeInBytes() const {
+	idx_t total_size = 0;
+	for (auto &partition : partitions) {
+		total_size += partition->SizeInBytes();
+	}
+	return total_size;
+}
+
 void PartitionedTupleData::CreateAllocator() {
-	allocators->allocators.emplace_back(
-	    make_shared<TupleDataAllocator>(BufferManager::GetBufferManager(context), layout));
+	allocators->allocators.emplace_back(make_shared<TupleDataAllocator>(buffer_manager, layout));
 }
 
 } // namespace duckdb

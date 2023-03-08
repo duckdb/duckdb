@@ -118,9 +118,11 @@ public:
 	~JoinHashTable();
 
 	//! Add the given data to the HT
-	void Build(TupleDataAppendState &append_state, DataChunk &keys, DataChunk &input);
+	void Build(PartitionedTupleDataAppendState &append_state, DataChunk &keys, DataChunk &input);
 	//! Merge another HT into this one
 	void Merge(JoinHashTable &other);
+	//! TODO:
+	void Unpartition();
 	//! Initialize the pointer table for the probe
 	void InitializePointerTable();
 	//! Finalize the build of the HT, constructing the actual hash table and making the HT ready for probing.
@@ -140,6 +142,10 @@ public:
 	}
 	idx_t SizeInBytes() const {
 		return data_collection->SizeInBytes();
+	}
+
+	PartitionedTupleData &GetSinkCollection() {
+		return *sink_collection;
 	}
 
 	TupleDataCollection &GetDataCollection() {
@@ -209,6 +215,8 @@ private:
 	idx_t PrepareKeys(DataChunk &keys, unique_ptr<UnifiedVectorFormat[]> &key_data, const SelectionVector *&current_sel,
 	                  SelectionVector &sel, bool build_side);
 
+	//! TODO
+	mutex data_lock;
 	//! TODO
 	unique_ptr<PartitionedTupleData> sink_collection;
 	//! The DataCollection holding the main data of the hash table
@@ -281,10 +289,12 @@ public:
 	bool external;
 	//! The current number of radix bits used to partition
 	idx_t radix_bits;
+	//! The max size of the HT
+	idx_t max_ht_size;
 	//! Total count
 	idx_t total_count;
-	//! Number of tuples for the build-side HT per partitioned round
-	idx_t tuples_per_round;
+	//! Total size
+	idx_t total_size;
 
 	//! Capacity of the pointer table given the ht count
 	//! (minimum of 1024 to prevent collision chance for small HT's)
@@ -292,8 +302,10 @@ public:
 		return MaxValue<idx_t>(NextPowerOfTwo(count * 2), 1 << 10);
 	}
 
+	//! Whether we need to do an external join
+	bool RequiresExternalJoin(ClientConfig &config, vector<unique_ptr<JoinHashTable>> &local_hts);
 	//! Computes partition sizes and number of radix bits (called before scheduling partition tasks)
-	void ComputePartitionSizes(ClientConfig &config, vector<unique_ptr<JoinHashTable>> &local_hts, idx_t max_ht_size);
+	bool RequiresPartitioning(ClientConfig &config, vector<unique_ptr<JoinHashTable>> &local_hts);
 	//! Partition this HT
 	void Partition(JoinHashTable &global_ht);
 
@@ -309,10 +321,6 @@ private:
 	//! First and last partition of the current probe round
 	idx_t partition_start;
 	idx_t partition_end;
-
-	//! Partitioned data
-	mutex partitioned_data_lock;
-	unique_ptr<PartitionedTupleData> partitioned_data_collection;
 };
 
 } // namespace duckdb

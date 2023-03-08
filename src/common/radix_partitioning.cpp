@@ -458,7 +458,6 @@ void RadixPartitionedColumnData::InitializeAppendStateInternal(PartitionedColumn
 	state.partition_buffers.reserve(num_partitions);
 	state.partition_append_states.reserve(num_partitions);
 	for (idx_t i = 0; i < num_partitions; i++) {
-		// TODO only initialize the append if partition idx > ...
 		state.partition_append_states.emplace_back(make_unique<ColumnDataAppendState>());
 		partitions[i]->InitializeAppend(*state.partition_append_states[i]);
 		state.partition_buffers.emplace_back(CreatePartitionBuffer());
@@ -475,10 +474,10 @@ void RadixPartitionedColumnData::ComputePartitionIndices(PartitionedColumnDataAp
 //===--------------------------------------------------------------------===//
 // Tuple Data Partitioning
 //===--------------------------------------------------------------------===//
-RadixPartitionedTupleData::RadixPartitionedTupleData(ClientContext &context_p, TupleDataLayout layout_p,
+RadixPartitionedTupleData::RadixPartitionedTupleData(BufferManager &buffer_manager, TupleDataLayout layout_p,
                                                      idx_t radix_bits_p, idx_t hash_col_idx_p)
-    : PartitionedTupleData(PartitionedTupleDataType::RADIX, context_p, std::move(layout_p)), radix_bits(radix_bits_p),
-      hash_col_idx(hash_col_idx_p) {
+    : PartitionedTupleData(PartitionedTupleDataType::RADIX, buffer_manager, std::move(layout_p)),
+      radix_bits(radix_bits_p), hash_col_idx(hash_col_idx_p) {
 	D_ASSERT(hash_col_idx < layout.GetTypes().size());
 	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
 	allocators->allocators.reserve(num_partitions);
@@ -486,33 +485,54 @@ RadixPartitionedTupleData::RadixPartitionedTupleData(ClientContext &context_p, T
 		CreateAllocator();
 	}
 	D_ASSERT(allocators->allocators.size() == num_partitions);
+	Initialize();
 }
 
 RadixPartitionedTupleData::RadixPartitionedTupleData(const RadixPartitionedTupleData &other)
     : PartitionedTupleData(other), radix_bits(other.radix_bits), hash_col_idx(other.hash_col_idx) {
-	for (idx_t i = 0; i < RadixPartitioning::NumberOfPartitions(radix_bits); i++) {
-		partitions.emplace_back(CreatePartitionCollection(i));
-	}
+	Initialize();
 }
 
 RadixPartitionedTupleData::~RadixPartitionedTupleData() {
 }
 
+void RadixPartitionedTupleData::Initialize() {
+	for (idx_t i = 0; i < RadixPartitioning::NumberOfPartitions(radix_bits); i++) {
+		partitions.emplace_back(CreatePartitionCollection(i));
+	}
+}
+
 void RadixPartitionedTupleData::InitializeAppendStateInternal(PartitionedTupleDataAppendState &state) const {
+	// Init pin state per partition
 	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
 	state.partition_pin_states.reserve(num_partitions);
-	state.chunk_state.vector_data.reserve(partitions[0]->GetLayout().ColumnCount());
 	for (idx_t i = 0; i < num_partitions; i++) {
-		// TODO only initialize the append if partition idx > ...
 		state.partition_pin_states.emplace_back(make_unique<TupleDataPinState>());
-		state.partition_pin_states.back()->properties = TupleDataPinProperties::UNPIN_AFTER_DONE;
+		partitions[i]->InitializeAppend(*state.partition_pin_states[i], TupleDataPinProperties::UNPIN_AFTER_DONE);
 	}
+
+	// Init single chunk state
+	auto column_count = layout.ColumnCount();
+	vector<column_t> column_ids;
+	column_ids.reserve(column_count);
+	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+		column_ids.emplace_back(col_idx);
+	}
+	partitions[0]->InitializeAppend(state.chunk_state, std::move(column_ids));
 }
 
 void RadixPartitionedTupleData::ComputePartitionIndices(PartitionedTupleDataAppendState &state, DataChunk &input) {
 	D_ASSERT(partitions.size() == RadixPartitioning::NumberOfPartitions(radix_bits));
 	RadixBitsSwitch<ComputePartitionIndicesFunctor, void>(radix_bits, input.data[hash_col_idx], state.partition_indices,
 	                                                      input.size());
+}
+
+void RadixPartitionedTupleData::ComputePartitionIndices(Vector &row_locations, idx_t count,
+                                                        Vector &partition_indices) const {
+	Vector intermediate(LogicalType::HASH);
+	partitions[0]->Gather(row_locations, *FlatVector::IncrementalSelectionVector(), count, hash_col_idx, intermediate,
+	                      *FlatVector::IncrementalSelectionVector());
+	RadixBitsSwitch<ComputePartitionIndicesFunctor, void>(radix_bits, intermediate, partition_indices, count);
 }
 
 } // namespace duckdb

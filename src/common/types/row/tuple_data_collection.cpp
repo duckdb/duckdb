@@ -116,12 +116,20 @@ void TupleDataCollection::InitializeAppend(TupleDataAppendState &append_state, T
 void TupleDataCollection::InitializeAppend(TupleDataAppendState &append_state, vector<column_t> column_ids,
                                            TupleDataPinProperties properties) {
 	VerifyAppendColumns(layout, column_ids);
-	append_state.chunk_state.vector_data.resize(layout.ColumnCount());
-	append_state.pin_state.properties = properties;
-	append_state.chunk_state.column_ids = std::move(column_ids);
+	InitializeAppend(append_state.pin_state, properties);
+	InitializeAppend(append_state.chunk_state, std::move(column_ids));
+}
+
+void TupleDataCollection::InitializeAppend(TupleDataPinState &pin_state, TupleDataPinProperties properties) {
+	pin_state.properties = properties;
 	if (segments.empty()) {
 		segments.emplace_back(allocator);
 	}
+}
+
+void TupleDataCollection::InitializeAppend(TupleDataChunkState &chunk_state, vector<column_t> column_ids) {
+	chunk_state.vector_data.resize(layout.ColumnCount());
+	chunk_state.column_ids = std::move(column_ids);
 }
 
 void TupleDataCollection::Append(DataChunk &new_chunk, const SelectionVector &append_sel, idx_t append_count) {
@@ -244,6 +252,34 @@ void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, Vector &sour
 	scatter_function.function(source, chunk_state.vector_data[column_id], append_sel, append_count, original_count,
 	                          layout, chunk_state.row_locations, chunk_state.heap_locations, column_id,
 	                          scatter_function.child_functions);
+}
+
+void TupleDataCollection::CopyRows(TupleDataChunkState &chunk_state, TupleDataChunkState &input,
+                                   const SelectionVector &append_sel, const idx_t append_count) const {
+	const auto source_locations = FlatVector::GetData<data_ptr_t>(input.row_locations);
+	const auto target_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
+
+	// Copy rows
+	const auto row_width = layout.GetRowWidth();
+	for (idx_t i = 0; i < append_count; i++) {
+		auto idx = append_sel.get_index(i);
+		FastMemcpy(target_locations[i], source_locations[idx], row_width);
+	}
+
+	// Copy heap if we need to
+	if (!layout.AllConstant()) {
+		const auto source_heap_locations = FlatVector::GetData<data_ptr_t>(input.heap_locations);
+		const auto target_heap_locations = FlatVector::GetData<data_ptr_t>(chunk_state.heap_locations);
+		const auto heap_sizes = FlatVector::GetData<idx_t>(input.heap_sizes);
+
+		// Copy heap
+		for (idx_t i = 0; i < append_count; i++) {
+			auto idx = append_sel.get_index(i);
+			FastMemcpy(target_heap_locations[i], source_heap_locations[idx], heap_sizes[idx]);
+		}
+
+		// TODO: fix pointers
+	}
 }
 
 void TupleDataCollection::Combine(TupleDataCollection &other) {

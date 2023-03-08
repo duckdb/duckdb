@@ -65,6 +65,10 @@ idx_t TupleDataChunkIterator::GetCount() const {
 	return collection.segments[current_segment_idx].chunks[current_chunk_idx].count;
 }
 
+TupleDataChunkState &TupleDataChunkIterator::GetChunkState() {
+	return state.chunk_state;
+}
+
 data_ptr_t *TupleDataChunkIterator::GetRowLocations() {
 	return FlatVector::GetData<data_ptr_t>(state.chunk_state.row_locations);
 }
