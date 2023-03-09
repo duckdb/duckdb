@@ -102,7 +102,43 @@ struct BindReplaceDemoFun {
 	}
 };
 
-TEST_CASE("Bind Replace function", "[bind replace]") {
+// Simpler function that is effectively an alias for range()
+struct BindReplaceDemoFun2 {
+	struct CustomFunctionData : public TableFunctionData {
+		bool done = false;
+	};
+
+	static unique_ptr<TableRef> BindReplace(ClientContext &context, TableFunctionBindInput &input) {
+		auto result = make_unique<BindReplaceDemoFun2::CustomFunctionData>();
+
+		auto value = input.inputs[0].GetValue<int64_t>();
+		if (value < 0) {
+			// Note: we are returning a nullptr in a table function without bind, this will fail
+			return nullptr;
+		}
+
+		vector<unique_ptr<ParsedExpression>> children;
+		children.push_back(make_unique<ConstantExpression>(Value(value)));
+		auto tf_ref = make_unique<TableFunctionRef>();
+		tf_ref->function = make_unique<FunctionExpression>("range", std::move(children));
+
+		return std::move(tf_ref);
+	}
+
+	static void Register(Connection &con) {
+		// Create our test TableFunction
+		con.BeginTransaction();
+		auto &client_context = *con.context;
+		auto &catalog = Catalog::GetSystemCatalog(client_context);
+		TableFunction bind_replace_demo("bind_replace_demo2", {LogicalType::BIGINT}, nullptr, nullptr);
+		bind_replace_demo.bind_replace = BindReplaceDemoFun2::BindReplace;
+		CreateTableFunctionInfo bind_replace_demo_info(bind_replace_demo);
+		catalog.CreateTableFunction(*con.context, &bind_replace_demo_info);
+		con.Commit();
+	}
+};
+
+TEST_CASE("Table function with both bind and bindreplace", "[tablefunction]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	BindReplaceDemoFun::Register(con);
@@ -117,7 +153,23 @@ TEST_CASE("Bind Replace function", "[bind replace]") {
 	REQUIRE(result2->RowCount() == 1);
 	REQUIRE(CHECK_COLUMN(result2, 0, {0}));
 	REQUIRE(CHECK_COLUMN(result2, 1, {"hello_LL"}));
+}
 
-	auto result3 = con.Query("EXPLAIN SELECT depth_hello_LL, col_hello_LL FROM bind_replace_demo(2, 'hello_');");
-	Printer::Print(result3->ToString());
+TEST_CASE("Table function with only bindreplace", "[tablefunction]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	BindReplaceDemoFun2::Register(con);
+
+	// Positive numbers simply will return the results from the range() call that was returned in the bind replace
+	auto result = con.Query("SELECT * FROM bind_replace_demo2(3);");
+	REQUIRE(result->RowCount() == 3);
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2}));
+
+	// Negative numbers will not work: we have specified a bind replace, but no bind so returning a nullptr is not
+	// allowed
+	auto expect_err = con.Query("SELECT * FROM bind_replace_demo2(-3);");
+	REQUIRE_THROWS(expect_err->Fetch());
+	REQUIRE(expect_err->HasError());
+	REQUIRE(expect_err->GetError() == "INTERNAL Error: Failed to bind \"bind_replace_demo2\": nullptr returned from "
+	                                  "bind_replace without bind function");
 }
