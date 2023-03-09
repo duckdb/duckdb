@@ -19,8 +19,8 @@ BoundAggregateExpression::BoundAggregateExpression(AggregateFunction function, v
 }
 
 string BoundAggregateExpression::ToString() const {
-	return FunctionExpression::ToString<BoundAggregateExpression, Expression>(*this, string(), function.name, false,
-	                                                                          IsDistinct(), filter.get());
+	return FunctionExpression::ToString<BoundAggregateExpression, Expression, BoundOrderModifier>(
+	    *this, string(), function.name, false, IsDistinct(), filter.get(), order_bys.get());
 }
 
 hash_t BoundAggregateExpression::Hash() const {
@@ -55,6 +55,9 @@ bool BoundAggregateExpression::Equals(const BaseExpression *other_p) const {
 	if (!FunctionData::Equals(bind_info.get(), other->bind_info.get())) {
 		return false;
 	}
+	if (!BoundOrderModifier::Equals(order_bys.get(), other->order_bys.get())) {
+		return false;
+	}
 	return true;
 }
 
@@ -74,12 +77,16 @@ unique_ptr<Expression> BoundAggregateExpression::Copy() {
 	auto copy = make_unique<BoundAggregateExpression>(function, std::move(new_children), std::move(new_filter),
 	                                                  std::move(new_bind_info), aggr_type);
 	copy->CopyProperties(*this);
+	copy->order_bys = order_bys ? order_bys->Copy() : nullptr;
 	return std::move(copy);
 }
 
 void BoundAggregateExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteField(IsDistinct());
 	writer.WriteOptional(filter);
+	if (order_bys) {
+		throw NotImplementedException("Serialization of ORDER BY aggregate not yet supported");
+	}
 	FunctionSerializer::Serialize<AggregateFunction>(writer, function, return_type, children, bind_info.get());
 }
 
