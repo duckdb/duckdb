@@ -1078,7 +1078,9 @@ bool ART::MergeIndexes(IndexLock &state, Index *other_index) {
 	// vacuum excess memory
 	// FIXME: improve performance by directly iterating the underlying buffers (should be similar to InitializeMerge
 	// code)
-	Vacuum();
+	// TODO: enable this? if not enables, then memory consumption super high, needs
+	// TODO: more thought!
+	//	Vacuum();
 	return true;
 }
 

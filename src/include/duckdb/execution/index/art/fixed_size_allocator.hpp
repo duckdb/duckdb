@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/pair.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/vector.hpp"
@@ -37,8 +38,8 @@ public:
 	idx_t offsets_per_buffer;
 	//! Buffers containing the data
 	vector<data_ptr_t> buffers;
-	//! Set containing all free positions
-	list<idx_t> free_list;
+	//! List of lists containing all free positions, with buffer ID offsets
+	list<pair<idx_t, list<idx_t>>> free_list;
 
 public:
 	//! Get a new position to data, might cause a new buffer allocation
@@ -69,6 +70,9 @@ private:
 
 	//! Returns a data_ptr_t to the position
 	data_ptr_t Get(const idx_t &position) const;
+	//! Ensures that the first free list in the list always has a buffer ID offset
+	//! of zero
+	void RearrangeFreeList();
 };
 
 } // namespace duckdb
