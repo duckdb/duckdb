@@ -56,6 +56,90 @@ unique_ptr<GlobalOperatorState> PhysicalTableInOutFunction::GetGlobalOperatorSta
 	return std::move(result);
 }
 
+void PhysicalTableInOutFunction::AddProjectedColumnsFromOtherMapping(idx_t map_idx, DataChunk &input,
+                                                                     DataChunk &intermediate, DataChunk &out) const {
+	auto &mapping_column = intermediate.data[map_idx];
+
+	SelectionVector sel_vec;
+	sel_vec.Initialize(intermediate.size());
+	// Create a selection vector that maps from output row -> input row
+	UnifiedVectorFormat mapping_vector_data;
+	mapping_column.ToUnifiedFormat(intermediate.size(), mapping_vector_data);
+	auto mapping_data = (sel_t *)mapping_vector_data.data;
+	for (idx_t i = 0; i < intermediate.size(); i++) {
+		// The index in the input column that produced this output tuple
+		idx_t idx = mapping_vector_data.sel->get_index(i);
+		const auto input_row = mapping_data[idx];
+		D_ASSERT(input_row < STANDARD_VECTOR_SIZE);
+		sel_vec.set_index(i, input_row);
+	}
+
+	// Add the projected columns, and apply the selection vector
+	for (idx_t project_idx = 0; project_idx < projected_input.size(); project_idx++) {
+		auto source_idx = projected_input[project_idx];
+		D_ASSERT(source_idx < input.data.size());
+		auto target_idx = map_idx + project_idx;
+
+		auto &target_column = out.data[target_idx];
+		auto &source_column = input.data[source_idx];
+
+		target_column.Slice(source_column, sel_vec, intermediate.size());
+		// Note: we can avoid flattening this
+	}
+}
+
+void PhysicalTableInOutFunction::AddProjectedColumnsFromConstantMapping(idx_t map_idx, DataChunk &input,
+                                                                        DataChunk &intermediate, DataChunk &out) const {
+	auto &mapping_column = intermediate.data[map_idx];
+	D_ASSERT(mapping_column.GetVectorType() == VectorType::CONSTANT_VECTOR);
+
+	UnifiedVectorFormat mapping_vector_data;
+	mapping_column.ToUnifiedFormat(intermediate.size(), mapping_vector_data);
+	auto mapping_data = (sel_t *)mapping_vector_data.data;
+
+	// Add the projected columns, and apply the selection vector
+	for (idx_t project_idx = 0; project_idx < projected_input.size(); project_idx++) {
+		auto source_idx = projected_input[project_idx];
+		D_ASSERT(source_idx < input.data.size());
+		auto target_idx = map_idx + project_idx;
+
+		auto &target_column = out.data[target_idx];
+		auto &source_column = input.data[source_idx];
+
+		ConstantVector::Reference(target_column, source_column, mapping_data[0], input.size());
+	}
+}
+
+void PhysicalTableInOutFunction::AddProjectedColumnsFromFlatMapping(idx_t map_idx, DataChunk &input,
+                                                                    DataChunk &intermediate, DataChunk &out) const {
+	auto &mapping_column = intermediate.data[map_idx];
+	D_ASSERT(mapping_column.GetVectorType() == VectorType::FLAT_VECTOR);
+
+	UnifiedVectorFormat mapping_data;
+	mapping_column.ToUnifiedFormat(intermediate.size(), mapping_data);
+	D_ASSERT(mapping_data.validity.AllValid());
+	auto mapping_array = (sel_t *)mapping_data.data;
+
+	// We can directly use this column as a selection vector
+	SelectionVector sel_vec(mapping_array);
+
+	// Add the projected columns, and apply the selection vector
+	for (idx_t project_idx = 0; project_idx < projected_input.size(); project_idx++) {
+		auto source_idx = projected_input[project_idx];
+		D_ASSERT(source_idx < input.data.size());
+		auto target_idx = map_idx + project_idx;
+
+		auto &target_column = out.data[target_idx];
+		auto &source_column = input.data[source_idx];
+
+		target_column.Slice(source_column, sel_vec, intermediate.size());
+		// Since our selection vector is using temporary allocated data, we need to
+		// immediately flatten this column, so we don't run the risk of the dictionary vector
+		// outliving the selection vector
+		target_column.Flatten(intermediate.size());
+	}
+}
+
 OperatorResultType PhysicalTableInOutFunction::ExecuteWithMapping(ExecutionContext &context, DataChunk &input,
                                                                   DataChunk &chunk, TableInOutLocalState &state,
                                                                   TableFunctionInput &data) const {
@@ -92,30 +176,25 @@ OperatorResultType PhysicalTableInOutFunction::ExecuteWithMapping(ExecutionConte
 	}
 
 	auto &mapping_column = intermediate_chunk.data[base_columns];
-	D_ASSERT(mapping_column.GetVectorType() == VectorType::FLAT_VECTOR);
-	UnifiedVectorFormat mapping_data;
-	mapping_column.ToUnifiedFormat(intermediate_chunk.size(), mapping_data);
-	D_ASSERT(mapping_data.validity.AllValid());
-	auto mapping_array = (sel_t *)mapping_data.data;
-
-	// We can directly use this column as a selection vector
-	SelectionVector sel_vec(mapping_array);
-
-	// Add the projected columns, and apply the selection vector
-	for (idx_t project_idx = 0; project_idx < projected_input.size(); project_idx++) {
-		auto source_idx = projected_input[project_idx];
-		D_ASSERT(source_idx < input.data.size());
-		auto target_idx = base_columns + project_idx;
-
-		auto &target_column = chunk.data[target_idx];
-		auto &source_column = input.data[source_idx];
-
-		target_column.Slice(source_column, sel_vec, intermediate_chunk.size());
-		// Since our selection vector is using temporary allocated data, we need to
-		// immediately flatten this column, so we don't run the risk of the dictionary vector
-		// outliving the selection vector
-		target_column.Flatten(intermediate_chunk.size());
+	switch (mapping_column.GetVectorType()) {
+	case VectorType::FLAT_VECTOR: {
+		// This is the original vector we created
+		AddProjectedColumnsFromFlatMapping(base_columns, input, intermediate_chunk, chunk);
+		break;
 	}
+	case VectorType::CONSTANT_VECTOR: {
+		// We can avoid creating a selection vector altogether
+		AddProjectedColumnsFromConstantMapping(base_columns, input, intermediate_chunk, chunk);
+		break;
+	}
+	default: {
+		// Any other vector type: we need to create a selection vector
+		// but can avoid flattening because the memory of the selection vector will not be temporary
+		AddProjectedColumnsFromOtherMapping(base_columns, input, intermediate_chunk, chunk);
+		break;
+	}
+	}
+
 	return result;
 }
 

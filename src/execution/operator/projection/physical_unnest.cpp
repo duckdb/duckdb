@@ -348,9 +348,8 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 		if (add_in_out_mapping) {
 			auto &relation_vec = chunk.data[state.list_data.ColumnCount() + col_offset];
 			auto relation_data = FlatVector::GetData<uint32_t>(relation_vec);
-			for (idx_t i = 0; i < this_chunk_len; i++) {
-				relation_data[i] = state.current_row;
-			}
+			relation_data[0] = state.current_row;
+			relation_vec.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
 
 		state.list_position += this_chunk_len;

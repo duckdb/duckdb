@@ -46,6 +46,12 @@ private:
 	OperatorResultType ExecuteWithoutMapping(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                                         TableInOutGlobalState &gstate, TableInOutLocalState &state,
 	                                         TableFunctionInput &data) const;
+	void AddProjectedColumnsFromConstantMapping(idx_t map_idx, DataChunk &input, DataChunk &intermediate,
+	                                            DataChunk &out) const;
+	void AddProjectedColumnsFromFlatMapping(idx_t map_idx, DataChunk &input, DataChunk &intermediate,
+	                                        DataChunk &out) const;
+	void AddProjectedColumnsFromOtherMapping(idx_t map_idx, DataChunk &input, DataChunk &intermediate,
+	                                         DataChunk &out) const;
 
 private:
 	//! The table function
