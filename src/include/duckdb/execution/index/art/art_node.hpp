@@ -35,7 +35,7 @@ class Prefix;
 //! Workaround struct to allow the ARTNodeType as a key in an unordered map
 struct ARTNodeTypeHash {
 	template <typename T>
-	uint8_t operator()(T type) const {
+	inline uint8_t operator()(const T &type) const {
 		return (uint8_t)(type);
 	}
 };

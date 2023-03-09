@@ -11,22 +11,9 @@
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/list.hpp"
 
 namespace duckdb {
-
-//! Custom comparison function for the positions in the free list (priority queue) of the fixed size allocator
-struct CustomLess {
-	bool operator()(idx_t left, idx_t right) const {
-		// compare buffer IDs: offset and first byte to zero
-		if ((left & 0x00000000FFFFFFFF) < (right & 0x00000000FFFFFFFF)) {
-			return true;
-		} else if ((left & 0x00000000FFFFFFFF) == (right & 0x00000000FFFFFFFF)) {
-			// compare offsets: buffer ID and first byte to zero
-			return ((left & 0x00FFFFFF00000000) < (right & 0x00FFFFFF00000000));
-		}
-		return false;
-	}
-};
 
 //! The FixedSizeAllocator provides pointers to fixed-size sections of pre-allocated memory.
 //! The pointers are of type idx_t, and the leftmost byte must always be zero.
@@ -51,7 +38,7 @@ public:
 	//! Buffers containing the data
 	vector<data_ptr_t> buffers;
 	//! Set containing all free positions
-	set<idx_t, CustomLess> free_list;
+	list<idx_t> free_list;
 
 public:
 	//! Get a new position to data, might cause a new buffer allocation
