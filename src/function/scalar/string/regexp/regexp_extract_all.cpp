@@ -36,12 +36,20 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, idx_t 
 		throw InvalidInputException("Group by that number doesn't exist");
 	}
 
-	while (RE2::FindAndConsumeN(&input, pattern, group_args, args.size)) {
+	auto input_data = input.data();
+	auto input_length = input.size();
+	while (input.size() && RE2::FindAndConsumeN(&input, pattern, group_args, args.size)) {
+		if (input_data == input.data() && input_length == input.size()) {
+			input.remove_prefix(1);
+		}
+		input_data = input.data();
+		input_length = input.size();
 
 		// Make sure we have enough room for the new entries
 		if (current_list_size + 1 >= current_list_capacity) {
 			ListVector::Reserve(result, current_list_capacity * 2);
 			current_list_capacity = ListVector::GetListCapacity(result);
+			list_content = FlatVector::GetData<string_t>(child_vector);
 		}
 
 		// Write the captured groups into the list-child vector
@@ -51,7 +59,6 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, idx_t 
 		if (match_group.begin() == nullptr || match_group.size() == 0) {
 			// This group was not matched
 			list_content[child_idx] = string_t(string.GetDataUnsafe(), 0);
-			child_validity.SetInvalid(child_idx);
 		} else {
 			// Every group is a substring of the original, we can find out the offset using the pointer
 			// the 'match_group' address is guaranteed to be bigger than that of the source
@@ -109,6 +116,23 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 			auto idx = strings_data.sel->get_index(row);
 			auto string = ((string_t *)strings_data.data)[idx];
 
+			auto &string_validity = strings_data.validity;
+			if (!string_validity.RowIsValid(idx)) {
+				// String is NULL, result is also NULL
+				auto result_data = FlatVector::GetData<list_entry_t>(result);
+				auto &result_validity = FlatVector::Validity(result);
+				result_data[row].length = 0;
+				result_data[row].offset = ListVector::GetListSize(result);
+				result_validity.SetInvalid(row);
+				continue;
+			}
+			if (string.GetSize() == 0) {
+				// String is empty, can't be a match
+				auto result_data = FlatVector::GetData<list_entry_t>(result);
+				result_data[row].length = 0;
+				result_data[row].offset = ListVector::GetListSize(result);
+				continue;
+			}
 			idx_t group_index = GetGroupIndex(args, row);
 			// Get the groups
 			ExtractSingleTuple(string, lstate.constant_pattern, group_index, lstate.group_buffer, result, row);
@@ -117,6 +141,27 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 		RegexStringPieceArgs string_pieces;
 		for (idx_t row = 0; row < tuple_count; row++) {
 			auto pattern_idx = pattern_data.sel->get_index(row);
+			auto &validity = pattern_data.validity;
+			if (!validity.RowIsValid(pattern_idx)) {
+				// Pattern is NULL, result is also NULL
+				auto result_data = FlatVector::GetData<list_entry_t>(result);
+				auto &result_validity = FlatVector::Validity(result);
+				result_data[row].length = 0;
+				result_data[row].offset = ListVector::GetListSize(result);
+				result_validity.SetInvalid(row);
+				continue;
+			}
+
+			auto string_idx = strings_data.sel->get_index(row);
+			auto &string = ((string_t *)strings_data.data)[string_idx];
+			if (string.GetSize() == 0) {
+				// String is empty, can't be a match
+				auto result_data = FlatVector::GetData<list_entry_t>(result);
+				result_data[row].length = 0;
+				result_data[row].offset = ListVector::GetListSize(result);
+				continue;
+			}
+
 			auto &pattern_p = ((string_t *)pattern_data.data)[pattern_idx];
 			auto pattern = StringUtil::Format("(%s)", pattern_p.GetString());
 			auto pattern_strpiece = duckdb_re2::StringPiece(pattern.data(), pattern.size());
@@ -128,9 +173,6 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 				throw InvalidInputException("Pattern is malformed, no groups could be found");
 			}
 			string_pieces.SetSize(group_count_p);
-
-			auto string_idx = strings_data.sel->get_index(row);
-			auto &string = ((string_t *)strings_data.data)[string_idx];
 
 			idx_t group_index = GetGroupIndex(args, row);
 			ExtractSingleTuple(string, re, group_index, string_pieces, result, row);

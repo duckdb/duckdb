@@ -25,3 +25,308 @@ SELECT REGEXP_EXTRACT_ALL('test', '.')
 #SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)', -1);
 #----
 #[]
+
+#query I
+#SELECT regexp_extract_all('1a 2b 14m', '\\d+');
+#----
+#[]
+
+#query I
+#SELECT regexp_extract_all('1a 2b 14m', '\\d+', 0);
+#----
+#[]
+
+#query I
+#SELECT regexp_extract_all('1a 2b 14m', '\\d+', 1);
+#----
+#[]
+
+#query I
+#SELECT regexp_extract_all('1a 2b 14m', '\\d+', 2);
+#----
+#[]
+
+#query I
+#SELECT regexp_extract_all('1a 2b 14m', '\\d+', -1);
+#----
+#[]
+
+#query I
+#SELECT regexp_extract_all('1a 2b 14m', '(\\d+)?', 1);
+#----
+#[]
+
+#query I
+#SELECT regexp_extract_all('a 2b 14m', '(\\d+)?', 1);
+#----
+#[]
+
+#query I
+#SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)');
+#----
+#[]
+
+#query I
+#SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)', 0);
+#----
+#[]
+
+#query I
+#SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)', 1);
+#----
+#[]
+
+#query I
+#SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)', 2);
+#----
+#[]
+
+#query I
+#SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)', 3);
+#----
+#[]
+
+#query I
+#SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)', -1);
+#----
+#[]
+
+#query I
+#SELECT regexp_extract_all('1a 2b 14m', '(\\d+)?([a-z]+)', 1);
+#----
+#[]
+
+#query I
+#SELECT regexp_extract_all('a 2b 14m', '(\\d+)?([a-z]+)', 1);
+#----
+#[]
+
+# source:
+# https://github.com/ep-infosec/33_apache_doris/blob/9edb4e8735fd0c56ee63a3d1d2560af867d80440/docs/zh-CN/docs/sql-manual/sql-functions/string-functions/regexp/regexp_extract_all.md
+query I
+select regexp_extract_all('AbCdE', '([[:lower:]]+)C([[:lower:]]+)', 1);
+----
+[b]
+
+query I
+select regexp_extract_all('AbCdEfCg', '([[:lower:]]+)C([[:lower:]]+)', 1);
+----
+[b, f]
+
+query I
+select regexp_extract_all('abc=111, def=222, ghi=333', '("[^"]+"|\w+)=("[^"]+"|\w+)', 1);
+----
+[abc, def, ghi]
+
+query I
+select regexp_extract_all('', NULL)
+----
+NULL
+
+query I
+select regexp_extract_all(NULL, '')
+----
+NULL
+
+query I
+select regexp_extract_all('', '')
+----
+[]
+
+query I
+select regexp_extract_all('', 'abc')
+----
+[]
+
+query I
+select regexp_extract_all('abc', '.')
+----
+[a, b, c]
+
+# currently broken: produces [a, a, a]
+#query I
+#select regexp_extract_all('aaa', '^a')
+#----
+#[a]
+
+query I
+select regexp_extract_all('abc', 'abc')
+----
+[abc]
+
+query I
+select regexp_extract_all('abcdef', 'a.c.*f')
+----
+[abcdef]
+
+query I
+select regexp_extract_all('abcdef', 'ac.*e.')
+----
+[]
+
+query I
+select regexp_extract_all('abcdef', 'bcde')
+----
+[bcde]
+
+# infinite loop?
+query I
+select regexp_extract_all('aabca', 'a*')
+----
+[aa, , , a]
+
+query I
+select regexp_extract_all('aaba', 'a?')
+----
+[a, a, , a]
+
+query I
+select regexp_extract_all('baac', 'a*')
+----
+[, aa, ]
+
+# original test said the result should be '[bc]'
+# but presto agrees on this result
+query I
+select regexp_extract_all('abcd', 'a(bc)*')
+----
+[abc]
+
+query I
+select regexp_extract_all('щцф', '.')
+----
+[щ, ц, ф]
+
+query I
+select regexp_extract_all('щцф', '.{3}')
+----
+[щцф]
+
+query I
+select regexp_extract_all('щцф', '.{6}')
+----
+[]
+
+# our result: [, , цц, , ]
+#query I
+#select regexp_extract_all('щццф', 'ц*')
+#----
+#[, цц, ]
+
+query I
+select regexp_extract_all('', '()')
+----
+[]
+
+query I
+select regexp_extract_all('', '(abc)')
+----
+[]
+
+query I
+select regexp_extract_all('', '(abc)?')
+----
+[]
+
+query I
+select regexp_extract_all('abc', 'a(b)c')
+----
+[abc]
+
+# our result: [ab, b, b]
+#query I
+#select regexp_extract_all('abbb', '^a*(b)')
+#----
+#[ab]
+
+query I
+select regexp_extract_all('XbASDZb', '(.)b')
+----
+[Xb, Zb]
+
+query I
+select regexp_extract_all('abcdef', 'a(.c.*)f')
+----
+[abcdef]
+
+query I
+select regexp_extract_all('abcdef', '(bcde)')
+----
+[bcde]
+
+# our result: [this_, is_, _, a_, _, _, Test]
+#query I
+#select regexp_extract_all('this_is__a___Test', '(.*?)(?:_|$)')
+#----
+#[this_, is_, _, a_, _, _, Test, ]
+
+# our result: [щцф]
+#query I
+#select regexp_extract_all('щцф', 'щ(.).')
+#----
+#[ц]
+
+query I
+select regexp_extract_all('щцф', '(.{6})')
+----
+[]
+
+query I
+select regexp_extract_all('abc', '((a))')
+----
+[a]
+
+query I
+select regexp_extract_all('abc', '(a)(b)')
+----
+[ab]
+
+# we error: Invalid Input Error: Input is likely malformed, no groups were found
+#query I
+#select regexp_extract_all('', '(')
+#----
+#NULL
+
+query I
+select regexp_extract_all('abcdef', 'ac.*e.')
+----
+[]
+
+# our result: [щц]
+#query I
+#select regexp_extract_all('щцф', '.{2}')
+#----
+#[щ, ц, ф]
+
+#our result: [, , , , , , , , , , ,]
+#query I
+#select regexp_extract_all('\001\002\003', '\002?')
+#----
+#[, , , , , , , , , , , , ]
+
+query I
+select regexp_extract_all('', '()')
+----
+[]
+
+query I
+select regexp_extract_all('', '(abc)')
+----
+[]
+
+query I
+select regexp_extract_all('', '(abc)?')
+----
+[]
+
+# our result: [this_, _, test, case]
+#query I
+#select regexp_extract_all('this__test_case', '(.*?)(?:_|$)')
+#----
+#[this_, _, test, case, ]
+
+# our result: []
+#query I
+#select regexp_extract_all('щцф', 'щ(..)..')
+#----
+#[ц]
