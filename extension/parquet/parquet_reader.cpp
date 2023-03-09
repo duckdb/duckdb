@@ -228,7 +228,6 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 		case Type::INT64:
 			return LogicalType::BIGINT;
 		case Type::INT96: // always a timestamp it would seem
-			Printer::Print("INT96 TIMESTAMP");
 			return LogicalType::TIMESTAMP;
 		case Type::FLOAT:
 			return LogicalType::FLOAT;
