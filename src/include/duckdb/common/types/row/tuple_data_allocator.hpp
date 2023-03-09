@@ -99,8 +99,6 @@ private:
 	data_ptr_t GetBaseHeapPointer(TupleDataPinState &state, const TupleDataChunkPart &part);
 
 private:
-	//! The lock (for shared allocations)
-	mutex lock;
 	//! The buffer manager
 	BufferManager &buffer_manager;
 	//! The layout of the data

@@ -83,7 +83,6 @@ TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataPinState &pin_sta
 	D_ASSERT(count != 0);
 	TupleDataChunkPart result;
 
-	lock_guard<mutex> guard(lock);
 	// Allocate row block (if needed)
 	if (row_blocks.empty() || row_blocks.back().RemainingCapacity() < layout.GetRowWidth()) {
 		row_blocks.emplace_back(buffer_manager, (idx_t)Storage::BLOCK_SIZE);
@@ -96,29 +95,50 @@ TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataPinState &pin_sta
 	if (!layout.AllConstant()) {
 		const auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
 
-		// Allocate heap block (if needed)
-		if (heap_blocks.empty() || heap_blocks.back().RemainingCapacity() < heap_sizes[offset]) {
-			const auto size = MaxValue<idx_t>((idx_t)Storage::BLOCK_SIZE, heap_sizes[offset]);
-			heap_blocks.emplace_back(buffer_manager, size);
-		}
-		result.heap_block_index = heap_blocks.size() - 1;
-		result.heap_block_offset = heap_blocks.back().size;
-		result.base_heap_ptr = GetBaseHeapPointer(pin_state, result);
-
-		// Determine how many we can read next
-		const auto heap_remaining = heap_blocks.back().RemainingCapacity();
-		result.total_heap_size = 0;
+		// Compute total heap size first
+		idx_t total_heap_size = 0;
 		for (idx_t i = 0; i < count; i++) {
 			const auto &heap_size = heap_sizes[offset + i];
-			if (result.total_heap_size + heap_size > heap_remaining) {
-				result.count = i;
-				break;
-			}
-			result.total_heap_size += heap_size;
+			total_heap_size += heap_size;
 		}
 
-		// Mark this portion of the heap block as filled
-		heap_blocks.back().size += result.total_heap_size;
+		if (total_heap_size == 0) {
+			// We don't need a heap at all
+			result.heap_block_index = TupleDataChunkPart::INVALID_INDEX;
+			result.heap_block_offset = TupleDataChunkPart::INVALID_INDEX;
+			result.base_heap_ptr = nullptr;
+			result.total_heap_size = 0;
+		} else {
+			// Allocate heap block (if needed)
+			if (heap_blocks.empty() || heap_blocks.back().RemainingCapacity() < heap_sizes[offset]) {
+				const auto size = MaxValue<idx_t>((idx_t)Storage::BLOCK_SIZE, heap_sizes[offset]);
+				heap_blocks.emplace_back(buffer_manager, size);
+			}
+			result.heap_block_index = heap_blocks.size() - 1;
+			result.heap_block_offset = heap_blocks.back().size;
+			result.base_heap_ptr = GetBaseHeapPointer(pin_state, result);
+
+			const auto heap_remaining = heap_blocks.back().RemainingCapacity();
+			if (total_heap_size <= heap_remaining) {
+				// Everything fits
+				result.count = count;
+				result.total_heap_size = total_heap_size;
+			} else {
+				// Not everything fits - determine how many we can read next
+				result.total_heap_size = 0;
+				for (idx_t i = 0; i < count; i++) {
+					const auto &heap_size = heap_sizes[offset + i];
+					if (result.total_heap_size + heap_size > heap_remaining) {
+						result.count = i;
+						break;
+					}
+					result.total_heap_size += heap_size;
+				}
+			}
+
+			// Mark this portion of the heap block as filled
+			heap_blocks.back().size += result.total_heap_size;
+		}
 	}
 	D_ASSERT(result.count != 0 && result.count <= STANDARD_VECTOR_SIZE);
 
@@ -216,7 +236,7 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataPinState &pin_sta
 			row_locations[offset + i] = base_row_ptr + i * row_width;
 		}
 
-		if (!layout.AllConstant()) {
+		if (!layout.AllConstant() && part->total_heap_size != 0) {
 			const auto base_heap_ptr = GetBaseHeapPointer(pin_state, *part);
 			const auto new_heap_ptr = base_heap_ptr + part->heap_block_offset;
 
@@ -317,25 +337,13 @@ void TupleDataAllocator::ReleaseOrStoreHandlesInternal(TupleDataSegment &segment
 
 void TupleDataAllocator::PinRowBlock(TupleDataPinState &pin_state, const uint32_t row_block_index) {
 	if (pin_state.row_handles.find(row_block_index) == pin_state.row_handles.end()) {
-		shared_ptr<BlockHandle> handle;
-		{
-			lock_guard<mutex> guard(lock);
-			D_ASSERT(row_block_index < row_blocks.size());
-			handle = row_blocks[row_block_index].handle;
-		}
-		pin_state.row_handles[row_block_index] = buffer_manager.Pin(handle);
+		pin_state.row_handles[row_block_index] = buffer_manager.Pin(row_blocks[row_block_index].handle);
 	}
 }
 
 void TupleDataAllocator::PinHeapBlock(TupleDataPinState &pin_state, const uint32_t heap_block_index) {
 	if (pin_state.heap_handles.find(heap_block_index) == pin_state.heap_handles.end()) {
-		shared_ptr<BlockHandle> handle;
-		{
-			lock_guard<mutex> guard(lock);
-			D_ASSERT(heap_block_index < heap_blocks.size());
-			handle = heap_blocks[heap_block_index].handle;
-		}
-		pin_state.row_handles[heap_block_index] = buffer_manager.Pin(handle);
+		pin_state.row_handles[heap_block_index] = buffer_manager.Pin(heap_blocks[heap_block_index].handle);
 	}
 }
 
@@ -345,6 +353,7 @@ data_ptr_t TupleDataAllocator::GetRowPointer(TupleDataPinState &pin_state, const
 }
 
 data_ptr_t TupleDataAllocator::GetBaseHeapPointer(TupleDataPinState &pin_state, const TupleDataChunkPart &part) {
+	D_ASSERT(part.total_heap_size != 0); // Should be caught before
 	PinHeapBlock(pin_state, part.heap_block_index);
 	return pin_state.heap_handles[part.heap_block_index].Ptr();
 }

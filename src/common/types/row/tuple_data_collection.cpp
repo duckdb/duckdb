@@ -272,6 +272,15 @@ void TupleDataCollection::CopyRows(TupleDataChunkState &chunk_state, TupleDataCh
 		const auto target_heap_locations = FlatVector::GetData<data_ptr_t>(chunk_state.heap_locations);
 		const auto heap_sizes = FlatVector::GetData<idx_t>(input.heap_sizes);
 
+		// Check if we need to copy anything at all
+		idx_t total_heap_size = 0;
+		for (idx_t i = 0; i < append_count; i++) {
+			total_heap_size += heap_sizes[append_sel.get_index(i)];
+		}
+		if (total_heap_size == 0) {
+			return;
+		}
+
 		// Copy heap
 		for (idx_t i = 0; i < append_count; i++) {
 			auto idx = append_sel.get_index(i);
@@ -433,9 +442,13 @@ static inline void TupleDataValueScatter(const T &source, const data_ptr_t &row_
 template <>
 inline void TupleDataValueScatter(const string_t &source, const data_ptr_t &row_location, const idx_t offset_in_row,
                                   data_ptr_t &heap_location) {
-	memcpy(heap_location, source.GetDataUnsafe(), source.GetSize());
-	Store<string_t>(string_t((const char *)heap_location, source.GetSize()), row_location + offset_in_row);
-	heap_location += source.GetSize();
+	if (source.IsInlined()) {
+		Store<string_t>(source, row_location + offset_in_row);
+	} else {
+		memcpy(heap_location, source.GetDataUnsafe(), source.GetSize());
+		Store<string_t>(string_t((const char *)heap_location, source.GetSize()), row_location + offset_in_row);
+		heap_location += source.GetSize();
+	}
 }
 
 template <class T>

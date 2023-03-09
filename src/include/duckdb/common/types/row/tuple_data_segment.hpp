@@ -24,6 +24,8 @@ public:
 	TupleDataChunkPart(TupleDataChunkPart &&other) noexcept = default;
 	TupleDataChunkPart &operator=(TupleDataChunkPart &&) noexcept = default;
 
+	static constexpr const uint32_t INVALID_INDEX = (uint32_t)-1;
+
 public:
 	//! Index/offset of the row block
 	uint32_t row_block_index;
