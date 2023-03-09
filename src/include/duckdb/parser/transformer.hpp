@@ -335,6 +335,8 @@ private:
 	void TransformWindowFrame(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr);
 
 	unique_ptr<SampleOptions> TransformSampleOptions(duckdb_libpgquery::PGNode *options);
+	//! Returns true if an expression is only a star (i.e. "*", without any other decorators)
+	bool ExpressionIsEmptyStar(ParsedExpression &expr);
 
 private:
 	//! Current stack depth
