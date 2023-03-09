@@ -8,14 +8,15 @@ namespace duckdb {
 struct JsonSerializeBindData : public FunctionData {
 	bool skip_if_null = false;
 	bool skip_if_empty = false;
+	bool format = false;
 
-	JsonSerializeBindData(bool skip_if_null_p, bool skip_if_empty_p)
-	    : skip_if_null(skip_if_null_p), skip_if_empty(skip_if_empty_p) {
+	JsonSerializeBindData(bool skip_if_null_p, bool skip_if_empty_p, bool format_p)
+	    : skip_if_null(skip_if_null_p), skip_if_empty(skip_if_empty_p), format(format_p) {
 	}
 
 public:
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<JsonSerializeBindData>(skip_if_null, skip_if_empty);
+		return make_unique<JsonSerializeBindData>(skip_if_null, skip_if_empty, format);
 	}
 	bool Equals(const FunctionData &other_p) const override {
 		return true;
@@ -36,8 +37,9 @@ static unique_ptr<FunctionData> JsonSerializeBind(ClientContext &context, Scalar
 
 	bool skip_if_null = false;
 	bool skip_if_empty = false;
+	bool format = false;
 
-	if (arguments.size() > 1 && arguments.size() < 4) {
+	if (arguments.size() > 1 && arguments.size() < 5) {
 		for (idx_t i = 1; i < arguments.size(); i++) {
 			auto &arg = arguments[i];
 			if (arg->alias == "skip_null") {
@@ -62,10 +64,21 @@ static unique_ptr<FunctionData> JsonSerializeBind(ClientContext &context, Scalar
 					throw InvalidTypeException("skip_empty argument must be a boolean");
 				}
 				skip_if_empty = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
+			} else if (arg->alias == "format") {
+				if (arg->HasParameter()) {
+					throw ParameterNotResolvedException();
+				}
+				if (!arg->IsFoldable()) {
+					throw InvalidInputException("indent argument must be constant");
+				}
+				if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
+					throw InvalidTypeException("indent argument must be a boolean");
+				}
+				format = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
 			}
 		}
 	}
-	return make_unique<JsonSerializeBindData>(skip_if_null, skip_if_empty);
+	return make_unique<JsonSerializeBindData>(skip_if_null, skip_if_empty, format);
 }
 
 static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -101,14 +114,23 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 
 			yyjson_mut_obj_add_false(doc, result_obj, "error");
 			yyjson_mut_obj_add_val(doc, result_obj, "statements", statements_arr);
-			return JSONCommon::WriteVal(result_obj, alc);
+			idx_t len;
+			auto data = yyjson_mut_val_write_opts(result_obj,
+			                                      info.format ? JSONCommon::WRITE_PRETTY_FLAG : JSONCommon::WRITE_FLAG,
+			                                      alc, (size_t *)&len, nullptr);
+			return string_t(data, len);
 
 		} catch (Exception &exception) {
 			yyjson_mut_obj_add_true(doc, result_obj, "error");
 			yyjson_mut_obj_add_strcpy(doc, result_obj, "error_type",
 			                          StringUtil::Lower(exception.ExceptionTypeToString(exception.type)).c_str());
 			yyjson_mut_obj_add_strcpy(doc, result_obj, "error_message", exception.RawMessage().c_str());
-			return JSONCommon::WriteVal(result_obj, alc);
+
+			idx_t len;
+			auto data = yyjson_mut_val_write_opts(result_obj,
+			                                      info.format ? JSONCommon::WRITE_PRETTY_FLAG : JSONCommon::WRITE_FLAG,
+			                                      alc, (size_t *)&len, nullptr);
+			return string_t(data, len);
 		}
 	});
 }
@@ -117,6 +139,7 @@ CreateScalarFunctionInfo JSONFunctions::GetSerializeSqlFunction() {
 	ScalarFunctionSet set("json_serialize_sql");
 	set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, JSONCommon::JSONType(), JsonSerializeFunction,
 	                               JsonSerializeBind, nullptr, nullptr, JSONFunctionLocalState::Init));
+
 	set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN}, JSONCommon::JSONType(),
 	                               JsonSerializeFunction, JsonSerializeBind, nullptr, nullptr,
 	                               JSONFunctionLocalState::Init));
@@ -124,6 +147,11 @@ CreateScalarFunctionInfo JSONFunctions::GetSerializeSqlFunction() {
 	set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::BOOLEAN},
 	                               JSONCommon::JSONType(), JsonSerializeFunction, JsonSerializeBind, nullptr, nullptr,
 	                               JSONFunctionLocalState::Init));
+
+	set.AddFunction(
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::BOOLEAN, LogicalType::BOOLEAN},
+	                   JSONCommon::JSONType(), JsonSerializeFunction, JsonSerializeBind, nullptr, nullptr,
+	                   JSONFunctionLocalState::Init));
 
 	return CreateScalarFunctionInfo(set);
 }
