@@ -1,0 +1,25 @@
+# name: test/sql/copy/parquet/parquet_6630_union_by_name.test
+# description: Issue #6630: Segmentation Fault when using union_by_name with read_parquet
+# group: [parquet]
+
+require parquet
+
+query II
+select
+	distinct name,
+   true as is_suspended_or_cancelled
+from read_parquet('data/parquet-testing/issue6630_*.parquet',union_by_name=True)
+where "timestamp" between '2023-01-26 20:00:00' and '2023-01-28 04:00:00'
+   and (suspended = true or cancelled <> '' or state='SUSPENDED')
+   and actual_time is null
+----
+
+query II
+select
+	distinct name,
+   true as is_suspended_or_cancelled
+from read_parquet('data/parquet-testing/issue6630_*.parquet', union_by_name=False)
+where "timestamp" between '2023-01-26 20:00:00' and '2023-01-28 04:00:00'
+   and (suspended = true or cancelled <> '' or state='SUSPENDED')
+   and actual_time is null
+----
