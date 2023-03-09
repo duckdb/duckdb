@@ -41,7 +41,6 @@ class TestPythonResult(object):
         assert rel.execute().fetchall() == [(datetime.datetime(2008, 1, 1, 0, 0, 11), datetime.datetime(2008, 1, 1, 0, 0, 1, 794000), datetime.datetime(2008, 1, 1, 0, 0, 1, 989260), datetime.datetime(2008, 1, 1, 0, 0, 1, 899268))]
 
     def test_result_interval(self):
-        DateOffset = pytest.importorskip('pandas.DateOffset')
         connection = duckdb.connect()
         cursor = connection.cursor()
         cursor.execute('CREATE TABLE IF NOT EXISTS intervals (ivals INTERVAL)')
@@ -50,7 +49,7 @@ class TestPythonResult(object):
         rel = connection.table("intervals")
         res = rel.execute()
         assert res.description == [('ivals', 'TIMEDELTA', None, None, None, None, None)]
-        assert res.fetchall() == [(DateOffset(months=0, days=1, nanoseconds=0),), (DateOffset(months=0, days=0, nanoseconds=2000000000),), (DateOffset(months=0, days=0, nanoseconds=1000),)]
+        assert res.fetchall() == [(datetime.timedelta(days=1.0),), (datetime.timedelta(seconds=2.0),), (datetime.timedelta(microseconds=1.0),)]
 
     def test_description_uuid(self):
         connection = duckdb.connect()
