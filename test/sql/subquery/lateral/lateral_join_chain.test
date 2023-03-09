@@ -51,9 +51,9 @@ NULL	{'i': NULL}
 statement error
 SELECT * FROM integers, LATERAL (SELECT integers.*) t2(k) ORDER BY i;
 ----
-SELECT * expression
+* expression
 
 statement error
 SELECT * FROM integers, LATERAL (SELECT *) t2(k) ORDER BY i;
 ----
-SELECT * expression
+* expression

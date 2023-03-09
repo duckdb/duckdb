@@ -9,8 +9,10 @@
 
 namespace duckdb {
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<PhysicalOperator> child,
-                                                                     vector<unique_ptr<Expression>> distinct_targets) {
+unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDistinct &op) {
+	D_ASSERT(op.children.size() == 1);
+	auto child = CreatePlan(*op.children[0]);
+	auto &distinct_targets = op.distinct_targets;
 	D_ASSERT(child);
 	D_ASSERT(!distinct_targets.empty());
 
@@ -55,6 +57,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<
 			FunctionBinder function_binder(context);
 			auto first_aggregate = function_binder.BindAggregateFunction(
 			    FirstFun::GetFunction(logical_type), std::move(first_children), nullptr, AggregateType::NON_DISTINCT);
+			first_aggregate->order_bys = op.order_by ? op.order_by->Copy() : nullptr;
 			// add the projection
 			projections.push_back(make_unique<BoundReferenceExpression>(logical_type, group_count + aggregates.size()));
 			// push it to the list of aggregates
@@ -79,12 +82,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<
 	    make_unique<PhysicalProjection>(types, std::move(projections), groupby->estimated_cardinality);
 	aggr_projection->children.push_back(std::move(groupby));
 	return std::move(aggr_projection);
-}
-
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDistinct &op) {
-	D_ASSERT(op.children.size() == 1);
-	auto plan = CreatePlan(*op.children[0]);
-	return CreateDistinctOn(std::move(plan), std::move(op.distinct_targets));
 }
 
 } // namespace duckdb
