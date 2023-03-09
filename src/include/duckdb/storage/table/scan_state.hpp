@@ -25,11 +25,12 @@ class RowGroupCollection;
 class UpdateSegment;
 class TableScanState;
 class ColumnSegment;
-class SegmentTree;
+class ColumnSegmentTree;
 class ValiditySegment;
 class TableFilterSet;
 class ColumnData;
 class DuckTransaction;
+class RowGroupSegmentTree;
 
 struct SegmentScanState {
 	virtual ~SegmentScanState() {
@@ -47,7 +48,7 @@ struct ColumnScanState {
 	//! The column segment that is currently being scanned
 	ColumnSegment *current = nullptr;
 	//! Column segment tree
-	SegmentTree *segment_tree = nullptr;
+	ColumnSegmentTree *segment_tree = nullptr;
 	//! The current row index of the scan
 	idx_t row_index = 0;
 	//! The internal row index (i.e. the position of the SegmentScanState)
@@ -122,7 +123,7 @@ public:
 	//! The row_group scan state
 	RowGroupScanState row_group_state;
 	//! Row group segment tree
-	SegmentTree *row_groups;
+	RowGroupSegmentTree *row_groups;
 	//! The total maximum row index
 	idx_t max_row;
 	//! The current batch index

@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/storage/block.hpp"
-#include "duckdb/storage/table/segment_tree.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -35,10 +34,16 @@ struct ColumnAppendState;
 enum class ColumnSegmentType : uint8_t { TRANSIENT, PERSISTENT };
 //! TableFilter represents a filter pushed down into the table scan.
 
-class ColumnSegment : public SegmentBase {
+class ColumnSegment {
 public:
-	~ColumnSegment() override;
+	~ColumnSegment();
 
+	//! The index within the segment tree
+	idx_t index;
+	//! The start row id of this chunk
+	const idx_t start;
+	//! The amount of entries in this storage chunk
+	atomic<idx_t> count;
 	//! The database instance
 	DatabaseInstance &db;
 	//! The type stored in the column

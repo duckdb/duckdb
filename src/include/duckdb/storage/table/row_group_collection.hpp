@@ -23,6 +23,8 @@ class TableStatistics;
 
 class BoundConstraint;
 
+class RowGroupSegmentTree : public SegmentTree<RowGroup> {};
+
 class RowGroupCollection {
 public:
 	RowGroupCollection(shared_ptr<DataTableInfo> info, BlockManager &block_manager, vector<LogicalType> types,
@@ -109,7 +111,7 @@ private:
 	vector<LogicalType> types;
 	idx_t row_start;
 	//! The segment trees holding the various row_groups of the table
-	shared_ptr<SegmentTree> row_groups;
+	shared_ptr<RowGroupSegmentTree> row_groups;
 	//! Table statistics
 	TableStatistics stats;
 };

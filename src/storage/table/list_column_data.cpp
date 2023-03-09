@@ -40,7 +40,7 @@ void ListColumnData::InitializeScan(ColumnScanState &state) {
 }
 
 uint64_t ListColumnData::FetchListOffset(idx_t row_idx) {
-	auto segment = (ColumnSegment *)data.GetSegment(row_idx);
+	auto segment = data.GetSegment(row_idx);
 	ColumnFetchState fetch_state;
 	Vector result(type, 1);
 	segment->FetchRow(fetch_state, row_idx, result, 0);

@@ -10,20 +10,21 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/storage/storage_lock.hpp"
-#include "duckdb/storage/table/segment_base.hpp"
 #include "duckdb/storage/table/segment_lock.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
 
+template <class T>
 struct SegmentNode {
 	idx_t row_start;
-	unique_ptr<SegmentBase> node;
+	unique_ptr<T> node;
 };
 
 //! The SegmentTree maintains a list of all segments of a specific column in a table, and allows searching for a segment
 //! by row number
+template <class T>
 class SegmentTree {
 private:
 	class SegmentIterationHelper;
@@ -31,50 +32,182 @@ private:
 public:
 	//! Locks the segment tree. All methods to the segment tree either lock the segment tree, or take an already
 	//! obtained lock.
-	SegmentLock Lock();
+	SegmentLock Lock() {
+		return SegmentLock(node_lock);
+	}
 
-	bool IsEmpty(SegmentLock &);
+	bool IsEmpty(SegmentLock &) {
+		return nodes.empty();
+	}
 
 	//! Gets a pointer to the first segment. Useful for scans.
-	SegmentBase *GetRootSegment();
-	SegmentBase *GetRootSegment(SegmentLock &);
+	T *GetRootSegment() {
+		auto l = Lock();
+		return GetRootSegment(l);
+	}
+	T *GetRootSegment(SegmentLock &) {
+		return nodes.empty() ? nullptr : nodes[0].node.get();
+	}
 	//! Obtains ownership of the data of the segment tree
-	vector<SegmentNode> MoveSegments(SegmentLock &);
+	vector<SegmentNode<T>> MoveSegments(SegmentLock &) {
+		return std::move(nodes);
+	}
 	//! Gets a pointer to the nth segment. Negative numbers start from the back.
-	SegmentBase *GetSegmentByIndex(int64_t index);
-	SegmentBase *GetSegmentByIndex(SegmentLock &, int64_t index);
+	T *GetSegmentByIndex(int64_t index) {
+		auto l = Lock();
+		return GetSegmentByIndex(l, index);
+	}
+	T *GetSegmentByIndex(SegmentLock &, int64_t index) {
+		if (index < 0) {
+			index = nodes.size() + index;
+			if (index < 0) {
+				return nullptr;
+			}
+			return nodes[index].node.get();
+		} else {
+			if (idx_t(index) >= nodes.size()) {
+				return nullptr;
+			}
+			return nodes[index].node.get();
+		}
+	}
 	//! Gets the next segment
-	SegmentBase *GetNextSegment(SegmentBase *segment);
-	SegmentBase *GetNextSegment(SegmentLock &, SegmentBase *segment);
+	T *GetNextSegment(T *segment) {
+		auto l = Lock();
+		return GetNextSegment(l, segment);
+	}
+	T *GetNextSegment(SegmentLock &l, T *segment) {
+		if (!segment) {
+			return nullptr;
+		}
+#ifdef DEBUG
+		D_ASSERT(nodes[segment->index].node.get() == segment);
+#endif
+		return GetSegmentByIndex(l, segment->index + 1);
+	}
 
 	//! Gets a pointer to the last segment. Useful for appends.
-	SegmentBase *GetLastSegment();
-	SegmentBase *GetLastSegment(SegmentLock &);
+	T *GetLastSegment() {
+		auto l = Lock();
+		return GetLastSegment(l);
+	}
+	T *GetLastSegment(SegmentLock &) {
+		if (nodes.empty()) {
+			return nullptr;
+		}
+		return nodes.back().node.get();
+	}
 	//! Gets a pointer to a specific column segment for the given row
-	SegmentBase *GetSegment(idx_t row_number);
-	SegmentBase *GetSegment(SegmentLock &, idx_t row_number);
+	T *GetSegment(idx_t row_number) {
+		auto l = Lock();
+		return GetSegment(l, row_number);
+	}
+	T *GetSegment(SegmentLock &l, idx_t row_number) {
+		return nodes[GetSegmentIndex(l, row_number)].node.get();
+	}
 
 	//! Append a column segment to the tree
-	void AppendSegment(unique_ptr<SegmentBase> segment);
-	void AppendSegment(SegmentLock &, unique_ptr<SegmentBase> segment);
+	void AppendSegment(unique_ptr<T> segment) {
+		auto l = Lock();
+		AppendSegment(l, std::move(segment));
+	}
+	void AppendSegment(SegmentLock &l, unique_ptr<T> segment) {
+		D_ASSERT(segment);
+		// add the node to the list of nodes
+		SegmentNode<T> node;
+		segment->index = nodes.size();
+		node.row_start = segment->start;
+		node.node = std::move(segment);
+		nodes.push_back(std::move(node));
+	}
 	//! Debug method, check whether the segment is in the segment tree
-	bool HasSegment(SegmentBase *segment);
-	bool HasSegment(SegmentLock &, SegmentBase *segment);
+	bool HasSegment(T *segment) {
+		auto l = Lock();
+		return HasSegment(l, segment);
+	}
+	bool HasSegment(SegmentLock &, T *segment) {
+		return segment->index < nodes.size() && nodes[segment->index].node.get() == segment;
+	}
 
 	//! Replace this tree with another tree, taking over its nodes in-place
-	void Replace(SegmentTree &other);
-	void Replace(SegmentLock &, SegmentTree &other);
+	void Replace(SegmentTree &other) {
+		auto l = Lock();
+		Replace(l, other);
+	}
+	void Replace(SegmentLock &, SegmentTree &other) {
+		nodes = std::move(other.nodes);
+	}
 
 	//! Erase all segments after a specific segment
-	void EraseSegments(SegmentLock &, idx_t segment_start);
+	void EraseSegments(SegmentLock &, idx_t segment_start) {
+		if (segment_start >= nodes.size() - 1) {
+			return;
+		}
+		nodes.erase(nodes.begin() + segment_start + 1, nodes.end());
+	}
 
 	//! Get the segment index of the column segment for the given row
-	idx_t GetSegmentIndex(idx_t row_number);
-	idx_t GetSegmentIndex(SegmentLock &, idx_t row_number);
-	bool TryGetSegmentIndex(SegmentLock &, idx_t row_number, idx_t &);
+	idx_t GetSegmentIndex(idx_t row_number) {
+		auto l = Lock();
+		return GetSegmentIndex(l, row_number);
+	}
+	idx_t GetSegmentIndex(SegmentLock &l, idx_t row_number) {
+		idx_t segment_index;
+		if (TryGetSegmentIndex(l, row_number, segment_index)) {
+			return segment_index;
+		}
+		string error;
+		error = StringUtil::Format("Attempting to find row number \"%lld\" in %lld nodes\n", row_number, nodes.size());
+		for (idx_t i = 0; i < nodes.size(); i++) {
+			error += StringUtil::Format("Node %lld: Start %lld, Count %lld", i, nodes[i].row_start,
+			                            nodes[i].node->count.load());
+		}
+		throw InternalException("Could not find node in column segment tree!\n%s%s", error, Exception::GetStackTrace());
+	}
 
-	void Verify(SegmentLock &);
-	void Verify();
+	bool TryGetSegmentIndex(SegmentLock &, idx_t row_number, idx_t &result) {
+		if (nodes.empty()) {
+			return false;
+		}
+		D_ASSERT(!nodes.empty());
+		D_ASSERT(row_number >= nodes[0].row_start);
+		D_ASSERT(row_number < nodes.back().row_start + nodes.back().node->count);
+		idx_t lower = 0;
+		idx_t upper = nodes.size() - 1;
+		// binary search to find the node
+		while (lower <= upper) {
+			idx_t index = (lower + upper) / 2;
+			D_ASSERT(index < nodes.size());
+			auto &entry = nodes[index];
+			D_ASSERT(entry.row_start == entry.node->start);
+			if (row_number < entry.row_start) {
+				upper = index - 1;
+			} else if (row_number >= entry.row_start + entry.node->count) {
+				lower = index + 1;
+			} else {
+				result = index;
+				return true;
+			}
+		}
+		return false;
+	}
+
+	void Verify(SegmentLock &) {
+#ifdef DEBUG
+		idx_t base_start = nodes.empty() ? 0 : nodes[0].node->start;
+		for (idx_t i = 0; i < nodes.size(); i++) {
+			D_ASSERT(nodes[i].row_start == nodes[i].node->start);
+			D_ASSERT(nodes[i].node->start == base_start);
+			base_start += nodes[i].node->count;
+		}
+#endif
+	}
+	void Verify() {
+#ifdef DEBUG
+		auto l = Lock();
+		Verify(l);
+#endif
+	}
 
 	SegmentIterationHelper Segments() {
 		return SegmentIterationHelper(*this);
@@ -82,14 +215,14 @@ public:
 
 private:
 	//! The nodes in the tree, can be binary searched
-	vector<SegmentNode> nodes;
+	vector<SegmentNode<T>> nodes;
 	//! Lock to access or modify the nodes
 	mutex node_lock;
 
 private:
 	class SegmentIterationHelper {
 	public:
-		SegmentIterationHelper(SegmentTree &tree) : tree(tree) {
+		explicit SegmentIterationHelper(SegmentTree &tree) : tree(tree) {
 		}
 
 	private:
@@ -98,11 +231,11 @@ private:
 	private:
 		class SegmentIterator {
 		public:
-			SegmentIterator(SegmentTree &tree_p, SegmentBase *current_p) : tree(tree_p), current(current_p) {
+			SegmentIterator(SegmentTree &tree_p, T *current_p) : tree(tree_p), current(current_p) {
 			}
 
 			SegmentTree &tree;
-			SegmentBase *current;
+			T *current;
 
 		public:
 			void Next() {
@@ -116,17 +249,17 @@ private:
 			bool operator!=(const SegmentIterator &other) const {
 				return current != other.current;
 			}
-			SegmentBase &operator*() const {
+			T &operator*() const {
 				D_ASSERT(current);
 				return *current;
 			}
 		};
 
 	public:
-		DUCKDB_API SegmentIterator begin() {
+		SegmentIterator begin() {
 			return SegmentIterator(tree, tree.GetRootSegment());
 		}
-		DUCKDB_API SegmentIterator end() {
+		SegmentIterator end() {
 			return SegmentIterator(tree, nullptr);
 		}
 	};
