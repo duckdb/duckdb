@@ -46,7 +46,8 @@ import SwiftUI
  
  That seems like a great first task. Let's create a simple query that allows us
  to see all the columns in the table – plus they're types – so we know what
- we're working with. We'll use SwiftUI to visualize our results in a simple table.
+ we're working with. We'll use SwiftUI to visualize our results in a simple
+ table.
  */
 
 // Now the real-stuff. we'll define an asynchronous function that performs
@@ -54,15 +55,10 @@ import SwiftUI
 
 func fetchData() async throws -> ResultSet {
   
-  // Set the Stack Overflow survey year, you can go all the way back to 2017!
-  let surveyYear = 2022
-  
-  // Here, we download the CSVs for the Stack Overflow survey. (You'll find
-  // them in `~/Documents/Shared Playground Data/org.duckdb/surveys`)
-  try await SurveyLoader.downloadSurveyIfNeeded(forYear: surveyYear)
-  
-  // Then we grab the URL for our CSV file
-  let fileURL = SurveyLoader.surveyCSVURL(forYear: surveyYear)
+  // Here, we download the CSVs for the Stack Overflow survey. Subsequent calls
+  // to this method return a cached version you can view at
+  // `~/Documents/Shared Playground Data/org.duckdb/surveys`
+  let fileURL = try await SurveyLoader.downloadSurveyCSV(forYear: 2022)
   
   // We'll use an in-memory store for our database, as we don't need to persist
   // anything
@@ -105,29 +101,35 @@ struct TableLayoutView: View {
     let databaseType: String
   }
   
-  // We'll store the results here once we've retrieved them
-  @State var result: ResultSet?
+  // This will hold our view state and signal to the view whether or not it
+  // can show our gathered data
+  enum ViewState {
+    case loading
+    case result(ResultSet)
+  }
+  
+  @State var state = ViewState.loading
   
   var body: some View {
-    // Once we retrieve the rows we'll display them here
-    if let result {
-      Table(result) {
-        TableColumn("Column Name", value: \.name)
-        TableColumn("Column Type", value: \.typeName)
-      }
-    }
-    // Otherwise, we'll show a spinner and perform our database query
-    else {
+    switch state {
+    
+    // Whilst we're waiting for our data to load we'll display a spinner
+    case .loading:
       ProgressView { Text("loading") }
         .task {
           do {
             // Here, we kick-off the function we defined in step 1
-            self.result = try await fetchData()
+            self.state = .result(try await fetchData())
           }
-          catch {
-            print("error: \(error)")
-          }
+          catch { print("error: \(error)") }
         }
+      
+    // Now our result set has been loaded we can display its data
+    case .result(let result):
+      Table(result) {
+        TableColumn("Column Name", value: \.name)
+        TableColumn("Column Type", value: \.typeName)
+      }
     }
   }
 }

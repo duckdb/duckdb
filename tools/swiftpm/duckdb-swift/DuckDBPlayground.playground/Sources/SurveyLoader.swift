@@ -13,6 +13,18 @@ public enum SurveyLoader {
     .appending(component: "org.duckdb", directoryHint: .isDirectory)
     .appending(component: "surveys")
   
+  public static func downloadSurveyCSV(forYear year: Int) async throws -> URL {
+    try await downloadSurveyIfNeeded(forYear: year)
+    return localSurveyDataURL(forYear: year)
+      .appending(component: "survey_results_public.csv")
+  }
+  
+  public static func downloadSurveySchemaCSV(forYear year: Int) async throws -> URL {
+    try await downloadSurveyIfNeeded(forYear: year)
+    return localSurveyDataURL(forYear: year)
+      .appending(component: "survey_results_schema.csv")
+  }
+  
   public static func downloadSurveyIfNeeded(forYear year: Int) async throws {
     let surveyDataURL = localSurveyDataURL(forYear: year)
     if FileManager.default.fileExists(atPath: surveyDataURL.path) {
@@ -24,16 +36,6 @@ public enum SurveyLoader {
     try FileManager.default.createDirectory(
       at: surveyDataURL, withIntermediateDirectories: true)
     try Shell.execute("unzip '\(zipFileURL.path)' -d '\(surveyDataURL.path)'")
-  }
-  
-  public static func surveyCSVURL(forYear year: Int) -> URL {
-    localSurveyDataURL(forYear: year)
-      .appending(component: "survey_results_public.csv")
-  }
-  
-  public static func surveySchemaCSVURL(forYear year: Int) -> URL {
-    localSurveyDataURL(forYear: year)
-      .appending(component: "survey_results_schema.csv")
   }
   
   private static func localSurveyDataURL(forYear year: Int) -> URL {

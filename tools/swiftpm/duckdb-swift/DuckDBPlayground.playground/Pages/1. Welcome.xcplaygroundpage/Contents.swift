@@ -23,6 +23,6 @@
  ## Table of Contents
  1. [Welcome to DuckDB](1.%20Welcome) (This page)
  2. [Getting Started](2.%20Getting%20Started)
- 3. Coming soon.
+ 3. [Visualizing Data](3.%20Visualizing%20Data)
  
  */
