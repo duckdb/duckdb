@@ -17,8 +17,9 @@
 
 namespace duckdb {
 
-//! This allows us to use the & operator to check if the type is contained in the set
 enum class AggregateType : uint8_t { NON_DISTINCT = 1, DISTINCT = 2 };
+//! Whether or not the input order influences the result of the aggregate
+enum class AggregateOrderDependent : uint8_t { ORDER_DEPENDENT = 1, NOT_ORDER_DEPENDENT = 2 };
 
 class BoundAggregateExpression;
 
@@ -92,7 +93,7 @@ public:
 	                         LogicalType(LogicalTypeId::INVALID), null_handling),
 	      state_size(state_size), initialize(initialize), update(update), combine(combine), finalize(finalize),
 	      simple_update(simple_update), window(window), bind(bind), destructor(destructor), statistics(statistics),
-	      serialize(serialize), deserialize(deserialize) {
+	      serialize(serialize), deserialize(deserialize), order_dependent(AggregateOrderDependent::ORDER_DEPENDENT) {
 	}
 
 	DUCKDB_API
@@ -107,7 +108,7 @@ public:
 	                         LogicalType(LogicalTypeId::INVALID)),
 	      state_size(state_size), initialize(initialize), update(update), combine(combine), finalize(finalize),
 	      simple_update(simple_update), window(window), bind(bind), destructor(destructor), statistics(statistics),
-	      serialize(serialize), deserialize(deserialize) {
+	      serialize(serialize), deserialize(deserialize), order_dependent(AggregateOrderDependent::ORDER_DEPENDENT) {
 	}
 
 	DUCKDB_API AggregateFunction(const vector<LogicalType> &arguments, const LogicalType &return_type,
@@ -160,6 +161,8 @@ public:
 
 	aggregate_serialize_t serialize;
 	aggregate_deserialize_t deserialize;
+	//! Whether or not the aggregate is order dependent
+	AggregateOrderDependent order_dependent;
 
 	DUCKDB_API bool operator==(const AggregateFunction &rhs) const {
 		return state_size == rhs.state_size && initialize == rhs.initialize && update == rhs.update &&

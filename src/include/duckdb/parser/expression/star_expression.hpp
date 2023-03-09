@@ -24,8 +24,8 @@ public:
 	case_insensitive_set_t exclude_list;
 	//! List of columns to replace with another expression
 	case_insensitive_map_t<unique_ptr<ParsedExpression>> replace_list;
-	//! Regular expression to select columns (if any)
-	string regex;
+	//! The expression to select the columns (regular expression or list)
+	unique_ptr<ParsedExpression> expr;
 	//! Whether or not this is a COLUMNS expression
 	bool columns = false;
 

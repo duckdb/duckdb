@@ -276,8 +276,11 @@ option(BUILD_MAIN_DUCKDB_LIBRARY
         TRUE)
 option(EXTENSION_STATIC_BUILD
         "Extension build linking statically with DuckDB. Required for building linux loadable extensions."
-        TRUE)
+        FALSE)
 
+if(WIN32)
+  set(EXTENSION_STATIC_BUILD TRUE)
+endif()
 
 set(JEMALLOC_DEFAULT_BUILD FALSE)
 if(NOT CLANG_TIDY AND OS_NAME STREQUAL "linux")

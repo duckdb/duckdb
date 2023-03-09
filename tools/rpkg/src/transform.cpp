@@ -125,7 +125,7 @@ double ConvertTimestampValue<LogicalTypeId::TIMESTAMP_NS>(int64_t timestamp) {
 }
 
 template <LogicalTypeId LT>
-void ConvertTimestampVector(Vector &src_vec, size_t count, SEXP &dest, uint64_t dest_offset) {
+void ConvertTimestampVector(Vector &src_vec, size_t count, const SEXP dest, uint64_t dest_offset) {
 	auto src_data = FlatVector::GetData<int64_t>(src_vec);
 	auto &mask = FlatVector::Validity(src_vec);
 	double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
@@ -136,7 +136,7 @@ void ConvertTimestampVector(Vector &src_vec, size_t count, SEXP &dest, uint64_t 
 
 std::once_flag nanosecond_coercion_warning;
 
-void duckdb_r_decorate(const LogicalType &type, SEXP &dest, bool integer64) {
+void duckdb_r_decorate(const LogicalType &type, const SEXP dest, bool integer64) {
 	if (type.GetAlias() == R_STRING_TYPE_NAME) {
 		return;
 	}
@@ -222,7 +222,7 @@ SEXP ToRString(const string_t &input) {
 	return Rf_mkCharLenCE(data, len, CE_UTF8);
 }
 
-void duckdb_r_transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n, bool integer64) {
+void duckdb_r_transform(Vector &src_vec, const SEXP dest, idx_t dest_offset, idx_t n, bool integer64) {
 	if (src_vec.GetType().GetAlias() == R_STRING_TYPE_NAME) {
 		ptrdiff_t sexp_header_size = (data_ptr_t)DATAPTR(R_BlankString) - (data_ptr_t)R_BlankString;
 

@@ -1,12 +1,12 @@
-library("DBI")
-library("testthat")
+# Run this file with testthat::test_local(filter = "^relational$")
 
 con <- dbConnect(duckdb())
 on.exit(dbDisconnect(con, shutdown = TRUE))
 
 test_that("we can create a relation from a df", {
-  rel_from_df(con, mtcars)
-  expect_true(TRUE)
+  rel <- rel_from_df(con, mtcars)
+  expect_type(rel, "externalptr")
+  expect_s3_class(rel, "duckdb_relation")
 })
 
 test_that("we won't crash when creating a relation from odd things", {
