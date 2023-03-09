@@ -609,7 +609,7 @@ Value Value::STRUCT(child_list_t<Value> values) {
 	return result;
 }
 
-Value Value::MAP(LogicalType child_type, vector<Value> values) {
+Value Value::MAP(const LogicalType &child_type, vector<Value> values) {
 	Value result;
 
 	result.type_ = LogicalType::MAP(child_type);
@@ -670,7 +670,7 @@ Value Value::LIST(LogicalType child_type, vector<Value> values) {
 	return Value::LIST(std::move(values));
 }
 
-Value Value::EMPTYLIST(LogicalType child_type) {
+Value Value::EMPTYLIST(const LogicalType &child_type) {
 	Value result;
 	result.type_ = LogicalType::LIST(child_type);
 	result.value_info_ = make_shared<NestedValueInfo>();
