@@ -9,8 +9,6 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/unordered_map.hpp"
-#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
@@ -63,8 +61,9 @@ public:
 	//! Root of the tree
 	ARTNode tree;
 
-	//! Unordered map containing all fixed size allocators
-	unordered_map<ARTNodeType, FixedSizeAllocator, ARTNodeTypeHash> nodes;
+	//! Vector containing all fixed size allocators. Indexes into the vector via the ARTNodeType enum (-1) must
+	//! correspond to the specific allocator types
+	vector<FixedSizeAllocator> nodes;
 
 public:
 	//! Initialize a single predicate scan on the index with the given expression and column IDs
@@ -94,11 +93,12 @@ public:
 	bool ConstructFromSorted(idx_t count, vector<Key> &keys, Vector &row_identifiers);
 
 	//! Initializes a vacuum operation by calling the initialize operation of the respective
-	//! node allocator, and returns a set containing all qualifying node allocators
-	unordered_set<ARTNodeType, ARTNodeTypeHash> InitializeVacuum();
-	//! Finalizes a vacuum operation by calling the finalize operation of the respective
-	//! node allocators
-	void FinalizeVacuum(unordered_set<ARTNodeType, ARTNodeTypeHash> &vacuum_nodes);
+	//! node allocator, and returns a vector containing either true, if the allocator at
+	//! the respective position qualifies, or false, if not
+	vector<bool> InitializeVacuum();
+	//! Finalizes a vacuum operation by calling the finalize operation of all qualifying
+	//! fixed size allocators
+	void FinalizeVacuum(vector<bool> &vacuum_nodes);
 	//! Traverses an ART and vacuums the qualifying nodes
 	void Vacuum();
 
@@ -111,7 +111,7 @@ public:
 	BlockPointer Serialize(MetaBlockWriter &writer) override;
 
 	//! Initializes a merge operation by returning a set containing the buffer count of each fixed-size allocator
-	unordered_map<ARTNodeType, idx_t, ARTNodeTypeHash> InitializeMerge();
+	vector<idx_t> InitializeMerge();
 	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
 	//! index must also be locked during the merge
 	bool MergeIndexes(IndexLock &state, Index *other_index) override;

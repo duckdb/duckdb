@@ -32,13 +32,13 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	}
 
 	// initialize all allocators
-	nodes.emplace(ARTNodeType::PREFIX_SEGMENT, FixedSizeAllocator(sizeof(PrefixSegment)));
-	nodes.emplace(ARTNodeType::LEAF_SEGMENT, FixedSizeAllocator(sizeof(LeafSegment)));
-	nodes.emplace(ARTNodeType::LEAF, FixedSizeAllocator(sizeof(Leaf)));
-	nodes.emplace(ARTNodeType::NODE_4, FixedSizeAllocator(sizeof(Node4)));
-	nodes.emplace(ARTNodeType::NODE_16, FixedSizeAllocator(sizeof(Node16)));
-	nodes.emplace(ARTNodeType::NODE_48, FixedSizeAllocator(sizeof(Node48)));
-	nodes.emplace(ARTNodeType::NODE_256, FixedSizeAllocator(sizeof(Node256)));
+	nodes.emplace_back(sizeof(PrefixSegment));
+	nodes.emplace_back(sizeof(LeafSegment));
+	nodes.emplace_back(sizeof(Leaf));
+	nodes.emplace_back(sizeof(Node4));
+	nodes.emplace_back(sizeof(Node16));
+	nodes.emplace_back(sizeof(Node48));
+	nodes.emplace_back(sizeof(Node256));
 
 	// set the root node of the tree
 	tree = ARTNode();
@@ -338,22 +338,22 @@ bool ART::ConstructFromSorted(idx_t count, vector<Key> &keys, Vector &row_identi
 // Vacuum
 //===--------------------------------------------------------------------===//
 
-unordered_set<ARTNodeType, ARTNodeTypeHash> ART::InitializeVacuum() {
+vector<bool> ART::InitializeVacuum() {
 
-	unordered_set<ARTNodeType, ARTNodeTypeHash> vacuum_nodes;
-	for (auto &pair : nodes) {
-		if (pair.second.InitializeVacuum()) {
-			vacuum_nodes.emplace(pair.first);
-		}
+	vector<bool> vacuum_nodes;
+	for (auto &node : nodes) {
+		vacuum_nodes.push_back(node.InitializeVacuum());
 	}
 	return vacuum_nodes;
 }
 
-void ART::FinalizeVacuum(unordered_set<ARTNodeType, ARTNodeTypeHash> &vacuum_nodes) {
+void ART::FinalizeVacuum(vector<bool> &vacuum_nodes) {
 
-	for (const auto &vacuum_node : vacuum_nodes) {
-		auto &node = nodes.at(vacuum_node);
-		node.FinalizeVacuum();
+	D_ASSERT(vacuum_nodes.size() == nodes.size());
+	for (idx_t i = 0; i < vacuum_nodes.size(); i++) {
+		if (vacuum_nodes[i]) {
+			nodes[i].FinalizeVacuum();
+		}
 	}
 }
 
@@ -363,13 +363,22 @@ void ART::Vacuum() {
 		return;
 	}
 
-	// add all node allocators that need vacuuming to a set
+	// vacuum nodes holds true, if an allocator needs a vacuum, and false otherwise
 	auto vacuum_nodes = InitializeVacuum();
-	if (vacuum_nodes.empty()) {
+
+	// skip vacuum if no allocators require it
+	auto perform_vacuum = false;
+	for (const auto &vacuum_node : vacuum_nodes) {
+		if (vacuum_node) {
+			perform_vacuum = true;
+			break;
+		}
+	}
+	if (!perform_vacuum) {
 		return;
 	}
 
-	// traverse the tree and vacuum qualifying nodes
+	// traverse the allocated memory of the tree to perform a vacuum
 	ARTNode::Vacuum(*this, tree, vacuum_nodes);
 
 	// finalize the vacuum operation
@@ -1034,11 +1043,11 @@ BlockPointer ART::Serialize(MetaBlockWriter &writer) {
 // Merging
 //===--------------------------------------------------------------------===//
 
-unordered_map<ARTNodeType, idx_t, ARTNodeTypeHash> ART::InitializeMerge() {
+vector<idx_t> ART::InitializeMerge() {
 
-	unordered_map<ARTNodeType, idx_t, ARTNodeTypeHash> buffer_counts;
-	for (auto &pair : nodes) {
-		buffer_counts[pair.first] = pair.second.buffers.size();
+	vector<idx_t> buffer_counts;
+	for (auto &node : nodes) {
+		buffer_counts.emplace_back(node.buffers.size());
 	}
 	return buffer_counts;
 }
@@ -1055,9 +1064,9 @@ bool ART::MergeIndexes(IndexLock &state, Index *other_index) {
 	}
 
 	// merge the node storage
-	for (auto &node : nodes) {
-		D_ASSERT(other_art->nodes.find(node.first) != other_art->nodes.end());
-		node.second.Merge(other_art->nodes.at(node.first));
+	D_ASSERT(nodes.size() == other_art->nodes.size());
+	for (idx_t i = 0; i < nodes.size(); i++) {
+		nodes[i].Merge(other_art->nodes[i]);
 	}
 	other_art->nodes.clear();
 

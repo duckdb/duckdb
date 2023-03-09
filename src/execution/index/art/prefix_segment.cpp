@@ -9,14 +9,14 @@ PrefixSegment::PrefixSegment() : next(0) {
 }
 
 void PrefixSegment::Free(ART &art, const idx_t &position) {
-	D_ASSERT(art.nodes.find(ARTNodeType::PREFIX_SEGMENT) != art.nodes.end());
-	art.nodes.at(ARTNodeType::PREFIX_SEGMENT).Free(position);
+	D_ASSERT(ARTNode::GetIdx(ARTNodeType::PREFIX_SEGMENT) < art.nodes.size());
+	art.nodes[ARTNode::GetIdx(ARTNodeType::PREFIX_SEGMENT)].Free(position);
 	art.DecreaseMemorySize(sizeof(PrefixSegment));
 }
 
 idx_t PrefixSegment::New(ART &art) {
-	D_ASSERT(art.nodes.find(ARTNodeType::PREFIX_SEGMENT) != art.nodes.end());
-	return art.nodes.at(ARTNodeType::PREFIX_SEGMENT).New();
+	D_ASSERT(ARTNode::GetIdx(ARTNodeType::PREFIX_SEGMENT) < art.nodes.size());
+	return art.nodes[ARTNode::GetIdx(ARTNodeType::PREFIX_SEGMENT)].New();
 }
 
 PrefixSegment *PrefixSegment::Initialize(ART &art, const idx_t &position) {
@@ -28,8 +28,8 @@ PrefixSegment *PrefixSegment::Initialize(ART &art, const idx_t &position) {
 }
 
 PrefixSegment *PrefixSegment::Get(ART &art, const idx_t &position) {
-	D_ASSERT(art.nodes.find(ARTNodeType::PREFIX_SEGMENT) != art.nodes.end());
-	return art.nodes.at(ARTNodeType::PREFIX_SEGMENT).Get<PrefixSegment>(position);
+	D_ASSERT(ARTNode::GetIdx(ARTNodeType::PREFIX_SEGMENT) < art.nodes.size());
+	return art.nodes[ARTNode::GetIdx(ARTNodeType::PREFIX_SEGMENT)].Get<PrefixSegment>(position);
 }
 
 PrefixSegment *PrefixSegment::Append(ART &art, uint32_t &count, const uint8_t &byte) {

@@ -100,8 +100,8 @@ void Prefix::Vacuum(ART &art) {
 	}
 
 	// first position has special treatment because we don't obtain it from a prefix segment
-	D_ASSERT(art.nodes.find(ARTNodeType::PREFIX_SEGMENT) != art.nodes.end());
-	auto &allocator = art.nodes.at(ARTNodeType::PREFIX_SEGMENT);
+	D_ASSERT(ARTNode::GetIdx(ARTNodeType::PREFIX_SEGMENT) < art.nodes.size());
+	auto &allocator = art.nodes[ARTNode::GetIdx(ARTNodeType::PREFIX_SEGMENT)];
 	if (allocator.NeedsVacuum(data.position)) {
 		data.position = allocator.Vacuum(data.position);
 	}

@@ -78,8 +78,8 @@ void Leaf::Vacuum(ART &art) {
 	}
 
 	// first position has special treatment because we don't obtain it from a leaf segment
-	D_ASSERT(art.nodes.find(ARTNodeType::LEAF_SEGMENT) != art.nodes.end());
-	auto &allocator = art.nodes.at(ARTNodeType::LEAF_SEGMENT);
+	D_ASSERT(ARTNode::GetIdx(ARTNodeType::LEAF_SEGMENT) < art.nodes.size());
+	auto &allocator = art.nodes[ARTNode::GetIdx(ARTNodeType::LEAF_SEGMENT)];
 	if (allocator.NeedsVacuum(row_ids.position)) {
 		row_ids.position = allocator.Vacuum(row_ids.position);
 	}

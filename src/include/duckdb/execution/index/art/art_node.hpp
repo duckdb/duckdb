@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/unordered_set.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/execution/index/art/fixed_size_allocator.hpp"
 #include "duckdb/execution/index/art/swizzleable_pointer.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
@@ -74,7 +72,7 @@ public:
 	static void Initialize(ART &art, ARTNode &node, const ARTNodeType &type);
 
 	//! Vacuum the node (and its subtree)
-	static void Vacuum(ART &art, ARTNode &node, const unordered_set<ARTNodeType, ARTNodeTypeHash> &vacuum_nodes);
+	static void Vacuum(ART &art, ARTNode &node, const vector<bool> &vacuum_nodes);
 
 	//! Get the node
 	template <class T>
@@ -84,6 +82,10 @@ public:
 	void EncodeARTNodeType(const ARTNodeType &type);
 	//! Retrieve the node type from the leftmost byte
 	ARTNodeType DecodeARTNodeType() const;
+	//! Returns the index corresponding to an ARTNodeType
+	static inline uint8_t GetIdx(const ARTNodeType &type) {
+		return (uint8_t)type - 1;
+	}
 
 	//! Replace a child node at pos
 	void ReplaceChild(ART &art, const idx_t &pos, ARTNode &child);
@@ -126,7 +128,7 @@ public:
 	static ARTNodeType GetARTNodeTypeByCount(const idx_t &count);
 
 	//! Initializes a merge by fully deserializing the subtree of a node and incrementing its buffer IDs
-	void InitializeMerge(ART &art, unordered_map<ARTNodeType, idx_t, ARTNodeTypeHash> &buffer_counts);
+	void InitializeMerge(ART &art, const vector<idx_t> &buffer_counts);
 	//! Merge a node into this node
 	bool Merge(ART &art, ARTNode &other);
 	//! Merge two nodes by first resolving their prefixes

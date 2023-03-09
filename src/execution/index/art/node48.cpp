@@ -42,7 +42,7 @@ Node48 *Node48::Initialize(ART &art, const ARTNode &node) {
 	return n48;
 }
 
-void Node48::Vacuum(ART &art, const unordered_set<ARTNodeType, ARTNodeTypeHash> &vacuum_nodes) {
+void Node48::Vacuum(ART &art, const vector<bool> &vacuum_nodes) {
 
 	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
 		if (child_index[i] != ARTNode::EMPTY_MARKER) {
@@ -51,7 +51,7 @@ void Node48::Vacuum(ART &art, const unordered_set<ARTNodeType, ARTNodeTypeHash> 
 	}
 }
 
-void Node48::InitializeMerge(ART &art, unordered_map<ARTNodeType, idx_t, ARTNodeTypeHash> &buffer_counts) {
+void Node48::InitializeMerge(ART &art, const vector<idx_t> &buffer_counts) {
 
 	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
 		if (child_index[i] != ARTNode::EMPTY_MARKER) {

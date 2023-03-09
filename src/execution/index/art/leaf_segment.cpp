@@ -6,14 +6,14 @@
 namespace duckdb {
 
 void LeafSegment::Free(ART &art, const idx_t &position) {
-	D_ASSERT(art.nodes.find(ARTNodeType::LEAF_SEGMENT) != art.nodes.end());
-	art.nodes.at(ARTNodeType::LEAF_SEGMENT).Free(position);
+	D_ASSERT(ARTNode::GetIdx(ARTNodeType::LEAF_SEGMENT) < art.nodes.size());
+	art.nodes[ARTNode::GetIdx(ARTNodeType::LEAF_SEGMENT)].Free(position);
 	art.DecreaseMemorySize(sizeof(LeafSegment));
 }
 
 idx_t LeafSegment::New(ART &art) {
-	D_ASSERT(art.nodes.find(ARTNodeType::LEAF_SEGMENT) != art.nodes.end());
-	return art.nodes.at(ARTNodeType::LEAF_SEGMENT).New();
+	D_ASSERT(ARTNode::GetIdx(ARTNodeType::LEAF_SEGMENT) < art.nodes.size());
+	return art.nodes[ARTNode::GetIdx(ARTNodeType::LEAF_SEGMENT)].New();
 }
 
 LeafSegment *LeafSegment::Initialize(ART &art, const idx_t &position) {
@@ -25,8 +25,8 @@ LeafSegment *LeafSegment::Initialize(ART &art, const idx_t &position) {
 }
 
 LeafSegment *LeafSegment::Get(ART &art, const idx_t &position) {
-	D_ASSERT(art.nodes.find(ARTNodeType::LEAF_SEGMENT) != art.nodes.end());
-	return art.nodes.at(ARTNodeType::LEAF_SEGMENT).Get<LeafSegment>(position);
+	D_ASSERT(ARTNode::GetIdx(ARTNodeType::LEAF_SEGMENT) < art.nodes.size());
+	return art.nodes[ARTNode::GetIdx(ARTNodeType::LEAF_SEGMENT)].Get<LeafSegment>(position);
 }
 
 LeafSegment *LeafSegment::Append(ART &art, uint32_t &count, const row_t &row_id) {

@@ -38,14 +38,14 @@ Node16 *Node16::Initialize(ART &art, const ARTNode &node) {
 	return n16;
 }
 
-void Node16::Vacuum(ART &art, const unordered_set<ARTNodeType, ARTNodeTypeHash> &vacuum_nodes) {
+void Node16::Vacuum(ART &art, const vector<bool> &vacuum_nodes) {
 
 	for (idx_t i = 0; i < count; i++) {
 		ARTNode::Vacuum(art, children[i], vacuum_nodes);
 	}
 }
 
-void Node16::InitializeMerge(ART &art, unordered_map<ARTNodeType, idx_t, ARTNodeTypeHash> &buffer_counts) {
+void Node16::InitializeMerge(ART &art, const vector<idx_t> &buffer_counts) {
 
 	for (idx_t i = 0; i < count; i++) {
 		children[i].InitializeMerge(art, buffer_counts);

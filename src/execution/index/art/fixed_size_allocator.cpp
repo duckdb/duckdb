@@ -88,9 +88,26 @@ void FixedSizeAllocator::Merge(FixedSizeAllocator &other) {
 }
 
 bool FixedSizeAllocator::InitializeVacuum() {
+
+	// get the vacuum threshold
 	auto vacuum_count = free_list.size() / offsets_per_buffer / 2;
 	vacuum_threshold = buffers.size() - vacuum_count;
-	return vacuum_threshold < buffers.size();
+
+	// remove all invalid positions from the free list
+	// to ensure that we do not reuse them
+	if (vacuum_threshold < buffers.size()) {
+		auto it = free_list.begin();
+		while (it != free_list.end()) {
+			if (NeedsVacuum(*it)) {
+				it = free_list.erase(it);
+			} else {
+				it++;
+			}
+		}
+		return true;
+	}
+
+	return false;
 }
 
 void FixedSizeAllocator::FinalizeVacuum() {
@@ -99,16 +116,6 @@ void FixedSizeAllocator::FinalizeVacuum() {
 	while (vacuum_threshold < buffers.size()) {
 		Allocator::DefaultAllocator().FreeData(buffers.back(), Storage::BLOCK_ALLOC_SIZE);
 		buffers.pop_back();
-	}
-
-	// remove all invalid positions from the free list
-	auto it = free_list.begin();
-	while (it != free_list.end()) {
-		if (NeedsVacuum(*it)) {
-			it = free_list.erase(it);
-		} else {
-			it++;
-		}
 	}
 
 	D_ASSERT(free_list.size() <= buffers.size() * offsets_per_buffer);

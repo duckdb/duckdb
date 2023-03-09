@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/unordered_set.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/execution/index/art/art_node.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
 
@@ -33,10 +31,10 @@ public:
 	static Node16 *Initialize(ART &art, const ARTNode &node);
 
 	//! Vacuum the children of the node
-	void Vacuum(ART &art, const unordered_set<ARTNodeType, ARTNodeTypeHash> &vacuum_nodes);
+	void Vacuum(ART &art, const vector<bool> &vacuum_nodes);
 
 	//! Initializes a merge by incrementing the buffer IDs of the node
-	void InitializeMerge(ART &art, unordered_map<ARTNodeType, idx_t, ARTNodeTypeHash> &buffer_counts);
+	void InitializeMerge(ART &art, const vector<idx_t> &buffer_counts);
 
 	//! Insert a child node at byte
 	static void InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child);

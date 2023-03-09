@@ -25,8 +25,8 @@ ARTNode::ARTNode(MetaBlockReader &reader) : SwizzleablePointer(reader) {
 ARTNode ARTNode::New(ART &art, const ARTNodeType &type) {
 
 	ARTNode node;
-	D_ASSERT(art.nodes.find(type) != art.nodes.end());
-	node.pointer = art.nodes.at(type).New();
+	D_ASSERT(ARTNode::GetIdx(type) < art.nodes.size());
+	node.pointer = art.nodes[ARTNode::GetIdx(type)].New();
 	node.EncodeARTNodeType(type);
 	return node;
 }
@@ -66,8 +66,8 @@ void ARTNode::Free(ART &art, ARTNode &node) {
 
 		// free the node itself
 		auto position = node.pointer & FixedSizeAllocator::FIRST_BYTE_TO_ZERO;
-		D_ASSERT(art.nodes.find(type) != art.nodes.end());
-		art.nodes.at(type).Free(position);
+		D_ASSERT(ARTNode::GetIdx(type) < art.nodes.size());
+		art.nodes[ARTNode::GetIdx(type)].Free(position);
 	}
 
 	// overwrite with an empty ART node
@@ -100,30 +100,33 @@ void ARTNode::Initialize(ART &art, ARTNode &node, const ARTNodeType &type) {
 // Vacuum
 //===--------------------------------------------------------------------===//
 
-void ARTNode::Vacuum(ART &art, ARTNode &node, const unordered_set<ARTNodeType, ARTNodeTypeHash> &vacuum_nodes) {
+void ARTNode::Vacuum(ART &art, ARTNode &node, const vector<bool> &vacuum_nodes) {
 
 	if (node.IsSwizzled()) {
 		return;
 	}
 
-	// possibly vacuum prefix
-	if (vacuum_nodes.find(ARTNodeType::PREFIX_SEGMENT) != vacuum_nodes.end()) {
+	// possibly vacuum prefix segments
+	D_ASSERT(ARTNode::GetIdx(ARTNodeType::PREFIX_SEGMENT) < vacuum_nodes.size());
+	if (vacuum_nodes[ARTNode::GetIdx(ARTNodeType::PREFIX_SEGMENT)]) {
 		node.GetPrefix(art)->Vacuum(art);
 	}
 
 	auto type = node.DecodeARTNodeType();
-	if (vacuum_nodes.find(type) != vacuum_nodes.end()) {
-		D_ASSERT(art.nodes.find(type) != art.nodes.end());
+	D_ASSERT(ARTNode::GetIdx(type) < vacuum_nodes.size());
+	if (vacuum_nodes[ARTNode::GetIdx(type)]) {
+		D_ASSERT(ARTNode::GetIdx(type) < art.nodes.size());
 		auto position = node.pointer & FixedSizeAllocator::FIRST_BYTE_TO_ZERO;
-		if (art.nodes.at(type).NeedsVacuum(position)) {
-			node.pointer = art.nodes.at(type).Vacuum(position);
+		if (art.nodes[ARTNode::GetIdx(type)].NeedsVacuum(position)) {
+			node.pointer = art.nodes[ARTNode::GetIdx(type)].Vacuum(position);
 			node.EncodeARTNodeType(type);
 		}
 	}
 
 	switch (type) {
 	case ARTNodeType::LEAF: {
-		if (vacuum_nodes.find(ARTNodeType::LEAF_SEGMENT) != vacuum_nodes.end()) {
+		D_ASSERT(ARTNode::GetIdx(ARTNodeType::LEAF_SEGMENT) < vacuum_nodes.size());
+		if (vacuum_nodes[ARTNode::GetIdx(ARTNodeType::LEAF_SEGMENT)]) {
 			node.Get<Leaf>(art)->Vacuum(art);
 		}
 		return;
@@ -149,8 +152,8 @@ template <class T>
 T *ARTNode::Get(ART &art) const {
 
 	auto type = DecodeARTNodeType();
-	D_ASSERT(art.nodes.find(type) != art.nodes.end());
-	return art.nodes.at(type).Get<T>(pointer & FixedSizeAllocator::FIRST_BYTE_TO_ZERO);
+	D_ASSERT(ARTNode::GetIdx(type) < art.nodes.size());
+	return art.nodes[ARTNode::GetIdx(type)].Get<T>(pointer & FixedSizeAllocator::FIRST_BYTE_TO_ZERO);
 }
 
 //===--------------------------------------------------------------------===//
@@ -514,7 +517,7 @@ ARTNodeType ARTNode::GetARTNodeTypeByCount(const idx_t &count) {
 // Merging
 //===--------------------------------------------------------------------===//
 
-void ARTNode::InitializeMerge(ART &art, unordered_map<ARTNodeType, idx_t, ARTNodeTypeHash> &buffer_counts) {
+void ARTNode::InitializeMerge(ART &art, const vector<idx_t> &buffer_counts) {
 
 	if (!*this) {
 		return;
@@ -528,13 +531,13 @@ void ARTNode::InitializeMerge(ART &art, unordered_map<ARTNodeType, idx_t, ARTNod
 	auto type = DecodeARTNodeType();
 
 	// initialize prefix
-	D_ASSERT(buffer_counts.find(ARTNodeType::PREFIX_SEGMENT) != buffer_counts.end());
-	GetPrefix(art)->InitializeMerge(art, buffer_counts.at(ARTNodeType::PREFIX_SEGMENT));
+	D_ASSERT(ARTNode::GetIdx(ARTNodeType::PREFIX_SEGMENT) < buffer_counts.size());
+	GetPrefix(art)->InitializeMerge(art, buffer_counts[ARTNode::GetIdx(ARTNodeType::PREFIX_SEGMENT)]);
 
 	switch (type) {
 	case ARTNodeType::LEAF:
-		D_ASSERT(buffer_counts.find(ARTNodeType::LEAF_SEGMENT) != buffer_counts.end());
-		Get<Leaf>(art)->InitializeMerge(art, buffer_counts.at(ARTNodeType::LEAF_SEGMENT));
+		D_ASSERT(ARTNode::GetIdx(ARTNodeType::LEAF_SEGMENT) < buffer_counts.size());
+		Get<Leaf>(art)->InitializeMerge(art, buffer_counts[ARTNode::GetIdx(ARTNodeType::LEAF_SEGMENT)]);
 		break;
 	case ARTNodeType::NODE_4:
 		Get<Node4>(art)->InitializeMerge(art, buffer_counts);
@@ -552,10 +555,10 @@ void ARTNode::InitializeMerge(ART &art, unordered_map<ARTNodeType, idx_t, ARTNod
 		throw InternalException("Invalid node type for InitializeMerge.");
 	}
 
-	D_ASSERT(buffer_counts.find(type) != buffer_counts.end());
+	D_ASSERT(ARTNode::GetIdx(type) < buffer_counts.size());
 	D_ASSERT((pointer & FixedSizeAllocator::BUFFER_ID_TO_ZERO) ==
-	         ((pointer + buffer_counts.at(type)) & FixedSizeAllocator::BUFFER_ID_TO_ZERO));
-	pointer += buffer_counts.at(type);
+	         ((pointer + buffer_counts[ARTNode::GetIdx(type)]) & FixedSizeAllocator::BUFFER_ID_TO_ZERO));
+	pointer += buffer_counts[ARTNode::GetIdx(type)];
 }
 
 bool ARTNode::Merge(ART &art, ARTNode &other) {
