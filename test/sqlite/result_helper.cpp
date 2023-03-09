@@ -359,13 +359,12 @@ string TestResultHelper::SQLLogicTestConvertValue(Value value, LogicalType sql_t
 			if (str.empty()) {
 				return "(empty)";
 			} else {
-				idx_t start_pos = 0;
-				string to("\\0");
 				for (size_t i = 0; i < str.size(); ++i) {
 					if (str[i] < ' ' || str[i] > '`') {
-						to[2] = str[i];
-						str.replace(start_pos, 1, to);
-                        start_pos += to.size();
+                        string to("\\");
+                        to += std::to_string((int)str[i]);
+						str.replace(i, 1, to);
+						i += to.size() - 1;
 					}
 				}
 				return str;
