@@ -45,8 +45,8 @@ bool TupleDataChunkIterator::Next() {
 	// NextScanIndex can go past this iterators 'end', so we have to check the indices again
 	if (!collection.NextScanIndex(state, current_segment_idx, current_chunk_idx) ||
 	    (current_segment_idx == end_segment_idx && current_chunk_idx == end_chunk_idx)) {
-		// Drop pins / store them if TupleDataPinProperties::KEEP_EVERYTHING_PINNED
-		collection.FinalizePinState(state.pin_state);
+		// Drop pins / stores them if TupleDataPinProperties::KEEP_EVERYTHING_PINNED
+		collection.FinalizePinState(state.pin_state, collection.segments[current_segment_idx]);
 		return false;
 	}
 

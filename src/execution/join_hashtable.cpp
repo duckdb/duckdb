@@ -906,7 +906,8 @@ bool JoinHashTable::PrepareExternalFinalize() {
 	for (idx_t partition_idx = partition_start + 1; partition_idx < num_partitions; partition_idx++) {
 		auto incl_count = count + partitions[partition_idx]->Count();
 		auto incl_data_size = data_size + partitions[partition_idx]->SizeInBytes();
-		if (incl_data_size + PointerTableCapacity(incl_count) * sizeof(data_ptr_t) > max_ht_size) {
+		auto incl_ht_size = incl_data_size + PointerTableCapacity(incl_count) * sizeof(data_ptr_t);
+		if (incl_ht_size > max_ht_size) {
 			partition_end = partition_idx;
 			break;
 		}

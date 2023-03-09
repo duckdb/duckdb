@@ -535,4 +535,30 @@ void RadixPartitionedTupleData::ComputePartitionIndices(Vector &row_locations, i
 	RadixBitsSwitch<ComputePartitionIndicesFunctor, void>(radix_bits, intermediate, partition_indices, count);
 }
 
+void RadixPartitionedTupleData::RepartitionFinalizeStates(PartitionedTupleData &old_partitioned_data,
+                                                          PartitionedTupleData &new_partitioned_data,
+                                                          PartitionedTupleDataAppendState &state,
+                                                          idx_t finished_partition_idx) const {
+	D_ASSERT(old_partitioned_data.GetType() == PartitionedTupleDataType::RADIX &&
+	         new_partitioned_data.GetType() == PartitionedTupleDataType::RADIX);
+	const auto &old_radix_partitions = (RadixPartitionedTupleData &)old_partitioned_data;
+	const auto &new_radix_partitions = (RadixPartitionedTupleData &)new_partitioned_data;
+	const auto old_radix_bits = old_radix_partitions.GetRadixBits();
+	const auto new_radix_bits = new_radix_partitions.GetRadixBits();
+	D_ASSERT(new_radix_bits > old_radix_bits);
+
+	// We take the most significant digits as the partition index
+	// When repartitioning, partition 0 from "old" goes into the first N partitions in "new"
+	// When the partition 0 is done, we can already finalize the append states, unpinning blocks
+	const auto multiplier = RadixPartitioning::NumberOfPartitions(new_radix_bits - old_radix_bits);
+	const auto from_idx = finished_partition_idx * multiplier;
+	const auto to_idx = from_idx + multiplier;
+	auto &partitions = new_partitioned_data.GetPartitions();
+	for (idx_t partition_index = from_idx; partition_index < to_idx; partition_index++) {
+		auto &partition = *partitions[partition_index];
+		auto &partition_pin_state = *state.partition_pin_states[partition_index];
+		partition.FinalizePinState(partition_pin_state);
+	}
+}
+
 } // namespace duckdb

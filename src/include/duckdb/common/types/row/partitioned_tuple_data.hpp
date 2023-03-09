@@ -47,6 +47,8 @@ public:
 	virtual ~PartitionedTupleData();
 
 public:
+	//! Get the partitioning type of this PartitionedTupleData
+	PartitionedTupleDataType GetType() const;
 	//! Initializes a local state for parallel partitioning that can be merged into this PartitionedTupleData
 	void InitializeAppendState(PartitionedTupleDataAppendState &state) const;
 	//! Appends a DataChunk to this PartitionedTupleData
@@ -58,7 +60,7 @@ public:
 	//! Combine another PartitionedTupleData into this PartitionedTupleData
 	void Combine(PartitionedTupleData &other);
 	//! Repartition this PartitionedTupleData into the new PartitionedTupleData
-	void Repartition(PartitionedTupleData &new_partitioned_tuple_data);
+	void Repartition(PartitionedTupleData &new_partitioned_data);
 	//! Get the partitions in this PartitionedTupleData
 	vector<unique_ptr<TupleDataCollection>> &GetPartitions();
 	//! Get the count of this PartitionedTupleData
@@ -82,6 +84,15 @@ protected:
 	//! Compute partition indices from rows (similar to function above)
 	virtual void ComputePartitionIndices(Vector &row_locations, idx_t count, Vector &partition_indices) const {
 		throw NotImplementedException("ComputePartitionIndices for this type of PartitionedTupleData");
+	}
+	//! Whether or not to iterate over the original partitions in reverse order when repartitioning (optional)
+	virtual bool RepartitionReverseOrder() const {
+		return false;
+	}
+	//! Finalize states while repartitioning - useful for unpinning blocks that are no longer needed (optional)
+	virtual void RepartitionFinalizeStates(PartitionedTupleData &old_partitioned_data,
+	                                       PartitionedTupleData &new_partitioned_data,
+	                                       PartitionedTupleDataAppendState &state, idx_t finished_partition_idx) const {
 	}
 
 protected:

@@ -51,7 +51,7 @@ public:
 	TupleDataChunk &operator=(TupleDataChunk &&) noexcept;
 
 	//! Add a part to this chunk
-	void AddPart(TupleDataChunkPart &&part);
+	void AddPart(TupleDataChunkPart &&part, const TupleDataLayout &layout);
 	//! Tries to merge the last chunk part into the second-to-last one
 	void MergeLastChunkPart(const TupleDataLayout &layout);
 	//! Verify counts of the parts in this chunk

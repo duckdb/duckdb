@@ -68,10 +68,14 @@ public:
 	//! Initializes a chunk, making its pointers valid
 	void InitializeChunkState(TupleDataSegment &segment, TupleDataPinState &pin_state, TupleDataChunkState &chunk_state,
 	                          idx_t chunk_idx, bool init_heap);
+	static inline void RecomputeHeapPointers(Vector &old_heap_ptrs, const SelectionVector &old_heap_sel,
+	                                         const data_ptr_t row_locations[], Vector &new_heap_ptrs,
+	                                         const idx_t offset, const idx_t count, const TupleDataLayout &layout,
+	                                         const idx_t base_col_offset);
 	//! Releases or stores any handles in the management state that are no longer required
-	void ReleaseOrStoreHandles(TupleDataPinState &state, TupleDataSegment &segment, TupleDataChunk &chunk) const;
+	void ReleaseOrStoreHandles(TupleDataPinState &state, TupleDataSegment &segment, TupleDataChunk &chunk);
 	//! Releases or stores ALL handles in the management state
-	void ReleaseOrStoreHandles(TupleDataPinState &state, TupleDataSegment &segment) const;
+	void ReleaseOrStoreHandles(TupleDataPinState &state, TupleDataSegment &segment);
 
 private:
 	//! Builds out a single part (grabs the lock)
@@ -82,8 +86,8 @@ private:
 	                                  bool init_heap_pointers, bool init_heap_sizes,
 	                                  vector<TupleDataChunkPart *> &parts);
 	//! Internal function for ReleaseOrStoreHandles
-	static void ReleaseOrStoreHandlesInternal(unordered_map<uint32_t, BufferHandle> &handles,
-	                                          const unordered_set<uint32_t> &block_ids, TupleDataSegment &segment,
+	static void ReleaseOrStoreHandlesInternal(TupleDataSegment &segment, unordered_map<uint32_t, BufferHandle> &handles,
+	                                          const unordered_set<uint32_t> &block_ids, vector<TupleDataBlock> &blocks,
 	                                          TupleDataPinProperties properties);
 	//! Pins the given row block
 	void PinRowBlock(TupleDataPinState &state, const uint32_t row_block_index);

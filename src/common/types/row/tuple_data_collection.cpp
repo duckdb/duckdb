@@ -278,7 +278,9 @@ void TupleDataCollection::CopyRows(TupleDataChunkState &chunk_state, TupleDataCh
 			FastMemcpy(target_heap_locations[i], source_heap_locations[idx], heap_sizes[idx]);
 		}
 
-		// TODO: fix pointers
+		// Recompute pointers after copying the data
+		TupleDataAllocator::RecomputeHeapPointers(input.heap_locations, append_sel, source_locations,
+		                                          chunk_state.heap_locations, 0, count, layout, 0);
 	}
 }
 
@@ -605,7 +607,12 @@ TupleDataScatterFunction TupleDataCollection::GetScatterFunction(const TupleData
 	return result;
 }
 
+void TupleDataCollection::FinalizePinState(TupleDataPinState &pin_state, TupleDataSegment &segment) {
+	segment.allocator->ReleaseOrStoreHandles(pin_state, segment);
+}
+
 void TupleDataCollection::FinalizePinState(TupleDataPinState &pin_state) {
+	D_ASSERT(segments.size() == 1);
 	allocator->ReleaseOrStoreHandles(pin_state, segments.back());
 }
 

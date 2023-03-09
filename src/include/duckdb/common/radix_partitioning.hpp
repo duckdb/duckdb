@@ -124,6 +124,12 @@ protected:
 	void InitializeAppendStateInternal(PartitionedTupleDataAppendState &state) const override;
 	void ComputePartitionIndices(PartitionedTupleDataAppendState &state, DataChunk &input) override;
 	void ComputePartitionIndices(Vector &row_locations, idx_t count, Vector &partition_indices) const override;
+	bool RepartitionReverseOrder() const override {
+		return true;
+	}
+	void RepartitionFinalizeStates(PartitionedTupleData &old_partitioned_data,
+	                               PartitionedTupleData &new_partitioned_data, PartitionedTupleDataAppendState &state,
+	                               idx_t finished_partition_idx) const override;
 
 private:
 	//! The number of radix bits

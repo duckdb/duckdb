@@ -90,6 +90,8 @@ public:
 	void CopyRows(TupleDataChunkState &chunk_state, TupleDataChunkState &input, const SelectionVector &append_sel,
 	              const idx_t append_count) const;
 	//! Finalizes the pin state, releasing or storing blocks
+	void FinalizePinState(TupleDataPinState &pin_state, TupleDataSegment &segment);
+	//! Finalizes the pin state, releasing or storing blocks
 	void FinalizePinState(TupleDataPinState &pin_state);
 	//! Appends the other TupleDataCollection to this, destroying the other data collection
 	void Combine(TupleDataCollection &other);

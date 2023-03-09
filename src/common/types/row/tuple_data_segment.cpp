@@ -24,10 +24,12 @@ TupleDataChunk &TupleDataChunk::operator=(TupleDataChunk &&other) noexcept {
 	return *this;
 }
 
-void TupleDataChunk::AddPart(TupleDataChunkPart &&part) {
+void TupleDataChunk::AddPart(TupleDataChunkPart &&part, const TupleDataLayout &layout) {
 	count += part.count;
 	row_block_ids.insert(part.row_block_index);
-	heap_block_ids.insert(part.heap_block_index);
+	if (!layout.AllConstant() && part.total_heap_size > 0) {
+		heap_block_ids.insert(part.heap_block_index);
+	}
 	parts.emplace_back(std::move(part));
 }
 

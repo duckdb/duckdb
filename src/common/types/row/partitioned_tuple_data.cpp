@@ -28,6 +28,10 @@ unique_ptr<PartitionedTupleData> PartitionedTupleData::CreateShared() {
 PartitionedTupleData::~PartitionedTupleData() {
 }
 
+PartitionedTupleDataType PartitionedTupleData::GetType() const {
+	return type;
+}
+
 void PartitionedTupleData::InitializeAppendState(PartitionedTupleDataAppendState &state) const {
 	state.partition_sel.Initialize();
 
@@ -186,17 +190,23 @@ void PartitionedTupleData::Combine(PartitionedTupleData &other) {
 	}
 }
 
-void PartitionedTupleData::Repartition(PartitionedTupleData &new_partitioned_tuple_data) {
-	D_ASSERT(layout.GetTypes() == new_partitioned_tuple_data.layout.GetTypes());
+void PartitionedTupleData::Repartition(PartitionedTupleData &new_partitioned_data) {
+	D_ASSERT(layout.GetTypes() == new_partitioned_data.layout.GetTypes());
 
 	PartitionedTupleDataAppendState append_state;
-	new_partitioned_tuple_data.InitializeAppendState(append_state);
+	new_partitioned_data.InitializeAppendState(append_state);
 
-	// TODO: consume blocks as we go
-	for (idx_t partition_idx = 0; partition_idx < partitions.size(); partition_idx++) {
-		auto &partition = *partitions[partition_idx];
+	const auto reverse = RepartitionReverseOrder();
+	const idx_t start_idx = reverse ? partitions.size() : 0;
+	const idx_t end_idx = reverse ? 0 : partitions.size();
+	const int64_t update = reverse ? -1 : 1;
+	const int64_t adjustment = reverse ? -1 : 0;
 
-		TupleDataChunkIterator iterator(partition, TupleDataPinProperties::UNPIN_AFTER_DONE, true);
+	for (idx_t partition_idx = start_idx; partition_idx != end_idx; partition_idx += update) {
+		auto actual_partition_idx = partition_idx + adjustment;
+		auto &partition = *partitions[actual_partition_idx];
+
+		TupleDataChunkIterator iterator(partition, TupleDataPinProperties::DESTROY_AFTER_DONE, true);
 		auto &chunk_state = iterator.GetChunkState();
 		do {
 			auto count = iterator.GetCount();
@@ -204,7 +214,8 @@ void PartitionedTupleData::Repartition(PartitionedTupleData &new_partitioned_tup
 			Append(append_state, chunk_state, count);
 		} while (iterator.Next());
 
-		partitions[partition_idx] = nullptr;
+		RepartitionFinalizeStates(*this, new_partitioned_data, append_state, actual_partition_idx);
+		partitions[actual_partition_idx] = nullptr;
 	}
 
 	FlushAppendState(append_state);
