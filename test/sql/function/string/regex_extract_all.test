@@ -11,7 +11,7 @@ SELECT regexp_extract_all('1a 2b 14m', '(\d+)');
 [1, 2, 14]
 
 query I
-SELECT regexp_extract_all('1a 2b 14m', '(\d+)([a-z]+)')
+SELECT regexp_extract_all('1a 2b 14m', '(\d+)([a-z]+)', 2)
 ----
 [a, b, m]
 
@@ -19,3 +19,9 @@ query I
 SELECT REGEXP_EXTRACT_ALL('test', '.')
 ----
 [t, e, s, t]
+
+#FIXME: this doesn't work yet
+#query I
+#SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)', -1);
+#----
+#[]

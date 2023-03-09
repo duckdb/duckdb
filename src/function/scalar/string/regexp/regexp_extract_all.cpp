@@ -65,6 +65,15 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, idx_t 
 	ListVector::SetListSize(result, current_list_size);
 }
 
+idx_t GetGroupIndex(DataChunk &args, idx_t row) {
+	if (args.ColumnCount() < 3) {
+		return 0;
+	}
+	UnifiedVectorFormat format;
+	args.data[2].ToUnifiedFormat(args.size(), format);
+	return ((int32_t *)format.data)[format.sel->get_index(row)];
+}
+
 void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	const auto &info = (RegexpBaseBindData &)*func_expr.bind_info;
@@ -73,10 +82,6 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 	auto &patterns = args.data[1];
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	auto &output_child = ListVector::GetEntry(result);
-	auto &child_validity = FlatVector::Validity(output_child);
-
-	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<list_entry_t>(result);
 
 	UnifiedVectorFormat strings_data;
 	strings.ToUnifiedFormat(args.size(), strings_data);
@@ -103,12 +108,13 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 		for (idx_t row = 0; row < tuple_count; row++) {
 			auto idx = strings_data.sel->get_index(row);
 			auto string = ((string_t *)strings_data.data)[idx];
+
+			idx_t group_index = GetGroupIndex(args, row);
 			// Get the groups
-			ExtractSingleTuple(string, lstate.constant_pattern, 0, lstate.group_buffer, result, row);
+			ExtractSingleTuple(string, lstate.constant_pattern, group_index, lstate.group_buffer, result, row);
 		}
 	} else {
 		RegexStringPieceArgs string_pieces;
-		duckdb_re2::StringPiece *groups = nullptr;
 		for (idx_t row = 0; row < tuple_count; row++) {
 			auto pattern_idx = pattern_data.sel->get_index(row);
 			auto &pattern_p = ((string_t *)pattern_data.data)[pattern_idx];
@@ -126,7 +132,8 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 			auto string_idx = strings_data.sel->get_index(row);
 			auto &string = ((string_t *)strings_data.data)[string_idx];
 
-			ExtractSingleTuple(string, re, 0, string_pieces, result, row);
+			idx_t group_index = GetGroupIndex(args, row);
+			ExtractSingleTuple(string, re, group_index, string_pieces, result, row);
 		}
 	}
 
