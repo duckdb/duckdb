@@ -20,7 +20,7 @@ bool TryParseConstantPattern(ClientContext &context, Expression &expr, string &c
 void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, bool *global_replace = nullptr);
 void ParseRegexOptions(ClientContext &context, Expression &expr, RE2::Options &target, bool *global_replace = nullptr);
 
-inline duckdb_re2::StringPiece CreateStringPiece(string_t &input) {
+inline duckdb_re2::StringPiece CreateStringPiece(const string_t &input) {
 	return duckdb_re2::StringPiece(input.GetDataUnsafe(), input.GetSize());
 }
 
@@ -87,28 +87,81 @@ struct RegexpExtractBindData : public RegexpBaseBindData {
 	bool Equals(const FunctionData &other_p) const override;
 };
 
+struct RegexStringPieceArgs {
+	RegexStringPieceArgs()
+	    : size(0), capacity(0), group_buffer(nullptr), group_args(nullptr), group_inner_args(nullptr) {
+	}
+	void Init(idx_t size) {
+		this->size = size;
+		this->capacity = size;
+		group_buffer = AllocateArray<duckdb_re2::StringPiece>(size);
+		group_inner_args = AllocateArray<duckdb_re2::RE2::Arg>(size);
+		group_args = AllocateArray<duckdb_re2::RE2::Arg *>(size);
+		for (idx_t i = 0; i < size; i++) {
+			group_args[i] = &group_inner_args[i];
+			group_inner_args[i] = &group_buffer[i];
+		}
+	}
+	void SetSize(idx_t size) {
+		this->size = size;
+		if (size > capacity) {
+			Clear();
+			Init(size);
+		}
+	}
+
+	RegexStringPieceArgs &operator=(RegexStringPieceArgs &&other) {
+		std::swap(this->size, other.size);
+		std::swap(this->capacity, other.capacity);
+		std::swap(this->group_args, other.group_args);
+		std::swap(this->group_buffer, other.group_buffer);
+		return *this;
+	}
+
+	~RegexStringPieceArgs() {
+		Clear();
+	}
+
+private:
+	void Clear() {
+		DeleteArray<duckdb_re2::StringPiece>(group_buffer, size);
+		group_buffer = nullptr;
+		DeleteArray<duckdb_re2::RE2::Arg>(group_inner_args, size);
+		group_inner_args = nullptr;
+		DeleteArray<duckdb_re2::RE2::Arg *>(group_args, size);
+		group_args = nullptr;
+
+		size = 0;
+		capacity = 0;
+	}
+
+public:
+	idx_t size;
+	//! The currently allocated capacity for the groups
+	idx_t capacity;
+	//! Used by ExtractAll to pre-allocate the storage for the groups
+	duckdb_re2::StringPiece *group_buffer;
+	//! We have to wrap the stringpieces in Args to use RE2::FindAndConsume
+	duckdb_re2::RE2::Arg **group_args;
+	duckdb_re2::RE2::Arg *group_inner_args;
+};
+
 struct RegexLocalState : public FunctionLocalState {
 	explicit RegexLocalState(RegexpBaseBindData &info, bool extract_all = false)
 	    : constant_pattern(duckdb_re2::StringPiece(info.constant_string.c_str(), info.constant_string.size()),
-	                       info.options),
-	      group_buffer(nullptr) {
+	                       info.options) {
 		if (extract_all) {
-			auto group_count = constant_pattern.NumberOfCapturingGroups();
-			if (group_count != -1) {
-				group_buffer = AllocateArray<duckdb_re2::StringPiece>(1 + group_count);
+			auto group_count_p = constant_pattern.NumberOfCapturingGroups();
+			if (group_count_p != -1) {
+				group_buffer.Init(group_count_p);
 			}
 		}
 		D_ASSERT(info.constant_pattern);
 	}
-	virtual ~RegexLocalState() {
-		if (group_buffer) {
-			DeleteArray<duckdb_re2::StringPiece>(group_buffer, 1 + constant_pattern.NumberOfCapturingGroups());
-		}
-	}
 
 	RE2 constant_pattern;
-	//! Used by ExtractAll to pre-allocate the storage for the groups
-	duckdb_re2::StringPiece *group_buffer;
+	//! Used by regexp_extract_all to pre-allocate the args
+	RegexStringPieceArgs group_buffer;
 };
 
 unique_ptr<FunctionLocalState> RegexInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr,
