@@ -117,3 +117,17 @@ US	8579	8783	9510	NULL	24962	1910
 statement error
 PIVOT Cities ON (Country, Name) IN ('xx') USING SUM(Population);
 ----
+
+# multiple pivots
+query IIIIIII
+PIVOT Cities ON Year USING SUM(Population) as sum_pop, count(population) as count_pop, GROUP BY Country;
+----
+NL	1005	1	1065	1	1158	1
+US	8579	2	8783	2	9510	2
+
+
+query IIIIIII
+PIVOT Cities ON Year USING SUM(Population), count(population) GROUP BY Country;
+----
+NL	1005	1	1065	1	1158	1
+US	8579	2	8783	2	9510	2
