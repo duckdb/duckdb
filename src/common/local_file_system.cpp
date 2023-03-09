@@ -837,13 +837,15 @@ static bool IsCrawl(const string &glob) {
 	return glob == "**";
 }
 
-static void RecursiveGlobDirectories(FileSystem &fs, const string &path, vector<string> &result) {
+static void RecursiveGlobDirectories(FileSystem &fs, const string &path, vector<string> &result, bool match_directory) {
 
-	result.push_back(path);
 	fs.ListFiles(path, [&](const string &fname, bool is_directory) {
+		const string concat(fs.JoinPath(path, fname));
+		if (is_directory == match_directory) {
+			result.push_back(concat);
+		}
 		if (is_directory) {
-			const string concat(fs.JoinPath(path, fname));
-			RecursiveGlobDirectories(fs, concat, result);
+			RecursiveGlobDirectories(fs, concat, result, match_directory);
 		}
 	});
 }
@@ -965,8 +967,11 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 			}
 		} else {
 			if (IsCrawl(splits[i])) {
+				if (!is_last_chunk) {
+					result = previous_directories;
+				}
 				for (auto &prev_dir : previous_directories) {
-					RecursiveGlobDirectories(*this, prev_dir, result);
+					RecursiveGlobDirectories(*this, prev_dir, result, !is_last_chunk);
 				}
 			} else {
 				if (previous_directories.empty()) {
