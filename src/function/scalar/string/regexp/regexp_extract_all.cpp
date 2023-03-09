@@ -24,6 +24,7 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 	auto &patterns = args.data[1];
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	auto &output_child = ListVector::GetEntry(result);
+	auto &child_validity = FlatVector::Validity(output_child);
 
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<list_entry_t>(result);
@@ -31,6 +32,10 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 	UnifiedVectorFormat strings_data;
 	strings.ToUnifiedFormat(args.size(), strings_data);
 
+	UnifiedVectorFormat pattern_data;
+	patterns.ToUnifiedFormat(args.size(), pattern_data);
+
+	idx_t tuple_count = args.AllConstant() ? 1 : args.size();
 	if (info.constant_pattern) {
 		auto &lstate = (RegexLocalState &)*ExecuteFunctionState::GetFunctionState(state);
 
@@ -43,14 +48,14 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 		// Get out pre-allocated array for the result of Match
 		auto groups = lstate.group_buffer;
 
-		output_child.Initialize(false, max_groups * args.size());
+		// Avoid doing extra work if the strings are also constant
+		output_child.Initialize(false, max_groups * tuple_count);
 		// Reference the 'strings' StringBuffer, because we won't need to allocate new data
 		// for the result, all returned strings are substrings of the originals
 		output_child.SetAuxiliary(strings.GetAuxiliary());
 		auto list_content = FlatVector::GetData<string_t>(output_child);
-		auto &child_validity = FlatVector::Validity(output_child);
 
-		for (idx_t row = 0; row < args.size(); row++) {
+		for (idx_t row = 0; row < tuple_count; row++) {
 			auto idx = strings_data.sel->get_index(row);
 			auto string = ((string_t *)strings_data.data)[idx];
 			// Get the groups
@@ -75,18 +80,83 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 					list_content[child_idx] = string_t(string.GetDataUnsafe() + offset, match_group.size());
 				}
 			}
+		}
 
-			// FIXME: since the amount of groups is constant, we could probably optimize this into a hotloop
-			auto &entry = result_data[row];
-			entry.offset = row * max_groups;
+		// Set all the list entries
+		for (idx_t i = 0; i < tuple_count; i++) {
+			auto &entry = result_data[i];
+			entry.offset = i * max_groups;
 			entry.length = max_groups;
 		}
-		ListVector::SetListSize(result, args.size() * max_groups);
-		if (args.AllConstant()) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		}
+
+		ListVector::SetListSize(result, tuple_count * max_groups);
 	} else {
-		(void)patterns;
+		output_child.Initialize(false, STANDARD_VECTOR_SIZE);
+		output_child.SetAuxiliary(strings.GetAuxiliary());
+		idx_t child_capacity = STANDARD_VECTOR_SIZE;
+
+		idx_t largest_group = 0;
+		duckdb_re2::StringPiece *groups = nullptr;
+		for (idx_t row = 0; row < tuple_count; row++) {
+			auto pattern_idx = pattern_data.sel->get_index(row);
+			auto &pattern = ((string_t *)pattern_data.data)[pattern_idx];
+			duckdb_re2::RE2 re(CreateStringPiece(pattern), info.options);
+
+			auto group_count_p = re.NumberOfCapturingGroups();
+			if (group_count_p == -1) {
+				// FIXME: null the list instead
+				throw InvalidInputException("Pattern is malformed, no groups could be found");
+			}
+			idx_t group_count = 1 + group_count_p;
+			if (group_count > largest_group) {
+				// Reallocate the temporary group buffer if it's too small
+				DeleteArray<duckdb_re2::StringPiece>(groups, largest_group);
+				largest_group = group_count;
+				groups = AllocateArray<duckdb_re2::StringPiece>(largest_group);
+			}
+
+			auto string_idx = strings_data.sel->get_index(row);
+			auto &string = ((string_t *)strings_data.data)[string_idx];
+			// Get the groups
+			re.Match(CreateStringPiece(string), 0, string.GetSize(), duckdb_re2::RE2::Anchor::UNANCHORED, groups,
+			         group_count);
+
+			// Multiply the capacity if we have reached the current capacity
+			if (ListVector::GetListSize(result) + group_count >= child_capacity) {
+				child_capacity *= 2;
+				ListVector::Reserve(result, child_capacity);
+			}
+			auto list_content = FlatVector::GetData<string_t>(output_child);
+
+			// Write them into the list-child vector
+			idx_t current_list_size = ListVector::GetListSize(result);
+			for (idx_t group = 0; group < group_count; group++) {
+				auto &match_group = groups[group];
+
+				// Every group is a substring of the original, we can find out the offset using the pointer
+				// the 'match_group' address is guaranteed to be bigger than that of the source
+				D_ASSERT((const char *)match_group.begin() <= string.GetDataUnsafe());
+
+				idx_t child_idx = current_list_size + group;
+				if (match_group.begin() == nullptr || match_group.size() == 0) {
+					// This group was not matched
+					list_content[child_idx] = string_t(string.GetDataUnsafe(), 0);
+					child_validity.SetInvalid(child_idx);
+				} else {
+					idx_t offset = match_group.begin() - string.GetDataUnsafe();
+					list_content[child_idx] = string_t(string.GetDataUnsafe() + offset, match_group.size());
+				}
+			}
+			auto &entry = result_data[row];
+			entry.offset = current_list_size;
+			entry.length = group_count;
+			ListVector::SetListSize(result, current_list_size + group_count);
+		}
+		DeleteArray<duckdb_re2::StringPiece>(groups, largest_group);
+	}
+
+	if (args.AllConstant()) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
 
