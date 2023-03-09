@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/http_stats.hpp
+// duckdb/common/http_state.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -15,7 +15,16 @@
 
 namespace duckdb {
 
-class HTTPStats {
+struct CachedFile {
+	//! Cached Data
+	shared_ptr<char> data;
+	//! Data capacity
+	uint64_t capacity = 0;
+	//! If we finished downloading the file
+	bool finished = false;
+};
+
+class HTTPState {
 public:
 	atomic<idx_t> head_count {0};
 	atomic<idx_t> get_count {0};
@@ -23,6 +32,10 @@ public:
 	atomic<idx_t> post_count {0};
 	atomic<idx_t> total_bytes_received {0};
 	atomic<idx_t> total_bytes_sent {0};
+	//! Mutex to lock when getting the cached file(Parallel Only)
+	mutex cached_files_mutex;
+	//! In case of fully downloading the file, the cached files of this query
+	unordered_map<string, CachedFile> cached_files;
 
 	void Reset() {
 		head_count = 0;
@@ -31,13 +44,14 @@ public:
 		post_count = 0;
 		total_bytes_received = 0;
 		total_bytes_sent = 0;
+		cached_files.clear();
 	}
 
 	//! helper function to get the HTTP
-	static HTTPStats *TryGetStats(FileOpener *opener) {
+	static HTTPState *TryGetState(FileOpener *opener) {
 		auto client_context = FileOpener::TryGetClientContext(opener);
 		if (client_context) {
-			return client_context->client_data->http_stats.get();
+			return client_context->client_data->http_state.get();
 		}
 		return nullptr;
 	}
