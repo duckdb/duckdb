@@ -127,6 +127,19 @@ public extension Column {
   ///
   /// - Parameter type: the native Swift type to cast to
   /// - Returns: a typed DuckDB result set ``Column``
+  func cast(to type: Int.Type) -> Column<Int> {
+    let transformer = result.transformer(forColumn: columnIndex, to: type)
+    return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
+  }
+  
+  /// Casts the column to the given type
+  ///
+  /// A column cast always succeeds but if there is a type-mismatch between
+  /// the given type and the column's underlying database type, returned
+  /// elements will always be equal to `nil`.
+  ///
+  /// - Parameter type: the native Swift type to cast to
+  /// - Returns: a typed DuckDB result set ``Column``
   func cast(to type: Int8.Type) -> Column<Int8> {
     let transformer = result.transformer(forColumn: columnIndex, to: type)
     return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
@@ -180,6 +193,19 @@ public extension Column {
   /// - Parameter type: the native Swift type to cast to
   /// - Returns: a typed DuckDB result set ``Column``
   func cast(to type: IntHuge.Type) -> Column<IntHuge> {
+    let transformer = result.transformer(forColumn: columnIndex, to: type)
+    return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
+  }
+  
+  /// Casts the column to the given type
+  ///
+  /// A column cast always succeeds but if there is a type-mismatch between
+  /// the given type and the column's underlying database type, returned
+  /// elements will always be equal to `nil`.
+  ///
+  /// - Parameter type: the native Swift type to cast to
+  /// - Returns: a typed DuckDB result set ``Column``
+  func cast(to type: UInt.Type) -> Column<UInt> {
     let transformer = result.transformer(forColumn: columnIndex, to: type)
     return .init(result: result, columnIndex: columnIndex, itemAt: transformer)
   }

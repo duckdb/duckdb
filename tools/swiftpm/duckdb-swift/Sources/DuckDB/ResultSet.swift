@@ -140,6 +140,18 @@ extension ResultSet {
   }
   
   func transformer(
+    forColumn columnIndex: DBInt, to type: Int.Type
+  ) -> @Sendable (DBInt) -> Int? {
+    transformer(forColumn: columnIndex, to: type) { try? $0.unwrap(type) }
+  }
+  
+  func transformer(
+    forColumn columnIndex: DBInt, to type: UInt.Type
+  ) -> @Sendable (DBInt) -> UInt? {
+    transformer(forColumn: columnIndex, to: type) { try? $0.unwrap(type) }
+  }
+  
+  func transformer(
     forColumn columnIndex: DBInt, to type: IntHuge.Type
   ) -> @Sendable (DBInt) -> IntHuge? {
     transformer(forColumn: columnIndex, to: type, fromType: .hugeint) { try? $0.unwrap(type) }
