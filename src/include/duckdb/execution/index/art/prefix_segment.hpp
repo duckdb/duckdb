@@ -23,13 +23,13 @@ public:
 	idx_t next;
 
 	//! Get a new pointer to a prefix segment, might cause a new buffer allocation
-	inline static idx_t New(ART &art);
+	static idx_t New(ART &art);
 	//! Free a prefix segment
-	inline static void Free(ART &art, const idx_t &position);
+	static void Free(ART &art, const idx_t &position);
 	//! Initialize all the fields of the segment
 	static PrefixSegment *Initialize(ART &art, const idx_t &position);
 	//! Get a prefix segment
-	inline static PrefixSegment *Get(ART &art, const idx_t &position);
+	static PrefixSegment *Get(ART &art, const idx_t &position);
 
 	//! Appends a byte to the current segment, or creates a new segment containing that byte
 	PrefixSegment *Append(ART &art, uint32_t &count, const uint8_t &byte);

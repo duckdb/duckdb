@@ -78,12 +78,12 @@ public:
 
 	//! Get the node
 	template <class T>
-	inline T *Get(ART &art) const;
+	T *Get(ART &art) const;
 
 	//! Set the leftmost byte to contain the node type
 	void EncodeARTNodeType(const ARTNodeType &type);
 	//! Retrieve the node type from the leftmost byte
-	inline ARTNodeType DecodeARTNodeType() const;
+	ARTNodeType DecodeARTNodeType() const;
 
 	//! Replace a child node at pos
 	void ReplaceChild(ART &art, const idx_t &pos, ARTNode &child);
