@@ -316,13 +316,14 @@ void RegexpFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet regexp_extract_all("regexp_extract_all");
 	regexp_extract_all.AddFunction(ScalarFunction(
 	    {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::LIST(LogicalType::VARCHAR),
-	    RegexpExtractAll::Execute, RegexpExtractAll::Bind, nullptr, nullptr, RegexInitLocalState, LogicalType::INVALID,
-	    FunctionSideEffects::NO_SIDE_EFFECTS, FunctionNullHandling::SPECIAL_HANDLING));
+	    RegexpExtractAll::Execute, RegexpExtractAll::Bind, nullptr, nullptr, RegexpExtractAll::InitLocalState,
+	    LogicalType::INVALID, FunctionSideEffects::NO_SIDE_EFFECTS, FunctionNullHandling::SPECIAL_HANDLING));
 
 	set.AddFunction(regexp_full_match);
 	set.AddFunction(regexp_partial_match);
 	set.AddFunction(regexp_replace);
 	set.AddFunction(regexp_extract);
+	set.AddFunction(regexp_extract_all);
 }
 
 } // namespace duckdb

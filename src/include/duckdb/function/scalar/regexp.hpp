@@ -11,6 +11,7 @@
 #include "duckdb/function/function_set.hpp"
 #include "re2/re2.h"
 #include "duckdb/function/built_in_functions.hpp"
+#include "re2/stringpiece.h"
 
 namespace duckdb {
 
@@ -35,6 +36,8 @@ struct RegexpExtractAll {
 	static void Execute(DataChunk &args, ExpressionState &state, Vector &result);
 	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
 	                                     vector<unique_ptr<Expression>> &arguments);
+	static unique_ptr<FunctionLocalState> InitLocalState(ExpressionState &state, const BoundFunctionExpression &expr,
+	                                                     FunctionData *bind_data);
 };
 
 struct RegexpBaseBindData : public FunctionData {
@@ -85,13 +88,27 @@ struct RegexpExtractBindData : public RegexpBaseBindData {
 };
 
 struct RegexLocalState : public FunctionLocalState {
-	explicit RegexLocalState(RegexpBaseBindData &info)
+	explicit RegexLocalState(RegexpBaseBindData &info, bool extract_all = false)
 	    : constant_pattern(duckdb_re2::StringPiece(info.constant_string.c_str(), info.constant_string.size()),
-	                       info.options) {
+	                       info.options),
+	      group_buffer(nullptr) {
+		if (extract_all) {
+			auto group_count = constant_pattern.NumberOfCapturingGroups();
+			if (group_count != -1) {
+				group_buffer = AllocateArray<duckdb_re2::StringPiece>(1 + group_count);
+			}
+		}
 		D_ASSERT(info.constant_pattern);
+	}
+	virtual ~RegexLocalState() {
+		if (group_buffer) {
+			DeleteArray<duckdb_re2::StringPiece>(group_buffer, 1 + constant_pattern.NumberOfCapturingGroups());
+		}
 	}
 
 	RE2 constant_pattern;
+	//! Used by ExtractAll to pre-allocate the storage for the groups
+	duckdb_re2::StringPiece *group_buffer;
 };
 
 unique_ptr<FunctionLocalState> RegexInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr,
