@@ -1601,15 +1601,6 @@ void ListVector::Reserve(Vector &vector, idx_t required_capacity) {
 	child_buffer.Reserve(required_capacity);
 }
 
-Value FlatVector::GetValuesFromOffsets(Vector &values, vector<idx_t> &offsets) {
-	vector<Value> list_values;
-	list_values.reserve(offsets.size());
-	for (auto &offset : offsets) {
-		list_values.push_back(values.GetValue(offset));
-	}
-	return Value::LIST(values.GetType(), std::move(list_values));
-}
-
 idx_t ListVector::GetListSize(const Vector &vec) {
 	if (vec.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vec);
