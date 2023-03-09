@@ -50,7 +50,9 @@ const test_httpfs = async function (db: duckdb.Database) {
             assert.ok(isHTTPException(err));
             if (isHTTPException(err)) {
                 assert.equal(err.statusCode, 404);
-                assert.equal(err.response, 'Not Found');
+                assert.equal(err.reason, 'Not Found');
+                assert.equal(err.response, '');
+                assert.ok('Content-Length' in err.headers, JSON.stringify(err.headers));
             }
             resolve();
         });
