@@ -5,6 +5,7 @@
 #include "duckdb/parser/tableref/list.hpp"
 #include "duckdb/common/serializer/format_serializer.hpp"
 #include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 

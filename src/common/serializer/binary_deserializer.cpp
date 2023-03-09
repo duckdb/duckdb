@@ -1,5 +1,3 @@
-#pragma once
-
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 
 namespace duckdb {

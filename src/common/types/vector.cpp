@@ -18,6 +18,9 @@
 #include "duckdb/common/fsst.hpp"
 #include "fsst.h"
 
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
+
 #include <cstring> // strlen() on Solaris
 
 namespace duckdb {

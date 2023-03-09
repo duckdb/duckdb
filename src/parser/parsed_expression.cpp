@@ -110,8 +110,8 @@ void ParsedExpression::Serialize(Serializer &serializer) const {
 }
 
 void ParsedExpression::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty("class", GetExpressionClass(), duckdb::ExpressionClassToString);
-	serializer.WriteProperty("type", type, duckdb::ExpressionTypeToString);
+	serializer.WriteProperty("class", GetExpressionClass());
+	serializer.WriteProperty("type", type);
 	serializer.WriteProperty("alias", alias);
 }
 

@@ -62,19 +62,6 @@ public:
 		}
 	}
 
-	template <class T>
-	typename std::enable_if<std::is_enum<T>::value, void>::type WriteProperty(const char *tag, T value,
-	                                                                          string (*to_string)(T)) {
-		SetTag(tag);
-		if (serialize_enum_as_string) {
-			// Use the provided tostring function
-			WriteValue(to_string(value));
-		} else {
-			// Use the underlying type
-			WriteValue(static_cast<typename std::underlying_type<T>::type>(value));
-		}
-	}
-
 	// Optional, by value
 	template <class T>
 	typename std::enable_if<std::is_trivially_copyable<T>::value && !std::is_enum<T>::value, void>::type

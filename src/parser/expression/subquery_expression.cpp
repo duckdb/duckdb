@@ -2,7 +2,9 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/field_writer.hpp"
-#include "duckdb/common/serializer/enum_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+
 namespace duckdb {
 
 SubqueryExpression::SubqueryExpression()

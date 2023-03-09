@@ -1,7 +1,8 @@
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 
 #include "duckdb/common/field_writer.hpp"
-#include "duckdb/common/serializer/enum_serializer.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 
