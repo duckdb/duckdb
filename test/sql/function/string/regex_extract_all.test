@@ -627,3 +627,15 @@ https://docs.fluentd.org/v0.12/articles/out_file	[docs.fluentd.org/v0.12/article
 https://docs.fluentd.org/v0.12/articles/out_forward	[]	[docs.fluentd.org]
 https://www.fluentd.org/v0.12/articles/out_file	[]	[out_file]
 out_file/article/docs.fluentd.org/	[]	[out_file, docs.fluentd.org]
+
+statement error
+select REGEXP_EXTRACT_ALL('hello', '(.)', 2);
+----
+Pattern has 1 groups. Cannot access group 2
+
+query II
+SELECT
+  REGEXP_EXTRACT_ALL('https://www.emakina.nl/?utm_source=sf_mail&user_id=7h87hte51kj_9866c', '([^\?&]+)=') AS parameter_key,
+  REGEXP_EXTRACT_ALL('https://www.emakina.nl/?utm_source=sf_mail&user_id=7h87hte51kj_9866c', '=([^&]+)') AS parameter_value 
+----
+[utm_source=, user_id=]	[=sf_mail, =7h87hte51kj_9866c]
