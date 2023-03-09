@@ -128,5 +128,4 @@ CreateScalarFunctionInfo JSONFunctions::GetSerializeSqlFunction() {
 	return CreateScalarFunctionInfo(set);
 }
 
-
 } // namespace duckdb
