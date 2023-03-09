@@ -359,7 +359,15 @@ string TestResultHelper::SQLLogicTestConvertValue(Value value, LogicalType sql_t
 			if (str.empty()) {
 				return "(empty)";
 			} else {
-				return StringUtil::Replace(str, string("\0", 1), "\\0");
+				idx_t start_pos = 0;
+				string to("\\0");
+				for (size_t i = 0; i < str.size(); ++i) {
+					if (str[i] < ' ' || str[i] > '`') {
+						to[2] = str[i];
+						str.replace(start_pos, 1, to);
+					}
+				}
+				return str;
 			}
 		}
 		}
