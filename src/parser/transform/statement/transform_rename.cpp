@@ -36,10 +36,6 @@ unique_ptr<AlterStatement> Transformer::TransformRename(duckdb_libpgquery::PGNod
 		info = make_unique<RenameTableInfo>(std::move(data), new_name);
 		break;
 	}
-
-	case duckdb_libpgquery::PG_OBJECT_SCHEMA: {
-		throw NotImplementedException("Renaming schemas is not yet supported");
-	}
 	case duckdb_libpgquery::PG_OBJECT_VIEW: {
 		// change view name
 		string new_name = stmt->newname;
