@@ -25,6 +25,7 @@ class RowGroupCollection;
 class UpdateSegment;
 class TableScanState;
 class ColumnSegment;
+class SegmentTree;
 class ValiditySegment;
 class TableFilterSet;
 class ColumnData;
@@ -45,6 +46,8 @@ typedef unordered_map<block_id_t, BufferHandle> buffer_handle_set_t;
 struct ColumnScanState {
 	//! The column segment that is currently being scanned
 	ColumnSegment *current = nullptr;
+	//! Column segment tree
+	SegmentTree *segment_tree = nullptr;
 	//! The current row index of the scan
 	idx_t row_index = 0;
 	//! The internal row index (i.e. the position of the SegmentScanState)
@@ -114,10 +117,12 @@ private:
 class CollectionScanState {
 public:
 	CollectionScanState(TableScanState &parent_p)
-	    : row_group_state(*this), max_row(0), batch_index(0), parent(parent_p) {};
+	    : row_group_state(*this), row_groups(nullptr), max_row(0), batch_index(0), parent(parent_p) {};
 
 	//! The row_group scan state
 	RowGroupScanState row_group_state;
+	//! Row group segment tree
+	SegmentTree *row_groups;
 	//! The total maximum row index
 	idx_t max_row;
 	//! The current batch index
@@ -129,6 +134,7 @@ public:
 	AdaptiveFilter *GetAdaptiveFilter();
 	bool Scan(DuckTransaction &transaction, DataChunk &result);
 	bool ScanCommitted(DataChunk &result, TableScanType type);
+	bool ScanCommitted(DataChunk &result, SegmentLock &l, TableScanType type);
 
 private:
 	TableScanState &parent;

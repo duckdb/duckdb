@@ -25,6 +25,9 @@ struct SegmentNode {
 //! The SegmentTree maintains a list of all segments of a specific column in a table, and allows searching for a segment
 //! by row number
 class SegmentTree {
+private:
+	class SegmentIterationHelper;
+
 public:
 	//! Locks the segment tree. All methods to the segment tree either lock the segment tree, or take an already
 	//! obtained lock.
@@ -40,6 +43,9 @@ public:
 	//! Gets a pointer to the nth segment. Negative numbers start from the back.
 	SegmentBase *GetSegmentByIndex(int64_t index);
 	SegmentBase *GetSegmentByIndex(SegmentLock &, int64_t index);
+	//! Gets the next segment
+	SegmentBase *GetNextSegment(SegmentBase *segment);
+	SegmentBase *GetNextSegment(SegmentLock &, SegmentBase *segment);
 
 	//! Gets a pointer to the last segment. Useful for appends.
 	SegmentBase *GetLastSegment();
@@ -70,11 +76,60 @@ public:
 	void Verify(SegmentLock &);
 	void Verify();
 
+	SegmentIterationHelper Segments() {
+		return SegmentIterationHelper(*this);
+	}
+
 private:
 	//! The nodes in the tree, can be binary searched
 	vector<SegmentNode> nodes;
 	//! Lock to access or modify the nodes
 	mutex node_lock;
+
+private:
+	class SegmentIterationHelper {
+	public:
+		SegmentIterationHelper(SegmentTree &tree) : tree(tree) {
+		}
+
+	private:
+		SegmentTree &tree;
+
+	private:
+		class SegmentIterator {
+		public:
+			SegmentIterator(SegmentTree &tree_p, SegmentBase *current_p) : tree(tree_p), current(current_p) {
+			}
+
+			SegmentTree &tree;
+			SegmentBase *current;
+
+		public:
+			void Next() {
+				current = tree.GetNextSegment(current);
+			}
+
+			SegmentIterator &operator++() {
+				Next();
+				return *this;
+			}
+			bool operator!=(const SegmentIterator &other) const {
+				return current != other.current;
+			}
+			SegmentBase &operator*() const {
+				D_ASSERT(current);
+				return *current;
+			}
+		};
+
+	public:
+		DUCKDB_API SegmentIterator begin() {
+			return SegmentIterator(tree, tree.GetRootSegment());
+		}
+		DUCKDB_API SegmentIterator end() {
+			return SegmentIterator(tree, nullptr);
+		}
+	};
 };
 
 } // namespace duckdb

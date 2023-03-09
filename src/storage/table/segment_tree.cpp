@@ -12,6 +12,21 @@ bool SegmentTree::IsEmpty(SegmentLock &) {
 	return nodes.empty();
 }
 
+SegmentBase *SegmentTree::GetNextSegment(SegmentBase *segment) {
+	auto l = Lock();
+	return GetNextSegment(l, segment);
+}
+
+SegmentBase *SegmentTree::GetNextSegment(SegmentLock &l, SegmentBase *segment) {
+	if (!segment) {
+		return nullptr;
+	}
+#ifdef DEBUG
+	D_ASSERT(nodes[segment->index].node.get() == segment);
+#endif
+	return GetSegmentByIndex(l, segment->index + 1);
+}
+
 SegmentBase *SegmentTree::GetRootSegment(SegmentLock &l) {
 	return nodes.empty() ? nullptr : nodes[0].node.get();
 }
@@ -128,10 +143,8 @@ bool SegmentTree::HasSegment(SegmentBase *segment) {
 void SegmentTree::AppendSegment(SegmentLock &, unique_ptr<SegmentBase> segment) {
 	D_ASSERT(segment);
 	// add the node to the list of nodes
-	if (!nodes.empty()) {
-		nodes.back().node->next = segment.get();
-	}
 	SegmentNode node;
+	segment->index = nodes.size();
 	node.row_start = segment->start;
 	node.node = std::move(segment);
 	nodes.push_back(std::move(node));
