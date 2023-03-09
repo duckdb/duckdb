@@ -18,14 +18,17 @@ namespace RegexpUtil {
 bool TryParseConstantPattern(ClientContext &context, Expression &expr, string &constant_string);
 void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, bool *global_replace = nullptr);
 void ParseRegexOptions(ClientContext &context, Expression &expr, RE2::Options &target, bool *global_replace = nullptr);
+
 inline duckdb_re2::StringPiece CreateStringPiece(string_t &input) {
 	return duckdb_re2::StringPiece(input.GetDataUnsafe(), input.GetSize());
 }
+
 inline string_t Extract(const string_t &input, Vector &result, const RE2 &re, const duckdb_re2::StringPiece &rewrite) {
 	string extracted;
 	RE2::Extract(input.GetString(), re, rewrite, &extracted);
 	return StringVector::AddString(result, extracted.c_str(), extracted.size());
 }
+
 } // namespace RegexpUtil
 
 struct RegexpExtractAll {

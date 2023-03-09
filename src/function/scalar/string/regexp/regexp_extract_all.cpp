@@ -8,7 +8,7 @@ using namespace RegexpUtil;
 
 void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	const auto &info = (RegexpExtractBindData &)*func_expr.bind_info;
+	const auto &info = (RegexpBaseBindData &)*func_expr.bind_info;
 
 	auto &strings = args.data[0];
 	auto &patterns = args.data[1];
