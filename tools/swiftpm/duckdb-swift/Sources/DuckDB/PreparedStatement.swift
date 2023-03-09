@@ -33,6 +33,17 @@ import Foundation
 /// prepared statement can be executed using those parameters. A single query
 /// can be prepared once and executed many times.
 ///
+/// Prepared statements are useful to:
+///
+///   - Easily supply parameters to functions while avoiding string
+///     concatenation/SQL injection attacks.
+///   - Speed up queries that will be executed many times with different
+///     parameters.
+///
+/// The following example creates a prepared statement that allows parameters
+/// to be bound in two positions within a 'select' statement. The prepared
+/// statement is finally executed by calling ``PreparedStatement/execute()``.
+///
 /// ```swift
 ///   let connection: Connection = ...
 ///   let statement = try PreparedStatement(

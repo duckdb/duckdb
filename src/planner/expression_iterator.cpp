@@ -29,6 +29,11 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 		if (aggr_expr.filter) {
 			callback(aggr_expr.filter);
 		}
+		if (aggr_expr.order_bys) {
+			for (auto &order : aggr_expr.order_bys->orders) {
+				callback(order.expression);
+			}
+		}
 		break;
 	}
 	case ExpressionClass::BOUND_BETWEEN: {
