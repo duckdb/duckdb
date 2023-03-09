@@ -300,7 +300,7 @@ public:
 	};
 	template <class RESPONSE, typename ResponseWrapperShape<decltype(RESPONSE::code)>::code = 0, typename... ARGS>
 	explicit HTTPException(RESPONSE &response, const string &msg, ARGS... params)
-	    : HTTPException(response.code, "NOT YET SUPPORTED", response.headers, response.error, msg, params...) {
+	    : HTTPException(response.code, response.body, response.headers, response.error, msg, params...) {
 	}
 
 	template <typename HEADERS, typename... ARGS>

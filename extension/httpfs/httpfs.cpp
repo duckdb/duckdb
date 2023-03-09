@@ -631,6 +631,7 @@ ResponseWrapper::ResponseWrapper(duckdb_httplib_openssl::Response &res, string &
 		headers[h.first] = h.second;
 	}
 	http_url = original_url;
+	body = res.body;
 }
 
 HTTPFileHandle::~HTTPFileHandle() = default;
