@@ -1,0 +1,21 @@
+# name: test/sql/function/string/regex_extract_all.test
+# description: regex extract test
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT regexp_extract_all('1a 2b 14m', '(\d+)');
+----
+[1, 2, 14]
+
+query I
+SELECT regexp_extract_all('1a 2b 14m', '(\d+)([a-z]+)')
+----
+[a, b, m]
+
+query I
+SELECT REGEXP_EXTRACT_ALL('test', '.')
+----
+[t, e, s, t]
