@@ -2,9 +2,6 @@
 # description: Test order of unmarked prepared statements
 # group: [prepared]
 
-require skip_reload
-
-
 statement ok
 CREATE TABLE integers(i INTEGER, j VARCHAR)
 
