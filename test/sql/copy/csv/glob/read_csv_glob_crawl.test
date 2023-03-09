@@ -74,11 +74,6 @@ SELECT count(*) FROM glob('test/sql/copy/csv/data/glob/crawl/d/**/');
 ----
 148
 
-statement error
-SELECT sum(column0) FROM read_csv('test/sql/copy/csv/data/glob/crawl/d/**/', auto_detect=1);
-----
-IO Error: Could not read from file 
-
 query I
 SELECT count(*) FROM glob('test/sql/copy/csv/data/glob/crawl/d/**/mid/*.csv');
 ----
@@ -168,3 +163,10 @@ query I
 SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/**/**/**/**/*.csv';
 ----
 6124
+
+require notwindows
+
+statement error
+SELECT sum(column0) FROM read_csv('test/sql/copy/csv/data/glob/crawl/d/**/', auto_detect=1);
+----
+IO Error: Could not read from file 
