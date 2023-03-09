@@ -1569,7 +1569,7 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::FormatDeserialize(FormatDeserializer &d
 	default:
 		throw InternalException("Unimplemented type info in ExtraTypeInfo::Deserialize");
 	}
-	deserializer.ReadOptionalProperty("alias", result->alias, string());
+	deserializer.ReadOptionalPropertyOrDefault("alias", result->alias, string());
 	return result;
 }
 
@@ -1657,12 +1657,12 @@ LogicalType LogicalType::Deserialize(Deserializer &source) {
 
 void LogicalType::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("id", id_);
-	serializer.WriteProperty("type_info", type_info_.get());
+	serializer.WriteOptionalProperty("type_info", type_info_.get());
 }
 
 LogicalType LogicalType::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto id = deserializer.ReadProperty<LogicalTypeId>("id");
-	auto info = deserializer.ReadProperty<shared_ptr<ExtraTypeInfo>>("type_info");
+	auto info = deserializer.ReadOptionalProperty<shared_ptr<ExtraTypeInfo>>("type_info");
 
 	return LogicalType(id, std::move(info));
 }

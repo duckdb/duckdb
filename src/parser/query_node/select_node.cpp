@@ -220,7 +220,7 @@ unique_ptr<QueryNode> SelectNode::FormatDeserialize(FormatDeserializer &deserial
 	deserializer.ReadOptionalProperty("sample", result->sample);
 	deserializer.ReadOptionalProperty("qualify", result->qualify);
 
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<QueryNode> SelectNode::Deserialize(FieldReader &reader) {

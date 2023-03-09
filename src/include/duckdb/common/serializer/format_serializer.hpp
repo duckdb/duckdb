@@ -24,18 +24,9 @@ protected:
 	bool serialize_enum_as_string = false;
 
 public:
-	// Pass by value
+	// Serialize a value
 	template <class T>
-	typename std::enable_if<std::is_trivially_copyable<T>::value && !std::is_enum<T>::value, void>::type
-	WriteProperty(const char *tag, T value) {
-		SetTag(tag);
-		WriteValue(value);
-	}
-
-	// Pass by reference
-	template <class T>
-	typename std::enable_if<!std::is_trivially_copyable<T>::value, void>::type WriteProperty(const char *tag,
-	                                                                                         T &value) {
+	typename std::enable_if<!std::is_enum<T>::value, void>::type WriteProperty(const char *tag, T &value) {
 		SetTag(tag);
 		WriteValue(value);
 	}
@@ -62,10 +53,9 @@ public:
 		}
 	}
 
-	// Optional, by value
+	// Optional pointer
 	template <class T>
-	typename std::enable_if<std::is_trivially_copyable<T>::value && !std::is_enum<T>::value, void>::type
-	WriteOptionalProperty(const char *tag, T ptr) {
+	void WriteOptionalProperty(const char *tag, T *ptr) {
 		SetTag(tag);
 		if (ptr == nullptr) {
 			OnOptionalBegin(false);
@@ -77,10 +67,9 @@ public:
 		}
 	}
 
-	// Optional, by ref (required for unique_ptr)
+	// Optional unique_ptr
 	template <class T>
-	typename std::enable_if<!std::is_trivially_copyable<T>::value, void>::type WriteOptionalProperty(const char *tag,
-	                                                                                                 T &ptr) {
+	void WriteOptionalProperty(const char *tag, const unique_ptr<T> &ptr) {
 		SetTag(tag);
 		if (ptr == nullptr) {
 			OnOptionalBegin(false);

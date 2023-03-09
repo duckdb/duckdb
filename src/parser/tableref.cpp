@@ -63,7 +63,7 @@ void TableRef::FormatSerialize(FormatSerializer &serializer) const {
 unique_ptr<TableRef> TableRef::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto type = deserializer.ReadProperty<TableReferenceType>("type");
 	auto alias = deserializer.ReadProperty<string>("alias");
-	auto sample = deserializer.ReadOptionalProperty<unique_ptr<SampleOptions>>("sample", nullptr);
+	auto sample = deserializer.ReadOptionalProperty<unique_ptr<SampleOptions>>("sample");
 
 	unique_ptr<TableRef> result;
 

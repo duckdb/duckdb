@@ -143,7 +143,7 @@ unique_ptr<ParsedExpression> FunctionExpression::FormatDeserialize(ExpressionTyp
 	auto function_name = deserializer.ReadProperty<string>("function_name");
 	auto schema = deserializer.ReadProperty<string>("schema");
 	auto children = deserializer.ReadProperty<vector<unique_ptr<ParsedExpression>>>("children");
-	auto filter = deserializer.ReadOptionalProperty<unique_ptr<ParsedExpression>>("filter", nullptr);
+	auto filter = deserializer.ReadOptionalProperty<unique_ptr<ParsedExpression>>("filter");
 	auto order_bys = unique_ptr_cast<ResultModifier, OrderModifier>(
 	    deserializer.ReadProperty<unique_ptr<ResultModifier>>("order_bys"));
 	auto distinct = deserializer.ReadProperty<bool>("distinct");

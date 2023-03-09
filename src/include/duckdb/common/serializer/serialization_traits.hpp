@@ -27,7 +27,8 @@ constexpr bool has_serialize_v() {
 }
 
 // Check for anything implementing a static `T FormatDeserialize(FormatDeserializer&)` method
-template <typename T, typename = void>
+/*
+template <typename T, typename = void_t<>>
 struct has_deserialize : std::false_type {};
 
 template <typename T>
@@ -35,8 +36,29 @@ struct has_deserialize<T, void_t<decltype(T::FormatDeserialize)>> : std::true_ty
 
 template <typename T>
 constexpr bool has_deserialize_v() {
-	return has_deserialize<T>::value;
-}
+    return has_deserialize<T>::value;
+}*/
+
+template <typename T, typename = T>
+struct has_deserialize : std::false_type {};
+
+// Accept `static unique_ptr<T> FormatDeserialize(FormatDeserializer& deserializer)`
+template <typename T>
+struct has_deserialize<
+    T, typename std::enable_if<std::is_same<decltype(T::FormatDeserialize), unique_ptr<T>(FormatDeserializer &)>::value,
+                               T>::type> : std::true_type {};
+
+// Accept `static shared_ptr<T> FormatDeserialize(FormatDeserializer& deserializer)`
+template <typename T>
+struct has_deserialize<
+    T, typename std::enable_if<std::is_same<decltype(T::FormatDeserialize), shared_ptr<T>(FormatDeserializer &)>::value,
+                               T>::type> : std::true_type {};
+
+// Accept `static T FormatDeserialize(FormatDeserializer& deserializer)`
+template <typename T>
+struct has_deserialize<
+    T, typename std::enable_if<std::is_same<decltype(T::FormatDeserialize), T(FormatDeserializer &)>::value, T>::type>
+    : std::true_type {};
 
 // Check if T is a vector, and provide access to the inner type
 template <typename T>

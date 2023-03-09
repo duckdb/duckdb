@@ -87,7 +87,7 @@ unique_ptr<TableRef> ExpressionListRef::FormatDeserialize(FormatDeserializer &so
 	source.ReadProperty("expected_names", result->expected_names);
 	source.ReadProperty("expected_types", result->expected_types);
 	source.ReadProperty("values", result->values);
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<TableRef> ExpressionListRef::Deserialize(FieldReader &reader) {
