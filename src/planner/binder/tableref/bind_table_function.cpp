@@ -134,9 +134,8 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 			if (new_plan != nullptr) {
 				return CreatePlan(*Bind(*new_plan));
 			} else if (!table_function.bind) {
-				throw InternalException(
-				    "Failed to bind \"%s\": nullptr returned from bind_replace without bind function",
-				    table_function.name);
+				throw BinderException("Failed to bind \"%s\": nullptr returned from bind_replace without bind function",
+				                      table_function.name);
 			}
 		}
 		bind_data = table_function.bind(context, bind_input, return_types, return_names);
