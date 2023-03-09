@@ -660,9 +660,9 @@ Value Value::LIST(vector<Value> values) {
 	return result;
 }
 
-Value Value::LIST(LogicalType child_type, vector<Value> values) {
+Value Value::LIST(const LogicalType &child_type, vector<Value> values) {
 	if (values.empty()) {
-		return Value::EMPTYLIST(std::move(child_type));
+		return Value::EMPTYLIST(child_type);
 	}
 	for (auto &val : values) {
 		val = val.DefaultCastAs(child_type);
