@@ -365,6 +365,7 @@ string TestResultHelper::SQLLogicTestConvertValue(Value value, LogicalType sql_t
 					if (str[i] < ' ' || str[i] > '`') {
 						to[2] = str[i];
 						str.replace(start_pos, 1, to);
+                        start_pos += to.size();
 					}
 				}
 				return str;
