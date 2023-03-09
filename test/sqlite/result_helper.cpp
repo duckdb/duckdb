@@ -361,8 +361,8 @@ string TestResultHelper::SQLLogicTestConvertValue(Value value, LogicalType sql_t
 			} else {
 				for (size_t i = 0; i < str.size(); ++i) {
 					if (str[i] < ' ' || str[i] > '`') {
-                        string to("\\");
-                        to += std::to_string((int)str[i]);
+						string to("\\");
+						to += std::to_string((int)str[i]);
 						str.replace(i, 1, to);
 						i += to.size() - 1;
 					}
