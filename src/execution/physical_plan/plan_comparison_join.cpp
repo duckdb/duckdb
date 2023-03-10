@@ -154,6 +154,9 @@ static void CanUseIndexJoin(TableScanBindData *tbl, Expression &expr, Index **re
 
 void TransformIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Index **left_index, Index **right_index,
                         PhysicalOperator *left, PhysicalOperator *right) {
+	if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+		return;
+	}
 	// check if one of the tables has an index on column
 	if (op.join_type == JoinType::INNER && op.conditions.size() == 1) {
 		// check if one of the children are table scans and if they have an index in the join attribute
@@ -223,7 +226,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 	}
 
 	unique_ptr<PhysicalOperator> plan;
-	if (has_equality && op.type != LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+	if (has_equality) {
 		Index *left_index {}, *right_index {};
 		TransformIndexJoin(context, op, &left_index, &right_index, left.get(), right.get());
 		if (left_index &&

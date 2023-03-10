@@ -60,6 +60,11 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<Logical
 		}
 		for (auto &grp : aggr.grouping_sets) {
 			// check for each of the grouping sets if they contain all groups
+			if (bindings.empty()) {
+				// we can never push down empty grouping sets
+				can_pushdown_filter = false;
+				break;
+			}
 			for (auto &binding : bindings) {
 				if (grp.find(binding.column_index) == grp.end()) {
 					can_pushdown_filter = false;
