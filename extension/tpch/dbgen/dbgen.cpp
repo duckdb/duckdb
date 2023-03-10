@@ -589,11 +589,11 @@ string DBGenWrapper::GetAnswer(double sf, int query) {
 	}
 	const char *answer;
 	if (sf == 0.01) {
-		answer = TPCH_ANSWERS_SF0_01[query - 1];
+		answer = TPCH_ANSWERS_SF0_01[query];
 	} else if (sf == 0.1) {
-		answer = TPCH_ANSWERS_SF0_1[query - 1];
+		answer = TPCH_ANSWERS_SF0_1[query];
 	} else if (sf == 1) {
-		answer = TPCH_ANSWERS_SF1[query - 1];
+		answer = TPCH_ANSWERS_SF1[query];
 	} else {
 		throw NotImplementedException("Don't have TPC-H answers for SF %llf!", sf);
 	}
