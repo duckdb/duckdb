@@ -47,6 +47,8 @@ public:
 		return result;
 	}
 
+	ClientContext *GetConnection(DatabaseInstance *db);
+
 	static ConnectionManager &Get(DatabaseInstance &db);
 	static ConnectionManager &Get(ClientContext &context);
 
