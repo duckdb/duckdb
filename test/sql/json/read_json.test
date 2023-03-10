@@ -4,6 +4,9 @@
 
 require json
 
+statement ok
+pragma enable_verification
+
 statement error
 SELECT * FROM read_json('data/json/example_n.ndjson')
 ----
@@ -47,7 +50,7 @@ NULL	NULL
 4	Broadcast News
 5	Raising Arizona
 
-# some of these objects don't have "name"
+# some of these values don't have "name"
 query II
 SELECT * FROM read_json('data/json/different_schemas.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'})
 ----
@@ -123,7 +126,7 @@ SELECT * FROM 'data/json/example_n.ndjson'
 4	Broadcast News
 5	Raising Arizona
 
-# we can detect lists too, default depth is 2
+# we can detect lists too
 query III
 SELECT id, typeof(name), unnest(name) FROM 'data/json/with_list.json'
 ----
@@ -147,23 +150,23 @@ SELECT id, typeof(name), unnest(name) FROM 'data/json/with_list.json'
 query III
 SELECT id, typeof(name), unnest(name) FROM read_json_auto('data/json/with_list.json', maximum_depth=1)
 ----
-1	JSON[]	O
-1	JSON[]	Brother,
-1	JSON[]	Where
-1	JSON[]	Art
-1	JSON[]	Thou?
-2	JSON[]	Home
-2	JSON[]	for
-2	JSON[]	the
-2	JSON[]	Holidays
-3	JSON[]	The
-3	JSON[]	Firm
-4	JSON[]	Broadcast
-4	JSON[]	News
-5	JSON[]	Raising
-5	JSON[]	Arizona
+1	JSON[]	"O"
+1	JSON[]	"Brother,"
+1	JSON[]	"Where"
+1	JSON[]	"Art"
+1	JSON[]	"Thou?"
+2	JSON[]	"Home"
+2	JSON[]	"for"
+2	JSON[]	"the"
+2	JSON[]	"Holidays"
+3	JSON[]	"The"
+3	JSON[]	"Firm"
+4	JSON[]	"Broadcast"
+4	JSON[]	"News"
+5	JSON[]	"Raising"
+5	JSON[]	"Arizona"
 
-# with depth 1 we don't bother detecting anything, everything defaults to JSON (even the "id" column in this case)
+# with depth 0 we don't bother detecting anything, everything defaults to JSON (even the "id" column in this case)
 query II
 SELECT typeof(id), typeof(name) FROM read_json_auto('data/json/with_list.json', maximum_depth=0)
 ----
@@ -182,6 +185,95 @@ d5c52052-5f8e-473f-bc8d-176342643ef5	UUID
 3b6a6de3-0732-4591-93ed-8df6091eb00d	UUID
 ae24e69e-e0bf-4e85-9848-27d35df85b8b	UUID
 63928b16-1814-436f-8b30-b3c40cc31d51	UUID
+
+# top-level array of values
+query I
+select * from read_json('data/json/top_level_array.json', columns={conclusion: 'VARCHAR'}, json_format='array_of_records')
+----
+cancelled
+cancelled
+
+query I
+select * from read_json('data/json/top_level_array.json', auto_detect=true, json_format='array_of_records')
+----
+cancelled
+cancelled
+
+# if we try to read it with 'unstructured', we get an error
+statement error
+select * from read_json('data/json/top_level_array.json', columns={conclusion: 'VARCHAR'}, lines='false')
+----
+Invalid Input Error: JSON transform error in file "data/json/top_level_array.json", in object 1: Expected OBJECT, but got ARRAY
+
+# if we try to read an ndjson file as if it is an array of values, we get an error
+statement error
+select * from read_json_auto('data/json/example_n.ndjson', json_format='array_of_records')
+----
+Invalid Input Error: JSON transform error in file "data/json/example_n.ndjson", in line 1: Expected JSON ARRAY but got OBJECT
+
+# test that we can read a list of longer than STANDARD_VECTOR_SIZE properly
+statement ok
+copy (select list(to_json({duck: 42})) from range(10000)) to '__TEST_DIR__/my_file.json' (format csv, quote '')
+
+query T
+select count(*) from read_json('__TEST_DIR__/my_file.json', columns={duck: 'INTEGER'}, json_format='array_of_records')
+----
+10000
+
+query T
+select sum(duck) = 42*10000 from read_json('__TEST_DIR__/my_file.json', columns={duck: 'INTEGER'}, json_format='array_of_records')
+----
+true
+
+# read_json_auto also understands array of values
+query T
+select count(*) from '__TEST_DIR__/my_file.json'
+----
+10000
+
+query T
+select sum(duck) = 42*10000 from '__TEST_DIR__/my_file.json'
+----
+true
+
+# what if we do an array of non-values?
+statement ok
+copy (select list(range) from range(10)) to '__TEST_DIR__/my_file.json' (format csv, quote '')
+
+query T
+select * from '__TEST_DIR__/my_file.json'
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+query T
+select * from read_json('__TEST_DIR__/my_file.json', json_format='array_of_values', columns={range: 'INTEGER'})
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+# fails because it's not an array of records
+statement error
+select * from read_json_auto('__TEST_DIR__/my_file.json', json_format='array_of_records')
+
+statement ok
+pragma disable_verification
 
 require httpfs
 

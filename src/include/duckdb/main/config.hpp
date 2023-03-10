@@ -25,12 +25,12 @@
 #include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/replacement_scan.hpp"
-#include "duckdb/function/create_database_extension.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/planner/operator_extension.hpp"
 
 namespace duckdb {
+class BufferPool;
 class CastFunctionSet;
 class ClientContext;
 class ErrorManager;
@@ -137,6 +137,8 @@ struct DBConfigOptions {
 	case_insensitive_map_t<Value> set_variables;
 	//! Database configuration variable default values;
 	case_insensitive_map_t<Value> set_variable_defaults;
+	//! Directory to store extension binaries in
+	string extension_directory;
 	//! Whether unsigned extensions should be loaded
 	bool allow_unsigned_extensions = false;
 	//! Enable emitting FSST Vectors
@@ -183,8 +185,8 @@ public:
 	vector<std::unique_ptr<OperatorExtension>> operator_extensions;
 	//! Extensions made to storage
 	case_insensitive_map_t<std::unique_ptr<StorageExtension>> storage_extensions;
-	//! Extensions made to binder to implement the create_database functionality
-	vector<CreateDatabaseExtension> create_database_extensions;
+	//! A buffer pool can be shared across multiple databases (if desired).
+	shared_ptr<BufferPool> buffer_pool;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);

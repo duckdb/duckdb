@@ -38,22 +38,57 @@ const vector<string> ExtensionHelper::PathComponents() {
 	return vector<string> {".duckdb", "extensions", GetVersionDirectoryName(), DuckDB::Platform()};
 }
 
-string ExtensionHelper::ExtensionDirectory(ClientContext &context) {
-	auto &fs = FileSystem::GetFileSystem(context);
-	string local_path = fs.GetHomeDirectory(FileSystem::GetFileOpener(context));
-	if (!fs.DirectoryExists(local_path)) {
-		throw IOException("Can't find the home directory at '%s'\nSpecify a home directory using the SET "
-		                  "home_directory='/path/to/dir' option.",
-		                  local_path);
+string ExtensionHelper::ExtensionDirectory(DBConfig &config, FileSystem &fs, FileOpener *opener) {
+	string extension_directory;
+	if (!config.options.extension_directory.empty()) { // create the extension directory if not present
+		extension_directory = config.options.extension_directory;
+		// TODO this should probably live in the FileSystem
+		// convert random separators to platform-canonic
+		extension_directory = fs.ConvertSeparators(extension_directory);
+		// expand ~ in extension directory
+		extension_directory = fs.ExpandPath(extension_directory, opener);
+		if (!fs.DirectoryExists(extension_directory)) {
+			auto sep = fs.PathSeparator();
+			auto splits = StringUtil::Split(extension_directory, sep);
+			D_ASSERT(!splits.empty());
+			string extension_directory_prefix;
+			if (StringUtil::StartsWith(extension_directory, sep)) {
+				extension_directory_prefix = sep; // this is swallowed by Split otherwise
+			}
+			for (auto &split : splits) {
+				extension_directory_prefix = extension_directory_prefix + split + sep;
+				if (!fs.DirectoryExists(extension_directory_prefix)) {
+					fs.CreateDirectory(extension_directory_prefix);
+				}
+			}
+		}
+	} else { // otherwise default to home
+		string home_directory = fs.GetHomeDirectory(opener);
+		// exception if the home directory does not exist, don't create whatever we think is home
+		if (!fs.DirectoryExists(home_directory)) {
+			throw IOException("Can't find the home directory at '%s'\nSpecify a home directory using the SET "
+			                  "home_directory='/path/to/dir' option.",
+			                  home_directory);
+		}
+		extension_directory = home_directory;
 	}
+	D_ASSERT(fs.DirectoryExists(extension_directory));
+
 	auto path_components = PathComponents();
 	for (auto &path_ele : path_components) {
-		local_path = fs.JoinPath(local_path, path_ele);
-		if (!fs.DirectoryExists(local_path)) {
-			fs.CreateDirectory(local_path);
+		extension_directory = fs.JoinPath(extension_directory, path_ele);
+		if (!fs.DirectoryExists(extension_directory)) {
+			fs.CreateDirectory(extension_directory);
 		}
 	}
-	return local_path;
+	return extension_directory;
+}
+
+string ExtensionHelper::ExtensionDirectory(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	auto &fs = FileSystem::GetFileSystem(context);
+	auto opener = FileSystem::GetFileOpener(context);
+	return ExtensionDirectory(config, fs, opener);
 }
 
 bool ExtensionHelper::CreateSuggestions(const string &extension_name, string &message) {
@@ -75,15 +110,24 @@ bool ExtensionHelper::CreateSuggestions(const string &extension_name, string &me
 	return false;
 }
 
+void ExtensionHelper::InstallExtension(DBConfig &config, FileSystem &fs, const string &extension, bool force_install) {
+	string local_path = ExtensionDirectory(config, fs, nullptr);
+	InstallExtensionInternal(config, nullptr, fs, local_path, extension, force_install);
+}
+
 void ExtensionHelper::InstallExtension(ClientContext &context, const string &extension, bool force_install) {
 	auto &config = DBConfig::GetConfig(context);
+	auto &fs = FileSystem::GetFileSystem(context);
+	string local_path = ExtensionDirectory(context);
+	auto &client_config = ClientConfig::GetConfig(context);
+	InstallExtensionInternal(config, &client_config, fs, local_path, extension, force_install);
+}
+
+void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *client_config, FileSystem &fs,
+                                               const string &local_path, const string &extension, bool force_install) {
 	if (!config.options.enable_external_access) {
 		throw PermissionException("Installing extensions is disabled through configuration");
 	}
-	auto &fs = FileSystem::GetFileSystem(context);
-
-	string local_path = ExtensionDirectory(context);
-
 	auto extension_name = ApplyExtensionAlias(fs.ExtractBaseName(extension));
 
 	string local_extension_path = fs.JoinPath(local_path, extension_name + ".duckdb_extension");
@@ -123,7 +167,7 @@ void ExtensionHelper::InstallExtension(ClientContext &context, const string &ext
 
 	string default_endpoint = "http://extensions.duckdb.org";
 	string versioned_path = "/${REVISION}/${PLATFORM}/${NAME}.duckdb_extension.gz";
-	string &custom_endpoint = ClientConfig::GetConfig(context).custom_extension_repo;
+	string custom_endpoint = client_config ? client_config->custom_extension_repo : string();
 	string &endpoint = !custom_endpoint.empty() ? custom_endpoint : default_endpoint;
 	string url_template = endpoint + versioned_path;
 
@@ -162,8 +206,8 @@ void ExtensionHelper::InstallExtension(ClientContext &context, const string &ext
 		if (exact_match) {
 			message += "\nAre you using a development build? In this case, extensions might not (yet) be uploaded.";
 		}
-		throw IOException("Failed to download extension \"%s\" at URL \"%s%s\"\n%s", extension_name, url_base,
-		                  url_local_part, message);
+		throw HTTPException(res.value().status, res->body, "Failed to download extension \"%s\" at URL \"%s%s\"\n%s",
+		                    extension_name, url_base, url_local_part, message);
 	}
 	auto decompressed_body = GZipFileSystem::UncompressGZIPString(res->body);
 	std::ofstream out(temp_path, std::ios::binary);

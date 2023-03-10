@@ -65,6 +65,9 @@ public:
 
 	//! List of order nodes
 	vector<BoundOrderByNode> orders;
+
+	unique_ptr<BoundOrderModifier> Copy() const;
+	static bool Equals(const BoundOrderModifier *left, const BoundOrderModifier *right);
 };
 
 class BoundDistinctModifier : public BoundResultModifier {

@@ -113,7 +113,7 @@ void Prefix::Overwrite(uint32_t new_size, uint8_t *data) {
 
 void Prefix::Concatenate(ART &art, uint8_t key, Prefix &other) {
 	auto new_size = size + 1 + other.size;
-	art.memory_size += (new_size - size) * sizeof(uint8_t);
+	art.IncreaseMemorySize((new_size - size) * sizeof(uint8_t));
 	// have to allocate space in our prefix array
 	auto new_prefix = AllocateArray<uint8_t>(new_size);
 	idx_t new_prefix_idx = 0;
@@ -136,8 +136,7 @@ void Prefix::Concatenate(ART &art, uint8_t key, Prefix &other) {
 
 uint8_t Prefix::Reduce(ART &art, uint32_t n) {
 	auto new_size = size - n - 1;
-	D_ASSERT(art.memory_size >= (size - new_size) * sizeof(uint8_t));
-	art.memory_size -= (size - new_size) * sizeof(uint8_t);
+	art.DecreaseMemorySize((size - new_size) * sizeof(uint8_t));
 	auto prefix = GetPrefixData();
 	auto partial_key = prefix[n];
 

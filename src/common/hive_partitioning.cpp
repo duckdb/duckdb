@@ -150,6 +150,7 @@ HivePartitionedColumnData::HivePartitionedColumnData(const HivePartitionedColumn
 void HivePartitionedColumnData::ComputePartitionIndices(PartitionedColumnDataAppendState &state, DataChunk &input) {
 	Vector hashes(LogicalType::HASH, input.size());
 	input.Hash(group_by_columns, hashes);
+	hashes.Flatten(input.size());
 
 	for (idx_t i = 0; i < input.size(); i++) {
 		HivePartitionKey key;

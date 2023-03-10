@@ -664,6 +664,7 @@ public:
 			if (!matches[outer_idx]) {
 				true_sel.set_index(count++, outer_idx);
 				if (count >= STANDARD_VECTOR_SIZE) {
+					outer_idx++;
 					break;
 				}
 			}
@@ -847,8 +848,6 @@ public:
 
 			lstate.joiner = make_unique<IEJoinUnion>(client, op, left_table, b1, right_table, b2);
 			return;
-		} else {
-			--next_pair;
 		}
 
 		// Outer joins
@@ -864,6 +863,7 @@ public:
 		// Left outer blocks
 		const auto l = next_left++;
 		if (l < left_outers) {
+			lstate.joiner = nullptr;
 			lstate.left_block_index = l;
 			lstate.left_base = left_bases[l];
 
@@ -873,12 +873,12 @@ public:
 			return;
 		} else {
 			lstate.left_matches = nullptr;
-			--next_left;
 		}
 
 		// Right outer block
 		const auto r = next_right++;
 		if (r < right_outers) {
+			lstate.joiner = nullptr;
 			lstate.right_block_index = r;
 			lstate.right_base = right_bases[r];
 
@@ -888,7 +888,6 @@ public:
 			return;
 		} else {
 			lstate.right_matches = nullptr;
-			--next_right;
 		}
 	}
 
@@ -936,7 +935,7 @@ void PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result, Globa
 
 	ie_gstate.Initialize(ie_sink);
 
-	if (!ie_lstate.joiner) {
+	if (!ie_lstate.joiner && !ie_lstate.left_matches && !ie_lstate.right_matches) {
 		ie_gstate.GetNextPair(context.client, ie_sink, ie_lstate);
 	}
 
@@ -959,8 +958,7 @@ void PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result, Globa
 			ie_gstate.GetNextPair(context.client, ie_sink, ie_lstate);
 			continue;
 		}
-
-		SliceSortedPayload(result, ie_sink.tables[0]->global_sort_state, ie_lstate.left_base, ie_lstate.true_sel,
+		SliceSortedPayload(result, ie_sink.tables[0]->global_sort_state, ie_lstate.left_block_index, ie_lstate.true_sel,
 		                   count);
 
 		// Fill in NULLs to the right
@@ -983,8 +981,8 @@ void PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result, Globa
 			continue;
 		}
 
-		SliceSortedPayload(result, ie_sink.tables[1]->global_sort_state, ie_lstate.right_base, ie_lstate.true_sel,
-		                   count, left_cols);
+		SliceSortedPayload(result, ie_sink.tables[1]->global_sort_state, ie_lstate.right_block_index,
+		                   ie_lstate.true_sel, count, left_cols);
 
 		// Fill in NULLs to the left
 		for (idx_t col_idx = 0; col_idx < left_cols; ++col_idx) {

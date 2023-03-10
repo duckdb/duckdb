@@ -1,0 +1,14 @@
+# name: test/sql/prepared/test_issue_6276.test
+# description: Issue 6276: Spurious additional parameter required in prepared statement
+# group: [prepared]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PREPARE v1 AS SELECT CASE ? WHEN ? THEN ? WHEN ? THEN ? ELSE ? END AS x
+
+query I
+EXECUTE V1(1, 2, 3, 4, 5, 6);
+----
+6

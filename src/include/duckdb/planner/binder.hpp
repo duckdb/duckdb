@@ -108,6 +108,9 @@ public:
 
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry *schema);
+
+	vector<unique_ptr<Expression>> BindCreateIndexExpressions(TableCatalogEntry *table, CreateIndexInfo *info);
+
 	void BindCreateViewInfo(CreateViewInfo &base);
 	SchemaCatalogEntry *BindSchema(CreateInfo &info);
 	SchemaCatalogEntry *BindCreateFunctionInfo(CreateInfo &info);
@@ -247,10 +250,11 @@ private:
 	BoundStatement Bind(LoadStatement &stmt);
 	BoundStatement Bind(LogicalPlanStatement &stmt);
 	BoundStatement Bind(AttachStatement &stmt);
+	BoundStatement Bind(DetachStatement &stmt);
 
 	BoundStatement BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry *table,
-	                             idx_t update_table_index, unique_ptr<LogicalOperator> child_operator,
-	                             BoundStatement result);
+	                             const string &alias, idx_t update_table_index,
+	                             unique_ptr<LogicalOperator> child_operator, BoundStatement result);
 
 	unique_ptr<QueryNode> BindTableMacro(FunctionExpression &function, TableMacroCatalogEntry *macro_func, idx_t depth);
 
@@ -271,6 +275,12 @@ private:
 	unique_ptr<BoundTableRef> Bind(TableFunctionRef &ref);
 	unique_ptr<BoundTableRef> Bind(EmptyTableRef &ref);
 	unique_ptr<BoundTableRef> Bind(ExpressionListRef &ref);
+	unique_ptr<BoundTableRef> Bind(PivotRef &expr);
+
+	unique_ptr<SelectNode> BindPivot(PivotRef &expr, vector<unique_ptr<ParsedExpression>> all_columns);
+	unique_ptr<SelectNode> BindUnpivot(Binder &child_binder, PivotRef &expr,
+	                                   vector<unique_ptr<ParsedExpression>> all_columns,
+	                                   unique_ptr<ParsedExpression> &where_clause);
 
 	bool BindTableFunctionParameters(TableFunctionCatalogEntry &table_function,
 	                                 vector<unique_ptr<ParsedExpression>> &expressions, vector<LogicalType> &arguments,
@@ -329,12 +339,15 @@ private:
 	void ExpandStarExpressions(vector<unique_ptr<ParsedExpression>> &select_list,
 	                           vector<unique_ptr<ParsedExpression>> &new_select_list);
 	void ExpandStarExpression(unique_ptr<ParsedExpression> expr, vector<unique_ptr<ParsedExpression>> &new_select_list);
-	bool FindStarExpression(ParsedExpression &expr, StarExpression **star);
+	bool FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpression **star, bool is_root, bool in_columns);
 	void ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_ptr<ParsedExpression> &replacement);
+	void BindWhereStarExpression(unique_ptr<ParsedExpression> &expr);
 
 	//! If only a schema name is provided (e.g. "a.b") then figure out if "a" is a schema or a catalog name
 	void BindSchemaOrCatalog(string &catalog_name, string &schema_name);
 	SchemaCatalogEntry *BindCreateSchema(CreateInfo &info);
+
+	unique_ptr<BoundQueryNode> BindSelectNode(SelectNode &statement, unique_ptr<BoundTableRef> from_table);
 
 public:
 	// This should really be a private constructor, but make_shared does not allow it...

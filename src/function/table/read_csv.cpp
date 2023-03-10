@@ -10,6 +10,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/main/extension_helper.hpp"
 
 #include <limits>
 
@@ -27,11 +28,11 @@ unique_ptr<CSVFileHandle> ReadCSV::OpenCSV(const string &file_path, FileCompress
 void ReadCSVData::InitializeFiles(ClientContext &context, const vector<string> &patterns) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	for (auto &file_pattern : patterns) {
-		auto found_files = fs.Glob(file_pattern, context);
-		if (found_files.empty()) {
-			throw IOException("No files found that match the pattern \"%s\"", file_pattern);
-		}
+		auto found_files = fs.GlobFiles(file_pattern, context);
 		files.insert(files.end(), found_files.begin(), found_files.end());
+	}
+	if (files.empty()) {
+		throw IOException("CSV reader needs at least one file to read");
 	}
 }
 
@@ -63,9 +64,15 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	auto &options = result->options;
 
 	vector<string> patterns;
+	if (input.inputs[0].IsNull()) {
+		throw ParserException("CSV reader cannot take NULL as parameter");
+	}
 	if (input.inputs[0].type().id() == LogicalTypeId::LIST) {
 		// list of globs
 		for (auto &val : ListValue::GetChildren(input.inputs[0])) {
+			if (val.IsNull()) {
+				throw ParserException("CSV reader cannot take NULL input as parameter");
+			}
 			patterns.push_back(StringValue::Get(val));
 		}
 	} else {
@@ -97,6 +104,17 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			}
 			if (names.empty()) {
 				throw BinderException("read_csv requires at least a single column as input!");
+			}
+		} else if (loption == "column_names" || loption == "names") {
+			if (!options.name_list.empty()) {
+				throw BinderException("read_csv_auto column_names/names can only be supplied once");
+			}
+			if (kv.second.IsNull()) {
+				throw BinderException("read_csv_auto %s cannot be NULL", kv.first);
+			}
+			auto &children = ListValue::GetChildren(kv.second);
+			for (auto &child : children) {
+				options.name_list.push_back(StringValue::Get(child));
 			}
 		} else if (loption == "column_types" || loption == "types" || loption == "dtypes") {
 			auto &child_type = kv.second.type();
@@ -251,9 +269,6 @@ public:
 	    : file_handle(std::move(file_handle_p)), system_threads(system_threads_p), buffer_size(buffer_size_p),
 	      force_parallelism(force_parallelism_p) {
 		current_file_path = files_path_p[0];
-		for (idx_t i = 0; i < rows_to_skip; i++) {
-			file_handle->ReadLine();
-		}
 		estimated_linenr = rows_to_skip;
 		file_size = file_handle->FileSize();
 		first_file_size = file_size;
@@ -303,7 +318,7 @@ public:
 			progress = double(bytes_read) / double(file_size);
 		}
 		// now get the total percentage of files read
-		double percentage = double(file_index) / total_files;
+		double percentage = double(file_index - 1) / total_files;
 		percentage += (double(1) / double(total_files)) * progress;
 		return percentage * 100;
 	}
@@ -575,6 +590,7 @@ struct SingleThreadedCSVState : public GlobalTableFunctionState {
 		{
 			lock_guard<mutex> l(csv_lock);
 			if (initial_reader) {
+				total_size = initial_reader->file_handle ? initial_reader->file_handle->FileSize() : 0;
 				return std::move(initial_reader);
 			}
 			if (next_file >= total_files) {
@@ -963,6 +979,8 @@ TableFunction ReadCSVTableFunction::GetAutoFunction(bool list_parameter) {
 	read_csv_auto.named_parameters["column_types"] = LogicalType::ANY;
 	read_csv_auto.named_parameters["dtypes"] = LogicalType::ANY;
 	read_csv_auto.named_parameters["types"] = LogicalType::ANY;
+	read_csv_auto.named_parameters["names"] = LogicalType::LIST(LogicalType::VARCHAR);
+	read_csv_auto.named_parameters["column_names"] = LogicalType::LIST(LogicalType::VARCHAR);
 	return read_csv_auto;
 }
 

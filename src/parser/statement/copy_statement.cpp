@@ -11,16 +11,6 @@ CopyStatement::CopyStatement(const CopyStatement &other) : SQLStatement(other), 
 	}
 }
 
-string ConvertOptionValueToString(const Value &val) {
-	auto type = val.type().id();
-	switch (type) {
-	case LogicalTypeId::VARCHAR:
-		return KeywordHelper::WriteOptionallyQuoted(val.ToString());
-	default:
-		return val.ToString();
-	}
-}
-
 string CopyStatement::CopyOptionsToString(const string &format,
                                           const case_insensitive_map_t<vector<Value>> &options) const {
 	if (format.empty() && options.empty()) {
@@ -45,15 +35,14 @@ string CopyStatement::CopyOptionsToString(const string &format,
 			// Options like HEADER don't need an explicit value
 			// just providing the name already sets it to true
 		} else if (values.size() == 1) {
-			result += ConvertOptionValueToString(values[0]);
+			result += values[0].ToSQLString();
 		} else {
 			result += "( ";
 			for (idx_t i = 0; i < values.size(); i++) {
-				auto &value = values[i];
 				if (i) {
 					result += ", ";
 				}
-				result += KeywordHelper::WriteOptionallyQuoted(value.ToString());
+				result += values[i].ToSQLString();
 			}
 			result += " )";
 		}

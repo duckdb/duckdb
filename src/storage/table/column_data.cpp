@@ -27,8 +27,10 @@ ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t c
 
 ColumnData::ColumnData(ColumnData &other, idx_t start, ColumnData *parent)
     : block_manager(other.block_manager), info(other.info), column_index(other.column_index), start(start),
-      type(std::move(other.type)), parent(parent), updates(std::move(other.updates)),
-      version(parent ? parent->version + 1 : 0) {
+      type(std::move(other.type)), parent(parent), version(parent ? parent->version + 1 : 0) {
+	if (other.updates) {
+		updates = make_unique<UpdateSegment>(*other.updates, *this);
+	}
 	idx_t offset = 0;
 	for (auto segment = other.data.GetRootSegment(); segment; segment = segment->Next()) {
 		auto &other = (ColumnSegment &)*segment;
@@ -252,7 +254,7 @@ void ColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &state, Uni
 	while (true) {
 		// append the data from the vector
 		idx_t copied_elements = state.current->Append(state, vdata, offset, count);
-		stats.Merge(*state.current->stats.statistics);
+		stats.Merge(state.current->stats.statistics);
 		if (copied_elements == count) {
 			// finished copying everything
 			break;
@@ -387,7 +389,7 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group,
 	// scan the segments of the column data
 	// set up the checkpoint state
 	auto checkpoint_state = CreateCheckpointState(row_group, partial_block_manager);
-	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type, StatisticsType::LOCAL_STATS);
+	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
 
 	auto l = data.Lock();
 	auto nodes = data.MoveSegments(l);
@@ -412,13 +414,19 @@ void ColumnData::DeserializeColumn(Deserializer &source) {
 	idx_t data_pointer_count = source.Read<idx_t>();
 	for (idx_t data_ptr = 0; data_ptr < data_pointer_count; data_ptr++) {
 		// read the data pointer
-		DataPointer data_pointer;
-		data_pointer.row_start = source.Read<idx_t>();
-		data_pointer.tuple_count = source.Read<idx_t>();
-		data_pointer.block_pointer.block_id = source.Read<block_id_t>();
-		data_pointer.block_pointer.offset = source.Read<uint32_t>();
-		data_pointer.compression_type = source.Read<CompressionType>();
-		data_pointer.statistics = BaseStatistics::Deserialize(source, type);
+		auto row_start = source.Read<idx_t>();
+		auto tuple_count = source.Read<idx_t>();
+		auto block_pointer_block_id = source.Read<block_id_t>();
+		auto block_pointer_offset = source.Read<uint32_t>();
+		auto compression_type = source.Read<CompressionType>();
+		auto stats = BaseStatistics::Deserialize(source, type);
+
+		DataPointer data_pointer(std::move(stats));
+		data_pointer.row_start = row_start;
+		data_pointer.tuple_count = tuple_count;
+		data_pointer.block_pointer.block_id = block_pointer_block_id;
+		data_pointer.block_pointer.offset = block_pointer_offset;
+		data_pointer.compression_type = compression_type;
 
 		// create a persistent segment
 		auto segment = ColumnSegment::CreatePersistentSegment(
@@ -464,8 +472,7 @@ void ColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, T
 		column_info.segment_start = segment->start;
 		column_info.segment_count = segment->count;
 		column_info.compression_type = CompressionTypeToString(segment->function->type);
-		column_info.segment_stats =
-		    segment->stats.statistics ? segment->stats.statistics->ToString() : string("No Stats");
+		column_info.segment_stats = segment->stats.statistics.ToString();
 		column_info.has_updates = updates ? true : false;
 		// persistent
 		// block_id

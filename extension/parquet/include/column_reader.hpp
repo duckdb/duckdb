@@ -18,8 +18,7 @@
 
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
-#include "duckdb/storage/statistics/string_statistics.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
+
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
@@ -131,6 +130,7 @@ protected:
 	ParquetReader &reader;
 	LogicalType type;
 	unique_ptr<Vector> byte_array_data;
+	idx_t byte_array_count = 0;
 
 	idx_t pending_skips = 0;
 

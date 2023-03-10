@@ -30,7 +30,7 @@ enum PySQLTokenType {
 	PY_SQL_TOKEN_COMMENT
 };
 
-static py::object PyTokenize(const string &query) {
+static py::list PyTokenize(const string &query) {
 	auto tokens = Parser::Tokenize(query);
 	py::list result;
 	for (auto &token : tokens) {
@@ -58,7 +58,7 @@ static py::object PyTokenize(const string &query) {
 		}
 		result.append(tuple);
 	}
-	return std::move(result);
+	return result;
 }
 
 static void InitializeConnectionMethods(py::module_ &m) {
@@ -93,6 +93,10 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         py::arg("date_as_object") = false, py::arg("connection") = py::none())
 	    .def("fetch_arrow_table", &PyConnectionWrapper::FetchArrow, "Fetch a result as Arrow table following execute()",
 	         py::arg("chunk_size") = 1000000, py::arg("connection") = py::none())
+	    .def("torch", &PyConnectionWrapper::FetchPyTorch,
+	         "Fetch a result as dict of PyTorch Tensors following execute()", py::arg("connection") = py::none())
+	    .def("tf", &PyConnectionWrapper::FetchTF, "Fetch a result as dict of TensorFlow Tensors following execute()",
+	         py::arg("connection") = py::none())
 	    .def("fetch_record_batch", &PyConnectionWrapper::FetchRecordBatchReader,
 	         "Fetch an Arrow RecordBatchReader following execute()", py::arg("chunk_size") = 1000000,
 	         py::arg("connection") = py::none())
@@ -162,9 +166,10 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	m.def("from_substrait", &PyConnectionWrapper::FromSubstrait, "Create a query object from protobuf plan",
 	      py::arg("proto"), py::arg("connection") = py::none())
 	    .def("get_substrait", &PyConnectionWrapper::GetSubstrait, "Serialize a query to protobuf", py::arg("query"),
-	         py::arg("connection") = py::none())
+	         py::arg("connection") = py::none(), py::kw_only(), py::arg("enable_optimizer") = true)
 	    .def("get_substrait_json", &PyConnectionWrapper::GetSubstraitJSON,
-	         "Serialize a query to protobuf on the JSON format", py::arg("query"), py::arg("connection") = py::none())
+	         "Serialize a query to protobuf on the JSON format", py::arg("query"), py::arg("connection") = py::none(),
+	         py::kw_only(), py::arg("enable_optimizer") = true)
 	    .def("get_table_names", &PyConnectionWrapper::GetTableNames, "Extract the required table names from a query",
 	         py::arg("query"), py::arg("connection") = py::none())
 	    .def("description", &PyConnectionWrapper::GetDescription, "Get result set attributes, mainly column names",
@@ -202,12 +207,17 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	m.attr("threadsafety") = 1;
 	m.attr("paramstyle") = "qmark";
 
+	py::enum_<duckdb::ExplainType>(m, "ExplainType")
+	    .value("STANDARD", duckdb::ExplainType::EXPLAIN_STANDARD)
+	    .value("ANALYZE", duckdb::ExplainType::EXPLAIN_ANALYZE)
+	    .export_values();
+
 	RegisterExceptions(m);
 
 	m.def("connect", &DuckDBPyConnection::Connect,
 	      "Create a DuckDB database instance. Can take a database file name to read/write persistent data and a "
 	      "read_only flag if no changes are desired",
-	      py::arg("database") = ":memory:", py::arg("read_only") = false, py::arg("config") = py::none());
+	      py::arg("database") = ":memory:", py::arg("read_only") = false, py::arg_v("config", py::dict(), "None"));
 	m.def("tokenize", PyTokenize,
 	      "Tokenizes a SQL string, returning a list of (position, type) tuples that can be "
 	      "used for e.g. syntax highlighting",
@@ -232,9 +242,9 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	m.def("from_substrait", &DuckDBPyRelation::FromSubstrait, "Creates a query object from the substrait plan",
 	      py::arg("proto"), py::arg("connection") = py::none());
 	m.def("get_substrait", &DuckDBPyRelation::GetSubstrait, "Serialize a query object to protobuf", py::arg("query"),
-	      py::arg("connection") = py::none());
+	      py::arg("connection") = py::none(), py::kw_only(), py::arg("enable_optimizer") = true);
 	m.def("get_substrait_json", &DuckDBPyRelation::GetSubstraitJSON, "Serialize a query object to protobuf",
-	      py::arg("query"), py::arg("connection") = py::none());
+	      py::arg("query"), py::arg("connection") = py::none(), py::kw_only(), py::arg("enable_optimizer") = true);
 	m.def("from_substrait_json", &DuckDBPyRelation::FromSubstraitJSON, "Serialize a query object to protobuf",
 	      py::arg("json"), py::arg("connection") = py::none());
 	m.def("from_parquet", &DuckDBPyRelation::FromParquet,

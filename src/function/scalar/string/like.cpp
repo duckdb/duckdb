@@ -2,7 +2,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/storage/statistics/string_statistics.hpp"
+
 #include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
@@ -220,7 +220,7 @@ bool LikeOperatorFunction(string_t &s, string_t &pat, char escape) {
 	return LikeOperatorFunction(s.GetDataUnsafe(), s.GetSize(), pat.GetDataUnsafe(), pat.GetSize(), escape);
 }
 
-bool LikeFun::Glob(const char *string, idx_t slen, const char *pattern, idx_t plen) {
+bool LikeFun::Glob(const char *string, idx_t slen, const char *pattern, idx_t plen, bool allow_question_mark) {
 	idx_t sidx = 0;
 	idx_t pidx = 0;
 main_loop : {
@@ -249,8 +249,11 @@ main_loop : {
 			return false;
 		}
 		case '?':
-			// wildcard: matches anything but null
-			break;
+			// when enabled: matches anything but null
+			if (allow_question_mark) {
+				break;
+			}
+			DUCKDB_EXPLICIT_FALLTHROUGH;
 		case '[':
 			pidx++;
 			goto parse_bracket;
@@ -479,11 +482,7 @@ static unique_ptr<BaseStatistics> ILikePropagateStats(ClientContext &context, Fu
 	auto &expr = input.expr;
 	D_ASSERT(child_stats.size() >= 1);
 	// can only propagate stats if the children have stats
-	if (!child_stats[0]) {
-		return nullptr;
-	}
-	auto &sstats = (StringStatistics &)*child_stats[0];
-	if (!sstats.has_unicode) {
+	if (!StringStats::CanContainUnicode(child_stats[0])) {
 		expr.function.function = ScalarFunction::BinaryFunction<string_t, string_t, bool, ASCII_OP>;
 	}
 	return nullptr;

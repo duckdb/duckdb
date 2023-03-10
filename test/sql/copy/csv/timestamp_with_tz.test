@@ -1,0 +1,30 @@
+# name: test/sql/copy/csv/timestamp_with_tz.test
+# description: Test reading timestamp with timezones
+# group: [csv]
+
+statement ok
+CREATE TABLE tbl(id int, ts timestamp);
+
+# this fails without ICU loaded
+statement error
+COPY tbl FROM 'data/csv/timestamp_with_tz.csv' (HEADER)
+----
+timestamp that is not UTC
+
+require icu
+
+# we can load this into a timestamptz table
+statement ok
+CREATE TABLE tbl_tz(id int, ts timestamptz);
+
+statement ok
+COPY tbl_tz FROM 'data/csv/timestamp_with_tz.csv' (HEADER)
+
+statement ok
+SET TimeZone='UTC'
+
+query II
+SELECT * FROM tbl_tz
+----
+1	2021-05-25 04:55:03.382494+00
+2	2021-05-25 09:55:03.382494+00

@@ -1,8 +1,19 @@
 name: CIFuzz
 on:
+  workflow_dispatch:
+  repository_dispatch:
   push:
+    branches:
+      - '**'
+      - '!master'
+      - '!feature'
+    tags:
+      - '**'
     paths-ignore:
       - '**.md'
+      - 'tools/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/cifuzz.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
@@ -85,7 +96,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 

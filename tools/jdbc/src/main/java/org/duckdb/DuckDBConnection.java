@@ -24,20 +24,34 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Executor;
 
-public class DuckDBConnection implements java.sql.Connection {
-	protected ByteBuffer conn_ref = null;
-	protected DuckDBDatabase db;
-	protected boolean autoCommit = true;
-	protected boolean transactionRunning = false;
+public final class DuckDBConnection implements java.sql.Connection {
 
-	public DuckDBConnection(DuckDBDatabase db) throws SQLException {
-		if (db.db_ref == null) {
-			throw new SQLException("Database was shutdown");
+	/** Name of the DuckDB default schema. */
+	public static final String DEFAULT_SCHEMA = "main";
+
+	ByteBuffer conn_ref;
+	boolean autoCommit = true;
+	boolean transactionRunning;
+	final String url;
+	private final boolean readOnly;
+
+	public static DuckDBConnection newConnection(String url, boolean readOnly, Properties properties) throws SQLException {
+		if (!url.startsWith("jdbc:duckdb")) {
+			throw new SQLException("DuckDB JDBC URL needs to start with 'jdbc:duckdb:'");
 		}
-		conn_ref = DuckDBNative.duckdb_jdbc_connect(db.db_ref);
-		DuckDBNative.duckdb_jdbc_set_auto_commit(conn_ref, true);
-		this.db = db;
-		db.incrementConnections();
+		String db_dir = url.substring("jdbc:duckdb:".length()).trim();
+		if (db_dir.length() == 0) {
+			db_dir = ":memory:";
+		}
+		ByteBuffer nativeReference = DuckDBNative.duckdb_jdbc_startup(db_dir.getBytes(StandardCharsets.UTF_8), readOnly, properties);
+		return new DuckDBConnection(nativeReference, url, readOnly);
+	}
+
+	private DuckDBConnection(ByteBuffer connectionReference, String url, boolean readOnly) throws SQLException {
+		conn_ref = connectionReference;
+		this.url = url;
+		this.readOnly = readOnly;
+		DuckDBNative.duckdb_jdbc_set_auto_commit(connectionReference, true);
 	}
 	
 	public Statement createStatement(int resultSetType, int resultSetConcurrency, int resultSetHoldability)
@@ -67,31 +81,28 @@ public class DuckDBConnection implements java.sql.Connection {
 	}
 
 	public Connection duplicate() throws SQLException {
-		if (db == null) {
-			throw new SQLException("Connection was closed");
+		if (isClosed()) {
+			throw new SQLException("Connection is closed");
 		}
-		if (db.db_ref == null) {
-			throw new SQLException("Database was shutdown");
-		}
-		return new DuckDBConnection(db);
-	}
-
-	public DuckDBDatabase getDatabase() {
-		return db;
+		return new DuckDBConnection(
+				DuckDBNative.duckdb_jdbc_connect(conn_ref),
+				url,
+				readOnly
+		);
 	}
 
 	public void commit() throws SQLException {
-		Statement s = createStatement();
-		s.execute("COMMIT");
-		transactionRunning = false;
-		s.close();
+		try (Statement s = createStatement()) {
+			s.execute("COMMIT");
+			transactionRunning = false;
+		}
 	}
 
 	public void rollback() throws SQLException {
-		Statement s = createStatement();
-		s.execute("ROLLBACK");
-		transactionRunning = false;
-		s.close();
+		try (Statement s = createStatement()) {
+			s.execute("ROLLBACK");
+			transactionRunning = false;
+		}
 	}
 
 	protected void finalize() throws Throwable {
@@ -102,9 +113,7 @@ public class DuckDBConnection implements java.sql.Connection {
 		if (conn_ref != null) {
 			DuckDBNative.duckdb_jdbc_disconnect(conn_ref);
 			conn_ref = null;
-			db.maybeShutdown();
 		}
-		db = null;
 	}
 
 	public boolean isClosed() throws SQLException {
@@ -116,17 +125,10 @@ public class DuckDBConnection implements java.sql.Connection {
 			return false;
 		}
 		// run a query just to be sure
-		Statement s = createStatement();
-		ResultSet rs = s.executeQuery("SELECT 42");
-		if (!rs.next() || rs.getInt(1) != 42) {
-			rs.close();
-			s.close();
-			return false;
+		try (Statement s = createStatement();
+			ResultSet rs = s.executeQuery("SELECT 42")) {
+			return rs.next() && rs.getInt(1) == 42;
 		}
-		rs.close();
-		s.close();
-
-		return true;
 	}
 
 	public SQLWarning getWarnings() throws SQLException {
@@ -147,13 +149,13 @@ public class DuckDBConnection implements java.sql.Connection {
 	}
 
 	public void setReadOnly(boolean readOnly) throws SQLException {
-		if (readOnly != db.read_only) {
+		if (readOnly != this.readOnly) {
 			throw new SQLFeatureNotSupportedException("Can't change read-only status on connection level.");
 		}
 	}
 
-	public boolean isReadOnly() throws SQLException {
-		return db.read_only;
+	public boolean isReadOnly() {
+		return readOnly;
 	}
 
 	public void setAutoCommit(boolean autoCommit) throws SQLException {

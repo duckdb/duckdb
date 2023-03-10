@@ -72,6 +72,9 @@ static void NegatePercentileFractions(ClientContext &context, unique_ptr<ParsedE
 		for (const auto &element_val : ListValue::GetChildren(value)) {
 			values.push_back(NegatePercentileValue(element_val, desc));
 		}
+		if (values.empty()) {
+			throw BinderException("Empty list in percentile not allowed");
+		}
 		bound.expr = make_unique<BoundConstantExpression>(Value::LIST(values));
 	} else {
 		bound.expr = make_unique<BoundConstantExpression>(NegatePercentileValue(value, desc));
@@ -205,8 +208,9 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	auto bound_function = func->functions.GetFunctionByOffset(best_function);
 
 	// Bind any sort columns, unless the aggregate is order-insensitive
-	auto order_bys = make_unique<BoundOrderModifier>();
+	unique_ptr<BoundOrderModifier> order_bys;
 	if (!aggr.order_bys->orders.empty()) {
+		order_bys = make_unique<BoundOrderModifier>();
 		auto &config = DBConfig::GetConfig(context);
 		for (auto &order : aggr.order_bys->orders) {
 			auto &order_expr = (BoundExpression &)*order.expression;
@@ -219,12 +223,13 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 		}
 	}
 
-	auto aggregate = function_binder.BindAggregateFunction(
-	    bound_function, std::move(children), std::move(bound_filter),
-	    aggr.distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT, std::move(order_bys));
+	auto aggregate =
+	    function_binder.BindAggregateFunction(bound_function, std::move(children), std::move(bound_filter),
+	                                          aggr.distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT);
 	if (aggr.export_state) {
 		aggregate = ExportAggregateFunction::Bind(std::move(aggregate));
 	}
+	aggregate->order_bys = std::move(order_bys);
 
 	// check for all the aggregates if this aggregate already exists
 	idx_t aggr_index;

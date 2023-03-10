@@ -7,9 +7,11 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/planner/expression_binder/lateral_binder.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
 
 namespace duckdb {
 
@@ -128,6 +130,8 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 	{
 		LateralBinder binder(left_binder, context);
 		result->right = right_binder.Bind(*ref.right);
+		result->correlated_columns = binder.ExtractCorrelatedColumns(right_binder);
+
 		result->lateral = binder.HasCorrelatedColumns();
 		if (result->lateral) {
 			// lateral join: can only be an INNER or LEFT join
@@ -135,7 +139,6 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 				throw BinderException("The combining JOIN type must be INNER or LEFT for a LATERAL reference");
 			}
 		}
-		result->correlated_columns = binder.ExtractCorrelatedColumns(right_binder);
 	}
 
 	vector<unique_ptr<ParsedExpression>> extra_conditions;
@@ -252,6 +255,8 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 		}
 	}
 
+	auto right_bindings_list_copy = right_binder.bind_context.GetBindingsList();
+
 	bind_context.AddContext(std::move(left_binder.bind_context));
 	bind_context.AddContext(std::move(right_binder.bind_context));
 	MoveCorrelatedExpressions(left_binder);
@@ -268,6 +273,11 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 		WhereBinder binder(*this, context);
 		result->condition = binder.Bind(ref.condition);
 	}
+
+	if (result->type == JoinType::SEMI || result->type == JoinType::ANTI) {
+		bind_context.RemoveContext(right_bindings_list_copy);
+	}
+
 	return std::move(result);
 }
 

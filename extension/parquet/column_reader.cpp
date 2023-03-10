@@ -589,6 +589,7 @@ void StringColumnReader::PrepareDeltaLengthByteArray(ResizeableBuffer &buffer) {
 	}
 	auto length_data = (uint32_t *)length_buffer->ptr;
 	byte_array_data = make_unique<Vector>(LogicalType::VARCHAR, value_count);
+	byte_array_count = value_count;
 	auto string_data = FlatVector::GetData<string_t>(*byte_array_data);
 	for (idx_t i = 0; i < value_count; i++) {
 		auto str_len = length_data[i];
@@ -615,6 +616,7 @@ void StringColumnReader::PrepareDeltaByteArray(ResizeableBuffer &buffer) {
 	auto prefix_data = (uint32_t *)prefix_buffer->ptr;
 	auto suffix_data = (uint32_t *)suffix_buffer->ptr;
 	byte_array_data = make_unique<Vector>(LogicalType::VARCHAR, prefix_count);
+	byte_array_count = prefix_count;
 	auto string_data = FlatVector::GetData<string_t>(*byte_array_data);
 	for (idx_t i = 0; i < prefix_count; i++) {
 		auto str_len = prefix_data[i] + suffix_data[i];
@@ -646,6 +648,11 @@ void StringColumnReader::DeltaByteArray(uint8_t *defines, idx_t num_values, parq
 			continue;
 		}
 		if (filter[row_idx + result_offset]) {
+			if (delta_offset >= byte_array_count) {
+				throw IOException("DELTA_BYTE_ARRAY - length mismatch between values and byte array lengths (attempted "
+				                  "read of %d from %d entries) - corrupt file?",
+				                  delta_offset + 1, byte_array_count);
+			}
 			result_ptr[row_idx + result_offset] = string_data[delta_offset++];
 		} else {
 			delta_offset++;
@@ -858,7 +865,7 @@ RowNumberColumnReader::RowNumberColumnReader(ParquetReader &reader, LogicalType 
 
 unique_ptr<BaseStatistics> RowNumberColumnReader::Stats(idx_t row_group_idx_p,
                                                         const std::vector<ColumnChunk> &columns) {
-	auto stats = make_unique<NumericStatistics>(type, StatisticsType::LOCAL_STATS);
+	auto stats = NumericStats::CreateUnknown(type);
 	auto &row_groups = reader.GetFileMetadata()->row_groups;
 	D_ASSERT(row_group_idx_p < row_groups.size());
 	idx_t row_group_offset_min = 0;
@@ -866,11 +873,10 @@ unique_ptr<BaseStatistics> RowNumberColumnReader::Stats(idx_t row_group_idx_p,
 		row_group_offset_min += row_groups[i].num_rows;
 	}
 
-	stats->min = Value::BIGINT(row_group_offset_min);
-	stats->max = Value::BIGINT(row_group_offset_min + row_groups[row_group_idx_p].num_rows);
-
-	D_ASSERT(!stats->CanHaveNull() && stats->CanHaveNoNull());
-	return std::move(stats);
+	NumericStats::SetMin(stats, Value::BIGINT(row_group_offset_min));
+	NumericStats::SetMax(stats, Value::BIGINT(row_group_offset_min + row_groups[row_group_idx_p].num_rows));
+	stats.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+	return stats.ToUnique();
 }
 
 void RowNumberColumnReader::InitializeRead(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns,
