@@ -604,22 +604,22 @@ Value Value::STRUCT(child_list_t<Value> values) {
 		struct_values.push_back(std::move(child.second));
 	}
 	result.value_info_ = make_shared<NestedValueInfo>(std::move(struct_values));
-	result.type_ = LogicalType::STRUCT(std::move(child_types));
+	result.type_ = LogicalType::STRUCT(child_types);
 	result.is_null = false;
 	return result;
 }
 
-Value Value::MAP(LogicalType child_type, vector<Value> values) {
+Value Value::MAP(const LogicalType &child_type, vector<Value> values) {
 	Value result;
 
-	result.type_ = LogicalType::MAP(std::move(child_type));
+	result.type_ = LogicalType::MAP(child_type);
 	result.is_null = false;
 	result.value_info_ = make_shared<NestedValueInfo>(std::move(values));
 	return result;
 }
 
 Value Value::UNION(child_list_t<LogicalType> members, uint8_t tag, Value value) {
-	D_ASSERT(members.size() > 0);
+	D_ASSERT(!members.empty());
 	D_ASSERT(members.size() <= UnionType::MAX_UNION_MEMBERS);
 	D_ASSERT(members.size() > tag);
 
@@ -660,9 +660,9 @@ Value Value::LIST(vector<Value> values) {
 	return result;
 }
 
-Value Value::LIST(LogicalType child_type, vector<Value> values) {
+Value Value::LIST(const LogicalType &child_type, vector<Value> values) {
 	if (values.empty()) {
-		return Value::EMPTYLIST(std::move(child_type));
+		return Value::EMPTYLIST(child_type);
 	}
 	for (auto &val : values) {
 		val = val.DefaultCastAs(child_type);
@@ -670,9 +670,9 @@ Value Value::LIST(LogicalType child_type, vector<Value> values) {
 	return Value::LIST(std::move(values));
 }
 
-Value Value::EMPTYLIST(LogicalType child_type) {
+Value Value::EMPTYLIST(const LogicalType &child_type) {
 	Value result;
-	result.type_ = LogicalType::LIST(std::move(child_type));
+	result.type_ = LogicalType::LIST(child_type);
 	result.value_info_ = make_shared<NestedValueInfo>();
 	result.is_null = false;
 	return result;
