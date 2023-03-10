@@ -432,7 +432,9 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 		idx_t unnest_count = result->unnests.size();
 		LogicalType result_type;
 		auto expr = select_binder.Bind(statement.select_list[i], &result_type);
-		if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES && select_binder.HasBoundColumns()) {
+		bool is_original_column = i < result->column_count;
+		bool can_group_by_all = statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES && is_original_column;
+		if (can_group_by_all && select_binder.HasBoundColumns()) {
 			if (select_binder.BoundAggregates()) {
 				throw BinderException("Cannot mix aggregates with non-aggregated columns!");
 			}
@@ -451,7 +453,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 			result->types.push_back(result_type);
 		}
 		internal_sql_types.push_back(result_type);
-		if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES) {
+		if (can_group_by_all) {
 			select_binder.ResetBindings();
 		}
 	}
@@ -473,16 +475,18 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 	    !result->groups.grouping_sets.empty()) {
 		if (statement.aggregate_handling == AggregateHandling::NO_AGGREGATES_ALLOWED) {
 			throw BinderException("Aggregates cannot be present in a Project relation!");
-		} else if (statement.aggregate_handling == AggregateHandling::STANDARD_HANDLING) {
-			if (select_binder.HasBoundColumns()) {
-				auto &bound_columns = select_binder.GetBoundColumns();
-				string error;
-				error = "column \"%s\" must appear in the GROUP BY clause or must be part of an aggregate function.";
+		} else if (select_binder.HasBoundColumns()) {
+			auto &bound_columns = select_binder.GetBoundColumns();
+			string error;
+			error = "column \"%s\" must appear in the GROUP BY clause or must be part of an aggregate function.";
+			if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES) {
+				error += "\nGROUP BY ALL will only group entries in the SELECT list. Add it to the SELECT list or GROUP BY this entry explicitly.";
+			} else {
 				error += "\nEither add it to the GROUP BY list, or use \"ANY_VALUE(%s)\" if the exact value of \"%s\" "
-				         "is not important.";
-				throw BinderException(FormatError(bound_columns[0].query_location, error, bound_columns[0].name,
-				                                  bound_columns[0].name, bound_columns[0].name));
+						 "is not important.";
 			}
+			throw BinderException(FormatError(bound_columns[0].query_location, error, bound_columns[0].name,
+											  bound_columns[0].name, bound_columns[0].name));
 		}
 	}
 
