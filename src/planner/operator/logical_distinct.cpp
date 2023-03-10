@@ -15,6 +15,9 @@ string LogicalDistinct::ParamsToString() const {
 }
 void LogicalDistinct::Serialize(FieldWriter &writer) const {
 	writer.WriteSerializableList(distinct_targets);
+	if (order_by) {
+		throw NotImplementedException("Serializing ORDER BY not yet supported");
+	}
 }
 
 unique_ptr<LogicalOperator> LogicalDistinct::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {

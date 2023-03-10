@@ -4,7 +4,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/http_stats.hpp"
+#include "duckdb/common/http_state.hpp"
 #include "duckdb/common/preserved_error.hpp"
 #include "duckdb/common/progress_bar/progress_bar.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
@@ -156,8 +156,8 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 PreservedError ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction) {
 	client_data->profiler->EndQuery();
 
-	if (client_data->http_stats) {
-		client_data->http_stats->Reset();
+	if (client_data->http_state) {
+		client_data->http_state->Reset();
 	}
 
 	// Notify any registered state of query end
@@ -717,9 +717,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 	auto &profiler = QueryProfiler::Get(*this);
 	profiler.StartQuery(query, IsExplainAnalyze(statement ? statement.get() : prepared->unbound_statement.get()));
 
-	if (IsExplainAnalyze(statement ? statement.get() : prepared->unbound_statement.get())) {
-		client_data->http_stats = make_unique<HTTPStats>();
-	}
+	client_data->http_state = make_unique<HTTPState>();
 
 	bool invalidate_query = true;
 	try {

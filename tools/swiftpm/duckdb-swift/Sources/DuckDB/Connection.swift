@@ -30,12 +30,22 @@
 ///
 /// For each database, you can create one or many connections using
 /// ``Database/connect()``.
+/// As individual connections are locked during querying it is recommended that
+/// in contexts where blocking is undesirable, connections should be accessed
+/// asynchronously through an actor or via a background queue.
 ///
-/// Querying a connection is a blocking operation, and
-/// individual connections are locked during querying. It is therefore
-/// recommended that connections are accessed via a background queue or
-/// through an actor.
-public final class Connection {
+/// The following example creates a new in-memory database and connects to it.
+///
+/// ```swift
+/// do {
+///   let database = try Database(store: .inMemory)
+///   let connection = try database.connect()
+/// }
+/// catch {
+///   // handle error
+/// }
+/// ```
+public final class Connection: Sendable {
 
   private let database: Database
   private let ptr = UnsafeMutablePointer<duckdb_connection?>.allocate(capacity: 1)

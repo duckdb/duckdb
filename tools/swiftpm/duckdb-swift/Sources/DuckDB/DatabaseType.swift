@@ -25,6 +25,17 @@
 @_implementationOnly import Cduckdb
 
 /// The underlying database type of a DuckDB column
+///
+/// DuckDB is a strongly typed database system. As such, every column has a
+/// single type specified. This type is constant over the entire column. That is
+/// to say, a column with an underlying type of ``DatabaseType/integer`` will
+/// only contain ``DatabaseType/integer`` values.
+///
+/// DuckDB also supports columns of composite types. For example, it is possible
+/// to define an array of integers (`INT[]`), which can be cast to `[Int]`
+/// within Swift using ``Column/cast(to:)-4376d``. It is also possible to
+/// define database types as arbitrary structs (`ROW(i INTEGER, j VARCHAR)`),
+/// which can be cast to their `Decodable` matching Swift type in the same way.
 public struct DatabaseType: RawRepresentable, Hashable, Equatable {
   public let rawValue: UInt32
   public init(rawValue: UInt32) {

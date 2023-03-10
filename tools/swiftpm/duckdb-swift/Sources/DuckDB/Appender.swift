@@ -34,6 +34,31 @@ import Foundation
 /// Appends are made in row-wise format. For every column an `append(_:)` call
 /// should be made after which the row should be finished by calling
 /// ``endRow()``.
+///
+/// The following example shows two rows being appended to a table with a two
+/// column layout.
+///
+/// ```swift
+/// do {
+///   let database = try Database(store: .inMemory)
+///   let connection = try database.connect()
+///   try connection.execute("CREATE TABLE people(id INTEGER, name VARCHAR)")
+///   let appender = try Appender(connection: connection, table: "people")
+///   // add first row
+///   try appender.append(Int32(1))
+///   try appender.append("Mark")
+///   try appender.endRow()
+///   // add second row
+///   try appender.append(Int32(2))
+///   try appender.append("Hannes")
+///   try appender.endRow()
+///   // flush rows to table
+///   try appender.flush()
+/// }
+/// catch {
+///   // handle error
+/// }
+/// ```
 public final class Appender {
 
   private let connection: Connection

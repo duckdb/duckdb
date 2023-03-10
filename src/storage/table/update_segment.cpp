@@ -38,7 +38,17 @@ UpdateSegment::UpdateSegment(UpdateSegment &other, ColumnData &owner)
     : column_data(owner), root(std::move(other.root)), stats(std::move(other.stats)), type_size(other.type_size) {
 
 	this->heap.Move(other.heap);
-
+	// update the segment links
+	if (root) {
+		for (idx_t i = 0; i < RowGroup::ROW_GROUP_VECTOR_COUNT; i++) {
+			if (!root->info[i]) {
+				continue;
+			}
+			for (auto info = root->info[i]->info.get(); info; info = info->next) {
+				info->segment = this;
+			}
+		}
+	}
 	initialize_update_function = other.initialize_update_function;
 	merge_update_function = other.merge_update_function;
 	fetch_update_function = other.fetch_update_function;
@@ -50,12 +60,6 @@ UpdateSegment::UpdateSegment(UpdateSegment &other, ColumnData &owner)
 }
 
 UpdateSegment::~UpdateSegment() {
-}
-
-void UpdateSegment::ClearUpdates() {
-	stats.statistics.Copy(BaseStatistics::CreateEmpty(stats.statistics.GetType()));
-	root.reset();
-	heap.Destroy();
 }
 
 //===--------------------------------------------------------------------===//

@@ -2,9 +2,6 @@
 # description: PREPARE for SELECT clause
 # group: [prepared]
 
-require skip_reload
-
-
 statement ok
 CREATE TABLE a (i TINYINT)
 

@@ -128,6 +128,8 @@ void LogicalOperator::Verify(ClientContext &context) {
 			continue;
 		}
 		BufferedSerializer serializer;
+		// We are serializing a query plan
+		serializer.is_query_plan = true;
 		try {
 			expressions[expr_idx]->Serialize(serializer);
 		} catch (NotImplementedException &ex) {
@@ -136,7 +138,7 @@ void LogicalOperator::Verify(ClientContext &context) {
 		}
 
 		auto data = serializer.GetData();
-		auto deserializer = BufferedDeserializer(data.data.get(), data.size);
+		auto deserializer = BufferedContextDeserializer(context, data.data.get(), data.size);
 
 		PlanDeserializationState state(context);
 		auto deserialized_expression = Expression::Deserialize(deserializer, state);
@@ -371,7 +373,7 @@ unique_ptr<LogicalOperator> LogicalOperator::Copy(ClientContext &context) const 
 		                              std::string(ex.what()));
 	}
 	auto data = logical_op_serializer.GetData();
-	auto logical_op_deserializer = BufferedDeserializer(data.data.get(), data.size);
+	auto logical_op_deserializer = BufferedContextDeserializer(context, data.data.get(), data.size);
 	PlanDeserializationState state(context);
 	auto op_copy = LogicalOperator::Deserialize(logical_op_deserializer, state);
 	return op_copy;
