@@ -1,0 +1,16 @@
+# name: test/fuzzer/pedro/having_subquery_failed_to_bind.test
+# description: Having subquery alias in subquery
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification;
+
+statement error
+SELECT sum(c2) c0 FROM (SELECT 1) t1(c2) HAVING (SELECT c0);
+---
+cannot reference alias
+
+statement error
+SELECT count() c0 FROM (SELECT 1) t1(c2) HAVING 1 = (SELECT c0 WHERE EXISTS (SELECT 1));
+----
+cannot reference alias
