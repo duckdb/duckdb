@@ -15,7 +15,8 @@
 
 namespace duckdb {
 
-namespace RegexpUtil {
+namespace regexp_util {
+
 bool TryParseConstantPattern(ClientContext &context, Expression &expr, string &constant_string);
 void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, bool *global_replace = nullptr);
 void ParseRegexOptions(ClientContext &context, Expression &expr, RE2::Options &target, bool *global_replace = nullptr);
@@ -30,7 +31,7 @@ inline string_t Extract(const string_t &input, Vector &result, const RE2 &re, co
 	return StringVector::AddString(result, extracted.c_str(), extracted.size());
 }
 
-} // namespace RegexpUtil
+} // namespace regexp_util
 
 struct RegexpExtractAll {
 	static void Execute(DataChunk &args, ExpressionState &state, Vector &result);

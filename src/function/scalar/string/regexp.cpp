@@ -12,7 +12,10 @@
 
 namespace duckdb {
 
-using namespace RegexpUtil;
+using regexp_util::CreateStringPiece;
+using regexp_util::Extract;
+using regexp_util::ParseRegexOptions;
+using regexp_util::TryParseConstantPattern;
 
 static bool RegexOptionsEquals(const duckdb_re2::RE2::Options &opt_a, const duckdb_re2::RE2::Options &opt_b) {
 	return opt_a.case_sensitive() == opt_b.case_sensitive();

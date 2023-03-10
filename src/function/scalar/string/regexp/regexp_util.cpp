@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-namespace RegexpUtil {
+namespace regexp_util {
 
 bool TryParseConstantPattern(ClientContext &context, Expression &expr, string &constant_string) {
 	if (!expr.IsFoldable()) {
@@ -74,6 +74,6 @@ void ParseRegexOptions(ClientContext &context, Expression &expr, RE2::Options &t
 	}
 }
 
-} // namespace RegexpUtil
+} // namespace regexp_util
 
 } // namespace duckdb

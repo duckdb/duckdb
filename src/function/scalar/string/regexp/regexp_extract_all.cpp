@@ -5,7 +5,10 @@
 
 namespace duckdb {
 
-using namespace RegexpUtil;
+using regexp_util::CreateStringPiece;
+using regexp_util::Extract;
+using regexp_util::ParseRegexOptions;
+using regexp_util::TryParseConstantPattern;
 
 unique_ptr<FunctionLocalState>
 RegexpExtractAll::InitLocalState(ExpressionState &state, const BoundFunctionExpression &expr, FunctionData *bind_data) {
@@ -41,7 +44,7 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, int32_
 	bool throw_on_group_found = (idx_t)group >= args.size;
 	while (RE2::FindAndConsumeN(&input, pattern, group_args, args.size)) {
 		idx_t consumed = args.group_buffer[0].size();
-		if (!consumed && input.size() != 0) {
+		if (!consumed && !input.empty()) {
 			// Empty match found, have to manually forward the input
 			// to avoid an infinite loop
 			input.remove_prefix(1);
@@ -62,7 +65,7 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, int32_
 		auto &match_group = args.group_buffer[group];
 
 		idx_t child_idx = current_list_size;
-		if (match_group.size() == 0) {
+		if (match_group.empty()) {
 			// This group was not matched
 			list_content[child_idx] = string_t(string.GetDataUnsafe(), 0);
 			if (match_group.begin() == nullptr) {
@@ -77,7 +80,7 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, int32_
 			list_content[child_idx] = string_t(string.GetDataUnsafe() + offset, match_group.size());
 		}
 		current_list_size++;
-		if (!consumed && input.size() == 0) {
+		if (!consumed && input.empty()) {
 			// Empty match found at the end of the string
 			break;
 		}
@@ -167,7 +170,7 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 			auto &pattern_p = ((string_t *)pattern_data.data)[pattern_idx];
 			auto pattern = StringUtil::Format("(%s)", pattern_p.GetString());
 			auto pattern_strpiece = duckdb_re2::StringPiece(pattern.data(), pattern.size());
-			duckdb_re2::RE2 re(std::move(pattern_strpiece), info.options);
+			duckdb_re2::RE2 re(pattern_strpiece, info.options);
 
 			auto group_count_p = re.NumberOfCapturingGroups();
 			if (group_count_p == -1) {
