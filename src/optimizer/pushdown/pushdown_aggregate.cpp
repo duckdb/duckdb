@@ -42,6 +42,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<Logical
 		}
 		// if there are any empty grouping sets, we cannot push down filters
 		bool has_empty_grouping_sets = false;
+		if (aggr.grouping_sets.empty()) {
+			has_empty_grouping_sets = true;
+		}
 		for (auto &grp : aggr.grouping_sets) {
 			if (grp.empty()) {
 				has_empty_grouping_sets = true;
