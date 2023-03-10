@@ -298,6 +298,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			result->dependencies.AddDependency(type_dependency);
 		}
 	}
+	result->dependencies.VerifyDependencies(schema->catalog, result->Base().table);
 	properties.allow_stream_result = false;
 	return result;
 }

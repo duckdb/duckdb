@@ -21,6 +21,8 @@ class DependencyList {
 public:
 	DUCKDB_API void AddDependency(CatalogEntry *entry);
 
+	DUCKDB_API void VerifyDependencies(Catalog *catalog, const string &name);
+
 private:
 	unordered_set<CatalogEntry *> set;
 };
