@@ -1,5 +1,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/transformer.hpp"
 
@@ -36,13 +37,27 @@ unique_ptr<ParsedExpression> Transformer::TransformStarExpression(duckdb_libpgqu
 			result->replace_list.insert(make_pair(std::move(exclude_entry), std::move(replace_expression)));
 		}
 	}
-	if (star->regex) {
+	if (star->expr) {
+		D_ASSERT(star->columns);
 		D_ASSERT(result->relation_name.empty());
 		D_ASSERT(result->exclude_list.empty());
 		D_ASSERT(result->replace_list.empty());
-		result->regex = star->regex;
+		result->expr = TransformExpression(star->expr);
+		if (result->expr->type == ExpressionType::STAR) {
+			auto child_star = (StarExpression *)result->expr.get();
+			result->exclude_list = std::move(child_star->exclude_list);
+			result->replace_list = std::move(child_star->replace_list);
+			result->expr.reset();
+		} else if (result->expr->type == ExpressionType::LAMBDA) {
+			vector<unique_ptr<ParsedExpression>> children;
+			children.push_back(make_unique<StarExpression>());
+			children.push_back(std::move(result->expr));
+			auto list_filter = make_unique<FunctionExpression>("list_filter", std::move(children));
+			result->expr = std::move(list_filter);
+		}
 	}
 	result->columns = star->columns;
+	result->query_location = star->location;
 	return std::move(result);
 }
 

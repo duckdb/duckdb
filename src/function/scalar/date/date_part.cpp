@@ -9,7 +9,7 @@
 #include "duckdb/function/scalar/date_functions.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
+
 #include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
@@ -161,34 +161,27 @@ DatePartSpecifier GetDateTypePartSpecifier(const string &specifier, LogicalType 
 }
 
 template <int64_t MIN, int64_t MAX>
-static unique_ptr<BaseStatistics> PropagateSimpleDatePartStatistics(vector<unique_ptr<BaseStatistics>> &child_stats) {
+static unique_ptr<BaseStatistics> PropagateSimpleDatePartStatistics(vector<BaseStatistics> &child_stats) {
 	// we can always propagate simple date part statistics
 	// since the min and max can never exceed these bounds
-	auto result = make_unique<NumericStatistics>(LogicalType::BIGINT, Value::BIGINT(MIN), Value::BIGINT(MAX),
-	                                             StatisticsType::LOCAL_STATS);
-	if (!child_stats[0]) {
-		// if there are no child stats, we don't know
-		result->validity_stats = make_unique<ValidityStatistics>(true);
-	} else if (child_stats[0]->validity_stats) {
-		result->validity_stats = child_stats[0]->validity_stats->Copy();
-	}
-	return std::move(result);
+	auto result = NumericStats::CreateEmpty(LogicalType::BIGINT);
+	result.CopyValidity(child_stats[0]);
+	NumericStats::SetMin(result, Value::BIGINT(MIN));
+	NumericStats::SetMax(result, Value::BIGINT(MAX));
+	return result.ToUnique();
 }
 
 struct DatePart {
 	template <class T, class OP>
-	static unique_ptr<BaseStatistics> PropagateDatePartStatistics(vector<unique_ptr<BaseStatistics>> &child_stats) {
+	static unique_ptr<BaseStatistics> PropagateDatePartStatistics(vector<BaseStatistics> &child_stats) {
 		// we can only propagate complex date part stats if the child has stats
-		if (!child_stats[0]) {
-			return nullptr;
-		}
-		auto &nstats = (NumericStatistics &)*child_stats[0];
-		if (nstats.min.IsNull() || nstats.max.IsNull()) {
+		auto &nstats = child_stats[0];
+		if (!NumericStats::HasMinMax(nstats)) {
 			return nullptr;
 		}
 		// run the operator on both the min and the max, this gives us the [min, max] bound
-		auto min = nstats.min.GetValueUnsafe<T>();
-		auto max = nstats.max.GetValueUnsafe<T>();
+		auto min = NumericStats::GetMinUnsafe<T>(nstats);
+		auto max = NumericStats::GetMaxUnsafe<T>(nstats);
 		if (min > max) {
 			return nullptr;
 		}
@@ -198,12 +191,11 @@ struct DatePart {
 		}
 		auto min_part = OP::template Operation<T, int64_t>(min);
 		auto max_part = OP::template Operation<T, int64_t>(max);
-		auto result = make_unique<NumericStatistics>(LogicalType::BIGINT, Value::BIGINT(min_part),
-		                                             Value::BIGINT(max_part), StatisticsType::LOCAL_STATS);
-		if (child_stats[0]->validity_stats) {
-			result->validity_stats = child_stats[0]->validity_stats->Copy();
-		}
-		return std::move(result);
+		auto result = NumericStats::CreateEmpty(LogicalType::BIGINT);
+		NumericStats::SetMin(result, Value::BIGINT(min_part));
+		NumericStats::SetMax(result, Value::BIGINT(max_part));
+		result.CopyValidity(child_stats[0]);
+		return result.ToUnique();
 	}
 
 	template <typename OP>

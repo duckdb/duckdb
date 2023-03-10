@@ -23,6 +23,10 @@ const string &PreparedStatement::GetError() {
 	return error.Message();
 }
 
+PreservedError &PreparedStatement::GetErrorObject() {
+	return error;
+}
+
 bool PreparedStatement::HasError() const {
 	return !success;
 }

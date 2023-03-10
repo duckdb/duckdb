@@ -20,7 +20,7 @@ class PhysicalPerfectHashAggregate : public PhysicalOperator {
 public:
 	PhysicalPerfectHashAggregate(ClientContext &context, vector<LogicalType> types,
 	                             vector<unique_ptr<Expression>> aggregates, vector<unique_ptr<Expression>> groups,
-	                             vector<unique_ptr<BaseStatistics>> group_stats, vector<idx_t> required_bits,
+	                             const vector<unique_ptr<BaseStatistics>> &group_stats, vector<idx_t> required_bits,
 	                             idx_t estimated_cardinality);
 
 	//! The groups

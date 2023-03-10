@@ -17,7 +17,7 @@ class Serializer;
 class Deserializer;
 class Vector;
 
-class DistinctStatistics : public BaseStatistics {
+class DistinctStatistics {
 public:
 	DistinctStatistics();
 	explicit DistinctStatistics(unique_ptr<HyperLogLog> log, idx_t sample_count, idx_t total_count);
@@ -30,12 +30,12 @@ public:
 	atomic<idx_t> total_count;
 
 public:
-	void Merge(const BaseStatistics &other) override;
+	void Merge(const DistinctStatistics &other);
 
-	unique_ptr<BaseStatistics> Copy() const override;
+	unique_ptr<DistinctStatistics> Copy() const;
 
-	void Serialize(Serializer &serializer) const override;
-	void Serialize(FieldWriter &writer) const override;
+	void Serialize(Serializer &serializer) const;
+	void Serialize(FieldWriter &writer) const;
 
 	static unique_ptr<DistinctStatistics> Deserialize(Deserializer &source);
 	static unique_ptr<DistinctStatistics> Deserialize(FieldReader &reader);
@@ -43,7 +43,7 @@ public:
 	void Update(Vector &update, idx_t count, bool sample = true);
 	void Update(UnifiedVectorFormat &update_data, const LogicalType &ptype, idx_t count, bool sample = true);
 
-	string ToString() const override;
+	string ToString() const;
 	idx_t GetCount() const;
 
 private:

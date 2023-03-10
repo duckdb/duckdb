@@ -7,8 +7,7 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/storage/statistics/list_statistics.hpp"
-#include "duckdb/storage/statistics/validity_statistics.hpp"
+#include "duckdb/storage/statistics/list_stats.hpp"
 
 namespace duckdb {
 
@@ -212,17 +211,11 @@ static unique_ptr<FunctionData> ListExtractBind(ClientContext &context, ScalarFu
 
 static unique_ptr<BaseStatistics> ListExtractStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
-	if (!child_stats[0]) {
-		return nullptr;
-	}
-	auto &list_stats = (ListStatistics &)*child_stats[0];
-	if (!list_stats.child_stats) {
-		return nullptr;
-	}
-	auto child_copy = list_stats.child_stats->Copy();
+	auto &list_child_stats = ListStats::GetChildStats(child_stats[0]);
+	auto child_copy = list_child_stats.Copy();
 	// list_extract always pushes a NULL, since if the offset is out of range for a list it inserts a null
-	child_copy->validity_stats = make_unique<ValidityStatistics>(true);
-	return child_copy;
+	child_copy.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+	return child_copy.ToUnique();
 }
 
 void ListExtractFun::RegisterFunction(BuiltinFunctions &set) {

@@ -3,7 +3,7 @@
 #include "crypto.hpp"
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
-#include "duckdb/common/http_stats.hpp"
+#include "duckdb/common/http_state.hpp"
 #include "duckdb/common/thread.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/function/scalar/strftime.hpp"
@@ -272,7 +272,7 @@ string S3FileSystem::InitializeMultipartUpload(S3FileHandle &file_handle) {
 	idx_t response_buffer_len = 1000;
 	auto response_buffer = unique_ptr<char[]> {new char[response_buffer_len]};
 
-	string query_param = UrlEncode("uploads") + "=";
+	string query_param = "uploads=";
 	auto res = s3fs.PostRequest(file_handle, file_handle.path, {}, response_buffer, response_buffer_len, nullptr, 0,
 	                            query_param);
 	string result(response_buffer.get(), response_buffer_len);
@@ -292,9 +292,8 @@ string S3FileSystem::InitializeMultipartUpload(S3FileHandle &file_handle) {
 void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuffer> write_buffer) {
 	auto &s3fs = (S3FileSystem &)file_handle.file_system;
 
-	string query_param = S3FileSystem::UrlEncode("partNumber") + "=" + to_string(write_buffer->part_no + 1) + "&" +
-	                     S3FileSystem::UrlEncode("uploadId") + "=" +
-	                     S3FileSystem::UrlEncode(file_handle.multipart_upload_id, true);
+	string query_param = "partNumber=" + to_string(write_buffer->part_no + 1) + "&" +
+	                     "uploadId=" + S3FileSystem::UrlEncode(file_handle.multipart_upload_id, true);
 	unique_ptr<ResponseWrapper> res;
 	case_insensitive_map_t<string>::iterator etag_lookup;
 
@@ -303,8 +302,8 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 		                      query_param);
 
 		if (res->code != 200) {
-			throw IOException("Unable to connect  to URL " + res->http_url + " " + res->error + " (HTTP code " +
-			                  to_string(res->code) + ")");
+			throw HTTPException(res->code, res->error, "Unable to connect to URL %s %s (HTTP code %s)", res->http_url,
+			                    res->error, to_string(res->code));
 		}
 
 		etag_lookup = res->headers.find("ETag");
@@ -431,14 +430,15 @@ void S3FileSystem::FinalizeMultipartUpload(S3FileHandle &file_handle) {
 	idx_t response_buffer_len = 1000;
 	auto response_buffer = unique_ptr<char[]> {new char[response_buffer_len]};
 
-	string query_param = UrlEncode("uploadId") + "=" + file_handle.multipart_upload_id;
+	string query_param = "uploadId=" + S3FileSystem::UrlEncode(file_handle.multipart_upload_id, true);
 	auto res = s3fs.PostRequest(file_handle, file_handle.path, {}, response_buffer, response_buffer_len,
 	                            (char *)body.c_str(), body.length(), query_param);
 	string result(response_buffer.get(), response_buffer_len);
 
 	auto open_tag_pos = result.find("<CompleteMultipartUploadResult", 0);
 	if (open_tag_pos == string::npos) {
-		throw IOException("Unexpected response during S3 multipart upload finalization");
+		throw HTTPException(res->code, res->error, "Unexpected response during S3 multipart upload finalization: %d",
+		                    res->code);
 	}
 	file_handle.upload_finalized = true;
 }
@@ -669,6 +669,15 @@ unique_ptr<ResponseWrapper> S3FileSystem::HeadRequest(FileHandle &handle, string
 	return HTTPFileSystem::HeadRequest(handle, http_url, headers);
 }
 
+unique_ptr<ResponseWrapper> S3FileSystem::GetRequest(FileHandle &handle, string s3_url, HeaderMap header_map) {
+	auto auth_params = static_cast<S3FileHandle &>(handle).auth_params;
+	auto parsed_s3_url = S3UrlParse(s3_url, auth_params);
+	string http_url = parsed_s3_url.GetHTTPUrl(auth_params);
+	auto headers =
+	    create_s3_header(parsed_s3_url.path, "", parsed_s3_url.host, "s3", "GET", auth_params, "", "", "", "");
+	return HTTPFileSystem::GetRequest(handle, http_url, headers);
+}
+
 unique_ptr<ResponseWrapper> S3FileSystem::GetRangeRequest(FileHandle &handle, string s3_url, HeaderMap header_map,
                                                           idx_t file_offset, char *buffer_out, idx_t buffer_out_len) {
 	auto auth_params = static_cast<S3FileHandle &>(handle).auth_params;
@@ -882,7 +891,7 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 	do {
 		// main listobject call, may
 		string response_str = AWSListObjectV2::Request(shared_path, http_params, s3_auth_params,
-		                                               main_continuation_token, HTTPStats::TryGetStats(opener));
+		                                               main_continuation_token, HTTPState::TryGetState(opener));
 		main_continuation_token = AWSListObjectV2::ParseContinuationToken(response_str);
 		AWSListObjectV2::ParseKey(response_str, s3_keys);
 
@@ -898,7 +907,7 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 			do {
 				auto prefix_res =
 				    AWSListObjectV2::Request(prefix_path, http_params, s3_auth_params, common_prefix_continuation_token,
-				                             HTTPStats::TryGetStats(opener));
+				                             HTTPState::TryGetState(opener));
 				AWSListObjectV2::ParseKey(prefix_res, s3_keys);
 				auto more_prefixes = AWSListObjectV2::ParseCommonPrefix(prefix_res);
 				common_prefixes.insert(common_prefixes.end(), more_prefixes.begin(), more_prefixes.end());
@@ -954,7 +963,7 @@ bool S3FileSystem::ListFiles(const string &directory, const std::function<void(c
 }
 
 string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthParams &s3_auth_params,
-                                string &continuation_token, HTTPStats *stats, bool use_delimiter) {
+                                string &continuation_token, HTTPState *state, bool use_delimiter) {
 	auto parsed_url = S3FileSystem::S3UrlParse(path, s3_auth_params);
 
 	// Construct the ListObjectsV2 call
@@ -997,21 +1006,20 @@ string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthPar
 	    listobjectv2_url.c_str(), *headers,
 	    [&](const duckdb_httplib_openssl::Response &response) {
 		    if (response.status >= 400) {
-			    std::cerr << response.reason << std::endl;
-			    throw IOException("HTTP GET error on '" + listobjectv2_url + "' (HTTP " +
-			                      std::to_string(response.status) + ")");
+			    throw HTTPException(response.status, response.body, "HTTP GET error on '%s' (HTTP %s)",
+			                        listobjectv2_url, response.status);
 		    }
 		    return true;
 	    },
 	    [&](const char *data, size_t data_length) {
-		    if (stats) {
-			    stats->total_bytes_received += data_length;
+		    if (state) {
+			    state->total_bytes_received += data_length;
 		    }
 		    response << string(data, data_length);
 		    return true;
 	    });
-	if (stats) {
-		stats->get_count++;
+	if (state) {
+		state->get_count++;
 	}
 	if (res.error() != duckdb_httplib_openssl::Error::Success) {
 		throw IOException(to_string(res.error()) + " error for HTTP GET to '" + listobjectv2_url + "'");

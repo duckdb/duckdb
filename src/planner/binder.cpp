@@ -3,8 +3,10 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/list.hpp"
+#include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
@@ -13,7 +15,6 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_sample.hpp"
-#include "duckdb/parser/parsed_expression_iterator.hpp"
 
 #include <algorithm>
 
@@ -170,8 +171,12 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	case TableReferenceType::EXPRESSION_LIST:
 		result = Bind((ExpressionListRef &)ref);
 		break;
+	case TableReferenceType::PIVOT:
+		result = Bind((PivotRef &)ref);
+		break;
 	case TableReferenceType::CTE:
 	case TableReferenceType::INVALID:
+	default:
 		throw InternalException("Unknown table ref type");
 	}
 	result->sample = std::move(ref.sample);
@@ -203,6 +208,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 		root = CreatePlan((BoundCTERef &)ref);
 		break;
 	case TableReferenceType::INVALID:
+	default:
 		throw InternalException("Unsupported bound table ref type");
 	}
 	// plan the sample clause
@@ -432,8 +438,8 @@ void VerifyNotExcluded(ParsedExpression &expr) {
 }
 
 BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry *table,
-                                     idx_t update_table_index, unique_ptr<LogicalOperator> child_operator,
-                                     BoundStatement result) {
+                                     const string &alias, idx_t update_table_index,
+                                     unique_ptr<LogicalOperator> child_operator, BoundStatement result) {
 
 	vector<LogicalType> types;
 	vector<std::string> names;
@@ -451,31 +457,20 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 		column_count++;
 	}
 
-	binder->bind_context.AddBaseTable(update_table_index, table->name, names, types, bound_columns, table, false);
+	binder->bind_context.AddBaseTable(update_table_index, alias.empty() ? table->name : alias, names, types,
+	                                  bound_columns, table, false);
 	ReturningBinder returning_binder(*binder, context);
 
 	vector<unique_ptr<Expression>> projection_expressions;
 	LogicalType result_type;
-	for (auto &returning_expr : returning_list) {
-		auto expr_type = returning_expr->GetExpressionType();
-		if (expr_type == ExpressionType::STAR) {
-			auto generated_star_list = vector<unique_ptr<ParsedExpression>>();
-			binder->bind_context.GenerateAllColumnExpressions((StarExpression &)*returning_expr, generated_star_list);
-
-			for (auto &star_column : generated_star_list) {
-				auto star_expr = returning_binder.Bind(star_column, &result_type);
-				result.types.push_back(result_type);
-				result.names.push_back(star_expr->GetName());
-				projection_expressions.push_back(std::move(star_expr));
-			}
-		} else {
-			// TODO: accept 'excluded' in the RETURNING clause
-			VerifyNotExcluded(*returning_expr);
-			auto expr = returning_binder.Bind(returning_expr, &result_type);
-			result.names.push_back(expr->GetName());
-			result.types.push_back(result_type);
-			projection_expressions.push_back(std::move(expr));
-		}
+	vector<unique_ptr<ParsedExpression>> new_returning_list;
+	binder->ExpandStarExpressions(returning_list, new_returning_list);
+	for (auto &returning_expr : new_returning_list) {
+		VerifyNotExcluded(*returning_expr);
+		auto expr = returning_binder.Bind(returning_expr, &result_type);
+		result.names.push_back(expr->GetName());
+		result.types.push_back(result_type);
+		projection_expressions.push_back(std::move(expr));
 	}
 
 	auto projection = make_unique<LogicalProjection>(GenerateTableIndex(), std::move(projection_expressions));

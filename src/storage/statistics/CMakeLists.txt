@@ -4,12 +4,11 @@ add_library_unity(
   base_statistics.cpp
   column_statistics.cpp
   distinct_statistics.cpp
-  list_statistics.cpp
-  numeric_statistics.cpp
+  list_stats.cpp
+  numeric_stats.cpp
   segment_statistics.cpp
-  string_statistics.cpp
-  struct_statistics.cpp
-  validity_statistics.cpp)
+  string_stats.cpp
+  struct_stats.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_storage_statistics>
     PARENT_SCOPE)
