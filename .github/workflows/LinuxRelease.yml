@@ -582,6 +582,36 @@ jobs:
         path: |
           duckdb-wasm32-nothreads.zip
 
+ linux-wasm-experimental:
+    name: WebAssembly duckdb-wasm builds
+    runs-on: ubuntu-22.04
+    needs: linux-release-64
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - uses: mymindstorm/setup-emsdk@v11
+
+    - name: Setup
+      shell: bash
+      run: |
+        git clone --recurse-submodules --branch latest_stable --depth 1 https://github.com/duckdb/duckdb-wasm
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+
+    - name: Build WebAssembly
+      shell: bash
+      run: |
+        cd duckdb-wasm
+        bash scripts/wasm_build_lib.sh relsize mvp $(pwd)/..
+        bash scripts/wasm_build_lib.sh relsize eh $(pwd)/..
+        bash scripts/wasm_build_lib.sh relsize coi $(pwd)/..
+
  symbol-leakage:
     name: Symbol Leakage
     runs-on: ubuntu-20.04
