@@ -24,27 +24,42 @@
 
 @_implementationOnly import Cduckdb
 
-public struct Date: Hashable, Equatable, Codable {
-  var days: Int32
+/// A date in the Gregorian calendar
+///
+/// A date specifies a combination of year, month and day. DuckDB follows the
+/// SQL standard’s lead by counting dates exclusively in the Gregorian calendar,
+/// even for years before that calendar was in use.
+public struct Date: Hashable, Equatable, Codable, Sendable {
+  /// days since the unix date epoch `1970-01-01`
+  public var days: Int32
 }
 
 public extension Date {
   
+  /// The components of ``Date`` decomposed into its constituent parts
+  ///
+  /// A type to facilate the conversion between nominal units of years, months
+  /// and days into the underlying DuckDB ``Date`` representation of days since
+  /// `1970-01-01`.
   struct Components: Hashable, Equatable {
     public var year: Int32
     public var month: Int8
     public var day: Int8
   }
   
+  /// Creates a new instance from the given date components
+  ///
+  /// - Parameter components: the date components of the instance
   init(components: Components) {
     let cdatestruct = duckdb_to_date(duckdb_date_struct(components: components))
     self = cdatestruct.asDate
   }
   
+  /// Date components
   var components: Components { Components(self) }
 }
 
-public extension Date.Components {
+private extension Date.Components {
   
   init(_ date: Date) {
     let cdate = duckdb_date(date: date)

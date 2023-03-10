@@ -3,8 +3,6 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/storage/statistics/list_statistics.hpp"
-#include "duckdb/storage/statistics/validity_statistics.hpp"
 
 namespace duckdb {
 
@@ -84,9 +82,10 @@ static unique_ptr<FunctionData> ListConcatBind(ClientContext &context, ScalarFun
 		throw ParameterNotResolvedException();
 	} else if (lhs.id() == LogicalTypeId::SQLNULL || rhs.id() == LogicalTypeId::SQLNULL) {
 		// we mimic postgres behaviour: list_concat(NULL, my_list) = my_list
-		bound_function.arguments[0] = lhs;
-		bound_function.arguments[1] = rhs;
-		bound_function.return_type = rhs.id() == LogicalTypeId::SQLNULL ? lhs : rhs;
+		auto return_type = rhs.id() == LogicalTypeId::SQLNULL ? lhs : rhs;
+		bound_function.arguments[0] = return_type;
+		bound_function.arguments[1] = return_type;
+		bound_function.return_type = return_type;
 	} else {
 		D_ASSERT(lhs.id() == LogicalTypeId::LIST);
 		D_ASSERT(rhs.id() == LogicalTypeId::LIST);
@@ -108,14 +107,11 @@ static unique_ptr<FunctionData> ListConcatBind(ClientContext &context, ScalarFun
 static unique_ptr<BaseStatistics> ListConcatStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	D_ASSERT(child_stats.size() == 2);
-	if (!child_stats[0] || !child_stats[1]) {
-		return nullptr;
-	}
 
-	auto &left_stats = (ListStatistics &)*child_stats[0];
-	auto &right_stats = (ListStatistics &)*child_stats[1];
+	auto &left_stats = child_stats[0];
+	auto &right_stats = child_stats[1];
 
-	auto stats = left_stats.Copy();
+	auto stats = left_stats.ToUnique();
 	stats->Merge(right_stats);
 
 	return stats;

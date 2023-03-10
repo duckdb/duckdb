@@ -251,7 +251,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	if (!stmt.returning_list.empty()) {
 		unique_ptr<LogicalOperator> update_as_logicaloperator = std::move(update);
 
-		return BindReturning(std::move(stmt.returning_list), table, update_table_index,
+		return BindReturning(std::move(stmt.returning_list), table, stmt.table->alias, update_table_index,
 		                     std::move(update_as_logicaloperator), std::move(result));
 	}
 

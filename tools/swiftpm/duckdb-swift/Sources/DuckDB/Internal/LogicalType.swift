@@ -38,12 +38,12 @@ final class LogicalType {
     ptr.deallocate()
   }
   
-  var dataType: DBTypeID {
+  var dataType: DatabaseType {
     let ctypeid = duckdb_get_type_id(ptr.pointee)
     return ctypeid.asTypeID
   }
   
-  var underlyingDataType: DBTypeID {
+  var underlyingDataType: DatabaseType {
     guard dataType == .enum else { return dataType }
     let ctypeid = duckdb_enum_internal_type(ptr.pointee)
     return ctypeid.asTypeID
@@ -57,7 +57,7 @@ extension LogicalType {
   struct DecimalProperties {
     let width: UInt8
     let scale: UInt8
-    let storageType: DBTypeID
+    let storageType: DatabaseType
   }
   
   var decimalProperties: DecimalProperties? {
@@ -75,7 +75,7 @@ extension LogicalType {
 
 extension LogicalType {
   
-  static let structCompatibleTypes = [DBTypeID.struct, .map]
+  static let structCompatibleTypes = [DatabaseType.struct, .map]
   
   var structMemberNames: [String]? {
     guard Self.structCompatibleTypes.contains(dataType) else { return nil }

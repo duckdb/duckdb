@@ -13,6 +13,7 @@
 #include "duckdb/common/box_renderer.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
+#include "duckdb/parser/statement/explain_statement.hpp"
 
 namespace duckdb {
 
@@ -124,6 +125,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromArrow(py::object &arrow_objec
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const string &expr) {
+	if (!rel) {
+		return nullptr;
+	}
 	auto projected_relation = make_unique<DuckDBPyRelation>(rel->Project(expr));
 	projected_relation->rel->extra_dependencies = this->rel->extra_dependencies;
 	return projected_relation;
@@ -667,6 +671,18 @@ void DuckDBPyRelation::Close() {
 	result->Close();
 }
 
+bool DuckDBPyRelation::ContainsColumnByName(const string &name) const {
+	return std::find(names.begin(), names.end(), name) != names.end();
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GetAttribute(const string &name) {
+	// TODO: support fetching a result containing only column 'name' from a value_relation
+	if (!rel || !ContainsColumnByName(name)) {
+		throw InvalidInputException("This relation does not contain a column by the name of '%s'", name);
+	}
+	return make_unique<DuckDBPyRelation>(rel->Project({name}));
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Union(DuckDBPyRelation *other) {
 	return make_unique<DuckDBPyRelation>(rel->Union(other->rel));
 }
@@ -940,9 +956,10 @@ void DuckDBPyRelation::Print() {
 	py::print(py::str(ToString()));
 }
 
-string DuckDBPyRelation::Explain() {
+string DuckDBPyRelation::Explain(ExplainType type) {
+
 	AssertRelation();
-	auto res = rel->Explain();
+	auto res = rel->Explain(type);
 	D_ASSERT(res->type == duckdb::QueryResultType::MATERIALIZED_RESULT);
 	auto &materialized = (duckdb::MaterializedQueryResult &)*res;
 	auto &coll = materialized.Collection();
