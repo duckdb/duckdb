@@ -223,7 +223,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 	}
 
 	unique_ptr<PhysicalOperator> plan;
-	if (has_equality) {
+	if (has_equality && op.type != LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		Index *left_index {}, *right_index {};
 		TransformIndexJoin(context, op, &left_index, &right_index, left.get(), right.get());
 		if (left_index &&
