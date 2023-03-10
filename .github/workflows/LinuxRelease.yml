@@ -596,7 +596,9 @@ jobs:
     - name: Setup
       shell: bash
       run: |
-        git clone --recurse-submodules --branch latest_stable --depth 1 https://github.com/duckdb/duckdb-wasm
+        git clone --recurse-submodules https://github.com/duckdb/duckdb-wasm
+        cd duckdb-wasm
+        git checkout 2cee83b1
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
