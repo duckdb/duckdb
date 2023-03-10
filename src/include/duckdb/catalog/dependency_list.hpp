@@ -12,6 +12,7 @@
 #include "duckdb/common/unordered_set.hpp"
 
 namespace duckdb {
+class Catalog;
 class CatalogEntry;
 
 //! The DependencyList
