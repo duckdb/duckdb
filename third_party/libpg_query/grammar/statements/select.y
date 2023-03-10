@@ -1155,6 +1155,18 @@ joined_table:
 					n->location = @2;
 					$$ = n;
 				}
+			| table_ref ASOF JOIN table_ref join_qual
+				{
+					PGJoinExpr *n = makeNode(PGJoinExpr);
+					n->jointype = PG_JOIN_ASOF;
+					n->isNatural = false;
+					n->larg = $1;
+					n->rarg = $4;
+					n->usingClause = NIL; /* figure out which columns later... */
+					n->quals = $5; /* ON clause */
+					n->location = @2;
+					$$ = n;
+				}
 			| table_ref POSITIONAL JOIN table_ref
 				{
 					/* POSITIONAL JOIN is a coordinated scan */

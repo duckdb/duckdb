@@ -665,6 +665,20 @@ typedef enum PGJoinType {
 	PG_JOIN_ANTI, /* 1 copy of each LHS row that has no match */
 
 	/*
+	 * ASOF joins are left outer joins with a single inequality predicate
+	 * and optional equality predicates.
+	 * The semantics are equivalent to the following window join:
+	 * 		times t
+	 * 	LEFT JOIN (
+     *		SELECT *,
+     *			LEAD(begin, 1, 'infinity') OVER ([PARTITION BY key] ORDER BY begin) AS end)
+	 * 		FROM events) e
+	 *	ON t.ts >= e.begin AND t.ts < e.end [AND t.key = e.key]
+
+	 */
+	PG_JOIN_ASOF, /* Two event tables */
+
+	/*
 	 * These codes are used internally in the planner, but are not supported
 	 * by the executor (nor, indeed, by most of the planner).
 	 */

@@ -1,0 +1,52 @@
+# name: test/sql/join/asof/test_asof_join.test
+# description: Test As-Of joins
+# group: [asof]
+
+statement ok
+PRAGMA enable_verification
+
+# Use doubles for readable infinities
+statement ok
+CREATE TABLE events (begin DOUBLE, value INTEGER);
+
+statement ok
+INSERT INTO events VALUES
+	(1, 0),
+	(3, 1),
+	(6, 2),
+	(8, 3)
+;
+
+query III
+SELECT value, begin, 
+	LEAD(begin, 1, 'infinity'::DOUBLE) OVER (ORDER BY begin ASC) AS end
+FROM events e
+----
+0	1.0	3.0
+1	3.0	6.0
+2	6.0	8.0
+3	8.0	inf
+
+# Window version
+query II
+SELECT p.ts, e.value
+FROM 
+	range(0,10) p(ts)
+LEFT JOIN (
+	SELECT value, begin, 
+		LEAD(begin, 1, 'infinity'::DOUBLE) OVER (ORDER BY begin ASC) AS end
+	FROM events
+) e
+ON p.ts >= e.begin AND p.ts < e.end
+ORDER BY p.ts ASC
+----
+0	NULL
+1	0
+2	0
+3	1
+4	1
+5	1
+6	2
+7	2
+8	3
+9	3
