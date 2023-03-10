@@ -854,22 +854,30 @@ bool JoinHashTable::RequiresPartitioning(ClientConfig &config, vector<unique_ptr
 	D_ASSERT(external);
 
 	idx_t num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
+	vector<idx_t> partition_counts(num_partitions, 0);
 	vector<idx_t> partition_sizes(num_partitions, 0);
 	for (auto &ht : local_hts) {
-		auto &local_sink_collection = ht->GetSinkCollection();
+		const auto &local_partitions = ht->GetSinkCollection().GetPartitions();
 		for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
-			partition_sizes[partition_idx] += local_sink_collection.GetPartitions()[partition_idx]->SizeInBytes();
+			auto &local_partition = local_partitions[partition_idx];
+			partition_counts[partition_idx] += local_partition->Count();
+			partition_sizes[partition_idx] += local_partition->SizeInBytes();
 		}
 	}
 
+	// Figure out if we can fit all single partitions in memory
 	idx_t max_partition_size = 0;
 	for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
-		max_partition_size = MaxValue<idx_t>(max_partition_size, partition_sizes[partition_idx]);
+		auto data_size = partition_sizes[partition_idx];
+		auto ht_size = data_size + PointerTableCapacity(partition_counts[partition_idx]) * sizeof(data_ptr_t);
+		max_partition_size = MaxValue<idx_t>(max_partition_size, ht_size);
 	}
 
 	if (config.force_external || max_partition_size > max_ht_size) {
 		// TODO: refine this experimentally
 		radix_bits = 8;
+		sink_collection =
+		    make_unique<RadixPartitionedTupleData>(buffer_manager, layout, radix_bits, layout.ColumnCount() - 1);
 		return true;
 	} else {
 		return false;
@@ -877,15 +885,15 @@ bool JoinHashTable::RequiresPartitioning(ClientConfig &config, vector<unique_ptr
 }
 
 void JoinHashTable::Partition(JoinHashTable &global_ht) {
-	auto new_sink_collection =
-	    make_unique<RadixPartitionedTupleData>(buffer_manager, layout, radix_bits, layout.ColumnCount() - 1);
+	auto new_sink_collection = make_unique_base<PartitionedTupleData, RadixPartitionedTupleData>(
+	    buffer_manager, layout, global_ht.radix_bits, layout.ColumnCount() - 1);
 	sink_collection->Repartition(*new_sink_collection);
 	sink_collection = std::move(new_sink_collection);
 	global_ht.Merge(*this);
 }
 
 void JoinHashTable::Reset() {
-	data_collection = nullptr;
+	data_collection->Reset();
 	finalized = false;
 }
 
@@ -899,24 +907,28 @@ bool JoinHashTable::PrepareExternalFinalize() {
 		Reset();
 	}
 
-	// Determine how many partitions we can do next (at least one)
+	// Start where we left off
 	auto &partitions = sink_collection->GetPartitions();
-	idx_t count = partitions[partition_start]->Count();
-	idx_t data_size = partitions[partition_start]->SizeInBytes();
-	for (idx_t partition_idx = partition_start + 1; partition_idx < num_partitions; partition_idx++) {
+	partition_start = partition_end;
+
+	// Determine how many partitions we can do next (at least one)
+	idx_t count = 0;
+	idx_t data_size = 0;
+	for (idx_t partition_idx = partition_start; partition_idx < num_partitions; partition_idx++) {
 		auto incl_count = count + partitions[partition_idx]->Count();
 		auto incl_data_size = data_size + partitions[partition_idx]->SizeInBytes();
 		auto incl_ht_size = incl_data_size + PointerTableCapacity(incl_count) * sizeof(data_ptr_t);
-		if (incl_ht_size > max_ht_size) {
+		if (count > 0 && incl_ht_size > max_ht_size) {
 			partition_end = partition_idx;
 			break;
 		}
 		count = incl_count;
 		data_size = incl_data_size;
 	}
+	D_ASSERT(count != 0);
 
 	// Move the partitions to the main data collection
-	for (idx_t partition_idx = partition_start; partition_idx < partition_start; partition_idx++) {
+	for (idx_t partition_idx = partition_start; partition_idx < partition_end; partition_idx++) {
 		data_collection->Combine(*partitions[partition_idx]);
 	}
 	D_ASSERT(Count() == count);

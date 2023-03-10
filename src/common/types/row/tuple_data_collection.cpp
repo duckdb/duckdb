@@ -215,8 +215,8 @@ void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, Vector &source_
 	}
 }
 
-void TupleDataCollection::Build(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state, idx_t append_offset,
-                                idx_t append_count) {
+void TupleDataCollection::Build(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state,
+                                const idx_t append_offset, const idx_t append_count) {
 	segments.back().allocator->Build(segments.back(), pin_state, chunk_state, append_offset, append_count);
 	count += append_count;
 	Verify();
@@ -275,7 +275,8 @@ void TupleDataCollection::CopyRows(TupleDataChunkState &chunk_state, TupleDataCh
 		// Check if we need to copy anything at all
 		idx_t total_heap_size = 0;
 		for (idx_t i = 0; i < append_count; i++) {
-			total_heap_size += heap_sizes[append_sel.get_index(i)];
+			auto idx = append_sel.get_index(i);
+			total_heap_size += heap_sizes[idx];
 		}
 		if (total_heap_size == 0) {
 			return;
@@ -288,8 +289,8 @@ void TupleDataCollection::CopyRows(TupleDataChunkState &chunk_state, TupleDataCh
 		}
 
 		// Recompute pointers after copying the data
-		TupleDataAllocator::RecomputeHeapPointers(input.heap_locations, append_sel, source_locations,
-		                                          chunk_state.heap_locations, 0, count, layout, 0);
+		TupleDataAllocator::RecomputeHeapPointers(input.heap_locations, append_sel, target_locations,
+		                                          chunk_state.heap_locations, 0, append_count, layout, 0);
 	}
 }
 
@@ -314,6 +315,14 @@ void TupleDataCollection::Combine(TupleDataCollection &other) {
 	other.segments.clear();
 	other.count = 0;
 	Verify();
+}
+
+void TupleDataCollection::Reset() {
+	count = 0;
+	segments.clear();
+
+	// Refreshes the TupleDataAllocator to prevent holding on to allocated data unnecessarily
+	allocator = make_shared<TupleDataAllocator>(*allocator);
 }
 
 void TupleDataCollection::InitializeChunk(DataChunk &chunk) const {
@@ -410,7 +419,7 @@ void TupleDataCollection::Gather(Vector &row_locations, const SelectionVector &s
                                  const SelectionVector &target_sel) const {
 	D_ASSERT(column_ids.size() == result.ColumnCount());
 	for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
-		Gather(row_locations, scan_sel, column_ids[col_idx], scan_count, result.data[col_idx], target_sel);
+		Gather(row_locations, scan_sel, scan_count, column_ids[col_idx], result.data[col_idx], target_sel);
 	}
 }
 

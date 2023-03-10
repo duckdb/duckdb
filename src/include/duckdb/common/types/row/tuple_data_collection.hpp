@@ -79,7 +79,8 @@ public:
 	                             const SelectionVector &append_sel, const idx_t append_count,
 	                             const idx_t original_count);
 	//! Builds out the buffer space for the specified chunk state
-	void Build(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state, idx_t append_offset, idx_t append_count);
+	void Build(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state, const idx_t append_offset,
+	           const idx_t append_count);
 	//! Scatters the given DataChunk to the rows in the specified append state
 	void Scatter(TupleDataChunkState &chunk_state, DataChunk &new_chunk, const SelectionVector &append_sel,
 	             const idx_t append_count) const;
@@ -95,6 +96,8 @@ public:
 	void FinalizePinState(TupleDataPinState &pin_state);
 	//! Appends the other TupleDataCollection to this, destroying the other data collection
 	void Combine(TupleDataCollection &other);
+	//! Resets the TupleDataCollection, clearing all data
+	void Reset();
 
 	//! Initializes a chunk with the correct types that can be used to call Append/Scan
 	void InitializeChunk(DataChunk &chunk) const;

@@ -83,20 +83,21 @@ void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, TupleD
 	unordered_map<idx_t, list_entry_t> partition_entries;
 	BuildPartitionSel(state, count, partition_entries);
 
-	// Reference the input heap sizes
-	state.chunk_state.heap_sizes.Reference(input.heap_sizes);
-
 	// Early out: check if everything belongs to a single partition
 	if (partition_entries.size() == 1) {
 		const auto &partition_index = partition_entries.begin()->first;
 		auto &partition = *partitions[partition_index];
 		auto &partition_pin_state = *state.partition_pin_states[partition_index];
+
+		state.chunk_state.heap_sizes.Reference(input.heap_sizes);
 		partition.Build(partition_pin_state, state.chunk_state, 0, count);
 		partition.CopyRows(state.chunk_state, input, *FlatVector::IncrementalSelectionVector(), count);
 		return;
 	}
 
 	// Build the buffer space
+	state.chunk_state.heap_sizes.Slice(input.heap_sizes, state.partition_sel, count);
+	state.chunk_state.heap_sizes.Flatten(count);
 	BuildBufferSpace(state, partition_entries);
 
 	// Copy the rows
@@ -152,7 +153,7 @@ void PartitionedTupleData::BuildBufferSpace(PartitionedTupleDataAppendState &sta
 	for (auto &pc : partition_entries) {
 		const auto &partition_index = pc.first;
 
-		// Partition, and pin state for this partition index
+		// Partition, pin state for this partition index
 		auto &partition = *partitions[partition_index];
 		auto &partition_pin_state = *state.partition_pin_states[partition_index];
 
@@ -175,6 +176,10 @@ void PartitionedTupleData::FlushAppendState(PartitionedTupleDataAppendState &sta
 }
 
 void PartitionedTupleData::Combine(PartitionedTupleData &other) {
+	if (other.Count() == 0) {
+		return;
+	}
+
 	// Now combine the state's partitions into this
 	lock_guard<mutex> guard(lock);
 
@@ -206,19 +211,20 @@ void PartitionedTupleData::Repartition(PartitionedTupleData &new_partitioned_dat
 		auto actual_partition_idx = partition_idx + adjustment;
 		auto &partition = *partitions[actual_partition_idx];
 
-		TupleDataChunkIterator iterator(partition, TupleDataPinProperties::DESTROY_AFTER_DONE, true);
-		auto &chunk_state = iterator.GetChunkState();
-		do {
-			auto count = iterator.GetCount();
-			ComputePartitionIndices(chunk_state.row_locations, count, append_state.partition_indices);
-			Append(append_state, chunk_state, count);
-		} while (iterator.Next());
+		if (partition.Count() > 0) {
+			TupleDataChunkIterator iterator(partition, TupleDataPinProperties::DESTROY_AFTER_DONE, true);
+			auto &chunk_state = iterator.GetChunkState();
+			do {
+				auto count = iterator.GetCount();
+				new_partitioned_data.Append(append_state, chunk_state, count);
+			} while (iterator.Next());
 
-		RepartitionFinalizeStates(*this, new_partitioned_data, append_state, actual_partition_idx);
+			RepartitionFinalizeStates(*this, new_partitioned_data, append_state, actual_partition_idx);
+		}
 		partitions[actual_partition_idx] = nullptr;
 	}
 
-	FlushAppendState(append_state);
+	new_partitioned_data.FlushAppendState(append_state);
 }
 
 vector<unique_ptr<TupleDataCollection>> &PartitionedTupleData::GetPartitions() {

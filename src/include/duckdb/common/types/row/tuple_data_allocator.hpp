@@ -54,7 +54,8 @@ public:
 
 class TupleDataAllocator {
 public:
-	explicit TupleDataAllocator(BufferManager &buffer_manager, const TupleDataLayout &layout);
+	TupleDataAllocator(BufferManager &buffer_manager, const TupleDataLayout &layout);
+	TupleDataAllocator(TupleDataAllocator &allocator);
 
 	//! Get the buffer allocator
 	Allocator &GetAllocator();
@@ -64,7 +65,7 @@ public:
 public:
 	//! Builds out the chunks for next append, given the metadata in the append state
 	void Build(TupleDataSegment &segment, TupleDataPinState &pin_state, TupleDataChunkState &chunk_state,
-	           idx_t initial_offset, idx_t count);
+	           const idx_t append_offset, const idx_t append_count);
 	//! Initializes a chunk, making its pointers valid
 	void InitializeChunkState(TupleDataSegment &segment, TupleDataPinState &pin_state, TupleDataChunkState &chunk_state,
 	                          idx_t chunk_idx, bool init_heap);
@@ -79,8 +80,8 @@ public:
 
 private:
 	//! Builds out a single part (grabs the lock)
-	TupleDataChunkPart BuildChunkPart(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state, idx_t offset,
-	                                  idx_t count);
+	TupleDataChunkPart BuildChunkPart(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state,
+	                                  const idx_t append_offset, const idx_t append_count);
 	//! Internal function for InitializeChunkState
 	void InitializeChunkStateInternal(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state, idx_t offset,
 	                                  bool init_heap_pointers, bool init_heap_sizes,
