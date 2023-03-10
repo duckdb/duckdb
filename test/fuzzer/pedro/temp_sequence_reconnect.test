@@ -19,7 +19,7 @@ CREATE TEMP SEQUENCE t1;
 statement error
 ALTER TABLE t1 ADD c0 INT;
 ----
-cannot introduce dependency
+Cross catalog dependencies are not supported
 
 statement ok
 DROP SEQUENCE temp.t1
