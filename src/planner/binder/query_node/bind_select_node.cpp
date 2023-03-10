@@ -426,6 +426,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 	// after that, we bind to the SELECT list
 	SelectBinder select_binder(*this, context, *result, info, alias_map);
 	vector<LogicalType> internal_sql_types;
+	vector<idx_t> group_by_all_indexes;
 	for (idx_t i = 0; i < statement.select_list.size(); i++) {
 		bool is_window = statement.select_list[i]->IsWindow();
 		idx_t unnest_count = result->unnests.size();
@@ -443,10 +444,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 			}
 			// we are forcing aggregates, and the node has columns bound
 			// this entry becomes a group
-			auto group_ref = make_unique<BoundColumnRefExpression>(
-			    expr->return_type, ColumnBinding(result->group_index, result->groups.group_expressions.size()));
-			result->groups.group_expressions.push_back(std::move(expr));
-			expr = std::move(group_ref);
+			group_by_all_indexes.push_back(i);
 		}
 		result->select_list.push_back(std::move(expr));
 		if (i < result->column_count) {
@@ -456,6 +454,14 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 		if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES) {
 			select_binder.ResetBindings();
 		}
+	}
+	// push the GROUP BY ALL expressions into the group set
+	for (idx_t i = 0; i < group_by_all_indexes.size(); i++) {
+		auto &expr = result->select_list[i];
+		auto group_ref = make_unique<BoundColumnRefExpression>(
+		    expr->return_type, ColumnBinding(result->group_index, result->groups.group_expressions.size()));
+		result->groups.group_expressions.push_back(std::move(expr));
+		expr = std::move(group_ref);
 	}
 	result->need_prune = result->select_list.size() > result->column_count;
 
