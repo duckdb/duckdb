@@ -21,9 +21,6 @@ namespace duckdb {
  */
 class StringUtil {
 public:
-	static const char *const HEX_UPPER_TABLE;
-
-public:
 	static uint8_t GetHexValue(char c) {
 		if (c >= '0' && c <= '9') {
 			return c - '0';

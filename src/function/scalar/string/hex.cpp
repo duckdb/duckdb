@@ -1,5 +1,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
@@ -17,9 +18,9 @@ struct HexStrOperator {
 		auto output = target.GetDataWriteable();
 
 		for (idx_t i = 0; i < size; ++i) {
-			*output = StringUtil::HEX_UPPER_TABLE[(data[i] >> 4) & 0x0F];
+			*output = Blob::HEX_TABLE[(data[i] >> 4) & 0x0F];
 			output++;
-			*output = StringUtil::HEX_UPPER_TABLE[data[i] & 0x0F];
+			*output = Blob::HEX_TABLE[data[i] & 0x0F];
 			output++;
 		}
 
@@ -54,7 +55,6 @@ struct FromHexOperator {
 		}
 
 		for (; i < size; i += 2) {
-
 			uint8_t major = StringUtil::GetHexValue(data[i]);
 			uint8_t minor = StringUtil::GetHexValue(data[i + 1]);
 			*output = (major << 4) | minor;
@@ -81,7 +81,7 @@ struct HexIntegralOperator {
 				continue;
 			}
 			seen_non_zero = true;
-			*ptr = StringUtil::HEX_UPPER_TABLE[byte];
+			*ptr = Blob::HEX_TABLE[byte];
 			ptr++;
 			buffer_size++;
 		}
@@ -114,7 +114,7 @@ struct HexHugeIntOperator {
 				continue;
 			}
 			seen_non_zero = true;
-			*ptr = StringUtil::HEX_UPPER_TABLE[byte];
+			*ptr = Blob::HEX_TABLE[byte];
 			ptr++;
 			buffer_size++;
 		}
@@ -127,7 +127,7 @@ struct HexHugeIntOperator {
 				continue;
 			}
 			seen_non_zero = true;
-			*ptr = StringUtil::HEX_UPPER_TABLE[byte];
+			*ptr = Blob::HEX_TABLE[byte];
 			ptr++;
 			buffer_size++;
 		}

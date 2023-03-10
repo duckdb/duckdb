@@ -14,8 +14,6 @@
 
 namespace duckdb {
 
-const char *const StringUtil::HEX_UPPER_TABLE = "0123456789ABCDEF";
-
 bool StringUtil::Contains(const string &haystack, const string &needle) {
 	return (haystack.find(needle) != string::npos);
 }
