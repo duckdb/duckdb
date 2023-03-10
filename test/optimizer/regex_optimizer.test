@@ -30,3 +30,15 @@ EXPLAIN SELECT regexp_matches(s, 'a') FROM test
 query I nosort regexconstantsinglechar
 EXPLAIN SELECT contains(s, 'a') FROM test
 ----
+
+query I nosort correct_result
+SELECT regexp_matches(s, '[a]') FROM test
+----
+
+query I nosort correct_result
+SELECT regexp_matches(s, 'a') FROM test
+----
+
+query I nosort correct_result
+SELECT contains(s, 'aaa') FROM test
+----

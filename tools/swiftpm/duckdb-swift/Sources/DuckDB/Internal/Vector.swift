@@ -27,6 +27,8 @@ import Foundation
 
 struct Vector {
   
+  static let vectorSize = DBInt(duckdb_vector_size())
+  
   let count: Int
   let offset: Int
   let logicalType: LogicalType
@@ -126,17 +128,17 @@ private extension Vector {
   }
   
   func unwrap(_ type: Timestamp.Type, at index: Int) throws -> Timestamp {
-    let columnTypes = [DBTypeID.timestamp_s, .timestamp_ms, .timestamp, .timestamp_ns]
+    let columnTypes = [DatabaseType.timestampS, .timestampMS, .timestamp, .timestampNS]
     try assertNonNullTypeMatch(of: type, at: index, withColumnTypes: .init(columnTypes))
     return unsafelyUnwrapElement(as: duckdb_timestamp.self, at: index) { ctimestamp in
       switch logicalType.dataType {
-      case .timestamp_s:
+      case .timestampS:
         let scaled = duckdb_timestamp(micros: ctimestamp.micros * 1_000_000)
         return scaled.asTimestamp
-      case .timestamp_ms:
+      case .timestampMS:
         let scaled = duckdb_timestamp(micros: ctimestamp.micros * 1_000)
         return scaled.asTimestamp
-      case .timestamp_ns:
+      case .timestampNS:
         let scaled = duckdb_timestamp(micros: ctimestamp.micros / 1_000)
         return scaled.asTimestamp
       default:
@@ -198,13 +200,13 @@ private extension Vector {
   }
   
   func assertNonNullTypeMatch<T>(
-    of type: T.Type, at index: Int, withColumnType columnType: DBTypeID
+    of type: T.Type, at index: Int, withColumnType columnType: DatabaseType
   ) throws {
     try assertNonNullTypeMatch(of: type, at: index, withColumnTypes: .init([columnType]))
   }
   
   func assertNonNullTypeMatch<T>(
-    of type: T.Type, at index: Int, withColumnTypes columnTypes: Set<DBTypeID>
+    of type: T.Type, at index: Int, withColumnTypes columnTypes: Set<DatabaseType>
   ) throws {
     guard unwrapNull(at: index) == false else {
       throw DatabaseError.valueNotFound(type)
@@ -255,7 +257,7 @@ extension Vector: Collection {
 
 extension Vector.Element {
   
-  var dataType: DBTypeID { vector.logicalType.dataType }
+  var dataType: DatabaseType { vector.logicalType.dataType }
   
   func unwrapNull() -> Bool { vector.unwrapNull(at: index) }
   func unwrap(_ type: Int.Type) throws -> Int { try vector.unwrap(type, at: index) }

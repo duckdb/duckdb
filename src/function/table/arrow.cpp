@@ -101,6 +101,9 @@ LogicalType ArrowTableFunction::GetArrowLogicalType(
 	} else if (format == "tiM") {
 		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::MONTHS);
 		return LogicalType::INTERVAL;
+	} else if (format == "tin") {
+		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::MONTH_DAY_NANO);
+		return LogicalType::INTERVAL;
 	} else if (format == "+l") {
 		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::NORMAL, 0);
 		auto child_type = GetArrowLogicalType(*schema.children[0], arrow_convert_data, col_idx);

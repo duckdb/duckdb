@@ -110,6 +110,7 @@ AggregateFunction SumFun::GetSumAggregate(PhysicalType type) {
 	case PhysicalType::INT16: {
 		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int16_t, hugeint_t, IntegerSumOperation>(
 		    LogicalType::SMALLINT, LogicalType::HUGEINT);
+		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 		return function;
 	}
 
@@ -118,6 +119,7 @@ AggregateFunction SumFun::GetSumAggregate(PhysicalType type) {
 		    AggregateFunction::UnaryAggregate<SumState<hugeint_t>, int32_t, hugeint_t, SumToHugeintOperation>(
 		        LogicalType::INTEGER, LogicalType::HUGEINT);
 		function.statistics = SumPropagateStats;
+		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 		return function;
 	}
 	case PhysicalType::INT64: {
@@ -125,12 +127,14 @@ AggregateFunction SumFun::GetSumAggregate(PhysicalType type) {
 		    AggregateFunction::UnaryAggregate<SumState<hugeint_t>, int64_t, hugeint_t, SumToHugeintOperation>(
 		        LogicalType::BIGINT, LogicalType::HUGEINT);
 		function.statistics = SumPropagateStats;
+		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 		return function;
 	}
 	case PhysicalType::INT128: {
 		auto function =
 		    AggregateFunction::UnaryAggregate<SumState<hugeint_t>, hugeint_t, hugeint_t, HugeintSumOperation>(
 		        LogicalType::HUGEINT, LogicalType::HUGEINT);
+		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 		return function;
 	}
 	default:
@@ -144,12 +148,14 @@ AggregateFunction SumFun::GetSumAggregateNoOverflow(PhysicalType type) {
 		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int32_t, hugeint_t, IntegerSumOperation>(
 		    LogicalType::INTEGER, LogicalType::HUGEINT);
 		function.name = "sum_no_overflow";
+		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 		return function;
 	}
 	case PhysicalType::INT64: {
 		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int64_t, hugeint_t, IntegerSumOperation>(
 		    LogicalType::BIGINT, LogicalType::HUGEINT);
 		function.name = "sum_no_overflow";
+		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 		return function;
 	}
 	default:
@@ -164,6 +170,7 @@ unique_ptr<FunctionData> BindDecimalSum(ClientContext &context, AggregateFunctio
 	function.name = "sum";
 	function.arguments[0] = decimal_type;
 	function.return_type = LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, DecimalType::GetScale(decimal_type));
+	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return nullptr;
 }
 
@@ -174,6 +181,7 @@ unique_ptr<FunctionData> BindDecimalSumNoOverflow(ClientContext &context, Aggreg
 	function.name = "sum_no_overflow";
 	function.arguments[0] = decimal_type;
 	function.return_type = LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, DecimalType::GetScale(decimal_type));
+	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return nullptr;
 }
 

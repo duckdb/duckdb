@@ -9,6 +9,7 @@
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -169,13 +170,20 @@ PhysicalPlanGenerator::ExtractAggregateExpressions(unique_ptr<PhysicalOperator> 
 	vector<unique_ptr<Expression>> expressions;
 	vector<LogicalType> types;
 
+	// bind sorted aggregates
+	for (auto &aggr : aggregates) {
+		auto &bound_aggr = (BoundAggregateExpression &)*aggr;
+		if (bound_aggr.order_bys) {
+			// sorted aggregate!
+			FunctionBinder::BindSortedAggregate(context, bound_aggr, groups);
+		}
+	}
 	for (auto &group : groups) {
 		auto ref = make_unique<BoundReferenceExpression>(group->return_type, expressions.size());
 		types.push_back(group->return_type);
 		expressions.push_back(std::move(group));
 		group = std::move(ref);
 	}
-
 	for (auto &aggr : aggregates) {
 		auto &bound_aggr = (BoundAggregateExpression &)*aggr;
 		for (auto &child : bound_aggr.children) {

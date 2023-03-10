@@ -48,6 +48,11 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		for (auto &target : distinct.distinct_targets) {
 			callback(&target);
 		}
+		if (distinct.order_by) {
+			for (auto &order : distinct.order_by->orders) {
+				callback(&order.expression);
+			}
+		}
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_INSERT: {

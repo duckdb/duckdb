@@ -27,9 +27,9 @@ import Foundation
 
 // MARK: - Top Level Decoder
 
-public final class VectorElementDecoder {
+final class VectorElementDecoder {
   
-  public static let `default` = VectorElementDecoder()
+  static let `default` = VectorElementDecoder()
   
   func decode<T: Decodable>(_ type: T.Type, element: Vector.Element) throws -> T {
     try T(from: VectorElementDataDecoder(element: element))
@@ -76,7 +76,7 @@ fileprivate struct VectorElementDataDecoder: Decoder {
         try KeyedValueContainer<Key>.createStructContainer(decoder: self, element: element)
       )
     default:
-      let columnType = element.dataType.description.uppercased()
+      let columnType = element.dataType
       let context = DecodingError.Context(
         codingPath: codingPath,
         debugDescription: "Cannot create keyed decoding container for column type \(columnType)"
@@ -90,7 +90,7 @@ fileprivate struct VectorElementDataDecoder: Decoder {
     case .list:
       return try UnkeyedValueContainer.createListContainer(decoder: self, element: element)
     default:
-      let columnType = element.dataType.description.uppercased()
+      let columnType = element.dataType
       let context = DecodingError.Context(
         codingPath: codingPath,
         debugDescription: "Cannot create unkeyed decoding container for column type \(columnType)"
@@ -241,10 +241,10 @@ extension VectorElementDataDecoder {
         throw DecodingError.valueNotFound(type, context)
       }
       catch DatabaseError.typeMismatch(let type) {
-        let columnDescription = element.dataType.description.uppercased()
+        let columnType = element.dataType
         let context = DecodingError.Context(
           codingPath: codingPath,
-          debugDescription: "Expected to decode \(type) but found \(columnDescription) instead."
+          debugDescription: "Expected to decode \(type) but found \(columnType) instead."
         )
         throw DecodingError.typeMismatch(type, context)
       }
@@ -411,7 +411,7 @@ fileprivate extension VectorElementDataDecoder.KeyedValueContainer {
       throw DecodingError.valueNotFound(Self.self, context)
     }
     guard element.dataType == .map else {
-      let columnType = element.dataType.description.uppercased()
+      let columnType = element.dataType
       let context = DecodingError.Context(
         codingPath: decoder.codingPath,
         debugDescription: "Expected map column type, found \(columnType) column type instead."
@@ -456,10 +456,9 @@ fileprivate extension VectorElementDataDecoder.KeyedValueContainer {
       throw DecodingError.valueNotFound(Self.self, context)
     }
     guard dataType == .struct else {
-      let columnType = dataType.description.uppercased()
       let context = DecodingError.Context(
         codingPath: codingPath,
-        debugDescription: "Expected struct column type, found \(columnType) column type instead."
+        debugDescription: "Expected struct column type, found \(dataType) column type instead."
       )
       throw DecodingError.typeMismatch(Self.self, context)
     }
@@ -513,10 +512,9 @@ fileprivate extension VectorElementDataDecoder.UnkeyedValueContainer {
       throw DecodingError.valueNotFound(Self.self, context)
     }
     guard dataType == .list else {
-      let columnType = dataType.description.uppercased()
       let context = DecodingError.Context(
         codingPath: codingPath,
-        debugDescription: "Expected list column type, found \(columnType) column type instead."
+        debugDescription: "Expected list column type, found \(dataType) column type instead."
       )
       throw DecodingError.typeMismatch(Self.self, context)
     }

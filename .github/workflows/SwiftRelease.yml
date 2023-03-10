@@ -1,7 +1,6 @@
 name: SwiftRelease
 on:
   workflow_dispatch:
-  repository_dispatch:
   push:
     tags:
       - '**'

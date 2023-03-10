@@ -1,12 +1,17 @@
 import duckdb
 import os
 import pandas as pd
+from pytest import raises, mark
+
+
+# We only run this test if this env var is set
+pytestmark = mark.skipif(
+    not os.getenv('DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED', False),
+    reason='httpfs extension not available'
+)
 
 
 def test_httpfs(require):
-    # We only run this test if this env var is set
-    if not os.getenv('DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED', False):
-        return
     connection = require('httpfs')     
     try:
         connection.execute("SELECT id, first_name, last_name FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet') LIMIT 3;")
@@ -26,3 +31,13 @@ def test_httpfs(require):
         'last_name': ['Jordan', 'Freeman', 'Morgan']
     })
     assert(result_df.equals(exp_result))
+
+
+
+def test_http_exception(require):
+    connection = require('httpfs')
+
+    with raises(duckdb.HTTPException) as exc:
+        connection.execute("SELECT * FROM PARQUET_SCAN('https://example.com/userdata1.parquet')")
+
+    assert exc.value.status_code == 404

@@ -15,10 +15,11 @@ PhysicalCreateType::PhysicalCreateType(unique_ptr<CreateTypeInfo> info, idx_t es
 //===--------------------------------------------------------------------===//
 class CreateTypeGlobalState : public GlobalSinkState {
 public:
-	explicit CreateTypeGlobalState(ClientContext &context) : collection(context, {LogicalType::VARCHAR}) {
+	explicit CreateTypeGlobalState(ClientContext &context) : result(LogicalType::VARCHAR) {
 	}
-
-	ColumnDataCollection collection;
+	Vector result;
+	idx_t size = 0;
+	idx_t capacity = STANDARD_VECTOR_SIZE;
 };
 
 unique_ptr<GlobalSinkState> PhysicalCreateType::GetGlobalSinkState(ClientContext &context) const {
@@ -28,7 +29,7 @@ unique_ptr<GlobalSinkState> PhysicalCreateType::GetGlobalSinkState(ClientContext
 SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
                                         DataChunk &input) const {
 	auto &gstate = (CreateTypeGlobalState &)gstate_p;
-	idx_t total_row_count = gstate.collection.Count() + input.size();
+	idx_t total_row_count = gstate.size + input.size();
 	if (total_row_count > NumericLimits<uint32_t>::Maximum()) {
 		throw InvalidInputException("Attempted to create ENUM of size %llu, which exceeds the maximum size of %llu",
 		                            total_row_count, NumericLimits<uint32_t>::Maximum());
@@ -36,15 +37,23 @@ SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, GlobalSinkSta
 	UnifiedVectorFormat sdata;
 	input.data[0].ToUnifiedFormat(input.size(), sdata);
 
+	if (total_row_count > gstate.capacity) {
+		// We must resize our result vector
+		gstate.result.Resize(gstate.capacity, gstate.capacity * 2);
+		gstate.capacity *= 2;
+	}
+
+	auto src_ptr = (string_t *)sdata.data;
+	auto result_ptr = FlatVector::GetData<string_t>(gstate.result);
 	// Input vector has NULL value, we just throw an exception
 	for (idx_t i = 0; i < input.size(); i++) {
 		idx_t idx = sdata.sel->get_index(i);
 		if (!sdata.validity.RowIsValid(idx)) {
 			throw InvalidInputException("Attempted to create ENUM type with NULL value!");
 		}
+		result_ptr[gstate.size++] =
+		    StringVector::AddStringOrBlob(gstate.result, src_ptr[idx].GetDataUnsafe(), src_ptr[idx].GetSize());
 	}
-
-	gstate.collection.Append(input);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -72,44 +81,15 @@ void PhysicalCreateType::GetData(ExecutionContext &context, DataChunk &chunk, Gl
 
 	if (IsSink()) {
 		D_ASSERT(info->type == LogicalType::INVALID);
-
 		auto &g_sink_state = (CreateTypeGlobalState &)*sink_state;
-		auto &collection = g_sink_state.collection;
-
-		idx_t total_row_count = collection.Count();
-
-		ColumnDataScanState scan_state;
-		collection.InitializeScan(scan_state);
-
-		DataChunk scan_chunk;
-		collection.InitializeScanChunk(scan_chunk);
-
-		Vector result(LogicalType::VARCHAR, total_row_count);
-		auto result_ptr = FlatVector::GetData<string_t>(result);
-
-		idx_t offset = 0;
-		while (collection.Scan(scan_state, scan_chunk)) {
-			idx_t src_row_count = scan_chunk.size();
-			auto &src_vec = scan_chunk.data[0];
-			D_ASSERT(src_vec.GetVectorType() == VectorType::FLAT_VECTOR);
-			D_ASSERT(src_vec.GetType().id() == LogicalType::VARCHAR);
-
-			auto src_ptr = FlatVector::GetData<string_t>(src_vec);
-
-			for (idx_t i = 0; i < src_row_count; i++) {
-				idx_t target_index = offset + i;
-				result_ptr[target_index] =
-				    StringVector::AddStringOrBlob(result, src_ptr[i].GetDataUnsafe(), src_ptr[i].GetSize());
-			}
-
-			offset += src_row_count;
-		}
-
-		info->type = LogicalType::ENUM(info->name, result, total_row_count);
+		info->type = LogicalType::ENUM(info->name, g_sink_state.result, g_sink_state.size);
 	}
 
 	auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
-	catalog.CreateType(context.client, info.get());
+	auto catalog_entry = catalog.CreateType(context.client, info.get());
+	D_ASSERT(catalog_entry->type == CatalogType::TYPE_ENTRY);
+	auto catalog_type = (TypeCatalogEntry *)catalog_entry;
+	LogicalType::SetCatalog(info->type, catalog_type);
 	state.finished = true;
 }
 

@@ -25,16 +25,31 @@
 @_implementationOnly import Cduckdb
 import Foundation
 
-public final class QueryResult {
+/// An object representing a DuckDB result set
+///
+/// A DuckDB result set contains the data returned from the database after a
+/// successful query.
+///
+/// A result set is organized into vertical table slices called columns. Each
+/// column of the result set is accessible by calling the ``subscript(_:)``
+/// method of the result.
+///
+/// Elements of a column can be accessed by casting the column to the native
+/// Swift type that matches the underlying database column type. See ``Column``
+/// for further discussion.
+public final class ResultSet: Sendable {
   
+  /// The number of chunks in the result set
   public var chunkCount: DBInt { duckdb_result_chunk_count(ptr.pointee) }
+  /// The number of columns in the result set
   public var columnCount: DBInt { duckdb_column_count(ptr) }
   
-  lazy private (set) var rowCount = {
+  /// The total number of rows in the result set
+  var rowCount: DBInt {
     guard chunkCount > 0 else { return DBInt(0) }
     let lastChunk = dataChunk(at: chunkCount - 1)
-    return (chunkCount - 1) * Self.vectorSize + lastChunk.count
-  }()
+    return (chunkCount - 1) * Vector.vectorSize + lastChunk.count
+  }
   
   private let ptr = UnsafeMutablePointer<duckdb_result>.allocate(capacity: 1)
   
@@ -61,15 +76,32 @@ public final class QueryResult {
     ptr.deallocate()
   }
   
-  public subscript(_ columnIndex: DBInt) -> Column<Void> {
+  /// Returns a `Void` typed column for the given column index
+  ///
+  /// A `Void` typed column can be cast to a column matching the underlying
+  /// database representation using ``Column/cast(to:)-4376d``. See ``Column``
+  /// for further discussion.
+  ///
+  /// - Parameter columnIndex: the index of the column in the result set
+  /// - Returns: a `Void` typed column
+  public func column(at columnIndex: DBInt) -> Column<Void> {
     precondition(columnIndex < columnCount)
     return Column(result: self, columnIndex: columnIndex)
   }
   
-  public func columnName(at index: DBInt) -> String {
-    String(cString: duckdb_column_name(ptr, index))
+  /// The underlying column name for the given column index
+  ///
+  /// - Parameter columnIndex: the index of the column in the result set
+  /// - Returns: the name of the column
+  public func columnName(at columnIndex: DBInt) -> String {
+    String(cString: duckdb_column_name(ptr, columnIndex))
   }
   
+  /// The index of the given column name
+  ///
+  /// - Parameter columnName: the name of the column in the result set
+  /// - Returns: the index of the column
+  /// - Complexity: O(n)
   public func index(forColumnName columnName: String) -> DBInt? {
     for i in 0..<columnCount {
       if self.columnName(at: i) == columnName {
@@ -79,9 +111,9 @@ public final class QueryResult {
     return nil
   }
   
-  func columnDataType(at index: DBInt) -> DBTypeID {
+  func columnDataType(at index: DBInt) -> DatabaseType {
     let dataType = duckdb_column_type(ptr, index)
-    return DBTypeID(rawValue: dataType.rawValue)
+    return DatabaseType(rawValue: dataType.rawValue)
   }
   
   func withCResult<T>(_ body: (UnsafeMutablePointer<duckdb_result>) throws -> T) rethrows -> T {
@@ -91,56 +123,68 @@ public final class QueryResult {
 
 // MARK: - Type Casting Transformers
 
-extension QueryResult {
+extension ResultSet {
   
   func transformer(
     forColumn columnIndex: DBInt, to type: Void.Type
-  ) -> (DBInt) -> Void? {
+  ) -> @Sendable (DBInt) -> Void? {
     transformer(forColumn: columnIndex, to: type) { $0.unwrapNull() ? nil : () }
   }
   
   func transformer<T: PrimitiveDatabaseValue>(
     forColumn columnIndex: DBInt, to type: T.Type
-  ) -> (DBInt) -> T? {
+  ) -> @Sendable (DBInt) -> T? {
     transformer(
       forColumn: columnIndex, to: type, fromType: T.representedDatabaseTypeID
     ) { try? $0.unwrap(type) }
   }
   
   func transformer(
+    forColumn columnIndex: DBInt, to type: Int.Type
+  ) -> @Sendable (DBInt) -> Int? {
+    transformer(forColumn: columnIndex, to: type) { try? $0.unwrap(type) }
+  }
+  
+  func transformer(
+    forColumn columnIndex: DBInt, to type: UInt.Type
+  ) -> @Sendable (DBInt) -> UInt? {
+    transformer(forColumn: columnIndex, to: type) { try? $0.unwrap(type) }
+  }
+  
+  func transformer(
     forColumn columnIndex: DBInt, to type: IntHuge.Type
-  ) -> (DBInt) -> IntHuge? {
+  ) -> @Sendable (DBInt) -> IntHuge? {
     transformer(forColumn: columnIndex, to: type, fromType: .hugeint) { try? $0.unwrap(type) }
   }
   
   func transformer(
     forColumn columnIndex: DBInt, to type: String.Type
-  ) -> (DBInt) -> String? {
+  ) -> @Sendable (DBInt) -> String? {
     transformer(forColumn: columnIndex, to: type, fromType: .varchar) { try? $0.unwrap(type) }
   }
   
   func transformer(
     forColumn columnIndex: DBInt, to type: UUID.Type
-  ) -> (DBInt) -> UUID? {
+  ) -> @Sendable (DBInt) -> UUID? {
     transformer(forColumn: columnIndex, to: type, fromType: .uuid) { try? $0.unwrap(type) }
   }
   
   func transformer(
     forColumn columnIndex: DBInt, to type: Time.Type
-  ) -> (DBInt) -> Time? {
+  ) -> @Sendable (DBInt) -> Time? {
     transformer(forColumn: columnIndex, to: type, fromType: .time) { try? $0.unwrap(type) }
   }
   
   func transformer(
     forColumn columnIndex: DBInt, to type: Date.Type
-  ) -> (DBInt) -> Date? {
+  ) -> @Sendable (DBInt) -> Date? {
     transformer(forColumn: columnIndex, to: type, fromType: .date) { try? $0.unwrap(type) }
   }
   
   func transformer(
     forColumn columnIndex: DBInt, to type: Timestamp.Type
-  ) -> (DBInt) -> Timestamp? {
-    let columnTypes = [DBTypeID.timestamp_s, .timestamp_ms, .timestamp, .timestamp_ns]
+  ) -> @Sendable (DBInt) -> Timestamp? {
+    let columnTypes = [DatabaseType.timestampS, .timestampMS, .timestamp, .timestampNS]
     return transformer(
       forColumn: columnIndex, to: type, fromTypes: .init(columnTypes)
     ) { try? $0.unwrap(type) }
@@ -148,25 +192,25 @@ extension QueryResult {
   
   func transformer(
     forColumn columnIndex: DBInt, to type: Interval.Type
-  ) -> (DBInt) -> Interval? {
+  ) -> @Sendable (DBInt) -> Interval? {
     transformer(forColumn: columnIndex, to: type, fromType: .interval) { try? $0.unwrap(type) }
   }
   
   func transformer(
     forColumn columnIndex: DBInt, to type: Data.Type
-  ) -> (DBInt) -> Data? {
+  ) -> @Sendable (DBInt) -> Data? {
     transformer(forColumn: columnIndex, to: type, fromType: .blob) { try? $0.unwrap(type) }
   }
   
   func transformer(
     forColumn columnIndex: DBInt, to type: Decimal.Type
-  ) -> (DBInt) -> Decimal? {
+  ) -> @Sendable (DBInt) -> Decimal? {
     transformer(forColumn: columnIndex, to: type, fromType: .decimal) { try? $0.unwrap(type) }
   }
   
   func decodableTransformer<T: Decodable>(
     forColumn columnIndex: DBInt, to type: T.Type
-  ) -> (DBInt) -> T? {
+  ) -> @Sendable (DBInt) -> T? {
     transformer(forColumn: columnIndex, to: type) { element in
       do {
         return try VectorElementDecoder.default.decode(T?.self, element: element)
@@ -181,9 +225,7 @@ extension QueryResult {
 
 // MARK: - Data Extraction Utilities
 
-private extension QueryResult {
-  
-  static let vectorSize = DBInt(duckdb_vector_size())
+private extension ResultSet {
   
   func dataChunk(at index: DBInt) -> DataChunk {
     precondition(index < chunkCount, "data chunk out of bounds")
@@ -193,18 +235,18 @@ private extension QueryResult {
   func transformer<T>(
     forColumn columnIndex: DBInt,
     to type: T.Type,
-    fromType columnType: DBTypeID,
+    fromType columnType: DatabaseType,
     _ body: @escaping (Vector.Element) -> T?
-  ) -> (DBInt) -> T? {
+  ) -> @Sendable (DBInt) -> T? {
     transformer(forColumn: columnIndex, to: type, fromTypes: .init([columnType]), body)
   }
   
   func transformer<T>(
     forColumn columnIndex: DBInt,
     to type: T.Type,
-    fromTypes columnTypes: Set<DBTypeID>? = nil,
+    fromTypes columnTypes: Set<DatabaseType>? = nil,
     _ body: @escaping (Vector.Element) -> T?
-  ) -> (DBInt) -> T? {
+  ) -> @Sendable (DBInt) -> T? {
     if let columnTypes {
       let columnDataType = columnDataType(at: columnIndex)
       guard columnTypes.contains(columnDataType) else {
@@ -214,8 +256,8 @@ private extension QueryResult {
       }
     }
     return { [self] itemIndex in
-      let chunkIndex = itemIndex / Self.vectorSize
-      let rowIndex = itemIndex % Self.vectorSize
+      let chunkIndex = itemIndex / Vector.vectorSize
+      let rowIndex = itemIndex % Vector.vectorSize
       let chunk = dataChunk(at: chunkIndex)
       return chunk.withVector(at: columnIndex) { vector in
         body(vector[Int(rowIndex)])
@@ -224,9 +266,47 @@ private extension QueryResult {
   }
 }
 
+// MARK: - Collection conformance
+
+extension ResultSet: RandomAccessCollection {
+  
+  public typealias Element = Column<Void>
+  
+  public struct Iterator: IteratorProtocol {
+    
+    private let result: ResultSet
+    private var position: DBInt
+    
+    init(result: ResultSet) {
+      self.result = result
+      self.position = result.startIndex
+    }
+    
+    public mutating func next() -> Element? {
+      guard position < result.endIndex else { return nil }
+      defer { position += 1 }
+      return .some(result[position])
+    }
+  }
+  
+  public var startIndex: DBInt { 0 }
+  public var endIndex: DBInt { columnCount }
+  
+  public subscript(position: DBInt) -> Column<Void> {
+    column(at: position)
+  }
+  
+  public func makeIterator() -> Iterator {
+    Iterator(result: self)
+  }
+  
+  public func index(after i: DBInt) -> DBInt { i + 1 }
+  public func index(before i: DBInt) -> DBInt { i - 1 }
+}
+
 // MARK: - Debug Description
 
-extension QueryResult: CustomDebugStringConvertible {
+extension ResultSet: CustomDebugStringConvertible {
   
   public var debugDescription: String {
     let summary = "chunks: \(chunkCount); rows: \(rowCount); columns: \(columnCount); layout:"

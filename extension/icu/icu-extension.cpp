@@ -13,6 +13,7 @@
 #include "include/icu-datesub.hpp"
 #include "include/icu-datetrunc.hpp"
 #include "include/icu-makedate.hpp"
+#include "include/icu-list-range.hpp"
 #include "include/icu-table-range.hpp"
 #include "include/icu-strptime.hpp"
 #include "include/icu-timebucket.hpp"
@@ -268,6 +269,7 @@ void ICUExtension::Load(DuckDB &db) {
 	RegisterICUDateTruncFunctions(*con.context);
 	RegisterICUMakeDateFunctions(*con.context);
 	RegisterICUTableRangeFunctions(*con.context);
+	RegisterICUListRangeFunctions(*con.context);
 	RegisterICUStrptimeFunctions(*con.context);
 	RegisterICUTimeBucketFunctions(*con.context);
 	RegisterICUTimeZoneFunctions(*con.context);

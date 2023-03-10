@@ -281,12 +281,12 @@ void WriteAheadLog::WriteUpdate(DataChunk &chunk, const vector<column_t> &column
 //===--------------------------------------------------------------------===//
 // Write ALTER Statement
 //===--------------------------------------------------------------------===//
-void WriteAheadLog::WriteAlter(AlterInfo &info) {
+void WriteAheadLog::WriteAlter(data_ptr_t ptr, idx_t data_size) {
 	if (skip_writing) {
 		return;
 	}
 	writer->Write<WALType>(WALType::ALTER_INFO);
-	info.Serialize(*writer);
+	writer->WriteData(ptr, data_size);
 }
 
 //===--------------------------------------------------------------------===//

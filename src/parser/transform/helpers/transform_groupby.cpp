@@ -176,6 +176,13 @@ bool Transformer::TransformGroupBy(duckdb_libpgquery::PGList *group, SelectNode 
 			result.grouping_sets = std::move(new_sets);
 		}
 	}
+	if (result.group_expressions.size() == 1 && result.grouping_sets.size() == 1 &&
+	    ExpressionIsEmptyStar(*result.group_expressions[0])) {
+		// GROUP BY *
+		result.group_expressions.clear();
+		result.grouping_sets.clear();
+		select_node.aggregate_handling = AggregateHandling::FORCE_AGGREGATES;
+	}
 	return true;
 }
 
