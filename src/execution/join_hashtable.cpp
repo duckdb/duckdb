@@ -914,21 +914,22 @@ bool JoinHashTable::PrepareExternalFinalize() {
 	// Determine how many partitions we can do next (at least one)
 	idx_t count = 0;
 	idx_t data_size = 0;
-	for (idx_t partition_idx = partition_start; partition_idx < num_partitions; partition_idx++) {
+	idx_t partition_idx;
+	for (partition_idx = partition_start; partition_idx < num_partitions; partition_idx++) {
 		auto incl_count = count + partitions[partition_idx]->Count();
 		auto incl_data_size = data_size + partitions[partition_idx]->SizeInBytes();
 		auto incl_ht_size = incl_data_size + PointerTableCapacity(incl_count) * sizeof(data_ptr_t);
 		if (count > 0 && incl_ht_size > max_ht_size) {
-			partition_end = partition_idx;
 			break;
 		}
 		count = incl_count;
 		data_size = incl_data_size;
 	}
+	partition_end = partition_idx;
 	D_ASSERT(count != 0);
 
 	// Move the partitions to the main data collection
-	for (idx_t partition_idx = partition_start; partition_idx < partition_end; partition_idx++) {
+	for (partition_idx = partition_start; partition_idx < partition_end; partition_idx++) {
 		data_collection->Combine(*partitions[partition_idx]);
 	}
 	D_ASSERT(Count() == count);

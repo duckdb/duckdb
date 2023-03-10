@@ -59,11 +59,12 @@ void TupleDataAllocator::Build(TupleDataSegment &segment, TupleDataPinState &pin
 		auto &chunk = chunks.back();
 
 		// Build the next part
-		chunk.AddPart(BuildChunkPart(pin_state, chunk_state, append_offset + offset, append_count - offset), layout);
+		auto next = MinValue<idx_t>(append_count - offset, STANDARD_VECTOR_SIZE - chunk.count);
+		chunk.AddPart(BuildChunkPart(pin_state, chunk_state, append_offset + offset, next), layout);
 		chunk_part_indices.emplace_back(chunks.size() - 1, chunk.parts.size() - 1);
 
 		auto &chunk_part = chunk.parts.back();
-		const auto next = chunk_part.count;
+		next = chunk_part.count;
 		segment.count += next;
 
 		offset += next;
