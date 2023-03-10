@@ -433,7 +433,8 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 		LogicalType result_type;
 		auto expr = select_binder.Bind(statement.select_list[i], &result_type);
 		bool is_original_column = i < result->column_count;
-		bool can_group_by_all = statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES && is_original_column;
+		bool can_group_by_all =
+		    statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES && is_original_column;
 		if (can_group_by_all && select_binder.HasBoundColumns()) {
 			if (select_binder.BoundAggregates()) {
 				throw BinderException("Cannot mix aggregates with non-aggregated columns!");
@@ -480,13 +481,14 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 			string error;
 			error = "column \"%s\" must appear in the GROUP BY clause or must be part of an aggregate function.";
 			if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES) {
-				error += "\nGROUP BY ALL will only group entries in the SELECT list. Add it to the SELECT list or GROUP BY this entry explicitly.";
+				error += "\nGROUP BY ALL will only group entries in the SELECT list. Add it to the SELECT list or "
+				         "GROUP BY this entry explicitly.";
 			} else {
 				error += "\nEither add it to the GROUP BY list, or use \"ANY_VALUE(%s)\" if the exact value of \"%s\" "
-						 "is not important.";
+				         "is not important.";
 			}
 			throw BinderException(FormatError(bound_columns[0].query_location, error, bound_columns[0].name,
-											  bound_columns[0].name, bound_columns[0].name));
+			                                  bound_columns[0].name, bound_columns[0].name));
 		}
 	}
 
