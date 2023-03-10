@@ -18,6 +18,7 @@ DROP TABLE t0
 statement ok
 CREATE TABLE t0(c0 INT);
 
-query I
+statement error
 SELECT rowid c2 FROM t0 GROUP BY ALL ORDER BY (t0.rowid, c2);
 ----
+GROUP BY ALL will only group entries in the SELECT list
