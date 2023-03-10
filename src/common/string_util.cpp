@@ -197,7 +197,7 @@ vector<string> StringUtil::Split(const string &input, const string &split) {
 		last = next + split_len;
 	}
 	if (splits.empty()) {
-		splits.push_back(split);
+		splits.push_back(input);
 	}
 	return splits;
 }
