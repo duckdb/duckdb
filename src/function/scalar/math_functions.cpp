@@ -41,6 +41,9 @@ void BuiltinFunctions::RegisterMathFunctions() {
 	Register<SignBitFun>();
 	Register<IsInfiniteFun>();
 	Register<IsFiniteFun>();
+
+	Register<GCDFun>();
+	Register<LCMFun>();
 }
 
 } // namespace duckdb

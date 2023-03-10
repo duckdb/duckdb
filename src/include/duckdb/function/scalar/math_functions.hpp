@@ -122,4 +122,13 @@ struct IsFiniteFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct GCDFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct LCMFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+
 } // namespace duckdb
