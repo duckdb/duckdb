@@ -836,16 +836,29 @@ static bool IsCrawl(const string &glob) {
 	// glob must match exactly
 	return glob == "**";
 }
+static bool IsSymbolicLink(const string &file) {
+	struct stat buf;
+	return (lstat(file.c_str(), &buf) != -1 && S_ISLNK(buf.st_mode));
+}
 
-static void RecursiveGlobDirectories(FileSystem &fs, const string &path, vector<string> &result, bool match_directory) {
+static void RecursiveGlobDirectories(FileSystem &fs, const string &path, vector<string> &result, bool match_directory,
+                                     bool join_path) {
 
 	fs.ListFiles(path, [&](const string &fname, bool is_directory) {
-		const string concat(fs.JoinPath(path, fname));
+		string concat;
+		if (join_path) {
+			concat = fs.JoinPath(path, fname);
+		} else {
+			concat = fname;
+		}
+		if (IsSymbolicLink(concat)) {
+			return;
+		}
 		if (is_directory == match_directory) {
 			result.push_back(concat);
 		}
 		if (is_directory) {
-			RecursiveGlobDirectories(fs, concat, result, match_directory);
+			RecursiveGlobDirectories(fs, concat, result, match_directory, true);
 		}
 	});
 }
@@ -970,8 +983,12 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 				if (!is_last_chunk) {
 					result = previous_directories;
 				}
-				for (auto &prev_dir : previous_directories) {
-					RecursiveGlobDirectories(*this, prev_dir, result, !is_last_chunk);
+				if (previous_directories.empty()) {
+					RecursiveGlobDirectories(*this, ".", result, !is_last_chunk, false);
+				} else {
+					for (auto &prev_dir : previous_directories) {
+						RecursiveGlobDirectories(*this, prev_dir, result, !is_last_chunk, true);
+					}
 				}
 			} else {
 				if (previous_directories.empty()) {

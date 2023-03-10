@@ -164,9 +164,35 @@ SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/**/**/**/**/*.csv';
 ----
 6124
 
+# Test with hidden files. By default python does not return hidden files, but duckdb does.
+query II
+FROM read_csv_auto('test/sql/copy/csv/data/glob/crawl/hidden/**');
+----
+42	42
+42	42
+42	42
+
+# tests without previous directories
+query I
+select count(*) > 0 from glob('**');
+----
+true
+
+query I
+select count(*) > 0 from glob('**/**');
+----
+true
+
 require notwindows
 
 statement error
 SELECT sum(column0) FROM read_csv('test/sql/copy/csv/data/glob/crawl/d/**/', auto_detect=1);
 ----
 IO Error: Could not read from file 
+
+# symlink test: symlinks will be ignored
+query I
+FROM read_csv_auto('test/sql/copy/csv/data/glob/crawl/symbolic_link/**');
+----
+-42
+
