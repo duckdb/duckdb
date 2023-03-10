@@ -21,13 +21,13 @@ bool MACAddr::TryParse(string_t input, MACAddr &result, string *error_message) {
 	}
 
 	int c = 0;
-	for(int i=0; i < 6; i++) {
+	for (int i = 0; i < 6; i++) {
 		uint8_t number;
-		auto substr = string_t(data+(c), 2);
+		auto substr = string_t(data + (c), 2);
 		if (!TryCast::Operation<string_t, uint8_t>(substr, number)) {
 			return MacAddrError(input, error_message, "Expected a number between 0 and 255 " + substr.GetString());
 		}
-		c= c+3;
+		c = c + 3;
 		vals[i] = number;
 	}
 
@@ -37,9 +37,9 @@ bool MACAddr::TryParse(string_t input, MACAddr &result, string *error_message) {
 		}
 	}
 
-	result.a = vals[0]<<8 | vals[1];
-	result.b = vals[2]<<8 | vals[3];
-	result.c = vals[4]<<8 | vals[5];
+	result.a = vals[0] << 8 | vals[1];
+	result.b = vals[2] << 8 | vals[3];
+	result.c = vals[4] << 8 | vals[5];
 
 	return true;
 }

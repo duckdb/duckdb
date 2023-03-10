@@ -17,11 +17,12 @@ namespace duckdb {
 class MACAddr {
 public:
 	/*
-     * This is the internal storage format for MAC addresses:
+	 * This is the internal storage format for MAC addresses:
 	 */
-		unsigned short a;
-	    unsigned short b;
-	    unsigned short c;
+	unsigned short a;
+	unsigned short b;
+	unsigned short c;
+
 public:
 	MACAddr() {
 		a = b = c = 0;

@@ -4,7 +4,8 @@ project(MACAddrExtension)
 
 include_directories(include)
 
-set(MACADDR_EXTENSION_FILES macaddr-extension.cpp macaddr_functions.cpp macaddr.cpp)
+set(MACADDR_EXTENSION_FILES macaddr-extension.cpp macaddr_functions.cpp
+                            macaddr.cpp)
 
 add_library(macaddr_extension STATIC ${MACADDR_EXTENSION_FILES})
 set(PARAMETERS "-warnings")

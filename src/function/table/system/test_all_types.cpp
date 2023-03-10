@@ -59,8 +59,7 @@ vector<TestType> TestAllTypesFun::GetTestTypes() {
 	result.emplace_back(LogicalType::INTERVAL, "interval", Value::INTERVAL(min_interval),
 	                    Value::INTERVAL(max_interval));
 	// strings/blobs/bitstrings
-	result.emplace_back(LogicalType::VARCHAR, "varchar", Value("🦆🦆🦆🦆🦆🦆"),
-	                    Value(string("goo\x00se", 6)));
+	result.emplace_back(LogicalType::VARCHAR, "varchar", Value("🦆🦆🦆🦆🦆🦆"), Value(string("goo\x00se", 6)));
 	result.emplace_back(LogicalType::BLOB, "blob", Value::BLOB("thisisalongblob\\x00withnullbytes"),
 	                    Value::BLOB("\\x00\\x00\\x00a"));
 	result.emplace_back(LogicalType::BIT, "bit", Value::BIT("0010001001011100010101011010111"), Value::BIT("10101"));
@@ -124,8 +123,7 @@ vector<TestType> TestAllTypesFun::GetTestTypes() {
 
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
 	auto empty_varchar_list = Value::EMPTYLIST(LogicalType::VARCHAR);
-	auto varchar_list =
-	    Value::LIST({Value("🦆🦆🦆🦆🦆🦆"), Value("goose"), Value(LogicalType::VARCHAR), Value("")});
+	auto varchar_list = Value::LIST({Value("🦆🦆🦆🦆🦆🦆"), Value("goose"), Value(LogicalType::VARCHAR), Value("")});
 	result.emplace_back(varchar_list_type, "varchar_array", empty_varchar_list, varchar_list);
 
 	// nested arrays

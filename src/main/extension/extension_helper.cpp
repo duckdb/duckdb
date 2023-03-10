@@ -139,8 +139,8 @@ bool ExtensionHelper::AllowAutoInstall(const string &extension) {
 // Load Statically Compiled Extension
 //===--------------------------------------------------------------------===//
 void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
-	unordered_set<string> extensions {"parquet",    "icu",  "tpch",  "tpcds",    "fts",  "httpfs",
-	                                  "visualizer", "json", "excel", "sqlsmith", "inet", "jemalloc", "macaddr"};
+	unordered_set<string> extensions {"parquet", "icu",   "tpch",     "tpcds", "fts",      "httpfs", "visualizer",
+	                                  "json",    "excel", "sqlsmith", "inet",  "jemalloc", "macaddr"};
 	for (auto &ext : extensions) {
 		LoadExtensionInternal(db, ext, true);
 	}

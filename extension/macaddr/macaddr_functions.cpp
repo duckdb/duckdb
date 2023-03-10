@@ -9,7 +9,6 @@
 
 namespace duckdb {
 
-
 using MACADDR_TYPE = StructTypeTernary<uint16_t, uint16_t, uint16_t>;
 
 bool MACAddrFunctions::CastVarcharToMAC(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
@@ -49,13 +48,13 @@ bool MACAddrFunctions::CastVarcharToMAC(Vector &source, Vector &result, idx_t co
 }
 
 bool MACAddrFunctions::CastMACToVarchar(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	GenericExecutor::ExecuteUnary<MACADDR_TYPE, PrimitiveType<string_t>>(source, result, count, [&](MACADDR_TYPE input) {
-		MACAddr mac(input.a_val, input.b_val, input.c_val);
-		auto str = mac.ToString();
-		return StringVector::AddString(result, str);
-	});
+	GenericExecutor::ExecuteUnary<MACADDR_TYPE, PrimitiveType<string_t>>(
+	    source, result, count, [&](MACADDR_TYPE input) {
+		    MACAddr mac(input.a_val, input.b_val, input.c_val);
+		    auto str = mac.ToString();
+		    return StringVector::AddString(result, str);
+	    });
 	return true;
 }
-
 
 } // namespace duckdb
