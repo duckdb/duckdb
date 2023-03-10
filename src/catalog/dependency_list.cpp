@@ -11,7 +11,7 @@ void DependencyList::AddDependency(CatalogEntry *entry) {
 }
 
 void DependencyList::VerifyDependencies(Catalog *catalog, const string &name) {
-	for(auto &dep : set) {
+	for (auto &dep : set) {
 		if (dep->catalog != catalog) {
 			throw DependencyException(
 			    "Error adding dependency for object \"%s\" - dependency \"%s\" is in catalog "
@@ -20,6 +20,5 @@ void DependencyList::VerifyDependencies(Catalog *catalog, const string &name) {
 		}
 	}
 }
-
 
 } // namespace duckdb
