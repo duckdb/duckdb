@@ -9,6 +9,14 @@ namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
 
+static void ExtractFilterBindings(Expression &expr, vector<ColumnBinding> &bindings) {
+	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+		auto &colref = (BoundColumnRefExpression &)expr;
+		bindings.push_back(colref.binding);
+	}
+	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { ExtractFilterBindings(child, bindings); });
+}
+
 static unique_ptr<Expression> ReplaceGroupBindings(LogicalAggregate &proj, unique_ptr<Expression> expr) {
 	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = (BoundColumnRefExpression &)*expr;
@@ -40,17 +48,29 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<Logical
 			// filter on GROUPINGS function: cannot pushdown
 			continue;
 		}
-		// if there are any empty grouping sets, we cannot push down filters
-		bool has_empty_grouping_sets = false;
+		// no aggregate! we are filtering on a group
+		// we can only push this down if the filter is in all grouping sets
+		vector<ColumnBinding> bindings;
+		ExtractFilterBindings(*f.filter, bindings);
+
+		bool can_pushdown_filter = true;
 		if (aggr.grouping_sets.empty()) {
-			has_empty_grouping_sets = true;
+			// empty grouping set - we cannot pushdown the filter
+			can_pushdown_filter = false;
 		}
 		for (auto &grp : aggr.grouping_sets) {
-			if (grp.empty()) {
-				has_empty_grouping_sets = true;
+			// check for each of the grouping sets if they contain all groups
+			for (auto &binding : bindings) {
+				if (grp.find(binding.column_index) == grp.end()) {
+					can_pushdown_filter = false;
+					break;
+				}
+			}
+			if (!can_pushdown_filter) {
+				break;
 			}
 		}
-		if (has_empty_grouping_sets) {
+		if (!can_pushdown_filter) {
 			continue;
 		}
 		// no aggregate! we can push this down
