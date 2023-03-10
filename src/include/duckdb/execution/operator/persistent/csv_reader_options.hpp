@@ -37,9 +37,6 @@ struct BufferedCSVReaderOptions {
 	bool has_newline = false;
 	//! New Line separator
 	NewLineIdentifier new_line = NewLineIdentifier::NOT_SET;
-
-	//! Whether or not an option was provided for parallel
-	bool has_parallel = false;
 	//! Whether or not the read will use the ParallelCSVReader
 	bool use_parallel = false;
 	//! Whether or not a quote was defined by the user
@@ -134,7 +131,6 @@ struct BufferedCSVReaderOptions {
 	void SetEscape(const string &escape);
 	void SetQuote(const string &quote);
 	void SetDelimiter(const string &delimiter);
-	void SetParallel(bool use_parallel);
 
 	void SetNewline(const string &input);
 	//! Set an option that is supported by both reading and writing functions, called by

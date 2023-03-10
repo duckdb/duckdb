@@ -38,12 +38,6 @@ void ReadCSVData::InitializeFiles(ClientContext &context, const vector<string> &
 
 void ReadCSVData::FinalizeRead(ClientContext &context) {
 	BaseCSVData::Finalize();
-	auto &config = DBConfig::GetConfig(context);
-	bool single_threaded = false;
-	if (options.has_parallel) {
-		// Override the option set in the config
-		single_threaded = !options.use_parallel;
-	}
 	bool null_or_empty = options.delimiter.empty() || options.escape.empty() || options.quote.empty() ||
 	                     options.delimiter[0] == '\0' || options.escape[0] == '\0' || options.quote[0] == '\0';
 	bool complex_options = options.delimiter.size() > 1 || options.escape.size() > 1 || options.quote.size() > 1;
