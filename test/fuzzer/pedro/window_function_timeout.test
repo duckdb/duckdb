@@ -3,7 +3,7 @@
 # group: [pedro]
 
 statement ok
-PRAGMA disable_optimizer
+PRAGMA enable_verification
 
 statement ok
 CREATE TABLE t0 (c0 TIME);

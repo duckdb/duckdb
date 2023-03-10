@@ -105,6 +105,16 @@ bool Transformer::ExpressionIsEmptyStar(ParsedExpression &expr) {
 	return false;
 }
 
+bool Transformer::InWindowDefinition() {
+	if (in_window_definition) {
+		return true;
+	}
+	if (parent) {
+		return parent->InWindowDefinition();
+	}
+	return false;
+}
+
 unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::PGFuncCall *root) {
 	auto name = root->funcname;
 	string catalog, schema, function_name;
@@ -139,6 +149,10 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 
 	auto lowercase_name = StringUtil::Lower(function_name);
 	if (root->over) {
+		if (InWindowDefinition()) {
+			throw ParserException("window functions are not allowed in window definitions");
+		}
+
 		const auto win_fun_type = WindowToExpressionType(lowercase_name);
 		if (win_fun_type == ExpressionType::INVALID) {
 			throw InternalException("Unknown/unsupported window function");
@@ -218,8 +232,10 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			window_ref = it->second;
 			D_ASSERT(window_ref);
 		}
+		in_window_definition = true;
 		TransformWindowDef(window_ref, expr.get());
 		TransformWindowFrame(window_spec, expr.get());
+		in_window_definition = false;
 		expr->query_location = root->location;
 		return std::move(expr);
 	}
