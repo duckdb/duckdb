@@ -1,5 +1,5 @@
 # name: test/fuzzer/pedro/update_join_bind_error.test
-# description: Natural join index out of range
+# description: Lateral join in update clause
 # group: [pedro]
 
 statement ok
