@@ -458,8 +458,8 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 		}
 	}
 	// push the GROUP BY ALL expressions into the group set
-	for (idx_t i = 0; i < group_by_all_indexes.size(); i++) {
-		auto &expr = result->select_list[i];
+	for (auto &group_by_all_index : group_by_all_indexes) {
+		auto &expr = result->select_list[group_by_all_index];
 		auto group_ref = make_unique<BoundColumnRefExpression>(
 		    expr->return_type, ColumnBinding(result->group_index, result->groups.group_expressions.size()));
 		result->groups.group_expressions.push_back(std::move(expr));
