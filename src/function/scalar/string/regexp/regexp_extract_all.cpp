@@ -125,8 +125,7 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 
 		auto group_count = lstate.constant_pattern.NumberOfCapturingGroups();
 		if (group_count == -1) {
-			// FIXME: probably just make the list entry NULL?
-			throw InvalidInputException("Input is likely malformed, no groups were found");
+			throw InvalidInputException("Pattern failed to parse, error: '%s'", lstate.constant_pattern.error());
 		}
 
 		for (idx_t row = 0; row < tuple_count; row++) {
@@ -142,14 +141,6 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 				result_data[row].offset = ListVector::GetListSize(result);
 				result_validity.SetInvalid(row);
 				continue;
-			}
-			if (string.GetSize() == 0) {
-				// FIXME: If the match is optional, it can still have a match, even in any empty string
-				//// String is empty, can't be a match
-				// auto result_data = FlatVector::GetData<list_entry_t>(result);
-				// result_data[row].length = 0;
-				// result_data[row].offset = ListVector::GetListSize(result);
-				// continue;
 			}
 			int32_t group_index = GetGroupIndex(args, row);
 			// Get the groups
@@ -172,13 +163,6 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 
 			auto string_idx = strings_data.sel->get_index(row);
 			auto &string = ((string_t *)strings_data.data)[string_idx];
-			if (string.GetSize() == 0) {
-				// String is empty, can't be a match
-				auto result_data = FlatVector::GetData<list_entry_t>(result);
-				result_data[row].length = 0;
-				result_data[row].offset = ListVector::GetListSize(result);
-				continue;
-			}
 
 			auto &pattern_p = ((string_t *)pattern_data.data)[pattern_idx];
 			auto pattern = StringUtil::Format("(%s)", pattern_p.GetString());
@@ -187,8 +171,7 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 
 			auto group_count_p = re.NumberOfCapturingGroups();
 			if (group_count_p == -1) {
-				// FIXME: null the list instead
-				throw InvalidInputException("Pattern is malformed, no groups could be found");
+				throw InvalidInputException("Pattern failed to parse, error: '%s'", re.error());
 			}
 			string_pieces.SetSize(group_count_p);
 

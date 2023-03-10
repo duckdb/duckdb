@@ -203,7 +203,9 @@ select regexp_extract_all('щцф', '.{6}')
 ----
 []
 
-# our result: [, , цц, , ]
+# our result: [, , цц, , , ]
+# unicode characters are not 'skipped' correctly
+# we forward by 1 byte, instead of an entire character
 #query I
 #select regexp_extract_all('щццф', 'ц*')
 #----
@@ -250,17 +252,15 @@ select regexp_extract_all('abcdef', '(bcde)')
 ----
 [bcde]
 
-# our result: [this_, is_, _, a_, _, _, Test]
-#query I
-#select regexp_extract_all('this_is__a___Test', '(.*?)(?:_|$)')
-#----
-#[this_, is_, _, a_, _, _, Test, ]
+query I
+select regexp_extract_all('this_is__a___Test', '(.*?)(?:_|$)')
+----
+[this_, is_, _, a_, _, _, Test, ]
 
-# our result: [щцф]
-#query I
-#select regexp_extract_all('щцф', 'щ(.).')
-#----
-#[ц]
+query I
+select regexp_extract_all('щцф', 'щ(.).', 1)
+----
+[ц]
 
 query I
 select regexp_extract_all('щцф', '(.{6})')
@@ -277,11 +277,10 @@ select regexp_extract_all('abc', '(a)(b)')
 ----
 [ab]
 
-# we error: Invalid Input Error: Input is likely malformed, no groups were found
-#query I
-#select regexp_extract_all('', '(')
-#----
-#NULL
+statement error
+select regexp_extract_all('', '(')
+----
+Invalid Input Error: Pattern failed to parse, error: 'missing ): (()'
 
 query I
 select regexp_extract_all('abcdef', 'ac.*e.')
@@ -294,11 +293,10 @@ select regexp_extract_all('abcdef', 'ac.*e.')
 #----
 #[щ, ц, ф]
 
-#our result: [, , , , , , , , , , ,]
-#query I
-#select regexp_extract_all('\001\002\003', '\002?')
-#----
-#[, , , , , , , , , , , , ]
+query I
+select regexp_extract_all('\001\002\003', '\002?')
+----
+[, , , , , , , , , , , , ]
 
 query I
 select regexp_extract_all('', '()')
@@ -315,11 +313,10 @@ select regexp_extract_all('', '(abc)?')
 ----
 []
 
-# our result: [this_, _, test, case]
-#query I
-#select regexp_extract_all('this__test_case', '(.*?)(?:_|$)')
-#----
-#[this_, _, test, case, ]
+query I
+select regexp_extract_all('this__test_case', '(.*?)(?:_|$)')
+----
+[this_, _, test_, case, ]
 
 # our result: []
 #query I
