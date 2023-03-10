@@ -8,6 +8,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundCTERef &ref) {
 	auto index = ref.bind_index;
 
 	vector<LogicalType> types;
+	types.reserve(ref.types.size());
 	for (auto &type : ref.types) {
 		types.push_back(type);
 	}

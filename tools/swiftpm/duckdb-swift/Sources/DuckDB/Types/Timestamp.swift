@@ -29,7 +29,7 @@
 /// Timestamps represent points in absolute time, usually called instants.
 /// DuckDB represents instants as the number of microseconds (µs) since
 /// `1970-01-01 00:00:00+00`.
-public struct Timestamp: Hashable, Equatable, Codable {
+public struct Timestamp: Hashable, Equatable, Codable, Sendable {
   /// microseconds (µs) since `1970-01-01 00:00:00+00`.
   public var microseconds: Int64
 }
