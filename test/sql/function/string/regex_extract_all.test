@@ -20,86 +20,85 @@ SELECT REGEXP_EXTRACT_ALL('test', '.')
 ----
 [t, e, s, t]
 
-#FIXME: this doesn't work yet
-#query I
-#SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)', -1);
-#----
-#[]
+query I
+SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)', -1);
+----
+[]
 
-#query I
-#SELECT regexp_extract_all('1a 2b 14m', '\\d+');
-#----
-#[]
+query I
+SELECT regexp_extract_all('1a 2b 14m', '\\d+');
+----
+[]
 
-#query I
-#SELECT regexp_extract_all('1a 2b 14m', '\\d+', 0);
-#----
-#[]
+query I
+SELECT regexp_extract_all('1a 2b 14m', '\\d+', 0);
+----
+[]
 
-#query I
-#SELECT regexp_extract_all('1a 2b 14m', '\\d+', 1);
-#----
-#[]
+query I
+SELECT regexp_extract_all('1a 2b 14m', '\\d+', 1);
+----
+[]
 
-#query I
-#SELECT regexp_extract_all('1a 2b 14m', '\\d+', 2);
-#----
-#[]
+query I
+SELECT regexp_extract_all('1a 2b 14m', '\\d+', 2);
+----
+[]
 
-#query I
-#SELECT regexp_extract_all('1a 2b 14m', '\\d+', -1);
-#----
-#[]
+query I
+SELECT regexp_extract_all('1a 2b 14m', '\\d+', -1);
+----
+[]
 
-#query I
-#SELECT regexp_extract_all('1a 2b 14m', '(\\d+)?', 1);
-#----
-#[]
+query I
+SELECT regexp_extract_all('1a 2b 14m', '(\\d+)?', 1);
+----
+[NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL]
 
-#query I
-#SELECT regexp_extract_all('a 2b 14m', '(\\d+)?', 1);
-#----
-#[]
+query I
+SELECT regexp_extract_all('a 2b 14m', '(\\d+)?', 1);
+----
+[NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL]
 
-#query I
-#SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)');
-#----
-#[]
+query I
+SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)');
+----
+[]
 
-#query I
-#SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)', 0);
-#----
-#[]
+query I
+SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)', 0);
+----
+[]
 
-#query I
-#SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)', 1);
-#----
-#[]
+query I
+SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)', 1);
+----
+[]
 
-#query I
-#SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)', 2);
-#----
-#[]
+query I
+SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)', 2);
+----
+[]
 
-#query I
-#SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)', 3);
-#----
-#[]
+query I
+SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)', 3);
+----
+[]
 
-#query I
-#SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)', -1);
-#----
-#[]
+query I
+SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)', -1);
+----
+[]
 
-#query I
-#SELECT regexp_extract_all('1a 2b 14m', '(\\d+)?([a-z]+)', 1);
-#----
-#[]
+query I
+SELECT regexp_extract_all('1a 2b 14m', '(\\d+)?([a-z]+)', 1);
+----
+[NULL, NULL, NULL]
 
-#query I
-#SELECT regexp_extract_all('a 2b 14m', '(\\d+)?([a-z]+)', 1);
-#----
-#[]
+query I
+SELECT regexp_extract_all('a 2b 14m', '(\\d+)?([a-z]+)', 1);
+----
+[NULL, NULL, NULL]
 
 # source:
 # https://github.com/ep-infosec/33_apache_doris/blob/9edb4e8735fd0c56ee63a3d1d2560af867d80440/docs/zh-CN/docs/sql-manual/sql-functions/string-functions/regexp/regexp_extract_all.md
@@ -169,24 +168,21 @@ select regexp_extract_all('abcdef', 'bcde')
 ----
 [bcde]
 
-# infinite loop?
 query I
 select regexp_extract_all('aabca', 'a*')
 ----
-[aa, , , a]
+[aa, , , a, ]
 
 query I
 select regexp_extract_all('aaba', 'a?')
 ----
-[a, a, , a]
+[a, a, , a, ]
 
 query I
 select regexp_extract_all('baac', 'a*')
 ----
-[, aa, ]
+[, aa, , ]
 
-# original test said the result should be '[bc]'
-# but presto agrees on this result
 query I
 select regexp_extract_all('abcd', 'a(bc)*')
 ----
@@ -541,7 +537,7 @@ FROM (
   VALUES ('03-123-4567')
 ) AS t(str)
 ----
-03-123-4567	[123, 456]	[]	[03, 123, 4567]	[03, 12, 3, 45, 67]	[03, , 12, 3, , 45, 67]
+03-123-4567	[123, 456]	[]	[03, 123, 4567]	[03, 12, 3, 45, 67]	[03, , 12, 3, , 45, 67, ]
 
 #error: ab++ is not valid regex
 #query IIIIII
@@ -604,7 +600,7 @@ SELECT
  REGEXP_EXTRACT_ALL('123-1234', '^[0-9]{3}-[0-9]{4}$') AS m6,
  REGEXP_EXTRACT_ALL('2009/7/29', '^[0-9]{4}/[01]?[0-9]/[0123]?[0-9]$') AS m7
 ----
-[123456789]	[abcdefg]	[ABCDEFG]	[ABCdefg]	[12aaAA]	[123-1234]	[2009/7/29]
+[123456789, ]	[abcdefg, ]	[ABCDEFG, ]	[ABCdefg, ]	[12aaAA, ]	[123-1234]	[2009/7/29]
 
 query III
 WITH sample AS

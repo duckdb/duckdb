@@ -16,7 +16,7 @@ RegexpExtractAll::InitLocalState(ExpressionState &state, const BoundFunctionExpr
 	return nullptr;
 }
 
-void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, idx_t group, RegexStringPieceArgs &args,
+void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, int32_t group, RegexStringPieceArgs &args,
                         Vector &result, idx_t row) {
 	auto input = CreateStringPiece(string);
 
@@ -32,19 +32,25 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, idx_t 
 	auto &list_entry = result_data[row];
 	list_entry.offset = current_list_size;
 
-	if (group >= args.size) {
-		throw InvalidInputException("Group by that number doesn't exist");
+	if (group < 0) {
+		list_entry.length = 0;
+		return;
 	}
-
-	auto input_data = input.data();
-	auto input_length = input.size();
-	while (input.size() && RE2::FindAndConsumeN(&input, pattern, group_args, args.size)) {
-		if (input_data == input.data() && input_length == input.size()) {
+	// If the requested group index is out of bounds
+	// we want to throw only if there is a match
+	bool throw_on_group_found = (idx_t)group >= args.size;
+	while (RE2::FindAndConsumeN(&input, pattern, group_args, args.size)) {
+		idx_t consumed = args.group_buffer[0].size();
+		if (!consumed && input.size() != 0) {
+			// Empty match found, have to manually forward the input
+			// to avoid an infinite loop
 			input.remove_prefix(1);
+			consumed = 1;
 		}
-		input_data = input.data();
-		input_length = input.size();
 
+		if (throw_on_group_found) {
+			throw InvalidInputException("Pattern has %d groups. Cannot access group %d", args.size - 1, group);
+		}
 		// Make sure we have enough room for the new entries
 		if (current_list_size + 1 >= current_list_capacity) {
 			ListVector::Reserve(result, current_list_capacity * 2);
@@ -56,9 +62,13 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, idx_t 
 		auto &match_group = args.group_buffer[group];
 
 		idx_t child_idx = current_list_size;
-		if (match_group.begin() == nullptr || match_group.size() == 0) {
+		if (match_group.size() == 0) {
 			// This group was not matched
 			list_content[child_idx] = string_t(string.GetDataUnsafe(), 0);
+			if (match_group.begin() == nullptr) {
+				// This group is optional
+				child_validity.SetInvalid(child_idx);
+			}
 		} else {
 			// Every group is a substring of the original, we can find out the offset using the pointer
 			// the 'match_group' address is guaranteed to be bigger than that of the source
@@ -67,12 +77,19 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, idx_t 
 			list_content[child_idx] = string_t(string.GetDataUnsafe() + offset, match_group.size());
 		}
 		current_list_size++;
+		if (!consumed && input.size() == 0) {
+			// Empty match found at the end of the string
+			break;
+		}
 	}
+	// if (RE2::Match("", )) {
+	//	// add empty string
+	// }
 	list_entry.length = current_list_size - list_entry.offset;
 	ListVector::SetListSize(result, current_list_size);
 }
 
-idx_t GetGroupIndex(DataChunk &args, idx_t row) {
+int32_t GetGroupIndex(DataChunk &args, idx_t row) {
 	if (args.ColumnCount() < 3) {
 		return 0;
 	}
@@ -127,13 +144,14 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 				continue;
 			}
 			if (string.GetSize() == 0) {
-				// String is empty, can't be a match
-				auto result_data = FlatVector::GetData<list_entry_t>(result);
-				result_data[row].length = 0;
-				result_data[row].offset = ListVector::GetListSize(result);
-				continue;
+				// FIXME: If the match is optional, it can still have a match, even in any empty string
+				//// String is empty, can't be a match
+				// auto result_data = FlatVector::GetData<list_entry_t>(result);
+				// result_data[row].length = 0;
+				// result_data[row].offset = ListVector::GetListSize(result);
+				// continue;
 			}
-			idx_t group_index = GetGroupIndex(args, row);
+			int32_t group_index = GetGroupIndex(args, row);
 			// Get the groups
 			ExtractSingleTuple(string, lstate.constant_pattern, group_index, lstate.group_buffer, result, row);
 		}
