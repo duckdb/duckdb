@@ -52,7 +52,8 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 			children.push_back(make_pair(entry_name, entry_type));
 		}
 		D_ASSERT(!children.empty());
-		result_type = LogicalType::STRUCT(std::move(children));
+		result_type = LogicalType::STRUCT(children);
+
 	} else if (base_type == LogicalTypeId::MAP) {
 
 		if (!type_name->typmods || type_name->typmods->length != 2) {
@@ -207,7 +208,7 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 		// array bounds: turn the type into a list
 		idx_t extra_stack = 0;
 		for (auto cell = type_name->arrayBounds->head; cell != nullptr; cell = cell->next) {
-			result_type = LogicalType::LIST(std::move(result_type));
+			result_type = LogicalType::LIST(result_type);
 			StackCheck(extra_stack++);
 		}
 	}

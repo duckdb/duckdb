@@ -24,7 +24,7 @@ static ExpressionType WindowToExpressionType(string &fun_name) {
 		return ExpressionType::WINDOW_FIRST_VALUE;
 	} else if (fun_name == "last_value" || fun_name == "last") {
 		return ExpressionType::WINDOW_LAST_VALUE;
-	} else if (fun_name == "nth_value" || fun_name == "last") {
+	} else if (fun_name == "nth_value") {
 		return ExpressionType::WINDOW_NTH_VALUE;
 	} else if (fun_name == "cume_dist") {
 		return ExpressionType::WINDOW_CUME_DIST;

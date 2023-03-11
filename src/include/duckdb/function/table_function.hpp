@@ -11,6 +11,8 @@
 #include "duckdb/common/enums/operator_result_type.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/function/function.hpp"
+#include "duckdb/planner/bind_context.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
 
 #include <functional>
@@ -136,6 +138,7 @@ public:
 
 typedef unique_ptr<FunctionData> (*table_function_bind_t)(ClientContext &context, TableFunctionBindInput &input,
                                                           vector<LogicalType> &return_types, vector<string> &names);
+typedef unique_ptr<TableRef> (*table_function_bind_replace_t)(ClientContext &context, TableFunctionBindInput &input);
 typedef unique_ptr<GlobalTableFunctionState> (*table_function_init_global_t)(ClientContext &context,
                                                                              TableFunctionInitInput &input);
 typedef unique_ptr<LocalTableFunctionState> (*table_function_init_local_t)(ExecutionContext &context,
@@ -185,6 +188,11 @@ public:
 	//! This function is used for determining the return type of a table producing function and returning bind data
 	//! The returned FunctionData object should be constant and should not be changed during execution.
 	table_function_bind_t bind;
+	//! (Optional) Bind replace function
+	//! This function is called before the regular bind function. It allows returning a TableRef will be used to
+	//! to generate a logical plan that replaces the LogicalGet of a regularly bound TableFunction. The BindReplace can
+	//! also return a nullptr to indicate a regular bind needs to be performed instead.
+	table_function_bind_replace_t bind_replace;
 	//! (Optional) global init function
 	//! Initialize the global operator state of the function.
 	//! The global operator state is used to keep track of the progress in the table function and is shared between

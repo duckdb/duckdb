@@ -52,6 +52,8 @@ public:
 
 	void Close();
 
+	unique_ptr<DuckDBPyRelation> GetAttribute(const string &name);
+
 	static unique_ptr<DuckDBPyRelation> FromDf(const DataFrame &df, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static unique_ptr<DuckDBPyRelation> Values(py::object values = py::list(),
@@ -262,6 +264,7 @@ private:
 	void AssertResult() const;
 	void AssertResultOpen() const;
 	void AssertRelation() const;
+	bool ContainsColumnByName(const string &name) const;
 	void ExecuteOrThrow(bool stream_result = false);
 	unique_ptr<QueryResult> ExecuteInternal(bool stream_result = false);
 

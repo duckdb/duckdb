@@ -1289,15 +1289,24 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 			break;
 		}
 		case ExpressionType::WINDOW_FIRST_VALUE: {
+			//	Same as NTH_VALUE(..., 1)
 			idx_t n = 1;
 			const auto first_idx = FindNextStart(ignore_nulls, bounds.window_start, bounds.window_end, n);
-			CopyCell(payload_collection, 0, first_idx, result, output_offset);
+			if (!n) {
+				CopyCell(payload_collection, 0, first_idx, result, output_offset);
+			} else {
+				FlatVector::SetNull(result, output_offset, true);
+			}
 			break;
 		}
 		case ExpressionType::WINDOW_LAST_VALUE: {
 			idx_t n = 1;
-			CopyCell(payload_collection, 0, FindPrevStart(ignore_nulls, bounds.window_start, bounds.window_end, n),
-			         result, output_offset);
+			const auto last_idx = FindPrevStart(ignore_nulls, bounds.window_start, bounds.window_end, n);
+			if (!n) {
+				CopyCell(payload_collection, 0, last_idx, result, output_offset);
+			} else {
+				FlatVector::SetNull(result, output_offset, true);
+			}
 			break;
 		}
 		case ExpressionType::WINDOW_NTH_VALUE: {

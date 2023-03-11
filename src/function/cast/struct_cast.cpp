@@ -129,7 +129,7 @@ BoundCastInfo DefaultCasts::StructCastSwitch(BindCastInput &input, const Logical
 		for (auto &child_entry : struct_children) {
 			varchar_children.push_back(make_pair(child_entry.first, LogicalType::VARCHAR));
 		}
-		auto varchar_type = LogicalType::STRUCT(std::move(varchar_children));
+		auto varchar_type = LogicalType::STRUCT(varchar_children);
 		return BoundCastInfo(StructToVarcharCast,
 		                     StructBoundCastData::BindStructToStructCast(input, source, varchar_type));
 	}
