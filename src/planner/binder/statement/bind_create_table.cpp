@@ -125,7 +125,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 				pk_key_set.insert(fk.info.pk_keys[i]);
 			}
 			for (idx_t i = 0; i < fk.info.fk_keys.size(); i++) {
-				if (fk_key_set.find(fk.info.fk_keys[i]) != pk_key_set.end()) {
+				if (fk_key_set.find(fk.info.fk_keys[i]) != fk_key_set.end()) {
 					throw BinderException("Duplicate key specified in FOREIGN KEY constraint");
 				}
 				fk_key_set.insert(fk.info.fk_keys[i]);

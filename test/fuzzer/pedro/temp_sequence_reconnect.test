@@ -2,6 +2,8 @@
 # description: Reconnect after creating a temp sequence
 # group: [pedro]
 
+require skip_reload
+
 statement ok
 PRAGMA enable_verification
 
