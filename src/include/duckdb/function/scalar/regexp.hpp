@@ -89,23 +89,17 @@ struct RegexpExtractBindData : public RegexpBaseBindData {
 };
 
 struct RegexStringPieceArgs {
-	RegexStringPieceArgs()
-	    : size(0), capacity(0), group_buffer(nullptr), group_args(nullptr), group_inner_args(nullptr) {
+	RegexStringPieceArgs() : size(0), capacity(0), group_buffer(nullptr) {
 	}
 	void Init(idx_t size) {
 		this->size = size;
-		this->capacity = size;
-		group_buffer = AllocateArray<duckdb_re2::StringPiece>(size);
-		group_inner_args = AllocateArray<duckdb_re2::RE2::Arg>(size);
-		group_args = AllocateArray<duckdb_re2::RE2::Arg *>(size);
-		for (idx_t i = 0; i < size; i++) {
-			group_args[i] = &group_inner_args[i];
-			group_inner_args[i] = &group_buffer[i];
-		}
+		// Allocate for one extra, for the all-encompassing match group
+		this->capacity = size + 1;
+		group_buffer = AllocateArray<duckdb_re2::StringPiece>(capacity);
 	}
 	void SetSize(idx_t size) {
 		this->size = size;
-		if (size > capacity) {
+		if (size + 1 > capacity) {
 			Clear();
 			Init(size);
 		}
@@ -114,7 +108,6 @@ struct RegexStringPieceArgs {
 	RegexStringPieceArgs &operator=(RegexStringPieceArgs &&other) {
 		std::swap(this->size, other.size);
 		std::swap(this->capacity, other.capacity);
-		std::swap(this->group_args, other.group_args);
 		std::swap(this->group_buffer, other.group_buffer);
 		return *this;
 	}
@@ -125,12 +118,8 @@ struct RegexStringPieceArgs {
 
 private:
 	void Clear() {
-		DeleteArray<duckdb_re2::StringPiece>(group_buffer, size);
+		DeleteArray<duckdb_re2::StringPiece>(group_buffer, capacity);
 		group_buffer = nullptr;
-		DeleteArray<duckdb_re2::RE2::Arg>(group_inner_args, size);
-		group_inner_args = nullptr;
-		DeleteArray<duckdb_re2::RE2::Arg *>(group_args, size);
-		group_args = nullptr;
 
 		size = 0;
 		capacity = 0;
@@ -142,9 +131,6 @@ public:
 	idx_t capacity;
 	//! Used by ExtractAll to pre-allocate the storage for the groups
 	duckdb_re2::StringPiece *group_buffer;
-	//! We have to wrap the stringpieces in Args to use RE2::FindAndConsume
-	duckdb_re2::RE2::Arg **group_args;
-	duckdb_re2::RE2::Arg *group_inner_args;
 };
 
 struct RegexLocalState : public FunctionLocalState {

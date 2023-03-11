@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 query I
-SELECT regexp_extract_all('1a 2b 14m', '(\d+)');
+SELECT regexp_extract_all('1a 2b 14m', '(\d+)', 1);
 ----
 [1, 2, 14]
 
@@ -142,11 +142,10 @@ select regexp_extract_all('abc', '.')
 ----
 [a, b, c]
 
-# currently broken: produces [a, a, a]
-#query I
-#select regexp_extract_all('aaa', '^a')
-#----
-#[a]
+query I
+select regexp_extract_all('aaa', '^a')
+----
+[a]
 
 query I
 select regexp_extract_all('abc', 'abc')
@@ -231,11 +230,10 @@ select regexp_extract_all('abc', 'a(b)c')
 ----
 [abc]
 
-# our result: [ab, b, b]
-#query I
-#select regexp_extract_all('abbb', '^a*(b)')
-#----
-#[ab]
+query I
+select regexp_extract_all('abbb', '^a*(b)')
+----
+[ab]
 
 query I
 select regexp_extract_all('XbASDZb', '(.)b')
@@ -280,7 +278,7 @@ select regexp_extract_all('abc', '(a)(b)')
 statement error
 select regexp_extract_all('', '(')
 ----
-Invalid Input Error: Pattern failed to parse, error: 'missing ): (()'
+Invalid Input Error: Pattern failed to parse, error: 'missing ): ('
 
 query I
 select regexp_extract_all('abcdef', 'ac.*e.')
@@ -597,7 +595,7 @@ SELECT
  REGEXP_EXTRACT_ALL('123-1234', '^[0-9]{3}-[0-9]{4}$') AS m6,
  REGEXP_EXTRACT_ALL('2009/7/29', '^[0-9]{4}/[01]?[0-9]/[0123]?[0-9]$') AS m7
 ----
-[123456789, ]	[abcdefg, ]	[ABCDEFG, ]	[ABCdefg, ]	[12aaAA, ]	[123-1234]	[2009/7/29]
+[123456789]	[abcdefg]	[ABCDEFG]	[ABCdefg]	[12aaAA]	[123-1234]	[2009/7/29]
 
 query III
 WITH sample AS
@@ -622,9 +620,9 @@ https://www.fluentd.org/v0.12/articles/out_file	[]	[out_file]
 out_file/article/docs.fluentd.org/	[]	[out_file, docs.fluentd.org]
 
 statement error
-select REGEXP_EXTRACT_ALL('hello', '(.)', 2);
+select REGEXP_EXTRACT_ALL('hello', '.', 2);
 ----
-Pattern has 1 groups. Cannot access group 2
+Pattern has 0 groups. Cannot access group 2
 
 query II
 SELECT
@@ -632,3 +630,19 @@ SELECT
   REGEXP_EXTRACT_ALL('https://www.emakina.nl/?utm_source=sf_mail&user_id=7h87hte51kj_9866c', '=([^&]+)') AS parameter_value 
 ----
 [utm_source=, user_id=]	[=sf_mail, =7h87hte51kj_9866c]
+
+# Double anchor:
+query I
+select regexp_extract_all('si1si2', 'si\d$');
+----
+[si2]
+
+query I
+select regexp_extract_all('si1si2', '^(si\d)(?:.*)$', 1);
+----
+[si1]
+
+query I
+select regexp_extract_all('aabb', '^((aa)(bb))$', 3);
+----
+[bb]

@@ -19,6 +19,27 @@ RegexpExtractAll::InitLocalState(ExpressionState &state, const BoundFunctionExpr
 	return nullptr;
 }
 
+// Forwards startpos automatically
+bool ExtractAll(duckdb_re2::StringPiece &input, duckdb_re2::RE2 &pattern, idx_t *startpos,
+                duckdb_re2::StringPiece *groups, int ngroups) {
+
+	D_ASSERT(pattern.ok());
+	D_ASSERT(pattern.NumberOfCapturingGroups() == ngroups);
+
+	if (!pattern.Match(input, *startpos, input.size(), pattern.Anchored(), groups, ngroups + 1)) {
+		return false;
+	}
+	idx_t consumed = static_cast<size_t>(groups[0].end() - (input.begin() + *startpos));
+	if (!consumed) {
+		// Empty match found, have to manually forward the input
+		// to avoid an infinite loop
+		// FIXME: support unicode characters
+		consumed++;
+	}
+	*startpos += consumed;
+	return true;
+}
+
 void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, int32_t group, RegexStringPieceArgs &args,
                         Vector &result, idx_t row) {
 	auto input = CreateStringPiece(string);
@@ -26,7 +47,6 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, int32_
 	auto &child_vector = ListVector::GetEntry(result);
 	auto list_content = FlatVector::GetData<string_t>(child_vector);
 	auto &child_validity = FlatVector::Validity(child_vector);
-	auto group_args = (const duckdb_re2::RE2::Arg *const *)args.group_args;
 
 	auto current_list_size = ListVector::GetListSize(result);
 	auto current_list_capacity = ListVector::GetListCapacity(result);
@@ -41,19 +61,14 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, int32_
 	}
 	// If the requested group index is out of bounds
 	// we want to throw only if there is a match
-	bool throw_on_group_found = (idx_t)group >= args.size;
-	while (RE2::FindAndConsumeN(&input, pattern, group_args, args.size)) {
-		idx_t consumed = args.group_buffer[0].size();
-		if (!consumed && !input.empty()) {
-			// Empty match found, have to manually forward the input
-			// to avoid an infinite loop
-			input.remove_prefix(1);
-			consumed = 1;
+	bool throw_on_group_found = (idx_t)group > args.size;
+
+	idx_t startpos = 0;
+	for (idx_t iteration = 0; ExtractAll(input, pattern, &startpos, args.group_buffer, args.size); iteration++) {
+		if (!iteration && throw_on_group_found) {
+			throw InvalidInputException("Pattern has %d groups. Cannot access group %d", args.size, group);
 		}
 
-		if (throw_on_group_found) {
-			throw InvalidInputException("Pattern has %d groups. Cannot access group %d", args.size - 1, group);
-		}
 		// Make sure we have enough room for the new entries
 		if (current_list_size + 1 >= current_list_capacity) {
 			ListVector::Reserve(result, current_list_capacity * 2);
@@ -80,14 +95,11 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, int32_
 			list_content[child_idx] = string_t(string.GetDataUnsafe() + offset, match_group.size());
 		}
 		current_list_size++;
-		if (!consumed && input.empty()) {
+		if (startpos > input.size()) {
 			// Empty match found at the end of the string
 			break;
 		}
 	}
-	// if (RE2::Match("", )) {
-	//	// add empty string
-	// }
 	list_entry.length = current_list_size - list_entry.offset;
 	ListVector::SetListSize(result, current_list_size);
 }
@@ -168,8 +180,7 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 			auto &string = ((string_t *)strings_data.data)[string_idx];
 
 			auto &pattern_p = ((string_t *)pattern_data.data)[pattern_idx];
-			auto pattern = StringUtil::Format("(%s)", pattern_p.GetString());
-			auto pattern_strpiece = duckdb_re2::StringPiece(pattern.data(), pattern.size());
+			auto pattern_strpiece = CreateStringPiece(pattern_p);
 			duckdb_re2::RE2 re(pattern_strpiece, info.options);
 
 			auto group_count_p = re.NumberOfCapturingGroups();
@@ -196,10 +207,6 @@ unique_ptr<FunctionData> RegexpExtractAll::Bind(ClientContext &context, ScalarFu
 
 	string constant_string;
 	bool constant_pattern = TryParseConstantPattern(context, *arguments[1], constant_string);
-	if (constant_pattern) {
-		// We have to add an all-encompassing capture group, because DoMatch discards it, for some reason..
-		constant_string = StringUtil::Format("(%s)", constant_string);
-	}
 
 	if (arguments.size() >= 4) {
 		ParseRegexOptions(context, *arguments[3], options);
