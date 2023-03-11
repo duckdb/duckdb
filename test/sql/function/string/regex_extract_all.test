@@ -646,3 +646,25 @@ query I
 select regexp_extract_all('aabb', '^((aa)(bb))$', 3);
 ----
 [bb]
+
+# Different size patterns
+query I
+WITH t(pattern) AS (
+    VALUES
+		('(a)'),
+		('(a)(a)(a)'),
+		('()'),
+		('(a)(a)'),
+		('(a)'),
+		('(a)(b)?(a)'),
+		('(a)(a)(a)(a)(a)(a)(a)')
+)
+select regexp_extract_all('aaaaaaaa', pattern) from t;
+----
+[a, a, a, a, a, a, a, a]
+[aaa, aaa]
+[, , , , , , , , ]
+[aa, aa, aa, aa]
+[a, a, a, a, a, a, a, a]
+[aa, aa, aa, aa]
+[aaaaaaa]
