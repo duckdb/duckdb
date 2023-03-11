@@ -10,6 +10,7 @@
 
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
 
@@ -39,13 +40,13 @@ struct CastParameters {
 	}
 
 	//! The bound cast data (if any)
-	BoundCastData *cast_data = nullptr;
+	optional_ptr<BoundCastData> cast_data;
 	//! whether or not to enable strict casting
 	bool strict = false;
 	// out: error message in case cast has failed
 	string *error_message = nullptr;
 	//! Local state
-	FunctionLocalState *local_state = nullptr;
+	optional_ptr<FunctionLocalState> local_state;
 };
 
 typedef bool (*cast_function_t)(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
