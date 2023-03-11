@@ -156,7 +156,11 @@ unique_ptr<RowGroup> RowGroup::AlterType(const LogicalType &target_type, idx_t c
 	// scan the original table, and fill the new column with the transformed value
 	InitializeScan(scan_state);
 
-	Vector append_vector(target_type);
+	DataChunk append_chunk;
+	vector<LogicalType> append_types;
+	append_types.push_back(target_type);
+	append_chunk.Initialize(Allocator::DefaultAllocator(), append_types);
+	auto &append_vector = append_chunk.data[0];
 	SegmentStatistics altered_col_stats(target_type);
 	while (true) {
 		// scan the table
@@ -166,6 +170,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(const LogicalType &target_type, idx_t c
 			break;
 		}
 		// execute the expression
+		append_chunk.Reset();
 		executor.ExecuteExpression(scan_chunk, append_vector);
 		column_data->Append(altered_col_stats.statistics, append_state, append_vector, scan_chunk.size());
 	}

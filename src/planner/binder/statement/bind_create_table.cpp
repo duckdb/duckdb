@@ -119,9 +119,15 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 			         fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE);
 			physical_index_set_t fk_key_set, pk_key_set;
 			for (idx_t i = 0; i < fk.info.pk_keys.size(); i++) {
+				if (pk_key_set.find(fk.info.pk_keys[i]) != pk_key_set.end()) {
+					throw BinderException("Duplicate primary key referenced in FOREIGN KEY constraint");
+				}
 				pk_key_set.insert(fk.info.pk_keys[i]);
 			}
 			for (idx_t i = 0; i < fk.info.fk_keys.size(); i++) {
+				if (fk_key_set.find(fk.info.fk_keys[i]) != fk_key_set.end()) {
+					throw BinderException("Duplicate key specified in FOREIGN KEY constraint");
+				}
 				fk_key_set.insert(fk.info.fk_keys[i]);
 			}
 			info.bound_constraints.push_back(
@@ -292,6 +298,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			result->dependencies.AddDependency(type_dependency);
 		}
 	}
+	result->dependencies.VerifyDependencies(schema->catalog, result->Base().table);
 	properties.allow_stream_result = false;
 	return result;
 }
