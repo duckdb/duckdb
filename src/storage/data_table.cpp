@@ -819,9 +819,10 @@ void DataTable::RevertAppend(idx_t start_row, idx_t count) {
 //===--------------------------------------------------------------------===//
 // Indexes
 //===--------------------------------------------------------------------===//
-bool DataTable::AppendToIndexes(TableIndexList &indexes, DataChunk &chunk, row_t row_start) {
+PreservedError DataTable::AppendToIndexes(TableIndexList &indexes, DataChunk &chunk, row_t row_start) {
+	PreservedError error;
 	if (indexes.Empty()) {
-		return true;
+		return error;
 	}
 	// first generate the vector of row identifiers
 	Vector row_identifiers(LogicalType::ROW_TYPE);
@@ -832,11 +833,13 @@ bool DataTable::AppendToIndexes(TableIndexList &indexes, DataChunk &chunk, row_t
 	// now append the entries to the indices
 	indexes.Scan([&](Index &index) {
 		try {
-			if (!index.Append(chunk, row_identifiers)) {
-				append_failed = true;
-				return true;
-			}
-		} catch (...) {
+			error = index.Append(chunk, row_identifiers);
+		} catch (Exception &ex) {
+			error = PreservedError(ex);
+		} catch (std::exception &ex) {
+			error = PreservedError(ex);
+		}
+		if (error) {
 			append_failed = true;
 			return true;
 		}
@@ -850,12 +853,11 @@ bool DataTable::AppendToIndexes(TableIndexList &indexes, DataChunk &chunk, row_t
 		for (auto *index : already_appended) {
 			index->Delete(chunk, row_identifiers);
 		}
-		return false;
 	}
-	return true;
+	return error;
 }
 
-bool DataTable::AppendToIndexes(DataChunk &chunk, row_t row_start) {
+PreservedError DataTable::AppendToIndexes(DataChunk &chunk, row_t row_start) {
 	D_ASSERT(is_root);
 	return AppendToIndexes(info->indexes, chunk, row_start);
 }
