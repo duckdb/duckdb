@@ -37,8 +37,11 @@
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/main/relation/value_relation.hpp"
+#include "duckdb_python/filesystem_object.hpp"
 
 #include <random>
+
+#include "duckdb/common/printer.hpp"
 
 namespace duckdb {
 
@@ -46,6 +49,20 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::default_connection = nullptr;
 DBInstanceCache instance_cache;
 shared_ptr<PythonImportCache> DuckDBPyConnection::import_cache = nullptr;
 PythonEnvironmentType DuckDBPyConnection::environment = PythonEnvironmentType::NORMAL;
+
+static std::string GenerateRandomName() {
+	std::random_device rd;
+	std::mt19937 gen(rd());
+	std::uniform_int_distribution<> dis(0, 15);
+
+	std::stringstream ss;
+	int i;
+	ss << std::hex;
+	for (i = 0; i < 16; i++) {
+		ss << dis(gen);
+	}
+	return ss.str();
+}
 
 void DuckDBPyConnection::DetectEnvironment() {
 	// If __main__ does not have a __file__ attribute, we are in interactive mode
@@ -93,6 +110,8 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         py::arg("name"))
 	    .def("list_filesystems", &DuckDBPyConnection::ListFilesystems,
 	         "List registered filesystems, including builtin ones")
+	    .def("filesystem_is_registered", &DuckDBPyConnection::FileSystemIsRegistered,
+	         "Check if a filesystem with the provided name is currently registered", py::arg("name"))
 	    .def("duplicate", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
 	    .def("execute", &DuckDBPyConnection::Execute,
 	         "Execute the given SQL query, optionally using prepared statements with parameters set", py::arg("query"),
@@ -244,6 +263,11 @@ py::list DuckDBPyConnection::ListFilesystems() {
 		names.append(py::str(name));
 	}
 	return names;
+}
+
+bool DuckDBPyConnection::FileSystemIsRegistered(const string &name) {
+	auto subsystems = database->GetFileSystem().ListSubSystems();
+	return std::find(subsystems.begin(), subsystems.end(), name) != subsystems.end();
 }
 
 void DuckDBPyConnection::Initialize(py::handle &m) {
@@ -522,7 +546,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, co
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
-    const string &name, const py::object &header, const py::object &compression, const py::object &sep,
+    const py::object &name_p, const py::object &header, const py::object &compression, const py::object &sep,
     const py::object &delimiter, const py::object &dtype, const py::object &na_values, const py::object &skiprows,
     const py::object &quotechar, const py::object &escapechar, const py::object &encoding, const py::object &parallel,
     const py::object &date_format, const py::object &timestamp_format, const py::object &sample_size,
@@ -531,6 +555,18 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 		throw ConnectionException("Connection has already been closed");
 	}
 	BufferedCSVReaderOptions options;
+
+	shared_ptr<ExternalDependency> file_like_object_wrapper;
+	string name;
+	if (!py::isinstance<py::str>(name_p)) {
+		// Make sure that the object filesystem is initialized and registered
+		auto &fs = GetObjectFileSystem();
+		name = StringUtil::Format("%s://%s", "DUCKDB_INTERNAL_OBJECTSTORE", GenerateRandomName());
+		fs.attr("add_file")(name_p, name);
+		file_like_object_wrapper = make_unique<PythonDependencies>(make_unique<FileSystemObject>(fs, name));
+	} else {
+		name = py::str(name_p);
+	}
 
 	// First check if the header is explicitly set
 	// when false this affects the returned types, so it needs to be known at initialization of the relation
@@ -562,6 +598,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 
 	auto read_csv_p = connection->ReadCSV(name, options);
 	auto &read_csv = (ReadCSVRelation &)*read_csv_p;
+	if (file_like_object_wrapper) {
+		D_ASSERT(!read_csv.extra_dependencies);
+		read_csv.extra_dependencies = std::move(file_like_object_wrapper);
+	}
 
 	if (options.has_header) {
 		// 'options' is only used to initialize the ReadCSV relation
@@ -811,20 +851,6 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::TableFunction(const string &fna
 
 	return make_unique<DuckDBPyRelation>(
 	    connection->TableFunction(fname, DuckDBPyConnection::TransformPythonParamList(params)));
-}
-
-static std::string GenerateRandomName() {
-	std::random_device rd;
-	std::mt19937 gen(rd());
-	std::uniform_int_distribution<> dis(0, 15);
-
-	std::stringstream ss;
-	int i;
-	ss << std::hex;
-	for (i = 0; i < 16; i++) {
-		ss << dis(gen);
-	}
-	return ss.str();
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const DataFrame &value) {
@@ -1303,6 +1329,18 @@ PythonImportCache *DuckDBPyConnection::ImportCache() {
 		import_cache = make_shared<PythonImportCache>();
 	}
 	return import_cache.get();
+}
+
+ModifiedMemoryFileSystem &DuckDBPyConnection::GetObjectFileSystem() {
+	if (!internal_object_filesystem) {
+		D_ASSERT(!FileSystemIsRegistered("DUCKDB_INTERNAL_OBJECTSTORE"));
+		auto &import_cache = *ImportCache();
+		internal_object_filesystem =
+		    make_shared<ModifiedMemoryFileSystem>(import_cache.pyduckdb().filesystem.modified_memory_filesystem()());
+		auto &abstract_fs = (AbstractFileSystem &)*internal_object_filesystem;
+		RegisterFilesystem(abstract_fs);
+	}
+	return *internal_object_filesystem;
 }
 
 bool DuckDBPyConnection::IsInteractive() {

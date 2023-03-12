@@ -96,3 +96,9 @@ NULL
 # convert non-ascii string to blob using cat
 statement error
 select 'ü'::blob;
+
+# Test PR 6633
+query I
+SELECT '\x7F'::BLOB;
+----
+\x7F

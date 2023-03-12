@@ -73,7 +73,10 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expr
 			}
 			auto result_value = Value::HUGEINT(outer_value);
 			if (!result_value.DefaultTryCastAs(constant_type)) {
-				// if the cast is not possible then the comparison is not possible
+				// if the cast is not possible then an equality comparison is not possible
+				if (comparison->type != ExpressionType::COMPARE_EQUAL) {
+					return nullptr;
+				}
 				return ExpressionRewriter::ConstantOrNull(std::move(arithmetic->children[arithmetic_child_index]),
 				                                          Value::BOOLEAN(false));
 			}
@@ -86,7 +89,10 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expr
 			}
 			auto result_value = Value::HUGEINT(inner_value);
 			if (!result_value.DefaultTryCastAs(constant_type)) {
-				// if the cast is not possible then the comparison is not possible
+				// if the cast is not possible then an equality comparison is not possible
+				if (comparison->type != ExpressionType::COMPARE_EQUAL) {
+					return nullptr;
+				}
 				return ExpressionRewriter::ConstantOrNull(std::move(arithmetic->children[arithmetic_child_index]),
 				                                          Value::BOOLEAN(false));
 			}

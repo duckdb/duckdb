@@ -54,7 +54,7 @@ static unique_ptr<FunctionData> StructPackBind(ClientContext &context, ScalarFun
 	}
 
 	// this is more for completeness reasons
-	bound_function.return_type = LogicalType::STRUCT(std::move(struct_children));
+	bound_function.return_type = LogicalType::STRUCT(struct_children);
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 

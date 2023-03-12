@@ -414,7 +414,7 @@ struct QuantileBindData : public FunctionData {
 		size_t pos = 0;
 		size_t neg = 0;
 		for (idx_t i = 0; i < quantiles_p.size(); ++i) {
-			const auto q = quantiles_p[i];
+			const auto &q = quantiles_p[i];
 			pos += (q > 0);
 			neg += (q < 0);
 			quantiles.emplace_back(QuantileAbs(q));

@@ -1,0 +1,24 @@
+# name: test/fuzzer/pedro/window_function_timeout.test
+# description: Window function timeout
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0 (c0 TIME);
+
+statement error
+SELECT INTERVAL '17768853205' HOUR
+----
+out of range
+
+query I
+SELECT count(*) OVER (ORDER BY INTERVAL '17' HOUR) FROM t0 GROUP BY ROLLUP (c0);
+----
+1
+
+statement error
+SELECT count(*) OVER (ORDER BY INTERVAL '17768853205' HOUR) FROM t0 GROUP BY ROLLUP (c0);
+----
+out of range

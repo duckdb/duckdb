@@ -151,11 +151,11 @@ public:
 	//! Cannot be called with an empty list, use either EMPTYLIST or LIST with a type instead
 	DUCKDB_API static Value LIST(vector<Value> values);
 	//! Create a list value with the given entries
-	DUCKDB_API static Value LIST(LogicalType child_type, vector<Value> values);
+	DUCKDB_API static Value LIST(const LogicalType &child_type, vector<Value> values);
 	//! Create an empty list with the specified child-type
-	DUCKDB_API static Value EMPTYLIST(LogicalType child_type);
+	DUCKDB_API static Value EMPTYLIST(const LogicalType &child_type);
 	//! Create a map value with the given entries
-	DUCKDB_API static Value MAP(LogicalType child_type, vector<Value> values);
+	DUCKDB_API static Value MAP(const LogicalType &child_type, vector<Value> values);
 	//! Create a union value from a selected value and a tag from a set of alternatives.
 	DUCKDB_API static Value UNION(child_list_t<LogicalType> members, uint8_t tag, Value value);
 
