@@ -215,9 +215,9 @@ static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastP
 			    mask.SetInvalid(idx);
 			    success = false;
 		    }
-
 		    return input;
 	    });
+	result.Reinterpret(source);
 	return success;
 }
 
