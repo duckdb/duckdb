@@ -258,6 +258,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 
 	// serialize the AlterInfo into a temporary buffer
 	BufferedSerializer serializer;
+	serializer.WriteString(alter_info->GetColumnName());
 	alter_info->Serialize(serializer);
 	BinaryData serialized_alter = serializer.GetData();
 

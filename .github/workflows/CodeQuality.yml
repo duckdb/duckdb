@@ -1,13 +1,14 @@
 name: CodeQuality
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 2 * * *"
+  repository_dispatch:
   push:
     branches:
       - '**'
       - '!master'
       - '!feature'
+    tags:
+      - '**'
     paths-ignore:
       - '**.md'
       - '.github/workflows/**'
@@ -76,7 +77,7 @@ jobs:
       - name: Cache clang-tidy
         id: date
         shell: bash
-        run: echo "::set-output name=now::$(date)"
+        run: echo "name=now::$(date)" >> $GITHUB_OUTPUT
 
       - name: Cache clang-tidy
         uses: actions/cache@v3

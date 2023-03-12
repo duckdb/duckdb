@@ -1,0 +1,77 @@
+# name: test/sql/aggregate/aggregates/test_first_last_any_ordered.test
+# description: Test first/last/any_value and ordered aggregates
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER, grp INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1, NULL), (2, 3), (3, 2), (NULL, 1);
+
+query I
+SELECT FIRST(i ORDER BY grp NULLS LAST) FROM integers
+----
+NULL
+
+query I
+SELECT FIRST(i ORDER BY grp NULLS FIRST) FROM integers
+----
+1
+
+query I
+SELECT ANY_VALUE(i ORDER BY grp NULLS FIRST) FROM integers
+----
+1
+
+query I
+SELECT ANY_VALUE(i ORDER BY grp NULLS LAST) FROM integers
+----
+3
+
+query I
+SELECT ARG_MIN(i, grp) FROM integers
+----
+3
+
+query I
+SELECT FIRST(i ORDER BY grp DESC NULLS LAST) FROM integers
+----
+2
+
+query I
+SELECT ANY_VALUE(i ORDER BY grp DESC NULLS FIRST) FROM integers
+----
+1
+
+query I
+SELECT ANY_VALUE(i ORDER BY grp DESC NULLS LAST) FROM integers
+----
+2
+
+query I
+SELECT ARG_MAX(i, grp) FROM integers
+----
+2
+
+query I
+SELECT LAST(i ORDER BY grp NULLS FIRST) FROM integers
+----
+2
+
+query I
+SELECT ARG_MAX(i, grp) FROM integers
+----
+2
+
+query I
+SELECT LAST(i ORDER BY grp DESC NULLS FIRST) FROM integers
+----
+NULL
+
+query I
+SELECT ARG_MIN(i, grp) FROM integers
+----
+3

@@ -10,9 +10,9 @@ StarExpression::StarExpression(string relation_name_p)
 }
 
 string StarExpression::ToString() const {
-	if (!regex.empty()) {
+	if (expr) {
 		D_ASSERT(columns);
-		return "COLUMNS('" + regex + "')";
+		return "COLUMNS(" + expr->ToString() + ")";
 	}
 	string result;
 	if (columns) {
@@ -70,7 +70,7 @@ bool StarExpression::Equal(const StarExpression *a, const StarExpression *b) {
 			return false;
 		}
 	}
-	if (a->regex != b->regex) {
+	if (!BaseExpression::Equals(a->expr.get(), b->expr.get())) {
 		return false;
 	}
 	return true;
@@ -93,7 +93,7 @@ void StarExpression::Serialize(FieldWriter &writer) const {
 		entry.second->Serialize(serializer);
 	}
 	writer.WriteField<bool>(columns);
-	writer.WriteString(regex);
+	writer.WriteOptional(expr);
 }
 
 unique_ptr<ParsedExpression> StarExpression::Deserialize(ExpressionType type, FieldReader &reader) {
@@ -112,7 +112,7 @@ unique_ptr<ParsedExpression> StarExpression::Deserialize(ExpressionType type, Fi
 		result->replace_list.insert(make_pair(name, std::move(expr)));
 	}
 	result->columns = reader.ReadField<bool>(false);
-	result->regex = reader.ReadField<string>(string());
+	result->expr = reader.ReadOptional<ParsedExpression>(nullptr);
 	return std::move(result);
 }
 
@@ -123,7 +123,7 @@ unique_ptr<ParsedExpression> StarExpression::Copy() const {
 		copy->replace_list[entry.first] = entry.second->Copy();
 	}
 	copy->columns = columns;
-	copy->regex = regex;
+	copy->expr = expr ? expr->Copy() : nullptr;
 	copy->CopyProperties(*this);
 	return std::move(copy);
 }

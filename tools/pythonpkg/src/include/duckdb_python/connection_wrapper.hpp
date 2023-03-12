@@ -93,7 +93,7 @@ public:
 	                                             const py::object &sample_size = py::none(),
 	                                             const py::object &maximum_depth = py::none());
 	static unique_ptr<DuckDBPyRelation>
-	ReadCSV(const string &name, shared_ptr<DuckDBPyConnection> conn, const py::object &header = py::none(),
+	ReadCSV(const py::object &name, shared_ptr<DuckDBPyConnection> conn, const py::object &header = py::none(),
 	        const py::object &compression = py::none(), const py::object &sep = py::none(),
 	        const py::object &delimiter = py::none(), const py::object &dtype = py::none(),
 	        const py::object &na_values = py::none(), const py::object &skiprows = py::none(),
@@ -114,6 +114,10 @@ public:
 
 	static duckdb::pyarrow::Table FetchArrow(idx_t chunk_size, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
+	static py::dict FetchPyTorch(shared_ptr<DuckDBPyConnection> conn = nullptr);
+
+	static py::dict FetchTF(shared_ptr<DuckDBPyConnection> conn = nullptr);
+
 	static duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(const idx_t chunk_size,
 	                                                                 shared_ptr<DuckDBPyConnection> conn = nullptr);
 
@@ -122,5 +126,6 @@ public:
 	static void RegisterFilesystem(AbstractFileSystem file_system, shared_ptr<DuckDBPyConnection> conn);
 	static void UnregisterFilesystem(const py::str &name, shared_ptr<DuckDBPyConnection> conn);
 	static py::list ListFilesystems(shared_ptr<DuckDBPyConnection> conn);
+	static bool FileSystemIsRegistered(const string &name, shared_ptr<DuckDBPyConnection> conn);
 };
 } // namespace duckdb

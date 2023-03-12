@@ -46,7 +46,7 @@ void PhysicalRangeJoin::LocalSortedTable::Sink(DataChunk &input, GlobalSortState
 
 	//	Only sort the primary key
 	DataChunk join_head;
-	join_head.data.emplace_back(Vector(keys.data[0]));
+	join_head.data.emplace_back(keys.data[0]);
 	join_head.SetCardinality(keys.size());
 
 	// Sink the data into the local sort state

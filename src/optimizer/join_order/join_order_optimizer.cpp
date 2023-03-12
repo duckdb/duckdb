@@ -152,11 +152,11 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		// new NULL values in the right side, so pushing this condition through the join leads to incorrect results
 		// for this reason, we just start a new JoinOptimizer pass in each of the children of the join
 
-		// Keep track of all of the filter bindings the new join order optimizer makes
+		// Keep track of all filter bindings the new join order optimizer makes
 		vector<column_binding_map_t<ColumnBinding>> child_binding_maps;
 		idx_t child_bindings_it = 0;
 		for (auto &child : op->children) {
-			child_binding_maps.emplace_back(column_binding_map_t<ColumnBinding>());
+			child_binding_maps.emplace_back();
 			JoinOrderOptimizer optimizer(context);
 			child = optimizer.Optimize(std::move(child));
 			// save the relation bindings from the optimized child. These later all get added to the
@@ -222,12 +222,25 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		auto proj = (LogicalProjection *)op;
-		// we run the join order optimizer witin the subquery as well
+		// we run the join order optimizer within the subquery as well
 		JoinOrderOptimizer optimizer(context);
 		op->children[0] = optimizer.Optimize(std::move(op->children[0]));
 		// projection, add to the set of relations
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
-		relation_mapping[proj->table_index] = relations.size();
+		auto relation_id = relations.size();
+		// push one child column binding map back.
+		vector<column_binding_map_t<ColumnBinding>> child_binding_maps;
+		child_binding_maps.emplace_back();
+		optimizer.cardinality_estimator.CopyRelationMap(child_binding_maps.at(0));
+		// This logical projection may sit on top of a logical comparison join that has been pushed down
+		// we want to copy the binding info of both tables
+		relation_mapping[proj->table_index] = relation_id;
+		for (auto &binding_info : child_binding_maps.at(0)) {
+			cardinality_estimator.AddRelationToColumnMapping(
+			    ColumnBinding(proj->table_index, binding_info.first.column_index), binding_info.second);
+			cardinality_estimator.AddColumnToRelationMap(binding_info.second.table_index,
+			                                             binding_info.second.column_index);
+		}
 		relations.push_back(std::move(relation));
 		return true;
 	}
@@ -869,9 +882,11 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 
 	// first we will extract all relations from the main plan
 	vector<unique_ptr<LogicalOperator>> extracted_relations;
+	extracted_relations.reserve(relations.size());
 	for (auto &relation : relations) {
 		extracted_relations.push_back(ExtractJoinRelation(*relation));
 	}
+
 	// now we generate the actual joins
 	auto join_tree = GenerateJoins(extracted_relations, node);
 	// perform the final pushdown of remaining filters
@@ -999,7 +1014,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	for (idx_t i = 0; i < relations.size(); i++) {
 		auto &rel = *relations[i];
 		auto node = set_manager.GetJoinRelation(i);
-		nodes_ops.emplace_back(NodeOp(make_unique<JoinNode>(node, 0), rel.op));
+		nodes_ops.emplace_back(make_unique<JoinNode>(node, 0), rel.op);
 	}
 
 	cardinality_estimator.InitCardinalityEstimatorProps(&nodes_ops, &filter_infos);

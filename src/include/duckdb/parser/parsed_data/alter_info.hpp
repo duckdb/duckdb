@@ -20,7 +20,8 @@ enum class AlterType : uint8_t {
 	ALTER_VIEW = 2,
 	ALTER_SEQUENCE = 3,
 	CHANGE_OWNERSHIP = 4,
-	ALTER_FUNCTION = 5
+	ALTER_SCALAR_FUNCTION = 5,
+	ALTER_TABLE_FUNCTION = 6
 };
 
 struct AlterEntryData {
@@ -58,6 +59,9 @@ public:
 	void Serialize(Serializer &serializer) const;
 	virtual void Serialize(FieldWriter &writer) const = 0;
 	static unique_ptr<AlterInfo> Deserialize(Deserializer &source);
+	virtual string GetColumnName() const {
+		return "";
+	};
 
 	AlterEntryData GetAlterEntryData() const;
 };

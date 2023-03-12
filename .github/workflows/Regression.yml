@@ -1,11 +1,14 @@
 name: Regression
 on:
   workflow_dispatch:
+  repository_dispatch:
   push:
     branches:
       - '**'
       - '!master'
       - '!feature'
+    tags:
+      - '**'
     paths-ignore:
       - '**.md'
       - 'tools/**'

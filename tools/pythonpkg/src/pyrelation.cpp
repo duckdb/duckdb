@@ -13,6 +13,7 @@
 #include "duckdb/common/box_renderer.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
+#include "duckdb/parser/statement/explain_statement.hpp"
 
 namespace duckdb {
 
@@ -124,6 +125,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromArrow(py::object &arrow_objec
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const string &expr) {
+	if (!rel) {
+		return nullptr;
+	}
 	auto projected_relation = make_unique<DuckDBPyRelation>(rel->Project(expr));
 	projected_relation->rel->extra_dependencies = this->rel->extra_dependencies;
 	return projected_relation;
@@ -475,22 +479,22 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyRelation::FetchRecordBatchReader(idx_
 	return result->FetchRecordBatchReader(chunk_size);
 }
 
-static unique_ptr<QueryResult> PyExecuteRelation(const shared_ptr<Relation> &rel) {
+static unique_ptr<QueryResult> PyExecuteRelation(const shared_ptr<Relation> &rel, bool stream_result = false) {
 	if (!rel) {
 		return nullptr;
 	}
 	auto context = rel->context.GetContext();
 	py::gil_scoped_release release;
-	auto pending_query = context->PendingQuery(rel, false);
+	auto pending_query = context->PendingQuery(rel, stream_result);
 	return DuckDBPyConnection::CompletePendingQuery(*pending_query);
 }
 
-unique_ptr<QueryResult> DuckDBPyRelation::ExecuteInternal() {
-	return PyExecuteRelation(rel);
+unique_ptr<QueryResult> DuckDBPyRelation::ExecuteInternal(bool stream_result) {
+	return PyExecuteRelation(rel, stream_result);
 }
 
-void DuckDBPyRelation::ExecuteOrThrow() {
-	auto query_result = ExecuteInternal();
+void DuckDBPyRelation::ExecuteOrThrow(bool stream_result) {
+	auto query_result = ExecuteInternal(stream_result);
 	if (!query_result) {
 		throw InternalException("ExecuteOrThrow - no query available to execute");
 	}
@@ -520,7 +524,7 @@ Optional<py::tuple> DuckDBPyRelation::FetchOne() {
 		if (!rel) {
 			return py::none();
 		}
-		ExecuteOrThrow();
+		ExecuteOrThrow(true);
 	}
 	if (result->IsClosed()) {
 		return py::none();
@@ -533,7 +537,7 @@ py::list DuckDBPyRelation::FetchMany(idx_t size) {
 		if (!rel) {
 			return py::list();
 		}
-		ExecuteOrThrow();
+		ExecuteOrThrow(true);
 		D_ASSERT(result);
 	}
 	if (result->IsClosed()) {
@@ -572,6 +576,36 @@ py::dict DuckDBPyRelation::FetchNumpy() {
 	return res;
 }
 
+py::dict DuckDBPyRelation::FetchPyTorch() {
+	if (!result) {
+		if (!rel) {
+			return py::none();
+		}
+		ExecuteOrThrow();
+	}
+	if (result->IsClosed()) {
+		return py::none();
+	}
+	auto res = result->FetchPyTorch();
+	result = nullptr;
+	return res;
+}
+
+py::dict DuckDBPyRelation::FetchTF() {
+	if (!result) {
+		if (!rel) {
+			return py::none();
+		}
+		ExecuteOrThrow();
+	}
+	if (result->IsClosed()) {
+		return py::none();
+	}
+	auto res = result->FetchTF();
+	result = nullptr;
+	return res;
+}
+
 py::dict DuckDBPyRelation::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk) {
 	if (!result) {
 		if (!rel) {
@@ -591,7 +625,7 @@ DataFrame DuckDBPyRelation::FetchDFChunk(idx_t vectors_per_chunk, bool date_as_o
 		if (!rel) {
 			return py::none();
 		}
-		ExecuteOrThrow();
+		ExecuteOrThrow(true);
 	}
 	AssertResultOpen();
 	return result->FetchDFChunk(vectors_per_chunk, date_as_object);
@@ -620,7 +654,7 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyRelation::ToRecordBatch(idx_t batch_s
 		if (!rel) {
 			return py::none();
 		}
-		ExecuteOrThrow();
+		ExecuteOrThrow(true);
 	}
 	AssertResultOpen();
 	return result->FetchRecordBatchReader(batch_size);
@@ -635,6 +669,18 @@ void DuckDBPyRelation::Close() {
 	}
 	AssertResultOpen();
 	result->Close();
+}
+
+bool DuckDBPyRelation::ContainsColumnByName(const string &name) const {
+	return std::find(names.begin(), names.end(), name) != names.end();
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GetAttribute(const string &name) {
+	// TODO: support fetching a result containing only column 'name' from a value_relation
+	if (!rel || !ContainsColumnByName(name)) {
+		throw InvalidInputException("This relation does not contain a column by the name of '%s'", name);
+	}
+	return make_unique<DuckDBPyRelation>(rel->Project({name}));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Union(DuckDBPyRelation *other) {
@@ -910,9 +956,10 @@ void DuckDBPyRelation::Print() {
 	py::print(py::str(ToString()));
 }
 
-string DuckDBPyRelation::Explain() {
+string DuckDBPyRelation::Explain(ExplainType type) {
+
 	AssertRelation();
-	auto res = rel->Explain();
+	auto res = rel->Explain(type);
 	D_ASSERT(res->type == duckdb::QueryResultType::MATERIALIZED_RESULT);
 	auto &materialized = (duckdb::MaterializedQueryResult &)*res;
 	auto &coll = materialized.Collection();

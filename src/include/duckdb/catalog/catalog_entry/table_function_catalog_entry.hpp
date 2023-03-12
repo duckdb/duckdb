@@ -9,16 +9,11 @@
 #pragma once
 
 #include "duckdb/catalog/standard_entry.hpp"
-#include "duckdb/function/table_function.hpp"
-#include "duckdb/common/vector.hpp"
-#include "duckdb/function/function_set.hpp"
+#include "duckdb/catalog/catalog_set.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 
 namespace duckdb {
-
-class Catalog;
-class Constraint;
-
-struct CreateTableFunctionInfo;
 
 //! A table function in the catalog
 class TableFunctionCatalogEntry : public StandardEntry {
@@ -31,5 +26,8 @@ public:
 
 	//! The table function
 	TableFunctionSet functions;
+
+public:
+	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info) override;
 };
 } // namespace duckdb

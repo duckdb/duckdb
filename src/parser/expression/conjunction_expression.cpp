@@ -45,9 +45,11 @@ bool ConjunctionExpression::Equal(const ConjunctionExpression *a, const Conjunct
 
 unique_ptr<ParsedExpression> ConjunctionExpression::Copy() const {
 	vector<unique_ptr<ParsedExpression>> copy_children;
+	copy_children.reserve(children.size());
 	for (auto &expr : children) {
 		copy_children.push_back(expr->Copy());
 	}
+
 	auto copy = make_unique<ConjunctionExpression>(type, std::move(copy_children));
 	copy->CopyProperties(*this);
 	return std::move(copy);

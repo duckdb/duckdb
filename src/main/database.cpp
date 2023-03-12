@@ -115,6 +115,15 @@ ConnectionManager &ConnectionManager::Get(DatabaseInstance &db) {
 	return db.GetConnectionManager();
 }
 
+ClientContext *ConnectionManager::GetConnection(DatabaseInstance *db) {
+	for (auto &conn : connections) {
+		if (conn.first->db.get() == db) {
+			return conn.first;
+		}
+	}
+	return nullptr;
+}
+
 ConnectionManager &ConnectionManager::Get(ClientContext &context) {
 	return ConnectionManager::Get(DatabaseInstance::GetDatabase(context));
 }
@@ -191,8 +200,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	}
 
 	db_manager = make_unique<DatabaseManager>(*this);
-	buffer_manager =
-	    make_unique<BufferManager>(*this, config.options.temporary_directory, config.options.maximum_memory);
+	buffer_manager = make_unique<BufferManager>(*this, config.options.temporary_directory);
 	scheduler = make_unique<TaskScheduler>(*this);
 	object_cache = make_unique<ObjectCache>();
 	connection_manager = make_unique<ConnectionManager>();
@@ -271,6 +279,10 @@ BufferManager &DatabaseInstance::GetBufferManager() {
 	return *buffer_manager;
 }
 
+BufferPool &DatabaseInstance::GetBufferPool() {
+	return *config.buffer_pool;
+}
+
 DatabaseManager &DatabaseManager::Get(DatabaseInstance &db) {
 	return db.GetDatabaseManager();
 }
@@ -339,6 +351,11 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	}
 	if (!config.default_allocator) {
 		config.default_allocator = Allocator::DefaultAllocatorReference();
+	}
+	if (new_config.buffer_pool) {
+		config.buffer_pool = std::move(new_config.buffer_pool);
+	} else {
+		config.buffer_pool = make_shared<BufferPool>(config.options.maximum_memory);
 	}
 }
 
