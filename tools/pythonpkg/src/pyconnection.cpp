@@ -1188,7 +1188,7 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 		throw InvalidInputException(
 		    "Python Object \"%s\" of type \"%s\" found on line \"%s\" not suitable for replacement scans.\nMake sure "
 		    "that \"%s\" is either a pandas.DataFrame, duckdb.DuckDBPyRelation, pyarrow Table, Dataset, "
-		    "RecordBatchReader, or Scanner",
+		    "RecordBatchReader, Scanner, or NumPy ndarrays with supported format",
 		    cpp_table_name, py_object_type, location, cpp_table_name);
 	}
 	return std::move(table_function);
