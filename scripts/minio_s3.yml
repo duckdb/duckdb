@@ -18,8 +18,6 @@ services:
 
   minio_setup:
     image: minio/mc:RELEASE.2021-11-05T10-05-06Z
-    networks:
-      duckdb_network:
     depends_on:
       - minio
     links:
