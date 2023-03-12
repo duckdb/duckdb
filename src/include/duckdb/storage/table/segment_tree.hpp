@@ -30,6 +30,8 @@ private:
 	class SegmentIterationHelper;
 
 public:
+	explicit SegmentTree(bool finished_loading_p = true) : finished_loading(finished_loading_p) {}
+
 	//! Locks the segment tree. All methods to the segment tree either lock the segment tree, or take an already
 	//! obtained lock.
 	SegmentLock Lock() {
@@ -37,7 +39,7 @@ public:
 	}
 
 	bool IsEmpty(SegmentLock &) {
-		return nodes.empty();
+		return GetRootSegment() == nullptr;
 	}
 
 	//! Gets a pointer to the first segment. Useful for scans.
@@ -45,11 +47,16 @@ public:
 		auto l = Lock();
 		return GetRootSegment(l);
 	}
+
 	T *GetRootSegment(SegmentLock &) {
+		if (nodes.empty()) {
+			LoadNextSegment();
+		}
 		return nodes.empty() ? nullptr : nodes[0].node.get();
 	}
 	//! Obtains ownership of the data of the segment tree
 	vector<SegmentNode<T>> MoveSegments(SegmentLock &) {
+		LoadAllSegments();
 		return std::move(nodes);
 	}
 	//! Gets a pointer to the nth segment. Negative numbers start from the back.
@@ -57,19 +64,13 @@ public:
 		auto l = Lock();
 		return GetSegmentByIndex(l, index);
 	}
-	T *GetSegmentByIndex(SegmentLock &, int64_t index) {
-		if (index < 0) {
-			index = nodes.size() + index;
-			if (index < 0) {
-				return nullptr;
-			}
-			return nodes[index].node.get();
-		} else {
-			if (idx_t(index) >= nodes.size()) {
-				return nullptr;
-			}
-			return nodes[index].node.get();
+	T *GetSegmentByIndex(SegmentLock &, idx_t index) {
+		// lazily load segments
+		while(index >= nodes.size() && LoadNextSegment()) {}
+		if (index >= nodes.size()) {
+			return nullptr;
 		}
+		return nodes[index].node.get();
 	}
 	//! Gets the next segment
 	T *GetNextSegment(T *segment) {
@@ -87,11 +88,8 @@ public:
 	}
 
 	//! Gets a pointer to the last segment. Useful for appends.
-	T *GetLastSegment() {
-		auto l = Lock();
-		return GetLastSegment(l);
-	}
 	T *GetLastSegment(SegmentLock &) {
+		LoadAllSegments();
 		if (nodes.empty()) {
 			return nullptr;
 		}
@@ -130,11 +128,12 @@ public:
 	}
 
 	//! Replace this tree with another tree, taking over its nodes in-place
-	void Replace(SegmentTree &other) {
+	void Replace(SegmentTree<T> &other) {
 		auto l = Lock();
 		Replace(l, other);
 	}
-	void Replace(SegmentLock &, SegmentTree &other) {
+	void Replace(SegmentLock &, SegmentTree<T> &other) {
+		other.LoadAllSegments();
 		nodes = std::move(other.nodes);
 	}
 
@@ -147,10 +146,6 @@ public:
 	}
 
 	//! Get the segment index of the column segment for the given row
-	idx_t GetSegmentIndex(idx_t row_number) {
-		auto l = Lock();
-		return GetSegmentIndex(l, row_number);
-	}
 	idx_t GetSegmentIndex(SegmentLock &l, idx_t row_number) {
 		idx_t segment_index;
 		if (TryGetSegmentIndex(l, row_number, segment_index)) {
@@ -166,6 +161,8 @@ public:
 	}
 
 	bool TryGetSegmentIndex(SegmentLock &, idx_t row_number, idx_t &result) {
+		// load segments until the row number is within bounds
+		while ((nodes.empty() || row_number < nodes.back().row_start + nodes.back().node->count) && LoadNextSegment()) {}
 		if (nodes.empty()) {
 			return false;
 		}
@@ -211,6 +208,14 @@ public:
 
 	SegmentIterationHelper Segments() {
 		return SegmentIterationHelper(*this);
+	}
+
+protected:
+	bool finished_loading;
+
+	//! Load the next segment - only used when lazily loading
+	virtual unique_ptr<T> LoadSegment() {
+		return nullptr;
 	}
 
 private:
@@ -263,6 +268,24 @@ private:
 			return SegmentIterator(tree, nullptr);
 		}
 	};
+
+	//! Load the next segment, if there are any left to load
+	bool LoadNextSegment() {
+		if (finished_loading) {
+			return false;
+		}
+		auto result = LoadSegment();
+		if (result) {
+			AppendSegment(std::move(result));
+			return true;
+		}
+		return false;
+	}
+
+	//! Load all segments, if there are any left to load
+	void LoadAllSegments() {
+		while(LoadNextSegment());
+	}
 };
 
 } // namespace duckdb

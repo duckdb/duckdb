@@ -1,7 +1,5 @@
 #include "duckdb/storage/checkpoint/table_data_reader.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
-
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/types/null_value.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -9,7 +7,6 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/client_context.hpp"
 
 #include "duckdb/storage/table/row_group.hpp"
 
