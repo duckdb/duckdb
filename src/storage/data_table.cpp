@@ -1206,9 +1206,9 @@ void DataTable::WALAddIndex(ClientContext &context, unique_ptr<Index> index,
 			index->ExecuteExpressions(intermediate, result);
 
 			// insert into the index
-			if (!index->Insert(lock, result, intermediate.data[intermediate.ColumnCount() - 1])) {
-				throw InternalException("Error during WAL replay. Can't create unique index, table contains "
-				                        "duplicate data on indexed column(s).");
+			auto error = index->Insert(lock, result, intermediate.data[intermediate.ColumnCount() - 1]);
+			if (error) {
+				throw InternalException("Error during WAL replay: %s", error.Message());
 			}
 		}
 	}
