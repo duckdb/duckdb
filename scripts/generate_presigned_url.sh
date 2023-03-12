@@ -1,28 +1,13 @@
 #!/usr/bin/env bash
 #Note: DONT run as root
 
-# 1. upload test files (duckdb/data/) to testing Minio server
-# 2. use `usr/bin/mc share download` to generatd the presigned url
-# 3. set presigned url to env variable, so sqllogictest can read the presigned url
+mkdir -p data/parquet-testing/presigned
 
-# 1
-build/release/test/unittest test/sql/copy/s3/s3_presigned_upload.test
-build/release/test/unittest test/sql/copy/s3/s3_presigned_upload.test_slow
+generate_large_parquet_query=$(cat <<EOF
 
-# 2
-docker compose -f scripts/presigned_url.yml -p duckdb-mc up -d 
-sleep 3
+CALL DBGEN(sf=1);
+COPY lineitem TO 'data/parquet-testing/presigned/presigned-url-lineitem.parquet' (FORMAT 'parquet');
 
-# 3 
-# duckdb-mc-minio_mc-[1-9]* or duckdb-mc_minio_mc_[1-9]*
-mc_container_name=$(docker ps -a --format '{{.Names}}' | grep -m 1 "duckdb-mc")
-echo $mc_container_name
-
-export S3_SMALL_CSV_PRESIGNED_URL=$(docker logs $mc_container_name | grep -m 1 'Share:.*web_page\.csv' | grep -o 'http[s]\?://[^ ]\+')
-echo $S3_SMALL_CSV_PRESIGNED_URL
-
-export S3_SMALL_PARQUET_PRESIGNED_URL=$(docker logs $mc_container_name | grep -m 1 'Share:.*web_page\.parquet' | grep -o 'http[s]\?://[^ ]\+')
-echo $S3_SMALL_PARQUET_PRESIGNED_URL
-
-export S3_LARGE_PARQUET_PRESIGNED_URL=$(docker logs $mc_container_name | grep -m 1 'Share:.*lineitem_large\.parquet' | grep -o 'http[s]\?://[^ ]\+')
-echo $S3_LARGE_PARQUET_PRESIGNED_URL
+EOF
+)
+build/release/duckdb -c "$generate_large_parquet_query"
