@@ -158,7 +158,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	result.types = {LogicalType::BIGINT};
 	result.names = {"Count"};
 
-	if (!stmt.info->table.empty()) {
+	if (stmt.info->table.empty()) {
 		throw ParserException("COPY FROM requires a table name to be specified");
 	}
 	// COPY FROM a file
