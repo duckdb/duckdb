@@ -19,6 +19,9 @@ BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, i
 	auto &expr = (ColumnRefExpression &)**expr_ptr;
 	auto alias_result = column_alias_binder.BindAlias(*this, expr, depth, root_expression);
 	if (!alias_result.HasError()) {
+		if (depth > 0) {
+			throw BinderException("Having clause cannot reference alias in correlated subquery");
+		}
 		return alias_result;
 	}
 	if (aggregate_handling == AggregateHandling::FORCE_AGGREGATES) {

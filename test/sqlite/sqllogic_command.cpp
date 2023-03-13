@@ -115,6 +115,9 @@ Query::Query(SQLLogicTestRunner &runner) : Command(runner) {
 RestartCommand::RestartCommand(SQLLogicTestRunner &runner) : Command(runner) {
 }
 
+ReconnectCommand::ReconnectCommand(SQLLogicTestRunner &runner) : Command(runner) {
+}
+
 LoopCommand::LoopCommand(SQLLogicTestRunner &runner, LoopDefinition definition_p)
     : Command(runner), definition(std::move(definition_p)) {
 }
@@ -272,6 +275,13 @@ void RestartCommand::ExecuteInternal(ExecuteContext &context) const {
 		    make_unique<BufferedFileWriter>(FileSystem::GetFileSystem(*runner.con->context), low_query_writer_path,
 		                                    1 << 1 | 1 << 5, runner.con->context->client_data->file_opener.get());
 	}
+}
+
+void ReconnectCommand::ExecuteInternal(ExecuteContext &context) const {
+	if (context.is_parallel) {
+		throw std::runtime_error("Cannot reconnect in parallel");
+	}
+	runner.Reconnect();
 }
 
 void Statement::ExecuteInternal(ExecuteContext &context) const {

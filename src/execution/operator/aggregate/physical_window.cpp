@@ -1559,6 +1559,9 @@ TaskExecutionResult WindowMergeTask::ExecuteTask(TaskExecutionMode mode) {
 	size_t sorted = 0;
 	while (sorted < hash_groups.states.size()) {
 		// First check if there is an unfinished task for this thread
+		if (executor.HasError()) {
+			return TaskExecutionResult::TASK_ERROR;
+		}
 		if (!local_state.TaskFinished()) {
 			local_state.ExecuteTask();
 			continue;

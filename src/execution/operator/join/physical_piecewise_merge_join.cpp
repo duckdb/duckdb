@@ -30,25 +30,20 @@ PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalOperator &op, uniq
 		switch (cond.comparison) {
 		case ExpressionType::COMPARE_LESSTHAN:
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			lhs_orders.emplace_back(
-			    BoundOrderByNode(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(left)));
-			rhs_orders.emplace_back(
-			    BoundOrderByNode(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(right)));
+			lhs_orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(left));
+			rhs_orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(right));
 			break;
 		case ExpressionType::COMPARE_GREATERTHAN:
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			lhs_orders.emplace_back(
-			    BoundOrderByNode(OrderType::DESCENDING, OrderByNullType::NULLS_LAST, std::move(left)));
-			rhs_orders.emplace_back(
-			    BoundOrderByNode(OrderType::DESCENDING, OrderByNullType::NULLS_LAST, std::move(right)));
+			lhs_orders.emplace_back(OrderType::DESCENDING, OrderByNullType::NULLS_LAST, std::move(left));
+			rhs_orders.emplace_back(OrderType::DESCENDING, OrderByNullType::NULLS_LAST, std::move(right));
 			break;
 		case ExpressionType::COMPARE_NOTEQUAL:
 		case ExpressionType::COMPARE_DISTINCT_FROM:
 			// Allowed in multi-predicate joins, but can't be first/sort.
 			D_ASSERT(!lhs_orders.empty());
-			lhs_orders.emplace_back(BoundOrderByNode(OrderType::INVALID, OrderByNullType::NULLS_LAST, std::move(left)));
-			rhs_orders.emplace_back(
-			    BoundOrderByNode(OrderType::INVALID, OrderByNullType::NULLS_LAST, std::move(right)));
+			lhs_orders.emplace_back(OrderType::INVALID, OrderByNullType::NULLS_LAST, std::move(left));
+			rhs_orders.emplace_back(OrderType::INVALID, OrderByNullType::NULLS_LAST, std::move(right));
 			break;
 
 		default:

@@ -426,12 +426,16 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 	// after that, we bind to the SELECT list
 	SelectBinder select_binder(*this, context, *result, info, alias_map);
 	vector<LogicalType> internal_sql_types;
+	vector<idx_t> group_by_all_indexes;
 	for (idx_t i = 0; i < statement.select_list.size(); i++) {
 		bool is_window = statement.select_list[i]->IsWindow();
 		idx_t unnest_count = result->unnests.size();
 		LogicalType result_type;
 		auto expr = select_binder.Bind(statement.select_list[i], &result_type);
-		if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES && select_binder.HasBoundColumns()) {
+		bool is_original_column = i < result->column_count;
+		bool can_group_by_all =
+		    statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES && is_original_column;
+		if (can_group_by_all && select_binder.HasBoundColumns()) {
 			if (select_binder.BoundAggregates()) {
 				throw BinderException("Cannot mix aggregates with non-aggregated columns!");
 			}
@@ -443,19 +447,24 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 			}
 			// we are forcing aggregates, and the node has columns bound
 			// this entry becomes a group
-			auto group_ref = make_unique<BoundColumnRefExpression>(
-			    expr->return_type, ColumnBinding(result->group_index, result->groups.group_expressions.size()));
-			result->groups.group_expressions.push_back(std::move(expr));
-			expr = std::move(group_ref);
+			group_by_all_indexes.push_back(i);
 		}
 		result->select_list.push_back(std::move(expr));
 		if (i < result->column_count) {
 			result->types.push_back(result_type);
 		}
 		internal_sql_types.push_back(result_type);
-		if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES) {
+		if (can_group_by_all) {
 			select_binder.ResetBindings();
 		}
+	}
+	// push the GROUP BY ALL expressions into the group set
+	for (auto &group_by_all_index : group_by_all_indexes) {
+		auto &expr = result->select_list[group_by_all_index];
+		auto group_ref = make_unique<BoundColumnRefExpression>(
+		    expr->return_type, ColumnBinding(result->group_index, result->groups.group_expressions.size()));
+		result->groups.group_expressions.push_back(std::move(expr));
+		expr = std::move(group_ref);
 	}
 	result->need_prune = result->select_list.size() > result->column_count;
 
@@ -467,16 +476,19 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 	    !result->groups.grouping_sets.empty()) {
 		if (statement.aggregate_handling == AggregateHandling::NO_AGGREGATES_ALLOWED) {
 			throw BinderException("Aggregates cannot be present in a Project relation!");
-		} else if (statement.aggregate_handling == AggregateHandling::STANDARD_HANDLING) {
-			if (select_binder.HasBoundColumns()) {
-				auto &bound_columns = select_binder.GetBoundColumns();
-				string error;
-				error = "column \"%s\" must appear in the GROUP BY clause or must be part of an aggregate function.";
+		} else if (select_binder.HasBoundColumns()) {
+			auto &bound_columns = select_binder.GetBoundColumns();
+			string error;
+			error = "column \"%s\" must appear in the GROUP BY clause or must be part of an aggregate function.";
+			if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES) {
+				error += "\nGROUP BY ALL will only group entries in the SELECT list. Add it to the SELECT list or "
+				         "GROUP BY this entry explicitly.";
+			} else {
 				error += "\nEither add it to the GROUP BY list, or use \"ANY_VALUE(%s)\" if the exact value of \"%s\" "
 				         "is not important.";
-				throw BinderException(FormatError(bound_columns[0].query_location, error, bound_columns[0].name,
-				                                  bound_columns[0].name, bound_columns[0].name));
 			}
+			throw BinderException(FormatError(bound_columns[0].query_location, error, bound_columns[0].name,
+			                                  bound_columns[0].name, bound_columns[0].name));
 		}
 	}
 
