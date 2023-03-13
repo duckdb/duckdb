@@ -39,43 +39,31 @@ static unique_ptr<FunctionData> JsonSerializeBind(ClientContext &context, Scalar
 	bool skip_if_empty = false;
 	bool format = false;
 
-	if (arguments.size() > 1 && arguments.size() < 5) {
-		for (idx_t i = 1; i < arguments.size(); i++) {
-			auto &arg = arguments[i];
-			if (arg->alias == "skip_null") {
-				if (arg->HasParameter()) {
-					throw ParameterNotResolvedException();
-				}
-				if (!arg->IsFoldable()) {
-					throw InvalidInputException("skip_null argument must be constant");
-				}
-				if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
-					throw InvalidTypeException("skip_null argument must be a boolean");
-				}
-				skip_if_null = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
-			} else if (arg->alias == "skip_empty") {
-				if (arg->HasParameter()) {
-					throw ParameterNotResolvedException();
-				}
-				if (!arg->IsFoldable()) {
-					throw InvalidInputException("skip_empty argument must be constant");
-				}
-				if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
-					throw InvalidTypeException("skip_empty argument must be a boolean");
-				}
-				skip_if_empty = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
-			} else if (arg->alias == "format") {
-				if (arg->HasParameter()) {
-					throw ParameterNotResolvedException();
-				}
-				if (!arg->IsFoldable()) {
-					throw InvalidInputException("indent argument must be constant");
-				}
-				if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
-					throw InvalidTypeException("indent argument must be a boolean");
-				}
-				format = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
+	for (idx_t i = 1; i < arguments.size(); i++) {
+		auto &arg = arguments[i];
+		if (arg->HasParameter()) {
+			throw ParameterNotResolvedException();
+		}
+		if (!arg->IsFoldable()) {
+			throw InvalidInputException("arguments to json_serialize_sql must be constant");
+		}
+		if (arg->alias == "skip_null") {
+			if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
+				throw InvalidTypeException("skip_null argument must be a boolean");
 			}
+			skip_if_null = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
+		} else if (arg->alias == "skip_empty") {
+			if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
+				throw InvalidTypeException("skip_empty argument must be a boolean");
+			}
+			skip_if_empty = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
+		} else if (arg->alias == "format") {
+			if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
+				throw InvalidTypeException("indent argument must be a boolean");
+			}
+			format = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
+		} else {
+			throw BinderException(StringUtil::Format("Unknown argument to json_serialize_sql: %s", arg->alias.c_str()));
 		}
 	}
 	return make_unique<JsonSerializeBindData>(skip_if_null, skip_if_empty, format);
@@ -118,7 +106,7 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 			auto data = yyjson_mut_val_write_opts(result_obj,
 			                                      info.format ? JSONCommon::WRITE_PRETTY_FLAG : JSONCommon::WRITE_FLAG,
 			                                      alc, (size_t *)&len, nullptr);
-			return string_t(data, len);
+			return StringVector::AddString(result, data, len);
 
 		} catch (Exception &exception) {
 			yyjson_mut_obj_add_true(doc, result_obj, "error");
@@ -130,7 +118,7 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 			auto data = yyjson_mut_val_write_opts(result_obj,
 			                                      info.format ? JSONCommon::WRITE_PRETTY_FLAG : JSONCommon::WRITE_FLAG,
 			                                      alc, (size_t *)&len, nullptr);
-			return string_t(data, len);
+			return StringVector::AddString(result, data, len);
 		}
 	});
 }
