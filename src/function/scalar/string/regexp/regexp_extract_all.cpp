@@ -123,6 +123,26 @@ int32_t GetGroupIndex(DataChunk &args, idx_t row, int32_t &result) {
 	return true;
 }
 
+duckdb_re2::RE2 &GetPattern(const RegexpBaseBindData &info, ExpressionState &state,
+                            unique_ptr<duckdb_re2::RE2> &pattern_p) {
+	if (info.constant_pattern) {
+		auto &lstate = (RegexLocalState &)*ExecuteFunctionState::GetFunctionState(state);
+		return lstate.constant_pattern;
+	}
+	D_ASSERT(pattern_p);
+	return *pattern_p;
+}
+
+RegexStringPieceArgs &GetGroupsBuffer(const RegexpBaseBindData &info, ExpressionState &state,
+                                      unique_ptr<RegexStringPieceArgs> &groups_p) {
+	if (info.constant_pattern) {
+		auto &lstate = (RegexLocalState &)*ExecuteFunctionState::GetFunctionState(state);
+		return lstate.group_buffer;
+	}
+	D_ASSERT(groups_p);
+	return *groups_p;
+}
+
 void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	const auto &info = (RegexpBaseBindData &)*func_expr.bind_info;
@@ -145,64 +165,59 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 
 	// Avoid doing extra work if all the inputs are constant
 	idx_t tuple_count = args.AllConstant() ? 1 : args.size();
-	if (info.constant_pattern) {
-		auto &lstate = (RegexLocalState &)*ExecuteFunctionState::GetFunctionState(state);
 
-		auto group_count = lstate.constant_pattern.NumberOfCapturingGroups();
-		if (group_count == -1) {
-			throw InvalidInputException("Pattern failed to parse, error: '%s'", lstate.constant_pattern.error());
-		}
-
-		for (idx_t row = 0; row < tuple_count; row++) {
-			auto idx = strings_data.sel->get_index(row);
-			auto string = ((string_t *)strings_data.data)[idx];
-
-			int32_t group_index;
-			if (!strings_data.validity.RowIsValid(idx) || !GetGroupIndex(args, row, group_index)) {
-				// Pattern is NULL, result is also NULL
-				auto result_data = FlatVector::GetData<list_entry_t>(result);
-				auto &result_validity = FlatVector::Validity(result);
-				result_data[row].length = 0;
-				result_data[row].offset = ListVector::GetListSize(result);
-				result_validity.SetInvalid(row);
-				continue;
-			}
-
-			// Get the groups
-			ExtractSingleTuple(string, lstate.constant_pattern, group_index, lstate.group_buffer, result, row);
-		}
+	unique_ptr<RegexStringPieceArgs> non_const_args;
+	unique_ptr<duckdb_re2::RE2> stored_re;
+	if (!info.constant_pattern) {
+		non_const_args = make_unique<RegexStringPieceArgs>();
 	} else {
-		RegexStringPieceArgs string_pieces;
-		for (idx_t row = 0; row < tuple_count; row++) {
-			auto pattern_idx = pattern_data.sel->get_index(row);
-			auto &validity = pattern_data.validity;
-			auto string_idx = strings_data.sel->get_index(row);
-			int32_t group_index;
-			if (!validity.RowIsValid(pattern_idx) || !strings_data.validity.RowIsValid(string_idx) ||
-			    !GetGroupIndex(args, row, group_index)) {
-				// Pattern is NULL, result is also NULL
-				auto result_data = FlatVector::GetData<list_entry_t>(result);
-				auto &result_validity = FlatVector::Validity(result);
-				result_data[row].length = 0;
-				result_data[row].offset = ListVector::GetListSize(result);
-				result_validity.SetInvalid(row);
-				continue;
-			}
-
-			auto &string = ((string_t *)strings_data.data)[string_idx];
-
-			auto &pattern_p = ((string_t *)pattern_data.data)[pattern_idx];
-			auto pattern_strpiece = CreateStringPiece(pattern_p);
-			duckdb_re2::RE2 re(pattern_strpiece, info.options);
-
-			auto group_count_p = re.NumberOfCapturingGroups();
-			if (group_count_p == -1) {
-				throw InvalidInputException("Pattern failed to parse, error: '%s'", re.error());
-			}
-			string_pieces.SetSize(group_count_p);
-
-			ExtractSingleTuple(string, re, group_index, string_pieces, result, row);
+		// Verify that the constant pattern is valid
+		auto &re = GetPattern(info, state, stored_re);
+		auto group_count_p = re.NumberOfCapturingGroups();
+		if (group_count_p == -1) {
+			throw InvalidInputException("Pattern failed to parse, error: '%s'", re.error());
 		}
+	}
+
+	for (idx_t row = 0; row < tuple_count; row++) {
+		bool pattern_valid = true;
+		if (!info.constant_pattern) {
+			// Check if the pattern is NULL or not,
+			// and compile the pattern if it's not constant
+			auto pattern_idx = pattern_data.sel->get_index(row);
+			if (!pattern_data.validity.RowIsValid(pattern_idx)) {
+				pattern_valid = false;
+			} else {
+				auto &pattern_p = ((string_t *)pattern_data.data)[pattern_idx];
+				auto pattern_strpiece = CreateStringPiece(pattern_p);
+				stored_re = make_unique<duckdb_re2::RE2>(pattern_strpiece, info.options);
+
+				// Increase the size of the args buffer if needed
+				auto group_count_p = stored_re->NumberOfCapturingGroups();
+				if (group_count_p == -1) {
+					throw InvalidInputException("Pattern failed to parse, error: '%s'", stored_re->error());
+				}
+				non_const_args->SetSize(group_count_p);
+			}
+		}
+
+		auto string_idx = strings_data.sel->get_index(row);
+		int32_t group_index;
+		if (!pattern_valid || !strings_data.validity.RowIsValid(string_idx) || !GetGroupIndex(args, row, group_index)) {
+			// If something is NULL, the result is NULL
+			// FIXME: do we even need 'SPECIAL_HANDLING'?
+			auto result_data = FlatVector::GetData<list_entry_t>(result);
+			auto &result_validity = FlatVector::Validity(result);
+			result_data[row].length = 0;
+			result_data[row].offset = ListVector::GetListSize(result);
+			result_validity.SetInvalid(row);
+			continue;
+		}
+
+		auto &re = GetPattern(info, state, stored_re);
+		auto &groups = GetGroupsBuffer(info, state, non_const_args);
+		auto &string = ((string_t *)strings_data.data)[string_idx];
+		ExtractSingleTuple(string, re, group_index, groups, result, row);
 	}
 
 	if (args.AllConstant()) {
