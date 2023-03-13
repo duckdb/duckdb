@@ -50,3 +50,21 @@ ORDER BY p.ts ASC
 7	2
 8	3
 9	3
+
+# Simple test
+query II
+SELECT p.ts, e.value
+FROM range(0,10) p(ts) ASOF JOIN events e
+ON p.ts >= e.begin
+ORDER BY p.ts ASC
+----
+0	NULL
+1	0
+2	0
+3	1
+4	1
+5	1
+6	2
+7	2
+8	3
+9	3

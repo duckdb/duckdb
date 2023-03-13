@@ -36,6 +36,10 @@ unique_ptr<TableRef> Transformer::TransformJoin(duckdb_libpgquery::PGJoinExpr *r
 		result->ref_type = JoinRefType::POSITIONAL;
 		break;
 	}
+	case duckdb_libpgquery::PG_JOIN_ASOF: {
+		result->type = JoinType::ASOF;
+		break;
+	}
 	default: {
 		throw NotImplementedException("Join type %d not supported\n", root->jointype);
 	}

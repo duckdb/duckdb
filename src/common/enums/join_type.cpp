@@ -20,6 +20,8 @@ string JoinTypeToString(JoinType type) {
 		return "SINGLE";
 	case JoinType::MARK:
 		return "MARK";
+	case JoinType::ASOF:
+		return "ASOF";
 	case JoinType::INVALID: // LCOV_EXCL_START
 		break;
 	}
@@ -27,7 +29,7 @@ string JoinTypeToString(JoinType type) {
 } // LCOV_EXCL_STOP
 
 bool IsLeftOuterJoin(JoinType type) {
-	return type == JoinType::LEFT || type == JoinType::OUTER;
+	return type == JoinType::LEFT || type == JoinType::OUTER || type == JoinType::ASOF;
 }
 
 bool IsRightOuterJoin(JoinType type) {

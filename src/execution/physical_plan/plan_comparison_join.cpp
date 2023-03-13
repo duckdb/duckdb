@@ -197,6 +197,25 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		return make_unique<PhysicalCrossProduct>(op.types, std::move(left), std::move(right), op.estimated_cardinality);
 	}
 
+	if (op.join_type == JoinType::ASOF) {
+		//	 Temporary implementation: IEJoin of Window
+		auto comp_idx = op.conditions.size();
+		for (size_t c = 0; c < op.conditions.size(); ++c) {
+			auto &cond = op.conditions[c];
+			switch (cond.comparison) {
+			case ExpressionType::COMPARE_EQUAL:
+			case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+				break;
+			case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+				D_ASSERT(comp_idx == op.conditions.size());
+				comp_idx = c;
+				break;
+			default:
+				throw NotImplementedException("Unimplemented ASOF join condition");
+			}
+		}
+	}
+
 	bool has_equality = false;
 	// bool has_inequality = false;
 	size_t has_range = 0;
