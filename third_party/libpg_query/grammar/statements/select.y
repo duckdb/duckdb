@@ -1162,8 +1162,10 @@ joined_table:
 					n->isNatural = false;
 					n->larg = $1;
 					n->rarg = $4;
-					n->usingClause = NIL; /* figure out which columns later... */
-					n->quals = $5; /* ON clause */
+					if ($5 != NULL && IsA($5, PGList))
+						n->usingClause = (PGList *) $5; /* USING clause */
+					else
+						n->quals = $5; /* ON clause */
 					n->location = @2;
 					$$ = n;
 				}

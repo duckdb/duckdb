@@ -17,15 +17,30 @@ INSERT INTO events VALUES
 	(8, 3)
 ;
 
-query III
-SELECT value, begin, 
-	LEAD(begin, 1, 'infinity'::DOUBLE) OVER (ORDER BY begin ASC) AS end
-FROM events e
-----
-0	1.0	3.0
-1	3.0	6.0
-2	6.0	8.0
-3	8.0	inf
+#
+#  Errors
+#
+
+# Unimplemented ASOF JOIN condition
+statement error
+SELECT p.ts, e.value
+FROM range(0,10) p(ts) ASOF JOIN events e
+ON p.ts <> e.begin
+ORDER BY p.ts ASC
+
+# Missing ASOF JOIN inequality
+statement error
+SELECT p.ts, e.value
+FROM range(0,10) p(ts) ASOF JOIN events e
+ON p.ts = e.begin
+ORDER BY p.ts ASC
+
+# Multiple ASOF JOIN inequalities
+statement error
+SELECT p.ts, e.value
+FROM range(0,10) p(ts) ASOF JOIN events e
+ON p.ts >= e.begin AND p.ts >= e.value
+ORDER BY p.ts ASC
 
 # Window version
 query II
@@ -51,12 +66,30 @@ ORDER BY p.ts ASC
 8	3
 9	3
 
-# Simple test
+# Simple ON test
 query II
 SELECT p.ts, e.value
 FROM range(0,10) p(ts) ASOF JOIN events e
 ON p.ts >= e.begin
 ORDER BY p.ts ASC
+----
+0	NULL
+1	0
+2	0
+3	1
+4	1
+5	1
+6	2
+7	2
+8	3
+9	3
+
+# Simple USING test 
+query II
+SELECT p.begin, e.value
+FROM range(0,10) p(begin) ASOF JOIN events e
+USING (begin)
+ORDER BY p.begin ASC
 ----
 0	NULL
 1	0
