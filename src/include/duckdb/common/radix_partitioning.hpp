@@ -50,12 +50,6 @@ public:
 	//! Select using a cutoff on the radix bits of the hash
 	static idx_t Select(Vector &hashes, const SelectionVector *sel, idx_t count, idx_t radix_bits, idx_t cutoff,
 	                    SelectionVector *true_sel, SelectionVector *false_sel);
-
-	//! Partition the data in block_collection/string_heap to multiple partitions
-	static void PartitionRowData(BufferManager &buffer_manager, const RowLayout &layout, const idx_t hash_offset,
-	                             RowDataCollection &block_collection, RowDataCollection &string_heap,
-	                             vector<unique_ptr<RowDataCollection>> &partition_block_collections,
-	                             vector<unique_ptr<RowDataCollection>> &partition_string_heaps, idx_t radix_bits);
 };
 
 //! RadixPartitionedColumnData is a PartitionedColumnData that partitions input based on the radix of a hash
