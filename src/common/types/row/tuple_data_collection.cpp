@@ -224,10 +224,12 @@ void TupleDataCollection::Build(TupleDataPinState &pin_state, TupleDataChunkStat
 
 void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, DataChunk &new_chunk,
                                   const SelectionVector &append_sel, const idx_t append_count) const {
+	const auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
+
 	// Set the validity mask for each row before inserting data
-	auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
+	const auto validity_bytes = (layout.ColumnCount() + 7) / 8;
 	for (idx_t i = 0; i < append_count; i++) {
-		ValidityBytes(row_locations[i]).SetAllValid(layout.ColumnCount());
+		memset(row_locations[i], ~0, validity_bytes);
 	}
 
 	if (!layout.AllConstant()) {
