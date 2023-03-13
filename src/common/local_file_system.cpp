@@ -836,6 +836,18 @@ static bool IsCrawl(const string &glob) {
 	// glob must match exactly
 	return glob == "**";
 }
+static bool hasMultipleCrawl(const vector<string> &splits) {
+	bool found_one = false;
+	for (const auto &s : splits) {
+		if (IsCrawl(s)) {
+			if (found_one == true) {
+				return true;
+			}
+			found_one = true;
+		}
+	}
+	return false;
+}
 static bool IsSymbolicLink(const string &file) {
 	struct stat status;
 	return (lstat(file.c_str(), &status) != -1 && S_ISLNK(status.st_mode));
@@ -961,6 +973,10 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 				previous_directories.push_back(search_path);
 			}
 		}
+	}
+
+	if (hasMultipleCrawl(splits)) {
+		throw IOException("Cannot use multiple \'**\' in one path");
 	}
 
 	for (idx_t i = absolute_path ? 1 : 0; i < splits.size(); i++) {
