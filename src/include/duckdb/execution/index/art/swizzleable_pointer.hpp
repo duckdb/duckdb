@@ -22,9 +22,6 @@ public:
 	//! Constructs a swizzled pointer from a block ID and an offset
 	explicit SwizzleablePointer(MetaBlockReader &reader);
 
-	//! The swizzleable pointer
-	idx_t pointer;
-
 public:
 	//! Checks if the pointer is swizzled
 	inline bool IsSwizzled() const {
@@ -33,9 +30,17 @@ public:
 	//! Get the block info from a swizzled pointer
 	BlockPointer GetBlockInfo();
 	//! Returns true, if the pointer is set, else false
-	explicit operator bool() const {
+	inline explicit operator bool() const {
 		return pointer;
 	}
+	//! Reset the current pointer
+	inline void Reset() {
+		pointer = 0;
+	}
+
+protected:
+	//! The swizzleable pointer
+	idx_t pointer;
 };
 
 } // namespace duckdb

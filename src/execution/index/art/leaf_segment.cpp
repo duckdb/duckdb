@@ -5,17 +5,6 @@
 
 namespace duckdb {
 
-void LeafSegment::Free(ART &art, const idx_t &position) {
-	D_ASSERT(ARTNode::GetIdx(ARTNodeType::LEAF_SEGMENT) < art.nodes.size());
-	art.nodes[ARTNode::GetIdx(ARTNodeType::LEAF_SEGMENT)].Free(position);
-	art.DecreaseMemorySize(sizeof(LeafSegment));
-}
-
-idx_t LeafSegment::New(ART &art) {
-	D_ASSERT(ARTNode::GetIdx(ARTNodeType::LEAF_SEGMENT) < art.nodes.size());
-	return art.nodes[ARTNode::GetIdx(ARTNodeType::LEAF_SEGMENT)].New();
-}
-
 LeafSegment *LeafSegment::Initialize(ART &art, const idx_t &position) {
 	auto segment = LeafSegment::Get(art, position);
 	art.IncreaseMemorySize(sizeof(LeafSegment));
@@ -24,29 +13,24 @@ LeafSegment *LeafSegment::Initialize(ART &art, const idx_t &position) {
 	return segment;
 }
 
-LeafSegment *LeafSegment::Get(ART &art, const idx_t &position) {
-	D_ASSERT(ARTNode::GetIdx(ARTNodeType::LEAF_SEGMENT) < art.nodes.size());
-	return art.nodes[ARTNode::GetIdx(ARTNodeType::LEAF_SEGMENT)].Get<LeafSegment>(position);
-}
-
 LeafSegment *LeafSegment::Append(ART &art, uint32_t &count, const row_t &row_id) {
 
 	auto *segment = this;
-	auto pos = count % ARTNode::LEAF_SEGMENT_SIZE;
+	auto position = count % ARTNode::LEAF_SEGMENT_SIZE;
 
 	// we need a new segment
-	if (pos == 0 && count != 0) {
-		auto new_position = LeafSegment::New(art);
-		next = new_position;
-		segment = LeafSegment::Initialize(art, new_position);
+	if (position == 0 && count != 0) {
+		LeafSegment::New(art, next);
+		segment = LeafSegment::Initialize(art, next);
 	}
 
-	segment->row_ids[pos] = row_id;
+	segment->row_ids[position] = row_id;
 	count++;
 	return segment;
 }
 
 LeafSegment *LeafSegment::GetTail(ART &art) {
+
 	auto segment = this;
 	auto position = next;
 	while (position != DConstants::INVALID_INDEX) {

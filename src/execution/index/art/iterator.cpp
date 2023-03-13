@@ -76,7 +76,7 @@ void Iterator::FindMinimum(const ARTNode &node) {
 	}
 
 	// go to the leftmost entry in the current node
-	auto position = node.GetMinPos(*art);
+	auto position = node.GetMinPosition(*art);
 	D_ASSERT(position != DConstants::INVALID_INDEX);
 	auto next = node.GetChild(*art, position);
 	cur_key.Push(node.GetKeyByte(*art, position));
@@ -147,7 +147,7 @@ bool Iterator::Next() {
 			return true;
 		}
 		// find next node
-		top.position = node.GetNextPos(*art, top.position);
+		top.position = node.GetNextPosition(*art, top.position);
 		if (top.position != DConstants::INVALID_INDEX) {
 			// add key-byte of the new node
 			PushKey(node, top.position);
@@ -186,7 +186,7 @@ bool Iterator::LowerBound(ARTNode node, const Key &key, const bool &is_inclusive
 		// greater case: find leftmost leaf node directly
 		if (!equal) {
 			while (node.DecodeARTNodeType() != ARTNodeType::LEAF) {
-				auto min_pos = node.GetMinPos(*art);
+				auto min_pos = node.GetMinPosition(*art);
 				PushKey(node, min_pos);
 				nodes.push(IteratorEntry(node, min_pos));
 				node = *node.GetChild(*art, min_pos);
@@ -247,7 +247,7 @@ bool Iterator::LowerBound(ARTNode node, const Key &key, const bool &is_inclusive
 		// prefix matches, search inside the child for the key
 		depth += node_prefix->count;
 
-		top.position = node.GetChildPosGreaterEqual(*art, key[depth], equal);
+		top.position = node.GetChildPositionGreaterEqual(*art, key[depth], equal);
 		// The maximum key byte of the current node is less than the key
 		// So fall back to the previous node
 		if (top.position == DConstants::INVALID_INDEX) {

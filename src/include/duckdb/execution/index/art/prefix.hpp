@@ -19,14 +19,13 @@ class PrefixSegment;
 class Prefix {
 public:
 	//! Inlined empty prefix
-	Prefix(); // TODO: necessary?
+	Prefix();
 	//! Inlined prefix containing one byte
-	explicit Prefix(const uint8_t &byte); // TODO: necessary?
+	explicit Prefix(const uint8_t &byte);
 
-	//! Delete copy/assign operator
+	//! Disable copy operators
 	Prefix(const Prefix &) = delete;
-	//! Delete move operator
-	void operator=(const Prefix &) = delete;
+	Prefix &operator=(const Prefix &) = delete;
 
 	//! Number of bytes in this prefix
 	uint32_t count;
@@ -41,7 +40,9 @@ public:
 	//! Delete all prefix segments (if not inlined) and reset all fields
 	void Free(ART &art);
 	//! Initializes all the fields of an empty prefix
-	void Initialize();
+	inline void Initialize() {
+		count = 0;
+	}
 	//! Initialize a prefix from an ART key
 	void Initialize(ART &art, const Key &key, const uint32_t &depth, const uint32_t &count_p);
 	//! Initialize a prefix from another prefix up to count
@@ -53,12 +54,16 @@ public:
 	//! Initializes a merge by incrementing the buffer IDs of the prefix segments
 	void InitializeMerge(ART &art, const idx_t &buffer_count);
 
-	//! Move a prefix into this prefix. NOTE: both prefixes must be in the same ART
-	void Move(Prefix &other);
+	//! Move a prefix into this prefix
+	inline void Move(Prefix &other) {
+		count = other.count;
+		data = other.data;
+		other.Initialize();
+	}
 	//! Append a prefix to this prefix
-	void Append(ART &art, Prefix &other);
+	void Append(ART &art, const Prefix &other);
 	//! Concatenate prefix with a partial key byte and another prefix: other.prefix + byte + this->prefix
-	void Concatenate(ART &art, const uint8_t &byte, Prefix &other);
+	void Concatenate(ART &art, const uint8_t &byte, const Prefix &other);
 	//! Removes the first n bytes, and returns the new first byte
 	uint8_t Reduce(ART &art, const idx_t &n);
 
@@ -70,13 +75,15 @@ public:
 	uint32_t MismatchPosition(ART &art, const Prefix &other) const;
 
 	//! Serialize this prefix
-	void Serialize(ART &art, MetaBlockWriter &writer);
+	void Serialize(ART &art, MetaBlockWriter &writer) const;
 	//! Deserialize this prefix
 	void Deserialize(ART &art, MetaBlockReader &reader);
 
 private:
 	//! Returns whether this prefix is inlined
-	bool IsInlined() const;
+	inline bool IsInlined() const {
+		return count <= ARTNode::PREFIX_INLINE_BYTES;
+	}
 	//! Moves all inlined bytes onto a prefix segment, does not change the size
 	//! so this will be an (temporarily) invalid prefix
 	void MoveInlinedToSegment(ART &art);

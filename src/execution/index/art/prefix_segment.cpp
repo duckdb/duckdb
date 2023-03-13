@@ -8,17 +8,6 @@ namespace duckdb {
 PrefixSegment::PrefixSegment() : next(0) {
 }
 
-void PrefixSegment::Free(ART &art, const idx_t &position) {
-	D_ASSERT(ARTNode::GetIdx(ARTNodeType::PREFIX_SEGMENT) < art.nodes.size());
-	art.nodes[ARTNode::GetIdx(ARTNodeType::PREFIX_SEGMENT)].Free(position);
-	art.DecreaseMemorySize(sizeof(PrefixSegment));
-}
-
-idx_t PrefixSegment::New(ART &art) {
-	D_ASSERT(ARTNode::GetIdx(ARTNodeType::PREFIX_SEGMENT) < art.nodes.size());
-	return art.nodes[ARTNode::GetIdx(ARTNodeType::PREFIX_SEGMENT)].New();
-}
-
 PrefixSegment *PrefixSegment::Initialize(ART &art, const idx_t &position) {
 	auto segment = PrefixSegment::Get(art, position);
 	art.IncreaseMemorySize(sizeof(PrefixSegment));
@@ -27,32 +16,27 @@ PrefixSegment *PrefixSegment::Initialize(ART &art, const idx_t &position) {
 	return segment;
 }
 
-PrefixSegment *PrefixSegment::Get(ART &art, const idx_t &position) {
-	D_ASSERT(ARTNode::GetIdx(ARTNodeType::PREFIX_SEGMENT) < art.nodes.size());
-	return art.nodes[ARTNode::GetIdx(ARTNodeType::PREFIX_SEGMENT)].Get<PrefixSegment>(position);
-}
-
 PrefixSegment *PrefixSegment::Append(ART &art, uint32_t &count, const uint8_t &byte) {
 
 	auto *segment = this;
-	auto pos = count % ARTNode::PREFIX_SEGMENT_SIZE;
+	auto position = count % ARTNode::PREFIX_SEGMENT_SIZE;
 
 	// we need a new segment
-	if (pos == 0 && count != 0) {
-		auto new_position = PrefixSegment::New(art);
-		next = new_position;
-		segment = PrefixSegment::Initialize(art, new_position);
+	if (position == 0 && count != 0) {
+		PrefixSegment::New(art, next);
+		segment = PrefixSegment::Initialize(art, next);
 	}
 
-	segment->bytes[pos] = byte;
+	segment->bytes[position] = byte;
 	count++;
 	return segment;
 }
 
 PrefixSegment *PrefixSegment::GetTail(ART &art) {
+
 	auto segment = this;
 	auto position = next;
-	while (next != DConstants::INVALID_INDEX) {
+	while (position != DConstants::INVALID_INDEX) {
 		segment = PrefixSegment::Get(art, position);
 		position = segment->next;
 	}

@@ -54,17 +54,19 @@ public:
 	void Remove(ART &art, const row_t &row_id);
 
 	//! Returns whether this leaf is inlined
-	bool IsInlined() const;
+	inline bool IsInlined() const {
+		return count <= 1;
+	}
 	//! Get the row ID at pos
 	row_t GetRowId(ART &art, const idx_t &position) const;
 	//! Returns the position of a row ID, and an invalid index, if the leaf does not contain the row ID
 	uint32_t FindRowId(ART &art, idx_t &position, const row_t &row_id) const;
 
 	//! Returns the string representation of a leaf
-	string ToString(ART &art);
+	string ToString(ART &art) const;
 
 	//! Serialize this leaf
-	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);
+	BlockPointer Serialize(ART &art, MetaBlockWriter &writer) const;
 	//! Deserialize this leaf
 	void Deserialize(ART &art, MetaBlockReader &reader);
 

@@ -29,15 +29,6 @@ class ART;
 class ARTNode;
 class Prefix;
 
-// structs
-//! Workaround struct to allow the ARTNodeType as a key in an unordered map
-struct ARTNodeTypeHash {
-	template <typename T>
-	inline uint8_t operator()(const T &type) const {
-		return (uint8_t)(type);
-	}
-};
-
 //! The ARTNode is the swizzleable pointer class of the ART index.
 //! If the ARTNode pointer is not swizzled, then the leftmost byte identifies the ARTNodeType.
 //! The remaining bytes are the position in the respective ART buffer.
@@ -51,9 +42,9 @@ public:
 	static constexpr uint8_t NODE_48_SHRINK_THRESHOLD = 12;
 	static constexpr uint8_t NODE_256_SHRINK_THRESHOLD = 36;
 	// node sizes
-	static constexpr uint16_t NODE_4_CAPACITY = 4;
-	static constexpr uint16_t NODE_16_CAPACITY = 16;
-	static constexpr uint16_t NODE_48_CAPACITY = 48;
+	static constexpr uint8_t NODE_4_CAPACITY = 4;
+	static constexpr uint8_t NODE_16_CAPACITY = 16;
+	static constexpr uint8_t NODE_48_CAPACITY = 48;
 	static constexpr uint16_t NODE_256_CAPACITY = 256;
 	// others
 	static constexpr uint8_t EMPTY_MARKER = 48;
@@ -65,14 +56,11 @@ public:
 	//! Constructs a swizzled pointer from a block ID and an offset
 	explicit ARTNode(MetaBlockReader &reader);
 	//! Get a new pointer to a node, might cause a new buffer allocation
-	static ARTNode New(ART &art, const ARTNodeType &type);
+	static void New(ART &art, ARTNode &node, const ARTNodeType &type);
 	//! Free the node (and its subtree)
 	static void Free(ART &art, ARTNode &node);
 	//! Initializes a new ART node
 	static void Initialize(ART &art, ARTNode &node, const ARTNodeType &type);
-
-	//! Vacuum the node (and its subtree)
-	static void Vacuum(ART &art, ARTNode &node, const vector<bool> &vacuum_nodes);
 
 	//! Get the node
 	template <class T>
@@ -82,36 +70,32 @@ public:
 	void EncodeARTNodeType(const ARTNodeType &type);
 	//! Retrieve the node type from the leftmost byte
 	ARTNodeType DecodeARTNodeType() const;
-	//! Returns the index corresponding to an ARTNodeType
-	static inline uint8_t GetIdx(const ARTNodeType &type) {
-		return (uint8_t)type - 1;
-	}
 
 	//! Replace a child node at pos
-	void ReplaceChild(ART &art, const idx_t &pos, ARTNode &child);
+	void ReplaceChild(ART &art, const idx_t &position, ARTNode &child);
 	//! Insert a child node at byte
 	static void InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child);
 	//! Delete the child node at pos
-	static void DeleteChild(ART &art, ARTNode &node, idx_t pos);
+	static void DeleteChild(ART &art, ARTNode &node, idx_t position);
 
 	//! Get the child at the specified position in the node. pos must be between [0, count)
-	ARTNode *GetChild(ART &art, const idx_t &pos) const;
+	ARTNode *GetChild(ART &art, const idx_t &position) const;
 	//! Get the byte at the specified position
-	uint8_t GetKeyByte(ART &art, const idx_t &pos) const;
+	uint8_t GetKeyByte(ART &art, const idx_t &position) const;
 	//! Get the position of a child corresponding exactly to the specific byte, returns DConstants::INVALID_INDEX if
 	//! the child does not exist
-	idx_t GetChildPos(ART &art, const uint8_t &byte) const;
+	idx_t GetChildPosition(ART &art, const uint8_t &byte) const;
 	//! Get the position of the first child that is greater or equal to the specific byte, or DConstants::INVALID_INDEX
 	//! if there are no children matching the criteria
-	idx_t GetChildPosGreaterEqual(ART &art, const uint8_t &byte, bool &inclusive) const;
+	idx_t GetChildPositionGreaterEqual(ART &art, const uint8_t &byte, bool &inclusive) const;
 	//! Get the position of the minimum child node in the node
-	idx_t GetMinPos(ART &art) const;
+	idx_t GetMinPosition(ART &art) const;
 	//! Get the next position in the node, or DConstants::INVALID_INDEX if there is no next position. If pos ==
 	//! DConstants::INVALID_INDEX, then the first valid position in the node is returned
-	idx_t GetNextPos(ART &art, idx_t pos) const;
+	idx_t GetNextPosition(ART &art, idx_t pos) const;
 	//! Get the next position and byte in the node, or DConstants::INVALID_INDEX if there is no next position. If pos ==
 	//! DConstants::INVALID_INDEX, then the first valid position and byte in the node are returned
-	idx_t GetNextPosAndByte(ART &art, idx_t pos, uint8_t &byte) const;
+	idx_t GetNextPositionAndByte(ART &art, idx_t pos, uint8_t &byte) const;
 
 	//! Serialize an ART node
 	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);

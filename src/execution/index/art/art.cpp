@@ -32,16 +32,16 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	}
 
 	// initialize all allocators
-	nodes.emplace_back(sizeof(PrefixSegment));
-	nodes.emplace_back(sizeof(LeafSegment));
-	nodes.emplace_back(sizeof(Leaf));
-	nodes.emplace_back(sizeof(Node4));
-	nodes.emplace_back(sizeof(Node16));
-	nodes.emplace_back(sizeof(Node48));
-	nodes.emplace_back(sizeof(Node256));
+	prefix_segments = make_unique<FixedSizeAllocator>(sizeof(PrefixSegment));
+	leaf_segments = make_unique<FixedSizeAllocator>(sizeof(LeafSegment));
+	leaves = make_unique<FixedSizeAllocator>(sizeof(Leaf));
+	n4_nodes = make_unique<FixedSizeAllocator>(sizeof(Node4));
+	n16_nodes = make_unique<FixedSizeAllocator>(sizeof(Node16));
+	n48_nodes = make_unique<FixedSizeAllocator>(sizeof(Node48));
+	n256_nodes = make_unique<FixedSizeAllocator>(sizeof(Node256));
 
 	// set the root node of the tree
-	tree = ARTNode();
+	tree.Reset();
 	if (block_id != DConstants::INVALID_INDEX) {
 		tree.Deserialize(*this, block_id, block_offset);
 	}
@@ -72,7 +72,7 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 
 ART::~ART() {
 	if (tree) {
-		tree = ARTNode();
+		tree.Reset();
 	}
 }
 
@@ -290,7 +290,7 @@ bool Construct(ART &art, vector<Key> &keys, row_t *row_ids, ARTNode &node, KeySe
 			return false;
 		}
 
-		node = ARTNode::New(art, ARTNodeType::LEAF);
+		ARTNode::New(art, node, ARTNodeType::LEAF);
 		if (single_row_id) {
 			Leaf::Initialize(art, node, start_key, prefix_start, row_ids[key_section.start]);
 		} else {
@@ -341,20 +341,12 @@ bool ART::ConstructFromSorted(idx_t count, vector<Key> &keys, Vector &row_identi
 vector<bool> ART::InitializeVacuum() {
 
 	vector<bool> vacuum_nodes;
-	for (auto &node : nodes) {
-		vacuum_nodes.push_back(node.InitializeVacuum());
-	}
+	// TODO
 	return vacuum_nodes;
 }
 
 void ART::FinalizeVacuum(vector<bool> &vacuum_nodes) {
-
-	D_ASSERT(vacuum_nodes.size() == nodes.size());
-	for (idx_t i = 0; i < vacuum_nodes.size(); i++) {
-		if (vacuum_nodes[i]) {
-			nodes[i].FinalizeVacuum();
-		}
-	}
+	// TODO
 }
 
 void ART::Vacuum() {
@@ -378,8 +370,9 @@ void ART::Vacuum() {
 		return;
 	}
 
+	// TODO
 	// traverse the allocated memory of the tree to perform a vacuum
-	ARTNode::Vacuum(*this, tree, vacuum_nodes);
+	//	ARTNode::Vacuum(*this, tree, vacuum_nodes);
 
 	// finalize the vacuum operation
 	FinalizeVacuum(vacuum_nodes);
@@ -477,7 +470,7 @@ bool ART::Insert(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id
 
 	if (!node) {
 		// node is currently empty, create a leaf here with the key
-		node = ARTNode::New(*this, ARTNodeType::LEAF);
+		ARTNode::New(*this, node, ARTNodeType::LEAF);
 		Leaf::Initialize(*this, node, key, depth, row_id);
 		return true;
 	}
@@ -501,18 +494,20 @@ bool ART::Insert(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id
 		}
 
 		// replace leaf with Node4 and store both leaves in it
-		auto new_n4_node = ARTNode::New(*this, ARTNodeType::NODE_4);
-		auto new_n4 = Node4::Initialize(*this, new_n4_node);
+		// TODO: potentially less allocations here
+		auto old_node = node;
+		ARTNode::New(*this, node, ARTNodeType::NODE_4);
+		auto new_n4 = Node4::Initialize(*this, node);
 		new_n4->prefix.Initialize(*this, key, depth, new_prefix_length);
 
-		auto key_byte = node.GetPrefix(*this)->Reduce(*this, new_prefix_length);
-		Node4::InsertChild(*this, new_n4_node, key_byte, node);
+		auto key_byte = old_node.GetPrefix(*this)->Reduce(*this, new_prefix_length);
+		Node4::InsertChild(*this, node, key_byte, old_node);
 
-		auto leaf_node = ARTNode::New(*this, ARTNodeType::LEAF);
+		ARTNode leaf_node;
+		ARTNode::New(*this, leaf_node, ARTNodeType::LEAF);
 		Leaf::Initialize(*this, leaf_node, key, depth + new_prefix_length + 1, row_id);
-		Node4::InsertChild(*this, new_n4_node, key[depth + new_prefix_length], leaf_node);
+		Node4::InsertChild(*this, node, key[depth + new_prefix_length], leaf_node);
 
-		node = new_n4_node;
 		return true;
 	}
 
@@ -523,18 +518,20 @@ bool ART::Insert(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id
 		if (mismatch_position != node.GetPrefix(*this)->count) {
 
 			// prefix differs, create new node
-			auto new_n4_node = ARTNode::New(*this, ARTNodeType::NODE_4);
-			auto new_n4 = Node4::Initialize(*this, new_n4_node);
+			// TODO: potentially less allocations here
+			auto old_node = node;
+			ARTNode::New(*this, node, ARTNodeType::NODE_4);
+			auto new_n4 = Node4::Initialize(*this, node);
 			new_n4->prefix.Initialize(*this, key, depth, mismatch_position);
 
-			auto key_byte = node.GetPrefix(*this)->Reduce(*this, mismatch_position);
-			Node4::InsertChild(*this, new_n4_node, key_byte, node);
+			auto key_byte = old_node.GetPrefix(*this)->Reduce(*this, mismatch_position);
+			Node4::InsertChild(*this, node, key_byte, old_node);
 
-			auto leaf_node = ARTNode::New(*this, ARTNodeType::LEAF);
+			ARTNode leaf_node;
+			ARTNode::New(*this, leaf_node, ARTNodeType::LEAF);
 			Leaf::Initialize(*this, leaf_node, key, depth + mismatch_position + 1, row_id);
-			Node4::InsertChild(*this, new_n4_node, key[depth + mismatch_position], leaf_node);
+			Node4::InsertChild(*this, node, key[depth + mismatch_position], leaf_node);
 
-			node = new_n4_node;
 			return true;
 		}
 		depth += node.GetPrefix(*this)->count;
@@ -542,7 +539,7 @@ bool ART::Insert(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id
 
 	// recurse
 	D_ASSERT(depth < key.len);
-	idx_t position = node.GetChildPos(*this, key[depth]);
+	idx_t position = node.GetChildPosition(*this, key[depth]);
 	if (position != DConstants::INVALID_INDEX) {
 		auto child = node.GetChild(*this, position);
 		bool success = Insert(*child, key, depth + 1, row_id);
@@ -551,7 +548,9 @@ bool ART::Insert(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id
 	}
 
 	// insert at position
-	auto leaf_node = ARTNode::New(*this, ARTNodeType::LEAF);
+	// TODO: potentially less allocations here (leaf already exists as empty ARTNode child of node)
+	ARTNode leaf_node;
+	ARTNode::New(*this, leaf_node, ARTNodeType::LEAF);
 	Leaf::Initialize(*this, leaf_node, key, depth + 1, row_id);
 	ARTNode::InsertChild(*this, node, key[depth], leaf_node);
 	return true;
@@ -612,7 +611,7 @@ void ART::Erase(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id)
 
 		if (leaf->count == 0) {
 			ARTNode::Free(*this, node);
-			node = ARTNode();
+			node.Reset();
 		}
 		return;
 	}
@@ -626,7 +625,7 @@ void ART::Erase(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id)
 		depth += node_prefix->count;
 	}
 
-	idx_t position = node.GetChildPos(*this, key[depth]);
+	idx_t position = node.GetChildPosition(*this, key[depth]);
 	if (position != DConstants::INVALID_INDEX) {
 		auto child = node.GetChild(*this, position);
 		D_ASSERT(child);
@@ -750,7 +749,7 @@ Leaf *ART::Lookup(ARTNode node, const Key &key, idx_t depth) {
 		}
 
 		// prefix matches key, but no child at byte, does not contain key
-		idx_t position = node.GetChildPos(*this, key[depth]);
+		idx_t position = node.GetChildPosition(*this, key[depth]);
 		if (position == DConstants::INVALID_INDEX) {
 			return nullptr;
 		}
@@ -1046,9 +1045,12 @@ BlockPointer ART::Serialize(MetaBlockWriter &writer) {
 vector<idx_t> ART::InitializeMerge() {
 
 	vector<idx_t> buffer_counts;
-	for (auto &node : nodes) {
-		buffer_counts.emplace_back(node.buffers.size());
+	auto type = ARTNodeType::PREFIX_SEGMENT;
+	while (type != ARTNodeType::NODE_256) {
+		buffer_counts.emplace_back(GetAllocator(type)->buffers.size());
+		type = ARTNodeType((uint8_t)type + 1);
 	}
+	buffer_counts.emplace_back(GetAllocator(type)->buffers.size());
 	return buffer_counts;
 }
 
@@ -1064,11 +1066,12 @@ bool ART::MergeIndexes(IndexLock &state, Index *other_index) {
 	}
 
 	// merge the node storage
-	D_ASSERT(nodes.size() == other_art->nodes.size());
-	for (idx_t i = 0; i < nodes.size(); i++) {
-		nodes[i].Merge(other_art->nodes[i]);
+	auto type = ARTNodeType::PREFIX_SEGMENT;
+	while (type != ARTNodeType::NODE_256) {
+		GetAllocator(type)->Merge(*other_art->GetAllocator(type));
+		type = ARTNodeType((uint8_t)type + 1);
 	}
-	other_art->nodes.clear();
+	GetAllocator(type)->Merge(*other_art->GetAllocator(type));
 
 	// merge the ARTs
 	if (!tree.Merge(*this, other_art->tree)) {
@@ -1095,6 +1098,27 @@ string ART::ToString() {
 	}
 	std::cout << str;
 	return str;
+}
+
+FixedSizeAllocator *ART::GetAllocator(const ARTNodeType &type) const {
+	switch (type) {
+	case ARTNodeType::PREFIX_SEGMENT:
+		return prefix_segments.get();
+	case ARTNodeType::LEAF_SEGMENT:
+		return leaf_segments.get();
+	case ARTNodeType::LEAF:
+		return leaves.get();
+	case ARTNodeType::NODE_4:
+		return n4_nodes.get();
+	case ARTNodeType::NODE_16:
+		return n16_nodes.get();
+	case ARTNodeType::NODE_48:
+		return n48_nodes.get();
+	case ARTNodeType::NODE_256:
+		return n256_nodes.get();
+	default:
+		throw InternalException("Unknown ARTNodeType for FixedSizeAllocator");
+	}
 }
 
 } // namespace duckdb

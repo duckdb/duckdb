@@ -32,19 +32,35 @@ Node256 *Node256::Initialize(ART &art, const ARTNode &node) {
 
 	n256->count = 0;
 	n256->prefix.Initialize();
+
 	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
-		n256->children[i] = ARTNode();
+		n256->children[i].Reset();
 	}
+
 	return n256;
 }
 
-void Node256::Vacuum(ART &art, const vector<bool> &vacuum_nodes) {
+Node256 *Node256::GrowNode48(ART &art, ARTNode &node256, ARTNode &node48) {
+
+	ARTNode::New(art, node256, ARTNodeType::NODE_256);
+
+	auto n48 = node48.Get<Node48>(art);
+	auto n256 = node256.Get<Node256>(art);
+
+	n256->count = n48->count;
+	n256->prefix.Move(n48->prefix);
 
 	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
-		if (children[i]) {
-			ARTNode::Vacuum(art, children[i], vacuum_nodes);
+		if (n48->child_index[i] != ARTNode::EMPTY_MARKER) {
+			n256->children[i] = n48->children[n48->child_index[i]];
+		} else {
+			n256->children[i].Reset();
 		}
 	}
+
+	n48->count = 0;
+	ARTNode::Free(art, node48);
+	return n256;
 }
 
 void Node256::InitializeMerge(ART &art, const vector<idx_t> &buffer_counts) {
@@ -62,88 +78,68 @@ void Node256::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode 
 	D_ASSERT(!node.IsSwizzled());
 	auto n256 = node.Get<Node256>(art);
 
+#ifdef DEBUG
+	// ensure that there is no other child at the same byte
+	D_ASSERT(!n256->children[byte]);
+#endif
+
 	n256->count++;
 	n256->children[byte] = child;
 }
 
-void Node256::DeleteChild(ART &art, ARTNode &node, idx_t pos) {
+void Node256::DeleteChild(ART &art, ARTNode &node, idx_t position) {
 
 	D_ASSERT(node);
 	D_ASSERT(!node.IsSwizzled());
 	auto n256 = node.Get<Node256>(art);
 
 	// free the child and decrease the count
-	ARTNode::Free(art, n256->children[pos]);
+	ARTNode::Free(art, n256->children[position]);
 	n256->count--;
 
 	// shrink node to Node48
 	if (n256->count <= ARTNode::NODE_256_SHRINK_THRESHOLD) {
-
-		auto new_n48_node = ARTNode::New(art, ARTNodeType::NODE_48);
-		auto new_n48 = Node48::Initialize(art, new_n48_node);
-
-		new_n48->prefix.Move(n256->prefix);
-
-#ifdef DEBUG
-		idx_t child_count = 0;
-		for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
-			if (n256->children[i]) {
-				child_count++;
-			}
-		}
-		D_ASSERT(child_count == n256->count);
-#endif
-
-		for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
-			if (n256->children[i]) {
-				new_n48->child_index[i] = new_n48->count;
-				new_n48->children[new_n48->count++] = n256->children[i];
-				n256->children[i] = ARTNode();
-			}
-		}
-
-		n256->count = 0;
-		ARTNode::Free(art, node);
-		node = new_n48_node;
+		auto node256 = node;
+		Node48::ShrinkNode256(art, node, node256);
 	}
 }
 
-void Node256::ReplaceChild(const idx_t &pos, ARTNode &child) {
-	D_ASSERT(pos < ARTNode::NODE_256_CAPACITY);
-	children[pos] = child;
+void Node256::ReplaceChild(const idx_t &position, ARTNode &child) {
+	D_ASSERT(position < ARTNode::NODE_256_CAPACITY);
+	children[position] = child;
 }
 
-ARTNode *Node256::GetChild(const idx_t &pos) {
-	D_ASSERT(pos < ARTNode::NODE_256_CAPACITY);
-	return &children[pos];
+ARTNode *Node256::GetChild(const idx_t &position) {
+	D_ASSERT(position < ARTNode::NODE_256_CAPACITY);
+	return &children[position];
 }
 
-uint8_t Node256::GetKeyByte(const idx_t &pos) const {
-	D_ASSERT(pos < ARTNode::NODE_256_CAPACITY);
-	return pos;
+uint8_t Node256::GetKeyByte(const idx_t &position) const {
+	D_ASSERT(position < ARTNode::NODE_256_CAPACITY);
+	return position;
 }
 
-idx_t Node256::GetChildPos(const uint8_t &byte) const {
+idx_t Node256::GetChildPosition(const uint8_t &byte) const {
 	if (children[byte]) {
 		return byte;
 	}
 	return DConstants::INVALID_INDEX;
 }
 
-idx_t Node256::GetChildPosGreaterEqual(const uint8_t &byte, bool &inclusive) const {
-	for (idx_t pos = byte; pos < ARTNode::NODE_256_CAPACITY; pos++) {
-		if (children[pos]) {
+idx_t Node256::GetChildPositionGreaterEqual(const uint8_t &byte, bool &inclusive) const {
+	for (idx_t position = byte; position < ARTNode::NODE_256_CAPACITY; position++) {
+		if (children[position]) {
 			inclusive = false;
-			if (pos == byte) {
+			if (position == byte) {
 				inclusive = true;
 			}
-			return pos;
+			return position;
 		}
 	}
 	return DConstants::INVALID_INDEX;
 }
 
-idx_t Node256::GetMinPos() const {
+idx_t Node256::GetMinPosition() const {
 	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
 		if (children[i]) {
 			return i;
@@ -152,22 +148,22 @@ idx_t Node256::GetMinPos() const {
 	return DConstants::INVALID_INDEX;
 }
 
-idx_t Node256::GetNextPos(idx_t pos) const {
-	pos == DConstants::INVALID_INDEX ? pos = 0 : pos++;
-	for (; pos < ARTNode::NODE_256_CAPACITY; pos++) {
-		if (children[pos]) {
-			return pos;
+idx_t Node256::GetNextPosition(idx_t position) const {
+	position == DConstants::INVALID_INDEX ? position = 0 : position++;
+	for (; position < ARTNode::NODE_256_CAPACITY; position++) {
+		if (children[position]) {
+			return position;
 		}
 	}
 	return DConstants::INVALID_INDEX;
 }
 
-idx_t Node256::GetNextPosAndByte(idx_t pos, uint8_t &byte) const {
-	pos == DConstants::INVALID_INDEX ? pos = 0 : pos++;
-	for (; pos < ARTNode::NODE_256_CAPACITY; pos++) {
-		if (children[pos]) {
-			byte = uint8_t(pos);
-			return pos;
+idx_t Node256::GetNextPositionAndByte(idx_t position, uint8_t &byte) const {
+	position == DConstants::INVALID_INDEX ? position = 0 : position++;
+	for (; position < ARTNode::NODE_256_CAPACITY; position++) {
+		if (children[position]) {
+			byte = uint8_t(position);
+			return position;
 		}
 	}
 	return DConstants::INVALID_INDEX;
