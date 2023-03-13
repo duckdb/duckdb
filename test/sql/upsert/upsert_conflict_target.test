@@ -17,7 +17,7 @@ create or replace table tbl (
 statement error
 insert into tbl VALUES (1,2,3), (1,2,3);
 ----
-Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicated key
+Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key
 
 statement ok
 insert into tbl VALUES (1,2,3), (1,4,5);
