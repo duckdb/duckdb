@@ -40,13 +40,9 @@ struct NumericValueUnion {
 	} value_;
 
 	template <class T>
-	T &GetReferenceUnsafe() {
-		throw InternalException("NumericValueUnion::GetReferenceUnsafe called on unsupported type");
-	}
+	T &GetReferenceUnsafe();
 	template <class T>
-	T GetValueUnsafe() const {
-		throw InternalException("NumericValueUnion::GetValueUnsafe called on unsupported type");
-	}
+	T GetValueUnsafe() const;
 };
 
 struct NumericStatsData {
