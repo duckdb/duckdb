@@ -134,7 +134,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		schema = INVALID_SCHEMA;
 		function_name = reinterpret_cast<duckdb_libpgquery::PGValue *>(name->head->data.ptr_value)->val.str;
 	} else {
-		throw InternalException("TransformFuncCall - Expected 1, 2 or 3 qualifications");
+		throw ParserException("TransformFuncCall - Expected 1, 2 or 3 qualifications");
 	}
 
 	//  transform children
