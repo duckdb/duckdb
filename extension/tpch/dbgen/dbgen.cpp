@@ -465,7 +465,7 @@ void skip(int table, int children, DSS_HUGE step, DBGenContext &dbgen_ctx){
 	}
 }
 
-void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string schema, string suffix, int children_p, int step_p) {
+void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string schema, string suffix, int children_p, int current_step) {
 	if (flt_scale == 0) {
 		return;
 	}
@@ -501,10 +501,9 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 	tdefs[REGION].base = NATIONS_MAX;
 
 	children = children_p;
-	step = step_p;
 	d_path = NULL;
 
-	if (step >= children){
+	if (current_step >= children){
 		return;
 	}
 
@@ -549,9 +548,9 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 			} else {
 				rowcnt = tdefs[i].base;
 			}
-			if (children > 1 && step != -1){
+			if (children > 1 && current_step != -1){
 				size_t part_size = std::ceil((double)rowcnt / (double)children);
-				 auto part_offset = part_size * step;
+				 auto part_offset = part_size * current_step;
 				 auto part_end = part_offset + part_size;
 				 rowcnt = part_end > rowcnt? rowcnt - part_offset : part_size;
 				 skip(i,children, part_offset, dbgen_ctx);
