@@ -9,11 +9,51 @@
 
 namespace duckdb {
 
+//===--------------------------------------------------------------------===//
+// RowGroupSegmentTree
+//===--------------------------------------------------------------------===//
+class RowGroupSegmentTree : public SegmentTree<RowGroup> {
+public:
+	RowGroupSegmentTree(DataTableInfo &table_info_p, BlockManager &block_manager_p, vector<LogicalType> column_types_p) :
+	    SegmentTree<RowGroup>(), info(table_info_p), block_manager(block_manager_p),
+		column_types(std::move(column_types_p)), current_row_group(0), max_row_group(0) {}
+
+	void Initialize(PersistentTableData &data) {
+		D_ASSERT(data.row_group_count > 0);
+		current_row_group = 0;
+		max_row_group = data.row_group_count;
+		finished_loading = false;
+		reader = make_unique<MetaBlockReader>(block_manager, data.block_id);
+		reader->offset = data.offset;
+	}
+
+protected:
+	unique_ptr<RowGroup> LoadSegment() override {
+		if (current_row_group >= max_row_group) {
+			finished_loading = true;
+			return nullptr;
+		}
+		auto row_group_pointer = RowGroup::Deserialize(*reader, column_types);
+		current_row_group++;
+		return make_unique<RowGroup>(info.db, block_manager, info, column_types, std::move(row_group_pointer));
+	}
+
+	DataTableInfo &info;
+	BlockManager &block_manager;
+	vector<LogicalType> column_types;
+	idx_t current_row_group;
+	idx_t max_row_group;
+	unique_ptr<MetaBlockReader> reader;
+};
+
+//===--------------------------------------------------------------------===//
+// Row Group Collection
+//===--------------------------------------------------------------------===//
 RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, BlockManager &block_manager,
                                        vector<LogicalType> types_p, idx_t row_start_p, idx_t total_rows_p)
     : block_manager(block_manager), total_rows(total_rows_p), info(std::move(info_p)), types(std::move(types_p)),
       row_start(row_start_p) {
-	row_groups = make_shared<RowGroupSegmentTree>();
+	row_groups = make_shared<RowGroupSegmentTree>(*info, block_manager, types);
 }
 
 idx_t RowGroupCollection::GetTotalRows() const {
@@ -34,14 +74,8 @@ Allocator &RowGroupCollection::GetAllocator() const {
 void RowGroupCollection::Initialize(PersistentTableData &data) {
 	D_ASSERT(this->row_start == 0);
 	auto l = row_groups->Lock();
-	for (auto &row_group_pointer : data.row_groups) {
-		auto new_row_group = make_unique<RowGroup>(info->db, block_manager, *info, types, std::move(row_group_pointer));
-		auto row_group_count = new_row_group->start + new_row_group->count;
-		if (row_group_count > this->total_rows) {
-			this->total_rows = row_group_count;
-		}
-		row_groups->AppendSegment(l, std::move(new_row_group));
-	}
+	this->total_rows = data.total_rows;
+	row_groups->Initialize(data);
 	stats.Initialize(types, data);
 }
 

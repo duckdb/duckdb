@@ -8,8 +8,6 @@
 
 #include "duckdb/main/database.hpp"
 
-#include "duckdb/storage/table/row_group.hpp"
-
 namespace duckdb {
 
 TableDataReader::TableDataReader(MetaBlockReader &reader, BoundCreateTableInfo &info) : reader(reader), info(info) {
@@ -24,12 +22,9 @@ void TableDataReader::ReadTableData() {
 	info.data->table_stats.Deserialize(reader, columns);
 
 	// deserialize each of the individual row groups
-	auto row_group_count = reader.Read<uint64_t>();
-	info.data->row_groups.reserve(row_group_count);
-	for (idx_t i = 0; i < row_group_count; i++) {
-		auto row_group_pointer = RowGroup::Deserialize(reader, columns);
-		info.data->row_groups.push_back(std::move(row_group_pointer));
-	}
+	info.data->row_group_count = reader.Read<uint64_t>();
+	info.data->block_id = reader.block->BlockId();
+	info.data->offset = reader.offset;
 }
 
 } // namespace duckdb

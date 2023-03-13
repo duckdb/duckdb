@@ -23,7 +23,7 @@ class TableStatistics;
 
 class BoundConstraint;
 
-class RowGroupSegmentTree : public SegmentTree<RowGroup> {};
+class RowGroupSegmentTree;
 
 class RowGroupCollection {
 public:

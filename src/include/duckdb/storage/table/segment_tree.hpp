@@ -31,6 +31,7 @@ private:
 
 public:
 	explicit SegmentTree(bool finished_loading_p = true) : finished_loading(finished_loading_p) {}
+	virtual ~SegmentTree() {}
 
 	//! Locks the segment tree. All methods to the segment tree either lock the segment tree, or take an already
 	//! obtained lock.
@@ -38,8 +39,8 @@ public:
 		return SegmentLock(node_lock);
 	}
 
-	bool IsEmpty(SegmentLock &) {
-		return GetRootSegment() == nullptr;
+	bool IsEmpty(SegmentLock &l) {
+		return GetRootSegment(l) == nullptr;
 	}
 
 	//! Gets a pointer to the first segment. Useful for scans.
@@ -48,15 +49,15 @@ public:
 		return GetRootSegment(l);
 	}
 
-	T *GetRootSegment(SegmentLock &) {
+	T *GetRootSegment(SegmentLock &l) {
 		if (nodes.empty()) {
-			LoadNextSegment();
+			LoadNextSegment(l);
 		}
 		return nodes.empty() ? nullptr : nodes[0].node.get();
 	}
 	//! Obtains ownership of the data of the segment tree
-	vector<SegmentNode<T>> MoveSegments(SegmentLock &) {
-		LoadAllSegments();
+	vector<SegmentNode<T>> MoveSegments(SegmentLock &l) {
+		LoadAllSegments(l);
 		return std::move(nodes);
 	}
 	//! Gets a pointer to the nth segment. Negative numbers start from the back.
@@ -64,13 +65,23 @@ public:
 		auto l = Lock();
 		return GetSegmentByIndex(l, index);
 	}
-	T *GetSegmentByIndex(SegmentLock &, idx_t index) {
-		// lazily load segments
-		while(index >= nodes.size() && LoadNextSegment()) {}
-		if (index >= nodes.size()) {
-			return nullptr;
+	T *GetSegmentByIndex(SegmentLock &l, int64_t index) {
+		if (index < 0) {
+			// load all segments
+			LoadAllSegments(l);
+			index = nodes.size() + index;
+			if (index < 0) {
+				return nullptr;
+			}
+			return nodes[index].node.get();
+		} else {
+			// lazily load segments until we reach the specific segment
+			while(idx_t(index) >= nodes.size() && LoadNextSegment(l)) {}
+			if (idx_t(index) >= nodes.size()) {
+				return nullptr;
+			}
+			return nodes[index].node.get();
 		}
-		return nodes[index].node.get();
 	}
 	//! Gets the next segment
 	T *GetNextSegment(T *segment) {
@@ -88,8 +99,8 @@ public:
 	}
 
 	//! Gets a pointer to the last segment. Useful for appends.
-	T *GetLastSegment(SegmentLock &) {
-		LoadAllSegments();
+	T *GetLastSegment(SegmentLock &l) {
+		LoadAllSegments(l);
 		if (nodes.empty()) {
 			return nullptr;
 		}
@@ -132,8 +143,8 @@ public:
 		auto l = Lock();
 		Replace(l, other);
 	}
-	void Replace(SegmentLock &, SegmentTree<T> &other) {
-		other.LoadAllSegments();
+	void Replace(SegmentLock &l, SegmentTree<T> &other) {
+		other.LoadAllSegments(l);
 		nodes = std::move(other.nodes);
 	}
 
@@ -160,9 +171,9 @@ public:
 		throw InternalException("Could not find node in column segment tree!\n%s%s", error, Exception::GetStackTrace());
 	}
 
-	bool TryGetSegmentIndex(SegmentLock &, idx_t row_number, idx_t &result) {
+	bool TryGetSegmentIndex(SegmentLock &l, idx_t row_number, idx_t &result) {
 		// load segments until the row number is within bounds
-		while ((nodes.empty() || row_number < nodes.back().row_start + nodes.back().node->count) && LoadNextSegment()) {}
+		while ((nodes.empty() || row_number < nodes.back().row_start + nodes.back().node->count) && LoadNextSegment(l)) {}
 		if (nodes.empty()) {
 			return false;
 		}
@@ -270,21 +281,21 @@ private:
 	};
 
 	//! Load the next segment, if there are any left to load
-	bool LoadNextSegment() {
+	bool LoadNextSegment(SegmentLock &l) {
 		if (finished_loading) {
 			return false;
 		}
 		auto result = LoadSegment();
 		if (result) {
-			AppendSegment(std::move(result));
+			AppendSegment(l, std::move(result));
 			return true;
 		}
 		return false;
 	}
 
 	//! Load all segments, if there are any left to load
-	void LoadAllSegments() {
-		while(LoadNextSegment());
+	void LoadAllSegments(SegmentLock &l) {
+		while(LoadNextSegment(l));
 	}
 };
 

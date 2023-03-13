@@ -817,22 +817,22 @@ void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &main_serializer) 
 	writer.Finalize();
 }
 
-RowGroupPointer RowGroup::Deserialize(Deserializer &main_source, const ColumnList &columns) {
+RowGroupPointer RowGroup::Deserialize(Deserializer &main_source, const vector<LogicalType> &columns) {
 	RowGroupPointer result;
 
 	FieldReader reader(main_source);
 	result.row_start = reader.ReadRequired<uint64_t>();
 	result.tuple_count = reader.ReadRequired<uint64_t>();
 
-	auto physical_columns = columns.PhysicalColumnCount();
+	auto physical_columns = columns.size();
 	result.data_pointers.reserve(physical_columns);
 	result.statistics.reserve(physical_columns);
 
 	auto &source = reader.GetSource();
-	for (auto &col : columns.Physical()) {
-		result.statistics.push_back(BaseStatistics::Deserialize(source, col.Type()));
+	for (auto &col_type : columns) {
+		result.statistics.push_back(BaseStatistics::Deserialize(source, col_type));
 	}
-	for (idx_t i = 0; i < columns.PhysicalColumnCount(); i++) {
+	for (idx_t i = 0; i < columns.size(); i++) {
 		BlockPointer pointer;
 		pointer.block_id = source.Read<block_id_t>();
 		pointer.offset = source.Read<uint64_t>();
