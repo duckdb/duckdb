@@ -16,6 +16,7 @@
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
 #include "duckdb/storage/table/segment_tree.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
