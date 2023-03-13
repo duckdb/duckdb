@@ -94,10 +94,10 @@ SELECT count(*) FROM glob('test/sql/copy/csv/data/glob/crawl/d/**/mid/*/');
 ----
 81
 
-query I
+statement error
 SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/**/mid/**/*.csv';
 ----
-108
+IO Error: Cannot use multiple '**' in one path
 
 query I
 SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/**/???/*/*.csv';
@@ -129,10 +129,10 @@ SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/*/???/*.csv';
 ----
 9
 
-query I
+statement error
 SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/**/*/**/*.csv';
 ----
-615
+IO Error: Cannot use multiple '**' in one path
 
 query I
 SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/**/d2?/*/*.csv';
@@ -159,10 +159,10 @@ SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/*/**/d?0/*.csv';
 ----
 39
 
-query I
+statement error
 SELECT count(*) FROM 'test/sql/copy/csv/data/glob/crawl/d/**/**/**/**/*.csv';
 ----
-6124
+IO Error: Cannot use multiple '**' in one path
 
 # Test with hidden files. By default python does not return hidden files, but duckdb does.
 query II
@@ -192,7 +192,7 @@ IO Error: Could not read from file
 
 # symlink test: symlinks will not be searched
 query I
-FROM read_csv_auto('test/sql/copy/csv/data/glob/crawl/symbolic_link/**');
+FROM read_csv_auto('test/sql/copy/csv/data/glob/crawl/.symbolic_link/**');
 ----
 -42
 
