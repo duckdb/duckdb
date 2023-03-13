@@ -179,9 +179,9 @@ select count(*) > 0 from glob('**');
 true
 
 query I
-select count(*) > 0 from glob('**/**');
+select count(*) from glob('**/samename/*');
 ----
-true
+8
 
 require notwindows
 
@@ -190,7 +190,7 @@ SELECT sum(column0) FROM read_csv('test/sql/copy/csv/data/glob/crawl/d/**/', aut
 ----
 IO Error: Could not read from file 
 
-# symlink test: symlinks will be ignored
+# symlink test: symlinks will not be searched
 query I
 FROM read_csv_auto('test/sql/copy/csv/data/glob/crawl/symbolic_link/**');
 ----

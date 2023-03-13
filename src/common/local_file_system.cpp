@@ -837,8 +837,8 @@ static bool IsCrawl(const string &glob) {
 	return glob == "**";
 }
 static bool IsSymbolicLink(const string &file) {
-	struct stat buf;
-	return (lstat(file.c_str(), &buf) != -1 && S_ISLNK(buf.st_mode));
+	struct stat status;
+	return (lstat(file.c_str(), &status) != -1 && S_ISLNK(status.st_mode));
 }
 
 static void RecursiveGlobDirectories(FileSystem &fs, const string &path, vector<string> &result, bool match_directory,
