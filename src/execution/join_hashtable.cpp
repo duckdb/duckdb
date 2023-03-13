@@ -823,23 +823,27 @@ idx_t JoinHashTable::FillWithHTOffsets(JoinHTScanState &state, Vector &addresses
 
 bool JoinHashTable::RequiresExternalJoin(ClientConfig &config, vector<unique_ptr<JoinHashTable>> &local_hts) {
 	total_count = 0;
-	total_size = 0;
+	idx_t data_size = 0;
 	for (auto &ht : local_hts) {
 		auto &local_sink_collection = ht->GetSinkCollection();
 		total_count += local_sink_collection.Count();
-		total_size += local_sink_collection.SizeInBytes();
+		data_size += local_sink_collection.SizeInBytes();
 	}
-	total_size += PointerTableCapacity(total_count) * sizeof(data_ptr_t);
 
 	if (total_count == 0) {
 		return false;
 	}
 
 	if (config.force_external) {
-		max_ht_size = (total_size + 2) / 3;
+		// Do ~3 rounds if forcing external join to test all code paths
+		auto data_size_per_round = (data_size + 2) / 3;
+		auto count_per_round = (total_count + 2) / 3;
+		max_ht_size = data_size_per_round + PointerTableSize(count_per_round);
+		external = true;
+	} else {
+		auto ht_size = data_size + PointerTableSize(total_count);
+		external = ht_size > max_ht_size;
 	}
-
-	external = total_size > max_ht_size;
 	return external;
 }
 
@@ -871,7 +875,7 @@ bool JoinHashTable::RequiresPartitioning(ClientConfig &config, vector<unique_ptr
 	for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
 		const auto &partition_count = partition_counts[partition_idx];
 		const auto &partition_size = partition_sizes[partition_idx];
-		auto partition_ht_size = partition_size + PointerTableCapacity(partition_count) * sizeof(data_ptr_t);
+		auto partition_ht_size = partition_size + PointerTableSize(partition_count);
 		if (partition_ht_size > max_partition_size) {
 			max_partition_size = partition_ht_size;
 			max_partition_idx = partition_idx;
@@ -890,7 +894,7 @@ bool JoinHashTable::RequiresPartitioning(ClientConfig &config, vector<unique_ptr
 
 			auto new_estimated_count = double(partition_count) / partition_multiplier;
 			auto new_estimated_size = double(partition_size) / partition_multiplier;
-			auto new_estimated_ht_size = new_estimated_size + PointerTableCapacity(new_estimated_count);
+			auto new_estimated_ht_size = new_estimated_size + PointerTableSize(new_estimated_count);
 
 			if (new_estimated_ht_size <= double(max_ht_size) / 4) {
 				// Aim for an estimated partition size of max_ht_size / 4
@@ -940,7 +944,7 @@ bool JoinHashTable::PrepareExternalFinalize() {
 	for (partition_idx = partition_start; partition_idx < num_partitions; partition_idx++) {
 		auto incl_count = count + partitions[partition_idx]->Count();
 		auto incl_data_size = data_size + partitions[partition_idx]->SizeInBytes();
-		auto incl_ht_size = incl_data_size + PointerTableCapacity(incl_count) * sizeof(data_ptr_t);
+		auto incl_ht_size = incl_data_size + PointerTableSize(incl_count);
 		if (count > 0 && incl_ht_size > max_ht_size) {
 			break;
 		}
@@ -1020,7 +1024,7 @@ ProbeSpill::ProbeSpill(JoinHashTable &ht, ClientContext &context, const vector<L
     : ht(ht), context(context), probe_types(probe_types) {
 	auto remaining_count = ht.GetSinkCollection().Count();
 	auto remaining_data_size = ht.GetSinkCollection().SizeInBytes();
-	auto remaining_ht_size = remaining_data_size + ht.PointerTableCapacity(remaining_count) * sizeof(data_ptr_t);
+	auto remaining_ht_size = remaining_data_size + ht.PointerTableSize(remaining_count);
 	if (remaining_ht_size <= ht.max_ht_size) {
 		// No need to partition as we will only have one more probe round
 		partitioned = false;

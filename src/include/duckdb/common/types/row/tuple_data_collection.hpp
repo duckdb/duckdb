@@ -149,7 +149,7 @@ private:
 	//! Gets the gather function for the given column index
 	static TupleDataGatherFunction GetGatherFunction(const TupleDataLayout &layout, idx_t col_idx);
 	//! Get the next segment/chunk index for the scan
-	bool NextScanIndex(TupleDataScanState &scan_state, idx_t &segment_index, idx_t &chunk_index) const;
+	bool NextScanIndex(TupleDataScanState &scan_state, idx_t &segment_index, idx_t &chunk_index);
 	//! Scans the chunk at the given segment/chunk indices
 	void ScanAtIndex(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state, const vector<column_t> &column_ids,
 	                 idx_t segment_index, idx_t chunk_index, DataChunk &result);

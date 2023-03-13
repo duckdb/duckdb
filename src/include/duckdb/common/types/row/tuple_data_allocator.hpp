@@ -91,9 +91,9 @@ private:
 	                                          const unordered_set<uint32_t> &block_ids, vector<TupleDataBlock> &blocks,
 	                                          TupleDataPinProperties properties);
 	//! Pins the given row block
-	void PinRowBlock(TupleDataPinState &state, const uint32_t row_block_index);
+	BufferHandle &PinRowBlock(TupleDataPinState &state, const TupleDataChunkPart &part);
 	//! Pins the given heap block
-	void PinHeapBlock(TupleDataPinState &state, const uint32_t heap_block_index);
+	BufferHandle &PinHeapBlock(TupleDataPinState &state, const TupleDataChunkPart &part);
 	//! Gets the pointer to the rows for the given chunk part
 	data_ptr_t GetRowPointer(TupleDataPinState &state, const TupleDataChunkPart &part);
 	//! Gets the base pointer to the heap for the given chunk part

@@ -650,7 +650,7 @@ void TupleDataCollection::FinalizePinState(TupleDataPinState &pin_state) {
 	allocator->ReleaseOrStoreHandles(pin_state, segments.back());
 }
 
-bool TupleDataCollection::NextScanIndex(TupleDataScanState &state, idx_t &segment_index, idx_t &chunk_index) const {
+bool TupleDataCollection::NextScanIndex(TupleDataScanState &state, idx_t &segment_index, idx_t &chunk_index) {
 	// Check if we still have segments to scan
 	if (state.segment_index >= segments.size()) {
 		// No more data left in the scan
@@ -659,8 +659,7 @@ bool TupleDataCollection::NextScanIndex(TupleDataScanState &state, idx_t &segmen
 	// Check within the current segment if we still have chunks to scan
 	while (state.chunk_index >= segments[state.segment_index].ChunkCount()) {
 		// Exhausted all chunks for this segment: Move to the next one
-		state.pin_state.row_handles.clear();
-		state.pin_state.heap_handles.clear();
+		FinalizePinState(state.pin_state, segments[state.segment_index]);
 		state.segment_index++;
 		state.chunk_index = 0;
 		if (state.segment_index >= segments.size()) {

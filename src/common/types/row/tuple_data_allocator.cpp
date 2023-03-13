@@ -116,8 +116,8 @@ TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataPinState &pin_sta
 			// We don't need a heap at all
 			result.heap_block_index = TupleDataChunkPart::INVALID_INDEX;
 			result.heap_block_offset = TupleDataChunkPart::INVALID_INDEX;
-			result.base_heap_ptr = nullptr;
 			result.total_heap_size = 0;
+			result.base_heap_ptr = nullptr;
 		} else {
 			// Allocate heap block (if needed)
 			if (heap_blocks.empty() || heap_blocks.back().RemainingCapacity() < heap_sizes[append_offset]) {
@@ -127,7 +127,6 @@ TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataPinState &pin_sta
 			result.heap_block_index = heap_blocks.size() - 1;
 			auto &heap_block = heap_blocks[result.heap_block_index];
 			result.heap_block_offset = heap_block.size;
-			result.base_heap_ptr = GetBaseHeapPointer(pin_state, result);
 
 			const auto heap_remaining = heap_block.RemainingCapacity();
 			if (total_heap_size <= heap_remaining) {
@@ -146,8 +145,9 @@ TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataPinState &pin_sta
 				}
 			}
 
-			// Mark this portion of the heap block as filled
+			// Mark this portion of the heap block as filled and set the pointer
 			heap_block.size += result.total_heap_size;
+			result.base_heap_ptr = GetBaseHeapPointer(pin_state, result);
 		}
 	}
 	D_ASSERT(result.count != 0 && result.count <= STANDARD_VECTOR_SIZE);
@@ -225,6 +225,7 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataPinState &pin_sta
 			continue;
 		}
 
+		// There's definitely a heap
 		const auto base_heap_ptr = GetBaseHeapPointer(pin_state, *part);
 		const auto new_heap_ptr = base_heap_ptr + part->heap_block_offset;
 
@@ -390,26 +391,36 @@ void TupleDataAllocator::ReleaseOrStoreHandlesInternal(TupleDataSegment &segment
 	} while (found_handle);
 }
 
-void TupleDataAllocator::PinRowBlock(TupleDataPinState &pin_state, const uint32_t row_block_index) {
-	if (pin_state.row_handles.find(row_block_index) == pin_state.row_handles.end()) {
-		pin_state.row_handles[row_block_index] = buffer_manager.Pin(row_blocks[row_block_index].handle);
+BufferHandle &TupleDataAllocator::PinRowBlock(TupleDataPinState &pin_state, const TupleDataChunkPart &part) {
+	const auto &row_block_index = part.row_block_index;
+	auto it = pin_state.row_handles.find(row_block_index);
+	if (it == pin_state.row_handles.end()) {
+		auto &row_block = row_blocks[row_block_index];
+		D_ASSERT(part.row_block_offset < row_block.size);
+		D_ASSERT(part.row_block_offset + part.count * layout.GetRowWidth() <= row_block.size);
+		it = pin_state.row_handles.emplace(row_block_index, buffer_manager.Pin(row_block.handle)).first;
 	}
+	return it->second;
 }
 
-void TupleDataAllocator::PinHeapBlock(TupleDataPinState &pin_state, const uint32_t heap_block_index) {
-	if (pin_state.heap_handles.find(heap_block_index) == pin_state.heap_handles.end()) {
-		pin_state.heap_handles[heap_block_index] = buffer_manager.Pin(heap_blocks[heap_block_index].handle);
+BufferHandle &TupleDataAllocator::PinHeapBlock(TupleDataPinState &pin_state, const TupleDataChunkPart &part) {
+	const auto &heap_block_index = part.heap_block_index;
+	auto it = pin_state.heap_handles.find(heap_block_index);
+	if (it == pin_state.heap_handles.end()) {
+		auto &heap_block = heap_blocks[heap_block_index];
+		D_ASSERT(part.heap_block_offset < heap_block.size);
+		D_ASSERT(part.heap_block_offset + part.total_heap_size <= heap_block.size);
+		it = pin_state.heap_handles.emplace(heap_block_index, buffer_manager.Pin(heap_block.handle)).first;
 	}
+	return it->second;
 }
 
 data_ptr_t TupleDataAllocator::GetRowPointer(TupleDataPinState &pin_state, const TupleDataChunkPart &part) {
-	PinRowBlock(pin_state, part.row_block_index);
-	return pin_state.row_handles[part.row_block_index].Ptr() + part.row_block_offset;
+	return PinRowBlock(pin_state, part).Ptr() + part.row_block_offset;
 }
 
 data_ptr_t TupleDataAllocator::GetBaseHeapPointer(TupleDataPinState &pin_state, const TupleDataChunkPart &part) {
-	PinHeapBlock(pin_state, part.heap_block_index);
-	return pin_state.heap_handles[part.heap_block_index].Ptr();
+	return PinHeapBlock(pin_state, part).Ptr();
 }
 
 } // namespace duckdb

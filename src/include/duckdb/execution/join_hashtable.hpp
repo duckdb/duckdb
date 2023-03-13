@@ -293,13 +293,15 @@ public:
 	idx_t max_ht_size;
 	//! Total count
 	idx_t total_count;
-	//! Total size
-	idx_t total_size;
 
 	//! Capacity of the pointer table given the ht count
 	//! (minimum of 1024 to prevent collision chance for small HT's)
 	static idx_t PointerTableCapacity(idx_t count) {
 		return MaxValue<idx_t>(NextPowerOfTwo(count * 2), 1 << 10);
+	}
+	//! Size of the pointer table (in bytes)
+	static idx_t PointerTableSize(idx_t count) {
+		return PointerTableCapacity(count) * sizeof(data_ptr_t);
 	}
 
 	//! Whether we need to do an external join
