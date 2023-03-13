@@ -6,47 +6,40 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
+#include "duckdb/storage/table/row_group_segment_tree.hpp"
+#include "duckdb/storage/meta_block_reader.hpp"
 
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
-// RowGroupSegmentTree
+// Row Group Segment Tree
 //===--------------------------------------------------------------------===//
-class RowGroupSegmentTree : public SegmentTree<RowGroup, true> {
-public:
-	RowGroupSegmentTree(DataTableInfo &table_info_p, BlockManager &block_manager_p, vector<LogicalType> column_types_p)
-	    : SegmentTree<RowGroup, true>(), info(table_info_p), block_manager(block_manager_p),
-	      column_types(std::move(column_types_p)), current_row_group(0), max_row_group(0) {
+RowGroupSegmentTree::RowGroupSegmentTree(DataTableInfo &table_info_p, BlockManager &block_manager_p,
+                                         vector<LogicalType> column_types_p)
+    : SegmentTree<RowGroup, true>(), info(table_info_p), block_manager(block_manager_p),
+      column_types(std::move(column_types_p)), current_row_group(0), max_row_group(0) {
+}
+RowGroupSegmentTree::~RowGroupSegmentTree() {
+}
+
+void RowGroupSegmentTree::Initialize(PersistentTableData &data) {
+	D_ASSERT(data.row_group_count > 0);
+	current_row_group = 0;
+	max_row_group = data.row_group_count;
+	finished_loading = false;
+	reader = make_unique<MetaBlockReader>(block_manager, data.block_id);
+	reader->offset = data.offset;
+}
+
+unique_ptr<RowGroup> RowGroupSegmentTree::LoadSegment() {
+	if (current_row_group >= max_row_group) {
+		finished_loading = true;
+		return nullptr;
 	}
-
-	void Initialize(PersistentTableData &data) {
-		D_ASSERT(data.row_group_count > 0);
-		current_row_group = 0;
-		max_row_group = data.row_group_count;
-		finished_loading = false;
-		reader = make_unique<MetaBlockReader>(block_manager, data.block_id);
-		reader->offset = data.offset;
-	}
-
-protected:
-	unique_ptr<RowGroup> LoadSegment() override {
-		if (current_row_group >= max_row_group) {
-			finished_loading = true;
-			return nullptr;
-		}
-		auto row_group_pointer = RowGroup::Deserialize(*reader, column_types);
-		current_row_group++;
-		return make_unique<RowGroup>(info.db, block_manager, info, column_types, std::move(row_group_pointer));
-	}
-
-	DataTableInfo &info;
-	BlockManager &block_manager;
-	vector<LogicalType> column_types;
-	idx_t current_row_group;
-	idx_t max_row_group;
-	unique_ptr<MetaBlockReader> reader;
-};
-
+	auto row_group_pointer = RowGroup::Deserialize(*reader, column_types);
+	current_row_group++;
+	return make_unique<RowGroup>(info.db, block_manager, info, column_types, std::move(row_group_pointer));
+}
 //===--------------------------------------------------------------------===//
 // Row Group Collection
 //===--------------------------------------------------------------------===//

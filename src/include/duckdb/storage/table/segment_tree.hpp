@@ -13,6 +13,7 @@
 #include "duckdb/storage/table/segment_lock.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
