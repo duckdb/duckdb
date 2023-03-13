@@ -14,9 +14,10 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class RowGroupSegmentTree : public SegmentTree<RowGroup, true> {
 public:
-	RowGroupSegmentTree(DataTableInfo &table_info_p, BlockManager &block_manager_p, vector<LogicalType> column_types_p) :
-	    SegmentTree<RowGroup, true>(), info(table_info_p), block_manager(block_manager_p),
-		column_types(std::move(column_types_p)), current_row_group(0), max_row_group(0) {}
+	RowGroupSegmentTree(DataTableInfo &table_info_p, BlockManager &block_manager_p, vector<LogicalType> column_types_p)
+	    : SegmentTree<RowGroup, true>(), info(table_info_p), block_manager(block_manager_p),
+	      column_types(std::move(column_types_p)), current_row_group(0), max_row_group(0) {
+	}
 
 	void Initialize(PersistentTableData &data) {
 		D_ASSERT(data.row_group_count > 0);

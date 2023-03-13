@@ -54,9 +54,9 @@ RowGroup::RowGroup(AttachedDatabase &db, BlockManager &block_manager, DataTableI
 }
 
 RowGroup::RowGroup(RowGroup &row_group, idx_t start)
-    : start(start), count(row_group.count.load()), next(nullptr), db(row_group.db), block_manager(row_group.block_manager),
-      table_info(row_group.table_info), version_info(std::move(row_group.version_info)),
-      stats(std::move(row_group.stats)) {
+    : start(start), count(row_group.count.load()), next(nullptr), db(row_group.db),
+      block_manager(row_group.block_manager), table_info(row_group.table_info),
+      version_info(std::move(row_group.version_info)), stats(std::move(row_group.stats)) {
 	for (auto &column : row_group.columns) {
 		this->columns.push_back(ColumnData::CreateColumn(*column, start));
 	}

@@ -30,8 +30,10 @@ private:
 	class SegmentIterationHelper;
 
 public:
-	explicit SegmentTree() : finished_loading(true) {}
-	virtual ~SegmentTree() {}
+	explicit SegmentTree() : finished_loading(true) {
+	}
+	virtual ~SegmentTree() {
+	}
 
 	//! Locks the segment tree. All methods to the segment tree either lock the segment tree, or take an already
 	//! obtained lock.
@@ -76,7 +78,8 @@ public:
 			return nodes[index].node.get();
 		} else {
 			// lazily load segments until we reach the specific segment
-			while(idx_t(index) >= nodes.size() && LoadNextSegment(l)) {}
+			while (idx_t(index) >= nodes.size() && LoadNextSegment(l)) {
+			}
 			if (idx_t(index) >= nodes.size()) {
 				return nullptr;
 			}
@@ -122,11 +125,7 @@ public:
 	}
 
 	//! Append a column segment to the tree
-	void AppendSegment(unique_ptr<T> segment) {
-		auto l = Lock();
-		AppendSegment(l, std::move(segment));
-	}
-	void AppendSegment(SegmentLock &l, unique_ptr<T> segment) {
+	void AppendSegmentInternal(SegmentLock &l, unique_ptr<T> segment) {
 		D_ASSERT(segment);
 		// add the node to the list of nodes
 		if (!nodes.empty()) {
@@ -137,6 +136,14 @@ public:
 		node.row_start = segment->start;
 		node.node = std::move(segment);
 		nodes.push_back(std::move(node));
+	}
+	void AppendSegment(unique_ptr<T> segment) {
+		auto l = Lock();
+		AppendSegment(l, std::move(segment));
+	}
+	void AppendSegment(SegmentLock &l, unique_ptr<T> segment) {
+		LoadAllSegments(l);
+		AppendSegmentInternal(l, std::move(segment));
 	}
 	//! Debug method, check whether the segment is in the segment tree
 	bool HasSegment(T *segment) {
@@ -158,7 +165,8 @@ public:
 	}
 
 	//! Erase all segments after a specific segment
-	void EraseSegments(SegmentLock &, idx_t segment_start) {
+	void EraseSegments(SegmentLock &l, idx_t segment_start) {
+		LoadAllSegments(l);
 		if (segment_start >= nodes.size() - 1) {
 			return;
 		}
@@ -182,7 +190,11 @@ public:
 
 	bool TryGetSegmentIndex(SegmentLock &l, idx_t row_number, idx_t &result) {
 		// load segments until the row number is within bounds
-		while ((nodes.empty() || row_number < nodes.back().row_start + nodes.back().node->count) && LoadNextSegment(l)) {}
+		while (nodes.empty() || (row_number >= (nodes.back().row_start + nodes.back().node->count))) {
+			if (!LoadNextSegment(l)) {
+				break;
+			}
+		}
 		if (nodes.empty()) {
 			return false;
 		}
@@ -296,7 +308,7 @@ private:
 		}
 		auto result = LoadSegment();
 		if (result) {
-			AppendSegment(l, std::move(result));
+			AppendSegmentInternal(l, std::move(result));
 			return true;
 		}
 		return false;
@@ -304,7 +316,8 @@ private:
 
 	//! Load all segments, if there are any left to load
 	void LoadAllSegments(SegmentLock &l) {
-		while(LoadNextSegment(l));
+		while (LoadNextSegment(l))
+			;
 	}
 };
 

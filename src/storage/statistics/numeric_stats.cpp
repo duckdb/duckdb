@@ -2,6 +2,7 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 
 namespace duckdb {
 
@@ -62,69 +63,70 @@ void NumericStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	}
 }
 
-template<class T>
+template <class T>
 FilterPropagateResult CheckZonemapTemplated(const BaseStatistics &stats, ExpressionType comparison_type,
-                                                 const Value &constant_value) {
+                                            const Value &constant_value) {
 	auto min_value = NumericStats::GetMinUnsafe<T>(stats);
 	auto max_value = NumericStats::GetMaxUnsafe<T>(stats);
 	auto constant = constant_value.GetValueUnsafe<T>();
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
-		if (constant == min_value && constant == max_value) {
+		if (Equals::Operation(constant, min_value) && Equals::Operation(constant, max_value)) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-		} else if (constant >= min_value && constant <= max_value) {
+		} else if (GreaterThanEquals::Operation(constant, min_value) &&
+		           LessThanEquals::Operation(constant, max_value)) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		} else {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
 	case ExpressionType::COMPARE_NOTEQUAL:
-		if (constant < min_value || constant > max_value) {
+		if (LessThan::Operation(constant, min_value) || GreaterThan::Operation(constant, max_value)) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-		} else if (min_value == max_value && min_value == constant) {
+		} else if (Equals::Operation(min_value, max_value) && Equals::Operation(min_value, constant)) {
 			// corner case of a cluster with one numeric equal to the target constant
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		// X >= C
+		// GreaterThanEquals::Operation(X, C)
 		// this can be true only if max(X) >= C
 		// if min(X) >= C, then this is always true
-		if (min_value >= constant) {
+		if (GreaterThanEquals::Operation(min_value, constant)) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-		} else if (max_value >= constant) {
+		} else if (GreaterThanEquals::Operation(max_value, constant)) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		} else {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
 	case ExpressionType::COMPARE_GREATERTHAN:
-		// X > C
+		// GreaterThan::Operation(X, C)
 		// this can be true only if max(X) > C
 		// if min(X) > C, then this is always true
-		if (min_value > constant) {
+		if (GreaterThan::Operation(min_value, constant)) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-		} else if (max_value > constant) {
+		} else if (GreaterThan::Operation(max_value, constant)) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		} else {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		// X <= C
+		// LessThanEquals::Operation(X, C)
 		// this can be true only if min(X) <= C
 		// if max(X) <= C, then this is always true
-		if (max_value <= constant) {
+		if (LessThanEquals::Operation(max_value, constant)) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-		} else if (min_value <= constant) {
+		} else if (LessThanEquals::Operation(min_value, constant)) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		} else {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
 	case ExpressionType::COMPARE_LESSTHAN:
-		// X < C
+		// LessThan::Operation(X, C)
 		// this can be true only if min(X) < C
 		// if max(X) < C, then this is always true
-		if (max_value < constant) {
+		if (LessThan::Operation(max_value, constant)) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-		} else if (min_value < constant) {
+		} else if (LessThan::Operation(min_value, constant)) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		} else {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
@@ -143,7 +145,7 @@ FilterPropagateResult NumericStats::CheckZonemap(const BaseStatistics &stats, Ex
 	if (!NumericStats::HasMinMax(stats)) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	switch(stats.GetType().InternalType()) {
+	switch (stats.GetType().InternalType()) {
 	case PhysicalType::INT8:
 		return CheckZonemapTemplated<int8_t>(stats, comparison_type, constant);
 	case PhysicalType::INT16:
