@@ -176,11 +176,18 @@ void TupleDataAllocator::InitializeChunkState(TupleDataSegment &segment, TupleDa
 	InitializeChunkStateInternal(pin_state, chunk_state, 0, init_heap, init_heap, parts);
 }
 
-void VerifyTotalHeapSize(const idx_t heap_sizes[], const idx_t offset, const idx_t count,
-                         const TupleDataChunkPart &part) {
+static inline void InitializeHeapSizes(const data_ptr_t row_locations[], idx_t heap_sizes[], const idx_t offset,
+                                       const idx_t next, const TupleDataChunkPart &part, const idx_t heap_size_offset) {
+	// Read the heap sizes from the rows
+	for (idx_t i = 0; i < next; i++) {
+		auto idx = offset + i;
+		heap_sizes[idx] = Load<uint32_t>(row_locations[idx] + heap_size_offset);
+	}
+
+	// Verify total size
 #ifdef DEBUG
 	idx_t total_heap_size = 0;
-	for (idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < next; i++) {
 		auto idx = offset + i;
 		total_heap_size += heap_sizes[idx];
 	}
@@ -205,40 +212,45 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataPinState &pin_sta
 			row_locations[offset + i] = base_row_ptr + i * row_width;
 		}
 
-		if (!layout.AllConstant() && part->total_heap_size != 0) {
-			const auto base_heap_ptr = GetBaseHeapPointer(pin_state, *part);
-			const auto new_heap_ptr = base_heap_ptr + part->heap_block_offset;
+		if (layout.AllConstant()) { // Can't have a heap
+			offset += next;
+			continue;
+		}
 
-			// Check if heap block has changed - re-compute the pointers within each row if so
-			if (pin_state.properties != TupleDataPinProperties::ALREADY_PINNED) {
-				const auto old_base_heap_ptr = part->base_heap_ptr;
-				if (old_base_heap_ptr != base_heap_ptr) {
-					const auto old_heap_ptr = old_base_heap_ptr + part->heap_block_offset;
-					Vector old_heap_ptrs(Value::POINTER((uintptr_t)old_heap_ptr));
-					Vector new_heap_ptrs(Value::POINTER((uintptr_t)new_heap_ptr));
-					RecomputeHeapPointers(old_heap_ptrs, *ConstantVector::ZeroSelectionVector(), row_locations,
-					                      new_heap_ptrs, offset, next, layout, 0);
-					part->base_heap_ptr = base_heap_ptr;
-				}
+		if (part->total_heap_size == 0) {
+			if (init_heap_sizes) { // No heap, but we need the heap sizes
+				InitializeHeapSizes(row_locations, heap_sizes, offset, next, *part, layout.GetHeapSizeOffset());
 			}
+			offset += next;
+			continue;
+		}
 
-			if (init_heap_sizes) {
-				// Read the heap sizes from the rows
-				const auto heap_size_offset = layout.GetHeapSizeOffset();
-				for (idx_t i = 0; i < next; i++) {
-					auto idx = offset + i;
-					heap_sizes[idx] = Load<uint32_t>(row_locations[idx] + heap_size_offset);
-				}
-				VerifyTotalHeapSize(heap_sizes, offset, next, *part);
+		const auto base_heap_ptr = GetBaseHeapPointer(pin_state, *part);
+		const auto new_heap_ptr = base_heap_ptr + part->heap_block_offset;
+
+		// Check if heap block has changed - re-compute the pointers within each row if so
+		if (pin_state.properties != TupleDataPinProperties::ALREADY_PINNED) {
+			const auto old_base_heap_ptr = part->base_heap_ptr;
+			if (old_base_heap_ptr != base_heap_ptr) {
+				const auto old_heap_ptr = old_base_heap_ptr + part->heap_block_offset;
+				Vector old_heap_ptrs(Value::POINTER((uintptr_t)old_heap_ptr));
+				Vector new_heap_ptrs(Value::POINTER((uintptr_t)new_heap_ptr));
+				RecomputeHeapPointers(old_heap_ptrs, *ConstantVector::ZeroSelectionVector(), row_locations,
+				                      new_heap_ptrs, offset, next, layout, 0);
+				part->base_heap_ptr = base_heap_ptr;
 			}
+		}
 
-			if (init_heap_pointers) {
-				// Set the pointers where the heap data will be written (if needed)
-				heap_locations[offset] = new_heap_ptr;
-				for (idx_t i = 1; i < next; i++) {
-					auto idx = offset + i;
-					heap_locations[idx] = heap_locations[idx - 1] + heap_sizes[idx - 1];
-				}
+		if (init_heap_sizes) {
+			InitializeHeapSizes(row_locations, heap_sizes, offset, next, *part, layout.GetHeapSizeOffset());
+		}
+
+		if (init_heap_pointers) {
+			// Set the pointers where the heap data will be written (if needed)
+			heap_locations[offset] = new_heap_ptr;
+			for (idx_t i = 1; i < next; i++) {
+				auto idx = offset + i;
+				heap_locations[idx] = heap_locations[idx - 1] + heap_sizes[idx - 1];
 			}
 		}
 
