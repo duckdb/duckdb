@@ -11,7 +11,6 @@ namespace duckdb {
 void LogicalCopyToFile::Serialize(FieldWriter &writer) const {
 	writer.WriteString(file_path);
 	writer.WriteField(use_tmp_file);
-	writer.WriteField(fileformat);
 	writer.WriteField(overwrite_or_ignore);
 	writer.WriteField(per_thread_output);
 	writer.WriteList<idx_t>(partition_columns);

@@ -30,7 +30,7 @@ SELECT * FROM testSquared;
 
 # Test with the FILEFORMAT option. "{uuid}" will be replaced with a unique string.
 statement ok
-COPY testSquared TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), FILEFORMAT "myawesomeformat_{uuid}");
+COPY testSquared TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), FILEFORMAT "leadingpart_{uuid}");
 
 query III
 SELECT * FROM '__TEST_DIR__/part/a=9/*.parquet';
@@ -42,7 +42,7 @@ CREATE TABLE testCubed as SELECT i as a, (i*3) as b, power(i,3) as c from range(
 
 # Now append to the directory from previous test, creating a second file in the partition.
 statement ok
-COPY testCubed TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), OVERWRITE_OR_IGNORE TRUE, FILEFORMAT "myawesomeformat_{uuid}_thatwasit");
+COPY testCubed TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), OVERWRITE_OR_IGNORE TRUE, FILEFORMAT "leadingpart_{uuid}_trailingpart");
 
 query III sort
 SELECT * FROM '__TEST_DIR__/part/a=9/*.parquet';
@@ -85,11 +85,13 @@ COPY test5 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a));
 ----
 IO Error: Directory
 
-# Test where params/keywords don't have values
-statement ok
+# Test where fileformat template param has no value
+statement error
 COPY test4 TO '__TEST_DIR__/novalue' (FORMAT PARQUET, PARTITION_BY (a), FILEFORMAT);
+----
+Not implemented Error: Unrecognized option for PARQUET: FILEFORMAT
 
-# Test where params/keywords don't have values
+# Test where overwrite_or_ignore param has no value
 statement ok
 COPY test5 TO '__TEST_DIR__/novalue' (FORMAT PARQUET, PARTITION_BY (a), OVERWRITE_OR_IGNORE);
 
@@ -98,10 +100,10 @@ statement ok
 CREATE TABLE testppt as SELECT i as a, (i*10) as b, (i*100) as c from range(0,10000) tbl(i);
 
 statement ok
-COPY testppt TO '__TEST_DIR__/ppt/' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE, OVERWRITE_OR_IGNORE true, FILEFORMAT 'myfmt_{i}_{uuid}');
+COPY testppt TO '__TEST_DIR__/ppt/' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE, OVERWRITE_OR_IGNORE true, FILEFORMAT 'leadingpart_{i}_{uuid}');
 
 query I sort
-SELECT COUNT(*) FROM '__TEST_DIR__/ppt/myfmt_*.parquet';
+SELECT COUNT(*) FROM '__TEST_DIR__/ppt/leadingpart_*.parquet';
 ----
 10000
 
