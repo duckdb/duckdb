@@ -43,6 +43,10 @@ struct NumericValueUnion {
 	T &GetReferenceUnsafe() {
 		throw InternalException("NumericValueUnion::GetReferenceUnsafe called on unsupported type");
 	}
+	template <class T>
+	T GetValueUnsafe() const {
+		throw InternalException("NumericValueUnion::GetValueUnsafe called on unsupported type");
+	}
 };
 
 struct NumericStatsData {
@@ -110,11 +114,11 @@ struct NumericStats {
 
 	template <class T>
 	static T GetMinUnsafe(const BaseStatistics &stats) {
-		return NumericStats::Min(stats).template GetValueUnsafe<T>();
+		return NumericStats::GetDataUnsafe(stats).min.template GetValueUnsafe<T>();
 	}
 	template <class T>
 	static T GetMaxUnsafe(const BaseStatistics &stats) {
-		return NumericStats::Max(stats).template GetValueUnsafe<T>();
+		return NumericStats::GetDataUnsafe(stats).max.template GetValueUnsafe<T>();
 	}
 
 private:
@@ -153,5 +157,28 @@ template <>
 float &NumericValueUnion::GetReferenceUnsafe();
 template <>
 double &NumericValueUnion::GetReferenceUnsafe();
+
+template <>
+int8_t &NumericValueUnion::GetValueUnsafe() const;
+template <>
+int16_t &NumericValueUnion::GetValueUnsafe() const;
+template <>
+int32_t &NumericValueUnion::GetValueUnsafe() const;
+template <>
+int64_t &NumericValueUnion::GetValueUnsafe() const;
+template <>
+hugeint_t &NumericValueUnion::GetValueUnsafe() const;
+template <>
+uint8_t &NumericValueUnion::GetValueUnsafe() const;
+template <>
+uint16_t &NumericValueUnion::GetValueUnsafe() const;
+template <>
+uint32_t &NumericValueUnion::GetValueUnsafe() const;
+template <>
+uint64_t &NumericValueUnion::GetValueUnsafe() const;
+template <>
+float &NumericValueUnion::GetValueUnsafe() const;
+template <>
+double &NumericValueUnion::GetValueUnsafe() const;
 
 } // namespace duckdb

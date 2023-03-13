@@ -62,16 +62,12 @@ void NumericStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	}
 }
 
-FilterPropagateResult NumericStats::CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
-                                                 const Value &constant) {
-	if (constant.IsNull()) {
-		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
-	}
-	if (!NumericStats::HasMinMax(stats)) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-	auto min_value = NumericStats::Min(stats);
-	auto max_value = NumericStats::Max(stats);
+template<class T>
+FilterPropagateResult CheckZonemapTemplated(const BaseStatistics &stats, ExpressionType comparison_type,
+                                                 const Value &constant_value) {
+	auto min_value = NumericStats::GetMinUnsafe<T>(stats);
+	auto max_value = NumericStats::GetMaxUnsafe<T>(stats);
+	auto constant = constant_value.GetValueUnsafe<T>();
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
 		if (constant == min_value && constant == max_value) {
@@ -135,6 +131,43 @@ FilterPropagateResult NumericStats::CheckZonemap(const BaseStatistics &stats, Ex
 		}
 	default:
 		throw InternalException("Expression type in zonemap check not implemented");
+	}
+}
+
+FilterPropagateResult NumericStats::CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
+                                                 const Value &constant) {
+	D_ASSERT(constant.type() == stats.GetType());
+	if (constant.IsNull()) {
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	if (!NumericStats::HasMinMax(stats)) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	switch(stats.GetType().InternalType()) {
+	case PhysicalType::INT8:
+		return CheckZonemapTemplated<int8_t>(stats, comparison_type, constant);
+	case PhysicalType::INT16:
+		return CheckZonemapTemplated<int16_t>(stats, comparison_type, constant);
+	case PhysicalType::INT32:
+		return CheckZonemapTemplated<int32_t>(stats, comparison_type, constant);
+	case PhysicalType::INT64:
+		return CheckZonemapTemplated<int64_t>(stats, comparison_type, constant);
+	case PhysicalType::UINT8:
+		return CheckZonemapTemplated<uint8_t>(stats, comparison_type, constant);
+	case PhysicalType::UINT16:
+		return CheckZonemapTemplated<uint16_t>(stats, comparison_type, constant);
+	case PhysicalType::UINT32:
+		return CheckZonemapTemplated<uint32_t>(stats, comparison_type, constant);
+	case PhysicalType::UINT64:
+		return CheckZonemapTemplated<uint64_t>(stats, comparison_type, constant);
+	case PhysicalType::INT128:
+		return CheckZonemapTemplated<hugeint_t>(stats, comparison_type, constant);
+	case PhysicalType::FLOAT:
+		return CheckZonemapTemplated<float>(stats, comparison_type, constant);
+	case PhysicalType::DOUBLE:
+		return CheckZonemapTemplated<double>(stats, comparison_type, constant);
+	default:
+		throw InternalException("Unsupported type for NumericStats::CheckZonemap");
 	}
 }
 
@@ -523,6 +556,61 @@ float &NumericValueUnion::GetReferenceUnsafe() {
 
 template <>
 double &NumericValueUnion::GetReferenceUnsafe() {
+	return value_.double_;
+}
+
+template <>
+int8_t NumericValueUnion::GetValueUnsafe() const {
+	return value_.tinyint;
+}
+
+template <>
+int16_t NumericValueUnion::GetValueUnsafe() const {
+	return value_.smallint;
+}
+
+template <>
+int32_t NumericValueUnion::GetValueUnsafe() const {
+	return value_.integer;
+}
+
+template <>
+int64_t NumericValueUnion::GetValueUnsafe() const {
+	return value_.bigint;
+}
+
+template <>
+hugeint_t NumericValueUnion::GetValueUnsafe() const {
+	return value_.hugeint;
+}
+
+template <>
+uint8_t NumericValueUnion::GetValueUnsafe() const {
+	return value_.utinyint;
+}
+
+template <>
+uint16_t NumericValueUnion::GetValueUnsafe() const {
+	return value_.usmallint;
+}
+
+template <>
+uint32_t NumericValueUnion::GetValueUnsafe() const {
+	return value_.uinteger;
+}
+
+template <>
+uint64_t NumericValueUnion::GetValueUnsafe() const {
+	return value_.ubigint;
+}
+
+template <>
+float NumericValueUnion::GetValueUnsafe() const {
+	return value_.float_;
+}
+
+template <>
+double NumericValueUnion::GetValueUnsafe() const {
 	return value_.double_;
 }
 
