@@ -98,7 +98,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 			    option.second.empty() || option.second[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
 			continue;
 		}
-		if (loption == "fileformat" && !option.second.empty()){
+		if (loption == "fileformat" && !option.second.empty()) {
 			fileformat = option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>();
 			continue;
 		}

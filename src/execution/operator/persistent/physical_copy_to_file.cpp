@@ -42,22 +42,23 @@ public:
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-static string CreateFilename(const FileSystem& fs, const string& path, string fileformat, const string& extension, idx_t writer_offset = 0){
+static string CreateFilename(const FileSystem &fs, const string &path, string fileformat, const string &extension,
+                             idx_t writer_offset = 0) {
 	const string id_format("{i");
 	const string uuid_format("{uuid");
 	bool added_id = false;
 
-	if (StringUtil::Contains(fileformat, uuid_format)){
+	if (StringUtil::Contains(fileformat, uuid_format)) {
 		const string uuid(UUID::ToString(UUID::GenerateRandomUUID()));
 		fileformat = StringUtil::Replace(fileformat, uuid_format, uuid);
 		added_id = true;
 	}
-	if (StringUtil::Contains(fileformat, id_format)){
+	if (StringUtil::Contains(fileformat, id_format)) {
 		const string id(to_string(writer_offset));
 		fileformat = StringUtil::Replace(fileformat, id_format, id);
 		added_id = true;
 	}
-	if (!added_id){
+	if (!added_id) {
 		fileformat += to_string(writer_offset);
 	}
 	return fs.JoinPath(path, fileformat + "." + extension);
