@@ -22,13 +22,13 @@ namespace duckdb {
 //-----------------------------------------------
 template <>
 OrderType EnumSerializer::StringToEnum(const char *value) {
-	if (strcmp(value, "INVALID") == 0) {
+	if (StringUtil::Equals(value, "INVALID")) {
 		return OrderType::INVALID;
-	} else if (strcmp(value, "ORDER_DEFAULT") == 0) {
+	} else if (StringUtil::Equals(value, "ORDER_DEFAULT")) {
 		return OrderType::ORDER_DEFAULT;
-	} else if (strcmp(value, "ASCENDING") == 0) {
+	} else if (StringUtil::Equals(value, "ASCENDING")) {
 		return OrderType::ASCENDING;
-	} else if (strcmp(value, "DESCENDING") == 0) {
+	} else if (StringUtil::Equals(value, "DESCENDING")) {
 		return OrderType::DESCENDING;
 	} else {
 		throw NotImplementedException("FromString not implemented for enum value");
@@ -56,13 +56,13 @@ const char *EnumSerializer::EnumToString(OrderType value) {
 //-----------------------------------------------
 template <>
 OrderByNullType EnumSerializer::StringToEnum(const char *value) {
-	if (strcmp(value, "INVALID") == 0) {
+	if (StringUtil::Equals(value, "INVALID")) {
 		return OrderByNullType::INVALID;
-	} else if (strcmp(value, "ORDER_DEFAULT") == 0) {
+	} else if (StringUtil::Equals(value, "ORDER_DEFAULT")) {
 		return OrderByNullType::ORDER_DEFAULT;
-	} else if (strcmp(value, "NULLS_FIRST") == 0) {
+	} else if (StringUtil::Equals(value, "NULLS_FIRST")) {
 		return OrderByNullType::NULLS_FIRST;
-	} else if (strcmp(value, "NULLS_LAST") == 0) {
+	} else if (StringUtil::Equals(value, "NULLS_LAST")) {
 		return OrderByNullType::NULLS_LAST;
 	} else {
 		throw NotImplementedException("FromString not implemented for enum value");
@@ -90,13 +90,13 @@ const char *EnumSerializer::EnumToString(OrderByNullType value) {
 //-----------------------------------------------
 template <>
 ResultModifierType EnumSerializer::StringToEnum(const char *value) {
-	if (strcmp(value, "LIMIT_MODIFIER") == 0) {
+	if (StringUtil::Equals(value, "LIMIT_MODIFIER")) {
 		return ResultModifierType::LIMIT_MODIFIER;
-	} else if (strcmp(value, "ORDER_MODIFIER") == 0) {
+	} else if (StringUtil::Equals(value, "ORDER_MODIFIER")) {
 		return ResultModifierType::ORDER_MODIFIER;
-	} else if (strcmp(value, "DISTINCT_MODIFIER") == 0) {
+	} else if (StringUtil::Equals(value, "DISTINCT_MODIFIER")) {
 		return ResultModifierType::DISTINCT_MODIFIER;
-	} else if (strcmp(value, "LIMIT_PERCENT_MODIFIER") == 0) {
+	} else if (StringUtil::Equals(value, "LIMIT_PERCENT_MODIFIER")) {
 		return ResultModifierType::LIMIT_PERCENT_MODIFIER;
 	} else {
 		throw NotImplementedException("FromString not implement for enum value");
@@ -124,23 +124,23 @@ const char *EnumSerializer::EnumToString(ResultModifierType value) {
 //-----------------------------------------------
 template <>
 ExtraTypeInfoType EnumSerializer::StringToEnum(const char *value) {
-	if (strcmp(value, "INVALID_TYPE_INFO") == 0) {
+	if (StringUtil::Equals(value, "INVALID_TYPE_INFO")) {
 		return ExtraTypeInfoType::INVALID_TYPE_INFO;
-	} else if (strcmp(value, "GENERIC_TYPE_INFO") == 0) {
+	} else if (StringUtil::Equals(value, "GENERIC_TYPE_INFO")) {
 		return ExtraTypeInfoType::GENERIC_TYPE_INFO;
-	} else if (strcmp(value, "DECIMAL_TYPE_INFO") == 0) {
+	} else if (StringUtil::Equals(value, "DECIMAL_TYPE_INFO")) {
 		return ExtraTypeInfoType::DECIMAL_TYPE_INFO;
-	} else if (strcmp(value, "STRING_TYPE_INFO") == 0) {
+	} else if (StringUtil::Equals(value, "STRING_TYPE_INFO")) {
 		return ExtraTypeInfoType::STRING_TYPE_INFO;
-	} else if (strcmp(value, "LIST_TYPE_INFO") == 0) {
+	} else if (StringUtil::Equals(value, "LIST_TYPE_INFO")) {
 		return ExtraTypeInfoType::LIST_TYPE_INFO;
-	} else if (strcmp(value, "STRUCT_TYPE_INFO") == 0) {
+	} else if (StringUtil::Equals(value, "STRUCT_TYPE_INFO")) {
 		return ExtraTypeInfoType::STRUCT_TYPE_INFO;
-	} else if (strcmp(value, "ENUM_TYPE_INFO") == 0) {
+	} else if (StringUtil::Equals(value, "ENUM_TYPE_INFO")) {
 		return ExtraTypeInfoType::USER_TYPE_INFO;
-	} else if (strcmp(value, "USER_TYPE_INFO") == 0) {
+	} else if (StringUtil::Equals(value, "USER_TYPE_INFO")) {
 		return ExtraTypeInfoType::USER_TYPE_INFO;
-	} else if (strcmp(value, "AGGREGATE_STATE_TYPE_INFO") == 0) {
+	} else if (StringUtil::Equals(value, "AGGREGATE_STATE_TYPE_INFO")) {
 		return ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO;
 	} else {
 		throw NotImplementedException("FromString not implemented for enum value");
@@ -178,21 +178,21 @@ const char *EnumSerializer::EnumToString(ExtraTypeInfoType value) {
 //-----------------------------------------------
 template <>
 TableReferenceType EnumSerializer::StringToEnum(const char *value) {
-	if (strcmp(value, "INVALID") == 0) {
+	if (StringUtil::Equals(value, "INVALID")) {
 		return TableReferenceType::INVALID;
-	} else if (strcmp(value, "BASE_TABLE") == 0) {
+	} else if (StringUtil::Equals(value, "BASE_TABLE")) {
 		return TableReferenceType::BASE_TABLE;
-	} else if (strcmp(value, "SUBQUERY") == 0) {
+	} else if (StringUtil::Equals(value, "SUBQUERY")) {
 		return TableReferenceType::SUBQUERY;
-	} else if (strcmp(value, "JOIN") == 0) {
+	} else if (StringUtil::Equals(value, "JOIN")) {
 		return TableReferenceType::JOIN;
-	} else if (strcmp(value, "TABLE_FUNCTION") == 0) {
+	} else if (StringUtil::Equals(value, "TABLE_FUNCTION")) {
 		return TableReferenceType::TABLE_FUNCTION;
-	} else if (strcmp(value, "EXPRESSION_LIST") == 0) {
+	} else if (StringUtil::Equals(value, "EXPRESSION_LIST")) {
 		return TableReferenceType::EXPRESSION_LIST;
-	} else if (strcmp(value, "CTE") == 0) {
+	} else if (StringUtil::Equals(value, "CTE")) {
 		return TableReferenceType::CTE;
-	} else if (strcmp(value, "EMPTY") == 0) {
+	} else if (StringUtil::Equals(value, "EMPTY")) {
 		return TableReferenceType::EMPTY;
 	} else {
 		throw NotImplementedException("FromString not implemented for enum value");
@@ -228,13 +228,13 @@ const char *EnumSerializer::EnumToString(TableReferenceType value) {
 //-----------------------------------------------
 template <>
 JoinRefType EnumSerializer::StringToEnum(const char *value) {
-	if (strcmp(value, "REGULAR") == 0) {
+	if (StringUtil::Equals(value, "REGULAR")) {
 		return JoinRefType::REGULAR;
-	} else if (strcmp(value, "NATURAL") == 0) {
+	} else if (StringUtil::Equals(value, "NATURAL")) {
 		return JoinRefType::NATURAL;
-	} else if (strcmp(value, "CROSS") == 0) {
+	} else if (StringUtil::Equals(value, "CROSS")) {
 		return JoinRefType::CROSS;
-	} else if (strcmp(value, "POSITIONAL") == 0) {
+	} else if (StringUtil::Equals(value, "POSITIONAL")) {
 		return JoinRefType::POSITIONAL;
 	} else {
 		throw NotImplementedException("EnumSerializer::StringToEnum not implemented for enum value");
@@ -263,21 +263,21 @@ const char *EnumSerializer::EnumToString(JoinRefType value) {
 
 template <>
 JoinType EnumSerializer::StringToEnum(const char *value) {
-	if (strcmp(value, "LEFT") == 0) {
+	if (StringUtil::Equals(value, "LEFT")) {
 		return JoinType::LEFT;
-	} else if (strcmp(value, "RIGHT") == 0) {
+	} else if (StringUtil::Equals(value, "RIGHT")) {
 		return JoinType::RIGHT;
-	} else if (strcmp(value, "INNER") == 0) {
+	} else if (StringUtil::Equals(value, "INNER")) {
 		return JoinType::INNER;
-	} else if (strcmp(value, "FULL") == 0) {
+	} else if (StringUtil::Equals(value, "FULL")) {
 		return JoinType::OUTER;
-	} else if (strcmp(value, "SEMI") == 0) {
+	} else if (StringUtil::Equals(value, "SEMI")) {
 		return JoinType::SEMI;
-	} else if (strcmp(value, "ANTI") == 0) {
+	} else if (StringUtil::Equals(value, "ANTI")) {
 		return JoinType::ANTI;
-	} else if (strcmp(value, "SINGLE") == 0) {
+	} else if (StringUtil::Equals(value, "SINGLE")) {
 		return JoinType::SINGLE;
-	} else if (strcmp(value, "MARK") == 0) {
+	} else if (StringUtil::Equals(value, "MARK")) {
 		return JoinType::MARK;
 	} else {
 		throw NotImplementedException("EnumSerializer::StringToEnum not implemented for enum value");
@@ -315,11 +315,11 @@ const char *EnumSerializer::EnumToString(JoinType value) {
 
 template <>
 AggregateHandling EnumSerializer::StringToEnum(const char *value) {
-	if (strcmp(value, "STANDARD_HANDLING") == 0) {
+	if (StringUtil::Equals(value, "STANDARD_HANDLING")) {
 		return AggregateHandling::STANDARD_HANDLING;
-	} else if (strcmp(value, "NO_AGGREGATES_ALLOWED") == 0) {
+	} else if (StringUtil::Equals(value, "NO_AGGREGATES_ALLOWED")) {
 		return AggregateHandling::NO_AGGREGATES_ALLOWED;
-	} else if (strcmp(value, "FORCE_AGGREGATES") == 0) {
+	} else if (StringUtil::Equals(value, "FORCE_AGGREGATES")) {
 		return AggregateHandling::FORCE_AGGREGATES;
 	} else {
 		throw NotImplementedException("EnumSerializer::StringToEnum not implemented for enum value");
@@ -345,13 +345,13 @@ const char *EnumSerializer::EnumToString(AggregateHandling value) {
 //-----------------------------------------------
 template <>
 QueryNodeType EnumSerializer::StringToEnum(const char *value) {
-	if (strcmp(value, "SELECT_NODE") == 0) {
+	if (StringUtil::Equals(value, "SELECT_NODE")) {
 		return QueryNodeType::SELECT_NODE;
-	} else if (strcmp(value, "SET_OPERATION_NODE") == 0) {
+	} else if (StringUtil::Equals(value, "SET_OPERATION_NODE")) {
 		return QueryNodeType::SET_OPERATION_NODE;
-	} else if (strcmp(value, "BOUND_SUBQUERY_NODE") == 0) {
+	} else if (StringUtil::Equals(value, "BOUND_SUBQUERY_NODE")) {
 		return QueryNodeType::BOUND_SUBQUERY_NODE;
-	} else if (strcmp(value, "RECURSIVE_CTE_NODE") == 0) {
+	} else if (StringUtil::Equals(value, "RECURSIVE_CTE_NODE")) {
 		return QueryNodeType::RECURSIVE_CTE_NODE;
 	} else {
 		throw NotImplementedException("EnumSerializer::StringToEnum not implemented for string value");
@@ -379,15 +379,15 @@ const char *EnumSerializer::EnumToString(QueryNodeType value) {
 //-----------------------------------------------
 template <>
 SetOperationType EnumSerializer::StringToEnum(const char *value) {
-	if (strcmp(value, "NONE") == 0) {
+	if (StringUtil::Equals(value, "NONE")) {
 		return SetOperationType::NONE;
-	} else if (strcmp(value, "UNION") == 0) {
+	} else if (StringUtil::Equals(value, "UNION")) {
 		return SetOperationType::UNION;
-	} else if (strcmp(value, "EXCEPT") == 0) {
+	} else if (StringUtil::Equals(value, "EXCEPT")) {
 		return SetOperationType::EXCEPT;
-	} else if (strcmp(value, "INTERSECT") == 0) {
+	} else if (StringUtil::Equals(value, "INTERSECT")) {
 		return SetOperationType::INTERSECT;
-	} else if (strcmp(value, "UNION_BY_NAME") == 0) {
+	} else if (StringUtil::Equals(value, "UNION_BY_NAME")) {
 		return SetOperationType::UNION_BY_NAME;
 	} else {
 		throw NotImplementedException("EnumSerializer::StringToEnum not implemented for enum value");
@@ -417,23 +417,23 @@ const char *EnumSerializer::EnumToString(SetOperationType value) {
 //-----------------------------------------------
 template <>
 WindowBoundary EnumSerializer::StringToEnum(const char *value) {
-	if (strcmp(value, "INVALID") == 0) {
+	if (StringUtil::Equals(value, "INVALID")) {
 		return WindowBoundary::INVALID;
-	} else if (strcmp(value, "UNBOUNDED_PRECEDING") == 0) {
+	} else if (StringUtil::Equals(value, "UNBOUNDED_PRECEDING")) {
 		return WindowBoundary::UNBOUNDED_PRECEDING;
-	} else if (strcmp(value, "UNBOUNDED_FOLLOWING") == 0) {
+	} else if (StringUtil::Equals(value, "UNBOUNDED_FOLLOWING")) {
 		return WindowBoundary::UNBOUNDED_FOLLOWING;
-	} else if (strcmp(value, "CURRENT_ROW_RANGE") == 0) {
+	} else if (StringUtil::Equals(value, "CURRENT_ROW_RANGE")) {
 		return WindowBoundary::CURRENT_ROW_RANGE;
-	} else if (strcmp(value, "CURRENT_ROW_ROWS") == 0) {
+	} else if (StringUtil::Equals(value, "CURRENT_ROW_ROWS")) {
 		return WindowBoundary::CURRENT_ROW_ROWS;
-	} else if (strcmp(value, "EXPR_PRECEDING_ROWS") == 0) {
+	} else if (StringUtil::Equals(value, "EXPR_PRECEDING_ROWS")) {
 		return WindowBoundary::EXPR_PRECEDING_ROWS;
-	} else if (strcmp(value, "EXPR_FOLLOWING_ROWS") == 0) {
+	} else if (StringUtil::Equals(value, "EXPR_FOLLOWING_ROWS")) {
 		return WindowBoundary::EXPR_FOLLOWING_ROWS;
-	} else if (strcmp(value, "EXPR_PRECEDING_RANGE") == 0) {
+	} else if (StringUtil::Equals(value, "EXPR_PRECEDING_RANGE")) {
 		return WindowBoundary::EXPR_PRECEDING_RANGE;
-	} else if (strcmp(value, "EXPR_FOLLOWING_RANGE") == 0) {
+	} else if (StringUtil::Equals(value, "EXPR_FOLLOWING_RANGE")) {
 		return WindowBoundary::EXPR_FOLLOWING_RANGE;
 	} else {
 		throw NotImplementedException("FromString not implemented for enum value");
@@ -471,15 +471,15 @@ const char *EnumSerializer::EnumToString(WindowBoundary value) {
 //-----------------------------------------------
 template <>
 SubqueryType EnumSerializer::StringToEnum(const char *value) {
-	if (strcmp(value, "INVALID") == 0) {
+	if (StringUtil::Equals(value, "INVALID")) {
 		return SubqueryType::INVALID;
-	} else if (strcmp(value, "SCALAR") == 0) {
+	} else if (StringUtil::Equals(value, "SCALAR")) {
 		return SubqueryType::SCALAR;
-	} else if (strcmp(value, "EXISTS") == 0) {
+	} else if (StringUtil::Equals(value, "EXISTS")) {
 		return SubqueryType::EXISTS;
-	} else if (strcmp(value, "NOT_EXISTS") == 0) {
+	} else if (StringUtil::Equals(value, "NOT_EXISTS")) {
 		return SubqueryType::NOT_EXISTS;
-	} else if (strcmp(value, "ANY") == 0) {
+	} else if (StringUtil::Equals(value, "ANY")) {
 		return SubqueryType::ANY;
 	} else {
 		throw NotImplementedException("EnumSerializer::StringToEnum not implemented for enum value");
@@ -509,137 +509,137 @@ const char *EnumSerializer::EnumToString(SubqueryType value) {
 //-----------------------------------------------
 template <>
 ExpressionType EnumSerializer::StringToEnum(const char *value) {
-	if (strcmp(value, "CAST") == 0) {
+	if (StringUtil::Equals(value, "CAST")) {
 		return ExpressionType::OPERATOR_CAST;
-	} else if (strcmp(value, "NOT") == 0) {
+	} else if (StringUtil::Equals(value, "NOT")) {
 		return ExpressionType::OPERATOR_NOT;
-	} else if (strcmp(value, "IS_NULL") == 0) {
+	} else if (StringUtil::Equals(value, "IS_NULL")) {
 		return ExpressionType::OPERATOR_IS_NULL;
-	} else if (strcmp(value, "IS_NOT_NULL") == 0) {
+	} else if (StringUtil::Equals(value, "IS_NOT_NULL")) {
 		return ExpressionType::OPERATOR_IS_NOT_NULL;
-	} else if (strcmp(value, "EQUAL") == 0) {
+	} else if (StringUtil::Equals(value, "EQUAL")) {
 		return ExpressionType::COMPARE_EQUAL;
-	} else if (strcmp(value, "NOTEQUAL") == 0) {
+	} else if (StringUtil::Equals(value, "NOTEQUAL")) {
 		return ExpressionType::COMPARE_NOTEQUAL;
-	} else if (strcmp(value, "LESSTHAN") == 0) {
+	} else if (StringUtil::Equals(value, "LESSTHAN")) {
 		return ExpressionType::COMPARE_LESSTHAN;
-	} else if (strcmp(value, "GREATERTHAN") == 0) {
+	} else if (StringUtil::Equals(value, "GREATERTHAN")) {
 		return ExpressionType::COMPARE_GREATERTHAN;
-	} else if (strcmp(value, "LESSTHANOREQUALTO") == 0) {
+	} else if (StringUtil::Equals(value, "LESSTHANOREQUALTO")) {
 		return ExpressionType::COMPARE_LESSTHANOREQUALTO;
-	} else if (strcmp(value, "GREATERTHANOREQUALTO") == 0) {
+	} else if (StringUtil::Equals(value, "GREATERTHANOREQUALTO")) {
 		return ExpressionType::COMPARE_GREATERTHANOREQUALTO;
-	} else if (strcmp(value, "IN") == 0) {
+	} else if (StringUtil::Equals(value, "IN")) {
 		return ExpressionType::COMPARE_IN;
-	} else if (strcmp(value, "DISTINCT_FROM") == 0) {
+	} else if (StringUtil::Equals(value, "DISTINCT_FROM")) {
 		return ExpressionType::COMPARE_DISTINCT_FROM;
-	} else if (strcmp(value, "NOT_DISTINCT_FROM") == 0) {
+	} else if (StringUtil::Equals(value, "NOT_DISTINCT_FROM")) {
 		return ExpressionType::COMPARE_NOT_DISTINCT_FROM;
-	} else if (strcmp(value, "AND") == 0) {
+	} else if (StringUtil::Equals(value, "AND")) {
 		return ExpressionType::CONJUNCTION_AND;
-	} else if (strcmp(value, "OR") == 0) {
+	} else if (StringUtil::Equals(value, "OR")) {
 		return ExpressionType::CONJUNCTION_OR;
-	} else if (strcmp(value, "CONSTANT") == 0) {
+	} else if (StringUtil::Equals(value, "CONSTANT")) {
 		return ExpressionType::VALUE_CONSTANT;
-	} else if (strcmp(value, "PARAMETER") == 0) {
+	} else if (StringUtil::Equals(value, "PARAMETER")) {
 		return ExpressionType::VALUE_PARAMETER;
-	} else if (strcmp(value, "TUPLE") == 0) {
+	} else if (StringUtil::Equals(value, "TUPLE")) {
 		return ExpressionType::VALUE_TUPLE;
-	} else if (strcmp(value, "TUPLE_ADDRESS") == 0) {
+	} else if (StringUtil::Equals(value, "TUPLE_ADDRESS")) {
 		return ExpressionType::VALUE_TUPLE_ADDRESS;
-	} else if (strcmp(value, "NULL") == 0) {
+	} else if (StringUtil::Equals(value, "NULL")) {
 		return ExpressionType::VALUE_NULL;
-	} else if (strcmp(value, "VECTOR") == 0) {
+	} else if (StringUtil::Equals(value, "VECTOR")) {
 		return ExpressionType::VALUE_VECTOR;
-	} else if (strcmp(value, "SCALAR") == 0) {
+	} else if (StringUtil::Equals(value, "SCALAR")) {
 		return ExpressionType::VALUE_SCALAR;
-	} else if (strcmp(value, "AGGREGATE") == 0) {
+	} else if (StringUtil::Equals(value, "AGGREGATE")) {
 		return ExpressionType::AGGREGATE;
-	} else if (strcmp(value, "WINDOW_AGGREGATE") == 0) {
+	} else if (StringUtil::Equals(value, "WINDOW_AGGREGATE")) {
 		return ExpressionType::WINDOW_AGGREGATE;
-	} else if (strcmp(value, "RANK") == 0) {
+	} else if (StringUtil::Equals(value, "RANK")) {
 		return ExpressionType::WINDOW_RANK;
-	} else if (strcmp(value, "RANK_DENSE") == 0) {
+	} else if (StringUtil::Equals(value, "RANK_DENSE")) {
 		return ExpressionType::WINDOW_RANK_DENSE;
-	} else if (strcmp(value, "PERCENT_RANK") == 0) {
+	} else if (StringUtil::Equals(value, "PERCENT_RANK")) {
 		return ExpressionType::WINDOW_PERCENT_RANK;
-	} else if (strcmp(value, "ROW_NUMBER") == 0) {
+	} else if (StringUtil::Equals(value, "ROW_NUMBER")) {
 		return ExpressionType::WINDOW_ROW_NUMBER;
-	} else if (strcmp(value, "FIRST_VALUE") == 0) {
+	} else if (StringUtil::Equals(value, "FIRST_VALUE")) {
 		return ExpressionType::WINDOW_FIRST_VALUE;
-	} else if (strcmp(value, "LAST_VALUE") == 0) {
+	} else if (StringUtil::Equals(value, "LAST_VALUE")) {
 		return ExpressionType::WINDOW_LAST_VALUE;
-	} else if (strcmp(value, "NTH_VALUE") == 0) {
+	} else if (StringUtil::Equals(value, "NTH_VALUE")) {
 		return ExpressionType::WINDOW_NTH_VALUE;
-	} else if (strcmp(value, "CUME_DIST") == 0) {
+	} else if (StringUtil::Equals(value, "CUME_DIST")) {
 		return ExpressionType::WINDOW_CUME_DIST;
-	} else if (strcmp(value, "LEAD") == 0) {
+	} else if (StringUtil::Equals(value, "LEAD")) {
 		return ExpressionType::WINDOW_LEAD;
-	} else if (strcmp(value, "LAG") == 0) {
+	} else if (StringUtil::Equals(value, "LAG")) {
 		return ExpressionType::WINDOW_LAG;
-	} else if (strcmp(value, "NTILE") == 0) {
+	} else if (StringUtil::Equals(value, "NTILE")) {
 		return ExpressionType::WINDOW_NTILE;
-	} else if (strcmp(value, "FUNCTION") == 0) {
+	} else if (StringUtil::Equals(value, "FUNCTION")) {
 		return ExpressionType::FUNCTION;
-	} else if (strcmp(value, "CASE") == 0) {
+	} else if (StringUtil::Equals(value, "CASE")) {
 		return ExpressionType::CASE_EXPR;
-	} else if (strcmp(value, "NULLIF") == 0) {
+	} else if (StringUtil::Equals(value, "NULLIF")) {
 		return ExpressionType::OPERATOR_NULLIF;
-	} else if (strcmp(value, "COALESCE") == 0) {
+	} else if (StringUtil::Equals(value, "COALESCE")) {
 		return ExpressionType::OPERATOR_COALESCE;
-	} else if (strcmp(value, "ARRAY_EXTRACT") == 0) {
+	} else if (StringUtil::Equals(value, "ARRAY_EXTRACT")) {
 		return ExpressionType::ARRAY_EXTRACT;
-	} else if (strcmp(value, "ARRAY_SLICE") == 0) {
+	} else if (StringUtil::Equals(value, "ARRAY_SLICE")) {
 		return ExpressionType::ARRAY_SLICE;
-	} else if (strcmp(value, "STRUCT_EXTRACT") == 0) {
+	} else if (StringUtil::Equals(value, "STRUCT_EXTRACT")) {
 		return ExpressionType::STRUCT_EXTRACT;
-	} else if (strcmp(value, "SUBQUERY") == 0) {
+	} else if (StringUtil::Equals(value, "SUBQUERY")) {
 		return ExpressionType::SUBQUERY;
-	} else if (strcmp(value, "STAR") == 0) {
+	} else if (StringUtil::Equals(value, "STAR")) {
 		return ExpressionType::STAR;
-	} else if (strcmp(value, "PLACEHOLDER") == 0) {
+	} else if (StringUtil::Equals(value, "PLACEHOLDER")) {
 		return ExpressionType::PLACEHOLDER;
-	} else if (strcmp(value, "COLUMN_REF") == 0) {
+	} else if (StringUtil::Equals(value, "COLUMN_REF")) {
 		return ExpressionType::COLUMN_REF;
-	} else if (strcmp(value, "FUNCTION_REF") == 0) {
+	} else if (StringUtil::Equals(value, "FUNCTION_REF")) {
 		return ExpressionType::FUNCTION_REF;
-	} else if (strcmp(value, "TABLE_REF") == 0) {
+	} else if (StringUtil::Equals(value, "TABLE_REF")) {
 		return ExpressionType::TABLE_REF;
-	} else if (strcmp(value, "CAST") == 0) {
+	} else if (StringUtil::Equals(value, "CAST")) {
 		return ExpressionType::CAST;
-	} else if (strcmp(value, "COMPARE_NOT_IN") == 0) {
+	} else if (StringUtil::Equals(value, "COMPARE_NOT_IN")) {
 		return ExpressionType::COMPARE_NOT_IN;
-	} else if (strcmp(value, "COMPARE_BETWEEN") == 0) {
+	} else if (StringUtil::Equals(value, "COMPARE_BETWEEN")) {
 		return ExpressionType::COMPARE_BETWEEN;
-	} else if (strcmp(value, "COMPARE_NOT_BETWEEN") == 0) {
+	} else if (StringUtil::Equals(value, "COMPARE_NOT_BETWEEN")) {
 		return ExpressionType::COMPARE_NOT_BETWEEN;
-	} else if (strcmp(value, "VALUE_DEFAULT") == 0) {
+	} else if (StringUtil::Equals(value, "VALUE_DEFAULT")) {
 		return ExpressionType::VALUE_DEFAULT;
-	} else if (strcmp(value, "BOUND_REF") == 0) {
+	} else if (StringUtil::Equals(value, "BOUND_REF")) {
 		return ExpressionType::BOUND_REF;
-	} else if (strcmp(value, "BOUND_COLUMN_REF") == 0) {
+	} else if (StringUtil::Equals(value, "BOUND_COLUMN_REF")) {
 		return ExpressionType::BOUND_COLUMN_REF;
-	} else if (strcmp(value, "BOUND_FUNCTION") == 0) {
+	} else if (StringUtil::Equals(value, "BOUND_FUNCTION")) {
 		return ExpressionType::BOUND_FUNCTION;
-	} else if (strcmp(value, "BOUND_AGGREGATE") == 0) {
+	} else if (StringUtil::Equals(value, "BOUND_AGGREGATE")) {
 		return ExpressionType::BOUND_AGGREGATE;
-	} else if (strcmp(value, "GROUPING") == 0) {
+	} else if (StringUtil::Equals(value, "GROUPING")) {
 		return ExpressionType::GROUPING_FUNCTION;
-	} else if (strcmp(value, "ARRAY_CONSTRUCTOR") == 0) {
+	} else if (StringUtil::Equals(value, "ARRAY_CONSTRUCTOR")) {
 		return ExpressionType::ARRAY_CONSTRUCTOR;
-	} else if (strcmp(value, "TABLE_STAR") == 0) {
+	} else if (StringUtil::Equals(value, "TABLE_STAR")) {
 		return ExpressionType::TABLE_STAR;
-	} else if (strcmp(value, "BOUND_UNNEST") == 0) {
+	} else if (StringUtil::Equals(value, "BOUND_UNNEST")) {
 		return ExpressionType::BOUND_UNNEST;
-	} else if (strcmp(value, "COLLATE") == 0) {
+	} else if (StringUtil::Equals(value, "COLLATE")) {
 		return ExpressionType::COLLATE;
-	} else if (strcmp(value, "POSITIONAL_REFERENCE") == 0) {
+	} else if (StringUtil::Equals(value, "POSITIONAL_REFERENCE")) {
 		return ExpressionType::POSITIONAL_REFERENCE;
-	} else if (strcmp(value, "BOUND_LAMBDA_REF") == 0) {
+	} else if (StringUtil::Equals(value, "BOUND_LAMBDA_REF")) {
 		return ExpressionType::BOUND_LAMBDA_REF;
-	} else if (strcmp(value, "LAMBDA") == 0) {
+	} else if (StringUtil::Equals(value, "LAMBDA")) {
 		return ExpressionType::LAMBDA;
-	} else if (strcmp(value, "ARROW") == 0) {
+	} else if (StringUtil::Equals(value, "ARROW")) {
 		return ExpressionType::ARROW;
 	} else {
 		return ExpressionType::INVALID;
@@ -792,79 +792,79 @@ const char *EnumSerializer::EnumToString(ExpressionType value) {
 //-----------------------------------------------
 template <>
 ExpressionClass EnumSerializer::StringToEnum(const char *value) {
-	if (strcmp(value, "INVALID") == 0) {
+	if (StringUtil::Equals(value, "INVALID")) {
 		return ExpressionClass::INVALID;
-	} else if (strcmp(value, "AGGREGATE") == 0) {
+	} else if (StringUtil::Equals(value, "AGGREGATE")) {
 		return ExpressionClass::AGGREGATE;
-	} else if (strcmp(value, "CASE") == 0) {
+	} else if (StringUtil::Equals(value, "CASE")) {
 		return ExpressionClass::CASE;
-	} else if (strcmp(value, "CAST") == 0) {
+	} else if (StringUtil::Equals(value, "CAST")) {
 		return ExpressionClass::CAST;
-	} else if (strcmp(value, "COLUMN_REF") == 0) {
+	} else if (StringUtil::Equals(value, "COLUMN_REF")) {
 		return ExpressionClass::COLUMN_REF;
-	} else if (strcmp(value, "COMPARISON") == 0) {
+	} else if (StringUtil::Equals(value, "COMPARISON")) {
 		return ExpressionClass::COMPARISON;
-	} else if (strcmp(value, "CONJUNCTION") == 0) {
+	} else if (StringUtil::Equals(value, "CONJUNCTION")) {
 		return ExpressionClass::CONJUNCTION;
-	} else if (strcmp(value, "CONSTANT") == 0) {
+	} else if (StringUtil::Equals(value, "CONSTANT")) {
 		return ExpressionClass::CONSTANT;
-	} else if (strcmp(value, "DEFAULT") == 0) {
+	} else if (StringUtil::Equals(value, "DEFAULT")) {
 		return ExpressionClass::DEFAULT;
-	} else if (strcmp(value, "FUNCTION") == 0) {
+	} else if (StringUtil::Equals(value, "FUNCTION")) {
 		return ExpressionClass::FUNCTION;
-	} else if (strcmp(value, "OPERATOR") == 0) {
+	} else if (StringUtil::Equals(value, "OPERATOR")) {
 		return ExpressionClass::OPERATOR;
-	} else if (strcmp(value, "STAR") == 0) {
+	} else if (StringUtil::Equals(value, "STAR")) {
 		return ExpressionClass::STAR;
-	} else if (strcmp(value, "SUBQUERY") == 0) {
+	} else if (StringUtil::Equals(value, "SUBQUERY")) {
 		return ExpressionClass::SUBQUERY;
-	} else if (strcmp(value, "WINDOW") == 0) {
+	} else if (StringUtil::Equals(value, "WINDOW")) {
 		return ExpressionClass::WINDOW;
-	} else if (strcmp(value, "PARAMETER") == 0) {
+	} else if (StringUtil::Equals(value, "PARAMETER")) {
 		return ExpressionClass::PARAMETER;
-	} else if (strcmp(value, "COLLATE") == 0) {
+	} else if (StringUtil::Equals(value, "COLLATE")) {
 		return ExpressionClass::COLLATE;
-	} else if (strcmp(value, "LAMBDA") == 0) {
+	} else if (StringUtil::Equals(value, "LAMBDA")) {
 		return ExpressionClass::LAMBDA;
-	} else if (strcmp(value, "POSITIONAL_REFERENCE") == 0) {
+	} else if (StringUtil::Equals(value, "POSITIONAL_REFERENCE")) {
 		return ExpressionClass::POSITIONAL_REFERENCE;
-	} else if (strcmp(value, "BETWEEN") == 0) {
+	} else if (StringUtil::Equals(value, "BETWEEN")) {
 		return ExpressionClass::BETWEEN;
-	} else if (strcmp(value, "BOUND_AGGREGATE") == 0) {
+	} else if (StringUtil::Equals(value, "BOUND_AGGREGATE")) {
 		return ExpressionClass::BOUND_AGGREGATE;
-	} else if (strcmp(value, "BOUND_CASE") == 0) {
+	} else if (StringUtil::Equals(value, "BOUND_CASE")) {
 		return ExpressionClass::BOUND_CASE;
-	} else if (strcmp(value, "BOUND_CAST") == 0) {
+	} else if (StringUtil::Equals(value, "BOUND_CAST")) {
 		return ExpressionClass::BOUND_CAST;
-	} else if (strcmp(value, "BOUND_COLUMN_REF") == 0) {
+	} else if (StringUtil::Equals(value, "BOUND_COLUMN_REF")) {
 		return ExpressionClass::BOUND_COLUMN_REF;
-	} else if (strcmp(value, "BOUND_COMPARISON") == 0) {
+	} else if (StringUtil::Equals(value, "BOUND_COMPARISON")) {
 		return ExpressionClass::BOUND_COMPARISON;
-	} else if (strcmp(value, "BOUND_CONJUNCTION") == 0) {
+	} else if (StringUtil::Equals(value, "BOUND_CONJUNCTION")) {
 		return ExpressionClass::BOUND_CONJUNCTION;
-	} else if (strcmp(value, "BOUND_CONSTANT") == 0) {
+	} else if (StringUtil::Equals(value, "BOUND_CONSTANT")) {
 		return ExpressionClass::BOUND_CONSTANT;
-	} else if (strcmp(value, "BOUND_DEFAULT") == 0) {
+	} else if (StringUtil::Equals(value, "BOUND_DEFAULT")) {
 		return ExpressionClass::BOUND_DEFAULT;
-	} else if (strcmp(value, "BOUND_FUNCTION") == 0) {
+	} else if (StringUtil::Equals(value, "BOUND_FUNCTION")) {
 		return ExpressionClass::BOUND_FUNCTION;
-	} else if (strcmp(value, "BOUND_OPERATOR") == 0) {
+	} else if (StringUtil::Equals(value, "BOUND_OPERATOR")) {
 		return ExpressionClass::BOUND_OPERATOR;
-	} else if (strcmp(value, "BOUND_PARAMETER") == 0) {
+	} else if (StringUtil::Equals(value, "BOUND_PARAMETER")) {
 		return ExpressionClass::BOUND_PARAMETER;
-	} else if (strcmp(value, "BOUND_REF") == 0) {
+	} else if (StringUtil::Equals(value, "BOUND_REF")) {
 		return ExpressionClass::BOUND_REF;
-	} else if (strcmp(value, "BOUND_SUBQUERY") == 0) {
+	} else if (StringUtil::Equals(value, "BOUND_SUBQUERY")) {
 		return ExpressionClass::BOUND_SUBQUERY;
-	} else if (strcmp(value, "BOUND_WINDOW") == 0) {
+	} else if (StringUtil::Equals(value, "BOUND_WINDOW")) {
 		return ExpressionClass::BOUND_WINDOW;
-	} else if (strcmp(value, "BOUND_BETWEEN") == 0) {
+	} else if (StringUtil::Equals(value, "BOUND_BETWEEN")) {
 		return ExpressionClass::BOUND_BETWEEN;
-	} else if (strcmp(value, "BOUND_UNNEST") == 0) {
+	} else if (StringUtil::Equals(value, "BOUND_UNNEST")) {
 		return ExpressionClass::BOUND_UNNEST;
-	} else if (strcmp(value, "BOUND_LAMBDA") == 0) {
+	} else if (StringUtil::Equals(value, "BOUND_LAMBDA")) {
 		return ExpressionClass::BOUND_LAMBDA;
-	} else if (strcmp(value, "BOUND_EXPRESSION") == 0) {
+	} else if (StringUtil::Equals(value, "BOUND_EXPRESSION")) {
 		return ExpressionClass::BOUND_EXPRESSION;
 	} else {
 		throw NotImplementedException("Unrecognized ExpressionClass value");
@@ -958,11 +958,11 @@ const char *EnumSerializer::EnumToString(ExpressionClass value) {
 //-----------------------------------------------
 template <>
 SampleMethod EnumSerializer::StringToEnum(const char *value) {
-	if (strcmp(value, "System") == 0) {
+	if (StringUtil::Equals(value, "System")) {
 		return SampleMethod::SYSTEM_SAMPLE;
-	} else if (strcmp(value, "Bernoulli") == 0) {
+	} else if (StringUtil::Equals(value, "Bernoulli")) {
 		return SampleMethod::BERNOULLI_SAMPLE;
-	} else if (strcmp(value, "Reservoir") == 0) {
+	} else if (StringUtil::Equals(value, "Reservoir")) {
 		return SampleMethod::RESERVOIR_SAMPLE;
 	} else {
 		throw NotImplementedException("Unrecognized sample method type \"%s\"", value);
@@ -988,89 +988,89 @@ const char *EnumSerializer::EnumToString(SampleMethod value) {
 //-----------------------------------------------
 template <>
 LogicalTypeId EnumSerializer::StringToEnum(const char *value) {
-	if (strcmp(value, "BOOLEAN") == 0) {
+	if (StringUtil::Equals(value, "BOOLEAN")) {
 		return LogicalTypeId::BOOLEAN;
-	} else if (strcmp(value, "TINYINT") == 0) {
+	} else if (StringUtil::Equals(value, "TINYINT")) {
 		return LogicalTypeId::TINYINT;
-	} else if (strcmp(value, "SMALLINT") == 0) {
+	} else if (StringUtil::Equals(value, "SMALLINT")) {
 		return LogicalTypeId::SMALLINT;
-	} else if (strcmp(value, "INTEGER") == 0) {
+	} else if (StringUtil::Equals(value, "INTEGER")) {
 		return LogicalTypeId::INTEGER;
-	} else if (strcmp(value, "BIGINT") == 0) {
+	} else if (StringUtil::Equals(value, "BIGINT")) {
 		return LogicalTypeId::BIGINT;
-	} else if (strcmp(value, "HUGEINT") == 0) {
+	} else if (StringUtil::Equals(value, "HUGEINT")) {
 		return LogicalTypeId::HUGEINT;
-	} else if (strcmp(value, "UUID") == 0) {
+	} else if (StringUtil::Equals(value, "UUID")) {
 		return LogicalTypeId::UUID;
-	} else if (strcmp(value, "UTINYINT") == 0) {
+	} else if (StringUtil::Equals(value, "UTINYINT")) {
 		return LogicalTypeId::UTINYINT;
-	} else if (strcmp(value, "USMALLINT") == 0) {
+	} else if (StringUtil::Equals(value, "USMALLINT")) {
 		return LogicalTypeId::USMALLINT;
-	} else if (strcmp(value, "UINTEGER") == 0) {
+	} else if (StringUtil::Equals(value, "UINTEGER")) {
 		return LogicalTypeId::UINTEGER;
-	} else if (strcmp(value, "UBIGINT") == 0) {
+	} else if (StringUtil::Equals(value, "UBIGINT")) {
 		return LogicalTypeId::UBIGINT;
-	} else if (strcmp(value, "DATE") == 0) {
+	} else if (StringUtil::Equals(value, "DATE")) {
 		return LogicalTypeId::DATE;
-	} else if (strcmp(value, "TIME") == 0) {
+	} else if (StringUtil::Equals(value, "TIME")) {
 		return LogicalTypeId::TIME;
-	} else if (strcmp(value, "TIMESTAMP") == 0) {
+	} else if (StringUtil::Equals(value, "TIMESTAMP")) {
 		return LogicalTypeId::TIMESTAMP;
-	} else if (strcmp(value, "TIMESTAMP_MS") == 0) {
+	} else if (StringUtil::Equals(value, "TIMESTAMP_MS")) {
 		return LogicalTypeId::TIMESTAMP_MS;
-	} else if (strcmp(value, "TIMESTAMP_NS") == 0) {
+	} else if (StringUtil::Equals(value, "TIMESTAMP_NS")) {
 		return LogicalTypeId::TIMESTAMP_NS;
-	} else if (strcmp(value, "TIMESTAMP_S") == 0) {
+	} else if (StringUtil::Equals(value, "TIMESTAMP_S")) {
 		return LogicalTypeId::TIMESTAMP_SEC;
-	} else if (strcmp(value, "TIMESTAMP WITH TIME ZONE") == 0) {
+	} else if (StringUtil::Equals(value, "TIMESTAMP WITH TIME ZONE")) {
 		return LogicalTypeId::TIMESTAMP_TZ;
-	} else if (strcmp(value, "TIME WITH TIME ZONE") == 0) {
+	} else if (StringUtil::Equals(value, "TIME WITH TIME ZONE")) {
 		return LogicalTypeId::TIME_TZ;
-	} else if (strcmp(value, "FLOAT") == 0) {
+	} else if (StringUtil::Equals(value, "FLOAT")) {
 		return LogicalTypeId::FLOAT;
-	} else if (strcmp(value, "DOUBLE") == 0) {
+	} else if (StringUtil::Equals(value, "DOUBLE")) {
 		return LogicalTypeId::DOUBLE;
-	} else if (strcmp(value, "DECIMAL") == 0) {
+	} else if (StringUtil::Equals(value, "DECIMAL")) {
 		return LogicalTypeId::DECIMAL;
-	} else if (strcmp(value, "VARCHAR") == 0) {
+	} else if (StringUtil::Equals(value, "VARCHAR")) {
 		return LogicalTypeId::VARCHAR;
-	} else if (strcmp(value, "BLOB") == 0) {
+	} else if (StringUtil::Equals(value, "BLOB")) {
 		return LogicalTypeId::BLOB;
-	} else if (strcmp(value, "CHAR") == 0) {
+	} else if (StringUtil::Equals(value, "CHAR")) {
 		return LogicalTypeId::CHAR;
-	} else if (strcmp(value, "INTERVAL") == 0) {
+	} else if (StringUtil::Equals(value, "INTERVAL")) {
 		return LogicalTypeId::INTERVAL;
-	} else if (strcmp(value, "NULL") == 0) {
+	} else if (StringUtil::Equals(value, "NULL")) {
 		return LogicalTypeId::SQLNULL;
-	} else if (strcmp(value, "ANY") == 0) {
+	} else if (StringUtil::Equals(value, "ANY")) {
 		return LogicalTypeId::ANY;
-	} else if (strcmp(value, "VALIDITY") == 0) {
+	} else if (StringUtil::Equals(value, "VALIDITY")) {
 		return LogicalTypeId::VALIDITY;
-	} else if (strcmp(value, "STRUCT") == 0) {
+	} else if (StringUtil::Equals(value, "STRUCT")) {
 		return LogicalTypeId::STRUCT;
-	} else if (strcmp(value, "LIST") == 0) {
+	} else if (StringUtil::Equals(value, "LIST")) {
 		return LogicalTypeId::LIST;
-	} else if (strcmp(value, "MAP") == 0) {
+	} else if (StringUtil::Equals(value, "MAP")) {
 		return LogicalTypeId::MAP;
-	} else if (strcmp(value, "POINTER") == 0) {
+	} else if (StringUtil::Equals(value, "POINTER")) {
 		return LogicalTypeId::POINTER;
-	} else if (strcmp(value, "TABLE") == 0) {
+	} else if (StringUtil::Equals(value, "TABLE")) {
 		return LogicalTypeId::TABLE;
-	} else if (strcmp(value, "LAMBDA") == 0) {
+	} else if (StringUtil::Equals(value, "LAMBDA")) {
 		return LogicalTypeId::LAMBDA;
-	} else if (strcmp(value, "INVALID") == 0) {
+	} else if (StringUtil::Equals(value, "INVALID")) {
 		return LogicalTypeId::INVALID;
-	} else if (strcmp(value, "UNION") == 0) {
+	} else if (StringUtil::Equals(value, "UNION")) {
 		return LogicalTypeId::UNION;
-	} else if (strcmp(value, "UNKNOWN") == 0) {
+	} else if (StringUtil::Equals(value, "UNKNOWN")) {
 		return LogicalTypeId::UNKNOWN;
-	} else if (strcmp(value, "ENUM") == 0) {
+	} else if (StringUtil::Equals(value, "ENUM")) {
 		return LogicalTypeId::ENUM;
-	} else if (strcmp(value, "AGGREGATE_STATE") == 0) {
+	} else if (StringUtil::Equals(value, "AGGREGATE_STATE")) {
 		return LogicalTypeId::AGGREGATE_STATE;
-	} else if (strcmp(value, "USER") == 0) {
+	} else if (StringUtil::Equals(value, "USER")) {
 		return LogicalTypeId::USER;
-	} else if (strcmp(value, "BIT") == 0) {
+	} else if (StringUtil::Equals(value, "BIT")) {
 		return LogicalTypeId::BIT;
 	} else {
 		throw NotImplementedException(
