@@ -3,6 +3,8 @@
 #include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/file_opener.hpp"
+#include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/string_util.hpp"
 
 #include <algorithm>
 
@@ -40,6 +42,27 @@ public:
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
+static string CreateFilename(const FileSystem& fs, const string& path, string fileformat, const string& extension, idx_t writer_offset = 0){
+	const string id_format("{i");
+	const string uuid_format("{uuid");
+	bool added_id = false;
+
+	if (StringUtil::Contains(fileformat, uuid_format)){
+		const string uuid(UUID::ToString(UUID::GenerateRandomUUID()));
+		fileformat = StringUtil::Replace(fileformat, uuid_format, uuid);
+		added_id = true;
+	}
+	if (StringUtil::Contains(fileformat, id_format)){
+		const string id(to_string(writer_offset));
+		fileformat = StringUtil::Replace(fileformat, id_format, id);
+		added_id = true;
+	}
+	if (!added_id){
+		fileformat += to_string(writer_offset);
+	}
+	return fs.JoinPath(path, fileformat + "." + extension);
+}
+
 void MoveTmpFile(ClientContext &context, const string &tmp_file_path) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	auto file_path = tmp_file_path.substr(0, tmp_file_path.length() - 4);
