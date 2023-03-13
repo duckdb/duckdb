@@ -669,3 +669,41 @@ NULL
 [aaaaaaa]
 NULL
 
+# With regex options
+
+query I
+select regexp_extract_all('foobarbaz', '(BA[R|Z])', 1, 'i');
+----
+[bar, baz]
+
+query I
+WITH t(input, pattern, g) AS (
+    VALUES
+		(NULL, NULL, 0),
+		(NULL, NULL, 1),
+		('aaaaaaaa', '(A)', 0),
+		('aaaaaaaa', '(a)(A)(a)', 0),
+		('aaaaaaaa', '()', 1),
+		('aaaaaaaa', '(a)(A)', 0),
+		(NULL, NULL, NULL),
+		('aaaaaaaa', '(a)', 0),
+		('aaaaaaaa', '(a)(B)?(a)', NULL),
+		('aaa', '(a)(a)(A)(A)(a)(A)(a)', 0),
+		('aaaaaaaaaaa', '(a)(A)(a)(a)(a)(a)(a)', 0),
+		(NULL, '()', NULL)
+)
+select regexp_extract_all(input, pattern, g, 'i') from t;
+----
+NULL
+NULL
+[a, a, a, a, a, a, a, a]
+[aaa, aaa]
+[, , , , , , , , ]
+[aa, aa, aa, aa]
+NULL
+[a, a, a, a, a, a, a, a]
+NULL
+[]
+[aaaaaaa]
+NULL
+
