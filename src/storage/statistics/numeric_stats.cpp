@@ -507,6 +507,11 @@ void NumericStats::Verify(const BaseStatistics &stats, Vector &vector, const Sel
 }
 
 template <>
+bool &NumericValueUnion::GetReferenceUnsafe() {
+	return value_.boolean;
+}
+
+template <>
 int8_t &NumericValueUnion::GetReferenceUnsafe() {
 	return value_.tinyint;
 }
@@ -559,6 +564,11 @@ float &NumericValueUnion::GetReferenceUnsafe() {
 template <>
 double &NumericValueUnion::GetReferenceUnsafe() {
 	return value_.double_;
+}
+
+template <>
+bool NumericValueUnion::GetValueUnsafe() const {
+	return value_.boolean;
 }
 
 template <>

@@ -25,7 +25,7 @@ class Vector;
 
 struct NumericValueUnion {
 	union Val {
-		int8_t boolean;
+		bool boolean;
 		int8_t tinyint;
 		int16_t smallint;
 		int32_t integer;
@@ -136,6 +136,8 @@ template <>
 void NumericStats::Update<list_entry_t>(BaseStatistics &stats, list_entry_t new_value);
 
 template <>
+bool &NumericValueUnion::GetReferenceUnsafe();
+template <>
 int8_t &NumericValueUnion::GetReferenceUnsafe();
 template <>
 int16_t &NumericValueUnion::GetReferenceUnsafe();
@@ -158,6 +160,8 @@ float &NumericValueUnion::GetReferenceUnsafe();
 template <>
 double &NumericValueUnion::GetReferenceUnsafe();
 
+template <>
+bool &NumericValueUnion::GetValueUnsafe() const;
 template <>
 int8_t &NumericValueUnion::GetValueUnsafe() const;
 template <>
