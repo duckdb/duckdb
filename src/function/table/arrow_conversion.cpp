@@ -20,7 +20,13 @@ void ShiftRight(unsigned char *ar, int size, int shift) {
 
 void GetValidityMask(ValidityMask &mask, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
                      int64_t nested_offset = -1, bool add_null = false) {
-	if (array.null_count != 0 && array.buffers[0]) {
+	// In certains we don't need to or cannot copy arrow's validity mask to duckdb.
+	//
+	// The conditions where we do want to copy arrow's mask to duckdb are:
+	// 1. nulls exist
+	// 2. n_buffers > 0, meaning the array's arrow type is not `null`
+	// 3. the validity buffer (the first buffer) is not a nullptr
+	if (array.null_count != 0 && array.n_buffers > 0 && array.buffers[0]) {
 		auto bit_offset = scan_state.chunk_offset + array.offset;
 		if (nested_offset != -1) {
 			bit_offset = nested_offset;
