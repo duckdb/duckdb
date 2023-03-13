@@ -722,7 +722,8 @@ jobs:
       shell: bash
       run: |
         sudo ./scripts/install_s3_test_server.sh
-        ./scripts/run_s3_test_server.sh
+        ./scripts/generate_presigned_url.sh
+        source ./scripts/run_s3_test_server.sh
         sleep 60
 
     - name: Test
