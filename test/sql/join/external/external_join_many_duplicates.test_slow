@@ -5,39 +5,25 @@
 # runs out of memory occassionally on 32-bit machines
 require 64bit
 
-#statement ok
-#pragma verify_external
-
-#mode skip
-
-#statement ok
-#pragma threads=1
+statement ok
+pragma verify_external
 
 statement ok
 pragma verify_parallelism
 
 statement ok
-pragma debug_force_external=true
+create table test1 as select concat(range::VARCHAR, 'x', repeat('7', 1)) i from range(100, 132)
 
 statement ok
-create table test1 as select concat(range::VARCHAR, 'x', repeat('7', range - 80)) i from range(100, 132)
-
-statement ok
-create table test2 as select concat(range::VARCHAR, 'x', repeat('7', range - 80)) i from range(100, 132)
+create table test2 as select concat(range::VARCHAR, 'x', repeat('7', 1)) i from range(100, 132)
 
 statement ok
 insert into test2 select range::VARCHAR i from range(1000000000000, 1000000100000)
 
 query T
-with test1_cte as (
-    select * from test1
-    union all
-    select * from test1
-) select count(*) from test1_cte join test2 using (i)
+select count(*) from test1 join test2 using (i)
 ----
-64
-
-mode skip
+32
 
 # 10M build side with many useless duplicates (stress tests the compare-and-swap pointer table construction)
 statement ok

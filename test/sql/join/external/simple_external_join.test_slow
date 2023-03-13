@@ -10,7 +10,7 @@ create table t1 (i varchar)
 statement ok
 create table t2 (j varchar)
 
-# Create tables with large string values so that we have to swizzle strings
+# Create tables with large string values so that strings aren't inlined
 # The tables have some overlapping values to keep the join result small
 statement ok
 insert into t1 select concat(range::VARCHAR, repeat('0', 50)) i from range(100000) order by random()
@@ -23,24 +23,19 @@ statement ok
 pragma verify_parallelism
 
 statement ok
-pragma threads=1
-
-#statement ok
-#pragma debug_force_external=true
+pragma threads=4
 
 statement ok
-pragma memory_limit='25mb'
+pragma memory_limit='50mb'
 
 query I
 select count(*) from t1, t2 where i = j
 ----
 10000
 
-mode skip
-
 # higher memory limit for this because the strings are so large
 statement ok
-pragma memory_limit='100mb'
+pragma memory_limit='80mb'
 
 # add some strings that are longer than Storage::BLOCK_SIZE
 statement ok
