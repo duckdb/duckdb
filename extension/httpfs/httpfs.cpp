@@ -588,8 +588,8 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 				}
 				res = std::move(range_res);
 			} else {
-				throw HTTPException(*res, "Unable to connect to URL \"%s\": %s (%s)", res->http_url, to_string(res->code),
-			                    res->error);
+				throw HTTPException(*res, "Unable to connect to URL \"%s\": %s (%s)", res->http_url,
+				                    to_string(res->code), res->error);
 			}
 		}
 	}
