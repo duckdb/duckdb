@@ -117,14 +117,14 @@ LogicalType ArrowTableFunction::GetArrowLogicalType(
 		idx_t fixed_size = std::stoi(parameters);
 		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::FIXED_SIZE, fixed_size);
 		auto child_type = GetArrowLogicalType(*schema.children[0], arrow_convert_data, col_idx);
-		return LogicalType::LIST(std::move(child_type));
+		return LogicalType::LIST(child_type);
 	} else if (format == "+s") {
 		child_list_t<LogicalType> child_types;
 		for (idx_t type_idx = 0; type_idx < (idx_t)schema.n_children; type_idx++) {
 			auto child_type = GetArrowLogicalType(*schema.children[type_idx], arrow_convert_data, col_idx);
 			child_types.push_back({schema.children[type_idx]->name, child_type});
 		}
-		return LogicalType::STRUCT(std::move(child_types));
+		return LogicalType::STRUCT(child_types);
 
 	} else if (format == "+m") {
 		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::NORMAL, 0);

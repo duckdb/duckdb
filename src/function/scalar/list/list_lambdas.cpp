@@ -124,7 +124,7 @@ static void ExecuteExpression(vector<LogicalType> &types, vector<LogicalType> &r
 	// set the other vectors
 	vector<Vector> slices;
 	for (idx_t col_idx = 0; col_idx < args.ColumnCount() - 1; col_idx++) {
-		slices.emplace_back(Vector(args.data[col_idx + 1], sel_vectors[col_idx], elem_cnt));
+		slices.emplace_back(args.data[col_idx + 1], sel_vectors[col_idx], elem_cnt);
 		slices[col_idx].Flatten(elem_cnt);
 		input_chunk.data[col_idx + 2].Reference(slices[col_idx]);
 	}
@@ -195,10 +195,10 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 
 	// skip the list column
 	for (idx_t i = 1; i < args.ColumnCount(); i++) {
-		columns.emplace_back(UnifiedVectorFormat());
+		columns.emplace_back();
 		args.data[i].ToUnifiedFormat(count, columns[i - 1]);
 		indexes.push_back(0);
-		sel_vectors.emplace_back(SelectionVector(STANDARD_VECTOR_SIZE));
+		sel_vectors.emplace_back(STANDARD_VECTOR_SIZE);
 		types.push_back(args.data[i].GetType());
 	}
 

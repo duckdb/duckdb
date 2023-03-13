@@ -522,7 +522,7 @@ LogicalType GetUserTypeRecursive(const LogicalType &type, ClientContext &context
 		for (auto &child : StructType::GetChildTypes(type)) {
 			children.emplace_back(child.first, GetUserTypeRecursive(child.second, context));
 		}
-		return LogicalType::STRUCT(std::move(children));
+		return LogicalType::STRUCT(children);
 	}
 	if (type.id() == LogicalTypeId::LIST) {
 		return LogicalType::LIST(GetUserTypeRecursive(ListType::GetChildType(type), context));
@@ -773,12 +773,12 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 	if (type_id == LogicalTypeId::LIST) {
 		// list: perform max recursively on child type
 		auto new_child = MaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right));
-		return LogicalType::LIST(std::move(new_child));
+		return LogicalType::LIST(new_child);
 	}
 	if (type_id == LogicalTypeId::MAP) {
 		// list: perform max recursively on child type
 		auto new_child = MaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right));
-		return LogicalType::MAP(std::move(new_child));
+		return LogicalType::MAP(new_child);
 	}
 	if (type_id == LogicalTypeId::STRUCT) {
 		// struct: perform recursively
@@ -795,7 +795,7 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 			child_types.emplace_back(left_child_types[i].first, std::move(child_type));
 		}
 
-		return LogicalType::STRUCT(std::move(child_types));
+		return LogicalType::STRUCT(child_types);
 	}
 	if (type_id == LogicalTypeId::UNION) {
 		auto left_member_count = UnionType::GetMemberCount(left);
@@ -1076,8 +1076,8 @@ const LogicalType &ListType::GetChildType(const LogicalType &type) {
 	return ((ListTypeInfo &)*info).child_type;
 }
 
-LogicalType LogicalType::LIST(LogicalType child) {
-	auto info = make_shared<ListTypeInfo>(std::move(child));
+LogicalType LogicalType::LIST(const LogicalType &child) {
+	auto info = make_shared<ListTypeInfo>(child);
 	return LogicalType(LogicalTypeId::LIST, std::move(info));
 }
 
@@ -1207,8 +1207,8 @@ idx_t StructType::GetChildCount(const LogicalType &type) {
 	return StructType::GetChildTypes(type).size();
 }
 
-LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {
-	auto info = make_shared<StructTypeInfo>(std::move(children));
+LogicalType LogicalType::STRUCT(const child_list_t<LogicalType> &children) {
+	auto info = make_shared<StructTypeInfo>(children);
 	return LogicalType(LogicalTypeId::STRUCT, std::move(info));
 }
 
@@ -1220,8 +1220,8 @@ LogicalType LogicalType::AGGREGATE_STATE(aggregate_state_t state_type) { // NOLI
 //===--------------------------------------------------------------------===//
 // Map Type
 //===--------------------------------------------------------------------===//
-LogicalType LogicalType::MAP(LogicalType child) {
-	auto info = make_shared<ListTypeInfo>(std::move(child));
+LogicalType LogicalType::MAP(const LogicalType &child) {
+	auto info = make_shared<ListTypeInfo>(child);
 	return LogicalType(LogicalTypeId::MAP, std::move(info));
 }
 
@@ -1229,7 +1229,7 @@ LogicalType LogicalType::MAP(LogicalType key, LogicalType value) {
 	child_list_t<LogicalType> child_types;
 	child_types.emplace_back("key", std::move(key));
 	child_types.emplace_back("value", std::move(value));
-	return LogicalType::MAP(LogicalType::STRUCT(std::move(child_types)));
+	return LogicalType::MAP(LogicalType::STRUCT(child_types));
 }
 
 const LogicalType &MapType::KeyType(const LogicalType &type) {
