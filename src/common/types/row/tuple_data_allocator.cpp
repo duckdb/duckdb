@@ -337,10 +337,8 @@ void TupleDataAllocator::ReleaseOrStoreHandles(TupleDataPinState &pin_state, Tup
 }
 
 void TupleDataAllocator::ReleaseOrStoreHandles(TupleDataPinState &pin_state, TupleDataSegment &segment) {
-	if (pin_state.properties == TupleDataPinProperties::KEEP_EVERYTHING_PINNED) {
-		static TupleDataChunk DUMMY_CHUNK;
-		ReleaseOrStoreHandles(pin_state, segment, DUMMY_CHUNK);
-	}
+	static TupleDataChunk DUMMY_CHUNK;
+	ReleaseOrStoreHandles(pin_state, segment, DUMMY_CHUNK);
 }
 
 void TupleDataAllocator::ReleaseOrStoreHandlesInternal(TupleDataSegment &segment,

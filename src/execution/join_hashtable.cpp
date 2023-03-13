@@ -308,7 +308,7 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 	                                chunk_idx_to, false);
 	auto row_locations = iterator.GetRowLocations();
 	do {
-		auto count = iterator.GetCount();
+		const auto count = iterator.GetCount();
 		for (idx_t i = 0; i < count; i++) {
 			hash_data[i] = Load<hash_t>(row_locations[i] + pointer_offset);
 		}
@@ -866,16 +866,38 @@ bool JoinHashTable::RequiresPartitioning(ClientConfig &config, vector<unique_ptr
 	}
 
 	// Figure out if we can fit all single partitions in memory
+	idx_t max_partition_idx = 0;
 	idx_t max_partition_size = 0;
 	for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
-		auto data_size = partition_sizes[partition_idx];
-		auto ht_size = data_size + PointerTableCapacity(partition_counts[partition_idx]) * sizeof(data_ptr_t);
-		max_partition_size = MaxValue<idx_t>(max_partition_size, ht_size);
+		const auto &partition_count = partition_counts[partition_idx];
+		const auto &partition_size = partition_sizes[partition_idx];
+		auto partition_ht_size = partition_size + PointerTableCapacity(partition_count) * sizeof(data_ptr_t);
+		if (partition_ht_size > max_partition_size) {
+			max_partition_size = partition_ht_size;
+			max_partition_idx = partition_idx;
+		}
 	}
 
 	if (config.force_external || max_partition_size > max_ht_size) {
-		// TODO: refine this experimentally
-		radix_bits = 8;
+		const auto partition_count = partition_counts[max_partition_idx];
+		const auto partition_size = partition_sizes[max_partition_idx];
+
+		const auto max_added_bits = 8 - radix_bits;
+		idx_t added_bits;
+
+		for (added_bits = 1; added_bits < max_added_bits; added_bits++) {
+			double partition_multiplier = RadixPartitioning::NumberOfPartitions(added_bits);
+
+			auto new_estimated_count = double(partition_count) / partition_multiplier;
+			auto new_estimated_size = double(partition_size) / partition_multiplier;
+			auto new_estimated_ht_size = new_estimated_size + PointerTableCapacity(new_estimated_count);
+
+			if (new_estimated_ht_size <= double(max_ht_size) / 4) {
+				// Aim for an estimated partition size of max_ht_size / 4
+				break;
+			}
+		}
+		radix_bits += added_bits;
 		sink_collection =
 		    make_unique<RadixPartitionedTupleData>(buffer_manager, layout, radix_bits, layout.ColumnCount() - 1);
 		return true;

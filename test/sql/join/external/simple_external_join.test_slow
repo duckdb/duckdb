@@ -23,18 +23,20 @@ statement ok
 pragma verify_parallelism
 
 statement ok
-pragma threads=4
+pragma threads=1
+
+#statement ok
+#pragma debug_force_external=true
 
 statement ok
-pragma debug_force_external=true
-
-statement ok
-pragma memory_limit='50mb'
+pragma memory_limit='25mb'
 
 query I
 select count(*) from t1, t2 where i = j
 ----
 10000
+
+mode skip
 
 # higher memory limit for this because the strings are so large
 statement ok

@@ -263,23 +263,23 @@ public:
 		vector<unique_ptr<Task>> finalize_tasks;
 		auto &ht = *sink.hash_table;
 		const auto chunk_count = ht.GetDataCollection().ChunkCount();
-		if (ht.Count() < PARALLEL_CONSTRUCT_THRESHOLD && !context.config.verify_parallelism) {
+		const idx_t num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
+		if (num_threads == 1 || (ht.Count() < PARALLEL_CONSTRUCT_THRESHOLD && !context.config.verify_parallelism)) {
 			// Single-threaded finalize
 			finalize_tasks.push_back(
 			    make_unique<HashJoinFinalizeTask>(shared_from_this(), context, sink, 0, chunk_count, false));
 		} else {
 			// Parallel finalize
-			idx_t num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 			auto chunks_per_thread = MaxValue<idx_t>((chunk_count + num_threads - 1) / num_threads, 1);
 
-			idx_t block_idx = 0;
+			idx_t chunk_idx = 0;
 			for (idx_t thread_idx = 0; thread_idx < num_threads; thread_idx++) {
-				auto chunk_idx_from = block_idx;
+				auto chunk_idx_from = chunk_idx;
 				auto chunk_idx_to = MinValue<idx_t>(chunk_idx_from + chunks_per_thread, chunk_count);
 				finalize_tasks.push_back(make_unique<HashJoinFinalizeTask>(shared_from_this(), context, sink,
 				                                                           chunk_idx_from, chunk_idx_to, true));
-				block_idx = chunk_idx_to;
-				if (block_idx == chunk_count) {
+				chunk_idx = chunk_idx_to;
+				if (chunk_idx == chunk_count) {
 					break;
 				}
 			}
@@ -373,7 +373,12 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 			auto new_event = make_shared<HashJoinPartitionEvent>(pipeline, sink, sink.local_hash_tables);
 			event.InsertEvent(std::move(new_event));
 		} else {
+			for (auto &local_ht : sink.local_hash_tables) {
+				ht.Merge(*local_ht);
+			}
+			sink.local_hash_tables.clear();
 			sink.hash_table->PrepareExternalFinalize();
+			sink.ScheduleFinalize(pipeline, event);
 		}
 		sink.finalized = true;
 		return SinkFinalizeType::READY;
@@ -381,8 +386,8 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		for (auto &local_ht : sink.local_hash_tables) {
 			ht.Merge(*local_ht);
 		}
-		ht.Unpartition();
 		sink.local_hash_tables.clear();
+		ht.Unpartition();
 	}
 
 	// check for possible perfect hash table

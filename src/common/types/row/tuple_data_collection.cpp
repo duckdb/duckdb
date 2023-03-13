@@ -254,6 +254,17 @@ void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, Vector &sour
 	                          scatter_function.child_functions);
 }
 
+void VerifyHeapSizes(const data_ptr_t source_locations[], const idx_t heap_sizes[], const SelectionVector &append_sel,
+                     const idx_t append_count, const idx_t heap_size_offset) {
+#ifdef DEBUG
+	for (idx_t i = 0; i < append_count; i++) {
+		auto idx = append_sel.get_index(i);
+		const auto stored_heap_size = Load<uint32_t>(source_locations[idx] + heap_size_offset);
+		D_ASSERT(stored_heap_size == heap_sizes[idx]);
+	}
+#endif
+}
+
 void TupleDataCollection::CopyRows(TupleDataChunkState &chunk_state, TupleDataChunkState &input,
                                    const SelectionVector &append_sel, const idx_t append_count) const {
 	const auto source_locations = FlatVector::GetData<data_ptr_t>(input.row_locations);
@@ -271,6 +282,7 @@ void TupleDataCollection::CopyRows(TupleDataChunkState &chunk_state, TupleDataCh
 		const auto source_heap_locations = FlatVector::GetData<data_ptr_t>(input.heap_locations);
 		const auto target_heap_locations = FlatVector::GetData<data_ptr_t>(chunk_state.heap_locations);
 		const auto heap_sizes = FlatVector::GetData<idx_t>(input.heap_sizes);
+		VerifyHeapSizes(source_locations, heap_sizes, append_sel, append_count, layout.GetHeapSizeOffset());
 
 		// Check if we need to copy anything at all
 		idx_t total_heap_size = 0;
@@ -312,8 +324,7 @@ void TupleDataCollection::Combine(TupleDataCollection &other) {
 		}
 	}
 	this->count += other.count;
-	other.segments.clear();
-	other.count = 0;
+	other.Reset();
 	Verify();
 }
 
@@ -355,6 +366,7 @@ void TupleDataCollection::InitializeScan(TupleDataScanState &state, vector<colum
                                          TupleDataScanProperties properties) const {
 	state.pin_state.row_handles.clear();
 	state.pin_state.heap_handles.clear();
+	state.pin_state.properties = TupleDataPinProperties::UNPIN_AFTER_DONE;
 	state.segment_index = 0;
 	state.chunk_index = 0;
 	state.properties = properties;

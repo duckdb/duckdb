@@ -10,8 +10,11 @@ require 64bit
 
 #mode skip
 
+#statement ok
+#pragma threads=1
+
 statement ok
-pragma threads=1
+pragma verify_parallelism
 
 statement ok
 pragma debug_force_external=true
@@ -22,10 +25,17 @@ create table test1 as select concat(range::VARCHAR, 'x', repeat('7', range - 80)
 statement ok
 create table test2 as select concat(range::VARCHAR, 'x', repeat('7', range - 80)) i from range(100, 132)
 
+statement ok
+insert into test2 select range::VARCHAR i from range(1000000000000, 1000000100000)
+
 query T
-select count(*) from test1 join test2 using (i)
+with test1_cte as (
+    select * from test1
+    union all
+    select * from test1
+) select count(*) from test1_cte join test2 using (i)
 ----
-32
+64
 
 mode skip
 
