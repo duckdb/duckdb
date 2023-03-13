@@ -141,7 +141,6 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	copy->overwrite_or_ignore = overwrite_or_ignore;
 	copy->fileformat = fileformat;
 	copy->per_thread_output = per_thread_output;
-	copy->per_thread_output = per_thread_output;
 	copy->partition_output = !partition_cols.empty();
 	copy->partition_columns = std::move(partition_cols);
 
