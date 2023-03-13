@@ -837,16 +837,7 @@ static bool IsCrawl(const string &glob) {
 	return glob == "**";
 }
 static bool hasMultipleCrawl(const vector<string> &splits) {
-	bool found_one = false;
-	for (const auto &s : splits) {
-		if (IsCrawl(s)) {
-			if (found_one == true) {
-				return true;
-			}
-			found_one = true;
-		}
-	}
-	return false;
+	return std::count(splits.begin(), splits.end(), "**") > 1;
 }
 static bool IsSymbolicLink(const string &file) {
 	struct stat status;
