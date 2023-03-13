@@ -76,7 +76,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
 	bool use_tmp_file = true;
-	bool allow_overwrite = false;
+	bool overwrite_or_ignore = false;
 	string fileformat("data_");
 	bool user_set_use_tmp_file = false;
 	bool per_thread_output = false;
@@ -93,8 +93,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 			user_set_use_tmp_file = true;
 			continue;
 		}
-		if (loption == "allow_overwrite") {
-			allow_overwrite =
+		if (loption == "overwrite_or_ignore") {
+			overwrite_or_ignore =
 			    option.second.empty() || option.second[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
 			continue;
 		}
@@ -138,7 +138,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	auto copy = make_unique<LogicalCopyToFile>(copy_function->function, std::move(function_data));
 	copy->file_path = stmt.info->file_path;
 	copy->use_tmp_file = use_tmp_file;
-	copy->allow_overwrite = allow_overwrite;
+	copy->overwrite_or_ignore = overwrite_or_ignore;
 	copy->fileformat = fileformat;
 	copy->per_thread_output = per_thread_output;
 	copy->per_thread_output = per_thread_output;

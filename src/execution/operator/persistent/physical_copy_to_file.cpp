@@ -135,9 +135,9 @@ void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gst
 			string hive_path =
 			    CreateDirRecursive(partition_columns, names, partition_key_map[i]->values, trimmed_path, fs);
 			string full_path = fs.JoinPath(hive_path, "data_" + to_string(l.writer_offset) + "." + function.extension);
-			if (fs.FileExists(full_path) && !allow_overwrite) {
+			if (fs.FileExists(full_path) && !overwrite_or_ignore) {
 				throw IOException("failed to create " + full_path +
-				                  ", file exists! Enable ALLOW_OVERWRITE option to force writing");
+				                  ", file exists! Enable OVERWRITE_OR_IGNORE option to force writing");
 			}
 			// Create a writer for the current file
 			auto fun_data_global = function.copy_to_initialize_global(context.client, *bind_data, full_path);
@@ -209,8 +209,8 @@ unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContex
 		auto &fs = FileSystem::GetFileSystem(context.client);
 		string output_path =
 		    fs.JoinPath(file_path, StringUtil::Format("out_%llu", this_file_offset) + "." + function.extension);
-		if (fs.FileExists(output_path) && !allow_overwrite) {
-			throw IOException("%s exists! Enable ALLOW_OVERWRITE option to force writing", output_path);
+		if (fs.FileExists(output_path) && !overwrite_or_ignore) {
+			throw IOException("%s exists! Enable OVERWRITE_OR_IGNORE option to force writing", output_path);
 		}
 		res->global_state = function.copy_to_initialize_global(context.client, *bind_data, output_path);
 	}
@@ -222,17 +222,17 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 	if (partition_output || per_thread_output) {
 		auto &fs = FileSystem::GetFileSystem(context);
 
-		if (fs.FileExists(file_path) && !allow_overwrite) {
-			throw IOException("%s exists! Enable ALLOW_OVERWRITE option to force writing", file_path);
+		if (fs.FileExists(file_path) && !overwrite_or_ignore) {
+			throw IOException("%s exists! Enable OVERWRITE_OR_IGNORE option to force writing", file_path);
 		}
 		if (!fs.DirectoryExists(file_path)) {
 			fs.CreateDirectory(file_path);
-		} else if (!allow_overwrite) {
+		} else if (!overwrite_or_ignore) {
 			idx_t n_files = 0;
 			fs.ListFiles(
 			    file_path, [&n_files](const string &path, bool) { n_files++; }, FileOpener::Get(context));
 			if (n_files > 0) {
-				throw IOException("Directory %s is not empty! Enable ALLOW_OVERWRITE option to force writing",
+				throw IOException("Directory %s is not empty! Enable OVERWRITE_OR_IGNORE option to force writing",
 				                  file_path);
 			}
 		}

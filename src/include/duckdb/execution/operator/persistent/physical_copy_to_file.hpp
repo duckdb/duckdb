@@ -25,7 +25,7 @@ public:
 	string file_path;
 	bool use_tmp_file;
 	string fileformat;
-	bool allow_overwrite;
+	bool overwrite_or_ignore;
 	bool parallel;
 	bool per_thread_output;
 
