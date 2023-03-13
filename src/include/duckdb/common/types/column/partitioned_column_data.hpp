@@ -22,6 +22,7 @@ public:
 public:
 	Vector partition_indices;
 	SelectionVector partition_sel;
+	unordered_map<idx_t, list_entry_t> partition_entries;
 	DataChunk slice_chunk;
 
 	vector<unique_ptr<DataChunk>> partition_buffers;

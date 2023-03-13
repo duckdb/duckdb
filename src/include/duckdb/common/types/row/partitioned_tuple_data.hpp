@@ -22,6 +22,7 @@ public:
 public:
 	Vector partition_indices;
 	SelectionVector partition_sel;
+	unordered_map<idx_t, list_entry_t> partition_entries;
 
 	vector<unique_ptr<TupleDataPinState>> partition_pin_states;
 	TupleDataChunkState chunk_state;
@@ -104,8 +105,7 @@ protected:
 	void CreateAllocator();
 	//! Builds a selection vector in the Append state for the partitions
 	//! - returns true if everything belongs to the same partition - stores partition index in single_partition_idx
-	void BuildPartitionSel(PartitionedTupleDataAppendState &state, idx_t count,
-	                       unordered_map<idx_t, list_entry_t> &partition_entries);
+	void BuildPartitionSel(PartitionedTupleDataAppendState &state, idx_t count);
 	//! Builds out the buffer space in the partitions
 	void BuildBufferSpace(PartitionedTupleDataAppendState &state,
 	                      const unordered_map<idx_t, list_entry_t> &partition_entries);

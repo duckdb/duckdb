@@ -48,8 +48,9 @@ void PartitionedColumnData::Append(PartitionedColumnDataAppendState &state, Data
 
 	// Compute the counts per partition
 	const auto count = input.size();
-	unordered_map<idx_t, list_entry_t> partition_entries;
 	const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
+	auto &partition_entries = state.partition_entries;
+	partition_entries.clear();
 	switch (state.partition_indices.GetVectorType()) {
 	case VectorType::FLAT_VECTOR:
 		for (idx_t i = 0; i < count; i++) {

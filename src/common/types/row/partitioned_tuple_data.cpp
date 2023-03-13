@@ -49,10 +49,10 @@ void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, DataCh
 	ComputePartitionIndices(state, input);
 
 	// Build the selection vector for the partitions
-	unordered_map<idx_t, list_entry_t> partition_entries;
-	BuildPartitionSel(state, input.size(), partition_entries);
+	BuildPartitionSel(state, input.size());
 
 	// Early out: check if everything belongs to a single partition
+	const auto &partition_entries = state.partition_entries;
 	if (partition_entries.size() == 1) {
 		const auto &partition_index = partition_entries.begin()->first;
 		auto &partition = *partitions[partition_index];
@@ -80,10 +80,10 @@ void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, TupleD
 	ComputePartitionIndices(input.row_locations, count, state.partition_indices);
 
 	// Build the selection vector for the partitions
-	unordered_map<idx_t, list_entry_t> partition_entries;
-	BuildPartitionSel(state, count, partition_entries);
+	BuildPartitionSel(state, count);
 
 	// Early out: check if everything belongs to a single partition
+	auto &partition_entries = state.partition_entries;
 	if (partition_entries.size() == 1) {
 		const auto &partition_index = partition_entries.begin()->first;
 		auto &partition = *partitions[partition_index];
@@ -104,9 +104,11 @@ void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, TupleD
 	partitions[0]->CopyRows(state.chunk_state, input, state.partition_sel, count);
 }
 
-void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &state, idx_t count,
-                                             unordered_map<idx_t, list_entry_t> &partition_entries) {
+void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &state, idx_t count) {
 	const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
+	auto &partition_entries = state.partition_entries;
+	partition_entries.clear();
+
 	switch (state.partition_indices.GetVectorType()) {
 	case VectorType::FLAT_VECTOR:
 		for (idx_t i = 0; i < count; i++) {
