@@ -24,13 +24,13 @@ struct SegmentNode {
 
 //! The SegmentTree maintains a list of all segments of a specific column in a table, and allows searching for a segment
 //! by row number
-template <class T>
+template <class T, bool SUPPORTS_LAZY_LOADING = false>
 class SegmentTree {
 private:
 	class SegmentIterationHelper;
 
 public:
-	explicit SegmentTree(bool finished_loading_p = true) : finished_loading(finished_loading_p) {}
+	explicit SegmentTree() : finished_loading(true) {}
 	virtual ~SegmentTree() {}
 
 	//! Locks the segment tree. All methods to the segment tree either lock the segment tree, or take an already
@@ -85,6 +85,12 @@ public:
 	}
 	//! Gets the next segment
 	T *GetNextSegment(T *segment) {
+		if (!SUPPORTS_LAZY_LOADING) {
+			return segment->Next();
+		}
+		if (finished_loading) {
+			return segment->Next();
+		}
 		auto l = Lock();
 		return GetNextSegment(l, segment);
 	}
@@ -123,6 +129,9 @@ public:
 	void AppendSegment(SegmentLock &l, unique_ptr<T> segment) {
 		D_ASSERT(segment);
 		// add the node to the list of nodes
+		if (!nodes.empty()) {
+			nodes.back().node->next = segment.get();
+		}
 		SegmentNode<T> node;
 		segment->index = nodes.size();
 		node.row_start = segment->start;
@@ -222,7 +231,7 @@ public:
 	}
 
 protected:
-	bool finished_loading;
+	atomic<bool> finished_loading;
 
 	//! Load the next segment - only used when lazily loading
 	virtual unique_ptr<T> LoadSegment() {

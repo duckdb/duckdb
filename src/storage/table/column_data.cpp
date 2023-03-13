@@ -292,6 +292,7 @@ void ColumnData::RevertAppend(row_t start_row) {
 	// remove any segments AFTER this segment: they should be deleted entirely
 	data.EraseSegments(l, segment_index);
 
+	segment->next = nullptr;
 	transient.RevertAppend(start_row);
 }
 

@@ -23,14 +23,14 @@ constexpr const idx_t RowGroup::ROW_GROUP_SIZE;
 
 RowGroup::RowGroup(AttachedDatabase &db, BlockManager &block_manager, DataTableInfo &table_info, idx_t start,
                    idx_t count)
-    : start(start), count(count), db(db), block_manager(block_manager), table_info(table_info) {
+    : start(start), count(count), next(nullptr), db(db), block_manager(block_manager), table_info(table_info) {
 
 	Verify();
 }
 
 RowGroup::RowGroup(AttachedDatabase &db, BlockManager &block_manager, DataTableInfo &table_info,
                    const vector<LogicalType> &types, RowGroupPointer &&pointer)
-    : start(pointer.row_start), count(pointer.tuple_count), db(db), block_manager(block_manager),
+    : start(pointer.row_start), count(pointer.tuple_count), next(nullptr), db(db), block_manager(block_manager),
       table_info(table_info) {
 	// deserialize the columns
 	if (pointer.data_pointers.size() != types.size()) {
@@ -54,7 +54,7 @@ RowGroup::RowGroup(AttachedDatabase &db, BlockManager &block_manager, DataTableI
 }
 
 RowGroup::RowGroup(RowGroup &row_group, idx_t start)
-    : start(start), count(row_group.count.load()), db(row_group.db), block_manager(row_group.block_manager),
+    : start(start), count(row_group.count.load()), next(nullptr), db(row_group.db), block_manager(row_group.block_manager),
       table_info(row_group.table_info), version_info(std::move(row_group.version_info)),
       stats(std::move(row_group.stats)) {
 	for (auto &column : row_group.columns) {

@@ -58,7 +58,7 @@ unique_ptr<ColumnSegment> ColumnSegment::CreateSegment(ColumnSegment &other, idx
 ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, LogicalType type_p,
                              ColumnSegmentType segment_type, idx_t start, idx_t count, CompressionFunction *function_p,
                              BaseStatistics statistics, block_id_t block_id_p, idx_t offset_p, idx_t segment_size_p)
-    : start(start), count(count), db(db), type(std::move(type_p)), type_size(GetTypeIdSize(type.InternalType())),
+    : start(start), count(count), next(nullptr), db(db), type(std::move(type_p)), type_size(GetTypeIdSize(type.InternalType())),
       segment_type(segment_type), function(function_p), stats(std::move(statistics)), block(std::move(block)),
       block_id(block_id_p), offset(offset_p), segment_size(segment_size_p) {
 	D_ASSERT(function);
@@ -68,7 +68,7 @@ ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block
 }
 
 ColumnSegment::ColumnSegment(ColumnSegment &other, idx_t start)
-    : start(start), count(other.count.load()), db(other.db), type(std::move(other.type)), type_size(other.type_size),
+    : start(start), count(other.count.load()), next(nullptr), db(other.db), type(std::move(other.type)), type_size(other.type_size),
       segment_type(other.segment_type), function(other.function), stats(std::move(other.stats)),
       block(std::move(other.block)), block_id(other.block_id), offset(other.offset), segment_size(other.segment_size),
       segment_state(std::move(other.segment_state)) {

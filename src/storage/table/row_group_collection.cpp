@@ -12,10 +12,10 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // RowGroupSegmentTree
 //===--------------------------------------------------------------------===//
-class RowGroupSegmentTree : public SegmentTree<RowGroup> {
+class RowGroupSegmentTree : public SegmentTree<RowGroup, true> {
 public:
 	RowGroupSegmentTree(DataTableInfo &table_info_p, BlockManager &block_manager_p, vector<LogicalType> column_types_p) :
-	    SegmentTree<RowGroup>(), info(table_info_p), block_manager(block_manager_p),
+	    SegmentTree<RowGroup, true>(), info(table_info_p), block_manager(block_manager_p),
 		column_types(std::move(column_types_p)), current_row_group(0), max_row_group(0) {}
 
 	void Initialize(PersistentTableData &data) {
@@ -414,6 +414,7 @@ void RowGroupCollection::RevertAppendInternal(idx_t start_row, idx_t count) {
 	// remove any segments AFTER this segment: they should be deleted entirely
 	row_groups->EraseSegments(l, segment_index);
 
+	info.next = nullptr;
 	info.RevertAppend(start_row);
 }
 
