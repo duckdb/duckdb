@@ -202,13 +202,15 @@ select regexp_extract_all('щцф', '.{6}')
 ----
 []
 
-# our result: [, , цц, , , ]
-# unicode characters are not 'skipped' correctly
-# we forward by 1 byte, instead of an entire character
-#query I
-#select regexp_extract_all('щццф', 'ц*')
-#----
-#[, цц, ]
+query I
+select regexp_extract_all('щццф', 'ц*')
+----
+[, цц, , ]
+
+query I
+select regexp_extract_all('abba', 'b*')
+----
+[, bb, , ]
 
 query I
 select regexp_extract_all('', '()')
@@ -285,11 +287,15 @@ select regexp_extract_all('abcdef', 'ac.*e.')
 ----
 []
 
-# our result: [щц]
-#query I
-#select regexp_extract_all('щцф', '.{2}')
-#----
-#[щ, ц, ф]
+query I
+select regexp_extract_all('щцф', '.{2}')
+----
+[щц]
+
+query I
+select regexp_extract_all('abc', '.{2}')
+----
+[ab]
 
 query I
 select regexp_extract_all('\001\002\003', '\002?')
@@ -316,11 +322,10 @@ select regexp_extract_all('this__test_case', '(.*?)(?:_|$)')
 ----
 [this_, _, test_, case, ]
 
-# our result: []
-#query I
-#select regexp_extract_all('щцф', 'щ(..)..')
-#----
-#[ц]
+query I
+select regexp_extract_all('щцф', 'щ(..)..')
+----
+[]
 
 query II
 SELECT str, 
@@ -534,56 +539,14 @@ FROM (
 ----
 03-123-4567	[123, 456]	[]	[03, 123, 4567]	[03, 12, 3, 45, 67]	[03, , 12, 3, , 45, 67, ]
 
-#error: ab++ is not valid regex
-#query IIIIII
-#SELECT str, 
-#  REGEXP_EXTRACT_ALL(str,'ab+')  AS m1,      
-#  REGEXP_EXTRACT_ALL(str,'ab+?') AS m1_short,
-#  REGEXP_EXTRACT_ALL(str,'ab++') AS m1_long, 
-#  REGEXP_EXTRACT_ALL(str,'ab*')  AS m2,      
-#  REGEXP_EXTRACT_ALL(str,'ab*?') AS m2_short,
-#  REGEXP_EXTRACT_ALL(str,'ab*+') AS m2_long, 
-#  REGEXP_EXTRACT_ALL(str,'ab?')  AS m3,      
-#  REGEXP_EXTRACT_ALL(str,'ab??') AS m3_short,
-#  REGEXP_EXTRACT_ALL(str,'ab?+') AS m3_long  
-#FROM (
-#  VALUES ('acd'), ('abcd'), ('abbcd'), ('abbbcd')
-#) AS t(str)
-#----
-
-#error: ++ is not valid regex
-#query IIIIII
-#SELECT str, 
-#  REGEXP_EXTRACT_ALL(str,'[\d]+')  AS m1,
-#  REGEXP_EXTRACT_ALL(str,'[\d]+?') AS m1_short,
-#  REGEXP_EXTRACT_ALL(str,'[\d]++') AS m1_long,
-#  REGEXP_EXTRACT_ALL(str,'[\d]*')  AS m2,
-#  REGEXP_EXTRACT_ALL(str,'[\d]*?') AS m2_short,
-#  REGEXP_EXTRACT_ALL(str,'[\d]*+') AS m2_long,
-#  REGEXP_EXTRACT_ALL(str,'[\d]?')  AS m3,
-#  REGEXP_EXTRACT_ALL(str,'[\d]??') AS m3_short,
-#  REGEXP_EXTRACT_ALL(str,'[\d]?+') AS m3_long
-#FROM (
-#  VALUES ('03-123-4567')
-#) AS t("str")
-#----
-
-#error: ++ is not valid regex
-#query IIIIIIIII
-#SELECT str, 
-#  REGEXP_EXTRACT_ALL(str,'[\d-]+')  AS m1,
-#  REGEXP_EXTRACT_ALL(str,'[\d-]+?') AS m1_short,
-#  REGEXP_EXTRACT_ALL(str,'[\d-]++') AS m1_long,
-#  REGEXP_EXTRACT_ALL(str,'[\d-]*')  AS m2,
-#  REGEXP_EXTRACT_ALL(str,'[\d-]*?') AS m2_short,
-#  REGEXP_EXTRACT_ALL(str,'[\d-]*+') AS m2_long,
-#  REGEXP_EXTRACT_ALL(str,'[\d-]?')  AS m3,
-#  REGEXP_EXTRACT_ALL(str,'[\d-]??') AS m3_short,
-#  REGEXP_EXTRACT_ALL(str,'[\d-]?+') AS m3_long
-#FROM (
-#  VALUES '03-123-4567'
-#) AS t(str)
-#----
+statement error
+SELECT str, 
+  REGEXP_EXTRACT_ALL(str,'ab++') AS m1_long, 
+FROM (
+  VALUES ('acd'), ('abcd'), ('abbcd'), ('abbbcd')
+) AS t(str)
+----
+Invalid Input Error: Pattern failed to parse, error: 'bad repetition operator: ++'
 
 query IIIIIII
 SELECT

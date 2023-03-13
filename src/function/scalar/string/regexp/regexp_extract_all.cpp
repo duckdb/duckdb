@@ -1,6 +1,7 @@
 #include "duckdb/function/scalar/regexp.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 #include "re2/re2.h"
 
 namespace duckdb {
@@ -35,6 +36,9 @@ bool ExtractAll(duckdb_re2::StringPiece &input, duckdb_re2::RE2 &pattern, idx_t 
 		// to avoid an infinite loop
 		// FIXME: support unicode characters
 		consumed++;
+		while (*startpos + consumed < input.length() && !LengthFun::IsCharacter(input[*startpos + consumed])) {
+			consumed++;
+		}
 	}
 	*startpos += consumed;
 	return true;
