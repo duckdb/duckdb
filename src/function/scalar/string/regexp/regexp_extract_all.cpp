@@ -108,13 +108,19 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, int32_
 	ListVector::SetListSize(result, current_list_size);
 }
 
-int32_t GetGroupIndex(DataChunk &args, idx_t row) {
+int32_t GetGroupIndex(DataChunk &args, idx_t row, int32_t &result) {
 	if (args.ColumnCount() < 3) {
-		return 0;
+		result = 0;
+		return true;
 	}
 	UnifiedVectorFormat format;
 	args.data[2].ToUnifiedFormat(args.size(), format);
-	return ((int32_t *)format.data)[format.sel->get_index(row)];
+	idx_t index = format.sel->get_index(row);
+	if (!format.validity.RowIsValid(index)) {
+		return false;
+	}
+	result = ((int32_t *)format.data)[index];
+	return true;
 }
 
 void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -151,26 +157,8 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 			auto idx = strings_data.sel->get_index(row);
 			auto string = ((string_t *)strings_data.data)[idx];
 
-			auto &string_validity = strings_data.validity;
-			if (!string_validity.RowIsValid(idx)) {
-				// String is NULL, result is also NULL
-				auto result_data = FlatVector::GetData<list_entry_t>(result);
-				auto &result_validity = FlatVector::Validity(result);
-				result_data[row].length = 0;
-				result_data[row].offset = ListVector::GetListSize(result);
-				result_validity.SetInvalid(row);
-				continue;
-			}
-			int32_t group_index = GetGroupIndex(args, row);
-			// Get the groups
-			ExtractSingleTuple(string, lstate.constant_pattern, group_index, lstate.group_buffer, result, row);
-		}
-	} else {
-		RegexStringPieceArgs string_pieces;
-		for (idx_t row = 0; row < tuple_count; row++) {
-			auto pattern_idx = pattern_data.sel->get_index(row);
-			auto &validity = pattern_data.validity;
-			if (!validity.RowIsValid(pattern_idx)) {
+			int32_t group_index;
+			if (!strings_data.validity.RowIsValid(idx) || !GetGroupIndex(args, row, group_index)) {
 				// Pattern is NULL, result is also NULL
 				auto result_data = FlatVector::GetData<list_entry_t>(result);
 				auto &result_validity = FlatVector::Validity(result);
@@ -180,7 +168,27 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 				continue;
 			}
 
+			// Get the groups
+			ExtractSingleTuple(string, lstate.constant_pattern, group_index, lstate.group_buffer, result, row);
+		}
+	} else {
+		RegexStringPieceArgs string_pieces;
+		for (idx_t row = 0; row < tuple_count; row++) {
+			auto pattern_idx = pattern_data.sel->get_index(row);
+			auto &validity = pattern_data.validity;
 			auto string_idx = strings_data.sel->get_index(row);
+			int32_t group_index;
+			if (!validity.RowIsValid(pattern_idx) || !strings_data.validity.RowIsValid(string_idx) ||
+			    !GetGroupIndex(args, row, group_index)) {
+				// Pattern is NULL, result is also NULL
+				auto result_data = FlatVector::GetData<list_entry_t>(result);
+				auto &result_validity = FlatVector::Validity(result);
+				result_data[row].length = 0;
+				result_data[row].offset = ListVector::GetListSize(result);
+				result_validity.SetInvalid(row);
+				continue;
+			}
+
 			auto &string = ((string_t *)strings_data.data)[string_idx];
 
 			auto &pattern_p = ((string_t *)pattern_data.data)[pattern_idx];
@@ -193,7 +201,6 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 			}
 			string_pieces.SetSize(group_count_p);
 
-			idx_t group_index = GetGroupIndex(args, row);
 			ExtractSingleTuple(string, re, group_index, string_pieces, result, row);
 		}
 	}

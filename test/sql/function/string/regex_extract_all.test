@@ -614,20 +614,58 @@ select regexp_extract_all('aabb', '^((aa)(bb))$', 3);
 query I
 WITH t(pattern) AS (
     VALUES
+		(NULL),
 		('(a)'),
 		('(a)(a)(a)'),
 		('()'),
 		('(a)(a)'),
+		(NULL),
 		('(a)'),
 		('(a)(b)?(a)'),
-		('(a)(a)(a)(a)(a)(a)(a)')
+		('(a)(a)(a)(a)(a)(a)(a)'),
+		(NULL),
 )
 select regexp_extract_all('aaaaaaaa', pattern) from t;
 ----
+NULL
 [a, a, a, a, a, a, a, a]
 [aaa, aaa]
 [, , , , , , , , ]
 [aa, aa, aa, aa]
+NULL
 [a, a, a, a, a, a, a, a]
 [aa, aa, aa, aa]
 [aaaaaaa]
+NULL
+
+query I
+WITH t(input, pattern, g) AS (
+    VALUES
+		(NULL, NULL, 0),
+		(NULL, NULL, 1),
+		('aaaaaaaa', '(a)', 0),
+		('aaaaaaaa', '(a)(a)(a)', 0),
+		('aaaaaaaa', '()', 1),
+		('aaaaaaaa', '(a)(a)', 0),
+		(NULL, NULL, NULL),
+		('aaaaaaaa', '(a)', 0),
+		('aaaaaaaa', '(a)(b)?(a)', NULL),
+		('aaa', '(a)(a)(a)(a)(a)(a)(a)', 0),
+		('aaaaaaaaaaa', '(a)(a)(a)(a)(a)(a)(a)', 0),
+		(NULL, '()', NULL)
+)
+select regexp_extract_all(input, pattern, g) from t;
+----
+NULL
+NULL
+[a, a, a, a, a, a, a, a]
+[aaa, aaa]
+[, , , , , , , , ]
+[aa, aa, aa, aa]
+NULL
+[a, a, a, a, a, a, a, a]
+NULL
+[]
+[aaaaaaa]
+NULL
+
