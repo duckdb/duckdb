@@ -24,6 +24,7 @@ public:
 	unique_ptr<FunctionData> bind_data;
 	string file_path;
 	bool use_tmp_file;
+	string fileformat;
 	bool allow_overwrite;
 	bool parallel;
 	bool per_thread_output;

@@ -77,6 +77,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	}
 	bool use_tmp_file = true;
 	bool allow_overwrite = false;
+	string fileformat("data_");
 	bool user_set_use_tmp_file = false;
 	bool per_thread_output = false;
 	vector<idx_t> partition_cols;
@@ -95,6 +96,10 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 		if (loption == "allow_overwrite") {
 			allow_overwrite =
 			    option.second.empty() || option.second[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
+			continue;
+		}
+		if (loption == "fileformat" && !option.second.empty()){
+			fileformat = option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>();
 			continue;
 		}
 
@@ -134,6 +139,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	copy->file_path = stmt.info->file_path;
 	copy->use_tmp_file = use_tmp_file;
 	copy->allow_overwrite = allow_overwrite;
+	copy->fileformat = fileformat;
 	copy->per_thread_output = per_thread_output;
 	copy->per_thread_output = per_thread_output;
 	copy->partition_output = !partition_cols.empty();
