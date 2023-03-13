@@ -1,0 +1,111 @@
+# name: test/sql/copy/format_uuid.test
+# description: basic tests for the hive partitioned write
+# group: [copy]
+
+require parquet
+
+statement ok
+PRAGMA verify_parallelism;
+
+statement ok
+PRAGMA threads=4;
+
+# Simple table that is easy to partition
+statement ok
+CREATE TABLE testSquared as SELECT i as a, (i*2) as b, power(i,2) as c from range(0,10) tbl(i);
+
+query III
+SELECT * FROM testSquared;
+----
+0	0	0
+1	2	1 
+2	4	4
+3	6	9
+4	8	16 
+5	10	25
+6	12	36
+7	14	49
+8	16	64
+9	18	81    
+
+# Test with the FILEFORMAT option. "{uuid}" will be replaced with a unique string.
+statement ok
+COPY testSquared TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), FILEFORMAT "myawesomeformat_{uuid}");
+
+query III
+SELECT * FROM '__TEST_DIR__/part/a=9/*.parquet';
+----
+9	18	81
+
+statement ok
+CREATE TABLE testCubed as SELECT i as a, (i*3) as b, power(i,3) as c from range(0,10) tbl(i);
+
+# Now append to the directory from previous test, creating a second file in the partition.
+statement ok
+COPY testCubed TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), OVERWRITE_OR_IGNORE TRUE, FILEFORMAT "myawesomeformat_{uuid}_thatwasit");
+
+query III sort
+SELECT * FROM '__TEST_DIR__/part/a=9/*.parquet';
+----
+9	18	81
+9	27	729
+
+statement ok
+CREATE TABLE test4 as SELECT i as a, (i*4) as b, power(i,4) as c from range(0,10) tbl(i);
+
+# Test without a specified format name for the outputfile. The name will be the default: "data_{i}"
+statement ok
+COPY test4 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), OVERWRITE_OR_IGNORE TRUE);
+
+query III sort
+SELECT * FROM '__TEST_DIR__/part/a=9/*.parquet';
+----
+9	18	81
+9	27	729
+9	36	6561
+
+statement ok
+CREATE TABLE test5 as SELECT i as a, (i*5) as b, power(i,5) as c from range(0,10) tbl(i);
+
+# Test where the fileformat does not contain "{i}" or "{uuid}". 
+statement ok
+COPY test5 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), OVERWRITE_OR_IGNORE TRUE, FILEFORMAT basename);
+
+query III sort
+SELECT * FROM '__TEST_DIR__/part/a=9/*.parquet';
+----
+9	18	81
+9	27	729
+9	36	6561
+9	45	59049
+
+# Test without the OVERWRITE_OR_IGNORE param, that tries to add a file to an existing directory
+statement error
+COPY test5 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a));
+----
+IO Error: Directory
+
+# Test where params/keywords don't have values
+statement ok
+COPY test4 TO '__TEST_DIR__/novalue' (FORMAT PARQUET, PARTITION_BY (a), FILEFORMAT);
+
+# Test where params/keywords don't have values
+statement ok
+COPY test5 TO '__TEST_DIR__/novalue' (FORMAT PARQUET, PARTITION_BY (a), OVERWRITE_OR_IGNORE);
+
+# Test the data_{i} with per_thread_output true
+statement ok
+CREATE TABLE testppt as SELECT i as a, (i*10) as b, (i*100) as c from range(0,10000) tbl(i);
+
+statement ok
+COPY testppt TO '__TEST_DIR__/ppt/' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE, OVERWRITE_OR_IGNORE true, FILEFORMAT 'myfmt_{i}_{uuid}');
+
+query I sort
+SELECT COUNT(*) FROM '__TEST_DIR__/ppt/myfmt_*.parquet';
+----
+10000
+
+query I
+SELECT COUNT(*) FROM GLOB('__TEST_DIR__/ppt/*.parquet');
+----
+4
