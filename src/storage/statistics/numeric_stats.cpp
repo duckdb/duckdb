@@ -614,4 +614,19 @@ double NumericValueUnion::GetValueUnsafe() const {
 	return value_.double_;
 }
 
+template <>
+date_t NumericValueUnion::GetValueUnsafe() const {
+	return date_t(value_.integer);
+}
+
+template <>
+dtime_t NumericValueUnion::GetValueUnsafe() const {
+	return dtime_t(value_.bigint);
+}
+
+template <>
+timestamp_t NumericValueUnion::GetValueUnsafe() const {
+	return timestamp_t(value_.bigint);
+}
+
 } // namespace duckdb

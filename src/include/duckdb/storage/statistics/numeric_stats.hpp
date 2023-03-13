@@ -180,5 +180,11 @@ template <>
 float &NumericValueUnion::GetValueUnsafe() const;
 template <>
 double &NumericValueUnion::GetValueUnsafe() const;
+template <>
+date_t &NumericValueUnion::GetValueUnsafe() const;
+template <>
+dtime_t &NumericValueUnion::GetValueUnsafe() const;
+template <>
+timestamp_t &NumericValueUnion::GetValueUnsafe() const;
 
 } // namespace duckdb
