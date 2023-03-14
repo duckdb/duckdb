@@ -477,7 +477,7 @@ bool ART::Insert(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id
 
 	if (node.DecodeARTNodeType() == ARTNodeType::LEAF) {
 		// add a row ID to a leaf, if they have the same key
-		auto leaf = node.Get<Leaf>(*this);
+		auto leaf = leaves->Get<Leaf>(node.GetPtr());
 		uint32_t new_prefix_length = 0;
 
 		// FIXME: this code (if and while) can be optimized, less branching, see Construct
@@ -606,7 +606,7 @@ void ART::Erase(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id)
 
 	// delete a row ID from a leaf
 	if (node.DecodeARTNodeType() == ARTNodeType::LEAF) {
-		auto leaf = node.Get<Leaf>(*this);
+		auto leaf = leaves->Get<Leaf>(node.GetPtr());
 		leaf->Remove(*this, row_id);
 
 		if (leaf->count == 0) {
@@ -632,7 +632,7 @@ void ART::Erase(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id)
 
 		if (child->DecodeARTNodeType() == ARTNodeType::LEAF) {
 			// leaf found, remove entry
-			auto leaf = child->Get<Leaf>(*this);
+			auto leaf = leaves->Get<Leaf>(child->GetPtr());
 			leaf->Remove(*this, row_id);
 
 			if (leaf->count == 0) {
@@ -726,7 +726,7 @@ Leaf *ART::Lookup(ARTNode node, const Key &key, idx_t depth) {
 
 	while (node) {
 		if (node.DecodeARTNodeType() == ARTNodeType::LEAF) {
-			auto leaf = node.Get<Leaf>(*this);
+			auto leaf = leaves->Get<Leaf>(node.GetPtr());
 
 			// check if leaf contains key
 			for (idx_t i = 0; i < leaf->prefix.count; i++) {
@@ -1045,12 +1045,15 @@ BlockPointer ART::Serialize(MetaBlockWriter &writer) {
 vector<idx_t> ART::InitializeMerge() {
 
 	vector<idx_t> buffer_counts;
-	auto type = ARTNodeType::PREFIX_SEGMENT;
-	while (type != ARTNodeType::NODE_256) {
-		buffer_counts.emplace_back(GetAllocator(type)->buffers.size());
-		type = ARTNodeType((uint8_t)type + 1);
-	}
-	buffer_counts.emplace_back(GetAllocator(type)->buffers.size());
+
+	buffer_counts.emplace_back(prefix_segments->buffers.size());
+	buffer_counts.emplace_back(leaf_segments->buffers.size());
+	buffer_counts.emplace_back(leaves->buffers.size());
+	buffer_counts.emplace_back(n4_nodes->buffers.size());
+	buffer_counts.emplace_back(n16_nodes->buffers.size());
+	buffer_counts.emplace_back(n48_nodes->buffers.size());
+	buffer_counts.emplace_back(n256_nodes->buffers.size());
+
 	return buffer_counts;
 }
 
@@ -1066,12 +1069,13 @@ bool ART::MergeIndexes(IndexLock &state, Index *other_index) {
 	}
 
 	// merge the node storage
-	auto type = ARTNodeType::PREFIX_SEGMENT;
-	while (type != ARTNodeType::NODE_256) {
-		GetAllocator(type)->Merge(*other_art->GetAllocator(type));
-		type = ARTNodeType((uint8_t)type + 1);
-	}
-	GetAllocator(type)->Merge(*other_art->GetAllocator(type));
+	prefix_segments->Merge(*other_art->prefix_segments);
+	leaf_segments->Merge(*other_art->leaf_segments);
+	leaves->Merge(*other_art->leaves);
+	n4_nodes->Merge(*other_art->n4_nodes);
+	n16_nodes->Merge(*other_art->n16_nodes);
+	n48_nodes->Merge(*other_art->n48_nodes);
+	n256_nodes->Merge(*other_art->n256_nodes);
 
 	// merge the ARTs
 	if (!tree.Merge(*this, other_art->tree)) {
@@ -1098,27 +1102,6 @@ string ART::ToString() {
 	}
 	std::cout << str;
 	return str;
-}
-
-FixedSizeAllocator *ART::GetAllocator(const ARTNodeType &type) const {
-	switch (type) {
-	case ARTNodeType::PREFIX_SEGMENT:
-		return prefix_segments.get();
-	case ARTNodeType::LEAF_SEGMENT:
-		return leaf_segments.get();
-	case ARTNodeType::LEAF:
-		return leaves.get();
-	case ARTNodeType::NODE_4:
-		return n4_nodes.get();
-	case ARTNodeType::NODE_16:
-		return n16_nodes.get();
-	case ARTNodeType::NODE_48:
-		return n48_nodes.get();
-	case ARTNodeType::NODE_256:
-		return n256_nodes.get();
-	default:
-		throw InternalException("Unknown ARTNodeType for FixedSizeAllocator");
-	}
 }
 
 } // namespace duckdb

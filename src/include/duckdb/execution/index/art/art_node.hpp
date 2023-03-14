@@ -62,14 +62,14 @@ public:
 	//! Initializes a new ART node
 	static void Initialize(ART &art, ARTNode &node, const ARTNodeType &type);
 
-	//! Get the node
-	template <class T>
-	T *Get(ART &art) const;
-
 	//! Set the leftmost byte to contain the node type
 	void EncodeARTNodeType(const ARTNodeType &type);
 	//! Retrieve the node type from the leftmost byte
 	ARTNodeType DecodeARTNodeType() const;
+	//! Get the pointer without the node type encoded
+	inline idx_t GetPtr() const {
+		return pointer & FixedSizeAllocator::FIRST_BYTE_TO_ZERO;
+	}
 
 	//! Replace a child node at pos
 	void ReplaceChild(ART &art, const idx_t &position, ARTNode &child);

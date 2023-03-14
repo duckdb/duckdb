@@ -24,21 +24,21 @@ public:
 
 	//! Get a new pointer to a prefix segment, might cause a new buffer allocation
 	static inline void New(ART &art, idx_t &new_position) {
-		art.GetAllocator(ARTNodeType::PREFIX_SEGMENT)->New(new_position);
+		art.prefix_segments->New(new_position);
 	}
 	static inline idx_t New(ART &art) {
-		return art.GetAllocator(ARTNodeType::PREFIX_SEGMENT)->New();
+		return art.prefix_segments->New();
 	}
 	//! Free a prefix segment
 	static inline void Free(ART &art, const idx_t &position) {
-		art.GetAllocator(ARTNodeType::PREFIX_SEGMENT)->Free(position);
+		art.prefix_segments->Free(position);
 		art.DecreaseMemorySize(sizeof(PrefixSegment));
 	}
 	//! Initialize all the fields of the segment
 	static PrefixSegment *Initialize(ART &art, const idx_t &position);
 	//! Get a prefix segment
 	static inline PrefixSegment *Get(ART &art, const idx_t &position) {
-		return art.GetAllocator(ARTNodeType::PREFIX_SEGMENT)->Get<PrefixSegment>(position);
+		return art.prefix_segments->Get<PrefixSegment>(position);
 	}
 
 	//! Append a byte to the current segment, or create a new segment containing that byte

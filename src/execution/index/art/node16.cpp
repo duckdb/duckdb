@@ -12,7 +12,7 @@ void Node16::Free(ART &art, ARTNode &node) {
 	D_ASSERT(node);
 	D_ASSERT(!node.IsSwizzled());
 
-	auto n16 = node.Get<Node16>(art);
+	auto n16 = art.n16_nodes->Get<Node16>(node.GetPtr());
 
 	// free all children
 	if (n16->count) {
@@ -26,7 +26,7 @@ void Node16::Free(ART &art, ARTNode &node) {
 
 Node16 *Node16::Initialize(ART &art, const ARTNode &node) {
 
-	auto n16 = node.Get<Node16>(art);
+	auto n16 = art.n16_nodes->Get<Node16>(node.GetPtr());
 	art.IncreaseMemorySize(sizeof(Node16));
 
 	n16->count = 0;
@@ -43,8 +43,8 @@ Node16 *Node16::GrowNode4(ART &art, ARTNode &node16, ARTNode &node4) {
 
 	ARTNode::New(art, node16, ARTNodeType::NODE_16);
 
-	auto n4 = node4.Get<Node4>(art);
-	auto n16 = node16.Get<Node16>(art);
+	auto n4 = art.n4_nodes->Get<Node4>(node4.GetPtr());
+	auto n16 = art.n16_nodes->Get<Node16>(node16.GetPtr());
 
 	n16->count = n4->count;
 	n16->prefix.Move(n4->prefix);
@@ -67,8 +67,8 @@ Node16 *Node16::ShrinkNode48(ART &art, ARTNode &node16, ARTNode &node48) {
 
 	ARTNode::New(art, node16, ARTNodeType::NODE_16);
 
-	auto n16 = node16.Get<Node16>(art);
-	auto n48 = node48.Get<Node48>(art);
+	auto n16 = art.n16_nodes->Get<Node16>(node16.GetPtr());
+	auto n48 = art.n48_nodes->Get<Node48>(node48.GetPtr());
 
 	n16->count = 0;
 	n16->prefix.Move(n48->prefix);
@@ -101,7 +101,7 @@ void Node16::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &
 
 	D_ASSERT(node);
 	D_ASSERT(!node.IsSwizzled());
-	auto n16 = node.Get<Node16>(art);
+	auto n16 = art.n16_nodes->Get<Node16>(node.GetPtr());
 
 #ifdef DEBUG
 	// ensure that there is no other child at the same byte
@@ -139,7 +139,7 @@ void Node16::DeleteChild(ART &art, ARTNode &node, idx_t position) {
 
 	D_ASSERT(node);
 	D_ASSERT(!node.IsSwizzled());
-	auto n16 = node.Get<Node16>(art);
+	auto n16 = art.n16_nodes->Get<Node16>(node.GetPtr());
 
 	D_ASSERT(position < n16->count);
 

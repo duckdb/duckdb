@@ -61,9 +61,7 @@ public:
 	//! Root of the tree
 	ARTNode tree;
 
-	//	//! Vector containing all fixed size allocators. Indexes into the vector via the ARTNodeType enum (-1) must
-	//	//! correspond to the specific allocator types
-	//	vector<FixedSizeAllocator> nodes;
+	//! Fixed-size allocators for each node type
 	unique_ptr<FixedSizeAllocator> prefix_segments;
 	unique_ptr<FixedSizeAllocator> leaf_segments;
 	unique_ptr<FixedSizeAllocator> leaves;
@@ -135,8 +133,6 @@ public:
 
 	//! Returns the string representation of an ART
 	string ToString() override;
-
-	FixedSizeAllocator *GetAllocator(const ARTNodeType &type) const;
 
 private:
 	//! Insert a row ID into a leaf

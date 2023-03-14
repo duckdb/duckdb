@@ -11,7 +11,7 @@ void Leaf::Free(ART &art, ARTNode &node) {
 	D_ASSERT(node);
 	D_ASSERT(!node.IsSwizzled());
 
-	auto leaf = node.Get<Leaf>(art);
+	auto leaf = art.leaves->Get<Leaf>(node.GetPtr());
 
 	// delete all leaf segments
 	if (!leaf->IsInlined()) {
@@ -29,7 +29,7 @@ void Leaf::Free(ART &art, ARTNode &node) {
 
 Leaf *Leaf::Initialize(ART &art, const ARTNode &node, const Key &key, const uint32_t &depth, const row_t &row_id) {
 
-	auto leaf = node.Get<Leaf>(art);
+	auto leaf = art.leaves->Get<Leaf>(node.GetPtr());
 	art.IncreaseMemorySize(sizeof(Leaf));
 
 	// set the fields of the leaf
@@ -46,7 +46,7 @@ Leaf *Leaf::Initialize(ART &art, const ARTNode &node, const Key &key, const uint
 Leaf *Leaf::Initialize(ART &art, const ARTNode &node, const Key &key, const uint32_t &depth, const row_t *row_ids,
                        const idx_t &count) {
 
-	auto leaf = node.Get<Leaf>(art);
+	auto leaf = art.leaves->Get<Leaf>(node.GetPtr());
 	art.IncreaseMemorySize(sizeof(Leaf));
 
 	// inlined leaf
@@ -95,7 +95,7 @@ void Leaf::InitializeMerge(ART &art, const idx_t &buffer_count) {
 
 void Leaf::Merge(ART &art, ARTNode &other) {
 
-	auto other_leaf = other.Get<Leaf>(art);
+	auto other_leaf = art.leaves->Get<Leaf>(other.GetPtr());
 
 	// copy inlined row ID
 	if (other_leaf->IsInlined()) {

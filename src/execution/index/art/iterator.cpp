@@ -71,7 +71,7 @@ void Iterator::FindMinimum(const ARTNode &node) {
 
 	// found the minimum
 	if (node.DecodeARTNodeType() == ARTNodeType::LEAF) {
-		last_leaf = node.Get<Leaf>(*art);
+		last_leaf = art->leaves->Get<Leaf>(node.GetPtr());
 		return;
 	}
 
@@ -143,7 +143,7 @@ bool Iterator::Next() {
 		ARTNode node = top.node;
 		if (node.DecodeARTNodeType() == ARTNodeType::LEAF) {
 			// found a leaf: move to next node
-			last_leaf = node.Get<Leaf>(*art);
+			last_leaf = art->leaves->Get<Leaf>(node.GetPtr());
 			return true;
 		}
 		// find next node
@@ -204,7 +204,7 @@ bool Iterator::LowerBound(ARTNode node, const Key &key, const bool &is_inclusive
 
 		if (node.DecodeARTNodeType() == ARTNodeType::LEAF) {
 			// found a leaf node: check if it is bigger or equal than the current key
-			last_leaf = node.Get<Leaf>(*art);
+			last_leaf = art->leaves->Get<Leaf>(node.GetPtr());
 
 			// if the search is not inclusive the leaf node could still be equal to the current value
 			// check if leaf is equal to the current key

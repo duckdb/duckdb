@@ -20,21 +20,21 @@ public:
 
 	//! Get a new pointer to a leaf segment, might cause a new buffer allocation
 	static inline void New(ART &art, idx_t &new_position) {
-		art.GetAllocator(ARTNodeType::LEAF_SEGMENT)->New(new_position);
+		art.leaf_segments->New(new_position);
 	}
 	static inline idx_t New(ART &art) {
-		return art.GetAllocator(ARTNodeType::LEAF_SEGMENT)->New();
+		return art.leaf_segments->New();
 	}
 	//! Free a leaf segment
 	static inline void Free(ART &art, const idx_t &position) {
-		art.GetAllocator(ARTNodeType::LEAF_SEGMENT)->Free(position);
+		art.leaf_segments->Free(position);
 		art.DecreaseMemorySize(sizeof(LeafSegment));
 	}
 	//! Initialize all the fields of the segment
 	static LeafSegment *Initialize(ART &art, const idx_t &position);
 	//! Get a leaf segment
 	static inline LeafSegment *Get(ART &art, const idx_t &position) {
-		return art.GetAllocator(ARTNodeType::LEAF_SEGMENT)->Get<LeafSegment>(position);
+		return art.leaf_segments->Get<LeafSegment>(position);
 	}
 
 	//! Append a row ID to the current segment, or create a new segment containing that row ID

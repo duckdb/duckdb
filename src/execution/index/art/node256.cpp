@@ -11,7 +11,7 @@ void Node256::Free(ART &art, ARTNode &node) {
 	D_ASSERT(node);
 	D_ASSERT(!node.IsSwizzled());
 
-	auto n256 = node.Get<Node256>(art);
+	auto n256 = art.n256_nodes->Get<Node256>(node.GetPtr());
 
 	// free all children
 	if (n256->count) {
@@ -27,7 +27,7 @@ void Node256::Free(ART &art, ARTNode &node) {
 
 Node256 *Node256::Initialize(ART &art, const ARTNode &node) {
 
-	auto n256 = node.Get<Node256>(art);
+	auto n256 = art.n256_nodes->Get<Node256>(node.GetPtr());
 	art.IncreaseMemorySize(sizeof(Node256));
 
 	n256->count = 0;
@@ -44,8 +44,8 @@ Node256 *Node256::GrowNode48(ART &art, ARTNode &node256, ARTNode &node48) {
 
 	ARTNode::New(art, node256, ARTNodeType::NODE_256);
 
-	auto n48 = node48.Get<Node48>(art);
-	auto n256 = node256.Get<Node256>(art);
+	auto n48 = art.n48_nodes->Get<Node48>(node48.GetPtr());
+	auto n256 = art.n256_nodes->Get<Node256>(node256.GetPtr());
 
 	n256->count = n48->count;
 	n256->prefix.Move(n48->prefix);
@@ -76,7 +76,7 @@ void Node256::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode 
 
 	D_ASSERT(node);
 	D_ASSERT(!node.IsSwizzled());
-	auto n256 = node.Get<Node256>(art);
+	auto n256 = art.n256_nodes->Get<Node256>(node.GetPtr());
 
 #ifdef DEBUG
 	// ensure that there is no other child at the same byte
@@ -91,7 +91,7 @@ void Node256::DeleteChild(ART &art, ARTNode &node, idx_t position) {
 
 	D_ASSERT(node);
 	D_ASSERT(!node.IsSwizzled());
-	auto n256 = node.Get<Node256>(art);
+	auto n256 = art.n256_nodes->Get<Node256>(node.GetPtr());
 
 	// free the child and decrease the count
 	ARTNode::Free(art, n256->children[position]);
