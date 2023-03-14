@@ -90,28 +90,6 @@ void Prefix::Initialize(ART &art, const Prefix &other, const uint32_t &count_p) 
 	D_ASSERT(count == count_p);
 }
 
-void Prefix::Vacuum(ART &art) {
-
-	if (IsInlined()) {
-		return;
-	}
-
-	// first position has special treatment because we don't obtain it from a prefix segment
-	auto allocator = art.GetAllocator(ARTNodeType::PREFIX_SEGMENT);
-	if (allocator->NeedsVacuum(data.position)) {
-		allocator->Vacuum(data.position);
-	}
-
-	auto position = data.position;
-	while (position != DConstants::INVALID_INDEX) {
-		auto segment = PrefixSegment::Get(art, position);
-		if (segment->next != DConstants::INVALID_INDEX && allocator->NeedsVacuum(segment->next)) {
-			allocator->Vacuum(segment->next);
-		}
-		position = segment->next;
-	}
-}
-
 void Prefix::InitializeMerge(ART &art, const idx_t &buffer_count) {
 
 	if (IsInlined()) {

@@ -72,28 +72,6 @@ Leaf *Leaf::Initialize(ART &art, const ARTNode &node, const Key &key, const uint
 	return leaf;
 }
 
-void Leaf::Vacuum(ART &art) {
-
-	if (IsInlined()) {
-		return;
-	}
-
-	// first position has special treatment because we don't obtain it from a leaf segment
-	auto allocator = art.GetAllocator(ARTNodeType::LEAF_SEGMENT);
-	if (allocator->NeedsVacuum(row_ids.position)) {
-		allocator->Vacuum(row_ids.position);
-	}
-
-	auto position = row_ids.position;
-	while (position != DConstants::INVALID_INDEX) {
-		auto segment = LeafSegment::Get(art, position);
-		if (segment->next != DConstants::INVALID_INDEX && allocator->NeedsVacuum(segment->next)) {
-			allocator->Vacuum(segment->next);
-		}
-		position = segment->next;
-	}
-}
-
 void Leaf::InitializeMerge(ART &art, const idx_t &buffer_count) {
 
 	if (IsInlined()) {

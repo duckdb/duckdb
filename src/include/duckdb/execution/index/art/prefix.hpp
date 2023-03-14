@@ -48,9 +48,6 @@ public:
 	//! Initialize a prefix from another prefix up to count
 	void Initialize(ART &art, const Prefix &other, const uint32_t &count_p);
 
-	//! Vacuum the prefix
-	void Vacuum(ART &art);
-
 	//! Initializes a merge by incrementing the buffer IDs of the prefix segments
 	void InitializeMerge(ART &art, const idx_t &buffer_count);
 

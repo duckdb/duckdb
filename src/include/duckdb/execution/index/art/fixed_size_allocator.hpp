@@ -10,16 +10,20 @@
 
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/set.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/list.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
 
 namespace duckdb {
 
-struct FreeList {
-	explicit FreeList(idx_t buffer_id_offset) : buffer_id_offset(buffer_id_offset) {};
-	idx_t buffer_id_offset;
-	list<idx_t> list;
+struct BufferEntry {
+	BufferEntry(const data_ptr_t &ptr, const idx_t &allocation_count) : ptr(ptr), allocation_count(allocation_count) {
+	}
+	data_ptr_t ptr;
+	idx_t allocation_count;
 };
 
 //! The FixedSizeAllocator provides pointers to fixed-size sections of pre-allocated memory.
@@ -36,30 +40,28 @@ public:
 	static constexpr idx_t FIRST_BYTE_TO_ZERO = 0x00FFFFFFFFFFFFFF;
 
 	//! Other constants
+	static constexpr idx_t BUFFER_ALLOCATION_SIZE = Storage::BLOCK_ALLOC_SIZE;
 	static constexpr uint8_t OFFSET_SHIFT = sizeof(uint8_t) * 8 * 4;
 
 public:
 	explicit FixedSizeAllocator(const idx_t &allocation_size);
 	~FixedSizeAllocator();
 
-	//! Disable copy operators
-	FixedSizeAllocator(const FixedSizeAllocator &) = delete;
-	FixedSizeAllocator &operator=(const FixedSizeAllocator &) = delete;
-	//! Enable move operators
-	FixedSizeAllocator(FixedSizeAllocator &&other) noexcept;
-	FixedSizeAllocator &operator=(FixedSizeAllocator &&other) noexcept;
-
 	//! Allocation size of one element in a buffer
 	idx_t allocation_size;
-	//! Allocation size of one buffer
-	idx_t buffer_allocation_size;
-	//! Number of offsets into a buffer (buffer_allocation_size / allocation_size)
-	idx_t offsets_per_buffer;
+	//! Total number of allocations
+	idx_t total_allocations;
+	//! Number of validity_t values in the bitmask
+	idx_t bitmask_count;
+	//! First starting byte of the payload
+	idx_t allocation_offset;
+	//! Number of possible allocations per buffer
+	idx_t allocations_per_buffer;
 
 	//! Buffers containing the data
-	vector<data_ptr_t> buffers;
-	//! List of free lists containing all free positions
-	list<FreeList> free_lists;
+	vector<BufferEntry> buffers;
+	//! Buffers with free space
+	unordered_set<idx_t> buffers_with_free_space;
 
 public:
 	//! Get a new position to data, might cause a new buffer allocation
@@ -69,7 +71,7 @@ public:
 		New(position);
 		return position;
 	}
-	//! Free the data at position, i.e., add the position to the free list
+	//! Free the data at position
 	void Free(const idx_t &position);
 	//! Get the data at position
 	template <class T>
@@ -80,31 +82,19 @@ public:
 	//! Merge another FixedSizeAllocator with this allocator. Both must have the same allocation size
 	void Merge(FixedSizeAllocator &other);
 
-	//! Initializes a vacuum operation, and returns true, if the allocator requires a vacuum
-	bool InitializeVacuum();
-	//! Finalizes a vacuum operation by calling the finalize operation of the respective
-	//! fixed size allocators
-	void FinalizeVacuum();
-	//! Returns true, if the position qualifies for a vacuum operation
-	bool NeedsVacuum(const idx_t &position) const;
-	//! Vacuums a position and returns the new position
-	void Vacuum(idx_t &position);
-
 private:
-	//! Keeps track of the buffer id threshold for vacuum operations. This is
-	//! set once when starting a vacuum operation.
-	idx_t vacuum_threshold;
-
 	//! Returns a data_ptr_t to the position
 	inline data_ptr_t Get(const idx_t &position) const {
 		D_ASSERT((position & BUFFER_ID_AND_OFFSET_TO_ZERO) == 0);
 		D_ASSERT((position & OFFSET_AND_FIRST_BYTE_TO_ZERO) < buffers.size());
-		D_ASSERT((position >> OFFSET_SHIFT) < offsets_per_buffer);
-		return buffers[(position & OFFSET_AND_FIRST_BYTE_TO_ZERO)] + (position >> OFFSET_SHIFT) * allocation_size;
+		D_ASSERT((position >> OFFSET_SHIFT) < allocations_per_buffer);
+
+		auto buffer_id = (position & OFFSET_AND_FIRST_BYTE_TO_ZERO);
+		auto offset = (position >> OFFSET_SHIFT) * allocation_size + allocation_offset;
+		return buffers[buffer_id].ptr + offset;
 	}
-	//! Ensures that the first free list in the list always has a buffer ID offset
-	//! of zero
-	void RearrangeFreeList();
+	//! Returns the first free offset in a bitmask
+	idx_t GetOffset(ValidityMask &mask);
 };
 
 } // namespace duckdb

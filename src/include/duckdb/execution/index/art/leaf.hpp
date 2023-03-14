@@ -40,9 +40,6 @@ public:
 	static Leaf *Initialize(ART &art, const ARTNode &node, const Key &key, const uint32_t &depth, const row_t *row_ids,
 	                        const idx_t &count);
 
-	//! Vacuum the leaf
-	void Vacuum(ART &art);
-
 	//! Initializes a merge by incrementing the buffer IDs of the leaf segments
 	void InitializeMerge(ART &art, const idx_t &buffer_count);
 	//! Merge leaves
