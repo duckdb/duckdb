@@ -8,6 +8,10 @@ rapi_disconnect <- function(conn) {
   invisible(.Call(`_duckdb_rapi_disconnect`, conn))
 }
 
+rapi_set_sum_default_to_zero <- function(conn) {
+  .Call(`_duckdb_rapi_set_sum_default_to_zero`, conn)
+}
+
 rapi_startup <- function(dbdir, readonly, configsexp) {
   .Call(`_duckdb_rapi_startup`, dbdir, readonly, configsexp)
 }

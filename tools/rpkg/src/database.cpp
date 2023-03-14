@@ -1,10 +1,15 @@
 #include "rapi.hpp"
+#include "iostream"
 
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/common/vector_operations/generic_executor.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/function/aggregate/sum_helpers.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 
 using namespace duckdb;
 
@@ -19,6 +24,45 @@ static bool CastRstringToVarchar(Vector &source, Vector &result, idx_t count, Ca
 	    source, result, count,
 	    [&](PrimitiveType<uintptr_t> input) { return StringVector::AddString(result, (const char *)input.val); });
 	return true;
+}
+
+struct ZeroSumOperation {
+	template <class T, class STATE>
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+		if (!state->isset) {
+			mask.SetValid(idx);
+			target[idx] = 0;
+		} else {
+			target[idx] = state->value;
+		}
+	}
+};
+
+[[cpp11::register]] bool rapi_set_sum_default_to_zero(duckdb::conn_eptr_t conn) {
+	if (!conn || !conn.get() || !conn->conn) {
+		cpp11::stop("rapi_set_sum_default_to_zero: Invalid connection");
+	}
+	auto context = conn->conn->context;
+	auto &catalog = Catalog::GetSystemCatalog(*context);
+
+	context->transaction.BeginTransaction();
+
+	auto sum_function = Catalog::GetEntry(*context, CatalogType::AGGREGATE_FUNCTION_ENTRY, SYSTEM_CATALOG, DEFAULT_SCHEMA, "sum", false);
+
+	auto sum_function_cast = (AggregateFunctionCatalogEntry*)sum_function;
+	for(auto &aggr : sum_function_cast->functions.functions) {
+		switch(aggr.arguments[0].InternalType()) {
+		case PhysicalType::INT32:
+		case PhysicalType::INT128:
+		case PhysicalType::DOUBLE:
+		case PhysicalType::FLOAT:
+		case PhysicalType::INT64:
+			aggr.finalize = AggregateFunction::StateFinalize<SumState<int64_t>, int64_t, ZeroSumOperation>;
+			break;
+		}
+	}
+
+	context->transaction.Commit();
 }
 
 [[cpp11::register]] duckdb::db_eptr_t rapi_startup(std::string dbdir, bool readonly, cpp11::list configsexp) {

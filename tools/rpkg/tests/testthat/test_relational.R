@@ -295,9 +295,18 @@ test_that("rel aggregate with groups and aggregate function works", {
 })
 
 
+test_that("rel aggregate with groups and aggregate function works", {
+   rel_a <- rel_from_df(con, data.frame(a=c(1, 2, 5, 5), b=c(3, 3, 4, 4)))
+   aggrs <- list(sum = expr_function("sum", list(expr_reference("a"))))
+   res <- rel_aggregate(rel_a, list(expr_reference("b")), aggrs)
+   rel_df <- rel_to_altrep(res)
+   expected_result <- data.frame(b=c(3, 4), sum=c(3, 10))
+   expect_equal(rel_df, expected_result)
+})
+
 test_that("Window sum expression function test works", {
 #     select j, i, sum(i) over (partition by j) from a order by 1,2
-    rel_a <- rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
+    rel_a <- rel_from_df(con, data.frame(a=c(1:8, NA),b=c(1, 1, 2, 2, 3, 3, 4, 4, 4)))
     sum_func <- expr_function("sum", list(expr_reference("a")))
     aggrs <- expr_window(sum_func, partitions=list(expr_reference("b")))
     expr_set_alias(aggrs, "window_result")
@@ -508,4 +517,11 @@ test_that("R semantics for arithmetics sum function are respected", {
    expect_true(is.na(res[[1]]))
 })
 
-
+test_that("rel aggregate on NA is 0", {
+   rel_a <- rel_from_df(con, data.frame(a=c(NA, NA, 5, 5), b=c(3, 3, 4, 4)))
+   aggrs <- list(sum = expr_function("sum", list(expr_reference("a"))))
+   res <- rel_aggregate(rel_a, list(expr_reference("b")), aggrs)
+   rel_df <- rel_to_altrep(res)
+   expected_result <- data.frame(b=c(3, 4), sum=c(3, 10))
+   expect_equal(rel_df, expected_result)
+})
