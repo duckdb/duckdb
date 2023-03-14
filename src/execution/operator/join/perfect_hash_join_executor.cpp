@@ -29,19 +29,24 @@ bool PerfectHashJoinExecutor::BuildPerfectHashTable(LogicalType &key_type) {
 	memset(bitmap_build_idx.get(), 0, sizeof(bool) * build_size); // set false
 
 	// Now fill columns with build data
-	auto &data_collection = ht.GetDataCollection();
-	JoinHTScanState join_ht_state(data_collection, 0, data_collection.ChunkCount(),
-	                              TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
 
-	return FullScanHashTable(join_ht_state, key_type);
+	return FullScanHashTable(key_type);
 }
 
-bool PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalType &key_type) {
+bool PerfectHashJoinExecutor::FullScanHashTable(LogicalType &key_type) {
+	auto &data_collection = ht.GetDataCollection();
+
 	// TODO: In a parallel finalize: One should exclusively lock and each thread should do one part of the code below.
 	Vector tuples_addresses(LogicalType::POINTER, ht.Count()); // allocate space for all the tuples
 
-	// Go through all the blocks and fill the keys addresses
-	auto key_count = ht.FillWithHTOffsets(state, tuples_addresses);
+	idx_t key_count = 0;
+	if (data_collection.ChunkCount() > 0) {
+		JoinHTScanState join_ht_state(data_collection, 0, data_collection.ChunkCount(),
+		                              TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
+
+		// Go through all the blocks and fill the keys addresses
+		key_count = ht.FillWithHTOffsets(join_ht_state, tuples_addresses);
+	}
 
 	// Scan the build keys in the hash table
 	Vector build_vector(key_type, key_count);
@@ -64,7 +69,6 @@ bool PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalT
 
 	// Full scan the remaining build columns and fill the perfect hash table
 	const auto build_size = perfect_join_statistics.build_range + 1;
-	auto &data_collection = ht.GetDataCollection();
 	for (idx_t i = 0; i < ht.build_types.size(); i++) {
 		auto &vector = perfect_hash_table[i];
 		D_ASSERT(vector.GetType() == ht.build_types[i]);

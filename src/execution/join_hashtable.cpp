@@ -231,6 +231,9 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 	source_chunk.data[col_offset].Reference(hash_values);
 	source_chunk.SetCardinality(keys);
 
+	if (added_count < keys.size()) {
+		source_chunk.Slice(*current_sel, added_count);
+	}
 	sink_collection->Append(append_state, source_chunk);
 }
 
