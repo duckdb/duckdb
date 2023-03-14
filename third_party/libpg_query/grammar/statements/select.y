@@ -268,23 +268,23 @@ simple_select:
 				{
 					$$ = makeSetOp(PG_SETOP_EXCEPT, $3, $1, $4);
 				}
-			| pivot_keyword table_ref ON pivot_column_list USING func_application
+			| pivot_keyword table_ref ON pivot_column_list USING target_list_opt_comma
 				{
 					PGSelectStmt *res = makeNode(PGSelectStmt);
 					PGPivotStmt *n = makeNode(PGPivotStmt);
 					n->source = $2;
 					n->columns = $4;
-					n->aggrs = list_make1($6);
+					n->aggrs = $6;
 					res->pivot = n;
 					$$ = (PGNode *)res;
 				}
-			| pivot_keyword table_ref ON pivot_column_list USING func_application GROUP_P BY name_list_opt_comma_opt_bracket
+			| pivot_keyword table_ref ON pivot_column_list USING target_list_opt_comma GROUP_P BY name_list_opt_comma_opt_bracket
 				{
 					PGSelectStmt *res = makeNode(PGSelectStmt);
 					PGPivotStmt *n = makeNode(PGPivotStmt);
 					n->source = $2;
 					n->columns = $4;
-					n->aggrs = list_make1($6);
+					n->aggrs = $6;
 					n->groups = $9;
 					res->pivot = n;
 					$$ = (PGNode *)res;

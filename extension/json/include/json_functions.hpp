@@ -54,6 +54,7 @@ public:
 
 struct JSONFunctionLocalState : public FunctionLocalState {
 public:
+	explicit JSONFunctionLocalState(Allocator &allocator);
 	explicit JSONFunctionLocalState(ClientContext &context);
 	static unique_ptr<FunctionLocalState> Init(ExpressionState &state, const BoundFunctionExpression &expr,
 	                                           FunctionData *bind_data);
@@ -94,6 +95,7 @@ private:
 	static CreateScalarFunctionInfo GetKeysFunction();
 	static CreateScalarFunctionInfo GetTypeFunction();
 	static CreateScalarFunctionInfo GetValidFunction();
+	static CreateScalarFunctionInfo GetSerializeSqlFunction();
 
 	template <class FUNCTION_INFO>
 	static void AddAliases(const vector<string> &names, FUNCTION_INFO fun, vector<FUNCTION_INFO> &functions) {

@@ -1,4 +1,5 @@
 #include "duckdb/common/types/column_data_collection_segment.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
 
@@ -202,12 +203,16 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 				throw InternalException("Column Data Collection: mismatch in struct child sizes");
 			}
 		}
-	} else if (internal_type == PhysicalType::VARCHAR &&
-	           allocator->GetType() == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR) {
-		for (auto &swizzle_segment : vdata.swizzle_data) {
-			auto &string_heap_segment = GetVectorData(swizzle_segment.child_index);
-			allocator->UnswizzlePointers(state, result, swizzle_segment.offset, swizzle_segment.count,
-			                             string_heap_segment.block_id, string_heap_segment.offset);
+	} else if (internal_type == PhysicalType::VARCHAR) {
+		if (allocator->GetType() == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR) {
+			for (auto &swizzle_segment : vdata.swizzle_data) {
+				auto &string_heap_segment = GetVectorData(swizzle_segment.child_index);
+				allocator->UnswizzlePointers(state, result, swizzle_segment.offset, swizzle_segment.count,
+				                             string_heap_segment.block_id, string_heap_segment.offset);
+			}
+		}
+		if (state.properties == ColumnDataScanProperties::DISALLOW_ZERO_COPY) {
+			VectorOperations::Copy(result, result, vdata.count, 0, 0);
 		}
 	}
 	return vcount;

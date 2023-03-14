@@ -6,6 +6,9 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/hash.hpp"
 
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
+
 namespace duckdb {
 
 FunctionExpression::FunctionExpression(string catalog, string schema, const string &function_name,
@@ -120,6 +123,38 @@ unique_ptr<ParsedExpression> FunctionExpression::Deserialize(ExpressionType type
 
 void FunctionExpression::Verify() const {
 	D_ASSERT(!function_name.empty());
+}
+
+void FunctionExpression::FormatSerialize(FormatSerializer &serializer) const {
+	ParsedExpression::FormatSerialize(serializer);
+	serializer.WriteProperty("function_name", function_name);
+	serializer.WriteProperty("schema", schema);
+	serializer.WriteProperty("children", children);
+	serializer.WriteOptionalProperty("filter", filter);
+	serializer.WriteProperty("order_bys", (ResultModifier &)*order_bys);
+	serializer.WriteProperty("distinct", distinct);
+	serializer.WriteProperty("is_operator", is_operator);
+	serializer.WriteProperty("export_state", export_state);
+	serializer.WriteProperty("catalog", catalog);
+}
+
+unique_ptr<ParsedExpression> FunctionExpression::FormatDeserialize(ExpressionType type,
+                                                                   FormatDeserializer &deserializer) {
+	auto function_name = deserializer.ReadProperty<string>("function_name");
+	auto schema = deserializer.ReadProperty<string>("schema");
+	auto children = deserializer.ReadProperty<vector<unique_ptr<ParsedExpression>>>("children");
+	auto filter = deserializer.ReadOptionalProperty<unique_ptr<ParsedExpression>>("filter");
+	auto order_bys = unique_ptr_cast<ResultModifier, OrderModifier>(
+	    deserializer.ReadProperty<unique_ptr<ResultModifier>>("order_bys"));
+	auto distinct = deserializer.ReadProperty<bool>("distinct");
+	auto is_operator = deserializer.ReadProperty<bool>("is_operator");
+	auto export_state = deserializer.ReadProperty<bool>("export_state");
+	auto catalog = deserializer.ReadProperty<string>("catalog");
+
+	unique_ptr<FunctionExpression> function;
+	function = make_unique<FunctionExpression>(catalog, schema, function_name, std::move(children), std::move(filter),
+	                                           std::move(order_bys), distinct, is_operator, export_state);
+	return std::move(function);
 }
 
 } // namespace duckdb

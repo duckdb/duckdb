@@ -24,13 +24,12 @@ constexpr const idx_t RowGroup::ROW_GROUP_VECTOR_COUNT;
 constexpr const idx_t RowGroup::ROW_GROUP_SIZE;
 
 RowGroup::RowGroup(RowGroupCollection &collection, idx_t start, idx_t count)
-    : start(start), count(count), next(nullptr), collection(collection) {
-
+    : SegmentBase<RowGroup>(start, count), collection(collection) {
 	Verify();
 }
 
 RowGroup::RowGroup(RowGroupCollection &collection, RowGroupPointer &&pointer)
-    : start(pointer.row_start), count(pointer.tuple_count), next(nullptr), collection(collection) {
+    : SegmentBase<RowGroup>(pointer.row_start, pointer.tuple_count), collection(collection) {
 	// deserialize the columns
 	if (pointer.data_pointers.size() != collection.GetTypes().size()) {
 		throw IOException("Row group column count is unaligned with table column count. Corrupt file?");
@@ -55,7 +54,7 @@ RowGroup::RowGroup(RowGroupCollection &collection, RowGroupPointer &&pointer)
 }
 
 RowGroup::RowGroup(RowGroup &row_group, RowGroupCollection &collection, idx_t start)
-    : start(start), count(row_group.count.load()), next(nullptr), collection(collection),
+    : SegmentBase<RowGroup>(start, row_group.count.load()), collection(collection),
       version_info(std::move(row_group.version_info)), stats(std::move(row_group.stats)) {
 	for (auto &column : row_group.columns) {
 		this->columns.push_back(ColumnData::CreateColumn(*column, start));
@@ -197,7 +196,11 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 	scan_state.Initialize(collection.GetTypes());
 	InitializeScan(scan_state);
 
-	Vector append_vector(target_type);
+	DataChunk append_chunk;
+	vector<LogicalType> append_types;
+	append_types.push_back(target_type);
+	append_chunk.Initialize(Allocator::DefaultAllocator(), append_types);
+	auto &append_vector = append_chunk.data[0];
 	SegmentStatistics altered_col_stats(target_type);
 	while (true) {
 		// scan the table
@@ -207,6 +210,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 			break;
 		}
 		// execute the expression
+		append_chunk.Reset();
 		executor.ExecuteExpression(scan_chunk, append_vector);
 		column_data->Append(altered_col_stats.statistics, append_state, append_vector, scan_chunk.size());
 	}

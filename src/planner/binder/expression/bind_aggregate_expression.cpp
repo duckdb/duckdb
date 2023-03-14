@@ -219,7 +219,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 			const auto null_order = (order.null_order == OrderByNullType::ORDER_DEFAULT)
 			                            ? config.options.default_null_order
 			                            : order.null_order;
-			order_bys->orders.emplace_back(BoundOrderByNode(sense, null_order, std::move(order_expr.expr)));
+			order_bys->orders.emplace_back(sense, null_order, std::move(order_expr.expr));
 		}
 	}
 

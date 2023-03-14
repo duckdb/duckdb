@@ -1,0 +1,348 @@
+# name: test/sql/copy/csv/test_csv_httpfs.test
+# description: This test triggers the http prefetch mechanism.
+# group: [csv]
+
+require httpfs
+
+query IIIIII rowsort
+SELECT * from read_csv_auto('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c');
+----
+2020	Allemagne	Germany	26.1	53196.069	200601.2
+2020	Autriche	Austria	18.0	4723.5	26215.8
+2020	Belgique	Belgium	28.999999999999996	9436.1	32553.0
+2020	Bulgarie	Bulgaria	11.600000000000001	1124.1	9698.7
+2020	Chypre	Cyprus	0.0	0.0	1627.6
+2020	Croatie	Croatia	16.3	1094.8	6726.3
+2020	Danemark	Denmark	11.600000000000001	1579.0	13601.4
+2020	Espagne	Spain	17.4	14211.7	81512.9
+2020	Estonie	Estonia	8.5	241.1	2827.3
+2020	Finlande	Finland	2.8000000000000003	692.3	24674.4
+2020	France	France	20.3	28278.9	139375.8
+2020	Grèce	Greece	5.800000000000001	896.5	15401.9
+2020	Hongrie	Hungary	30.5	5486.7	17872.4
+2020	Irlande	Ireland	17.4	1968.477	11296.601
+2020	Italie	Italy	29.2	33042.585	113119.475
+2020	Lettonie	Latvia	8.200000000000001	323.605	3926.131
+2020	Lituanie	Lithuania	10.7	584.104	5457.728
+2020	Luxembourg	Luxembourg	16.5	623.165	3786.785
+2020	Malte	Malta	0.0	0.0	547.5
+2020	Pays-Bas	Netherlands	37.1	16588.314	44682.656
+2020	Pologne	Poland	13.5	9323.205	69135.018
+2020	Portugal	Portugal	11.1	1814.878	16354.725
+2020	Roumanie	Romania	23.7	5626.161	23712.653
+2020	Royaume-Uni	United Kingdom	32.4	39311.416	121414.483
+2020	République tchèque	Czech Republic	21.4	5187.282	24263.896
+2020	Slovaquie	Slovakia	25.0	2564.876	10248.401
+2020	Slovénie	Slovenia	12.1	590.243	4861.315
+2020	Suède	Sweden	1.5	475.195	31311.413
+2020	UE 28	Europe 28	22.5	238152.4	1056907.5
+2021	Allemagne	Germany	26.760345686044435	51812.567	193616.957
+2021	Autriche	Austria	18.720006775926056	4645.795	24817.272
+2021	Belgique	Belgium	29.279402721103864	9088.083	31039.168
+2021	Bulgarie	Bulgaria	12.368015142641884	1176.537	9512.739
+2021	Chypre	Cyprus	0.0	0.0	1528.558
+2021	Croatie	Croatia	17.10389029082304	1100.12	6431.987
+2021	Danemark	Denmark	11.485631727184947	1508.152	13130.771
+2021	Espagne	Spain	19.10173955663722	13815.0	72323.256
+2021	Estonie	Estonia	8.988278645659518	245.094	2726.818
+2021	Finlande	Finland	2.9937725178230212	694.288	23191.074
+2021	France	France	20.649030024470434	26465.646	128168.955
+2021	Grèce	Greece	7.580480506088059	1097.87	14482.855
+2021	Hongrie	Hungary	32.344729318831554	5693.164	17601.52
+2021	Irlande	Ireland	18.020604987495144	1953.468	10840.191
+2021	Italie	Italy	30.86368769746751	31807.236	103057.147
+2021	Lettonie	Latvia	8.502139837843602	322.927	3798.185
+2021	Lituanie	Lithuania	11.029023816606903	582.797	5284.212
+2021	Luxembourg	Luxembourg	17.282784281000467	564.365	3265.475
+2021	Malte	Malta	0.0	0.0	499.875
+2021	Pays-Bas	Netherlands	37.61392206122467	15896.316	42261.788
+2021	Pologne	Poland	13.146720200313602	9235.656	70250.647
+2021	Portugal	Portugal	11.437926753365227	1740.3	15215.17
+2021	Roumanie	Romania	24.909638477223016	5846.885	23472.38
+2021	République tchèque	Czech Republic	21.716683280446812	5158.445	23753.374
+2021	Slovaquie	Slovakia	25.253930010417324	2427.134	9610.916
+2021	Slovénie	Slovenia	13.141683407321874	582.024	4428.839
+2021	Suède	Sweden	1.497679952802663	471.085	31454.317
+2021	UE 27	UE 27	21.894190365821018	193930.95399999994	885764.4460000001
+
+query IIIIII rowsort res
+SELECT * from read_csv('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c',DELIM=';',HEADER=TRUE,Columns={'annee_de_reference':'VARCHAR','pays':'VARCHAR','label_en':'VARCHAR','part_du_gaz_naturel_dans_la_consommation_finale_d_energie0':'VARCHAR','consommation_finale_de_gaz_naturel_mtep':'VARCHAR','consommation_finale_d_energie_totale_mtep':'VARCHAR'});
+
+
+query IIIIII rowsort res
+SELECT * from read_csv('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c',DELIM=';',HEADER=TRUE,Columns={'annee_de_reference':'VARCHAR','pays':'VARCHAR','label_en':'VARCHAR','part_du_gaz_naturel_dans_la_consommation_finale_d_energie0':'VARCHAR','consommation_finale_de_gaz_naturel_mtep':'VARCHAR','consommation_finale_d_energie_totale_mtep':'VARCHAR'});
+
+
+# Give it a try to a request that returns length 0
+query I
+SELECT count(*) from read_csv_auto('https://query1.finance.yahoo.com/v7/finance/download/^GSPC?period1=1512086400&period2=1670630400&interval=1d&events=history')
+----
+1265
+
+# Give it a try to a request that returns length 0
+query I
+SELECT count(*) from read_csv_auto('https://query1.finance.yahoo.com/v7/finance/download/^GSPC?period1=1512086400&period2=1670630400&interval=1d&events=history')
+----
+1265
+
+# Give it a try to a request that returns length 0
+query I
+SELECT count(*) from read_csv_auto('https://query1.finance.yahoo.com/v7/finance/download/^GSPC?period1=1512086400&period2=1670630400&interval=1d&events=history')
+----
+1265
+
+#Add test for 5924
+query IIIIII
+select * from read_csv_auto('https://csvbase.com/meripaterson/stock-exchanges');
+----
+1	Africa	Lesotho	HYBSE	NULL	2019-03-25
+2	Asia	Kazakhstan	Astana International Financial Centre	AIXK	2018-11-18
+3	Africa	South Africa	ZAR X	ZARX	2018-11-18
+4	South America	Argentina	Bolsas y Mercados Argentinos	NULL	2018-04-02
+5	North America	United States of America	Delaware Board of Trade	NULL	2018-04-02
+6	Australia & Oceania	Australia	Chi-X Asia Pacific	NULL	2018-04-02
+7	Australia & Oceania	Australia	Chi-X Australia	CHIA	2018-04-02
+8	South America	Mexico	BIVA	BIVA	2018-01-06
+9	Africa	South Africa	Equity Express Securities Exchange	NULL	2017-12-11
+10	Africa	South Africa	Cape Town Stock Exchange	NULL	2021-10-22
+11	North America	Curacao	Dutch Caribbean Securities Exchange	DCSX	2017-09-12
+12	North America	Canada	NEO	NEOE	2017-09-06
+13	North America	Canada	Canadian Securities Exchange	CNSX	2017-09-06
+14	Western Europe	Germany	XETRA	XETR	2017-08-21
+15	Western Europe	France	Euronext Paris	XPAR	2017-08-19
+16	Western Europe	United Kingdom	Euronext London	XLDN	2017-08-19
+17	Eastern Europe	Albania	Tirana Stock Exchange	XTIR	2017-08-16
+18	Africa	Algeria	Bourse d'Alger	XALG	2017-08-16
+19	Africa	Angola	BODIVA	XBDV	2017-08-16
+20	South America	Argentina	Buenos Aires Stock Exchange	XBUE	2017-08-16
+21	South America	Argentina	Mercado Abierto Electrónico	XMAB	2017-08-16
+22	Eastern Europe	Armenia	Armenia Securities Exchange	XARM	2020-07-29
+23	Australia & Oceania	Australia	Australian Securities Exchange	XASX	2017-08-16
+24	Australia & Oceania	Australia	Block Event	BLEV	2017-08-16
+25	Australia & Oceania	Australia	IR Plus Securities Exchange	SIMV	2017-08-16
+26	Australia & Oceania	Australia	National Stock Exchange of Australia	XNEC	2017-08-16
+27	Australia & Oceania	Australia	Sydney Stock Exchange	APXL	2017-08-16
+28	Western Europe	Austria	Wiener Börse	XWBO	2017-08-16
+29	Asia	Azerbaijan	Baku Stock Exchange	BSEX	2017-08-16
+30	North America	Bahamas	Bahamas International Securities Exchange	XBAA	2017-08-16
+31	Middle East	Bahrain	Bahrain Bourse	XBAH	2017-08-16
+32	Asia	Bangladesh	Chittagong Stock Exchange	XCHG	2017-08-16
+33	Asia	Bangladesh	Dhaka Stock Exchange	XDHA	2017-08-16
+34	North America	Barbados	Barbados Stock Exchange	XBAB	2017-08-16
+35	Eastern Europe	Belarus	Belarusian Currency and Stock Exchange	BCSE	2017-08-16
+36	Western Europe	Belgium	Euronext Brussels	XBRU	2017-08-16
+37	North America	Bermuda	Bermuda Stock Exchange	XBDA	2017-08-16
+38	Asia	Bhutan	Royal Securities Exchange of Bhutan	NULL	2017-08-16
+39	South America	Bolivia	Bolsa de Valores de Bolivia	XBOL	2017-08-16
+40	Eastern Europe	Bosnia and Herzegovina	Banja Luka Stock Exchange	XBLB	2017-08-16
+41	Eastern Europe	Bosnia and Herzegovina	Sarajevo Stock Exchange	XSSE	2017-08-16
+42	Africa	Botswana	Botswana Stock Exchange	XBOT	2017-08-16
+43	South America	Brazil	B3 - Brasil Bolsa Balcão	BVMF	2017-08-16
+44	South America	Brazil	Bolsa de Valores Minab - Espírito Santo	BOVM	2017-08-16
+45	Eastern Europe	Bulgaria	Bulgarian Stock Exchange	XBUL	2017-08-16
+46	Asia	Cambodia	Cambodia Securities Exchange	XCSX	2017-08-16
+47	North America	Canada	Montreal Exchange	XMOD	2017-08-16
+48	North America	Canada	Nasdaq Canada	XCSD	2017-08-16
+49	North America	Canada	TMX	TMXS	2017-08-16
+50	North America	Canada	Toronto Stock Exchange	XTSE	2017-08-16
+51	Africa	Cape Verde	Bolsa de Valores de Cabo Verde	XBVC	2017-08-16
+52	North America	Cayman Islands	Cayman Islands Stock Exchange	XCAY	2017-08-16
+53	Western Europe	Channel Islands	Channel Islands Stock Exchange	NULL	2017-08-16
+54	South America	Chile	Santiago Electronic Stock Exchange	XBCL	2017-08-16
+55	South America	Chile	Santiago Stock Exchange	XSGO	2017-08-16
+56	South America	Chile	Valparaiso Stock Exchange	BOVA	2017-08-16
+57	Asia	China	Shanghai Stock Exchange	XSHG	2017-08-16
+58	Asia	China	Shenzhen Stock Exchange	XSHE	2017-08-16
+59	South America	Colombia	Bolsa de Valores de Colombia	XBOG	2017-08-16
+60	North America	Costa Rica	Bolsa Nacional de Valores de Costa Rica	XBNV	2017-08-16
+61	Eastern Europe	Croatia	Zagreb Stock Exchange	XZAG	2017-08-16
+62	Eastern Europe	Cyprus	Cyprus Stock Exchange	XCYS	2017-08-16
+63	Eastern Europe	Czech Republic	Prague Stock Exchange	XPRAG	2017-08-16
+64	Eastern Europe	Czech Republic	RM-System Czech Stock Exchange	XRMZ	2017-08-16
+65	Western Europe	Denmark	Nasdaq Copenhagen	XCSE	2017-08-16
+66	North America	Dominican Republic	Bolsa de Valores de la República Dominicana	XBVR	2017-08-16
+67	South America	Ecuador	Bolsa de Valores de Guayaquil	XGUA	2017-08-16
+68	South America	Ecuador	Bolsa de Valores de Quito	XQUI	2017-08-16
+69	Africa	Egypt	Egyptian Exchange	XCAI	2017-08-16
+70	Africa	Egypt	Nilex	NILX	2017-08-16
+71	North America	El Salvador	Bolsa de Valores de El Salvador	XSVA	2017-08-16
+72	Eastern Europe	Estonia	Tallinn Stock Exchange	XTAL	2017-08-16
+73	Australia & Oceania	Fiji	South Pacific Stock Exchange	XSPS	2017-08-16
+74	Western Europe	Finland	Nasdaq Helsinki	XHEL	2017-08-16
+75	Africa	Gabon	Bourse Régionale des Valeurs Mobilières d'Afrique Centrale	NULL	2017-08-16
+76	Asia	Georgia	Georgian Stock Exchange	XGSE	2017-08-16
+77	Western Europe	Germany	Börse Berlin	XBER	2017-08-16
+78	Western Europe	Germany	Börse Düsseldorf	XDUS	2017-08-16
+79	Western Europe	Germany	Börse Hamburg & Hannover	HAMB	2017-08-16
+80	Western Europe	Germany	Börse München	XMUN	2017-08-16
+81	Western Europe	Germany	Börse Stuttgart	XSTU	2017-08-16
+82	Western Europe	Germany	Deutsche Börse Group	XFRA	2017-08-16
+83	Western Europe	Germany	Eurex	XEUR	2017-08-16
+84	Western Europe	Germany	Tradegate Exchange	TGAT	2017-08-16
+85	Africa	Ghana	Ghana Stock Exchange	XGHA	2017-08-16
+86	Western Europe	Gibraltar	Gibraltar Stock Exchange	GSXL	2017-08-16
+87	Western Europe	Greece	Athens Stock Exchange	ASEX	2017-08-16
+88	North America	Guatemala	Bolsa Nacional de Valores	XGTG	2017-08-16
+89	Western Europe	Guernsey	International Stock Exchange	XCIE	2017-08-16
+90	South America	Guyana	Guyana Stock Exchange	GSCI	2017-08-16
+91	North America	Haiti	Haitian Stock Exchange	NULL	2017-08-16
+92	North America	Honduras	Bolsa Centroamericana de Valores	XBCV	2017-08-16
+93	Asia	Hong Kong	Hong Kong Growth Enterprise Market	XGEM	2017-08-16
+94	Asia	Hong Kong	Hong Kong Stock Exchange	XHKG	2017-08-16
+95	Eastern Europe	Hungary	Budapest Stock Exchange	XBUD	2017-08-16
+96	Western Europe	Iceland	Nasdaq Iceland	XICE	2017-08-16
+97	Asia	India	Ahmedabad Stock Exchange	NULL	2017-08-16
+98	Asia	India	Bangalore Stock Exchange	XBAN	2017-08-16
+99	Asia	India	Bombay Stock Exchange	XBOM	2017-08-16
+100	Asia	India	BSE SME	BSME	2017-08-16
+101	Asia	India	Calcutta Stock Exchange	XCAL	2017-08-16
+102	Asia	India	Cochin Stock Exchange	NULL	2017-08-16
+103	Asia	India	Coimbatore Stock Exchange	NULL	2017-08-16
+104	Asia	India	Delhi Stock Exchange	XDES	2017-08-16
+105	Asia	India	Inter-Connected Stock Exchange of India	ISEX	2017-08-16
+106	Asia	India	Ludhiana Stock and Capital	NULL	2017-08-16
+107	Asia	India	Metropolitan Stock Exchange	NULL	2017-08-16
+108	Asia	India	National Stock Exchange of India	XNSE	2017-08-16
+109	Asia	India	OTC Exchange of India	OTCX	2017-08-16
+110	Asia	India	Pune Stock Exchange	NULL	2017-08-16
+111	Asia	India	Saurashtra Kutch Stock Exchange	NULL	2017-08-16
+112	Asia	India	United Stock Exchange of India	XUSE	2017-08-16
+113	Asia	India	Vadodara Stock Exchange	NULL	2017-08-16
+114	Asia	Indonesia	Indonesia Stock Exchange	XIDX	2017-08-16
+115	Asia	Iran	Iran Fara Bourse	NULL	2017-08-16
+116	Middle East	Iran	Tehran Stock Exchange	XTEH	2017-08-16
+117	Middle East	Iraq	Iraq Stock Exchange	XIQS	2017-08-16
+118	Western Europe	Ireland	Irish Stock Exchange	XDUB	2017-08-16
+119	Middle East	Israel	Tel Aviv Stock Exchange	XTAE	2017-08-16
+120	Western Europe	Italy	Borsa Italiana	XMIL	2017-08-16
+121	Africa	Ivory Coast	Bourse Regionale des Valeurs Mobilieres	XBRV	2017-08-16
+122	North America	Jamaica	Jamaica Stock Exchange	XJAM	2017-08-16
+123	Asia	Japan	Chi-X Japan	CHIJ	2017-08-16
+124	Asia	Japan	Daiwa Securities	DRCT	2017-08-16
+125	Asia	Japan	Fukuoka Stock Exchange	XFKA	2017-08-16
+126	Asia	Japan	Japan Exchange Group	XJPX	2017-08-16
+127	Asia	Japan	Nagoya Stock Exchange	XNGO	2017-08-16
+128	Asia	Japan	Sapporo Securities Exchange	XSAP	2017-08-16
+129	Asia	Japan	SBI Japannext	SBIJ	2017-08-16
+130	Middle East	Jordan	Amman Stock Exchange	XAMM	2017-08-16
+131	Asia	Kazakhstan	Kazakhstan Stock Exchange	XKAZ	2017-08-16
+132	Africa	Kenya	Nairobi Stock Exchange	XNAI	2017-08-16
+133	Middle East	Kuwait	Kuwait Stock Exchange	XKUW	2017-08-16
+134	Asia	Kyrgyzstan	Kyrgyz Stock Exchange	XKSE	2017-08-16
+135	Asia	Laos	Lao Securities Exchange	XLAO	2017-08-16
+136	Eastern Europe	Latvia	Riga Stock Exchange	XRIS	2017-08-16
+137	Middle East	Lebanon	Beirut Stock Exchange	XBEY	2017-08-16
+138	Africa	Lesotho	Maseru Securities Exchange	NULL	2017-08-16
+139	Eastern Europe	Lithuania	Vilnius Stock Exchange	XLIT	2017-08-16
+140	Western Europe	Luxembourg	Luxembourg Stock Exchange	XLUX	2017-08-16
+141	Eastern Europe	Macedonia	Macedonian Stock Exchange	XMAE	2017-08-16
+142	Africa	Malawi	Malawi Stock Exchange	XMSW	2017-08-16
+143	Asia	Malaysia	Bursa Malaysia	XKLS	2017-08-16
+144	Asia	Maldives	Maldives Stock Exchange	MALX	2017-08-16
+145	Western Europe	Malta	Malta Stock Exchange	XMAL	2017-08-16
+146	Western Europe	Malta	Malta Stock Exchange Prospects	PROS	2017-08-16
+147	Africa	Mauritius	Stock Exchange of Mauritius	XMAU	2017-08-16
+148	North America	Mexico	Bolsa Mexicana de Valores	XMEX	2017-08-16
+149	Western Europe	Moldova	Moldova Stock Exchange	XMOL	2017-08-16
+150	Asia	Mongolia	Mongolian Stock Exchange	XULA	2017-08-16
+151	Eastern Europe	Montenegro	Montenegro Stock Exchange	XMNX	2017-08-16
+152	Africa	Morocco	Casablanca Stock Exchange	XCAS	2017-08-16
+153	Africa	Mozambique	Bolsa de Valores de Mozambique	XBVM	2017-08-16
+154	Asia	Myanmar	Myanmar Securities Exchange Centre	NULL	2017-08-16
+155	Asia	Myanmar	Yangon Stock Exchange	NULL	2017-08-16
+156	Africa	Namibia	Namibian Stock Exchange	XNAM	2017-08-16
+157	Asia	Nepal	Nepal Stock Exchange	XNEP	2017-08-16
+158	Western Europe	Netherlands	Euronext Amsterdam	XAMS	2017-08-16
+159	Western Europe	Netherlands	Nxchange	XNXC	2017-08-16
+160	Australia & Oceania	New Zealand	New Zealand Exchange	XNZE	2017-08-16
+161	North America	Nicaragua	Bolsa de Valores de Nicaragua	XMAN	2017-08-16
+162	Africa	Nigeria	Nigerian Stock Exchange	XNSA	2017-08-16
+163	Western Europe	Norway	Oslo Stock Exchange	XOSL	2017-08-16
+164	Middle East	Oman	Muscat Securities Market	XMUS	2017-08-16
+165	Asia	Pakistan	Lahore Stock Exchange	NULL	2017-08-16
+166	Asia	Pakistan	Pakistan Stock Exchange	XKAR	2017-08-16
+167	Middle East	Palestine	Palestine Securities Exchange	XPAE	2017-08-16
+168	North America	Panama	Bolsa de Valores de Panama	XPTY	2017-08-16
+169	Australia & Oceania	Papua New Guinea	Port Moresby Stock Exchange	XPOM	2017-08-16
+170	South America	Paraguay	Bolsa de Valores & Productos de Asuncíon	XVPA	2017-08-16
+171	South America	Peru	Bolsa de Valores de Lima	XLIM	2017-08-16
+172	Asia	Philippines	Philippine Stock Exchange	XPHS	2017-08-16
+173	Eastern Europe	Poland	NewConnect	XNCO	2017-08-16
+174	Eastern Europe	Poland	Warsaw Stock Exchange	XWAR	2017-08-16
+175	Western Europe	Portugal	Euronext Lisbon	XLIS	2017-08-16
+176	Western Europe	Portugal	OPEX	OPEX	2017-08-16
+177	Middle East	Qatar	Qatar Stock Exchange	DSMD	2017-08-16
+178	Eastern Europe	Romania	Bucharest Stock Exchange	XRAS	2017-08-16
+179	Eastern Europe	Russia	Moscow Exchange	MISX	2017-08-16
+180	Eastern Europe	Russia	Saint Petersburg Stock Exchange	XPET	2017-08-16
+181	Eastern Europe	Russia	Siberian Exchange	XSIB	2017-08-16
+182	Africa	Rwanda	Rwanda Stock Exchange	RSEX	2017-08-16
+183	North America	Saint Kitts and Nevis	Eastern Caribbean Securities Exchange	XECS	2017-08-16
+184	Middle East	Saudi Arabia	Saudi Stock Exchange	XSAU	2017-08-16
+185	Eastern Europe	Serbia	Belgrade Stock Exchange	XBEL	2017-08-16
+186	Africa	Seychelles	Seychelles Securities Exchange (Trop-X)	TRPX	2017-08-16
+187	Asia	Singapore	Singapore Exchange	XSES	2017-08-16
+188	Eastern Europe	Slovakia	Bratislava Stock Exchange	XBRA	2017-08-16
+189	Eastern Europe	Slovenia	Ljubljana Stock Exchange	XLJU	2017-08-16
+190	Africa	Somalia	Somali Stock Exchange	NULL	2017-08-16
+191	Africa	South Africa	A2X Markets	A2XX	2017-08-16
+192	Africa	South Africa	Johannesburg Stock Exchange	XJSE	2017-08-16
+193	Asia	South Korea	Korea New Exchange	XKON	2017-08-16
+194	Asia	South Korea	Korea Stock Exchange	XKRX	2017-08-16
+195	Asia	South Korea	KOSDAQ Securities Exchange	XKOS	2017-08-16
+196	Western Europe	Spain	Bolsa de Bilbao	XBIL	2017-08-16
+197	Western Europe	Spain	Bolsa de Madrid	XMAD	2017-08-16
+198	Western Europe	Spain	Bolsa de Valencia	XVAL	2017-08-16
+199	Western Europe	Spain	Borsa de Barcelona	XBAR	2017-08-16
+200	Western Europe	Spain	Latibex	XLAT	2017-08-16
+201	Asia	Sri Lanka	Colombo Stock Exchange	XCOL	2017-08-16
+202	Africa	Sudan	Khartoum Stock Exchange	XKHA	2017-08-16
+203	Africa	Swaziland	Swaziland Stock Exchange	XSWA	2017-08-16
+204	Western Europe	Sweden	Aktietorget	XSAT	2017-08-16
+205	Western Europe	Sweden	Nasdaq Stockholm	XSTO	2017-08-16
+206	Western Europe	Sweden	Nordic Growth Market	XNGM	2017-08-16
+207	Western Europe	Switzerland	Berne eXchange	XBRN	2017-08-16
+208	Western Europe	Switzerland	SIX Swiss Exchange	XSWX	2017-08-16
+209	Middle East	Syria	Damascus Securities Exchange	XDSE	2017-08-16
+210	Asia	Taiwan	Taipei Exchange	ROCO	2017-08-16
+211	Asia	Taiwan	Taiwan Stock Exchange	XTAI	2017-08-16
+212	Africa	Tanzania	Dar-es-Salaam Stock Exchange	XDAR	2017-08-16
+213	Asia	Thailand	Stock Exchange of Thailand	XBKK	2017-08-16
+214	North America	Trinidad and Tobago	Trinidad and Tobago Stock Exchange	XTRN	2017-08-16
+215	Africa	Tunisia	Bourse de Tunis	XTUN	2017-08-16
+216	Eastern Europe	Turkey	Borsa İstanbul	XIST	2017-08-16
+217	Africa	Uganda	Uganda Securities Exchange	XUGA	2017-08-16
+218	Eastern Europe	Ukraine	East European Stock Exchange	EESE	2017-08-16
+219	Eastern Europe	Ukraine	PFTS Ukraine Stock Exchange	PFTS	2017-08-16
+220	Eastern Europe	Ukraine	Stock Exchange Perspectiva	SEPE	2017-08-16
+221	Eastern Europe	Ukraine	Ukrainian Exchange	UKEX	2017-08-16
+222	Middle East	United Arab Emirates	Abu Dhabi Securities Market	XADS	2017-08-16
+223	Middle East	United Arab Emirates	Dubai Financial Market	XDFM	2017-08-16
+224	Middle East	United Arab Emirates	Nasdaq Dubai	DIFX	2017-08-16
+225	Western Europe	United Kingdom	Aquis Exchange	AQXE	2017-08-16
+226	Western Europe	United Kingdom	Asset Match	AMPX	2017-08-16
+227	Western Europe	United Kingdom	London Stock Exchange	XLON	2017-08-16
+228	Western Europe	United Kingdom	NEX	NEXS	2017-08-16
+229	Western Europe	United Kingdom	Turquoise	TRQX	2017-08-16
+230	North America	United States of America	Bats BYX Exchange	BYXD	2017-08-16
+231	North America	United States of America	Bats EDGA Exchange	EDGA	2017-08-16
+232	North America	United States of America	Bats US	BATS	2017-08-16
+233	North America	United States of America	BatsEDGX Exchange	EDGX	2017-08-16
+234	North America	United States of America	Chicago Stock Exchange	XCHI	2017-08-16
+235	North America	United States of America	Investors Exchange	IEXG	2017-08-16
+236	North America	United States of America	NASDAQ	XNAS	2017-08-16
+237	North America	United States of America	New York Stock Exchange	XNYS	2017-08-16
+238	North America	United States of America	North American Derivatives Exchange NADEX	HEGX	2017-08-16
+239	South America	Uruguay	Bolsa de Valores de Montevideo	XMNT	2017-08-16
+240	South America	Uruguay	Bolsa Electronica de Valores de Uruguay	BVUR	2017-08-16
+241	Asia	Uzbekistan	Tashkent Stock Exchange	XSTE	2017-08-16
+242	Asia	Vietnam	Hanoi Stock Exchange	HSTC	2017-08-16
+243	Asia	Vietnam	Ho Chi Minh Stock Exchange	XSTC	2017-08-16
+244	Africa	Zambia	Lusaka Stock Exchange	XLUS	2017-08-16
+245	Africa	Zimbabwe	Zimbabwe Stock Exchange	XZIM	2017-08-16
+246	Eastern Europe	Albania	Albanian Securities Exchange	XALS	2019-11-17
+247	North America	United States of America	Long-Term Stock Exchange	LTSE	2020-09-14
+248	North America	United States of America	Miami International Securities Exchange	MIHI	2020-09-24
+249	North America	United States of America	Members' Exchange	NULL	2020-09-24
+250	Africa	Zimbabwe	Victoria Falls Stock Exchange	NULL	2020-11-01
+251	Asia	China	Beijing Stock Exchange	NULL	2021-12-27

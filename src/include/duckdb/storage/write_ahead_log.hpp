@@ -137,7 +137,7 @@ public:
 	//! Sets the table used for subsequent insert/delete/update commands
 	void WriteSetTable(string &schema, string &table);
 
-	void WriteAlter(AlterInfo &info);
+	void WriteAlter(data_ptr_t ptr, idx_t data_size);
 
 	void WriteInsert(DataChunk &chunk);
 	void WriteDelete(DataChunk &chunk);

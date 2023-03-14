@@ -29,7 +29,7 @@
 /// A date specifies a combination of year, month and day. DuckDB follows the
 /// SQL standard’s lead by counting dates exclusively in the Gregorian calendar,
 /// even for years before that calendar was in use.
-public struct Date: Hashable, Equatable, Codable {
+public struct Date: Hashable, Equatable, Codable, Sendable {
   /// days since the unix date epoch `1970-01-01`
   public var days: Int32
 }

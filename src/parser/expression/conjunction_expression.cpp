@@ -3,6 +3,9 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/expression_util.hpp"
 
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
+
 namespace duckdb {
 
 ConjunctionExpression::ConjunctionExpression(ExpressionType type)
@@ -45,9 +48,11 @@ bool ConjunctionExpression::Equal(const ConjunctionExpression *a, const Conjunct
 
 unique_ptr<ParsedExpression> ConjunctionExpression::Copy() const {
 	vector<unique_ptr<ParsedExpression>> copy_children;
+	copy_children.reserve(children.size());
 	for (auto &expr : children) {
 		copy_children.push_back(expr->Copy());
 	}
+
 	auto copy = make_unique<ConjunctionExpression>(type, std::move(copy_children));
 	copy->CopyProperties(*this);
 	return std::move(copy);
@@ -60,6 +65,18 @@ void ConjunctionExpression::Serialize(FieldWriter &writer) const {
 unique_ptr<ParsedExpression> ConjunctionExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto result = make_unique<ConjunctionExpression>(type);
 	result->children = reader.ReadRequiredSerializableList<ParsedExpression>();
+	return std::move(result);
+}
+
+void ConjunctionExpression::FormatSerialize(FormatSerializer &serializer) const {
+	ParsedExpression::FormatSerialize(serializer);
+	serializer.WriteProperty("children", children);
+}
+
+unique_ptr<ParsedExpression> ConjunctionExpression::FormatDeserialize(ExpressionType type,
+                                                                      FormatDeserializer &deserializer) {
+	auto result = make_unique<ConjunctionExpression>(type);
+	result->children = deserializer.ReadProperty<vector<unique_ptr<ParsedExpression>>>("children");
 	return std::move(result);
 }
 

@@ -80,9 +80,9 @@ public:
 	//! Obtain a lock on the index
 	virtual void InitializeLock(IndexLock &state);
 	//! Called when data is appended to the index. The lock obtained from InitializeLock must be held
-	virtual bool Append(IndexLock &state, DataChunk &entries, Vector &row_identifiers) = 0;
+	virtual PreservedError Append(IndexLock &state, DataChunk &entries, Vector &row_identifiers) = 0;
 	//! Obtains a lock and calls Append while holding that lock
-	bool Append(DataChunk &entries, Vector &row_identifiers);
+	PreservedError Append(DataChunk &entries, Vector &row_identifiers);
 	//! Verify that data can be appended to the index without a constraint violation
 	virtual void VerifyAppend(DataChunk &chunk) = 0;
 	//! Verify that data can be appended to the index without a constraint violation using the conflict manager
@@ -96,7 +96,7 @@ public:
 	void Delete(DataChunk &entries, Vector &row_identifiers);
 
 	//! Insert a chunk of entries into the index
-	virtual bool Insert(IndexLock &lock, DataChunk &input, Vector &row_identifiers) = 0;
+	virtual PreservedError Insert(IndexLock &lock, DataChunk &input, Vector &row_identifiers) = 0;
 
 	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
 	//! index must also be locked during the merge
@@ -147,6 +147,7 @@ public:
 
 	//! Execute the index expressions on an input chunk
 	void ExecuteExpressions(DataChunk &input, DataChunk &result);
+	static string AppendRowError(DataChunk &input, idx_t index);
 
 protected:
 	//! Lock used for any changes to the index

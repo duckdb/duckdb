@@ -15,6 +15,7 @@
 #include "duckdb/storage/statistics/segment_statistics.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/table/segment_base.hpp"
 
 namespace duckdb {
 class ColumnSegment;
@@ -33,30 +34,12 @@ struct ColumnAppendState;
 enum class ColumnSegmentType : uint8_t { TRANSIENT, PERSISTENT };
 //! TableFilter represents a filter pushed down into the table scan.
 
-class ColumnSegment {
+class ColumnSegment : public SegmentBase<ColumnSegment> {
 public:
 	~ColumnSegment();
 
-	ColumnSegment *Next() {
-#ifndef DUCKDB_R_BUILD
-		return next.load();
-#else
-		return next;
-#endif
-	}
-
 	//! The index within the segment tree
 	idx_t index;
-	//! The start row id of this chunk
-	const idx_t start;
-	//! The amount of entries in this storage chunk
-	atomic<idx_t> count;
-	//! The next segment after this one
-#ifndef DUCKDB_R_BUILD
-	atomic<ColumnSegment *> next;
-#else
-	ColumnSegment *next;
-#endif
 	//! The database instance
 	DatabaseInstance &db;
 	//! The type stored in the column

@@ -162,6 +162,9 @@ public:
 	//! Deserializes a blob back into a Vector
 	DUCKDB_API void Deserialize(idx_t count, Deserializer &source);
 
+	DUCKDB_API void FormatSerialize(FormatSerializer &serializer, idx_t count);
+	DUCKDB_API void FormatDeserialize(FormatDeserializer &deserializer, idx_t count);
+
 	// Getters
 	inline VectorType GetVectorType() const {
 		return vector_type;

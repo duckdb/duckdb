@@ -17,7 +17,10 @@
 
 namespace duckdb {
 
-enum QueryNodeType : uint8_t {
+class FormatDeserializer;
+class FormatSerializer;
+
+enum class QueryNodeType : uint8_t {
 	SELECT_NODE = 1,
 	SET_OPERATION_NODE = 2,
 	BOUND_SUBQUERY_NODE = 3,
@@ -35,6 +38,10 @@ public:
 public:
 	string ToString() const;
 	CommonTableExpressionMap Copy() const;
+
+	void FormatSerialize(FormatSerializer &serializer) const;
+	// static void FormatDeserialize(FormatDeserializer &deserializer, CommonTableExpressionMap &ret);
+	static CommonTableExpressionMap FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 class QueryNode {
@@ -72,6 +79,9 @@ public:
 
 	//! Adds a distinct modifier to the query node
 	void AddDistinct();
+
+	virtual void FormatSerialize(FormatSerializer &serializer) const;
+	static unique_ptr<QueryNode> FormatDeserialize(FormatDeserializer &deserializer);
 
 protected:
 	//! Copy base QueryNode properties from another expression to this one,
