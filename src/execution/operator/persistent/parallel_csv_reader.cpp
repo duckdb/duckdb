@@ -184,7 +184,7 @@ bool ParallelCSVReader::BufferRemainder() {
 
 bool ParallelCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message, bool try_add_line) {
 	// used for parsing algorithm
-	if (start_buffer == end_buffer){
+	if (start_buffer == end_buffer) {
 		// Nothing to read
 		finished = true;
 		return true;
@@ -444,7 +444,8 @@ final_state : {
 	}
 	// If this is the last buffer, we have to read the last value
 	if (buffer->buffer->IsCSVFileLastBuffer() || (buffer->next_buffer && buffer->next_buffer->IsCSVFileLastBuffer())) {
-		if (column > 0 || try_add_line || (insert_chunk.data.size() == 1 && start_buffer != position_buffer)) {
+		if (column > 0 || start_buffer != position_buffer || try_add_line ||
+		    (insert_chunk.data.size() == 1 && start_buffer != position_buffer)) {
 			// remaining values to be added to the chunk
 			auto str_value = buffer->GetValue(start_buffer, position_buffer, offset);
 			AddValue(str_value, column, escape_positions, has_quotes);
