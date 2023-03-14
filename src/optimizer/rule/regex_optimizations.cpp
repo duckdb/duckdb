@@ -57,7 +57,22 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		contains->children[1] = std::move(parameter);
 
 		return std::move(contains);
+	} else {
+		string prefix("temporary prefix");
+		bool foldcase = true;
+		//	duckdb_re2::Regexp idk_bro = duckdb_re2::Regexp(duckdb_re2::kRegexpAlternate, duckdb_re2::Regexp::NoParseFlags);
+		auto dunno = pattern.Regexp();
+		pattern.Regexp()->RequiredPrefix(&prefix, &foldcase, &dunno);
+		pattern.suffix_regexp
+		// prefix now has the prefic I need.
+		// foldcase is now false
+		// dunno is the regexp that comes after the thing
+		if (!prefix.empty() && dunno->op() == duckdb_re2::kRegexpEmptyMatch) {
+			// use prefix operator instead
+		}
+		auto a = "wait here";
 	}
+
 	return nullptr;
 }
 

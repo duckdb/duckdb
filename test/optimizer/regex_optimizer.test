@@ -11,6 +11,7 @@ INSERT INTO test VALUES ('aaa');
 statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
 
+mode skip
 
 # contains optimization: /aaa/ -> contains(aaa)
 query I nosort regexconstantpattern
@@ -41,4 +42,14 @@ SELECT regexp_matches(s, 'a') FROM test
 
 query I nosort correct_result
 SELECT contains(s, 'aaa') FROM test
+----
+
+mode unskip
+
+query I nosort correct_result
+SELECT regexp_matches(s, '^a') FROM TEST;
+----
+
+query I nosort correct_result
+SELECT regexp_matches(s, 'a$') FROM TEST;
 ----
