@@ -306,7 +306,7 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 
 	TupleDataChunkIterator iterator(*data_collection, TupleDataPinProperties::KEEP_EVERYTHING_PINNED, chunk_idx_from,
 	                                chunk_idx_to, false);
-	auto row_locations = iterator.GetRowLocations();
+	const auto row_locations = iterator.GetRowLocations();
 	do {
 		const auto count = iterator.GetCount();
 		for (idx_t i = 0; i < count; i++) {
@@ -759,12 +759,13 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 
 void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, DataChunk &result) {
 	// scan the HT starting from the current position and check which rows from the build side did not find a match
-	auto &iterator = state.iterator;
 	auto key_locations = FlatVector::GetData<data_ptr_t>(addresses);
 	idx_t found_entries = 0;
+
+	auto &iterator = state.iterator;
+	const auto row_locations = iterator.GetRowLocations();
 	do {
-		auto count = iterator.GetCount();
-		auto row_locations = iterator.GetRowLocations();
+		const auto count = iterator.GetCount();
 		for (idx_t i = state.offset_in_chunk; i < count; i++) {
 			auto found_match = Load<bool>(row_locations[i] + tuple_size);
 			if (!found_match) {
@@ -805,19 +806,20 @@ void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, Dat
 }
 
 idx_t JoinHashTable::FillWithHTOffsets(JoinHTScanState &state, Vector &addresses) {
-	// TODO: needs KEEP_PINNED
 	// iterate over HT
-	auto &iterator = state.iterator;
 	auto key_locations = FlatVector::GetData<data_ptr_t>(addresses);
 	idx_t key_count = 0;
+
+	auto &iterator = state.iterator;
+	const auto row_locations = iterator.GetRowLocations();
 	do {
-		auto count = iterator.GetCount();
+		const auto count = iterator.GetCount();
 		for (idx_t i = 0; i < count; i++) {
-			auto row_locations = iterator.GetRowLocations();
 			key_locations[key_count + i] = row_locations[i];
 		}
 		key_count += count;
 	} while (iterator.Next());
+
 	return key_count;
 }
 
@@ -888,7 +890,6 @@ bool JoinHashTable::RequiresPartitioning(ClientConfig &config, vector<unique_ptr
 
 		const auto max_added_bits = 8 - radix_bits;
 		idx_t added_bits;
-
 		for (added_bits = 1; added_bits < max_added_bits; added_bits++) {
 			double partition_multiplier = RadixPartitioning::NumberOfPartitions(added_bits);
 

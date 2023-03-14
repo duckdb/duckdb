@@ -227,9 +227,11 @@ void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, DataChunk &n
 	const auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
 
 	// Set the validity mask for each row before inserting data
-	const auto validity_bytes = (layout.ColumnCount() + 7) / 8;
+	//	const auto validity_bytes = (layout.ColumnCount() + 7) / 8;
+	const auto column_count = layout.ColumnCount();
 	for (idx_t i = 0; i < append_count; i++) {
-		memset(row_locations[i], ~0, validity_bytes);
+		ValidityBytes(row_locations[i]).SetAllValid(column_count);
+		//		memset(row_locations[i], ~0, validity_bytes);
 	}
 
 	if (!layout.AllConstant()) {
@@ -489,6 +491,11 @@ static void TemplatedTupleDataScatter(Vector &source, const UnifiedVectorFormat 
 	auto target_locations = FlatVector::GetData<data_ptr_t>(row_locations);
 	auto target_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
 
+	// Precompute mask indexes
+	idx_t entry_idx;
+	idx_t idx_in_entry;
+	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
+
 	const auto offset_in_row = layout.GetOffsets()[col_idx];
 	if (validity.AllValid()) {
 		for (idx_t i = 0; i < append_count; i++) {
@@ -497,14 +504,13 @@ static void TemplatedTupleDataScatter(Vector &source, const UnifiedVectorFormat 
 		}
 	} else {
 		for (idx_t i = 0; i < append_count; i++) {
-			auto source_idx = source_sel.get_index(append_sel.get_index(i));
+			const auto source_idx = source_sel.get_index(append_sel.get_index(i));
 			if (validity.RowIsValid(source_idx)) {
 				TupleDataValueScatter<T>(data[source_idx], target_locations[i], offset_in_row,
 				                         target_heap_locations[i]);
 			} else {
-				TupleDataValueScatter<T>(data[source_idx], target_locations[i], offset_in_row,
-				                         target_heap_locations[i]);
-				ValidityBytes(target_locations[i]).SetValidUnsafe(col_idx);
+				TupleDataValueScatter<T>(NullValue<T>(), target_locations[i], offset_in_row, target_heap_locations[i]);
+				ValidityBytes(target_locations[i]).SetInvalidUnsafe(entry_idx, idx_in_entry);
 			}
 		}
 	}
@@ -522,11 +528,16 @@ static void StructTupleDataScatter(Vector &source, const UnifiedVectorFormat &so
 	// Target
 	auto target_locations = FlatVector::GetData<data_ptr_t>(row_locations);
 
+	// Precompute mask indexes
+	idx_t entry_idx;
+	idx_t idx_in_entry;
+	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
+
 	// Set validity of the STRUCT in this layout
 	for (idx_t i = 0; i < append_count; i++) {
 		auto source_idx = source_sel.get_index(append_sel.get_index(i));
 		if (!validity.RowIsValid(source_idx)) {
-			ValidityBytes(target_locations[i]).SetValidUnsafe(col_idx);
+			ValidityBytes(target_locations[i]).SetInvalidUnsafe(entry_idx, idx_in_entry);
 		}
 	}
 
@@ -849,17 +860,6 @@ TupleDataGatherFunction TupleDataCollection::GetGatherFunction(const TupleDataLa
 	}
 	result.function = function;
 	return result;
-}
-
-void TupleDataCollection::Pin() {
-	// use TupleDataChunkIterator with KEEP_PINNED
-	throw NotImplementedException("TupleDataCollection::Pin");
-}
-
-void TupleDataCollection::Unpin() {
-	for (auto &segment : segments) {
-		segment.pinned_handles.clear();
-	}
 }
 
 string TupleDataCollection::ToString() {

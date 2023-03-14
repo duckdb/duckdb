@@ -131,11 +131,6 @@ public:
 	void Gather(Vector &row_locations, const SelectionVector &sel, const idx_t scan_count, const column_t column_id,
 	            Vector &result, const SelectionVector &target_sel) const;
 
-	//! TODO:
-	void Pin();
-	//! TODO:
-	void Unpin();
-
 	//! Converts this TupleDataCollection to a string representation
 	string ToString();
 	//! Prints the string representation of this TupleDataCollection
