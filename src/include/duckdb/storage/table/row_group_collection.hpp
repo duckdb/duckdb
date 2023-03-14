@@ -22,9 +22,9 @@ class PersistentTableData;
 class TableDataWriter;
 class TableIndexList;
 class TableStatistics;
-
+struct TableAppendState;
+class DuckTransaction;
 class BoundConstraint;
-
 class RowGroupSegmentTree;
 
 class RowGroupCollection {

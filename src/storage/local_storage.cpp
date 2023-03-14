@@ -360,6 +360,12 @@ LocalStorage::LocalStorage(ClientContext &context, DuckTransaction &transaction)
     : context(context), transaction(transaction) {
 }
 
+LocalStorage::CommitState::CommitState() {
+}
+
+LocalStorage::CommitState::~CommitState() {
+}
+
 LocalStorage &LocalStorage::Get(DuckTransaction &transaction) {
 	return transaction.GetLocalStorage();
 }

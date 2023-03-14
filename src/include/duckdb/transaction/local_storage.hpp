@@ -17,6 +17,7 @@ class AttachedDatabase;
 class DataTable;
 class Transaction;
 class WriteAheadLog;
+struct LocalAppendState;
 struct TableAppendState;
 
 class OptimisticDataWriter {
@@ -117,6 +118,9 @@ public:
 
 public:
 	struct CommitState {
+		CommitState();
+		~CommitState();
+
 		unordered_map<DataTable *, unique_ptr<TableAppendState>> append_states;
 	};
 
