@@ -55,7 +55,9 @@ bool ParallelCSVReader::NewLineDelimiter(bool carry, bool carry_followed_by_nl, 
 
 bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 	if (buffer->buffer->IsCSVFileFirstBuffer() && start_buffer == position_buffer &&
-	    start_buffer == buffer->buffer->GetStart()) {
+	    start_buffer <= buffer->buffer->GetStart()) {
+		start_buffer = buffer->buffer->GetStart();
+		position_buffer = start_buffer;
 		verification_positions.beginning_of_first_line = position_buffer;
 		verification_positions.end_of_last_line = position_buffer;
 		// First buffer doesn't need any setting
@@ -182,6 +184,13 @@ bool ParallelCSVReader::BufferRemainder() {
 	return true;
 }
 
+void VerifyLineLength(idx_t line_size, idx_t max_line_size) {
+	if (line_size > max_line_size) {
+		// FIXME: this should also output the correct estimated linenumber where it broke
+		throw InvalidInputException("Maximum line size of %llu bytes exceeded!", max_line_size);
+	}
+}
+
 bool ParallelCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message, bool try_add_line) {
 	// used for parsing algorithm
 	if (start_buffer == end_buffer) {
@@ -194,6 +203,7 @@ bool ParallelCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error
 	idx_t column = 0;
 	idx_t offset = 0;
 	bool has_quotes = false;
+
 	vector<idx_t> escape_positions;
 	if ((start_buffer == buffer->buffer_start || start_buffer == buffer->buffer_end) && !try_add_line) {
 		// First time reading this buffer piece
@@ -207,7 +217,8 @@ bool ParallelCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error
 			return true;
 		}
 	}
-
+	// Keep track of line size
+	idx_t line_start = position_buffer;
 	// start parsing the first value
 	goto value_start;
 
@@ -282,6 +293,8 @@ add_row : {
 		parse_chunk.Reset();
 		return success;
 	} else {
+		VerifyLineLength(position_buffer - line_start, options.maximum_line_size);
+		line_start = position_buffer;
 		finished_chunk = AddRow(insert_chunk, column, error_message);
 	}
 	// increase position by 1 and move start to the new position
@@ -459,6 +472,8 @@ final_state : {
 				reached_remainder_state = false;
 				return success;
 			} else {
+				VerifyLineLength(position_buffer - line_start, options.maximum_line_size);
+				line_start = position_buffer;
 				AddRow(insert_chunk, column, error_message);
 				verification_positions.end_of_last_line = position_buffer;
 			}
