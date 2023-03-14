@@ -27,15 +27,18 @@ public:
 };
 
 struct HTTPParams {
+
 	static constexpr uint64_t DEFAULT_TIMEOUT = 30000; // 30 sec
 	static constexpr uint64_t DEFAULT_RETRIES = 3;
 	static constexpr uint64_t DEFAULT_RETRY_WAIT_MS = 100;
 	static constexpr float DEFAULT_RETRY_BACKOFF = 4;
+	static constexpr bool DEFAULT_FORCE_DOWNLOAD = false;
 
 	uint64_t timeout;
 	uint64_t retries;
 	uint64_t retry_wait_ms;
 	float retry_backoff;
+	bool force_download;
 
 	static HTTPParams ReadFrom(FileOpener *opener);
 };
@@ -56,6 +59,7 @@ public:
 	uint8_t flags;
 	idx_t length;
 	time_t last_modified;
+	bool range_read = true;
 
 	// Read info
 	idx_t buffer_available;
@@ -68,7 +72,7 @@ public:
 	unique_ptr<data_t[]> read_buffer;
 	constexpr static idx_t READ_BUFFER_LEN = 1000000;
 
-	HTTPStats *stats;
+	HTTPState *state;
 
 public:
 	void Close() override {
@@ -96,6 +100,8 @@ public:
 	// Get Request with range parameter that GETs exactly buffer_out_len bytes from the url
 	virtual unique_ptr<ResponseWrapper> GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map,
 	                                                    idx_t file_offset, char *buffer_out, idx_t buffer_out_len);
+	// Get Request without a range (i.e., downloads full file)
+	virtual unique_ptr<ResponseWrapper> GetRequest(FileHandle &handle, string url, HeaderMap header_map);
 	// Post Request that can handle variable sized responses without a content-length header (needed for s3 multipart)
 	virtual unique_ptr<ResponseWrapper> PostRequest(FileHandle &handle, string url, HeaderMap header_map,
 	                                                unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len,

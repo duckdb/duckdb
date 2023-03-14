@@ -381,8 +381,7 @@ void ART::Vacuum() {
 //===--------------------------------------------------------------------===//
 // Insert / Verification / Constraint Checking
 //===--------------------------------------------------------------------===//
-
-bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
+PreservedError ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 
 	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
 	D_ASSERT(logical_types[0] == input.data[0].GetType());
@@ -427,12 +426,13 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	// TODO: verify and track old vs. new memory size
 
 	if (failed_index != DConstants::INVALID_INDEX) {
-		return false;
+		return PreservedError(ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicate key \"%s\"",
+		                                          AppendRowError(input, failed_index)));
 	}
-	return true;
+	return PreservedError();
 }
 
-bool ART::Append(IndexLock &lock, DataChunk &appended_data, Vector &row_identifiers) {
+PreservedError ART::Append(IndexLock &lock, DataChunk &appended_data, Vector &row_identifiers) {
 	DataChunk expression_result;
 	expression_result.Initialize(Allocator::DefaultAllocator(), logical_types);
 

@@ -1,0 +1,14 @@
+# name: test/fuzzer/sqlsmith/bitstring_agg_executor.test
+# description: bitstring_agg overflow
+# group: [sqlsmith]
+
+statement ok
+CREATE TABLE tbl(v UBIGINT);
+
+statement ok
+INSERT INTO tbl VALUES (42);
+
+statement error
+SELECT bitstring_agg(v, CAST(v AS UBIGINT), CAST(v AS UBIGINT)) FROM tbl;
+----
+bitstring_agg requires a constant min and max argument

@@ -197,16 +197,16 @@ void LocalTableStorage::FlushToDisk() {
 	optimistic_writer.FinalFlush();
 }
 
-bool LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source,
-                                        TableIndexList &index_list, const vector<LogicalType> &table_types,
-                                        row_t &start_row) {
+PreservedError LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source,
+                                                  TableIndexList &index_list, const vector<LogicalType> &table_types,
+                                                  row_t &start_row) {
 	// only need to scan for index append
 	// figure out which columns we need to scan for the set of indexes
 	auto columns = index_list.GetRequiredColumns();
 	// create an empty mock chunk that contains all the correct types for the table
 	DataChunk mock_chunk;
 	mock_chunk.InitializeEmpty(table_types);
-	bool success = true;
+	PreservedError error;
 	source.Scan(transaction, columns, [&](DataChunk &chunk) -> bool {
 		// construct the mock chunk by referencing the required columns
 		for (idx_t i = 0; i < columns.size(); i++) {
@@ -214,28 +214,28 @@ bool LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGroupCo
 		}
 		mock_chunk.SetCardinality(chunk);
 		// append this chunk to the indexes of the table
-		if (!DataTable::AppendToIndexes(index_list, mock_chunk, start_row)) {
-			success = false;
+		error = DataTable::AppendToIndexes(index_list, mock_chunk, start_row);
+		if (error) {
 			return false;
 		}
 		start_row += chunk.size();
 		return true;
 	});
-	return success;
+	return error;
 }
 
 void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state,
                                         idx_t append_count, bool append_to_table) {
-	bool constraint_violated = false;
 	if (append_to_table) {
 		table->InitializeAppend(transaction, append_state, append_count);
 	}
+	PreservedError error;
 	if (append_to_table) {
 		// appending: need to scan entire
 		row_groups->Scan(transaction, [&](DataChunk &chunk) -> bool {
 			// append this chunk to the indexes of the table
-			if (!table->AppendToIndexes(chunk, append_state.current_row)) {
-				constraint_violated = true;
+			error = table->AppendToIndexes(chunk, append_state.current_row);
+			if (error) {
 				return false;
 			}
 			// append to base table
@@ -243,11 +243,10 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 			return true;
 		});
 	} else {
-		constraint_violated = !AppendToIndexes(transaction, *row_groups, table->info->indexes, table->GetTypes(),
-		                                       append_state.current_row);
+		error = AppendToIndexes(transaction, *row_groups, table->info->indexes, table->GetTypes(),
+		                        append_state.current_row);
 	}
-	if (constraint_violated) {
-		PreservedError error;
+	if (error) {
 		// need to revert the append
 		row_t current_row = append_state.row_start;
 		// remove the data from the indexes, if there are any indexes
@@ -273,10 +272,7 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 		if (append_to_table) {
 			table->RevertAppendInternal(append_state.row_start, append_count);
 		}
-		if (error) {
-			error.Throw();
-		}
-		throw ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicated key");
+		error.Throw();
 	}
 }
 
@@ -412,8 +408,9 @@ void LocalStorage::Append(LocalAppendState &state, DataChunk &chunk) {
 	// append to unique indices (if any)
 	auto storage = state.storage;
 	idx_t base_id = MAX_ROW_ID + storage->row_groups->GetTotalRows() + state.append_state.total_append_count;
-	if (!DataTable::AppendToIndexes(storage->indexes, chunk, base_id)) {
-		throw ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicated key");
+	auto error = DataTable::AppendToIndexes(storage->indexes, chunk, base_id);
+	if (error) {
+		error.Throw();
 	}
 
 	//! Append the chunk to the local storage
@@ -434,9 +431,9 @@ void LocalStorage::LocalMerge(DataTable *table, RowGroupCollection &collection) 
 	if (!storage->indexes.Empty()) {
 		// append data to indexes if required
 		row_t base_id = MAX_ROW_ID + storage->row_groups->GetTotalRows();
-		bool success = storage->AppendToIndexes(transaction, collection, storage->indexes, table->GetTypes(), base_id);
-		if (!success) {
-			throw ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicated key");
+		auto error = storage->AppendToIndexes(transaction, collection, storage->indexes, table->GetTypes(), base_id);
+		if (error) {
+			error.Throw();
 		}
 	}
 	storage->row_groups->MergeStorage(collection);

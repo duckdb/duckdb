@@ -5,6 +5,8 @@
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 
@@ -62,6 +64,16 @@ string CommonTableExpressionMap::ToString() const {
 		result += ")";
 		first_cte = false;
 	}
+	return result;
+}
+
+void CommonTableExpressionMap::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("map", map);
+}
+
+CommonTableExpressionMap CommonTableExpressionMap::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = CommonTableExpressionMap();
+	deserializer.ReadProperty("map", result.map);
 	return result;
 }
 
@@ -155,6 +167,7 @@ void QueryNode::Serialize(Serializer &main_serializer) const {
 	writer.WriteField<QueryNodeType>(type);
 	writer.WriteSerializableList(modifiers);
 	// cte_map
+
 	writer.WriteField<uint32_t>((uint32_t)cte_map.map.size());
 	auto &serializer = writer.GetSerializer();
 	for (auto &cte : cte_map.map) {
@@ -163,7 +176,44 @@ void QueryNode::Serialize(Serializer &main_serializer) const {
 		cte.second->query->Serialize(serializer);
 	}
 	Serialize(writer);
+
 	writer.Finalize();
+}
+
+// Children should call the base method before their own.
+void QueryNode::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("type", type);
+	serializer.WriteProperty("modifiers", modifiers);
+	serializer.WriteProperty("cte_map", cte_map);
+}
+
+unique_ptr<QueryNode> QueryNode::FormatDeserialize(FormatDeserializer &deserializer) {
+
+	auto type = deserializer.ReadProperty<QueryNodeType>("type");
+
+	auto modifiers = deserializer.ReadProperty<vector<unique_ptr<ResultModifier>>>("modifiers");
+	auto cte_map = deserializer.ReadProperty<CommonTableExpressionMap>("cte_map");
+
+	unique_ptr<QueryNode> result;
+
+	switch (type) {
+	case QueryNodeType::SELECT_NODE:
+		result = SelectNode::FormatDeserialize(deserializer);
+		break;
+	case QueryNodeType::SET_OPERATION_NODE:
+		result = SetOperationNode::FormatDeserialize(deserializer);
+		break;
+	case QueryNodeType::RECURSIVE_CTE_NODE:
+		result = RecursiveCTENode::FormatDeserialize(deserializer);
+		break;
+	default:
+		throw SerializationException("Could not deserialize Query Node: unknown type!");
+	}
+
+	result->type = type;
+	result->modifiers = std::move(modifiers);
+	result->cte_map = std::move(cte_map);
+	return result;
 }
 
 unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &main_source) {

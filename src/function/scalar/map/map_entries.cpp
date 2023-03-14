@@ -44,7 +44,7 @@ static unique_ptr<FunctionData> MapEntriesBind(ClientContext &context, ScalarFun
 	child_types.push_back(make_pair("k", key_type));
 	child_types.push_back(make_pair("v", value_type));
 
-	auto row_type = LogicalType::STRUCT(std::move(child_types));
+	auto row_type = LogicalType::STRUCT(child_types);
 
 	bound_function.return_type = LogicalType::LIST(row_type);
 	return make_unique<VariableReturnBindData>(bound_function.return_type);

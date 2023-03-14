@@ -175,11 +175,12 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpress
 		}
 	}
 	// We found the table, now create the struct_pack expression
-	vector<unique_ptr<ParsedExpression>> child_exprs;
+	vector<unique_ptr<ParsedExpression>> child_expressions;
+	child_expressions.reserve(binding->names.size());
 	for (const auto &column_name : binding->names) {
-		child_exprs.push_back(make_unique<ColumnRefExpression>(column_name, table_name));
+		child_expressions.push_back(make_unique<ColumnRefExpression>(column_name, table_name));
 	}
-	return make_unique<FunctionExpression>("struct_pack", std::move(child_exprs));
+	return make_unique<FunctionExpression>("struct_pack", std::move(child_expressions));
 }
 
 unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpression &colref, string &error_message) {

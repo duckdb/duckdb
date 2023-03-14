@@ -44,7 +44,7 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 			// ALL sublink is equivalent to NOT(ANY) with inverted comparison
 			// e.g. [= ALL()] is equivalent to [NOT(<> ANY())]
 			// first invert the comparison type
-			subquery_expr->comparison_type = NegateComparisionExpression(subquery_expr->comparison_type);
+			subquery_expr->comparison_type = NegateComparisonExpression(subquery_expr->comparison_type);
 			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(subquery_expr));
 		}
 		break;
