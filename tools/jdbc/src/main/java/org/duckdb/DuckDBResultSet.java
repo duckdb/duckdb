@@ -1460,12 +1460,18 @@ public class DuckDBResultSet implements ResultSet {
 		throw new SQLFeatureNotSupportedException("getObject");
 	}
 
+	@SuppressWarnings("unchecked")
 	public <T> T unwrap(Class<T> iface) throws SQLException {
-		throw new SQLFeatureNotSupportedException("unwrap");
+		if (!iface.isInstance(this)) {
+			throw new SQLException(
+					this.getClass().getName() + " not unwrappable from " + iface.getName());
+		}
+		return (T) this;
 	}
 
-	public boolean isWrapperFor(Class<?> iface) throws SQLException {
-		throw new SQLFeatureNotSupportedException("isWrapperFor");
+	@Override
+	public boolean isWrapperFor(Class<?> iface) {
+		return iface.isInstance(this);
 	}
 
 }

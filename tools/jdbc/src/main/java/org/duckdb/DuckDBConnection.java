@@ -211,6 +211,20 @@ public final class DuckDBConnection implements java.sql.Connection {
 		return DuckDBNative.duckdb_jdbc_get_schema(conn_ref);
 	}
 
+	@SuppressWarnings("unchecked")
+	public <T> T unwrap(Class<T> iface) throws SQLException {
+		if (!iface.isInstance(this)) {
+			throw new SQLException(
+					this.getClass().getName() + " not unwrappable from " + iface.getName());
+		}
+		return (T) this;
+	}
+
+	@Override
+	public boolean isWrapperFor(Class<?> iface) {
+		return iface.isInstance(this);
+	}
+
 	public void abort(Executor executor) throws SQLException {
 		throw new SQLFeatureNotSupportedException("abort");
 	}
@@ -224,14 +238,6 @@ public final class DuckDBConnection implements java.sql.Connection {
 	}
 
 	// less likely to implement this stuff
-
-	public <T> T unwrap(Class<T> iface) throws SQLException {
-		throw new SQLFeatureNotSupportedException("unwrap");
-	}
-
-	public boolean isWrapperFor(Class<?> iface) throws SQLException {
-		throw new SQLFeatureNotSupportedException("isWrapperFor");
-	}
 
 	public CallableStatement prepareCall(String sql) throws SQLException {
 		throw new SQLFeatureNotSupportedException("prepareCall");

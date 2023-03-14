@@ -21,14 +21,18 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 		this.conn = conn;
 	}
 
-	@Override
+	@SuppressWarnings("unchecked")
 	public <T> T unwrap(Class<T> iface) throws SQLException {
-		throw new SQLFeatureNotSupportedException("unwrap");
+		if (!iface.isInstance(this)) {
+			throw new SQLException(
+					this.getClass().getName() + " not unwrappable from " + iface.getName());
+		}
+		return (T) this;
 	}
 
 	@Override
-	public boolean isWrapperFor(Class<?> iface) throws SQLException {
-		throw new SQLFeatureNotSupportedException("isWrapperFor");
+	public boolean isWrapperFor(Class<?> iface) {
+		return iface.isInstance(this);
 	}
 
 	@Override
