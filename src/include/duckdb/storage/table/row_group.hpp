@@ -16,6 +16,7 @@
 #include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/parser/column_list.hpp"
+#include "duckdb/storage/table/segment_base.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
@@ -41,7 +42,7 @@ struct RowGroupWriteData {
 	vector<BaseStatistics> statistics;
 };
 
-class RowGroup {
+class RowGroup : public SegmentBase<RowGroup> {
 public:
 	friend class ColumnData;
 	friend class VersionDeleteState;
@@ -57,26 +58,8 @@ public:
 	RowGroup(RowGroup &row_group, idx_t start);
 	~RowGroup();
 
-	RowGroup *Next() {
-#ifndef DUCKDB_R_BUILD
-		return next.load();
-#else
-		return next;
-#endif
-	}
-
 	//! The index within the segment tree
 	idx_t index;
-	//! The start row id of this row group
-	const idx_t start;
-	//! The amount of entries in the row group
-	atomic<idx_t> count;
-	//! The next segment after this one
-#ifndef DUCKDB_R_BUILD
-	atomic<RowGroup *> next;
-#else
-	RowGroup *next;
-#endif
 
 private:
 	//! The database instance
