@@ -48,8 +48,6 @@ private:
 	                                         TableFunctionInput &data) const;
 	void AddProjectedColumnsFromConstantMapping(idx_t map_idx, DataChunk &input, DataChunk &intermediate,
 	                                            DataChunk &out) const;
-	void AddProjectedColumnsFromFlatMapping(idx_t map_idx, DataChunk &input, DataChunk &intermediate,
-	                                        DataChunk &out) const;
 	void AddProjectedColumnsFromOtherMapping(idx_t map_idx, DataChunk &input, DataChunk &intermediate,
 	                                         DataChunk &out) const;
 

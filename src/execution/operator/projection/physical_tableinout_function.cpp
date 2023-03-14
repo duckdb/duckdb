@@ -11,6 +11,31 @@ public:
 	idx_t row_index;
 	bool new_row;
 	DataChunk input_chunk;
+	unique_ptr<DataChunk> intermediate_chunk;
+
+public:
+	DataChunk &GetIntermediateChunk(DataChunk &output, idx_t base_column_count) {
+		if (!intermediate_chunk) {
+			intermediate_chunk = make_unique<DataChunk>();
+			// Create an empty DataChunk that has room for the input + the mapping vector
+			auto chunk_types = output.GetTypes();
+			vector<LogicalType> intermediate_types;
+			intermediate_types.reserve(base_column_count + 1);
+			intermediate_types.insert(intermediate_types.end(), chunk_types.begin(),
+			                          chunk_types.begin() + base_column_count);
+			intermediate_types.emplace_back(LogicalType::UINTEGER);
+			// We initialize this as empty
+			intermediate_chunk->InitializeEmpty(intermediate_types);
+			// And only allocate for our mapping vector
+			intermediate_chunk->data[base_column_count].Initialize();
+		}
+		// Initialize our output chunk
+		for (idx_t i = 0; i < base_column_count; i++) {
+			intermediate_chunk->data[i].Reference(output.data[i]);
+		}
+		intermediate_chunk->SetCardinality(output.size());
+		return *intermediate_chunk;
+	}
 };
 
 class TableInOutGlobalState : public GlobalOperatorState {
@@ -93,9 +118,7 @@ void PhysicalTableInOutFunction::AddProjectedColumnsFromConstantMapping(idx_t ma
 	auto &mapping_column = intermediate.data[map_idx];
 	D_ASSERT(mapping_column.GetVectorType() == VectorType::CONSTANT_VECTOR);
 
-	UnifiedVectorFormat mapping_vector_data;
-	mapping_column.ToUnifiedFormat(intermediate.size(), mapping_vector_data);
-	auto mapping_data = (sel_t *)mapping_vector_data.data;
+	auto mapping_data = FlatVector::GetData<sel_t>(mapping_column);
 
 	// Add the projected columns, and apply the selection vector
 	for (idx_t project_idx = 0; project_idx < projected_input.size(); project_idx++) {
@@ -110,36 +133,6 @@ void PhysicalTableInOutFunction::AddProjectedColumnsFromConstantMapping(idx_t ma
 	}
 }
 
-void PhysicalTableInOutFunction::AddProjectedColumnsFromFlatMapping(idx_t map_idx, DataChunk &input,
-                                                                    DataChunk &intermediate, DataChunk &out) const {
-	auto &mapping_column = intermediate.data[map_idx];
-	D_ASSERT(mapping_column.GetVectorType() == VectorType::FLAT_VECTOR);
-
-	UnifiedVectorFormat mapping_data;
-	mapping_column.ToUnifiedFormat(intermediate.size(), mapping_data);
-	D_ASSERT(mapping_data.validity.AllValid());
-	auto mapping_array = (sel_t *)mapping_data.data;
-
-	// We can directly use this column as a selection vector
-	SelectionVector sel_vec(mapping_array);
-
-	// Add the projected columns, and apply the selection vector
-	for (idx_t project_idx = 0; project_idx < projected_input.size(); project_idx++) {
-		auto source_idx = projected_input[project_idx];
-		D_ASSERT(source_idx < input.data.size());
-		auto target_idx = map_idx + project_idx;
-
-		auto &target_column = out.data[target_idx];
-		auto &source_column = input.data[source_idx];
-
-		target_column.Slice(source_column, sel_vec, intermediate.size());
-		// Since our selection vector is using temporary allocated data, we need to
-		// immediately flatten this column, so we don't run the risk of the dictionary vector
-		// outliving the selection vector
-		target_column.Flatten(intermediate.size());
-	}
-}
-
 OperatorResultType PhysicalTableInOutFunction::ExecuteWithMapping(ExecutionContext &context, DataChunk &input,
                                                                   DataChunk &chunk, TableInOutLocalState &state,
                                                                   TableFunctionInput &data) const {
@@ -147,23 +140,7 @@ OperatorResultType PhysicalTableInOutFunction::ExecuteWithMapping(ExecutionConte
 	// this column is used to register the relation between input tuple -> output tuple(s)
 	const auto base_columns = chunk.ColumnCount() - projected_input.size();
 
-	DataChunk intermediate_chunk;
-	// Create an empty DataChunk that has room for the input + the mapping vector
-	auto chunk_types = chunk.GetTypes();
-	vector<LogicalType> intermediate_types;
-	intermediate_types.reserve(base_columns + 1);
-	intermediate_types.insert(intermediate_types.end(), chunk_types.begin(), chunk_types.begin() + base_columns);
-	intermediate_types.emplace_back(LogicalType::UINTEGER);
-	// We initialize this as empty
-	intermediate_chunk.InitializeEmpty(intermediate_types);
-	// And only allocate for our mapping vector
-	intermediate_chunk.data[base_columns].Initialize();
-
-	// Initialize our output chunk
-	for (idx_t i = 0; i < base_columns; i++) {
-		intermediate_chunk.data[i].Reference(chunk.data[i]);
-	}
-	intermediate_chunk.SetCardinality(chunk.size());
+	auto &intermediate_chunk = state.GetIntermediateChunk(chunk, base_columns);
 
 	// Let the function know that we expect it to write an in-out mapping for rowids
 	data.add_in_out_mapping = true;
@@ -177,11 +154,6 @@ OperatorResultType PhysicalTableInOutFunction::ExecuteWithMapping(ExecutionConte
 
 	auto &mapping_column = intermediate_chunk.data[base_columns];
 	switch (mapping_column.GetVectorType()) {
-	case VectorType::FLAT_VECTOR: {
-		// This is the original vector we created
-		AddProjectedColumnsFromFlatMapping(base_columns, input, intermediate_chunk, chunk);
-		break;
-	}
 	case VectorType::CONSTANT_VECTOR: {
 		// We can avoid creating a selection vector altogether
 		AddProjectedColumnsFromConstantMapping(base_columns, input, intermediate_chunk, chunk);
