@@ -516,9 +516,8 @@ test_that("rel aggregate on NA is 0", {
 
 test_that("Window sum expression where NA exists defaults the sum to 0", {
 #     select j, i, sum(i) over (partition by j) from a order by 1,2
-    con <- dbConnect(duckdb::duckdb())
     duckdb_set_sum_default_to_zero(con)
-    rel_a <- rel_from_df(con, data.frame(a=c(1, 2, 3, 4, 5, 6, 7, 8, NA, NA),b=c(1, 1, 2, 2, 3, 3, 4, 4, 4, 5)))
+    rel_a <- rel_from_df(con, data.frame(a=c(1, 2, 3, 4, 5, 6, 7, 8, NA, NA), b=c(1, 1, 2, 2, 3, 3, 4, 4, 4, 5)))
     sum_func <- expr_function("sum", list(expr_reference("a")))
     aggrs <- expr_window(sum_func, partitions=list(expr_reference("b")))
     expr_set_alias(aggrs, "window_result")
@@ -528,3 +527,4 @@ test_that("Window sum expression where NA exists defaults the sum to 0", {
     expected_result <- data.frame(a=c(NA, 1:8, NA), window_result=c(0, 3, 3, 7, 7, 11, 11, 15, 15, 15))
     expect_equal(res, expected_result)
 })
+
