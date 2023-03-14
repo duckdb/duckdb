@@ -27,6 +27,10 @@
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
 
+#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/enum_serializer.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+
 #include <cmath>
 
 namespace duckdb {
@@ -327,95 +331,8 @@ bool TypeIsInteger(PhysicalType type) {
 	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128;
 }
 
-// LCOV_EXCL_START
 string LogicalTypeIdToString(LogicalTypeId id) {
-	switch (id) {
-	case LogicalTypeId::BOOLEAN:
-		return "BOOLEAN";
-	case LogicalTypeId::TINYINT:
-		return "TINYINT";
-	case LogicalTypeId::SMALLINT:
-		return "SMALLINT";
-	case LogicalTypeId::INTEGER:
-		return "INTEGER";
-	case LogicalTypeId::BIGINT:
-		return "BIGINT";
-	case LogicalTypeId::HUGEINT:
-		return "HUGEINT";
-	case LogicalTypeId::UUID:
-		return "UUID";
-	case LogicalTypeId::UTINYINT:
-		return "UTINYINT";
-	case LogicalTypeId::USMALLINT:
-		return "USMALLINT";
-	case LogicalTypeId::UINTEGER:
-		return "UINTEGER";
-	case LogicalTypeId::UBIGINT:
-		return "UBIGINT";
-	case LogicalTypeId::DATE:
-		return "DATE";
-	case LogicalTypeId::TIME:
-		return "TIME";
-	case LogicalTypeId::TIMESTAMP:
-		return "TIMESTAMP";
-	case LogicalTypeId::TIMESTAMP_MS:
-		return "TIMESTAMP_MS";
-	case LogicalTypeId::TIMESTAMP_NS:
-		return "TIMESTAMP_NS";
-	case LogicalTypeId::TIMESTAMP_SEC:
-		return "TIMESTAMP_S";
-	case LogicalTypeId::TIMESTAMP_TZ:
-		return "TIMESTAMP WITH TIME ZONE";
-	case LogicalTypeId::TIME_TZ:
-		return "TIME WITH TIME ZONE";
-	case LogicalTypeId::FLOAT:
-		return "FLOAT";
-	case LogicalTypeId::DOUBLE:
-		return "DOUBLE";
-	case LogicalTypeId::DECIMAL:
-		return "DECIMAL";
-	case LogicalTypeId::VARCHAR:
-		return "VARCHAR";
-	case LogicalTypeId::BLOB:
-		return "BLOB";
-	case LogicalTypeId::CHAR:
-		return "CHAR";
-	case LogicalTypeId::INTERVAL:
-		return "INTERVAL";
-	case LogicalTypeId::SQLNULL:
-		return "NULL";
-	case LogicalTypeId::ANY:
-		return "ANY";
-	case LogicalTypeId::VALIDITY:
-		return "VALIDITY";
-	case LogicalTypeId::STRUCT:
-		return "STRUCT";
-	case LogicalTypeId::LIST:
-		return "LIST";
-	case LogicalTypeId::MAP:
-		return "MAP";
-	case LogicalTypeId::POINTER:
-		return "POINTER";
-	case LogicalTypeId::TABLE:
-		return "TABLE";
-	case LogicalTypeId::LAMBDA:
-		return "LAMBDA";
-	case LogicalTypeId::INVALID:
-		return "INVALID";
-	case LogicalTypeId::UNION:
-		return "UNION";
-	case LogicalTypeId::UNKNOWN:
-		return "UNKNOWN";
-	case LogicalTypeId::ENUM:
-		return "ENUM";
-	case LogicalTypeId::AGGREGATE_STATE:
-		return "AGGREGATE_STATE";
-	case LogicalTypeId::USER:
-		return "USER";
-	case LogicalTypeId::BIT:
-		return "BIT";
-	}
-	return "UNDEFINED";
+	return EnumSerializer::EnumToString(id);
 }
 
 string LogicalType::ToString() const {
@@ -883,11 +800,15 @@ public:
 		return alias == other_p->alias && EqualsInternal(other_p);
 	}
 	//! Serializes a ExtraTypeInfo to a stand-alone binary blob
-	virtual void Serialize(FieldWriter &writer) const {};
+	virtual void Serialize(FieldWriter &writer) const {
+	}
 	//! Serializes a ExtraTypeInfo to a stand-alone binary blob
 	static void Serialize(ExtraTypeInfo *info, FieldWriter &writer);
 	//! Deserializes a blob back into an ExtraTypeInfo
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader);
+
+	virtual void FormatSerialize(FormatSerializer &serializer) const;
+	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source);
 
 protected:
 	virtual bool EqualsInternal(ExtraTypeInfo *other_p) const {
@@ -959,6 +880,18 @@ public:
 		writer.WriteField<uint8_t>(scale);
 	}
 
+	void FormatSerialize(FormatSerializer &serializer) const override {
+		ExtraTypeInfo::FormatSerialize(serializer);
+		serializer.WriteProperty("width", width);
+		serializer.WriteProperty("scale", scale);
+	}
+
+	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source) {
+		auto width = source.ReadProperty<uint8_t>("width");
+		auto scale = source.ReadProperty<uint8_t>("scale");
+		return make_shared<DecimalTypeInfo>(width, scale);
+	}
+
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
 		auto width = reader.ReadRequired<uint8_t>();
 		auto scale = reader.ReadRequired<uint8_t>();
@@ -1016,6 +949,16 @@ public:
 		return make_shared<StringTypeInfo>(std::move(collation));
 	}
 
+	void FormatSerialize(FormatSerializer &serializer) const override {
+		ExtraTypeInfo::FormatSerialize(serializer);
+		serializer.WriteProperty("collation", collation);
+	}
+
+	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source) {
+		auto collation = source.ReadProperty<string>("collation");
+		return make_shared<StringTypeInfo>(std::move(collation));
+	}
+
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
 		// collation info has no impact on equality
@@ -1057,8 +1000,18 @@ public:
 		writer.WriteSerializable(child_type);
 	}
 
+	void FormatSerialize(FormatSerializer &serializer) const override {
+		ExtraTypeInfo::FormatSerialize(serializer);
+		serializer.WriteProperty("child_type", child_type);
+	}
+
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
 		auto child_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
+		return make_shared<ListTypeInfo>(std::move(child_type));
+	}
+
+	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source) {
+		auto child_type = source.ReadProperty<LogicalType>("child_type");
 		return make_shared<ListTypeInfo>(std::move(child_type));
 	}
 
@@ -1101,6 +1054,11 @@ public:
 		}
 	}
 
+	void FormatSerialize(FormatSerializer &serializer) const override {
+		ExtraTypeInfo::FormatSerialize(serializer);
+		serializer.WriteProperty("child_types", child_types);
+	}
+
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
 		child_list_t<LogicalType> child_list;
 		auto child_types_size = reader.ReadRequired<uint32_t>();
@@ -1111,6 +1069,11 @@ public:
 			child_list.emplace_back(std::move(name), std::move(type));
 		}
 		return make_shared<StructTypeInfo>(std::move(child_list));
+	}
+
+	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &deserializer) {
+		auto child_types = deserializer.ReadProperty<child_list_t<LogicalType>>("child_types");
+		return make_shared<StructTypeInfo>(std::move(child_types));
 	}
 
 protected:
@@ -1136,6 +1099,21 @@ public:
 		for (idx_t i = 0; i < state_type.bound_argument_types.size(); i++) {
 			state_type.bound_argument_types[i].Serialize(serializer);
 		}
+	}
+
+	void FormatSerialize(FormatSerializer &serializer) const override {
+		ExtraTypeInfo::FormatSerialize(serializer);
+		serializer.WriteProperty("function_name", state_type.function_name);
+		serializer.WriteProperty("return_type", state_type.return_type);
+		serializer.WriteProperty("bound_argument_types", state_type.bound_argument_types);
+	}
+
+	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source) {
+		auto function_name = source.ReadProperty<string>("function_name");
+		auto return_type = source.ReadProperty<LogicalType>("return_type");
+		auto bound_argument_types = source.ReadProperty<vector<LogicalType>>("bound_argument_types");
+		return make_shared<AggregateStateTypeInfo>(
+		    aggregate_state_t(std::move(function_name), std::move(return_type), std::move(bound_argument_types)));
 	}
 
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
@@ -1294,8 +1272,18 @@ public:
 		writer.WriteString(user_type_name);
 	}
 
+	void FormatSerialize(FormatSerializer &serializer) const override {
+		ExtraTypeInfo::FormatSerialize(serializer);
+		serializer.WriteProperty("user_type_name", user_type_name);
+	}
+
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
 		auto enum_name = reader.ReadRequired<string>();
+		return make_shared<UserTypeInfo>(std::move(enum_name));
+	}
+
+	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source) {
+		auto enum_name = source.ReadProperty<string>("user_type_name");
 		return make_shared<UserTypeInfo>(std::move(enum_name));
 	}
 
@@ -1380,6 +1368,12 @@ protected:
 		EnumType::Serialize(writer, *this, serialize_internals);
 	}
 
+	void FormatSerialize(FormatSerializer &serializer) const override {
+		ExtraTypeInfo::FormatSerialize(serializer);
+		serializer.WriteProperty("dict_size", dict_size);
+		serializer.WriteProperty("enum_name", enum_name);
+		((Vector &)values_insert_order).FormatSerialize(serializer, dict_size);
+	}
 	Vector values_insert_order;
 
 private:
@@ -1436,6 +1430,13 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 
 		Vector values_insert_order(LogicalType::VARCHAR, size);
 		values_insert_order.Deserialize(size, reader.GetSource());
+		return make_shared<EnumTypeInfoTemplated>(std::move(enum_name), values_insert_order, size);
+	}
+
+	static shared_ptr<EnumTypeInfoTemplated> FormatDeserialize(FormatDeserializer &source, uint32_t size) {
+		auto enum_name = source.ReadProperty<string>("enum_name");
+		Vector values_insert_order(LogicalType::VARCHAR, size);
+		values_insert_order.FormatDeserialize(source, size);
 		return make_shared<EnumTypeInfoTemplated>(std::move(enum_name), values_insert_order, size);
 	}
 
@@ -1573,6 +1574,70 @@ void ExtraTypeInfo::Serialize(ExtraTypeInfo *info, FieldWriter &writer) {
 		writer.WriteString(info->alias);
 	}
 }
+void ExtraTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("type", type);
+	serializer.WriteProperty("alias", alias);
+}
+
+shared_ptr<ExtraTypeInfo> ExtraTypeInfo::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto type = deserializer.ReadProperty<ExtraTypeInfoType>("type");
+
+	shared_ptr<ExtraTypeInfo> result;
+	switch (type) {
+	case ExtraTypeInfoType::INVALID_TYPE_INFO: {
+		string alias;
+		deserializer.ReadOptionalProperty("alias", alias);
+		if (!alias.empty()) {
+			return make_shared<ExtraTypeInfo>(type, alias);
+		}
+		return nullptr;
+	}
+	case ExtraTypeInfoType::GENERIC_TYPE_INFO: {
+		result = make_shared<ExtraTypeInfo>(type);
+	} break;
+	case ExtraTypeInfoType::DECIMAL_TYPE_INFO:
+		result = DecimalTypeInfo::FormatDeserialize(deserializer);
+		break;
+	case ExtraTypeInfoType::STRING_TYPE_INFO:
+		result = StringTypeInfo::FormatDeserialize(deserializer);
+		break;
+	case ExtraTypeInfoType::LIST_TYPE_INFO:
+		result = ListTypeInfo::FormatDeserialize(deserializer);
+		break;
+	case ExtraTypeInfoType::STRUCT_TYPE_INFO:
+		result = StructTypeInfo::FormatDeserialize(deserializer);
+		break;
+	case ExtraTypeInfoType::USER_TYPE_INFO:
+		result = UserTypeInfo::FormatDeserialize(deserializer);
+		break;
+	case ExtraTypeInfoType::ENUM_TYPE_INFO: {
+		auto enum_size = deserializer.ReadProperty<uint32_t>("enum_size");
+		auto enum_internal_type = EnumVectorDictType(enum_size);
+		switch (enum_internal_type) {
+		case PhysicalType::UINT8:
+			result = EnumTypeInfoTemplated<uint8_t>::FormatDeserialize(deserializer, enum_size);
+			break;
+		case PhysicalType::UINT16:
+			result = EnumTypeInfoTemplated<uint16_t>::FormatDeserialize(deserializer, enum_size);
+			break;
+		case PhysicalType::UINT32:
+			result = EnumTypeInfoTemplated<uint32_t>::FormatDeserialize(deserializer, enum_size);
+			break;
+		default:
+			throw InternalException("Invalid Physical Type for ENUMs");
+		}
+	} break;
+	case ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO:
+		result = AggregateStateTypeInfo::FormatDeserialize(deserializer);
+		break;
+
+	default:
+		throw InternalException("Unimplemented type info in ExtraTypeInfo::Deserialize");
+	}
+	deserializer.ReadOptionalPropertyOrDefault("alias", result->alias, string());
+	return result;
+}
+
 shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(FieldReader &reader) {
 	auto type = reader.ReadRequired<ExtraTypeInfoType>();
 	shared_ptr<ExtraTypeInfo> extra_info;
@@ -1680,6 +1745,18 @@ LogicalType LogicalType::Deserialize(Deserializer &source) {
 	auto id = reader.ReadRequired<LogicalTypeId>();
 	auto info = ExtraTypeInfo::Deserialize(reader);
 	reader.Finalize();
+
+	return LogicalType(id, std::move(info));
+}
+
+void LogicalType::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("id", id_);
+	serializer.WriteOptionalProperty("type_info", type_info_.get());
+}
+
+LogicalType LogicalType::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto id = deserializer.ReadProperty<LogicalTypeId>("id");
+	auto info = deserializer.ReadOptionalProperty<shared_ptr<ExtraTypeInfo>>("type_info");
 
 	return LogicalType(id, std::move(info));
 }

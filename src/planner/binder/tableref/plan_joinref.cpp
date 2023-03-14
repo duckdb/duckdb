@@ -33,7 +33,7 @@ static bool CreateJoinCondition(Expression &expr, const unordered_set<idx_t> &le
 		if (left_side == JoinSide::RIGHT) {
 			// left = right, right = left, flip the comparison symbol and reverse sides
 			swap(left, right);
-			condition.comparison = FlipComparisionExpression(expr.type);
+			condition.comparison = FlipComparisonExpression(expr.type);
 		}
 		condition.left = std::move(left);
 		condition.right = std::move(right);
