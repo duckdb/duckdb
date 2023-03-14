@@ -161,7 +161,7 @@ void ColumnDataCheckpointer::WriteToDisk() {
 	// first we check the current segments
 	// if there are any persistent segments, we will mark their old block ids as modified
 	// since the segments will be rewritten their old on disk data is no longer required
-	auto &block_manager = col_data.block_manager;
+	auto &block_manager = col_data.GetBlockManager();
 	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
 		auto segment = nodes[segment_idx].node.get();
 		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {

@@ -21,27 +21,26 @@ namespace duckdb {
 constexpr const idx_t RowGroup::ROW_GROUP_VECTOR_COUNT;
 constexpr const idx_t RowGroup::ROW_GROUP_SIZE;
 
-RowGroup::RowGroup(AttachedDatabase &db, BlockManager &block_manager, DataTableInfo &table_info, idx_t start,
-                   idx_t count)
-    : start(start), count(count), next(nullptr), db(db), block_manager(block_manager), table_info(table_info) {
+RowGroup::RowGroup(RowGroupCollection &collection, idx_t start, idx_t count)
+    : start(start), count(count), next(nullptr), collection(collection) {
 
 	Verify();
 }
 
-RowGroup::RowGroup(AttachedDatabase &db, BlockManager &block_manager, DataTableInfo &table_info,
-                   const vector<LogicalType> &types, RowGroupPointer &&pointer)
-    : start(pointer.row_start), count(pointer.tuple_count), next(nullptr), db(db), block_manager(block_manager),
-      table_info(table_info) {
+RowGroup::RowGroup(RowGroupCollection &collection, RowGroupPointer &&pointer)
+    : start(pointer.row_start), count(pointer.tuple_count), next(nullptr), collection(collection) {
 	// deserialize the columns
-	if (pointer.data_pointers.size() != types.size()) {
+	if (pointer.data_pointers.size() != collection.GetTypes().size()) {
 		throw IOException("Row group column count is unaligned with table column count. Corrupt file?");
 	}
+	auto &block_manager = collection.GetBlockManager();
+	auto &types = collection.GetTypes();
 	for (idx_t i = 0; i < pointer.data_pointers.size(); i++) {
 		auto &block_pointer = pointer.data_pointers[i];
 		MetaBlockReader column_data_reader(block_manager, block_pointer.block_id);
 		column_data_reader.offset = block_pointer.offset;
-		this->columns.push_back(
-		    ColumnData::Deserialize(block_manager, table_info, i, start, column_data_reader, types[i], nullptr));
+		this->columns.push_back(ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), i, start, column_data_reader,
+		                                                types[i], nullptr));
 	}
 
 	// set up the statistics
@@ -53,9 +52,8 @@ RowGroup::RowGroup(AttachedDatabase &db, BlockManager &block_manager, DataTableI
 	Verify();
 }
 
-RowGroup::RowGroup(RowGroup &row_group, idx_t start)
-    : start(start), count(row_group.count.load()), next(nullptr), db(row_group.db),
-      block_manager(row_group.block_manager), table_info(row_group.table_info),
+RowGroup::RowGroup(RowGroup &row_group, RowGroupCollection &collection, idx_t start)
+    : start(start), count(row_group.count.load()), next(nullptr), collection(collection),
       version_info(std::move(row_group.version_info)), stats(std::move(row_group.stats)) {
 	for (auto &column : row_group.columns) {
 		this->columns.push_back(ColumnData::CreateColumn(*column, start));
@@ -80,13 +78,20 @@ RowGroup::~RowGroup() {
 }
 
 DatabaseInstance &RowGroup::GetDatabase() {
-	return db.GetDatabase();
+	return collection.GetDatabase();
+}
+
+BlockManager &RowGroup::GetBlockManager() {
+	return collection.GetBlockManager();
+}
+DataTableInfo &RowGroup::GetTableInfo() {
+	return collection.GetTableInfo();
 }
 
 void RowGroup::InitializeEmpty(const vector<LogicalType> &types) {
 	// set up the segment trees for the column segments
 	for (idx_t i = 0; i < types.size(); i++) {
-		auto column_data = ColumnData::CreateColumn(block_manager, GetTableInfo(), i, start, types[i]);
+		auto column_data = ColumnData::CreateColumn(GetBlockManager(), GetTableInfo(), i, start, types[i]);
 		stats.emplace_back(types[i]);
 		columns.push_back(std::move(column_data));
 	}
@@ -142,13 +147,13 @@ bool RowGroup::InitializeScan(RowGroupScanState &state) {
 	return true;
 }
 
-unique_ptr<RowGroup> RowGroup::AlterType(const LogicalType &target_type, idx_t changed_idx,
-                                         ExpressionExecutor &executor, RowGroupScanState &scan_state,
+unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, const LogicalType &target_type,
+                                         idx_t changed_idx, ExpressionExecutor &executor, RowGroupScanState &scan_state,
                                          DataChunk &scan_chunk) {
 	Verify();
 
 	// construct a new column data for this type
-	auto column_data = ColumnData::CreateColumn(block_manager, GetTableInfo(), changed_idx, start, target_type);
+	auto column_data = ColumnData::CreateColumn(GetBlockManager(), GetTableInfo(), changed_idx, start, target_type);
 
 	ColumnAppendState append_state;
 	column_data->InitializeAppend(append_state);
@@ -171,7 +176,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(const LogicalType &target_type, idx_t c
 	}
 
 	// set up the row_group based on this row_group
-	auto row_group = make_unique<RowGroup>(db, block_manager, table_info, this->start, this->count);
+	auto row_group = make_unique<RowGroup>(new_collection, this->start, this->count);
 	row_group->version_info = version_info;
 	for (idx_t i = 0; i < columns.size(); i++) {
 		if (i == changed_idx) {
@@ -188,13 +193,13 @@ unique_ptr<RowGroup> RowGroup::AlterType(const LogicalType &target_type, idx_t c
 	return row_group;
 }
 
-unique_ptr<RowGroup> RowGroup::AddColumn(ColumnDefinition &new_column, ExpressionExecutor &executor,
-                                         Expression *default_value, Vector &result) {
+unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, ColumnDefinition &new_column,
+                                         ExpressionExecutor &executor, Expression *default_value, Vector &result) {
 	Verify();
 
 	// construct a new column data for the new column
 	auto added_column =
-	    ColumnData::CreateColumn(block_manager, GetTableInfo(), columns.size(), start, new_column.Type());
+	    ColumnData::CreateColumn(GetBlockManager(), GetTableInfo(), columns.size(), start, new_column.Type());
 	SegmentStatistics added_col_stats(new_column.Type());
 
 	idx_t rows_to_write = this->count;
@@ -214,7 +219,7 @@ unique_ptr<RowGroup> RowGroup::AddColumn(ColumnDefinition &new_column, Expressio
 	}
 
 	// set up the row_group based on this row_group
-	auto row_group = make_unique<RowGroup>(db, block_manager, table_info, this->start, this->count);
+	auto row_group = make_unique<RowGroup>(new_collection, this->start, this->count);
 	row_group->version_info = version_info;
 	row_group->columns = columns;
 	for (auto &stat : stats) {
@@ -228,12 +233,12 @@ unique_ptr<RowGroup> RowGroup::AddColumn(ColumnDefinition &new_column, Expressio
 	return row_group;
 }
 
-unique_ptr<RowGroup> RowGroup::RemoveColumn(idx_t removed_column) {
+unique_ptr<RowGroup> RowGroup::RemoveColumn(RowGroupCollection &new_collection, idx_t removed_column) {
 	Verify();
 
 	D_ASSERT(removed_column < columns.size());
 
-	auto row_group = make_unique<RowGroup>(db, block_manager, table_info, this->start, this->count);
+	auto row_group = make_unique<RowGroup>(new_collection, this->start, this->count);
 	row_group->version_info = version_info;
 	row_group->columns = columns;
 	for (auto &stat : stats) {
@@ -463,7 +468,7 @@ void RowGroup::Scan(TransactionData transaction, RowGroupScanState &state, DataC
 }
 
 void RowGroup::ScanCommitted(RowGroupScanState &state, DataChunk &result, TableScanType type) {
-	auto &transaction_manager = DuckTransactionManager::Get(db);
+	auto &transaction_manager = DuckTransactionManager::Get(collection.GetAttached());
 
 	auto lowest_active_start = transaction_manager.LowestActiveStart();
 	auto lowest_active_id = transaction_manager.LowestActiveId();

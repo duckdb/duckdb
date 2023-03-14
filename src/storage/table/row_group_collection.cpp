@@ -14,10 +14,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Row Group Segment Tree
 //===--------------------------------------------------------------------===//
-RowGroupSegmentTree::RowGroupSegmentTree(DataTableInfo &table_info_p, BlockManager &block_manager_p,
-                                         vector<LogicalType> column_types_p)
-    : SegmentTree<RowGroup, true>(), info(table_info_p), block_manager(block_manager_p),
-      column_types(std::move(column_types_p)), current_row_group(0), max_row_group(0) {
+RowGroupSegmentTree::RowGroupSegmentTree(RowGroupCollection &collection)
+    : SegmentTree<RowGroup, true>(), collection(collection), current_row_group(0), max_row_group(0) {
 }
 RowGroupSegmentTree::~RowGroupSegmentTree() {
 }
@@ -27,7 +25,7 @@ void RowGroupSegmentTree::Initialize(PersistentTableData &data) {
 	current_row_group = 0;
 	max_row_group = data.row_group_count;
 	finished_loading = false;
-	reader = make_unique<MetaBlockReader>(block_manager, data.block_id);
+	reader = make_unique<MetaBlockReader>(collection.GetBlockManager(), data.block_id);
 	reader->offset = data.offset;
 }
 
@@ -36,9 +34,9 @@ unique_ptr<RowGroup> RowGroupSegmentTree::LoadSegment() {
 		finished_loading = true;
 		return nullptr;
 	}
-	auto row_group_pointer = RowGroup::Deserialize(*reader, column_types);
+	auto row_group_pointer = RowGroup::Deserialize(*reader, collection.GetTypes());
 	current_row_group++;
-	return make_unique<RowGroup>(info.db, block_manager, info, column_types, std::move(row_group_pointer));
+	return make_unique<RowGroup>(collection, std::move(row_group_pointer));
 }
 //===--------------------------------------------------------------------===//
 // Row Group Collection
@@ -47,7 +45,7 @@ RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, BlockMa
                                        vector<LogicalType> types_p, idx_t row_start_p, idx_t total_rows_p)
     : block_manager(block_manager), total_rows(total_rows_p), info(std::move(info_p)), types(std::move(types_p)),
       row_start(row_start_p) {
-	row_groups = make_shared<RowGroupSegmentTree>(*info, block_manager, types);
+	row_groups = make_shared<RowGroupSegmentTree>(*this);
 }
 
 idx_t RowGroupCollection::GetTotalRows() const {
@@ -60,6 +58,14 @@ const vector<LogicalType> &RowGroupCollection::GetTypes() const {
 
 Allocator &RowGroupCollection::GetAllocator() const {
 	return Allocator::Get(info->db);
+}
+
+AttachedDatabase &RowGroupCollection::GetAttached() {
+	return GetTableInfo().db;
+}
+
+DatabaseInstance &RowGroupCollection::GetDatabase() {
+	return GetAttached().GetDatabase();
 }
 
 //===--------------------------------------------------------------------===//
@@ -79,7 +85,7 @@ void RowGroupCollection::InitializeEmpty() {
 
 void RowGroupCollection::AppendRowGroup(SegmentLock &l, idx_t start_row) {
 	D_ASSERT(start_row >= row_start);
-	auto new_row_group = make_unique<RowGroup>(info->db, block_manager, *info, start_row, 0);
+	auto new_row_group = make_unique<RowGroup>(*this, start_row, 0);
 	new_row_group->InitializeEmpty(types);
 	row_groups->AppendSegment(l, std::move(new_row_group));
 }
@@ -94,6 +100,7 @@ void RowGroupCollection::Verify() {
 	row_groups->Verify();
 	for (auto &row_group : row_groups->Segments()) {
 		row_group.Verify();
+		D_ASSERT(&row_group.GetCollection() == this);
 		D_ASSERT(row_group.start == this->row_start + current_total_rows);
 		current_total_rows += row_group.count;
 	}
@@ -416,7 +423,7 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data) {
 	D_ASSERT(data.types == types);
 	auto index = row_start + total_rows.load();
 	for (auto &row_group : data.row_groups->Segments()) {
-		auto new_group = make_unique<RowGroup>(row_group, index);
+		auto new_group = make_unique<RowGroup>(row_group, *this, index);
 		index += new_group->count;
 		row_groups->AppendSegment(std::move(new_group));
 	}
@@ -604,7 +611,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 	// fill the column with its DEFAULT value, or NULL if none is specified
 	auto new_stats = make_unique<SegmentStatistics>(new_column.GetType());
 	for (auto &current_row_group : row_groups->Segments()) {
-		auto new_row_group = current_row_group.AddColumn(new_column, executor, default_value, default_vector);
+		auto new_row_group = current_row_group.AddColumn(*result, new_column, executor, default_value, default_vector);
 		// merge in the statistics
 		new_row_group->MergeIntoStatistics(new_column_idx, new_column_stats.Statistics());
 
@@ -623,7 +630,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::RemoveColumn(idx_t col_idx) {
 	result->stats.InitializeRemoveColumn(stats, col_idx);
 
 	for (auto &current_row_group : row_groups->Segments()) {
-		auto new_row_group = current_row_group.RemoveColumn(col_idx);
+		auto new_row_group = current_row_group.RemoveColumn(*result, col_idx);
 		result->row_groups->AppendSegment(std::move(new_row_group));
 	}
 	return result;
@@ -661,7 +668,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 	// now alter the type of the column within all of the row_groups individually
 	auto &changed_stats = result->stats.GetStats(changed_idx);
 	for (auto &current_row_group : row_groups->Segments()) {
-		auto new_row_group = current_row_group.AlterType(target_type, changed_idx, executor,
+		auto new_row_group = current_row_group.AlterType(*result, target_type, changed_idx, executor,
 		                                                 scan_state.table_state.row_group_state, scan_chunk);
 		new_row_group->MergeIntoStatistics(changed_idx, changed_stats.Statistics());
 		result->row_groups->AppendSegment(std::move(new_row_group));

@@ -26,6 +26,7 @@ class DataTable;
 class PartialBlockManager;
 struct DataTableInfo;
 class ExpressionExecutor;
+class RowGroupCollection;
 class RowGroupWriter;
 class UpdateSegment;
 class TableStatistics;
@@ -51,10 +52,9 @@ public:
 	static constexpr const idx_t ROW_GROUP_VECTOR_COUNT = ROW_GROUP_SIZE / STANDARD_VECTOR_SIZE;
 
 public:
-	RowGroup(AttachedDatabase &db, BlockManager &block_manager, DataTableInfo &table_info, idx_t start, idx_t count);
-	RowGroup(AttachedDatabase &db, BlockManager &block_manager, DataTableInfo &table_info,
-	         const vector<LogicalType> &types, RowGroupPointer &&pointer);
-	RowGroup(RowGroup &row_group, idx_t start);
+	RowGroup(RowGroupCollection &collection, idx_t start, idx_t count);
+	RowGroup(RowGroupCollection &collection, RowGroupPointer &&pointer);
+	RowGroup(RowGroup &row_group, RowGroupCollection &collection, idx_t start);
 	~RowGroup();
 
 	RowGroup *Next() {
@@ -79,12 +79,8 @@ public:
 #endif
 
 private:
-	//! The database instance
-	AttachedDatabase &db;
-	//! The block manager
-	BlockManager &block_manager;
-	//! The table info of this row_group
-	DataTableInfo &table_info;
+	//! The RowGroupCollection this row-group is a part of
+	RowGroupCollection &collection;
 	//! The version info of the row_group (inserted and deleted tuple info)
 	shared_ptr<VersionNode> version_info;
 	//! The column data of the row_group
@@ -93,13 +89,12 @@ private:
 	vector<SegmentStatistics> stats;
 
 public:
+	RowGroupCollection &GetCollection() {
+		return collection;
+	}
 	DatabaseInstance &GetDatabase();
-	BlockManager &GetBlockManager() {
-		return block_manager;
-	}
-	DataTableInfo &GetTableInfo() {
-		return table_info;
-	}
+	BlockManager &GetBlockManager();
+	DataTableInfo &GetTableInfo();
 	idx_t GetColumnIndex(ColumnData *data) {
 		for (idx_t i = 0; i < columns.size(); i++) {
 			if (columns[i].get() == data) {
@@ -109,11 +104,11 @@ public:
 		return 0;
 	}
 
-	unique_ptr<RowGroup> AlterType(const LogicalType &target_type, idx_t changed_idx, ExpressionExecutor &executor,
-	                               RowGroupScanState &scan_state, DataChunk &scan_chunk);
-	unique_ptr<RowGroup> AddColumn(ColumnDefinition &new_column, ExpressionExecutor &executor,
-	                               Expression *default_value, Vector &intermediate);
-	unique_ptr<RowGroup> RemoveColumn(idx_t removed_column);
+	unique_ptr<RowGroup> AlterType(RowGroupCollection &collection, const LogicalType &target_type, idx_t changed_idx,
+	                               ExpressionExecutor &executor, RowGroupScanState &scan_state, DataChunk &scan_chunk);
+	unique_ptr<RowGroup> AddColumn(RowGroupCollection &collection, ColumnDefinition &new_column,
+	                               ExpressionExecutor &executor, Expression *default_value, Vector &intermediate);
+	unique_ptr<RowGroup> RemoveColumn(RowGroupCollection &collection, idx_t removed_column);
 
 	void CommitDrop();
 	void CommitDropColumn(idx_t index);

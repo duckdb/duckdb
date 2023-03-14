@@ -63,6 +63,9 @@ public:
 public:
 	virtual bool CheckZonemap(ColumnScanState &state, TableFilter &filter) = 0;
 
+	BlockManager &GetBlockManager() {
+		return block_manager;
+	}
 	DatabaseInstance &GetDatabase() const;
 	DataTableInfo &GetTableInfo() const;
 	virtual idx_t GetMaxEntry();
