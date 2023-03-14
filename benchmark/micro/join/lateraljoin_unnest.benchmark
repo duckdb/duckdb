@@ -1,0 +1,17 @@
+# name: benchmark/micro/join/lateraljoin_unnest.benchmark
+# description: Perform a LATERAL join using UNNEST
+# group: [join]
+
+name LATERAL join + UNNEST
+group join
+storage persistent
+
+load
+CREATE TABLE lists AS SELECT ARRAY[i, NULL, i + 1, i + 2, NULL] l FROM generate_series(0, 999999, 1) t(i);
+checkpoint;
+
+run
+SELECT SUM(k) FROM lists, UNNEST(l) t(k)
+
+result I
+1500001500000
