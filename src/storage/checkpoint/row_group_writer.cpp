@@ -32,7 +32,7 @@ void SingleFileRowGroupWriter::WriteColumnDataPointers(ColumnCheckpointState &co
 		meta_writer.Write<block_id_t>(data_pointer.block_pointer.block_id);
 		meta_writer.Write<uint32_t>(data_pointer.block_pointer.offset);
 		meta_writer.Write<CompressionType>(data_pointer.compression_type);
-		data_pointer.statistics->Serialize(meta_writer);
+		data_pointer.statistics.Serialize(meta_writer);
 	}
 }
 

@@ -354,6 +354,7 @@ public:
 		return_types.assign(union_col_types.begin(), union_col_types.end());
 		result->SetInitialReader(result->union_readers[0]);
 		D_ASSERT(names.size() == return_types.size());
+		result->types = union_col_types;
 
 		return std::move(result);
 	}

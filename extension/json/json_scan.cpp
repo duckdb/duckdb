@@ -221,7 +221,7 @@ unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientCo
 		}
 		bind_data.names = std::move(names);
 	}
-	return result;
+	return std::move(result);
 }
 
 idx_t JSONGlobalTableFunctionState::MaxThreads() const {
@@ -262,7 +262,7 @@ unique_ptr<LocalTableFunctionState> JSONLocalTableFunctionState::Init(ExecutionC
 	result->state.transform_options = gstate.state.bind_data.transform_options;
 	result->state.transform_options.date_format_map = &result->state.date_format_map;
 
-	return result;
+	return std::move(result);
 }
 
 idx_t JSONLocalTableFunctionState::GetBatchIndex() const {

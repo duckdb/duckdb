@@ -1,0 +1,9 @@
+# name: test/fuzzer/pedro/vacuum_unsupported_type.test
+# description: Vacuum a table with arrays
+# group: [pedro]
+
+statement ok
+CREATE TABLE t1 AS (VALUES ([], {'a': []}));
+
+statement ok
+VACUUM t1;

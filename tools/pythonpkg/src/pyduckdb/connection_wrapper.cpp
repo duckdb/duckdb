@@ -232,12 +232,12 @@ unique_ptr<DuckDBPyRelation> PyConnectionWrapper::ReadJSON(const string &filenam
 }
 
 unique_ptr<DuckDBPyRelation> PyConnectionWrapper::ReadCSV(
-    const string &name, shared_ptr<DuckDBPyConnection> conn, const py::object &header, const py::object &compression,
-    const py::object &sep, const py::object &delimiter, const py::object &dtype, const py::object &na_values,
-    const py::object &skiprows, const py::object &quotechar, const py::object &escapechar, const py::object &encoding,
-    const py::object &parallel, const py::object &date_format, const py::object &timestamp_format,
-    const py::object &sample_size, const py::object &all_varchar, const py::object &normalize_names,
-    const py::object &filename) {
+    const py::object &name, shared_ptr<DuckDBPyConnection> conn, const py::object &header,
+    const py::object &compression, const py::object &sep, const py::object &delimiter, const py::object &dtype,
+    const py::object &na_values, const py::object &skiprows, const py::object &quotechar, const py::object &escapechar,
+    const py::object &encoding, const py::object &parallel, const py::object &date_format,
+    const py::object &timestamp_format, const py::object &sample_size, const py::object &all_varchar,
+    const py::object &normalize_names, const py::object &filename) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
@@ -335,6 +335,12 @@ py::list PyConnectionWrapper::ListFilesystems(shared_ptr<DuckDBPyConnection> con
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
 	return conn->ListFilesystems();
+}
+bool PyConnectionWrapper::FileSystemIsRegistered(const string &name, shared_ptr<DuckDBPyConnection> conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->FileSystemIsRegistered(name);
 }
 
 } // namespace duckdb

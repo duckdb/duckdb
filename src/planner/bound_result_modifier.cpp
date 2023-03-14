@@ -19,7 +19,7 @@ BoundOrderByNode::BoundOrderByNode(OrderType type, OrderByNullType null_order, u
 
 BoundOrderByNode BoundOrderByNode::Copy() const {
 	if (stats) {
-		return BoundOrderByNode(type, null_order, expression->Copy(), stats->Copy());
+		return BoundOrderByNode(type, null_order, expression->Copy(), stats->ToUnique());
 	} else {
 		return BoundOrderByNode(type, null_order, expression->Copy());
 	}
@@ -78,6 +78,32 @@ BoundOrderByNode BoundOrderByNode::Deserialize(Deserializer &source, PlanDeseria
 	auto expression = reader.ReadRequiredSerializable<Expression>(state);
 	reader.Finalize();
 	return BoundOrderByNode(type, null_order, std::move(expression));
+}
+
+unique_ptr<BoundOrderModifier> BoundOrderModifier::Copy() const {
+	auto result = make_unique<BoundOrderModifier>();
+	for (auto &order : orders) {
+		result->orders.push_back(order.Copy());
+	}
+	return result;
+}
+
+bool BoundOrderModifier::Equals(const BoundOrderModifier *left, const BoundOrderModifier *right) {
+	if (left == right) {
+		return true;
+	}
+	if (!left || !right) {
+		return false;
+	}
+	if (left->orders.size() != right->orders.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < left->orders.size(); i++) {
+		if (!left->orders[i].Equals(right->orders[i])) {
+			return false;
+		}
+	}
+	return true;
 }
 
 BoundLimitModifier::BoundLimitModifier() : BoundResultModifier(ResultModifierType::LIMIT_MODIFIER) {

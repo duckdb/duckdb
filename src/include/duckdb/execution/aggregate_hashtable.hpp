@@ -113,6 +113,7 @@ public:
 	}
 
 	idx_t MaxCapacity();
+	static idx_t GetMaxCapacity(HtEntryType entry_type, idx_t tuple_size);
 
 	void Partition(vector<GroupedAggregateHashTable *> &partition_hts, hash_t mask, idx_t shift);
 

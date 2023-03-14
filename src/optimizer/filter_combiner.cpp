@@ -604,7 +604,7 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression *expr) {
 
 		// create the ExpressionValueInformation
 		ExpressionValueInformation info;
-		info.comparison_type = left_is_scalar ? FlipComparisionExpression(comparison.type) : comparison.type;
+		info.comparison_type = left_is_scalar ? FlipComparisonExpression(comparison.type) : comparison.type;
 		info.constant = constant_value;
 
 		// get the current bucket of constant values

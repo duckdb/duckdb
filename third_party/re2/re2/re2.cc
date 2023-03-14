@@ -566,6 +566,15 @@ static int ascii_strcasecmp(const char* a, const char* b, size_t len) {
   return 0;
 }
 
+RE2::Anchor RE2::Anchored() const {
+  if (prog_->anchor_start()) {
+    if (prog_->anchor_end()) {
+      return Anchor::ANCHOR_BOTH;
+    }
+    return Anchor::ANCHOR_START;
+  }
+  return Anchor::UNANCHORED;
+}
 
 /***** Actual matching and rewriting code *****/
 

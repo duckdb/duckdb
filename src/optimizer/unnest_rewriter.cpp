@@ -261,7 +261,7 @@ void UnnestRewriter::UpdateBoundUnnestBindings(UnnestRewriterPlanUpdater &update
 		for (idx_t child_col_idx = 0; child_col_idx < unnest_child_cols.size(); child_col_idx++) {
 			if (delim_columns[delim_col_idx].table_index == unnest_child_cols[child_col_idx].table_index) {
 				ColumnBinding old_binding(overwritten_tbl_idx, DConstants::INVALID_INDEX);
-				updater.replace_bindings.emplace_back(ReplaceBinding(old_binding, delim_columns[delim_col_idx]));
+				updater.replace_bindings.emplace_back(old_binding, delim_columns[delim_col_idx]);
 				break;
 			}
 		}
@@ -301,7 +301,7 @@ void UnnestRewriter::GetLHSExpressions(LogicalOperator &op) {
 	}
 
 	for (idx_t i = 0; i < op.types.size(); i++) {
-		lhs_bindings.emplace_back(LHSBinding(col_bindings[i], op.types[i]));
+		lhs_bindings.emplace_back(col_bindings[i], op.types[i]);
 		if (set_alias) {
 			auto &proj = (LogicalProjection &)op;
 			lhs_bindings.back().alias = proj.expressions[i]->alias;

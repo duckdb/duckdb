@@ -138,12 +138,23 @@ string Exception::ExceptionTypeToString(ExceptionType type) {
 		return "Parameter Not Allowed";
 	case ExceptionType::DEPENDENCY:
 		return "Dependency";
+	case ExceptionType::HTTP:
+		return "HTTP";
 	default:
 		return "Unknown";
 	}
 }
 
-void Exception::ThrowAsTypeWithMessage(ExceptionType type, const string &message) {
+const HTTPException &Exception::AsHTTPException() const {
+	D_ASSERT(type == ExceptionType::HTTP);
+	const auto &e = static_cast<const HTTPException *>(this);
+	D_ASSERT(e->GetStatusCode() != 0);
+	D_ASSERT(e->GetHeaders().size() > 0);
+	return *e;
+}
+
+void Exception::ThrowAsTypeWithMessage(ExceptionType type, const string &message,
+                                       const std::shared_ptr<Exception> &original) {
 	switch (type) {
 	case ExceptionType::OUT_OF_RANGE:
 		throw OutOfRangeException(message);
@@ -191,6 +202,9 @@ void Exception::ThrowAsTypeWithMessage(ExceptionType type, const string &message
 		throw FatalException(message);
 	case ExceptionType::DEPENDENCY:
 		throw DependencyException(message);
+	case ExceptionType::HTTP: {
+		original->AsHTTPException().Throw();
+	}
 	default:
 		throw Exception(type, message);
 	}
