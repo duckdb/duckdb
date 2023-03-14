@@ -314,8 +314,6 @@ test_that("Symmetric difference returns the symmetric difference", {
     expect_equal(rel_df, expected_result)
 })
 
-<<<<<<< HEAD
-=======
 test_that("rel aggregate with no groups but a sum over a column, sums the column", {
    rel_a <- rel_from_df(con, data.frame(a=c(1, 2), b=c(3, 4)))
    aggrs <- list(sum = expr_function("sum", list(expr_reference("a"))))
@@ -522,19 +520,6 @@ test_that("You can perform the window function percent rank", {
     expect_equal(res, expected_result)
 })
 
-
-test_that("You can perform the window function percent rank", {
-    con <- dbConnect(duckdb::duckdb())
-	  rel_a <- rel_from_df(con, data.frame(a=c(1, 1, 2, 2, 2), b=c(2, 2, 3, 3, 4), d=c(5, 4, 3, 2, 1)))
-    sum_func <- expr_function("sum", list(expr_reference("a")))
-    percent_rank_wind <- expr_window(sum_func)
-    expr_set_alias(percent_rank_wind, "sum(a)")
-    window_proj <- rel_project(rel_a, list(expr_reference("a"), expr_reference("b"), percent_rank_wind))
-    res <- rel_to_altrep(window_proj)
-    expected_result <- data.frame(a=c(1, 1, 2, 2, 2), percent_rank=c(0.0, 0.0, 0.5, 0.5, 0.5))
-    expect_equal(res, expected_result)
-})
-
 # with and without offsets
 test_that("R semantics for adding NaNs is respected", {
    dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
@@ -551,14 +536,15 @@ test_that("R semantics for adding NaNs is respected", {
 
 test_that("R semantics for arithmetics sum function are respected", {
    dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
-   test_df_a <- rel_from_df(con, data.frame(a=c(1:5, NaN)))
-   sum_rel <- rapi_expr_function("sum", list(expr_reference("a")))
-   ans <- rapi_rel_aggregate(test_df_a, list(), list(sum_rel))
-   res <- rapi_rel_to_df(ans)
-   expect_true(is.na(res[[1]]))
+   test_df_a <- duckdb:::rel_from_df(con, data.frame(a=c(1:5, NA)))
+   sum_rel <- duckdb:::expr_function("sum", list(duckdb:::expr_reference("a")))
+   ans <- duckdb:::rel_aggregate(test_df_a, list(), list(sum_rel))
+   res <- duckdb:::rel_to_altrep(ans)
+   expect_equal(15, res[[1]])
 })
 
 test_that("rel aggregate on NA is 0", {
+   duckdb_set_sum_default_to_zero(con)
    rel_a <- rel_from_df(con, data.frame(a=c(NA, NA, 5, 5), b=c(3, 3, 4, 4)))
    aggrs <- list(sum = expr_function("sum", list(expr_reference("a"))))
    res <- rel_aggregate(rel_a, list(expr_reference("b")), aggrs)
