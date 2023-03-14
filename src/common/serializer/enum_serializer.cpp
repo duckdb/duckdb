@@ -279,6 +279,8 @@ JoinType EnumSerializer::StringToEnum(const char *value) {
 		return JoinType::SINGLE;
 	} else if (StringUtil::Equals(value, "MARK")) {
 		return JoinType::MARK;
+	} else if (StringUtil::Equals(value, "ASOF")) {
+		return JoinType::ASOF;
 	} else {
 		throw NotImplementedException("EnumSerializer::StringToEnum not implemented for enum value");
 	}
