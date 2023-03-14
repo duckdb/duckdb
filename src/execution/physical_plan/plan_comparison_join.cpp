@@ -258,17 +258,47 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		asof_upper.right = make_unique<BoundReferenceExpression>(asof_type, window_types.size() - 1);
 		asof_upper.comparison = ExpressionType::COMPARE_LESSTHAN;
 
-		//	Project away asof_temp
+		// We have an equality condition, so we may have to deal with projection maps.
+		// IEJoin does not (currently) support them, so we have to do it manually
 		auto proj_types = op.types;
-		vector<unique_ptr<Expression>> proj_selects(proj_types.size());
-		for (storage_t i = 0; i < proj_types.size(); ++i) {
-			proj_selects[i] = make_unique<BoundReferenceExpression>(proj_types[i], i);
-		}
+		op.types.clear();
+
+		auto &lhs_types = op.children[0]->types;
+		op.types = lhs_types;
+
+		auto &rhs_types = op.children[1]->types;
+		op.types.insert(op.types.end(), rhs_types.begin(), rhs_types.end());
 
 		op.types.emplace_back(asof_type);
 		op.conditions.emplace_back(std::move(asof_upper));
 		auto iejoin = make_unique<PhysicalIEJoin>(op, std::move(left), std::move(window), std::move(op.conditions),
 		                                          JoinType::LEFT, op.estimated_cardinality);
+
+		//	Project away asof_temp and anything from the projection maps
+		vector<unique_ptr<Expression>> proj_selects;
+		proj_selects.reserve(proj_types.size());
+
+		if (op.left_projection_map.empty()) {
+			for (storage_t i = 0; i < lhs_types.size(); ++i) {
+				proj_selects.emplace_back(make_unique<BoundReferenceExpression>(lhs_types[i], i));
+			}
+		} else {
+			for (auto i : op.left_projection_map) {
+				proj_selects.emplace_back(make_unique<BoundReferenceExpression>(lhs_types[i], i));
+			}
+		}
+		const auto left_cols = op.children[0]->types.size();
+
+		if (op.right_projection_map.empty()) {
+			for (storage_t i = 0; i < rhs_types.size(); ++i) {
+				proj_selects.emplace_back(make_unique<BoundReferenceExpression>(rhs_types[i], left_cols + i));
+			}
+
+		} else {
+			for (auto i : op.right_projection_map) {
+				proj_selects.emplace_back(make_unique<BoundReferenceExpression>(rhs_types[i], left_cols + i));
+			}
+		}
 
 		auto proj =
 		    make_unique<PhysicalProjection>(std::move(proj_types), std::move(proj_selects), op.estimated_cardinality);
