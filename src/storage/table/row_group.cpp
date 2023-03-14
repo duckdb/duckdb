@@ -108,7 +108,7 @@ void ColumnScanState::Initialize(const LogicalType &type) {
 		// validity + struct children
 		auto &struct_children = StructType::GetChildTypes(type);
 		child_states.resize(struct_children.size() + 1);
-		for(idx_t i = 0; i < struct_children.size(); i++) {
+		for (idx_t i = 0; i < struct_children.size(); i++) {
 			child_states[i + 1].Initialize(struct_children[i].second);
 		}
 	} else if (type.InternalType() == PhysicalType::LIST) {
@@ -124,7 +124,7 @@ void ColumnScanState::Initialize(const LogicalType &type) {
 void RowGroupScanState::Initialize(const vector<LogicalType> &types) {
 	auto &column_ids = GetColumnIds();
 	column_scans = unique_ptr<ColumnScanState[]>(new ColumnScanState[column_ids.size()]);
-	for(idx_t i = 0; i < column_ids.size(); i++) {
+	for (idx_t i = 0; i < column_ids.size(); i++) {
 		if (column_ids[i] == COLUMN_IDENTIFIER_ROW_ID) {
 			continue;
 		}

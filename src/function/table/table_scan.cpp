@@ -47,7 +47,6 @@ struct TableScanGlobalState : public GlobalTableFunctionState {
 	}
 
 	ParallelTableScanState state;
-	mutex lock;
 	idx_t max_threads;
 	//! How many rows we already scanned
 	atomic<idx_t> row_count;
@@ -147,7 +146,6 @@ bool TableScanParallelStateNext(ClientContext &context, const FunctionData *bind
 	auto &state = (TableScanLocalState &)*local_state;
 	auto &storage = bind_data.table->GetStorage();
 
-	lock_guard<mutex> parallel_lock(parallel_state.lock);
 	return storage.NextParallelScan(context, parallel_state.state, state.scan_state);
 }
 

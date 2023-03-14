@@ -173,6 +173,7 @@ struct ParallelCollectionScanState {
 	idx_t vector_index;
 	idx_t max_row;
 	idx_t batch_index;
+	mutex lock;
 };
 
 struct ParallelTableScanState {

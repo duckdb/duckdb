@@ -141,16 +141,15 @@ void RowGroupCollection::InitializeScanWithOffset(CollectionScanState &state, co
 	}
 }
 
-bool RowGroupCollection::InitializeScanInRowGroup(CollectionScanState &state,
-                                                  ParallelCollectionScanState &parallel_state, idx_t vector_index,
-                                                  idx_t max_row) {
+bool RowGroupCollection::InitializeScanInRowGroup(CollectionScanState &state, RowGroupCollection &collection,
+                                                  RowGroup &row_group, idx_t vector_index, idx_t max_row) {
 	state.max_row = max_row;
-	state.row_groups = parallel_state.collection->row_groups.get();
+	state.row_groups = collection.row_groups.get();
 	if (!state.row_group_state.column_scans) {
 		// initialize the scan state
-		state.row_group_state.Initialize(parallel_state.collection->GetTypes());
+		state.row_group_state.Initialize(collection.GetTypes());
 	}
-	return parallel_state.current_row_group->InitializeScanWithOffset(state.row_group_state, vector_index);
+	return row_group.InitializeScanWithOffset(state.row_group_state, vector_index);
 }
 
 void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &state) {
@@ -163,31 +162,44 @@ void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &sta
 
 bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollectionScanState &state,
                                           CollectionScanState &scan_state) {
-	while (state.current_row_group && state.current_row_group->count > 0) {
+	while (true) {
 		idx_t vector_index;
 		idx_t max_row;
-		if (ClientConfig::GetConfig(context).verify_parallelism) {
-			vector_index = state.vector_index;
-			max_row = state.current_row_group->start +
-			          MinValue<idx_t>(state.current_row_group->count,
-			                          STANDARD_VECTOR_SIZE * state.vector_index + STANDARD_VECTOR_SIZE);
-			D_ASSERT(vector_index * STANDARD_VECTOR_SIZE < state.current_row_group->count);
-		} else {
-			vector_index = 0;
-			max_row = state.current_row_group->start + state.current_row_group->count;
-		}
-		max_row = MinValue<idx_t>(max_row, state.max_row);
-		bool need_to_scan = InitializeScanInRowGroup(scan_state, state, vector_index, max_row);
-		if (ClientConfig::GetConfig(context).verify_parallelism) {
-			state.vector_index++;
-			if (state.vector_index * STANDARD_VECTOR_SIZE >= state.current_row_group->count) {
-				state.current_row_group = row_groups->GetNextSegment(state.current_row_group);
-				state.vector_index = 0;
+		RowGroupCollection *collection;
+		RowGroup *row_group;
+		{
+			// select the next row group to scan from the parallel state
+			lock_guard<mutex> l(state.lock);
+			if (!state.current_row_group || state.current_row_group->count == 0) {
+				// no more data left to scan
+				break;
 			}
-		} else {
-			state.current_row_group = row_groups->GetNextSegment(state.current_row_group);
+			collection = state.collection;
+			row_group = state.current_row_group;
+			if (ClientConfig::GetConfig(context).verify_parallelism) {
+				vector_index = state.vector_index;
+				max_row = state.current_row_group->start +
+				          MinValue<idx_t>(state.current_row_group->count,
+				                          STANDARD_VECTOR_SIZE * state.vector_index + STANDARD_VECTOR_SIZE);
+				D_ASSERT(vector_index * STANDARD_VECTOR_SIZE < state.current_row_group->count);
+				state.vector_index++;
+				if (state.vector_index * STANDARD_VECTOR_SIZE >= state.current_row_group->count) {
+					state.current_row_group = row_groups->GetNextSegment(state.current_row_group);
+					state.vector_index = 0;
+				}
+			} else {
+				vector_index = 0;
+				max_row = state.current_row_group->start + state.current_row_group->count;
+				state.current_row_group = row_groups->GetNextSegment(state.current_row_group);
+			}
+			max_row = MinValue<idx_t>(max_row, state.max_row);
+			scan_state.batch_index = ++state.batch_index;
 		}
-		scan_state.batch_index = ++state.batch_index;
+		D_ASSERT(collection);
+		D_ASSERT(row_group);
+
+		// initialize the scan for this row group
+		bool need_to_scan = InitializeScanInRowGroup(scan_state, *collection, *row_group, vector_index, max_row);
 		if (!need_to_scan) {
 			// filters allow us to skip this row group: move to the next row group
 			continue;
