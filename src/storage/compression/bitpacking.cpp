@@ -11,6 +11,7 @@
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 #include <functional>
 

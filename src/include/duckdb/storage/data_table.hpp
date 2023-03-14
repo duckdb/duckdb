@@ -39,6 +39,7 @@ class Transaction;
 class WriteAheadLog;
 class TableDataWriter;
 class ConflictManager;
+class TableScanState;
 enum class VerifyExistenceType : uint8_t;
 
 //! DataTable represents a physical table on disk

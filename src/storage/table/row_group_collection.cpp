@@ -8,6 +8,7 @@
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/table/row_group_segment_tree.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
 

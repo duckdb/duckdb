@@ -1,6 +1,5 @@
 #include "duckdb/function/table/table_scan.hpp"
 
-#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/mutex.hpp"
@@ -15,6 +14,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
 

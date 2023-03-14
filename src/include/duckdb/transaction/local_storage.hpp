@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/storage/table/row_group_collection.hpp"
-#include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
 

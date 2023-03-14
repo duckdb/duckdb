@@ -11,7 +11,6 @@
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/append_state.hpp"
-#include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/common/mutex.hpp"
@@ -36,6 +35,8 @@ struct ColumnCheckpointState;
 struct RowGroupPointer;
 struct TransactionData;
 struct VersionNode;
+class RowGroupScanState;
+class TableFilterSet;
 
 struct RowGroupWriteData {
 	vector<unique_ptr<ColumnCheckpointState>> states;

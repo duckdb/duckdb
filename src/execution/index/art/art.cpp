@@ -6,12 +6,25 @@
 #include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 #include <algorithm>
 #include <cstring>
 #include <ctgmath>
 
 namespace duckdb {
+
+struct ARTIndexScanState : public IndexScanState {
+
+	//! Scan predicates (single predicate scan or range scan)
+	Value values[2];
+	//! Expressions of the scan predicates
+	ExpressionType expressions[2];
+	bool checked = false;
+	//! All scanned row IDs
+	vector<row_t> result_ids;
+	Iterator iterator;
+};
 
 ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
          const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type,

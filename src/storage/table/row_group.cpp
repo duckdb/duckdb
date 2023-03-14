@@ -15,6 +15,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
 

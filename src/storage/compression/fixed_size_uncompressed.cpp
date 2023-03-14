@@ -9,6 +9,7 @@
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
 

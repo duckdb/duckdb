@@ -15,7 +15,9 @@
 
 namespace duckdb {
 struct ParallelTableScanState;
-
+struct ParallelCollectionScanState;
+class CreateIndexScanState;
+class CollectionScanState;
 class PersistentTableData;
 class TableDataWriter;
 class TableIndexList;

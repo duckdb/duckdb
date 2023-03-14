@@ -11,6 +11,7 @@
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
 
