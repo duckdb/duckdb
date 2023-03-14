@@ -63,20 +63,28 @@ Catalog &Catalog::GetSystemCatalog(ClientContext &context) {
 	return Catalog::GetSystemCatalog(*context.db);
 }
 
-Catalog &Catalog::GetCatalog(ClientContext &context, const string &catalog_name) {
+optional_ptr<Catalog> Catalog::GetCatalogEntry(ClientContext &context, const string &catalog_name) {
 	auto &db_manager = DatabaseManager::Get(context);
 	if (catalog_name == TEMP_CATALOG) {
-		return ClientData::Get(context).temporary_objects->GetCatalog();
+		return &ClientData::Get(context).temporary_objects->GetCatalog();
 	}
 	if (catalog_name == SYSTEM_CATALOG) {
-		return GetSystemCatalog(context);
+		return &GetSystemCatalog(context);
 	}
 	auto entry = db_manager.GetDatabase(
 	    context, IsInvalidCatalog(catalog_name) ? DatabaseManager::GetDefaultDatabase(context) : catalog_name);
 	if (!entry) {
+		return nullptr;
+	}
+	return &entry->GetCatalog();
+}
+
+Catalog &Catalog::GetCatalog(ClientContext &context, const string &catalog_name) {
+	auto catalog = Catalog::GetCatalogEntry(context, catalog_name);
+	if (!catalog) {
 		throw BinderException("Catalog \"%s\" does not exist!", catalog_name);
 	}
-	return entry->GetCatalog();
+	return *catalog;
 }
 
 //===--------------------------------------------------------------------===//
@@ -576,7 +584,15 @@ CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, const 
 	vector<CatalogLookup> lookups;
 	lookups.reserve(entries.size());
 	for (auto &entry : entries) {
-		lookups.emplace_back(Catalog::GetCatalog(context, entry.catalog), entry.schema);
+		if (if_exists_p) {
+			auto catalog_entry = Catalog::GetCatalogEntry(context, entry.catalog);
+			if (!catalog_entry) {
+				return nullptr;
+			}
+			lookups.emplace_back(*catalog_entry, entry.schema);
+		} else {
+			lookups.emplace_back(Catalog::GetCatalog(context, entry.catalog), entry.schema);
+		}
 	}
 	auto result = LookupEntry(context, lookups, type, name, if_exists_p, error_context);
 	if (!result.Found()) {
