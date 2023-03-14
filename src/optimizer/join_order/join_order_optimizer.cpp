@@ -7,6 +7,7 @@
 #include "duckdb/planner/operator/list.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 namespace std {
 
