@@ -48,8 +48,10 @@ public:
 	DUCKDB_API virtual void Serialize(FieldWriter &writer) const = 0;
 	//! Deserializes a blob back into a TableRef
 	DUCKDB_API static unique_ptr<TableRef> Deserialize(Deserializer &source);
-
 	//! Copy the properties of this table ref to the target
 	void CopyProperties(TableRef &target) const;
+
+	virtual void FormatSerialize(FormatSerializer &serializer) const;
+	static unique_ptr<TableRef> FormatDeserialize(FormatDeserializer &deserializer);
 };
 } // namespace duckdb

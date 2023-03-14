@@ -1,5 +1,7 @@
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 
@@ -61,6 +63,25 @@ unique_ptr<QueryNode> RecursiveCTENode::Deserialize(FieldReader &reader) {
 	result->left = reader.ReadRequiredSerializable<QueryNode>();
 	result->right = reader.ReadRequiredSerializable<QueryNode>();
 	result->aliases = reader.ReadRequiredList<string>();
+	return std::move(result);
+}
+
+void RecursiveCTENode::FormatSerialize(FormatSerializer &serializer) const {
+	QueryNode::FormatSerialize(serializer);
+	serializer.WriteProperty("cte_name", ctename);
+	serializer.WriteProperty("union_all", union_all);
+	serializer.WriteProperty("left", *left);
+	serializer.WriteProperty("right", *right);
+	serializer.WriteProperty("aliases", aliases);
+}
+
+unique_ptr<QueryNode> RecursiveCTENode::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = make_unique<RecursiveCTENode>();
+	deserializer.ReadProperty("cte_name", result->ctename);
+	deserializer.ReadProperty("union_all", result->union_all);
+	deserializer.ReadProperty("left", result->left);
+	deserializer.ReadProperty("right", result->right);
+	deserializer.ReadProperty("aliases", result->aliases);
 	return std::move(result);
 }
 

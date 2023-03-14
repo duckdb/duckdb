@@ -30,6 +30,9 @@
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/error_manager.hpp"
 
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
+
 #include <utility>
 #include <cmath>
 
@@ -1797,6 +1800,120 @@ Value Value::Deserialize(Deserializer &main_source) {
 	}
 	}
 	reader.Finalize();
+	return new_value;
+}
+
+void Value::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("type", type_);
+	serializer.WriteProperty("is_null", is_null);
+	if (!IsNull()) {
+		switch (type_.InternalType()) {
+		case PhysicalType::BOOL:
+			serializer.WriteProperty("value", value_.boolean);
+			break;
+		case PhysicalType::INT8:
+			serializer.WriteProperty("value", value_.tinyint);
+			break;
+		case PhysicalType::INT16:
+			serializer.WriteProperty("value", value_.smallint);
+			break;
+		case PhysicalType::INT32:
+			serializer.WriteProperty("value", value_.integer);
+			break;
+		case PhysicalType::INT64:
+			serializer.WriteProperty("value", value_.bigint);
+			break;
+		case PhysicalType::UINT8:
+			serializer.WriteProperty("value", value_.utinyint);
+			break;
+		case PhysicalType::UINT16:
+			serializer.WriteProperty("value", value_.usmallint);
+			break;
+		case PhysicalType::UINT32:
+			serializer.WriteProperty("value", value_.uinteger);
+			break;
+		case PhysicalType::UINT64:
+			serializer.WriteProperty("value", value_.ubigint);
+			break;
+		case PhysicalType::INT128:
+			serializer.WriteProperty("value", value_.hugeint);
+			break;
+		case PhysicalType::FLOAT:
+			serializer.WriteProperty("value", value_.float_);
+			break;
+		case PhysicalType::DOUBLE:
+			serializer.WriteProperty("value", value_.double_);
+			break;
+		case PhysicalType::INTERVAL:
+			serializer.WriteProperty("value", value_.interval);
+			break;
+		case PhysicalType::VARCHAR:
+			serializer.WriteProperty("value", StringValue::Get(*this));
+			break;
+		default: {
+			Vector v(*this);
+			v.FormatSerialize(serializer, 1);
+			break;
+		}
+		}
+	}
+}
+
+Value Value::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto type = deserializer.ReadProperty<LogicalType>("type");
+	auto is_null = deserializer.ReadProperty<bool>("is_null");
+	Value new_value = Value(type);
+	if (is_null) {
+		return new_value;
+	}
+	new_value.is_null = false;
+	switch (type.InternalType()) {
+	case PhysicalType::BOOL:
+		new_value.value_.boolean = deserializer.ReadProperty<bool>("value");
+		break;
+	case PhysicalType::UINT8:
+		new_value.value_.utinyint = deserializer.ReadProperty<uint8_t>("value");
+		break;
+	case PhysicalType::INT8:
+		new_value.value_.tinyint = deserializer.ReadProperty<int8_t>("value");
+		break;
+	case PhysicalType::UINT16:
+		new_value.value_.usmallint = deserializer.ReadProperty<uint16_t>("value");
+		break;
+	case PhysicalType::INT16:
+		new_value.value_.smallint = deserializer.ReadProperty<int16_t>("value");
+		break;
+	case PhysicalType::UINT32:
+		new_value.value_.uinteger = deserializer.ReadProperty<uint32_t>("value");
+		break;
+	case PhysicalType::INT32:
+		new_value.value_.integer = deserializer.ReadProperty<int32_t>("value");
+		break;
+	case PhysicalType::UINT64:
+		new_value.value_.ubigint = deserializer.ReadProperty<uint64_t>("value");
+		break;
+	case PhysicalType::INT64:
+		new_value.value_.bigint = deserializer.ReadProperty<int64_t>("value");
+		break;
+	case PhysicalType::FLOAT:
+		new_value.value_.float_ = deserializer.ReadProperty<float>("value");
+		break;
+	case PhysicalType::DOUBLE:
+		new_value.value_.double_ = deserializer.ReadProperty<double>("value");
+		break;
+	case PhysicalType::INTERVAL:
+		new_value.value_.interval = deserializer.ReadProperty<interval_t>("value");
+		break;
+	case PhysicalType::VARCHAR:
+		new_value.value_info_ = make_shared<StringValueInfo>(deserializer.ReadProperty<string>("value"));
+		break;
+	default: {
+		Vector v(type);
+		v.FormatDeserialize(deserializer, 1);
+		new_value = v.GetValue(0);
+		break;
+	}
+	}
 	return new_value;
 }
 

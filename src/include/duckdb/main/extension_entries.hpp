@@ -55,6 +55,7 @@ static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {
     {"json_transform_strict", "json"},
     {"json_type", "json"},
     {"json_valid", "json"},
+    {"json_serialize_sql", "json"},
     {"make_timestamptz", "icu"},
     {"parquet_metadata", "parquet"},
     {"parquet_scan", "parquet"},
