@@ -103,7 +103,10 @@ unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, 
 	return make_unique<JSONReadManyFunctionData>(std::move(paths), std::move(lens));
 }
 
-JSONFunctionLocalState::JSONFunctionLocalState(ClientContext &context) : json_allocator(BufferAllocator::Get(context)) {
+JSONFunctionLocalState::JSONFunctionLocalState(Allocator &allocator) : json_allocator(allocator) {
+}
+JSONFunctionLocalState::JSONFunctionLocalState(ClientContext &context)
+    : JSONFunctionLocalState(BufferAllocator::Get(context)) {
 }
 
 unique_ptr<FunctionLocalState> JSONFunctionLocalState::Init(ExpressionState &state, const BoundFunctionExpression &expr,
@@ -143,6 +146,7 @@ vector<CreateScalarFunctionInfo> JSONFunctions::GetScalarFunctions() {
 	functions.push_back(GetKeysFunction());
 	functions.push_back(GetTypeFunction());
 	functions.push_back(GetValidFunction());
+	functions.push_back(GetSerializeSqlFunction());
 
 	return functions;
 }
@@ -184,8 +188,12 @@ unique_ptr<TableRef> JSONFunctions::ReadJSONReplacement(ClientContext &context, 
 	return std::move(table_function);
 }
 
-static unique_ptr<FunctionLocalState> InitJSONCastLocalState(ClientContext &context) {
-	return make_unique<JSONFunctionLocalState>(context);
+static unique_ptr<FunctionLocalState> InitJSONCastLocalState(CastLocalStateParameters &parameters) {
+	if (parameters.context) {
+		return make_unique<JSONFunctionLocalState>(*parameters.context);
+	} else {
+		return make_unique<JSONFunctionLocalState>(Allocator::DefaultAllocator());
+	}
 }
 
 static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
@@ -208,9 +216,9 @@ static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastP
 			    mask.SetInvalid(idx);
 			    success = false;
 		    }
-
 		    return input;
 	    });
+	result.Reinterpret(source);
 	return success;
 }
 

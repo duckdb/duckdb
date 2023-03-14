@@ -81,6 +81,8 @@ bar
 
 statement error
 SELECT regexp_extract(s, '(b..)(b..)', i) FROM test
+----
+Invalid Input Error: Group index field field must be a constant!
 
 # null values
 query T

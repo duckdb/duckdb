@@ -4,11 +4,140 @@
 
 namespace duckdb {
 
+// **** helper functions ****
+static char ComputePadding(idx_t len) {
+	return (8 - (len % 8)) % 8;
+}
+
+idx_t Bit::ComputeBitstringLen(idx_t len) {
+	len = len % 8 ? (len / 8) + 1 : len / 8;
+	return ++len; // additional first byte to store info on zero padding
+}
+
+inline idx_t Bit::GetPadding(const string_t &bit_string) {
+	auto data = (const_data_ptr_t)bit_string.GetDataUnsafe();
+	return data[0];
+}
+
 void Bit::SetEmptyBitString(string_t &target, string_t &input) {
 	char *res_buf = target.GetDataWriteable();
 	const char *buf = input.GetDataUnsafe();
 	memset(res_buf, 0, input.GetSize());
 	res_buf[0] = buf[0];
+}
+
+void Bit::SetEmptyBitString(string_t &target, idx_t len) {
+	char *res_buf = target.GetDataWriteable();
+	memset(res_buf, 0, target.GetSize());
+	res_buf[0] = ComputePadding(len);
+}
+
+// **** casting functions ****
+void Bit::ToString(string_t bits, char *output) {
+	auto data = (const_data_ptr_t)bits.GetDataUnsafe();
+	auto len = bits.GetSize();
+
+	idx_t padding = GetPadding(bits);
+	idx_t output_idx = 0;
+	for (idx_t bit_idx = padding; bit_idx < 8; bit_idx++) {
+		output[output_idx++] = data[1] & (1 << (7 - bit_idx)) ? '1' : '0';
+	}
+	for (idx_t byte_idx = 2; byte_idx < len; byte_idx++) {
+		for (idx_t bit_idx = 0; bit_idx < 8; bit_idx++) {
+			output[output_idx++] = data[byte_idx] & (1 << (7 - bit_idx)) ? '1' : '0';
+		}
+	}
+}
+
+string Bit::ToString(string_t str) {
+	auto len = BitLength(str);
+	auto buffer = std::unique_ptr<char[]>(new char[len]);
+	ToString(str, buffer.get());
+	return string(buffer.get(), len);
+}
+
+bool Bit::TryGetBitStringSize(string_t str, idx_t &str_len, string *error_message) {
+	auto data = (const_data_ptr_t)str.GetDataUnsafe();
+	auto len = str.GetSize();
+	str_len = 0;
+	for (idx_t i = 0; i < len; i++) {
+		if (data[i] == '0' || data[i] == '1') {
+			str_len++;
+		} else {
+			string error = StringUtil::Format("Invalid character encountered in string -> bit conversion: '%s'",
+			                                  string((char *)data + i, 1));
+			HandleCastError::AssignError(error, error_message);
+			return false;
+		}
+	}
+	if (str_len == 0) {
+		string error = "Cannot cast empty string to BIT";
+		HandleCastError::AssignError(error, error_message);
+		return false;
+	}
+	str_len = ComputeBitstringLen(str_len);
+	return true;
+}
+
+idx_t Bit::GetBitSize(string_t str) {
+	string error_message;
+	idx_t str_len;
+	if (!Bit::TryGetBitStringSize(str, str_len, &error_message)) {
+		throw ConversionException(error_message);
+	}
+	return str_len;
+}
+
+void Bit::ToBit(string_t str, data_ptr_t output) {
+	auto data = (const_data_ptr_t)str.GetDataUnsafe();
+	auto len = str.GetSize();
+
+	char byte = 0;
+	idx_t padded_byte = len % 8;
+	for (idx_t i = 0; i < padded_byte; i++) {
+		byte <<= 1;
+		if (data[i] == '1') {
+			byte |= 1;
+		}
+	}
+	if (padded_byte != 0) {
+		*(output++) = (8 - padded_byte); // the first byte contains the number of padded zeroes
+	}
+	*(output++) = byte;
+
+	for (idx_t byte_idx = padded_byte; byte_idx < len; byte_idx += 8) {
+		byte = 0;
+		for (idx_t bit_idx = 0; bit_idx < 8; bit_idx++) {
+			byte <<= 1;
+			if (data[byte_idx + bit_idx] == '1') {
+				byte |= 1;
+			}
+		}
+		*(output++) = byte;
+	}
+}
+
+string Bit::ToBit(string_t str) {
+	auto bit_len = GetBitSize(str);
+	auto buffer = std::unique_ptr<char[]>(new char[bit_len]);
+	Bit::ToBit(str, (data_ptr_t)buffer.get());
+	return string(buffer.get(), bit_len);
+}
+
+// **** scalar functions ****
+void Bit::BitString(const string_t &input, const idx_t &len, string_t &result) {
+	char *res_buf = result.GetDataWriteable();
+	const char *buf = input.GetDataUnsafe();
+
+	res_buf[0] = ComputePadding(len);
+	for (idx_t i = 0; i < Bit::BitLength(result); i++) {
+		if (i < len - input.GetSize()) {
+			Bit::SetBit(result, i, 0);
+		} else {
+			idx_t bit = buf[i - (len - input.GetSize())] == '1' ? 1 : 0;
+			Bit::SetBit(result, i, bit);
+		}
+	}
 }
 
 idx_t Bit::BitLength(string_t bits) {
@@ -64,98 +193,6 @@ idx_t Bit::BitPosition(string_t substring, string_t bits) {
 	return 0;
 }
 
-void Bit::ToString(string_t bits, char *output) {
-	auto data = (const_data_ptr_t)bits.GetDataUnsafe();
-	auto len = bits.GetSize();
-
-	idx_t padding = GetPadding(bits);
-	idx_t output_idx = 0;
-	for (idx_t bit_idx = padding; bit_idx < 8; bit_idx++) {
-		output[output_idx++] = data[1] & (1 << (7 - bit_idx)) ? '1' : '0';
-	}
-	for (idx_t byte_idx = 2; byte_idx < len; byte_idx++) {
-		for (idx_t bit_idx = 0; bit_idx < 8; bit_idx++) {
-			output[output_idx++] = data[byte_idx] & (1 << (7 - bit_idx)) ? '1' : '0';
-		}
-	}
-}
-
-string Bit::ToString(string_t str) {
-	auto len = BitLength(str);
-	auto buffer = std::unique_ptr<char[]>(new char[len]);
-	ToString(str, buffer.get());
-	return string(buffer.get(), len);
-}
-
-bool Bit::TryGetBitStringSize(string_t str, idx_t &str_len, string *error_message) {
-	auto data = (const_data_ptr_t)str.GetDataUnsafe();
-	auto len = str.GetSize();
-	str_len = 0;
-	for (idx_t i = 0; i < len; i++) {
-		if (data[i] == '0' || data[i] == '1') {
-			str_len++;
-		} else {
-			string error = StringUtil::Format("Invalid character encountered in string -> bit conversion: '%s'",
-			                                  string((char *)data + i, 1));
-			HandleCastError::AssignError(error, error_message);
-			return false;
-		}
-	}
-	if (str_len == 0) {
-		string error = "Cannot cast empty string to BIT";
-		HandleCastError::AssignError(error, error_message);
-		return false;
-	}
-	str_len = str_len % 8 ? (str_len / 8) + 1 : str_len / 8;
-	str_len++; // additional first byte to store info on zero padding
-	return true;
-}
-
-idx_t Bit::GetBitSize(string_t str) {
-	string error_message;
-	idx_t str_len;
-	if (!Bit::TryGetBitStringSize(str, str_len, &error_message)) {
-		throw ConversionException(error_message);
-	}
-	return str_len;
-}
-
-void Bit::ToBit(string_t str, data_ptr_t output) {
-	auto data = (const_data_ptr_t)str.GetDataUnsafe();
-	auto len = str.GetSize();
-
-	char byte = 0;
-	idx_t padded_byte = len % 8;
-	for (idx_t i = 0; i < padded_byte; i++) {
-		byte <<= 1;
-		if (data[i] == '1') {
-			byte |= 1;
-		}
-	}
-	if (padded_byte != 0) {
-		*(output++) = (8 - padded_byte); // the first byte contains the number of padded zeroes
-	}
-	*(output++) = byte;
-
-	for (idx_t byte_idx = padded_byte; byte_idx < len; byte_idx += 8) {
-		byte = 0;
-		for (idx_t bit_idx = 0; bit_idx < 8; bit_idx++) {
-			byte <<= 1;
-			if (data[byte_idx + bit_idx] == '1') {
-				byte |= 1;
-			}
-		}
-		*(output++) = byte;
-	}
-}
-
-string Bit::ToBit(string_t str) {
-	auto bit_len = GetBitSize(str);
-	auto buffer = std::unique_ptr<char[]>(new char[bit_len]);
-	Bit::ToBit(str, (data_ptr_t)buffer.get());
-	return string(buffer.get(), bit_len);
-}
-
 idx_t Bit::GetBit(string_t bit_string, idx_t n) {
 	const char *buf = bit_string.GetDataUnsafe();
 	n += GetPadding(bit_string);
@@ -192,12 +229,7 @@ void Bit::SetBit(string_t &bit_string, idx_t n, idx_t new_value) {
 	}
 }
 
-inline idx_t Bit::GetPadding(const string_t &bit_string) {
-	auto data = (const_data_ptr_t)bit_string.GetDataUnsafe();
-	return data[0];
-}
-
-// **** BITWISE OPERATORS ****
+// **** BITWISE operators ****
 void Bit::RightShift(const string_t &bit_string, const idx_t &shift, string_t &result) {
 	char *res_buf = result.GetDataWriteable();
 	const char *buf = bit_string.GetDataUnsafe();

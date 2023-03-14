@@ -12,11 +12,36 @@ bool Utils::OtherIsInt(Napi::Number source) {
 	}
 }
 
-Napi::Value Utils::CreateError(Napi::Env env, std::string msg) {
+static void SetString(Napi::Object &obj, const std::string &key, const std::string &value) {
+	obj.Set(Napi::String::New(obj.Env(), key), Napi::String::New(obj.Env(), value));
+}
+
+Napi::Object Utils::CreateError(Napi::Env env, duckdb::PreservedError &error) {
+	auto obj = Utils::CreateError(env, error.Message());
+	if (error.Type() == duckdb::ExceptionType::HTTP) {
+		const auto &e = error.GetError()->AsHTTPException();
+		obj.Set(Napi::String::New(env, "statusCode"), Napi::Number::New(env, e.GetStatusCode()));
+		SetString(obj, "response", e.GetResponseBody());
+		SetString(obj, "reason", e.GetReason());
+
+		auto headers = Napi::Object::New(env);
+		for (const auto &item : e.GetHeaders()) {
+			SetString(headers, item.first, item.second);
+		}
+		obj.Set(Napi::String::New(env, "headers"), headers);
+	}
+
+	SetString(obj, "errorType", duckdb::Exception::ExceptionTypeToString(error.Type()));
+
+	return obj;
+}
+
+Napi::Object Utils::CreateError(Napi::Env env, std::string msg) {
 	auto err = Napi::Error::New(env, Napi::String::New(env, msg).Utf8Value()).Value();
 	Napi::Object obj = err.As<Napi::Object>();
 	obj.Set(Napi::String::New(env, "errno"), Napi::Number::New(env, Database::DUCKDB_NODEJS_ERROR));
-	obj.Set(Napi::String::New(env, "code"), Napi::String::New(env, "DUCKDB_NODEJS_ERROR"));
+	SetString(obj, "code", "DUCKDB_NODEJS_ERROR");
+	SetString(obj, "errorType", "Invalid");
 
 	return obj;
 }

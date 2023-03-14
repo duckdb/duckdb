@@ -25,13 +25,55 @@
 @_implementationOnly import Cduckdb
 import Foundation
 
+/// An object reperesenting a DuckDB prepared statement
+///
+/// A prepared statement is a parameterized query. The query is prepared with
+/// question marks (`?`) or dollar symbols (`$1`) indicating the parameters of
+/// the query. Values can then be bound to these parameters, after which the
+/// prepared statement can be executed using those parameters. A single query
+/// can be prepared once and executed many times.
+///
+/// Prepared statements are useful to:
+///
+///   - Easily supply parameters to functions while avoiding string
+///     concatenation/SQL injection attacks.
+///   - Speed up queries that will be executed many times with different
+///     parameters.
+///
+/// The following example creates a prepared statement that allows parameters
+/// to be bound in two positions within a 'select' statement. The prepared
+/// statement is finally executed by calling ``PreparedStatement/execute()``.
+///
+/// ```swift
+///   let connection: Connection = ...
+///   let statement = try PreparedStatement(
+///     connection: connection,
+///     query: "SELECT $1 from $2"
+///   )
+///   try statement.bind("last_name")
+///   try statement.bind("employees")
+///   // executes 'SELECT last_name from employees'
+///   let result = try statement.execute()
+/// ```
 public final class PreparedStatement {
   
+  /// The number of parameters to which values can be bound
   public var parameterCount: Int { Int(duckdb_nparams(ptr.pointee)) }
 
   private let connection: Connection
   private let ptr = UnsafeMutablePointer<duckdb_prepared_statement?>.allocate(capacity: 1)
 
+  /// Creates a new prepared statement for a given connection and query
+  ///
+  /// The query is prepared with question marks (`?`) or dollar symbols (`$1`)
+  /// indicating the parameters of the query.
+  ///
+  /// - Important: Prepared statement parameters use one-based indexing
+  /// - Parameter connection: the connection on which the prepared stement will
+  ///   execute
+  /// - Parameter query: the parameterized query
+  /// - Throws: ``DatabaseError/preparedStatementFailedToInitialize(reason:)``
+  ///   if there is a problem with the query or connection
   public init(connection: Connection, query: String) throws {
     self.connection = connection
     let status = query.withCString { queryStPtr in
@@ -47,11 +89,17 @@ public final class PreparedStatement {
     ptr.deallocate()
   }
   
-  public func execute() throws -> QueryResult {
-    try QueryResult(prepared: self)
+  /// Executes the prepared statement
+  ///
+  /// Issues the parameterized query to the database using the values previously
+  /// bound via the `bind(_:at:)` set of functions.
+  ///
+  /// - Throws: ``DatabaseError/preparedStatementQueryError(reason:)``
+  public func execute() throws -> ResultSet {
+    try ResultSet(prepared: self)
   }
   
-  func parameterType(at index: Int) -> DBTypeID {
+  func parameterType(at index: Int) -> DatabaseType {
     let cparamtype = duckdb_param_type(ptr.pointee, DBInt(index))
     return cparamtype.asTypeID
   }
@@ -67,81 +115,241 @@ public final class PreparedStatement {
 
 public extension PreparedStatement {
   
+  /// Binds a value of the given type at the specified parameter index
+  ///
+  /// Sets the value that will be used for the next call to ``execute()``.
+  ///
+  /// - Important: Prepared statement parameters use one-based indexing
+  /// - Parameter value: the value to bind
+  /// - Parameter index: the one-based parameter index
+  /// - Throws: ``DatabaseError/preparedStatementFailedToBindParameter(reason:)``
+  ///   if there is a type-mismatch between the value being bound and the
+  ///   underlying column type
   func bind(_ value: Bool?, at index: Int) throws {
     guard let value = try unwrapValueOrBindNull(value, at: index) else { return }
     try withThrowingCommand { duckdb_bind_boolean(ptr.pointee, .init(index), value) }
   }
   
+  /// Binds a value of the given type at the specified parameter index
+  ///
+  /// Sets the value that will be used for the next call to ``execute()``.
+  ///
+  /// - Important: Prepared statement parameters use one-based indexing
+  /// - Parameter value: the value to bind
+  /// - Parameter index: the one-based parameter index
+  /// - Throws: ``DatabaseError/preparedStatementFailedToBindParameter(reason:)``
+  ///   if there is a type-mismatch between the value being bound and the
+  ///   underlying column type
   func bind(_ value: Int8?, at index: Int) throws {
     guard let value = try unwrapValueOrBindNull(value, at: index) else { return }
     try withThrowingCommand { duckdb_bind_int8(ptr.pointee, .init(index), value) }
   }
   
+  /// Binds a value of the given type at the specified parameter index
+  ///
+  /// Sets the value that will be used for the next call to ``execute()``.
+  ///
+  /// - Important: Prepared statement parameters use one-based indexing
+  /// - Parameter value: the value to bind
+  /// - Parameter index: the one-based parameter index
+  /// - Throws: ``DatabaseError/preparedStatementFailedToBindParameter(reason:)``
+  ///   if there is a type-mismatch between the value being bound and the
+  ///   underlying column type
   func bind(_ value: Int16?, at index: Int) throws {
     guard let value = try unwrapValueOrBindNull(value, at: index) else { return }
     try withThrowingCommand { duckdb_bind_int16(ptr.pointee, .init(index), value) }
   }
   
+  /// Binds a value of the given type at the specified parameter index
+  ///
+  /// Sets the value that will be used for the next call to ``execute()``.
+  ///
+  /// - Important: Prepared statement parameters use one-based indexing
+  /// - Parameter value: the value to bind
+  /// - Parameter index: the one-based parameter index
+  /// - Throws: ``DatabaseError/preparedStatementFailedToBindParameter(reason:)``
+  ///   if there is a type-mismatch between the value being bound and the
+  ///   underlying column type
   func bind(_ value: Int32?, at index: Int) throws {
     guard let value = try unwrapValueOrBindNull(value, at: index) else { return }
     try withThrowingCommand { duckdb_bind_int32(ptr.pointee, .init(index), value) }
   }
   
+  /// Binds a value of the given type at the specified parameter index
+  ///
+  /// Sets the value that will be used for the next call to ``execute()``.
+  ///
+  /// - Important: Prepared statement parameters use one-based indexing
+  /// - Parameter value: the value to bind
+  /// - Parameter index: the one-based parameter index
+  /// - Throws: ``DatabaseError/preparedStatementFailedToBindParameter(reason:)``
+  ///   if there is a type-mismatch between the value being bound and the
+  ///   underlying column type
   func bind(_ value: Int64?, at index: Int) throws {
     guard let value = try unwrapValueOrBindNull(value, at: index) else { return }
     try withThrowingCommand { duckdb_bind_int64(ptr.pointee, .init(index), value) }
   }
   
+  /// Binds a value of the given type at the specified parameter index
+  ///
+  /// Sets the value that will be used for the next call to ``execute()``.
+  ///
+  /// - Important: Prepared statement parameters use one-based indexing
+  /// - Parameter value: the value to bind
+  /// - Parameter index: the one-based parameter index
+  /// - Throws: ``DatabaseError/preparedStatementFailedToBindParameter(reason:)``
+  ///   if there is a type-mismatch between the value being bound and the
+  ///   underlying column type
   func bind(_ value: IntHuge?, at index: Int) throws {
     guard let value = try unwrapValueOrBindNull(value, at: index) else { return }
     try withThrowingCommand { duckdb_bind_hugeint(ptr.pointee, .init(index), .init(value)) }
   }
 
+  /// Binds a value of the given type at the specified parameter index
+  ///
+  /// Sets the value that will be used for the next call to ``execute()``.
+  ///
+  /// - Important: Prepared statement parameters use one-based indexing
+  /// - Parameter value: the value to bind
+  /// - Parameter index: the one-based parameter index
+  /// - Throws: ``DatabaseError/preparedStatementFailedToBindParameter(reason:)``
+  ///   if there is a type-mismatch between the value being bound and the
+  ///   underlying column type
   func bind(_ value: Decimal?, at index: Int) throws {
     guard let value = try unwrapValueOrBindNull(value, at: index) else { return }
     try withThrowingCommand { duckdb_bind_decimal(ptr.pointee, .init(index), try .init(value)) }
   }
   
+  /// Binds a value of the given type at the specified parameter index
+  ///
+  /// Sets the value that will be used for the next call to ``execute()``.
+  ///
+  /// - Important: Prepared statement parameters use one-based indexing
+  /// - Parameter value: the value to bind
+  /// - Parameter index: the one-based parameter index
+  /// - Throws: ``DatabaseError/preparedStatementFailedToBindParameter(reason:)``
+  ///   if there is a type-mismatch between the value being bound and the
+  ///   underlying column type
   func bind(_ value: UInt8?, at index: Int) throws {
     guard let value = try unwrapValueOrBindNull(value, at: index) else { return }
     try withThrowingCommand { duckdb_bind_uint8(ptr.pointee, .init(index), value) }
   }
   
+  /// Binds a value of the given type at the specified parameter index
+  ///
+  /// Sets the value that will be used for the next call to ``execute()``.
+  ///
+  /// - Important: Prepared statement parameters use one-based indexing
+  /// - Parameter value: the value to bind
+  /// - Parameter index: the one-based parameter index
+  /// - Throws: ``DatabaseError/preparedStatementFailedToBindParameter(reason:)``
+  ///   if there is a type-mismatch between the value being bound and the
+  ///   underlying column type
   func bind(_ value: UInt16?, at index: Int) throws {
     guard let value = try unwrapValueOrBindNull(value, at: index) else { return }
     try withThrowingCommand { duckdb_bind_uint16(ptr.pointee, .init(index), value) }
   }
   
+  /// Binds a value of the given type at the specified parameter index
+  ///
+  /// Sets the value that will be used for the next call to ``execute()``.
+  ///
+  /// - Important: Prepared statement parameters use one-based indexing
+  /// - Parameter value: the value to bind
+  /// - Parameter index: the one-based parameter index
+  /// - Throws: ``DatabaseError/preparedStatementFailedToBindParameter(reason:)``
+  ///   if there is a type-mismatch between the value being bound and the
+  ///   underlying column type
   func bind(_ value: UInt32?, at index: Int) throws {
     guard let value = try unwrapValueOrBindNull(value, at: index) else { return }
     try withThrowingCommand { duckdb_bind_uint32(ptr.pointee, .init(index), value) }
   }
   
+  /// Binds a value of the given type at the specified parameter index
+  ///
+  /// Sets the value that will be used for the next call to ``execute()``.
+  ///
+  /// - Important: Prepared statement parameters use one-based indexing
+  /// - Parameter value: the value to bind
+  /// - Parameter index: the one-based parameter index
+  /// - Throws: ``DatabaseError/preparedStatementFailedToBindParameter(reason:)``
+  ///   if there is a type-mismatch between the value being bound and the
+  ///   underlying column type
   func bind(_ value: UInt64?, at index: Int) throws {
     guard let value = try unwrapValueOrBindNull(value, at: index) else { return }
     try withThrowingCommand { duckdb_bind_uint64(ptr.pointee, .init(index), value) }
   }
   
+  /// Binds a value of the given type at the specified parameter index
+  ///
+  /// Sets the value that will be used for the next call to ``execute()``.
+  ///
+  /// - Important: Prepared statement parameters use one-based indexing
+  /// - Parameter value: the value to bind
+  /// - Parameter index: the one-based parameter index
+  /// - Throws: ``DatabaseError/preparedStatementFailedToBindParameter(reason:)``
+  ///   if there is a type-mismatch between the value being bound and the
+  ///   underlying column type
   func bind(_ value: Float?, at index: Int) throws {
     guard let value = try unwrapValueOrBindNull(value, at: index) else { return }
     try withThrowingCommand { duckdb_bind_float(ptr.pointee, .init(index), value) }
   }
   
+  /// Binds a value of the given type at the specified parameter index
+  ///
+  /// Sets the value that will be used for the next call to ``execute()``.
+  ///
+  /// - Important: Prepared statement parameters use one-based indexing
+  /// - Parameter value: the value to bind
+  /// - Parameter index: the one-based parameter index
+  /// - Throws: ``DatabaseError/preparedStatementFailedToBindParameter(reason:)``
+  ///   if there is a type-mismatch between the value being bound and the
+  ///   underlying column type
   func bind(_ value: Double?, at index: Int) throws {
     guard let value = try unwrapValueOrBindNull(value, at: index) else { return }
     try withThrowingCommand { duckdb_bind_double(ptr.pointee, .init(index), value) }
   }
   
+  /// Binds a value of the given type at the specified parameter index
+  ///
+  /// Sets the value that will be used for the next call to ``execute()``.
+  ///
+  /// - Important: Prepared statement parameters use one-based indexing
+  /// - Parameter value: the value to bind
+  /// - Parameter index: the one-based parameter index
+  /// - Throws: ``DatabaseError/preparedStatementFailedToBindParameter(reason:)``
+  ///   if there is a type-mismatch between the value being bound and the
+  ///   underlying column type
   func bind(_ value: Date?, at index: Int) throws {
     guard let value = try unwrapValueOrBindNull(value, at: index) else { return }
     try withThrowingCommand { duckdb_bind_date(ptr.pointee, .init(index), .init(date: value)) }
   }
 
+  /// Binds a value of the given type at the specified parameter index
+  ///
+  /// Sets the value that will be used for the next call to ``execute()``.
+  ///
+  /// - Important: Prepared statement parameters use one-based indexing
+  /// - Parameter value: the value to bind
+  /// - Parameter index: the one-based parameter index
+  /// - Throws: ``DatabaseError/preparedStatementFailedToBindParameter(reason:)``
+  ///   if there is a type-mismatch between the value being bound and the
+  ///   underlying column type
   func bind(_ value: Time?, at index: Int) throws {
     guard let value = try unwrapValueOrBindNull(value, at: index) else { return }
     try withThrowingCommand { duckdb_bind_time(ptr.pointee, .init(index), .init(time: value)) }
   }
 
+  /// Binds a value of the given type at the specified parameter index
+  ///
+  /// Sets the value that will be used for the next call to ``execute()``.
+  ///
+  /// - Important: Prepared statement parameters use one-based indexing
+  /// - Parameter value: the value to bind
+  /// - Parameter index: the one-based parameter index
+  /// - Throws: ``DatabaseError/preparedStatementFailedToBindParameter(reason:)``
+  ///   if there is a type-mismatch between the value being bound and the
+  ///   underlying column type
   func bind(_ value: Timestamp?, at index: Int) throws {
     guard let value = try unwrapValueOrBindNull(value, at: index) else { return }
     try withThrowingCommand {
@@ -149,6 +357,16 @@ public extension PreparedStatement {
     }
   }
 
+  /// Binds a value of the given type at the specified parameter index
+  ///
+  /// Sets the value that will be used for the next call to ``execute()``.
+  ///
+  /// - Important: Prepared statement parameters use one-based indexing
+  /// - Parameter value: the value to bind
+  /// - Parameter index: the one-based parameter index
+  /// - Throws: ``DatabaseError/preparedStatementFailedToBindParameter(reason:)``
+  ///   if there is a type-mismatch between the value being bound and the
+  ///   underlying column type
   func bind(_ value: Interval?, at index: Int) throws {
     guard let value = try unwrapValueOrBindNull(value, at: index) else { return }
     try withThrowingCommand {
@@ -156,6 +374,16 @@ public extension PreparedStatement {
     }
   }
   
+  /// Binds a value of the given type at the specified parameter index
+  ///
+  /// Sets the value that will be used for the next call to ``execute()``.
+  ///
+  /// - Important: Prepared statement parameters use one-based indexing
+  /// - Parameter value: the value to bind
+  /// - Parameter index: the one-based parameter index
+  /// - Throws: ``DatabaseError/preparedStatementFailedToBindParameter(reason:)``
+  ///   if there is a type-mismatch between the value being bound and the
+  ///   underlying column type
   func bind(_ value: String?, at index: Int) throws {
     guard let value = try unwrapValueOrBindNull(value, at: index) else { return }
     let data = value.data(using: .utf8)!
@@ -167,6 +395,16 @@ public extension PreparedStatement {
     }
   }
   
+  /// Binds a value of the given type at the specified parameter index
+  ///
+  /// Sets the value that will be used for the next call to ``execute()``.
+  ///
+  /// - Important: Prepared statement parameters use one-based indexing
+  /// - Parameter value: the value to bind
+  /// - Parameter index: the one-based parameter index
+  /// - Throws: ``DatabaseError/preparedStatementFailedToBindParameter(reason:)``
+  ///   if there is a type-mismatch between the value being bound and the
+  ///   underlying column type
   func bind(_ value: Data?, at index: Int) throws {
     guard let value = try unwrapValueOrBindNull(value, at: index) else { return }
     try withThrowingCommand {

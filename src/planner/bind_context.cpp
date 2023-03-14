@@ -13,7 +13,7 @@
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "re2/re2.h"
+#include "duckdb/planner/expression_binder/constant_binder.hpp"
 
 #include <algorithm>
 
@@ -319,31 +319,15 @@ bool BindContext::CheckExclusionList(StarExpression &expr, Binding *binding, con
 	return false;
 }
 
-bool CheckRegex(const string &column_name, duckdb_re2::RE2 *regex) {
-	if (!regex) {
-		return true;
-	}
-	return RE2::PartialMatch(column_name, *regex);
-}
-
 void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
                                                vector<unique_ptr<ParsedExpression>> &new_select_list) {
 	if (bindings_list.empty()) {
-		throw BinderException("SELECT * expression without FROM clause!");
+		throw BinderException("* expression without FROM clause!");
 	}
 	case_insensitive_set_t excluded_columns;
 	if (expr.relation_name.empty()) {
 		// SELECT * case
 		// bind all expressions of each table in-order
-		unique_ptr<duckdb_re2::RE2> regex;
-		bool found_match = true;
-		if (!expr.regex.empty()) {
-			regex = make_unique<duckdb_re2::RE2>(expr.regex);
-			if (!regex->error().empty()) {
-				throw BinderException("Failed to compile regex \"%s\": %s", expr.regex, regex->error());
-			}
-			found_match = false;
-		}
 		unordered_set<UsingColumnSet *> handled_using_columns;
 		for (auto &entry : bindings_list) {
 			auto binding = entry.second;
@@ -351,10 +335,6 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 				if (CheckExclusionList(expr, binding, column_name, new_select_list, excluded_columns)) {
 					continue;
 				}
-				if (!CheckRegex(column_name, regex.get())) {
-					continue;
-				}
-				found_match = true;
 				// check if this column is a USING column
 				auto using_binding = GetUsingBinding(column_name, binding->alias);
 				if (using_binding) {
@@ -383,9 +363,6 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 				}
 				new_select_list.push_back(make_unique<ColumnRefExpression>(column_name, binding->alias));
 			}
-		}
-		if (!found_match) {
-			throw BinderException("No matching columns found that match regex \"%s\"", expr.regex);
 		}
 	} else {
 		// SELECT tbl.* case
@@ -552,6 +529,22 @@ void BindContext::AddContext(BindContext other) {
 #endif
 			using_columns[entry.first].insert(alias);
 		}
+	}
+}
+
+void BindContext::RemoveContext(vector<std::pair<string, duckdb::Binding *>> &other_bindings_list) {
+	for (auto &other_binding : other_bindings_list) {
+		if (bindings.find(other_binding.first) != bindings.end()) {
+			bindings.erase(other_binding.first);
+		}
+	}
+
+	vector<idx_t> delete_list_indexes;
+	for (auto &other_binding : other_bindings_list) {
+		auto it =
+		    std::remove_if(bindings_list.begin(), bindings_list.end(),
+		                   [other_binding](std::pair<string, Binding *> &x) { return x.first == other_binding.first; });
+		bindings_list.erase(it, bindings_list.end());
 	}
 }
 

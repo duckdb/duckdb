@@ -18,8 +18,7 @@
 
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
-#include "duckdb/storage/statistics/string_statistics.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
+
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"

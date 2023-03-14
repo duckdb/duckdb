@@ -11,7 +11,8 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundCastE
 	result->AddChild(expr.child.get());
 	result->Finalize();
 	if (expr.bound_cast.init_local_state) {
-		result->local_state = expr.bound_cast.init_local_state(root.executor->GetContext());
+		CastLocalStateParameters parameters(root.executor->GetContext(), expr.bound_cast.cast_data);
+		result->local_state = expr.bound_cast.init_local_state(parameters);
 	}
 	return std::move(result);
 }

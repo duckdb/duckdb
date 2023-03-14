@@ -10,6 +10,8 @@
 
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
 
@@ -31,25 +33,43 @@ struct BoundCastData {
 struct CastParameters {
 	CastParameters() {
 	}
-	CastParameters(BoundCastData *cast_data, bool strict, string *error_message, FunctionLocalState *local_state)
+	CastParameters(BoundCastData *cast_data, bool strict, string *error_message,
+	               optional_ptr<FunctionLocalState> local_state)
 	    : cast_data(cast_data), strict(strict), error_message(error_message), local_state(local_state) {
 	}
-	CastParameters(CastParameters &parent, BoundCastData *cast_data = nullptr)
-	    : cast_data(cast_data), strict(parent.strict), error_message(parent.error_message) {
+	CastParameters(CastParameters &parent, optional_ptr<BoundCastData> cast_data,
+	               optional_ptr<FunctionLocalState> local_state)
+	    : cast_data(cast_data), strict(parent.strict), error_message(parent.error_message), local_state(local_state) {
 	}
 
 	//! The bound cast data (if any)
-	BoundCastData *cast_data = nullptr;
+	optional_ptr<BoundCastData> cast_data;
 	//! whether or not to enable strict casting
 	bool strict = false;
 	// out: error message in case cast has failed
 	string *error_message = nullptr;
 	//! Local state
-	FunctionLocalState *local_state = nullptr;
+	optional_ptr<FunctionLocalState> local_state;
+};
+
+struct CastLocalStateParameters {
+	CastLocalStateParameters(optional_ptr<ClientContext> context_p, optional_ptr<BoundCastData> cast_data_p)
+	    : context(context_p), cast_data(cast_data_p) {
+	}
+	CastLocalStateParameters(ClientContext &context_p, optional_ptr<BoundCastData> cast_data_p)
+	    : context(&context_p), cast_data(cast_data_p) {
+	}
+	CastLocalStateParameters(CastLocalStateParameters &parent, optional_ptr<BoundCastData> cast_data_p)
+	    : context(parent.context), cast_data(cast_data_p) {
+	}
+
+	optional_ptr<ClientContext> context;
+	//! The bound cast data (if any)
+	optional_ptr<BoundCastData> cast_data;
 };
 
 typedef bool (*cast_function_t)(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
-typedef unique_ptr<FunctionLocalState> (*init_cast_local_state_t)(ClientContext &context);
+typedef unique_ptr<FunctionLocalState> (*init_cast_local_state_t)(CastLocalStateParameters &parameters);
 
 struct BoundCastInfo {
 	DUCKDB_API
@@ -65,70 +85,14 @@ public:
 };
 
 struct BindCastInput {
-	DUCKDB_API BindCastInput(CastFunctionSet &function_set, BindCastInfo *info, ClientContext *context);
+	DUCKDB_API BindCastInput(CastFunctionSet &function_set, BindCastInfo *info, optional_ptr<ClientContext> context);
 
 	CastFunctionSet &function_set;
 	BindCastInfo *info;
-	ClientContext *context;
+	optional_ptr<ClientContext> context;
 
 public:
 	DUCKDB_API BoundCastInfo GetCastFunction(const LogicalType &source, const LogicalType &target);
-};
-
-struct ListBoundCastData : public BoundCastData {
-	explicit ListBoundCastData(BoundCastInfo child_cast) : child_cast_info(std::move(child_cast)) {
-	}
-
-	BoundCastInfo child_cast_info;
-	static unique_ptr<BoundCastData> BindListToListCast(BindCastInput &input, const LogicalType &source,
-	                                                    const LogicalType &target);
-
-public:
-	unique_ptr<BoundCastData> Copy() const override {
-		return make_unique<ListBoundCastData>(child_cast_info.Copy());
-	}
-};
-
-struct ListCast {
-	static bool ListToListCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
-};
-
-struct StructBoundCastData : public BoundCastData {
-	StructBoundCastData(vector<BoundCastInfo> child_casts, LogicalType target_p)
-	    : child_cast_info(std::move(child_casts)), target(std::move(target_p)) {
-	}
-
-	vector<BoundCastInfo> child_cast_info;
-	LogicalType target;
-
-	static unique_ptr<BoundCastData> BindStructToStructCast(BindCastInput &input, const LogicalType &source,
-	                                                        const LogicalType &target);
-
-public:
-	unique_ptr<BoundCastData> Copy() const override {
-		vector<BoundCastInfo> copy_info;
-		for (auto &info : child_cast_info) {
-			copy_info.push_back(info.Copy());
-		}
-		return make_unique<StructBoundCastData>(std::move(copy_info), target);
-	}
-};
-
-struct MapBoundCastData : public BoundCastData {
-	MapBoundCastData(BoundCastInfo key_cast, BoundCastInfo value_cast)
-	    : key_cast(std::move(key_cast)), value_cast(std::move(value_cast)) {
-	}
-
-	BoundCastInfo key_cast;
-	BoundCastInfo value_cast;
-
-	static unique_ptr<BoundCastData> BindMapToMapCast(BindCastInput &input, const LogicalType &source,
-	                                                  const LogicalType &target);
-
-public:
-	unique_ptr<BoundCastData> Copy() const override {
-		return make_unique<MapBoundCastData>(key_cast.Copy(), value_cast.Copy());
-	}
 };
 
 struct DefaultCasts {

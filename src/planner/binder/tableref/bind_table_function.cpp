@@ -126,9 +126,18 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 	unique_ptr<FunctionData> bind_data;
 	vector<LogicalType> return_types;
 	vector<string> return_names;
-	if (table_function.bind) {
+	if (table_function.bind || table_function.bind_replace) {
 		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,
 		                                  table_function.function_info.get());
+		if (table_function.bind_replace) {
+			auto new_plan = table_function.bind_replace(context, bind_input);
+			if (new_plan != nullptr) {
+				return CreatePlan(*Bind(*new_plan));
+			} else if (!table_function.bind) {
+				throw BinderException("Failed to bind \"%s\": nullptr returned from bind_replace without bind function",
+				                      table_function.name);
+			}
+		}
 		bind_data = table_function.bind(context, bind_input, return_types, return_names);
 		if (table_function.name == "pandas_scan" || table_function.name == "arrow_scan") {
 			auto arrow_bind = (PyTableFunctionData *)bind_data.get();
@@ -153,6 +162,7 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 			return_names[i] = "C" + to_string(i);
 		}
 	}
+
 	auto get = make_unique<LogicalGet>(bind_index, table_function, std::move(bind_data), return_types, return_names);
 	get->parameters = parameters;
 	get->named_parameters = named_parameters;

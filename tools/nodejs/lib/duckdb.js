@@ -688,3 +688,22 @@ Statement.prototype.stream;
  * @returns sql contained in statement
  */
 Statement.prototype.sql;
+
+/**
+ * @typedef DuckDbError
+ * @type {object}
+ * @property {number} errno - -1 for DuckDB errors
+ * @property {string} message - Error message
+ * @property {string} code - 'DUCKDB_NODEJS_ERROR' for DuckDB errors
+ * @property {string} errorType - DuckDB error type code (eg, HTTP, IO, Catalog)
+ */
+
+/**
+ * @typedef HTTPError
+ * @type {object}
+ * @extends {DuckDbError}
+ * @property {number} statusCode - HTTP response status code
+ * @property {string} reason - HTTP response reason
+ * @property {string} response - HTTP response body
+ * @property {object} headers - HTTP headers
+ */

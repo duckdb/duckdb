@@ -6,7 +6,6 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 namespace duckdb {
@@ -40,8 +39,7 @@ void CardinalityEstimator::AddRelationTdom(FilterInfo *filter_info) {
 		}
 	}
 	auto key = ColumnBinding(filter_info->left_binding.table_index, filter_info->left_binding.column_index);
-	column_binding_set_t tmp({key});
-	relations_to_tdoms.emplace_back(RelationsToTDom(tmp));
+	relations_to_tdoms.emplace_back(column_binding_set_t({key}));
 }
 
 bool CardinalityEstimator::SingleColumnFilter(FilterInfo *filter_info) {
@@ -94,7 +92,7 @@ void CardinalityEstimator::AddToEquivalenceSets(FilterInfo *filter_info, vector<
 		column_binding_set_t tmp;
 		tmp.insert(filter_info->left_binding);
 		tmp.insert(filter_info->right_binding);
-		relations_to_tdoms.emplace_back(RelationsToTDom(tmp));
+		relations_to_tdoms.emplace_back(tmp);
 		relations_to_tdoms.back().filters.push_back(filter_info);
 	}
 }
@@ -260,7 +258,7 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet *new_set
 			// connection to any subgraph in subgraphs. Add a new subgraph, and maybe later there will be
 			// a connection.
 			if (!found_match) {
-				subgraphs.emplace_back(Subgraph2Denominator());
+				subgraphs.emplace_back();
 				auto subgraph = &subgraphs.back();
 				subgraph->relations.insert(filter->left_binding.table_index);
 				subgraph->relations.insert(filter->right_binding.table_index);

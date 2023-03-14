@@ -34,6 +34,9 @@ public:
 	NumpyCacheItem &numpy() {
 		return LazyLoadModule(numpy_module);
 	}
+	PyDuckDBCacheItem &pyduckdb() {
+		return LazyLoadModule(pyduckdb_module);
+	}
 	DatetimeCacheItem &datetime() {
 		return LazyLoadModule(datetime_module);
 	}
@@ -61,6 +64,7 @@ public:
 
 private:
 	NumpyCacheItem numpy_module;
+	PyDuckDBCacheItem pyduckdb_module;
 	DatetimeCacheItem datetime_module;
 	DecimalCacheItem decimal_module;
 	UUIDCacheItem uuid_module;

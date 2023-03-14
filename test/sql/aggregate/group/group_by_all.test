@@ -17,6 +17,12 @@ SELECT g, SUM(i) FROM integers GROUP BY ALL ORDER BY 1
 0	3
 1	3
 
+query II
+SELECT SUM(i), g FROM integers GROUP BY ALL ORDER BY 2
+----
+3	0
+3	1
+
 # we can also use the star syntax
 query II
 SELECT g, SUM(i) FROM integers GROUP BY * ORDER BY 1

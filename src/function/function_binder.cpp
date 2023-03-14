@@ -294,8 +294,7 @@ unique_ptr<BoundFunctionExpression> FunctionBinder::BindScalarFunction(ScalarFun
 unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunction(AggregateFunction bound_function,
                                                                            vector<unique_ptr<Expression>> children,
                                                                            unique_ptr<Expression> filter,
-                                                                           AggregateType aggr_type,
-                                                                           unique_ptr<BoundOrderModifier> order_bys) {
+                                                                           AggregateType aggr_type) {
 	unique_ptr<FunctionData> bind_info;
 	if (bound_function.bind) {
 		bind_info = bound_function.bind(context, bound_function, children);
@@ -305,12 +304,6 @@ unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunction(Aggre
 
 	// check if we need to add casts to the children
 	CastToFunctionArguments(bound_function, children);
-
-	// Special case: for ORDER BY aggregates, we wrap the aggregate function in a SortedAggregateFunction
-	// The children are the sort clauses and the binding contains the ordering data.
-	if (order_bys && !order_bys->orders.empty()) {
-		bind_info = BindSortedAggregate(bound_function, children, std::move(bind_info), std::move(order_bys));
-	}
 
 	return make_unique<BoundAggregateExpression>(std::move(bound_function), std::move(children), std::move(filter),
 	                                             std::move(bind_info), aggr_type);
