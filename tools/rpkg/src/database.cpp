@@ -1,5 +1,4 @@
 #include "rapi.hpp"
-#include "iostream"
 
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
@@ -39,30 +38,37 @@ struct ZeroSumOperation {
 };
 
 [[cpp11::register]] bool rapi_set_sum_default_to_zero(duckdb::conn_eptr_t conn) {
-	if (!conn || !conn.get() || !conn->conn) {
-		cpp11::stop("rapi_set_sum_default_to_zero: Invalid connection");
-	}
-	auto context = conn->conn->context;
-	auto &catalog = Catalog::GetSystemCatalog(*context);
-
-	context->transaction.BeginTransaction();
-
-	auto sum_function = Catalog::GetEntry(*context, CatalogType::AGGREGATE_FUNCTION_ENTRY, SYSTEM_CATALOG, DEFAULT_SCHEMA, "sum", false);
-
-	auto sum_function_cast = (AggregateFunctionCatalogEntry*)sum_function;
-	for(auto &aggr : sum_function_cast->functions.functions) {
-		switch(aggr.arguments[0].InternalType()) {
-		case PhysicalType::INT32:
-		case PhysicalType::INT128:
-		case PhysicalType::DOUBLE:
-		case PhysicalType::FLOAT:
-		case PhysicalType::INT64:
-			aggr.finalize = AggregateFunction::StateFinalize<SumState<int64_t>, int64_t, ZeroSumOperation>;
-			break;
+	try {
+		if (!conn || !conn.get() || !conn->conn) {
+			cpp11::stop("rapi_set_sum_default_to_zero: Invalid connection");
 		}
+		auto context = conn->conn->context;
+
+		context->transaction.BeginTransaction();
+
+		auto sum_function = Catalog::GetEntry(*context, CatalogType::AGGREGATE_FUNCTION_ENTRY, SYSTEM_CATALOG,
+		                                      DEFAULT_SCHEMA, "sum", false);
+
+		auto sum_function_cast = (AggregateFunctionCatalogEntry *)sum_function;
+		for (auto &aggr : sum_function_cast->functions.functions) {
+			switch (aggr.arguments[0].InternalType()) {
+			case PhysicalType::INT32:
+			case PhysicalType::INT128:
+			case PhysicalType::DOUBLE:
+			case PhysicalType::FLOAT:
+			case PhysicalType::INT64:
+				aggr.finalize = AggregateFunction::StateFinalize<SumState<int64_t>, int64_t, ZeroSumOperation>;
+				break;
+			}
+		}
+
+		context->transaction.Commit();
+	} catch (...) {
+		cpp11::warning("Something went wrong. Please contact duckdblabs.");
+		return false;
 	}
 
-	context->transaction.Commit();
+	return true;
 }
 
 [[cpp11::register]] duckdb::db_eptr_t rapi_startup(std::string dbdir, bool readonly, cpp11::list configsexp) {

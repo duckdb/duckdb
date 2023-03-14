@@ -346,7 +346,7 @@ test_that("rel aggregate with groups and aggregate function works", {
 
 test_that("Window sum expression function test works", {
 #     select j, i, sum(i) over (partition by j) from a order by 1,2
-    rel_a <- rel_from_df(con, data.frame(a=c(1:8, NA),b=c(1, 1, 2, 2, 3, 3, 4, 4, 4)))
+    rel_a <- rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
     sum_func <- expr_function("sum", list(expr_reference("a")))
     aggrs <- expr_window(sum_func, partitions=list(expr_reference("b")))
     expr_set_alias(aggrs, "window_result")
@@ -563,6 +563,21 @@ test_that("rel aggregate on NA is 0", {
    aggrs <- list(sum = expr_function("sum", list(expr_reference("a"))))
    res <- rel_aggregate(rel_a, list(expr_reference("b")), aggrs)
    rel_df <- rel_to_altrep(res)
-   expected_result <- data.frame(b=c(3, 4), sum=c(3, 10))
+   expected_result <- data.frame(b=c(3, 4), sum=c(0, 10))
    expect_equal(rel_df, expected_result)
+})
+
+test_that("Window sum expression where NA exists defaults the sum to 0", {
+#     select j, i, sum(i) over (partition by j) from a order by 1,2
+    con <- dbConnect(duckdb::duckdb())
+    duckdb_set_sum_default_to_zero(con)
+    rel_a <- rel_from_df(con, data.frame(a=c(1, 2, 3, 4, 5, 6, 7, 8, NA, NA),b=c(1, 1, 2, 2, 3, 3, 4, 4, 4, 5)))
+    sum_func <- expr_function("sum", list(expr_reference("a")))
+    aggrs <- expr_window(sum_func, partitions=list(expr_reference("b")))
+    expr_set_alias(aggrs, "window_result")
+    window_proj <- rel_project(rel_a, list(expr_reference("a"), aggrs))
+    order_over_window <- rapi_rel_order(window_proj, list(expr_reference("window_result")))
+    res <- rel_to_altrep(order_over_window)
+    expected_result <- data.frame(a=c(NA, 1:8, NA), window_result=c(0, 3, 3, 7, 7, 11, 11, 15, 15, 15))
+    expect_equal(res, expected_result)
 })
