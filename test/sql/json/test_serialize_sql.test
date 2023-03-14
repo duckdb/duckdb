@@ -1,0 +1,28 @@
+# name: test/sql/json/test_serialize_sql.test
+# group: [json]
+
+require json
+
+# Example with simple query
+query I
+SELECT json_serialize_sql('SELECT 1 + 2 FROM tbl1');
+----
+{"error":false,"statements":[{"type":"SELECT_NODE","modifiers":[],"cte_map":{"map":[]},"select_list":[{"class":"FUNCTION","type":"FUNCTION","alias":"","function_name":"+","schema":"","children":[{"class":"CONSTANT","type":"CONSTANT","alias":"","value":{"type":{"id":"INTEGER","type_info":null},"is_null":false,"value":1}},{"class":"CONSTANT","type":"CONSTANT","alias":"","value":{"type":{"id":"INTEGER","type_info":null},"is_null":false,"value":2}}],"filter":null,"order_bys":{"type":"ORDER_MODIFIER","orders":[]},"distinct":false,"is_operator":true,"export_state":false,"catalog":""}],"from_table":{"type":"BASE_TABLE","alias":"","sample":null,"schema_name":"","table_name":"tbl1","column_name_alias":[],"catalog_name":""},"where_clause":null,"group_expressions":[],"group_sets":[],"aggregate_handling":"STANDARD_HANDLING","having":null,"sample":null,"qualify":null}]}
+
+# Example with skip_null and skip_empty
+query I
+SELECT json_serialize_sql('SELECT *, 1 + 2 FROM tbl1', skip_null := true, skip_empty := true);
+----
+{"error":false,"statements":[{"type":"SELECT_NODE","select_list":[{"class":"STAR","type":"STAR","columns":false},{"class":"FUNCTION","type":"FUNCTION","function_name":"+","children":[{"class":"CONSTANT","type":"CONSTANT","value":{"type":{"id":"INTEGER"},"is_null":false,"value":1}},{"class":"CONSTANT","type":"CONSTANT","value":{"type":{"id":"INTEGER"},"is_null":false,"value":2}}],"order_bys":{"type":"ORDER_MODIFIER"},"distinct":false,"is_operator":true,"export_state":false}],"from_table":{"type":"BASE_TABLE","table_name":"tbl1"},"aggregate_handling":"STANDARD_HANDLING"}]}
+
+# Example with subquery
+query I
+SELECT json_serialize_sql('SELECT * FROM (SELECT 1 + 2)', skip_null := true, skip_empty := true);
+----
+{"error":false,"statements":[{"type":"SELECT_NODE","select_list":[{"class":"STAR","type":"STAR","columns":false}],"from_table":{"type":"SUBQUERY","subquery":{"type":"SELECT_NODE","select_list":[{"class":"FUNCTION","type":"FUNCTION","function_name":"+","children":[{"class":"CONSTANT","type":"CONSTANT","value":{"type":{"id":"INTEGER"},"is_null":false,"value":1}},{"class":"CONSTANT","type":"CONSTANT","value":{"type":{"id":"INTEGER"},"is_null":false,"value":2}}],"order_bys":{"type":"ORDER_MODIFIER"},"distinct":false,"is_operator":true,"export_state":false}],"from_table":{"type":"EMPTY"},"aggregate_handling":"STANDARD_HANDLING"}},"aggregate_handling":"STANDARD_HANDLING"}]}
+
+# Example with syntax error
+query I
+SELECT json_serialize_sql('SELECT AND LAUNCH ROCKETS WHERE 1 = 1');
+----
+{"error":true,"error_type":"parser","error_message":"syntax error at or near \"AND\"\nLINE 1: SELECT AND LAUNCH ROCKETS WHERE 1 = 1\n               ^"}

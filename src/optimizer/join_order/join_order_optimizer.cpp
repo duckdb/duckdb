@@ -138,7 +138,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 					std::swap(join.children[0], join.children[1]);
 					for (auto &cond : join.conditions) {
 						std::swap(cond.left, cond.right);
-						cond.comparison = FlipComparisionExpression(cond.comparison);
+						cond.comparison = FlipComparisonExpression(cond.comparison);
 					}
 				}
 			}
@@ -156,7 +156,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		vector<column_binding_map_t<ColumnBinding>> child_binding_maps;
 		idx_t child_bindings_it = 0;
 		for (auto &child : op->children) {
-			child_binding_maps.emplace_back(column_binding_map_t<ColumnBinding>());
+			child_binding_maps.emplace_back();
 			JoinOrderOptimizer optimizer(context);
 			child = optimizer.Optimize(std::move(child));
 			// save the relation bindings from the optimized child. These later all get added to the
@@ -230,7 +230,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		auto relation_id = relations.size();
 		// push one child column binding map back.
 		vector<column_binding_map_t<ColumnBinding>> child_binding_maps;
-		child_binding_maps.emplace_back(column_binding_map_t<ColumnBinding>());
+		child_binding_maps.emplace_back();
 		optimizer.cardinality_estimator.CopyRelationMap(child_binding_maps.at(0));
 		// This logical projection may sit on top of a logical comparison join that has been pushed down
 		// we want to copy the binding info of both tables
@@ -769,7 +769,7 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 
 				if (invert) {
 					// reverse comparison expression if we reverse the order of the children
-					cond.comparison = FlipComparisionExpression(cond.comparison);
+					cond.comparison = FlipComparisonExpression(cond.comparison);
 				}
 				join->conditions.push_back(std::move(cond));
 			}
@@ -846,7 +846,7 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 				cond.comparison = comparison.type;
 				if (invert) {
 					// reverse comparison expression if we reverse the order of the children
-					cond.comparison = FlipComparisionExpression(comparison.type);
+					cond.comparison = FlipComparisonExpression(comparison.type);
 				}
 				// now find the join to push it into
 				auto node = result_operator.get();
@@ -882,9 +882,11 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 
 	// first we will extract all relations from the main plan
 	vector<unique_ptr<LogicalOperator>> extracted_relations;
+	extracted_relations.reserve(relations.size());
 	for (auto &relation : relations) {
 		extracted_relations.push_back(ExtractJoinRelation(*relation));
 	}
+
 	// now we generate the actual joins
 	auto join_tree = GenerateJoins(extracted_relations, node);
 	// perform the final pushdown of remaining filters
@@ -1012,7 +1014,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	for (idx_t i = 0; i < relations.size(); i++) {
 		auto &rel = *relations[i];
 		auto node = set_manager.GetJoinRelation(i);
-		nodes_ops.emplace_back(NodeOp(make_unique<JoinNode>(node, 0), rel.op));
+		nodes_ops.emplace_back(make_unique<JoinNode>(node, 0), rel.op);
 	}
 
 	cardinality_estimator.InitCardinalityEstimatorProps(&nodes_ops, &filter_infos);

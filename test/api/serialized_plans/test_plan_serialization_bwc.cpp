@@ -64,7 +64,8 @@ TEST_CASE("Test deserialized plans from file", "[.][serialization]") {
 	DuckDB db;
 	Connection con(db);
 	load_db(con);
-	BufferedFileReader deserializer(db.GetFileSystem(), get_full_file_name("serialized_plans.binary").c_str());
+	BufferedFileReader deserializer(db.GetFileSystem(), get_full_file_name("serialized_plans.binary").c_str(),
+	                                con.context.get());
 	deserializer.SetVersion(deserializer.Read<uint64_t>());
 
 	std::ifstream queries(get_full_file_name("queries.sql"));

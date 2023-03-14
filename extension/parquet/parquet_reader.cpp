@@ -320,7 +320,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 			                                     std::move(struct_reader));
 		}
 		if (child_types.size() > 1 || (!is_list && !is_map && !is_repeated)) {
-			result_type = LogicalType::STRUCT(std::move(child_types));
+			result_type = LogicalType::STRUCT(child_types);
 			result = make_unique<StructColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
 			                                         std::move(child_readers));
 		} else {

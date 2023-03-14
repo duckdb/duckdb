@@ -121,6 +121,9 @@ bool TryCastFloatingValueCommaSeparated(const string_t &value_str, const Logical
 }
 
 bool BaseCSVReader::TryCastValue(const Value &value, const LogicalType &sql_type) {
+	if (value.IsNull()) {
+		return true;
+	}
 	if (options.has_format[LogicalTypeId::DATE] && sql_type.id() == LogicalTypeId::DATE) {
 		date_t result;
 		string error_message;

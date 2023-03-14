@@ -22,4 +22,6 @@ enum class JoinRefType : uint8_t {
 	POSITIONAL // Positional condition
 };
 
+const char *ToString(JoinRefType value);
+
 } // namespace duckdb

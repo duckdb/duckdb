@@ -271,6 +271,7 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 	vector<vector<unique_ptr<ParsedExpression>>> unpivot_expressions;
 	for (idx_t v_idx = 0; v_idx < unpivot.entries[0].values.size(); v_idx++) {
 		vector<unique_ptr<ParsedExpression>> expressions;
+		expressions.reserve(unpivot.entries.size());
 		for (auto &entry : unpivot.entries) {
 			expressions.push_back(make_unique<ColumnRefExpression>(entry.values[v_idx].ToString()));
 		}
