@@ -73,16 +73,13 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 		int64_t range;
 		switch (group_type.InternalType()) {
 		case PhysicalType::INT8:
-			range = int64_t(NumericStats::GetMax<int8_t>(nstats)) -
-			        int64_t(NumericStats::GetMin<int8_t>(nstats));
+			range = int64_t(NumericStats::GetMax<int8_t>(nstats)) - int64_t(NumericStats::GetMin<int8_t>(nstats));
 			break;
 		case PhysicalType::INT16:
-			range = int64_t(NumericStats::GetMax<int16_t>(nstats)) -
-			        int64_t(NumericStats::GetMin<int16_t>(nstats));
+			range = int64_t(NumericStats::GetMax<int16_t>(nstats)) - int64_t(NumericStats::GetMin<int16_t>(nstats));
 			break;
 		case PhysicalType::INT32:
-			range = int64_t(NumericStats::GetMax<int32_t>(nstats)) -
-			        int64_t(NumericStats::GetMin<int32_t>(nstats));
+			range = int64_t(NumericStats::GetMax<int32_t>(nstats)) - int64_t(NumericStats::GetMin<int32_t>(nstats));
 			break;
 		case PhysicalType::INT64:
 			if (!TrySubtractOperator::Operation(NumericStats::GetMax<int64_t>(nstats),

@@ -62,4 +62,4 @@ double &NumericValueUnion::GetReferenceUnsafe() {
 	return value_.double_;
 }
 
-}
+} // namespace duckdb

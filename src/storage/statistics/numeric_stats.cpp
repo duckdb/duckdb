@@ -67,7 +67,7 @@ void NumericStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 }
 
 struct GetNumericValueUnion {
-	template<class T>
+	template <class T>
 	static T Operation(const NumericValueUnion &v);
 };
 
@@ -136,12 +136,12 @@ T NumericStats::GetMaxUnsafe(const BaseStatistics &stats) {
 	return GetNumericValueUnion::Operation<T>(NumericStats::GetDataUnsafe(stats).max);
 }
 
-template<class T>
+template <class T>
 bool ConstantExactRange(T min, T max, T constant) {
 	return Equals::Operation(constant, min) && Equals::Operation(constant, max);
 }
 
-template<class T>
+template <class T>
 bool ConstantValueInRange(T min, T max, T constant) {
 	return !(LessThan::Operation(constant, min) || GreaterThan::Operation(constant, max));
 }
