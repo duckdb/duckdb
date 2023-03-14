@@ -89,7 +89,8 @@ public:
 	static unique_ptr<DuckDBPyRelation> FromArrow(py::object &arrow_object,
 	                                              shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	unique_ptr<DuckDBPyRelation> Project(const string &expr);
+	unique_ptr<DuckDBPyRelation> ProjectFromExpression(const string &expr);
+	unique_ptr<DuckDBPyRelation> Project(const py::object &expr);
 
 	static unique_ptr<DuckDBPyRelation> ProjectDf(const DataFrame &df, const string &expr,
 	                                              shared_ptr<DuckDBPyConnection> conn = nullptr);

@@ -14,6 +14,7 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
+#include "duckdb/catalog/default/default_types.hpp"
 
 namespace duckdb {
 
@@ -124,13 +125,49 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromArrow(py::object &arrow_objec
 	return conn->FromArrow(arrow_object);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const string &expr) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectFromExpression(const string &expression) {
+	auto projected_relation = make_unique<DuckDBPyRelation>(rel->Project(expression));
+	projected_relation->rel->extra_dependencies = this->rel->extra_dependencies;
+	return projected_relation;
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const py::object &expr) {
 	if (!rel) {
 		return nullptr;
 	}
-	auto projected_relation = make_unique<DuckDBPyRelation>(rel->Project(expr));
-	projected_relation->rel->extra_dependencies = this->rel->extra_dependencies;
-	return projected_relation;
+	if (py::isinstance<py::str>(expr)) {
+		// SQL string
+		string expression = py::str(expr);
+		return ProjectFromExpression(expression);
+	}
+	if (!py::isinstance<py::list>(expr)) {
+		return nullptr;
+	}
+	auto list = py::list(expr);
+	vector<LogicalType> types_filter;
+	// Collect the list of types specified that will be our filter
+	for (auto &item : list) {
+		string item_str = py::str(item);
+		auto type = DefaultTypeGenerator::GetDefaultType(item_str);
+		if (type == LogicalTypeId::INVALID) {
+			throw NotImplementedException("We can not filter on this type yet");
+		}
+		types_filter.push_back(type);
+	}
+
+	string projection = "";
+	for (idx_t i = 0; i < types.size(); i++) {
+		auto &type = types[i];
+		// This is ugly as hell, but it should at least work
+		if (std::find_if(types_filter.begin(), types_filter.end(),
+		                 [&](const LogicalType &filter) { return filter.id() == type.id(); }) != types_filter.end()) {
+			if (!projection.empty()) {
+				projection += ", ";
+			}
+			projection += names[i];
+		}
+	}
+	return ProjectFromExpression(projection);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectDf(const DataFrame &df, const string &expr,
@@ -138,7 +175,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectDf(const DataFrame &df, co
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
-	return conn->FromDF(df)->Project(expr);
+	return conn->FromDF(df)->ProjectFromExpression(expr);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::SetAlias(const string &expr) {
@@ -398,7 +435,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Mode(const string &aggr_columns, 
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Abs(const string &columns) {
 	auto expr = GenerateExpressionList("abs", columns);
-	return Project(expr);
+	return ProjectFromExpression(expr);
 }
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Prod(const string &aggr_columns, const string &groups) {
 	return GenericAggregator("product", aggr_columns, groups);
