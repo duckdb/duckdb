@@ -55,10 +55,6 @@ void ColumnScanState::Next(idx_t count) {
 	}
 }
 
-void ColumnScanState::NextVector() {
-	Next(STANDARD_VECTOR_SIZE);
-}
-
 const vector<column_t> &RowGroupScanState::GetColumnIds() {
 	return parent.GetColumnIds();
 }

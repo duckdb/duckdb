@@ -32,14 +32,11 @@ void ListColumnData::InitializeScan(ColumnScanState &state) {
 	ColumnData::InitializeScan(state);
 
 	// initialize the validity segment
-	ColumnScanState validity_state;
-	validity.InitializeScan(validity_state);
-	state.child_states.push_back(std::move(validity_state));
+	D_ASSERT(state.child_states.size() == 2);
+	validity.InitializeScan(state.child_states[0]);
 
 	// initialize the child scan
-	ColumnScanState child_state;
-	child_column->InitializeScan(child_state);
-	state.child_states.push_back(std::move(child_state));
+	child_column->InitializeScan(state.child_states[1]);
 }
 
 uint64_t ListColumnData::FetchListOffset(idx_t row_idx) {
@@ -292,6 +289,7 @@ void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &sta
 		auto &child_type = ListType::GetChildType(result.GetType());
 		Vector child_scan(child_type, child_scan_count);
 		// seek the scan towards the specified position and read [length] entries
+		child_state->Initialize(child_type);
 		child_column->InitializeScanWithOffset(*child_state, start + start_offset);
 		D_ASSERT(child_type.InternalType() == PhysicalType::STRUCT ||
 		         child_state->row_index + child_scan_count - this->start <= child_column->GetMaxEntry());

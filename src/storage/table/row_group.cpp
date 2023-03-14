@@ -99,6 +99,39 @@ void RowGroup::InitializeEmpty(const vector<LogicalType> &types) {
 	}
 }
 
+void ColumnScanState::Initialize(const LogicalType &type) {
+	if (type.id() == LogicalTypeId::VALIDITY) {
+		// validity - nothing to initialize
+		return;
+	}
+	if (type.InternalType() == PhysicalType::STRUCT) {
+		// validity + struct children
+		auto &struct_children = StructType::GetChildTypes(type);
+		child_states.resize(struct_children.size() + 1);
+		for(idx_t i = 0; i < struct_children.size(); i++) {
+			child_states[i + 1].Initialize(struct_children[i].second);
+		}
+	} else if (type.InternalType() == PhysicalType::LIST) {
+		// validity + list child
+		child_states.resize(2);
+		child_states[1].Initialize(ListType::GetChildType(type));
+	} else {
+		// validity
+		child_states.resize(1);
+	}
+}
+
+void RowGroupScanState::Initialize(const vector<LogicalType> &types) {
+	auto &column_ids = GetColumnIds();
+	column_scans = unique_ptr<ColumnScanState[]>(new ColumnScanState[column_ids.size()]);
+	for(idx_t i = 0; i < column_ids.size(); i++) {
+		if (column_ids[i] == COLUMN_IDENTIFIER_ROW_ID) {
+			continue;
+		}
+		column_scans[i].Initialize(types[column_ids[i]]);
+	}
+}
+
 bool RowGroup::InitializeScanWithOffset(RowGroupScanState &state, idx_t vector_offset) {
 	auto &column_ids = state.GetColumnIds();
 	auto filters = state.GetFilters();
@@ -112,7 +145,7 @@ bool RowGroup::InitializeScanWithOffset(RowGroupScanState &state, idx_t vector_o
 	state.row_group = this;
 	state.vector_index = vector_offset;
 	state.max_row = this->start > parent_max_row ? 0 : MinValue<idx_t>(this->count, parent_max_row - this->start);
-	state.column_scans = unique_ptr<ColumnScanState[]>(new ColumnScanState[column_ids.size()]);
+	D_ASSERT(state.column_scans);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];
 		if (column != COLUMN_IDENTIFIER_ROW_ID) {
@@ -137,7 +170,7 @@ bool RowGroup::InitializeScan(RowGroupScanState &state) {
 	state.row_group = this;
 	state.vector_index = 0;
 	state.max_row = this->start > parent_max_row ? 0 : MinValue<idx_t>(this->count, parent_max_row - this->start);
-	state.column_scans = unique_ptr<ColumnScanState[]>(new ColumnScanState[column_ids.size()]);
+	D_ASSERT(state.column_scans);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];
 		if (column != COLUMN_IDENTIFIER_ROW_ID) {
@@ -161,6 +194,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 	column_data->InitializeAppend(append_state);
 
 	// scan the original table, and fill the new column with the transformed value
+	scan_state.Initialize(collection.GetTypes());
 	InitializeScan(scan_state);
 
 	Vector append_vector(target_type);

@@ -72,12 +72,11 @@ struct ColumnScanState {
 	idx_t last_offset = 0;
 
 public:
+	void Initialize(const LogicalType &type);
 	//! Move the scan state forward by "count" rows (including all child states)
 	void Next(idx_t count);
 	//! Move ONLY this state forward by "count" rows (i.e. not the child states)
 	void NextInternal(idx_t count);
-	//! Move the scan state forward by STANDARD_VECTOR_SIZE rows
-	void NextVector();
 };
 
 struct ColumnFetchState {
@@ -105,6 +104,7 @@ public:
 	unique_ptr<ColumnScanState[]> column_scans;
 
 public:
+	void Initialize(const vector<LogicalType> &types);
 	const vector<column_t> &GetColumnIds();
 	TableFilterSet *GetFilters();
 	AdaptiveFilter *GetAdaptiveFilter();

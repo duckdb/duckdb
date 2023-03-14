@@ -118,6 +118,7 @@ void RowGroupCollection::InitializeScan(CollectionScanState &state, const vector
 	D_ASSERT(row_group);
 	state.row_groups = row_groups.get();
 	state.max_row = row_start + total_rows;
+	state.row_group_state.Initialize(GetTypes());
 	while (row_group && !row_group->InitializeScan(state.row_group_state)) {
 		row_group = row_groups->GetNextSegment(row_group);
 	}
@@ -133,6 +134,7 @@ void RowGroupCollection::InitializeScanWithOffset(CollectionScanState &state, co
 	D_ASSERT(row_group);
 	state.row_groups = row_groups.get();
 	state.max_row = end_row;
+	state.row_group_state.Initialize(GetTypes());
 	idx_t start_vector = (start_row - row_group->start) / STANDARD_VECTOR_SIZE;
 	if (!row_group->InitializeScanWithOffset(state.row_group_state, start_vector)) {
 		throw InternalException("Failed to initialize row group scan with offset");
@@ -144,6 +146,10 @@ bool RowGroupCollection::InitializeScanInRowGroup(CollectionScanState &state,
                                                   idx_t max_row) {
 	state.max_row = max_row;
 	state.row_groups = parallel_state.collection->row_groups.get();
+	if (!state.row_group_state.column_scans) {
+		// initialize the scan state
+		state.row_group_state.Initialize(parallel_state.collection->GetTypes());
+	}
 	return parallel_state.current_row_group->InitializeScanWithOffset(state.row_group_state, vector_index);
 }
 
@@ -527,6 +533,7 @@ void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_
 	DataChunk result;
 	result.Initialize(GetAllocator(), types);
 
+	state.table_state.row_group_state.Initialize(GetTypes());
 	row_group->InitializeScanWithOffset(state.table_state.row_group_state, row_group_vector_idx);
 	row_group->ScanCommitted(state.table_state.row_group_state, result, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
 	result.Slice(sel, count);
