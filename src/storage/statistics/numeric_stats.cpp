@@ -14,6 +14,9 @@ template <>
 void NumericStats::Update<list_entry_t>(BaseStatistics &stats, list_entry_t new_value) {
 }
 
+//===--------------------------------------------------------------------===//
+// NumericStats
+//===--------------------------------------------------------------------===//
 BaseStatistics NumericStats::CreateUnknown(LogicalType type) {
 	BaseStatistics result(std::move(type));
 	result.InitializeUnknown();
@@ -63,26 +66,105 @@ void NumericStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	}
 }
 
+struct GetNumericValueUnion {
+	template<class T>
+	static T Operation(const NumericValueUnion &v);
+};
+
+template <>
+int8_t GetNumericValueUnion::Operation(const NumericValueUnion &v) {
+	return v.value_.tinyint;
+}
+
+template <>
+int16_t GetNumericValueUnion::Operation(const NumericValueUnion &v) {
+	return v.value_.smallint;
+}
+
+template <>
+int32_t GetNumericValueUnion::Operation(const NumericValueUnion &v) {
+	return v.value_.integer;
+}
+
+template <>
+int64_t GetNumericValueUnion::Operation(const NumericValueUnion &v) {
+	return v.value_.bigint;
+}
+
+template <>
+hugeint_t GetNumericValueUnion::Operation(const NumericValueUnion &v) {
+	return v.value_.hugeint;
+}
+
+template <>
+uint8_t GetNumericValueUnion::Operation(const NumericValueUnion &v) {
+	return v.value_.utinyint;
+}
+
+template <>
+uint16_t GetNumericValueUnion::Operation(const NumericValueUnion &v) {
+	return v.value_.usmallint;
+}
+
+template <>
+uint32_t GetNumericValueUnion::Operation(const NumericValueUnion &v) {
+	return v.value_.uinteger;
+}
+
+template <>
+uint64_t GetNumericValueUnion::Operation(const NumericValueUnion &v) {
+	return v.value_.ubigint;
+}
+
+template <>
+float GetNumericValueUnion::Operation(const NumericValueUnion &v) {
+	return v.value_.float_;
+}
+
+template <>
+double GetNumericValueUnion::Operation(const NumericValueUnion &v) {
+	return v.value_.double_;
+}
+
+template <class T>
+T NumericStats::GetMinUnsafe(const BaseStatistics &stats) {
+	return GetNumericValueUnion::Operation<T>(NumericStats::GetDataUnsafe(stats).min);
+}
+
+template <class T>
+T NumericStats::GetMaxUnsafe(const BaseStatistics &stats) {
+	return GetNumericValueUnion::Operation<T>(NumericStats::GetDataUnsafe(stats).max);
+}
+
+template<class T>
+bool ConstantExactRange(T min, T max, T constant) {
+	return Equals::Operation(constant, min) && Equals::Operation(constant, max);
+}
+
+template<class T>
+bool ConstantValueInRange(T min, T max, T constant) {
+	return !(LessThan::Operation(constant, min) || GreaterThan::Operation(constant, max));
+}
+
 template <class T>
 FilterPropagateResult CheckZonemapTemplated(const BaseStatistics &stats, ExpressionType comparison_type,
                                             const Value &constant_value) {
-	auto min_value = NumericStats::GetMinUnsafe<T>(stats);
-	auto max_value = NumericStats::GetMaxUnsafe<T>(stats);
-	auto constant = constant_value.GetValueUnsafe<T>();
+	T min_value = NumericStats::GetMinUnsafe<T>(stats);
+	T max_value = NumericStats::GetMaxUnsafe<T>(stats);
+	T constant = constant_value.GetValueUnsafe<T>();
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
-		if (Equals::Operation(constant, min_value) && Equals::Operation(constant, max_value)) {
+		if (ConstantExactRange(min_value, max_value, constant)) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-		} else if (GreaterThanEquals::Operation(constant, min_value) &&
-		           LessThanEquals::Operation(constant, max_value)) {
-			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		} else {
-			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
+		if (ConstantValueInRange(min_value, max_value, constant)) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	case ExpressionType::COMPARE_NOTEQUAL:
-		if (LessThan::Operation(constant, min_value) || GreaterThan::Operation(constant, max_value)) {
+		if (!ConstantValueInRange(min_value, max_value, constant)) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-		} else if (Equals::Operation(min_value, max_value) && Equals::Operation(min_value, constant)) {
+		} else if (ConstantExactRange(min_value, max_value, constant)) {
 			// corner case of a cluster with one numeric equal to the target constant
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
@@ -504,141 +586,6 @@ void NumericStats::Verify(const BaseStatistics &stats, Vector &vector, const Sel
 	default:
 		throw InternalException("Unsupported type %s for numeric statistics verify", type.ToString());
 	}
-}
-
-template <>
-bool &NumericValueUnion::GetReferenceUnsafe() {
-	return value_.boolean;
-}
-
-template <>
-int8_t &NumericValueUnion::GetReferenceUnsafe() {
-	return value_.tinyint;
-}
-
-template <>
-int16_t &NumericValueUnion::GetReferenceUnsafe() {
-	return value_.smallint;
-}
-
-template <>
-int32_t &NumericValueUnion::GetReferenceUnsafe() {
-	return value_.integer;
-}
-
-template <>
-int64_t &NumericValueUnion::GetReferenceUnsafe() {
-	return value_.bigint;
-}
-
-template <>
-hugeint_t &NumericValueUnion::GetReferenceUnsafe() {
-	return value_.hugeint;
-}
-
-template <>
-uint8_t &NumericValueUnion::GetReferenceUnsafe() {
-	return value_.utinyint;
-}
-
-template <>
-uint16_t &NumericValueUnion::GetReferenceUnsafe() {
-	return value_.usmallint;
-}
-
-template <>
-uint32_t &NumericValueUnion::GetReferenceUnsafe() {
-	return value_.uinteger;
-}
-
-template <>
-uint64_t &NumericValueUnion::GetReferenceUnsafe() {
-	return value_.ubigint;
-}
-
-template <>
-float &NumericValueUnion::GetReferenceUnsafe() {
-	return value_.float_;
-}
-
-template <>
-double &NumericValueUnion::GetReferenceUnsafe() {
-	return value_.double_;
-}
-
-template <>
-bool NumericValueUnion::GetValueUnsafe() const {
-	return value_.boolean;
-}
-
-template <>
-int8_t NumericValueUnion::GetValueUnsafe() const {
-	return value_.tinyint;
-}
-
-template <>
-int16_t NumericValueUnion::GetValueUnsafe() const {
-	return value_.smallint;
-}
-
-template <>
-int32_t NumericValueUnion::GetValueUnsafe() const {
-	return value_.integer;
-}
-
-template <>
-int64_t NumericValueUnion::GetValueUnsafe() const {
-	return value_.bigint;
-}
-
-template <>
-hugeint_t NumericValueUnion::GetValueUnsafe() const {
-	return value_.hugeint;
-}
-
-template <>
-uint8_t NumericValueUnion::GetValueUnsafe() const {
-	return value_.utinyint;
-}
-
-template <>
-uint16_t NumericValueUnion::GetValueUnsafe() const {
-	return value_.usmallint;
-}
-
-template <>
-uint32_t NumericValueUnion::GetValueUnsafe() const {
-	return value_.uinteger;
-}
-
-template <>
-uint64_t NumericValueUnion::GetValueUnsafe() const {
-	return value_.ubigint;
-}
-
-template <>
-float NumericValueUnion::GetValueUnsafe() const {
-	return value_.float_;
-}
-
-template <>
-double NumericValueUnion::GetValueUnsafe() const {
-	return value_.double_;
-}
-
-template <>
-date_t NumericValueUnion::GetValueUnsafe() const {
-	return date_t(value_.integer);
-}
-
-template <>
-dtime_t NumericValueUnion::GetValueUnsafe() const {
-	return dtime_t(value_.bigint);
-}
-
-template <>
-timestamp_t NumericValueUnion::GetValueUnsafe() const {
-	return timestamp_t(value_.bigint);
 }
 
 } // namespace duckdb

@@ -180,8 +180,8 @@ struct DatePart {
 			return nullptr;
 		}
 		// run the operator on both the min and the max, this gives us the [min, max] bound
-		auto min = NumericStats::GetMinUnsafe<T>(nstats);
-		auto max = NumericStats::GetMaxUnsafe<T>(nstats);
+		auto min = NumericStats::GetMin<T>(nstats);
+		auto max = NumericStats::GetMax<T>(nstats);
 		if (min > max) {
 			return nullptr;
 		}
