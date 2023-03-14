@@ -143,7 +143,7 @@ void ChunkCollection::Fuse(ChunkCollection &other) {
 			auto &rhs = other.GetChunk(chunk_idx);
 			lhs->data.reserve(rhs.data.size());
 			for (auto &v : rhs.data) {
-				lhs->data.emplace_back(Vector(v));
+				lhs->data.emplace_back(v);
 			}
 			lhs->SetCardinality(rhs.size());
 			chunks.push_back(std::move(lhs));
@@ -156,7 +156,7 @@ void ChunkCollection::Fuse(ChunkCollection &other) {
 			auto &rhs = other.GetChunk(chunk_idx);
 			D_ASSERT(lhs.size() == rhs.size());
 			for (auto &v : rhs.data) {
-				lhs.data.emplace_back(Vector(v));
+				lhs.data.emplace_back(v);
 			}
 		}
 	}

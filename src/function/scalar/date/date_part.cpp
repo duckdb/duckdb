@@ -1332,7 +1332,7 @@ struct StructDatePart {
 		}
 
 		Function::EraseArgument(bound_function, arguments, 0);
-		bound_function.return_type = LogicalType::STRUCT(std::move(struct_children));
+		bound_function.return_type = LogicalType::STRUCT(struct_children);
 		return make_unique<BindData>(bound_function.return_type, part_codes);
 	}
 

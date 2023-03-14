@@ -4,8 +4,7 @@
 namespace duckdb {
 
 ColumnStatistics::ColumnStatistics(BaseStatistics stats_p) : stats(std::move(stats_p)) {
-	auto type = stats.GetType().InternalType();
-	if (type != PhysicalType::LIST && type != PhysicalType::STRUCT) {
+	if (DistinctStatistics::TypeIsSupported(stats.GetType())) {
 		distinct_stats = make_unique<DistinctStatistics>();
 	}
 }

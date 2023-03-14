@@ -2,6 +2,8 @@
 #include "duckdb/parser/expression_util.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 
@@ -190,6 +192,35 @@ void SelectNode::Serialize(FieldWriter &writer) const {
 	writer.WriteOptional(having);
 	writer.WriteOptional(sample);
 	writer.WriteOptional(qualify);
+}
+
+void SelectNode::FormatSerialize(FormatSerializer &serializer) const {
+	QueryNode::FormatSerialize(serializer);
+	serializer.WriteProperty("select_list", select_list);
+	serializer.WriteOptionalProperty("from_table", from_table);
+	serializer.WriteOptionalProperty("where_clause", where_clause);
+	serializer.WriteProperty("group_expressions", groups.group_expressions);
+	serializer.WriteProperty("group_sets", groups.grouping_sets);
+	serializer.WriteProperty("aggregate_handling", aggregate_handling);
+	serializer.WriteOptionalProperty("having", having);
+	serializer.WriteOptionalProperty("sample", sample);
+	serializer.WriteOptionalProperty("qualify", qualify);
+}
+
+unique_ptr<QueryNode> SelectNode::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = make_unique<SelectNode>();
+
+	deserializer.ReadProperty("select_list", result->select_list);
+	deserializer.ReadOptionalProperty("from_table", result->from_table);
+	deserializer.ReadOptionalProperty("where_clause", result->where_clause);
+	deserializer.ReadProperty("group_expressions", result->groups.group_expressions);
+	deserializer.ReadProperty("group_sets", result->groups.grouping_sets);
+	deserializer.ReadProperty("aggregate_handling", result->aggregate_handling);
+	deserializer.ReadOptionalProperty("having", result->having);
+	deserializer.ReadOptionalProperty("sample", result->sample);
+	deserializer.ReadOptionalProperty("qualify", result->qualify);
+
+	return std::move(result);
 }
 
 unique_ptr<QueryNode> SelectNode::Deserialize(FieldReader &reader) {

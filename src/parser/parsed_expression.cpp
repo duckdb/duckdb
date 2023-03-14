@@ -5,6 +5,8 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/parser/expression/list.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 
@@ -105,6 +107,76 @@ void ParsedExpression::Serialize(Serializer &serializer) const {
 	writer.WriteString(alias);
 	Serialize(writer);
 	writer.Finalize();
+}
+
+void ParsedExpression::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("class", GetExpressionClass());
+	serializer.WriteProperty("type", type);
+	serializer.WriteProperty("alias", alias);
+}
+
+unique_ptr<ParsedExpression> ParsedExpression::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto expression_class = deserializer.ReadProperty<ExpressionClass>("class");
+	auto type = deserializer.ReadProperty<ExpressionType>("type");
+	auto alias = deserializer.ReadProperty<string>("alias");
+	unique_ptr<ParsedExpression> result;
+	switch (expression_class) {
+	case ExpressionClass::BETWEEN:
+		result = BetweenExpression::FormatDeserialize(type, deserializer);
+		break;
+	case ExpressionClass::CASE:
+		result = CaseExpression::FormatDeserialize(type, deserializer);
+		break;
+	case ExpressionClass::CAST:
+		result = CastExpression::FormatDeserialize(type, deserializer);
+		break;
+	case ExpressionClass::COLLATE:
+		result = CollateExpression::FormatDeserialize(type, deserializer);
+		break;
+	case ExpressionClass::COLUMN_REF:
+		result = ColumnRefExpression::FormatDeserialize(type, deserializer);
+		break;
+	case ExpressionClass::COMPARISON:
+		result = ComparisonExpression::FormatDeserialize(type, deserializer);
+		break;
+	case ExpressionClass::CONJUNCTION:
+		result = ConjunctionExpression::FormatDeserialize(type, deserializer);
+		break;
+	case ExpressionClass::CONSTANT:
+		result = ConstantExpression::FormatDeserialize(type, deserializer);
+		break;
+	case ExpressionClass::DEFAULT:
+		result = make_unique<DefaultExpression>();
+		break;
+	case ExpressionClass::FUNCTION:
+		result = FunctionExpression::FormatDeserialize(type, deserializer);
+		break;
+	case ExpressionClass::LAMBDA:
+		result = LambdaExpression::FormatDeserialize(type, deserializer);
+		break;
+	case ExpressionClass::OPERATOR:
+		result = OperatorExpression::FormatDeserialize(type, deserializer);
+		break;
+	case ExpressionClass::PARAMETER:
+		result = ParameterExpression::FormatDeserialize(type, deserializer);
+		break;
+	case ExpressionClass::POSITIONAL_REFERENCE:
+		result = PositionalReferenceExpression::FormatDeserialize(type, deserializer);
+		break;
+	case ExpressionClass::STAR:
+		result = StarExpression::FormatDeserialize(type, deserializer);
+		break;
+	case ExpressionClass::SUBQUERY:
+		result = SubqueryExpression::FormatDeserialize(type, deserializer);
+		break;
+	case ExpressionClass::WINDOW:
+		result = WindowExpression::FormatDeserialize(type, deserializer);
+		break;
+	default:
+		throw SerializationException("Unsupported type for expression deserialization!");
+	}
+	result->alias = alias;
+	return result;
 }
 
 unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &source) {

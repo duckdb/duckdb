@@ -205,11 +205,10 @@ string ExpressionTypeToOperator(ExpressionType type);
 
 // Operator String to ExpressionType (e.g. + => OPERATOR_ADD)
 ExpressionType OperatorToExpressionType(const string &op);
-
 //! Negate a comparison expression, turning e.g. = into !=, or < into >=
-ExpressionType NegateComparisionExpression(ExpressionType type);
+ExpressionType NegateComparisonExpression(ExpressionType type);
 //! Flip a comparison expression, turning e.g. < into >, or = into =
-ExpressionType FlipComparisionExpression(ExpressionType type);
+ExpressionType FlipComparisonExpression(ExpressionType type);
 
 DUCKDB_API string ExpressionClassToString(ExpressionClass type);
 

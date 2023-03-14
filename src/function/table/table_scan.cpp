@@ -332,7 +332,7 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 				auto comparison_type = comparison->type;
 				if (comparison->left->type == ExpressionType::VALUE_CONSTANT) {
 					// the expression is on the right side, we flip them around
-					comparison_type = FlipComparisionExpression(comparison_type);
+					comparison_type = FlipComparisonExpression(comparison_type);
 				}
 				if (comparison_type == ExpressionType::COMPARE_EQUAL) {
 					// equality value
