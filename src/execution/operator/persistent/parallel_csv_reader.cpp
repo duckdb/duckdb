@@ -184,6 +184,11 @@ bool ParallelCSVReader::BufferRemainder() {
 
 bool ParallelCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message, bool try_add_line) {
 	// used for parsing algorithm
+	if (start_buffer == end_buffer){
+		// Nothing to read
+		finished = true;
+		return true;
+	}
 	D_ASSERT(end_buffer <= buffer_size);
 	bool finished_chunk = false;
 	idx_t column = 0;
