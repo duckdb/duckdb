@@ -281,6 +281,7 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
                                                const data_ptr_t row_locations[], Vector &new_heap_ptrs,
                                                const idx_t offset, const idx_t count, const TupleDataLayout &layout,
                                                const idx_t base_col_offset) {
+	// TODO: maybe check validity before recomputing?
 	const auto old_heap_locations = FlatVector::GetData<data_ptr_t>(old_heap_ptrs);
 
 	UnifiedVectorFormat new_heap_data;

@@ -739,7 +739,7 @@ bool HashJoinGlobalSourceState::AssignTask(HashJoinGlobalSinkState &sink, HashJo
 			lstate.full_outer_chunk_idx_from = full_outer_chunk_idx;
 			full_outer_chunk_idx =
 			    MinValue<idx_t>(full_outer_chunk_count, full_outer_chunk_idx + full_outer_chunks_per_thread);
-			lstate.full_outer_chunk_idx_to = build_chunk_idx;
+			lstate.full_outer_chunk_idx_to = full_outer_chunk_idx;
 			return true;
 		}
 		break;
