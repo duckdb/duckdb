@@ -22,8 +22,11 @@ public:
 	explicit PersistentTableData(idx_t column_count);
 	~PersistentTableData();
 
-	vector<RowGroupPointer> row_groups;
 	TableStatistics table_stats;
+	idx_t total_rows;
+	idx_t row_group_count;
+	block_id_t block_id;
+	idx_t offset;
 };
 
 } // namespace duckdb

@@ -43,16 +43,27 @@ export type ExceptionType =
     | "Parameter Not Allowed"  // parameter types not allowed
     | "Dependency"       // dependency
     | "Unknown"
+    | "HTTP"
     ;
 
 /**
  * Standard error shape for DuckDB errors
  */
-export interface DuckDbError extends Error {
+export interface _DuckDbError extends Error {
   errno: -1; // value of ERROR
   code: 'DUCKDB_NODEJS_ERROR';
   errorType: ExceptionType;
 }
+
+export interface HttpError extends _DuckDbError {
+  errorType: 'HTTP';
+  statusCode: number;
+  response: string;
+  reason: string;
+  headers: Record<string, string>;
+}
+
+export type DuckDbError = HttpError | _DuckDbError;
 
 type Callback<T> = (err: DuckDbError | null, res: T) => void;
 

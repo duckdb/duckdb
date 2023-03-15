@@ -532,37 +532,6 @@ template <>
 DUCKDB_API interval_t Value::GetValueUnsafe() const;
 
 template <>
-DUCKDB_API int8_t &Value::GetReferenceUnsafe();
-template <>
-DUCKDB_API int16_t &Value::GetReferenceUnsafe();
-template <>
-DUCKDB_API int32_t &Value::GetReferenceUnsafe();
-template <>
-DUCKDB_API int64_t &Value::GetReferenceUnsafe();
-template <>
-DUCKDB_API hugeint_t &Value::GetReferenceUnsafe();
-template <>
-DUCKDB_API uint8_t &Value::GetReferenceUnsafe();
-template <>
-DUCKDB_API uint16_t &Value::GetReferenceUnsafe();
-template <>
-DUCKDB_API uint32_t &Value::GetReferenceUnsafe();
-template <>
-DUCKDB_API uint64_t &Value::GetReferenceUnsafe();
-template <>
-DUCKDB_API float &Value::GetReferenceUnsafe();
-template <>
-DUCKDB_API double &Value::GetReferenceUnsafe();
-template <>
-DUCKDB_API date_t &Value::GetReferenceUnsafe();
-template <>
-DUCKDB_API dtime_t &Value::GetReferenceUnsafe();
-template <>
-DUCKDB_API timestamp_t &Value::GetReferenceUnsafe();
-template <>
-DUCKDB_API interval_t &Value::GetReferenceUnsafe();
-
-template <>
 DUCKDB_API bool Value::IsNan(float input);
 template <>
 DUCKDB_API bool Value::IsNan(double input);

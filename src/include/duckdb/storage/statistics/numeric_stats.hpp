@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/storage/statistics/numeric_stats_union.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
@@ -22,28 +20,6 @@ class FieldWriter;
 class FieldReader;
 struct SelectionVector;
 class Vector;
-
-struct NumericValueUnion {
-	union Val {
-		int8_t boolean;
-		int8_t tinyint;
-		int16_t smallint;
-		int32_t integer;
-		int64_t bigint;
-		uint8_t utinyint;
-		uint16_t usmallint;
-		uint32_t uinteger;
-		uint64_t ubigint;
-		hugeint_t hugeint;
-		float float_;
-		double double_;
-	} value_;
-
-	template <class T>
-	T &GetReferenceUnsafe() {
-		throw InternalException("NumericValueUnion::GetReferenceUnsafe called on unsupported type");
-	}
-};
 
 struct NumericStatsData {
 	//! Whether or not the value has a max value
@@ -109,13 +85,17 @@ struct NumericStats {
 	static void Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count);
 
 	template <class T>
-	static T GetMinUnsafe(const BaseStatistics &stats) {
-		return NumericStats::Min(stats).template GetValueUnsafe<T>();
+	static T GetMin(const BaseStatistics &stats) {
+		return NumericStats::Min(stats).GetValueUnsafe<T>();
 	}
 	template <class T>
-	static T GetMaxUnsafe(const BaseStatistics &stats) {
-		return NumericStats::Max(stats).template GetValueUnsafe<T>();
+	static T GetMax(const BaseStatistics &stats) {
+		return NumericStats::Max(stats).GetValueUnsafe<T>();
 	}
+	template <class T>
+	static T GetMinUnsafe(const BaseStatistics &stats);
+	template <class T>
+	static T GetMaxUnsafe(const BaseStatistics &stats);
 
 private:
 	static NumericStatsData &GetDataUnsafe(BaseStatistics &stats);
@@ -130,28 +110,5 @@ template <>
 void NumericStats::Update<interval_t>(BaseStatistics &stats, interval_t new_value);
 template <>
 void NumericStats::Update<list_entry_t>(BaseStatistics &stats, list_entry_t new_value);
-
-template <>
-int8_t &NumericValueUnion::GetReferenceUnsafe();
-template <>
-int16_t &NumericValueUnion::GetReferenceUnsafe();
-template <>
-int32_t &NumericValueUnion::GetReferenceUnsafe();
-template <>
-int64_t &NumericValueUnion::GetReferenceUnsafe();
-template <>
-hugeint_t &NumericValueUnion::GetReferenceUnsafe();
-template <>
-uint8_t &NumericValueUnion::GetReferenceUnsafe();
-template <>
-uint16_t &NumericValueUnion::GetReferenceUnsafe();
-template <>
-uint32_t &NumericValueUnion::GetReferenceUnsafe();
-template <>
-uint64_t &NumericValueUnion::GetReferenceUnsafe();
-template <>
-float &NumericValueUnion::GetReferenceUnsafe();
-template <>
-double &NumericValueUnion::GetReferenceUnsafe();
 
 } // namespace duckdb
