@@ -18,6 +18,9 @@
 #include "duckdb/common/fsst.hpp"
 #include "fsst.h"
 
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
+
 #include <cstring> // strlen() on Solaris
 
 namespace duckdb {
@@ -241,7 +244,8 @@ struct DataArrays {
 	idx_t type_size;
 	bool is_nested;
 	DataArrays(Vector &vec, data_ptr_t data, VectorBuffer *buffer, idx_t type_size, bool is_nested)
-	    : vec(vec), data(data), buffer(buffer), type_size(type_size), is_nested(is_nested) {};
+	    : vec(vec), data(data), buffer(buffer), type_size(type_size), is_nested(is_nested) {
+	}
 };
 
 void FindChildren(std::vector<DataArrays> &to_resize, VectorBuffer &auxiliary) {
@@ -960,6 +964,141 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 			throw InternalException("Unimplemented variable width type for Vector::Serialize!");
 		}
 	}
+}
+
+void Vector::FormatSerialize(FormatSerializer &serializer, idx_t count) {
+	auto &type = GetType();
+
+	UnifiedVectorFormat vdata;
+	ToUnifiedFormat(count, vdata);
+
+	const auto write_validity = (count > 0) && !vdata.validity.AllValid();
+	serializer.WriteProperty("has_validity", write_validity);
+	if (write_validity) {
+		ValidityMask flat_mask(count);
+		for (idx_t i = 0; i < count; ++i) {
+			auto row_idx = vdata.sel->get_index(i);
+			flat_mask.Set(i, vdata.validity.RowIsValid(row_idx));
+		}
+		serializer.WriteProperty("validity_mask", (const_data_ptr_t)flat_mask.GetData(),
+		                         flat_mask.ValidityMaskSize(count));
+	}
+	if (TypeIsConstantSize(type.InternalType())) {
+		// constant size type: simple copy
+		idx_t write_size = GetTypeIdSize(type.InternalType()) * count;
+		auto ptr = unique_ptr<data_t[]>(new data_t[write_size]);
+		VectorOperations::WriteToStorage(*this, count, ptr.get());
+		serializer.WriteProperty("data", write_size);
+	} else {
+		switch (type.InternalType()) {
+		case PhysicalType::VARCHAR: {
+			auto strings = (string_t *)vdata.data;
+			for (idx_t i = 0; i < count; i++) {
+				auto idx = vdata.sel->get_index(i);
+				auto source = !vdata.validity.RowIsValid(idx) ? NullValue<string_t>() : strings[idx];
+				string_t str = string_t(source.GetDataUnsafe(), source.GetSize());
+				serializer.WriteProperty("data", str);
+			}
+			break;
+		}
+		case PhysicalType::STRUCT: {
+			Flatten(count);
+			auto &entries = StructVector::GetEntries(*this);
+			for (auto &entry : entries) {
+				entry->FormatSerialize(serializer, count);
+			}
+			break;
+		}
+		case PhysicalType::LIST: {
+			auto &child = ListVector::GetEntry(*this);
+			auto list_size = ListVector::GetListSize(*this);
+
+			// serialize the list entries in a flat array
+			auto data = unique_ptr<list_entry_t[]>(new list_entry_t[count]);
+			auto source_array = (list_entry_t *)vdata.data;
+			for (idx_t i = 0; i < count; i++) {
+				auto idx = vdata.sel->get_index(i);
+				auto source = source_array[idx];
+				data[i].offset = source.offset;
+				data[i].length = source.length;
+			}
+
+			// write the list size
+			serializer.WriteProperty("list_size", list_size);
+			serializer.WriteProperty("data", (data_ptr_t)data.get(), count * sizeof(list_entry_t));
+			child.FormatSerialize(serializer, list_size);
+			break;
+		}
+		default:
+			throw InternalException("Unimplemented variable width type for Vector::Serialize!");
+		}
+	}
+}
+
+void Vector::FormatDeserialize(FormatDeserializer &deserializer, idx_t count) {
+	/*
+	auto &type = GetType();
+
+	auto &validity = FlatVector::Validity(*this);
+	validity.Reset();
+	const auto has_validity = deserializer.ReadProperty<bool>("has_validity");
+	if (has_validity) {
+	    validity.Initialize(count);
+	    source.ReadData((data_ptr_t)validity.GetData(), validity.ValidityMaskSize(count));
+	}
+
+	if (TypeIsConstantSize(type.InternalType())) {
+	    // constant size type: read fixed amount of data from
+	    auto column_size = GetTypeIdSize(type.InternalType()) * count;
+	    auto ptr = unique_ptr<data_t[]>(new data_t[column_size]);
+	    source.ReadData(ptr.get(), column_size);
+
+	    VectorOperations::ReadFromStorage(ptr.get(), count, *this);
+	} else {
+	    switch (type.InternalType()) {
+	    case PhysicalType::VARCHAR: {
+	        auto strings = FlatVector::GetData<string_t>(*this);
+	        for (idx_t i = 0; i < count; i++) {
+	            // read the strings
+	            auto str = source.Read<string>();
+	            // now add the string to the StringHeap of the vector
+	            // and write the pointer into the vector
+	            if (validity.RowIsValid(i)) {
+	                strings[i] = StringVector::AddStringOrBlob(*this, str);
+	            }
+	        }
+	        break;
+	    }
+	    case PhysicalType::STRUCT: {
+	        auto &entries = StructVector::GetEntries(*this);
+	        for (auto &entry : entries) {
+	            entry->FormatDeserialize(deserializer, count);
+	        }
+	        break;
+	    }
+	    case PhysicalType::LIST: {
+	        // read the list size
+	        auto list_size = deserializer.ReadProperty<idx_t>("list_size");
+	        ListVector::Reserve(*this, list_size);
+	        ListVector::SetListSize(*this, list_size);
+
+	        // read the list entry
+	        auto list_entries = FlatVector::GetData(*this);
+	        source.ReadData(list_entries, count * sizeof(list_entry_t));
+
+	        // deserialize the child vector
+	        auto &child = ListVector::GetEntry(*this);
+	        child.Deserialize(list_size, source);
+
+	        break;
+	    }
+	    default:
+	        throw InternalException("Unimplemented variable width type for Vector::Deserialize!");
+	    }
+	}
+	 */
+
+	throw NotImplementedException("TODO: Implement deserialization for DuckDB Vectors");
 }
 
 void Vector::Deserialize(idx_t count, Deserializer &source) {

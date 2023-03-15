@@ -45,7 +45,7 @@ DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_m
 	auto types = GetTypes();
 	this->row_groups =
 	    make_shared<RowGroupCollection>(info, TableIOManager::Get(*this).GetBlockManagerForRowData(), types, 0);
-	if (data && !data->row_groups.empty()) {
+	if (data && data->row_group_count > 0) {
 		this->row_groups->Initialize(*data);
 	} else {
 		this->row_groups->InitializeEmpty();

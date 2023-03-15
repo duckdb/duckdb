@@ -1102,19 +1102,20 @@ static void ListTupleDataGather(const TupleDataLayout &layout, Vector &row_locat
 			target_validity.SetInvalid(target_idx);
 		}
 	}
-	ListVector::Reserve(target, target_list_offset);
-	ListVector::SetListSize(target, target_list_offset);
+	auto list_size_before = ListVector::GetListSize(target);
+	ListVector::Reserve(target, list_size_before + target_list_offset);
+	ListVector::SetListSize(target, list_size_before + target_list_offset);
 
 	// Recurse
 	D_ASSERT(child_functions.size() == 1);
 	const auto &child_function = child_functions[0];
-	child_function.function(layout, heap_locations, col_idx, scan_sel, scan_count, ListVector::GetEntry(target),
-	                        target_sel, child_function.child_functions);
+	child_function.function(layout, heap_locations, list_size_before, scan_sel, scan_count,
+	                        ListVector::GetEntry(target), target_sel, child_function.child_functions);
 }
 
 template <class T>
 static void TemplatedWithinListTupleDataGather(const TupleDataLayout &layout, Vector &heap_locations,
-                                               const idx_t col_idx, const SelectionVector &scan_sel,
+                                               const idx_t list_size_before, const SelectionVector &scan_sel,
                                                const idx_t scan_count, Vector &target,
                                                const SelectionVector &target_sel,
                                                const vector<TupleDataGatherFunction> &child_functions) {
@@ -1126,7 +1127,7 @@ static void TemplatedWithinListTupleDataGather(const TupleDataLayout &layout, Ve
 	auto target_data = FlatVector::GetData<T>(target);
 	auto &target_validity = FlatVector::Validity(target);
 
-	uint64_t target_offset = 0;
+	uint64_t target_offset = list_size_before;
 	for (idx_t i = 0; i < scan_count; i++) {
 		auto source_idx = scan_sel.get_index(i);
 		if (!source_heap_validity.RowIsValid(source_idx)) {

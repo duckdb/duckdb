@@ -50,13 +50,19 @@ void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, Da
 
 	// now start writing the row group pointers to disk
 	table_data_writer.Write<uint64_t>(row_group_pointers.size());
+	idx_t total_rows = 0;
 	for (auto &row_group_pointer : row_group_pointers) {
+		auto row_group_count = row_group_pointer.row_start + row_group_pointer.tuple_count;
+		if (row_group_count > total_rows) {
+			total_rows = row_group_count;
+		}
 		RowGroup::Serialize(row_group_pointer, table_data_writer);
 	}
 
 	// Pointer to the table itself goes to the metadata stream.
 	meta_data_writer.Write<block_id_t>(pointer.block_id);
 	meta_data_writer.Write<uint64_t>(pointer.offset);
+	meta_data_writer.Write<idx_t>(total_rows);
 
 	// Now we serialize indexes in the table_metadata_writer
 	std::vector<BlockPointer> index_pointers = info->indexes.SerializeIndexes(table_data_writer);
