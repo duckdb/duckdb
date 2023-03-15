@@ -34,12 +34,16 @@ void ListStats::Copy(BaseStatistics &stats, const BaseStatistics &other) {
 }
 
 const BaseStatistics &ListStats::GetChildStats(const BaseStatistics &stats) {
-	D_ASSERT(stats.GetStatsType() == StatisticsType::LIST_STATS);
+	if (stats.GetStatsType() != StatisticsType::LIST_STATS) {
+		throw InternalException("ListStats::GetChildStats called on stats that is not a list");
+	}
 	D_ASSERT(stats.child_stats);
 	return stats.child_stats[0];
 }
 BaseStatistics &ListStats::GetChildStats(BaseStatistics &stats) {
-	D_ASSERT(stats.GetStatsType() == StatisticsType::LIST_STATS);
+	if (stats.GetStatsType() != StatisticsType::LIST_STATS) {
+		throw InternalException("ListStats::GetChildStats called on stats that is not a list");
+	}
 	D_ASSERT(stats.child_stats);
 	return stats.child_stats[0];
 }

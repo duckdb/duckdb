@@ -71,8 +71,11 @@ private:
 	vector<unique_ptr<CreatePivotEntry>> pivot_entries;
 	//! Sets of stored CTEs, if any
 	vector<CommonTableExpressionMap *> stored_cte_map;
+	//! Whether or not we are currently binding a window definition
+	bool in_window_definition = false;
 
 	void Clear();
+	bool InWindowDefinition();
 
 	void SetParamCount(idx_t new_count) {
 		if (parent) {
@@ -335,6 +338,8 @@ private:
 	void TransformWindowFrame(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr);
 
 	unique_ptr<SampleOptions> TransformSampleOptions(duckdb_libpgquery::PGNode *options);
+	//! Returns true if an expression is only a star (i.e. "*", without any other decorators)
+	bool ExpressionIsEmptyStar(ParsedExpression &expr);
 
 private:
 	//! Current stack depth

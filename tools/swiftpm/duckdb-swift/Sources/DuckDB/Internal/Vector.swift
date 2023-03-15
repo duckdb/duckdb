@@ -27,6 +27,8 @@ import Foundation
 
 struct Vector {
   
+  static let vectorSize = DBInt(duckdb_vector_size())
+  
   let count: Int
   let offset: Int
   let logicalType: LogicalType

@@ -30,10 +30,30 @@ public typealias DBInt = UInt64
 
 /// An object representing a DuckDB database
 ///
-/// A Database can be initialized using a local file store, or alternatively,
-/// using an in-memory store. Note that for an in-memory database no data is
-/// persisted to disk (i.e. all data is lost when you exit the process).
-public final class Database {
+/// To use DuckDB, you must first initialize a DuckDB ``Database``.
+/// ``Database/init(store:configuration:)`` takes as parameter the database
+/// store type. The ``Database/Store/inMemory`` option can be used to create an
+/// in-memory database. Note that for an in-memory database no data is persisted
+/// to disk (i.e. all data is lost when you exit the process).
+///
+/// With the ``Database`` instantiated, you can create one or many DuckDB
+/// ``Connection`` instances using ``Database/connect()``. As individual
+/// connections are locked during querying it is recommended that in contexts
+/// where blocking is undesirable, connections should be accessed
+/// asynchronously through an actor or via a background queue.
+///
+/// The following example creates a new in-memory database and connects to it.
+///
+/// ```swift
+/// do {
+///   let database = try Database(store: .inMemory)
+///   let connection = try database.connect()
+/// }
+/// catch {
+///   // handle error
+/// }
+/// ```
+public final class Database: Sendable {
   
   /// Duck DB database store type
   public enum Store {
@@ -53,9 +73,13 @@ public final class Database {
   /// - Note: An in-memory database does not persist data to disk. All data is
   ///   lost when you exit the process.
   /// - Parameter store: the store to initialize the database with
+  /// - Parameter configuration: the configuration to initialize the database
+  ///   with
   /// - Throws: ``DatabaseError/databaseFailedToInitialize(reason:)`` if the
   ///   database failed to instantiate
-  public convenience init(store: Store = .inMemory) throws {
+  public convenience init(
+    store: Store = .inMemory, configuration: Configuration? = nil
+  ) throws {
     var fileURL: URL?
     if case .file(let url) = store {
       guard url.isFileURL else {
@@ -64,14 +88,21 @@ public final class Database {
       }
       fileURL = url
     }
-    try self.init(path: fileURL?.path, config: nil)
+    try self.init(path: fileURL?.path, config: configuration)
   }
   
-  private init(path: String?, config: duckdb_config?) throws {
+  private init(path: String?, config: Configuration?) throws {
     let outError = UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>.allocate(capacity: 1)
     defer { outError.deallocate() }
     let status = path.withOptionalCString { strPtr in
-      duckdb_open_ext(strPtr, ptr, config, outError)
+      if let config {
+        return config.withCConfiguration { cconfig in
+          duckdb_open_ext(strPtr, ptr, cconfig, outError)
+        }
+      }
+      else {
+        return duckdb_open_ext(strPtr, ptr, nil, outError)
+      }
     }
     guard status == .success else {
       let error = outError.pointee.map { ptr in

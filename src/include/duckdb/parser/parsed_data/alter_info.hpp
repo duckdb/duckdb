@@ -59,6 +59,9 @@ public:
 	void Serialize(Serializer &serializer) const;
 	virtual void Serialize(FieldWriter &writer) const = 0;
 	static unique_ptr<AlterInfo> Deserialize(Deserializer &source);
+	virtual string GetColumnName() const {
+		return "";
+	};
 
 	AlterEntryData GetAlterEntryData() const;
 };
