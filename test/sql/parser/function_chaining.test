@@ -84,6 +84,17 @@ SELECT v.split(' ').length() FROM varchars
 ----
 2
 
+# list aggr
+query I
+SELECT v.split(' ').aggregate('count') FROM varchars
+----
+2
+
+query I
+SELECT v.split(' ').aggregate('min') FROM varchars
+----
+Hello
+
 # prepared statements
 statement ok
 PREPARE v1 AS SELECT ?.split(' ').lower()
