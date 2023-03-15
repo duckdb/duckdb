@@ -5,7 +5,7 @@
 import numpy as np
 import duckdb
 from datetime import timedelta
-
+import pytest
 
 class TestScanNumpy(object):
     def test_scan_numpy(self, duckdb_cursor):
@@ -77,35 +77,25 @@ class TestScanNumpy(object):
 
         # list of arrays with different length
         z = [np.array([1,2]), np.array([3])]
-        try:
-            res = duckdb.sql("select * from z").fetchall()
-        except duckdb.InvalidInputException as e:
-            pass
+        with pytest.raises(duckdb.InvalidInputException):
+            duckdb.sql("select * from z")
 
         # dict of ndarrays of different length
         z = {"z":np.array([1,2]), "x":np.array([3])}
-        try:
-            res = duckdb.sql("select * from z").fetchall()
-        except duckdb.InvalidInputException as e:
-            pass
+        with pytest.raises(duckdb.InvalidInputException):
+            duckdb.sql("select * from z")
 
         # high dimensional tensors
         z = np.array([[[1,2]]])
-        try:
-            res = duckdb.sql("select * from z").fetchall()
-        except duckdb.InvalidInputException as e:
-            pass
+        with pytest.raises(duckdb.InvalidInputException):
+            duckdb.sql("select * from z")
 
         # list of ndarrys with len(shape) > 1
         z = [np.array([[1,2],[3,4]])]
-        try:
-            res = duckdb.sql("select * from z").fetchall()
-        except duckdb.InvalidInputException as e:
-            pass
+        with pytest.raises(duckdb.InvalidInputException):
+            duckdb.sql("select * from z")
 
         # dict of ndarrays with len(shape) > 1
         z = {"x":np.array([[1,2],[3,4]])}
-        try:
-            res = duckdb.sql("select * from z").fetchall()
-        except duckdb.InvalidInputException as e:
-            pass
+        with pytest.raises(duckdb.InvalidInputException):
+            duckdb.sql("select * from z")

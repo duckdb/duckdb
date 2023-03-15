@@ -419,7 +419,7 @@ void VectorConversion::BindNumpy(const DBConfig &config, py::handle df, vector<P
 			df_types.attr("append")(py::str("string"));
 			continue;
 		}
-		df_types.attr("append")(item.second.attr("dtype"));
+		df_types.attr("append")(py::str(item.second.attr("dtype")));
 	}
 	auto get_fun = df.attr("__getitem__");
 	if (py::len(df_columns) == 0 || py::len(df_types) == 0 || py::len(df_columns) != py::len(df_types)) {

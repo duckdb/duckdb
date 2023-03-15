@@ -1350,9 +1350,22 @@ bool DuckDBPyConnection::IsPandasDataframe(const py::object &object) {
 	return import_cache.pandas().DataFrame.IsInstance(object);
 }
 
+bool isValidNumpyDimensions(const py::handle &object, int &dim) {
+	// check the dimensions of numpy arrays
+	// should only be called by IsAcceptedNumpyObject
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	if (!import_cache.numpy().ndarray.IsInstance(object)) {
+		return false;
+	}
+	auto shape = (py::cast<py::array>(object)).attr("shape");
+	if (py::len(shape) != 1) {
+		return false;
+	}
+	int cur_dim = (shape.attr("__getitem__")(0)).cast<int>();
+	dim = dim == -1 ? cur_dim : dim;
+	return dim == cur_dim;
+}
 NumpyObjectType DuckDBPyConnection::IsAcceptedNumpyObject(const py::object &object) {
-	// Instead of returning a bool, we return a size_t integer
-	// 	to indicate the type of an accepted numpy object.
 	if (!ModuleIsLoaded<NumpyCacheItem>()) {
 		return NumpyObjectType::INVALID;
 	}
@@ -1370,17 +1383,7 @@ NumpyObjectType DuckDBPyConnection::IsAcceptedNumpyObject(const py::object &obje
 	} else if (py::isinstance<py::dict>(object)) {
 		int dim = -1;
 		for (auto item : py::cast<py::dict>(object)) {
-			if (import_cache.numpy().ndarray.IsInstance(item.second) &&
-			    py::len((py::cast<py::array>(item.second)).attr("shape")) ==
-			        1) { // check all the arrays have same length
-				if (dim == -1) {
-					dim = ((py::cast<py::array>(item.second)).attr("shape").attr("__getitem__")(0)).cast<int>();
-				} else if (dim !=
-				           ((py::cast<py::array>(item.second)).attr("shape").attr("__getitem__")(0)).cast<int>()) {
-					return NumpyObjectType::INVALID;
-				}
-				continue;
-			} else {
+			if (!isValidNumpyDimensions(item.second, dim)) {
 				return NumpyObjectType::INVALID;
 			}
 		}
@@ -1388,17 +1391,9 @@ NumpyObjectType DuckDBPyConnection::IsAcceptedNumpyObject(const py::object &obje
 	} else if (py::isinstance<py::list>(object)) {
 		int dim = -1;
 		for (auto item : py::cast<py::list>(object)) {
-			if (import_cache.numpy().ndarray.IsInstance(item) &&
-			    py::len((py::cast<py::array>(item)).attr("shape")) == 1) { // check all the arrays have same length
-				if (dim == -1) {
-					dim = ((py::cast<py::array>(item)).attr("shape").attr("__getitem__")(0)).cast<int>();
-				} else if (dim != ((py::cast<py::array>(item)).attr("shape").attr("__getitem__")(0)).cast<int>()) {
-					return NumpyObjectType::INVALID;
-				}
-				continue;
-			} else {
-				return NumpyObjectType::INVALID;
-			}
+			if (!isValidNumpyDimensions(item, dim)) {
+                                return NumpyObjectType::INVALID;
+                        }
 		}
 		return NumpyObjectType::LIST;
 	}
