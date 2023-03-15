@@ -214,7 +214,7 @@ void VerifyLineLength(idx_t line_size, idx_t max_line_size) {
 
 bool ParallelCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message, bool try_add_line) {
 	// used for parsing algorithm
-	if (start_buffer == end_buffer) {
+	if (start_buffer == buffer_size) {
 		// Nothing to read
 		finished = true;
 		return true;
