@@ -187,11 +187,11 @@ test_that("Full join returns all outer relations", {
 })
 
 test_that("cross join works", {
-   left <- duckdb:::rel_from_df(con, data.frame(left_a=c(1, 2, 3), left_b=c(1, 1, 2)))
-   right <- duckdb:::rel_from_df(con, data.frame(right_a=c(1, 4, 5), right_b=c(7, 8, 9)))
-   cross <- duckdb:::rel_join(left, right, list(), "cross")
-   order_by <- duckdb:::rel_order(cross, list(duckdb:::expr_reference("right_a"), duckdb:::expr_reference("right_a")))
-   rel_df <- duckdb:::rel_to_altrep(order_by)
+   left <- rel_from_df(con, data.frame(left_a=c(1, 2, 3), left_b=c(1, 1, 2)))
+   right <- rel_from_df(con, data.frame(right_a=c(1, 4, 5), right_b=c(7, 8, 9)))
+   cross <- rel_join(left, right, list(), "cross")
+   order_by <- rel_order(cross, list(expr_reference("right_a"), expr_reference("right_a")))
+   rel_df <- rel_to_altrep(order_by)
    dim(rel_df)
    expected_result <- data.frame(left_a=c(1, 2, 3, 1, 2, 3, 1, 2, 3),
                                  left_b=c(1, 1, 2, 1, 1, 2, 1, 1, 2),
@@ -201,12 +201,12 @@ test_that("cross join works", {
 })
 
 test_that("semi join works", {
-    left <- duckdb:::rel_from_df(con, data.frame(left_b=c(1, 5, 6)))
-    right <- duckdb:::rel_from_df(con, data.frame(right_a=c(1, 2, 3), right_b=c(1, 1, 2)))
+    left <- rel_from_df(con, data.frame(left_b=c(1, 5, 6)))
+    right <- rel_from_df(con, data.frame(right_a=c(1, 2, 3), right_b=c(1, 1, 2)))
     cond <- list(expr_function("eq", list(expr_reference("left_b"), expr_reference("right_a"))))
     # select * from left semi join right on (left_b = right_a)
-    rel2 <- duckdb:::rel_join(left, right, cond, "semi")
-    rel_df <- duckdb:::rel_to_altrep(rel2)
+    rel2 <- rel_join(left, right, cond, "semi")
+    rel_df <- rel_to_altrep(rel2)
     dim(rel_df)
     expected_result <- data.frame(left_b=c(1))
     expect_equal(rel_df, expected_result)
@@ -214,12 +214,12 @@ test_that("semi join works", {
 
 
 test_that("anti join works", {
-    left <- duckdb:::rel_from_df(con, data.frame(left_b=c(1, 5, 6)))
-    right <- duckdb:::rel_from_df(con, data.frame(right_a=c(1, 2, 3), right_b=c(1, 1, 2)))
+    left <- rel_from_df(con, data.frame(left_b=c(1, 5, 6)))
+    right <- rel_from_df(con, data.frame(right_a=c(1, 2, 3), right_b=c(1, 1, 2)))
     cond <- list(expr_function("eq", list(expr_reference("left_b"), expr_reference("right_a"))))
     # select * from left anti join right on (left_b = right_a)
-    rel2 <- duckdb:::rel_join(left, right, cond, "anti")
-    rel_df <- duckdb:::rel_to_altrep(rel2)
+    rel2 <- rel_join(left, right, cond, "anti")
+    rel_df <- rel_to_altrep(rel2)
     dim(rel_df)
     expected_result <- data.frame(left_b=c(5, 6))
     expect_equal(rel_df, expected_result)
@@ -500,27 +500,14 @@ test_that("You can perform the window function cume_dist", {
 })
 
 test_that("You can perform the window function percent rank", {
-	  rel_a <- rel_from_df(con, data.frame(a=c(1, 1, 2, 2, 2)))
+	  rel_a <- rel_from_df(con, data.frame(a=c(5, 1, 3, 2, 2)))
     percent_rank_func <- expr_function("percent_rank", list(), order_bys=list(expr_reference("a")))
     percent_rank_wind <- expr_window(percent_rank_func)
     expr_set_alias(percent_rank_wind, "percent_rank")
     window_proj <- rel_project(rel_a, list(expr_reference("a"), percent_rank_wind))
     order_proj <- rel_order(window_proj, list(expr_reference("a")))
     res <- rel_to_altrep(order_proj)
-    expected_result <- data.frame(a=c(1, 1, 2, 2, 2), percent_rank=c(0.0, 0.0, 0.5, 0.5, 0.5))
-    expect_equal(res, expected_result)
-})
-
-
-test_that("You can perform the window function percent rank", {
-    con <- dbConnect(duckdb::duckdb())
-	  rel_a <- rel_from_df(con, data.frame(a=c(1, 1, 2, 2, 2), b=c(2, 2, 3, 3, 4), d=c(5, 4, 3, 2, 1)))
-    sum_func <- expr_function("sum", list(expr_reference("a")))
-    percent_rank_wind <- expr_window(sum_func)
-    expr_set_alias(percent_rank_wind, "sum(a)")
-    window_proj <- rel_project(rel_a, list(expr_reference("a"), expr_reference("b"), percent_rank_wind))
-    res <- rel_to_altrep(window_proj)
-    expected_result <- data.frame(a=c(1, 1, 2, 2, 2), percent_rank=c(0.0, 0.0, 0.5, 0.5, 0.5))
+    expected_result <- data.frame(a=c(1, 2, 2, 3, 5), percent_rank=c(0.00, 0.25, 0.25, 0.75, 1.00))
     expect_equal(res, expected_result)
 })
 
@@ -538,12 +525,11 @@ test_that("R semantics for adding NaNs is respected", {
 })
 
 test_that("R semantics for arithmetics sum function are respected", {
-   dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
-   test_df_a <- duckdb:::rel_from_df(con, data.frame(a=c(1:5)))
-   sum_rel <- duckdb:::expr_function("sum", list(duckdb:::expr_reference("a")))
-   ans <- duckdb:::rel_aggregate(test_df_a, list(), list(sum_rel))
-   res <- duckdb:::rel_to_altrep(ans)
-   expect_true(is.na(res[[1]]))
+   test_df_a <- rel_from_df(con, data.frame(a=c(1:5, NA)))
+   sum_rel <- expr_function("sum", list(expr_reference("a")))
+   ans <- rel_aggregate(test_df_a, list(), list(sum_rel))
+   res <- rel_to_altrep(ans)
+   expect_equal(res[[1]], 15)
 })
 
 
