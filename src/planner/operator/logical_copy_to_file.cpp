@@ -11,7 +11,7 @@ namespace duckdb {
 void LogicalCopyToFile::Serialize(FieldWriter &writer) const {
 	writer.WriteString(file_path);
 	writer.WriteField(use_tmp_file);
-	writer.WriteField(overwrite_or_ignore);
+	writer.WriteField(allow_overwrite);
 	writer.WriteField(per_thread_output);
 	writer.WriteList<idx_t>(partition_columns);
 
@@ -30,7 +30,7 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(LogicalDeserializatio
 	auto file_path = reader.ReadRequired<string>();
 	auto use_tmp_file = reader.ReadRequired<bool>();
 	auto fileformat = reader.ReadRequired<string>();
-	auto overwrite_or_ignore = reader.ReadRequired<bool>();
+	auto allow_overwrite = reader.ReadRequired<bool>();
 	auto per_thread_output = reader.ReadRequired<bool>();
 	auto partition_columns = reader.ReadRequiredList<idx_t>();
 
@@ -58,7 +58,7 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(LogicalDeserializatio
 	result->file_path = file_path;
 	result->use_tmp_file = use_tmp_file;
 	result->fileformat = fileformat;
-	result->overwrite_or_ignore = overwrite_or_ignore;
+	result->allow_overwrite = allow_overwrite;
 	result->per_thread_output = per_thread_output;
 	result->partition_columns = std::move(partition_columns);
 	return std::move(result);

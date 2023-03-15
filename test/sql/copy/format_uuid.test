@@ -42,7 +42,7 @@ CREATE TABLE testCubed as SELECT i as a, (i*3) as b, power(i,3) as c from range(
 
 # Now append to the directory from previous test, creating a second file in the partition.
 statement ok
-COPY testCubed TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), OVERWRITE_OR_IGNORE TRUE, FILEFORMAT "leadingpart_{uuid}_trailingpart");
+COPY testCubed TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), allow_overwrite TRUE, FILEFORMAT "leadingpart_{uuid}_trailingpart");
 
 query III sort
 SELECT * FROM '__TEST_DIR__/part/a=9/*.parquet';
@@ -55,7 +55,7 @@ CREATE TABLE test4 as SELECT i as a, (i*4) as b, power(i,4) as c from range(0,10
 
 # Test without a specified format name for the outputfile. The name will be the default: "data_{i}"
 statement ok
-COPY test4 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), OVERWRITE_OR_IGNORE TRUE);
+COPY test4 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), allow_overwrite TRUE);
 
 query III sort
 SELECT * FROM '__TEST_DIR__/part/a=9/*.parquet';
@@ -69,7 +69,7 @@ CREATE TABLE test5 as SELECT i as a, (i*5) as b, power(i,5) as c from range(0,10
 
 # Test where the fileformat does not contain "{i}" or "{uuid}". 
 statement ok
-COPY test5 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), OVERWRITE_OR_IGNORE TRUE, FILEFORMAT basename);
+COPY test5 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), allow_overwrite TRUE, FILEFORMAT basename);
 
 query III sort
 SELECT * FROM '__TEST_DIR__/part/a=9/*.parquet';
@@ -79,7 +79,7 @@ SELECT * FROM '__TEST_DIR__/part/a=9/*.parquet';
 9	36	6561
 9	45	59049
 
-# Test without the OVERWRITE_OR_IGNORE param, that tries to add a file to an existing directory
+# Test without the allow_overwrite param, that tries to add a file to an existing directory
 statement error
 COPY test5 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a));
 ----
@@ -91,16 +91,16 @@ COPY test4 TO '__TEST_DIR__/novalue' (FORMAT PARQUET, PARTITION_BY (a), FILEFORM
 ----
 Not implemented Error: Unrecognized option for PARQUET: FILEFORMAT
 
-# Test where overwrite_or_ignore param has no value
+# Test where allow_overwrite param has no value
 statement ok
-COPY test5 TO '__TEST_DIR__/novalue' (FORMAT PARQUET, PARTITION_BY (a), OVERWRITE_OR_IGNORE);
+COPY test5 TO '__TEST_DIR__/novalue' (FORMAT PARQUET, PARTITION_BY (a), allow_overwrite);
 
 # Test the data_{i} with per_thread_output true
 statement ok
 CREATE TABLE testppt as SELECT i as a, (i*10) as b, (i*100) as c from range(0,10000) tbl(i);
 
 statement ok
-COPY testppt TO '__TEST_DIR__/ppt/' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE, OVERWRITE_OR_IGNORE true, FILEFORMAT 'leadingpart_{i}_{uuid}');
+COPY testppt TO '__TEST_DIR__/ppt/' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE, allow_overwrite true, FILEFORMAT 'leadingpart_{i}_{uuid}');
 
 query I sort
 SELECT COUNT(*) FROM '__TEST_DIR__/ppt/leadingpart_*.parquet';
