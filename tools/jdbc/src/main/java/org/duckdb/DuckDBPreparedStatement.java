@@ -518,6 +518,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 	}
 
 	@SuppressWarnings("unchecked")
+	@Override
 	public <T> T unwrap(Class<T> iface) throws SQLException {
 		if (!iface.isInstance(this)) {
 			throw new SQLException(

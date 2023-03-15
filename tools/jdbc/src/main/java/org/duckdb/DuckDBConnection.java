@@ -212,6 +212,7 @@ public final class DuckDBConnection implements java.sql.Connection {
 	}
 
 	@SuppressWarnings("unchecked")
+	@Override
 	public <T> T unwrap(Class<T> iface) throws SQLException {
 		if (!iface.isInstance(this)) {
 			throw new SQLException(

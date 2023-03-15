@@ -1461,6 +1461,7 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	@SuppressWarnings("unchecked")
+	@Override
 	public <T> T unwrap(Class<T> iface) throws SQLException {
 		if (!iface.isInstance(this)) {
 			throw new SQLException(
