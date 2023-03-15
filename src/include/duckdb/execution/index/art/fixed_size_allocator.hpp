@@ -43,6 +43,10 @@ public:
 	static constexpr idx_t BUFFER_ALLOCATION_SIZE = Storage::BLOCK_ALLOC_SIZE;
 	static constexpr uint8_t OFFSET_SHIFT = sizeof(uint8_t) * 8 * 4;
 
+	//! Constants for offset calculations
+	static constexpr idx_t base[] = {0x00000000FFFFFFFF, 0x0000FFFF, 0x00FF, 0x0F, 0x3, 0x1};
+	static constexpr uint8_t shift[] = {32, 16, 8, 4, 2, 1};
+
 public:
 	explicit FixedSizeAllocator(const idx_t &allocation_size);
 	~FixedSizeAllocator();
@@ -94,7 +98,7 @@ private:
 		return buffers[buffer_id].ptr + offset;
 	}
 	//! Returns the first free offset in a bitmask
-	idx_t GetOffset(ValidityMask &mask);
+	idx_t GetOffset(ValidityMask &mask, const idx_t &allocation_count);
 };
 
 } // namespace duckdb

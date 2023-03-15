@@ -12,6 +12,8 @@ PRAGMA wal_autocheckpoint='1TB';
 
 statement ok
 create table t2 (i integer,  uid varchar);
+
+statement ok
 create unique index iu on t2(uid);
 
 statement ok

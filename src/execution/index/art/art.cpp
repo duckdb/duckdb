@@ -512,10 +512,11 @@ bool ART::Insert(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id
 	}
 
 	// handle prefix of inner node
-	if (node.GetPrefix(*this)->count) {
+	auto old_node_prefix = node.GetPrefix(*this);
+	if (old_node_prefix->count) {
 
-		auto mismatch_position = node.GetPrefix(*this)->KeyMismatchPosition(*this, key, depth);
-		if (mismatch_position != node.GetPrefix(*this)->count) {
+		auto mismatch_position = old_node_prefix->KeyMismatchPosition(*this, key, depth);
+		if (mismatch_position != old_node_prefix->count) {
 
 			// prefix differs, create new node
 			// TODO: potentially less allocations here
@@ -524,7 +525,7 @@ bool ART::Insert(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id
 			auto new_n4 = Node4::Initialize(*this, node);
 			new_n4->prefix.Initialize(*this, key, depth, mismatch_position);
 
-			auto key_byte = old_node.GetPrefix(*this)->Reduce(*this, mismatch_position);
+			auto key_byte = old_node_prefix->Reduce(*this, mismatch_position);
 			Node4::InsertChild(*this, node, key_byte, old_node);
 
 			ARTNode leaf_node;
