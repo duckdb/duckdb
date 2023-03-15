@@ -184,9 +184,6 @@ void LoadInterpretedBenchmarks() {
 }
 
 string parse_root_dir_or_default(const int arg_counter, char const *const *arg_values) {
-	// default root directory is the benchmark directory in the duckdb root directory
-	string root_dir = DUCKDB_ROOT_DIRECTORY;
-
 	// check if the user specified a different root directory
 	for (int arg_index = 1; arg_index < arg_counter; ++arg_index) {
 		string arg = arg_values[arg_index];
@@ -196,11 +193,16 @@ string parse_root_dir_or_default(const int arg_counter, char const *const *arg_v
 				print_help();
 				exit(1);
 			}
-			root_dir = FileSystem::JoinPath(FileSystem::GetWorkingDirectory(), arg_values[arg_index + 1]);
-			break;
+			auto path = arg_values[arg_index + 1];
+			if (FileSystem::IsPathAbsolute(path)) {
+				return path;
+			} else {
+				return FileSystem::JoinPath(FileSystem::GetWorkingDirectory(), path);
+			}
 		}
 	}
-	return root_dir;
+	// default root directory is the duckdb root directory
+	return DUCKDB_ROOT_DIRECTORY;
 }
 /**
  * Builds a configuration based on the passed arguments.
