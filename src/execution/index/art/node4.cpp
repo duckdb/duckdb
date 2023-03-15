@@ -6,6 +6,23 @@
 
 namespace duckdb {
 
+Node4 *Node4::New(ART &art, ARTNode &node) {
+
+	node.SetPtr(art.n4_nodes->New(), ARTNodeType::NODE_4);
+
+	auto n4 = art.n4_nodes->Get<Node4>(node.GetPtr());
+	art.IncreaseMemorySize(sizeof(Node4));
+
+	n4->count = 0;
+	n4->prefix.Initialize();
+
+	for (idx_t i = 0; i < ARTNode::NODE_4_CAPACITY; i++) {
+		n4->children[i].Reset();
+	}
+
+	return n4;
+}
+
 void Node4::Free(ART &art, ARTNode &node) {
 
 	D_ASSERT(node);
@@ -23,26 +40,9 @@ void Node4::Free(ART &art, ARTNode &node) {
 	art.DecreaseMemorySize(sizeof(Node4));
 }
 
-Node4 *Node4::Initialize(ART &art, const ARTNode &node) {
-
-	auto n4 = art.n4_nodes->Get<Node4>(node.GetPtr());
-	art.IncreaseMemorySize(sizeof(Node4));
-
-	n4->count = 0;
-	n4->prefix.Initialize();
-
-	for (idx_t i = 0; i < ARTNode::NODE_4_CAPACITY; i++) {
-		n4->children[i].Reset();
-	}
-
-	return n4;
-}
-
 Node4 *Node4::ShrinkNode16(ART &art, ARTNode &node4, ARTNode &node16) {
 
-	ARTNode::New(art, node4, ARTNodeType::NODE_4);
-
-	auto n4 = art.n4_nodes->Get<Node4>(node4.GetPtr());
+	auto n4 = Node4::New(art, node4);
 	auto n16 = art.n16_nodes->Get<Node16>(node16.GetPtr());
 
 	n4->count = n16->count;
@@ -139,21 +139,6 @@ void Node4::DeleteChild(ART &art, ARTNode &node, idx_t position) {
 	}
 }
 
-void Node4::ReplaceChild(const idx_t &position, ARTNode &child) {
-	D_ASSERT(position < ARTNode::NODE_4_CAPACITY);
-	children[position] = child;
-}
-
-ARTNode *Node4::GetChild(const idx_t &position) {
-	D_ASSERT(position < count);
-	return &children[position];
-}
-
-uint8_t Node4::GetKeyByte(const idx_t &position) const {
-	D_ASSERT(position < count);
-	return key[position];
-}
-
 idx_t Node4::GetChildPosition(const uint8_t &byte) const {
 	for (idx_t position = 0; position < count; position++) {
 		if (key[position] == byte) {
@@ -174,10 +159,6 @@ idx_t Node4::GetChildPositionGreaterEqual(const uint8_t &byte, bool &inclusive) 
 		}
 	}
 	return DConstants::INVALID_INDEX;
-}
-
-idx_t Node4::GetMinPosition() const {
-	return 0;
 }
 
 idx_t Node4::GetNextPosition(idx_t position) const {

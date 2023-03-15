@@ -26,10 +26,10 @@ public:
 	ARTNode children[ARTNode::NODE_4_CAPACITY];
 
 public:
+	//! Get a new pointer to a node, might cause a new buffer allocation, and initialize it
+	static Node4 *New(ART &art, ARTNode &node);
 	//! Free the node (and its subtree)
 	static void Free(ART &art, ARTNode &node);
-	//! Initializes all the fields of the node
-	static Node4 *Initialize(ART &art, const ARTNode &node);
 	//! Initializes all fields of the node while shrinking a Node16 to a Node4
 	static Node4 *ShrinkNode16(ART &art, ARTNode &node4, ARTNode &node16);
 
@@ -42,12 +42,21 @@ public:
 	static void DeleteChild(ART &art, ARTNode &node, idx_t position);
 
 	//! Replace a child node at pos
-	void ReplaceChild(const idx_t &position, ARTNode &child);
+	inline void ReplaceChild(const idx_t &position, ARTNode &child) {
+		D_ASSERT(position < ARTNode::NODE_4_CAPACITY);
+		children[position] = child;
+	}
 
 	//! Get the child at the specified position in the node. pos must be between [0, count)
-	ARTNode *GetChild(const idx_t &position);
+	inline ARTNode *GetChild(const idx_t &position) {
+		D_ASSERT(position < count);
+		return &children[position];
+	}
 	//! Get the byte at the specified position
-	uint8_t GetKeyByte(const idx_t &position) const;
+	inline uint8_t GetKeyByte(const idx_t &position) const {
+		D_ASSERT(position < count);
+		return key[position];
+	}
 	//! Get the position of a child corresponding exactly to the specific byte, returns DConstants::INVALID_INDEX if
 	//! the child does not exist
 	idx_t GetChildPosition(const uint8_t &byte) const;
@@ -55,7 +64,9 @@ public:
 	//! if there are no children matching the criteria
 	idx_t GetChildPositionGreaterEqual(const uint8_t &byte, bool &inclusive) const;
 	//! Get the position of the minimum child node in the node
-	idx_t GetMinPosition() const;
+	constexpr idx_t GetMinPosition() const {
+		return 0;
+	}
 	//! Get the next position in the node, or DConstants::INVALID_INDEX if there is no next position. If pos ==
 	//! DConstants::INVALID_INDEX, then the first valid position in the node is returned
 	idx_t GetNextPosition(idx_t position) const;

@@ -7,6 +7,23 @@
 
 namespace duckdb {
 
+Node16 *Node16::New(ART &art, ARTNode &node) {
+
+	node.SetPtr(art.n16_nodes->New(), ARTNodeType::NODE_16);
+
+	auto n16 = art.n16_nodes->Get<Node16>(node.GetPtr());
+	art.IncreaseMemorySize(sizeof(Node16));
+
+	n16->count = 0;
+	n16->prefix.Initialize();
+
+	for (idx_t i = 0; i < ARTNode::NODE_16_CAPACITY; i++) {
+		n16->children[i].Reset();
+	}
+
+	return n16;
+}
+
 void Node16::Free(ART &art, ARTNode &node) {
 
 	D_ASSERT(node);
@@ -24,27 +41,10 @@ void Node16::Free(ART &art, ARTNode &node) {
 	art.DecreaseMemorySize(sizeof(Node16));
 }
 
-Node16 *Node16::Initialize(ART &art, const ARTNode &node) {
-
-	auto n16 = art.n16_nodes->Get<Node16>(node.GetPtr());
-	art.IncreaseMemorySize(sizeof(Node16));
-
-	n16->count = 0;
-	n16->prefix.Initialize();
-
-	for (idx_t i = 0; i < ARTNode::NODE_16_CAPACITY; i++) {
-		n16->children[i].Reset();
-	}
-
-	return n16;
-}
-
 Node16 *Node16::GrowNode4(ART &art, ARTNode &node16, ARTNode &node4) {
 
-	ARTNode::New(art, node16, ARTNodeType::NODE_16);
-
 	auto n4 = art.n4_nodes->Get<Node4>(node4.GetPtr());
-	auto n16 = art.n16_nodes->Get<Node16>(node16.GetPtr());
+	auto n16 = Node16::New(art, node16);
 
 	n16->count = n4->count;
 	n16->prefix.Move(n4->prefix);
@@ -65,9 +65,7 @@ Node16 *Node16::GrowNode4(ART &art, ARTNode &node16, ARTNode &node4) {
 
 Node16 *Node16::ShrinkNode48(ART &art, ARTNode &node16, ARTNode &node48) {
 
-	ARTNode::New(art, node16, ARTNodeType::NODE_16);
-
-	auto n16 = art.n16_nodes->Get<Node16>(node16.GetPtr());
+	auto n16 = Node16::New(art, node16);
 	auto n48 = art.n48_nodes->Get<Node48>(node48.GetPtr());
 
 	n16->count = 0;
@@ -160,21 +158,6 @@ void Node16::DeleteChild(ART &art, ARTNode &node, idx_t position) {
 	}
 }
 
-void Node16::ReplaceChild(const idx_t &position, ARTNode &child) {
-	D_ASSERT(position < ARTNode::NODE_16_CAPACITY);
-	children[position] = child;
-}
-
-ARTNode *Node16::GetChild(const idx_t &position) {
-	D_ASSERT(position < count);
-	return &children[position];
-}
-
-uint8_t Node16::GetKeyByte(const idx_t &position) const {
-	D_ASSERT(position < count);
-	return key[position];
-}
-
 idx_t Node16::GetChildPosition(const uint8_t &byte) const {
 	for (idx_t position = 0; position < count; position++) {
 		if (key[position] == byte) {
@@ -195,10 +178,6 @@ idx_t Node16::GetChildPositionGreaterEqual(const uint8_t &byte, bool &inclusive)
 		}
 	}
 	return DConstants::INVALID_INDEX;
-}
-
-idx_t Node16::GetMinPosition() const {
-	return 0;
 }
 
 idx_t Node16::GetNextPosition(idx_t position) const {

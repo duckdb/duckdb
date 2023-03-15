@@ -6,6 +6,23 @@
 
 namespace duckdb {
 
+Node256 *Node256::New(ART &art, ARTNode &node) {
+
+	node.SetPtr(art.n256_nodes->New(), ARTNodeType::NODE_256);
+
+	auto n256 = art.n256_nodes->Get<Node256>(node.GetPtr());
+	art.IncreaseMemorySize(sizeof(Node256));
+
+	n256->count = 0;
+	n256->prefix.Initialize();
+
+	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
+		n256->children[i].Reset();
+	}
+
+	return n256;
+}
+
 void Node256::Free(ART &art, ARTNode &node) {
 
 	D_ASSERT(node);
@@ -25,27 +42,10 @@ void Node256::Free(ART &art, ARTNode &node) {
 	art.DecreaseMemorySize(sizeof(Node256));
 }
 
-Node256 *Node256::Initialize(ART &art, const ARTNode &node) {
-
-	auto n256 = art.n256_nodes->Get<Node256>(node.GetPtr());
-	art.IncreaseMemorySize(sizeof(Node256));
-
-	n256->count = 0;
-	n256->prefix.Initialize();
-
-	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
-		n256->children[i].Reset();
-	}
-
-	return n256;
-}
-
 Node256 *Node256::GrowNode48(ART &art, ARTNode &node256, ARTNode &node48) {
 
-	ARTNode::New(art, node256, ARTNodeType::NODE_256);
-
 	auto n48 = art.n48_nodes->Get<Node48>(node48.GetPtr());
-	auto n256 = art.n256_nodes->Get<Node256>(node256.GetPtr());
+	auto n256 = Node256::New(art, node256);
 
 	n256->count = n48->count;
 	n256->prefix.Move(n48->prefix);
@@ -102,28 +102,6 @@ void Node256::DeleteChild(ART &art, ARTNode &node, idx_t position) {
 		auto node256 = node;
 		Node48::ShrinkNode256(art, node, node256);
 	}
-}
-
-void Node256::ReplaceChild(const idx_t &position, ARTNode &child) {
-	D_ASSERT(position < ARTNode::NODE_256_CAPACITY);
-	children[position] = child;
-}
-
-ARTNode *Node256::GetChild(const idx_t &position) {
-	D_ASSERT(position < ARTNode::NODE_256_CAPACITY);
-	return &children[position];
-}
-
-uint8_t Node256::GetKeyByte(const idx_t &position) const {
-	D_ASSERT(position < ARTNode::NODE_256_CAPACITY);
-	return position;
-}
-
-idx_t Node256::GetChildPosition(const uint8_t &byte) const {
-	if (children[byte]) {
-		return byte;
-	}
-	return DConstants::INVALID_INDEX;
 }
 
 idx_t Node256::GetChildPositionGreaterEqual(const uint8_t &byte, bool &inclusive) const {

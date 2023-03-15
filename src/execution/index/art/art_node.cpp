@@ -25,32 +25,21 @@ ARTNode::ARTNode(MetaBlockReader &reader) : SwizzleablePointer(reader) {
 void ARTNode::New(ART &art, ARTNode &node, const ARTNodeType &type) {
 
 	switch (type) {
-	case ARTNodeType::PREFIX_SEGMENT:
-		art.prefix_segments->New(node.pointer);
-		break;
-	case ARTNodeType::LEAF_SEGMENT:
-		art.leaf_segments->New(node.pointer);
-		break;
-	case ARTNodeType::LEAF:
-		art.leaves->New(node.pointer);
-		break;
 	case ARTNodeType::NODE_4:
-		art.n4_nodes->New(node.pointer);
+		Node4::New(art, node);
 		break;
 	case ARTNodeType::NODE_16:
-		art.n16_nodes->New(node.pointer);
+		Node16::New(art, node);
 		break;
 	case ARTNodeType::NODE_48:
-		art.n48_nodes->New(node.pointer);
+		Node48::New(art, node);
 		break;
 	case ARTNodeType::NODE_256:
-		art.n256_nodes->New(node.pointer);
+		Node256::New(art, node);
 		break;
 	default:
-		throw InternalException("Unknown ARTNodeType for FixedSizeAllocator");
+		throw InternalException("Invalid node type for Initialize.");
 	}
-
-	node.EncodeARTNodeType(type);
 }
 
 void ARTNode::Free(ART &art, ARTNode &node) {
@@ -94,51 +83,6 @@ void ARTNode::Free(ART &art, ARTNode &node) {
 
 	// overwrite with an empty ART node
 	node.Reset();
-}
-
-void ARTNode::Initialize(ART &art, ARTNode &node, const ARTNodeType &type) {
-
-	ARTNode::New(art, node, type);
-
-	switch (type) {
-	case ARTNodeType::NODE_4:
-		Node4::Initialize(art, node);
-		break;
-	case ARTNodeType::NODE_16:
-		Node16::Initialize(art, node);
-		break;
-	case ARTNodeType::NODE_48:
-		Node48::Initialize(art, node);
-		break;
-	case ARTNodeType::NODE_256:
-		Node256::Initialize(art, node);
-		break;
-	default:
-		throw InternalException("Invalid node type for Initialize.");
-	}
-}
-
-//===--------------------------------------------------------------------===//
-// Encoding / Decoding the node type
-//===--------------------------------------------------------------------===//
-
-void ARTNode::EncodeARTNodeType(const ARTNodeType &type) {
-
-	// left shift the type by 7 bytes
-	auto type_64_bit = (idx_t)type;
-	type_64_bit <<= ((sizeof(idx_t) - sizeof(uint8_t)) * 8);
-
-	// ensure that we do not overwrite any bits
-	D_ASSERT((pointer & FixedSizeAllocator::BUFFER_ID_AND_OFFSET_TO_ZERO) == 0);
-	pointer |= type_64_bit;
-	D_ASSERT(DecodeARTNodeType() == type);
-}
-
-ARTNodeType ARTNode::DecodeARTNodeType() const {
-
-	// right shift by 7 bytes
-	auto type = pointer >> ((sizeof(idx_t) - sizeof(uint8_t)) * 8);
-	return ARTNodeType(type);
 }
 
 //===--------------------------------------------------------------------===//
@@ -383,18 +327,22 @@ void ARTNode::Deserialize(ART &art, idx_t block_id, idx_t offset) {
 
 	auto type_byte = reader.Read<uint8_t>();
 	ARTNodeType type((ARTNodeType)(type_byte));
-	ARTNode::New(art, *this, type);
 
 	switch (type) {
 	case ARTNodeType::LEAF:
+		SetPtr(art.leaves->New(), type);
 		return art.leaves->Get<Leaf>(GetPtr())->Deserialize(art, reader);
 	case ARTNodeType::NODE_4:
+		SetPtr(art.n4_nodes->New(), type);
 		return art.n4_nodes->Get<Node4>(GetPtr())->Deserialize(art, reader);
 	case ARTNodeType::NODE_16:
+		SetPtr(art.n16_nodes->New(), type);
 		return art.n16_nodes->Get<Node16>(GetPtr())->Deserialize(art, reader);
 	case ARTNodeType::NODE_48:
+		SetPtr(art.n48_nodes->New(), type);
 		return art.n48_nodes->Get<Node48>(GetPtr())->Deserialize(art, reader);
 	case ARTNodeType::NODE_256:
+		SetPtr(art.n256_nodes->New(), type);
 		return art.n256_nodes->Get<Node256>(GetPtr())->Deserialize(art, reader);
 	default:
 		throw InternalException("Invalid node type for Deserialize.");
@@ -583,10 +531,8 @@ bool ARTNode::ResolvePrefixes(ART &art, ARTNode &other) {
 	// prefixes differ, create new node and insert both nodes as children
 
 	// create new node
-	// TODO: potentially less allocations here
 	auto old_l_node = l_node;
-	ARTNode::New(art, l_node, ARTNodeType::NODE_4);
-	auto new_n4 = Node4::Initialize(art, l_node);
+	auto new_n4 = Node4::New(art, l_node);
 	new_n4->prefix.Initialize(art, *l_prefix, mismatch_position);
 
 	// insert old l_node, break up prefix of old l_node

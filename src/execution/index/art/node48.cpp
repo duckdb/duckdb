@@ -7,6 +7,27 @@
 
 namespace duckdb {
 
+Node48 *Node48::New(ART &art, ARTNode &node) {
+
+	node.SetPtr(art.n48_nodes->New(), ARTNodeType::NODE_48);
+
+	auto n48 = art.n48_nodes->Get<Node48>(node.GetPtr());
+	art.IncreaseMemorySize(sizeof(Node48));
+
+	n48->count = 0;
+	n48->prefix.Initialize();
+
+	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
+		n48->child_index[i] = ARTNode::EMPTY_MARKER;
+	}
+
+	for (idx_t i = 0; i < ARTNode::NODE_48_CAPACITY; i++) {
+		n48->children[i].Reset();
+	}
+
+	return n48;
+}
+
 void Node48::Free(ART &art, ARTNode &node) {
 
 	D_ASSERT(node);
@@ -26,31 +47,10 @@ void Node48::Free(ART &art, ARTNode &node) {
 	art.DecreaseMemorySize(sizeof(Node48));
 }
 
-Node48 *Node48::Initialize(ART &art, const ARTNode &node) {
-
-	auto n48 = art.n48_nodes->Get<Node48>(node.GetPtr());
-	art.IncreaseMemorySize(sizeof(Node48));
-
-	n48->count = 0;
-	n48->prefix.Initialize();
-
-	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
-		n48->child_index[i] = ARTNode::EMPTY_MARKER;
-	}
-
-	for (idx_t i = 0; i < ARTNode::NODE_48_CAPACITY; i++) {
-		n48->children[i].Reset();
-	}
-
-	return n48;
-}
-
 Node48 *Node48::GrowNode16(ART &art, ARTNode &node48, ARTNode &node16) {
 
-	ARTNode::New(art, node48, ARTNodeType::NODE_48);
-
 	auto n16 = art.n16_nodes->Get<Node16>(node16.GetPtr());
-	auto n48 = art.n48_nodes->Get<Node48>(node48.GetPtr());
+	auto n48 = Node48::New(art, node48);
 
 	n48->count = n16->count;
 	n48->prefix.Move(n16->prefix);
@@ -75,9 +75,7 @@ Node48 *Node48::GrowNode16(ART &art, ARTNode &node48, ARTNode &node16) {
 
 Node48 *Node48::ShrinkNode256(ART &art, ARTNode &node48, ARTNode &node256) {
 
-	ARTNode::New(art, node48, ARTNodeType::NODE_48);
-
-	auto n48 = art.n48_nodes->Get<Node48>(node48.GetPtr());
+	auto n48 = Node48::New(art, node48);
 	auto n256 = art.n256_nodes->Get<Node256>(node256.GetPtr());
 
 	n48->count = 0;
@@ -161,30 +159,6 @@ void Node48::DeleteChild(ART &art, ARTNode &node, idx_t position) {
 		auto node48 = node;
 		Node16::ShrinkNode48(art, node, node48);
 	}
-}
-
-void Node48::ReplaceChild(const idx_t &position, ARTNode &child) {
-	D_ASSERT(position < ARTNode::NODE_256_CAPACITY);
-	D_ASSERT(child_index[position] < ARTNode::NODE_48_CAPACITY);
-	children[child_index[position]] = child;
-}
-
-ARTNode *Node48::GetChild(const idx_t &position) {
-	D_ASSERT(position < ARTNode::NODE_256_CAPACITY);
-	D_ASSERT(child_index[position] < ARTNode::NODE_48_CAPACITY);
-	return &children[child_index[position]];
-}
-
-uint8_t Node48::GetKeyByte(const idx_t &position) const {
-	D_ASSERT(position < ARTNode::NODE_256_CAPACITY);
-	return position;
-}
-
-idx_t Node48::GetChildPosition(const uint8_t &byte) const {
-	if (child_index[byte] == ARTNode::EMPTY_MARKER) {
-		return DConstants::INVALID_INDEX;
-	}
-	return byte;
 }
 
 idx_t Node48::GetChildPositionGreaterEqual(const uint8_t &byte, bool &inclusive) const {

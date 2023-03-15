@@ -55,20 +55,36 @@ public:
 	ARTNode();
 	//! Constructs a swizzled pointer from a block ID and an offset
 	explicit ARTNode(MetaBlockReader &reader);
-	//! Get a new pointer to a node, might cause a new buffer allocation
+	//! Get a new pointer to a node, might cause a new buffer allocation, and initialize it
 	static void New(ART &art, ARTNode &node, const ARTNodeType &type);
 	//! Free the node (and its subtree)
 	static void Free(ART &art, ARTNode &node);
-	//! Initializes a new ART node
-	static void Initialize(ART &art, ARTNode &node, const ARTNodeType &type);
 
 	//! Set the leftmost byte to contain the node type
-	void EncodeARTNodeType(const ARTNodeType &type);
+	inline void EncodeARTNodeType(const ARTNodeType &type) {
+		// left shift the type by 7 bytes
+		auto type_64_bit = (idx_t)type;
+		type_64_bit <<= ((sizeof(idx_t) - sizeof(uint8_t)) * 8);
+
+		// ensure that we do not overwrite any bits
+		D_ASSERT((pointer & FixedSizeAllocator::BUFFER_ID_AND_OFFSET_TO_ZERO) == 0);
+		pointer |= type_64_bit;
+		D_ASSERT(DecodeARTNodeType() == type);
+	}
 	//! Retrieve the node type from the leftmost byte
-	ARTNodeType DecodeARTNodeType() const;
+	inline ARTNodeType DecodeARTNodeType() const {
+		// right shift by 7 bytes
+		auto type = pointer >> ((sizeof(idx_t) - sizeof(uint8_t)) * 8);
+		return ARTNodeType(type);
+	}
 	//! Get the pointer without the node type encoded
 	inline idx_t GetPtr() const {
 		return pointer & FixedSizeAllocator::FIRST_BYTE_TO_ZERO;
+	}
+	//! Set the pointer and encode the node type
+	inline void SetPtr(const idx_t &ptr, const ARTNodeType &type) {
+		pointer = ptr;
+		EncodeARTNodeType(type);
 	}
 
 	//! Replace a child node at pos

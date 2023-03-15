@@ -290,11 +290,10 @@ bool Construct(ART &art, vector<Key> &keys, row_t *row_ids, ARTNode &node, KeySe
 			return false;
 		}
 
-		ARTNode::New(art, node, ARTNodeType::LEAF);
 		if (single_row_id) {
-			Leaf::Initialize(art, node, start_key, prefix_start, row_ids[key_section.start]);
+			Leaf::New(art, node, start_key, prefix_start, row_ids[key_section.start]);
 		} else {
-			Leaf::Initialize(art, node, start_key, prefix_start, row_ids + key_section.start, num_row_ids);
+			Leaf::New(art, node, start_key, prefix_start, row_ids + key_section.start, num_row_ids);
 		}
 		return true;
 	}
@@ -306,7 +305,7 @@ bool Construct(ART &art, vector<Key> &keys, row_t *row_ids, ARTNode &node, KeySe
 	GetChildSections(child_sections, keys, key_section);
 
 	auto node_type = ARTNode::GetARTNodeTypeByCount(child_sections.size());
-	ARTNode::Initialize(art, node, node_type);
+	ARTNode::New(art, node, node_type);
 
 	auto prefix_length = key_section.depth - prefix_start;
 	node.GetPrefix(art)->Initialize(art, start_key, prefix_start, prefix_length);
@@ -470,8 +469,7 @@ bool ART::Insert(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id
 
 	if (!node) {
 		// node is currently empty, create a leaf here with the key
-		ARTNode::New(*this, node, ARTNodeType::LEAF);
-		Leaf::Initialize(*this, node, key, depth, row_id);
+		Leaf::New(*this, node, key, depth, row_id);
 		return true;
 	}
 
@@ -494,18 +492,15 @@ bool ART::Insert(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id
 		}
 
 		// replace leaf with Node4 and store both leaves in it
-		// TODO: potentially less allocations here
 		auto old_node = node;
-		ARTNode::New(*this, node, ARTNodeType::NODE_4);
-		auto new_n4 = Node4::Initialize(*this, node);
+		auto new_n4 = Node4::New(*this, node);
 		new_n4->prefix.Initialize(*this, key, depth, new_prefix_length);
 
 		auto key_byte = old_node.GetPrefix(*this)->Reduce(*this, new_prefix_length);
 		Node4::InsertChild(*this, node, key_byte, old_node);
 
 		ARTNode leaf_node;
-		ARTNode::New(*this, leaf_node, ARTNodeType::LEAF);
-		Leaf::Initialize(*this, leaf_node, key, depth + new_prefix_length + 1, row_id);
+		Leaf::New(*this, leaf_node, key, depth + new_prefix_length + 1, row_id);
 		Node4::InsertChild(*this, node, key[depth + new_prefix_length], leaf_node);
 
 		return true;
@@ -519,18 +514,15 @@ bool ART::Insert(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id
 		if (mismatch_position != old_node_prefix->count) {
 
 			// prefix differs, create new node
-			// TODO: potentially less allocations here
 			auto old_node = node;
-			ARTNode::New(*this, node, ARTNodeType::NODE_4);
-			auto new_n4 = Node4::Initialize(*this, node);
+			auto new_n4 = Node4::New(*this, node);
 			new_n4->prefix.Initialize(*this, key, depth, mismatch_position);
 
 			auto key_byte = old_node_prefix->Reduce(*this, mismatch_position);
 			Node4::InsertChild(*this, node, key_byte, old_node);
 
 			ARTNode leaf_node;
-			ARTNode::New(*this, leaf_node, ARTNodeType::LEAF);
-			Leaf::Initialize(*this, leaf_node, key, depth + mismatch_position + 1, row_id);
+			Leaf::New(*this, leaf_node, key, depth + mismatch_position + 1, row_id);
 			Node4::InsertChild(*this, node, key[depth + mismatch_position], leaf_node);
 
 			return true;
@@ -549,10 +541,8 @@ bool ART::Insert(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id
 	}
 
 	// insert at position
-	// TODO: potentially less allocations here (leaf already exists as empty ARTNode child of node)
 	ARTNode leaf_node;
-	ARTNode::New(*this, leaf_node, ARTNodeType::LEAF);
-	Leaf::Initialize(*this, leaf_node, key, depth + 1, row_id);
+	Leaf::New(*this, leaf_node, key, depth + 1, row_id);
 	ARTNode::InsertChild(*this, node, key[depth], leaf_node);
 	return true;
 }

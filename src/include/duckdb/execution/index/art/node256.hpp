@@ -13,6 +13,7 @@
 
 namespace duckdb {
 
+//! Node256 holds up to 256 ARTNode children which can be directly indexed by the key byte
 class Node256 {
 public:
 	//! Number of non-null children
@@ -23,10 +24,10 @@ public:
 	ARTNode children[ARTNode::NODE_256_CAPACITY];
 
 public:
+	//! Get a new pointer to a node, might cause a new buffer allocation, and initialize it
+	static Node256 *New(ART &art, ARTNode &node);
 	//! Free the node (and its subtree)
 	static void Free(ART &art, ARTNode &node);
-	//! Initializes all the fields of the node
-	static Node256 *Initialize(ART &art, const ARTNode &node);
 	//! Initializes all the fields of the node while growing a Node48 to a Node256
 	static Node256 *GrowNode48(ART &art, ARTNode &node256, ARTNode &node48);
 
@@ -39,15 +40,29 @@ public:
 	static void DeleteChild(ART &art, ARTNode &node, idx_t position);
 
 	//! Replace a child node at pos
-	void ReplaceChild(const idx_t &position, ARTNode &child);
+	inline void ReplaceChild(const idx_t &position, ARTNode &child) {
+		D_ASSERT(position < ARTNode::NODE_256_CAPACITY);
+		children[position] = child;
+	}
 
 	//! Get the child at the specified position in the node. pos must be between [0, count)
-	ARTNode *GetChild(const idx_t &position);
+	inline ARTNode *GetChild(const idx_t &position) {
+		D_ASSERT(position < ARTNode::NODE_256_CAPACITY);
+		return &children[position];
+	}
 	//! Get the byte at the specified position
-	uint8_t GetKeyByte(const idx_t &position) const;
+	inline uint8_t GetKeyByte(const idx_t &position) const {
+		D_ASSERT(position < ARTNode::NODE_256_CAPACITY);
+		return position;
+	}
 	//! Get the position of a child corresponding exactly to the specific byte, returns DConstants::INVALID_INDEX if
 	//! the child does not exist
-	idx_t GetChildPosition(const uint8_t &byte) const;
+	inline idx_t GetChildPosition(const uint8_t &byte) const {
+		if (children[byte]) {
+			return byte;
+		}
+		return DConstants::INVALID_INDEX;
+	}
 	//! Get the position of the first child that is greater or equal to the specific byte, or DConstants::INVALID_INDEX
 	//! if there are no children matching the criteria
 	idx_t GetChildPositionGreaterEqual(const uint8_t &byte, bool &inclusive) const;

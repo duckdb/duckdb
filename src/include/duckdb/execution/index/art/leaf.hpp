@@ -31,14 +31,15 @@ public:
 	} row_ids;
 
 public:
+	//! Get a new pointer to a node, might cause a new buffer allocation, and initializes a leaf holding one
+	//! row ID and a prefix starting at depth
+	static Leaf *New(ART &art, ARTNode &node, const Key &key, const uint32_t &depth, const row_t &row_id);
+	//! Get a new pointer to a node, might cause a new buffer allocation, and initializes a leaf holding
+	//! n_row_ids row IDs and a prefix starting at depth
+	static Leaf *New(ART &art, ARTNode &node, const Key &key, const uint32_t &depth, const row_t *row_ids,
+	                 const idx_t &count);
 	//! Free the leaf
 	static void Free(ART &art, ARTNode &node);
-
-	//! Initializes a leaf holding one row ID and a prefix starting at depth
-	static Leaf *Initialize(ART &art, const ARTNode &node, const Key &key, const uint32_t &depth, const row_t &row_id);
-	//! Initializes a leaf holding n_row_ids row IDs and a prefix starting at depth
-	static Leaf *Initialize(ART &art, const ARTNode &node, const Key &key, const uint32_t &depth, const row_t *row_ids,
-	                        const idx_t &count);
 
 	//! Initializes a merge by incrementing the buffer IDs of the leaf segments
 	void InitializeMerge(ART &art, const idx_t &buffer_count);
