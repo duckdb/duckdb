@@ -23,4 +23,8 @@ unique_ptr<TableRef> EmptyTableRef::Deserialize(FieldReader &reader) {
 	return make_unique<EmptyTableRef>();
 }
 
+unique_ptr<TableRef> EmptyTableRef::FormatDeserialize(FormatDeserializer &source) {
+	return make_unique<EmptyTableRef>();
+}
+
 } // namespace duckdb

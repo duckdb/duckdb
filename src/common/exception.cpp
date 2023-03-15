@@ -149,6 +149,7 @@ const HTTPException &Exception::AsHTTPException() const {
 	D_ASSERT(type == ExceptionType::HTTP);
 	const auto &e = static_cast<const HTTPException *>(this);
 	D_ASSERT(e->GetStatusCode() != 0);
+	D_ASSERT(e->GetHeaders().size() > 0);
 	return *e;
 }
 
@@ -202,8 +203,7 @@ void Exception::ThrowAsTypeWithMessage(ExceptionType type, const string &message
 	case ExceptionType::DEPENDENCY:
 		throw DependencyException(message);
 	case ExceptionType::HTTP: {
-		auto exc = original->AsHTTPException();
-		throw HTTPException(exc.GetStatusCode(), exc.GetResponse(), exc.what());
+		original->AsHTTPException().Throw();
 	}
 	default:
 		throw Exception(type, message);
