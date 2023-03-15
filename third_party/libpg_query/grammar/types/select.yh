@@ -27,8 +27,8 @@
 				qualified_name_list any_name 				any_operator expr_list	attrs expr_list_opt_comma opt_expr_list_opt_comma
 				target_list			 			 indirection opt_indirection target_list_opt_comma opt_target_list_opt_comma
 			 group_clause select_limit
-				opt_select_limit 			 			 TableFuncElementList opt_type_modifiers opt_select
-%type <list>	group_by_list group_by_list_opt_comma
+				opt_select_limit 			 			 TableFuncElementList opt_type_modifiers opt_select extended_indirection opt_extended_indirection
+%type <list>	group_by_list group_by_list_opt_comma opt_func_arguments
 %type <node>	group_by_item empty_grouping_set rollup_clause cube_clause grouping_sets_clause grouping_or_grouping_id
 %type <range>	OptTempTableName
 %type <into>	into_clause
@@ -59,7 +59,7 @@
 %type <node> TableFuncElement
 
 
-%type <node> where_clause 				a_expr b_expr c_expr AexprConst indirection_el opt_slice_bound
+%type <node> where_clause 				a_expr b_expr c_expr AexprConst indirection_el opt_slice_bound extended_indirection_el
 				columnref in_expr having_clause qualify_clause func_table
 %type <list>	rowsfrom_item rowsfrom_list opt_col_def_list
 %type <boolean> opt_ordinality
