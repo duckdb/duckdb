@@ -133,7 +133,6 @@ static DefaultMacro internal_macros[] = {
 
 	// date functions
 	{DEFAULT_SCHEMA, "date_add", {"date", "interval", nullptr}, "date + interval"},
-	{DEFAULT_SCHEMA, "date_sub", {"date", "interval", nullptr}, "date - interval"},
 
 	{nullptr, nullptr, {nullptr}, nullptr}
 	};

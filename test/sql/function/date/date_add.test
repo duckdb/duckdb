@@ -21,14 +21,3 @@ query I
 SELECT DATE_ADD(TIMESTAMP '2008-12-25 00:00:00', INTERVAL 5 DAY) AS five_days_later;
 ----
 2008-12-30 00:00:00
-
-# date_sub, bigquery
-query I
-SELECT DATE_SUB(DATE '2008-12-25', INTERVAL 5 DAY) AS five_days_ago;
-----
-2008-12-20
-
-query I
-SELECT DATE_SUB(TIMESTAMP '2008-12-25 00:00:00', INTERVAL 5 DAY) AS five_days_later;
-----
-2008-12-20 00:00:00
