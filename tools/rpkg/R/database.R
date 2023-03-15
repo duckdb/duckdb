@@ -1,6 +1,3 @@
-
-
-
 #' Override the finalize call of the duckdb sum function so that
 #' if the result is not set, set it to 0
 #' @param conn A DuckDB connection, created by `dbConnect()`.
