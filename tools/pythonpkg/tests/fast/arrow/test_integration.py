@@ -1,5 +1,6 @@
 import duckdb
 import os
+import datetime
 try:
     import pyarrow
     import pyarrow.parquet
@@ -100,6 +101,113 @@ class TestArrowIntegration(object):
         duckdb_conn.from_arrow(arrow_tbl).create("bigdecimal")
         result = duckdb_conn.execute('select * from bigdecimal')
         assert (result.fetchone()[0] == 9999999999999999999999999999999999)
+
+    def test_intervals_roundtrip(self,duckdb_cursor):
+        if not can_run:
+            return
+
+        duckdb_conn = duckdb.connect()
+
+        # test for import from apache arrow
+        expected_value = pyarrow.MonthDayNano([2, 8,
+                                               (datetime.timedelta(seconds=1, microseconds=1,
+                                                                   milliseconds=1, minutes=1,
+                                                                   hours=1) //
+                                                                   datetime.timedelta(microseconds=1)) * 1000])
+        arr = [expected_value]
+
+        data = pyarrow.array(arr, pyarrow.month_day_nano_interval())
+        arrow_tbl = pyarrow.Table.from_arrays([data],['a'])
+        duckdb_conn = duckdb.connect()
+        duckdb_conn.from_arrow(arrow_tbl).create("intervaltbl")
+        duck_arrow_tbl = duckdb_conn.table("intervaltbl").arrow()['a']
+
+        assert  (duck_arrow_tbl[0].value == expected_value)
+
+        # test for select interval from duckdb
+        duckdb_conn.execute("CREATE TABLE test (a INTERVAL)")
+        duckdb_conn.execute("INSERT INTO  test VALUES (INTERVAL 1 YEAR + INTERVAL 1 DAY + INTERVAL 1 SECOND)")
+        expected_value = pyarrow.MonthDayNano([12, 1, 1000000000])
+        duck_tbl_arrow = duckdb_conn.table("test").arrow()['a']
+        assert  (duck_tbl_arrow[0].value.months == expected_value.months)
+        assert  (duck_tbl_arrow[0].value.days == expected_value.days)
+        assert  (duck_tbl_arrow[0].value.nanoseconds == expected_value.nanoseconds)
+
+    def test_null_intervals_roundtrip(self,duckdb_cursor):
+        if not can_run:
+            return
+        # test for null interval
+        expected_value = pyarrow.MonthDayNano([2, 8,
+                                               (datetime.timedelta(seconds=1, microseconds=1,
+                                                                   milliseconds=1, minutes=1,
+                                                                   hours=1) //
+                                                                   datetime.timedelta(microseconds=1)) * 1000])
+        arr = [
+            None,
+            expected_value
+        ]
+        data = pyarrow.array(arr, pyarrow.month_day_nano_interval())
+        arrow_tbl = pyarrow.Table.from_arrays([data],['a'])
+        duckdb_conn = duckdb.connect()
+        duckdb_conn.from_arrow(arrow_tbl).create("intervalnulltbl")
+        duckdb_tbl_arrow = duckdb_conn.table("intervalnulltbl").arrow()['a']
+
+        assert  (duckdb_tbl_arrow[0].value == None)
+        assert  (duckdb_tbl_arrow[1].value == expected_value)
+
+    def test_nested_interval_roundtrip(self,duckdb_cursor):
+        if not can_run:
+            return
+        # Dictionary
+        duckdb_conn = duckdb.connect()
+        indices = pyarrow.array([0, 1, 0, 1, 2, 1, 0, 2])
+        first_value = pyarrow.MonthDayNano([0, 1, 2000000])
+        second_value = pyarrow.MonthDayNano([90, 12, 0])
+        dictionary = pyarrow.array([first_value, second_value, None])
+        dict_array = pyarrow.DictionaryArray.from_arrays(indices, dictionary)
+        arrow_table = pyarrow.Table.from_arrays([dict_array],['a'])
+        duckdb_conn.from_arrow(arrow_table).create("dictionarytbl")
+        duckdb_tbl_arrow = duckdb_conn.table("dictionarytbl").arrow()['a']
+
+        assert  duckdb_tbl_arrow[0].value == first_value
+        assert  duckdb_tbl_arrow[1].value == second_value
+        assert  duckdb_tbl_arrow[2].value == first_value
+        assert  duckdb_tbl_arrow[3].value == second_value
+        assert  duckdb_tbl_arrow[4].value == None
+        assert  duckdb_tbl_arrow[5].value == second_value
+        assert  duckdb_tbl_arrow[6].value == first_value
+        assert  duckdb_tbl_arrow[7].value == None
+        
+        # List
+        query = duckdb.query("SELECT a from (select list_value(INTERVAL 3 MONTHS, INTERVAL 5 DAYS, INTERVAL 10 SECONDS, NULL) as a) as t").arrow()['a']
+        assert query[0][0].value == pyarrow.MonthDayNano([3, 0, 0])
+        assert query[0][1].value == pyarrow.MonthDayNano([0, 5, 0])
+        assert query[0][2].value == pyarrow.MonthDayNano([0, 0, 10000000000])
+        assert query[0][3].value == None
+        
+        # Struct
+        query = "SELECT a from (SELECT STRUCT_PACK(a := INTERVAL 1 MONTHS, b := INTERVAL 10 DAYS, c:= INTERVAL 20 SECONDS) as a) as t"
+        true_answer = duckdb.query(query).fetchall()
+        from_arrow = duckdb.from_arrow(duckdb.query(query).arrow()).fetchall()
+        assert true_answer[0][0]['a'] == from_arrow[0][0]['a']
+        assert true_answer[0][0]['b'] == from_arrow[0][0]['b']
+        assert true_answer[0][0]['c'] == from_arrow[0][0]['c']
+
+    def test_min_max_interval_roundtrip(self, duckdb_cursor):
+        if not can_run:
+            return
+
+        duckdb_conn = duckdb.connect()
+        interval_min_value = pyarrow.MonthDayNano([0, 0, 0])
+        interval_max_value = pyarrow.MonthDayNano([2147483647, 2147483647, 9223372036854775000])
+        data = pyarrow.array([interval_min_value, interval_max_value], pyarrow.month_day_nano_interval())
+        arrow_tbl = pyarrow.Table.from_arrays([data],['a'])
+        duckdb_conn = duckdb.connect()
+        duckdb_conn.from_arrow(arrow_tbl).create("intervalminmaxtbl")
+
+        duck_arrow_tbl = duckdb_conn.table("intervalminmaxtbl").arrow()['a']
+        assert duck_arrow_tbl[0].value == pyarrow.MonthDayNano([0, 0, 0])
+        assert duck_arrow_tbl[1].value == pyarrow.MonthDayNano([2147483647, 2147483647, 9223372036854775000])
 
     def test_strings_roundtrip(self,duckdb_cursor):
         if not can_run:

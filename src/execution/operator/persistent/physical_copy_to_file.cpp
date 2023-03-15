@@ -85,8 +85,8 @@ static string CreateDirRecursive(const vector<idx_t> &cols, const vector<string>
 	CreateDir(path, fs);
 
 	for (idx_t i = 0; i < cols.size(); i++) {
-		auto partition_col_name = names[cols[i]];
-		auto partition_value = values[i];
+		const auto &partition_col_name = names[cols[i]];
+		const auto &partition_value = values[i];
 		string p_dir = partition_col_name + "=" + partition_value.ToString();
 		path = fs.JoinPath(path, p_dir);
 		CreateDir(path, fs);

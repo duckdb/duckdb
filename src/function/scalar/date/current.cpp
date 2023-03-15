@@ -35,14 +35,12 @@ static void CurrentTimestampFunction(DataChunk &input, ExpressionState &state, V
 
 void CurrentTimeFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction current_time("get_current_time", {}, LogicalType::TIME, CurrentTimeFunction);
-	;
 	current_time.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
 	set.AddFunction(current_time);
 }
 
 void CurrentDateFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction current_date({}, LogicalType::DATE, CurrentDateFunction);
-	;
 	current_date.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
 	set.AddFunction({"today", "current_date"}, current_date);
 }

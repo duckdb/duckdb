@@ -208,8 +208,9 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	auto bound_function = func->functions.GetFunctionByOffset(best_function);
 
 	// Bind any sort columns, unless the aggregate is order-insensitive
-	auto order_bys = make_unique<BoundOrderModifier>();
+	unique_ptr<BoundOrderModifier> order_bys;
 	if (!aggr.order_bys->orders.empty()) {
+		order_bys = make_unique<BoundOrderModifier>();
 		auto &config = DBConfig::GetConfig(context);
 		for (auto &order : aggr.order_bys->orders) {
 			auto &order_expr = (BoundExpression &)*order.expression;
@@ -218,16 +219,17 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 			const auto null_order = (order.null_order == OrderByNullType::ORDER_DEFAULT)
 			                            ? config.options.default_null_order
 			                            : order.null_order;
-			order_bys->orders.emplace_back(BoundOrderByNode(sense, null_order, std::move(order_expr.expr)));
+			order_bys->orders.emplace_back(sense, null_order, std::move(order_expr.expr));
 		}
 	}
 
-	auto aggregate = function_binder.BindAggregateFunction(
-	    bound_function, std::move(children), std::move(bound_filter),
-	    aggr.distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT, std::move(order_bys));
+	auto aggregate =
+	    function_binder.BindAggregateFunction(bound_function, std::move(children), std::move(bound_filter),
+	                                          aggr.distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT);
 	if (aggr.export_state) {
 		aggregate = ExportAggregateFunction::Bind(std::move(aggregate));
 	}
+	aggregate->order_bys = std::move(order_bys);
 
 	// check for all the aggregates if this aggregate already exists
 	idx_t aggr_index;

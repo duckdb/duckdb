@@ -40,6 +40,8 @@ public:
 	vector<shared_ptr<DuckDBPyConnection>> cursors;
 	unordered_map<string, shared_ptr<Relation>> temporary_views;
 	std::mutex py_connection_lock;
+	//! MemoryFileSystem used to temporarily store file-like objects for reading
+	shared_ptr<ModifiedMemoryFileSystem> internal_object_filesystem;
 
 public:
 	explicit DuckDBPyConnection() {
@@ -61,7 +63,7 @@ public:
 	static bool IsInteractive();
 
 	unique_ptr<DuckDBPyRelation>
-	ReadCSV(const string &name, const py::object &header = py::none(), const py::object &compression = py::none(),
+	ReadCSV(const py::object &name, const py::object &header = py::none(), const py::object &compression = py::none(),
 	        const py::object &sep = py::none(), const py::object &delimiter = py::none(),
 	        const py::object &dtype = py::none(), const py::object &na_values = py::none(),
 	        const py::object &skiprows = py::none(), const py::object &quotechar = py::none(),
@@ -132,6 +134,8 @@ public:
 
 	void Close();
 
+	ModifiedMemoryFileSystem &GetObjectFileSystem();
+
 	// cursor() is stupid
 	shared_ptr<DuckDBPyConnection> Cursor();
 
@@ -164,6 +168,7 @@ public:
 	void RegisterFilesystem(AbstractFileSystem filesystem);
 	void UnregisterFilesystem(const py::str &name);
 	py::list ListFilesystems();
+	bool FileSystemIsRegistered(const string &name);
 
 	//! Default connection to an in-memory database
 	static shared_ptr<DuckDBPyConnection> default_connection;

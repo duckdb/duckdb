@@ -723,9 +723,9 @@ static void GetSegmentDataFunctions(WriteDataToSegment &write_data_to_segment,
 		read_data_from_segment.segment_function = ReadDataFromVarcharSegment;
 		copy_data_from_segment.segment_function = CopyDataFromListSegment;
 
-		write_data_to_segment.child_functions.emplace_back(WriteDataToSegment());
+		write_data_to_segment.child_functions.emplace_back();
 		write_data_to_segment.child_functions.back().create_segment = CreatePrimitiveSegment<char>;
-		copy_data_from_segment.child_functions.emplace_back(CopyDataFromSegment());
+		copy_data_from_segment.child_functions.emplace_back();
 		copy_data_from_segment.child_functions.back().segment_function = CopyDataFromPrimitiveSegment<char>;
 		break;
 	}
@@ -736,9 +736,9 @@ static void GetSegmentDataFunctions(WriteDataToSegment &write_data_to_segment,
 		copy_data_from_segment.segment_function = CopyDataFromListSegment;
 
 		// recurse
-		write_data_to_segment.child_functions.emplace_back(WriteDataToSegment());
-		read_data_from_segment.child_functions.emplace_back(ReadDataFromSegment());
-		copy_data_from_segment.child_functions.emplace_back(CopyDataFromSegment());
+		write_data_to_segment.child_functions.emplace_back();
+		read_data_from_segment.child_functions.emplace_back();
+		copy_data_from_segment.child_functions.emplace_back();
 		GetSegmentDataFunctions(write_data_to_segment.child_functions.back(),
 		                        read_data_from_segment.child_functions.back(),
 		                        copy_data_from_segment.child_functions.back(), ListType::GetChildType(type));
@@ -753,9 +753,9 @@ static void GetSegmentDataFunctions(WriteDataToSegment &write_data_to_segment,
 		// recurse
 		auto child_types = StructType::GetChildTypes(type);
 		for (idx_t i = 0; i < child_types.size(); i++) {
-			write_data_to_segment.child_functions.emplace_back(WriteDataToSegment());
-			read_data_from_segment.child_functions.emplace_back(ReadDataFromSegment());
-			copy_data_from_segment.child_functions.emplace_back(CopyDataFromSegment());
+			write_data_to_segment.child_functions.emplace_back();
+			read_data_from_segment.child_functions.emplace_back();
+			copy_data_from_segment.child_functions.emplace_back();
 			GetSegmentDataFunctions(write_data_to_segment.child_functions.back(),
 			                        read_data_from_segment.child_functions.back(),
 			                        copy_data_from_segment.child_functions.back(), child_types[i].second);

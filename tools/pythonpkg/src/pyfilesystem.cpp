@@ -127,6 +127,10 @@ void PythonFilesystem::Seek(duckdb::FileHandle &handle, uint64_t location) {
 
 	auto seek = PythonFileHandle::GetHandle(handle).attr("seek");
 	seek(location);
+	if (PyErr_Occurred()) {
+		PyErr_PrintEx(1);
+		throw InvalidInputException("Python exception occurred!");
+	}
 }
 bool PythonFilesystem::CanHandleFile(const string &fpath) {
 	for (const auto &protocol : protocols) {

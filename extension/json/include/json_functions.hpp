@@ -54,6 +54,7 @@ public:
 
 struct JSONFunctionLocalState : public FunctionLocalState {
 public:
+	explicit JSONFunctionLocalState(Allocator &allocator);
 	explicit JSONFunctionLocalState(ClientContext &context);
 	static unique_ptr<FunctionLocalState> Init(ExpressionState &state, const BoundFunctionExpression &expr,
 	                                           FunctionData *bind_data);

@@ -20,7 +20,7 @@ const int Blob::HEX_MAP[256] = {
     -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
 
 bool IsRegularCharacter(data_t c) {
-	return c >= 32 && c <= 127 && c != '\\' && c != '\'' && c != '"';
+	return c >= 32 && c <= 126 && c != '\\' && c != '\'' && c != '"';
 }
 
 idx_t Blob::GetStringSize(string_t blob) {

@@ -316,6 +316,20 @@ void IntervalConversionMonths(Vector &vector, ArrowArray &array, ArrowScanLocalS
 	}
 }
 
+void IntervalConversionMonthDayNanos(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state,
+                                     int64_t nested_offset, idx_t size) {
+	auto tgt_ptr = (interval_t *)FlatVector::GetData(vector);
+	auto src_ptr = (ArrowInterval *)array.buffers[1] + scan_state.chunk_offset + array.offset;
+	if (nested_offset != -1) {
+		src_ptr = (ArrowInterval *)array.buffers[1] + nested_offset + array.offset;
+	}
+	for (idx_t row = 0; row < size; row++) {
+		tgt_ptr[row].days = src_ptr[row].days;
+		tgt_ptr[row].micros = src_ptr[row].nanoseconds / Interval::NANOS_PER_MICRO;
+		tgt_ptr[row].months = src_ptr[row].months;
+	}
+}
+
 void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
                          std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx,
                          std::pair<idx_t, idx_t> &arrow_convert_idx, int64_t nested_offset, ValidityMask *parent_mask) {
@@ -507,6 +521,10 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState 
 		}
 		case ArrowDateTimeType::MONTHS: {
 			IntervalConversionMonths(vector, array, scan_state, nested_offset, size);
+			break;
+		}
+		case ArrowDateTimeType::MONTH_DAY_NANO: {
+			IntervalConversionMonthDayNanos(vector, array, scan_state, nested_offset, size);
 			break;
 		}
 		default:
