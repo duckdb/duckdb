@@ -402,6 +402,27 @@ void Prefix::Deserialize(ART &art, MetaBlockReader &reader) {
 	D_ASSERT(count_p == count);
 }
 
+void Prefix::Vacuum(ART &art) {
+
+	if (IsInlined()) {
+		return;
+	}
+
+	// first position has special treatment because we don't obtain it from a prefix segment
+	if (art.prefix_segments->NeedsVacuum(data.position)) {
+		data.position = art.prefix_segments->Vacuum(data.position);
+	}
+
+	auto position = data.position;
+	while (position != DConstants::INVALID_INDEX) {
+		auto segment = PrefixSegment::Get(art, position);
+		if (segment->next != DConstants::INVALID_INDEX && art.prefix_segments->NeedsVacuum(segment->next)) {
+			segment->next = art.prefix_segments->Vacuum(segment->next);
+		}
+		position = segment->next;
+	}
+}
+
 void Prefix::MoveInlinedToSegment(ART &art) {
 
 	D_ASSERT(IsInlined());

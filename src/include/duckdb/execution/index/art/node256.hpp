@@ -79,5 +79,8 @@ public:
 	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);
 	//! Deserialize this node
 	void Deserialize(ART &art, MetaBlockReader &reader);
+
+	//! Vacuum the children of the node
+	void Vacuum(ART &art, const vector<bool> &vacuum_nodes);
 };
 } // namespace duckdb

@@ -250,4 +250,13 @@ void Node48::Deserialize(ART &art, MetaBlockReader &reader) {
 	art.IncreaseMemorySize(sizeof(Node48));
 }
 
+void Node48::Vacuum(ART &art, const vector<bool> &vacuum_nodes) {
+
+	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
+		if (child_index[i] != ARTNode::EMPTY_MARKER) {
+			ARTNode::Vacuum(art, children[child_index[i]], vacuum_nodes);
+		}
+	}
+}
+
 } // namespace duckdb

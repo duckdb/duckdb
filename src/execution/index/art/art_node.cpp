@@ -438,14 +438,13 @@ void ARTNode::InitializeMerge(ART &art, const vector<idx_t> &buffer_counts) {
 		Deserialize(art, block_info.block_id, block_info.offset);
 	}
 
-	auto type = DecodeARTNodeType();
-
 	// if not all prefixes are inlined
 	if (buffer_counts[(uint8_t)ARTNodeType::PREFIX_SEGMENT - 1] != 0) {
 		// initialize prefix segments
 		GetPrefix(art)->InitializeMerge(art, buffer_counts[(uint8_t)ARTNodeType::PREFIX_SEGMENT - 1]);
 	}
 
+	auto type = DecodeARTNodeType();
 	switch (type) {
 	case ARTNodeType::LEAF:
 		// if not all leaves are inlined
@@ -609,6 +608,62 @@ bool ARTNode::MergeInternal(ART &art, ARTNode &other) {
 
 	ARTNode::Free(art, r_node);
 	return true;
+}
+
+//===--------------------------------------------------------------------===//
+// Vacuum
+//===--------------------------------------------------------------------===//
+
+void ARTNode::Vacuum(ART &art, ARTNode &node, const vector<bool> &vacuum_nodes) {
+
+	if (node.IsSwizzled()) {
+		return;
+	}
+
+	// possibly vacuum prefix segments, if not all prefixes are inlined
+	if (vacuum_nodes[(uint8_t)ARTNodeType::PREFIX_SEGMENT - 1] != 0) {
+		// vacuum prefix segments
+		node.GetPrefix(art)->Vacuum(art);
+	}
+
+	auto type = node.DecodeARTNodeType();
+	auto needs_vacuum = vacuum_nodes[(uint8_t)type - 1];
+	auto ptr = node.GetPtr();
+
+	switch (type) {
+	case ARTNodeType::LEAF: {
+		if (needs_vacuum && art.leaves->NeedsVacuum(ptr)) {
+			node.SetPtr(art.leaves->Vacuum(ptr), type);
+		}
+		// possibly vacuum leaf segments, if not all leaves are inlined
+		if (vacuum_nodes[(uint8_t)ARTNodeType::LEAF_SEGMENT - 1] != 0) {
+			art.leaves->Get<Leaf>(node.GetPtr())->Vacuum(art);
+		}
+		return;
+	}
+	case ARTNodeType::NODE_4:
+		if (needs_vacuum && art.n4_nodes->NeedsVacuum(ptr)) {
+			node.SetPtr(art.n4_nodes->Vacuum(ptr), type);
+		}
+		return art.n4_nodes->Get<Node4>(node.GetPtr())->Vacuum(art, vacuum_nodes);
+	case ARTNodeType::NODE_16:
+		if (needs_vacuum && art.n16_nodes->NeedsVacuum(ptr)) {
+			node.SetPtr(art.n16_nodes->Vacuum(ptr), type);
+		}
+		return art.n16_nodes->Get<Node16>(node.GetPtr())->Vacuum(art, vacuum_nodes);
+	case ARTNodeType::NODE_48:
+		if (needs_vacuum && art.n48_nodes->NeedsVacuum(ptr)) {
+			node.SetPtr(art.n48_nodes->Vacuum(ptr), type);
+		}
+		return art.n48_nodes->Get<Node48>(node.GetPtr())->Vacuum(art, vacuum_nodes);
+	case ARTNodeType::NODE_256:
+		if (needs_vacuum && art.n256_nodes->NeedsVacuum(ptr)) {
+			node.SetPtr(art.n256_nodes->Vacuum(ptr), type);
+		}
+		return art.n256_nodes->Get<Node256>(node.GetPtr())->Vacuum(art, vacuum_nodes);
+	default:
+		throw InternalException("Invalid node type for Vacuum.");
+	}
 }
 
 } // namespace duckdb

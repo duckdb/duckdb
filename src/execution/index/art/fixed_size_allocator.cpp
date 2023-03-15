@@ -113,6 +113,50 @@ void FixedSizeAllocator::Merge(FixedSizeAllocator &other) {
 	total_allocations += other.total_allocations;
 }
 
+bool FixedSizeAllocator::InitializeVacuum() {
+
+	auto total_available_allocations = allocations_per_buffer * buffers.size();
+	auto total_free_positions = total_available_allocations - total_allocations;
+
+	// vacuum_count buffers can be freed
+	auto vacuum_count = total_free_positions / allocations_per_buffer / 2;
+	if (vacuum_count < VACUUM_THRESHOLD) {
+		return false;
+	}
+	vacuum_threshold = buffers.size() - vacuum_count;
+
+	// remove all invalid buffers from the available buffer list to ensure that we do not reuse them
+	auto it = buffers_with_free_space.begin();
+	while (it != buffers_with_free_space.end()) {
+		if (*it >= vacuum_threshold) {
+			it = buffers_with_free_space.erase(it);
+		} else {
+			it++;
+		}
+	}
+
+	return true;
+}
+
+void FixedSizeAllocator::FinalizeVacuum() {
+
+	// free all (now unused) buffers
+	while (vacuum_threshold < buffers.size()) {
+		Allocator::DefaultAllocator().FreeData(buffers.back().ptr, BUFFER_ALLOCATION_SIZE);
+		buffers.pop_back();
+	}
+}
+
+idx_t FixedSizeAllocator::Vacuum(const idx_t &position) {
+
+	// we do not need to adjust the bitmask of the old buffer, because we will free the entire
+	// buffer after vacuum
+
+	auto new_position = New();
+	memcpy(Get(new_position), Get(position), allocation_size);
+	return new_position;
+}
+
 idx_t FixedSizeAllocator::GetOffset(ValidityMask &mask, const idx_t &allocation_count) {
 
 	auto data = mask.GetData();

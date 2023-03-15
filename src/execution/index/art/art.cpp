@@ -334,50 +334,6 @@ bool ART::ConstructFromSorted(idx_t count, vector<Key> &keys, Vector &row_identi
 }
 
 //===--------------------------------------------------------------------===//
-// Vacuum
-//===--------------------------------------------------------------------===//
-
-vector<bool> ART::InitializeVacuum() {
-
-	vector<bool> vacuum_nodes;
-	// TODO
-	return vacuum_nodes;
-}
-
-void ART::FinalizeVacuum(vector<bool> &vacuum_nodes) {
-	// TODO
-}
-
-void ART::Vacuum() {
-
-	if (!tree) {
-		return;
-	}
-
-	// vacuum nodes holds true, if an allocator needs a vacuum, and false otherwise
-	auto vacuum_nodes = InitializeVacuum();
-
-	// skip vacuum if no allocators require it
-	auto perform_vacuum = false;
-	for (const auto &vacuum_node : vacuum_nodes) {
-		if (vacuum_node) {
-			perform_vacuum = true;
-			break;
-		}
-	}
-	if (!perform_vacuum) {
-		return;
-	}
-
-	// TODO
-	// traverse the allocated memory of the tree to perform a vacuum
-	//	ARTNode::Vacuum(*this, tree, vacuum_nodes);
-
-	// finalize the vacuum operation
-	FinalizeVacuum(vacuum_nodes);
-}
-
-//===--------------------------------------------------------------------===//
 // Insert / Verification / Constraint Checking
 //===--------------------------------------------------------------------===//
 PreservedError ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
@@ -1030,54 +986,93 @@ BlockPointer ART::Serialize(MetaBlockWriter &writer) {
 }
 
 //===--------------------------------------------------------------------===//
+// Vacuum
+//===--------------------------------------------------------------------===//
+
+vector<bool> ART::InitializeVacuum(vector<FixedSizeAllocator *> &allocators) {
+
+	vector<bool> vacuum_nodes;
+	for (auto &allocator : allocators) {
+		vacuum_nodes.push_back(allocator->InitializeVacuum());
+	}
+	return vacuum_nodes;
+}
+
+void ART::FinalizeVacuum(vector<FixedSizeAllocator *> &allocators, vector<bool> &vacuum_nodes) {
+
+	for (idx_t i = 0; i < allocators.size(); i++) {
+		if (vacuum_nodes[i]) {
+			allocators[i]->FinalizeVacuum();
+		}
+	}
+}
+
+void ART::Vacuum() {
+
+	if (!tree) {
+		return;
+	}
+
+	auto allocators = GetAllocators();
+
+	// vacuum nodes holds true, if an allocator needs a vacuum, and false otherwise
+	auto vacuum_nodes = InitializeVacuum(allocators);
+
+	// skip vacuum if no allocators require it
+	auto perform_vacuum = false;
+	for (const auto &vacuum_node : vacuum_nodes) {
+		if (vacuum_node) {
+			perform_vacuum = true;
+			break;
+		}
+	}
+	if (!perform_vacuum) {
+		return;
+	}
+
+	// traverse the allocated memory of the tree to perform a vacuum
+	ARTNode::Vacuum(*this, tree, vacuum_nodes);
+
+	// finalize the vacuum operation
+	FinalizeVacuum(allocators, vacuum_nodes);
+}
+
+//===--------------------------------------------------------------------===//
 // Merging
 //===--------------------------------------------------------------------===//
 
-vector<idx_t> ART::InitializeMerge() {
+vector<idx_t> ART::InitializeMerge(vector<FixedSizeAllocator *> &allocators) {
 
 	vector<idx_t> buffer_counts;
-
-	buffer_counts.emplace_back(prefix_segments->buffers.size());
-	buffer_counts.emplace_back(leaf_segments->buffers.size());
-	buffer_counts.emplace_back(leaves->buffers.size());
-	buffer_counts.emplace_back(n4_nodes->buffers.size());
-	buffer_counts.emplace_back(n16_nodes->buffers.size());
-	buffer_counts.emplace_back(n48_nodes->buffers.size());
-	buffer_counts.emplace_back(n256_nodes->buffers.size());
-
+	buffer_counts.reserve(allocators.size());
+	for (auto &allocator : allocators) {
+		buffer_counts.emplace_back(allocator->buffers.size());
+	}
 	return buffer_counts;
 }
 
 bool ART::MergeIndexes(IndexLock &state, Index *other_index) {
 
 	auto other_art = (ART *)other_index;
+	auto allocators = GetAllocators();
+	auto other_allocators = other_art->GetAllocators();
 
 	if (tree) {
 		//  fully deserialize other_index, and traverse it to increment its buffer IDs
-		auto buffer_counts = InitializeMerge();
+		auto buffer_counts = InitializeMerge(allocators);
 		other_art->tree.InitializeMerge(*other_art, buffer_counts);
 	}
 
 	// merge the node storage
-	prefix_segments->Merge(*other_art->prefix_segments);
-	leaf_segments->Merge(*other_art->leaf_segments);
-	leaves->Merge(*other_art->leaves);
-	n4_nodes->Merge(*other_art->n4_nodes);
-	n16_nodes->Merge(*other_art->n16_nodes);
-	n48_nodes->Merge(*other_art->n48_nodes);
-	n256_nodes->Merge(*other_art->n256_nodes);
+	for (idx_t i = 0; i < allocators.size(); i++) {
+		allocators[i]->Merge(*other_allocators[i]);
+	}
 
 	// merge the ARTs
 	if (!tree.Merge(*this, other_art->tree)) {
 		return false;
 	}
 
-	// vacuum excess memory
-	// FIXME: improve performance by directly iterating the underlying buffers (should be similar to InitializeMerge
-	// code)
-	// TODO: enable this? if not enables, then memory consumption super high, needs
-	// TODO: more thought!
-	//	Vacuum();
 	return true;
 }
 
@@ -1092,6 +1087,21 @@ string ART::ToString() {
 	}
 	std::cout << str;
 	return str;
+}
+
+vector<FixedSizeAllocator *> ART::GetAllocators() const {
+
+	vector<FixedSizeAllocator *> allocators;
+
+	allocators.push_back(prefix_segments.get());
+	allocators.push_back(leaf_segments.get());
+	allocators.push_back(leaves.get());
+	allocators.push_back(n4_nodes.get());
+	allocators.push_back(n16_nodes.get());
+	allocators.push_back(n48_nodes.get());
+	allocators.push_back(n256_nodes.get());
+
+	return allocators;
 }
 
 } // namespace duckdb

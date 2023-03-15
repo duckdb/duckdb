@@ -42,6 +42,7 @@ public:
 	//! Other constants
 	static constexpr idx_t BUFFER_ALLOCATION_SIZE = Storage::BLOCK_ALLOC_SIZE;
 	static constexpr uint8_t OFFSET_SHIFT = sizeof(uint8_t) * 8 * 4;
+	static constexpr uint8_t VACUUM_THRESHOLD = 4;
 
 	//! Constants for offset calculations
 	static constexpr idx_t BASE[] = {0x00000000FFFFFFFF, 0x0000FFFF, 0x00FF, 0x0F, 0x3, 0x1};
@@ -67,6 +68,9 @@ public:
 	//! Buffers with free space
 	unordered_set<idx_t> buffers_with_free_space;
 
+	//! Minimum buffer ID of buffers that can be vacuumed
+	idx_t vacuum_threshold;
+
 public:
 	//! Get a new position to data, might cause a new buffer allocation
 	void New(idx_t &new_position);
@@ -85,6 +89,24 @@ public:
 
 	//! Merge another FixedSizeAllocator with this allocator. Both must have the same allocation size
 	void Merge(FixedSizeAllocator &other);
+
+	//! Initialize a vacuum operation, and return true, if the allocator needs a vacuum
+	bool InitializeVacuum();
+	//! Finalize a vacuum operation by freeing all buffers exceeding vacuum_threshold
+	void FinalizeVacuum();
+	//! Returns true, if a position qualifies for a vacuum operation, and false otherwise
+	inline bool NeedsVacuum(const idx_t &position) const {
+		// get the buffer ID
+		D_ASSERT((position & BUFFER_ID_AND_OFFSET_TO_ZERO) == 0);
+		auto buffer_id = position & OFFSET_AND_FIRST_BYTE_TO_ZERO;
+
+		if (buffer_id >= vacuum_threshold) {
+			return true;
+		}
+		return false;
+	}
+	//! Vacuums a position
+	idx_t Vacuum(const idx_t &position);
 
 private:
 	//! Returns a data_ptr_t to the position

@@ -68,6 +68,9 @@ public:
 	//! Deserialize this leaf
 	void Deserialize(ART &art, MetaBlockReader &reader);
 
+	//! Vacuum the leaf segments of a leaf, if not inlined
+	void Vacuum(ART &art);
+
 private:
 	//! Moves the inlined row ID onto a leaf segment, does not change the size
 	//! so this will be an (temporarily) invalid leaf

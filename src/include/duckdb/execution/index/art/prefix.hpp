@@ -76,6 +76,9 @@ public:
 	//! Deserialize this prefix
 	void Deserialize(ART &art, MetaBlockReader &reader);
 
+	//! Vacuum the prefix segments of a prefix, if not inlined
+	void Vacuum(ART &art);
+
 private:
 	//! Returns whether this prefix is inlined
 	inline bool IsInlined() const {

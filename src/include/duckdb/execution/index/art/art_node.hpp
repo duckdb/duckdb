@@ -135,6 +135,9 @@ public:
 	bool ResolvePrefixes(ART &art, ARTNode &other);
 	//! Merge two nodes that have no prefix or the same prefix
 	bool MergeInternal(ART &art, ARTNode &other);
+
+	//! Vacuum all nodes that exceed their respective vacuum thresholds
+	static void Vacuum(ART &art, ARTNode &node, const vector<bool> &vacuum_nodes);
 };
 
 } // namespace duckdb

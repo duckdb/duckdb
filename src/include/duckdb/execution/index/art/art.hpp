@@ -97,16 +97,6 @@ public:
 	//! Construct an ART from a vector of sorted keys
 	bool ConstructFromSorted(idx_t count, vector<Key> &keys, Vector &row_identifiers);
 
-	//! Initializes a vacuum operation by calling the initialize operation of the respective
-	//! node allocator, and returns a vector containing either true, if the allocator at
-	//! the respective position qualifies, or false, if not
-	vector<bool> InitializeVacuum();
-	//! Finalizes a vacuum operation by calling the finalize operation of all qualifying
-	//! fixed size allocators
-	void FinalizeVacuum(vector<bool> &vacuum_nodes);
-	//! Traverses an ART and vacuums the qualifying nodes
-	void Vacuum();
-
 	//! Search equal values and fetches the row IDs
 	bool SearchEqual(Key &key, idx_t max_count, vector<row_t> &result_ids);
 	//! Search equal values used for joins that do not need to fetch data
@@ -115,11 +105,12 @@ public:
 	//! Serializes the index and returns the pair of block_id offset positions
 	BlockPointer Serialize(MetaBlockWriter &writer) override;
 
-	//! Initializes a merge operation by returning a set containing the buffer count of each fixed-size allocator
-	vector<idx_t> InitializeMerge();
 	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
 	//! index must also be locked during the merge
 	bool MergeIndexes(IndexLock &state, Index *other_index) override;
+
+	//! Traverses an ART and vacuums the qualifying nodes
+	void Vacuum();
 
 	//! Generate ART keys for an input chunk
 	static void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, vector<Key> &keys);
@@ -151,6 +142,19 @@ private:
 	//! Returns all row IDs belonging to a key within the range of lower_bound and upper_bound
 	bool SearchCloseRange(ARTIndexScanState *state, Key &lower_bound, Key &upper_bound, bool left_inclusive,
 	                      bool right_inclusive, idx_t max_count, vector<row_t> &result_ids);
+
+	//! Initializes a merge operation by returning a set containing the buffer count of each fixed-size allocator
+	vector<idx_t> InitializeMerge(vector<FixedSizeAllocator *> &allocators);
+	//! Returns a vector containing pointers to all fixed-size allocators
+	vector<FixedSizeAllocator *> GetAllocators() const;
+
+	//! Initializes a vacuum operation by calling the initialize operation of the respective
+	//! node allocator, and returns a vector containing either true, if the allocator at
+	//! the respective position qualifies, or false, if not
+	vector<bool> InitializeVacuum(vector<FixedSizeAllocator *> &allocators);
+	//! Finalizes a vacuum operation by calling the finalize operation of all qualifying
+	//! fixed size allocators
+	void FinalizeVacuum(vector<FixedSizeAllocator *> &allocators, vector<bool> &vacuum_nodes);
 };
 
 } // namespace duckdb

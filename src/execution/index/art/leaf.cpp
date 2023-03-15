@@ -377,6 +377,27 @@ void Leaf::Deserialize(ART &art, MetaBlockReader &reader) {
 	D_ASSERT(count_p == count);
 }
 
+void Leaf::Vacuum(ART &art) {
+
+	if (IsInlined()) {
+		return;
+	}
+
+	// first position has special treatment because we don't obtain it from a leaf segment
+	if (art.leaf_segments->NeedsVacuum(row_ids.position)) {
+		row_ids.position = art.leaf_segments->Vacuum(row_ids.position);
+	}
+
+	auto position = row_ids.position;
+	while (position != DConstants::INVALID_INDEX) {
+		auto segment = LeafSegment::Get(art, position);
+		if (segment->next != DConstants::INVALID_INDEX && art.leaf_segments->NeedsVacuum(segment->next)) {
+			segment->next = art.leaf_segments->Vacuum(segment->next);
+		}
+		position = segment->next;
+	}
+}
+
 void Leaf::MoveInlinedToSegment(ART &art) {
 
 	D_ASSERT(IsInlined());
