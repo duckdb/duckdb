@@ -16,6 +16,12 @@ SELECT x.lower() FROM varchars
 ----
 Function with name lower does not exist
 
+# conflict
+statement error
+SELECT main.lower() FROM varchars AS t(main)
+----
+No function matches the given name and argument types
+
 query I
 SELECT v.lower() FROM varchars
 ----
