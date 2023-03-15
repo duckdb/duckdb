@@ -1,6 +1,7 @@
 #include "duckdb/storage/table/list_column_data.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/storage/table/column_checkpoint_state.hpp"
 
 namespace duckdb {
 
@@ -40,7 +41,7 @@ void ListColumnData::InitializeScan(ColumnScanState &state) {
 }
 
 uint64_t ListColumnData::FetchListOffset(idx_t row_idx) {
-	auto segment = (ColumnSegment *)data.GetSegment(row_idx);
+	auto segment = data.GetSegment(row_idx);
 	ColumnFetchState fetch_state;
 	Vector result(type, 1);
 	segment->FetchRow(fetch_state, row_idx, result, 0);
