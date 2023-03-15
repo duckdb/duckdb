@@ -37,14 +37,13 @@ struct ZeroSumOperation {
 	}
 };
 
-
 [[cpp11::register]] void rapi_set_sum_default_to_zero(duckdb::conn_eptr_t conn) {
 	// I want to check the validity of conn, but if I do, an R program that calls this function
 	// will not exit
 
 	conn->conn->context->transaction.BeginTransaction();
-	auto sum_function = Catalog::GetEntry(*conn->conn->context, CatalogType::AGGREGATE_FUNCTION_ENTRY,
-										  SYSTEM_CATALOG, DEFAULT_SCHEMA, "sum", false);
+	auto sum_function = Catalog::GetEntry(*conn->conn->context, CatalogType::AGGREGATE_FUNCTION_ENTRY, SYSTEM_CATALOG,
+	                                      DEFAULT_SCHEMA, "sum", false);
 
 	auto sum_function_cast = (AggregateFunctionCatalogEntry *)sum_function;
 	for (auto &aggr : sum_function_cast->functions.functions) {
