@@ -171,10 +171,10 @@ double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p
 idx_t TableScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
                              LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state) {
 	auto &state = (TableScanLocalState &)*local_state;
-	if (state.scan_state.table_state.row_group_state.row_group) {
+	if (state.scan_state.table_state.row_group) {
 		return state.scan_state.table_state.batch_index;
 	}
-	if (state.scan_state.local_state.row_group_state.row_group) {
+	if (state.scan_state.local_state.row_group) {
 		return state.scan_state.table_state.batch_index + state.scan_state.local_state.batch_index;
 	}
 	return 0;

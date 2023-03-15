@@ -120,7 +120,7 @@ void ColumnScanState::Initialize(const LogicalType &type) {
 	}
 }
 
-void RowGroupScanState::Initialize(const vector<LogicalType> &types) {
+void CollectionScanState::Initialize(const vector<LogicalType> &types) {
 	auto &column_ids = GetColumnIds();
 	column_scans = unique_ptr<ColumnScanState[]>(new ColumnScanState[column_ids.size()]);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
@@ -131,10 +131,9 @@ void RowGroupScanState::Initialize(const vector<LogicalType> &types) {
 	}
 }
 
-bool RowGroup::InitializeScanWithOffset(RowGroupScanState &state, idx_t vector_offset) {
+bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, idx_t vector_offset) {
 	auto &column_ids = state.GetColumnIds();
 	auto filters = state.GetFilters();
-	auto parent_max_row = state.GetParentMaxRow();
 	if (filters) {
 		if (!CheckZonemap(*filters, column_ids)) {
 			return false;
@@ -143,7 +142,8 @@ bool RowGroup::InitializeScanWithOffset(RowGroupScanState &state, idx_t vector_o
 
 	state.row_group = this;
 	state.vector_index = vector_offset;
-	state.max_row = this->start > parent_max_row ? 0 : MinValue<idx_t>(this->count, parent_max_row - this->start);
+	state.max_row_group_row =
+	    this->start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - this->start);
 	D_ASSERT(state.column_scans);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];
@@ -157,10 +157,9 @@ bool RowGroup::InitializeScanWithOffset(RowGroupScanState &state, idx_t vector_o
 	return true;
 }
 
-bool RowGroup::InitializeScan(RowGroupScanState &state) {
+bool RowGroup::InitializeScan(CollectionScanState &state) {
 	auto &column_ids = state.GetColumnIds();
 	auto filters = state.GetFilters();
-	auto parent_max_row = state.GetParentMaxRow();
 	if (filters) {
 		if (!CheckZonemap(*filters, column_ids)) {
 			return false;
@@ -168,7 +167,8 @@ bool RowGroup::InitializeScan(RowGroupScanState &state) {
 	}
 	state.row_group = this;
 	state.vector_index = 0;
-	state.max_row = this->start > parent_max_row ? 0 : MinValue<idx_t>(this->count, parent_max_row - this->start);
+	state.max_row_group_row =
+	    this->start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - this->start);
 	D_ASSERT(state.column_scans);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];
@@ -182,8 +182,8 @@ bool RowGroup::InitializeScan(RowGroupScanState &state) {
 }
 
 unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, const LogicalType &target_type,
-                                         idx_t changed_idx, ExpressionExecutor &executor, RowGroupScanState &scan_state,
-                                         DataChunk &scan_chunk) {
+                                         idx_t changed_idx, ExpressionExecutor &executor,
+                                         CollectionScanState &scan_state, DataChunk &scan_chunk) {
 	Verify();
 
 	// construct a new column data for this type
@@ -303,7 +303,7 @@ void RowGroup::CommitDropColumn(idx_t column_idx) {
 	columns[column_idx]->CommitDropColumn();
 }
 
-void RowGroup::NextVector(RowGroupScanState &state) {
+void RowGroup::NextVector(CollectionScanState &state) {
 	state.vector_index++;
 	auto &column_ids = state.GetColumnIds();
 	for (idx_t i = 0; i < column_ids.size(); i++) {
@@ -331,7 +331,7 @@ bool RowGroup::CheckZonemap(TableFilterSet &filters, const vector<column_t> &col
 	return true;
 }
 
-bool RowGroup::CheckZonemapSegments(RowGroupScanState &state) {
+bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 	auto &column_ids = state.GetColumnIds();
 	auto filters = state.GetFilters();
 	if (!filters) {
@@ -368,19 +368,19 @@ bool RowGroup::CheckZonemapSegments(RowGroupScanState &state) {
 }
 
 template <TableScanType TYPE>
-void RowGroup::TemplatedScan(TransactionData transaction, RowGroupScanState &state, DataChunk &result) {
+void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &state, DataChunk &result) {
 	const bool ALLOW_UPDATES = TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES &&
 	                           TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED;
 	auto table_filters = state.GetFilters();
 	auto &column_ids = state.GetColumnIds();
 	auto adaptive_filter = state.GetAdaptiveFilter();
 	while (true) {
-		if (state.vector_index * STANDARD_VECTOR_SIZE >= state.max_row) {
+		if (state.vector_index * STANDARD_VECTOR_SIZE >= state.max_row_group_row) {
 			// exceeded the amount of rows to scan
 			return;
 		}
 		idx_t current_row = state.vector_index * STANDARD_VECTOR_SIZE;
-		auto max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.max_row - current_row);
+		auto max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.max_row_group_row - current_row);
 
 		//! first check the zonemap if we have to scan this partition
 		if (!CheckZonemapSegments(state)) {
@@ -503,11 +503,11 @@ void RowGroup::TemplatedScan(TransactionData transaction, RowGroupScanState &sta
 	}
 }
 
-void RowGroup::Scan(TransactionData transaction, RowGroupScanState &state, DataChunk &result) {
+void RowGroup::Scan(TransactionData transaction, CollectionScanState &state, DataChunk &result) {
 	TemplatedScan<TableScanType::TABLE_SCAN_REGULAR>(transaction, state, result);
 }
 
-void RowGroup::ScanCommitted(RowGroupScanState &state, DataChunk &result, TableScanType type) {
+void RowGroup::ScanCommitted(CollectionScanState &state, DataChunk &result, TableScanType type) {
 	auto &transaction_manager = DuckTransactionManager::Get(collection.GetAttached());
 
 	auto lowest_active_start = transaction_manager.LowestActiveStart();

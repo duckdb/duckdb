@@ -55,22 +55,6 @@ void ColumnScanState::Next(idx_t count) {
 	}
 }
 
-const vector<column_t> &RowGroupScanState::GetColumnIds() {
-	return parent.GetColumnIds();
-}
-
-TableFilterSet *RowGroupScanState::GetFilters() {
-	return parent.GetFilters();
-}
-
-AdaptiveFilter *RowGroupScanState::GetAdaptiveFilter() {
-	return parent.GetAdaptiveFilter();
-}
-
-idx_t RowGroupScanState::GetParentMaxRow() {
-	return parent.max_row;
-}
-
 const vector<column_t> &CollectionScanState::GetColumnIds() {
 	return parent.GetColumnIds();
 }
@@ -84,37 +68,35 @@ AdaptiveFilter *CollectionScanState::GetAdaptiveFilter() {
 }
 
 bool CollectionScanState::Scan(DuckTransaction &transaction, DataChunk &result) {
-	auto current_row_group = row_group_state.row_group;
-	while (current_row_group) {
-		current_row_group->Scan(transaction, row_group_state, result);
+	while (row_group) {
+		row_group->Scan(transaction, *this, result);
 		if (result.size() > 0) {
 			return true;
 		} else {
 			do {
-				current_row_group = row_group_state.row_group = row_groups->GetNextSegment(current_row_group);
-				if (current_row_group) {
-					bool scan_row_group = current_row_group->InitializeScan(row_group_state);
+				row_group = row_groups->GetNextSegment(row_group);
+				if (row_group) {
+					bool scan_row_group = row_group->InitializeScan(*this);
 					if (scan_row_group) {
 						// scan this row group
 						break;
 					}
 				}
-			} while (current_row_group);
+			} while (row_group);
 		}
 	}
 	return false;
 }
 
 bool CollectionScanState::ScanCommitted(DataChunk &result, SegmentLock &l, TableScanType type) {
-	auto current_row_group = row_group_state.row_group;
-	while (current_row_group) {
-		current_row_group->ScanCommitted(row_group_state, result, type);
+	while (row_group) {
+		row_group->ScanCommitted(*this, result, type);
 		if (result.size() > 0) {
 			return true;
 		} else {
-			current_row_group = row_group_state.row_group = row_groups->GetNextSegment(l, current_row_group);
-			if (current_row_group) {
-				current_row_group->InitializeScan(row_group_state);
+			row_group = row_groups->GetNextSegment(l, row_group);
+			if (row_group) {
+				row_group->InitializeScan(*this);
 			}
 		}
 	}
@@ -122,15 +104,14 @@ bool CollectionScanState::ScanCommitted(DataChunk &result, SegmentLock &l, Table
 }
 
 bool CollectionScanState::ScanCommitted(DataChunk &result, TableScanType type) {
-	auto current_row_group = row_group_state.row_group;
-	while (current_row_group) {
-		current_row_group->ScanCommitted(row_group_state, result, type);
+	while (row_group) {
+		row_group->ScanCommitted(*this, result, type);
 		if (result.size() > 0) {
 			return true;
 		} else {
-			current_row_group = row_group_state.row_group = row_groups->GetNextSegment(current_row_group);
-			if (current_row_group) {
-				current_row_group->InitializeScan(row_group_state);
+			row_group = row_groups->GetNextSegment(row_group);
+			if (row_group) {
+				row_group->InitializeScan(*this);
 			}
 		}
 	}

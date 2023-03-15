@@ -36,7 +36,7 @@ struct ColumnCheckpointState;
 struct RowGroupPointer;
 struct TransactionData;
 struct VersionNode;
-class RowGroupScanState;
+class CollectionScanState;
 class TableFilterSet;
 struct ColumnFetchState;
 struct RowGroupAppendState;
@@ -91,7 +91,8 @@ public:
 	}
 
 	unique_ptr<RowGroup> AlterType(RowGroupCollection &collection, const LogicalType &target_type, idx_t changed_idx,
-	                               ExpressionExecutor &executor, RowGroupScanState &scan_state, DataChunk &scan_chunk);
+	                               ExpressionExecutor &executor, CollectionScanState &scan_state,
+	                               DataChunk &scan_chunk);
 	unique_ptr<RowGroup> AddColumn(RowGroupCollection &collection, ColumnDefinition &new_column,
 	                               ExpressionExecutor &executor, Expression *default_value, Vector &intermediate);
 	unique_ptr<RowGroup> RemoveColumn(RowGroupCollection &collection, idx_t removed_column);
@@ -102,16 +103,16 @@ public:
 	void InitializeEmpty(const vector<LogicalType> &types);
 
 	//! Initialize a scan over this row_group
-	bool InitializeScan(RowGroupScanState &state);
-	bool InitializeScanWithOffset(RowGroupScanState &state, idx_t vector_offset);
+	bool InitializeScan(CollectionScanState &state);
+	bool InitializeScanWithOffset(CollectionScanState &state, idx_t vector_offset);
 	//! Checks the given set of table filters against the row-group statistics. Returns false if the entire row group
 	//! can be skipped.
 	bool CheckZonemap(TableFilterSet &filters, const vector<column_t> &column_ids);
 	//! Checks the given set of table filters against the per-segment statistics. Returns false if any segments were
 	//! skipped.
-	bool CheckZonemapSegments(RowGroupScanState &state);
-	void Scan(TransactionData transaction, RowGroupScanState &state, DataChunk &result);
-	void ScanCommitted(RowGroupScanState &state, DataChunk &result, TableScanType type);
+	bool CheckZonemapSegments(CollectionScanState &state);
+	void Scan(TransactionData transaction, CollectionScanState &state, DataChunk &result);
+	void ScanCommitted(CollectionScanState &state, DataChunk &result, TableScanType type);
 
 	idx_t GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
 	idx_t GetCommittedSelVector(transaction_t start_time, transaction_t transaction_id, idx_t vector_idx,
@@ -156,13 +157,13 @@ public:
 
 	void Verify();
 
-	void NextVector(RowGroupScanState &state);
+	void NextVector(CollectionScanState &state);
 
 private:
 	ChunkInfo *GetChunkInfo(idx_t vector_idx);
 
 	template <TableScanType TYPE>
-	void TemplatedScan(TransactionData transaction, RowGroupScanState &state, DataChunk &result);
+	void TemplatedScan(TransactionData transaction, CollectionScanState &state, DataChunk &result);
 
 	static void CheckpointDeletes(VersionNode *versions, Serializer &serializer);
 	static shared_ptr<VersionNode> DeserializeDeletes(Deserializer &source);

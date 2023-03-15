@@ -88,40 +88,20 @@ struct ColumnFetchState {
 	BufferHandle &GetOrInsertHandle(ColumnSegment &segment);
 };
 
-class RowGroupScanState {
-public:
-	RowGroupScanState(CollectionScanState &parent_p)
-	    : row_group(nullptr), vector_index(0), max_row(0), parent(parent_p) {
-	}
-
-	//! The current row_group we are scanning
-	RowGroup *row_group = nullptr;
-	//! The vector index within the row_group
-	idx_t vector_index = 0;
-	//! The maximum row index of this row_group scan
-	idx_t max_row = 0;
-	//! Child column scans
-	unique_ptr<ColumnScanState[]> column_scans;
-
-public:
-	void Initialize(const vector<LogicalType> &types);
-	const vector<column_t> &GetColumnIds();
-	TableFilterSet *GetFilters();
-	AdaptiveFilter *GetAdaptiveFilter();
-	idx_t GetParentMaxRow();
-
-private:
-	//! The parent scan state
-	CollectionScanState &parent;
-};
-
 class CollectionScanState {
 public:
 	CollectionScanState(TableScanState &parent_p)
-	    : row_group_state(*this), row_groups(nullptr), max_row(0), batch_index(0), parent(parent_p) {};
+	    : row_group(nullptr), vector_index(0), max_row_group_row(0), row_groups(nullptr), max_row(0), batch_index(0),
+	      parent(parent_p) {};
 
-	//! The row_group scan state
-	RowGroupScanState row_group_state;
+	//! The current row_group we are scanning
+	RowGroup *row_group;
+	//! The vector index within the row_group
+	idx_t vector_index;
+	//! The maximum row within the row group
+	idx_t max_row_group_row;
+	//! Child column scans
+	unique_ptr<ColumnScanState[]> column_scans;
 	//! Row group segment tree
 	RowGroupSegmentTree *row_groups;
 	//! The total maximum row index
@@ -130,6 +110,7 @@ public:
 	idx_t batch_index;
 
 public:
+	void Initialize(const vector<LogicalType> &types);
 	const vector<column_t> &GetColumnIds();
 	TableFilterSet *GetFilters();
 	AdaptiveFilter *GetAdaptiveFilter();
