@@ -11,14 +11,9 @@ public class DuckDBParameterMetaData implements ParameterMetaData {
 		this.meta = meta;
 	}
 
-	@SuppressWarnings("unchecked")
 	@Override
 	public <T> T unwrap(Class<T> iface) throws SQLException {
-		if (!iface.isInstance(this)) {
-			throw new SQLException(
-					this.getClass().getName() + " not unwrappable from " + iface.getName());
-		}
-		return (T) this;
+		return JdbcUtils.unwrap(this, iface);
 	}
 
 	@Override

@@ -21,14 +21,9 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 		this.conn = conn;
 	}
 
-	@SuppressWarnings("unchecked")
 	@Override
 	public <T> T unwrap(Class<T> iface) throws SQLException {
-		if (!iface.isInstance(this)) {
-			throw new SQLException(
-					this.getClass().getName() + " not unwrappable from " + iface.getName());
-		}
-		return (T) this;
+		return JdbcUtils.unwrap(this, iface);
 	}
 
 	@Override
