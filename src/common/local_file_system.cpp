@@ -839,9 +839,23 @@ static bool IsCrawl(const string &glob) {
 static bool HasMultipleCrawl(const vector<string> &splits) {
 	return std::count(splits.begin(), splits.end(), "**") > 1;
 }
-static bool IsSymbolicLink(const string &file) {
+static bool IsSymbolicLink(const string &path) {
+	#ifndef _WIN32
 	struct stat status;
-	return (lstat(file.c_str(), &status) != -1 && S_ISLNK(status.st_mode));
+	return (lstat(path.c_str(), &status) != -1 && S_ISLNK(status.st_mode));
+	#else
+	auto attributes = WindowsGetFileAttributes(path);
+	if (attributes == INVALID_FILE_ATTRIBUTES)
+		return false;
+	if (!(attributes & FILE_ATTRIBUTE_REPARSE_POINT))
+		return false;
+	auto handle = OpenFile(path, 0, FileFlags::FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, NULL);
+	//return?
+	
+	}
+// nique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock_type,
+//                                                  FileCompressionType compression, FileOpener *opener) {
+	#endif
 }
 
 static void RecursiveGlobDirectories(FileSystem &fs, const string &path, vector<string> &result, bool match_directory,
