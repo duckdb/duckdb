@@ -336,3 +336,22 @@ test_that("R semantics for arithmetics sum function are respected", {
    expect_true(is.na(res[[1]]))
 })
 
+test_that("R can do comparisons with constant strings", {
+   dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
+   test_df_a <- rel_from_df(con, data.frame(a=c("hello", "world")), TRUE)
+   filter_rel <- rel_filter(test_df_a, list(expr_function("eq", list(expr_reference("a"), expr_constant("hello", TRUE)))))
+   res <- rel_to_altrep(filter_rel)
+   expect_equal(res, data.frame(a=c("hello")))
+})
+
+test_that("R can do comparisons with constant strings and respects the original value of the constant string", {
+   dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
+   test_df_a <- rel_from_df(con, data.frame(a=c("hello", "world")), TRUE)
+   const_hello <- expr_constant("hello", TRUE)
+   filter_rel <- rel_filter(test_df_a, list(expr_function("eq", list(expr_reference("a"), const_hello))))
+   const_hello <- expr_constant("world")
+   res <- rel_to_altrep(filter_rel)
+   expect_equal(res, data.frame(a=c("hello")))
+})
+
+
