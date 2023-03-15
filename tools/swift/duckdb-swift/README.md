@@ -36,7 +36,7 @@ To use DuckDB in your Swift based project:
     .target(name: "TargetName", dependencies: [
       .product(name: "DuckDB", package: "duckdb-swift"),
       ...
-    ]),    
+    ]),
     ```
     
 ## Source and file format stability
@@ -60,8 +60,8 @@ Development is managed through [the main DuckDB repository](https://github.com/d
   ```
   3. Generate the Unified Build files for the package:
   ```shell
-  python3 tools/swiftpm/create-package.py tools/swift
+  python3 tools/swift/create-package.py tools/swift
   ```
-  4. Open the Xcode workspace at `tools/swiftpm/duckdb-swift/DuckDB.xcworkspace`
+  4. Open the Xcode workspace at `tools/swift/duckdb-swift/DuckDB.xcworkspace`
 
 Please also refer to our [Contribution Guide](https://github.com/duckdb/duckdb/CONTRIBUTING.md).
