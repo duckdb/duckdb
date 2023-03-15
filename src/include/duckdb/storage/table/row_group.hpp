@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/vector_size.hpp"
-#include "duckdb/storage/table/segment_base.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -17,6 +16,7 @@
 #include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/parser/column_list.hpp"
+#include "duckdb/storage/table/segment_base.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
@@ -42,7 +42,7 @@ struct RowGroupWriteData {
 	vector<BaseStatistics> statistics;
 };
 
-class RowGroup : public SegmentBase {
+class RowGroup : public SegmentBase<RowGroup> {
 public:
 	friend class ColumnData;
 	friend class VersionDeleteState;
@@ -57,6 +57,9 @@ public:
 	         const vector<LogicalType> &types, RowGroupPointer &&pointer);
 	RowGroup(RowGroup &row_group, idx_t start);
 	~RowGroup();
+
+	//! The index within the segment tree
+	idx_t index;
 
 private:
 	//! The database instance
@@ -135,7 +138,7 @@ public:
 	RowGroupWriteData WriteToDisk(PartialBlockManager &manager, const vector<CompressionType> &compression_types);
 	RowGroupPointer Checkpoint(RowGroupWriter &writer, TableStatistics &global_stats);
 	static void Serialize(RowGroupPointer &pointer, Serializer &serializer);
-	static RowGroupPointer Deserialize(Deserializer &source, const ColumnList &columns);
+	static RowGroupPointer Deserialize(Deserializer &source, const vector<LogicalType> &columns);
 
 	void InitializeAppend(RowGroupAppendState &append_state);
 	void Append(RowGroupAppendState &append_state, DataChunk &chunk, idx_t append_count);
