@@ -10,6 +10,7 @@
 #include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 
@@ -159,7 +160,8 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 		} else {
 			// pivot but no aggregates specified - push a count star
 			vector<unique_ptr<ParsedExpression>> children;
-			pivot_ref->aggregates.push_back(make_unique<FunctionExpression>("count_star", std::move(children)));
+			auto function = make_unique<FunctionExpression>("count_star", std::move(children));
+			pivot_ref->aggregates.push_back(std::move(function));
 		}
 	}
 	if (pivot->groups) {
