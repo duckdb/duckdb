@@ -146,7 +146,6 @@ test_that("Inner join returns all inner relations", {
     expect_equal(rel_df, expected_result)
 })
 
-
 test_that("Left join returns all left relations", {
     dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
     left <- rel_from_df(con, data.frame(left_a=c(1, 2, 3), left_b=c(1, 1, 2)))
@@ -211,7 +210,6 @@ test_that("semi join works", {
     expected_result <- data.frame(left_b=c(1))
     expect_equal(rel_df, expected_result)
 })
-
 
 test_that("anti join works", {
     left <- rel_from_df(con, data.frame(left_b=c(1, 5, 6)))
@@ -332,9 +330,8 @@ test_that("rel aggregate with groups and aggregate function works", {
    expect_equal(rel_df, expected_result)
 })
 
-
 test_that("Window sum expression function test works", {
-#     select j, i, sum(i) over (partition by j) from a order by 1,2
+#   select j, i, sum(i) over (partition by j) from a order by 1,2
     rel_a <- rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
     sum_func <- expr_function("sum", list(expr_reference("a")))
     aggrs <- expr_window(sum_func, partitions=list(expr_reference("b")))
@@ -347,7 +344,7 @@ test_that("Window sum expression function test works", {
 })
 
 test_that("Window count function works", {
-#     select a, b, count(b) over (partition by a) from a order by a
+#   select a, b, count(b) over (partition by a) from a order by a
     rel_a <- rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
     count_func <- expr_function("count", list(expr_reference("a")))
     count <-  expr_window(count_func, partitions=list(expr_reference("b")))
@@ -388,7 +385,7 @@ test_that("Window sum with Partition, order, and window boundaries works", {
     expected_result <- data.frame(a=c(1:8), window_result=c(1, 3, 6, 9, 5, 11, 18, 21))
     expect_equal(res, expected_result)
 })
-# #
+
 test_that("Window avg with a filter expression and partition works", {
 #   select a, b, avg(a) FILTER (WHERE x % 2 = 0) over (partition by b)
     DBI::dbExecute(con, "CREATE OR REPLACE MACRO mod(a, b) as a % b")
@@ -407,7 +404,6 @@ test_that("Window avg with a filter expression and partition works", {
     res <- rel_to_altrep(proj_order)
     expect_equal(res, expected_result)
 })
-#
 
 test_that("Window lag function works as expected", {
 #   select a, b, lag(a, 1) OVER () order by a
@@ -531,5 +527,3 @@ test_that("R semantics for arithmetics sum function are respected", {
    res <- rel_to_altrep(ans)
    expect_equal(res[[1]], 15)
 })
-
-

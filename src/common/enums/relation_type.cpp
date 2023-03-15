@@ -53,8 +53,6 @@ string RelationTypeToString(RelationType type) {
 		return "TABLE_FUNCTION_RELATION";
 	case RelationType::VIEW_RELATION:
 		return "VIEW_RELATION";
-	case RelationType::WINDOW_RELATION:
-		return "WINDOW_RELATION";
 	case RelationType::QUERY_RELATION:
 		return "QUERY_RELATION";
 	case RelationType::INVALID_RELATION:

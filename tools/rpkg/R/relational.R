@@ -153,11 +153,6 @@ rel_aggregate <- rapi_rel_aggregate
 #' rel2 <- rel_order(rel, list(expr_reference("hp")))
 rel_order <- rapi_rel_order
 
-
-# expr_set_function_order <- rapi_expr_function_order
-#
-# expr_set_function_filter <- rapi_expr_function_filter
-
 expr_window <- function(window_function, partitions=list(),
 				window_boundary_start="unbounded_preceding",
 				window_boundary_end="current_row_range", start_expr = list(), end_expr=list(), offset_expr=list(), default_expr=list()) {

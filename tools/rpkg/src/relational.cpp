@@ -98,14 +98,14 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 		filter_expr = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(filters));
 	}
 
-	auto func_ret = make_external<FunctionExpression>("duckdb_expr", name, std::move(children));
+	auto func_expr = make_external<FunctionExpression>("duckdb_expr", name, std::move(children));
 	if (!order_bys.empty()) {
-		func_ret->order_bys = std::move(order_modifier);
+		func_expr->order_bys = std::move(order_modifier);
 	}
 	if (!filter_bys.empty()) {
-		func_ret->filter = std::move(filter_expr);
+		func_expr->filter = std::move(filter_expr);
 	}
-	return func_ret;
+	return func_expr;
 }
 
 [[cpp11::register]] void rapi_expr_set_alias(duckdb::expr_extptr_t expr, std::string alias) {
