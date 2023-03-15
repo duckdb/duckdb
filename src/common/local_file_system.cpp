@@ -966,7 +966,7 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 		}
 	}
 
-	if (hasMultipleCrawl(splits)) {
+	if (HasMultipleCrawl(splits)) {
 		throw IOException("Cannot use multiple \'**\' in one path");
 	}
 
