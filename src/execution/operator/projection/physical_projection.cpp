@@ -35,6 +35,41 @@ unique_ptr<OperatorState> PhysicalProjection::GetOperatorState(ExecutionContext 
 	return make_unique<ProjectionState>(context, select_list);
 }
 
+unique_ptr<PhysicalOperator>
+PhysicalProjection::CreateJoinProjection(vector<LogicalType> proj_types, const vector<LogicalType> &lhs_types,
+                                         const vector<LogicalType> &rhs_types, const vector<idx_t> &left_projection_map,
+                                         const vector<idx_t> &right_projection_map, const idx_t estimated_cardinality) {
+
+	vector<unique_ptr<Expression>> proj_selects;
+	proj_selects.reserve(proj_types.size());
+
+	if (left_projection_map.empty()) {
+		for (storage_t i = 0; i < lhs_types.size(); ++i) {
+			proj_selects.emplace_back(make_unique<BoundReferenceExpression>(lhs_types[i], i));
+		}
+	} else {
+		for (auto i : left_projection_map) {
+			proj_selects.emplace_back(make_unique<BoundReferenceExpression>(lhs_types[i], i));
+		}
+	}
+	const auto left_cols = lhs_types.size();
+
+	if (right_projection_map.empty()) {
+		for (storage_t i = 0; i < rhs_types.size(); ++i) {
+			proj_selects.emplace_back(make_unique<BoundReferenceExpression>(rhs_types[i], left_cols + i));
+		}
+
+	} else {
+		for (auto i : right_projection_map) {
+			proj_selects.emplace_back(make_unique<BoundReferenceExpression>(rhs_types[i], left_cols + i));
+		}
+	}
+
+	auto proj = make_unique<PhysicalProjection>(std::move(proj_types), std::move(proj_selects), estimated_cardinality);
+
+	return proj;
+}
+
 string PhysicalProjection::ParamsToString() const {
 	string extra_info;
 	for (auto &expr : select_list) {

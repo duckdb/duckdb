@@ -227,7 +227,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 			throw NotImplementedException("Missing ASOF JOIN inequality");
 		}
 
-		//	 Temporary implementation: IEJoin of Window
+		//	Temporary implementation: IEJoin of Window
 		//	LEAD(asof_column, 1, infinity) OVER (PARTITION BY equi_column... ORDER BY asof_column) AS asof_temp
 		auto &asof_comp = op.conditions[asof_idx];
 		auto &asof_column = asof_comp.right;
@@ -263,10 +263,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		auto proj_types = op.types;
 		op.types.clear();
 
-		auto &lhs_types = op.children[0]->types;
+		auto lhs_types = op.children[0]->types;
 		op.types = lhs_types;
 
-		auto &rhs_types = op.children[1]->types;
+		auto rhs_types = op.children[1]->types;
 		op.types.insert(op.types.end(), rhs_types.begin(), rhs_types.end());
 
 		op.types.emplace_back(asof_type);
@@ -275,33 +275,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		                                          JoinType::LEFT, op.estimated_cardinality);
 
 		//	Project away asof_temp and anything from the projection maps
-		vector<unique_ptr<Expression>> proj_selects;
-		proj_selects.reserve(proj_types.size());
-
-		if (op.left_projection_map.empty()) {
-			for (storage_t i = 0; i < lhs_types.size(); ++i) {
-				proj_selects.emplace_back(make_unique<BoundReferenceExpression>(lhs_types[i], i));
-			}
-		} else {
-			for (auto i : op.left_projection_map) {
-				proj_selects.emplace_back(make_unique<BoundReferenceExpression>(lhs_types[i], i));
-			}
-		}
-		const auto left_cols = op.children[0]->types.size();
-
-		if (op.right_projection_map.empty()) {
-			for (storage_t i = 0; i < rhs_types.size(); ++i) {
-				proj_selects.emplace_back(make_unique<BoundReferenceExpression>(rhs_types[i], left_cols + i));
-			}
-
-		} else {
-			for (auto i : op.right_projection_map) {
-				proj_selects.emplace_back(make_unique<BoundReferenceExpression>(rhs_types[i], left_cols + i));
-			}
-		}
-
-		auto proj =
-		    make_unique<PhysicalProjection>(std::move(proj_types), std::move(proj_selects), op.estimated_cardinality);
+		auto proj = PhysicalProjection::CreateJoinProjection(proj_types, lhs_types, rhs_types, op.left_projection_map,
+		                                                     op.right_projection_map, op.estimated_cardinality);
 		proj->children.push_back(std::move(iejoin));
 
 		return proj;
