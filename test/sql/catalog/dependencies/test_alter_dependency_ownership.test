@@ -226,6 +226,11 @@ ALTER SEQUENCE sequence1 OWNED BY tablename;
 statement error
 DROP SEQUENCE sequence1;
 
+statement error
+CREATE OR REPLACE SEQUENCE sequence1;
+----
+there are entries that depend on it
+
 # Owning the sequence with the same table shouldn't return any error
 statement ok
 ALTER SEQUENCE sequence1 OWNED BY new_tablename;
