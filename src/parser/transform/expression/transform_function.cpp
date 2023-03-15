@@ -39,6 +39,36 @@ static ExpressionType WindowToExpressionType(string &fun_name) {
 	return ExpressionType::WINDOW_AGGREGATE;
 }
 
+static string EncodeOrderType(OrderType type) {
+	switch (type) {
+	case OrderType::INVALID:
+		return "INVALID";
+	case OrderType::ORDER_DEFAULT:
+		return "DEFAULT";
+	case OrderType::ASCENDING:
+		return "ASC";
+	case OrderType::DESCENDING:
+		return "DESC";
+	default:
+		throw NotImplementedException("EncodeOrderType not implemented for enum value");
+	}
+}
+
+static string EncodeOrderType(OrderByNullType type) {
+	switch (type) {
+	case OrderByNullType::INVALID:
+		return "INVALID";
+	case OrderByNullType::ORDER_DEFAULT:
+		return "DEFAULT";
+	case OrderByNullType::NULLS_FIRST:
+		return "NULLS FIRST";
+	case OrderByNullType::NULLS_LAST:
+		return "NULLS LAST";
+	default:
+		throw NotImplementedException("ToString not implemented for enum value");
+	}
+}
+
 void Transformer::TransformWindowDef(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr) {
 	D_ASSERT(window_spec);
 	D_ASSERT(expr);
@@ -310,6 +340,26 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		coalesce_op->children.push_back(std::move(children[0]));
 		coalesce_op->children.push_back(std::move(children[1]));
 		return std::move(coalesce_op);
+	} else if (lowercase_name == "list" && order_bys->orders.size() == 1) {
+		// list(expr ORDER BY expr <sense> <nulls>) => list_sort(list(expr), <sense>, <nulls>)
+		if (children.size() != 1) {
+			throw ParserException("Wrong number of arguments to LIST.");
+		}
+		auto arg_expr = children[0].get();
+		auto &order_by = order_bys->orders[0];
+		if (arg_expr->Equals(order_by.expression.get())) {
+			auto sense = make_unique<ConstantExpression>(EncodeOrderType(order_by.type));
+			auto nulls = make_unique<ConstantExpression>(EncodeOrderType(order_by.null_order));
+			order_bys = nullptr;
+			auto unordered = make_unique<FunctionExpression>(
+			    catalog, schema, lowercase_name.c_str(), std::move(children), std::move(filter_expr),
+			    std::move(order_bys), root->agg_distinct, false, root->export_state);
+			lowercase_name = "list_sort";
+			children.clear();
+			children.emplace_back(std::move(unordered));
+			children.emplace_back(std::move(sense));
+			children.emplace_back(std::move(nulls));
+		}
 	}
 
 	auto function = make_unique<FunctionExpression>(std::move(catalog), std::move(schema), lowercase_name.c_str(),
