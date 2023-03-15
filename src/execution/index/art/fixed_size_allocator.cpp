@@ -132,12 +132,12 @@ idx_t FixedSizeAllocator::GetOffset(ValidityMask &mask, const idx_t &allocation_
 			idx_t r = 0;
 
 			for (idx_t i = 0; i < 6; i++) {
-				if (v & base[i]) {
+				if (v & BASE[i]) {
 					// first valid bit is in the rightmost s[i] bits
-					v &= base[i];
+					v &= BASE[i];
 				} else {
-					v >>= shift[i];
-					r += shift[i];
+					v >>= SHIFT[i];
+					r += SHIFT[i];
 				}
 			}
 			D_ASSERT(v);

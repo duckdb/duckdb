@@ -44,8 +44,8 @@ public:
 	static constexpr uint8_t OFFSET_SHIFT = sizeof(uint8_t) * 8 * 4;
 
 	//! Constants for offset calculations
-	static constexpr idx_t base[] = {0x00000000FFFFFFFF, 0x0000FFFF, 0x00FF, 0x0F, 0x3, 0x1};
-	static constexpr uint8_t shift[] = {32, 16, 8, 4, 2, 1};
+	static constexpr idx_t BASE[] = {0x00000000FFFFFFFF, 0x0000FFFF, 0x00FF, 0x0F, 0x3, 0x1};
+	static constexpr uint8_t SHIFT[] = {32, 16, 8, 4, 2, 1};
 
 public:
 	explicit FixedSizeAllocator(const idx_t &allocation_size);

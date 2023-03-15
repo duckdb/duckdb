@@ -440,12 +440,20 @@ void ARTNode::InitializeMerge(ART &art, const vector<idx_t> &buffer_counts) {
 
 	auto type = DecodeARTNodeType();
 
-	// initialize prefix
-	GetPrefix(art)->InitializeMerge(art, buffer_counts[(uint8_t)ARTNodeType::PREFIX_SEGMENT - 1]);
+	// if not all prefixes are inlined
+	if (buffer_counts[(uint8_t)ARTNodeType::PREFIX_SEGMENT - 1] != 0) {
+		// initialize prefix segments
+		GetPrefix(art)->InitializeMerge(art, buffer_counts[(uint8_t)ARTNodeType::PREFIX_SEGMENT - 1]);
+	}
 
 	switch (type) {
 	case ARTNodeType::LEAF:
-		art.leaves->Get<Leaf>(GetPtr())->InitializeMerge(art, buffer_counts[(uint8_t)ARTNodeType::LEAF_SEGMENT - 1]);
+		// if not all leaves are inlined
+		if (buffer_counts[(uint8_t)ARTNodeType::LEAF_SEGMENT - 1] != 0) {
+			// initialize leaf segments
+			art.leaves->Get<Leaf>(GetPtr())->InitializeMerge(art,
+			                                                 buffer_counts[(uint8_t)ARTNodeType::LEAF_SEGMENT - 1]);
+		}
 		break;
 	case ARTNodeType::NODE_4:
 		art.n4_nodes->Get<Node4>(GetPtr())->InitializeMerge(art, buffer_counts);

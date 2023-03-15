@@ -1054,7 +1054,6 @@ bool ART::MergeIndexes(IndexLock &state, Index *other_index) {
 
 	if (tree) {
 		//  fully deserialize other_index, and traverse it to increment its buffer IDs
-		//  FIXME: improve performance by directly iterating the underlying buffers (should be similar to Vacuum code)
 		auto buffer_counts = InitializeMerge();
 		other_art->tree.InitializeMerge(*other_art, buffer_counts);
 	}
