@@ -14,7 +14,7 @@ on:
       - 'examples/**'
       - 'test/**'
       - 'tools/**'
-      - '!tools/swiftpm/**'
+      - '!tools/swift/**'
       - '.github/workflows/**'
       - '!.github/workflows/Swift.yml'
   pull_request:
@@ -23,7 +23,7 @@ on:
       - 'examples/**'
       - 'test/**'
       - 'tools/**'
-      - '!tools/swiftpm/**'
+      - '!tools/swift/**'
       - '.github/workflows/**'
       - '!.github/workflows/Swift.yml'
 
@@ -53,7 +53,7 @@ jobs:
           fetch-depth: '0'
 
       - name: Prepare Package
-        run: python3 tools/swiftpm/create_package.py tools/swiftpm
+        run: python3 tools/swift/create_package.py tools/swift
 
       - name: Select Xcode
         run: sudo xcode-select -switch /Applications/Xcode_14.2.app && /usr/bin/xcodebuild -version
@@ -61,7 +61,7 @@ jobs:
       - name: Run Tests
         run: |
           xcrun xcodebuild test \
-            -workspace tools/swiftpm/duckdb-swift/DuckDB.xcworkspace \
+            -workspace tools/swift/duckdb-swift/DuckDB.xcworkspace \
             -scheme DuckDB \
             -destination platform='${{ matrix.destination }}'
           
