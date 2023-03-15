@@ -2528,7 +2528,7 @@ c_expr:		columnref								{ $$ = $1; }
 					n->location = @1;
 					$$ = (PGNode *) n;
 				}
-			| indirection_expr opt_indirection
+			| indirection_expr opt_extended_indirection
 				{
 					if ($2)
 					{
@@ -2654,6 +2654,7 @@ indirection_expr:		'?'
 				{
 					$$ = $1;
 				}
+		;
 
 func_application:       func_name '(' ')'
 				{
@@ -3570,6 +3571,52 @@ opt_indirection:
 			/*EMPTY*/								{ $$ = NIL; }
 			| opt_indirection indirection_el		{ $$ = lappend($1, $2); }
 		;
+
+opt_func_arguments:
+	/* empty */ 				{ $$ = NULL; }
+	| '(' ')'					{ $$ = list_make1(NULL); }
+	| '(' func_arg_list ')' 	{ $$ = $2; }
+	;
+
+extended_indirection_el:
+			'.' attr_name opt_func_arguments
+				{
+					if ($3) {
+						PGFuncCall *n = makeFuncCall(list_make1(makeString($2)), $3->head->data.ptr_value ? $3 : NULL, @2);
+						$$ = (PGNode *) n;
+					} else {
+						$$ = (PGNode *) makeString($2);
+					}
+				}
+			| '[' a_expr ']'
+				{
+					PGAIndices *ai = makeNode(PGAIndices);
+					ai->is_slice = false;
+					ai->lidx = NULL;
+					ai->uidx = $2;
+					$$ = (PGNode *) ai;
+				}
+			| '[' opt_slice_bound ':' opt_slice_bound ']'
+				{
+					PGAIndices *ai = makeNode(PGAIndices);
+					ai->is_slice = true;
+					ai->lidx = $2;
+					ai->uidx = $4;
+					$$ = (PGNode *) ai;
+				}
+		;
+
+extended_indirection:
+			extended_indirection_el									{ $$ = list_make1($1); }
+			| extended_indirection extended_indirection_el			{ $$ = lappend($1, $2); }
+		;
+
+opt_extended_indirection:
+			/*EMPTY*/												{ $$ = NIL; }
+			| opt_extended_indirection extended_indirection_el		{ $$ = lappend($1, $2); }
+		;
+
+
 
 opt_asymmetric: ASYMMETRIC
 			| /*EMPTY*/
