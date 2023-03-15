@@ -53,8 +53,11 @@ public:
 		SetTag(tag);
 		auto present = OnOptionalBegin();
 		if (present) {
-			return Read<T>();
+			auto item = Read<T>();
+			OnOptionalEnd();
+			return std::move(item);
 		} else {
+			OnOptionalEnd();
 			return std::forward<T>(default_value);
 		}
 	}
@@ -66,8 +69,10 @@ public:
 		auto present = OnOptionalBegin();
 		if (present) {
 			ret = Read<T>();
+			OnOptionalEnd();
 		} else {
 			ret = std::forward<T>(default_value);
+			OnOptionalEnd();
 		}
 	}
 
@@ -78,8 +83,11 @@ public:
 		SetTag(tag);
 		auto present = OnOptionalBegin();
 		if (present) {
-			return Read<T>();
+			auto item = Read<T>();
+			OnOptionalEnd();
+			return std::move(item);
 		} else {
+			OnOptionalEnd();
 			return T();
 		}
 	}
@@ -92,8 +100,10 @@ public:
 		auto present = OnOptionalBegin();
 		if (present) {
 			ret = Read<T>();
+			OnOptionalEnd();
 		} else {
 			ret = T();
+			OnOptionalEnd();
 		}
 	}
 
@@ -137,11 +147,21 @@ private:
 	inline typename std::enable_if<is_unordered_map<T>::value, T>::type Read() {
 		using KEY_TYPE = typename is_unordered_map<T>::KEY_TYPE;
 		using VALUE_TYPE = typename is_unordered_map<T>::VALUE_TYPE;
-		auto size = ReadUnsignedInt32();
+
 		T map;
+		auto size = OnMapBegin();
 		for (idx_t i = 0; i < size; i++) {
-			map[Read<KEY_TYPE>()] = Read<VALUE_TYPE>();
+			OnMapEntryBegin();
+			OnMapKeyBegin();
+			auto key = Read<KEY_TYPE>();
+			OnMapKeyEnd();
+			OnMapValueBegin();
+			auto value = Read<VALUE_TYPE>();
+			OnMapValueEnd();
+			OnMapEntryEnd();
+			map[std::move(key)] = std::move(value);
 		}
+		OnMapEnd();
 
 		return map;
 	}
