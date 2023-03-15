@@ -50,6 +50,8 @@ void ScanPandasCategory(py::array &column, idx_t count, idx_t offset, Vector &ou
 		ScanPandasCategoryTemplated<int16_t, T>(column, offset, out, count);
 	} else if (src_type == "int32") {
 		ScanPandasCategoryTemplated<int32_t, T>(column, offset, out, count);
+	} else if (src_type == "int64") {
+		ScanPandasCategoryTemplated<int64_t, T>(column, offset, out, count);
 	} else {
 		throw NotImplementedException("The Pandas type " + src_type + " for categorical types is not implemented yet");
 	}
@@ -439,9 +441,20 @@ void VectorConversion::BindNumpy(const DBConfig &config, py::handle df, vector<P
 			bind_data.pandas_type = PandasType::FLOAT_32;
 			duckdb_col_type = PandasToLogicalType(bind_data.pandas_type);
 		} else if (bind_data.pandas_type == PandasType::OBJECT && string(py::str(df_types[col_idx])) == "string") {
-			bind_data.numpy_col =
-			    py::array(column.attr("astype")("object_")); // treat the string array as numpy.object_ array
-			bind_data.pandas_type = PandasType::OBJECT;
+			bind_data.pandas_type = PandasType::CATEGORY;
+			auto enum_name = string(py::str(df_columns[col_idx]));
+			auto uniq = py::cast<py::tuple>(py::module_::import("numpy").attr("unique")(column, false, true));
+			vector<string> enum_entries = py::cast<vector<string>>(uniq.attr("__getitem__")(0));
+			idx_t size = enum_entries.size();
+			Vector enum_entries_vec(LogicalType::VARCHAR, size);
+			auto enum_entries_ptr = FlatVector::GetData<string_t>(enum_entries_vec);
+			for (idx_t i = 0; i < size; i++) {
+				enum_entries_ptr[i] = StringVector::AddStringOrBlob(enum_entries_vec, enum_entries[i]);
+			}
+			duckdb_col_type = LogicalType::ENUM(enum_name, enum_entries_vec, size);
+			bind_data.numpy_col = uniq.attr("__getitem__")(1);
+			D_ASSERT(py::hasattr(bind_data.numpy_col, "dtype"));
+			bind_data.internal_categorical_type = string(py::str(bind_data.numpy_col.attr("dtype")));
 		} else {
 			bind_data.numpy_col = column;
 			duckdb_col_type = PandasToLogicalType(bind_data.pandas_type);
