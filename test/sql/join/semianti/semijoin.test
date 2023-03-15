@@ -117,7 +117,7 @@ SELECT * FROM left_table SEMI JOIN right_table ON (left_table.a > right_table.a)
 43	1	1
 
 statement ok
-INSERT INTO right_table VALUES (1, 42);
+INSERT INTO right_table VALUES (1, 42), (1, 42);
 
 # complex condition resulting in an any join
 query III
