@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/storage/block.hpp"
-#include "duckdb/storage/table/segment_tree.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -17,6 +16,7 @@
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/table/segment_base.hpp"
 
 namespace duckdb {
 class ColumnSegment;
@@ -35,10 +35,12 @@ struct ColumnAppendState;
 enum class ColumnSegmentType : uint8_t { TRANSIENT, PERSISTENT };
 //! TableFilter represents a filter pushed down into the table scan.
 
-class ColumnSegment : public SegmentBase {
+class ColumnSegment : public SegmentBase<ColumnSegment> {
 public:
-	~ColumnSegment() override;
+	~ColumnSegment();
 
+	//! The index within the segment tree
+	idx_t index;
 	//! The database instance
 	DatabaseInstance &db;
 	//! The type stored in the column

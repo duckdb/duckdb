@@ -6,6 +6,7 @@ add_library_unity(
   distinct_statistics.cpp
   list_stats.cpp
   numeric_stats.cpp
+  numeric_stats_union.cpp
   segment_statistics.cpp
   string_stats.cpp
   struct_stats.cpp)
