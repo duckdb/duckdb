@@ -25,7 +25,7 @@ unique_ptr<Expression> CreateBoundStructExtract(ClientContext &context, unique_p
 	auto return_type = extract_function.return_type;
 	auto result = make_unique<BoundFunctionExpression>(return_type, std::move(extract_function), std::move(arguments),
 	                                                   std::move(bind_info));
-	result->alias = key;
+	result->alias = std::move(key);
 	return std::move(result);
 }
 
