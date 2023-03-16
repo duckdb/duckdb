@@ -9,12 +9,12 @@ void JsonDeserializer::SetTag(const char *tag) {
 // If inside an object, return the value associated by the current tag (property name)
 // If inside an array, return the next element in the sequence
 yyjson_val *JsonDeserializer::GetNextValue() {
-	auto parent_val = Current();
+	auto &parent_val = Current();
 	yyjson_val *val;
-	if (yyjson_is_obj(parent_val)) {
-		val = yyjson_obj_get(parent_val, current_tag);
-	} else if (yyjson_is_arr(parent_val)) {
-		val = yyjson_arr_iter_next(&arr_iter);
+	if (yyjson_is_obj(parent_val.val)) {
+		val = yyjson_obj_get(parent_val.val, current_tag);
+	} else if (yyjson_is_arr(parent_val.val)) {
+		val = yyjson_arr_iter_next(&parent_val.arr_iter);
 	} else {
 		// unreachable?
 		throw InternalException("Cannot get value from non-array/object");
@@ -27,11 +27,11 @@ yyjson_val *JsonDeserializer::GetNextValue() {
 
 void JsonDeserializer::ThrowTypeError(yyjson_val *val, const char *expected) {
 	auto actual = yyjson_get_type_desc(val);
-	auto parent = Current();
-	if (yyjson_is_obj(parent)) {
+	auto &parent = Current();
+	if (yyjson_is_obj(parent.val)) {
 		auto msg =
 		    StringUtil::Format("property '%s' expected type '%s', but got type: '%s'", current_tag, expected, actual);
-	} else if (yyjson_is_arr(parent)) {
+	} else if (yyjson_is_arr(parent.val)) {
 		auto msg = StringUtil::Format("Sequence expect child of type '%s', but got type: %s", expected, actual);
 	} else {
 		// unreachable?
@@ -46,7 +46,7 @@ void JsonDeserializer::DumpDoc() {
 }
 
 void JsonDeserializer::DumpCurrent() {
-	const char *json = yyjson_val_write(Current(), 0, nullptr);
+	const char *json = yyjson_val_write(Current().val, 0, nullptr);
 	printf("json: %s\n", json);
 	free((void *)json);
 }
@@ -71,7 +71,7 @@ void JsonDeserializer::OnObjectBegin() {
 	if (!yyjson_is_obj(val)) {
 		ThrowTypeError(val, "object");
 	}
-	stack.push_back(val);
+	Push(val);
 }
 
 void JsonDeserializer::OnObjectEnd() {
@@ -83,13 +83,12 @@ idx_t JsonDeserializer::OnListBegin() {
 	if (!yyjson_is_arr(val)) {
 		ThrowTypeError(val, "array");
 	}
-	yyjson_arr_iter_init(val, &arr_iter);
-	stack.push_back(val);
+	Push(val);
 	return yyjson_arr_size(val);
 }
 
 void JsonDeserializer::OnListEnd() {
-	stack.pop_back();
+	Pop();
 }
 
 // Deserialize maps as [ { key: ..., value: ... } ]
@@ -98,9 +97,7 @@ idx_t JsonDeserializer::OnMapBegin() {
 	if (!yyjson_is_arr(val)) {
 		ThrowTypeError(val, "array");
 	}
-
-	yyjson_arr_iter_init(val, &arr_iter);
-	stack.push_back(val);
+	Push(val);
 	return yyjson_arr_size(val);
 }
 
@@ -109,7 +106,7 @@ void JsonDeserializer::OnMapEntryBegin() {
 	if (!yyjson_is_obj(val)) {
 		ThrowTypeError(val, "object");
 	}
-	stack.push_back(val);
+	Push(val);
 }
 
 void JsonDeserializer::OnMapKeyBegin() {

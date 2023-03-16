@@ -6,25 +6,30 @@ namespace duckdb {
 
 class JsonDeserializer : public FormatDeserializer {
 public:
-	JsonDeserializer(const char *json, idx_t len) {
-		doc = yyjson_read(json, len, 0);
-		stack = {yyjson_doc_get_root(doc)};
-	}
-	JsonDeserializer(yyjson_doc *doc) : doc(doc) {
-		stack = {yyjson_doc_get_root(doc)};
-	}
 	JsonDeserializer(yyjson_val *val, yyjson_doc *doc) : doc(doc) {
-		stack = {val};
+		stack.emplace_back(val);
 	}
 	~JsonDeserializer() {
 		yyjson_doc_free(doc);
 	}
 
 private:
+	struct StackFrame {
+		yyjson_val *val;
+		yyjson_arr_iter arr_iter;
+
+		explicit StackFrame(yyjson_val *val) : val(val) {
+			yyjson_arr_iter_init(val, &arr_iter);
+		}
+		StackFrame(const StackFrame &) = delete;
+		StackFrame &operator=(const StackFrame &) = delete;
+		StackFrame(StackFrame &&) = default;
+		StackFrame &operator=(StackFrame &&) = default;
+	};
+
 	yyjson_doc *doc;
 	const char *current_tag = nullptr;
-	vector<yyjson_val *> stack;
-	yyjson_arr_iter arr_iter;
+	vector<StackFrame> stack;
 
 	void DumpDoc();
 	void DumpCurrent();
@@ -32,9 +37,16 @@ private:
 	void Dump(yyjson_val *val);
 
 	// Get the current json value
-	inline yyjson_val *Current() {
+	inline StackFrame &Current() {
 		return stack.back();
 	};
+
+	inline void Push(yyjson_val *val) {
+		stack.emplace_back(val);
+	}
+	inline void Pop() {
+		stack.pop_back();
+	}
 	yyjson_val *GetNextValue();
 
 	void ThrowTypeError(yyjson_val *val, const char *expected);
