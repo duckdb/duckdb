@@ -7,6 +7,7 @@
 #include "duckdb/common/vector_operations/generic_executor.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/value.hpp"
 #include "duckdb/function/aggregate/sum_helpers.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 
