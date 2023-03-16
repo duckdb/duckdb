@@ -129,7 +129,6 @@ OperatorResultType PhysicalBlockwiseNLJoin::ExecuteInternal(ExecutionContext &co
 		intermediate_chunk->Reset();
 	}
 
-
 	// now perform the actual join
 	// we perform a cross product, then execute the expression directly on the cross product result
 	idx_t result_count = 0;
@@ -165,7 +164,7 @@ OperatorResultType PhysicalBlockwiseNLJoin::ExecuteInternal(ExecutionContext &co
 			if (state.cross_product.ScanLHS()) {
 				found_match[state.cross_product.PositionInChunk()] = true;
 			} else {
-				for(idx_t i = 0; i < result_count; i++) {
+				for (idx_t i = 0; i < result_count; i++) {
 					found_match[state.match_sel.get_index(i)] = true;
 				}
 			}
@@ -180,8 +179,7 @@ OperatorResultType PhysicalBlockwiseNLJoin::ExecuteInternal(ExecutionContext &co
 				// set the match flags in the LHS
 				state.left_outer.SetMatches(state.match_sel, result_count);
 				// set the match flag in the RHS
-				gstate.right_outer.SetMatch(state.cross_product.ScanPosition() +
-											state.cross_product.PositionInChunk());
+				gstate.right_outer.SetMatch(state.cross_product.ScanPosition() + state.cross_product.PositionInChunk());
 			} else {
 				// set the match flag in the LHS
 				state.left_outer.SetMatch(state.cross_product.PositionInChunk());
