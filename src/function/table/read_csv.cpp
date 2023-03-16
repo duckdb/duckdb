@@ -133,11 +133,11 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			}
 			auto &list_children = ListValue::GetChildren(kv.second);
 			if (list_children.empty()) {
-				throw BinderException("auto_types requires at least one type");
+				throw BinderException("auto_type_candidates requires at least one type");
 			}
 			for (auto &child : list_children) {
 				if (child.type().id() != LogicalTypeId::VARCHAR) {
-					throw BinderException("auto_types requires a type specification as string");
+					throw BinderException("auto_type_candidates requires a type specification as string");
 				}
 				auto candidate_type = TransformStringToLogicalType(StringValue::Get(child), context);
 				candidate_types[GetCandidateSpecificity(candidate_type)] = candidate_type;

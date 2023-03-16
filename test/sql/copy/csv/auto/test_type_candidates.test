@@ -47,6 +47,8 @@ VARCHAR	VARCHAR	VARCHAR
 
 statement error
 SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['BIGINT']);
+----
+Could not convert string 'bla' to INT64 in column "column2", at line 1.
 
 query III
 SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['BIGINT','VARCHAR']);
@@ -90,9 +92,15 @@ SMALLINT	FLOAT	VARCHAR
 
 statement error
 SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['USMALLINT', 'VARCHAR']);
+----
+Auto Type Candidate of type USMALLINT is not accepted as a valid input
 
 statement error
 SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['bla', 'VARCHAR'])
+----
+Type with name bla does not exist!
 
 statement error
 SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=[]);
+----
+auto_type_candidates requires at least one type
