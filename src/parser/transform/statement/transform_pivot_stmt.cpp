@@ -10,6 +10,7 @@
 #include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
@@ -56,9 +57,12 @@ unique_ptr<SQLStatement> Transformer::GenerateCreateEnumStmt(unique_ptr<CreatePi
 
 	// generate the query that will result in the enum creation
 	auto select_node = std::move(entry->base);
-	auto columnref = std::move(entry->column);
+	auto columnref = entry->column->Copy();
 	auto cast = make_unique<CastExpression>(LogicalType::VARCHAR, columnref->Copy());
 	select_node->select_list.push_back(std::move(cast));
+
+	auto is_not_null = make_unique<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, std::move(entry->column));
+	select_node->where_clause = std::move(is_not_null);
 
 	// order by the column
 	auto modifier = make_unique<OrderModifier>();

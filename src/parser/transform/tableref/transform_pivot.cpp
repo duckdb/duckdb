@@ -36,6 +36,14 @@ PivotColumn Transformer::TransformPivotColumn(duckdb_libpgquery::PGPivot *pivot)
 	PivotColumn col;
 	if (pivot->pivot_columns) {
 		TransformExpressionList(*pivot->pivot_columns, col.pivot_expressions);
+		for(auto &expr : col.pivot_expressions) {
+			if (expr->IsScalar()) {
+				throw ParserException("Cannot pivot on constant value \"%s\"", expr->ToString());
+			}
+			if (expr->HasSubquery()) {
+				throw ParserException("Cannot pivot on subquery \"%s\"", expr->ToString());
+			}
+		}
 	} else if (pivot->unpivot_columns) {
 		col.unpivot_names = TransformStringList(pivot->unpivot_columns);
 	} else {
