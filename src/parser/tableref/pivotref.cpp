@@ -27,7 +27,7 @@ string PivotColumn::ToString() const {
 			}
 			result += ")";
 		}
-	} else if (pivot_expressions.size() > 0) {
+	} else if (!pivot_expressions.empty()) {
 		// pivot
 		result += "(";
 		for (idx_t n = 0; n < pivot_expressions.size(); n++) {
