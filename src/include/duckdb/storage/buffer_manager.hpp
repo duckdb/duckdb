@@ -13,6 +13,7 @@
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -31,6 +32,7 @@ public:
 	}
 
 public:
+	static unique_ptr<BufferManager> CreateStandardBufferManager(DatabaseInstance &db, DBConfig &config);
 	virtual BufferHandle Allocate(idx_t block_size, bool can_destroy = true,
 	                              shared_ptr<BlockHandle> *block = nullptr) = 0;
 	//! Reallocate an in-memory buffer that is pinned.

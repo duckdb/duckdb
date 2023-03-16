@@ -196,7 +196,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	if (!config.custom_buffer_manager) {
 		// Only when no custom buffer manager is provided do we create one
 		// otherwise we take the buffer manager from the config instead when it's requested
-		buffer_manager = make_unique<StandardBufferManager>(*this, config.options.temporary_directory);
+		buffer_manager = BufferManager::CreateStandardBufferManager(*this, config);
 	}
 	scheduler = make_unique<TaskScheduler>(*this);
 	object_cache = make_unique<ObjectCache>();

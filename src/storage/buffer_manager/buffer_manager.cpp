@@ -2,8 +2,13 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_buffer.hpp"
+#include "duckdb/storage/standard_buffer_manager.hpp"
 
 namespace duckdb {
+
+unique_ptr<BufferManager> BufferManager::CreateStandardBufferManager(DatabaseInstance &db, DBConfig &config) {
+	return make_unique<StandardBufferManager>(db, config.options.temporary_directory);
+}
 
 shared_ptr<BlockHandle> BufferManager::RegisterSmallMemory(idx_t block_size) {
 	throw NotImplementedException("This type of BufferManager can not create 'small-memory' blocks");
