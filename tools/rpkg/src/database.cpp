@@ -32,7 +32,11 @@ struct ZeroSumOperation {
 			mask.SetValid(idx);
 			target[idx] = 0;
 		} else {
-			target[idx] = state->value;
+			if (Value::IsNan(state->value)) {
+				target[idx] = 0;
+			} else {
+				target[idx] = state->value;
+			}
 		}
 	}
 };
@@ -48,15 +52,15 @@ struct ZeroSumOperation {
 	auto sum_function_cast = (AggregateFunctionCatalogEntry *)sum_function;
 	for (auto &aggr : sum_function_cast->functions.functions) {
 		switch (aggr.arguments[0].InternalType()) {
+		case PhysicalType::DOUBLE:
+		case PhysicalType::FLOAT:
+			aggr.finalize = AggregateFunction::StateFinalize<SumState<double>, double, ZeroSumOperation>;
+			break;
 		case PhysicalType::INT8:
 		case PhysicalType::INT16:
 		case PhysicalType::INT32:
 		case PhysicalType::INT64:
 		case PhysicalType::INT128:
-		case PhysicalType::DOUBLE:
-		case PhysicalType::FLOAT:
-			aggr.finalize = AggregateFunction::StateFinalize<SumState<int64_t>, int64_t, ZeroSumOperation>;
-			break;
 		case PhysicalType::BOOL:
 		case PhysicalType::BIT:
 		case PhysicalType::STRUCT:
