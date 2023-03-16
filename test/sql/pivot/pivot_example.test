@@ -35,6 +35,13 @@ INSERT INTO Cities VALUES ('US', 'New York City', 2010, 8175);
 statement ok
 INSERT INTO Cities VALUES ('US', 'New York City', 2020, 8772);
 
+query IIII
+PIVOT Cities ON Country || '_' || Name USING SUM(Population) GROUP BY Year;
+----
+2000	1005	8015	564
+2010	1065	8175	608
+2020	1158	8772	738
+
 query IIIII
 PIVOT Cities ON Year USING SUM(Population);
 ----

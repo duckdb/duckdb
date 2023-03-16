@@ -16,15 +16,15 @@
 
 namespace duckdb {
 
-void Transformer::AddPivotEntry(string enum_name, unique_ptr<SelectNode> base, string column_name) {
+void Transformer::AddPivotEntry(string enum_name, unique_ptr<SelectNode> base, unique_ptr<ParsedExpression> column) {
 	if (parent) {
-		parent->AddPivotEntry(std::move(enum_name), std::move(base), std::move(column_name));
+		parent->AddPivotEntry(std::move(enum_name), std::move(base), std::move(column));
 		return;
 	}
 	auto result = make_unique<CreatePivotEntry>();
 	result->enum_name = std::move(enum_name);
 	result->base = std::move(base);
-	result->column_name = std::move(column_name);
+	result->column = std::move(column);
 
 	pivot_entries.push_back(std::move(result));
 }
@@ -56,7 +56,7 @@ unique_ptr<SQLStatement> Transformer::GenerateCreateEnumStmt(unique_ptr<CreatePi
 
 	// generate the query that will result in the enum creation
 	auto select_node = std::move(entry->base);
-	auto columnref = make_unique<ColumnRefExpression>(std::move(entry->column_name));
+	auto columnref = std::move(entry->column);
 	auto cast = make_unique<CastExpression>(LogicalType::VARCHAR, columnref->Copy());
 	select_node->select_list.push_back(std::move(cast));
 
@@ -135,7 +135,7 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 		if (!col.pivot_enum.empty() || !col.entries.empty()) {
 			continue;
 		}
-		if (col.names.size() != 1) {
+		if (col.pivot_expressions.size() != 1) {
 			throw InternalException("PIVOT statement with multiple names in pivot entry!?");
 		}
 		auto enum_name = "__pivot_enum_" + std::to_string(pivot_idx) + "_" + std::to_string(c);
@@ -143,7 +143,7 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 		auto new_select = make_unique<SelectNode>();
 		ExtractCTEsRecursive(new_select->cte_map);
 		new_select->from_table = source->Copy();
-		AddPivotEntry(enum_name, std::move(new_select), col.names[0]);
+		AddPivotEntry(enum_name, std::move(new_select), col.pivot_expressions[0]->Copy());
 		col.pivot_enum = enum_name;
 	}
 
