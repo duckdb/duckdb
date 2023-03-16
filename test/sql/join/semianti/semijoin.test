@@ -122,11 +122,10 @@ SELECT * FROM left_table SEMI JOIN right_table ON (left_table.a + right_table.a 
 ----
 43	1	1
 
-
 statement ok
 INSERT INTO right_table VALUES (1, 42), (1, 42);
 
-# left results are not deduplicated
+# Insert more values so that the scan side in the cross product is the right hand side
 statement ok
 INSERT INTO left_table VALUES (42, 1, 5), (42, 1, 5), (42, 1, 5), (2000, 20000, 200000);
 
@@ -139,6 +138,20 @@ SELECT * FROM left_table SEMI JOIN right_table ON (left_table.a + right_table.a 
 42	1	5
 42	1	5
 43	1	1
+
+mode output_result
+
+statement ok
+select * from left_table, right_table
+
+# complex condition resulting in an any join
+query III
+SELECT * FROM left_table SEMI JOIN right_table ON ((left_table.a = NULL AND right_table.a = NULL) OR left_table.a = right_table.a) order by left_table.a, left_table.c;
+----
+42	1	1
+42	1	5
+42	1	5
+42	1	5
 
 # correlated subqueries
 query II

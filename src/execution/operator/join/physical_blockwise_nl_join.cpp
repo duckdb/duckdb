@@ -106,15 +106,6 @@ unique_ptr<OperatorState> PhysicalBlockwiseNLJoin::GetOperatorState(ExecutionCon
 	return std::move(result);
 }
 
-static bool found_match_full(bool found_match[], idx_t input_chunk_size) {
-	for (idx_t i = 0; i < input_chunk_size; i++) {
-		if (!found_match[i]) {
-			return false;
-		}
-	}
-	return true;
-}
-
 OperatorResultType PhysicalBlockwiseNLJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input,
                                                             DataChunk &chunk, GlobalOperatorState &gstate_p,
                                                             OperatorState &state_p) const {
@@ -143,6 +134,7 @@ OperatorResultType PhysicalBlockwiseNLJoin::ExecuteInternal(ExecutionContext &co
 	// we perform a cross product, then execute the expression directly on the cross product result
 	idx_t result_count = 0;
 	bool found_match[STANDARD_VECTOR_SIZE] = {0};
+
 	do {
 		auto result = state.cross_product.Execute(input, *intermediate_chunk);
 		if (result == OperatorResultType::NEED_MORE_INPUT) {
@@ -167,43 +159,35 @@ OperatorResultType PhysicalBlockwiseNLJoin::ExecuteInternal(ExecutionContext &co
 
 		// now perform the computation
 		result_count = state.executor.SelectExpression(*intermediate_chunk, state.match_sel);
-		if (result_count > 0) {
-			// found a match!
-			// check if the cross product is scanning the LHS or the RHS in its entirety
 
-			if (!state.cross_product.ScanLHS()) {
-				if (join_type == JoinType::ANTI || join_type == JoinType::SEMI) {
-					for(idx_t i = 0; i < result_count; i++) {
-						found_match[state.match_sel.get_index(i)] = true;
-					}
-					// if there is more output in the cross product, make sure we consume it
-					if (result == OperatorResultType::HAVE_MORE_OUTPUT) {
-						result_count = 0;
-						intermediate_chunk->Reset();
-					}
-				} else {
-					// set the match flags in the LHS
-					state.left_outer.SetMatches(state.match_sel, result_count);
-					// set the match flag in the RHS
-					gstate.right_outer.SetMatch(state.cross_product.ScanPosition() +
-					                            state.cross_product.PositionInChunk());
-				}
+		// handle anti and semi joins with different logic
+		if (join_type == JoinType::ANTI || join_type == JoinType::SEMI) {
+			if (state.cross_product.ScanLHS()) {
+				found_match[state.cross_product.PositionInChunk()] = true;
 			} else {
-				if (join_type == JoinType::ANTI || join_type == JoinType::SEMI) {
-					found_match[state.cross_product.PositionInChunk()] = true;
-					if (result == OperatorResultType::HAVE_MORE_OUTPUT) {
-						result_count = 0;
-						intermediate_chunk->Reset();
-					}
-				} else {
-					// set the match flag in the LHS
-					state.left_outer.SetMatch(state.cross_product.PositionInChunk());
-					// set the match flags in the RHS
-					gstate.right_outer.SetMatches(state.match_sel, result_count, state.cross_product.ScanPosition());
+				for(idx_t i = 0; i < result_count; i++) {
+					found_match[state.match_sel.get_index(i)] = true;
 				}
 			}
-		} else {
 			intermediate_chunk->Reset();
+			// trick the loop to continue as semi and anti joins will never produce more output than
+			// the LHS cardinality
+			result_count = 0;
+		} else if (result_count > 0) {
+			// found a match!
+			// check if the cross product is scanning the LHS or the RHS in its entirety
+			if (!state.cross_product.ScanLHS()) {
+				// set the match flags in the LHS
+				state.left_outer.SetMatches(state.match_sel, result_count);
+				// set the match flag in the RHS
+				gstate.right_outer.SetMatch(state.cross_product.ScanPosition() +
+											state.cross_product.PositionInChunk());
+			} else {
+				// set the match flag in the LHS
+				state.left_outer.SetMatch(state.cross_product.PositionInChunk());
+				// set the match flags in the RHS
+				gstate.right_outer.SetMatches(state.match_sel, result_count, state.cross_product.ScanPosition());
+			}
 		}
 	} while (result_count == 0);
 
