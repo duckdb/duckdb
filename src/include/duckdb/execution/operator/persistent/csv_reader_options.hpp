@@ -14,6 +14,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/types.hpp"
 
 namespace duckdb {
 
@@ -77,6 +78,14 @@ struct BufferedCSVReaderOptions {
 	vector<LogicalType> sql_type_list;
 	//! User-defined name list
 	vector<string> name_list;
+	//! Types considered as candidates for auto detection ordered by descending specificity (~ from high to low)
+	vector<LogicalType> auto_type_candidates = {LogicalType::VARCHAR, LogicalType::TIMESTAMP, LogicalType::DATE,
+	                                            LogicalType::TIME,    LogicalType::DOUBLE,    LogicalType::BIGINT,
+	                                            LogicalType::BOOLEAN, LogicalType::SQLNULL};
+
+	//! Const/Static ht with accepted auto_types and their weights in specificity
+	static const duckdb::unordered_map<uint8_t, uint8_t> auto_type_candidates_specificity;
+
 	//===--------------------------------------------------------------------===//
 	// ReadCSVOptions
 	//===--------------------------------------------------------------------===//

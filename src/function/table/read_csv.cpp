@@ -53,6 +53,16 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 	}
 }
 
+uint8_t GetCandidateSpecificity(const LogicalType &candidate_type) {
+	auto id = (uint8_t)candidate_type.id();
+	auto it = BufferedCSVReaderOptions::auto_type_candidates_specificity.find(id);
+	if (it == BufferedCSVReaderOptions::auto_type_candidates_specificity.end()) {
+		throw BinderException("Auto Type Candidate of type %s is not accepted as a valid input",
+		                      LogicalTypeIdToString(candidate_type.id()));
+	}
+	return it->second;
+}
+
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctionBindInput &input,
                                             vector<LogicalType> &return_types, vector<string> &names) {
 	auto &config = DBConfig::GetConfig(context);
@@ -104,6 +114,24 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			}
 			if (names.empty()) {
 				throw BinderException("read_csv requires at least a single column as input!");
+			}
+		} else if (loption == "auto_type_candidates") {
+			options.auto_type_candidates.clear();
+			map<uint8_t, LogicalType> candidate_types;
+			auto &child_type = kv.second.type();
+			if (child_type.id() != LogicalTypeId::LIST) {
+				throw BinderException("read_csv auto_types requires a list as input");
+			}
+			auto &list_children = ListValue::GetChildren(kv.second);
+			for (auto &child : list_children) {
+				if (child.type().id() != LogicalTypeId::VARCHAR) {
+					throw BinderException("auto_types requires a type specification as string");
+				}
+				auto candidate_type = TransformStringToLogicalType(StringValue::Get(child), context);
+				candidate_types[GetCandidateSpecificity(candidate_type)] = candidate_type;
+			}
+			for (auto &candidate_type : candidate_types) {
+				options.auto_type_candidates.emplace_back(candidate_type.second);
 			}
 		} else if (loption == "column_names" || loption == "names") {
 			if (!options.name_list.empty()) {
@@ -795,6 +823,7 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["escape"] = LogicalType::VARCHAR;
 	table_function.named_parameters["nullstr"] = LogicalType::VARCHAR;
 	table_function.named_parameters["columns"] = LogicalType::ANY;
+	table_function.named_parameters["auto_type_candidates"] = LogicalType::ANY;
 	table_function.named_parameters["header"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["auto_detect"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["sample_size"] = LogicalType::BIGINT;

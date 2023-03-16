@@ -1,0 +1,46 @@
+# name: test/sql/copy/csv/auto/test_type_candidates.test
+# description: Test Type Candidates for auto_csv
+# group: [auto]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table t (a integer, b double, c varchar)
+
+statement ok
+insert into t values (1,1.1,'bla');
+
+statement ok
+COPY (SELECT * from t) TO '__TEST_DIR__/csv_file.csv'  (FORMAT CSV, DELIMITER '|');
+
+query III
+SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv');
+----
+1	1.1	bla
+
+query TTT
+SELECT typeof(column0), typeof(column1), typeof(column2) FROM read_csv_auto ('__TEST_DIR__/csv_file.csv');
+----
+BIGINT	DOUBLE	VARCHAR
+
+query III
+SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['BIGINT', 'DOUBLE', 'VARCHAR']);
+----
+1	1.1	bla
+
+#query TTT
+#SELECT typeof(column0), typeof(column1), typeof(column2) FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['BIGINT', 'DOUBLE', 'VARCHAR']);
+#----
+#BIGINT	DOUBLE	VARCHAR
+
+
+query III
+SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['VARCHAR']);
+----
+1	1.1	bla
+
+query TTT
+SELECT typeof(column0), typeof(column1), typeof(column2) FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['VARCHAR']);
+----
+VARCHAR	VARCHAR	VARCHAR
