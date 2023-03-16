@@ -1,0 +1,10 @@
+So, the selection vector is applied to the cross product.
+
+- If the left hand side is scanned and used as a constant vector to create the cross product, we can add rows to the returning
+  data chunk one by one and always return HAVE_MORE_OUTPUT.
+  Since the LHS is scanned, a result means there is at lest one ruple in the RHS that satisfies the condition and we can move forward.
+
+- If the right hand side is scanned. Then we can technically add every matched result index to the found_match array.
+  Here we can return HAVE_MORE_OUTPUT as well, but there is a catch
+  	- If another tuple in the RHS results in a match for an already matched tuple, we end up duplicating it in our result.
+  	-

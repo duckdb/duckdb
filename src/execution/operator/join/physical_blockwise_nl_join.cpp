@@ -92,7 +92,27 @@ public:
 
 unique_ptr<OperatorState> PhysicalBlockwiseNLJoin::GetOperatorState(ExecutionContext &context) const {
 	auto &gstate = (BlockwiseNLJoinGlobalState &)*sink_state;
-	return make_unique<BlockwiseNLJoinState>(context, gstate.right_chunks, *this);
+	auto result = make_unique<BlockwiseNLJoinState>(context, gstate.right_chunks, *this);
+	if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
+		vector<LogicalType> intermediate_types;
+		for (auto &type : children[0]->types) {
+			intermediate_types.emplace_back(type);
+		}
+		for (auto &type : children[1]->types) {
+			intermediate_types.emplace_back(type);
+		}
+		result->intermediate_chunk.Initialize(Allocator::DefaultAllocator(), intermediate_types);
+	}
+	return std::move(result);
+}
+
+static bool found_match_full(bool found_match[], idx_t input_chunk_size) {
+	for (idx_t i = 0; i < input_chunk_size; i++) {
+		if (!found_match[i]) {
+			return false;
+		}
+	}
+	return true;
 }
 
 OperatorResultType PhysicalBlockwiseNLJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input,
@@ -112,31 +132,55 @@ OperatorResultType PhysicalBlockwiseNLJoin::ExecuteInternal(ExecutionContext &co
 		}
 	}
 
+	DataChunk *intermediate_chunk = &chunk;
+	if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
+		intermediate_chunk = &state.intermediate_chunk;
+		intermediate_chunk->Reset();
+	}
+
+
 	// now perform the actual join
 	// we perform a cross product, then execute the expression directly on the cross product result
 	idx_t result_count = 0;
-	bool found_match[STANDARD_VECTOR_SIZE];
+	bool found_match[STANDARD_VECTOR_SIZE] = {0};
 	do {
-		auto result = state.cross_product.Execute(input, chunk);
+		auto result = state.cross_product.Execute(input, *intermediate_chunk);
 		if (result == OperatorResultType::NEED_MORE_INPUT) {
 			// exhausted input, have to pull new LHS chunk
 			if (state.left_outer.Enabled()) {
 				// left join: before we move to the next chunk, see if we need to output any vectors that didn't
 				// have a match found
-				state.left_outer.ConstructLeftJoinResult(input, chunk);
+				state.left_outer.ConstructLeftJoinResult(input, *intermediate_chunk);
 				state.left_outer.Reset();
 			}
+
+			if (join_type == JoinType::SEMI) {
+				PhysicalJoin::ConstructSemiJoinResult(input, chunk, found_match);
+			}
+			if (join_type == JoinType::ANTI) {
+				PhysicalJoin::ConstructAntiJoinResult(input, chunk, found_match);
+			}
+
+			// Here I need to do some more anti semi join stuff
 			return OperatorResultType::NEED_MORE_INPUT;
 		}
 
 		// now perform the computation
-		result_count = state.executor.SelectExpression(chunk, state.match_sel);
+		result_count = state.executor.SelectExpression(*intermediate_chunk, state.match_sel);
 		if (result_count > 0) {
 			// found a match!
 			// check if the cross product is scanning the LHS or the RHS in its entirety
+
 			if (!state.cross_product.ScanLHS()) {
 				if (join_type == JoinType::ANTI || join_type == JoinType::SEMI) {
-					found_match[state.cross_product.PositionInChunk()] = true;
+					for(idx_t i = 0; i < result_count; i++) {
+						found_match[state.match_sel.get_index(i)] = true;
+					}
+					// if there is more output in the cross product, make sure we consume it
+					if (result == OperatorResultType::HAVE_MORE_OUTPUT) {
+						result_count = 0;
+						intermediate_chunk->Reset();
+					}
 				} else {
 					// set the match flags in the LHS
 					state.left_outer.SetMatches(state.match_sel, result_count);
@@ -146,8 +190,10 @@ OperatorResultType PhysicalBlockwiseNLJoin::ExecuteInternal(ExecutionContext &co
 				}
 			} else {
 				if (join_type == JoinType::ANTI || join_type == JoinType::SEMI) {
-					for(idx_t i = 0; i < result_count; i++) {
-						found_match[state.match_sel.get_index(i)] = true;
+					found_match[state.cross_product.PositionInChunk()] = true;
+					if (result == OperatorResultType::HAVE_MORE_OUTPUT) {
+						result_count = 0;
+						intermediate_chunk->Reset();
 					}
 				} else {
 					// set the match flag in the LHS
@@ -157,19 +203,9 @@ OperatorResultType PhysicalBlockwiseNLJoin::ExecuteInternal(ExecutionContext &co
 				}
 			}
 		} else {
-			chunk.Reset();
+			intermediate_chunk->Reset();
 		}
 	} while (result_count == 0);
-
-	if (join_type == JoinType::SEMI) {
-		PhysicalJoin::ConstructSemiJoinResult(input, chunk, found_match);
-		return OperatorResultType::NEED_MORE_INPUT;
-	}
-	if (join_type == JoinType::ANTI) {
-		PhysicalJoin::ConstructAntiJoinResult(input, chunk, found_match);
-		return OperatorResultType::NEED_MORE_INPUT;
-	}
-
 
 	return OperatorResultType::HAVE_MORE_OUTPUT;
 }
