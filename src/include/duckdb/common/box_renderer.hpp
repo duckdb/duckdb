@@ -100,7 +100,9 @@ private:
 	string GetRenderValue(ColumnDataRowCollection &rows, idx_t c, idx_t r);
 	list<ColumnDataCollection> FetchRenderCollections(ClientContext &context, const ColumnDataCollection &result,
 	                                                  idx_t top_rows, idx_t bottom_rows);
-	list<ColumnDataCollection> PivotCollections(ClientContext &context, list<ColumnDataCollection> input, vector<string> &column_names, vector<LogicalType> &result_types, idx_t row_count);
+	list<ColumnDataCollection> PivotCollections(ClientContext &context, list<ColumnDataCollection> input,
+	                                            vector<string> &column_names, vector<LogicalType> &result_types,
+	                                            idx_t row_count);
 	vector<idx_t> ComputeRenderWidths(const vector<string> &names, const vector<LogicalType> &result_types,
 	                                  list<ColumnDataCollection> &collections, idx_t min_width, idx_t max_width,
 	                                  vector<idx_t> &column_map, idx_t &total_length);

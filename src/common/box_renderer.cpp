@@ -197,7 +197,9 @@ list<ColumnDataCollection> BoxRenderer::FetchRenderCollections(ClientContext &co
 	return collections;
 }
 
-list<ColumnDataCollection> BoxRenderer::PivotCollections(ClientContext &context, list<ColumnDataCollection> input, vector<string> &column_names, vector<LogicalType> &result_types, idx_t row_count) {
+list<ColumnDataCollection> BoxRenderer::PivotCollections(ClientContext &context, list<ColumnDataCollection> input,
+                                                         vector<string> &column_names,
+                                                         vector<LogicalType> &result_types, idx_t row_count) {
 	auto &top = input.front();
 	auto &bottom = input.back();
 
@@ -225,15 +227,15 @@ list<ColumnDataCollection> BoxRenderer::PivotCollections(ClientContext &context,
 	auto &res_coll = result.front();
 	ColumnDataAppendState append_state;
 	res_coll.InitializeAppend(append_state);
-	for(idx_t c = 0; c < top.ColumnCount(); c++) {
-		vector<column_t> column_ids { c };
+	for (idx_t c = 0; c < top.ColumnCount(); c++) {
+		vector<column_t> column_ids {c};
 		auto row_index = row_chunk.size();
 		idx_t current_index = 0;
 		row_chunk.SetValue(current_index++, row_index, column_names[c]);
 		row_chunk.SetValue(current_index++, row_index, RenderType(result_types[c]));
-		for(auto &collection : input) {
-			for(auto &chunk : collection.Chunks(column_ids)) {
-				for(idx_t r = 0; r < chunk.size(); r++) {
+		for (auto &collection : input) {
+			for (auto &chunk : collection.Chunks(column_ids)) {
+				for (idx_t r = 0; r < chunk.size(); r++) {
 					row_chunk.SetValue(current_index++, row_index, chunk.GetValue(0, r));
 				}
 			}
@@ -671,7 +673,8 @@ void BoxRenderer::Render(ClientContext &context, const vector<string> &names, co
 	idx_t min_width = has_hidden_rows || row_count == 0 ? minimum_row_length : 0;
 	vector<idx_t> column_map;
 	idx_t total_length;
-	auto widths = ComputeRenderWidths(column_names, result_types, collections, min_width, max_width, column_map, total_length);
+	auto widths =
+	    ComputeRenderWidths(column_names, result_types, collections, min_width, max_width, column_map, total_length);
 
 	// render boundaries for the individual columns
 	vector<idx_t> boundaries;
@@ -705,12 +708,20 @@ void BoxRenderer::Render(ClientContext &context, const vector<string> &names, co
 		}
 	}
 	idx_t column_count = column_map.size();
-	if (has_hidden_columns) {
-		column_count--;
-		if (config.render_mode == RenderMode::ROWS) {
+	if (config.render_mode == RenderMode::COLUMNS) {
+		if (has_hidden_columns) {
+			has_hidden_rows = true;
+			shown_str = " (" + to_string(column_count - 3) + " shown)";
+		} else {
+			shown_str = string();
+		}
+	} else {
+		if (has_hidden_columns) {
+			column_count--;
 			column_count_str += " (" + to_string(column_count) + " shown)";
 		}
 	}
+
 	RenderRowCount(std::move(row_count_str), std::move(shown_str), column_count_str, boundaries, has_hidden_rows,
 	               has_hidden_columns, total_length, row_count, column_count, minimum_row_length, ss);
 }
