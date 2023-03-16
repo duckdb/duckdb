@@ -139,8 +139,6 @@ SELECT * FROM left_table SEMI JOIN right_table ON (left_table.a + right_table.a 
 42	1	5
 43	1	1
 
-mode output_result
-
 statement ok
 select * from left_table, right_table
 
