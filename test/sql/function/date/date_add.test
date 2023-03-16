@@ -1,0 +1,23 @@
+# name: test/sql/function/date/date_add.test
+# description: Test date_add/date_sub
+# group: [date]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE dates(d DATE);
+
+statement ok
+INSERT INTO dates VALUES (DATE '1992-01-01')
+
+# date_add, bigquery
+query I
+SELECT DATE_ADD(DATE '2008-12-25', INTERVAL 5 DAY) AS five_days_later;
+----
+2008-12-30
+
+query I
+SELECT DATE_ADD(TIMESTAMP '2008-12-25 00:00:00', INTERVAL 5 DAY) AS five_days_later;
+----
+2008-12-30 00:00:00

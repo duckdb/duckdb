@@ -43,6 +43,14 @@ US	Seattle	564	608	738
 US	New York City	8015	8175	8772
 
 query IIIII
+SELECT Country, Name, "2000_total_pop", "2010_total_pop", "2020_total_pop" FROM (PIVOT Cities ON Year USING SUM(Population) as total_pop)
+----
+NL	Amsterdam	1005	1065	1158
+US	Seattle	564	608	738
+US	New York City	8015	8175	8772
+
+
+query IIIII
 PIVOT_WIDER Cities ON Year USING SUM(Population);
 ----
 NL	Amsterdam	1005	1065	1158

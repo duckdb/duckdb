@@ -268,6 +268,53 @@ simple_select:
 				{
 					$$ = makeSetOp(PG_SETOP_EXCEPT, $3, $1, $4);
 				}
+			| pivot_keyword table_ref USING target_list_opt_comma
+				{
+					PGSelectStmt *res = makeNode(PGSelectStmt);
+					PGPivotStmt *n = makeNode(PGPivotStmt);
+					n->source = $2;
+					n->aggrs = $4;
+					res->pivot = n;
+					$$ = (PGNode *)res;
+				}
+			| pivot_keyword table_ref USING target_list_opt_comma GROUP_P BY name_list_opt_comma_opt_bracket
+				{
+					PGSelectStmt *res = makeNode(PGSelectStmt);
+					PGPivotStmt *n = makeNode(PGPivotStmt);
+					n->source = $2;
+					n->aggrs = $4;
+					n->groups = $7;
+					res->pivot = n;
+					$$ = (PGNode *)res;
+				}
+			| pivot_keyword table_ref GROUP_P BY name_list_opt_comma_opt_bracket
+				{
+					PGSelectStmt *res = makeNode(PGSelectStmt);
+					PGPivotStmt *n = makeNode(PGPivotStmt);
+					n->source = $2;
+					n->groups = $5;
+					res->pivot = n;
+					$$ = (PGNode *)res;
+				}
+			| pivot_keyword table_ref ON pivot_column_list
+				{
+					PGSelectStmt *res = makeNode(PGSelectStmt);
+					PGPivotStmt *n = makeNode(PGPivotStmt);
+					n->source = $2;
+					n->columns = $4;
+					res->pivot = n;
+					$$ = (PGNode *)res;
+				}
+			| pivot_keyword table_ref ON pivot_column_list GROUP_P BY name_list_opt_comma_opt_bracket
+				{
+					PGSelectStmt *res = makeNode(PGSelectStmt);
+					PGPivotStmt *n = makeNode(PGPivotStmt);
+					n->source = $2;
+					n->columns = $4;
+					n->groups = $7;
+					res->pivot = n;
+					$$ = (PGNode *)res;
+				}
 			| pivot_keyword table_ref ON pivot_column_list USING target_list_opt_comma
 				{
 					PGSelectStmt *res = makeNode(PGSelectStmt);
