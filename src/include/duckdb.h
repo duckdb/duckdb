@@ -411,6 +411,20 @@ Destroys the specified configuration option and de-allocates all memory allocate
 DUCKDB_API void duckdb_destroy_config(duckdb_config *config);
 
 /*!
+Prototypes used by the callback buffer manager
+* duckdb_buffer *buffer: an opaque user-created buffer created through the 'duckdb_allocate_func'
+* void *data: the user-provided state/context
+*/
+typedef void *duckdb_buffer;
+typedef duckdb_buffer (*duckdb_allocate_func)(void *data, idx_t size);
+typedef duckdb_buffer (*duckdb_reallocate_func)(void *data, duckdb_buffer buffer, idx_t old_size, idx_t new_size);
+typedef void (*duckdb_destroy_func)(void *data, duckdb_buffer buffer);
+typedef void *(*duckdb_pin_func)(void *data, duckdb_buffer buffer);
+typedef void (*duckdb_unpin_func)(void *data, duckdb_buffer buffer);
+typedef idx_t (*duckdb_max_memory_func)(void *data);
+typedef idx_t (*duckdb_used_memory_func)(void *data);
+
+/*!
 Sets the external buffer manager to use.
 Functions interacting with this buffer manager are provided as callbacks.
 
@@ -421,21 +435,10 @@ Functions interacting with this buffer manager are provided as callbacks.
 * destroy_func: The function invoked when a buffer is destroyed.
 * pin_func: The function invoked when the buffer is pinned.
 * unpin_func: The function invoked when the buffer is unpinned.
-* used_memory_func: The function used to query the current used memory.
 * max_memory_func: The function used to query the maximum allowed used memory.
+* used_memory_func: The function used to query the current used memory.
 * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
 */
-
-typedef void *duckdb_buffer;
-
-typedef duckdb_buffer (*duckdb_allocate_func)(void *data, idx_t size);
-typedef duckdb_buffer (*duckdb_reallocate_func)(void *data, duckdb_buffer buffer, idx_t old_size, idx_t new_size);
-typedef void (*duckdb_destroy_func)(void *data, duckdb_buffer buffer);
-typedef void *(*duckdb_pin_func)(void *data, duckdb_buffer buffer);
-typedef void (*duckdb_unpin_func)(void *data, duckdb_buffer buffer);
-typedef idx_t (*duckdb_max_memory_func)(void *data);
-typedef idx_t (*duckdb_used_memory_func)(void *data);
-
 DUCKDB_API duckdb_state duckdb_add_custom_buffer_manager(
     duckdb_config config, void *allocation_context, duckdb_allocate_func allocate_func,
     duckdb_reallocate_func reallocate_func, duckdb_destroy_func destroy_func, duckdb_pin_func pin_func,
