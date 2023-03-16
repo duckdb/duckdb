@@ -5,6 +5,10 @@
 #include "duckdb/common/helper.hpp"
 
 namespace duckdb {
+
+constexpr idx_t FixedSizeAllocator::BASE[];
+constexpr uint8_t FixedSizeAllocator::SHIFT[];
+
 FixedSizeAllocator::FixedSizeAllocator(const idx_t &allocation_size)
     : allocation_size(allocation_size), total_allocations(0) {
 
