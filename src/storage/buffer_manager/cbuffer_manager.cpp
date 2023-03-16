@@ -70,6 +70,10 @@ void CBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_siz
 }
 
 BufferHandle CBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
+	if (!handle->buffer) {
+		handle->buffer = make_unique<ExternalFileBuffer>(custom_allocator, handle->memory_usage);
+	}
+	D_ASSERT(handle->buffer);
 	auto &buffer = (ExternalFileBuffer &)*handle->buffer;
 	auto allocation = (data_ptr_t)(config.pin_func(config.data, buffer.ExternalBufferHandle()));
 	if (handle->readers == 0) {

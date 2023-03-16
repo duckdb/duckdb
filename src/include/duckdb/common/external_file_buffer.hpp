@@ -9,6 +9,11 @@ class ExternalFileBuffer : public FileBuffer {
 public:
 	ExternalFileBuffer(Allocator &allocator, uint64_t size)
 	    : FileBuffer(allocator, FileBufferType::EXTERNAL_BUFFER, size), allocation(nullptr) {
+		// Prevent the FileBuffer destructor from running
+		internal_buffer = nullptr;
+	}
+	~ExternalFileBuffer() {
+		buffer = nullptr;
 	}
 
 public:

@@ -3,11 +3,14 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/storage/standard_buffer_manager.hpp"
+#include "duckdb/storage/cbuffer_manager_default.hpp"
 
 namespace duckdb {
 
 unique_ptr<BufferManager> BufferManager::CreateStandardBufferManager(DatabaseInstance &db, DBConfig &config) {
-	return make_unique<StandardBufferManager>(db, config.options.temporary_directory);
+	static MyBufferManager buffer_manager;
+	CBufferManagerConfig cbuffer_manager_config = DefaultCBufferManagerConfig(&buffer_manager);
+	return make_unique<CBufferManager>(cbuffer_manager_config);
 }
 
 shared_ptr<BlockHandle> BufferManager::RegisterSmallMemory(idx_t block_size) {

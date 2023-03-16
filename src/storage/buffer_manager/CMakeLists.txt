@@ -7,6 +7,7 @@ add_library_unity(
   block_manager.cpp
   block_handle.cpp
   cbuffer_manager.cpp
+  cbuffer_manager_default.cpp
   buffer_pool_reservation.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_storage_buffer_manager>
