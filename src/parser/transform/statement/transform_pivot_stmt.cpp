@@ -10,6 +10,7 @@
 #include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 
@@ -99,15 +100,35 @@ unique_ptr<SQLStatement> Transformer::CreatePivotStatement(unique_ptr<SQLStateme
 unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PGSelectStmt *stmt) {
 	auto pivot = stmt->pivot;
 	auto source = TransformTableRefNode(pivot->source);
-	auto columns = TransformPivotList(pivot->columns);
 
 	auto select_node = make_unique<SelectNode>();
 	// handle the CTEs
 	if (stmt->withClause) {
 		TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), select_node->cte_map);
 	}
+	if (!pivot->columns) {
+		// no pivot columns - not actually a pivot
+		select_node->from_table = std::move(source);
+		if (pivot->groups) {
+			auto groups = TransformStringList(pivot->groups);
+			GroupingSet set;
+			for (idx_t gr = 0; gr < groups.size(); gr++) {
+				auto &group = groups[gr];
+				auto colref = make_unique<ColumnRefExpression>(group);
+				select_node->select_list.push_back(colref->Copy());
+				select_node->groups.group_expressions.push_back(std::move(colref));
+				set.insert(gr);
+			}
+			select_node->groups.grouping_sets.push_back(std::move(set));
+		}
+		if (pivot->aggrs) {
+			TransformExpressionList(*pivot->aggrs, select_node->select_list);
+		}
+		return std::move(select_node);
+	}
 
 	// generate CREATE TYPE statements for each of the columns that do not have an IN list
+	auto columns = TransformPivotList(pivot->columns);
 	auto pivot_idx = PivotEntryCount();
 	for (idx_t c = 0; c < columns.size(); c++) {
 		auto &col = columns[c];
@@ -131,13 +152,17 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 
 	auto pivot_ref = make_unique<PivotRef>();
 	pivot_ref->source = std::move(source);
-	if (pivot->aggrs) {
-		TransformExpressionList(*pivot->aggrs, pivot_ref->aggregates);
-	} else {
-		if (!pivot->unpivots) {
-			throw InternalException("No unpivots and no aggrs");
-		}
+	if (pivot->unpivots) {
 		pivot_ref->unpivot_names = TransformStringList(pivot->unpivots);
+	} else {
+		if (pivot->aggrs) {
+			TransformExpressionList(*pivot->aggrs, pivot_ref->aggregates);
+		} else {
+			// pivot but no aggregates specified - push a count star
+			vector<unique_ptr<ParsedExpression>> children;
+			auto function = make_unique<FunctionExpression>("count_star", std::move(children));
+			pivot_ref->aggregates.push_back(std::move(function));
+		}
 	}
 	if (pivot->groups) {
 		pivot_ref->groups = TransformStringList(pivot->groups);

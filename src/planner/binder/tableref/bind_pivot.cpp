@@ -56,7 +56,7 @@ static void ConstructPivots(PivotRef &ref, idx_t pivot_idx, vector<unique_ptr<Pa
 				auto &function = (FunctionExpression &)*copy;
 				// add the filter and alias to the aggregate function
 				function.filter = expr->Copy();
-				if (ref.aggregates.size() > 1) {
+				if (ref.aggregates.size() > 1 || !function.alias.empty()) {
 					// if there are multiple aggregates specified we add the name of the aggregate as well
 					function.alias = name + "_" + function.GetName();
 				} else {
