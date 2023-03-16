@@ -316,7 +316,6 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 	result->aggregate_index = GenerateTableIndex();
 	result->groupings_index = GenerateTableIndex();
 	result->window_index = GenerateTableIndex();
-	result->unnest_index = GenerateTableIndex();
 	result->prune_index = GenerateTableIndex();
 
 	result->from_table = std::move(from_table);
