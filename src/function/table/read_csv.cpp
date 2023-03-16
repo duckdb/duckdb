@@ -54,9 +54,18 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 }
 
 uint8_t GetCandidateSpecificity(const LogicalType &candidate_type) {
+	//! Const ht with accepted auto_types and their weights in specificity
+	const duckdb::unordered_map<uint8_t, uint8_t> auto_type_candidates_specificity {
+	    {(uint8_t)LogicalTypeId::VARCHAR, 0},  {(uint8_t)LogicalTypeId::TIMESTAMP, 1},
+	    {(uint8_t)LogicalTypeId::DATE, 2},     {(uint8_t)LogicalTypeId::TIME, 3},
+	    {(uint8_t)LogicalTypeId::DOUBLE, 4},   {(uint8_t)LogicalTypeId::FLOAT, 5},
+	    {(uint8_t)LogicalTypeId::BIGINT, 6},   {(uint8_t)LogicalTypeId::INTEGER, 7},
+	    {(uint8_t)LogicalTypeId::SMALLINT, 8}, {(uint8_t)LogicalTypeId::TINYINT, 9},
+	    {(uint8_t)LogicalTypeId::BOOLEAN, 10}, {(uint8_t)LogicalTypeId::SQLNULL, 11}};
+
 	auto id = (uint8_t)candidate_type.id();
-	auto it = BufferedCSVReaderOptions::auto_type_candidates_specificity.find(id);
-	if (it == BufferedCSVReaderOptions::auto_type_candidates_specificity.end()) {
+	auto it = auto_type_candidates_specificity.find(id);
+	if (it == auto_type_candidates_specificity.end()) {
 		throw BinderException("Auto Type Candidate of type %s is not accepted as a valid input",
 		                      LogicalTypeIdToString(candidate_type.id()));
 	}
@@ -123,6 +132,9 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 				throw BinderException("read_csv auto_types requires a list as input");
 			}
 			auto &list_children = ListValue::GetChildren(kv.second);
+			if (list_children.empty()) {
+				throw BinderException("auto_types requires at least one type");
+			}
 			for (auto &child : list_children) {
 				if (child.type().id() != LogicalTypeId::VARCHAR) {
 					throw BinderException("auto_types requires a type specification as string");

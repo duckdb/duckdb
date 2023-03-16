@@ -5,16 +5,8 @@
 require vector_size 512
 
 # CSV file with very sparse column
-statement ok
+statement error
 CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/issue_811.csv', SAMPLE_SIZE=1024);
-
-query IIII
-SELECT typeof(TestInteger), typeof(TestDouble), typeof(TestDate), typeof(TestText) FROM test LIMIT 1
-----
-BIGINT	VARCHAR	DATE	VARCHAR
-
-statement ok
-DROP TABLE test
 
 # CSV file with very sparse column
 statement ok

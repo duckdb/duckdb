@@ -29,10 +29,10 @@ SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=[
 ----
 1	1.1	bla
 
-#query TTT
-#SELECT typeof(column0), typeof(column1), typeof(column2) FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['BIGINT', 'DOUBLE', 'VARCHAR']);
-#----
-#BIGINT	DOUBLE	VARCHAR
+query TTT
+SELECT typeof(column0), typeof(column1), typeof(column2) FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['BIGINT', 'DOUBLE', 'VARCHAR']);
+----
+BIGINT	DOUBLE	VARCHAR
 
 
 query III
@@ -44,3 +44,45 @@ query TTT
 SELECT typeof(column0), typeof(column1), typeof(column2) FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['VARCHAR']);
 ----
 VARCHAR	VARCHAR	VARCHAR
+
+statement error
+SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['BIGINT']);
+
+query III
+SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['BIGINT','VARCHAR']);
+----
+1	1.1	bla
+
+query TTT
+SELECT typeof(column0), typeof(column1), typeof(column2) FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['BIGINT','VARCHAR']);
+----
+BIGINT	VARCHAR	VARCHAR
+
+query III
+SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['FLOAT','VARCHAR']);
+----
+1.0	1.1	bla
+
+query TTT
+SELECT typeof(column0), typeof(column1), typeof(column2) FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['FLOAT','VARCHAR']);
+----
+FLOAT	FLOAT	VARCHAR
+
+query III
+SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['SMALLINT','BIGINT', 'DOUBLE', 'FLOAT','VARCHAR']);
+----
+1	1.1	bla
+
+query TTT
+SELECT typeof(column0), typeof(column1), typeof(column2) FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['SMALLINT','BIGINT', 'DOUBLE', 'FLOAT','VARCHAR']);
+----
+SMALLINT	FLOAT	VARCHAR
+
+statement error
+SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['USMALLINT', 'VARCHAR']);
+
+statement error
+SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=['bla', 'VARCHAR'])
+
+statement error
+SELECT * FROM read_csv_auto ('__TEST_DIR__/csv_file.csv', auto_type_candidates=[]);

@@ -83,9 +83,6 @@ struct BufferedCSVReaderOptions {
 	                                            LogicalType::TIME,    LogicalType::DOUBLE,    LogicalType::BIGINT,
 	                                            LogicalType::BOOLEAN, LogicalType::SQLNULL};
 
-	//! Const/Static ht with accepted auto_types and their weights in specificity
-	static const duckdb::unordered_map<uint8_t, uint8_t> auto_type_candidates_specificity;
-
 	//===--------------------------------------------------------------------===//
 	// ReadCSVOptions
 	//===--------------------------------------------------------------------===//
