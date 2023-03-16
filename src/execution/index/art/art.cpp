@@ -16,7 +16,6 @@
 
 #include <algorithm>
 #include <cstring>
-#include <iostream>
 
 namespace duckdb {
 
@@ -1081,12 +1080,10 @@ bool ART::MergeIndexes(IndexLock &state, Index *other_index) {
 //===--------------------------------------------------------------------===//
 
 string ART::ToString() {
-	string str = "[empty]";
 	if (tree) {
-		str = tree.ToString(*this);
+		return tree.ToString(*this);
 	}
-	std::cout << str;
-	return str;
+	return "[empty]";
 }
 
 vector<FixedSizeAllocator *> ART::GetAllocators() const {
