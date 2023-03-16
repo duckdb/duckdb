@@ -7,6 +7,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 
 namespace duckdb {
 
@@ -149,6 +150,12 @@ vector<CreateScalarFunctionInfo> JSONFunctions::GetScalarFunctions() {
 	return functions;
 }
 
+vector<CreatePragmaFunctionInfo> JSONFunctions::GetPragmaFunctions() {
+	vector<CreatePragmaFunctionInfo> functions;
+	functions.push_back(GetExecuteJsonSerializedSqlPragmaFunction());
+	return functions;
+}
+
 vector<CreateTableFunctionInfo> JSONFunctions::GetTableFunctions() {
 	vector<CreateTableFunctionInfo> functions;
 
@@ -161,6 +168,7 @@ vector<CreateTableFunctionInfo> JSONFunctions::GetTableFunctions() {
 	functions.push_back(GetReadNDJSONFunction());
 	functions.push_back(GetReadJSONAutoFunction());
 	functions.push_back(GetReadNDJSONAutoFunction());
+	functions.push_back(GetExecuteJsonSerializedSqlFunction());
 
 	return functions;
 }

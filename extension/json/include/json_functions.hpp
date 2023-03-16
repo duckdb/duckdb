@@ -66,6 +66,7 @@ public:
 class JSONFunctions {
 public:
 	static vector<CreateScalarFunctionInfo> GetScalarFunctions();
+	static vector<CreatePragmaFunctionInfo> GetPragmaFunctions();
 	static vector<CreateTableFunctionInfo> GetTableFunctions();
 	static unique_ptr<TableRef> ReadJSONReplacement(ClientContext &context, const string &table_name,
 	                                                ReplacementScanData *data);
@@ -97,6 +98,8 @@ private:
 	static CreateScalarFunctionInfo GetSerializeSqlFunction();
 	static CreateScalarFunctionInfo GetDeserializeSqlFunction();
 
+	static CreatePragmaFunctionInfo GetExecuteJsonSerializedSqlPragmaFunction();
+
 	template <class FUNCTION_INFO>
 	static void AddAliases(const vector<string> &names, FUNCTION_INFO fun, vector<FUNCTION_INFO> &functions) {
 		for (auto &name : names) {
@@ -113,6 +116,7 @@ private:
 	static CreateTableFunctionInfo GetReadNDJSONFunction();
 	static CreateTableFunctionInfo GetReadJSONAutoFunction();
 	static CreateTableFunctionInfo GetReadNDJSONAutoFunction();
+	static CreateTableFunctionInfo GetExecuteJsonSerializedSqlFunction();
 };
 
 } // namespace duckdb

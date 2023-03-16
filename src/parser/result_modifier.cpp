@@ -247,7 +247,9 @@ void OrderModifier::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("orders", orders);
 }
 unique_ptr<ResultModifier> OrderModifier::FormatDeserialize(FormatDeserializer &deserializer) {
-	throw NotImplementedException("err");
+	auto mod = make_unique<OrderModifier>();
+	deserializer.ReadProperty("orders", mod->orders);
+	return std::move(mod);
 }
 
 unique_ptr<ResultModifier> OrderModifier::Deserialize(FieldReader &reader) {

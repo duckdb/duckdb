@@ -111,7 +111,10 @@ private:
 	// Deserialize anything implementing a FormatDeserialize method
 	template <typename T = void>
 	inline typename std::enable_if<has_deserialize<T>::value, T>::type Read() {
-		return T::FormatDeserialize(*this);
+		OnObjectBegin();
+		auto val = T::FormatDeserialize(*this);
+		OnObjectEnd();
+		return std::move(val);
 	}
 
 	// Structural Types
@@ -119,14 +122,20 @@ private:
 	template <class T = void>
 	inline typename std::enable_if<is_unique_ptr<T>::value, T>::type Read() {
 		using ELEMENT_TYPE = typename is_unique_ptr<T>::ELEMENT_TYPE;
-		return std::move(ELEMENT_TYPE::FormatDeserialize(*this));
+		OnObjectBegin();
+		auto val = std::move(ELEMENT_TYPE::FormatDeserialize(*this));
+		OnObjectEnd();
+		return std::move(val);
 	}
 
 	// Deserialize shared_ptr
 	template <typename T = void>
 	inline typename std::enable_if<is_shared_ptr<T>::value, T>::type Read() {
 		using ELEMENT_TYPE = typename is_shared_ptr<T>::ELEMENT_TYPE;
-		return std::move(ELEMENT_TYPE::FormatDeserialize(*this));
+		OnObjectBegin();
+		auto val = std::move(ELEMENT_TYPE::FormatDeserialize(*this));
+		OnObjectEnd();
+		return std::move(val);
 	}
 
 	// Deserialize a vector
@@ -134,10 +143,11 @@ private:
 	inline typename std::enable_if<is_vector<T>::value, T>::type Read() {
 		using ELEMENT_TYPE = typename is_vector<T>::ELEMENT_TYPE;
 		T vec;
-		auto size = ReadUnsignedInt32();
+		auto size = OnListBegin();
 		for (idx_t i = 0; i < size; i++) {
 			vec.push_back(Read<ELEMENT_TYPE>());
 		}
+		OnListEnd();
 
 		return vec;
 	}
@@ -170,11 +180,12 @@ private:
 	template <typename T = void>
 	inline typename std::enable_if<is_unordered_set<T>::value, T>::type Read() {
 		using ELEMENT_TYPE = typename is_unordered_set<T>::ELEMENT_TYPE;
-		auto size = ReadUnsignedInt32();
+		auto size = OnListBegin();
 		T set;
 		for (idx_t i = 0; i < size; i++) {
 			set.insert(Read<ELEMENT_TYPE>());
 		}
+		OnListEnd();
 
 		return set;
 	}
@@ -183,11 +194,12 @@ private:
 	template <typename T = void>
 	inline typename std::enable_if<is_set<T>::value, T>::type Read() {
 		using ELEMENT_TYPE = typename is_set<T>::ELEMENT_TYPE;
-		auto size = ReadUnsignedInt32();
+		auto size = OnListBegin();
 		T set;
 		for (idx_t i = 0; i < size; i++) {
 			set.insert(Read<ELEMENT_TYPE>());
 		}
+		OnListEnd();
 
 		return set;
 	}
