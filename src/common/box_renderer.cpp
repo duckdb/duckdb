@@ -445,12 +445,14 @@ void BoxRenderer::RenderValues(const list<ColumnDataCollection> &collections, co
 	auto column_count = column_map.size();
 
 	vector<ValueRenderAlignment> alignments;
-	for (idx_t c = 0; c < column_count; c++) {
-		auto column_idx = column_map[c];
-		if (column_idx == SPLIT_COLUMN) {
-			alignments.push_back(ValueRenderAlignment::MIDDLE);
-		} else {
-			alignments.push_back(TypeAlignment(result_types[column_idx]));
+	if (config.render_mode == RenderMode::ROWS) {
+		for (idx_t c = 0; c < column_count; c++) {
+			auto column_idx = column_map[c];
+			if (column_idx == SPLIT_COLUMN) {
+				alignments.push_back(ValueRenderAlignment::MIDDLE);
+			} else {
+				alignments.push_back(TypeAlignment(result_types[column_idx]));
+			}
 		}
 	}
 
@@ -464,13 +466,28 @@ void BoxRenderer::RenderValues(const list<ColumnDataCollection> &collections, co
 			} else {
 				str = GetRenderValue(rows, column_idx, r);
 			}
-			RenderValue(ss, str, widths[c], alignments[c]);
+			ValueRenderAlignment alignment;
+			if (config.render_mode == RenderMode::ROWS) {
+				alignment = alignments[c];
+			} else {
+				if (c < 2) {
+					alignment = ValueRenderAlignment::LEFT;
+				} else if (c == SPLIT_COLUMN) {
+					alignment = ValueRenderAlignment::MIDDLE;
+				} else {
+					alignment = ValueRenderAlignment::RIGHT;
+				}
+			}
+			RenderValue(ss, str, widths[c], alignment);
 		}
 		ss << config.VERTICAL;
 		ss << std::endl;
 	}
 
 	if (bottom_rows > 0) {
+		if (config.render_mode == RenderMode::COLUMNS) {
+			throw InternalException("Columns render mode does not support bottom rows");
+		}
 		// render the bottom rows
 		// first render the divider
 		auto brows = bottom_collection.GetRows();
