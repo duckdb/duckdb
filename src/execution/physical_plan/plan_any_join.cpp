@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/join/physical_blockwise_nl_join.hpp"
+#include "duckdb/execution/operator/join/physical_nested_loop_join.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
 
@@ -13,9 +14,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAnyJoin &o
 	auto right = CreatePlan(*op.children[1]);
 
 	// create the blockwise NL join
-	if (op.join_type == JoinType::SEMI) {
-		return make_unique<>()
-	}
 	return make_unique<PhysicalBlockwiseNLJoin>(op, std::move(left), std::move(right), std::move(op.condition),
 	                                            op.join_type, op.estimated_cardinality);
 }
