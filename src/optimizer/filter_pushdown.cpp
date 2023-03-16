@@ -105,13 +105,7 @@ void FilterPushdown::GenerateFilters() {
 	});
 }
 
-unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOperator> op) {
-	// unhandled type, first perform filter pushdown in its children
-	for (auto &child : op->children) {
-		FilterPushdown pushdown(optimizer);
-		child = pushdown.Rewrite(std::move(child));
-	}
-	// now push any existing filters
+unique_ptr<LogicalOperator> FilterPushdown::PushFinalFilters(unique_ptr<LogicalOperator> op) {
 	if (filters.empty()) {
 		// no filters to push
 		return op;
@@ -122,6 +116,16 @@ unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOpe
 	}
 	filter->children.push_back(std::move(op));
 	return std::move(filter);
+}
+
+unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOperator> op) {
+	// unhandled type, first perform filter pushdown in its children
+	for (auto &child : op->children) {
+		FilterPushdown pushdown(optimizer);
+		child = pushdown.Rewrite(std::move(child));
+	}
+	// now push any existing filters
+	return PushFinalFilters(std::move(op));
 }
 
 void FilterPushdown::Filter::ExtractBindings() {

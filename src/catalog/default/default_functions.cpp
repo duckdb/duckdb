@@ -131,6 +131,9 @@ static DefaultMacro internal_macros[] = {
 	// nested list aggregates
 	{DEFAULT_SCHEMA, "list_histogram", {"l", nullptr}, "list_aggr(l, 'histogram')"},
 
+	// date functions
+	{DEFAULT_SCHEMA, "date_add", {"date", "interval", nullptr}, "date + interval"},
+
 	{nullptr, nullptr, {nullptr}, nullptr}
 	};
 
