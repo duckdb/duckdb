@@ -22,7 +22,6 @@
 #include "duckdb/main/relation/join_relation.hpp"
 #include "duckdb/main/relation/cross_product_relation.hpp"
 #include "duckdb/main/relation/setop_relation.hpp"
-#include "duckdb/main/relation/window_relation.hpp"
 #include "duckdb/main/relation/limit_relation.hpp"
 #include "duckdb/main/relation/distinct_relation.hpp"
 
