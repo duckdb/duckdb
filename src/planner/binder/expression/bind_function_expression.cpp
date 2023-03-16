@@ -18,13 +18,6 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
                                             unique_ptr<ParsedExpression> *expr_ptr) {
 	// lookup the function in the catalog
 	QueryErrorContext error_context(binder.root_statement, function.query_location);
-
-	if (function.function_name == "unnest" || function.function_name == "unlist") {
-		// special case, not in catalog
-		// TODO make sure someone does not create such a function OR
-		// have unnest live in catalog, too
-		return BindUnnest(function, depth);
-	}
 	auto func = Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function.catalog, function.schema,
 	                              function.function_name, true, error_context);
 	if (!func) {
@@ -246,7 +239,7 @@ BindResult ExpressionBinder::BindAggregate(FunctionExpression &expr, AggregateFu
 	return BindResult(binder.FormatError(expr, UnsupportedAggregateMessage()));
 }
 
-BindResult ExpressionBinder::BindUnnest(FunctionExpression &expr, idx_t depth) {
+BindResult ExpressionBinder::BindUnnest(FunctionExpression &expr, idx_t depth, bool root_expression) {
 	return BindResult(binder.FormatError(expr, UnsupportedUnnestMessage()));
 }
 
