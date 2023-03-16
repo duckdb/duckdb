@@ -30,6 +30,9 @@ unique_ptr<Expression> CreateBoundStructExtract(ClientContext &context, unique_p
 
 BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, bool root_expression) {
 	// bind the children of the function expression
+	if (depth > 0) {
+		return BindResult(binder.FormatError(function, "UNNEST() for correlated expressions is not supported yet"));
+	}
 	string error;
 	if (function.children.empty()) {
 		return BindResult(binder.FormatError(function, "UNNEST() requires a single argument"));
@@ -107,9 +110,6 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 		break;
 	default:
 		return BindResult(binder.FormatError(function, "UNNEST() can only be applied to lists, structs and NULL"));
-	}
-	if (depth > 0) {
-		throw BinderException(binder.FormatError(function, "UNNEST() for correlated expressions is not supported yet"));
 	}
 
 	idx_t list_unnests;
