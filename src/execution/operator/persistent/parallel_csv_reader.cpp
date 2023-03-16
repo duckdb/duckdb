@@ -53,7 +53,7 @@ bool ParallelCSVReader::NewLineDelimiter(bool carry, bool carry_followed_by_nl, 
 	return (carry && carry_followed_by_nl) || (!carry && first_char);
 }
 
-void ParallelCSVReader::SkipEmptyLines(){
+void ParallelCSVReader::SkipEmptyLines() {
 	idx_t new_pos_buffer = position_buffer;
 	for (; new_pos_buffer < end_buffer; new_pos_buffer++) {
 		if (StringUtil::CharacterIsNewline((*buffer)[new_pos_buffer])) {
@@ -67,11 +67,10 @@ void ParallelCSVReader::SkipEmptyLines(){
 			}
 			position_buffer = new_pos_buffer;
 			return;
-		} else if ((*buffer)[new_pos_buffer] != ' '){
+		} else if ((*buffer)[new_pos_buffer] != ' ') {
 			return;
 		}
 	}
-
 }
 bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 	if (buffer->buffer->IsCSVFileFirstBuffer() && start_buffer == position_buffer &&

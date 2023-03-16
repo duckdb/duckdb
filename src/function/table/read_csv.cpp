@@ -275,6 +275,9 @@ public:
 		} else {
 			bytes_per_local_state = file_size / MaxThreads();
 		}
+		for (idx_t i = 0; i < rows_to_skip; i++) {
+			file_handle->ReadLine();
+		}
 		current_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position);
 		next_buffer = current_buffer->Next(*file_handle, buffer_size, current_csv_position);
 		running_threads = MaxThreads();
@@ -471,11 +474,9 @@ static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext 
 
 	bind_data.options.file_path = bind_data.files[0];
 	file_handle = ReadCSV::OpenCSV(bind_data.options.file_path, bind_data.options.compression, context);
-	idx_t rows_to_skip =
-	    bind_data.options.skip_rows + (bind_data.options.has_header && bind_data.options.header ? 1 : 0);
-	return make_unique<ParallelCSVGlobalState>(context, std::move(file_handle), bind_data.files,
-	                                           context.db->NumberOfThreads(), bind_data.options.buffer_size,
-	                                           rows_to_skip, ClientConfig::GetConfig(context).verify_parallelism);
+	return make_unique<ParallelCSVGlobalState>(
+	    context, std::move(file_handle), bind_data.files, context.db->NumberOfThreads(), bind_data.options.buffer_size,
+	    bind_data.options.skip_rows, ClientConfig::GetConfig(context).verify_parallelism);
 }
 
 //===--------------------------------------------------------------------===//
