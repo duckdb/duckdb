@@ -1,5 +1,7 @@
 #include "duckdb/execution/index/art/swizzleable_pointer.hpp"
 
+#include "duckdb/storage/meta_block_reader.hpp"
+
 namespace duckdb {
 
 SwizzleablePointer::SwizzleablePointer(MetaBlockReader &reader) {

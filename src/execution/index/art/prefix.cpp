@@ -2,6 +2,7 @@
 
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_node.hpp"
+#include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/prefix_segment.hpp"
 
 namespace duckdb {

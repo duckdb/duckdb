@@ -8,14 +8,19 @@
 
 #pragma once
 
-#include "duckdb/execution/index/art/art_node.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
-#include "duckdb/execution/index/art/art_key.hpp"
 
 namespace duckdb {
 
 // classes
 class ART;
+class ARTNode;
+class Key;
+class MetaBlockWriter;
+class MetaBlockReader;
+
+// structs
+struct BlockPointer;
 
 class Leaf {
 public:

@@ -10,8 +10,6 @@
 
 #include "duckdb/execution/index/art/fixed_size_allocator.hpp"
 #include "duckdb/execution/index/art/swizzleable_pointer.hpp"
-#include "duckdb/storage/meta_block_reader.hpp"
-#include "duckdb/storage/meta_block_writer.hpp"
 
 namespace duckdb {
 
@@ -28,6 +26,11 @@ enum class ARTNodeType : uint8_t {
 class ART;
 class ARTNode;
 class Prefix;
+class MetaBlockReader;
+class MetaBlockWriter;
+
+// structs
+struct BlockPointer;
 
 //! The ARTNode is the swizzleable pointer class of the ART index.
 //! If the ARTNode pointer is not swizzled, then the leftmost byte identifies the ARTNodeType.

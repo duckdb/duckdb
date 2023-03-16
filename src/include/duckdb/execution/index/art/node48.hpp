@@ -13,6 +13,9 @@
 
 namespace duckdb {
 
+// classes
+class ART;
+
 //! Node48 holds up to 48 ARTNode children. It contains a child_index array which can be directly indexed by the key
 //! byte, and which contains the position of the child node in the children array
 class Node48 {

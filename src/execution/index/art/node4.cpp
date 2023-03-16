@@ -3,6 +3,8 @@
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_node.hpp"
 #include "duckdb/execution/index/art/node16.hpp"
+#include "duckdb/storage/meta_block_writer.hpp"
+#include "duckdb/storage/meta_block_reader.hpp"
 
 namespace duckdb {
 

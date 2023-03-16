@@ -8,12 +8,9 @@
 
 #pragma once
 
-#include "duckdb/common/pair.hpp"
-#include "duckdb/common/set.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/common/list.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 

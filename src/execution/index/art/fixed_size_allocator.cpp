@@ -1,7 +1,6 @@
 #include "duckdb/execution/index/art/fixed_size_allocator.hpp"
 
 #include "duckdb/common/allocator.hpp"
-#include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 
@@ -172,24 +171,24 @@ idx_t FixedSizeAllocator::GetOffset(ValidityMask &mask, const idx_t &allocation_
 		if (data[entry_idx] != 0) {
 
 			// find the position of the free bit
-			auto v = data[entry_idx];
-			idx_t r = 0;
+			auto entry = data[entry_idx];
+			idx_t first_valid_bit = 0;
 
 			for (idx_t i = 0; i < 6; i++) {
-				if (v & BASE[i]) {
+				if (entry & BASE[i]) {
 					// first valid bit is in the rightmost s[i] bits
-					v &= BASE[i];
+					entry &= BASE[i];
 				} else {
-					v >>= SHIFT[i];
-					r += SHIFT[i];
+					entry >>= SHIFT[i];
+					first_valid_bit += SHIFT[i];
 				}
 			}
-			D_ASSERT(v);
+			D_ASSERT(entry);
 
 			auto prev_bits = entry_idx * sizeof(validity_t) * 8;
-			D_ASSERT(mask.RowIsValid(prev_bits + r));
-			mask.SetInvalid(prev_bits + r);
-			return (prev_bits + r) << OFFSET_SHIFT;
+			D_ASSERT(mask.RowIsValid(prev_bits + first_valid_bit));
+			mask.SetInvalid(prev_bits + first_valid_bit);
+			return (prev_bits + first_valid_bit) << OFFSET_SHIFT;
 		}
 	}
 

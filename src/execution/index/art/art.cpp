@@ -16,7 +16,6 @@
 
 #include <algorithm>
 #include <cstring>
-#include <ctgmath>
 #include <iostream>
 
 namespace duckdb {
@@ -992,6 +991,7 @@ BlockPointer ART::Serialize(MetaBlockWriter &writer) {
 vector<bool> ART::InitializeVacuum(vector<FixedSizeAllocator *> &allocators) {
 
 	vector<bool> vacuum_nodes;
+	vacuum_nodes.reserve(allocators.size());
 	for (auto &allocator : allocators) {
 		vacuum_nodes.push_back(allocator->InitializeVacuum());
 	}

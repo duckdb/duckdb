@@ -13,6 +13,9 @@
 
 namespace duckdb {
 
+// classes
+class ART;
+
 //! Node256 holds up to 256 ARTNode children which can be directly indexed by the key byte
 class Node256 {
 public:

@@ -4,6 +4,8 @@
 #include "duckdb/execution/index/art/art_node.hpp"
 #include "duckdb/execution/index/art/node4.hpp"
 #include "duckdb/execution/index/art/node48.hpp"
+#include "duckdb/storage/meta_block_writer.hpp"
+#include "duckdb/storage/meta_block_reader.hpp"
 
 namespace duckdb {
 

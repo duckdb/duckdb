@@ -8,13 +8,12 @@
 #pragma once
 
 #include "duckdb/execution/index/art/art_node.hpp"
-#include "duckdb/execution/index/art/art_key.hpp"
 
 namespace duckdb {
 
 // classes
 class ART;
-class PrefixSegment;
+class Key;
 
 class Prefix {
 public:

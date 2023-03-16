@@ -2,7 +2,10 @@
 
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_node.hpp"
+#include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/leaf_segment.hpp"
+#include "duckdb/storage/meta_block_writer.hpp"
+#include "duckdb/storage/meta_block_reader.hpp"
 
 namespace duckdb {
 
@@ -213,14 +216,15 @@ void Leaf::Remove(ART &art, const row_t &row_id) {
 		}
 
 		// calculate the copy count
-		auto copy_count = count - copy_idx - 1;
+		auto copy_count = count - copy_idx;
 		if (ARTNode::LEAF_SEGMENT_SIZE - 1 < copy_count) {
 			copy_count = ARTNode::LEAF_SEGMENT_SIZE - 1;
 		}
 
 		// copy row IDs
-		for (idx_t i = 0; i < copy_count; i++) {
-			segment->row_ids[i] = segment->row_ids[i + 1];
+		D_ASSERT((copy_idx % ARTNode::LEAF_SEGMENT_SIZE) != 0);
+		for (idx_t i = copy_idx % ARTNode::LEAF_SEGMENT_SIZE; i <= copy_count; i++) {
+			segment->row_ids[i - 1] = segment->row_ids[i];
 			copy_idx++;
 		}
 

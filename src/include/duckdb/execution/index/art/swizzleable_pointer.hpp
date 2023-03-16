@@ -7,9 +7,13 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
-#include "duckdb/storage/meta_block_reader.hpp"
-
 namespace duckdb {
+
+// classes
+class MetaBlockReader;
+
+// structs
+struct BlockPointer;
 
 //! SwizzleablePointer uses the most significant bit as a flag. If the swizzle flag is set, the value in
 //! the SwizzleablePointer is a memory address. Otherwise, the variable stores the block information

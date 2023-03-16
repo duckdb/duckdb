@@ -13,6 +13,9 @@
 
 namespace duckdb {
 
+// classes
+class ART;
+
 //! Node4 holds up to four ARTNode children sorted by their key byte
 class Node4 {
 public:
@@ -64,7 +67,7 @@ public:
 	//! if there are no children matching the criteria
 	idx_t GetChildPositionGreaterEqual(const uint8_t &byte, bool &inclusive) const;
 	//! Get the position of the minimum child node in the node
-	constexpr idx_t GetMinPosition() const {
+	inline idx_t GetMinPosition() const {
 		return 0;
 	}
 	//! Get the next position in the node, or DConstants::INVALID_INDEX if there is no next position. If pos ==
