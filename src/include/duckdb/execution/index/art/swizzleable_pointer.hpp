@@ -7,6 +7,8 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
+#include "duckdb/common/constants.hpp"
+
 namespace duckdb {
 
 // classes

@@ -82,7 +82,7 @@ public:
 	template <class T>
 	inline T *Get(const idx_t &position) const {
 		return (T *)Get(position);
-	};
+	}
 
 	//! Merge another FixedSizeAllocator with this allocator. Both must have the same allocation size
 	void Merge(FixedSizeAllocator &other);
