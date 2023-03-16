@@ -8,7 +8,7 @@ string JoinTypeToString(JoinType type) {
 }
 
 bool IsLeftOuterJoin(JoinType type) {
-	return type == JoinType::LEFT || type == JoinType::OUTER || type == JoinType::ASOF;
+	return type == JoinType::LEFT || type == JoinType::OUTER;
 }
 
 bool IsRightOuterJoin(JoinType type) {

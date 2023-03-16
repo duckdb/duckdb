@@ -236,6 +236,8 @@ JoinRefType EnumSerializer::StringToEnum(const char *value) {
 		return JoinRefType::CROSS;
 	} else if (StringUtil::Equals(value, "POSITIONAL")) {
 		return JoinRefType::POSITIONAL;
+	} else if (StringUtil::Equals(value, "ASOF")) {
+		return JoinRefType::ASOF;
 	} else {
 		throw NotImplementedException("EnumSerializer::StringToEnum not implemented for enum value");
 	}
@@ -252,6 +254,8 @@ const char *EnumSerializer::EnumToString(JoinRefType value) {
 		return "CROSS";
 	case JoinRefType::POSITIONAL:
 		return "POSITIONAL";
+	case JoinRefType::ASOF:
+		return "ASOF";
 	default:
 		throw NotImplementedException("ToString not implemented for enum value");
 	}
@@ -279,8 +283,6 @@ JoinType EnumSerializer::StringToEnum(const char *value) {
 		return JoinType::SINGLE;
 	} else if (StringUtil::Equals(value, "MARK")) {
 		return JoinType::MARK;
-	} else if (StringUtil::Equals(value, "ASOF")) {
-		return JoinType::ASOF;
 	} else {
 		throw NotImplementedException("EnumSerializer::StringToEnum not implemented for enum value");
 	}
@@ -305,8 +307,6 @@ const char *EnumSerializer::EnumToString(JoinType value) {
 		return "SINGLE";
 	case JoinType::MARK:
 		return "MARK";
-	case JoinType::ASOF:
-		return "ASOF";
 	case JoinType::INVALID:
 		return "INVALID";
 	}

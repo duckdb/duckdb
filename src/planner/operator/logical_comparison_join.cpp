@@ -6,7 +6,7 @@
 namespace duckdb {
 
 LogicalComparisonJoin::LogicalComparisonJoin(JoinType join_type, LogicalOperatorType logical_type)
-    : LogicalJoin(join_type, logical_type) {
+    : LogicalJoin(join_type, logical_type), join_reftype(JoinRefType::REGULAR) {
 }
 
 string LogicalComparisonJoin::ParamsToString() const {
@@ -25,6 +25,7 @@ void LogicalComparisonJoin::Serialize(FieldWriter &writer) const {
 	LogicalJoin::Serialize(writer);
 	writer.WriteRegularSerializableList(conditions);
 	writer.WriteRegularSerializableList(delim_types);
+	writer.WriteField<JoinRefType>(join_reftype);
 }
 
 void LogicalComparisonJoin::Deserialize(LogicalComparisonJoin &comparison_join, LogicalDeserializationState &state,
@@ -32,6 +33,7 @@ void LogicalComparisonJoin::Deserialize(LogicalComparisonJoin &comparison_join, 
 	LogicalJoin::Deserialize(comparison_join, state, reader);
 	comparison_join.conditions = reader.ReadRequiredSerializableList<JoinCondition, JoinCondition>(state.gstate);
 	comparison_join.delim_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+	comparison_join.join_reftype = reader.ReadField<JoinRefType>(JoinRefType::REGULAR);
 }
 
 unique_ptr<LogicalOperator> LogicalComparisonJoin::Deserialize(LogicalDeserializationState &state,

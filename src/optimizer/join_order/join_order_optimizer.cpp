@@ -120,13 +120,14 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 
 	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		auto &join = (LogicalComparisonJoin &)*op;
-		if (join.join_type == JoinType::INNER) {
+		if (join.join_type == JoinType::INNER && join.join_reftype != JoinRefType::ASOF) {
 			// extract join conditions from inner join
 			filter_operators.push_back(op);
 		} else {
 			// non-inner join, not reorderable yet
 			non_reorderable_operation = true;
-			if (join.join_type == JoinType::LEFT && join.right_projection_map.empty()) {
+			if (join.join_type == JoinType::LEFT && join.right_projection_map.empty() &&
+			    join.join_reftype != JoinRefType::ASOF) {
 				// for left joins; if the RHS cardinality is significantly larger than the LHS (2x)
 				// we convert to doing a RIGHT OUTER JOIN
 				// FIXME: for now we don't swap if the right_projection_map is not empty

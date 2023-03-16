@@ -36,10 +36,6 @@ unique_ptr<TableRef> Transformer::TransformJoin(duckdb_libpgquery::PGJoinExpr *r
 		result->ref_type = JoinRefType::POSITIONAL;
 		break;
 	}
-	case duckdb_libpgquery::PG_JOIN_ASOF: {
-		result->type = JoinType::ASOF;
-		break;
-	}
 	default: {
 		throw NotImplementedException("Join type %d not supported\n", root->jointype);
 	}
@@ -48,8 +44,15 @@ unique_ptr<TableRef> Transformer::TransformJoin(duckdb_libpgquery::PGJoinExpr *r
 	// Check the type of left arg and right arg before transform
 	result->left = TransformTableRefNode(root->larg);
 	result->right = TransformTableRefNode(root->rarg);
-	if (root->isNatural) {
+	switch (root->joinreftype) {
+	case duckdb_libpgquery::PG_JOIN_NATURAL:
 		result->ref_type = JoinRefType::NATURAL;
+		break;
+	case duckdb_libpgquery::PG_JOIN_ASOF:
+		result->ref_type = JoinRefType::ASOF;
+		break;
+	default:
+		break;
 	}
 	result->query_location = root->location;
 

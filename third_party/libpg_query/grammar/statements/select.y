@@ -1140,7 +1140,7 @@ joined_table:
 					/* CROSS JOIN is same as unqualified inner join */
 					PGJoinExpr *n = makeNode(PGJoinExpr);
 					n->jointype = PG_JOIN_INNER;
-					n->isNatural = false;
+					n->joinreftype = PG_JOIN_REGULAR;
 					n->larg = $1;
 					n->rarg = $4;
 					n->usingClause = NIL;
@@ -1152,7 +1152,7 @@ joined_table:
 				{
 					PGJoinExpr *n = makeNode(PGJoinExpr);
 					n->jointype = $2;
-					n->isNatural = false;
+					n->joinreftype = PG_JOIN_REGULAR;
 					n->larg = $1;
 					n->rarg = $4;
 					if ($5 != NULL && IsA($5, PGList))
@@ -1167,7 +1167,7 @@ joined_table:
 					/* letting join_type reduce to empty doesn't work */
 					PGJoinExpr *n = makeNode(PGJoinExpr);
 					n->jointype = PG_JOIN_INNER;
-					n->isNatural = false;
+					n->joinreftype = PG_JOIN_REGULAR;
 					n->larg = $1;
 					n->rarg = $3;
 					if ($4 != NULL && IsA($4, PGList))
@@ -1181,7 +1181,7 @@ joined_table:
 				{
 					PGJoinExpr *n = makeNode(PGJoinExpr);
 					n->jointype = $3;
-					n->isNatural = true;
+					n->joinreftype = PG_JOIN_NATURAL;
 					n->larg = $1;
 					n->rarg = $5;
 					n->usingClause = NIL; /* figure out which columns later... */
@@ -1194,7 +1194,7 @@ joined_table:
 					/* letting join_type reduce to empty doesn't work */
 					PGJoinExpr *n = makeNode(PGJoinExpr);
 					n->jointype = PG_JOIN_INNER;
-					n->isNatural = true;
+					n->joinreftype = PG_JOIN_NATURAL;
 					n->larg = $1;
 					n->rarg = $4;
 					n->usingClause = NIL; /* figure out which columns later... */
@@ -1202,11 +1202,25 @@ joined_table:
 					n->location = @2;
 					$$ = n;
 				}
+			| table_ref ASOF join_type JOIN table_ref join_qual
+				{
+					PGJoinExpr *n = makeNode(PGJoinExpr);
+					n->jointype = $3;
+					n->joinreftype = PG_JOIN_ASOF;
+					n->larg = $1;
+					n->rarg = $5;
+					if ($6 != NULL && IsA($6, PGList))
+						n->usingClause = (PGList *) $6; /* USING clause */
+					else
+						n->quals = $6; /* ON clause */
+					n->location = @2;
+					$$ = n;
+				}
 			| table_ref ASOF JOIN table_ref join_qual
 				{
 					PGJoinExpr *n = makeNode(PGJoinExpr);
-					n->jointype = PG_JOIN_ASOF;
-					n->isNatural = false;
+					n->jointype = PG_JOIN_INNER;
+					n->joinreftype = PG_JOIN_ASOF;
 					n->larg = $1;
 					n->rarg = $4;
 					if ($5 != NULL && IsA($5, PGList))
@@ -1221,7 +1235,7 @@ joined_table:
 					/* POSITIONAL JOIN is a coordinated scan */
 					PGJoinExpr *n = makeNode(PGJoinExpr);
 					n->jointype = PG_JOIN_POSITION;
-					n->isNatural = false;
+					n->joinreftype = PG_JOIN_REGULAR;
 					n->larg = $1;
 					n->rarg = $4;
 					n->usingClause = NIL;
@@ -1234,7 +1248,7 @@ joined_table:
                     /* ANTI JOIN is a filter */
                     PGJoinExpr *n = makeNode(PGJoinExpr);
                     n->jointype = PG_JOIN_ANTI;
-                    n->isNatural = false;
+                    n->joinreftype = PG_JOIN_REGULAR;
                     n->larg = $1;
                     n->rarg = $4;
                     if ($5 != NULL && IsA($5, PGList))
@@ -1249,7 +1263,7 @@ joined_table:
                    /* SEMI JOIN is also a filter */
                    PGJoinExpr *n = makeNode(PGJoinExpr);
                    n->jointype = PG_JOIN_SEMI;
-                   n->isNatural = false;
+                   n->joinreftype = PG_JOIN_REGULAR;
                    n->larg = $1;
                    n->rarg = $4;
                    if ($5 != NULL && IsA($5, PGList))

@@ -202,7 +202,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		return make_unique<PhysicalCrossProduct>(op.types, std::move(left), std::move(right), op.estimated_cardinality);
 	}
 
-	if (op.join_type == JoinType::ASOF) {
+	if (op.join_reftype == JoinRefType::ASOF) {
 		//	Validate
 		vector<idx_t> equi_indexes;
 		auto asof_idx = op.conditions.size();
@@ -214,18 +214,14 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 				equi_indexes.emplace_back(c);
 				break;
 			case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-				if (asof_idx < op.conditions.size()) {
-					throw NotImplementedException("Multiple ASOF JOIN inequalities");
-				}
+				D_ASSERT(asof_idx == op.conditions.size());
 				asof_idx = c;
 				break;
 			default:
-				throw NotImplementedException("Unimplemented ASOF JOIN condition");
+				throw InternalException("Invalid ASOF JOIN comparison");
 			}
 		}
-		if (asof_idx == op.conditions.size()) {
-			throw NotImplementedException("Missing ASOF JOIN inequality");
-		}
+		D_ASSERT(asof_idx < op.conditions.size());
 
 		//	Temporary implementation: IEJoin of Window
 		//	LEAD(asof_column, 1, infinity) OVER (PARTITION BY equi_column... ORDER BY asof_column) AS asof_temp
@@ -272,7 +268,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		op.types.emplace_back(asof_type);
 		op.conditions.emplace_back(std::move(asof_upper));
 		auto iejoin = make_unique<PhysicalIEJoin>(op, std::move(left), std::move(window), std::move(op.conditions),
-		                                          JoinType::LEFT, op.estimated_cardinality);
+		                                          op.join_type, op.estimated_cardinality);
 
 		//	Project away asof_temp and anything from the projection maps
 		auto proj = PhysicalProjection::CreateJoinProjection(proj_types, lhs_types, rhs_types, op.left_projection_map,

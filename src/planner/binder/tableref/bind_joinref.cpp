@@ -198,6 +198,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 		break;
 	}
 	case JoinRefType::REGULAR:
+	case JoinRefType::ASOF:
 		if (!ref.using_columns.empty()) {
 			// USING columns
 			D_ASSERT(!result->condition);
@@ -243,7 +244,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			right_binding = RetrieveUsingBinding(right_binder, right_using_binding, using_column, "right", set.get());
 
 			// Last column of ASOF JOIN ... USING is >=
-			const auto type = (ref.type == JoinType::ASOF && i == extra_using_columns.size() - 1)
+			const auto type = (ref.ref_type == JoinRefType::ASOF && i == extra_using_columns.size() - 1)
 			                      ? ExpressionType::COMPARE_GREATERTHANOREQUALTO
 			                      : ExpressionType::COMPARE_EQUAL;
 
