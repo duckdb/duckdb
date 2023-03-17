@@ -97,6 +97,8 @@ public:
 	virtual void InitializeAppend(ColumnAppendState &state);
 	//! Append a vector of type [type] to the end of the column
 	virtual void Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count);
+	//! Append a vector of type [type] to the end of the column
+	void Append(ColumnAppendState &state, Vector &vector, idx_t count);
 	virtual void AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count);
 	//! Revert a set of appends to the ColumnData
 	virtual void RevertAppend(row_t start_row);
@@ -131,6 +133,8 @@ public:
 	virtual void GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, TableStorageInfo &result);
 	virtual void Verify(RowGroup &parent);
 
+	bool CheckZonemap(TableFilter &filter);
+
 	static shared_ptr<ColumnData> CreateColumn(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
 	                                           idx_t start_row, const LogicalType &type, ColumnData *parent = nullptr);
 	static shared_ptr<ColumnData> CreateColumn(ColumnData &other, idx_t start_row, ColumnData *parent = nullptr);
@@ -138,6 +142,10 @@ public:
 	                                                 idx_t column_index, idx_t start_row, const LogicalType &type,
 	                                                 ColumnData *parent = nullptr);
 	static unique_ptr<ColumnData> CreateColumnUnique(ColumnData &other, idx_t start_row, ColumnData *parent = nullptr);
+
+	void MergeStatistics(const BaseStatistics &other);
+	void MergeIntoStatistics(BaseStatistics &other);
+	unique_ptr<BaseStatistics> GetStatistics();
 
 protected:
 	//! Append a transient segment
@@ -159,6 +167,8 @@ protected:
 	unique_ptr<UpdateSegment> updates;
 	//! The internal version of the column data
 	idx_t version;
+	//! The stats of the root segment
+	unique_ptr<SegmentStatistics> stats;
 };
 
 } // namespace duckdb

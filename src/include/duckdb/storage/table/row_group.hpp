@@ -71,8 +71,6 @@ private:
 	shared_ptr<VersionNode> version_info;
 	//! The column data of the row_group
 	vector<shared_ptr<ColumnData>> columns;
-	//! The segment statistics for each of the columns
-	vector<SegmentStatistics> stats;
 
 public:
 	RowGroupCollection &GetCollection() {
@@ -170,7 +168,6 @@ private:
 
 private:
 	mutex row_group_lock;
-	mutex stats_lock;
 };
 
 struct VersionNode {

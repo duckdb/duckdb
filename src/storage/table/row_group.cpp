@@ -44,10 +44,6 @@ RowGroup::RowGroup(RowGroupCollection &collection, RowGroupPointer &&pointer)
 		                                                types[i], nullptr));
 	}
 
-	// set up the statistics
-	for (auto &stats : pointer.statistics) {
-		this->stats.emplace_back(std::move(stats));
-	}
 	this->version_info = std::move(pointer.versions);
 
 	Verify();
@@ -55,7 +51,7 @@ RowGroup::RowGroup(RowGroupCollection &collection, RowGroupPointer &&pointer)
 
 RowGroup::RowGroup(RowGroup &row_group, RowGroupCollection &collection, idx_t start)
     : SegmentBase<RowGroup>(start, row_group.count.load()), collection(collection),
-      version_info(std::move(row_group.version_info)), stats(std::move(row_group.stats)) {
+      version_info(std::move(row_group.version_info)) {
 	for (auto &column : row_group.columns) {
 		this->columns.push_back(ColumnData::CreateColumn(*column, start));
 	}
@@ -93,7 +89,6 @@ void RowGroup::InitializeEmpty(const vector<LogicalType> &types) {
 	// set up the segment trees for the column segments
 	for (idx_t i = 0; i < types.size(); i++) {
 		auto column_data = ColumnData::CreateColumn(GetBlockManager(), GetTableInfo(), i, start, types[i]);
-		stats.emplace_back(types[i]);
 		columns.push_back(std::move(column_data));
 	}
 }
@@ -201,7 +196,6 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 	append_types.push_back(target_type);
 	append_chunk.Initialize(Allocator::DefaultAllocator(), append_types);
 	auto &append_vector = append_chunk.data[0];
-	SegmentStatistics altered_col_stats(target_type);
 	while (true) {
 		// scan the table
 		scan_chunk.Reset();
@@ -212,7 +206,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 		// execute the expression
 		append_chunk.Reset();
 		executor.ExecuteExpression(scan_chunk, append_vector);
-		column_data->Append(altered_col_stats.statistics, append_state, append_vector, scan_chunk.size());
+		column_data->Append(append_state, append_vector, scan_chunk.size());
 	}
 
 	// set up the row_group based on this row_group
@@ -222,11 +216,9 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 		if (i == changed_idx) {
 			// this is the altered column: use the new column
 			row_group->columns.push_back(std::move(column_data));
-			row_group->stats.push_back(std::move(altered_col_stats)); // NOLINT: false positive
 		} else {
 			// this column was not altered: use the data directly
 			row_group->columns.push_back(columns[i]);
-			row_group->stats.emplace_back(stats[i].statistics.Copy());
 		}
 	}
 	row_group->Verify();
@@ -240,7 +232,6 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 	// construct a new column data for the new column
 	auto added_column =
 	    ColumnData::CreateColumn(GetBlockManager(), GetTableInfo(), columns.size(), start, new_column.Type());
-	SegmentStatistics added_col_stats(new_column.Type());
 
 	idx_t rows_to_write = this->count;
 	if (rows_to_write > 0) {
@@ -254,7 +245,7 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 				dummy_chunk.SetCardinality(rows_in_this_vector);
 				executor.ExecuteExpression(dummy_chunk, result);
 			}
-			added_column->Append(added_col_stats.statistics, state, result, rows_in_this_vector);
+			added_column->Append(state, result, rows_in_this_vector);
 		}
 	}
 
@@ -262,12 +253,8 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 	auto row_group = make_unique<RowGroup>(new_collection, this->start, this->count);
 	row_group->version_info = version_info;
 	row_group->columns = columns;
-	for (auto &stat : stats) {
-		row_group->stats.emplace_back(stat.statistics.Copy());
-	}
 	// now add the new column
 	row_group->columns.push_back(std::move(added_column));
-	row_group->stats.push_back(std::move(added_col_stats));
 
 	row_group->Verify();
 	return row_group;
@@ -280,13 +267,12 @@ unique_ptr<RowGroup> RowGroup::RemoveColumn(RowGroupCollection &new_collection, 
 
 	auto row_group = make_unique<RowGroup>(new_collection, this->start, this->count);
 	row_group->version_info = version_info;
-	row_group->columns = columns;
-	for (auto &stat : stats) {
-		row_group->stats.emplace_back(stat.statistics.Copy());
+	// copy over all columns except for the removed one
+	for (idx_t i = 0; i < columns.size(); i++) {
+		if (i != removed_column) {
+			row_group->columns.push_back(columns[i]);
+		}
 	}
-	// now remove the column
-	row_group->columns.erase(row_group->columns.begin() + removed_column);
-	row_group->stats.erase(row_group->stats.begin() + removed_column);
 
 	row_group->Verify();
 	return row_group;
@@ -321,10 +307,7 @@ bool RowGroup::CheckZonemap(TableFilterSet &filters, const vector<column_t> &col
 		auto column_index = entry.first;
 		auto &filter = entry.second;
 		auto base_column_index = column_ids[column_index];
-
-		auto propagate_result = filter->CheckStatistics(stats[base_column_index].statistics);
-		if (propagate_result == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
-		    propagate_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
+		if (!columns[base_column_index]->CheckZonemap(*filter)) {
 			return false;
 		}
 	}
@@ -675,7 +658,7 @@ void RowGroup::InitializeAppend(RowGroupAppendState &append_state) {
 void RowGroup::Append(RowGroupAppendState &state, DataChunk &chunk, idx_t append_count) {
 	// append to the current row_group
 	for (idx_t i = 0; i < columns.size(); i++) {
-		columns[i]->Append(stats[i].statistics, state.states[i], chunk.data[i], append_count);
+		columns[i]->Append(state.states[i], chunk.data[i], append_count);
 	}
 	state.offset_in_row_group += append_count;
 }
@@ -715,24 +698,18 @@ void RowGroup::UpdateColumn(TransactionData transaction, DataChunk &updates, Vec
 }
 
 unique_ptr<BaseStatistics> RowGroup::GetStatistics(idx_t column_idx) {
-	D_ASSERT(column_idx < stats.size());
-
-	lock_guard<mutex> slock(stats_lock);
-	return stats[column_idx].statistics.ToUnique();
+	D_ASSERT(column_idx < columns.size());
+	return columns[column_idx]->GetStatistics();
 }
 
 void RowGroup::MergeStatistics(idx_t column_idx, const BaseStatistics &other) {
-	D_ASSERT(column_idx < stats.size());
-
-	lock_guard<mutex> slock(stats_lock);
-	stats[column_idx].statistics.Merge(other);
+	D_ASSERT(column_idx < columns.size());
+	columns[column_idx]->MergeStatistics(other);
 }
 
 void RowGroup::MergeIntoStatistics(idx_t column_idx, BaseStatistics &other) {
-	D_ASSERT(column_idx < stats.size());
-
-	lock_guard<mutex> slock(stats_lock);
-	other.Merge(stats[column_idx].statistics);
+	D_ASSERT(column_idx < columns.size());
+	columns[column_idx]->MergeIntoStatistics(other);
 }
 
 RowGroupWriteData RowGroup::WriteToDisk(PartialBlockManager &manager,
@@ -777,7 +754,6 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, TableStatistics &gl
 	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
 		global_stats.GetStats(column_idx).Statistics().Merge(result.statistics[column_idx]);
 	}
-	row_group_pointer.statistics = std::move(result.statistics);
 
 	// construct the row group pointer and write the column meta data to disk
 	D_ASSERT(result.states.size() == columns.size());
@@ -851,9 +827,6 @@ void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &main_serializer) 
 	writer.WriteField<uint64_t>(pointer.row_start);
 	writer.WriteField<uint64_t>(pointer.tuple_count);
 	auto &serializer = writer.GetSerializer();
-	for (auto &stats : pointer.statistics) {
-		stats.Serialize(serializer);
-	}
 	for (auto &data_pointer : pointer.data_pointers) {
 		serializer.Write<block_id_t>(data_pointer.block_id);
 		serializer.Write<uint64_t>(data_pointer.offset);
@@ -871,12 +844,8 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &main_source, const vector<Lo
 
 	auto physical_columns = columns.size();
 	result.data_pointers.reserve(physical_columns);
-	result.statistics.reserve(physical_columns);
 
 	auto &source = reader.GetSource();
-	for (auto &col_type : columns) {
-		result.statistics.push_back(BaseStatistics::Deserialize(source, col_type));
-	}
 	for (idx_t i = 0; i < columns.size(); i++) {
 		BlockPointer pointer;
 		pointer.block_id = source.Read<block_id_t>();

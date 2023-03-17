@@ -21,9 +21,12 @@
 namespace duckdb {
 
 ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
-                       LogicalType type, ColumnData *parent)
-    : block_manager(block_manager), info(info), column_index(column_index), start(start_row), type(std::move(type)),
+                       LogicalType type_p, ColumnData *parent)
+    : block_manager(block_manager), info(info), column_index(column_index), start(start_row), type(std::move(type_p)),
       parent(parent), version(0) {
+	if (!parent) {
+		stats = make_unique<SegmentStatistics>(type);
+	}
 }
 
 ColumnData::ColumnData(ColumnData &other, idx_t start, ColumnData *parent)
@@ -31,6 +34,9 @@ ColumnData::ColumnData(ColumnData &other, idx_t start, ColumnData *parent)
       type(std::move(other.type)), parent(parent), version(parent ? parent->version + 1 : 0) {
 	if (other.updates) {
 		updates = make_unique<UpdateSegment>(*other.updates, *this);
+	}
+	if (other.stats) {
+		stats = make_unique<SegmentStatistics>(other.stats->statistics.Copy());
 	}
 	idx_t offset = 0;
 	for (auto &segment : other.data.Segments()) {
@@ -231,6 +237,46 @@ void ColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector 
 	AppendData(stats, state, vdata, count);
 }
 
+void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t count) {
+	if (parent || !stats) {
+		throw InternalException("ColumnData::Append called on a column with a parent or without stats");
+	}
+	Append(stats->statistics, state, vector, count);
+}
+
+bool ColumnData::CheckZonemap(TableFilter &filter) {
+	if (!stats) {
+		throw InternalException("ColumnData::CheckZonemap called on a column without stats");
+	}
+	auto propagate_result = filter.CheckStatistics(stats->statistics);
+	if (propagate_result == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
+	    propagate_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
+		return false;
+	}
+	return true;
+}
+
+unique_ptr<BaseStatistics> ColumnData::GetStatistics() {
+	if (!stats) {
+		throw InternalException("ColumnData::GetStatistics called on a column without stats");
+	}
+	return stats->statistics.ToUnique();
+}
+
+void ColumnData::MergeStatistics(const BaseStatistics &other) {
+	if (!stats) {
+		throw InternalException("ColumnData::MergeStatistics called on a column without stats");
+	}
+	return stats->statistics.Merge(other);
+}
+
+void ColumnData::MergeIntoStatistics(BaseStatistics &other) {
+	if (!stats) {
+		throw InternalException("ColumnData::MergeIntoStatistics called on a column without stats");
+	}
+	return other.Merge(stats->statistics);
+}
+
 void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	auto l = data.Lock();
 	if (data.IsEmpty(l)) {
@@ -421,9 +467,12 @@ void ColumnData::DeserializeColumn(Deserializer &source) {
 		auto block_pointer_block_id = source.Read<block_id_t>();
 		auto block_pointer_offset = source.Read<uint32_t>();
 		auto compression_type = source.Read<CompressionType>();
-		auto stats = BaseStatistics::Deserialize(source, type);
+		auto segment_stats = BaseStatistics::Deserialize(source, type);
+		if (stats) {
+			stats->statistics.Merge(segment_stats);
+		}
 
-		DataPointer data_pointer(std::move(stats));
+		DataPointer data_pointer(std::move(segment_stats));
 		data_pointer.row_start = row_start;
 		data_pointer.tuple_count = tuple_count;
 		data_pointer.block_pointer.block_id = block_pointer_block_id;
