@@ -2,12 +2,33 @@ import Base.Threads.@spawn
 
 mutable struct QueryResult
     handle::Ref{duckdb_result}
-    df::DataFrame
+	names::Vector{Symbol}
+	types::Vector{Type}
+    df::Union{Missing, DataFrame}
 
     function QueryResult(handle::Ref{duckdb_result})
-        df = toDataFrame(handle)
+    	column_count = duckdb_column_count(handle)
+		names::Vector{Symbol} = Vector()
+		for i in 1:column_count
+			name = sym(duckdb_column_name(handle, i))
+			if name in view(names, 1:(i - 1))
+				j = 1
+				new_name = Symbol(name, :_, j)
+				while new_name in view(names, 1:(i - 1))
+					j += 1
+					new_name = Symbol(name, :_, j)
+				end
+				name = new_name
+			end
+			push!(names, name)
+		end
+		types::Vector{Type} = Vector()
+		for i in 1:column_count
+			logical_type = LogicalType(duckdb_column_logical_type(handle, i))
+			push!(types, Union{Missing, duckdb_type_to_julia_type(logical_type)})
+		end
 
-        result = new(handle, df)
+        result = new(handle, names, types, missing)
         finalizer(_close_result, result)
         return result
     end
@@ -531,38 +552,26 @@ function convert_column(column_data::ColumnConversionData)
     return convert_column_loop(column_data, conversion_func, internal_type, target_type, conversion_loop_func)
 end
 
-function toDataFrame(result::Ref{duckdb_result})::DataFrame
-    column_count = duckdb_column_count(result)
-    # duplicate eliminate the names
-    names = Vector{Symbol}(undef, column_count)
-    for i in 1:column_count
-        name = sym(duckdb_column_name(result, i))
-        if name in view(names, 1:(i - 1))
-            j = 1
-            new_name = Symbol(name, :_, j)
-            while new_name in view(names, 1:(i - 1))
-                j += 1
-                new_name = Symbol(name, :_, j)
-            end
-            name = new_name
-        end
-        names[i] = name
-    end
-    # gather all the data chunks
-    chunk_count = duckdb_result_chunk_count(result[])
-    chunks::Vector{DataChunk} = []
-    for i in 1:chunk_count
-        push!(chunks, DataChunk(duckdb_result_get_chunk(result[], i), true))
-    end
+function toDataFrame(q::QueryResult)::DataFrame
+	if q.df === missing
+		# gather all the data chunks
+    	column_count = duckdb_column_count(q.handle)
+		chunk_count = duckdb_result_chunk_count(q.handle[])
+		chunks::Vector{DataChunk} = []
+		for i in 1:chunk_count
+			push!(chunks, DataChunk(duckdb_result_get_chunk(q.handle[], i), true))
+		end
 
-    df = DataFrame()
-    for i in 1:column_count
-        name = names[i]
-        logical_type = LogicalType(duckdb_column_logical_type(result, i))
-        column_data = ColumnConversionData(chunks, i, logical_type, nothing)
-        df[!, name] = convert_column(column_data)
-    end
-    return df
+		df = DataFrame()
+		for i in 1:column_count
+			name = q.names[i]
+			logical_type = LogicalType(duckdb_column_logical_type(q.handle, i))
+			column_data = ColumnConversionData(chunks, i, logical_type, nothing)
+			df[!, name] = convert_column(column_data)
+		end
+		q.df = df
+	end
+	return q.df
 end
 
 mutable struct PendingQueryResult
@@ -720,10 +729,10 @@ execute(db::DB, sql::AbstractString, params::DBInterface.StatementParams) = exec
 execute(db::DB, sql::AbstractString; kwargs...) = execute(db.main_connection, sql, values(kwargs))
 
 Tables.isrowtable(::Type{QueryResult}) = true
-Tables.columnnames(q::QueryResult) = Tables.columnnames(q.df)
+Tables.columnnames(q::QueryResult) = q.names
 
 function Tables.schema(q::QueryResult)
-    return Tables.schema(q.df)
+    return Tables.Schema(q.names, q.types)
 end
 
 Base.IteratorSize(::Type{QueryResult}) = Base.SizeUnknown()
@@ -734,14 +743,14 @@ function DBInterface.close!(q::QueryResult)
 end
 
 function Base.iterate(q::QueryResult)
-    return Base.iterate(eachrow(q.df))
+    return Base.iterate(eachrow(toDataFrame(q)))
 end
 
 function Base.iterate(q::QueryResult, state)
-    return Base.iterate(eachrow(q.df), state)
+    return Base.iterate(eachrow(toDataFrame(q)), state)
 end
 
-DataFrames.DataFrame(q::QueryResult) = DataFrame(q.df)
+DataFrames.DataFrame(q::QueryResult) = toDataFrame(q)
 
 "Return the last row insert id from the executed statement"
 function DBInterface.lastrowid(con::Connection)
@@ -781,4 +790,4 @@ function DBInterface.execute(con::Connection, sql::AbstractString)
     return execute(Stmt(con, sql))
 end
 
-Base.show(io::IO, result::DuckDB.QueryResult) = print(io, result.df)
+Base.show(io::IO, result::DuckDB.QueryResult) = print(io, toDataFrame(result))
