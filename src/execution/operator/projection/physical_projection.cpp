@@ -66,9 +66,7 @@ PhysicalProjection::CreateJoinProjection(vector<LogicalType> proj_types, const v
 		}
 	}
 
-	auto proj = make_unique<PhysicalProjection>(std::move(proj_types), std::move(proj_selects), estimated_cardinality);
-
-	return proj;
+	return make_unique<PhysicalProjection>(std::move(proj_types), std::move(proj_selects), estimated_cardinality);
 }
 
 string PhysicalProjection::ParamsToString() const {
