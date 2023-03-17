@@ -11,6 +11,7 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/function/copy_function.hpp"
+#include "duckdb/common/file_system.hpp"
 
 namespace duckdb {
 
