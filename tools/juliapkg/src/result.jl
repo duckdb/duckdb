@@ -5,6 +5,7 @@ mutable struct QueryResult
 	names::Vector{Symbol}
 	types::Vector{Type}
     df::Union{Missing, DataFrame}
+    chunk_index::UInt64
 
     function QueryResult(handle::Ref{duckdb_result})
     	column_count = duckdb_column_count(handle)
@@ -28,7 +29,7 @@ mutable struct QueryResult
 			push!(types, Union{Missing, duckdb_type_to_julia_type(logical_type)})
 		end
 
-        result = new(handle, names, types, missing)
+        result = new(handle, names, types, missing, 1)
         finalizer(_close_result, result)
         return result
     end
@@ -748,6 +749,16 @@ end
 
 function Base.iterate(q::QueryResult, state)
     return Base.iterate(eachrow(toDataFrame(q)), state)
+end
+
+function nextDataChunk(q::QueryResult)::Union{Missing, DataChunk}
+	chunk_count = duckdb_result_chunk_count(q.handle[])
+	if q.chunk_index > chunk_count
+		return missing
+	end
+	chunk = DataChunk(duckdb_result_get_chunk(q.handle[], q.chunk_index), true)
+	q.chunk_index += 1
+	return chunk
 end
 
 DataFrames.DataFrame(q::QueryResult) = toDataFrame(q)
