@@ -111,11 +111,19 @@ bool ExtensionHelper::CreateSuggestions(const string &extension_name, string &me
 }
 
 void ExtensionHelper::InstallExtension(DBConfig &config, FileSystem &fs, const string &extension, bool force_install) {
+#ifdef WASM_LOADABLE_EXTENSIONS
+	// Install is currently a no-op
+	return;
+#endif
 	string local_path = ExtensionDirectory(config, fs, nullptr);
 	InstallExtensionInternal(config, nullptr, fs, local_path, extension, force_install);
 }
 
 void ExtensionHelper::InstallExtension(ClientContext &context, const string &extension, bool force_install) {
+#ifdef WASM_LOADABLE_EXTENSIONS
+	// Install is currently a no-op
+	return;
+#endif
 	auto &config = DBConfig::GetConfig(context);
 	auto &fs = FileSystem::GetFileSystem(context);
 	string local_path = ExtensionDirectory(context);
