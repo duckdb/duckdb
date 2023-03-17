@@ -61,7 +61,7 @@ bool IteratorCurrentKey::operator==(const Key &k) const {
 	return true;
 }
 
-void Iterator::FindMinimum(const ARTNode &node) {
+void Iterator::FindMinimum(ARTNode &node) {
 
 	// reconstruct the prefix
 	auto node_prefix = node.GetPrefix(*art);

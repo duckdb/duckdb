@@ -377,7 +377,7 @@ void Leaf::Deserialize(ART &art, MetaBlockReader &reader) {
 	LeafSegment::New(art, row_ids.position);
 	auto segment = LeafSegment::Initialize(art, row_ids.position);
 	for (idx_t i = 0; i < count_p; i++) {
-		segment = segment->Append(art, count, reader.Read<uint8_t>());
+		segment = segment->Append(art, count, reader.Read<row_t>());
 	}
 	D_ASSERT(count_p == count);
 }

@@ -126,7 +126,7 @@ public:
 	//! Returns the capacity of a node
 	idx_t GetCapacity() const;
 	//! Returns a pointer to the prefix of a node
-	Prefix *GetPrefix(ART &art) const;
+	Prefix *GetPrefix(ART &art);
 	//! Returns the matching node type for a given count
 	static ARTNodeType GetARTNodeTypeByCount(const idx_t &count);
 

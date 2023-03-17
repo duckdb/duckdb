@@ -39,6 +39,7 @@ public:
 	//! Other constants
 	static constexpr idx_t BUFFER_ALLOCATION_SIZE = Storage::BLOCK_ALLOC_SIZE;
 	static constexpr uint8_t OFFSET_SHIFT = sizeof(uint8_t) * 8 * 4;
+	// we can approx. gain one MB by vacuuming this allocator
 	static constexpr uint8_t VACUUM_THRESHOLD = 4;
 
 	//! Constants for offset calculations

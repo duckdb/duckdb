@@ -58,7 +58,7 @@ public:
 	//! Scan the tree
 	bool Scan(const Key &bound, const idx_t &max_count, vector<row_t> &result_ids, const bool &is_inclusive);
 	//! Finds the minimum value of the tree
-	void FindMinimum(const ARTNode &node);
+	void FindMinimum(ARTNode &node);
 	//! Goes to the lower bound of the tree
 	bool LowerBound(ARTNode node, const Key &key, const bool &is_inclusive);
 

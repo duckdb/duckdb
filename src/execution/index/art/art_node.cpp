@@ -392,7 +392,12 @@ idx_t ARTNode::GetCapacity() const {
 	}
 }
 
-Prefix *ARTNode::GetPrefix(ART &art) const {
+Prefix *ARTNode::GetPrefix(ART &art) {
+
+	if (IsSwizzled()) {
+		auto block_info = GetBlockInfo();
+		Deserialize(art, block_info.block_id, block_info.offset);
+	}
 
 	D_ASSERT(!IsSwizzled());
 
