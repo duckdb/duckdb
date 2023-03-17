@@ -882,6 +882,7 @@ void BufferedCSVReaderOptions::Serialize(FieldWriter &writer) const {
 	// read options
 	writer.WriteList<string>(names);
 	writer.WriteField<idx_t>(skip_rows);
+	writer.WriteField<bool>(skip_rows_set);
 	writer.WriteField<idx_t>(maximum_line_size);
 	writer.WriteField<bool>(normalize_names);
 	writer.WriteListNoReference<bool>(force_not_null);
@@ -915,6 +916,7 @@ void BufferedCSVReaderOptions::Deserialize(FieldReader &reader) {
 	// read options
 	names = reader.ReadRequiredList<string>();
 	skip_rows = reader.ReadRequired<idx_t>();
+	skip_rows_set = reader.ReadRequired<bool>();
 	maximum_line_size = reader.ReadRequired<idx_t>();
 	normalize_names = reader.ReadRequired<bool>();
 	force_not_null = reader.ReadRequiredList<bool>();

@@ -145,6 +145,7 @@ void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value 
 		}
 	} else if (loption == "skip") {
 		skip_rows = ParseInteger(value, loption);
+		skip_rows_set = true;
 	} else if (loption == "max_line_size" || loption == "maximum_line_size") {
 		maximum_line_size = ParseInteger(value, loption);
 	} else if (loption == "sample_chunk_size") {

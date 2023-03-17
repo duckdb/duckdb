@@ -441,11 +441,14 @@ void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types
 
 					idx_t start_row = original_options.skip_rows;
 					idx_t consistent_rows = 0;
-					idx_t num_cols = 0;
+					idx_t num_cols = sniffed_column_counts.empty() ? 0 : sniffed_column_counts[0];
 
 					for (idx_t row = 0; row < sniffed_column_counts.size(); row++) {
 						if (sniffed_column_counts[row] == num_cols) {
 							consistent_rows++;
+						} else if (original_options.skip_rows_set) {
+							// if the user supplied us with the skip option we cannot alter its
+							break;
 						} else {
 							num_cols = sniffed_column_counts[row];
 							start_row = row + original_options.skip_rows;

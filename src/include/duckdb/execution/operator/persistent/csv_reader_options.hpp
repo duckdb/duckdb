@@ -83,6 +83,8 @@ struct BufferedCSVReaderOptions {
 
 	//! How many leading rows to skip
 	idx_t skip_rows = 0;
+	//! Whether or not the skip_rows is set by the user
+	bool skip_rows_set = false;
 	//! Maximum CSV line size: specified because if we reach this amount, we likely have wrong delimiters (default: 2MB)
 	//! note that this is the guaranteed line length that will succeed, longer lines may be accepted if slightly above
 	idx_t maximum_line_size = 2097152;
