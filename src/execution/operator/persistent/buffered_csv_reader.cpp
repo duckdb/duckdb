@@ -447,7 +447,7 @@ void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types
 						if (sniffed_column_counts[row] == num_cols) {
 							consistent_rows++;
 						} else if (original_options.skip_rows_set) {
-							// if the user supplied us with the skip option we cannot alter its
+							// if the user provided the skip option we cannot change the start row
 							break;
 						} else {
 							num_cols = sniffed_column_counts[row];
