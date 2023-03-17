@@ -386,6 +386,24 @@ test_that("Window sum with Partition, order, and window boundaries works", {
     expect_equal(res, expected_result)
 })
 
+test_that("Window boundaries boundaries are CaSe INsenSItive", {
+#     SUM(x) OVER (partition by b ROWS BETWEEN 3 PRECEDING AND CURRENT ROW)
+    rel_a <- rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 1, 1, 2, 2, 2, 2)))
+    partitions <- list(expr_reference("b"))
+    order_by_a <- list(rapi_rel_order(rel_a, list(expr_reference("a"))))
+    sum_func <- expr_function("sum", list(expr_reference("a")), order_bys=list(expr_reference("a")))
+    sum_window <- expr_window(sum_func, partitions=partitions,
+                                        window_boundary_start="exPr_PREceding_rOWs",
+                                        window_boundary_end="cURrEnt_rOw_RoWs",
+                                        start_expr=list(expr_constant(2)))
+    expr_set_alias(sum_window, "window_result")
+    window_proj <- rel_project(rel_a, list(expr_reference("a"), sum_window))
+    proj_order <-rel_order(window_proj, list(expr_reference("a")))
+    res <- rel_to_altrep(proj_order)
+    expected_result <- data.frame(a=c(1:8), window_result=c(1, 3, 6, 9, 5, 11, 18, 21))
+    expect_equal(res, expected_result)
+})
+
 test_that("Window avg with a filter expression and partition works", {
 #   select a, b, avg(a) FILTER (WHERE x % 2 = 0) over (partition by b)
     DBI::dbExecute(con, "CREATE OR REPLACE MACRO mod(a, b) as a % b")
@@ -409,6 +427,20 @@ test_that("Window lag function works as expected", {
 #   select a, b, lag(a, 1) OVER () order by a
     rel_a <- rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
     lag <- expr_function("lag", list(expr_reference("a")))
+    window_lag <- expr_window(lag, offset=list(expr_constant(1)))
+	  expr_set_alias(window_lag, "lag")
+	  proj_window <- rel_project(rel_a, list(expr_reference("a"), window_lag))
+    order_over_window <- rapi_rel_order(proj_window, list(expr_reference("a")))
+    expected_result <- data.frame(a=c(1:8), lag=c(NA, 1, 2, 3, 4, 5, 6, 7))
+    res <- rel_to_altrep(order_over_window)
+    expect_equal(res, expected_result)
+})
+
+
+test_that("function name for window is case insensitive", {
+#   select a, b, lag(a, 1) OVER () order by a
+    rel_a <- rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
+    lag <- expr_function("LAG", list(expr_reference("a")))
     window_lag <- expr_window(lag, offset=list(expr_constant(1)))
 	  expr_set_alias(window_lag, "lag")
 	  proj_window <- rel_project(rel_a, list(expr_reference("a"), window_lag))

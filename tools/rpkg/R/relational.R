@@ -153,10 +153,28 @@ rel_aggregate <- rapi_rel_aggregate
 #' rel2 <- rel_order(rel, list(expr_reference("hp")))
 rel_order <- rapi_rel_order
 
+
+
 expr_window <- function(window_function, partitions=list(),
 				window_boundary_start="unbounded_preceding",
-				window_boundary_end="current_row_range", start_expr = list(), end_expr=list(), offset_expr=list(), default_expr=list()) {
-	rapi_expr_window(window_function, partitions, window_boundary_start, window_boundary_end, start_expr, end_expr, offset_expr, default_expr)
+				window_boundary_end="current_row_range",
+				start_expr = list(), end_expr=list(), offset_expr=list(), default_expr=list()) {
+  expr_window_(window_function, partitions, tolower(window_boundary_start), tolower(window_boundary_end), start_expr, end_expr, offset_expr, default_expr)
+}
+
+window_boundaries <- c("unbounded_preceding",
+                       "unbounded_following",
+                       "current_row_range",
+                       "current_row_rows",
+                       "expr_preceding_rows",
+                       "expr_following_rows",
+                       "expr_preceding_range")
+
+expr_window_ <- function (window_function, partitions=list(), window_boundary_start=window_boundaries,
+          window_boundary_end=window_boundaries, start_expr = list(), end_expr=list(), offset_expr=list(), default_expr=list()) {
+    window_boundary_start <- match.arg(window_boundary_start)
+    window_boundary_end <- match.arg(window_boundary_end)
+    rapi_expr_window(window_function, partitions, window_boundary_start, window_boundary_end, start_expr, end_expr, offset_expr, default_expr)
 }
 
 #' Lazily INNER join two DuckDB relation objects

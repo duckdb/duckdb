@@ -6,9 +6,6 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE integers (a int, b int);
-
-statement ok
 CREATE TABLE empsalary (depname varchar, empno bigint, salary int, enroll_date date)
 
 statement ok
