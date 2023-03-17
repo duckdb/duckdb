@@ -2,32 +2,32 @@ import Base.Threads.@spawn
 
 mutable struct QueryResult
     handle::Ref{duckdb_result}
-	names::Vector{Symbol}
-	types::Vector{Type}
+    names::Vector{Symbol}
+    types::Vector{Type}
     df::Union{Missing, DataFrame}
     chunk_index::UInt64
 
     function QueryResult(handle::Ref{duckdb_result})
-    	column_count = duckdb_column_count(handle)
-		names::Vector{Symbol} = Vector()
-		for i in 1:column_count
-			name = sym(duckdb_column_name(handle, i))
-			if name in view(names, 1:(i - 1))
-				j = 1
-				new_name = Symbol(name, :_, j)
-				while new_name in view(names, 1:(i - 1))
-					j += 1
-					new_name = Symbol(name, :_, j)
-				end
-				name = new_name
-			end
-			push!(names, name)
-		end
-		types::Vector{Type} = Vector()
-		for i in 1:column_count
-			logical_type = LogicalType(duckdb_column_logical_type(handle, i))
-			push!(types, Union{Missing, duckdb_type_to_julia_type(logical_type)})
-		end
+        column_count = duckdb_column_count(handle)
+        names::Vector{Symbol} = Vector()
+        for i in 1:column_count
+            name = sym(duckdb_column_name(handle, i))
+            if name in view(names, 1:(i - 1))
+                j = 1
+                new_name = Symbol(name, :_, j)
+                while new_name in view(names, 1:(i - 1))
+                    j += 1
+                    new_name = Symbol(name, :_, j)
+                end
+                name = new_name
+            end
+            push!(names, name)
+        end
+        types::Vector{Type} = Vector()
+        for i in 1:column_count
+            logical_type = LogicalType(duckdb_column_logical_type(handle, i))
+            push!(types, Union{Missing, duckdb_type_to_julia_type(logical_type)})
+        end
 
         result = new(handle, names, types, missing, 1)
         finalizer(_close_result, result)
@@ -554,25 +554,33 @@ function convert_column(column_data::ColumnConversionData)
 end
 
 function toDataFrame(q::QueryResult)::DataFrame
-	if q.df === missing
-		# gather all the data chunks
-    	column_count = duckdb_column_count(q.handle)
-		chunk_count = duckdb_result_chunk_count(q.handle[])
-		chunks::Vector{DataChunk} = []
-		for i in 1:chunk_count
-			push!(chunks, DataChunk(duckdb_result_get_chunk(q.handle[], i), true))
-		end
+    if q.df === missing
+        if q.chunk_index != 1
+            throw(NotImplementedException("Converting to a DataFrame is not supported after calling nextDataChunk"))
+        end
+        # gather all the data chunks
+        column_count = duckdb_column_count(q.handle)
+        chunks::Vector{DataChunk} = []
+        while true
+            # fetch the next chunk
+            chunk = DuckDB.nextDataChunk(q)
+            if chunk === missing
+                # consumed all chunks
+                break
+            end
+            push!(chunks, chunk)
+        end
 
-		df = DataFrame()
-		for i in 1:column_count
-			name = q.names[i]
-			logical_type = LogicalType(duckdb_column_logical_type(q.handle, i))
-			column_data = ColumnConversionData(chunks, i, logical_type, nothing)
-			df[!, name] = convert_column(column_data)
-		end
-		q.df = df
-	end
-	return q.df
+        df = DataFrame()
+        for i in 1:column_count
+            name = q.names[i]
+            logical_type = LogicalType(duckdb_column_logical_type(q.handle, i))
+            column_data = ColumnConversionData(chunks, i, logical_type, nothing)
+            df[!, name] = convert_column(column_data)
+        end
+        q.df = df
+    end
+    return q.df
 end
 
 mutable struct PendingQueryResult
@@ -581,11 +589,27 @@ mutable struct PendingQueryResult
 
     function PendingQueryResult(stmt::Stmt)
         pending_handle = Ref{duckdb_pending_result}()
-        ret = duckdb_pending_prepared(stmt.handle, pending_handle)
+        ret = executePending(stmt.handle, pending_handle, stmt.result_type)
         result = new(pending_handle[], ret == DuckDBSuccess)
         finalizer(_close_pending_result, result)
         return result
     end
+end
+
+function executePending(
+    handle::duckdb_prepared_statement,
+    pending_handle::Ref{duckdb_pending_result},
+    ::Type{MaterializedResult}
+)
+    return duckdb_pending_prepared(handle, pending_handle)
+end
+
+function executePending(
+    handle::duckdb_prepared_statement,
+    pending_handle::Ref{duckdb_pending_result},
+    ::Type{StreamResult}
+)
+    return duckdb_pending_prepared_streaming(handle, pending_handle)
 end
 
 function _close_pending_result(pending::PendingQueryResult)
@@ -717,7 +741,7 @@ function DBInterface.close!(stmt::Stmt)
 end
 
 function execute(con::Connection, sql::AbstractString, params::DBInterface.StatementParams)
-    stmt = Stmt(con, sql)
+    stmt = Stmt(con, sql, MaterializedResult)
     try
         return execute(stmt, params)
     finally
@@ -752,13 +776,25 @@ function Base.iterate(q::QueryResult, state)
 end
 
 function nextDataChunk(q::QueryResult)::Union{Missing, DataChunk}
-	chunk_count = duckdb_result_chunk_count(q.handle[])
-	if q.chunk_index > chunk_count
-		return missing
-	end
-	chunk = DataChunk(duckdb_result_get_chunk(q.handle[], q.chunk_index), true)
-	q.chunk_index += 1
-	return chunk
+    if duckdb_result_is_streaming(q.handle[])
+        chunk_handle = duckdb_stream_fetch_chunk(q.handle[])
+        if chunk_handle == C_NULL
+            return missing
+        end
+        chunk = DataChunk(chunk_handle, true)
+        if get_size(chunk) == 0
+            return missing
+        end
+        return chunk
+    else
+        chunk_count = duckdb_result_chunk_count(q.handle[])
+        if q.chunk_index > chunk_count
+            return missing
+        end
+        chunk = DataChunk(duckdb_result_get_chunk(q.handle[], q.chunk_index), true)
+    end
+    q.chunk_index += 1
+    return chunk
 end
 
 DataFrames.DataFrame(q::QueryResult) = toDataFrame(q)
@@ -777,7 +813,8 @@ Prepare an SQL statement given as a string in the DuckDB database; returns a `Du
 See `DBInterface.execute`(@ref) for information on executing a prepared statement and passing parameters to bind.
 A `DuckDB.Stmt` object can be closed (resources freed) using `DBInterface.close!`(@ref).
 """
-DBInterface.prepare(con::Connection, sql::AbstractString) = Stmt(con, sql)
+DBInterface.prepare(con::Connection, sql::AbstractString, result_type::Type) = Stmt(con, sql, result_type)
+DBInterface.prepare(con::Connection, sql::AbstractString) = DBInterface.prepare(con, sql, MaterializedResult)
 DBInterface.prepare(db::DB, sql::AbstractString) = DBInterface.prepare(db.main_connection, sql)
 
 """
@@ -797,8 +834,12 @@ function DBInterface.execute(stmt::Stmt, params::DBInterface.StatementParams)
     return execute(stmt, params)
 end
 
-function DBInterface.execute(con::Connection, sql::AbstractString)
-    return execute(Stmt(con, sql))
+function DBInterface.execute(con::Connection, sql::AbstractString, result_type::Type)
+    return execute(Stmt(con, sql, result_type))
 end
+
+DBInterface.execute(con::Connection, sql::AbstractString) = DBInterface.execute(con, sql, MaterializedResult)
+DBInterface.execute(db::DB, sql::AbstractString, result_type::Type) =
+    DBInterface.execute(db.main_connection, sql, result_type)
 
 Base.show(io::IO, result::DuckDB.QueryResult) = print(io, toDataFrame(result))
