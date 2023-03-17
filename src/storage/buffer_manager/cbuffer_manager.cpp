@@ -24,16 +24,9 @@ BufferHandle CBufferManager::Allocate(idx_t block_size, bool can_destroy, shared
 	shared_ptr<BlockHandle> temp_block; // Doesn't this cause a memory-leak, or at the very least heap-use-after-free???
 	shared_ptr<BlockHandle> *handle_p = block ? block : &temp_block;
 
-	// Create an ExternalFileBuffer, which uses a callback to retrieve the allocation when Buffer() is called
-	auto buffer = make_unique<ExternalFileBuffer>(custom_allocator, alloc_size);
-
-	// Used to manage the used_memory counter with RAII
-	BufferPoolReservation reservation(this->GetBufferPool());
-	reservation.size = alloc_size;
-
-	// create a new block pointer for this block
-	*handle_p = make_shared<BlockHandle>(*block_manager, ++temporary_id, std::move(buffer), can_destroy, alloc_size,
-	                                     std::move(reservation));
+	// create a new (UNLOADED) block pointer for this block
+	*handle_p = make_shared<BlockHandle>(*block_manager, ++temporary_id);
+	(*handle_p)->memory_usage = alloc_size;
 	return Pin(*handle_p);
 }
 
@@ -42,13 +35,12 @@ BufferPool &CBufferManager::GetBufferPool() {
 }
 
 shared_ptr<BlockHandle> CBufferManager::RegisterSmallMemory(idx_t block_size) {
-	auto buffer = make_unique<ExternalFileBuffer>(custom_allocator, block_size);
+	auto buffer = make_unique<ExternalFileBuffer>(custom_allocator, config, block_size);
 
 	// create a new block pointer for this block
-	BufferPoolReservation reservation(this->GetBufferPool());
-	reservation.size = block_size;
-	return make_shared<BlockHandle>(*block_manager, ++temporary_id, std::move(buffer), false, block_size,
-	                                std::move(reservation));
+	auto block = make_shared<BlockHandle>(*block_manager, ++temporary_id);
+	block->memory_usage = block_size;
+	return block;
 }
 
 void CBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) {
@@ -70,25 +62,48 @@ void CBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_siz
 }
 
 BufferHandle CBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
-	if (!handle->buffer) {
-		handle->buffer = make_unique<ExternalFileBuffer>(custom_allocator, handle->memory_usage);
+	idx_t required_memory;
+	{
+		// lock the block
+		lock_guard<mutex> lock(handle->lock);
+		// check if the block is already loaded
+		if (handle->state == BlockState::BLOCK_LOADED) {
+			// the block is loaded, increment the reader count and return a pointer to the handle
+			auto &buffer = (ExternalFileBuffer &)*handle->buffer;
+			config.pin_func(config.data, buffer.ExternalBufferHandle());
+			handle->readers++;
+			return handle->Load(handle);
+		}
+		required_memory = handle->memory_usage;
 	}
-	D_ASSERT(handle->buffer);
-	auto &buffer = (ExternalFileBuffer &)*handle->buffer;
-	auto allocation = (data_ptr_t)(config.pin_func(config.data, buffer.ExternalBufferHandle()));
-	if (handle->readers == 0) {
-		// FIXME: this is not protecting anything really,
-		// if the number goes up, then goes down to 0 again, this will be called twice for a single buffer
-		buffer.SetAllocation(allocation);
-	}
-	handle->readers++;
+	// Load the block, setting the allocation
+	lock_guard<mutex> lock(handle->lock);
+	D_ASSERT(handle->readers == 0);
+	handle->readers = 1;
+	auto new_buffer = make_unique<ExternalFileBuffer>(custom_allocator, config, required_memory);
+	TempBufferPoolReservation reservation(*buffer_pool, required_memory);
+	handle->memory_charge = std::move(reservation);
+	auto allocation = (data_ptr_t)(config.pin_func(config.data, new_buffer->ExternalBufferHandle()));
+
+	// We have to do this manually, so 'Load' will just return the buffer
+	new_buffer->SetAllocation(allocation);
+	handle->buffer = std::move(new_buffer);
+	handle->state = BlockState::BLOCK_LOADED;
 	return handle->Load(handle);
 }
 
 void CBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
+	lock_guard<mutex> lock(handle->lock);
+	if (!handle->buffer) {
+		return;
+	}
 	auto &buffer = (ExternalFileBuffer &)*handle->buffer;
+	D_ASSERT(handle->readers > 0);
 	handle->readers--;
 	config.unpin_func(config.data, buffer.ExternalBufferHandle());
+	if (handle->readers == 0 && handle->can_destroy) {
+		handle.reset();
+	}
 }
 
 idx_t CBufferManager::GetUsedMemory() const {

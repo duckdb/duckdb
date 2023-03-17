@@ -7,13 +7,13 @@ namespace duckdb {
 
 class ExternalFileBuffer : public FileBuffer {
 public:
-	ExternalFileBuffer(Allocator &allocator, uint64_t size)
-	    : FileBuffer(allocator, FileBufferType::EXTERNAL_BUFFER, size), allocation(nullptr) {
+	ExternalFileBuffer(Allocator &allocator, CBufferManagerConfig &config, uint64_t size)
+	    : FileBuffer(allocator, FileBufferType::EXTERNAL_BUFFER, size), allocation(nullptr), config(config) {
 		// Prevent the FileBuffer destructor from running
 		internal_buffer = nullptr;
 	}
 	~ExternalFileBuffer() {
-		buffer = nullptr;
+		allocator.FreeData(buffer, size);
 	}
 
 public:
@@ -31,17 +31,13 @@ public:
 		return buffer;
 	}
 	void SetAllocation(data_ptr_t allocation) {
-		// FIXME: this is called when the readers count is 0, which can happen multiple times
-		// that's why it only checks that the pointer isn't the same
-		if (allocation != this->allocation) {
-			D_ASSERT(!this->allocation);
-			this->allocation = allocation;
-		}
+		this->allocation = allocation;
 	}
 
 private:
 	//! The allocation associated with the buffer
 	data_ptr_t allocation;
+	CBufferManagerConfig &config;
 };
 
 } // namespace duckdb
