@@ -1223,7 +1223,7 @@ struct LCMOperator {
 		if (!TryMultiplyOperator::Operation<TA, TB, TR>(left, right / gcd(left, right), result)) {
 			throw OutOfRangeException("lcm value is out of range");
 		}
-		return result; // left * (right / gcd(left, right));
+		return (result < 0) ? -result : result;
 	}
 };
 
