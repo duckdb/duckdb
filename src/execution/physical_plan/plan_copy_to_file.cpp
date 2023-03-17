@@ -19,6 +19,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile
 	copy->use_tmp_file = op.use_tmp_file;
 	copy->overwrite_or_ignore = op.overwrite_or_ignore;
 	copy->fileformat = op.fileformat;
+	copy->use_uuid_format = op.use_uuid_format;
+	copy->format_position = op.format_position;
 	copy->per_thread_output = op.per_thread_output;
 	copy->partition_output = op.partition_output;
 	copy->partition_columns = op.partition_columns;

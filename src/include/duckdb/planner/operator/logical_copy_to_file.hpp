@@ -25,6 +25,8 @@ public:
 	std::string file_path;
 	bool use_tmp_file;
 	string fileformat;
+	bool use_uuid_format;
+	idx_t format_position;
 	bool overwrite_or_ignore;
 	bool per_thread_output;
 

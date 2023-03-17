@@ -25,6 +25,8 @@ public:
 	string file_path;
 	bool use_tmp_file;
 	string fileformat;
+	idx_t format_position;
+	bool use_uuid_format;
 	bool overwrite_or_ignore;
 	bool parallel;
 	bool per_thread_output;
@@ -42,6 +44,7 @@ public:
 
 public:
 	// Sink interface
+	string CreateFilename(const FileSystem &fs, const string &path, const string &extension, idx_t writer_offset) const;
 	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
 	                    DataChunk &input) const override;
 	void Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const override;

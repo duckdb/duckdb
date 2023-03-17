@@ -86,10 +86,8 @@ COPY test5 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a));
 IO Error: Directory
 
 # Test where fileformat template param has no value
-statement error
+statement ok
 COPY test4 TO '__TEST_DIR__/novalue' (FORMAT PARQUET, PARTITION_BY (a), FILEFORMAT);
-----
-Not implemented Error: Unrecognized option for PARQUET: FILEFORMAT
 
 # Test where overwrite_or_ignore param has no value
 statement ok
