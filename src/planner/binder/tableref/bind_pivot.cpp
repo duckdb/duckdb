@@ -25,10 +25,10 @@ static void ConstructPivots(PivotRef &ref, idx_t pivot_idx, vector<unique_ptr<Pa
 	for (auto &entry : pivot.entries) {
 		unique_ptr<ParsedExpression> expr = current_expr ? current_expr->Copy() : nullptr;
 		string name = entry.alias;
-		D_ASSERT(entry.values.size() == pivot.names.size());
+		D_ASSERT(entry.values.size() == pivot.pivot_expressions.size());
 		for (idx_t v = 0; v < entry.values.size(); v++) {
 			auto &value = entry.values[v];
-			auto column_ref = make_unique<ColumnRefExpression>(pivot.names[v]);
+			auto column_ref = pivot.pivot_expressions[v]->Copy();
 			auto constant_value = make_unique<ConstantExpression>(value);
 			auto comp_expr = make_unique<ComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
 			                                                   std::move(column_ref), std::move(constant_value));
@@ -126,8 +126,8 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 		}
 		total_pivots *= pivot.entries.size();
 		// add the pivoted column to the columns that have been handled
-		for (auto &pivot_name : pivot.names) {
-			handled_columns.insert(pivot_name);
+		for (auto &pivot_name : pivot.pivot_expressions) {
+			ExtractPivotExpressions(*pivot_name, handled_columns);
 		}
 		value_set_t pivots;
 		for (auto &entry : pivot.entries) {
@@ -143,9 +143,9 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 				    ref, StringUtil::Format("The value \"%s\" was specified multiple times in the IN clause",
 				                            val.ToString())));
 			}
-			if (entry.values.size() != pivot.names.size()) {
+			if (entry.values.size() != pivot.pivot_expressions.size()) {
 				throw ParserException("PIVOT IN list - inconsistent amount of rows - expected %d but got %d",
-				                      pivot.names.size(), entry.values.size());
+				                      pivot.pivot_expressions.size(), entry.values.size());
 			}
 			pivots.insert(val);
 		}
@@ -284,7 +284,7 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 	vector<unique_ptr<ParsedExpression>> unnest_name_children;
 	unnest_name_children.push_back(std::move(unpivot_name_expr));
 	auto unnest_name_expr = make_unique<FunctionExpression>("unnest", std::move(unnest_name_children));
-	unnest_name_expr->alias = unpivot.names[0];
+	unnest_name_expr->alias = unpivot.unpivot_names[0];
 	select_node->select_list.push_back(std::move(unnest_name_expr));
 
 	// construct the UNNEST expression for the set of unpivoted columns
