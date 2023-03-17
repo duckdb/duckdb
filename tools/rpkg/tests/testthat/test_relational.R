@@ -337,6 +337,7 @@ test_that("R semantics for arithmetics sum function are respected", {
 })
 
 test_that("R can do comparisons with constant strings", {
+   con <- dbConnect(duckdb::duckdb())
    dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
    test_df_a <- rel_from_df(con, data.frame(a=c("hello", "world")), TRUE)
    filter_rel <- rel_filter(test_df_a, list(expr_function("eq", list(expr_reference("a"), expr_constant("hello", TRUE)))))
@@ -354,4 +355,19 @@ test_that("R can do comparisons with constant strings and respects the original 
    expect_equal(res, data.frame(a=c("hello")))
 })
 
+test_that("R strings are not garbage collected", {
+   con <- dbConnect(duckdb::duckdb())
+   tmp_func <- function(rel_df) {
+       hello <- "hello"
+       const_hello <- expr_constant(hello, TRUE)
+       filter_rel <- rel_filter(rel_df, list(expr_function("eq", list(expr_reference("a"), const_hello))))
+       browser()
+       filter_rel
+   }
+   dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
+   rel_df <- rel_from_df(con, data.frame(a=c("hello", "world")), TRUE)
+   filter_rel <- tmp_func(rel_df)
+   res <- rel_to_altrep(filter_rel)
+   expect_equal(res, data.frame(a=c("hello")))
+})
 
