@@ -847,7 +847,7 @@ static bool IsSymbolicLink(const string &path) {
 	auto attributes = WindowsGetFileAttributes(path);
 	if (attributes == INVALID_FILE_ATTRIBUTES)
 		return false;
-	return attributes & FILE_ATTRIBUTE_REPARSE_POINT);
+	return attributes & FILE_ATTRIBUTE_REPARSE_POINT;
 #endif
 }
 
