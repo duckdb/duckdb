@@ -10,7 +10,15 @@ statement ok con1
 CREATE SCHEMA test;
 
 statement ok con1
+CREATE OR REPLACE SCHEMA test;
+
+statement ok con1
 CREATE TABLE test.hello(i INTEGER);
+
+statement error con1
+CREATE OR REPLACE SCHEMA test;
+----
+there are entries that depend on it
 
 # in one transaction drop the table and then the schema (without cascade)
 statement ok con1
