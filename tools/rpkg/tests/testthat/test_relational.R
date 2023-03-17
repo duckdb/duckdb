@@ -356,17 +356,26 @@ test_that("R can do comparisons with constant strings and respects the original 
 })
 
 test_that("R strings are not garbage collected", {
+  pkgload::load_all()
+  library(pryr)
    con <- dbConnect(duckdb::duckdb())
+   fill_memory <- hello <- paste0(c(0:1e7), "memory_filler")
+   fill_memory_2 <- paste0(c(1:1e7), "jsdjkdkjsd")
+   fill_memory_3 <- paste0(c(1:1e7), "sljdfgiur")
+   fill_memory_4 <- paste0(c(1:1e7), "o4ljkvf,nsdf")
    tmp_func <- function(rel_df) {
-       hello <- "hello"
-       const_hello <- expr_constant(hello, TRUE)
+       hello <- paste0(c(1:1e7), "hello")
+       const_hello <- expr_constant(hello[[500000]], TRUE)
+       message(hello[[500000]])
        filter_rel <- rel_filter(rel_df, list(expr_function("eq", list(expr_reference("a"), const_hello))))
-       browser()
+       rm(hello)
+       gc()
        filter_rel
    }
    dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
-   rel_df <- rel_from_df(con, data.frame(a=c("hello", "world")), TRUE)
+   rel_df <- rel_from_df(con, data.frame(a=c("500000hello", "world")), TRUE)
    filter_rel <- tmp_func(rel_df)
+   gc()
    res <- rel_to_altrep(filter_rel)
    expect_equal(res, data.frame(a=c("hello")))
 })
