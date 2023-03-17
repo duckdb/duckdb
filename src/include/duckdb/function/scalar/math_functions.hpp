@@ -130,5 +130,4 @@ struct LCMFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-
 } // namespace duckdb

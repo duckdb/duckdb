@@ -1172,13 +1172,13 @@ TA gcd(TA left, TA right) {
 	TA a = left;
 	TA b = right;
 	while (true) {
-		if(a == 0) {
+		if (a == 0) {
 			return (b < 0) ? -b : b;
 		}
 		b %= a;
 
-		if(b == 0) {
-			return (a < 0)? -a : a;
+		if (b == 0) {
+			return (a < 0) ? -a : a;
 		}
 		a %= b;
 	}
@@ -1195,15 +1195,15 @@ void GCDFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet funcs("gcd");
 
 	funcs.AddFunction(ScalarFunction({LogicalType::TINYINT, LogicalType::TINYINT}, LogicalType::TINYINT,
-	                                     ScalarFunction::BinaryFunction<int8_t, int8_t, int8_t, GCDOperator>));
+	                                 ScalarFunction::BinaryFunction<int8_t, int8_t, int8_t, GCDOperator>));
 	funcs.AddFunction(ScalarFunction({LogicalType::SMALLINT, LogicalType::SMALLINT}, LogicalType::SMALLINT,
-	                                     ScalarFunction::BinaryFunction<int16_t, int16_t, int16_t, GCDOperator>));
+	                                 ScalarFunction::BinaryFunction<int16_t, int16_t, int16_t, GCDOperator>));
 	funcs.AddFunction(ScalarFunction({LogicalType::INTEGER, LogicalType::INTEGER}, LogicalType::INTEGER,
-	                                     ScalarFunction::BinaryFunction<int32_t, int32_t, int32_t, GCDOperator>));
+	                                 ScalarFunction::BinaryFunction<int32_t, int32_t, int32_t, GCDOperator>));
 	funcs.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT}, LogicalType::BIGINT,
-	                                     ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, GCDOperator>));
+	                                 ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, GCDOperator>));
 	funcs.AddFunction(ScalarFunction({LogicalType::HUGEINT, LogicalType::HUGEINT}, LogicalType::HUGEINT,
-	                                     ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, GCDOperator>));
+	                                 ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, GCDOperator>));
 
 	set.AddFunction(funcs);
 }
@@ -1216,14 +1216,14 @@ void GCDFun::RegisterFunction(BuiltinFunctions &set) {
 struct LCMOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA left, TB right) {
-		if(left == right && left == 0) {
+		if (left == right && left == 0) {
 			return 0;
 		}
 		TR result;
 		if (!TryMultiplyOperator::Operation<TA, TB, TR>(left, right / gcd(left, right), result)) {
 			throw OutOfRangeException("lcm value is out of range");
 		}
-		return result; //left * (right / gcd(left, right));
+		return result; // left * (right / gcd(left, right));
 	}
 };
 
@@ -1231,15 +1231,15 @@ void LCMFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet funcs("lcm");
 
 	funcs.AddFunction(ScalarFunction({LogicalType::TINYINT, LogicalType::TINYINT}, LogicalType::TINYINT,
-	                                     ScalarFunction::BinaryFunction<int8_t, int8_t, int8_t, LCMOperator>));
+	                                 ScalarFunction::BinaryFunction<int8_t, int8_t, int8_t, LCMOperator>));
 	funcs.AddFunction(ScalarFunction({LogicalType::SMALLINT, LogicalType::SMALLINT}, LogicalType::SMALLINT,
-	                                     ScalarFunction::BinaryFunction<int16_t, int16_t, int16_t, LCMOperator>));
+	                                 ScalarFunction::BinaryFunction<int16_t, int16_t, int16_t, LCMOperator>));
 	funcs.AddFunction(ScalarFunction({LogicalType::INTEGER, LogicalType::INTEGER}, LogicalType::INTEGER,
-	                                     ScalarFunction::BinaryFunction<int32_t, int32_t, int32_t, LCMOperator>));
+	                                 ScalarFunction::BinaryFunction<int32_t, int32_t, int32_t, LCMOperator>));
 	funcs.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT}, LogicalType::BIGINT,
-	                                     ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, LCMOperator>));
+	                                 ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, LCMOperator>));
 	funcs.AddFunction(ScalarFunction({LogicalType::HUGEINT, LogicalType::HUGEINT}, LogicalType::HUGEINT,
-	                                     ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, LCMOperator>));
+	                                 ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, LCMOperator>));
 
 	set.AddFunction(funcs);
 }
