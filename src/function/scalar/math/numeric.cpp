@@ -1173,12 +1173,12 @@ TA gcd(TA left, TA right) {
 	TA b = right;
 	while (true) {
 		if (a == 0) {
-			return (b < 0) ? -b : b;
+			return TryAbsOperator::Operation<TA, TA>(b);
 		}
 		b %= a;
 
 		if (b == 0) {
-			return (a < 0) ? -a : a;
+			return TryAbsOperator::Operation<TA, TA>(a);
 		}
 		a %= b;
 	}
@@ -1223,7 +1223,7 @@ struct LCMOperator {
 		if (!TryMultiplyOperator::Operation<TA, TB, TR>(left, right / gcd(left, right), result)) {
 			throw OutOfRangeException("lcm value is out of range");
 		}
-		return (result < 0) ? -result : result;
+		return TryAbsOperator::Operation<TB, TB>(result);
 	}
 };
 
