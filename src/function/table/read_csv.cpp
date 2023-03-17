@@ -38,13 +38,15 @@ void ReadCSVData::InitializeFiles(ClientContext &context, const vector<string> &
 
 void ReadCSVData::FinalizeRead(ClientContext &context) {
 	BaseCSVData::Finalize();
+	// Here we identify if we can run this CSV file on parallel or not.
 	bool null_or_empty = options.delimiter.empty() || options.escape.empty() || options.quote.empty() ||
 	                     options.delimiter[0] == '\0' || options.escape[0] == '\0' || options.quote[0] == '\0';
 	bool complex_options = options.delimiter.size() > 1 || options.escape.size() > 1 || options.quote.size() > 1;
 	bool not_supported_options =
 	    options.union_by_name || options.include_file_name || options.include_parsed_hive_partitions;
 
-	if (null_or_empty || not_supported_options || complex_options || options.new_line == NewLineIdentifier::MIX) {
+	if (!options.run_parallel || null_or_empty || not_supported_options || complex_options ||
+	    options.new_line == NewLineIdentifier::MIX) {
 		// not supported for parallel CSV reading
 		single_threaded = true;
 	}
@@ -161,6 +163,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			options.include_file_name = BooleanValue::Get(kv.second);
 		} else if (loption == "hive_partitioning") {
 			options.include_parsed_hive_partitions = BooleanValue::Get(kv.second);
+		} else if (loption == "parallel") {
+			options.run_parallel = BooleanValue::Get(kv.second);
 		} else {
 			options.SetReadOption(loption, kv.second, names);
 		}
