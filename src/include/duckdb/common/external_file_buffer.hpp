@@ -8,20 +8,10 @@ namespace duckdb {
 class ExternalFileBuffer : public FileBuffer {
 public:
 	ExternalFileBuffer(Allocator &allocator, CBufferManagerConfig &config, uint64_t size)
-	    : FileBuffer(allocator, FileBufferType::EXTERNAL_BUFFER, size), allocation(nullptr), config(config) {
-		// Prevent the FileBuffer destructor from running
-		internal_buffer = nullptr;
-	}
-	~ExternalFileBuffer() {
-		allocator.FreeData(buffer, size);
+	    : FileBuffer(allocator, FileBufferType::EXTERNAL_BUFFER, size), config(config) {
 	}
 
 public:
-	void Init() final override {
-		FileBuffer::Init();
-		allocation = nullptr;
-	}
-
 	data_ptr_t Buffer() const final override {
 		// Use a callback to retrieve the actual allocation from an external buffer handle
 		D_ASSERT(allocation);

@@ -70,7 +70,8 @@ BufferHandle CBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 		if (handle->state == BlockState::BLOCK_LOADED) {
 			// the block is loaded, increment the reader count and return a pointer to the handle
 			auto &buffer = (ExternalFileBuffer &)*handle->buffer;
-			config.pin_func(config.data, buffer.ExternalBufferHandle());
+			data_ptr_t allocation = (data_ptr_t)config.pin_func(config.data, buffer.ExternalBufferHandle());
+			buffer.SetAllocation(allocation);
 			handle->readers++;
 			return handle->Load(handle);
 		}
@@ -94,6 +95,9 @@ BufferHandle CBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 
 void CBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 	lock_guard<mutex> lock(handle->lock);
+	if (handle->state == BlockState::BLOCK_UNLOADED) {
+		return;
+	}
 	if (!handle->buffer) {
 		return;
 	}
@@ -136,21 +140,21 @@ void CBufferManager::DeleteTemporaryFile(block_id_t block_id) {
 data_ptr_t CBufferManager::CBufferAllocatorAllocate(PrivateAllocatorData *private_data, idx_t size) {
 	auto &data = (CBufferAllocatorData &)*private_data;
 	auto &config = data.manager.config;
-	duckdb_buffer buffer = config.allocate_func(config.data, size);
+	duckdb_buffer buffer = config.allocate_func(config.data, size, Storage::BLOCK_HEADER_SIZE);
 	return (data_ptr_t)buffer;
 }
 
 void CBufferManager::CBufferAllocatorFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
 	auto &data = (CBufferAllocatorData &)*private_data;
 	auto &config = data.manager.config;
-	config.destroy_func(config.data, pointer);
+	config.destroy_func(config.data, pointer, Storage::BLOCK_HEADER_SIZE);
 }
 
 data_ptr_t CBufferManager::CBufferAllocatorRealloc(PrivateAllocatorData *private_data, data_ptr_t pointer,
                                                    idx_t old_size, idx_t size) {
 	auto &data = (CBufferAllocatorData &)*private_data;
 	auto &config = data.manager.config;
-	auto buffer = config.reallocate_func(config.data, pointer, old_size, size);
+	auto buffer = config.reallocate_func(config.data, pointer, old_size, size, Storage::BLOCK_HEADER_SIZE);
 	return (data_ptr_t)buffer;
 }
 

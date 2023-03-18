@@ -416,9 +416,10 @@ Prototypes used by the callback buffer manager
 * void *data: the user-provided state/context
 */
 typedef void *duckdb_buffer;
-typedef duckdb_buffer (*duckdb_allocate_func)(void *data, idx_t size);
-typedef duckdb_buffer (*duckdb_reallocate_func)(void *data, duckdb_buffer buffer, idx_t old_size, idx_t new_size);
-typedef void (*duckdb_destroy_func)(void *data, duckdb_buffer buffer);
+typedef duckdb_buffer (*duckdb_allocate_func)(void *data, idx_t size, idx_t header_bytes);
+typedef duckdb_buffer (*duckdb_reallocate_func)(void *data, duckdb_buffer buffer, idx_t old_size, idx_t new_size,
+                                                idx_t header_bytes);
+typedef void (*duckdb_destroy_func)(void *data, duckdb_buffer buffer, idx_t header_bytes);
 typedef void *(*duckdb_pin_func)(void *data, duckdb_buffer buffer);
 typedef void (*duckdb_unpin_func)(void *data, duckdb_buffer buffer);
 typedef idx_t (*duckdb_max_memory_func)(void *data);
