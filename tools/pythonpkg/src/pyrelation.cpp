@@ -1,4 +1,5 @@
 #include "duckdb_python/pyrelation.hpp"
+#include "duckdb_python/pytype.hpp"
 #include "duckdb_python/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb/parser/qualified_name.hpp"
@@ -147,18 +148,25 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const py::object &expr) {
 	vector<LogicalType> types_filter;
 	// Collect the list of types specified that will be our filter
 	for (auto &item : list) {
-		string item_str = py::str(item);
-		auto type = DefaultTypeGenerator::GetDefaultType(item_str);
-		if (type == LogicalTypeId::INVALID) {
-			throw NotImplementedException("We can not filter on this type yet");
+		LogicalType type;
+		if (py::isinstance<py::str>(item)) {
+			string type_str = py::str(item);
+			type = TransformStringToLogicalType(type_str, *rel->context.GetContext());
+		} else if (py::isinstance<DuckDBPyType>(item)) {
+			auto *type_p = item.cast<DuckDBPyType *>();
+			type = type_p->Type();
+		} else {
+			string actual_type = py::str(item.get_type());
+			throw InvalidInputException("Can only project on objects of type DuckDBPyType or str, not '%s'",
+			                            actual_type);
 		}
-		types_filter.push_back(type);
+		types_filter.push_back(std::move(type));
 	}
 
 	string projection = "";
 	for (idx_t i = 0; i < types.size(); i++) {
 		auto &type = types[i];
-		// This is ugly as hell, but it should at least work
+		// Check if any of the types in the filter match the current type
 		if (std::find_if(types_filter.begin(), types_filter.end(),
 		                 [&](const LogicalType &filter) { return filter.id() == type.id(); }) != types_filter.end()) {
 			if (!projection.empty()) {
