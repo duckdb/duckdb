@@ -1226,7 +1226,7 @@ void GCDFun::RegisterFunction(BuiltinFunctions &set) {
 struct LCMOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA left, TB right) {
-		if (left == right && left == 0) {
+		if (left == 0 || right == 0) {
 			return 0;
 		}
 		TR result;
