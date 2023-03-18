@@ -61,9 +61,6 @@ public:
 	RowGroup(RowGroup &row_group, RowGroupCollection &collection, idx_t start);
 	~RowGroup();
 
-	//! The index within the segment tree
-	idx_t index;
-
 private:
 	//! The RowGroupCollection this row-group is a part of
 	RowGroupCollection &collection;

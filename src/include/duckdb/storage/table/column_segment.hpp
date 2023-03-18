@@ -38,8 +38,6 @@ class ColumnSegment : public SegmentBase<ColumnSegment> {
 public:
 	~ColumnSegment();
 
-	//! The index within the segment tree
-	idx_t index;
 	//! The database instance
 	DatabaseInstance &db;
 	//! The type stored in the column
