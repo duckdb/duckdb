@@ -1214,6 +1214,8 @@ void GCDFun::RegisterFunction(BuiltinFunctions &set) {
 	                                 ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, GCDOperator>));
 
 	set.AddFunction(funcs);
+	funcs.name = "greatest_common_multiple";
+	set.AddFunction(funcs);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1249,6 +1251,8 @@ void LCMFun::RegisterFunction(BuiltinFunctions &set) {
 	funcs.AddFunction(ScalarFunction({LogicalType::HUGEINT, LogicalType::HUGEINT}, LogicalType::HUGEINT,
 	                                 ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, LCMOperator>));
 
+	set.AddFunction(funcs);
+	funcs.name = "least_common_multiple";
 	set.AddFunction(funcs);
 }
 
