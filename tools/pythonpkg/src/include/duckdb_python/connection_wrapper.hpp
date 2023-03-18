@@ -21,8 +21,8 @@ public:
 	                                          shared_ptr<DuckDBPyConnection> conn = nullptr);
 	static shared_ptr<DuckDBPyType> MapType(shared_ptr<DuckDBPyType> key, shared_ptr<DuckDBPyType> value,
 	                                        shared_ptr<DuckDBPyConnection> conn = nullptr);
-	static shared_ptr<DuckDBPyType> StructType(py::object fields, shared_ptr<DuckDBPyConnection> conn = nullptr);
-	static shared_ptr<DuckDBPyType> UnionType(py::object members, shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static shared_ptr<DuckDBPyType> StructType(const py::object &fields, shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static shared_ptr<DuckDBPyType> UnionType(const py::object &members, shared_ptr<DuckDBPyConnection> conn = nullptr);
 	static shared_ptr<DuckDBPyType> EnumType(const string &name, shared_ptr<DuckDBPyType> type,
 	                                         const py::list &values_p, shared_ptr<DuckDBPyConnection> conn = nullptr);
 	static shared_ptr<DuckDBPyType> DecimalType(int width, int scale, shared_ptr<DuckDBPyConnection> conn = nullptr);

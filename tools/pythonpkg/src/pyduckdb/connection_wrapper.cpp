@@ -3,11 +3,12 @@
 
 namespace duckdb {
 
-shared_ptr<DuckDBPyType> PyConnectionWrapper::UnionType(py::object members, shared_ptr<DuckDBPyConnection> conn) {
+shared_ptr<DuckDBPyType> PyConnectionWrapper::UnionType(const py::object &members,
+                                                        shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
-	return conn->UnionType(std::move(members));
+	return conn->UnionType(members);
 }
 
 shared_ptr<DuckDBPyType> PyConnectionWrapper::EnumType(const string &name, shared_ptr<DuckDBPyType> type,
@@ -48,11 +49,12 @@ shared_ptr<DuckDBPyType> PyConnectionWrapper::MapType(shared_ptr<DuckDBPyType> k
 	return conn->MapType(std::move(key), std::move(value));
 }
 
-shared_ptr<DuckDBPyType> PyConnectionWrapper::StructType(py::object fields, shared_ptr<DuckDBPyConnection> conn) {
+shared_ptr<DuckDBPyType> PyConnectionWrapper::StructType(const py::object &fields,
+                                                         shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
-	return conn->StructType(std::move(fields));
+	return conn->StructType(fields);
 }
 
 shared_ptr<DuckDBPyType> PyConnectionWrapper::Type(const string &type_str, shared_ptr<DuckDBPyConnection> conn) {
