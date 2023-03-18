@@ -6,6 +6,7 @@ include_directories(${pybind11_INCLUDE_DIR})
 include_directories(${PYTHON_INCLUDE_DIRS})
 
 add_subdirectory(pyrelation)
+add_subdirectory(pyconnection)
 add_subdirectory(common)
 add_subdirectory(pandas)
 
@@ -17,6 +18,7 @@ add_library(
   pyrelation.cpp
   dataframe.cpp
   pyresult.cpp
+  pytype.cpp
   map.cpp
   vector_conversion.cpp
   python_conversion.cpp

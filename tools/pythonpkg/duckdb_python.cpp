@@ -66,6 +66,23 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	      py::arg("connection") = py::none())
 	    .def("duplicate", &PyConnectionWrapper::Cursor, "Create a duplicate of the current connection",
 	         py::arg("connection") = py::none())
+	    .def("sqltype", &PyConnectionWrapper::Type, "Create a type object from 'type_str'", py::arg("type_str"),
+	         py::arg("connection") = py::none())
+	    .def("struct_type", &PyConnectionWrapper::StructType, "Create a struct type object from 'fields'",
+	         py::arg("fields"), py::arg("connection") = py::none())
+	    .def("union_type", &PyConnectionWrapper::UnionType, "Create a union type object from 'members'",
+	         py::arg("members").none(false), py::arg("connection") = py::none())
+	    .def("string_type", &PyConnectionWrapper::StringType, "Create a string type with an optional collation",
+	         py::arg("collation") = string(), py::arg("connection") = py::none())
+	    .def("enum_type", &PyConnectionWrapper::EnumType,
+	         "Create an enum type of underlying 'type', consisting of the list of 'values'", py::arg("name"),
+	         py::arg("type"), py::arg("values"), py::arg("connection") = py::none())
+	    .def("decimal_type", &PyConnectionWrapper::DecimalType, "Create a decimal type with 'width' and 'scale'",
+	         py::arg("width"), py::arg("scale"), py::arg("connection") = py::none())
+	    .def("array_type", &PyConnectionWrapper::ArrayType, "Create an array type object of 'type'",
+	         py::arg("type").none(false), py::arg("connection") = py::none())
+	    .def("map_type", &PyConnectionWrapper::MapType, "Create a map type object from 'key_type' and 'value_type'",
+	         py::arg("key").none(false), py::arg("value").none(false), py::arg("connection") = py::none())
 	    .def("execute", &PyConnectionWrapper::Execute,
 	         "Execute the given SQL query, optionally using prepared statements with parameters set", py::arg("query"),
 	         py::arg("parameters") = py::none(), py::arg("multiple_parameter_sets") = false,
@@ -189,9 +206,49 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         py::arg("connection") = py::none());
 }
 
+static void DefineBaseTypes(py::handle &m) {
+	m.attr("tinyint") = DuckDBPyType(LogicalType::TINYINT);
+	m.attr("smallint") = DuckDBPyType(LogicalType::SMALLINT);
+	m.attr("integer") = DuckDBPyType(LogicalType::INTEGER);
+	m.attr("bigint") = DuckDBPyType(LogicalType::BIGINT);
+
+	m.attr("sqlnull") = DuckDBPyType(LogicalType::SQLNULL);
+	m.attr("boolean") = DuckDBPyType(LogicalType::BOOLEAN);
+	m.attr("tinyint") = DuckDBPyType(LogicalType::TINYINT);
+	m.attr("utinyint") = DuckDBPyType(LogicalType::UTINYINT);
+	m.attr("smallint") = DuckDBPyType(LogicalType::SMALLINT);
+	m.attr("usmallint") = DuckDBPyType(LogicalType::USMALLINT);
+	m.attr("integer") = DuckDBPyType(LogicalType::INTEGER);
+	m.attr("uinteger") = DuckDBPyType(LogicalType::UINTEGER);
+	m.attr("bigint") = DuckDBPyType(LogicalType::BIGINT);
+	m.attr("ubigint") = DuckDBPyType(LogicalType::UBIGINT);
+	m.attr("hugeint") = DuckDBPyType(LogicalType::HUGEINT);
+	m.attr("uuid") = DuckDBPyType(LogicalType::UUID);
+	m.attr("float") = DuckDBPyType(LogicalType::FLOAT);
+	m.attr("double") = DuckDBPyType(LogicalType::DOUBLE);
+	m.attr("date") = DuckDBPyType(LogicalType::DATE);
+
+	m.attr("timestamp") = DuckDBPyType(LogicalType::TIMESTAMP);
+	m.attr("timestamp_ms") = DuckDBPyType(LogicalType::TIMESTAMP_MS);
+	m.attr("timestamp_ns") = DuckDBPyType(LogicalType::TIMESTAMP_NS);
+	m.attr("timestamp_s") = DuckDBPyType(LogicalType::TIMESTAMP_S);
+
+	m.attr("time") = DuckDBPyType(LogicalType::TIME);
+
+	m.attr("time_tz") = DuckDBPyType(LogicalType::TIME_TZ);
+	m.attr("timestamp_tz") = DuckDBPyType(LogicalType::TIMESTAMP_TZ);
+
+	m.attr("varchar") = DuckDBPyType(LogicalType::VARCHAR);
+
+	m.attr("blob") = DuckDBPyType(LogicalType::BLOB);
+	m.attr("bit") = DuckDBPyType(LogicalType::BIT);
+	m.attr("interval") = DuckDBPyType(LogicalType::INTERVAL);
+}
+
 PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	DuckDBPyRelation::Initialize(m);
 	DuckDBPyConnection::Initialize(m);
+	DuckDBPyType::Initialize(m);
 	PythonObject::Initialize();
 
 	InitializeConnectionMethods(m);
@@ -209,6 +266,8 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	m.attr("apilevel") = "1.0";
 	m.attr("threadsafety") = 1;
 	m.attr("paramstyle") = "qmark";
+
+	DefineBaseTypes(m);
 
 	py::enum_<duckdb::ExplainType>(m, "ExplainType")
 	    .value("STANDARD", duckdb::ExplainType::EXPLAIN_STANDARD)
