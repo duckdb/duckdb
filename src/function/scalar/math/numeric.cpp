@@ -1171,6 +1171,14 @@ template <class TA>
 TA gcd(TA left, TA right) {
 	TA a = left;
 	TA b = right;
+
+	// This protects the following modulo operations from a corner case,
+	// where we would get a runtime error due to an integer overflow.
+	if ((left == NumericLimits<TA>::Minimum() && right == -1) ||
+	    (left == -1 && right == NumericLimits<TA>::Minimum())) {
+		return 1;
+	}
+
 	while (true) {
 		if (a == 0) {
 			return TryAbsOperator::Operation<TA, TA>(b);
