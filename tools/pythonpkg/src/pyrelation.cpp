@@ -163,17 +163,24 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const py::object &expr) {
 		types_filter.push_back(std::move(type));
 	}
 
+	if (types_filter.empty()) {
+		throw InvalidInputException("List of types can not be empty!");
+	}
+
 	string projection = "";
 	for (idx_t i = 0; i < types.size(); i++) {
 		auto &type = types[i];
 		// Check if any of the types in the filter match the current type
 		if (std::find_if(types_filter.begin(), types_filter.end(),
-		                 [&](const LogicalType &filter) { return filter.id() == type.id(); }) != types_filter.end()) {
+		                 [&](const LogicalType &filter) { return filter == type; }) != types_filter.end()) {
 			if (!projection.empty()) {
 				projection += ", ";
 			}
 			projection += names[i];
 		}
+	}
+	if (projection.empty()) {
+		throw InvalidInputException("None of the columns matched the provided type filter!");
 	}
 	return ProjectFromExpression(projection);
 }

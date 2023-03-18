@@ -153,6 +153,35 @@ class TestRelation(object):
         rel = duckdb.project(test_df, 'i')
         assert rel.execute().fetchall() == [(1,), (2,), (3,), (4,)]
 
+    def test_project_on_types(self, duckdb_cursor):
+        con = duckdb_cursor
+        con.sql("""
+            create table tbl(
+                c0 BIGINT,
+                c1 TINYINT,
+                c2 VARCHAR,
+                c3 TIMESTAMP,
+                c4 VARCHAR,
+                c5 STRUCT(a VARCHAR, b BIGINT)
+            )
+            """)
+        rel = con.table("tbl")
+        # select only the varchar columns
+        projection = rel.project(["varchar"])
+        assert projection.columns == ["c2", "c4"]
+
+        # select bigint, tinyint and a type that isn't there
+        projection = rel.project([duckdb.bigint, "tinyint", con.struct_type({'a': duckdb.varchar, 'b': duckdb.tinyint})])
+        assert projection.columns == ["c0", "c1"]
+
+        ## select with empty projection list, not possible
+        with pytest.raises(duckdb.Error):
+            projection = rel.project([])
+        
+        # select with type-filter that matches nothing
+        with pytest.raises(duckdb.Error):
+            projection = rel.project([duckdb.boolean])
+
     def test_df_alias(self,duckdb_cursor):
         test_df = pd.DataFrame.from_dict({"i":[1, 2, 3, 4], "j":["one", "two", "three", "four"]})
         rel = duckdb.alias(test_df, 'dfzinho')
