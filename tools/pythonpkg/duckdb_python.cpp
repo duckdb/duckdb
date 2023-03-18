@@ -207,11 +207,6 @@ static void InitializeConnectionMethods(py::module_ &m) {
 }
 
 static void DefineBaseTypes(py::handle &m) {
-	m.attr("tinyint") = DuckDBPyType(LogicalType::TINYINT);
-	m.attr("smallint") = DuckDBPyType(LogicalType::SMALLINT);
-	m.attr("integer") = DuckDBPyType(LogicalType::INTEGER);
-	m.attr("bigint") = DuckDBPyType(LogicalType::BIGINT);
-
 	m.attr("sqlnull") = DuckDBPyType(LogicalType::SQLNULL);
 	m.attr("boolean") = DuckDBPyType(LogicalType::BOOLEAN);
 	m.attr("tinyint") = DuckDBPyType(LogicalType::TINYINT);
