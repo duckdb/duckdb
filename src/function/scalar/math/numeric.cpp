@@ -1168,7 +1168,7 @@ void EvenFun::RegisterFunction(BuiltinFunctions &set) {
 
 // should be replaced with std::gcd in a newer C++ standard
 template <class TA>
-TA gcd(TA left, TA right) {
+TA Gcd(TA left, TA right) {
 	TA a = left;
 	TA b = right;
 
@@ -1195,7 +1195,7 @@ TA gcd(TA left, TA right) {
 struct GCDOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA left, TB right) {
-		return gcd(left, right);
+		return Gcd(left, right);
 	}
 };
 
@@ -1230,7 +1230,7 @@ struct LCMOperator {
 			return 0;
 		}
 		TR result;
-		if (!TryMultiplyOperator::Operation<TA, TB, TR>(left, right / gcd(left, right), result)) {
+		if (!TryMultiplyOperator::Operation<TA, TB, TR>(left, right / Gcd(left, right), result)) {
 			throw OutOfRangeException("lcm value is out of range");
 		}
 		return TryAbsOperator::Operation<TR, TR>(result);
