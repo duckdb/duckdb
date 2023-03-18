@@ -1050,7 +1050,7 @@ py::list DuckDBPyRelation::ColumnTypes() {
 	AssertRelation();
 	py::list res;
 	for (auto &col : rel->Columns()) {
-		res.append(col.Type().ToString());
+		res.append(DuckDBPyType(col.Type()));
 	}
 	return res;
 }
