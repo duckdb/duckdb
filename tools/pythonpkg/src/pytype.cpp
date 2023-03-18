@@ -3,10 +3,10 @@
 
 namespace duckdb {
 
-DuckDBPyType::DuckDBPyType(LogicalType type) : type(type) {
+DuckDBPyType::DuckDBPyType(LogicalType type) : type(std::move(type)) {
 }
 
-bool DuckDBPyType::Equals(shared_ptr<DuckDBPyType> other) const {
+bool DuckDBPyType::Equals(const shared_ptr<DuckDBPyType> &other) const {
 	if (!other) {
 		return false;
 	}

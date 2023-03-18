@@ -2,13 +2,13 @@
 
 namespace duckdb {
 
-shared_ptr<DuckDBPyType> DuckDBPyConnection::MapType(shared_ptr<DuckDBPyType> key_type,
-                                                     shared_ptr<DuckDBPyType> value_type) {
+shared_ptr<DuckDBPyType> DuckDBPyConnection::MapType(const shared_ptr<DuckDBPyType> &key_type,
+                                                     const shared_ptr<DuckDBPyType> &value_type) {
 	auto map_type = LogicalType::MAP(key_type->Type(), value_type->Type());
 	return make_shared<DuckDBPyType>(map_type);
 }
 
-shared_ptr<DuckDBPyType> DuckDBPyConnection::ArrayType(shared_ptr<DuckDBPyType> type) {
+shared_ptr<DuckDBPyType> DuckDBPyConnection::ArrayType(const shared_ptr<DuckDBPyType> &type) {
 	auto array_type = LogicalType::LIST(type->Type());
 	return make_shared<DuckDBPyType>(array_type);
 }
@@ -68,7 +68,7 @@ shared_ptr<DuckDBPyType> DuckDBPyConnection::UnionType(const py::object &members
 	return make_shared<DuckDBPyType>(union_type);
 }
 
-shared_ptr<DuckDBPyType> DuckDBPyConnection::EnumType(const string &name, shared_ptr<DuckDBPyType> type,
+shared_ptr<DuckDBPyType> DuckDBPyConnection::EnumType(const string &name, const shared_ptr<DuckDBPyType> &type,
                                                       const py::list &values_p) {
 	return nullptr;
 

@@ -78,11 +78,13 @@ public:
 	                                      const py::object &sample_size = py::none(),
 	                                      const py::object &maximum_depth = py::none());
 
-	shared_ptr<DuckDBPyType> MapType(shared_ptr<DuckDBPyType> key_type, shared_ptr<DuckDBPyType> value_type);
+	shared_ptr<DuckDBPyType> MapType(const shared_ptr<DuckDBPyType> &key_type,
+	                                 const shared_ptr<DuckDBPyType> &value_type);
 	shared_ptr<DuckDBPyType> StructType(const py::object &fields);
-	shared_ptr<DuckDBPyType> ArrayType(shared_ptr<DuckDBPyType> type);
+	shared_ptr<DuckDBPyType> ArrayType(const shared_ptr<DuckDBPyType> &type);
 	shared_ptr<DuckDBPyType> UnionType(const py::object &members);
-	shared_ptr<DuckDBPyType> EnumType(const string &name, shared_ptr<DuckDBPyType> type, const py::list &values_p);
+	shared_ptr<DuckDBPyType> EnumType(const string &name, const shared_ptr<DuckDBPyType> &type,
+	                                  const py::list &values_p);
 	shared_ptr<DuckDBPyType> DecimalType(int width, int scale);
 	shared_ptr<DuckDBPyType> StringType(const string &collation = string());
 	shared_ptr<DuckDBPyType> Type(const string &type_str);

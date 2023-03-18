@@ -13,7 +13,7 @@ public:
 	static void Initialize(py::handle &m);
 
 public:
-	bool Equals(shared_ptr<DuckDBPyType> other) const;
+	bool Equals(const shared_ptr<DuckDBPyType> &other) const;
 	bool EqualsString(const string &type_str) const;
 	string ToString() const;
 	const LogicalType &Type() const;

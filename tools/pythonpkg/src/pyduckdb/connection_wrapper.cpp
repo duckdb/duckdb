@@ -11,12 +11,12 @@ shared_ptr<DuckDBPyType> PyConnectionWrapper::UnionType(const py::object &member
 	return conn->UnionType(members);
 }
 
-shared_ptr<DuckDBPyType> PyConnectionWrapper::EnumType(const string &name, shared_ptr<DuckDBPyType> type,
+shared_ptr<DuckDBPyType> PyConnectionWrapper::EnumType(const string &name, const shared_ptr<DuckDBPyType> &type,
                                                        const py::list &values, shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
-	return conn->EnumType(name, std::move(type), values);
+	return conn->EnumType(name, type, values);
 }
 
 shared_ptr<DuckDBPyType> PyConnectionWrapper::DecimalType(int width, int scale, shared_ptr<DuckDBPyConnection> conn) {
@@ -33,20 +33,21 @@ shared_ptr<DuckDBPyType> PyConnectionWrapper::StringType(const string &collation
 	return conn->StringType(collation);
 }
 
-shared_ptr<DuckDBPyType> PyConnectionWrapper::ArrayType(shared_ptr<DuckDBPyType> type,
+shared_ptr<DuckDBPyType> PyConnectionWrapper::ArrayType(const shared_ptr<DuckDBPyType> &type,
                                                         shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
-	return conn->ArrayType(std::move(type));
+	return conn->ArrayType(type);
 }
 
-shared_ptr<DuckDBPyType> PyConnectionWrapper::MapType(shared_ptr<DuckDBPyType> key, shared_ptr<DuckDBPyType> value,
+shared_ptr<DuckDBPyType> PyConnectionWrapper::MapType(const shared_ptr<DuckDBPyType> &key,
+                                                      const shared_ptr<DuckDBPyType> &value,
                                                       shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
-	return conn->MapType(std::move(key), std::move(value));
+	return conn->MapType(key, value);
 }
 
 shared_ptr<DuckDBPyType> PyConnectionWrapper::StructType(const py::object &fields,
