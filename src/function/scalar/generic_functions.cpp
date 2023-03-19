@@ -12,6 +12,7 @@ void BuiltinFunctions::RegisterGenericFunctions() {
 	Register<ConstantOrNull>();
 	Register<CurrentSettingFun>();
 	Register<SystemFun>();
+	Register<AssertFun>();
 }
 
 } // namespace duckdb
