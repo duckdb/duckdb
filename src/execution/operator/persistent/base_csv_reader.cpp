@@ -320,7 +320,11 @@ bool BaseCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column, string &error
 	}
 
 	if (column < return_types.size() && mode != ParserMode::SNIFFING_DIALECT) {
-		if (options.ignore_errors) {
+		if (options.null_padding) {
+			for (; column < return_types.size(); column++) {
+				FlatVector::SetNull(parse_chunk.data[column], parse_chunk.size(), true);
+			}
+		} else if (options.ignore_errors) {
 			column = 0;
 			return false;
 		} else {

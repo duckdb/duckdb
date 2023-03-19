@@ -112,6 +112,8 @@ struct BufferedCSVReaderOptions {
 	idx_t buffer_size = CSVBuffer::INITIAL_BUFFER_SIZE_COLOSSAL;
 	//! Decimal separator when reading as numeric
 	string decimal_separator = ".";
+	//! Whether or not to pad rows that do not have enough columns with NULL values
+	bool null_padding = true;
 
 	//===--------------------------------------------------------------------===//
 	// WriteCSVOptions

@@ -18,12 +18,28 @@ FROM read_csv_auto('data/csv/issue6764.csv', all_varchar=true, header=false, ski
 1	a	alice
 2	b	bob
 
-query I
-FROM read_csv_auto('data/csv/issue6764.csv', all_varchar=true, header=false, skip=0)
+query IIII
+FROM read_csv_auto('data/csv/issue6764.csv')
 ----
-one,two,three,four
-1,a,alice
-2,b,bob
+1	a	alice	NULL
+2	b	bob	NULL
 
-statement error
+query IIII
+FROM read_csv_auto('data/csv/issue6764.csv', all_varchar=true)
+----
+1	a	alice	NULL
+2	b	bob	NULL
+
+query IIII
+FROM read_csv_auto('data/csv/issue6764.csv', header=false)
+----
+one	two	three	four
+1	a	alice	NULL
+2	b	bob	NULL
+
+query IIII
 FROM read_csv_auto('data/csv/issue6764.csv', all_varchar=true, header=false, skip=0, sep=',')
+----
+one	two	three	four
+1	a	alice	NULL
+2	b	bob	NULL

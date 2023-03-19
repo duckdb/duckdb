@@ -184,6 +184,8 @@ void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value 
 		if (decimal_separator != "." && decimal_separator != ",") {
 			throw BinderException("Unsupported parameter for DECIMAL_SEPARATOR: should be '.' or ','");
 		}
+	} else if (loption == "null_padding") {
+		null_padding = ParseBoolean(value, loption);
 	} else {
 		throw BinderException("Unrecognized option for CSV reader \"%s\"", loption);
 	}

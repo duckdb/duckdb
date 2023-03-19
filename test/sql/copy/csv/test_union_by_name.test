@@ -128,7 +128,9 @@ NULL	300	Friday	data/csv/union-by-name/ubn4.csv
 
 # Test hive_partition with union_by_name 
 statement error
-SELECT * FROM read_csv_auto('data/csv/union-by-name/part=[ab]/*',HIVE_PARTITIONING=TRUE)
+SELECT * FROM read_csv_auto('data/csv/union-by-name/part=[ab]/*',HIVE_PARTITIONING=TRUE, null_padding=0)
+----
+expected 3 values per row, but got 2
 
 query IIII
 SELECT id, value, a, part
@@ -141,4 +143,3 @@ ORDER BY id
 # Test hive_partition with union_by_name 
 statement error
 SELECT * FROM read_csv_auto('data/csv/union-by-name/*[!a]/*',HIVE_PARTITIONING=TRUE ,UNION_BY_NAME=TRUE)
-
