@@ -121,6 +121,14 @@ void MiniZStreamWrapper::Initialize(CompressedFile &file, bool write) {
 		auto read_count = file.child_handle->Read(gzip_hdr, GZIP_HEADER_MINSIZE);
 		GZipFileSystem::VerifyGZIPHeader(gzip_hdr, read_count);
 
+		if (gzip_hdr[3] & GZIP_FLAG_EXTRA) {
+			uint8_t gzip_xlen[2];
+			file.child_handle->Seek(data_start);
+			auto read_extra = file.child_handle->Read(gzip_xlen, 2);
+			idx_t xlen = (uint8_t)gzip_xlen[0] | (uint8_t)gzip_xlen[1] << 8;
+			data_start += xlen + 2;
+		}
+
 		if (gzip_hdr[3] & GZIP_FLAG_NAME) {
 			file.child_handle->Seek(data_start);
 			data_start += GZipConsumeString(*file.child_handle);
@@ -280,6 +288,10 @@ string GZipFileSystem::UncompressGZIPString(const string &in) {
 	memcpy(gzip_hdr, body_ptr, GZIP_HEADER_MINSIZE);
 	body_ptr += GZIP_HEADER_MINSIZE;
 	GZipFileSystem::VerifyGZIPHeader(gzip_hdr, GZIP_HEADER_MINSIZE);
+
+	if (gzip_hdr[3] & GZIP_FLAG_EXTRA) {
+		throw IOException("Extra field in a GZIP stream unsupported");
+	}
 
 	if (gzip_hdr[3] & GZIP_FLAG_NAME) {
 		char c;

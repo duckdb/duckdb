@@ -45,6 +45,6 @@ static constexpr const uint8_t GZIP_FLAG_ENCRYPT = 0x20;
 static constexpr const uint8_t GZIP_HEADER_MINSIZE = 10;
 
 static constexpr const unsigned char GZIP_FLAG_UNSUPPORTED =
-    GZIP_FLAG_ASCII | GZIP_FLAG_MULTIPART | GZIP_FLAG_EXTRA | GZIP_FLAG_COMMENT | GZIP_FLAG_ENCRYPT;
+    GZIP_FLAG_ASCII | GZIP_FLAG_MULTIPART | GZIP_FLAG_COMMENT | GZIP_FLAG_ENCRYPT;
 
 } // namespace duckdb
