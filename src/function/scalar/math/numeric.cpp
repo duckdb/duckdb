@@ -1214,7 +1214,7 @@ void GCDFun::RegisterFunction(BuiltinFunctions &set) {
 	                                 ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, GCDOperator>));
 
 	set.AddFunction(funcs);
-	funcs.name = "greatest_common_multiple";
+	funcs.name = "greatest_common_divisor";
 	set.AddFunction(funcs);
 }
 
