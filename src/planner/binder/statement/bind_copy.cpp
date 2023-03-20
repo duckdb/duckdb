@@ -107,12 +107,12 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 				fileformat = option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>();
 				format_position = fileformat.find(id_format);
 				if (format_position != string::npos) {
-					StringUtil::Replace(fileformat, id_format, "");
+					fileformat = StringUtil::Replace(fileformat, id_format, "");
 					use_uuid_format = false;
 				}
 				format_position = fileformat.find(uuid_format);
 				if (format_position != string::npos) {
-					StringUtil::Replace(fileformat, uuid_format, "");
+					fileformat = StringUtil::Replace(fileformat, uuid_format, "");
 					use_uuid_format = true;
 				}
 				format_position = std::min(format_position, (idx_t)fileformat.length());
