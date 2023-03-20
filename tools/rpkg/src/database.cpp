@@ -7,6 +7,7 @@
 #include "duckdb/common/vector_operations/generic_executor.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/value.hpp"
 #include "duckdb/function/aggregate/sum_helpers.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 
@@ -60,6 +61,11 @@ struct FloatDoubleZeroSumOperation : public BaseSumOperation<SumSetOperation, Re
 			}
 			break;
 		case PhysicalType::FLOAT:
+		case PhysicalType::INT8:
+		case PhysicalType::INT16:
+		case PhysicalType::INT32:
+		case PhysicalType::INT64:
+		case PhysicalType::INT128:
 		case PhysicalType::BOOL:
 		case PhysicalType::BIT:
 		case PhysicalType::STRUCT:

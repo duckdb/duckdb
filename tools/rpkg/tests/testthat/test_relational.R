@@ -187,11 +187,11 @@ test_that("Full join returns all outer relations", {
 })
 
 test_that("cross join works", {
-   left <- duckdb:::rel_from_df(con, data.frame(left_a=c(1, 2, 3), left_b=c(1, 1, 2)))
-   right <- duckdb:::rel_from_df(con, data.frame(right_a=c(1, 4, 5), right_b=c(7, 8, 9)))
-   cross <- duckdb:::rel_join(left, right, list(), "cross")
-   order_by <- duckdb:::rel_order(cross, list(duckdb:::expr_reference("right_a"), duckdb:::expr_reference("right_a")))
-   rel_df <- duckdb:::rel_to_altrep(order_by)
+   left <- rel_from_df(con, data.frame(left_a=c(1, 2, 3), left_b=c(1, 1, 2)))
+   right <- rel_from_df(con, data.frame(right_a=c(1, 4, 5), right_b=c(7, 8, 9)))
+   cross <- rel_join(left, right, list(), "cross")
+   order_by <- rel_order(cross, list(expr_reference("right_a"), expr_reference("right_a")))
+   rel_df <- rel_to_altrep(order_by)
    dim(rel_df)
    expected_result <- data.frame(left_a=c(1, 2, 3, 1, 2, 3, 1, 2, 3),
                                  left_b=c(1, 1, 2, 1, 1, 2, 1, 1, 2),
@@ -201,12 +201,12 @@ test_that("cross join works", {
 })
 
 test_that("semi join works", {
-    left <- duckdb:::rel_from_df(con, data.frame(left_b=c(1, 5, 6)))
-    right <- duckdb:::rel_from_df(con, data.frame(right_a=c(1, 2, 3), right_b=c(1, 1, 2)))
+    left <- rel_from_df(con, data.frame(left_b=c(1, 5, 6)))
+    right <- rel_from_df(con, data.frame(right_a=c(1, 2, 3), right_b=c(1, 1, 2)))
     cond <- list(expr_function("eq", list(expr_reference("left_b"), expr_reference("right_a"))))
     # select * from left semi join right on (left_b = right_a)
-    rel2 <- duckdb:::rel_join(left, right, cond, "semi")
-    rel_df <- duckdb:::rel_to_altrep(rel2)
+    rel2 <- rel_join(left, right, cond, "semi")
+    rel_df <- rel_to_altrep(rel2)
     dim(rel_df)
     expected_result <- data.frame(left_b=c(1))
     expect_equal(rel_df, expected_result)
@@ -214,12 +214,12 @@ test_that("semi join works", {
 
 
 test_that("anti join works", {
-    left <- duckdb:::rel_from_df(con, data.frame(left_b=c(1, 5, 6)))
-    right <- duckdb:::rel_from_df(con, data.frame(right_a=c(1, 2, 3), right_b=c(1, 1, 2)))
+    left <- rel_from_df(con, data.frame(left_b=c(1, 5, 6)))
+    right <- rel_from_df(con, data.frame(right_a=c(1, 2, 3), right_b=c(1, 1, 2)))
     cond <- list(expr_function("eq", list(expr_reference("left_b"), expr_reference("right_a"))))
     # select * from left anti join right on (left_b = right_a)
-    rel2 <- duckdb:::rel_join(left, right, cond, "anti")
-    rel_df <- duckdb:::rel_to_altrep(rel2)
+    rel2 <- rel_join(left, right, cond, "anti")
+    rel_df <- rel_to_altrep(rel2)
     dim(rel_df)
     expected_result <- data.frame(left_b=c(5, 6))
     expect_equal(rel_df, expected_result)
@@ -345,7 +345,7 @@ test_that("rel aggregate with groups and aggregate function works", {
 # with and without offsets
 test_that("R semantics for adding NaNs is respected", {
    dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
-   test_df_a <- rel_from_df(con, data.frame(a=c(1, 2), b=c(3, 4)))
+   test_df_a <- rel_from_df(con, data.frame(a=c(NaN, 2), b=c(3, 4)))
    test_df_b <- rel_from_df(con, data.frame(c=c(NaN, 6), d=c(3, 8)))
    cond <- list(expr_function("eq", list(expr_reference("b"), expr_reference("d"))))
    rel_join <- rel_join(test_df_a, test_df_b, cond, "inner")
@@ -358,16 +358,24 @@ test_that("R semantics for adding NaNs is respected", {
 
 test_that("R semantics for arithmetics sum function are respected", {
    dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
-   test_df_a <- duckdb:::rel_from_df(con, data.frame(a=c(1:5, NaN)))
-   sum_rel <- duckdb:::expr_function("sum", list(duckdb:::expr_reference("a")))
-   ans <- duckdb:::rel_aggregate(test_df_a, list(), list(sum_rel))
-   res <- duckdb:::rel_to_altrep(ans)
-   expect_equal(NaN, res[[1]])
+   test_df_a <- rel_from_df(con, data.frame(a=c(1:5, NaN)))
+   sum_rel <- expr_function("sum", list(expr_reference("a")))
+   ans <- rel_aggregate(test_df_a, list(), list(sum_rel))
+   res <- rel_to_altrep(ans)
+   expect_true(is.NaN(res[[1]]))
+})
+
+test_that("rel aggregate on NaN is 0 when sum default it 0", {
+   duckdb_set_sum_default_to_zero(con, TRUE)
+   test_df_a <- rel_from_df(con, data.frame(a=c(1:5, NaN)))
+   sum_rel <- expr_function("sum", list(expr_reference("a")))
+   ans <- rel_aggregate(test_df_a, list(), list(sum_rel))
+   res <- rel_to_altrep(ans)
+   expect_equal(0, res[[1]])
 })
 
 test_that("rel aggregate on NA is 0", {
-   con <- dbConnect(duckdb::duckdb())
-   duckdb_sum_default_zero(con, TRUE)
+   duckdb_set_sum_default_to_zero(con, TRUE)
    rel_a <- rel_from_df(con, data.frame(a=c(NaN, NaN, 5, 5), b=c(3, 3, 4, 4)))
    aggrs <- list(sum = expr_function("sum", list(expr_reference("a"))))
    res <- rel_aggregate(rel_a, list(expr_reference("b")), aggrs)
