@@ -42,8 +42,8 @@ void BuiltinFunctions::RegisterMathFunctions() {
 	Register<IsInfiniteFun>();
 	Register<IsFiniteFun>();
 
-	Register<GCDFun>();
-	Register<LCMFun>();
+	Register<GreatestCommonDivisorFun>();
+	Register<LeastCommonMultipleFun>();
 }
 
 } // namespace duckdb

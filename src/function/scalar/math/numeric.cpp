@@ -1168,7 +1168,7 @@ void EvenFun::RegisterFunction(BuiltinFunctions &set) {
 
 // should be replaced with std::gcd in a newer C++ standard
 template <class TA>
-TA Gcd(TA left, TA right) {
+TA GreatestCommonDivisor(TA left, TA right) {
 	TA a = left;
 	TA b = right;
 
@@ -1192,26 +1192,22 @@ TA Gcd(TA left, TA right) {
 	}
 }
 
-struct GCDOperator {
+struct GreatestCommonDivisorOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA left, TB right) {
-		return Gcd(left, right);
+		return GreatestCommonDivisor(left, right);
 	}
 };
 
-void GCDFun::RegisterFunction(BuiltinFunctions &set) {
+void GreatestCommonDivisorFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet funcs("gcd");
 
-	funcs.AddFunction(ScalarFunction({LogicalType::TINYINT, LogicalType::TINYINT}, LogicalType::TINYINT,
-	                                 ScalarFunction::BinaryFunction<int8_t, int8_t, int8_t, GCDOperator>));
-	funcs.AddFunction(ScalarFunction({LogicalType::SMALLINT, LogicalType::SMALLINT}, LogicalType::SMALLINT,
-	                                 ScalarFunction::BinaryFunction<int16_t, int16_t, int16_t, GCDOperator>));
-	funcs.AddFunction(ScalarFunction({LogicalType::INTEGER, LogicalType::INTEGER}, LogicalType::INTEGER,
-	                                 ScalarFunction::BinaryFunction<int32_t, int32_t, int32_t, GCDOperator>));
-	funcs.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT}, LogicalType::BIGINT,
-	                                 ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, GCDOperator>));
-	funcs.AddFunction(ScalarFunction({LogicalType::HUGEINT, LogicalType::HUGEINT}, LogicalType::HUGEINT,
-	                                 ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, GCDOperator>));
+	funcs.AddFunction(
+	    ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT}, LogicalType::BIGINT,
+	                   ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, GreatestCommonDivisorOperator>));
+	funcs.AddFunction(
+	    ScalarFunction({LogicalType::HUGEINT, LogicalType::HUGEINT}, LogicalType::HUGEINT,
+	                   ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, GreatestCommonDivisorOperator>));
 
 	set.AddFunction(funcs);
 	funcs.name = "greatest_common_divisor";
@@ -1223,33 +1219,29 @@ void GCDFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 
 // should be replaced with std::lcm in a newer C++ standard
-struct LCMOperator {
+struct LeastCommonMultipleOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA left, TB right) {
 		if (left == 0 || right == 0) {
 			return 0;
 		}
 		TR result;
-		if (!TryMultiplyOperator::Operation<TA, TB, TR>(left, right / Gcd(left, right), result)) {
+		if (!TryMultiplyOperator::Operation<TA, TB, TR>(left, right / GreatestCommonDivisor(left, right), result)) {
 			throw OutOfRangeException("lcm value is out of range");
 		}
 		return TryAbsOperator::Operation<TR, TR>(result);
 	}
 };
 
-void LCMFun::RegisterFunction(BuiltinFunctions &set) {
+void LeastCommonMultipleFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet funcs("lcm");
 
-	funcs.AddFunction(ScalarFunction({LogicalType::TINYINT, LogicalType::TINYINT}, LogicalType::TINYINT,
-	                                 ScalarFunction::BinaryFunction<int8_t, int8_t, int8_t, LCMOperator>));
-	funcs.AddFunction(ScalarFunction({LogicalType::SMALLINT, LogicalType::SMALLINT}, LogicalType::SMALLINT,
-	                                 ScalarFunction::BinaryFunction<int16_t, int16_t, int16_t, LCMOperator>));
-	funcs.AddFunction(ScalarFunction({LogicalType::INTEGER, LogicalType::INTEGER}, LogicalType::INTEGER,
-	                                 ScalarFunction::BinaryFunction<int32_t, int32_t, int32_t, LCMOperator>));
-	funcs.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT}, LogicalType::BIGINT,
-	                                 ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, LCMOperator>));
-	funcs.AddFunction(ScalarFunction({LogicalType::HUGEINT, LogicalType::HUGEINT}, LogicalType::HUGEINT,
-	                                 ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, LCMOperator>));
+	funcs.AddFunction(
+	    ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT}, LogicalType::BIGINT,
+	                   ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, LeastCommonMultipleOperator>));
+	funcs.AddFunction(
+	    ScalarFunction({LogicalType::HUGEINT, LogicalType::HUGEINT}, LogicalType::HUGEINT,
+	                   ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, LeastCommonMultipleOperator>));
 
 	set.AddFunction(funcs);
 	funcs.name = "least_common_multiple";

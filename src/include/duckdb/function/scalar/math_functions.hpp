@@ -122,11 +122,11 @@ struct IsFiniteFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct GCDFun {
+struct GreatestCommonDivisorFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct LCMFun {
+struct LeastCommonMultipleFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
