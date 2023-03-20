@@ -194,10 +194,10 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 				c = *body_ptr;
 				body_ptr++;
 			} while (c != '\0' && body_ptr < gzip_header + old_len);
-			if (idx_t)(body_ptr - gzip_header) >= GZIP_HEADER_MAXSIZE) {
-					throw InternalException("Filename resulting in GZIP header larger than defined maximum (%d)",
-					                        GZIP_HEADER_MAXSIZE);
-				}
+			if ((idx_t)(body_ptr - gzip_header) >= GZIP_HEADER_MAXSIZE) {
+				throw InternalException("Filename resulting in GZIP header larger than defined maximum (%d)",
+				                        GZIP_HEADER_MAXSIZE);
+			}
 			if (body_ptr >= gzip_header + old_len) {
 				mz_stream_ptr->reserved = 2;
 				sd.in_buff_start = sd.in_buff_end;
