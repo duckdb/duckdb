@@ -41,17 +41,6 @@ struct FloatDoubleZeroSumOperation : public BaseSumOperation<SumSetOperation, Re
 	}
 };
 
-struct DoubleSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd> {
-	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (!state->isset) {
-			mask.SetInvalid(idx);
-		} else {
-			target[idx] = state->value;
-		}
-	}
-};
-
 [[cpp11::register]] void rapi_sum_default_zero(duckdb::conn_eptr_t conn, bool turn_on) {
 	// I want to check the validity of conn, but if I do, an R program that calls this function
 	// will not exit
@@ -67,7 +56,7 @@ struct DoubleSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd>
 			if (turn_on) {
 				aggr.finalize = AggregateFunction::StateFinalize<SumState<double>, double, FloatDoubleZeroSumOperation>;
 			} else {
-				aggr.finalize = AggregateFunction::StateFinalize<SumState<double>, double, DoubleSumOperation>;
+				aggr.finalize = AggregateFunction::StateFinalize<SumState<double>, double, DoubleSumOperation<RegularAdd>>;
 			}
 			break;
 		case PhysicalType::FLOAT:

@@ -176,4 +176,17 @@ struct BaseSumOperation {
 	}
 };
 
+// used in R project
+template <class ADD_OPERATOR>
+struct DoubleSumOperation : public BaseSumOperation<SumSetOperation, ADD_OPERATOR> {
+	template <class T, class STATE>
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+		if (!state->isset) {
+			mask.SetInvalid(idx);
+		} else {
+			target[idx] = state->value;
+		}
+	}
+};
+
 } // namespace duckdb
