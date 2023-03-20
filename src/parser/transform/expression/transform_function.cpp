@@ -1,3 +1,4 @@
+#include "duckdb/common/serializer/enum_serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
@@ -38,36 +39,6 @@ static ExpressionType WindowToExpressionType(string &fun_name) {
 	}
 
 	return ExpressionType::WINDOW_AGGREGATE;
-}
-
-static string EncodeOrderType(OrderType type) {
-	switch (type) {
-	case OrderType::INVALID:
-		return "INVALID";
-	case OrderType::ORDER_DEFAULT:
-		return "DEFAULT";
-	case OrderType::ASCENDING:
-		return "ASC";
-	case OrderType::DESCENDING:
-		return "DESC";
-	default:
-		throw NotImplementedException("EncodeOrderType not implemented for enum value");
-	}
-}
-
-static string EncodeOrderType(OrderByNullType type) {
-	switch (type) {
-	case OrderByNullType::INVALID:
-		return "INVALID";
-	case OrderByNullType::ORDER_DEFAULT:
-		return "DEFAULT";
-	case OrderByNullType::NULLS_FIRST:
-		return "NULLS FIRST";
-	case OrderByNullType::NULLS_LAST:
-		return "NULLS LAST";
-	default:
-		throw NotImplementedException("ToString not implemented for enum value");
-	}
 }
 
 void Transformer::TransformWindowDef(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr) {
@@ -349,8 +320,8 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		auto arg_expr = children[0].get();
 		auto &order_by = order_bys->orders[0];
 		if (arg_expr->Equals(order_by.expression.get())) {
-			auto sense = make_unique<ConstantExpression>(EncodeOrderType(order_by.type));
-			auto nulls = make_unique<ConstantExpression>(EncodeOrderType(order_by.null_order));
+			auto sense = make_unique<ConstantExpression>(EnumSerializer::EnumToString(order_by.type));
+			auto nulls = make_unique<ConstantExpression>(EnumSerializer::EnumToString(order_by.null_order));
 			order_bys = nullptr;
 			auto unordered = make_unique<FunctionExpression>(
 			    catalog, schema, lowercase_name.c_str(), std::move(children), std::move(filter_expr),
