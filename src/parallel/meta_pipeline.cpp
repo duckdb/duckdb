@@ -133,10 +133,6 @@ bool MetaPipeline::HasFinishEvent(Pipeline *pipeline) {
 }
 
 Pipeline *MetaPipeline::CreateUnionPipeline(Pipeline &current, bool order_matters) {
-	if (HasRecursiveCTE()) {
-		throw NotImplementedException("UNIONS are not supported in recursive CTEs yet");
-	}
-
 	// create the union pipeline (batch index 0, should be set correctly afterwards)
 	auto union_pipeline = CreatePipeline();
 	state.SetPipelineOperators(*union_pipeline, state.GetPipelineOperators(current));
