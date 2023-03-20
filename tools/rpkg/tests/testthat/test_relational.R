@@ -338,7 +338,7 @@ test_that("R semantics for arithmetics sum function are respected", {
 
 
 test_that("anti joins for neq_na_matches works", {
-   dbExecute(con, 'CREATE MACRO "___eq_na_matches_na"(a, b) AS ((a IS NULL AND b IS NULL) OR (a = b))')
+   dbExecute(con, 'CREATE OR REPLACE MACRO "___eq_na_matches_na"(a, b) AS ((a IS NULL AND b IS NULL) OR (a = b))')
    rel1 <- rel_from_df(con, data.frame(x = c(1, 1, 2)))
    rel2 <- rel_from_df(con, data.frame(y = c(2)))
    cond <- list(expr_function("___eq_na_matches_na", list(expr_reference("x"), expr_reference("y"))))
