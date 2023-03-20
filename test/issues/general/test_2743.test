@@ -110,3 +110,137 @@ SELECT * FROM t ORDER BY x, y;
 8	1
 9	1
 10	1
+
+statement ok
+CREATE TEMP TABLE flights (
+  source  TEXT,
+  dest    TEXT,
+  carrier TEXT
+);
+
+statement ok
+INSERT INTO flights VALUES
+('A', 'B', 'C1'),
+('A', 'C', 'C2'),
+('A', 'D', 'C1'),
+('B', 'D', 'C3'),
+('C', 'E', 'C3')
+;
+
+statement ok
+CREATE TEMP TABLE trains (
+  source TEXT,
+  dest   TEXT
+);
+
+statement ok
+INSERT INTO trains VALUES
+('B', 'C'),
+('A', 'E'),
+('C', 'E')
+;
+
+query III
+WITH RECURSIVE connections(source, dest, carrier) AS (
+     (SELECT f.source, f.dest, f.carrier
+      FROM flights f
+      WHERE f.source = 'A'
+    UNION ALL
+      SELECT r.source, r.dest, 'Rail' AS carrier
+      FROM trains r
+      WHERE r.source = 'A')
+  UNION ALL -- two recursive terms below
+     (SELECT c.source, f.dest, f.carrier
+      FROM connections c, flights f
+      WHERE c.dest = f.source
+    UNION ALL
+      SELECT c.source, r.dest, 'Rail' AS carrier
+      FROM connections c, trains r
+      WHERE c.dest = r.source)
+)
+SELECT * FROM connections;
+----
+A	B	C1
+A	C	C2
+A	D	C1
+A	E	Rail
+A	D	C3
+A	E	C3
+A	C	Rail
+A	E	Rail
+A	E	C3
+A	E	Rail
+
+query I
+WITH RECURSIVE t(x) AS
+(
+  (SELECT 2
+    UNION
+  SELECT 1)
+    UNION ALL
+  (SELECT x+1
+  FROM   t
+  WHERE  x < 4
+    UNION
+  SELECT x*2
+  FROM   t
+  WHERE  x >= 4 AND x < 8
+    UNION ALL
+  SELECT x+1
+  FROM   t
+  WHERE  x >= 4 AND x < 8)
+) SELECT * FROM t ORDER BY x;
+----
+1
+2
+2
+3
+3
+4
+4
+5
+5
+6
+6
+7
+7
+8
+8
+8
+8
+10
+10
+12
+12
+14
+14
+
+query I
+WITH RECURSIVE foo(i) AS
+    (values (1)
+      UNION
+    (SELECT i+1 FROM foo WHERE i < 2
+      UNION ALL
+    SELECT i+1 FROM foo WHERE i < 2
+      UNION
+    SELECT i+1 FROM foo WHERE i < 2
+      UNION ALL
+    SELECT i+1 FROM foo WHERE i < 2
+      UNION
+    SELECT i+1 FROM foo WHERE i < 2
+      UNION ALL
+    SELECT i+1 FROM foo WHERE i < 2
+      UNION
+    SELECT i+1 FROM foo WHERE i < 2
+      UNION ALL
+    SELECT i+1 FROM foo WHERE i < 2
+      UNION
+    SELECT i+1 FROM foo WHERE i < 2
+      UNION ALL
+    SELECT i+1 FROM foo WHERE i < 2
+      UNION
+    SELECT i+1 FROM foo WHERE i < 2)
+) SELECT * FROM foo;
+----
+1
+2
