@@ -68,16 +68,7 @@ void ColumnData::IncrementVersion() {
 }
 
 idx_t ColumnData::GetMaxEntry() {
-	auto l = data.Lock();
-	auto first_segment = data.GetRootSegment(l);
-	auto last_segment = data.GetLastSegment(l);
-	if (!first_segment) {
-		D_ASSERT(!last_segment);
-		return 0;
-	} else {
-		D_ASSERT(last_segment->start >= first_segment->start);
-		return last_segment->start + last_segment->count - first_segment->start;
-	}
+	return count;
 }
 
 void ColumnData::InitializeScan(ColumnScanState &state) {
