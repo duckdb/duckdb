@@ -132,7 +132,7 @@ OperatorResultType PhysicalBlockwiseNLJoin::ExecuteInternal(ExecutionContext &co
 	// now perform the actual join
 	// we perform a cross product, then execute the expression directly on the cross product result
 	idx_t result_count = 0;
-	bool found_match[STANDARD_VECTOR_SIZE] = {0};
+	bool found_match[STANDARD_VECTOR_SIZE] = {false};
 
 	do {
 		auto result = state.cross_product.Execute(input, *intermediate_chunk);
