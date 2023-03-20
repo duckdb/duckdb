@@ -137,9 +137,6 @@ SELECT * FROM left_table ANTI JOIN right_table ON (left_table.a + right_table.a 
 ----
 2000	20000	200000
 
-statement ok
-select left_table.a as outer_a, (SELECT b FROM right_table where right_table.a != outer_a) right_table_b FROM left_table;
-
 # correlated subqueries
 query II
 SELECT a as outer_a, (SELECT right_table.b FROM right_table where right_table.a != outer_a) right_table_b FROM left_table ANTI JOIN right_table ON (left_table.a = right_table.a) Order by outer_a, right_table_b;

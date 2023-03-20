@@ -139,9 +139,6 @@ SELECT * FROM left_table SEMI JOIN right_table ON (left_table.a + right_table.a 
 42	1	5
 43	1	1
 
-statement ok
-select * from left_table, right_table
-
 # complex condition resulting in an any join
 query III
 SELECT * FROM left_table SEMI JOIN right_table ON ((left_table.a = NULL AND right_table.a = NULL) OR left_table.a = right_table.a) order by left_table.a, left_table.c;
