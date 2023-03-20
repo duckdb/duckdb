@@ -37,8 +37,6 @@ struct BufferedCSVReaderOptions {
 	bool has_newline = false;
 	//! New Line separator
 	NewLineIdentifier new_line = NewLineIdentifier::NOT_SET;
-	//! Whether or not the read will use the ParallelCSVReader
-	bool use_parallel = false;
 	//! Whether or not a quote was defined by the user
 	bool has_quote = false;
 	//! Quote used for columns that contain reserved characters, e.g., delimiter
@@ -107,7 +105,10 @@ struct BufferedCSVReaderOptions {
 	idx_t buffer_size = CSVBuffer::INITIAL_BUFFER_SIZE_COLOSSAL;
 	//! Decimal separator when reading as numeric
 	string decimal_separator = ".";
-
+	//! If we are running the parallel version of the CSV Reader. In general, the system should always auto-detect
+	//! When it can't execute a parallel run before execution. However, there are (rather specific) situations where
+	//! setting up this manually might be important
+	bool run_parallel = true;
 	//===--------------------------------------------------------------------===//
 	// WriteCSVOptions
 	//===--------------------------------------------------------------------===//

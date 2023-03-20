@@ -38,10 +38,15 @@ void ReadCSVData::InitializeFiles(ClientContext &context, const vector<string> &
 
 void ReadCSVData::FinalizeRead(ClientContext &context) {
 	BaseCSVData::Finalize();
+	// Here we identify if we can run this CSV file on parallel or not.
 	bool null_or_empty = options.delimiter.empty() || options.escape.empty() || options.quote.empty() ||
 	                     options.delimiter[0] == '\0' || options.escape[0] == '\0' || options.quote[0] == '\0';
 	bool complex_options = options.delimiter.size() > 1 || options.escape.size() > 1 || options.quote.size() > 1;
-	if (null_or_empty || complex_options || options.new_line == NewLineIdentifier::MIX) {
+	bool not_supported_options =
+	    options.union_by_name || options.include_file_name || options.include_parsed_hive_partitions;
+
+	if (!options.run_parallel || null_or_empty || not_supported_options || complex_options ||
+	    options.new_line == NewLineIdentifier::MIX) {
 		// not supported for parallel CSV reading
 		single_threaded = true;
 	}
@@ -158,6 +163,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			options.include_file_name = BooleanValue::Get(kv.second);
 		} else if (loption == "hive_partitioning") {
 			options.include_parsed_hive_partitions = BooleanValue::Get(kv.second);
+		} else if (loption == "parallel") {
+			options.run_parallel = BooleanValue::Get(kv.second);
 		} else {
 			options.SetReadOption(loption, kv.second, names);
 		}
@@ -271,6 +278,9 @@ public:
 			bytes_per_local_state = buffer_size / ParallelCSVGlobalState::MaxThreads();
 		} else {
 			bytes_per_local_state = file_size / MaxThreads();
+		}
+		for (idx_t i = 0; i < rows_to_skip; i++) {
+			file_handle->ReadLine();
 		}
 		current_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position);
 		next_buffer = current_buffer->Next(*file_handle, buffer_size, current_csv_position);
@@ -468,11 +478,9 @@ static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext 
 
 	bind_data.options.file_path = bind_data.files[0];
 	file_handle = ReadCSV::OpenCSV(bind_data.options.file_path, bind_data.options.compression, context);
-	idx_t rows_to_skip =
-	    bind_data.options.skip_rows + (bind_data.options.has_header && bind_data.options.header ? 1 : 0);
-	return make_unique<ParallelCSVGlobalState>(context, std::move(file_handle), bind_data.files,
-	                                           context.db->NumberOfThreads(), bind_data.options.buffer_size,
-	                                           rows_to_skip, ClientConfig::GetConfig(context).verify_parallelism);
+	return make_unique<ParallelCSVGlobalState>(
+	    context, std::move(file_handle), bind_data.files, context.db->NumberOfThreads(), bind_data.options.buffer_size,
+	    bind_data.options.skip_rows, ClientConfig::GetConfig(context).verify_parallelism);
 }
 
 //===--------------------------------------------------------------------===//

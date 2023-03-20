@@ -1416,6 +1416,7 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 	if (!bom_checked) {
 		bom_checked = true;
 		if (read_count >= 3 && buffer[0] == '\xEF' && buffer[1] == '\xBB' && buffer[2] == '\xBF') {
+			start += 3;
 			position += 3;
 		}
 	}

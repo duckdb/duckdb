@@ -103,7 +103,7 @@ idx_t PhysicalTableScan::GetBatchIndex(ExecutionContext &context, DataChunk &chu
 }
 
 string PhysicalTableScan::GetName() const {
-	return StringUtil::Upper(function.name);
+	return StringUtil::Upper(function.name + " " + function.extra_info);
 }
 
 string PhysicalTableScan::ParamsToString() const {
