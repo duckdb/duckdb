@@ -70,7 +70,6 @@ public:
 		return position_in_chunk;
 	}
 
-	// ??
 	idx_t ScanPosition() {
 		return scan_state.current_row_index;
 	}
