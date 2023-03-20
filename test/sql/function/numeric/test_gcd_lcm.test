@@ -61,4 +61,4 @@ statement error
 SELECT lcm(42, 'abcd')
 
 statement error
-select lcm(420000000,570000000)
+select lcm(4200000000000000000,5700000000000000000)
