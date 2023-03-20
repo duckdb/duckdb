@@ -124,7 +124,7 @@ void MiniZStreamWrapper::Initialize(CompressedFile &file, bool write) {
 		if (gzip_hdr[3] & GZIP_FLAG_EXTRA) {
 			uint8_t gzip_xlen[2];
 			file.child_handle->Seek(data_start);
-			auto read_extra = file.child_handle->Read(gzip_xlen, 2);
+			file.child_handle->Read(gzip_xlen, 2);
 			idx_t xlen = (uint8_t)gzip_xlen[0] | (uint8_t)gzip_xlen[1] << 8;
 			data_start += xlen + 2;
 		}
@@ -179,7 +179,8 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 			idx_t xlen = (uint8_t)*body_ptr | (uint8_t) * (body_ptr + 1) << 8;
 			body_ptr += xlen + 2;
 			if (GZIP_FOOTER_SIZE + GZIP_HEADER_MINSIZE + 2 + xlen >= GZIP_HEADER_MAXSIZE) {
-				throw InternalException("Extra field resulting in GZIP header larger than defined maximum (%d)",GZIP_HEADER_MAXSIZE);
+				throw InternalException("Extra field resulting in GZIP header larger than defined maximum (%d)",
+				                        GZIP_HEADER_MAXSIZE);
 			}
 			if (GZIP_FOOTER_SIZE + GZIP_HEADER_MINSIZE + 2 + xlen > old_len) {
 				mz_stream_ptr->reserved = 2;
@@ -193,9 +194,10 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 				c = *body_ptr;
 				body_ptr++;
 			} while (c != '\0' && body_ptr < gzip_header + old_len);
-			if ((body_ptr - gzip_header) >= GZIP_HEADER_MAXSIZE) {
-				throw InternalException("Filename resulting in GZIP header larger than defined maximum (%d)",GZIP_HEADER_MAXSIZE);
-			}
+			if (idx_t)(body_ptr - gzip_header) >= GZIP_HEADER_MAXSIZE) {
+					throw InternalException("Filename resulting in GZIP header larger than defined maximum (%d)",
+					                        GZIP_HEADER_MAXSIZE);
+				}
 			if (body_ptr >= gzip_header + old_len) {
 				mz_stream_ptr->reserved = 2;
 				sd.in_buff_start = sd.in_buff_end;
@@ -234,8 +236,8 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 	if (ret == duckdb_miniz::MZ_STREAM_END) {
 		// Last read from file done and remaining bytes only for footer or less
 		if ((sd.in_buff_end < sd.in_buff.get() + sd.in_buf_size) && mz_stream_ptr->avail_in <= GZIP_FOOTER_SIZE) {
-				Close();
-				return true;
+			Close();
+			return true;
 		}
 		if (mz_stream_ptr->avail_in > GZIP_FOOTER_SIZE) {
 			// Definitely not concatenated gzip
