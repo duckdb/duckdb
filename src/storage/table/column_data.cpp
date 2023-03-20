@@ -22,7 +22,7 @@ namespace duckdb {
 
 ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
                        LogicalType type_p, ColumnData *parent)
-    : block_manager(block_manager), info(info), column_index(column_index), start(start_row), type(std::move(type_p)),
+    : SegmentBase<ColumnData>(start_row, 0), block_manager(block_manager), info(info), column_index(column_index), type(std::move(type_p)),
       parent(parent), version(0) {
 	if (!parent) {
 		stats = make_unique<SegmentStatistics>(type);
@@ -30,7 +30,7 @@ ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t c
 }
 
 ColumnData::ColumnData(ColumnData &other, idx_t start, ColumnData *parent)
-    : block_manager(other.block_manager), info(other.info), column_index(other.column_index), start(start),
+    : SegmentBase<ColumnData>(start, other.count), block_manager(other.block_manager), info(other.info), column_index(other.column_index),
       type(std::move(other.type)), parent(parent), version(parent ? parent->version + 1 : 0) {
 	if (other.updates) {
 		updates = make_unique<UpdateSegment>(*other.updates, *this);
@@ -300,6 +300,7 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 
 void ColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) {
 	idx_t offset = 0;
+	this->count += count;
 	while (true) {
 		// append the data from the vector
 		idx_t copied_elements = state.current->Append(state, vdata, offset, count);
@@ -339,6 +340,7 @@ void ColumnData::RevertAppend(row_t start_row) {
 	// remove any segments AFTER this segment: they should be deleted entirely
 	data.EraseSegments(l, segment_index);
 
+	this->count = start_row - this->start;
 	segment->next = nullptr;
 	transient.RevertAppend(start_row);
 }
@@ -459,6 +461,7 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group,
 
 void ColumnData::DeserializeColumn(Deserializer &source) {
 	// load the data pointers for the column
+	this->count = 0;
 	idx_t data_pointer_count = source.Read<idx_t>();
 	for (idx_t data_ptr = 0; data_ptr < data_pointer_count; data_ptr++) {
 		// read the data pointer
@@ -478,6 +481,8 @@ void ColumnData::DeserializeColumn(Deserializer &source) {
 		data_pointer.block_pointer.block_id = block_pointer_block_id;
 		data_pointer.block_pointer.offset = block_pointer_offset;
 		data_pointer.compression_type = compression_type;
+
+		this->count += tuple_count;
 
 		// create a persistent segment
 		auto segment = ColumnSegment::CreatePersistentSegment(
@@ -545,14 +550,22 @@ void ColumnData::Verify(RowGroup &parent) {
 #ifdef DEBUG
 	D_ASSERT(this->start == parent.start);
 	data.Verify();
+	if (type.InternalType() == PhysicalType::STRUCT) {
+		// structs don't have segments
+		D_ASSERT(!data.GetRootSegment());
+		return;
+	}
 	idx_t current_index = 0;
 	idx_t current_start = this->start;
+	idx_t total_count = 0;
 	for (auto &segment : data.Segments()) {
 		D_ASSERT(segment.index == current_index);
 		D_ASSERT(segment.start == current_start);
 		current_start += segment.count;
+		total_count += segment.count;
 		current_index++;
 	}
+	D_ASSERT(this->count == total_count);
 #endif
 }
 

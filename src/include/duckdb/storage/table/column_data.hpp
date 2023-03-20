@@ -36,14 +36,14 @@ struct ColumnCheckpointInfo {
 
 class ColumnSegmentTree : public SegmentTree<ColumnSegment> {};
 
-class ColumnData {
+class ColumnData : public SegmentBase<ColumnData> {
 	friend class ColumnDataCheckpointer;
 
 public:
 	ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type,
 	           ColumnData *parent);
 	ColumnData(ColumnData &other, idx_t start, ColumnData *parent);
-	virtual ~ColumnData();
+	virtual ~ColumnData() override;
 
 	//! The block manager
 	BlockManager &block_manager;
@@ -51,8 +51,6 @@ public:
 	DataTableInfo &info;
 	//! The column index of the column, either within the parent table or within the parent
 	idx_t column_index;
-	//! The start row
-	idx_t start;
 	//! The type of the column
 	LogicalType type;
 	//! The parent column (if any)
