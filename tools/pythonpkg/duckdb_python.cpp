@@ -65,24 +65,25 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	m.def("cursor", &PyConnectionWrapper::Cursor, "Create a duplicate of the current connection",
 	      py::arg("connection") = py::none())
 	    .def("duplicate", &PyConnectionWrapper::Cursor, "Create a duplicate of the current connection",
-	         py::arg("connection") = py::none())
-	    .def("sqltype", &PyConnectionWrapper::Type, "Create a type object from 'type_str'", py::arg("type_str"),
-	         py::arg("connection") = py::none())
-	    .def("struct_type", &PyConnectionWrapper::StructType, "Create a struct type object from 'fields'",
-	         py::arg("fields"), py::arg("connection") = py::none())
-	    .def("union_type", &PyConnectionWrapper::UnionType, "Create a union type object from 'members'",
-	         py::arg("members").none(false), py::arg("connection") = py::none())
+	         py::arg("connection") = py::none());
+	DefineMethod({"sqltype", "dtype", "type"}, m, &PyConnectionWrapper::Type, "Create a type object from 'type_str'",
+	             py::arg("type_str"), py::arg("connection") = py::none());
+	DefineMethod({"struct_type", "row_type"}, m, &PyConnectionWrapper::StructType,
+	             "Create a struct type object from 'fields'", py::arg("fields"), py::arg("connection") = py::none());
+	m.def("union_type", &PyConnectionWrapper::UnionType, "Create a union type object from 'members'",
+	      py::arg("members").none(false), py::arg("connection") = py::none())
 	    .def("string_type", &PyConnectionWrapper::StringType, "Create a string type with an optional collation",
 	         py::arg("collation") = string(), py::arg("connection") = py::none())
 	    .def("enum_type", &PyConnectionWrapper::EnumType,
 	         "Create an enum type of underlying 'type', consisting of the list of 'values'", py::arg("name"),
 	         py::arg("type"), py::arg("values"), py::arg("connection") = py::none())
 	    .def("decimal_type", &PyConnectionWrapper::DecimalType, "Create a decimal type with 'width' and 'scale'",
-	         py::arg("width"), py::arg("scale"), py::arg("connection") = py::none())
-	    .def("array_type", &PyConnectionWrapper::ArrayType, "Create an array type object of 'type'",
-	         py::arg("type").none(false), py::arg("connection") = py::none())
-	    .def("map_type", &PyConnectionWrapper::MapType, "Create a map type object from 'key_type' and 'value_type'",
-	         py::arg("key").none(false), py::arg("value").none(false), py::arg("connection") = py::none())
+	         py::arg("width"), py::arg("scale"), py::arg("connection") = py::none());
+	DefineMethod({"array_type", "list_type"}, m, &PyConnectionWrapper::ArrayType,
+	             "Create an array type object of 'type'", py::arg("type").none(false),
+	             py::arg("connection") = py::none());
+	m.def("map_type", &PyConnectionWrapper::MapType, "Create a map type object from 'key_type' and 'value_type'",
+	      py::arg("key").none(false), py::arg("value").none(false), py::arg("connection") = py::none())
 	    .def("execute", &PyConnectionWrapper::Execute,
 	         "Execute the given SQL query, optionally using prepared statements with parameters set", py::arg("query"),
 	         py::arg("parameters") = py::none(), py::arg("multiple_parameter_sets") = false,

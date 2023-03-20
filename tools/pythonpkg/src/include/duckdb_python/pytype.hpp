@@ -15,6 +15,8 @@ public:
 public:
 	bool Equals(const shared_ptr<DuckDBPyType> &other) const;
 	bool EqualsString(const string &type_str) const;
+	shared_ptr<DuckDBPyType> GetAttribute(const string &name) const;
+	bool HasAttribute(const string &name) const;
 	string ToString() const;
 	const LogicalType &Type() const;
 

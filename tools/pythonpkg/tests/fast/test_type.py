@@ -74,3 +74,16 @@ class TestRelation(object):
 
         type = duckdb.union_type({'a': duckdb.bigint, 'b': duckdb.varchar, 'c': duckdb.tinyint})
         assert str(type) == 'UNION(a BIGINT, b VARCHAR, c TINYINT)'
+    
+    def test_attribute_accessor(self):
+        type = duckdb.row_type([duckdb.bigint, duckdb.list_type(duckdb.map_type(duckdb.blob, duckdb.bit))])
+        assert hasattr(type, 'a') == False
+        assert hasattr(type, 'v1') == True
+
+        field_one = type['v1']
+        assert str(field_one) == 'BIGINT'
+        field_one = type.v1
+        assert str(field_one) == 'BIGINT'
+
+        field_two = type['v2']
+        assert str(field_two) == 'MAP(BLOB, BIT)[]'
