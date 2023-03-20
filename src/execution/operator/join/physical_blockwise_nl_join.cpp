@@ -159,7 +159,7 @@ OperatorResultType PhysicalBlockwiseNLJoin::ExecuteInternal(ExecutionContext &co
 		result_count = state.executor.SelectExpression(*intermediate_chunk, state.match_sel);
 
 		// handle anti and semi joins with different logic
-		 if (result_count > 0) {
+		if (result_count > 0) {
 			// found a match!
 			// handle anti semi join conditions first
 			if (join_type == JoinType::ANTI || join_type == JoinType::SEMI) {
