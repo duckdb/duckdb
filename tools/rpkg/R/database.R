@@ -6,6 +6,6 @@
 #' @examples
 #' conn <- dbConnect(duckdb::duckdb())
 #' duckdb_set_sum_default_to_zero(conn)
-duckdb_set_sum_default_to_zero <- function(conn) {
-  rapi_set_sum_default_to_zero(conn@conn_ref)
+duckdb_sum_default_zero <- function(conn, turn_on=FALSE) {
+  rapi_sum_default_zero(conn@conn_ref, turn_on)
 }

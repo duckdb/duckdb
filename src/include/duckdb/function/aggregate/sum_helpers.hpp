@@ -36,6 +36,21 @@ struct SumState {
 	}
 };
 
+struct SumSetOperation {
+	template <class STATE>
+	static void Initialize(STATE *state) {
+		state->Initialize();
+	}
+	template <class STATE>
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
+		target->Combine(source);
+	}
+	template <class STATE>
+	static void AddValues(STATE *state, idx_t count) {
+		state->isset = true;
+	}
+};
+
 struct KahanSumState {
 	bool isset;
 	double value;

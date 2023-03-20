@@ -358,20 +358,36 @@ test_that("R semantics for adding NaNs is respected", {
 
 test_that("R semantics for arithmetics sum function are respected", {
    dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
-   test_df_a <- duckdb:::rel_from_df(con, data.frame(a=c(1:5, NA)))
+   test_df_a <- duckdb:::rel_from_df(con, data.frame(a=c(1:5, NaN)))
    sum_rel <- duckdb:::expr_function("sum", list(duckdb:::expr_reference("a")))
    ans <- duckdb:::rel_aggregate(test_df_a, list(), list(sum_rel))
    res <- duckdb:::rel_to_altrep(ans)
-   expect_equal(15, res[[1]])
+   expect_equal(NaN, res[[1]])
 })
 
 test_that("rel aggregate on NA is 0", {
-   duckdb_set_sum_default_to_zero(con)
-   rel_a <- rel_from_df(con, data.frame(a=c(NA, NA, 5, 5), b=c(3, 3, 4, 4)))
+   con <- dbConnect(duckdb::duckdb())
+   duckdb_sum_default_zero(con, TRUE)
+   rel_a <- rel_from_df(con, data.frame(a=c(NaN, NaN, 5, 5), b=c(3, 3, 4, 4)))
    aggrs <- list(sum = expr_function("sum", list(expr_reference("a"))))
    res <- rel_aggregate(rel_a, list(expr_reference("b")), aggrs)
    rel_df <- rel_to_altrep(res)
    expected_result <- data.frame(b=c(3, 4), sum=c(0, 10))
+   expect_equal(rel_df, expected_result)
+})
+
+test_that("rel aggregate on NA is 0 with only 1 NaN", {
+   duckdb_sum_default_zero(con, TRUE)
+   rel_a <- rel_from_df(con, data.frame(a=c(NaN, 2, 2, 2, 2, 1, 1), b=c(3, 3, 3, 3, 3, 4, 4)))
+   aggrs <- list(sum = expr_function("sum", list(expr_reference("a"))))
+   res <- rel_aggregate(rel_a, list(expr_reference("b")), aggrs)
+   rel_df <- rel_to_altrep(res)
+   expected_result <- data.frame(b=c(3, 4), sum=c(0, 2))
+   expect_equal(rel_df, expected_result)
+   duckdb_sum_default_zero(con, FALSE)
+   res <- rel_aggregate(rel_a, list(expr_reference("b")), aggrs)
+   rel_df <- rel_to_altrep(res)
+   expected_result <- data.frame(b=c(3, 4), sum=c(NaN, 2))
    expect_equal(rel_df, expected_result)
 })
 

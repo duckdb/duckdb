@@ -25,19 +25,34 @@ static bool CastRstringToVarchar(Vector &source, Vector &result, idx_t count, Ca
 	return true;
 }
 
-struct ZeroSumOperation {
+struct FloatDoubleZeroSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd>{
 	template <class T, class STATE>
 	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->isset) {
-			mask.SetValid(idx);
-			target[idx] = 0;
+			// if it's not set, set to 0
+			mask.SetInvalid(idx);
+		} else {
+			if (Value::DoubleIsFinite(state->value)) {
+				target[idx] = state->value;
+			} else {
+				target[idx] = 0;
+			}
+		}
+	}
+};
+
+struct DoubleSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd> {
+	template <class T, class STATE>
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+		if (!state->isset) {
+			mask.SetInvalid(idx);
 		} else {
 			target[idx] = state->value;
 		}
 	}
 };
 
-[[cpp11::register]] void rapi_set_sum_default_to_zero(duckdb::conn_eptr_t conn) {
+[[cpp11::register]] void rapi_sum_default_zero(duckdb::conn_eptr_t conn, bool turn_on) {
 	// I want to check the validity of conn, but if I do, an R program that calls this function
 	// will not exit
 
@@ -48,15 +63,14 @@ struct ZeroSumOperation {
 	auto sum_function_cast = (AggregateFunctionCatalogEntry *)sum_function;
 	for (auto &aggr : sum_function_cast->functions.functions) {
 		switch (aggr.arguments[0].InternalType()) {
-		case PhysicalType::INT8:
-		case PhysicalType::INT16:
-		case PhysicalType::INT32:
-		case PhysicalType::INT64:
-		case PhysicalType::INT128:
 		case PhysicalType::DOUBLE:
-		case PhysicalType::FLOAT:
-			aggr.finalize = AggregateFunction::StateFinalize<SumState<int64_t>, int64_t, ZeroSumOperation>;
+			if (turn_on) {
+				aggr.finalize = AggregateFunction::StateFinalize<SumState<double>, double, FloatDoubleZeroSumOperation>;
+			} else {
+				aggr.finalize = AggregateFunction::StateFinalize<SumState<double>, double, DoubleSumOperation>;
+			}
 			break;
+		case PhysicalType::FLOAT:
 		case PhysicalType::BOOL:
 		case PhysicalType::BIT:
 		case PhysicalType::STRUCT:
