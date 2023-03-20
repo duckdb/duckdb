@@ -43,6 +43,8 @@ static constexpr const uint8_t GZIP_FLAG_COMMENT = 0x10;
 static constexpr const uint8_t GZIP_FLAG_ENCRYPT = 0x20;
 
 static constexpr const uint8_t GZIP_HEADER_MINSIZE = 10;
+static constexpr const idx_t GZIP_HEADER_MAXSIZE = 512;
+static constexpr const uint8_t GZIP_FOOTER_SIZE = 8;
 
 static constexpr const unsigned char GZIP_FLAG_UNSUPPORTED =
     GZIP_FLAG_ASCII | GZIP_FLAG_MULTIPART | GZIP_FLAG_COMMENT | GZIP_FLAG_ENCRYPT;
