@@ -103,7 +103,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 		if (loption == "fileformat") {
 			if (!option.second.empty()) {
 				const string uuid_format {"{uuid}"};
-				const string id_format {"{id}"};
+				const string id_format {"{i}"};
 				fileformat = option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>();
 				format_position = fileformat.find(id_format);
 				if (format_position != string::npos) {
