@@ -65,12 +65,13 @@ void OptimisticDataWriter::FlushToDisk(RowGroup *row_group) {
 	for (auto &column : table->column_definitions) {
 		compression_types.push_back(column.CompressionType());
 	}
-	auto row_group_pointer = row_group->WriteToDisk(*partial_manager, compression_types);
+	throw InternalException("Write row group to disk");
+//	auto row_group_pointer = row_group->WriteToDisk(*partial_manager, compression_types);
 
 	// update the set of written blocks
-	for (idx_t col_idx = 0; col_idx < row_group_pointer.statistics.size(); col_idx++) {
-		row_group_pointer.states[col_idx]->GetBlockIds(written_blocks);
-	}
+//	for (idx_t col_idx = 0; col_idx < row_group_pointer.statistics.size(); col_idx++) {
+//		row_group_pointer.states[col_idx]->GetBlockIds(written_blocks);
+//	}
 }
 
 void OptimisticDataWriter::FlushToDisk(RowGroupCollection &row_groups, bool force) {

@@ -68,54 +68,57 @@ AdaptiveFilter *CollectionScanState::GetAdaptiveFilter() {
 }
 
 bool CollectionScanState::Scan(DuckTransaction &transaction, DataChunk &result) {
-	while (row_group) {
-		row_group->Scan(transaction, *this, result);
-		if (result.size() > 0) {
-			return true;
-		} else {
-			do {
-				row_group = row_groups->GetNextSegment(row_group);
-				if (row_group) {
-					bool scan_row_group = row_group->InitializeScan(*this);
-					if (scan_row_group) {
-						// scan this row group
-						break;
-					}
-				}
-			} while (row_group);
-		}
-	}
-	return false;
+	throw InternalException("Scan from columns/row group");
+//	while (row_group) {
+//		row_group->Scan(transaction, *this, result);
+//		if (result.size() > 0) {
+//			return true;
+//		} else {
+//			do {
+//				row_group = row_groups->GetNextSegment(row_group);
+//				if (row_group) {
+//					bool scan_row_group = row_group->InitializeScan(*this);
+//					if (scan_row_group) {
+//						// scan this row group
+//						break;
+//					}
+//				}
+//			} while (row_group);
+//		}
+//	}
+//	return false;
 }
 
 bool CollectionScanState::ScanCommitted(DataChunk &result, SegmentLock &l, TableScanType type) {
-	while (row_group) {
-		row_group->ScanCommitted(*this, result, type);
-		if (result.size() > 0) {
-			return true;
-		} else {
-			row_group = row_groups->GetNextSegment(l, row_group);
-			if (row_group) {
-				row_group->InitializeScan(*this);
-			}
-		}
-	}
-	return false;
+	throw InternalException("ScanCommitted from columns/row group");
+//	while (row_group) {
+//		row_group->ScanCommitted(*this, result, type);
+//		if (result.size() > 0) {
+//			return true;
+//		} else {
+//			row_group = row_groups->GetNextSegment(l, row_group);
+//			if (row_group) {
+//				row_group->InitializeScan(*this);
+//			}
+//		}
+//	}
+//	return false;
 }
 
 bool CollectionScanState::ScanCommitted(DataChunk &result, TableScanType type) {
-	while (row_group) {
-		row_group->ScanCommitted(*this, result, type);
-		if (result.size() > 0) {
-			return true;
-		} else {
-			row_group = row_groups->GetNextSegment(row_group);
-			if (row_group) {
-				row_group->InitializeScan(*this);
-			}
-		}
-	}
-	return false;
+	throw InternalException("ScanCommitted from columns/row group");
+//	while (row_group) {
+//		row_group->ScanCommitted(*this, result, type);
+//		if (result.size() > 0) {
+//			return true;
+//		} else {
+//			row_group = row_groups->GetNextSegment(row_group);
+//			if (row_group) {
+//				row_group->InitializeScan(*this);
+//			}
+//		}
+//	}
+//	return false;
 }
 
 } // namespace duckdb
