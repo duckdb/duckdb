@@ -1,5 +1,5 @@
 # name: benchmark/micro/list/list_order_by.benchmark
-# description: Test date casting
+# description: Ordered LIST aggregation
 # group: [list]
 
 name String Split Regexp
