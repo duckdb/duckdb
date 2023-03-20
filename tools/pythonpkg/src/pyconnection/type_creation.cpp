@@ -70,26 +70,7 @@ shared_ptr<DuckDBPyType> DuckDBPyConnection::UnionType(const py::object &members
 
 shared_ptr<DuckDBPyType> DuckDBPyConnection::EnumType(const string &name, const shared_ptr<DuckDBPyType> &type,
                                                       const py::list &values_p) {
-	return nullptr;
-
-	// vector<Value> values;
-	// idx_t size = values_p.size();
-	// values.reserve(size);
-
-	//// Construct Value's out of the python objects
-	// for (auto& item : values_p) {
-
-	//}
-	// if (values_p.empty()) {
-	//	throw InvalidInputException("Can not create an empty ENUM type!");
-	//}
-	//// TODO: Create a Vector out of the vector of Values
-	// Vector ordered_data(type->Type(), size);
-
-	//// TODO: Sort this list, verify uniqueness
-
-	// auto enum_type = LogicalType::ENUM(name, ordered_data, 0);
-	// return make_shared<DuckDBPyType>(enum_type);
+	throw NotImplementedException("enum_type creation method is not implemented yet");
 }
 
 shared_ptr<DuckDBPyType> DuckDBPyConnection::DecimalType(int width, int scale) {
