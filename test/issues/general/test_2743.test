@@ -15,9 +15,7 @@ WITH RECURSIVE t(x, y) AS
   (SELECT x+1, 1
   FROM   t
   WHERE  x < 10 AND y = 1
-
     UNION ALL
-
   SELECT x+1, 2
   FROM   t
   WHERE  x < 10 AND y = 2)
@@ -94,14 +92,12 @@ WITH RECURSIVE t(x, y) AS
   (SELECT x+1, 1
   FROM   t
   WHERE  x < 10 AND y = 1
-
     UNION ALL
-
   SELECT x+1, 1
   FROM   t
   WHERE  x < 10 AND y = 2)
 )
-SELECT * FROM t;
+SELECT * FROM t ORDER BY x, y;
 ----
 1	1
 1	2
