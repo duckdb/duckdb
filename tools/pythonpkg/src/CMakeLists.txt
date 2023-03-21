@@ -19,7 +19,6 @@ add_library(
   pyrelation.cpp
   dataframe.cpp
   pyresult.cpp
-  pytype.cpp
   map.cpp
   vector_conversion.cpp
   python_conversion.cpp
