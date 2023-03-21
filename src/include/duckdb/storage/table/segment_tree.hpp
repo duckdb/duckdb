@@ -321,9 +321,11 @@ private:
 
 	//! Load the next segment, if there are any left to load
 	bool LoadNextSegment(SegmentLock &l) {
-		if (is_read_only) {
-			D_ASSERT(!finished_loading);
+		if (!SUPPORTS_LAZY_LOADING) {
 			return false;
+		}
+		if (is_read_only) {
+			throw InternalException("Lazy loading with is_read_only!?");
 		}
 		if (finished_loading) {
 			return false;
@@ -338,6 +340,9 @@ private:
 
 	//! Load all segments, if there are any left to load
 	void LoadAllSegments(SegmentLock &l) {
+		if (!SUPPORTS_LAZY_LOADING) {
+			return;
+		}
 		while (LoadNextSegment(l))
 			;
 	}
