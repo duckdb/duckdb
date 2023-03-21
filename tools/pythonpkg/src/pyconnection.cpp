@@ -1334,9 +1334,9 @@ PythonImportCache *DuckDBPyConnection::ImportCache() {
 ModifiedMemoryFileSystem &DuckDBPyConnection::GetObjectFileSystem() {
 	if (!internal_object_filesystem) {
 		D_ASSERT(!FileSystemIsRegistered("DUCKDB_INTERNAL_OBJECTSTORE"));
-		auto &import_cache = *ImportCache();
+		auto &py_import_cache = *ImportCache();
 		internal_object_filesystem =
-		    make_shared<ModifiedMemoryFileSystem>(import_cache.pyduckdb().filesystem.modified_memory_filesystem()());
+		    make_shared<ModifiedMemoryFileSystem>(py_import_cache.pyduckdb().filesystem.modified_memory_filesystem()());
 		auto &abstract_fs = (AbstractFileSystem &)*internal_object_filesystem;
 		RegisterFilesystem(abstract_fs);
 	}
@@ -1369,19 +1369,24 @@ bool DuckDBPyConnection::IsPandasDataframe(const py::object &object) {
 	if (!ModuleIsLoaded<PandasCacheItem>()) {
 		return false;
 	}
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return import_cache.pandas().DataFrame.IsInstance(object);
+	auto &py_import_cache = *DuckDBPyConnection::ImportCache();
+	return py_import_cache.pandas().DataFrame.IsInstance(object);
 }
 
 bool DuckDBPyConnection::IsAcceptedArrowObject(const py::object &object) {
-	if (!ModuleIsLoaded<ArrowCacheItem>()) {
+	if (!ModuleIsLoaded<ArrowLibCacheItem>()) {
 		return false;
 	}
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return import_cache.arrow().lib.Table.IsInstance(object) ||
-	       import_cache.arrow().lib.RecordBatchReader.IsInstance(object) ||
-	       import_cache.arrow().dataset.Dataset.IsInstance(object) ||
-	       import_cache.arrow().dataset.Scanner.IsInstance(object);
+	auto &py_import_cache = *DuckDBPyConnection::ImportCache();
+	if (py_import_cache.arrow_lib().Table.IsInstance(object) ||
+	    py_import_cache.arrow_lib().RecordBatchReader.IsInstance(object)) {
+		return true;
+	}
+	if (!py_import_cache.arrow_dataset().IsLoaded()) {
+		return false;
+	}
+	return py_import_cache.arrow_dataset().Dataset.IsInstance(object) ||
+	       py_import_cache.arrow_dataset().Scanner.IsInstance(object);
 }
 
 unique_lock<std::mutex> DuckDBPyConnection::AcquireConnectionLock() {
