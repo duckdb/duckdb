@@ -6,6 +6,7 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 
 namespace duckdb {
 
@@ -93,7 +94,16 @@ struct BitStringAggOperation {
 
 	template <class INPUT_TYPE>
 	static idx_t GetRange(INPUT_TYPE min, INPUT_TYPE max) {
-		return max - min + 1;
+		D_ASSERT(max >= min);
+		INPUT_TYPE result;
+		if (!TrySubtractOperator::Operation(max, min, result)) {
+			return NumericLimits<idx_t>::Maximum();
+		}
+		idx_t val(result);
+		if (val == NumericLimits<idx_t>::Maximum()) {
+			return val;
+		}
+		return val + 1;
 	}
 
 	template <class INPUT_TYPE, class STATE>
@@ -162,12 +172,15 @@ void BitStringAggOperation::Execute(BitAggState<hugeint_t> *state, hugeint_t inp
 
 template <>
 idx_t BitStringAggOperation::GetRange(hugeint_t min, hugeint_t max) {
-	idx_t val;
-	if (Hugeint::TryCast(max - min + 1, val)) {
-		return val;
-	} else {
-		throw OutOfRangeException("Range too large for bitstring aggregation");
+	hugeint_t result;
+	if (!TrySubtractOperator::Operation(max, min, result)) {
+		return NumericLimits<idx_t>::Maximum();
 	}
+	idx_t range;
+	if (!Hugeint::TryCast(result + 1, range)) {
+		return NumericLimits<idx_t>::Maximum();
+	}
+	return range;
 }
 
 unique_ptr<BaseStatistics> BitstringPropagateStats(ClientContext &context, BoundAggregateExpression &expr,
@@ -185,8 +198,10 @@ unique_ptr<BaseStatistics> BitstringPropagateStats(ClientContext &context, Bound
 
 unique_ptr<FunctionData> BindBitstringAgg(ClientContext &context, AggregateFunction &function,
                                           vector<unique_ptr<Expression>> &arguments) {
-
 	if (arguments.size() == 3) {
+		if (!arguments[1]->IsFoldable() && !arguments[2]->IsFoldable()) {
+			throw BinderException("bitstring_agg requires a constant min and max argument");
+		}
 		auto min = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 		auto max = ExpressionExecutor::EvaluateScalar(context, *arguments[2]);
 		Function::EraseArgument(function, arguments, 2);

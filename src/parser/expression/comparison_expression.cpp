@@ -4,6 +4,9 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
+
 namespace duckdb {
 
 ComparisonExpression::ComparisonExpression(ExpressionType type, unique_ptr<ParsedExpression> left,
@@ -40,6 +43,19 @@ unique_ptr<ParsedExpression> ComparisonExpression::Deserialize(ExpressionType ty
 	auto left_child = reader.ReadRequiredSerializable<ParsedExpression>();
 	auto right_child = reader.ReadRequiredSerializable<ParsedExpression>();
 	return make_unique<ComparisonExpression>(type, std::move(left_child), std::move(right_child));
+}
+
+void ComparisonExpression::FormatSerialize(FormatSerializer &serializer) const {
+	ParsedExpression::FormatSerialize(serializer);
+	serializer.WriteProperty("left", *left);
+	serializer.WriteProperty("right", *right);
+}
+
+unique_ptr<ParsedExpression> ComparisonExpression::FormatDeserialize(ExpressionType type,
+                                                                     FormatDeserializer &deserializer) {
+	auto left = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("left");
+	auto right = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("right");
+	return make_unique<ComparisonExpression>(type, std::move(left), std::move(right));
 }
 
 } // namespace duckdb

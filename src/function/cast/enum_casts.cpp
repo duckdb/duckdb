@@ -109,17 +109,39 @@ unique_ptr<BoundCastData> BindEnumCast(BindCastInput &input, const LogicalType &
 	return make_unique<EnumBoundCastData>(std::move(to_varchar_cast), std::move(from_varchar_cast));
 }
 
+struct EnumCastLocalState : public FunctionLocalState {
+public:
+	unique_ptr<FunctionLocalState> to_varchar_local;
+	unique_ptr<FunctionLocalState> from_varchar_local;
+};
+
+static unique_ptr<FunctionLocalState> InitEnumCastLocalState(CastLocalStateParameters &parameters) {
+	auto &cast_data = (EnumBoundCastData &)*parameters.cast_data;
+	auto result = make_unique<EnumCastLocalState>();
+
+	if (cast_data.from_varchar_cast.init_local_state) {
+		CastLocalStateParameters from_varchar_params(parameters, cast_data.from_varchar_cast.cast_data);
+		result->from_varchar_local = cast_data.from_varchar_cast.init_local_state(from_varchar_params);
+	}
+	if (cast_data.to_varchar_cast.init_local_state) {
+		CastLocalStateParameters from_varchar_params(parameters, cast_data.to_varchar_cast.cast_data);
+		result->from_varchar_local = cast_data.to_varchar_cast.init_local_state(from_varchar_params);
+	}
+	return std::move(result);
+}
+
 static bool EnumToAnyCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &cast_data = (EnumBoundCastData &)*parameters.cast_data;
+	auto &lstate = (EnumCastLocalState &)*parameters.local_state;
 
 	Vector varchar_cast(LogicalType::VARCHAR, count);
 
 	// cast to varchar
-	CastParameters to_varchar_params(parameters, cast_data.to_varchar_cast.cast_data.get());
+	CastParameters to_varchar_params(parameters, cast_data.to_varchar_cast.cast_data, lstate.to_varchar_local);
 	cast_data.to_varchar_cast.function(source, varchar_cast, count, to_varchar_params);
 
 	// cast from varchar to the target
-	CastParameters from_varchar_params(parameters, cast_data.from_varchar_cast.cast_data.get());
+	CastParameters from_varchar_params(parameters, cast_data.from_varchar_cast.cast_data, lstate.from_varchar_local);
 	cast_data.from_varchar_cast.function(varchar_cast, result, count, from_varchar_params);
 	return true;
 }
@@ -152,7 +174,7 @@ BoundCastInfo DefaultCasts::EnumCastSwitch(BindCastInput &input, const LogicalTy
 			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
 		}
 	default: {
-		return BoundCastInfo(EnumToAnyCast, BindEnumCast(input, source, target));
+		return BoundCastInfo(EnumToAnyCast, BindEnumCast(input, source, target), InitEnumCastLocalState);
 	}
 	}
 }

@@ -170,6 +170,18 @@ public:
 	//! Equivalent to calling TopNLevenshtein followed by CandidatesMessage
 	DUCKDB_API static string CandidatesErrorMessage(const vector<string> &strings, const string &target,
 	                                                const string &message_prefix, idx_t n = 5);
+
+	//! Returns true if two null-terminated strings are equal or point to the same address.
+	//! Returns false if only one of the strings is nullptr
+	DUCKDB_API static bool Equals(const char *s1, const char *s2) {
+		if (s1 == s2) {
+			return true;
+		}
+		if (s1 == nullptr || s2 == nullptr) {
+			return false;
+		}
+		return strcmp(s1, s2) == 0;
+	}
 };
 
 } // namespace duckdb

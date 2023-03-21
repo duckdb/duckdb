@@ -2,6 +2,8 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
 
 namespace duckdb {
 
@@ -69,6 +71,24 @@ unique_ptr<ParsedExpression> SubqueryExpression::Deserialize(ExpressionType type
 	expression->subquery = std::move(subquery);
 	expression->child = reader.ReadOptional<ParsedExpression>(nullptr);
 	expression->comparison_type = reader.ReadRequired<ExpressionType>();
+	return std::move(expression);
+}
+
+void SubqueryExpression::FormatSerialize(FormatSerializer &serializer) const {
+	ParsedExpression::FormatSerialize(serializer);
+	serializer.WriteProperty("subquery_type", subquery_type);
+	serializer.WriteProperty("subquery", *subquery.get());
+	serializer.WriteOptionalProperty("child", child);
+	serializer.WriteProperty("comparison_type", comparison_type);
+}
+
+unique_ptr<ParsedExpression> SubqueryExpression::FormatDeserialize(ExpressionType type,
+                                                                   FormatDeserializer &deserializer) {
+	auto expression = make_unique<SubqueryExpression>();
+	deserializer.ReadProperty("subquery_type", expression->subquery_type);
+	deserializer.ReadProperty("subquery", expression->subquery);
+	deserializer.ReadOptionalProperty("child", expression->child);
+	deserializer.ReadProperty("comparison_type", expression->comparison_type);
 	return std::move(expression);
 }
 

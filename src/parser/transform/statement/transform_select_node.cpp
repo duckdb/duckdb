@@ -26,8 +26,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 				auto window_def = reinterpret_cast<duckdb_libpgquery::PGWindowDef *>(window_ele->data.ptr_value);
 				D_ASSERT(window_def);
 				D_ASSERT(window_def->name);
-				auto window_name = StringUtil::Lower(string(window_def->name));
-
+				string window_name(window_def->name);
 				auto it = window_clauses.find(window_name);
 				if (it != window_clauses.end()) {
 					throw ParserException("window \"%s\" is already defined", window_name);

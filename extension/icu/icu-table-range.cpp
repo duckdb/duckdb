@@ -13,13 +13,13 @@ struct ICUTableRange {
 	using CalendarPtr = unique_ptr<icu::Calendar>;
 
 	struct BindData : public TableFunctionData {
-		explicit BindData(const BindData &other)
-		    : tz_setting(other.tz_setting), cal_setting(other.cal_setting), calendar(other.calendar->clone()),
-		      start(other.start), end(other.end), increment(other.increment), inclusive_bound(other.inclusive_bound),
-		      greater_than_check(other.greater_than_check) {
+		BindData(const BindData &other)
+		    : TableFunctionData(other), tz_setting(other.tz_setting), cal_setting(other.cal_setting),
+		      calendar(other.calendar->clone()), start(other.start), end(other.end), increment(other.increment),
+		      inclusive_bound(other.inclusive_bound), greater_than_check(other.greater_than_check) {
 		}
 
-		BindData(ClientContext &context) {
+		explicit BindData(ClientContext &context) {
 			Value tz_value;
 			if (context.TryGetCurrentSetting("TimeZone", tz_value)) {
 				tz_setting = tz_value.ToString();
@@ -54,14 +54,14 @@ struct ICUTableRange {
 		bool inclusive_bound;
 		bool greater_than_check;
 
-		bool Equals(const FunctionData &other_p) const {
+		bool Equals(const FunctionData &other_p) const override {
 			auto &other = (const BindData &)other_p;
 			return other.start == start && other.end == end && other.increment == increment &&
 			       other.inclusive_bound == inclusive_bound && other.greater_than_check == greater_than_check &&
 			       *calendar == *other.calendar;
 		}
 
-		unique_ptr<FunctionData> Copy() const {
+		unique_ptr<FunctionData> Copy() const override {
 			return make_unique<BindData>(*this);
 		}
 

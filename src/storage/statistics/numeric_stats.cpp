@@ -2,6 +2,7 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 
 namespace duckdb {
 
@@ -13,6 +14,9 @@ template <>
 void NumericStats::Update<list_entry_t>(BaseStatistics &stats, list_entry_t new_value) {
 }
 
+//===--------------------------------------------------------------------===//
+// NumericStats
+//===--------------------------------------------------------------------===//
 BaseStatistics NumericStats::CreateUnknown(LogicalType type) {
 	BaseStatistics result(std::move(type));
 	result.InitializeUnknown();
@@ -62,79 +66,192 @@ void NumericStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	}
 }
 
-FilterPropagateResult NumericStats::CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
-                                                 const Value &constant) {
-	if (constant.IsNull()) {
-		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
-	}
-	if (!NumericStats::HasMinMax(stats)) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-	auto min_value = NumericStats::Min(stats);
-	auto max_value = NumericStats::Max(stats);
+struct GetNumericValueUnion {
+	template <class T>
+	static T Operation(const NumericValueUnion &v);
+};
+
+template <>
+int8_t GetNumericValueUnion::Operation(const NumericValueUnion &v) {
+	return v.value_.tinyint;
+}
+
+template <>
+int16_t GetNumericValueUnion::Operation(const NumericValueUnion &v) {
+	return v.value_.smallint;
+}
+
+template <>
+int32_t GetNumericValueUnion::Operation(const NumericValueUnion &v) {
+	return v.value_.integer;
+}
+
+template <>
+int64_t GetNumericValueUnion::Operation(const NumericValueUnion &v) {
+	return v.value_.bigint;
+}
+
+template <>
+hugeint_t GetNumericValueUnion::Operation(const NumericValueUnion &v) {
+	return v.value_.hugeint;
+}
+
+template <>
+uint8_t GetNumericValueUnion::Operation(const NumericValueUnion &v) {
+	return v.value_.utinyint;
+}
+
+template <>
+uint16_t GetNumericValueUnion::Operation(const NumericValueUnion &v) {
+	return v.value_.usmallint;
+}
+
+template <>
+uint32_t GetNumericValueUnion::Operation(const NumericValueUnion &v) {
+	return v.value_.uinteger;
+}
+
+template <>
+uint64_t GetNumericValueUnion::Operation(const NumericValueUnion &v) {
+	return v.value_.ubigint;
+}
+
+template <>
+float GetNumericValueUnion::Operation(const NumericValueUnion &v) {
+	return v.value_.float_;
+}
+
+template <>
+double GetNumericValueUnion::Operation(const NumericValueUnion &v) {
+	return v.value_.double_;
+}
+
+template <class T>
+T NumericStats::GetMinUnsafe(const BaseStatistics &stats) {
+	return GetNumericValueUnion::Operation<T>(NumericStats::GetDataUnsafe(stats).min);
+}
+
+template <class T>
+T NumericStats::GetMaxUnsafe(const BaseStatistics &stats) {
+	return GetNumericValueUnion::Operation<T>(NumericStats::GetDataUnsafe(stats).max);
+}
+
+template <class T>
+bool ConstantExactRange(T min, T max, T constant) {
+	return Equals::Operation(constant, min) && Equals::Operation(constant, max);
+}
+
+template <class T>
+bool ConstantValueInRange(T min, T max, T constant) {
+	return !(LessThan::Operation(constant, min) || GreaterThan::Operation(constant, max));
+}
+
+template <class T>
+FilterPropagateResult CheckZonemapTemplated(const BaseStatistics &stats, ExpressionType comparison_type,
+                                            const Value &constant_value) {
+	T min_value = NumericStats::GetMinUnsafe<T>(stats);
+	T max_value = NumericStats::GetMaxUnsafe<T>(stats);
+	T constant = constant_value.GetValueUnsafe<T>();
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
-		if (constant == min_value && constant == max_value) {
+		if (ConstantExactRange(min_value, max_value, constant)) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-		} else if (constant >= min_value && constant <= max_value) {
-			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		} else {
-			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
+		if (ConstantValueInRange(min_value, max_value, constant)) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	case ExpressionType::COMPARE_NOTEQUAL:
-		if (constant < min_value || constant > max_value) {
+		if (!ConstantValueInRange(min_value, max_value, constant)) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-		} else if (min_value == max_value && min_value == constant) {
+		} else if (ConstantExactRange(min_value, max_value, constant)) {
 			// corner case of a cluster with one numeric equal to the target constant
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		// X >= C
+		// GreaterThanEquals::Operation(X, C)
 		// this can be true only if max(X) >= C
 		// if min(X) >= C, then this is always true
-		if (min_value >= constant) {
+		if (GreaterThanEquals::Operation(min_value, constant)) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-		} else if (max_value >= constant) {
+		} else if (GreaterThanEquals::Operation(max_value, constant)) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		} else {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
 	case ExpressionType::COMPARE_GREATERTHAN:
-		// X > C
+		// GreaterThan::Operation(X, C)
 		// this can be true only if max(X) > C
 		// if min(X) > C, then this is always true
-		if (min_value > constant) {
+		if (GreaterThan::Operation(min_value, constant)) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-		} else if (max_value > constant) {
+		} else if (GreaterThan::Operation(max_value, constant)) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		} else {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		// X <= C
+		// LessThanEquals::Operation(X, C)
 		// this can be true only if min(X) <= C
 		// if max(X) <= C, then this is always true
-		if (max_value <= constant) {
+		if (LessThanEquals::Operation(max_value, constant)) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-		} else if (min_value <= constant) {
+		} else if (LessThanEquals::Operation(min_value, constant)) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		} else {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
 	case ExpressionType::COMPARE_LESSTHAN:
-		// X < C
+		// LessThan::Operation(X, C)
 		// this can be true only if min(X) < C
 		// if max(X) < C, then this is always true
-		if (max_value < constant) {
+		if (LessThan::Operation(max_value, constant)) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-		} else if (min_value < constant) {
+		} else if (LessThan::Operation(min_value, constant)) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		} else {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
 	default:
 		throw InternalException("Expression type in zonemap check not implemented");
+	}
+}
+
+FilterPropagateResult NumericStats::CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
+                                                 const Value &constant) {
+	D_ASSERT(constant.type() == stats.GetType());
+	if (constant.IsNull()) {
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+	if (!NumericStats::HasMinMax(stats)) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	switch (stats.GetType().InternalType()) {
+	case PhysicalType::INT8:
+		return CheckZonemapTemplated<int8_t>(stats, comparison_type, constant);
+	case PhysicalType::INT16:
+		return CheckZonemapTemplated<int16_t>(stats, comparison_type, constant);
+	case PhysicalType::INT32:
+		return CheckZonemapTemplated<int32_t>(stats, comparison_type, constant);
+	case PhysicalType::INT64:
+		return CheckZonemapTemplated<int64_t>(stats, comparison_type, constant);
+	case PhysicalType::UINT8:
+		return CheckZonemapTemplated<uint8_t>(stats, comparison_type, constant);
+	case PhysicalType::UINT16:
+		return CheckZonemapTemplated<uint16_t>(stats, comparison_type, constant);
+	case PhysicalType::UINT32:
+		return CheckZonemapTemplated<uint32_t>(stats, comparison_type, constant);
+	case PhysicalType::UINT64:
+		return CheckZonemapTemplated<uint64_t>(stats, comparison_type, constant);
+	case PhysicalType::INT128:
+		return CheckZonemapTemplated<hugeint_t>(stats, comparison_type, constant);
+	case PhysicalType::FLOAT:
+		return CheckZonemapTemplated<float>(stats, comparison_type, constant);
+	case PhysicalType::DOUBLE:
+		return CheckZonemapTemplated<double>(stats, comparison_type, constant);
+	default:
+		throw InternalException("Unsupported type for NumericStats::CheckZonemap");
 	}
 }
 
@@ -469,61 +586,6 @@ void NumericStats::Verify(const BaseStatistics &stats, Vector &vector, const Sel
 	default:
 		throw InternalException("Unsupported type %s for numeric statistics verify", type.ToString());
 	}
-}
-
-template <>
-int8_t &NumericValueUnion::GetReferenceUnsafe() {
-	return value_.tinyint;
-}
-
-template <>
-int16_t &NumericValueUnion::GetReferenceUnsafe() {
-	return value_.smallint;
-}
-
-template <>
-int32_t &NumericValueUnion::GetReferenceUnsafe() {
-	return value_.integer;
-}
-
-template <>
-int64_t &NumericValueUnion::GetReferenceUnsafe() {
-	return value_.bigint;
-}
-
-template <>
-hugeint_t &NumericValueUnion::GetReferenceUnsafe() {
-	return value_.hugeint;
-}
-
-template <>
-uint8_t &NumericValueUnion::GetReferenceUnsafe() {
-	return value_.utinyint;
-}
-
-template <>
-uint16_t &NumericValueUnion::GetReferenceUnsafe() {
-	return value_.usmallint;
-}
-
-template <>
-uint32_t &NumericValueUnion::GetReferenceUnsafe() {
-	return value_.uinteger;
-}
-
-template <>
-uint64_t &NumericValueUnion::GetReferenceUnsafe() {
-	return value_.ubigint;
-}
-
-template <>
-float &NumericValueUnion::GetReferenceUnsafe() {
-	return value_.float_;
-}
-
-template <>
-double &NumericValueUnion::GetReferenceUnsafe() {
-	return value_.double_;
 }
 
 } // namespace duckdb

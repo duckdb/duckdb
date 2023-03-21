@@ -9,6 +9,7 @@
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -72,20 +73,17 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 		int64_t range;
 		switch (group_type.InternalType()) {
 		case PhysicalType::INT8:
-			range = int64_t(NumericStats::GetMaxUnsafe<int8_t>(nstats)) -
-			        int64_t(NumericStats::GetMinUnsafe<int8_t>(nstats));
+			range = int64_t(NumericStats::GetMax<int8_t>(nstats)) - int64_t(NumericStats::GetMin<int8_t>(nstats));
 			break;
 		case PhysicalType::INT16:
-			range = int64_t(NumericStats::GetMaxUnsafe<int16_t>(nstats)) -
-			        int64_t(NumericStats::GetMinUnsafe<int16_t>(nstats));
+			range = int64_t(NumericStats::GetMax<int16_t>(nstats)) - int64_t(NumericStats::GetMin<int16_t>(nstats));
 			break;
 		case PhysicalType::INT32:
-			range = int64_t(NumericStats::GetMaxUnsafe<int32_t>(nstats)) -
-			        int64_t(NumericStats::GetMinUnsafe<int32_t>(nstats));
+			range = int64_t(NumericStats::GetMax<int32_t>(nstats)) - int64_t(NumericStats::GetMin<int32_t>(nstats));
 			break;
 		case PhysicalType::INT64:
-			if (!TrySubtractOperator::Operation(NumericStats::GetMaxUnsafe<int64_t>(nstats),
-			                                    NumericStats::GetMinUnsafe<int64_t>(nstats), range)) {
+			if (!TrySubtractOperator::Operation(NumericStats::GetMax<int64_t>(nstats),
+			                                    NumericStats::GetMin<int64_t>(nstats), range)) {
 				return false;
 			}
 			break;
@@ -169,13 +167,20 @@ PhysicalPlanGenerator::ExtractAggregateExpressions(unique_ptr<PhysicalOperator> 
 	vector<unique_ptr<Expression>> expressions;
 	vector<LogicalType> types;
 
+	// bind sorted aggregates
+	for (auto &aggr : aggregates) {
+		auto &bound_aggr = (BoundAggregateExpression &)*aggr;
+		if (bound_aggr.order_bys) {
+			// sorted aggregate!
+			FunctionBinder::BindSortedAggregate(context, bound_aggr, groups);
+		}
+	}
 	for (auto &group : groups) {
 		auto ref = make_unique<BoundReferenceExpression>(group->return_type, expressions.size());
 		types.push_back(group->return_type);
 		expressions.push_back(std::move(group));
 		group = std::move(ref);
 	}
-
 	for (auto &aggr : aggregates) {
 		auto &bound_aggr = (BoundAggregateExpression &)*aggr;
 		for (auto &child : bound_aggr.children) {

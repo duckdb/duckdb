@@ -1,0 +1,23 @@
+# name: test/sql/copy/csv/issue_6690.test
+# description: Issue #6690: incorrect handling of NULL values when decimal separator is defined
+# group: [csv]
+
+require vector_size 512
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+FROM read_csv_auto('data/csv/comma_decimal_null.csv',SEP=',',SAMPLE_SIZE=-1,header=TRUE,decimal_separator=',')
+
+query I
+SELECT FINANZ_STATO_FSC FROM read_csv_auto('data/csv/comma_decimal_null.csv',SEP=',',SAMPLE_SIZE=-1,header=TRUE,decimal_separator=',')
+----
+80000000.0
+1400000.0
+424428.0
+525572.0
+385000000.0
+577000.0
+NULL
+NULL

@@ -1,12 +1,12 @@
-library("DBI")
-library("testthat")
+# Run this file with testthat::test_local(filter = "^relational$")
 
 con <- dbConnect(duckdb())
 on.exit(dbDisconnect(con, shutdown = TRUE))
 
 test_that("we can create a relation from a df", {
-  rel_from_df(con, mtcars)
-  expect_true(TRUE)
+  rel <- rel_from_df(con, mtcars)
+  expect_type(rel, "externalptr")
+  expect_s3_class(rel, "duckdb_relation")
 })
 
 test_that("we won't crash when creating a relation from odd things", {
@@ -342,6 +342,7 @@ test_that("R semantics for arithmetics sum function are respected", {
    expect_true(is.na(res[[1]]))
 })
 
+<<<<<<< HEAD
 test_that("R can do comparisons with constant strings", {
    con <- dbConnect(duckdb::duckdb())
    dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
@@ -386,3 +387,25 @@ test_that("R can do comparisons with constant strings and respects the original 
 #    expect_equal(res, data.frame(a=c("hello")))
 # })
 #
+
+test_that("anti joins for eq_na_matches works", {
+   dbExecute(con, 'CREATE OR REPLACE MACRO "___eq_na_matches_na"(a, b) AS ((a IS NULL AND b IS NULL) OR (a = b))')
+   rel1 <- rel_from_df(con, data.frame(x = c(1, 1, 2, 3)))
+   rel2 <- rel_from_df(con, data.frame(y = c(2, 3, 3, 4)))
+   cond <- list(expr_function("___eq_na_matches_na", list(expr_reference("x"), expr_reference("y"))))
+   out <- rel_join(rel1, rel2, cond, "anti")
+   res <- rel_to_altrep(out)
+   expect_equal(res, data.frame(x=c(1, 1)))
+})
+
+
+test_that("semi joins for eq_na_matches works", {
+   dbExecute(con, 'CREATE OR REPLACE MACRO "___eq_na_matches_na"(a, b) AS ((a IS NULL AND b IS NULL) OR (a = b))')
+   rel1 <- rel_from_df(con, data.frame(x = c(1, 1, 2, 2)))
+   rel2 <- rel_from_df(con, data.frame(y = c(2, 2, 2, 2, 3, 3, 3)))
+   cond <- list(expr_function("___eq_na_matches_na", list(expr_reference("x"), expr_reference("y"))))
+   out <- rel_join(rel1, rel2, cond, "semi")
+   res <- rel_to_altrep(out)
+   expect_equal(res, data.frame(x=c(2, 2)))
+})
+

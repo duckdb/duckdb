@@ -29,6 +29,11 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 		if (aggr_expr.filter) {
 			callback(aggr_expr.filter);
 		}
+		if (aggr_expr.order_bys) {
+			for (auto &order : aggr_expr.order_bys->orders) {
+				callback(order.expression);
+			}
+		}
 		break;
 	}
 	case ExpressionClass::BOUND_BETWEEN: {
@@ -195,22 +200,24 @@ void ExpressionIterator::EnumerateQueryNodeChildren(BoundQueryNode &node,
 	}
 	case QueryNodeType::SELECT_NODE: {
 		auto &bound_select = (BoundSelectNode &)node;
-		for (idx_t i = 0; i < bound_select.select_list.size(); i++) {
-			EnumerateExpression(bound_select.select_list[i], callback);
+		for (auto &expr : bound_select.select_list) {
+			EnumerateExpression(expr, callback);
 		}
 		EnumerateExpression(bound_select.where_clause, callback);
-		for (idx_t i = 0; i < bound_select.groups.group_expressions.size(); i++) {
-			EnumerateExpression(bound_select.groups.group_expressions[i], callback);
+		for (auto &expr : bound_select.groups.group_expressions) {
+			EnumerateExpression(expr, callback);
 		}
 		EnumerateExpression(bound_select.having, callback);
-		for (idx_t i = 0; i < bound_select.aggregates.size(); i++) {
-			EnumerateExpression(bound_select.aggregates[i], callback);
+		for (auto &expr : bound_select.aggregates) {
+			EnumerateExpression(expr, callback);
 		}
-		for (idx_t i = 0; i < bound_select.unnests.size(); i++) {
-			EnumerateExpression(bound_select.unnests[i], callback);
+		for (auto &entry : bound_select.unnests) {
+			for (auto &expr : entry.second.expressions) {
+				EnumerateExpression(expr, callback);
+			}
 		}
-		for (idx_t i = 0; i < bound_select.windows.size(); i++) {
-			EnumerateExpression(bound_select.windows[i], callback);
+		for (auto &expr : bound_select.windows) {
+			EnumerateExpression(expr, callback);
 		}
 		if (bound_select.from_table) {
 			EnumerateTableRefChildren(*bound_select.from_table, callback);

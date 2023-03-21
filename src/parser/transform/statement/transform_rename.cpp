@@ -6,7 +6,9 @@ namespace duckdb {
 unique_ptr<AlterStatement> Transformer::TransformRename(duckdb_libpgquery::PGNode *node) {
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGRenameStmt *>(node);
 	D_ASSERT(stmt);
-	D_ASSERT(stmt->relation);
+	if (!stmt->relation) {
+		throw NotImplementedException("Altering schemas is not yet supported");
+	}
 
 	unique_ptr<AlterInfo> info;
 
@@ -16,8 +18,6 @@ unique_ptr<AlterStatement> Transformer::TransformRename(duckdb_libpgquery::PGNod
 	data.schema = stmt->relation->schemaname ? stmt->relation->schemaname : INVALID_SCHEMA;
 	if (stmt->relation->relname) {
 		data.name = stmt->relation->relname;
-	}
-	if (stmt->relation->schemaname) {
 	}
 	// first we check the type of ALTER
 	switch (stmt->renameType) {
@@ -36,7 +36,6 @@ unique_ptr<AlterStatement> Transformer::TransformRename(duckdb_libpgquery::PGNod
 		info = make_unique<RenameTableInfo>(std::move(data), new_name);
 		break;
 	}
-
 	case duckdb_libpgquery::PG_OBJECT_VIEW: {
 		// change view name
 		string new_name = stmt->newname;

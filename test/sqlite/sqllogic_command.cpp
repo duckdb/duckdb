@@ -64,13 +64,16 @@ void Command::RestartDatabase(ExecuteContext &context, Connection *&connection, 
 	} catch (...) {
 		query_fail = true;
 	}
-	bool is_any_transaction_active = false;
+	bool can_restart = true;
 	for (auto &conn : connection->context->db->GetConnectionManager().connections) {
+		if (!conn.first->client_data->prepared_statements.empty()) {
+			can_restart = false;
+		}
 		if (conn.first->transaction.HasActiveTransaction()) {
-			is_any_transaction_active = true;
+			can_restart = false;
 		}
 	}
-	if (!query_fail && !is_any_transaction_active && !runner.skip_reload) {
+	if (!query_fail && can_restart && !runner.skip_reload) {
 		// We basically restart the database if no transaction is active and if the query is valid
 		auto command = make_unique<RestartCommand>(runner);
 		runner.ExecuteCommand(std::move(command));
@@ -110,6 +113,9 @@ Query::Query(SQLLogicTestRunner &runner) : Command(runner) {
 }
 
 RestartCommand::RestartCommand(SQLLogicTestRunner &runner) : Command(runner) {
+}
+
+ReconnectCommand::ReconnectCommand(SQLLogicTestRunner &runner) : Command(runner) {
 }
 
 LoopCommand::LoopCommand(SQLLogicTestRunner &runner, LoopDefinition definition_p)
@@ -257,8 +263,6 @@ void RestartCommand::ExecuteInternal(ExecuteContext &context) const {
 		low_query_writer_path = runner.con->context->client_data->log_query_writer->path;
 	}
 
-	auto prepared_statements = std::move(runner.con->context->client_data->prepared_statements);
-
 	runner.LoadDatabase(runner.dbpath);
 
 	runner.con->context->config = client_config;
@@ -271,7 +275,13 @@ void RestartCommand::ExecuteInternal(ExecuteContext &context) const {
 		    make_unique<BufferedFileWriter>(FileSystem::GetFileSystem(*runner.con->context), low_query_writer_path,
 		                                    1 << 1 | 1 << 5, runner.con->context->client_data->file_opener.get());
 	}
-	runner.con->context->client_data->prepared_statements = std::move(prepared_statements);
+}
+
+void ReconnectCommand::ExecuteInternal(ExecuteContext &context) const {
+	if (context.is_parallel) {
+		throw std::runtime_error("Cannot reconnect in parallel");
+	}
+	runner.Reconnect();
 }
 
 void Statement::ExecuteInternal(ExecuteContext &context) const {

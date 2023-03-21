@@ -76,6 +76,7 @@ AggregateFunction CountFun::GetFunction() {
 	    LogicalType(LogicalTypeId::ANY), LogicalType::BIGINT);
 	fun.name = "count";
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return fun;
 }
 

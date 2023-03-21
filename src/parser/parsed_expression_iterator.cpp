@@ -96,6 +96,13 @@ void ParsedExpressionIterator::EnumerateChildren(
 		}
 		break;
 	}
+	case ExpressionClass::STAR: {
+		auto &star_expr = (StarExpression &)expr;
+		if (star_expr.expr) {
+			callback(star_expr.expr);
+		}
+		break;
+	}
 	case ExpressionClass::SUBQUERY: {
 		auto &subquery_expr = (SubqueryExpression &)expr;
 		if (subquery_expr.child) {
@@ -135,7 +142,6 @@ void ParsedExpressionIterator::EnumerateChildren(
 	case ExpressionClass::COLUMN_REF:
 	case ExpressionClass::CONSTANT:
 	case ExpressionClass::DEFAULT:
-	case ExpressionClass::STAR:
 	case ExpressionClass::PARAMETER:
 	case ExpressionClass::POSITIONAL_REFERENCE:
 		// these node types have no children

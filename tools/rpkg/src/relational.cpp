@@ -31,14 +31,14 @@ template <typename T, typename... ARGS>
 external_pointer<T> make_external(const string &rclass, ARGS &&... args) {
 	auto extptr = external_pointer<T>(new T(std::forward<ARGS>(args)...));
 	((sexp)extptr).attr("class") = rclass;
-	return (extptr);
+	return extptr;
 }
 
 template <typename T, typename... ARGS>
 external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&... args) {
 	auto extptr = external_pointer<T>(new T(std::forward<ARGS>(args)...), true, true, prot);
 	((sexp)extptr).attr("class") = rclass;
-	return (extptr);
+	return extptr;
 }
 
 // DuckDB Expressions

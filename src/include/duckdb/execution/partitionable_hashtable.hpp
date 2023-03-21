@@ -57,9 +57,12 @@ private:
 
 	HashTableList unpartitioned_hts;
 	unordered_map<hash_t, HashTableList> radix_partitioned_hts;
+	idx_t tuple_size;
 
 private:
 	idx_t ListAddChunk(HashTableList &list, DataChunk &groups, Vector &group_hashes, DataChunk &payload,
 	                   const vector<idx_t> &filter);
+	//! Returns the HT entry size used for intermediate hash tables
+	HtEntryType GetHTEntrySize();
 };
 } // namespace duckdb
