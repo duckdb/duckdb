@@ -111,8 +111,10 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
                                                               vector<JoinCondition> conditions,
                                                               vector<unique_ptr<Expression>> arbitrary_expressions) {
 	// Validate the conditions
+	bool need_to_consider_arbitrary_expressions = true;
 	switch (reftype) {
 	case JoinRefType::ASOF: {
+		need_to_consider_arbitrary_expressions = false;
 		auto asof_idx = conditions.size();
 		for (size_t c = 0; c < conditions.size(); ++c) {
 			auto &cond = conditions[c];
@@ -139,7 +141,6 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 		break;
 	}
 
-	bool need_to_consider_arbitrary_expressions = true;
 	if (type == JoinType::INNER && reftype == JoinRefType::REGULAR) {
 		// for inner joins we can push arbitrary expressions as a filter
 		// here we prefer to create a comparison join if possible
