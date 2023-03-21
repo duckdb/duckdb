@@ -127,6 +127,11 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		} else if (loption == "auto_type_candidates") {
 			options.auto_type_candidates.clear();
 			map<uint8_t, LogicalType> candidate_types;
+			// We always have the extremes of Null and Varchar, so we can default to varchar if the
+			// sniffer is not able to confidently detect that column type
+			candidate_types[GetCandidateSpecificity(LogicalType::VARCHAR)] = LogicalType::VARCHAR;
+			candidate_types[GetCandidateSpecificity(LogicalType::SQLNULL)] = LogicalType::SQLNULL;
+
 			auto &child_type = kv.second.type();
 			if (child_type.id() != LogicalTypeId::LIST) {
 				throw BinderException("read_csv auto_types requires a list as input");

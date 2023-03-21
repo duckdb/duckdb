@@ -811,7 +811,11 @@ vector<LogicalType> BufferedCSVReader::RefineTypeDetection(const vector<LogicalT
 
 		// set sql types
 		for (auto &best_sql_types_candidate : best_sql_types_candidates) {
-			detected_types.push_back(best_sql_types_candidate.back());
+			LogicalType d_type = best_sql_types_candidate.back();
+			if (best_sql_types_candidate.size() == type_candidates.size()) {
+				d_type = LogicalType::VARCHAR;
+			}
+			detected_types.push_back(d_type);
 		}
 	}
 
