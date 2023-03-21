@@ -81,11 +81,11 @@ struct AddPropagateStatistics {
 	                      Value &new_max) {
 		T min, max;
 		// new min is min+min
-		if (!OP::Operation(NumericStats::GetMinUnsafe<T>(lstats), NumericStats::GetMinUnsafe<T>(rstats), min)) {
+		if (!OP::Operation(NumericStats::GetMin<T>(lstats), NumericStats::GetMin<T>(rstats), min)) {
 			return true;
 		}
 		// new max is max+max
-		if (!OP::Operation(NumericStats::GetMaxUnsafe<T>(lstats), NumericStats::GetMaxUnsafe<T>(rstats), max)) {
+		if (!OP::Operation(NumericStats::GetMax<T>(lstats), NumericStats::GetMax<T>(rstats), max)) {
 			return true;
 		}
 		new_min = Value::Numeric(type, min);
@@ -99,10 +99,10 @@ struct SubtractPropagateStatistics {
 	static bool Operation(LogicalType type, BaseStatistics &lstats, BaseStatistics &rstats, Value &new_min,
 	                      Value &new_max) {
 		T min, max;
-		if (!OP::Operation(NumericStats::GetMinUnsafe<T>(lstats), NumericStats::GetMaxUnsafe<T>(rstats), min)) {
+		if (!OP::Operation(NumericStats::GetMin<T>(lstats), NumericStats::GetMax<T>(rstats), min)) {
 			return true;
 		}
-		if (!OP::Operation(NumericStats::GetMaxUnsafe<T>(lstats), NumericStats::GetMinUnsafe<T>(rstats), max)) {
+		if (!OP::Operation(NumericStats::GetMax<T>(lstats), NumericStats::GetMin<T>(rstats), max)) {
 			return true;
 		}
 		new_min = Value::Numeric(type, min);
@@ -489,8 +489,8 @@ unique_ptr<FunctionData> DecimalNegateBind(ClientContext &context, ScalarFunctio
 struct NegatePropagateStatistics {
 	template <class T>
 	static bool Operation(LogicalType type, BaseStatistics &istats, Value &new_min, Value &new_max) {
-		auto max_value = NumericStats::GetMaxUnsafe<T>(istats);
-		auto min_value = NumericStats::GetMinUnsafe<T>(istats);
+		auto max_value = NumericStats::GetMax<T>(istats);
+		auto min_value = NumericStats::GetMin<T>(istats);
 		if (!NegateOperator::CanNegate<T>(min_value) || !NegateOperator::CanNegate<T>(max_value)) {
 			return true;
 		}
@@ -664,8 +664,8 @@ struct MultiplyPropagateStatistics {
 		// etc
 		// rather than doing all this switcheroo we just multiply all combinations of lmin/lmax with rmin/rmax
 		// and check what the minimum/maximum value is
-		T lvals[] {NumericStats::GetMinUnsafe<T>(lstats), NumericStats::GetMaxUnsafe<T>(lstats)};
-		T rvals[] {NumericStats::GetMinUnsafe<T>(rstats), NumericStats::GetMaxUnsafe<T>(rstats)};
+		T lvals[] {NumericStats::GetMin<T>(lstats), NumericStats::GetMax<T>(lstats)};
+		T rvals[] {NumericStats::GetMin<T>(rstats), NumericStats::GetMax<T>(rstats)};
 		T min = NumericLimits<T>::Maximum();
 		T max = NumericLimits<T>::Minimum();
 		// multiplications

@@ -1,6 +1,7 @@
 #include "duckdb/storage/table/struct_column_data.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/storage/table/column_checkpoint_state.hpp"
 
 namespace duckdb {
 

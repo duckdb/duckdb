@@ -32,10 +32,9 @@ ColumnData::ColumnData(ColumnData &other, idx_t start, ColumnData *parent)
 		updates = make_unique<UpdateSegment>(*other.updates, *this);
 	}
 	idx_t offset = 0;
-	for (auto segment = other.data.GetRootSegment(); segment; segment = segment->Next()) {
-		auto &other = (ColumnSegment &)*segment;
-		this->data.AppendSegment(ColumnSegment::CreateSegment(other, start + offset));
-		offset += segment->count;
+	for (auto &segment : other.data.Segments()) {
+		this->data.AppendSegment(ColumnSegment::CreateSegment(segment, start + offset));
+		offset += segment.count;
 	}
 }
 
@@ -75,7 +74,8 @@ idx_t ColumnData::GetMaxEntry() {
 }
 
 void ColumnData::InitializeScan(ColumnScanState &state) {
-	state.current = (ColumnSegment *)data.GetRootSegment();
+	state.current = data.GetRootSegment();
+	state.segment_tree = &data;
 	state.row_index = state.current ? state.current->start : 0;
 	state.internal_index = state.row_index;
 	state.initialized = false;
@@ -84,7 +84,8 @@ void ColumnData::InitializeScan(ColumnScanState &state) {
 }
 
 void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
-	state.current = (ColumnSegment *)data.GetSegment(row_idx);
+	state.current = data.GetSegment(row_idx);
+	state.segment_tree = &data;
 	state.row_index = row_idx;
 	state.internal_index = state.current->start;
 	state.initialized = false;
@@ -125,11 +126,12 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 		}
 
 		if (remaining > 0) {
-			if (!state.current->next) {
+			auto next = data.GetNextSegment(state.current);
+			if (!next) {
 				break;
 			}
 			state.previous_states.emplace_back(std::move(state.scan_state));
-			state.current = (ColumnSegment *)state.current->Next();
+			state.current = next;
 			state.current->InitializeScan(state);
 			state.segment_checked = false;
 			D_ASSERT(state.row_index >= state.current->start &&
@@ -234,14 +236,14 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 		// no segments yet, append an empty segment
 		AppendTransientSegment(l, start);
 	}
-	auto segment = (ColumnSegment *)data.GetLastSegment(l);
+	auto segment = data.GetLastSegment(l);
 	if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
 		// no transient segments yet
 		auto total_rows = segment->start + segment->count;
 		AppendTransientSegment(l, total_rows);
-		state.current = (ColumnSegment *)data.GetLastSegment(l);
+		state.current = data.GetLastSegment(l);
 	} else {
-		state.current = (ColumnSegment *)segment;
+		state.current = segment;
 	}
 
 	D_ASSERT(state.current->segment_type == ColumnSegmentType::TRANSIENT);
@@ -264,7 +266,7 @@ void ColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &state, Uni
 		{
 			auto l = data.Lock();
 			AppendTransientSegment(l, state.current->start + state.current->count);
-			state.current = (ColumnSegment *)data.GetLastSegment(l);
+			state.current = data.GetLastSegment(l);
 			state.current->InitializeAppend(state);
 		}
 		offset += copied_elements;
@@ -284,7 +286,7 @@ void ColumnData::RevertAppend(row_t start_row) {
 	// find the segment index that the current row belongs to
 	idx_t segment_index = data.GetSegmentIndex(l, start_row);
 	auto segment = data.GetSegmentByIndex(l, segment_index);
-	auto &transient = (ColumnSegment &)*segment;
+	auto &transient = *segment;
 	D_ASSERT(transient.segment_type == ColumnSegmentType::TRANSIENT);
 
 	// remove any segments AFTER this segment: they should be deleted entirely
@@ -299,14 +301,14 @@ idx_t ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	D_ASSERT(idx_t(row_id) >= start);
 	// perform the fetch within the segment
 	state.row_index = start + ((row_id - start) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE);
-	state.current = (ColumnSegment *)data.GetSegment(state.row_index);
+	state.current = data.GetSegment(state.row_index);
 	state.internal_index = state.current->start;
 	return ScanVector(state, result, STANDARD_VECTOR_SIZE);
 }
 
 void ColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
                           idx_t result_idx) {
-	auto segment = (ColumnSegment *)data.GetSegment(row_id);
+	auto segment = data.GetSegment(row_id);
 
 	// now perform the fetch within the segment
 	segment->FetchRow(state, row_id, result, result_idx);
@@ -357,15 +359,14 @@ void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
 }
 
 void ColumnData::CommitDropColumn() {
-	auto segment = (ColumnSegment *)data.GetRootSegment();
-	while (segment) {
-		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
-			auto block_id = segment->GetBlockId();
+	for (auto &segment_p : data.Segments()) {
+		auto &segment = segment_p;
+		if (segment.segment_type == ColumnSegmentType::PERSISTENT) {
+			auto block_id = segment.GetBlockId();
 			if (block_id != INVALID_BLOCK) {
 				block_manager.MarkBlockAsModified(block_id);
 			}
 		}
-		segment = (ColumnSegment *)segment->Next();
 	}
 }
 
@@ -464,7 +465,6 @@ void ColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, T
 	while (segment) {
 		ColumnSegmentInfo column_info;
 		column_info.row_group_index = row_group_index;
-		;
 		column_info.column_id = col_path[0];
 		column_info.column_path = col_path_str;
 		column_info.segment_idx = segment_idx;
@@ -487,7 +487,7 @@ void ColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, T
 		result.column_segments.push_back(std::move(column_info));
 
 		segment_idx++;
-		segment = (ColumnSegment *)segment->Next();
+		segment = (ColumnSegment *)data.GetNextSegment(segment);
 	}
 }
 
@@ -495,19 +495,13 @@ void ColumnData::Verify(RowGroup &parent) {
 #ifdef DEBUG
 	D_ASSERT(this->start == parent.start);
 	data.Verify();
-	auto root = data.GetRootSegment();
-	if (root) {
-		D_ASSERT(root != nullptr);
-		D_ASSERT(root->start == this->start);
-		idx_t prev_end = root->start;
-		while (root) {
-			D_ASSERT(prev_end == root->start);
-			prev_end = root->start + root->count;
-			if (!root->next) {
-				D_ASSERT(prev_end == parent.start + parent.count);
-			}
-			root = root->Next();
-		}
+	idx_t current_index = 0;
+	idx_t current_start = this->start;
+	for (auto &segment : data.Segments()) {
+		D_ASSERT(segment.index == current_index);
+		D_ASSERT(segment.start == current_start);
+		current_start += segment.count;
+		current_index++;
 	}
 #endif
 }

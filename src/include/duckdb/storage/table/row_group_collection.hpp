@@ -23,6 +23,8 @@ class TableStatistics;
 
 class BoundConstraint;
 
+class RowGroupSegmentTree;
+
 class RowGroupCollection {
 public:
 	RowGroupCollection(shared_ptr<DataTableInfo> info, BlockManager &block_manager, vector<LogicalType> types,
@@ -46,8 +48,8 @@ public:
 	void InitializeCreateIndexScan(CreateIndexScanState &state);
 	void InitializeScanWithOffset(CollectionScanState &state, const vector<column_t> &column_ids, idx_t start_row,
 	                              idx_t end_row);
-	static bool InitializeScanInRowGroup(CollectionScanState &state, RowGroup *row_group, idx_t vector_index,
-	                                     idx_t max_row);
+	static bool InitializeScanInRowGroup(CollectionScanState &state, ParallelCollectionScanState &parallel_state,
+	                                     idx_t vector_index, idx_t max_row);
 	void InitializeParallelScan(ParallelCollectionScanState &state);
 	bool NextParallelScan(ClientContext &context, ParallelCollectionScanState &state, CollectionScanState &scan_state);
 
@@ -109,7 +111,7 @@ private:
 	vector<LogicalType> types;
 	idx_t row_start;
 	//! The segment trees holding the various row_groups of the table
-	shared_ptr<SegmentTree> row_groups;
+	shared_ptr<RowGroupSegmentTree> row_groups;
 	//! Table statistics
 	TableStatistics stats;
 };
