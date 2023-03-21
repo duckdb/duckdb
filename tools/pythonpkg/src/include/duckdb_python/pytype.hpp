@@ -5,6 +5,26 @@
 
 namespace duckdb {
 
+class PyGenericAlias : public py::object {
+public:
+	using py::object::object;
+
+public:
+	static bool check_(const py::handle &object) {
+		return py::isinstance(object, py::module::import("types").attr("GenericAlias"));
+	}
+};
+
+class PyUnionType : public py::object {
+public:
+	using py::object::object;
+
+public:
+	static bool check_(const py::handle &object) {
+		return py::isinstance(object, py::module::import("types").attr("UnionType"));
+	}
+};
+
 class DuckDBPyType : public std::enable_shared_from_this<DuckDBPyType> {
 public:
 	explicit DuckDBPyType(LogicalType type);
@@ -16,7 +36,6 @@ public:
 	bool Equals(const shared_ptr<DuckDBPyType> &other) const;
 	bool EqualsString(const string &type_str) const;
 	shared_ptr<DuckDBPyType> GetAttribute(const string &name) const;
-	bool HasAttribute(const string &name) const;
 	string ToString() const;
 	const LogicalType &Type() const;
 
