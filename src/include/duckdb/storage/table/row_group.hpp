@@ -16,6 +16,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/parser/column_list.hpp"
 #include "duckdb/storage/table/segment_base.hpp"
+#include "duckdb/storage/block.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
