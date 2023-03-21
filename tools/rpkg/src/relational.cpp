@@ -41,7 +41,6 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 	((sexp)extptr).attr("class") = rclass;
 	return extptr;
 }
-
 // DuckDB Expressions
 
 [[cpp11::register]] SEXP rapi_expr_reference(std::string name, std::string table) {
@@ -79,7 +78,7 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 		children.back()->alias = "";
 	}
 
-	// For Aggregates you can add orders
+	// For aggregates you can add orders
 	auto order_modifier = make_unique<OrderModifier>();
 	for (expr_extptr_t expr : order_bys) {
 		order_modifier->orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, expr->Copy());
@@ -247,7 +246,8 @@ static WindowBoundary StringToWindowBoundary(string &window_boundary) {
 
 [[cpp11::register]] SEXP rapi_expr_window(duckdb::expr_extptr_t window_function, list partitions,
                                           std::string window_boundary_start, std::string window_boundary_end,
-                                          list start_exprs, list end_exprs, list offset_exprs, list default_exprs) {
+                                          duckdb::expr_extptr_t start_expr, duckdb::expr_extptr_t end_expr,
+                                          duckdb::expr_extptr_t offset_expr, duckdb::expr_extptr_t default_expr) {
 
 	if (!window_function || window_function->type != ExpressionType::FUNCTION) {
 		stop("expected function expression");
@@ -273,16 +273,16 @@ static WindowBoundary StringToWindowBoundary(string &window_boundary) {
 	for (expr_extptr_t partition : partitions) {
 		window_expr->partitions.push_back(partition->Copy());
 	}
-	for (duckdb::expr_extptr_t start_expr : start_exprs) {
+	if (start_expr) {
 		window_expr->start_expr = start_expr->Copy();
 	}
-	for (duckdb::expr_extptr_t end_expr : end_exprs) {
+	if (end_expr) {
 		window_expr->end_expr = end_expr->Copy();
 	}
-	for (duckdb::expr_extptr_t offset_expr : offset_exprs) {
+	if (offset_expr) {
 		window_expr->offset_expr = offset_expr->Copy();
 	}
-	for (duckdb::expr_extptr_t default_expr : default_exprs) {
+	if (default_expr) {
 		window_expr->default_expr = default_expr->Copy();
 	}
 
@@ -389,6 +389,12 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 
 [[cpp11::register]] std::string rapi_rel_alias(duckdb::rel_extptr_t rel) {
 	return rel->rel->GetAlias();
+}
+
+// Call this function to avoid passing an empty list if an argument is optional
+[[cpp11::register]] SEXP rapi_get_null_SEXP_ptr() {
+	auto ret = make_external<ConstantExpression>("duckdb_null_ptr", nullptr);
+	return ret;
 }
 
 [[cpp11::register]] SEXP rapi_rel_set_alias(duckdb::rel_extptr_t rel, std::string alias) {

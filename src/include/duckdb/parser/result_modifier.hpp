@@ -103,9 +103,6 @@ public:
 	OrderModifier() : ResultModifier(ResultModifierType::ORDER_MODIFIER) {
 	}
 
-	OrderModifier(vector<OrderByNode> orders) : ResultModifier(ResultModifierType::ORDER_MODIFIER) {
-	}
-
 	//! List of order nodes
 	vector<OrderByNode> orders;
 

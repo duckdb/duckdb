@@ -153,13 +153,31 @@ rel_aggregate <- rapi_rel_aggregate
 #' rel2 <- rel_order(rel, list(expr_reference("hp")))
 rel_order <- rapi_rel_order
 
-
+#' Get an external pointer pointing to NULL
+#' @return an external pointer pointing to null_ptr.
+#' @noRd
+#' @examples
+#' null_ptr <- sexp_null_ptr()
+sexp_null_ptr <- rapi_get_null_SEXP_ptr
 
 expr_window <- function(window_function, partitions=list(),
-				window_boundary_start="unbounded_preceding",
-				window_boundary_end="current_row_range",
-				start_expr = list(), end_expr=list(), offset_expr=list(), default_expr=list()) {
-  expr_window_(window_function, partitions, tolower(window_boundary_start), tolower(window_boundary_end), start_expr, end_expr, offset_expr, default_expr)
+                        window_boundary_start="unbounded_preceding",
+                        window_boundary_end="current_row_range",
+                        start_expr = NULL, end_expr=NULL, offset_expr=NULL, default_expr=NULL) {
+    null_ptr <- sexp_null_ptr()
+    if (is.null(start_expr)) {
+      start_expr <- null_ptr
+    }
+    if (is.null(end_expr)) {
+      end_expr <- null_ptr
+    }
+    if (is.null(offset_expr)) {
+      offset_expr <- null_ptr
+    }
+    if (is.null(default_expr)) {
+      default_expr <- null_ptr
+    }
+    expr_window_(window_function, partitions, tolower(window_boundary_start), tolower(window_boundary_end), start_expr, end_expr, offset_expr, default_expr)
 }
 
 window_boundaries <- c("unbounded_preceding",

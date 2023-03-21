@@ -13,20 +13,6 @@
 
 namespace duckdb {
 
-enum class WindowBoundary : uint8_t {
-	INVALID = 0,
-	UNBOUNDED_PRECEDING = 1,
-	UNBOUNDED_FOLLOWING = 2,
-	CURRENT_ROW_RANGE = 3,
-	CURRENT_ROW_ROWS = 4,
-	EXPR_PRECEDING_ROWS = 5,
-	EXPR_FOLLOWING_ROWS = 6,
-	EXPR_PRECEDING_RANGE = 7,
-	EXPR_FOLLOWING_RANGE = 8
-};
-
-const char *ToString(WindowBoundary value);
-
 static ExpressionType WindowToExpressionType(string &fun_name) {
 	if (fun_name == "rank") {
 		return ExpressionType::WINDOW_RANK;
@@ -40,7 +26,7 @@ static ExpressionType WindowToExpressionType(string &fun_name) {
 		return ExpressionType::WINDOW_FIRST_VALUE;
 	} else if (fun_name == "last_value" || fun_name == "last") {
 		return ExpressionType::WINDOW_LAST_VALUE;
-	} else if (fun_name == "nth_value" || fun_name == "last") {
+	} else if (fun_name == "nth_value") {
 		return ExpressionType::WINDOW_NTH_VALUE;
 	} else if (fun_name == "cume_dist") {
 		return ExpressionType::WINDOW_CUME_DIST;
@@ -53,6 +39,20 @@ static ExpressionType WindowToExpressionType(string &fun_name) {
 	}
 	return ExpressionType::WINDOW_AGGREGATE;
 }
+
+enum class WindowBoundary : uint8_t {
+	INVALID = 0,
+	UNBOUNDED_PRECEDING = 1,
+	UNBOUNDED_FOLLOWING = 2,
+	CURRENT_ROW_RANGE = 3,
+	CURRENT_ROW_ROWS = 4,
+	EXPR_PRECEDING_ROWS = 5,
+	EXPR_FOLLOWING_ROWS = 6,
+	EXPR_PRECEDING_RANGE = 7,
+	EXPR_FOLLOWING_RANGE = 8
+};
+
+const char *ToString(WindowBoundary value);
 
 //! The WindowExpression represents a window function in the query. They are a special case of aggregates which is why
 //! they inherit from them.

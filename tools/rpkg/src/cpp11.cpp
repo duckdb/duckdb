@@ -139,10 +139,10 @@ extern "C" SEXP _duckdb_rapi_rel_order(SEXP rel, SEXP orders) {
   END_CPP11
 }
 // relational.cpp
-SEXP rapi_expr_window(duckdb::expr_extptr_t window_function, list partitions, std::string window_boundary_start, std::string window_boundary_end, list start_exprs, list end_exprs, list offset_exprs, list default_exprs);
-extern "C" SEXP _duckdb_rapi_expr_window(SEXP window_function, SEXP partitions, SEXP window_boundary_start, SEXP window_boundary_end, SEXP start_exprs, SEXP end_exprs, SEXP offset_exprs, SEXP default_exprs) {
+SEXP rapi_expr_window(duckdb::expr_extptr_t window_function, list partitions, std::string window_boundary_start, std::string window_boundary_end, duckdb::expr_extptr_t start_expr, duckdb::expr_extptr_t end_expr, duckdb::expr_extptr_t offset_expr, duckdb::expr_extptr_t default_expr);
+extern "C" SEXP _duckdb_rapi_expr_window(SEXP window_function, SEXP partitions, SEXP window_boundary_start, SEXP window_boundary_end, SEXP start_expr, SEXP end_expr, SEXP offset_expr, SEXP default_expr) {
   BEGIN_CPP11
-    return cpp11::as_sexp(rapi_expr_window(cpp11::as_cpp<cpp11::decay_t<duckdb::expr_extptr_t>>(window_function), cpp11::as_cpp<cpp11::decay_t<list>>(partitions), cpp11::as_cpp<cpp11::decay_t<std::string>>(window_boundary_start), cpp11::as_cpp<cpp11::decay_t<std::string>>(window_boundary_end), cpp11::as_cpp<cpp11::decay_t<list>>(start_exprs), cpp11::as_cpp<cpp11::decay_t<list>>(end_exprs), cpp11::as_cpp<cpp11::decay_t<list>>(offset_exprs), cpp11::as_cpp<cpp11::decay_t<list>>(default_exprs)));
+    return cpp11::as_sexp(rapi_expr_window(cpp11::as_cpp<cpp11::decay_t<duckdb::expr_extptr_t>>(window_function), cpp11::as_cpp<cpp11::decay_t<list>>(partitions), cpp11::as_cpp<cpp11::decay_t<std::string>>(window_boundary_start), cpp11::as_cpp<cpp11::decay_t<std::string>>(window_boundary_end), cpp11::as_cpp<cpp11::decay_t<duckdb::expr_extptr_t>>(start_expr), cpp11::as_cpp<cpp11::decay_t<duckdb::expr_extptr_t>>(end_expr), cpp11::as_cpp<cpp11::decay_t<duckdb::expr_extptr_t>>(offset_expr), cpp11::as_cpp<cpp11::decay_t<duckdb::expr_extptr_t>>(default_expr)));
   END_CPP11
 }
 // relational.cpp
@@ -199,6 +199,13 @@ std::string rapi_rel_alias(duckdb::rel_extptr_t rel);
 extern "C" SEXP _duckdb_rapi_rel_alias(SEXP rel) {
   BEGIN_CPP11
     return cpp11::as_sexp(rapi_rel_alias(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(rel)));
+  END_CPP11
+}
+// relational.cpp
+SEXP rapi_get_null_SEXP_ptr();
+extern "C" SEXP _duckdb_rapi_get_null_SEXP_ptr() {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rapi_get_null_SEXP_ptr());
   END_CPP11
 }
 // relational.cpp
@@ -357,6 +364,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_duckdb_rapi_expr_set_alias",         (DL_FUNC) &_duckdb_rapi_expr_set_alias,         2},
     {"_duckdb_rapi_expr_tostring",          (DL_FUNC) &_duckdb_rapi_expr_tostring,          1},
     {"_duckdb_rapi_expr_window",            (DL_FUNC) &_duckdb_rapi_expr_window,            8},
+    {"_duckdb_rapi_get_null_SEXP_ptr",      (DL_FUNC) &_duckdb_rapi_get_null_SEXP_ptr,      0},
     {"_duckdb_rapi_get_substrait",          (DL_FUNC) &_duckdb_rapi_get_substrait,          3},
     {"_duckdb_rapi_get_substrait_json",     (DL_FUNC) &_duckdb_rapi_get_substrait_json,     3},
     {"_duckdb_rapi_prepare",                (DL_FUNC) &_duckdb_rapi_prepare,                2},

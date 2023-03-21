@@ -377,7 +377,7 @@ test_that("Window sum with Partition, order, and window boundaries works", {
     sum_window <- expr_window(sum_func, partitions=partitions,
                                         window_boundary_start="expr_preceding_rows",
                                         window_boundary_end="current_row_rows",
-                                        start_expr=list(expr_constant(2)))
+                                        start_expr=expr_constant(2))
     expr_set_alias(sum_window, "window_result")
     window_proj <- rel_project(rel_a, list(expr_reference("a"), sum_window))
     proj_order <-rel_order(window_proj, list(expr_reference("a")))
@@ -395,7 +395,7 @@ test_that("Window boundaries boundaries are CaSe INsenSItive", {
     sum_window <- expr_window(sum_func, partitions=partitions,
                                         window_boundary_start="exPr_PREceding_rOWs",
                                         window_boundary_end="cURrEnt_rOw_RoWs",
-                                        start_expr=list(expr_constant(2)))
+                                        start_expr=expr_constant(2))
     expr_set_alias(sum_window, "window_result")
     window_proj <- rel_project(rel_a, list(expr_reference("a"), sum_window))
     proj_order <-rel_order(window_proj, list(expr_reference("a")))
@@ -427,7 +427,7 @@ test_that("Window lag function works as expected", {
 #   select a, b, lag(a, 1) OVER () order by a
     rel_a <- rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
     lag <- expr_function("lag", list(expr_reference("a")))
-    window_lag <- expr_window(lag, offset=list(expr_constant(1)))
+    window_lag <- expr_window(lag, offset_expr=expr_constant(1))
 	  expr_set_alias(window_lag, "lag")
 	  proj_window <- rel_project(rel_a, list(expr_reference("a"), window_lag))
     order_over_window <- rapi_rel_order(proj_window, list(expr_reference("a")))
@@ -441,7 +441,7 @@ test_that("function name for window is case insensitive", {
 #   select a, b, lag(a, 1) OVER () order by a
     rel_a <- rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
     lag <- expr_function("LAG", list(expr_reference("a")))
-    window_lag <- expr_window(lag, offset=list(expr_constant(1)))
+    window_lag <- expr_window(lag, offset_expr=expr_constant(1))
 	  expr_set_alias(window_lag, "lag")
 	  proj_window <- rel_project(rel_a, list(expr_reference("a"), window_lag))
     order_over_window <- rapi_rel_order(proj_window, list(expr_reference("a")))
@@ -454,7 +454,7 @@ test_that("Window lead function works as expected", {
 #   select a, b, lag(a, 1) OVER () order by a
     rel_a <- rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
     lead <- expr_function("lead", list(expr_reference("a")))
-    window_lead <- expr_window(lead, offset=list(expr_constant(1)))
+    window_lead <- expr_window(lead, offset_expr=expr_constant(1))
 	  expr_set_alias(window_lead, "lead")
 	  proj_window <- rel_project(rel_a, list(expr_reference("a"), window_lead))
     order_over_window <- rapi_rel_order(proj_window, list(expr_reference("a")))
