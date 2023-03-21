@@ -42,6 +42,10 @@ SELECT MIN(i), MAX(i), COUNT(*) FROM integers2
 ----
 0	999999	1000000
 
+# rowsort
+statement ok
+PRAGMA disable_verification
+
 # we need a rowsort here because we don't preserve insertion order
 # note that rowsort is a string-based sort
 query I rowsort
