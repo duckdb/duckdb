@@ -57,19 +57,16 @@ void ListColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_
 	ColumnData::InitializeScanWithOffset(state, row_idx);
 
 	// initialize the validity segment
-	ColumnScanState validity_state;
-	validity.InitializeScanWithOffset(validity_state, row_idx);
-	state.child_states.push_back(std::move(validity_state));
+	D_ASSERT(state.child_states.size() == 2);
+	validity.InitializeScanWithOffset(state.child_states[0], row_idx);
 
 	// we need to read the list at position row_idx to get the correct row offset of the child
 	auto child_offset = row_idx == start ? 0 : FetchListOffset(row_idx - 1);
 
 	D_ASSERT(child_offset <= child_column->GetMaxEntry());
-	ColumnScanState child_state;
 	if (child_offset < child_column->GetMaxEntry()) {
-		child_column->InitializeScanWithOffset(child_state, start + child_offset);
+		child_column->InitializeScanWithOffset(state.child_states[1], start + child_offset);
 	}
-	state.child_states.push_back(std::move(child_state));
 }
 
 idx_t ListColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
