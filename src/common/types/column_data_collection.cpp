@@ -959,7 +959,7 @@ bool ColumnDataCollection::ResultEquals(const ColumnDataCollection &left, const 
 	for (idx_t r = 0; r < left.Count(); r++) {
 		for (idx_t c = 0; c < left.ColumnCount(); c++) {
 			auto lvalue = left_rows.GetValue(c, r);
-			auto rvalue = left_rows.GetValue(c, r);
+			auto rvalue = right_rows.GetValue(c, r);
 			if (!Value::DefaultValuesAreEqual(lvalue, rvalue)) {
 				error_message =
 				    StringUtil::Format("%s <> %s (row: %lld, col: %lld)\n", lvalue.ToString(), rvalue.ToString(), r, c);

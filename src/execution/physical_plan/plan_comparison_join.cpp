@@ -152,7 +152,8 @@ static void CanUseIndexJoin(TableScanBindData *tbl, Expression &expr, Index **re
 	});
 }
 
-Index *CheckIndexJoin(ClientContext &context, LogicalComparisonJoin &op, PhysicalOperator &plan, Expression &condition) {
+Index *CheckIndexJoin(ClientContext &context, LogicalComparisonJoin &op, PhysicalOperator &plan,
+                      Expression &condition) {
 	if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		return nullptr;
 	}
@@ -167,7 +168,7 @@ Index *CheckIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Physica
 	if (plan.type != PhysicalOperatorType::TABLE_SCAN) {
 		return nullptr;
 	}
-	auto &tbl_scan = (PhysicalTableScan &) plan;
+	auto &tbl_scan = (PhysicalTableScan &)plan;
 	auto tbl = dynamic_cast<TableScanBindData *>(tbl_scan.bind_data.get());
 	Index *result = nullptr;
 	if (CanPlanIndexJoin(context, tbl, tbl_scan)) {
@@ -176,18 +177,25 @@ Index *CheckIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Physica
 	return result;
 }
 
-static bool PlanIndexJoin(ClientContext &context, LogicalComparisonJoin &op, unique_ptr<PhysicalOperator> &plan, unique_ptr<PhysicalOperator> &left, unique_ptr<PhysicalOperator> &right, Index *index, bool swap_condition = false) {
+static bool PlanIndexJoin(ClientContext &context, LogicalComparisonJoin &op, unique_ptr<PhysicalOperator> &plan,
+                          unique_ptr<PhysicalOperator> &left, unique_ptr<PhysicalOperator> &right, Index *index,
+                          bool swap_condition = false) {
 	if (!index) {
 		return false;
 	}
 	// index joins are not supported if there are pushed down table filters
 	D_ASSERT(right->type == PhysicalOperatorType::TABLE_SCAN);
 	auto &tbl_scan = (PhysicalTableScan &)*right;
-//	if (tbl_scan.table_filters && !tbl_scan.table_filters->filters.empty()) {
-//		return false;
-//	}
+	//	if (tbl_scan.table_filters && !tbl_scan.table_filters->filters.empty()) {
+	//		return false;
+	//	}
+	// index joins are disabled if enable_optimizer is false
+	if (!ClientConfig::GetConfig(context).enable_optimizer) {
+		return false;
+	}
 	// check if the cardinality difference justifies an index join
-	if (!((ClientConfig::GetConfig(context).force_index_join || left->estimated_cardinality < 0.01 * right->estimated_cardinality))) {
+	if (!((ClientConfig::GetConfig(context).force_index_join ||
+	       left->estimated_cardinality < 0.01 * right->estimated_cardinality))) {
 		return false;
 	}
 
@@ -196,14 +204,14 @@ static bool PlanIndexJoin(ClientContext &context, LogicalComparisonJoin &op, uni
 		swap(op.conditions[0].left, op.conditions[0].right);
 		swap(op.left_projection_map, op.right_projection_map);
 	}
-	plan = make_unique<PhysicalIndexJoin>(op, std::move(left), std::move(right), std::move(op.conditions),
-										  op.join_type, op.left_projection_map, op.right_projection_map,
-										  tbl_scan.column_ids, index, !swap_condition, op.estimated_cardinality);
+	plan = make_unique<PhysicalIndexJoin>(op, std::move(left), std::move(right), std::move(op.conditions), op.join_type,
+	                                      op.left_projection_map, op.right_projection_map, tbl_scan.column_ids, index,
+	                                      !swap_condition, op.estimated_cardinality);
 	return true;
 }
 
-
-static bool PlanIndexJoin(ClientContext &context, LogicalComparisonJoin &op, unique_ptr<PhysicalOperator> &plan, unique_ptr<PhysicalOperator> &left, unique_ptr<PhysicalOperator> &right) {
+static bool PlanIndexJoin(ClientContext &context, LogicalComparisonJoin &op, unique_ptr<PhysicalOperator> &plan,
+                          unique_ptr<PhysicalOperator> &left, unique_ptr<PhysicalOperator> &right) {
 	if (op.conditions.empty()) {
 		return false;
 	}

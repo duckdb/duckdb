@@ -654,6 +654,7 @@ bool ART::SearchEqual(Key &key, idx_t max_count, vector<row_t> &result_ids) {
 }
 
 void ART::SearchEqualJoinNoFetch(Key &key, idx_t &result_size) {
+	result_size = 0;
 
 	// we need to look for a leaf
 	auto old_memory_size = memory_size;
