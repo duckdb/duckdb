@@ -81,6 +81,7 @@ void ColumnData::InitializeScan(ColumnScanState &state) {
 	state.initialized = false;
 	state.version = version;
 	state.scan_state.reset();
+	state.last_offset = 0;
 }
 
 void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
@@ -91,6 +92,7 @@ void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx)
 	state.initialized = false;
 	state.version = version;
 	state.scan_state.reset();
+	state.last_offset = 0;
 }
 
 idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining) {
