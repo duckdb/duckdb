@@ -352,7 +352,7 @@ test_that("R semantics for adding NaNs is respected", {
    addition_expression <- expr_function("+", list(expr_reference("a"), expr_reference("c")))
    proj <- rel_project(rel_join, list(addition_expression))
    res <- rapi_rel_to_df(proj)
-   expect_true(is.na(res[[1]]))
+   expect_true(is.nan(res[[1]]))
 })
 
 
@@ -362,11 +362,11 @@ test_that("R semantics for arithmetics sum function are respected", {
    sum_rel <- expr_function("sum", list(expr_reference("a")))
    ans <- rel_aggregate(test_df_a, list(), list(sum_rel))
    res <- rel_to_altrep(ans)
-   expect_true(is.NaN(res[[1]]))
+   expect_true(is.nan(res[[1]]))
 })
 
 test_that("rel aggregate on NaN is 0 when sum default it 0", {
-   duckdb_set_sum_default_to_zero(con, TRUE)
+   duckdb_sum_default_zero(con, TRUE)
    test_df_a <- rel_from_df(con, data.frame(a=c(1:5, NaN)))
    sum_rel <- expr_function("sum", list(expr_reference("a")))
    ans <- rel_aggregate(test_df_a, list(), list(sum_rel))
@@ -375,7 +375,7 @@ test_that("rel aggregate on NaN is 0 when sum default it 0", {
 })
 
 test_that("rel aggregate on NA is 0", {
-   duckdb_set_sum_default_to_zero(con, TRUE)
+   duckdb_sum_default_zero(con, TRUE)
    rel_a <- rel_from_df(con, data.frame(a=c(NaN, NaN, 5, 5), b=c(3, 3, 4, 4)))
    aggrs <- list(sum = expr_function("sum", list(expr_reference("a"))))
    res <- rel_aggregate(rel_a, list(expr_reference("b")), aggrs)
