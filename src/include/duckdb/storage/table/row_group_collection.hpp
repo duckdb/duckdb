@@ -26,7 +26,6 @@ struct TableAppendState;
 class DuckTransaction;
 class BoundConstraint;
 class RowGroupSegmentTree;
-class ColumnDataSegmentTree;
 
 class RowGroupCollection {
 public:
@@ -126,8 +125,6 @@ private:
 	idx_t row_start;
 	//! The segment trees holding the various row_groups of the table
 	shared_ptr<RowGroupSegmentTree> row_groups;
-	//! The columns of the row group collection
-	vector<shared_ptr<ColumnDataSegmentTree>> columns;
 	//! Table statistics
 	TableStatistics stats;
 };
