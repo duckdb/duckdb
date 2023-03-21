@@ -21,7 +21,8 @@ public:
 
 public:
 	static bool check_(const py::handle &object) {
-		return py::isinstance(object, py::module::import("types").attr("UnionType"));
+		return py::isinstance(object, py::module::import("types").attr("UnionType")) ||
+		       py::isinstance(object, py::module::import("typing").attr("_UnionGenericAlias"));
 	}
 };
 

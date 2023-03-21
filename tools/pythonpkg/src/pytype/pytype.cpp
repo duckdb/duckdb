@@ -21,29 +21,23 @@ bool DuckDBPyType::EqualsString(const string &type_str) const {
 	return StringUtil::CIEquals(type.ToString(), type_str);
 }
 
-static bool HasAttributeInternal(const LogicalType &type, const string &name, idx_t &index) {
+shared_ptr<DuckDBPyType> DuckDBPyType::GetAttribute(const string &name) const {
 	if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION) {
 		auto &children = StructType::GetChildTypes(type);
 		for (idx_t i = 0; i < children.size(); i++) {
 			auto &child = children[i];
 			if (StringUtil::CIEquals(child.first, name)) {
-				index = i;
-				return true;
+				return make_shared<DuckDBPyType>(StructType::GetChildType(type, i));
 			}
 		}
 	}
-	return false;
-}
-
-shared_ptr<DuckDBPyType> DuckDBPyType::GetAttribute(const string &name) const {
-	idx_t child_index;
-	if (!HasAttributeInternal(type, name, child_index)) {
-		throw py::attribute_error(
-		    StringUtil::Format("Tried to get child type by the name of '%s', but this type either isn't nested, "
-		                       "or it doesn't have a child by that name",
-		                       name));
+	if (type.id() == LogicalTypeId::LIST && StringUtil::CIEquals(name, "child")) {
+		return make_shared<DuckDBPyType>(ListType::GetChildType(type));
 	}
-	return make_shared<DuckDBPyType>(StructType::GetChildType(type, child_index));
+	throw py::attribute_error(
+	    StringUtil::Format("Tried to get child type by the name of '%s', but this type either isn't nested, "
+	                       "or it doesn't have a child by that name",
+	                       name));
 }
 
 static LogicalType FromObject(const py::object &object);
@@ -142,10 +136,6 @@ static child_list_t<LogicalType> ToFields(const py::tuple &fields_p) {
 }
 
 static LogicalType FromUnionType(const py::object &obj) {
-	py::module_ types = py::module_::import("types");
-	auto union_type = types.attr("UnionType");
-	D_ASSERT(py::isinstance(obj, union_type));
-
 	idx_t index = 1;
 	child_list_t<LogicalType> members;
 	py::tuple args = obj.attr("__args__");
@@ -225,6 +215,10 @@ void DuckDBPyType::Initialize(py::handle &m) {
 		auto ltype = FromGenericAlias(obj);
 		return make_shared<DuckDBPyType>(ltype);
 	}));
+	connection_module.def(py::init<>([](const PyUnionType &obj) {
+		auto ltype = FromUnionType(obj);
+		return make_shared<DuckDBPyType>(ltype);
+	}));
 	connection_module.def("__getattr__", &DuckDBPyType::GetAttribute, "Get the child type by 'name'", py::arg("name"));
 	connection_module.def("__getitem__", &DuckDBPyType::GetAttribute, "Get the child type by 'name'", py::arg("name"));
 
@@ -232,6 +226,7 @@ void DuckDBPyType::Initialize(py::handle &m) {
 	py::implicitly_convertible<py::type, DuckDBPyType>();
 	py::implicitly_convertible<py::object, DuckDBPyType>();
 	py::implicitly_convertible<PyGenericAlias, DuckDBPyType>();
+	py::implicitly_convertible<PyUnionType, DuckDBPyType>();
 }
 
 string DuckDBPyType::ToString() const {

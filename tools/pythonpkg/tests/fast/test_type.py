@@ -2,6 +2,7 @@ import duckdb
 import os
 import pandas as pd
 import pytest
+from typing import Union
 
 class TestRelation(object):
     def test_sqltype(self):
@@ -75,6 +76,37 @@ class TestRelation(object):
         type = duckdb.union_type({'a': duckdb.bigint, 'b': duckdb.varchar, 'c': duckdb.tinyint})
         assert str(type) == 'UNION(a BIGINT, b VARCHAR, c TINYINT)'
     
+    def test_implicit_convert_from_builtin_type(self):
+        type = duckdb.list_type(list[str])
+        assert str(type.child) == "VARCHAR[]"
+
+        mapping = {
+            'VARCHAR': str,
+            'BIGINT': int,
+            'BLOB': bytes,
+            'BLOB': bytearray,
+            'BOOLEAN': bool,
+            'DOUBLE': float
+        }
+        for expected, type in mapping.items():
+            res = duckdb.list_type(type)
+            assert str(res.child) == expected
+        
+        res = duckdb.list_type(dict['a': str, 'b': int])
+        assert str(res.child) == 'STRUCT(a VARCHAR, b BIGINT)'
+
+        res = duckdb.list_type(dict[str, int])
+        assert str(res.child) == 'MAP(VARCHAR, BIGINT)'
+
+        res = duckdb.list_type(list[str])
+        assert str(res.child) == 'VARCHAR[]'
+
+        res = duckdb.list_type(list[dict[str, dict[list[str], str]]])
+        assert str(res.child) == 'MAP(VARCHAR, MAP(VARCHAR[], VARCHAR))[]'
+
+        res = duckdb.list_type(list[Union[str, int]])
+        assert str(res.child) == 'UNION(u1 VARCHAR, u2 BIGINT)[]'
+
     def test_attribute_accessor(self):
         type = duckdb.row_type([duckdb.bigint, duckdb.list_type(duckdb.map_type(duckdb.blob, duckdb.bit))])
         assert hasattr(type, 'a') == False
@@ -87,3 +119,6 @@ class TestRelation(object):
 
         field_two = type['v2']
         assert str(field_two) == 'MAP(BLOB, BIT)[]'
+
+        child_type = type.v2.child
+        assert str(child_type) == 'MAP(BLOB, BIT)'
