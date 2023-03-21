@@ -76,14 +76,6 @@ public:
 	DatabaseInstance &GetDatabase();
 	BlockManager &GetBlockManager();
 	DataTableInfo &GetTableInfo();
-	idx_t GetColumnIndex(ColumnData *data) {
-		for (idx_t i = 0; i < columns.size(); i++) {
-			if (columns[i].get() == data) {
-				return i;
-			}
-		}
-		return 0;
-	}
 
 	unique_ptr<RowGroup> AlterType(RowGroupCollection &collection, const LogicalType &target_type, idx_t changed_idx,
 	                               ExpressionExecutor &executor, CollectionScanState &scan_state,
@@ -156,6 +148,9 @@ public:
 
 private:
 	ChunkInfo *GetChunkInfo(idx_t vector_idx);
+	ColumnData &GetColumn(idx_t c);
+	idx_t GetColumnCount() const;
+	vector<shared_ptr<ColumnData>> &GetColumns();
 
 	template <TableScanType TYPE>
 	void TemplatedScan(TransactionData transaction, CollectionScanState &state, DataChunk &result);
@@ -165,6 +160,7 @@ private:
 
 private:
 	mutex row_group_lock;
+	vector<BlockPointer> column_pointers;
 };
 
 struct VersionNode {

@@ -276,7 +276,7 @@ void StructColumnData::DeserializeColumn(Deserializer &source) {
 	for (auto &sub_column : sub_columns) {
 		sub_column->DeserializeColumn(source);
 	}
-	this->count = validity.count.load();
+	this->count = validity.count;
 }
 
 void StructColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, TableStorageInfo &result) {

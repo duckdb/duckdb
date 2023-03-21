@@ -48,6 +48,9 @@ public:
 
 	//! Gets a pointer to the first segment. Useful for scans.
 	T *GetRootSegment() {
+		if (!SUPPORTS_LAZY_LOADING) {
+			return nodes.empty() ? nullptr : nodes[0].node.get();
+		}
 		auto l = Lock();
 		return GetRootSegment(l);
 	}
