@@ -3,6 +3,9 @@
 # group: [pivot]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 CREATE TABLE cpb_tbl AS
 WITH CPB(CPDH,NF,JG) AS (
 SELECT 'C1',2022,10
@@ -37,7 +40,7 @@ SELECT 'C2',2010,30
 UNION ALL
 SELECT 'C3',2010,80
 )
-pivot CPB on nf IN (2010, 2017, 2018, 2022) using sum(jg) group by cpdh
+pivot CPB on nf IN (2010, 2017, 2018, 2022) using sum(jg)group by cpdh
 ----
 
 query IIIII rowsort pivot
