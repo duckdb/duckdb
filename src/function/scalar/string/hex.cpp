@@ -176,29 +176,26 @@ static void FromHexFunction(DataChunk &args, ExpressionState &state, Vector &res
 
 void HexFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet to_hex("to_hex");
-	ScalarFunctionSet hex("hex");
 	ScalarFunctionSet from_hex("from_hex");
-	ScalarFunctionSet unhex("unhex");
 
 	to_hex.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, ToHexFunction));
-	hex.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, ToHexFunction));
 
 	to_hex.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::VARCHAR, ToHexFunction));
-	hex.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::VARCHAR, ToHexFunction));
 
 	to_hex.AddFunction(ScalarFunction({LogicalType::UBIGINT}, LogicalType::VARCHAR, ToHexFunction));
-	hex.AddFunction(ScalarFunction({LogicalType::UBIGINT}, LogicalType::VARCHAR, ToHexFunction));
 
 	to_hex.AddFunction(ScalarFunction({LogicalType::HUGEINT}, LogicalType::VARCHAR, ToHexFunction));
-	hex.AddFunction(ScalarFunction({LogicalType::HUGEINT}, LogicalType::VARCHAR, ToHexFunction));
 
 	from_hex.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BLOB, FromHexFunction));
-	unhex.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BLOB, FromHexFunction));
 
 	set.AddFunction(to_hex);
-	set.AddFunction(hex);
 	set.AddFunction(from_hex);
-	set.AddFunction(unhex);
+
+	// mysql
+	to_hex.name = "hex";
+	from_hex.name = "unhex";
+	set.AddFunction(to_hex);
+	set.AddFunction(from_hex);
 }
 
 } // namespace duckdb
