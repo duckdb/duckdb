@@ -21,6 +21,8 @@ public:
 	                       idx_t chunk_idx_to, bool init_heap);
 
 public:
+	//! Whether the iterator is done
+	bool Done();
 	//! Fetches the next STANDARD_VECTOR_SIZE row locations (and heap locations/sizes if init_heap is true)
 	bool Next();
 	//! Resets the scan indices to the start

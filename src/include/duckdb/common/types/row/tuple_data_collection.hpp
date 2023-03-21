@@ -140,11 +140,11 @@ private:
 	//! Initializes the TupleDataCollection (called by the constructors)
 	void Initialize();
 	//! Gets the scatter function for the given column index
-	static TupleDataScatterFunction GetScatterFunction(LogicalType type, const TupleDataLayout &layout, idx_t col_idx,
-	                                                   bool within_list = false);
+	static TupleDataScatterFunction GetScatterFunction(const LogicalType &type, const TupleDataLayout &layout,
+	                                                   idx_t col_idx, bool within_list = false);
 	//! Gets the gather function for the given column index
-	static TupleDataGatherFunction GetGatherFunction(LogicalType type, const TupleDataLayout &layout, idx_t col_idx,
-	                                                 bool within_list = false);
+	static TupleDataGatherFunction GetGatherFunction(const LogicalType &type, const TupleDataLayout &layout,
+	                                                 idx_t col_idx, bool within_list = false);
 	//! Get the next segment/chunk index for the scan
 	bool NextScanIndex(TupleDataScanState &scan_state, idx_t &segment_index, idx_t &chunk_index);
 	//! Scans the chunk at the given segment/chunk indices

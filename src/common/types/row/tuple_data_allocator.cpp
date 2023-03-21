@@ -161,7 +161,7 @@ TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataPinState &pin_sta
 void TupleDataAllocator::InitializeChunkState(TupleDataSegment &segment, TupleDataPinState &pin_state,
                                               TupleDataChunkState &chunk_state, idx_t chunk_idx, bool init_heap) {
 	D_ASSERT(this == segment.allocator.get());
-	D_ASSERT(chunk_idx < segment.chunks.size());
+	D_ASSERT(chunk_idx < segment.ChunkCount());
 	auto &chunk = segment.chunks[chunk_idx];
 
 	// Release or store any handles that are no longer required
@@ -322,8 +322,7 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 			break;
 		}
 		case PhysicalType::STRUCT: {
-			D_ASSERT(layout.GetStructLayouts().find(col_idx) != layout.GetStructLayouts().end());
-			const auto &struct_layout = layout.GetStructLayouts().find(col_idx)->second;
+			const auto &struct_layout = layout.GetStructLayout(col_idx);
 			if (!struct_layout.AllConstant()) {
 				RecomputeHeapPointers(old_heap_ptrs, old_heap_sel, row_locations, new_heap_ptrs, offset, count,
 				                      struct_layout, col_offset);
@@ -339,9 +338,6 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 void TupleDataAllocator::ReleaseOrStoreHandles(TupleDataPinState &pin_state, TupleDataSegment &segment,
                                                TupleDataChunk &chunk) {
 	D_ASSERT(this == segment.allocator.get());
-	if (pin_state.properties == TupleDataPinProperties::ALREADY_PINNED) {
-		return;
-	}
 	ReleaseOrStoreHandlesInternal(segment, pin_state.row_handles, chunk.row_block_ids, row_blocks,
 	                              pin_state.properties);
 	if (!layout.AllConstant()) {
@@ -360,7 +356,6 @@ void TupleDataAllocator::ReleaseOrStoreHandlesInternal(TupleDataSegment &segment
                                                        const unordered_set<uint32_t> &block_ids,
                                                        vector<TupleDataBlock> &blocks,
                                                        TupleDataPinProperties properties) {
-	D_ASSERT(properties != TupleDataPinProperties::ALREADY_PINNED);
 	bool found_handle;
 	do {
 		found_handle = false;
@@ -377,6 +372,7 @@ void TupleDataAllocator::ReleaseOrStoreHandlesInternal(TupleDataSegment &segment
 				break;
 			}
 			case TupleDataPinProperties::UNPIN_AFTER_DONE:
+			case TupleDataPinProperties::ALREADY_PINNED:
 				break;
 			case TupleDataPinProperties::DESTROY_AFTER_DONE:
 				blocks[block_id].handle = nullptr;

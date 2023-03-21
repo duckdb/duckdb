@@ -671,7 +671,7 @@ void HashJoinGlobalSourceState::PrepareBuild(HashJoinGlobalSinkState &sink) {
 	auto &ht = *sink.hash_table;
 
 	// Try to put the next partitions in the block collection of the HT
-	if (!ht.PrepareExternalFinalize()) {
+	if (!sink.external || !ht.PrepareExternalFinalize()) {
 		global_stage = HashJoinSourceStage::DONE;
 		return;
 	}
@@ -858,6 +858,19 @@ void HashJoinLocalSourceState::ExternalScanHT(HashJoinGlobalSinkState &sink, Has
 	}
 }
 
+void HashJoinGetDataLoop(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate,
+                         HashJoinLocalSourceState &lstate, DataChunk &chunk) {
+	// Any call to GetData must produce tuples, otherwise the pipeline executor thinks that we're done
+	// Therefore, we loop until we've produced tuples, or until the operator is actually done
+	while (gstate.global_stage != HashJoinSourceStage::DONE && chunk.size() == 0) {
+		if (!lstate.TaskFinished() || gstate.AssignTask(sink, lstate)) {
+			lstate.ExecuteTask(sink, gstate, chunk);
+		} else {
+			gstate.TryPrepareNextStage(sink);
+		}
+	}
+}
+
 void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                                LocalSourceState &lstate_p) const {
 	auto &sink = (HashJoinGlobalSinkState &)*sink_state;
@@ -873,9 +886,7 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 					gstate.PrepareScanHT(sink);
 				}
 			}
-			if (!lstate.TaskFinished() || gstate.AssignTask(sink, lstate)) {
-				lstate.ExecuteTask(sink, gstate, chunk);
-			}
+			HashJoinGetDataLoop(sink, gstate, lstate, chunk);
 		}
 		return;
 	}
@@ -885,15 +896,7 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 		gstate.Initialize(context.client, sink);
 	}
 
-	// Any call to GetData must produce tuples, otherwise the pipeline executor thinks that we're done
-	// Therefore, we loop until we've produced tuples, or until the operator is actually done
-	while (gstate.global_stage != HashJoinSourceStage::DONE && chunk.size() == 0) {
-		if (!lstate.TaskFinished() || gstate.AssignTask(sink, lstate)) {
-			lstate.ExecuteTask(sink, gstate, chunk);
-		} else {
-			gstate.TryPrepareNextStage(sink);
-		}
-	}
+	HashJoinGetDataLoop(sink, gstate, lstate, chunk);
 }
 
 } // namespace duckdb

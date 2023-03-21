@@ -91,7 +91,7 @@ void VerifyAppendColumns(const TupleDataLayout &layout, const vector<column_t> &
 		const auto physical_type = layout.GetTypes()[col_idx].InternalType();
 		D_ASSERT(physical_type != PhysicalType::VARCHAR && physical_type != PhysicalType::LIST);
 		if (physical_type == PhysicalType::STRUCT) {
-			const auto &struct_layout = layout.GetStructLayouts().find(col_idx)->second;
+			const auto &struct_layout = layout.GetStructLayout(col_idx);
 			vector<column_t> struct_column_ids;
 			struct_column_ids.reserve(struct_layout.ColumnCount());
 			for (idx_t struct_col_idx = 0; struct_col_idx < struct_layout.ColumnCount(); struct_col_idx++) {
@@ -578,10 +578,12 @@ static void StructTupleDataScatter(Vector &source, const UnifiedVectorFormat &so
 	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
 
 	// Set validity of the STRUCT in this layout
-	for (idx_t i = 0; i < append_count; i++) {
-		auto source_idx = source_sel.get_index(append_sel.get_index(i));
-		if (!validity.RowIsValid(source_idx)) {
-			ValidityBytes(target_locations[i]).SetInvalidUnsafe(entry_idx, idx_in_entry);
+	if (!validity.AllValid()) {
+		for (idx_t i = 0; i < append_count; i++) {
+			auto source_idx = source_sel.get_index(append_sel.get_index(i));
+			if (!validity.RowIsValid(source_idx)) {
+				ValidityBytes(target_locations[i]).SetInvalidUnsafe(entry_idx, idx_in_entry);
+			}
 		}
 	}
 
@@ -593,21 +595,26 @@ static void StructTupleDataScatter(Vector &source, const UnifiedVectorFormat &so
 		struct_target_locations[i] = target_locations[i] + offset_in_row;
 	}
 
-	D_ASSERT(layout.GetStructLayouts().find(col_idx) != layout.GetStructLayouts().end());
-	const auto &struct_layout = layout.GetStructLayouts().find(col_idx)->second;
+	const auto &struct_layout = layout.GetStructLayout(col_idx);
 	auto &struct_sources = StructVector::GetEntries(source);
 	D_ASSERT(struct_layout.ColumnCount() == struct_sources.size());
 
+	// Set the validity of the entries within the STRUCTs
+	const auto validity_bytes = ValidityBytes::SizeInBytes(struct_layout.ColumnCount());
+	for (idx_t i = 0; i < append_count; i++) {
+		memset(struct_target_locations[i], ~0, validity_bytes);
+	}
+
 	// Recurse through the struct children
 	for (idx_t struct_col_idx = 0; struct_col_idx < struct_layout.ColumnCount(); struct_col_idx++) {
-		const auto &struct_source = struct_sources[struct_col_idx];
+		auto &struct_source = *struct_sources[struct_col_idx];
 		UnifiedVectorFormat struct_source_data;
-		struct_source->ToUnifiedFormat(original_count, struct_source_data);
+		struct_source.ToUnifiedFormat(original_count, struct_source_data);
 
-		const auto &struct_scatter_function = child_functions[col_idx];
-		struct_scatter_function.function(*struct_sources[struct_col_idx], struct_source_data, append_sel, append_count,
-		                                 original_count, struct_layout, struct_row_locations, heap_locations,
-		                                 struct_col_idx, struct_scatter_function.child_functions);
+		const auto &struct_scatter_function = child_functions[struct_col_idx];
+		struct_scatter_function.function(struct_source, struct_source_data, append_sel, append_count, original_count,
+		                                 struct_layout, struct_row_locations, heap_locations, struct_col_idx,
+		                                 struct_scatter_function.child_functions);
 	}
 }
 
@@ -758,7 +765,7 @@ static void StructWithinListTupleDataScatter(Vector &source, const UnifiedVector
 	// Recurse through the children
 	auto &struct_sources = StructVector::GetEntries(source);
 	for (idx_t struct_col_idx = 0; struct_col_idx < struct_sources.size(); struct_col_idx++) {
-		const auto &struct_scatter_function = child_functions[col_idx];
+		const auto &struct_scatter_function = child_functions[struct_col_idx];
 		struct_scatter_function.function(*struct_sources[struct_col_idx], list_data, append_sel, append_count,
 		                                 source_count, layout, row_locations, heap_locations, struct_col_idx,
 		                                 struct_scatter_function.child_functions);
@@ -788,12 +795,8 @@ static void ListWithinListTupleDataScatter(Vector &child_list, const UnifiedVect
 	// Child list child
 	auto &child_list_child_vec = ListVector::GetEntry(child_list);
 	const auto child_list_child_count = ListVector::GetListSize(child_list);
-	UnifiedVectorFormat child_list_child_data;
-	child_list_child_vec.ToUnifiedFormat(child_list_child_count, child_list_child_data);
-	const auto &child_list_child_sel = *child_list_data.sel;
 
 	// Construct combined list entries and a selection vector for the child list child
-	// TODO: not necessary if everything's flat?
 	list_entry_t combined_list_entries[STANDARD_VECTOR_SIZE];
 	SelectionVector combined_sel(child_list_child_count);
 	idx_t combined_list_offset = 0;
@@ -828,15 +831,15 @@ static void ListWithinListTupleDataScatter(Vector &child_list, const UnifiedVect
 				const auto &child_list_offset = child_list_entry.offset;
 				const auto &child_list_length = child_list_entry.length;
 
-				// Store the child list entries
+				// Store the child list entry
 				TupleDataWithinListValueStore<list_entry_t>(
 				    child_list_entry, child_data_location + child_i * TupleDataWithinListFixedSize<list_entry_t>(),
 				    target_heap_location);
 
-				// Combine the selection vector of the child list with that of the child list child
-				for (idx_t child_child_i = 0; child_child_i < child_list_length; child_child_i++) {
-					combined_sel.set_index(child_list_child_sel.get_index(child_list_offset + child_child_i),
-					                       combined_list_offset + child_list_size + child_child_i);
+				// Add this child's list entry's to the combined selection vector
+				for (idx_t child_value_i = 0; child_value_i < child_list_length; child_value_i++) {
+					combined_sel.set_index(child_list_offset + child_value_i,
+					                       combined_list_offset + child_list_size + child_value_i);
 				}
 
 				child_list_size += child_list_entry.length;
@@ -871,7 +874,7 @@ tuple_data_scatter_function_t GetTupleDataScatterFunction(bool within_list) {
 	return within_list ? TemplatedWithinListTupleDataScatter<T> : TemplatedTupleDataScatter<T>;
 }
 
-TupleDataScatterFunction TupleDataCollection::GetScatterFunction(LogicalType type, const TupleDataLayout &layout,
+TupleDataScatterFunction TupleDataCollection::GetScatterFunction(const LogicalType &type, const TupleDataLayout &layout,
                                                                  idx_t col_idx, bool within_list) {
 	TupleDataScatterFunction result;
 	tuple_data_scatter_function_t function;
@@ -920,8 +923,7 @@ TupleDataScatterFunction TupleDataCollection::GetScatterFunction(LogicalType typ
 		break;
 	case PhysicalType::STRUCT: {
 		function = within_list ? StructWithinListTupleDataScatter : StructTupleDataScatter;
-		D_ASSERT(layout.GetStructLayouts().find(col_idx) != layout.GetStructLayouts().end());
-		const auto &struct_layout = layout.GetStructLayouts().find(col_idx)->second;
+		const auto &struct_layout = within_list ? layout : layout.GetStructLayout(col_idx);
 		for (idx_t struct_col_idx = 0; struct_col_idx < struct_layout.ColumnCount(); struct_col_idx++) {
 			result.child_functions.emplace_back(GetScatterFunction(StructType::GetChildType(type, struct_col_idx),
 			                                                       struct_layout, struct_col_idx, within_list));
@@ -1046,17 +1048,16 @@ static void StructTupleDataGather(const TupleDataLayout &layout, Vector &row_loc
 	}
 
 	// Get the struct layout and struct entries
-	D_ASSERT(layout.GetStructLayouts().find(col_idx) != layout.GetStructLayouts().end());
-	const auto &struct_layout = layout.GetStructLayouts().find(col_idx)->second;
+	const auto &struct_layout = layout.GetStructLayout(col_idx);
 	auto &struct_targets = StructVector::GetEntries(target);
 	D_ASSERT(struct_layout.ColumnCount() == struct_targets.size());
 
 	// Recurse through the struct children
 	for (idx_t struct_col_idx = 0; struct_col_idx < struct_layout.ColumnCount(); struct_col_idx++) {
-		const auto &struct_target = struct_targets[struct_col_idx];
-		const auto &struct_gather_function = child_functions[col_idx];
+		auto &struct_target = *struct_targets[struct_col_idx];
+		const auto &struct_gather_function = child_functions[struct_col_idx];
 		struct_gather_function.function(struct_layout, struct_row_locations, struct_col_idx, scan_sel, scan_count,
-		                                *struct_target, target_sel, struct_gather_function.child_functions);
+		                                struct_target, target_sel, struct_gather_function.child_functions);
 	}
 }
 
@@ -1177,7 +1178,7 @@ tuple_data_gather_function_t GetTupleDataGatherFunction(bool within_list) {
 	return within_list ? TemplatedWithinListTupleDataGather<T> : TemplatedTupleDataGather<T>;
 }
 
-TupleDataGatherFunction TupleDataCollection::GetGatherFunction(LogicalType type, const TupleDataLayout &layout,
+TupleDataGatherFunction TupleDataCollection::GetGatherFunction(const LogicalType &type, const TupleDataLayout &layout,
                                                                idx_t col_idx, bool within_list) {
 	TupleDataGatherFunction result;
 	tuple_data_gather_function_t function;
@@ -1226,8 +1227,7 @@ TupleDataGatherFunction TupleDataCollection::GetGatherFunction(LogicalType type,
 		break;
 	case PhysicalType::STRUCT: {
 		function = within_list ? StructWithinListTupleDataGather : StructTupleDataGather;
-		D_ASSERT(layout.GetStructLayouts().find(col_idx) != layout.GetStructLayouts().end());
-		const auto &struct_layout = layout.GetStructLayouts().find(col_idx)->second;
+		const auto &struct_layout = within_list ? layout : layout.GetStructLayout(col_idx);
 		for (idx_t struct_col_idx = 0; struct_col_idx < struct_layout.ColumnCount(); struct_col_idx++) {
 			result.child_functions.push_back(GetGatherFunction(StructType::GetChildType(type, struct_col_idx),
 			                                                   struct_layout, struct_col_idx, within_list));

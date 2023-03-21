@@ -195,8 +195,7 @@ static void TemplatedMatchStruct(Vector &vec, UnifiedVectorFormat &col, const Tu
 	}
 
 	// Get the struct layout, child columns, then recurse
-	D_ASSERT(layout.GetStructLayouts().find(col_no) != layout.GetStructLayouts().end());
-	const auto &struct_layout = layout.GetStructLayouts().find(col_no)->second;
+	const auto &struct_layout = layout.GetStructLayout(col_no);
 	auto &struct_entries = StructVector::GetEntries(vec);
 	D_ASSERT(struct_layout.ColumnCount() == struct_entries.size());
 	for (idx_t struct_col_no = 0; struct_col_no < struct_layout.ColumnCount(); struct_col_no++) {

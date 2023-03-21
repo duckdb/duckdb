@@ -37,17 +37,28 @@ void TupleDataChunkIterator::InitializeCurrentChunk() {
 	segment.allocator->InitializeChunkState(segment, state.pin_state, state.chunk_state, current_chunk_idx, init_heap);
 }
 
+bool TupleDataChunkIterator::Done() {
+	return current_segment_idx == end_segment_idx && current_chunk_idx == end_chunk_idx;
+}
+
 bool TupleDataChunkIterator::Next() {
 	// Check if called after already done
 	D_ASSERT(current_segment_idx != end_segment_idx || current_chunk_idx != end_chunk_idx);
 
 	// Set the next indices and checks if we're at the end of the collection
 	// NextScanIndex can go past this iterators 'end', so we have to check the indices again
-	if (!collection.NextScanIndex(state, current_segment_idx, current_chunk_idx) ||
-	    (current_segment_idx == end_segment_idx && current_chunk_idx == end_chunk_idx)) {
+	const auto segment_idx_before = current_segment_idx;
+	if (!collection.NextScanIndex(state, current_segment_idx, current_chunk_idx) || Done()) {
+		current_segment_idx = end_segment_idx;
+		current_chunk_idx = end_chunk_idx;
 		// Drop pins / stores them if TupleDataPinProperties::KEEP_EVERYTHING_PINNED
 		collection.FinalizePinState(state.pin_state, collection.segments[current_segment_idx]);
 		return false;
+	}
+
+	// Finalize pin state when moving from one segment to the next
+	if (current_segment_idx != segment_idx_before) {
+		collection.FinalizePinState(state.pin_state, collection.segments[current_segment_idx]);
 	}
 
 	InitializeCurrentChunk();

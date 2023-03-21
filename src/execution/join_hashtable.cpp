@@ -766,6 +766,10 @@ void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, Dat
 	idx_t found_entries = 0;
 
 	auto &iterator = state.iterator;
+	if (iterator.Done()) {
+		return;
+	}
+
 	const auto row_locations = iterator.GetRowLocations();
 	do {
 		const auto count = iterator.GetCount();
