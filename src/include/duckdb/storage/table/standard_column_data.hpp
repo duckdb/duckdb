@@ -55,14 +55,11 @@ public:
 	                    Vector &scan_vector) override;
 
 	void DeserializeColumn(Deserializer &source) override;
+	void SetReadOnly() override;
 
 	void GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, TableStorageInfo &result) override;
 
 	void Verify(RowGroup &parent) override;
-
-private:
-	template <bool SCAN_COMMITTED, bool ALLOW_UPDATES>
-	void TemplatedScan(Transaction *transaction, ColumnScanState &state, Vector &result);
 };
 
 } // namespace duckdb

@@ -279,6 +279,13 @@ void StructColumnData::DeserializeColumn(Deserializer &source) {
 	this->count = validity.count;
 }
 
+void StructColumnData::SetReadOnly() {
+	validity.SetReadOnly();
+	for (auto &sub_column : sub_columns) {
+		sub_column->SetReadOnly();
+	}
+}
+
 void StructColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, TableStorageInfo &result) {
 	col_path.push_back(0);
 	validity.GetStorageInfo(row_group_index, col_path, result);

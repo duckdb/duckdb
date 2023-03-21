@@ -18,8 +18,6 @@ class SegmentBase {
 public:
 	SegmentBase(idx_t start, idx_t count) : start(start), count(count), next(nullptr) {
 	}
-	virtual ~SegmentBase() {
-	}
 	T *Next() {
 #ifndef DUCKDB_R_BUILD
 		return next.load();

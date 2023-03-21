@@ -28,8 +28,9 @@ RowGroup::RowGroup(RowGroupCollection &collection, idx_t start, idx_t count)
 	Verify();
 }
 
-RowGroup::RowGroup(RowGroupCollection &collection, RowGroupPointer &&pointer)
-    : SegmentBase<RowGroup>(pointer.row_start, pointer.tuple_count), collection(collection) {
+RowGroup::RowGroup(RowGroupCollection &collection, RowGroupPointer &&pointer, bool is_read_only)
+    : SegmentBase<RowGroup>(pointer.row_start, pointer.tuple_count), collection(collection),
+      is_read_only(is_read_only) {
 	// deserialize the columns
 	if (pointer.data_pointers.size() != collection.GetTypes().size()) {
 		throw IOException("Row group column count is unaligned with table column count. Corrupt file?");
@@ -68,7 +69,7 @@ RowGroup::~RowGroup() {
 
 vector<shared_ptr<ColumnData>> &RowGroup::GetColumns() {
 	// ensure all columns are loaded
-	for(idx_t c = 0; c < GetColumnCount(); c++) {
+	for (idx_t c = 0; c < GetColumnCount(); c++) {
 		GetColumn(c);
 	}
 	return columns;
@@ -95,7 +96,11 @@ ColumnData &RowGroup::GetColumn(idx_t c) {
 	auto &block_pointer = column_pointers[c];
 	MetaBlockReader column_data_reader(block_manager, block_pointer.block_id);
 	column_data_reader.offset = block_pointer.offset;
-	this->columns[c] = ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), c, start, column_data_reader, types[c], nullptr);
+	this->columns[c] =
+	    ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), c, start, column_data_reader, types[c], nullptr);
+	if (is_read_only) {
+		columns[c]->SetReadOnly();
+	}
 	return *columns[c];
 }
 
@@ -170,8 +175,7 @@ bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, idx_t vector
 		auto column = column_ids[i];
 		if (column != COLUMN_IDENTIFIER_ROW_ID) {
 			auto &column_data = GetColumn(column);
-			column_data.InitializeScanWithOffset(state.column_scans[i],
-			                                          start + vector_offset * STANDARD_VECTOR_SIZE);
+			column_data.InitializeScanWithOffset(state.column_scans[i], start + vector_offset * STANDARD_VECTOR_SIZE);
 		} else {
 			state.column_scans[i].current = nullptr;
 		}
@@ -431,7 +435,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 					auto &col_data = GetColumn(column);
 					if (TYPE != TableScanType::TABLE_SCAN_REGULAR) {
 						col_data.ScanCommitted(state.vector_index, state.column_scans[i], result.data[i],
-						                               ALLOW_UPDATES);
+						                       ALLOW_UPDATES);
 					} else {
 						col_data.Scan(transaction, state.vector_index, state.column_scans[i], result.data[i]);
 					}
@@ -456,9 +460,8 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 					auto tf_idx = adaptive_filter->permutation[i];
 					auto col_idx = column_ids[tf_idx];
 					auto &col_data = GetColumn(col_idx);
-					col_data.Select(transaction, state.vector_index, state.column_scans[tf_idx],
-					                         result.data[tf_idx], sel, approved_tuple_count,
-					                         *table_filters->filters[tf_idx]);
+					col_data.Select(transaction, state.vector_index, state.column_scans[tf_idx], result.data[tf_idx],
+					                sel, approved_tuple_count, *table_filters->filters[tf_idx]);
 				}
 				for (auto &table_filter : table_filters->filters) {
 					result.data[table_filter.first].Slice(sel, approved_tuple_count);
@@ -496,12 +499,11 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 					} else {
 						auto &col_data = GetColumn(column);
 						if (TYPE == TableScanType::TABLE_SCAN_REGULAR) {
-							col_data.FilterScan(transaction, state.vector_index, state.column_scans[i],
-							                            result.data[i], sel, approved_tuple_count);
+							col_data.FilterScan(transaction, state.vector_index, state.column_scans[i], result.data[i],
+							                    sel, approved_tuple_count);
 						} else {
-							col_data.FilterScanCommitted(state.vector_index, state.column_scans[i],
-							                                     result.data[i], sel, approved_tuple_count,
-							                                     ALLOW_UPDATES);
+							col_data.FilterScanCommitted(state.vector_index, state.column_scans[i], result.data[i], sel,
+							                             approved_tuple_count, ALLOW_UPDATES);
 						}
 					}
 				}
@@ -748,6 +750,12 @@ void RowGroup::MergeStatistics(idx_t column_idx, const BaseStatistics &other) {
 void RowGroup::MergeIntoStatistics(idx_t column_idx, BaseStatistics &other) {
 	auto &col_data = GetColumn(column_idx);
 	col_data.MergeIntoStatistics(other);
+}
+
+void RowGroup::SetReadOnly() {
+	for (auto &col : GetColumns()) {
+		col->SetReadOnly();
+	}
 }
 
 RowGroupWriteData RowGroup::WriteToDisk(PartialBlockManager &manager,

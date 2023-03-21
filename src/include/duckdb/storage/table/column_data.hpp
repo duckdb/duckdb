@@ -14,7 +14,7 @@
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
 #include "duckdb/storage/table/segment_tree.hpp"
-#include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/storage/table/column_segment_tree.hpp"
 #include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
@@ -33,8 +33,6 @@ struct ColumnCheckpointInfo {
 	explicit ColumnCheckpointInfo(CompressionType compression_type_p) : compression_type(compression_type_p) {};
 	CompressionType compression_type;
 };
-
-class ColumnSegmentTree : public SegmentTree<ColumnSegment> {};
 
 class ColumnData {
 	friend class ColumnDataCheckpointer;
@@ -131,6 +129,9 @@ public:
 	static shared_ptr<ColumnData> Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
 	                                          idx_t start_row, Deserializer &source, const LogicalType &type,
 	                                          ColumnData *parent);
+
+	//! Mark a ColumnData segment as read-only - meaning there will be no more appends to it
+	virtual void SetReadOnly();
 
 	virtual void GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, TableStorageInfo &result);
 	virtual void Verify(RowGroup &parent);

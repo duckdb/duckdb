@@ -31,7 +31,7 @@ private:
 	class SegmentIterationHelper;
 
 public:
-	explicit SegmentTree() : finished_loading(true) {
+	explicit SegmentTree() : finished_loading(true), is_read_only(false) {
 	}
 	virtual ~SegmentTree() {
 	}
@@ -39,6 +39,9 @@ public:
 	//! Locks the segment tree. All methods to the segment tree either lock the segment tree, or take an already
 	//! obtained lock.
 	SegmentLock Lock() {
+		if (is_read_only) {
+			return SegmentLock();
+		}
 		return SegmentLock(node_lock);
 	}
 
@@ -48,8 +51,8 @@ public:
 
 	//! Gets a pointer to the first segment. Useful for scans.
 	T *GetRootSegment() {
-		if (!SUPPORTS_LAZY_LOADING) {
-			return nodes.empty() ? nullptr : nodes[0].node.get();
+		if (is_read_only) {
+			return GetRootSegmentInternal();
 		}
 		auto l = Lock();
 		return GetRootSegment(l);
@@ -59,7 +62,7 @@ public:
 		if (nodes.empty()) {
 			LoadNextSegment(l);
 		}
-		return nodes.empty() ? nullptr : nodes[0].node.get();
+		return GetRootSegmentInternal();
 	}
 	//! Obtains ownership of the data of the segment tree
 	vector<SegmentNode<T>> MoveSegments(SegmentLock &l) {
@@ -130,6 +133,9 @@ public:
 
 	//! Append a column segment to the tree
 	void AppendSegmentInternal(SegmentLock &l, unique_ptr<T> segment) {
+		if (is_read_only) {
+			throw InternalException("AppendSegmentInternal cannot be called on a read-only segment-tree");
+		}
 		D_ASSERT(segment);
 		// add the node to the list of nodes
 		if (!nodes.empty()) {
@@ -160,6 +166,9 @@ public:
 
 	//! Replace this tree with another tree, taking over its nodes in-place
 	void Replace(SegmentTree<T> &other) {
+		if (is_read_only) {
+			throw InternalException("Replace cannot be called on a read-only segment-tree");
+		}
 		auto l = Lock();
 		Replace(l, other);
 	}
@@ -248,6 +257,7 @@ public:
 
 protected:
 	atomic<bool> finished_loading;
+	bool is_read_only;
 
 	//! Load the next segment - only used when lazily loading
 	virtual unique_ptr<T> LoadSegment() {
@@ -261,6 +271,10 @@ private:
 	mutex node_lock;
 
 private:
+	T *GetRootSegmentInternal() {
+		return nodes.empty() ? nullptr : nodes[0].node.get();
+	}
+
 	class SegmentIterationHelper {
 	public:
 		explicit SegmentIterationHelper(SegmentTree &tree) : tree(tree) {
@@ -307,6 +321,10 @@ private:
 
 	//! Load the next segment, if there are any left to load
 	bool LoadNextSegment(SegmentLock &l) {
+		if (is_read_only) {
+			D_ASSERT(!finished_loading);
+			return false;
+		}
 		if (finished_loading) {
 			return false;
 		}

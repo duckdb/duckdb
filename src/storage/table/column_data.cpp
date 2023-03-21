@@ -22,16 +22,17 @@ namespace duckdb {
 
 ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
                        LogicalType type_p, ColumnData *parent)
-    : start(start_row), count(0), block_manager(block_manager), info(info), column_index(column_index), type(std::move(type_p)),
-      parent(parent), version(0) {
+    : start(start_row), count(0), block_manager(block_manager), info(info), column_index(column_index),
+      type(std::move(type_p)), parent(parent), version(0) {
 	if (!parent) {
 		stats = make_unique<SegmentStatistics>(type);
 	}
 }
 
 ColumnData::ColumnData(ColumnData &other, idx_t start, ColumnData *parent)
-    : start(start), count(other.count), block_manager(other.block_manager), info(other.info), column_index(other.column_index),
-      type(std::move(other.type)), parent(parent), version(parent ? parent->version + 1 : 0) {
+    : start(start), count(other.count), block_manager(other.block_manager), info(other.info),
+      column_index(other.column_index), type(std::move(other.type)), parent(parent),
+      version(parent ? parent->version + 1 : 0) {
 	if (other.updates) {
 		updates = make_unique<UpdateSegment>(*other.updates, *this);
 	}
@@ -43,6 +44,7 @@ ColumnData::ColumnData(ColumnData &other, idx_t start, ColumnData *parent)
 		this->data.AppendSegment(ColumnSegment::CreateSegment(segment, start + offset));
 		offset += segment.count;
 	}
+	data.SetReadOnly(other.data.GetReadOnly());
 }
 
 ColumnData::~ColumnData() {
@@ -482,6 +484,10 @@ void ColumnData::DeserializeColumn(Deserializer &source) {
 		    std::move(data_pointer.statistics));
 		data.AppendSegment(std::move(segment));
 	}
+}
+
+void ColumnData::SetReadOnly() {
+	data.SetReadOnly(true);
 }
 
 shared_ptr<ColumnData> ColumnData::Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,

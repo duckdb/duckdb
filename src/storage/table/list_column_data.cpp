@@ -356,6 +356,12 @@ void ListColumnData::DeserializeColumn(Deserializer &source) {
 	child_column->DeserializeColumn(source);
 }
 
+void ListColumnData::SetReadOnly() {
+	ColumnData::SetReadOnly();
+	validity.SetReadOnly();
+	child_column->SetReadOnly();
+}
+
 void ListColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, TableStorageInfo &result) {
 	ColumnData::GetStorageInfo(row_group_index, col_path, result);
 	col_path.push_back(0);

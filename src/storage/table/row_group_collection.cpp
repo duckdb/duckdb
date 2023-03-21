@@ -37,8 +37,10 @@ unique_ptr<RowGroup> RowGroupSegmentTree::LoadSegment() {
 	}
 	auto row_group_pointer = RowGroup::Deserialize(*reader, collection.GetTypes());
 	current_row_group++;
-	return make_unique<RowGroup>(collection, std::move(row_group_pointer));
+	bool is_last_segment = current_row_group == max_row_group;
+	return make_unique<RowGroup>(collection, std::move(row_group_pointer), !is_last_segment);
 }
+
 //===--------------------------------------------------------------------===//
 // Row Group Collection
 //===--------------------------------------------------------------------===//
@@ -389,6 +391,9 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 		auto append_count = MinValue<idx_t>(remaining, RowGroup::ROW_GROUP_SIZE - row_group->count);
 		row_group->AppendVersionInfo(transaction, append_count);
 		remaining -= append_count;
+		if (remaining > 0) {
+			row_group->SetReadOnly();
+		}
 		row_group = row_groups->GetNextSegment(row_group);
 	}
 	total_rows += state.total_append_count;

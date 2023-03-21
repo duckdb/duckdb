@@ -57,6 +57,7 @@ public:
 	                                             ColumnCheckpointInfo &checkpoint_info) override;
 
 	void DeserializeColumn(Deserializer &source) override;
+	void SetReadOnly() override;
 
 	void GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, TableStorageInfo &result) override;
 
