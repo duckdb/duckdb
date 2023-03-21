@@ -1,6 +1,8 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 
 #include "duckdb/common/serializer.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 
@@ -15,9 +17,19 @@ void SelectStatement::Serialize(Serializer &serializer) const {
 	node->Serialize(serializer);
 }
 
+void SelectStatement::FormatSerialize(FormatSerializer &serializer) const {
+	node->FormatSerialize(serializer);
+}
+
 unique_ptr<SelectStatement> SelectStatement::Deserialize(Deserializer &source) {
 	auto result = make_unique<SelectStatement>();
 	result->node = QueryNode::Deserialize(source);
+	return result;
+}
+
+unique_ptr<SelectStatement> SelectStatement::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = make_unique<SelectStatement>();
+	deserializer.ReadProperty("node", result->node);
 	return result;
 }
 

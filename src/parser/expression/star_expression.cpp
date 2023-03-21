@@ -3,6 +3,9 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/field_writer.hpp"
 
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
+
 namespace duckdb {
 
 StarExpression::StarExpression(string relation_name_p)
@@ -126,6 +129,23 @@ unique_ptr<ParsedExpression> StarExpression::Copy() const {
 	copy->expr = expr ? expr->Copy() : nullptr;
 	copy->CopyProperties(*this);
 	return std::move(copy);
+}
+
+void StarExpression::FormatSerialize(FormatSerializer &serializer) const {
+	ParsedExpression::FormatSerialize(serializer);
+	serializer.WriteProperty("relation_name", relation_name);
+	serializer.WriteProperty("exclude_list", exclude_list);
+	serializer.WriteProperty("replace_list", replace_list);
+	serializer.WriteProperty("columns", columns);
+}
+
+unique_ptr<ParsedExpression> StarExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
+	auto result = make_unique<StarExpression>();
+	deserializer.ReadProperty("relation_name", result->relation_name);
+	deserializer.ReadProperty("exclude_list", result->exclude_list);
+	deserializer.ReadProperty("replace_list", result->replace_list);
+	deserializer.ReadProperty("columns", result->columns);
+	return std::move(result);
 }
 
 } // namespace duckdb

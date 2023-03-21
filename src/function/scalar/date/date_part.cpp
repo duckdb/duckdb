@@ -180,8 +180,8 @@ struct DatePart {
 			return nullptr;
 		}
 		// run the operator on both the min and the max, this gives us the [min, max] bound
-		auto min = NumericStats::GetMinUnsafe<T>(nstats);
-		auto max = NumericStats::GetMaxUnsafe<T>(nstats);
+		auto min = NumericStats::GetMin<T>(nstats);
+		auto max = NumericStats::GetMax<T>(nstats);
 		if (min > max) {
 			return nullptr;
 		}
@@ -1332,7 +1332,7 @@ struct StructDatePart {
 		}
 
 		Function::EraseArgument(bound_function, arguments, 0);
-		bound_function.return_type = LogicalType::STRUCT(std::move(struct_children));
+		bound_function.return_type = LogicalType::STRUCT(struct_children);
 		return make_unique<BindData>(bound_function.return_type, part_codes);
 	}
 

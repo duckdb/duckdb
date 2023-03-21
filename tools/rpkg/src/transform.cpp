@@ -15,24 +15,20 @@ static void VectorToR(Vector &src_vec, size_t count, void *dest, uint64_t dest_o
 	}
 }
 
-SEXP duckdb_r_allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nrows) {
-	SEXP varvalue = NULL;
-
+SEXP duckdb_r_allocate(const LogicalType &type, idx_t nrows) {
 	if (type.GetAlias() == R_STRING_TYPE_NAME) {
 		return NEW_STRING(nrows);
 	}
 
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
-		varvalue = r_varvalue.Protect(NEW_LOGICAL(nrows));
-		break;
+		return NEW_LOGICAL(nrows);
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::INTEGER:
-		varvalue = r_varvalue.Protect(NEW_INTEGER(nrows));
-		break;
+		return NEW_INTEGER(nrows);
 	case LogicalTypeId::UINTEGER:
 	case LogicalTypeId::UBIGINT:
 	case LogicalTypeId::BIGINT:
@@ -48,11 +44,9 @@ SEXP duckdb_r_allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nr
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::INTERVAL:
-		varvalue = r_varvalue.Protect(NEW_NUMERIC(nrows));
-		break;
+		return NEW_NUMERIC(nrows);
 	case LogicalTypeId::LIST:
-		varvalue = r_varvalue.Protect(NEW_LIST(nrows));
-		break;
+		return NEW_LIST(nrows);
 	case LogicalTypeId::STRUCT: {
 		cpp11::writable::list dest_list;
 
@@ -60,8 +54,7 @@ SEXP duckdb_r_allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nr
 			const auto &name = child.first;
 			const auto &child_type = child.second;
 
-			RProtector child_protector;
-			auto dest_child = duckdb_r_allocate(child_type, child_protector, nrows);
+			cpp11::sexp dest_child = duckdb_r_allocate(child_type, nrows);
 			dest_list.push_back(cpp11::named_arg(name.c_str()) = std::move(dest_child));
 		}
 
@@ -70,28 +63,18 @@ SEXP duckdb_r_allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nr
 		dest_list.attr(R_ClassSymbol) = RStrings::get().dataframe_str;
 		dest_list.attr(R_RowNamesSymbol) = {NA_INTEGER, -static_cast<int>(nrows)};
 
-		varvalue = r_varvalue.Protect(cpp11::as_sexp(dest_list));
-		break;
+		return dest_list;
 	}
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::UUID:
-		varvalue = r_varvalue.Protect(NEW_STRING(nrows));
-		break;
+		return NEW_STRING(nrows);
 	case LogicalTypeId::BLOB:
-		varvalue = r_varvalue.Protect(NEW_LIST(nrows));
-		break;
-	case LogicalTypeId::ENUM: {
-		varvalue = r_varvalue.Protect(NEW_INTEGER(nrows));
-
-		break;
-	}
+		return NEW_LIST(nrows);
+	case LogicalTypeId::ENUM:
+		return NEW_INTEGER(nrows);
 	default:
 		cpp11::stop("rapi_execute: Unknown column type for execute: %s", type.ToString().c_str());
 	}
-	if (!varvalue) {
-		throw std::bad_alloc();
-	}
-	return varvalue;
 }
 
 // Convert DuckDB's timestamp to R's timestamp (POSIXct). This is a represented as the number of seconds since the
@@ -407,9 +390,8 @@ void duckdb_r_transform(Vector &src_vec, const SEXP dest, idx_t dest_offset, idx
 				const auto end = src_data[row_idx].offset + src_data[row_idx].length;
 				child_vector.Slice(ListVector::GetEntry(src_vec), src_data[row_idx].offset, end);
 
-				RProtector ele_prot;
 				// transform the list child vector to a single R SEXP
-				auto list_element = ele_prot.Protect(duckdb_r_allocate(child_type, ele_prot, src_data[row_idx].length));
+				cpp11::sexp list_element = duckdb_r_allocate(child_type, src_data[row_idx].length);
 				duckdb_r_decorate(child_type, list_element, integer64);
 				duckdb_r_transform(child_vector, list_element, 0, src_data[row_idx].length, integer64);
 

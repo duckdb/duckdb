@@ -335,6 +335,16 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 		ReplaceColumnBindings(*insert.on_conflict_condition, table_index, projection_index);
 	}
 
+	if (insert.action_type == OnConflictAction::REPLACE) {
+		D_ASSERT(on_conflict.set_info == nullptr);
+		on_conflict.set_info = CreateSetInfoForReplace(table, stmt);
+		insert.action_type = OnConflictAction::UPDATE;
+	}
+	if (on_conflict.set_info && on_conflict.set_info->columns.empty()) {
+		// if we are doing INSERT OR REPLACE on a table with no columns outside of the primary key column
+		// convert to INSERT OR IGNORE
+		insert.action_type = OnConflictAction::NOTHING;
+	}
 	if (insert.action_type == OnConflictAction::NOTHING) {
 		if (!insert.on_conflict_condition) {
 			return;
@@ -346,15 +356,9 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 		insert.columns_to_fetch = table_binding->GetBoundColumnIds();
 		return;
 	}
-	if (insert.action_type == OnConflictAction::REPLACE) {
-		D_ASSERT(on_conflict.set_info == nullptr);
-		on_conflict.set_info = CreateSetInfoForReplace(table, stmt);
-		insert.action_type = OnConflictAction::UPDATE;
-	}
 
 	D_ASSERT(on_conflict.set_info);
 	auto &set_info = *on_conflict.set_info;
-	D_ASSERT(!set_info.columns.empty());
 	D_ASSERT(set_info.columns.size() == set_info.expressions.size());
 
 	if (set_info.condition) {

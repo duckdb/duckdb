@@ -15,7 +15,8 @@
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
-#include "duckdb/storage/table/column_checkpoint_state.hpp"
+#include "duckdb/storage/table/segment_tree.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
@@ -31,9 +32,11 @@ struct TransactionData;
 struct DataTableInfo;
 
 struct ColumnCheckpointInfo {
-	ColumnCheckpointInfo(CompressionType compression_type_p) : compression_type(compression_type_p) {};
+	explicit ColumnCheckpointInfo(CompressionType compression_type_p) : compression_type(compression_type_p) {};
 	CompressionType compression_type;
 };
+
+class ColumnSegmentTree : public SegmentTree<ColumnSegment> {};
 
 class ColumnData {
 	friend class ColumnDataCheckpointer;
@@ -148,7 +151,7 @@ protected:
 
 protected:
 	//! The segments holding the data of this column segment
-	SegmentTree data;
+	ColumnSegmentTree data;
 	//! The lock for the updates
 	mutex update_lock;
 	//! The updates for this column segment

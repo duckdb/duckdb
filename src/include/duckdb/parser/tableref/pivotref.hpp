@@ -24,11 +24,16 @@ struct PivotColumnEntry {
 	void Serialize(Serializer &serializer) const;
 	PivotColumnEntry Copy() const;
 	static PivotColumnEntry Deserialize(Deserializer &source);
+
+	void FormatSerialize(FormatSerializer &serializer) const;
+	static PivotColumnEntry FormatDeserialize(FormatDeserializer &source);
 };
 
 struct PivotColumn {
-	//! The column names to (un)pivot
-	vector<string> names;
+	//! The set of expressions to pivot on
+	vector<unique_ptr<ParsedExpression>> pivot_expressions;
+	//! The set of unpivot names
+	vector<string> unpivot_names;
 	//! The set of values to pivot on
 	vector<PivotColumnEntry> entries;
 	//! The enum to read pivot values from (if any)
@@ -39,6 +44,9 @@ struct PivotColumn {
 	void Serialize(Serializer &serializer) const;
 	PivotColumn Copy() const;
 	static PivotColumn Deserialize(Deserializer &source);
+
+	void FormatSerialize(FormatSerializer &serializer) const;
+	static PivotColumn FormatDeserialize(FormatDeserializer &source);
 };
 
 //! Represents a PIVOT or UNPIVOT expression
@@ -72,5 +80,8 @@ public:
 	void Serialize(FieldWriter &serializer) const override;
 	//! Deserializes a blob back into a JoinRef
 	static unique_ptr<TableRef> Deserialize(FieldReader &source);
+
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<TableRef> FormatDeserialize(FormatDeserializer &source);
 };
 } // namespace duckdb

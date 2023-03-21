@@ -122,16 +122,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 	right_pushdown.GenerateFilters();
 	op->children[0] = left_pushdown.Rewrite(std::move(op->children[0]));
 	op->children[1] = right_pushdown.Rewrite(std::move(op->children[1]));
-	if (filters.empty()) {
-		// no filters to push
-		return op;
-	}
-	auto filter = make_unique<LogicalFilter>();
-	for (auto &f : filters) {
-		filter->expressions.push_back(std::move(f->filter));
-	}
-	filter->children.push_back(std::move(op));
-	return std::move(filter);
+	return PushFinalFilters(std::move(op));
 }
 
 } // namespace duckdb
