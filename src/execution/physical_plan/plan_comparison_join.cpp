@@ -194,10 +194,11 @@ static bool PlanIndexJoin(ClientContext &context, LogicalComparisonJoin &op, uni
 	// plan the index join
 	if (swap_condition) {
 		swap(op.conditions[0].left, op.conditions[0].right);
+		swap(op.left_projection_map, op.right_projection_map);
 	}
 	plan = make_unique<PhysicalIndexJoin>(op, std::move(left), std::move(right), std::move(op.conditions),
 										  op.join_type, op.left_projection_map, op.right_projection_map,
-										  tbl_scan.column_ids, index, true, op.estimated_cardinality);
+										  tbl_scan.column_ids, index, !swap_condition, op.estimated_cardinality);
 	return true;
 }
 

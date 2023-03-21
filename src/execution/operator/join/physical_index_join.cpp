@@ -77,10 +77,11 @@ PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOpe
 		index_ids.insert(index_id);
 	}
 
-	for (idx_t column_id = 0; column_id < column_ids.size(); column_id++) {
-		auto it = index_ids.find(column_ids[column_id]);
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		auto column_id = column_ids[i];
+		auto it = index_ids.find(column_id);
 		if (it == index_ids.end()) {
-			fetch_ids.push_back(column_ids[column_id]);
+			fetch_ids.push_back(column_id);
 			fetch_types.push_back(tbl_scan.returned_types[column_id]);
 		}
 	}
