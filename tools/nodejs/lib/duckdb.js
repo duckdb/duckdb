@@ -189,7 +189,7 @@ Connection.prototype.arrowIPCAll = function (sql) {
  * @arg sql
  * @param {...*} params
  * @param callback
- * @return IpcResultStreamIterator
+ * @return Promise<IpcResultStreamIterator>
  */
 Connection.prototype.arrowIPCStream = async function (sql) {
     const query = "SELECT * FROM to_arrow_ipc((" + sql + "));";

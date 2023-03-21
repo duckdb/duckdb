@@ -49,7 +49,6 @@ NL	Amsterdam	1005	1065	1158
 US	Seattle	564	608	738
 US	New York City	8015	8175	8772
 
-
 query IIIII
 PIVOT_WIDER Cities ON Year USING SUM(Population);
 ----
