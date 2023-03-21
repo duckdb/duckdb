@@ -7,6 +7,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
+#include "duckdb/planner/operator/logical_asof_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
@@ -174,8 +175,12 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 	} else {
 		// we successfully converted expressions into JoinConditions
 		// create a LogicalComparisonJoin
-		auto comp_join = make_unique<LogicalComparisonJoin>(type);
-		comp_join->join_reftype = reftype;
+		unique_ptr<LogicalComparisonJoin> comp_join;
+		if (reftype == JoinRefType::ASOF) {
+			comp_join = make_unique<LogicalAsOfJoin>(type);
+		} else {
+			comp_join = make_unique<LogicalComparisonJoin>(type);
+		}
 		comp_join->conditions = std::move(conditions);
 		comp_join->children.push_back(std::move(left_child));
 		comp_join->children.push_back(std::move(right_child));
@@ -288,7 +293,9 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	}
 
 	// we visit the expressions depending on the type of join
-	if (join->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+	switch (join->type) {
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		// comparison join
 		// in this join we visit the expressions on the LHS with the LHS as root node
 		// and the expressions on the RHS with the RHS as root node
@@ -297,12 +304,18 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 			PlanSubqueries(&comp_join.conditions[i].left, &comp_join.children[0]);
 			PlanSubqueries(&comp_join.conditions[i].right, &comp_join.children[1]);
 		}
-	} else if (join->type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
 		auto &any_join = (LogicalAnyJoin &)*join;
 		// for the any join we just visit the condition
 		if (any_join.condition->HasSubquery()) {
 			throw NotImplementedException("Cannot perform non-inner join on subquery!");
 		}
+		break;
+	}
+	default:
+		break;
 	}
 	return result;
 }

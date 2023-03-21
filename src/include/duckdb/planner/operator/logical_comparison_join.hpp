@@ -26,8 +26,6 @@ public:
 	vector<JoinCondition> conditions;
 	//! Used for duplicate-eliminated joins
 	vector<LogicalType> delim_types;
-	//! How are the conditions interpreted?
-	JoinRefType join_reftype;
 
 public:
 	string ParamsToString() const override;

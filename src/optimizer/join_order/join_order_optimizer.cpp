@@ -113,21 +113,20 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 	bool non_reorderable_operation = false;
 	if (op->type == LogicalOperatorType::LOGICAL_UNION || op->type == LogicalOperatorType::LOGICAL_EXCEPT ||
 	    op->type == LogicalOperatorType::LOGICAL_INTERSECT || op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN ||
-	    op->type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
+	    op->type == LogicalOperatorType::LOGICAL_ANY_JOIN || op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
 		// set operation, optimize separately in children
 		non_reorderable_operation = true;
 	}
 
 	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		auto &join = (LogicalComparisonJoin &)*op;
-		if (join.join_type == JoinType::INNER && join.join_reftype != JoinRefType::ASOF) {
+		if (join.join_type == JoinType::INNER) {
 			// extract join conditions from inner join
 			filter_operators.push_back(op);
 		} else {
 			// non-inner join, not reorderable yet
 			non_reorderable_operation = true;
-			if (join.join_type == JoinType::LEFT && join.right_projection_map.empty() &&
-			    join.join_reftype != JoinRefType::ASOF) {
+			if (join.join_type == JoinType::LEFT && join.right_projection_map.empty()) {
 				// for left joins; if the RHS cardinality is significantly larger than the LHS (2x)
 				// we convert to doing a RIGHT OUTER JOIN
 				// FIXME: for now we don't swap if the right_projection_map is not empty
@@ -185,6 +184,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 	}
 
 	switch (op->type) {
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
 		// inner join or cross product
@@ -867,7 +867,8 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 						result_operator->children[0] = std::move(comp_join);
 					}
 				} else {
-					D_ASSERT(node->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN);
+					D_ASSERT(node->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
+					         node->type == LogicalOperatorType::LOGICAL_ASOF_JOIN);
 					auto &comp_join = (LogicalComparisonJoin &)*node;
 					comp_join.conditions.push_back(std::move(cond));
 				}
@@ -909,7 +910,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 	auto op = plan.get();
 	auto parent = plan.get();
 	while (op->type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT &&
-	       op->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+	       op->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
+	       op->type != LogicalOperatorType::LOGICAL_ASOF_JOIN) {
 		D_ASSERT(op->children.size() == 1);
 		parent = op;
 		op = op->children[0].get();
@@ -944,7 +946,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	// filters in the process
 	expression_set_t filter_set;
 	for (auto &f_op : filter_operators) {
-		if (f_op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		if (f_op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
+		    f_op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
 			auto &join = (LogicalComparisonJoin &)*f_op;
 			D_ASSERT(join.join_type == JoinType::INNER);
 			D_ASSERT(join.expressions.empty());
