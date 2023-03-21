@@ -3,6 +3,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/pragma/pragma_functions.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
@@ -15,7 +16,8 @@ string PragmaTableInfo(ClientContext &context, const FunctionParameters &paramet
 }
 
 string PragmaShowTables(ClientContext &context, const FunctionParameters &parameters) {
-	return "SELECT name FROM sqlite_master ORDER BY name;";
+	auto catalog = DatabaseManager::GetDefaultDatabase(context);
+	return "SELECT table_name FROM duckdb_tables() where database_name='"+catalog+"' ORDER BY table_name;";
 }
 
 string PragmaShowTablesExpanded(ClientContext &context, const FunctionParameters &parameters) {
