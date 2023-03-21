@@ -82,7 +82,11 @@ PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOpe
 		auto it = index_ids.find(column_id);
 		if (it == index_ids.end()) {
 			fetch_ids.push_back(column_id);
-			fetch_types.push_back(tbl_scan.returned_types[column_id]);
+			if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
+				fetch_types.push_back(LogicalType::ROW_TYPE);
+			} else {
+				fetch_types.push_back(tbl_scan.returned_types[column_id]);
+			}
 		}
 	}
 	if (right_projection_map.empty()) {
