@@ -309,6 +309,7 @@ static LogicalGet *GetLogicalGet(LogicalOperator *op, idx_t table_index = DConst
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		get = GetLogicalGet(op->children.at(0).get(), table_index);
 		break;
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		LogicalComparisonJoin *join = (LogicalComparisonJoin *)op;
 		// We should never be calling GetLogicalGet without a valid table_index.
@@ -383,6 +384,9 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(vector<NodeOp> *node_op
 				// less than the base table cardinality.
 				join_node->SetCost(join_node->GetBaseTableCardinality());
 			}
+		} else if (op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
+			// AsOf joins have the cardinality of the LHS
+			join_node->SetCost(join_node->GetBaseTableCardinality());
 		}
 		// Total domains can be affected by filters. So we update base table cardinality first
 		EstimateBaseTableCardinality(join_node, op);

@@ -870,16 +870,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 	// #######
 	// ### type detection (initial)
 	// #######
-	// type candidates, ordered by descending specificity (~ from high to low)
-	vector<LogicalType> type_candidates = {
-	    LogicalType::VARCHAR,
-	    LogicalType::TIMESTAMP,
-	    LogicalType::DATE,
-	    LogicalType::TIME,
-	    LogicalType::DOUBLE,
-	    /* LogicalType::FLOAT,*/ LogicalType::BIGINT,
-	    /*LogicalType::INTEGER,*/ /*LogicalType::SMALLINT, LogicalType::TINYINT,*/ LogicalType::BOOLEAN,
-	    LogicalType::SQLNULL};
+
 	// format template candidates, ordered by descending specificity (~ from high to low)
 	std::map<LogicalTypeId, vector<const char *>> format_template_candidates = {
 	    {LogicalTypeId::DATE, {"%m-%d-%Y", "%m-%d-%y", "%d-%m-%Y", "%d-%m-%y", "%Y-%m-%d", "%y-%m-%d"}},
@@ -890,8 +881,8 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 	vector<vector<LogicalType>> best_sql_types_candidates;
 	map<LogicalTypeId, vector<string>> best_format_candidates;
 	DataChunk best_header_row;
-	DetectCandidateTypes(type_candidates, format_template_candidates, info_candidates, original_options, best_num_cols,
-	                     best_sql_types_candidates, best_format_candidates, best_header_row);
+	DetectCandidateTypes(options.auto_type_candidates, format_template_candidates, info_candidates, original_options,
+	                     best_num_cols, best_sql_types_candidates, best_format_candidates, best_header_row);
 
 	if (best_format_candidates.empty() || best_header_row.size() == 0) {
 		throw InvalidInputException(
@@ -939,7 +930,8 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 	// #######
 	// ### type detection (refining)
 	// #######
-	return RefineTypeDetection(type_candidates, requested_types, best_sql_types_candidates, best_format_candidates);
+	return RefineTypeDetection(options.auto_type_candidates, requested_types, best_sql_types_candidates,
+	                           best_format_candidates);
 }
 
 bool BufferedCSVReader::TryParseComplexCSV(DataChunk &insert_chunk, string &error_message) {
