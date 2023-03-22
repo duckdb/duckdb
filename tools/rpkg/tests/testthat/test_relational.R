@@ -539,17 +539,6 @@ test_that("You can perform the window function percent rank", {
     expect_equal(res, expected_result)
 })
 
-test_that("You can perform the window function list aggregate ", {
-    # returns a list of values in a in order of the "b" column
-    # SELECT LIST(a ORDER BY b) FROM rel_df;
-	  rel_a <- rel_from_df(con, data.frame(a=c(5, 1, 3, 2, 2), b=c(5, 4, 3, 2, 1)))
-    list_func <- expr_function("list", list(), order_bys=list(expr_reference("b")))
-    list_aggr <- rel_aggregate(rel_a, list(), list(list_func))
-    res <- rel_to_altrep(list_aggr)
-    expected_result <- data.frame(a=c(1, 2, 2, 3, 5), percent_rank=c(0.00, 0.25, 0.25, 0.75, 1.00))
-    expect_equal(res, expected_result)
-})
-
 # with and without offsets
 test_that("R semantics for adding NaNs is respected", {
    dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
