@@ -367,7 +367,7 @@ test_that("R strings are not garbage collected", {
       hel <- "hel"
       lo <- "lo"
       o <- "o"
-      const_hello <- expr_constant(paste0(hel, lo, o), TRUE)
+      const_hello <- expr_constant(paste0(substr(paste0(1, 1, hel, lo), 3, 6), substr(paste0(129, "jk", o, "t"), 6, 6)), TRUE)
       filter_rel <- rel_filter(rel_df, list(expr_function("eq", list(expr_reference("a"), const_hello))))
       rm(hel)
       rm(lo)
@@ -375,9 +375,14 @@ test_that("R strings are not garbage collected", {
       gc()
       return(filter_rel)
   }
+  marhel <- "marhel"
+  lopez <- "lopez"
   dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
-  rel_df <- rel_from_df(con, data.frame(a=c("helloo", "world")), TRUE)
+  rel_df <- rel_from_df(con, data.frame(a=c(paste0(substr(marhel, 4, 6), substr(lopez, 0, 2)), "world")), TRUE)
   filter_rel <- get_string_filter_rel(rel_df)
+  # 3 for good measure
+  gc()
+  gc()
   gc()
   res <- rel_to_altrep(filter_rel)
   expect_equal(res, data.frame(a=c("hello")))

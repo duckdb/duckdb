@@ -119,8 +119,7 @@ Value RApiTypes::SexpToValue(SEXP valsexp, R_len_t idx, bool experimental) {
 	}
 	case RType::STRING: {
 		if (experimental) {
-			// TODO figure out if we have protect this, at the very least
-			// we need to reference the string somewhere so it does not get garbage collected
+			// string pointer will be protected with prot byte of an external pointer
 			auto char_ptr = CHAR(STRING_ELT(ToUtf8(valsexp), idx));
 			auto str_val = Value::POINTER((uintptr_t)char_ptr);
 			str_val.GetTypeMutable() = RStringsType::Get();

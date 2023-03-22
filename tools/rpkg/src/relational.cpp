@@ -60,8 +60,8 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 	if (LENGTH(val) != 1) {
 		stop("expr_constant: Need value of length one");
 	}
-
-	auto expr = make_external_prot<ConstantExpression>("duckdb_expr", val, RApiTypes::SexpToValue(val, 0, experimental));
+	auto expr =
+	    make_external_prot<ConstantExpression>("duckdb_expr", val, RApiTypes::SexpToValue(val, 0, experimental));
 	return expr;
 }
 
