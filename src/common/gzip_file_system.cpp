@@ -148,7 +148,9 @@ static idx_t old_len;
 static idx_t old_old_len;
 bool MiniZStreamWrapper::Read(StreamData &sd) {
 	// Special cases handling for the concatenated files
-	if (mz_stream_ptr->reserved > 0) {
+	//	if (mz_stream_ptr->reserved > 0) {
+	if (sd.refresh) {
+		sd.refresh = false;
 		idx_t remaining = sd.in_buff_end - sd.in_buff_start;
 		// Copy the (available part of) GZIP header to the help buffer
 		if (mz_stream_ptr->reserved == 1) {
@@ -257,7 +259,7 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 		}
 		// Potentially concatenated GZIP coming up - trigger handling for edge cases
 		mz_stream_ptr->reserved = 1;
-		sd.flag = 1;
+		sd.refrest = true;
 	}
 	return false;
 }

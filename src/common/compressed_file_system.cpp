@@ -58,19 +58,17 @@ int64_t CompressedFile::ReadData(void *buffer, int64_t remaining) {
 		D_ASSERT(stream_data.in_buff_start <= stream_data.in_buff_end);
 		D_ASSERT(stream_data.in_buff_end <= stream_data.in_buff_start + stream_data.in_buf_size);
 
-		// read more input when requested
-		if (stream_data.flag == 1) {
-			auto remaining = stream_data.in_buff_end - stream_data.in_buff_start;
-			memmove(stream_data.in_buff.get(), stream_data.in_buff_start, remaining);
-			// empty input buffer: refill from the start
-			auto sz = child_handle->Read(stream_data.in_buff_start, stream_data.in_buf_size - remaining);
+		// read more input when requested and still data in the input stream
+		if (stream_data.refresh && (stream_data.in_buff_end == stream_data.in_buff.get() + stream_data.in_buf_size)) {
+			auto bufrem = stream_data.in_buff_end - stream_data.in_buff_start;
+			memmove(stream_data.in_buff.get(), stream_data.in_buff_start, bufrem);
+			stream_data.in_buff_start = stream_data.in_buff.get();
+			auto sz = child_handle->Read(stream_data.in_buff_start + bufrem, stream_data.in_buf_size - bufrem);
+			stream_data.in_buff_end = stream_data.in_buff_start + bufrem + sz;
 			if (sz <= 0) {
 				stream_wrapper.reset();
 				break;
 			}
-			stream_data.in_buff_start = stream_data.in_buff.get();
-			stream_data.in_buff_end = stream_data.in_buff_start + remaining + sz;
-			stream_data.flag = 0;
 		}
 
 		// read more input if none available
