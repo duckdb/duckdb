@@ -209,7 +209,7 @@ void DuckDBPyType::Initialize(py::handle &m) {
 	connection_module.def("__eq__", &DuckDBPyType::Equals, "Compare two types for equality", py::arg("other"));
 	connection_module.def("__eq__", &DuckDBPyType::EqualsString, "Compare two types for equality", py::arg("other"));
 	connection_module.def(py::init<>([](const string &type_str, shared_ptr<DuckDBPyConnection> connection = nullptr) {
-		                      auto ltype = FromString(type_str, connection);
+		                      auto ltype = FromString(type_str, std::move(connection));
 		                      return make_shared<DuckDBPyType>(ltype);
 	                      }),
 	                      py::arg("type_str"), py::arg("connection") = py::none());
