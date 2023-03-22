@@ -61,8 +61,10 @@ int64_t CompressedFile::ReadData(void *buffer, int64_t remaining) {
 		// read more input when requested and still data in the input stream
 		if (stream_data.refresh && (stream_data.in_buff_end == stream_data.in_buff.get() + stream_data.in_buf_size)) {
 			auto bufrem = stream_data.in_buff_end - stream_data.in_buff_start;
+			// buffer not empty, move remaining bytes to the beginning
 			memmove(stream_data.in_buff.get(), stream_data.in_buff_start, bufrem);
 			stream_data.in_buff_start = stream_data.in_buff.get();
+			// refill the rest of input buffer
 			auto sz = child_handle->Read(stream_data.in_buff_start + bufrem, stream_data.in_buf_size - bufrem);
 			stream_data.in_buff_end = stream_data.in_buff_start + bufrem + sz;
 			if (sz <= 0) {
