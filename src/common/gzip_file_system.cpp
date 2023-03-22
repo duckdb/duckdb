@@ -257,6 +257,7 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 		}
 		// Potentially concatenated GZIP coming up - trigger handling for edge cases
 		mz_stream_ptr->reserved = 1;
+		sd.flag = 1;
 	}
 	return false;
 }

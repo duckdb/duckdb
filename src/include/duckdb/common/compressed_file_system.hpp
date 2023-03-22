@@ -26,6 +26,7 @@ struct StreamData {
 
 	idx_t in_buf_size = 0;
 	idx_t out_buf_size = 0;
+	idx_t flag=0;
 };
 
 struct StreamWrapper {
