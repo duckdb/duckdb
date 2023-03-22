@@ -22,5 +22,7 @@ SELECT COUNT(*) FROM vals WHERE i=(10 - ${threadid}) *  99999
 
 query I
 SELECT COUNT(v) FROM vals WHERE i=(10 - ${threadid}) *  99999
+----
+1
 
 endloop
