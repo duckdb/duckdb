@@ -10,12 +10,24 @@ PRAGMA verify_parallelism;
 statement ok
 PRAGMA threads=4;
 
-# Simple table that is easy to partition
+# Create some tables
 statement ok
-CREATE TABLE testSquared as SELECT i as a, (i*2) as b, power(i,2) as c from range(0,10) tbl(i);
+CREATE TABLE test2 as SELECT i as a, (i*2) as b, power(i,2) as c from range(0,10) tbl(i);
+
+statement ok
+CREATE TABLE test3 as SELECT i as a, (i*3) as b, power(i,3) as c from range(0,10) tbl(i);
+
+statement ok
+CREATE TABLE test4 as SELECT i as a, (i*4) as b, power(i,4) as c from range(0,10) tbl(i);
+
+statement ok
+CREATE TABLE test5 as SELECT i as a, (i*5) as b, power(i,5) as c from range(0,10) tbl(i);
+
+statement ok
+CREATE TABLE testpto as SELECT i as a, (i*10) as b, (i*100) as c from range(0,10000) tbl(i);
 
 query III
-SELECT * FROM testSquared;
+SELECT * FROM test2;
 ----
 0	0	0
 1	2	1 
@@ -30,33 +42,42 @@ SELECT * FROM testSquared;
 
 # Test with the FILEFORMAT option. "{uuid}" will be replaced with a unique string.
 statement ok
-COPY testSquared TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), FILEFORMAT "leadingpart_{uuid}");
+COPY test2 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), FILEFORMAT "leadingpart_{uuid}");
 
+# the filename contains a uuid
 query III
-SELECT * FROM '__TEST_DIR__/part/a=9/*.parquet';
+SELECT * FROM '__TEST_DIR__/part/a=9/leadingpart_????????-????-4???-????-????????????.parquet';
 ----
 9	18	81
 
+# create a second file in the same partition dirs. This is the append workflow
 statement ok
-CREATE TABLE testCubed as SELECT i as a, (i*3) as b, power(i,3) as c from range(0,10) tbl(i);
+COPY test3 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), overwrite_or_ignore TRUE, FILEFORMAT "leadingpart_{uuid}_trailingpart");
 
-# Now append to the directory from previous test, creating a second file in the partition.
-statement ok
-COPY testCubed TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), overwrite_or_ignore TRUE, FILEFORMAT "leadingpart_{uuid}_trailingpart");
-
+# the filename contains a uuid
 query III sort
-SELECT * FROM '__TEST_DIR__/part/a=9/*.parquet';
+SELECT * FROM '__TEST_DIR__/part/a=9/leadingpart_????????-????-4???-????-????????????_trailingpart.parquet';
+----
+9	27	729
+
+# the partition dir contains the files from test[2-3]
+query III sort
+SELECT * FROM '__TEST_DIR__/part/a=9/leadingpart_????????-????-4???-????-????????????*.parquet';
 ----
 9	18	81
 9	27	729
 
-statement ok
-CREATE TABLE test4 as SELECT i as a, (i*4) as b, power(i,4) as c from range(0,10) tbl(i);
-
-# Test without a specified format name for the outputfile. The name will be the default: "data_{i}"
+# Test without a specified format name for the outputfile.
 statement ok
 COPY test4 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), overwrite_or_ignore TRUE);
 
+# the filename is the default: "data_{i}"
+query III sort
+SELECT * FROM '__TEST_DIR__/part/a=9/data_[0-9]*.parquet';
+----
+9	36	6561
+
+# the partition dir contains the files from test[2-4]
 query III sort
 SELECT * FROM '__TEST_DIR__/part/a=9/*.parquet';
 ----
@@ -64,13 +85,17 @@ SELECT * FROM '__TEST_DIR__/part/a=9/*.parquet';
 9	27	729
 9	36	6561
 
-statement ok
-CREATE TABLE test5 as SELECT i as a, (i*5) as b, power(i,5) as c from range(0,10) tbl(i);
-
 # Test where the fileformat does not contain "{i}" or "{uuid}". 
 statement ok
-COPY test5 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), overwrite_or_ignore TRUE, FILEFORMAT basename);
+COPY test5 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), overwrite_or_ignore TRUE, FILEFORMAT "basename");
 
+# the file has the name of the given input
+query III sort
+SELECT * FROM '__TEST_DIR__/part/a=9/basename[0-9]*.parquet';
+----
+9	45	59049
+
+# the partition dir contains the files from test[2-5]
 query III sort
 SELECT * FROM '__TEST_DIR__/part/a=9/*.parquet';
 ----
@@ -85,27 +110,43 @@ COPY test5 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a));
 ----
 IO Error: Directory
 
-# Test where fileformat template param has no value
+# Test where the fileformat param has no value (for a directory that does not yet exist)
 statement ok
-COPY test4 TO '__TEST_DIR__/novalue' (FORMAT PARQUET, PARTITION_BY (a), FILEFORMAT);
+COPY test4 TO '__TEST_DIR__/to_be_overwritten' (FORMAT PARQUET, PARTITION_BY (a), FILEFORMAT);
 
-# Test where overwrite_or_ignore param has no value
-statement ok
-COPY test5 TO '__TEST_DIR__/novalue' (FORMAT PARQUET, PARTITION_BY (a), overwrite_or_ignore);
+query III sort
+SELECT * FROM '__TEST_DIR__/to_be_overwritten/a=9/data_[0-9]*.parquet';
+----
+9	36	6561
 
-# Test the data_{i} with per_thread_output true
+# Test where overwrite_or_ignore param has no value -> will be true -> overwrite previous test
 statement ok
-CREATE TABLE testppt as SELECT i as a, (i*10) as b, (i*100) as c from range(0,10000) tbl(i);
+COPY test5 TO '__TEST_DIR__/to_be_overwritten' (FORMAT PARQUET, PARTITION_BY (a), overwrite_or_ignore);
 
+query III sort
+SELECT * FROM '__TEST_DIR__/to_be_overwritten/a=9/data_[0-9]*.parquet';
+----
+9	45	59049
+
+# Test with a combination of {i} and {uuid} (segv test)
 statement ok
-COPY testppt TO '__TEST_DIR__/ppt/' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE, overwrite_or_ignore true, FILEFORMAT 'leadingpart_{i}_{uuid}');
+COPY test5 TO '__TEST_DIR__/within_bounds' (FORMAT PARQUET, PARTITION_BY (a), fileformat "a_name_{i}oh_{uuid}_really");
+
+query III sort
+SELECT * FROM '__TEST_DIR__/within_bounds/a=5/a_name_oh_????????-????-4???-????-????????????_really.parquet';
+----
+5	25	3125
+
+# Test the "{uuid}"" with per_thread_output TRUE
+statement ok
+COPY testpto TO '__TEST_DIR__/pto' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE, overwrite_or_ignore true, FILEFORMAT "basename_{uuid}");
 
 query I sort
-SELECT COUNT(*) FROM '__TEST_DIR__/ppt/leadingpart_*.parquet';
+SELECT COUNT(*) FROM '__TEST_DIR__/pto/basename_????????-????-4???-????-????????????.parquet';
 ----
 10000
 
 query I
-SELECT COUNT(*) FROM GLOB('__TEST_DIR__/ppt/*.parquet');
+SELECT COUNT(*) FROM GLOB('__TEST_DIR__/pto/basename_????????-????-4???-????-????????????.parquet');
 ----
 4
