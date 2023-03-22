@@ -128,7 +128,7 @@ void MiniZStreamWrapper::Initialize(CompressedFile &file, bool write) {
 			idx_t xlen = (uint8_t)gzip_xlen[0] | (uint8_t)gzip_xlen[1] << 8;
 			data_start += xlen + 2;
 		}
-
+		// Skip over the file name if necessary
 		if (gzip_hdr[3] & GZIP_FLAG_NAME) {
 			file.child_handle->Seek(data_start);
 			data_start += GZipConsumeString(*file.child_handle);
@@ -142,93 +142,34 @@ void MiniZStreamWrapper::Initialize(CompressedFile &file, bool write) {
 	}
 }
 
-/*
-// Local help buffer for handling the edge cases in concatenated GZIPs
-static uint8_t gzip_header[GZIP_HEADER_MAXSIZE];
-static idx_t old_len;
-static idx_t old_old_len;
-*/
 bool MiniZStreamWrapper::Read(StreamData &sd) {
 	// Handling for the concatenated files
 	if (sd.refresh) {
 		sd.refresh = false;
-/*		
-		idx_t remaining = sd.in_buff_end - sd.in_buff_start;
-		// Copy the (available part of) GZIP header to the help buffer
-		if (mz_stream_ptr->reserved == 1) {
-			idx_t available = MinValue<idx_t>(remaining, GZIP_HEADER_MAXSIZE);
-			memcpy(gzip_header, sd.in_buff_start, available);
-			old_len = available;
-			old_old_len = 0;
-		}
-		// Concatenate the missing part of GZIP header to the help buffer if needed
-		if (mz_stream_ptr->reserved == 2) {
-			memcpy(gzip_header + old_len, sd.in_buff_start, GZIP_HEADER_MAXSIZE - old_len);
-			old_old_len = old_len;
-			old_len = GZIP_HEADER_MAXSIZE;
-		}
-		mz_stream_ptr->reserved = 0;		
-		// Handle the header skipping in the the help buffer
-*/		
 		auto body_ptr = sd.in_buff_start + GZIP_FOOTER_SIZE;
-/*
-		// Edge case 1 - More data from input stream needed
-		if (GZIP_FOOTER_SIZE + GZIP_HEADER_MINSIZE > old_len) {
-			mz_stream_ptr->reserved = 2;
-			sd.in_buff_start = sd.in_buff_end;
-			return false;
-		}
-*/		
 		uint8_t gzip_hdr[GZIP_HEADER_MINSIZE];
 		memcpy(gzip_hdr, body_ptr, GZIP_HEADER_MINSIZE);
 		GZipFileSystem::VerifyGZIPHeader(gzip_hdr, GZIP_HEADER_MINSIZE);
 		body_ptr += GZIP_HEADER_MINSIZE;
 		if (gzip_hdr[3] & GZIP_FLAG_EXTRA) {
-/*		
-			// Edge case 2 - More data from input stream needed
-			if (GZIP_FOOTER_SIZE + GZIP_HEADER_MINSIZE + 2 > old_len) {
-				mz_stream_ptr->reserved = 2;
-				sd.in_buff_start = sd.in_buff_end;
-				return false;
-			}
-*/			
 			idx_t xlen = (uint8_t)*body_ptr | (uint8_t) * (body_ptr + 1) << 8;
 			body_ptr += xlen + 2;
 			if (GZIP_FOOTER_SIZE + GZIP_HEADER_MINSIZE + 2 + xlen >= GZIP_HEADER_MAXSIZE) {
 				throw InternalException("Extra field resulting in GZIP header larger than defined maximum (%d)",
 				                        GZIP_HEADER_MAXSIZE);
 			}
-/*			
-			// Edge case 3 - More data from input stream needed
-			if (GZIP_FOOTER_SIZE + GZIP_HEADER_MINSIZE + 2 + xlen > old_len) {
-				mz_stream_ptr->reserved = 2;
-				sd.in_buff_start = sd.in_buff_end;
-				return false;
-			}
-*/			
 		}
 		if (gzip_hdr[3] & GZIP_FLAG_NAME) {
 			char c;
 			do {
 				c = *body_ptr;
 				body_ptr++;
-			} while (c != '\0' && body_ptr < sd.in_buff_end);				
-//			} while (c != '\0' && body_ptr < gzip_header + old_len);
-//			if ((idx_t)(body_ptr - gzip_header) >= GZIP_HEADER_MAXSIZE) {
+			} while (c != '\0' && body_ptr < sd.in_buff_end);
 			if ((idx_t)(body_ptr - sd.in_buff_start) >= GZIP_HEADER_MAXSIZE) {
 				throw InternalException("Filename resulting in GZIP header larger than defined maximum (%d)",
 				                        GZIP_HEADER_MAXSIZE);
 			}
-/*			
-			// Edge case 4 - More data from input stream needed
-			if (body_ptr >= gzip_header + old_len) {
-				mz_stream_ptr->reserved = 2;
-				sd.in_buff_start = sd.in_buff_end;
-				return false;
-			}
-*/			
 		}
-//		sd.in_buff_start = sd.in_buff_start + (body_ptr - gzip_header) - old_old_len;
 		sd.in_buff_start = body_ptr;
 		if (sd.in_buff_end - sd.in_buff_start < 1) {
 			Close();
@@ -239,7 +180,6 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 		if (sta != duckdb_miniz::MZ_OK) {
 			throw InternalException("Failed to initialize miniz");
 		}
-//		mz_stream_ptr->reserved = 0;
 	}
 
 	// actually decompress
@@ -257,6 +197,7 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 	sd.in_buff_end = sd.in_buff_start + mz_stream_ptr->avail_in;
 	sd.out_buff_end = (data_ptr_t)mz_stream_ptr->next_out;
 	D_ASSERT(sd.out_buff_end + mz_stream_ptr->avail_out == sd.out_buff.get() + sd.out_buf_size);
+
 	// if stream ended, deallocate inflator
 	if (ret == duckdb_miniz::MZ_STREAM_END) {
 		// Last read from file done and remaining bytes only for footer or less
