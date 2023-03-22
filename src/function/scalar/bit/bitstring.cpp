@@ -22,8 +22,8 @@ static void BitStringFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 		    len = Bit::ComputeBitstringLen(n);
 		    string_t target = StringVector::EmptyString(result, len);
-
 		    Bit::BitString(input, n, target);
+		    target.Finalize();
 		    return target;
 	    });
 }
