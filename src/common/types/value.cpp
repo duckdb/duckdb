@@ -330,6 +330,52 @@ Value Value::MaximumValue(const LogicalType &type) {
 	}
 }
 
+Value Value::Infinity(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::DATE:
+		return Value::DATE(date_t::infinity());
+	case LogicalTypeId::TIMESTAMP:
+		return Value::TIMESTAMP(timestamp_t::infinity());
+	case LogicalTypeId::TIMESTAMP_MS:
+		return Value::TIMESTAMPMS(timestamp_t::infinity());
+	case LogicalTypeId::TIMESTAMP_NS:
+		return Value::TIMESTAMPNS(timestamp_t::infinity());
+	case LogicalTypeId::TIMESTAMP_SEC:
+		return Value::TIMESTAMPSEC(timestamp_t::infinity());
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return Value::TIMESTAMPTZ(timestamp_t::infinity());
+	case LogicalTypeId::FLOAT:
+		return Value::FLOAT(std::numeric_limits<float>::infinity());
+	case LogicalTypeId::DOUBLE:
+		return Value::DOUBLE(std::numeric_limits<double>::infinity());
+	default:
+		throw InvalidTypeException(type, "Infinity requires numeric type");
+	}
+}
+
+Value Value::NegativeInfinity(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::DATE:
+		return Value::DATE(date_t::ninfinity());
+	case LogicalTypeId::TIMESTAMP:
+		return Value::TIMESTAMP(timestamp_t::ninfinity());
+	case LogicalTypeId::TIMESTAMP_MS:
+		return Value::TIMESTAMPMS(timestamp_t::ninfinity());
+	case LogicalTypeId::TIMESTAMP_NS:
+		return Value::TIMESTAMPNS(timestamp_t::ninfinity());
+	case LogicalTypeId::TIMESTAMP_SEC:
+		return Value::TIMESTAMPSEC(timestamp_t::ninfinity());
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return Value::TIMESTAMPTZ(timestamp_t::ninfinity());
+	case LogicalTypeId::FLOAT:
+		return Value::FLOAT(-std::numeric_limits<float>::infinity());
+	case LogicalTypeId::DOUBLE:
+		return Value::DOUBLE(-std::numeric_limits<double>::infinity());
+	default:
+		throw InvalidTypeException(type, "NegativeInfinity requires numeric type");
+	}
+}
+
 Value Value::BOOLEAN(int8_t value) {
 	Value result(LogicalType::BOOLEAN);
 	result.value_.boolean = bool(value);
