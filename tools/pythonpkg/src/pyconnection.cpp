@@ -437,7 +437,8 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Append(const string &name, Da
 	return Execute("INSERT INTO \"" + name + "\" SELECT * FROM __append_df");
 }
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const string &name, py::object python_object) {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const string &name,
+                                                                        const py::object &python_object) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}

@@ -85,7 +85,7 @@ public:
 
 	shared_ptr<DuckDBPyConnection> Append(const string &name, DataFrame value);
 
-	shared_ptr<DuckDBPyConnection> RegisterPythonObject(const string &name, py::object python_object);
+	shared_ptr<DuckDBPyConnection> RegisterPythonObject(const string &name, const py::object &python_object);
 
 	void InstallExtension(const string &extension, bool force_install = false);
 
