@@ -7,6 +7,12 @@
 
 namespace duckdb {
 
+bool PyUnionType::check_(const py::handle &object) {
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	return py::isinstance(object, py::module::import("typing").attr("_UnionGenericAlias")) ||
+	       import_cache.types().UnionType.IsInstance(object);
+}
+
 DuckDBPyType::DuckDBPyType(LogicalType type) : type(std::move(type)) {
 }
 
@@ -207,10 +213,6 @@ void DuckDBPyType::Initialize(py::handle &m) {
 		                      return make_shared<DuckDBPyType>(ltype);
 	                      }),
 	                      py::arg("type_str"), py::arg("connection") = py::none());
-	connection_module.def(py::init<>([](const py::type &obj) {
-		auto ltype = FromType(obj);
-		return make_shared<DuckDBPyType>(ltype);
-	}));
 	connection_module.def(py::init<>([](const PyGenericAlias &obj) {
 		auto ltype = FromGenericAlias(obj);
 		return make_shared<DuckDBPyType>(ltype);
@@ -219,14 +221,17 @@ void DuckDBPyType::Initialize(py::handle &m) {
 		auto ltype = FromUnionType(obj);
 		return make_shared<DuckDBPyType>(ltype);
 	}));
+	connection_module.def(py::init<>([](const py::object &obj) {
+		auto ltype = FromObject(obj);
+		return make_shared<DuckDBPyType>(ltype);
+	}));
 	connection_module.def("__getattr__", &DuckDBPyType::GetAttribute, "Get the child type by 'name'", py::arg("name"));
 	connection_module.def("__getitem__", &DuckDBPyType::GetAttribute, "Get the child type by 'name'", py::arg("name"));
 
 	py::implicitly_convertible<py::str, DuckDBPyType>();
-	py::implicitly_convertible<py::type, DuckDBPyType>();
-	py::implicitly_convertible<py::object, DuckDBPyType>();
 	py::implicitly_convertible<PyGenericAlias, DuckDBPyType>();
 	py::implicitly_convertible<PyUnionType, DuckDBPyType>();
+	py::implicitly_convertible<py::object, DuckDBPyType>();
 }
 
 string DuckDBPyType::ToString() const {

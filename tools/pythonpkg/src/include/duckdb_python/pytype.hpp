@@ -20,10 +20,7 @@ public:
 	using py::object::object;
 
 public:
-	static bool check_(const py::handle &object) {
-		return py::isinstance(object, py::module::import("types").attr("UnionType")) ||
-		       py::isinstance(object, py::module::import("typing").attr("_UnionGenericAlias"));
-	}
+	static bool check_(const py::handle &object);
 };
 
 class DuckDBPyType : public std::enable_shared_from_this<DuckDBPyType> {
