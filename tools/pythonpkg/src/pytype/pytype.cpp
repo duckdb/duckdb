@@ -7,6 +7,7 @@
 
 namespace duckdb {
 
+// NOLINTNEXTLINE(readability-identifier-naming)
 bool PyUnionType::check_(const py::handle &object) {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	return py::isinstance(object, py::module::import("typing").attr("_UnionGenericAlias")) ||
@@ -148,7 +149,7 @@ static LogicalType FromUnionType(const py::object &obj) {
 
 	for (const auto &arg : args) {
 		auto name = StringUtil::Format("u%d", index++);
-		py::object object = py::object(arg.ptr(), true);
+		py::object object = py::reinterpret_borrow<py::object>(arg);
 		members.push_back(make_pair(name, FromObject(object)));
 	}
 
