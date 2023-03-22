@@ -257,7 +257,7 @@ public:
 
 protected:
 	atomic<bool> finished_loading;
-	bool is_read_only;
+	atomic<bool> is_read_only;
 
 	//! Load the next segment - only used when lazily loading
 	virtual unique_ptr<T> LoadSegment() {

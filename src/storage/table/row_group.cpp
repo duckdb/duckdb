@@ -37,6 +37,10 @@ RowGroup::RowGroup(RowGroupCollection &collection, RowGroupPointer &&pointer, bo
 	}
 	this->column_pointers = std::move(pointer.data_pointers);
 	this->columns.resize(column_pointers.size());
+	this->is_loaded = unique_ptr<atomic<bool>[]>(new atomic<bool>[columns.size()]);
+	for(idx_t c = 0; c < columns.size(); c++) {
+		this->is_loaded[c] = false;
+	}
 	this->version_info = std::move(pointer.versions);
 
 	Verify();
@@ -81,11 +85,18 @@ idx_t RowGroup::GetColumnCount() const {
 
 ColumnData &RowGroup::GetColumn(idx_t c) {
 	D_ASSERT(c < columns.size());
-	if (columns[c]) {
+	if (!is_loaded) {
+		// not being lazy loaded
+		D_ASSERT(columns[c]);
+		return *columns[c];
+	}
+	if (is_loaded[c]) {
+		D_ASSERT(columns[c]);
 		return *columns[c];
 	}
 	lock_guard<mutex> l(row_group_lock);
 	if (columns[c]) {
+		D_ASSERT(is_loaded[c]);
 		return *columns[c];
 	}
 	if (column_pointers.size() != columns.size()) {
@@ -101,6 +112,7 @@ ColumnData &RowGroup::GetColumn(idx_t c) {
 	if (is_read_only) {
 		columns[c]->SetReadOnly();
 	}
+	is_loaded[c] = true;
 	return *columns[c];
 }
 
