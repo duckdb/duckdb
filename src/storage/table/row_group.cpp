@@ -38,7 +38,7 @@ RowGroup::RowGroup(RowGroupCollection &collection, RowGroupPointer &&pointer, bo
 	this->column_pointers = std::move(pointer.data_pointers);
 	this->columns.resize(column_pointers.size());
 	this->is_loaded = unique_ptr<atomic<bool>[]>(new atomic<bool>[columns.size()]);
-	for(idx_t c = 0; c < columns.size(); c++) {
+	for (idx_t c = 0; c < columns.size(); c++) {
 		this->is_loaded[c] = false;
 	}
 	this->version_info = std::move(pointer.versions);
