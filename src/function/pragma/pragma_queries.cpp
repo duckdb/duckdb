@@ -17,7 +17,15 @@ string PragmaTableInfo(ClientContext &context, const FunctionParameters &paramet
 
 string PragmaShowTables(ClientContext &context, const FunctionParameters &parameters) {
 	auto catalog = DatabaseManager::GetDefaultDatabase(context);
-	return "SELECT table_name FROM duckdb_tables() where database_name='" + catalog + "' ORDER BY table_name;";
+	auto table_query = "SELECT table_name as name FROM duckdb_tables where database_name='" + catalog + "'";
+	auto view_query = "SELECT view_name as name FROM duckdb_views where database_name='" + catalog + "'";
+	auto index_query = "SELECT index_name as name FROM duckdb_indexes where database_name='" + catalog + "'";
+
+	auto all_query = "select name from tables union all select name from views union all select name from indexes";
+
+	auto pragma_query = "with tables as ( " + table_query + "), views as ( " + view_query + +" ), indexes as ( " +
+	                    index_query + "), db_objects as ( " + all_query + ") select name from db_objects order by name";
+	return pragma_query;
 }
 
 string PragmaShowTablesExpanded(ClientContext &context, const FunctionParameters &parameters) {
