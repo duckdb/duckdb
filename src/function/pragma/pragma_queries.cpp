@@ -17,7 +17,7 @@ string PragmaTableInfo(ClientContext &context, const FunctionParameters &paramet
 
 string PragmaShowTables(ClientContext &context, const FunctionParameters &parameters) {
 	auto catalog = DatabaseManager::GetDefaultDatabase(context);
-	return "SELECT table_name FROM duckdb_tables() where database_name='"+catalog+"' ORDER BY table_name;";
+	return "SELECT table_name FROM duckdb_tables() where database_name='" + catalog + "' ORDER BY table_name;";
 }
 
 string PragmaShowTablesExpanded(ClientContext &context, const FunctionParameters &parameters) {
