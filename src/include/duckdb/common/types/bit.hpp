@@ -57,5 +57,6 @@ private:
 	static void Finalize(string_t &str);
 	static idx_t GetBitInternal(string_t bit_string, idx_t n);
 	static void SetBitInternal(string_t &bit_string, idx_t n, idx_t new_value);
+	static idx_t GetBitIndex(idx_t n);
 };
 } // namespace duckdb

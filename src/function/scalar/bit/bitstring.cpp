@@ -14,7 +14,7 @@ static void BitStringFunction(DataChunk &args, ExpressionState &state, Vector &r
 		    if (n < 0) {
 			    throw InvalidInputException("The bitstring length cannot be negative");
 		    }
-		    if ((idx_t)n < input.GetSize()) {
+		    if (idx_t(n) < input.GetSize()) {
 			    throw InvalidInputException("Length must be equal or larger than input string");
 		    }
 		    idx_t len;

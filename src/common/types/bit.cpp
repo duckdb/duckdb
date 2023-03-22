@@ -10,8 +10,13 @@ static char ComputePadding(idx_t len) {
 }
 
 idx_t Bit::ComputeBitstringLen(idx_t len) {
-	len = len % 8 ? (len / 8) + 1 : len / 8;
-	return ++len; // additional first byte to store info on zero padding
+	idx_t result = len / 8;
+	if (len % 8 != 0) {
+		result++;
+	}
+	// additional first byte to store info on zero padding
+	result++;
+	return result;
 }
 
 static inline idx_t GetBitPadding(const string_t &bit_string) {
@@ -142,18 +147,17 @@ string Bit::ToBit(string_t str) {
 }
 
 // **** scalar functions ****
-void Bit::BitString(const string_t &input, const idx_t &len, string_t &result) {
+void Bit::BitString(const string_t &input, const idx_t &bit_length, string_t &result) {
 	char *res_buf = result.GetDataWriteable();
 	const char *buf = input.GetDataUnsafe();
 
-	auto padding = ComputePadding(len);
-	auto bit_length = Bit::BitLength(result);
+	auto padding = ComputePadding(bit_length);
 	res_buf[0] = padding;
 	for (idx_t i = 0; i < bit_length; i++) {
-		if (i < len - input.GetSize()) {
+		if (i < bit_length - input.GetSize()) {
 			Bit::SetBit(result, i, 0);
 		} else {
-			idx_t bit = buf[i - (len - input.GetSize())] == '1' ? 1 : 0;
+			idx_t bit = buf[i - (bit_length - input.GetSize())] == '1' ? 1 : 0;
 			Bit::SetBit(result, i, bit);
 		}
 	}
@@ -217,9 +221,15 @@ idx_t Bit::GetBit(string_t bit_string, idx_t n) {
 	return Bit::GetBitInternal(bit_string, n + GetBitPadding(bit_string));
 }
 
+idx_t Bit::GetBitIndex(idx_t n) {
+	return n / 8 + 1;
+}
+
 idx_t Bit::GetBitInternal(string_t bit_string, idx_t n) {
 	const char *buf = bit_string.GetDataUnsafe();
-	char byte = buf[(n / 8) + 1] >> (7 - (n % 8));
+	auto idx = Bit::GetBitIndex(n);
+	D_ASSERT(idx < bit_string.GetSize());
+	char byte = buf[idx] >> (7 - (n % 8));
 	return (byte & 1 ? 1 : 0);
 }
 
@@ -230,12 +240,14 @@ void Bit::SetBit(string_t &bit_string, idx_t n, idx_t new_value) {
 void Bit::SetBitInternal(string_t &bit_string, idx_t n, idx_t new_value) {
 	char *buf = bit_string.GetDataWriteable();
 
+	auto idx = Bit::GetBitIndex(n);
+	D_ASSERT(idx < bit_string.GetSize());
 	char shift_byte = 1 << (7 - (n % 8));
 	if (new_value == 0) {
 		shift_byte = ~shift_byte;
-		buf[(n / 8) + 1] &= shift_byte;
+		buf[idx] &= shift_byte;
 	} else {
-		buf[(n / 8) + 1] |= shift_byte;
+		buf[idx] |= shift_byte;
 	}
 }
 
