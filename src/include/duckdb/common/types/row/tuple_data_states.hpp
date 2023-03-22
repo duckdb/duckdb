@@ -31,8 +31,13 @@ struct TupleDataPinState {
 	TupleDataPinProperties properties = TupleDataPinProperties::INVALID;
 };
 
+struct TupleDataVectorFormat {
+	UnifiedVectorFormat data;
+	vector<TupleDataVectorFormat> child_data;
+};
+
 struct TupleDataChunkState {
-	vector<UnifiedVectorFormat> vector_data;
+	vector<TupleDataVectorFormat> vector_data;
 	vector<column_t> column_ids;
 
 	Vector row_locations = Vector(LogicalType::POINTER);

@@ -75,7 +75,7 @@ public:
 	static void ComputeHeapSizes(TupleDataChunkState &chunk_state, DataChunk &new_chunk,
 	                             const SelectionVector &append_sel, const idx_t append_count);
 	//! Computes the heap sizes for the specific Vector that will be appended
-	static void ComputeHeapSizes(Vector &heap_sizes_v, Vector &source_v, UnifiedVectorFormat &source,
+	static void ComputeHeapSizes(Vector &heap_sizes_v, Vector &source_v, TupleDataVectorFormat &source,
 	                             const SelectionVector &append_sel, const idx_t append_count,
 	                             const idx_t original_count);
 	//! Builds out the buffer space for the specified chunk state
