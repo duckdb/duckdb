@@ -7,6 +7,8 @@
 #include "duckdb/transaction/update_info.hpp"
 #include "duckdb/common/printer.hpp"
 
+#include <algorithm>
+
 namespace duckdb {
 
 static UpdateSegment::initialize_update_function_t GetInitializeUpdateFunction(PhysicalType type);
