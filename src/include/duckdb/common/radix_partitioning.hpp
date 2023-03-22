@@ -15,8 +15,6 @@
 namespace duckdb {
 
 class BufferManager;
-class RowLayout;
-class RowDataCollection;
 class Vector;
 struct UnifiedVectorFormat;
 struct SelectionVector;

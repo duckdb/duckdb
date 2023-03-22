@@ -39,64 +39,6 @@ RETURN_TYPE RadixBitsSwitch(idx_t radix_bits, ARGS &&...args) {
 	}
 }
 
-template <class OP, class RETURN_TYPE, idx_t radix_bits_1, typename... ARGS>
-RETURN_TYPE DoubleRadixBitsSwitch2(idx_t radix_bits_2, ARGS &&...args) {
-	D_ASSERT(radix_bits_2 <= sizeof(hash_t) * 8);
-	switch (radix_bits_2) {
-	case 1:
-		return OP::template Operation<radix_bits_1, 1>(std::forward<ARGS>(args)...);
-	case 2:
-		return OP::template Operation<radix_bits_1, 2>(std::forward<ARGS>(args)...);
-	case 3:
-		return OP::template Operation<radix_bits_1, 3>(std::forward<ARGS>(args)...);
-	case 4:
-		return OP::template Operation<radix_bits_1, 4>(std::forward<ARGS>(args)...);
-	case 5:
-		return OP::template Operation<radix_bits_1, 5>(std::forward<ARGS>(args)...);
-	case 6:
-		return OP::template Operation<radix_bits_1, 6>(std::forward<ARGS>(args)...);
-	case 7:
-		return OP::template Operation<radix_bits_1, 7>(std::forward<ARGS>(args)...);
-	case 8:
-		return OP::template Operation<radix_bits_1, 8>(std::forward<ARGS>(args)...);
-	case 9:
-		return OP::template Operation<radix_bits_1, 9>(std::forward<ARGS>(args)...);
-	case 10:
-		return OP::template Operation<radix_bits_1, 10>(std::forward<ARGS>(args)...);
-	default:
-		throw InternalException("TODO");
-	}
-}
-
-template <class OP, class RETURN_TYPE, typename... ARGS>
-RETURN_TYPE DoubleRadixBitsSwitch1(idx_t radix_bits_1, idx_t radix_bits_2, ARGS &&...args) {
-	D_ASSERT(radix_bits_1 <= sizeof(hash_t) * 8);
-	switch (radix_bits_1) {
-	case 1:
-		return DoubleRadixBitsSwitch2<OP, RETURN_TYPE, 1>(radix_bits_2, std::forward<ARGS>(args)...);
-	case 2:
-		return DoubleRadixBitsSwitch2<OP, RETURN_TYPE, 2>(radix_bits_2, std::forward<ARGS>(args)...);
-	case 3:
-		return DoubleRadixBitsSwitch2<OP, RETURN_TYPE, 3>(radix_bits_2, std::forward<ARGS>(args)...);
-	case 4:
-		return DoubleRadixBitsSwitch2<OP, RETURN_TYPE, 4>(radix_bits_2, std::forward<ARGS>(args)...);
-	case 5:
-		return DoubleRadixBitsSwitch2<OP, RETURN_TYPE, 5>(radix_bits_2, std::forward<ARGS>(args)...);
-	case 6:
-		return DoubleRadixBitsSwitch2<OP, RETURN_TYPE, 6>(radix_bits_2, std::forward<ARGS>(args)...);
-	case 7:
-		return DoubleRadixBitsSwitch2<OP, RETURN_TYPE, 7>(radix_bits_2, std::forward<ARGS>(args)...);
-	case 8:
-		return DoubleRadixBitsSwitch2<OP, RETURN_TYPE, 8>(radix_bits_2, std::forward<ARGS>(args)...);
-	case 9:
-		return DoubleRadixBitsSwitch2<OP, RETURN_TYPE, 9>(radix_bits_2, std::forward<ARGS>(args)...);
-	case 10:
-		return DoubleRadixBitsSwitch2<OP, RETURN_TYPE, 10>(radix_bits_2, std::forward<ARGS>(args)...);
-	default:
-		throw InternalException("TODO");
-	}
-}
-
 template <idx_t radix_bits>
 struct RadixLessThan {
 	static inline bool Operation(hash_t hash, hash_t cutoff) {
@@ -251,8 +193,8 @@ void RadixPartitionedTupleData::RepartitionFinalizeStates(PartitionedTupleData &
 	D_ASSERT(new_radix_bits > old_radix_bits);
 
 	// We take the most significant digits as the partition index
-	// When repartitioning, partition 0 from "old" goes into the first N partitions in "new"
-	// When the partition 0 is done, we can already finalize the append states, unpinning blocks
+	// When repartitioning, e.g., partition 0 from "old" goes into the first N partitions in "new"
+	// When partition 0 is done, we can already finalize the append states, unpinning blocks
 	const auto multiplier = RadixPartitioning::NumberOfPartitions(new_radix_bits - old_radix_bits);
 	const auto from_idx = finished_partition_idx * multiplier;
 	const auto to_idx = from_idx + multiplier;

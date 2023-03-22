@@ -55,7 +55,7 @@ public:
 	//! - useful for optimizing many appends made to the same tuple data collection
 	void InitializeAppend(TupleDataChunkState &chunk_state, vector<column_t> column_ids);
 	//! Append a DataChunk directly to this TupleDataCollection - calls InitializeAppend and Append internally
-	void Append(DataChunk &new_chunk, const SelectionVector &sel = *FlatVector::IncrementalSelectionVector(),
+	void Append(DataChunk &new_chunk, const SelectionVector &append_sel = *FlatVector::IncrementalSelectionVector(),
 	            idx_t append_count = DConstants::INVALID_INDEX);
 	//! Append a DataChunk directly to this TupleDataCollection - calls InitializeAppend and Append internally
 	void Append(DataChunk &new_chunk, vector<column_t> column_ids,
