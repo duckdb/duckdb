@@ -10,7 +10,7 @@ class TestImportWithoutPyArrowDataset:
 		# We should be able to import duckdb even when pyarrow.dataset is missing
 
 		rel = duckdb.query('select 1')
-		arrow_table = rel.arrow()
-		with pytest.raises(ModuleNotFoundError):
+		arrow_table = rel.record_batch()
+		with pytest.raises(duckdb.InvalidInputException):
 			# The replacement scan functionality relies on pyarrow.dataset
 			duckdb.query('select * from arrow_table')
