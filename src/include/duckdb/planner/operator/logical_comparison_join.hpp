@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/joinref_type.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
@@ -34,10 +35,12 @@ public:
 	                        FieldReader &reader);
 
 public:
-	static unique_ptr<LogicalOperator> CreateJoin(JoinType type, unique_ptr<LogicalOperator> left_child,
+	static unique_ptr<LogicalOperator> CreateJoin(JoinType type, JoinRefType ref_type,
+	                                              unique_ptr<LogicalOperator> left_child,
 	                                              unique_ptr<LogicalOperator> right_child,
 	                                              unique_ptr<Expression> condition);
-	static unique_ptr<LogicalOperator> CreateJoin(JoinType type, unique_ptr<LogicalOperator> left_child,
+	static unique_ptr<LogicalOperator> CreateJoin(JoinType type, JoinRefType ref_type,
+	                                              unique_ptr<LogicalOperator> left_child,
 	                                              unique_ptr<LogicalOperator> right_child,
 	                                              vector<JoinCondition> conditions,
 	                                              vector<unique_ptr<Expression>> arbitrary_expressions);

@@ -316,7 +316,6 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 	result->aggregate_index = GenerateTableIndex();
 	result->groupings_index = GenerateTableIndex();
 	result->window_index = GenerateTableIndex();
-	result->unnest_index = GenerateTableIndex();
 	result->prune_index = GenerateTableIndex();
 
 	result->from_table = std::move(from_table);
@@ -427,14 +426,32 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 	SelectBinder select_binder(*this, context, *result, info, alias_map);
 	vector<LogicalType> internal_sql_types;
 	vector<idx_t> group_by_all_indexes;
+	vector<string> new_names;
 	for (idx_t i = 0; i < statement.select_list.size(); i++) {
 		bool is_window = statement.select_list[i]->IsWindow();
 		idx_t unnest_count = result->unnests.size();
 		LogicalType result_type;
-		auto expr = select_binder.Bind(statement.select_list[i], &result_type);
+		auto expr = select_binder.Bind(statement.select_list[i], &result_type, true);
 		bool is_original_column = i < result->column_count;
 		bool can_group_by_all =
 		    statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES && is_original_column;
+		if (select_binder.HasExpandedExpressions()) {
+			if (!is_original_column) {
+				throw InternalException("Only original columns can have expanded expressions");
+			}
+			if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES) {
+				throw BinderException("UNNEST of struct cannot be combined with GROUP BY ALL");
+			}
+			auto &struct_expressions = select_binder.ExpandedExpressions();
+			D_ASSERT(!struct_expressions.empty());
+			for (auto &struct_expr : struct_expressions) {
+				new_names.push_back(struct_expr->GetName());
+				result->types.push_back(struct_expr->return_type);
+				result->select_list.push_back(std::move(struct_expr));
+			}
+			struct_expressions.clear();
+			continue;
+		}
 		if (can_group_by_all && select_binder.HasBoundColumns()) {
 			if (select_binder.BoundAggregates()) {
 				throw BinderException("Cannot mix aggregates with non-aggregated columns!");
@@ -450,7 +467,8 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 			group_by_all_indexes.push_back(i);
 		}
 		result->select_list.push_back(std::move(expr));
-		if (i < result->column_count) {
+		if (is_original_column) {
+			new_names.push_back(std::move(result->names[i]));
 			result->types.push_back(result_type);
 		}
 		internal_sql_types.push_back(result_type);
@@ -466,6 +484,8 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 		result->groups.group_expressions.push_back(std::move(expr));
 		expr = std::move(group_ref);
 	}
+	result->column_count = new_names.size();
+	result->names = std::move(new_names);
 	result->need_prune = result->select_list.size() > result->column_count;
 
 	// in the normal select binder, we bind columns as if there is no aggregation

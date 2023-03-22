@@ -30,8 +30,10 @@ struct PivotColumnEntry {
 };
 
 struct PivotColumn {
-	//! The column names to (un)pivot
-	vector<string> names;
+	//! The set of expressions to pivot on
+	vector<unique_ptr<ParsedExpression>> pivot_expressions;
+	//! The set of unpivot names
+	vector<string> unpivot_names;
 	//! The set of values to pivot on
 	vector<PivotColumnEntry> entries;
 	//! The enum to read pivot values from (if any)

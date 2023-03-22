@@ -12,15 +12,29 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 string PivotColumn::ToString() const {
 	string result;
-	if (names.size() == 1) {
-		result += KeywordHelper::WriteOptionallyQuoted(names[0]);
-	} else {
+	if (!unpivot_names.empty()) {
+		D_ASSERT(pivot_expressions.empty());
+		// unpivot
+		if (unpivot_names.size() == 1) {
+			result += KeywordHelper::WriteOptionallyQuoted(unpivot_names[0]);
+		} else {
+			result += "(";
+			for (idx_t n = 0; n < unpivot_names.size(); n++) {
+				if (n > 0) {
+					result += ", ";
+				}
+				result += KeywordHelper::WriteOptionallyQuoted(unpivot_names[n]);
+			}
+			result += ")";
+		}
+	} else if (!pivot_expressions.empty()) {
+		// pivot
 		result += "(";
-		for (idx_t n = 0; n < names.size(); n++) {
+		for (idx_t n = 0; n < pivot_expressions.size(); n++) {
 			if (n > 0) {
 				result += ", ";
 			}
-			result += KeywordHelper::WriteOptionallyQuoted(names[n]);
+			result += pivot_expressions[n]->ToString();
 		}
 		result += ")";
 	}
@@ -74,7 +88,10 @@ bool PivotColumnEntry::Equals(const PivotColumnEntry &other) const {
 }
 
 bool PivotColumn::Equals(const PivotColumn &other) const {
-	if (other.names != names) {
+	if (!ExpressionUtil::ListEquals(pivot_expressions, other.pivot_expressions)) {
+		return false;
+	}
+	if (other.unpivot_names != unpivot_names) {
 		return false;
 	}
 	if (other.pivot_enum != pivot_enum) {
@@ -93,7 +110,10 @@ bool PivotColumn::Equals(const PivotColumn &other) const {
 
 PivotColumn PivotColumn::Copy() const {
 	PivotColumn result;
-	result.names = names;
+	for (auto &expr : pivot_expressions) {
+		result.pivot_expressions.push_back(expr->Copy());
+	}
+	result.unpivot_names = unpivot_names;
 	for (auto &entry : entries) {
 		result.entries.push_back(entry.Copy());
 	}
@@ -103,14 +123,16 @@ PivotColumn PivotColumn::Copy() const {
 
 void PivotColumn::Serialize(Serializer &serializer) const {
 	FieldWriter writer(serializer);
-	writer.WriteList<string>(names);
+	writer.WriteSerializableList(pivot_expressions);
+	writer.WriteList<string>(unpivot_names);
 	writer.WriteRegularSerializableList(entries);
 	writer.WriteString(pivot_enum);
 	writer.Finalize();
 }
 
 void PivotColumn::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty("names", names);
+	serializer.WriteProperty("pivot_expressions", pivot_expressions);
+	serializer.WriteProperty("unpivot_names", unpivot_names);
 	serializer.WriteProperty("entries", entries);
 	serializer.WriteProperty("pivot_enum", pivot_enum);
 }
@@ -118,7 +140,8 @@ void PivotColumn::FormatSerialize(FormatSerializer &serializer) const {
 PivotColumn PivotColumn::Deserialize(Deserializer &source) {
 	PivotColumn result;
 	FieldReader reader(source);
-	result.names = reader.ReadRequiredList<string>();
+	result.pivot_expressions = reader.ReadRequiredSerializableList<ParsedExpression>();
+	result.unpivot_names = reader.ReadRequiredList<string>();
 	result.entries = reader.ReadRequiredSerializableList<PivotColumnEntry, PivotColumnEntry>();
 	result.pivot_enum = reader.ReadRequired<string>();
 	reader.Finalize();
@@ -127,7 +150,8 @@ PivotColumn PivotColumn::Deserialize(Deserializer &source) {
 
 PivotColumn PivotColumn::FormatDeserialize(FormatDeserializer &source) {
 	PivotColumn result;
-	source.ReadProperty("names", result.names);
+	source.ReadProperty("pivot_expressions", result.pivot_expressions);
+	source.ReadProperty("unpivot_names", result.unpivot_names);
 	source.ReadProperty("entries", result.entries);
 	source.ReadProperty("pivot_enum", result.pivot_enum);
 	return result;

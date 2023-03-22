@@ -585,7 +585,7 @@ DUCKDB_API bool duckdb_result_is_streaming(duckdb_result result);
 Returns the number of data chunks present in the result.
 
 * result: The result object
-* returns: The resulting data chunk. Returns `NULL` if the chunk index is out of bounds.
+* returns: Number of data chunks present in the result.
 */
 DUCKDB_API idx_t duckdb_result_chunk_count(duckdb_result result);
 

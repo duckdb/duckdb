@@ -115,6 +115,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 		plan = CreatePlan((LogicalDelimJoin &)op);
 		break;
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+		plan = CreatePlan((LogicalAsOfJoin &)op);
+		break;
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 		plan = CreatePlan((LogicalComparisonJoin &)op);
 		break;

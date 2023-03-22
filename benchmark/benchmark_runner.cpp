@@ -164,6 +164,8 @@ void print_help() {
 	fprintf(stderr, "              --log=[file]           Move log output to file\n");
 	fprintf(stderr, "              --info                 Prints info about the benchmark\n");
 	fprintf(stderr, "              --query                Prints query of the benchmark\n");
+	fprintf(stderr, "              --root-dir             Sets the root directory for where to store temp data and "
+	                "look for the 'benchmarks' directory\n");
 	fprintf(stderr,
 	        "              [name_pattern]         Run only the benchmark which names match the specified name pattern, "
 	        "e.g., DS.* for TPC-DS benchmarks\n");
@@ -181,6 +183,27 @@ void LoadInterpretedBenchmarks() {
 	});
 }
 
+string parse_root_dir_or_default(const int arg_counter, char const *const *arg_values) {
+	// check if the user specified a different root directory
+	for (int arg_index = 1; arg_index < arg_counter; ++arg_index) {
+		string arg = arg_values[arg_index];
+		if (arg == "--root-dir") {
+			if (arg_index + 1 >= arg_counter) {
+				fprintf(stderr, "Missing argument for --root-dir\n");
+				print_help();
+				exit(1);
+			}
+			auto path = arg_values[arg_index + 1];
+			if (FileSystem::IsPathAbsolute(path)) {
+				return path;
+			} else {
+				return FileSystem::JoinPath(FileSystem::GetWorkingDirectory(), path);
+			}
+		}
+	}
+	// default root directory is the duckdb root directory
+	return DUCKDB_ROOT_DIRECTORY;
+}
 /**
  * Builds a configuration based on the passed arguments.
  */
@@ -208,6 +231,9 @@ void parse_arguments(const int arg_counter, char const *const *arg_values) {
 			// write info of benchmark
 			auto splits = StringUtil::Split(arg, '=');
 			instance.threads = Value(splits[1]).DefaultCastAs(LogicalType::UINTEGER).GetValue<uint32_t>();
+		} else if (arg == "--root-dir") {
+			// We've already handled this, skip it
+			arg_index++;
 		} else if (arg == "--query") {
 			// write group of benchmark
 			instance.configuration.meta = BenchmarkMetaType::QUERY;
@@ -309,7 +335,9 @@ void print_error_message(const ConfigurationError &error) {
 }
 
 int main(int argc, char **argv) {
-	FileSystem::SetWorkingDirectory(DUCKDB_ROOT_DIRECTORY);
+	// Set the working directory. We need to scan this before loading the benchmarks or parsing the other arguments
+	string root_dir = parse_root_dir_or_default(argc, argv);
+	FileSystem::SetWorkingDirectory(root_dir);
 	// load interpreted benchmarks before doing anything else
 	LoadInterpretedBenchmarks();
 	parse_arguments(argc, argv);

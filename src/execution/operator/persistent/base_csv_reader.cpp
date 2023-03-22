@@ -498,12 +498,12 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 			}
 
 			// figure out the exact line number
+			UnifiedVectorFormat inserted_column_data;
+			insert_chunk.data[col_idx].ToUnifiedFormat(parse_chunk.size(), inserted_column_data);
 			idx_t row_idx;
 			for (row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
-				auto &inserted_column = insert_chunk.data[col_idx];
 				auto &parsed_column = parse_chunk.data[col_idx];
-
-				if (FlatVector::IsNull(inserted_column, row_idx) && !FlatVector::IsNull(parsed_column, row_idx)) {
+				if (!inserted_column_data.validity.RowIsValid(row_idx) && !FlatVector::IsNull(parsed_column, row_idx)) {
 					break;
 				}
 			}
