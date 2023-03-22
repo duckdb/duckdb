@@ -120,7 +120,7 @@ void MiniZStreamWrapper::Initialize(CompressedFile &file, bool write) {
 		idx_t data_start = GZIP_HEADER_MINSIZE;
 		auto read_count = file.child_handle->Read(gzip_hdr, GZIP_HEADER_MINSIZE);
 		GZipFileSystem::VerifyGZIPHeader(gzip_hdr, read_count);
-
+		// Skip over the extra field if necessary
 		if (gzip_hdr[3] & GZIP_FLAG_EXTRA) {
 			uint8_t gzip_xlen[2];
 			file.child_handle->Seek(data_start);
@@ -142,25 +142,31 @@ void MiniZStreamWrapper::Initialize(CompressedFile &file, bool write) {
 	}
 }
 
+// Local help buffer for handling the edge cases in concatenated GZIPs
 static uint8_t gzip_header[GZIP_HEADER_MAXSIZE];
 static idx_t old_len;
 static idx_t old_old_len;
 bool MiniZStreamWrapper::Read(StreamData &sd) {
+	// Special cases handling for the concatenated files
 	if (mz_stream_ptr->reserved > 0) {
 		idx_t remaining = sd.in_buff_end - sd.in_buff_start;
+		// Copy the (available part of) GZIP header to the help buffer
 		if (mz_stream_ptr->reserved == 1) {
 			idx_t available = MinValue<idx_t>(remaining, GZIP_HEADER_MAXSIZE);
 			memcpy(gzip_header, sd.in_buff_start, available);
 			old_len = available;
 			old_old_len = 0;
 		}
+		// Concatenate the missing part of GZIP header to the help buffer if needed
 		if (mz_stream_ptr->reserved == 2) {
 			memcpy(gzip_header + old_len, sd.in_buff_start, GZIP_HEADER_MAXSIZE - old_len);
 			old_old_len = old_len;
 			old_len = GZIP_HEADER_MAXSIZE;
 		}
 		mz_stream_ptr->reserved = 0;
+		// Handle the header skipping in the the help buffer
 		auto body_ptr = gzip_header + GZIP_FOOTER_SIZE;
+		// Edge case 1 - More data from input stream needed
 		if (GZIP_FOOTER_SIZE + GZIP_HEADER_MINSIZE > old_len) {
 			mz_stream_ptr->reserved = 2;
 			sd.in_buff_start = sd.in_buff_end;
@@ -171,6 +177,7 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 		GZipFileSystem::VerifyGZIPHeader(gzip_hdr, GZIP_HEADER_MINSIZE);
 		body_ptr += GZIP_HEADER_MINSIZE;
 		if (gzip_hdr[3] & GZIP_FLAG_EXTRA) {
+			// Edge case 2 - More data from input stream needed
 			if (GZIP_FOOTER_SIZE + GZIP_HEADER_MINSIZE + 2 > old_len) {
 				mz_stream_ptr->reserved = 2;
 				sd.in_buff_start = sd.in_buff_end;
@@ -182,6 +189,7 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 				throw InternalException("Extra field resulting in GZIP header larger than defined maximum (%d)",
 				                        GZIP_HEADER_MAXSIZE);
 			}
+			// Edge case 3 - More data from input stream needed
 			if (GZIP_FOOTER_SIZE + GZIP_HEADER_MINSIZE + 2 + xlen > old_len) {
 				mz_stream_ptr->reserved = 2;
 				sd.in_buff_start = sd.in_buff_end;
@@ -198,6 +206,7 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 				throw InternalException("Filename resulting in GZIP header larger than defined maximum (%d)",
 				                        GZIP_HEADER_MAXSIZE);
 			}
+			// Edge case 4 - More data from input stream needed
 			if (body_ptr >= gzip_header + old_len) {
 				mz_stream_ptr->reserved = 2;
 				sd.in_buff_start = sd.in_buff_end;
@@ -246,6 +255,7 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 				return true;
 			}
 		}
+		// Potentially concatenated GZIP coming up - trigger handling for edge cases
 		mz_stream_ptr->reserved = 1;
 	}
 	return false;
