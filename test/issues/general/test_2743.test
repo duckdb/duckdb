@@ -112,7 +112,7 @@ SELECT * FROM t ORDER BY x, y;
 10	1
 
 statement ok
-CREATE TEMP TABLE flights (
+CREATE TABLE flights (
   source  TEXT,
   dest    TEXT,
   carrier TEXT
@@ -128,7 +128,7 @@ INSERT INTO flights VALUES
 ;
 
 statement ok
-CREATE TEMP TABLE trains (
+CREATE TABLE trains (
   source TEXT,
   dest   TEXT
 );
