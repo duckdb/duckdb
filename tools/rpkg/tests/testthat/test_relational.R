@@ -342,9 +342,7 @@ test_that("R semantics for arithmetics sum function are respected", {
    expect_true(is.na(res[[1]]))
 })
 
-<<<<<<< HEAD
 test_that("R can do comparisons with constant strings", {
-   con <- dbConnect(duckdb::duckdb())
    dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
    test_df_a <- rel_from_df(con, data.frame(a=c("hello", "world")), TRUE)
    filter_rel <- rel_filter(test_df_a, list(expr_function("eq", list(expr_reference("a"), expr_constant("hello", TRUE)))))
