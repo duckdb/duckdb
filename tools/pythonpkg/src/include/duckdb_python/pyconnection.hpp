@@ -176,6 +176,7 @@ public:
 	static shared_ptr<PythonImportCache> import_cache;
 
 	static bool IsPandasDataframe(const py::object &object);
+	static bool IsPolarsDataframe(const py::object &object);
 	static bool IsAcceptedArrowObject(const py::object &object);
 
 	static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_query);

@@ -455,9 +455,22 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 		dependencies.push_back(make_shared<PythonDependencies>(make_unique<RegisteredObject>(python_object),
 		                                                       make_unique<RegisteredObject>(new_df)));
 		connection->context->external_dependencies[name] = std::move(dependencies);
-	} else if (IsAcceptedArrowObject(python_object)) {
+	} else if (IsAcceptedArrowObject(python_object) || IsPolarsDataframe(python_object)) {
+		py::object arrow_object;
+		if (IsPolarsDataframe(python_object)) {
+			if (PolarsDataFrame::IsDataFrame(python_object)) {
+				arrow_object = python_object.attr("to_arrow")();
+			} else if (PolarsDataFrame::IsLazyFrame(python_object)) {
+				py::object materialized = python_object.attr("collect")();
+				arrow_object = materialized.attr("to_arrow")();
+			} else {
+				throw NotImplementedException("Unsupported Polars DF Type");
+			}
+		} else {
+			arrow_object = python_object;
+		}
 		auto stream_factory =
-		    make_unique<PythonTableArrowArrayStreamFactory>(python_object.ptr(), connection->context->config);
+		    make_unique<PythonTableArrowArrayStreamFactory>(arrow_object.ptr(), connection->context->config);
 		auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 		auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
 		{
@@ -471,7 +484,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 		}
 		vector<shared_ptr<ExternalDependency>> dependencies;
 		dependencies.push_back(
-		    make_shared<PythonDependencies>(make_unique<RegisteredArrow>(std::move(stream_factory), python_object)));
+		    make_shared<PythonDependencies>(make_unique<RegisteredArrow>(std::move(stream_factory), arrow_object)));
 		connection->context->external_dependencies[name] = std::move(dependencies);
 	} else if (DuckDBPyRelation::IsRelation(python_object)) {
 		auto pyrel = py::cast<DuckDBPyRelation *>(python_object);
@@ -1371,6 +1384,15 @@ bool DuckDBPyConnection::IsPandasDataframe(const py::object &object) {
 	}
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	return import_cache.pandas().DataFrame.IsInstance(object);
+}
+
+bool DuckDBPyConnection::IsPolarsDataframe(const py::object &object) {
+	if (!ModuleIsLoaded<PolarsCacheItem>()) {
+		return false;
+	}
+	auto &import_cache_py = *DuckDBPyConnection::ImportCache();
+	return import_cache_py.polars().DataFrame.IsInstance(object) ||
+	       import_cache_py.polars().LazyFrame.IsInstance(object);
 }
 
 bool DuckDBPyConnection::IsAcceptedArrowObject(const py::object &object) {
