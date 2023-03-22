@@ -76,6 +76,8 @@ class TestRelation(object):
         type = duckdb.union_type({'a': duckdb.bigint, 'b': duckdb.varchar, 'c': duckdb.tinyint})
         assert str(type) == 'UNION(a BIGINT, b VARCHAR, c TINYINT)'
     
+    import sys
+    @pytest.mark.skipif(sys.version_info <= (3,7), reason="requires > python3.7")
     def test_implicit_convert_from_builtin_type(self):
         type = duckdb.list_type(list[str])
         assert str(type.child) == "VARCHAR[]"
