@@ -1286,6 +1286,7 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 				if (validity.RowIsValid(oidx)) {
 					auto buf = strings[oidx].GetDataUnsafe();
 					D_ASSERT(*buf >= 0 && *buf < 8);
+					Bit::Verify(strings[oidx]);
 				}
 			}
 			break;

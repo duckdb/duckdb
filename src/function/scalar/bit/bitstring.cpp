@@ -68,7 +68,8 @@ static void SetBitOperation(DataChunk &args, ExpressionState &state, Vector &res
 			                              NumericHelper::ToString(Bit::BitLength(input) - 1));
 		    }
 		    string_t target = StringVector::EmptyString(result, input.GetSize());
-		    Bit::SetBit(input, n, new_value, target);
+		    memcpy(target.GetDataWriteable(), input.GetDataUnsafe(), input.GetSize());
+		    Bit::SetBit(target, n, new_value);
 		    return target;
 	    });
 }
