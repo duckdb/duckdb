@@ -17,6 +17,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/fsst.hpp"
 #include "fsst.h"
+#include "duckdb/common/types/bit.hpp"
 
 #include "duckdb/common/serializer/format_serializer.hpp"
 #include "duckdb/common/serializer/format_deserializer.hpp"
