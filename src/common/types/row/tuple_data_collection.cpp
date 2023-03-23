@@ -31,8 +31,8 @@ void TupleDataCollection::Initialize() {
 	gather_functions.reserve(layout.ColumnCount());
 	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
 		auto &type = layout.GetTypes()[col_idx];
-		scatter_functions.emplace_back(GetScatterFunction(type, layout, col_idx));
-		gather_functions.emplace_back(GetGatherFunction(type, layout, col_idx));
+		scatter_functions.emplace_back(GetScatterFunction(type, col_idx));
+		gather_functions.emplace_back(GetGatherFunction(type, col_idx));
 	}
 }
 

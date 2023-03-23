@@ -63,6 +63,11 @@ public:
 	//! The size (in bytes) of the blocks held by this tuple data collection
 	idx_t SizeInBytes() const;
 
+	//! Gets the scatter function for the given column index
+	static TupleDataScatterFunction GetScatterFunction(const LogicalType &type, bool within_list = false);
+	//! Gets the gather function for the given column index
+	static TupleDataGatherFunction GetGatherFunction(const LogicalType &type, bool within_list = false);
+
 	//! Initializes an Append state - useful for optimizing many appends made to the same tuple data collection
 	void InitializeAppend(TupleDataAppendState &append_state,
 	                      TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE);
@@ -158,12 +163,6 @@ public:
 private:
 	//! Initializes the TupleDataCollection (called by the constructor)
 	void Initialize();
-
-	//! Gets the scatter function for the given column index
-	static TupleDataScatterFunction GetScatterFunction(const LogicalType &type, idx_t col_idx,
-	                                                   bool within_list = false);
-	//! Gets the gather function for the given column index
-	static TupleDataGatherFunction GetGatherFunction(const LogicalType &type, idx_t col_idx, bool within_list = false);
 
 	//! Computes the heap sizes for the specific Vector that will be appended
 	static void ComputeHeapSizes(Vector &heap_sizes_v, Vector &source_v, TupleDataVectorFormat &source,

@@ -209,11 +209,13 @@ static void TemplatedMatchStruct(Vector &vec, UnifiedVectorFormat &col, const Tu
 
 template <class OP, bool NO_MATCH_SEL>
 static void TemplatedMatchList(Vector &col, Vector &rows, SelectionVector &sel, idx_t &count,
-                               TupleDataCollection &collection, const idx_t col_no, SelectionVector *no_match,
+                               const TupleDataLayout &layout, const idx_t col_no, SelectionVector *no_match,
                                idx_t &no_match_count) {
 	// Gather a dense Vector containing the column values being matched
 	Vector key(col.GetType());
-	collection.Gather(rows, sel, count, col_no, key, *FlatVector::IncrementalSelectionVector());
+	const auto gather_function = TupleDataCollection::GetGatherFunction(col.GetType());
+	gather_function.function(layout, rows, col_no, sel, count, key, *FlatVector::IncrementalSelectionVector(), key,
+	                         gather_function.child_functions);
 
 	// Densify the input column
 	Vector sliced(col, sel, count);
@@ -229,13 +231,12 @@ static void TemplatedMatchList(Vector &col, Vector &rows, SelectionVector &sel, 
 }
 
 template <class OP, bool NO_MATCH_SEL>
-static void TemplatedMatchOp(Vector &vec, UnifiedVectorFormat &col, TupleDataCollection &collection, Vector &rows,
+static void TemplatedMatchOp(Vector &vec, UnifiedVectorFormat &col, const TupleDataLayout &layout, Vector &rows,
                              SelectionVector &sel, idx_t &count, idx_t col_no, SelectionVector *no_match,
                              idx_t &no_match_count, const idx_t original_count) {
 	if (count == 0) {
 		return;
 	}
-	const auto &layout = collection.GetLayout();
 	auto col_offset = layout.GetOffsets()[col_no];
 	switch (layout.GetTypes()[col_no].InternalType()) {
 	case PhysicalType::BOOL:
@@ -296,7 +297,7 @@ static void TemplatedMatchOp(Vector &vec, UnifiedVectorFormat &col, TupleDataCol
 		                                       original_count);
 		break;
 	case PhysicalType::LIST:
-		TemplatedMatchList<OP, NO_MATCH_SEL>(vec, rows, sel, count, collection, col_no, no_match, no_match_count);
+		TemplatedMatchList<OP, NO_MATCH_SEL>(vec, rows, sel, count, layout, col_no, no_match, no_match_count);
 		break;
 	default:
 		throw InternalException("Unsupported column type for RowOperations::Match");
@@ -304,7 +305,7 @@ static void TemplatedMatchOp(Vector &vec, UnifiedVectorFormat &col, TupleDataCol
 }
 
 template <bool NO_MATCH_SEL>
-static void TemplatedMatch(DataChunk &columns, UnifiedVectorFormat col_data[], TupleDataCollection &collection,
+static void TemplatedMatch(DataChunk &columns, UnifiedVectorFormat col_data[], const TupleDataLayout &layout,
                            Vector &rows, const Predicates &predicates, SelectionVector &sel, idx_t &count,
                            SelectionVector *no_match, idx_t &no_match_count) {
 	for (idx_t col_no = 0; col_no < predicates.size(); ++col_no) {
@@ -314,27 +315,27 @@ static void TemplatedMatch(DataChunk &columns, UnifiedVectorFormat col_data[], T
 		case ExpressionType::COMPARE_EQUAL:
 		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 		case ExpressionType::COMPARE_DISTINCT_FROM:
-			TemplatedMatchOp<Equals, NO_MATCH_SEL>(vec, col, collection, rows, sel, count, col_no, no_match,
-			                                       no_match_count, count);
+			TemplatedMatchOp<Equals, NO_MATCH_SEL>(vec, col, layout, rows, sel, count, col_no, no_match, no_match_count,
+			                                       count);
 			break;
 		case ExpressionType::COMPARE_NOTEQUAL:
-			TemplatedMatchOp<NotEquals, NO_MATCH_SEL>(vec, col, collection, rows, sel, count, col_no, no_match,
+			TemplatedMatchOp<NotEquals, NO_MATCH_SEL>(vec, col, layout, rows, sel, count, col_no, no_match,
 			                                          no_match_count, count);
 			break;
 		case ExpressionType::COMPARE_GREATERTHAN:
-			TemplatedMatchOp<GreaterThan, NO_MATCH_SEL>(vec, col, collection, rows, sel, count, col_no, no_match,
+			TemplatedMatchOp<GreaterThan, NO_MATCH_SEL>(vec, col, layout, rows, sel, count, col_no, no_match,
 			                                            no_match_count, count);
 			break;
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			TemplatedMatchOp<GreaterThanEquals, NO_MATCH_SEL>(vec, col, collection, rows, sel, count, col_no, no_match,
+			TemplatedMatchOp<GreaterThanEquals, NO_MATCH_SEL>(vec, col, layout, rows, sel, count, col_no, no_match,
 			                                                  no_match_count, count);
 			break;
 		case ExpressionType::COMPARE_LESSTHAN:
-			TemplatedMatchOp<LessThan, NO_MATCH_SEL>(vec, col, collection, rows, sel, count, col_no, no_match,
+			TemplatedMatchOp<LessThan, NO_MATCH_SEL>(vec, col, layout, rows, sel, count, col_no, no_match,
 			                                         no_match_count, count);
 			break;
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			TemplatedMatchOp<LessThanEquals, NO_MATCH_SEL>(vec, col, collection, rows, sel, count, col_no, no_match,
+			TemplatedMatchOp<LessThanEquals, NO_MATCH_SEL>(vec, col, layout, rows, sel, count, col_no, no_match,
 			                                               no_match_count, count);
 			break;
 		default:
@@ -343,13 +344,13 @@ static void TemplatedMatch(DataChunk &columns, UnifiedVectorFormat col_data[], T
 	}
 }
 
-idx_t RowOperations::Match(DataChunk &columns, UnifiedVectorFormat col_data[], TupleDataCollection &collection,
+idx_t RowOperations::Match(DataChunk &columns, UnifiedVectorFormat col_data[], const TupleDataLayout &layout,
                            Vector &rows, const Predicates &predicates, SelectionVector &sel, idx_t count,
                            SelectionVector *no_match, idx_t &no_match_count) {
 	if (no_match) {
-		TemplatedMatch<true>(columns, col_data, collection, rows, predicates, sel, count, no_match, no_match_count);
+		TemplatedMatch<true>(columns, col_data, layout, rows, predicates, sel, count, no_match, no_match_count);
 	} else {
-		TemplatedMatch<false>(columns, col_data, collection, rows, predicates, sel, count, no_match, no_match_count);
+		TemplatedMatch<false>(columns, col_data, layout, rows, predicates, sel, count, no_match, no_match_count);
 	}
 
 	return count;

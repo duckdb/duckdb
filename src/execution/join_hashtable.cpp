@@ -401,8 +401,8 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector &match_s
 	}
 	idx_t no_match_count = 0;
 
-	return RowOperations::Match(keys, key_data.get(), ht.GetDataCollection(), pointers, ht.predicates, match_sel,
-	                            this->count, no_match_sel, no_match_count);
+	return RowOperations::Match(keys, key_data.get(), ht.layout, pointers, ht.predicates, match_sel, this->count,
+	                            no_match_sel, no_match_count);
 }
 
 idx_t ScanStructure::ScanInnerJoin(DataChunk &keys, SelectionVector &result_vector) {

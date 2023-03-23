@@ -709,8 +709,7 @@ tuple_data_scatter_function_t GetTupleDataScatterFunction(bool within_list) {
 	return within_list ? TupleDataTemplatedWithinListScatter<T> : TupleDataTemplatedScatter<T>;
 }
 
-TupleDataScatterFunction TupleDataCollection::GetScatterFunction(const LogicalType &type, idx_t col_idx,
-                                                                 bool within_list) {
+TupleDataScatterFunction TupleDataCollection::GetScatterFunction(const LogicalType &type, bool within_list) {
 	TupleDataScatterFunction result;
 	tuple_data_scatter_function_t function;
 	switch (type.InternalType()) {
@@ -758,15 +757,14 @@ TupleDataScatterFunction TupleDataCollection::GetScatterFunction(const LogicalTy
 		break;
 	case PhysicalType::STRUCT: {
 		function = within_list ? TupleDataStructWithinListScatter : TupleDataStructScatter;
-		for (idx_t struct_col_idx = 0; struct_col_idx < StructType::GetChildCount(type); struct_col_idx++) {
-			result.child_functions.emplace_back(
-			    GetScatterFunction(StructType::GetChildType(type, struct_col_idx), struct_col_idx, within_list));
+		for (const auto &child_type : StructType::GetChildTypes(type)) {
+			result.child_functions.push_back(GetScatterFunction(child_type.second, within_list));
 		}
 		break;
 	}
 	case PhysicalType::LIST:
 		function = within_list ? TupleDataListWithinListScatter : TupleDataListScatter;
-		result.child_functions.emplace_back(GetScatterFunction(ListType::GetChildType(type), col_idx, true));
+		result.child_functions.emplace_back(GetScatterFunction(ListType::GetChildType(type), true));
 		break;
 	default:
 		throw InternalException("Unsupported type for TupleDataCollection::GetScatterFunction");
@@ -1109,8 +1107,7 @@ tuple_data_gather_function_t GetTupleDataGatherFunction(bool within_list) {
 	return within_list ? TemplatedWithinListTupleDataGather<T> : TemplatedTupleDataGather<T>;
 }
 
-TupleDataGatherFunction TupleDataCollection::GetGatherFunction(const LogicalType &type, idx_t col_idx,
-                                                               bool within_list) {
+TupleDataGatherFunction TupleDataCollection::GetGatherFunction(const LogicalType &type, bool within_list) {
 	TupleDataGatherFunction result;
 	tuple_data_gather_function_t function;
 	switch (type.InternalType()) {
@@ -1158,15 +1155,14 @@ TupleDataGatherFunction TupleDataCollection::GetGatherFunction(const LogicalType
 		break;
 	case PhysicalType::STRUCT: {
 		function = within_list ? StructWithinListTupleDataGather : StructTupleDataGather;
-		for (idx_t struct_col_idx = 0; struct_col_idx < StructType::GetChildCount(type); struct_col_idx++) {
-			result.child_functions.push_back(
-			    GetGatherFunction(StructType::GetChildType(type, struct_col_idx), struct_col_idx, within_list));
+		for (const auto &child_type : StructType::GetChildTypes(type)) {
+			result.child_functions.push_back(GetGatherFunction(child_type.second, within_list));
 		}
 		break;
 	}
 	case PhysicalType::LIST:
 		function = within_list ? ListWithinListTupleDataGather : ListTupleDataGather;
-		result.child_functions.push_back(GetGatherFunction(ListType::GetChildType(type), col_idx, true));
+		result.child_functions.push_back(GetGatherFunction(ListType::GetChildType(type), true));
 		break;
 	default:
 		throw InternalException("Unsupported type for TupleDataCollection::GetGatherFunction");
