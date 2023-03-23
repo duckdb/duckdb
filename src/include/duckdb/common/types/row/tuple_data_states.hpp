@@ -31,9 +31,16 @@ struct TupleDataPinState {
 	TupleDataPinProperties properties = TupleDataPinProperties::INVALID;
 };
 
+struct CombinedListData {
+	UnifiedVectorFormat combined_data;
+	list_entry_t combined_list_entries[STANDARD_VECTOR_SIZE];
+	buffer_ptr<SelectionData> selection_data;
+};
+
 struct TupleDataVectorFormat {
 	UnifiedVectorFormat data;
-	vector<TupleDataVectorFormat> child_data;
+	vector<TupleDataVectorFormat> child_formats;
+	unique_ptr<CombinedListData> combined_list_data;
 };
 
 struct TupleDataChunkState {
