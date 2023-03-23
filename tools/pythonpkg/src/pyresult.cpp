@@ -289,9 +289,9 @@ void TransformDuckToArrowChunk(ArrowSchema &arrow_schema, ArrowArray &data, py::
 	batches.append(batch_import_func((uint64_t)&data, (uint64_t)&arrow_schema));
 }
 
-bool DuckDBPyResult::FetchArrowChunk(QueryResult *result, py::list &batches, idx_t chunk_size) {
+bool DuckDBPyResult::FetchArrowChunk(QueryResult *result, py::list &batches, idx_t approx_rows_per_batch) {
 	ArrowArray data;
-	auto count = ArrowUtil::FetchChunk(result, chunk_size, &data);
+	auto count = ArrowUtil::FetchChunk(result, approx_rows_per_batch, &data);
 	if (count == 0) {
 		return false;
 	}
@@ -302,7 +302,7 @@ bool DuckDBPyResult::FetchArrowChunk(QueryResult *result, py::list &batches, idx
 	return true;
 }
 
-py::list DuckDBPyResult::FetchAllArrowChunks(idx_t chunk_size) {
+py::list DuckDBPyResult::FetchAllArrowChunks(idx_t approx_rows_per_batch) {
 	if (!result) {
 		throw InvalidInputException("result closed");
 	}
@@ -310,12 +310,12 @@ py::list DuckDBPyResult::FetchAllArrowChunks(idx_t chunk_size) {
 
 	py::list batches;
 
-	while (FetchArrowChunk(result.get(), batches, chunk_size)) {
+	while (FetchArrowChunk(result.get(), batches, approx_rows_per_batch)) {
 	}
 	return batches;
 }
 
-duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
+duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t approx_rows_per_batch) {
 	if (!result) {
 		throw InvalidInputException("There is no query result");
 	}
@@ -332,13 +332,13 @@ duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
 
 	auto schema_obj = schema_import_func((uint64_t)&schema);
 
-	py::list batches = FetchAllArrowChunks(chunk_size);
+	py::list batches = FetchAllArrowChunks(approx_rows_per_batch);
 
 	// We return an Arrow Table
 	return py::cast<duckdb::pyarrow::Table>(from_batches_func(batches, schema_obj));
 }
 
-duckdb::pyarrow::RecordBatchReader DuckDBPyResult::FetchRecordBatchReader(idx_t chunk_size) {
+duckdb::pyarrow::RecordBatchReader DuckDBPyResult::FetchRecordBatchReader(idx_t approx_rows_per_batch) {
 	if (!result) {
 		throw InvalidInputException("There is no query result");
 	}
@@ -346,7 +346,8 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyResult::FetchRecordBatchReader(idx_t 
 	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
 	auto record_batch_reader_func = pyarrow_lib_module.attr("RecordBatchReader").attr("_import_from_c");
 	//! We have to construct an Arrow Array Stream
-	ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(std::move(result), chunk_size);
+	ResultArrowArrayStreamWrapper *result_stream =
+	    new ResultArrowArrayStreamWrapper(std::move(result), approx_rows_per_batch);
 	py::object record_batch_reader = record_batch_reader_func((uint64_t)&result_stream->stream);
 	return py::cast<duckdb::pyarrow::RecordBatchReader>(record_batch_reader);
 }

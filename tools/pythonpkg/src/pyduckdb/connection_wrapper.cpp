@@ -282,11 +282,12 @@ DataFrame PyConnectionWrapper::FetchDFChunk(const idx_t vectors_per_chunk, bool 
 	return conn->FetchDFChunk(vectors_per_chunk, date_as_object);
 }
 
-duckdb::pyarrow::Table PyConnectionWrapper::FetchArrow(idx_t chunk_size, shared_ptr<DuckDBPyConnection> conn) {
+duckdb::pyarrow::Table PyConnectionWrapper::FetchArrow(idx_t approx_rows_per_batch,
+                                                       shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
-	return conn->FetchArrow(chunk_size);
+	return conn->FetchArrow(approx_rows_per_batch);
 }
 
 py::dict PyConnectionWrapper::FetchPyTorch(shared_ptr<DuckDBPyConnection> conn) {
@@ -303,19 +304,19 @@ py::dict PyConnectionWrapper::FetchTF(shared_ptr<DuckDBPyConnection> conn) {
 	return conn->FetchTF();
 }
 
-PolarsDataFrame PyConnectionWrapper::FetchPolars(idx_t chunk_size, shared_ptr<DuckDBPyConnection> conn) {
+PolarsDataFrame PyConnectionWrapper::FetchPolars(idx_t approx_rows_per_batch, shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
-	return conn->FetchPolars(chunk_size);
+	return conn->FetchPolars(approx_rows_per_batch);
 }
 
-duckdb::pyarrow::RecordBatchReader PyConnectionWrapper::FetchRecordBatchReader(const idx_t chunk_size,
+duckdb::pyarrow::RecordBatchReader PyConnectionWrapper::FetchRecordBatchReader(const idx_t approx_rows_per_batch,
                                                                                shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
-	return conn->FetchRecordBatchReader(chunk_size);
+	return conn->FetchRecordBatchReader(approx_rows_per_batch);
 }
 
 void PyConnectionWrapper::RegisterFilesystem(AbstractFileSystem file_system, shared_ptr<DuckDBPyConnection> conn) {

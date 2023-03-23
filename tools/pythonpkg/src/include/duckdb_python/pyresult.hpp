@@ -32,7 +32,7 @@ public:
 
 	DataFrame FetchDF(bool date_as_object);
 
-	duckdb::pyarrow::Table FetchArrowTable(idx_t chunk_size);
+	duckdb::pyarrow::Table FetchArrowTable(idx_t approx_rows_per_batch);
 
 	DataFrame FetchDFChunk(idx_t vectors_per_chunk, bool date_as_object);
 
@@ -40,7 +40,7 @@ public:
 
 	py::dict FetchTF();
 
-	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(idx_t chunk_size);
+	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(idx_t approx_rows_per_batch);
 
 	static py::list GetDescription(const vector<string> &names, const vector<LogicalType> &types);
 
@@ -56,9 +56,9 @@ public:
 private:
 	void FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversion &conversion, const char *name);
 
-	py::list FetchAllArrowChunks(idx_t chunk_size);
+	py::list FetchAllArrowChunks(idx_t approx_rows_per_batch);
 
-	bool FetchArrowChunk(QueryResult *result, py::list &batches, idx_t chunk_size);
+	bool FetchArrowChunk(QueryResult *result, py::list &batches, idx_t approx_rows_per_batch);
 
 	DataFrame FrameFromNumpy(bool date_as_object, const py::handle &o);
 
