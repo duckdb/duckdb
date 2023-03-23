@@ -29,9 +29,6 @@ void LogicalCopyToFile::Serialize(FieldWriter &writer) const {
 unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto file_path = reader.ReadRequired<string>();
 	auto use_tmp_file = reader.ReadRequired<bool>();
-	auto fileformat = reader.ReadRequired<string>();
-	auto format_position = reader.ReadRequired<idx_t>();
-	auto use_uuid_format = reader.ReadRequired<bool>();
 	auto overwrite_or_ignore = reader.ReadRequired<bool>();
 	auto per_thread_output = reader.ReadRequired<bool>();
 	auto partition_columns = reader.ReadRequiredList<idx_t>();
@@ -59,9 +56,6 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(LogicalDeserializatio
 	auto result = make_unique<LogicalCopyToFile>(copy_func, std::move(bind_data));
 	result->file_path = file_path;
 	result->use_tmp_file = use_tmp_file;
-	result->fileformat = fileformat;
-	result->format_position = format_position;
-	result->use_uuid_format = use_uuid_format;
 	result->overwrite_or_ignore = overwrite_or_ignore;
 	result->per_thread_output = per_thread_output;
 	result->partition_columns = std::move(partition_columns);

@@ -43,20 +43,6 @@ public:
 // Sink
 //===--------------------------------------------------------------------===//
 
-string PhysicalCopyToFile::CreateFilename(const FileSystem &fs, const string &path, const string &extension,
-                                          idx_t writer_offset) const {
-	string result(fileformat);
-	string replacement;
-	if (use_uuid_format) {
-		replacement = UUID::ToString(UUID::GenerateRandomUUID());
-	} else {
-		replacement = to_string(writer_offset);
-	}
-	// assert(format_position != string::npos);
-	result.insert(format_position, replacement);
-	return fs.JoinPath(path, result + "." + extension);
-}
-
 void MoveTmpFile(ClientContext &context, const string &tmp_file_path) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	auto file_path = tmp_file_path.substr(0, tmp_file_path.length() - 4);
@@ -69,7 +55,7 @@ void MoveTmpFile(ClientContext &context, const string &tmp_file_path) {
 PhysicalCopyToFile::PhysicalCopyToFile(vector<LogicalType> types, CopyFunction function_p,
                                        unique_ptr<FunctionData> bind_data, idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::COPY_TO_FILE, std::move(types), estimated_cardinality),
-      function(std::move(function_p)), bind_data(std::move(bind_data)), use_uuid_format(false), parallel(false) {
+      function(std::move(function_p)), bind_data(std::move(bind_data)), parallel(false) {
 }
 
 SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
@@ -128,7 +114,7 @@ void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gst
 		for (idx_t i = 0; i < partitions.size(); i++) {
 			string hive_path =
 			    CreateDirRecursive(partition_columns, names, partition_key_map[i]->values, trimmed_path, fs);
-			string full_path(CreateFilename(fs, hive_path, function.extension, l.writer_offset));
+			string full_path(fmt.CreateFilename(fs, hive_path, function.extension, l.writer_offset));
 			if (fs.FileExists(full_path) && !overwrite_or_ignore) {
 				throw IOException("failed to create " + full_path +
 				                  ", file exists! Enable OVERWRITE_OR_IGNORE option to force writing");
@@ -201,7 +187,7 @@ unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContex
 			this_file_offset = g.last_file_offset++;
 		}
 		auto &fs = FileSystem::GetFileSystem(context.client);
-		string output_path(CreateFilename(fs, file_path, function.extension, this_file_offset));
+		string output_path(fmt.CreateFilename(fs, file_path, function.extension, this_file_offset));
 		if (fs.FileExists(output_path) && !overwrite_or_ignore) {
 			throw IOException("%s exists! Enable OVERWRITE_OR_IGNORE option to force writing", output_path);
 		}

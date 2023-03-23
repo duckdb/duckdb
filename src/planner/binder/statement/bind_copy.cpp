@@ -19,6 +19,8 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
 
+#include "duckdb/planner/filename_format_creator.hpp"
+
 #include <algorithm>
 
 namespace duckdb {
@@ -77,9 +79,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	}
 	bool use_tmp_file = true;
 	bool overwrite_or_ignore = false;
-	string fileformat("data_");
-	idx_t format_position = fileformat.length();
-	bool use_uuid_format = false;
+	FilenameFormatCreator fmt;
 	bool user_set_use_tmp_file = false;
 	bool per_thread_output = false;
 	vector<idx_t> partition_cols;
@@ -102,20 +102,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 		}
 		if (loption == "fileformat") {
 			if (!option.second.empty()) {
-				const string uuid_format {"{uuid}"};
-				const string id_format {"{i}"};
-				fileformat = option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>();
-				format_position = fileformat.find(id_format);
-				if (format_position != string::npos) {
-					fileformat = StringUtil::Replace(fileformat, id_format, "");
-					use_uuid_format = false;
-				}
-				format_position = fileformat.find(uuid_format);
-				if (format_position != string::npos) {
-					fileformat = StringUtil::Replace(fileformat, uuid_format, "");
-					use_uuid_format = true;
-				}
-				format_position = std::min(format_position, (idx_t)fileformat.length());
+				fmt.setFilenameFormat(option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>());
 			}
 			continue;
 		}
@@ -156,9 +143,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	copy->file_path = stmt.info->file_path;
 	copy->use_tmp_file = use_tmp_file;
 	copy->overwrite_or_ignore = overwrite_or_ignore;
-	copy->format_position = format_position;
-	copy->use_uuid_format = use_uuid_format;
-	copy->fileformat = fileformat;
+	copy->fmt = std::move(fmt);
 	copy->per_thread_output = per_thread_output;
 	copy->partition_output = !partition_cols.empty();
 	copy->partition_columns = std::move(partition_cols);

@@ -12,6 +12,7 @@
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/planner/filename_format_creator.hpp"
 
 namespace duckdb {
 
@@ -25,9 +26,7 @@ public:
 	unique_ptr<FunctionData> bind_data;
 	string file_path;
 	bool use_tmp_file;
-	string fileformat;
-	idx_t format_position;
-	bool use_uuid_format;
+	FilenameFormatCreator fmt;
 	bool overwrite_or_ignore;
 	bool parallel;
 	bool per_thread_output;
@@ -45,7 +44,6 @@ public:
 
 public:
 	// Sink interface
-	string CreateFilename(const FileSystem &fs, const string &path, const string &extension, idx_t writer_offset) const;
 	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
 	                    DataChunk &input) const override;
 	void Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const override;
