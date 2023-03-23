@@ -13,7 +13,6 @@
 
 namespace duckdb {
 
-class ColumnSegmentTree : public SegmentTree<ColumnSegment> {
-};
+class ColumnSegmentTree : public SegmentTree<ColumnSegment> {};
 
 } // namespace duckdb
