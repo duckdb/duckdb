@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/bind_helpers.hpp"
+#include "duckdb/common/filename_format_creator.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/execution/operator/persistent/parallel_csv_reader.hpp"
 #include "duckdb/function/table/read_csv.hpp"
@@ -18,8 +19,6 @@
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
-
-#include "duckdb/planner/filename_format_creator.hpp"
 
 #include <algorithm>
 
@@ -102,7 +101,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 		}
 		if (loption == "fileformat") {
 			if (!option.second.empty()) {
-				fmt.setFilenameFormat(option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>());
+				fmt.SetFilenameFormat(option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>());
 			}
 			continue;
 		}

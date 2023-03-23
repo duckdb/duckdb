@@ -12,7 +12,7 @@
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/planner/filename_format_creator.hpp"
+#include "duckdb/common/filename_format_creator.hpp"
 
 namespace duckdb {
 

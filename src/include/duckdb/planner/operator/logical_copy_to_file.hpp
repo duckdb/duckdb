@@ -10,8 +10,8 @@
 
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/function/copy_function.hpp"
+#include "duckdb/common/filename_format_creator.hpp"
 #include "duckdb/common/local_file_system.hpp"
-#include "duckdb/planner/filename_format_creator.hpp"
 
 namespace duckdb {
 

@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-void FilenameFormatCreator::setFilenameFormat(const string &format) {
+void FilenameFormatCreator::SetFilenameFormat(const string &format) {
 	const string id_format {"{i}"};
 	const string uuid_format {"{uuid}"};
 
