@@ -10,6 +10,7 @@
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/exceptions.hpp"
 #include "duckdb_python/connection_wrapper.hpp"
+#include "duckdb_python/conversions/pyconnection_default.hpp"
 
 #include "duckdb.hpp"
 

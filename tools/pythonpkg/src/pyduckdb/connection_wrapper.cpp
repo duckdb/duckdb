@@ -201,9 +201,9 @@ void PyConnectionWrapper::Close(shared_ptr<DuckDBPyConnection> conn) {
 }
 
 shared_ptr<DuckDBPyConnection> PyConnectionWrapper::Cursor(shared_ptr<DuckDBPyConnection> conn) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
+	// if (!conn) {
+	//	conn = DuckDBPyConnection::DefaultConnection();
+	//}
 	return conn->Cursor();
 }
 
