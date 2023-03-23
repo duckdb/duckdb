@@ -76,8 +76,8 @@ void DuckDBPyConnection::DetectEnvironment() {
 	}
 
 	// Check to see if we are in a Jupyter Notebook
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	auto get_ipython = import_cache.IPython().get_ipython();
+	auto &import_cache_py = *DuckDBPyConnection::ImportCache();
+	auto get_ipython = import_cache_py.IPython().get_ipython();
 	if (get_ipython.ptr() == nullptr) {
 		// Could either not load the IPython module, or it has no 'get_ipython' attribute
 		return;
@@ -214,14 +214,6 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	    .def("install_extension", &DuckDBPyConnection::InstallExtension, "Install an extension by name",
 	         py::arg("extension"), py::kw_only(), py::arg("force_install") = false)
 	    .def("load_extension", &DuckDBPyConnection::LoadExtension, "Load an installed extension", py::arg("extension"));
-}
-
-unordered_set<string> GetKeywordArguments(const py::kwargs &kwargs) {
-	unordered_set<string> keywords;
-	for (auto &kv : kwargs) {
-		keywords.insert(py::str(kv.first));
-	}
-	return keywords;
 }
 
 void DuckDBPyConnection::UnregisterFilesystem(const py::str &name) {
@@ -432,12 +424,13 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const string &query, 
 	return shared_from_this();
 }
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Append(const string &name, DataFrame value) {
-	RegisterPythonObject("__append_df", std::move(value));
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Append(const string &name, const DataFrame &value) {
+	RegisterPythonObject("__append_df", value);
 	return Execute("INSERT INTO \"" + name + "\" SELECT * FROM __append_df");
 }
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const string &name, py::object python_object) {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const string &name,
+                                                                        const py::object &python_object) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
@@ -455,9 +448,22 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 		dependencies.push_back(make_shared<PythonDependencies>(make_unique<RegisteredObject>(python_object),
 		                                                       make_unique<RegisteredObject>(new_df)));
 		connection->context->external_dependencies[name] = std::move(dependencies);
-	} else if (IsAcceptedArrowObject(python_object)) {
+	} else if (IsAcceptedArrowObject(python_object) || IsPolarsDataframe(python_object)) {
+		py::object arrow_object;
+		if (IsPolarsDataframe(python_object)) {
+			if (PolarsDataFrame::IsDataFrame(python_object)) {
+				arrow_object = python_object.attr("to_arrow")();
+			} else if (PolarsDataFrame::IsLazyFrame(python_object)) {
+				py::object materialized = python_object.attr("collect")();
+				arrow_object = materialized.attr("to_arrow")();
+			} else {
+				throw NotImplementedException("Unsupported Polars DF Type");
+			}
+		} else {
+			arrow_object = python_object;
+		}
 		auto stream_factory =
-		    make_unique<PythonTableArrowArrayStreamFactory>(python_object.ptr(), connection->context->config);
+		    make_unique<PythonTableArrowArrayStreamFactory>(arrow_object.ptr(), connection->context->config);
 		auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 		auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
 		{
@@ -471,7 +477,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 		}
 		vector<shared_ptr<ExternalDependency>> dependencies;
 		dependencies.push_back(
-		    make_shared<PythonDependencies>(make_unique<RegisteredArrow>(std::move(stream_factory), python_object)));
+		    make_shared<PythonDependencies>(make_unique<RegisteredArrow>(std::move(stream_factory), arrow_object)));
 		connection->context->external_dependencies[name] = std::move(dependencies);
 	} else if (DuckDBPyRelation::IsRelation(python_object)) {
 		auto pyrel = py::cast<DuckDBPyRelation *>(python_object);
@@ -500,17 +506,17 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, co
 		child_list_t<Value> struct_fields;
 
 		for (auto &kv : columns_dict) {
-			auto &name = kv.first;
+			auto &column_name = kv.first;
 			auto &type = kv.second;
-			if (!py::isinstance<py::str>(name)) {
-				string actual_type = py::str(name.get_type());
+			if (!py::isinstance<py::str>(column_name)) {
+				string actual_type = py::str(column_name.get_type());
 				throw InvalidInputException("The provided column name must be a str, not of type '%s'", actual_type);
 			}
 			if (!py::isinstance<py::str>(type)) {
-				string actual_type = py::str(name.get_type());
+				string actual_type = py::str(column_name.get_type());
 				throw InvalidInputException("The provided column type must be a str, not of type '%s'", actual_type);
 			}
-			struct_fields.push_back(make_pair(py::str(name), Value(py::str(type))));
+			struct_fields.emplace_back(py::str(column_name), Value(py::str(type)));
 		}
 		auto dtype_struct = Value::STRUCT(std::move(struct_fields));
 		options["columns"] = std::move(dtype_struct);
@@ -646,7 +652,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 			child_list_t<Value> struct_fields;
 			py::dict dtype_dict = dtype;
 			for (auto &kv : dtype_dict) {
-				struct_fields.push_back(make_pair(py::str(kv.first), Value(py::str(kv.second))));
+				struct_fields.emplace_back(py::str(kv.first), Value(py::str(kv.second)));
 			}
 			auto dtype_struct = Value::STRUCT(std::move(struct_fields));
 			read_csv.AddNamedParameter("dtypes", std::move(dtype_struct));
@@ -1334,9 +1340,9 @@ PythonImportCache *DuckDBPyConnection::ImportCache() {
 ModifiedMemoryFileSystem &DuckDBPyConnection::GetObjectFileSystem() {
 	if (!internal_object_filesystem) {
 		D_ASSERT(!FileSystemIsRegistered("DUCKDB_INTERNAL_OBJECTSTORE"));
-		auto &import_cache = *ImportCache();
+		auto &import_cache_py = *ImportCache();
 		internal_object_filesystem =
-		    make_shared<ModifiedMemoryFileSystem>(import_cache.pyduckdb().filesystem.modified_memory_filesystem()());
+		    make_shared<ModifiedMemoryFileSystem>(import_cache_py.pyduckdb().filesystem.modified_memory_filesystem()());
 		auto &abstract_fs = (AbstractFileSystem &)*internal_object_filesystem;
 		RegisterFilesystem(abstract_fs);
 	}
@@ -1369,29 +1375,28 @@ bool DuckDBPyConnection::IsPandasDataframe(const py::object &object) {
 	if (!ModuleIsLoaded<PandasCacheItem>()) {
 		return false;
 	}
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return import_cache.pandas().DataFrame.IsInstance(object);
+	auto &import_cache_py = *DuckDBPyConnection::ImportCache();
+	return import_cache_py.pandas().DataFrame.IsInstance(object);
+}
+
+bool DuckDBPyConnection::IsPolarsDataframe(const py::object &object) {
+	if (!ModuleIsLoaded<PolarsCacheItem>()) {
+		return false;
+	}
+	auto &import_cache_py = *DuckDBPyConnection::ImportCache();
+	return import_cache_py.polars().DataFrame.IsInstance(object) ||
+	       import_cache_py.polars().LazyFrame.IsInstance(object);
 }
 
 bool DuckDBPyConnection::IsAcceptedArrowObject(const py::object &object) {
 	if (!ModuleIsLoaded<ArrowCacheItem>()) {
 		return false;
 	}
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return import_cache.arrow().lib.Table.IsInstance(object) ||
-	       import_cache.arrow().lib.RecordBatchReader.IsInstance(object) ||
-	       import_cache.arrow().dataset.Dataset.IsInstance(object) ||
-	       import_cache.arrow().dataset.Scanner.IsInstance(object);
-}
-
-unique_lock<std::mutex> DuckDBPyConnection::AcquireConnectionLock() {
-	// we first release the gil and then acquire the connection lock
-	unique_lock<std::mutex> lock(py_connection_lock, std::defer_lock);
-	{
-		py::gil_scoped_release release;
-		lock.lock();
-	}
-	return lock;
+	auto &import_cache_py = *DuckDBPyConnection::ImportCache();
+	return import_cache_py.arrow().lib.Table.IsInstance(object) ||
+	       import_cache_py.arrow().lib.RecordBatchReader.IsInstance(object) ||
+	       import_cache_py.arrow().dataset.Dataset.IsInstance(object) ||
+	       import_cache_py.arrow().dataset.Scanner.IsInstance(object);
 }
 
 } // namespace duckdb
