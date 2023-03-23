@@ -28,16 +28,6 @@ SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', paralle
 ----
 2501
 
-statement error
-SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', parallel=True, buffer_size=55)
-----
-CSV File not supported for multithreading
-
-statement error
-SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', parallel=True, buffer_size=55, null_padding=False)
-----
-CSV File not supported for multithreading
-
 statement ok
 CREATE TABLE test2 (a VARCHAR, b INTEGER, c INTEGER, d INTEGER);
 
@@ -51,3 +41,15 @@ query I
 SELECT COUNT(*) FROM read_csv('data/csv/nullpadding_commas.csv', sep=',', header=True, columns={'a': INT, 'b': INT, 'c': INT, 'd': INT}, ignore_errors=True, null_padding=False)
 ----
 2492
+
+require notwindows
+
+statement error
+SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', parallel=True, buffer_size=55)
+----
+CSV File not supported for multithreading
+
+statement error
+SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', parallel=True, buffer_size=55, null_padding=False)
+----
+CSV File not supported for multithreading
