@@ -67,15 +67,31 @@ AdaptiveFilter *CollectionScanState::GetAdaptiveFilter() {
 	return parent.GetAdaptiveFilter();
 }
 
+ParallelCollectionScanState::ParallelCollectionScanState()
+    : collection(nullptr), current_row_group(nullptr), processed_rows(0) {
+}
+
+CollectionScanState::CollectionScanState(TableScanState &parent_p)
+    : row_group(nullptr), vector_index(0), max_row_group_row(0), row_groups(nullptr), max_row(0), batch_index(0),
+      parent(parent_p) {
+}
+
 bool CollectionScanState::Scan(DuckTransaction &transaction, DataChunk &result) {
 	while (row_group) {
 		row_group->Scan(transaction, *this, result);
 		if (result.size() > 0) {
 			return true;
+		} else if (max_row <= row_group->start + row_group->count) {
+			row_group = nullptr;
+			return false;
 		} else {
 			do {
 				row_group = row_groups->GetNextSegment(row_group);
 				if (row_group) {
+					if (row_group->start >= max_row) {
+						row_group = nullptr;
+						break;
+					}
 					bool scan_row_group = row_group->InitializeScan(*this);
 					if (scan_row_group) {
 						// scan this row group

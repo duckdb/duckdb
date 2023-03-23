@@ -40,7 +40,7 @@ static storage_t GetStorageIndex(TableCatalogEntry &table, column_t column_id) {
 }
 
 struct TableScanGlobalState : public GlobalTableFunctionState {
-	TableScanGlobalState(ClientContext &context, const FunctionData *bind_data_p) : row_count(0) {
+	TableScanGlobalState(ClientContext &context, const FunctionData *bind_data_p) {
 		D_ASSERT(bind_data_p);
 		auto &bind_data = (const TableScanBindData &)*bind_data_p;
 		max_threads = bind_data.table->GetStorage().MaxThreads(context);
@@ -48,8 +48,6 @@ struct TableScanGlobalState : public GlobalTableFunctionState {
 
 	ParallelTableScanState state;
 	idx_t max_threads;
-	//! How many rows we already scanned
-	atomic<idx_t> row_count;
 
 	vector<idx_t> projection_ids;
 	vector<LogicalType> scanned_types;
@@ -130,7 +128,6 @@ static void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, Da
 			storage.Scan(transaction, output, state.scan_state);
 		}
 		if (output.size() > 0) {
-			gstate.row_count += output.size();
 			return;
 		}
 		if (!TableScanParallelStateNext(context, data_p.bind_data, data_p.local_state, data_p.global_state)) {
@@ -159,7 +156,9 @@ double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p
 		//! Table is either empty or smaller than a vector size, so it is finished
 		return 100;
 	}
-	auto percentage = 100 * (double(gstate.row_count) / total_rows);
+	idx_t scanned_rows = gstate.state.scan_state.processed_rows;
+	scanned_rows += gstate.state.local_state.processed_rows;
+	auto percentage = 100 * (double(scanned_rows) / total_rows);
 	if (percentage > 100) {
 		//! In case the last chunk has less elements than STANDARD_VECTOR_SIZE, if our percentage is over 100
 		//! It means we finished this table.
@@ -169,7 +168,7 @@ double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p
 }
 
 idx_t TableScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
-                             LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state) {
+                             LocalTableFunctionState *local_state, GlobalTableFunctionState *gstate_p) {
 	auto &state = (TableScanLocalState &)*local_state;
 	if (state.scan_state.table_state.row_group) {
 		return state.scan_state.table_state.batch_index;

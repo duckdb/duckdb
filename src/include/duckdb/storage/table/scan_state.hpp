@@ -90,9 +90,7 @@ struct ColumnFetchState {
 
 class CollectionScanState {
 public:
-	CollectionScanState(TableScanState &parent_p)
-	    : row_group(nullptr), vector_index(0), max_row_group_row(0), row_groups(nullptr), max_row(0), batch_index(0),
-	      parent(parent_p) {};
+	CollectionScanState(TableScanState &parent_p);
 
 	//! The current row_group we are scanning
 	RowGroup *row_group;
@@ -148,12 +146,15 @@ private:
 };
 
 struct ParallelCollectionScanState {
+	ParallelCollectionScanState();
+
 	//! The row group collection we are scanning
 	RowGroupCollection *collection;
 	RowGroup *current_row_group;
 	idx_t vector_index;
 	idx_t max_row;
 	idx_t batch_index;
+	atomic<idx_t> processed_rows;
 	mutex lock;
 };
 

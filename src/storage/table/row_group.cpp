@@ -207,6 +207,9 @@ bool RowGroup::InitializeScan(CollectionScanState &state) {
 	state.vector_index = 0;
 	state.max_row_group_row =
 	    this->start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - this->start);
+	if (state.max_row_group_row == 0) {
+		return false;
+	}
 	D_ASSERT(state.column_scans);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];
