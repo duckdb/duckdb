@@ -198,8 +198,17 @@ bool ArrowUtil::TryFetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray 
 		if (!data_chunk || data_chunk->size() == 0) {
 			break;
 		}
-		count += data_chunk->size();
-		appender.Append(*data_chunk);
+		if (count + data_chunk->size() > chunk_size){
+			// We have to split the chunk between this and the next batch
+			idx_t missing_size = chunk_size-count;
+			count += missing_size;
+			appender.Append(*data_chunk);
+
+		} else {
+			count += data_chunk->size();
+			appender.Append(*data_chunk);
+		}
+
 	}
 	if (count > 0) {
 		*out = appender.Finalize();

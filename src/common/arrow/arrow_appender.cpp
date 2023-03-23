@@ -12,7 +12,7 @@ namespace duckdb {
 // Arrow append data
 //===--------------------------------------------------------------------===//
 typedef void (*initialize_t)(ArrowAppendData &result, const LogicalType &type, idx_t capacity);
-typedef void (*append_vector_t)(ArrowAppendData &append_data, Vector &input, idx_t size);
+typedef void (*append_vector_t)(ArrowAppendData &append_data, Vector &input,idx_t from, idx_t to, idx_t input_size);
 typedef void (*finalize_t)(ArrowAppendData &append_data, const LogicalType &type, ArrowArray *result);
 
 struct ArrowAppendData {
@@ -146,9 +146,10 @@ struct ArrowIntervalConverter {
 
 template <class TGT, class SRC = TGT, class OP = ArrowScalarConverter>
 struct ArrowScalarBaseData {
-	static void Append(ArrowAppendData &append_data, Vector &input, idx_t size) {
+	static void Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
+		idx_t size = to-from;
 		UnifiedVectorFormat format;
-		input.ToUnifiedFormat(size, format);
+		input.ToUnifiedFormat(input_size, format);
 
 		// append the validity mask
 		AppendValidity(append_data, format, size);
@@ -158,7 +159,7 @@ struct ArrowScalarBaseData {
 		auto data = (SRC *)format.data;
 		auto result_data = (TGT *)append_data.main_buffer.data();
 
-		for (idx_t i = 0; i < size; i++) {
+		for (idx_t i = from; i < to; i++) {
 			auto source_idx = format.sel->get_index(i);
 			auto result_idx = append_data.row_count + i;
 
@@ -254,9 +255,10 @@ struct ArrowBoolData {
 		result.main_buffer.reserve(byte_count);
 	}
 
-	static void Append(ArrowAppendData &append_data, Vector &input, idx_t size) {
+	static void Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
+		idx_t size = to-from;
 		UnifiedVectorFormat format;
-		input.ToUnifiedFormat(size, format);
+		input.ToUnifiedFormat(input_size, format);
 
 		// we initialize both the validity and the bit set to 1's
 		ResizeValidity(append_data.validity, append_data.row_count + size);
@@ -268,7 +270,7 @@ struct ArrowBoolData {
 		uint8_t current_bit;
 		idx_t current_byte;
 		GetBitPosition(append_data.row_count, current_byte, current_bit);
-		for (idx_t i = 0; i < size; i++) {
+		for (idx_t i = from; i < to; i++) {
 			auto source_idx = format.sel->get_index(i);
 			// append the validity mask
 			if (!format.validity.RowIsValid(source_idx)) {
@@ -321,9 +323,10 @@ struct ArrowVarcharData {
 		result.aux_buffer.reserve(capacity);
 	}
 
-	static void Append(ArrowAppendData &append_data, Vector &input, idx_t size) {
+	static void Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
+		idx_t size = to-from;
 		UnifiedVectorFormat format;
-		input.ToUnifiedFormat(size, format);
+		input.ToUnifiedFormat(input_size, format);
 
 		// resize the validity mask and set up the validity buffer for iteration
 		ResizeValidity(append_data.validity, append_data.row_count + size);
@@ -340,7 +343,7 @@ struct ArrowVarcharData {
 		// now append the string data to the auxiliary buffer
 		// the auxiliary buffer's length depends on the string lengths, so we resize as required
 		auto last_offset = offset_data[append_data.row_count];
-		for (idx_t i = 0; i < size; i++) {
+		for (idx_t i = from; i < to; i++) {
 			auto source_idx = format.sel->get_index(i);
 			auto offset_idx = append_data.row_count + i + 1;
 
@@ -387,9 +390,9 @@ struct ArrowStructData {
 		}
 	}
 
-	static void Append(ArrowAppendData &append_data, Vector &input, idx_t size) {
+	static void Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
 		UnifiedVectorFormat format;
-		input.ToUnifiedFormat(size, format);
+		input.ToUnifiedFormat(input_size, format);
 
 		AppendValidity(append_data, format, size);
 		// append the children of the struct
@@ -397,7 +400,7 @@ struct ArrowStructData {
 		for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 			auto &child = children[child_idx];
 			auto &child_data = *append_data.child_data[child_idx];
-			child_data.append_vector(child_data, *child, size);
+			child_data.append_vector(child_data, *child,0, size);
 		}
 		append_data.row_count += size;
 	}
@@ -459,9 +462,9 @@ struct ArrowListData {
 		result.child_data.push_back(std::move(child_buffer));
 	}
 
-	static void Append(ArrowAppendData &append_data, Vector &input, idx_t size) {
+	static void Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
 		UnifiedVectorFormat format;
-		input.ToUnifiedFormat(size, format);
+		input.ToUnifiedFormat(input_size, format);
 
 		vector<sel_t> child_indices;
 		AppendValidity(append_data, format, size);
@@ -473,7 +476,7 @@ struct ArrowListData {
 		auto child_size = child_indices.size();
 		child.Slice(child_sel, child_size);
 
-		append_data.child_data[0]->append_vector(*append_data.child_data[0], child, child_size);
+		append_data.child_data[0]->append_vector(*append_data.child_data[0], child,0, child_size);
 		append_data.row_count += size;
 	}
 
@@ -508,9 +511,9 @@ struct ArrowMapData {
 		result.child_data.push_back(std::move(internal_struct));
 	}
 
-	static void Append(ArrowAppendData &append_data, Vector &input, idx_t size) {
+	static void Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
 		UnifiedVectorFormat format;
-		input.ToUnifiedFormat(size, format);
+		input.ToUnifiedFormat(input_size, format);
 
 		AppendValidity(append_data, format, size);
 		vector<sel_t> child_indices;
@@ -526,8 +529,8 @@ struct ArrowMapData {
 		auto &struct_data = *append_data.child_data[0];
 		auto &key_data = *struct_data.child_data[0];
 		auto &value_data = *struct_data.child_data[1];
-		key_data.append_vector(key_data, key_vector, list_size);
-		value_data.append_vector(value_data, value_vector, list_size);
+		key_data.append_vector(key_data, key_vector,0, list_size);
+		value_data.append_vector(value_data, value_vector,0, list_size);
 		append_data.row_count += size;
 		struct_data.row_count += size;
 	}
@@ -567,10 +570,10 @@ struct ArrowMapData {
 };
 
 //! Append a data chunk to the underlying arrow array
-void ArrowAppender::Append(DataChunk &input) {
+void ArrowAppender::Append(DataChunk &input, idx_t from, idx_t to, idx_t input_size) {
 	D_ASSERT(types == input.GetTypes());
 	for (idx_t i = 0; i < input.ColumnCount(); i++) {
-		root_data[i]->append_vector(*root_data[i], input.data[i], input.size());
+		root_data[i]->append_vector(*root_data[i], input.data[i],from,to);
 	}
 	row_count += input.size();
 }
