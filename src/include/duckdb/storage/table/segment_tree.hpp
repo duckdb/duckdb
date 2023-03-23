@@ -31,7 +31,7 @@ private:
 	class SegmentIterationHelper;
 
 public:
-	explicit SegmentTree() : finished_loading(true), is_read_only(false) {
+	explicit SegmentTree() : finished_loading(true) {
 	}
 	virtual ~SegmentTree() {
 	}
@@ -39,9 +39,6 @@ public:
 	//! Locks the segment tree. All methods to the segment tree either lock the segment tree, or take an already
 	//! obtained lock.
 	SegmentLock Lock() {
-		if (is_read_only) {
-			return SegmentLock();
-		}
 		return SegmentLock(node_lock);
 	}
 
@@ -51,9 +48,6 @@ public:
 
 	//! Gets a pointer to the first segment. Useful for scans.
 	T *GetRootSegment() {
-		if (is_read_only) {
-			return GetRootSegmentInternal();
-		}
 		auto l = Lock();
 		return GetRootSegment(l);
 	}
@@ -133,9 +127,6 @@ public:
 
 	//! Append a column segment to the tree
 	void AppendSegmentInternal(SegmentLock &l, unique_ptr<T> segment) {
-		if (is_read_only) {
-			throw InternalException("AppendSegmentInternal cannot be called on a read-only segment-tree");
-		}
 		D_ASSERT(segment);
 		// add the node to the list of nodes
 		if (!nodes.empty()) {
@@ -166,9 +157,6 @@ public:
 
 	//! Replace this tree with another tree, taking over its nodes in-place
 	void Replace(SegmentTree<T> &other) {
-		if (is_read_only) {
-			throw InternalException("Replace cannot be called on a read-only segment-tree");
-		}
 		auto l = Lock();
 		Replace(l, other);
 	}
@@ -257,7 +245,6 @@ public:
 
 protected:
 	atomic<bool> finished_loading;
-	atomic<bool> is_read_only;
 
 	//! Load the next segment - only used when lazily loading
 	virtual unique_ptr<T> LoadSegment() {
@@ -323,9 +310,6 @@ private:
 	bool LoadNextSegment(SegmentLock &l) {
 		if (!SUPPORTS_LAZY_LOADING) {
 			return false;
-		}
-		if (is_read_only) {
-			throw InternalException("Lazy loading with is_read_only!?");
 		}
 		if (finished_loading) {
 			return false;

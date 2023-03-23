@@ -28,9 +28,8 @@ RowGroup::RowGroup(RowGroupCollection &collection, idx_t start, idx_t count)
 	Verify();
 }
 
-RowGroup::RowGroup(RowGroupCollection &collection, RowGroupPointer &&pointer, bool is_read_only)
-    : SegmentBase<RowGroup>(pointer.row_start, pointer.tuple_count), collection(collection),
-      is_read_only(is_read_only) {
+RowGroup::RowGroup(RowGroupCollection &collection, RowGroupPointer &&pointer)
+    : SegmentBase<RowGroup>(pointer.row_start, pointer.tuple_count), collection(collection) {
 	// deserialize the columns
 	if (pointer.data_pointers.size() != collection.GetTypes().size()) {
 		throw IOException("Row group column count is unaligned with table column count. Corrupt file?");
@@ -109,9 +108,6 @@ ColumnData &RowGroup::GetColumn(idx_t c) {
 	column_data_reader.offset = block_pointer.offset;
 	this->columns[c] =
 	    ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), c, start, column_data_reader, types[c], nullptr);
-	if (is_read_only) {
-		columns[c]->SetReadOnly();
-	}
 	is_loaded[c] = true;
 	return *columns[c];
 }
@@ -768,12 +764,6 @@ void RowGroup::MergeIntoStatistics(idx_t column_idx, BaseStatistics &other) {
 	auto &col_data = GetColumn(column_idx);
 	lock_guard<mutex> slock(stats_lock);
 	col_data.MergeIntoStatistics(other);
-}
-
-void RowGroup::SetReadOnly() {
-	for (auto &col : GetColumns()) {
-		col->SetReadOnly();
-	}
 }
 
 RowGroupWriteData RowGroup::WriteToDisk(PartialBlockManager &manager,

@@ -58,7 +58,7 @@ public:
 
 public:
 	RowGroup(RowGroupCollection &collection, idx_t start, idx_t count);
-	RowGroup(RowGroupCollection &collection, RowGroupPointer &&pointer, bool is_read_only);
+	RowGroup(RowGroupCollection &collection, RowGroupPointer &&pointer);
 	RowGroup(RowGroup &row_group, RowGroupCollection &collection, idx_t start);
 	~RowGroup();
 
@@ -143,7 +143,6 @@ public:
 
 	void GetStorageInfo(idx_t row_group_index, TableStorageInfo &result);
 
-	void SetReadOnly();
 	void Verify();
 
 	void NextVector(CollectionScanState &state);
@@ -165,7 +164,6 @@ private:
 	mutex stats_lock;
 	vector<BlockPointer> column_pointers;
 	unique_ptr<atomic<bool>[]> is_loaded;
-	bool is_read_only;
 };
 
 struct VersionNode {

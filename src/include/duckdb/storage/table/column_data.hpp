@@ -130,9 +130,6 @@ public:
 	                                          idx_t start_row, Deserializer &source, const LogicalType &type,
 	                                          ColumnData *parent);
 
-	//! Mark a ColumnData segment as read-only - meaning there will be no more appends to it
-	virtual void SetReadOnly();
-
 	virtual void GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, TableStorageInfo &result);
 	virtual void Verify(RowGroup &parent);
 

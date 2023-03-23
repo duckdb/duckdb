@@ -44,7 +44,6 @@ ColumnData::ColumnData(ColumnData &other, idx_t start, ColumnData *parent)
 		this->data.AppendSegment(ColumnSegment::CreateSegment(segment, start + offset));
 		offset += segment.count;
 	}
-	data.SetReadOnly(other.data.GetReadOnly());
 }
 
 ColumnData::~ColumnData() {
@@ -486,10 +485,6 @@ void ColumnData::DeserializeColumn(Deserializer &source) {
 		    std::move(data_pointer.statistics));
 		data.AppendSegment(std::move(segment));
 	}
-}
-
-void ColumnData::SetReadOnly() {
-	data.SetReadOnly(true);
 }
 
 shared_ptr<ColumnData> ColumnData::Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
