@@ -142,7 +142,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	copy->file_path = stmt.info->file_path;
 	copy->use_tmp_file = use_tmp_file;
 	copy->overwrite_or_ignore = overwrite_or_ignore;
-	copy->fmt = std::move(fmt);
+	copy->fmt = fmt;
 	copy->per_thread_output = per_thread_output;
 	copy->partition_output = !partition_cols.empty();
 	copy->partition_columns = std::move(partition_cols);
