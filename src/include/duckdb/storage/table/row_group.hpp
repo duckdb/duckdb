@@ -162,6 +162,7 @@ private:
 
 private:
 	mutex row_group_lock;
+	mutex stats_lock;
 	vector<BlockPointer> column_pointers;
 	unique_ptr<atomic<bool>[]> is_loaded;
 	bool is_read_only;

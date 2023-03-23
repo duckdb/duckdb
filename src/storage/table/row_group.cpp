@@ -751,16 +751,19 @@ void RowGroup::UpdateColumn(TransactionData transaction, DataChunk &updates, Vec
 
 unique_ptr<BaseStatistics> RowGroup::GetStatistics(idx_t column_idx) {
 	auto &col_data = GetColumn(column_idx);
+	lock_guard<mutex> slock(stats_lock);
 	return col_data.GetStatistics();
 }
 
 void RowGroup::MergeStatistics(idx_t column_idx, const BaseStatistics &other) {
 	auto &col_data = GetColumn(column_idx);
+	lock_guard<mutex> slock(stats_lock);
 	col_data.MergeStatistics(other);
 }
 
 void RowGroup::MergeIntoStatistics(idx_t column_idx, BaseStatistics &other) {
 	auto &col_data = GetColumn(column_idx);
+	lock_guard<mutex> slock(stats_lock);
 	col_data.MergeIntoStatistics(other);
 }
 
