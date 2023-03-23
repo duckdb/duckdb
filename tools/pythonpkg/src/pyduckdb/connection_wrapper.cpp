@@ -8,6 +8,26 @@ shared_ptr<DuckDBPyConnection> PyConnectionWrapper::ExecuteMany(const string &qu
 	return conn->ExecuteMany(query, params);
 }
 
+unique_ptr<DuckDBPyRelation> PyConnectionWrapper::DistinctDF(const DataFrame &df, shared_ptr<DuckDBPyConnection> conn) {
+	return conn->FromDF(df)->Distinct();
+}
+
+void PyConnectionWrapper::WriteCsvDF(const DataFrame &df, const string &file, shared_ptr<DuckDBPyConnection> conn) {
+	return conn->FromDF(df)->ToCSV(file);
+}
+
+unique_ptr<DuckDBPyRelation> PyConnectionWrapper::QueryDF(const DataFrame &df, const string &view_name,
+                                                          const string &sql_query,
+                                                          shared_ptr<DuckDBPyConnection> conn) {
+	return conn->FromDF(df)->Query(view_name, sql_query);
+}
+
+unique_ptr<DuckDBPyRelation> PyConnectionWrapper::AggregateDF(const DataFrame &df, const string &expr,
+                                                              const string &groups,
+                                                              shared_ptr<DuckDBPyConnection> conn) {
+	return conn->FromDF(df)->Aggregate(expr, groups);
+}
+
 shared_ptr<DuckDBPyConnection> PyConnectionWrapper::Execute(const string &query, py::object params, bool many,
                                                             shared_ptr<DuckDBPyConnection> conn) {
 	return conn->Execute(query, params, many);
@@ -32,22 +52,8 @@ void PyConnectionWrapper::LoadExtension(const string &extension, shared_ptr<Duck
 	conn->LoadExtension(extension);
 }
 
-unique_ptr<DuckDBPyRelation> PyConnectionWrapper::FromQuery(const string &query, const string &alias,
-                                                            shared_ptr<DuckDBPyConnection> conn) {
-	return conn->FromQuery(query, alias);
-}
-
-unique_ptr<DuckDBPyRelation> PyConnectionWrapper::RunQuery(const string &query, const string &alias,
-                                                           shared_ptr<DuckDBPyConnection> conn) {
-	return conn->RunQuery(query, alias);
-}
-
 unique_ptr<DuckDBPyRelation> PyConnectionWrapper::Table(const string &tname, shared_ptr<DuckDBPyConnection> conn) {
 	return conn->Table(tname);
-}
-
-unique_ptr<DuckDBPyRelation> PyConnectionWrapper::Values(py::object params, shared_ptr<DuckDBPyConnection> conn) {
-	return conn->Values(params);
 }
 
 unique_ptr<DuckDBPyRelation> PyConnectionWrapper::View(const string &vname, shared_ptr<DuckDBPyConnection> conn) {
@@ -88,6 +94,11 @@ unique_ptr<DuckDBPyRelation> PyConnectionWrapper::FromArrow(py::object &arrow_ob
 
 unique_ptr<DuckDBPyRelation> PyConnectionWrapper::FromSubstrait(py::bytes &proto, shared_ptr<DuckDBPyConnection> conn) {
 	return conn->FromSubstrait(proto);
+}
+
+unique_ptr<DuckDBPyRelation> PyConnectionWrapper::FromSubstraitJSON(const string &json,
+                                                                    shared_ptr<DuckDBPyConnection> conn) {
+	return conn->FromSubstraitJSON(json);
 }
 
 unique_ptr<DuckDBPyRelation> PyConnectionWrapper::GetSubstrait(const string &query, shared_ptr<DuckDBPyConnection> conn,
@@ -209,6 +220,45 @@ py::list PyConnectionWrapper::ListFilesystems(shared_ptr<DuckDBPyConnection> con
 }
 bool PyConnectionWrapper::FileSystemIsRegistered(const string &name, shared_ptr<DuckDBPyConnection> conn) {
 	return conn->FileSystemIsRegistered(name);
+}
+
+unique_ptr<DuckDBPyRelation> PyConnectionWrapper::Values(py::object values, shared_ptr<DuckDBPyConnection> conn) {
+	return conn->Values(std::move(values));
+}
+
+unique_ptr<DuckDBPyRelation> PyConnectionWrapper::FromQuery(const string &query, const string &alias,
+                                                            shared_ptr<DuckDBPyConnection> conn) {
+	return conn->FromQuery(query, alias);
+}
+
+unique_ptr<DuckDBPyRelation> PyConnectionWrapper::RunQuery(const string &query, const string &alias,
+                                                           shared_ptr<DuckDBPyConnection> conn) {
+	return conn->RunQuery(query, alias);
+}
+
+unique_ptr<DuckDBPyRelation> PyConnectionWrapper::ProjectDf(const DataFrame &df, const string &expr,
+                                                            shared_ptr<DuckDBPyConnection> conn) {
+	return conn->FromDF(df)->Project(expr);
+}
+
+unique_ptr<DuckDBPyRelation> PyConnectionWrapper::AliasDF(const DataFrame &df, const string &expr,
+                                                          shared_ptr<DuckDBPyConnection> conn) {
+	return conn->FromDF(df)->SetAlias(expr);
+}
+
+unique_ptr<DuckDBPyRelation> PyConnectionWrapper::FilterDf(const DataFrame &df, const string &expr,
+                                                           shared_ptr<DuckDBPyConnection> conn) {
+	return conn->FromDF(df)->Filter(expr);
+}
+
+unique_ptr<DuckDBPyRelation> PyConnectionWrapper::LimitDF(const DataFrame &df, int64_t n,
+                                                          shared_ptr<DuckDBPyConnection> conn) {
+	return conn->FromDF(df)->Limit(n);
+}
+
+unique_ptr<DuckDBPyRelation> PyConnectionWrapper::OrderDf(const DataFrame &df, const string &expr,
+                                                          shared_ptr<DuckDBPyConnection> conn) {
+	return conn->FromDF(df)->Order(expr);
 }
 
 } // namespace duckdb
