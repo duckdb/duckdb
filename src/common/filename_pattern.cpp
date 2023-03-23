@@ -25,7 +25,7 @@ void FilenamePattern::SetFilenamePattern(const string &pattern) {
 }
 
 string FilenamePattern::CreateFilename(const FileSystem &fs, const string &path, const string &extension,
-                                             idx_t offset) const {
+                                       idx_t offset) const {
 	string result(_base);
 	string replacement;
 
