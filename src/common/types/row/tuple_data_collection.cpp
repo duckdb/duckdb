@@ -302,33 +302,30 @@ void TupleDataCollection::InitializeScanChunk(TupleDataScanState &state, DataChu
 	chunk.Initialize(allocator->GetAllocator(), chunk_types);
 }
 
-void TupleDataCollection::InitializeScan(TupleDataScanState &state, TupleDataScanProperties properties) const {
+void TupleDataCollection::InitializeScan(TupleDataScanState &state) const {
 	vector<column_t> column_ids;
 	column_ids.reserve(layout.ColumnCount());
 	for (idx_t i = 0; i < layout.ColumnCount(); i++) {
 		column_ids.push_back(i);
 	}
-	InitializeScan(state, std::move(column_ids), properties);
+	InitializeScan(state, std::move(column_ids));
 }
 
-void TupleDataCollection::InitializeScan(TupleDataScanState &state, vector<column_t> column_ids,
-                                         TupleDataScanProperties properties) const {
+void TupleDataCollection::InitializeScan(TupleDataScanState &state, vector<column_t> column_ids) const {
 	state.pin_state.row_handles.clear();
 	state.pin_state.heap_handles.clear();
 	state.pin_state.properties = TupleDataPinProperties::UNPIN_AFTER_DONE;
 	state.segment_index = 0;
 	state.chunk_index = 0;
-	state.properties = properties;
 	state.chunk_state.column_ids = std::move(column_ids);
 }
 
-void TupleDataCollection::InitializeScan(TupleDataParallelScanState &gstate, TupleDataScanProperties properties) const {
-	InitializeScan(gstate.scan_state, properties);
+void TupleDataCollection::InitializeScan(TupleDataParallelScanState &gstate) const {
+	InitializeScan(gstate.scan_state);
 }
 
-void TupleDataCollection::InitializeScan(TupleDataParallelScanState &state, vector<column_t> column_ids,
-                                         TupleDataScanProperties properties) const {
-	InitializeScan(state.scan_state, std::move(column_ids), properties);
+void TupleDataCollection::InitializeScan(TupleDataParallelScanState &state, vector<column_t> column_ids) const {
+	InitializeScan(state.scan_state, std::move(column_ids));
 }
 
 bool TupleDataCollection::Scan(TupleDataScanState &state, DataChunk &result) {

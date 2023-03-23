@@ -126,17 +126,13 @@ public:
 	//! Initializes a chunk with the correct types for a given scan state
 	void InitializeScanChunk(TupleDataScanState &state, DataChunk &chunk) const;
 	//! Initializes a Scan state for scanning all columns
-	void InitializeScan(TupleDataScanState &state,
-	                    TupleDataScanProperties properties = TupleDataScanProperties::ALLOW_ZERO_COPY) const;
+	void InitializeScan(TupleDataScanState &state) const;
 	//! Initializes a Scan state for scanning a subset of the columns
-	void InitializeScan(TupleDataScanState &state, vector<column_t> column_ids,
-	                    TupleDataScanProperties properties = TupleDataScanProperties::ALLOW_ZERO_COPY) const;
+	void InitializeScan(TupleDataScanState &state, vector<column_t> column_ids) const;
 	//! Initialize a parallel scan over the column data collection over all columns
-	void InitializeScan(TupleDataParallelScanState &state,
-	                    TupleDataScanProperties properties = TupleDataScanProperties::ALLOW_ZERO_COPY) const;
+	void InitializeScan(TupleDataParallelScanState &state) const;
 	//! Initialize a parallel scan over the column data collection over a subset of the columns
-	void InitializeScan(TupleDataParallelScanState &gstate, vector<column_t> column_ids,
-	                    TupleDataScanProperties properties = TupleDataScanProperties::ALLOW_ZERO_COPY) const;
+	void InitializeScan(TupleDataParallelScanState &gstate, vector<column_t> column_ids) const;
 	//! Scans a DataChunk from the TupleDataCollection
 	bool Scan(TupleDataScanState &state, DataChunk &result);
 	//! Scans a DataChunk from the TupleDataCollection

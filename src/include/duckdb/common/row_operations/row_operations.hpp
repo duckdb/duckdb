@@ -19,6 +19,7 @@ class DataChunk;
 class RowLayout;
 class TupleDataLayout;
 class RowDataCollection;
+class TupleDataCollection;
 struct SelectionVector;
 class StringHeap;
 class Vector;
@@ -66,9 +67,9 @@ struct RowOperations {
 	//! Returns the number of matches remaining in the selection.
 	using Predicates = vector<ExpressionType>;
 
-	static idx_t Match(DataChunk &columns, UnifiedVectorFormat col_data[], const TupleDataLayout &layout, Vector &rows,
-	                   const Predicates &predicates, SelectionVector &sel, idx_t count, SelectionVector *no_match,
-	                   idx_t &no_match_count);
+	static idx_t Match(DataChunk &columns, UnifiedVectorFormat col_data[], TupleDataCollection &collection,
+	                   Vector &rows, const Predicates &predicates, SelectionVector &sel, idx_t count,
+	                   SelectionVector *no_match, idx_t &no_match_count);
 
 	//===--------------------------------------------------------------------===//
 	// Heap Operators
