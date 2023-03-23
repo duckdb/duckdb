@@ -128,12 +128,12 @@ SELECT * FROM '__TEST_DIR__/to_be_overwritten/a=9/data_[0-9]*.parquet';
 ----
 9	45	59049
 
-# Test with a combination of {i} and {uuid} (segv test)
+# Test with a combination of {i} and {uuid}
 statement ok
-COPY test5 TO '__TEST_DIR__/within_bounds' (FORMAT PARQUET, PARTITION_BY (a), fileformat "a_name_{i}oh_{uuid}_really");
+COPY test5 TO '__TEST_DIR__/incorrect_pos' (FORMAT PARQUET, PARTITION_BY (a), fileformat "a_name_{i}oh_{uuid}_really");
 
 query III sort
-SELECT * FROM '__TEST_DIR__/within_bounds/a=5/a_name_oh_????????-????-4???-????-????????????_really.parquet';
+SELECT * FROM '__TEST_DIR__/incorrect_pos/a=5/a_name_oh_????????-????-4???-????-????????????_really.parquet';
 ----
 5	25	3125
 
