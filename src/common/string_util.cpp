@@ -21,9 +21,8 @@ string StringUtil::GenerateRandomName(idx_t length) {
 	std::uniform_int_distribution<> dis(0, 15);
 
 	std::stringstream ss;
-	int i;
 	ss << std::hex;
-	for (i = 0; i < length; i++) {
+	for (idx_t i = 0; i < length; i++) {
 		ss << dis(gen);
 	}
 	return ss.str();
