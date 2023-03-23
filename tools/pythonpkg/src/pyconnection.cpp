@@ -1294,8 +1294,9 @@ static void SetDefaultConfigArguments(ClientContext &context) {
 	}
 	if (!HasJupyterProgressBarDependencies()) {
 		// Disable progress bar altogether
-		config.system_progress_bar_disable_reason = "either 'ipywidgets' or 'IPython' modules are not installed, so we "
-		                                            "can not render a progress bar in a Jupyter environment";
+		config.system_progress_bar_disable_reason =
+		    "to render a progress bar in a Jupyter environment, we require both 'ipywidgets' and 'IPython' to be "
+		    "installed, one or both of those are missing";
 		config.enable_progress_bar = false;
 		return;
 	}
