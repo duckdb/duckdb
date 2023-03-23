@@ -1268,6 +1268,18 @@ void CreateNewInstance(DuckDBPyConnection &res, const string &database, DBConfig
 	}
 }
 
+static bool HasJupyterProgressBarDependencies() {
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	if (!import_cache.ipywidgets().IsLoaded()) {
+		// ipywidgets not installed, needed to support the progress bar
+		return false;
+	}
+	if (!import_cache.IPython().IsLoaded()) {
+		return false;
+	}
+	return true;
+}
+
 static void SetDefaultConfigArguments(ClientContext &context) {
 	if (!DuckDBPyConnection::IsInteractive()) {
 		// Don't need to set any special default arguments
@@ -1277,10 +1289,19 @@ static void SetDefaultConfigArguments(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	config.enable_progress_bar = true;
 
-	if (DuckDBPyConnection::IsJupyter()) {
-		// Set the function used to create the display for the progress bar
-		context.config.display_create_func = JupyterProgressBarDisplay::Create;
+	if (!DuckDBPyConnection::IsJupyter()) {
+		return;
 	}
+	if (!HasJupyterProgressBarDependencies()) {
+		// Disable progress bar altogether
+		config.system_progress_bar_disable_reason = "either 'ipywidgets' or 'IPython' modules are not installed, so we "
+		                                            "can not render a progress bar in a Jupyter environment";
+		config.enable_progress_bar = false;
+		return;
+	}
+
+	// Set the function used to create the display for the progress bar
+	context.config.display_create_func = JupyterProgressBarDisplay::Create;
 }
 
 static shared_ptr<DuckDBPyConnection> FetchOrCreateInstance(const string &database, DBConfig &config) {
