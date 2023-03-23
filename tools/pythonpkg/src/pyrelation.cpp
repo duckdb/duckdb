@@ -964,7 +964,6 @@ string DuckDBPyRelation::Explain(ExplainType type) {
 	auto &materialized = (duckdb::MaterializedQueryResult &)*res;
 	auto &coll = materialized.Collection();
 	string result;
-	bool skipped_first = false;
 	for (auto &row : coll.Rows()) {
 		// Skip the first column because it just contains 'physical plan'
 		for (idx_t col_idx = 1; col_idx < coll.ColumnCount(); col_idx++) {

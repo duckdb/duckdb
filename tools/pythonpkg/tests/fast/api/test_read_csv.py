@@ -275,6 +275,7 @@ class TestReadCSV(object):
 			res = duckdb_cursor.read_csv(obj, header=True).fetchall()
 
 	def test_internal_object_filesystem_cleanup(self, duckdb_cursor):
+		pytest.importorskip('fsspec')
 		class CountedObject(StringIO):
 			instance_count = 0
 			def __init__(self, str):

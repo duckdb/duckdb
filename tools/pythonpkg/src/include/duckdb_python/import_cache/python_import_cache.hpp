@@ -25,7 +25,7 @@ public:
 public:
 	template <class T>
 	T &LazyLoadModule(T &module) {
-		if (!module.LoadAttempted()) {
+		if (!module.LoadSucceeded()) {
 			module.LoadModule(T::Name, *this);
 		}
 		return module;

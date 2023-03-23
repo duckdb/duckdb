@@ -1382,7 +1382,7 @@ bool DuckDBPyConnection::IsAcceptedArrowObject(const py::object &object) {
 	    py_import_cache.arrow_lib().RecordBatchReader.IsInstance(object)) {
 		return true;
 	}
-	if (!py_import_cache.arrow_dataset().IsLoaded()) {
+	if (!ModuleIsLoaded<ArrowDatasetCacheItem>()) {
 		return false;
 	}
 	return py_import_cache.arrow_dataset().Dataset.IsInstance(object) ||
