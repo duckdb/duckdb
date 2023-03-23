@@ -34,6 +34,13 @@ public:
 		throw InvalidInputException("Invalid input for hex digit: %s", string(c, 1));
 	}
 
+	static uint8_t GetBinaryValue(char c) {
+		if (c >= '0' && c <= '1') {
+			return c - '0';
+		}
+		throw InvalidInputException("Invalid input for hex digit: %s", string(c, 1));
+	}
+
 	DUCKDB_API static bool CharacterIsSpace(char c) {
 		return c == ' ' || c == '\t' || c == '\n' || c == '\v' || c == '\f' || c == '\r';
 	}
