@@ -200,7 +200,7 @@ void my_named_function(duckdb_function_info info, duckdb_data_chunk output) {
 		if (init_data->pos >= bind_data->size) {
 			break;
 		}
-		ptr[i] = init_data->pos % 2 == 0 ? (42*bind_data->multiplier) : (84*bind_data->multiplier);
+		ptr[i] = init_data->pos % 2 == 0 ? (42 * bind_data->multiplier) : (84 * bind_data->multiplier);
 		init_data->pos++;
 	}
 	duckdb_data_chunk_set_size(output, i);
@@ -211,7 +211,8 @@ TEST_CASE("Test Table Function named parameters in C API", "[capi]") {
 	unique_ptr<CAPIResult> result;
 
 	REQUIRE(tester.OpenDatabase(nullptr));
-	capi_register_table_function(tester.connection, "my_multiplier_function", my_named_bind, my_named_init, my_named_function);
+	capi_register_table_function(tester.connection, "my_multiplier_function", my_named_bind, my_named_init,
+	                             my_named_function);
 
 	result = tester.Query("SELECT * FROM my_multiplier_function(3)");
 	REQUIRE_NO_FAIL(*result);
