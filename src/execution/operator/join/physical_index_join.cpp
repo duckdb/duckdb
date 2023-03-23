@@ -64,6 +64,8 @@ PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOpe
     : CachingPhysicalOperator(PhysicalOperatorType::INDEX_JOIN, std::move(op.types), estimated_cardinality),
       left_projection_map(left_projection_map_p), right_projection_map(std::move(right_projection_map_p)),
       index(index_p), conditions(std::move(cond)), join_type(join_type), lhs_first(lhs_first) {
+	D_ASSERT(right->type == PhysicalOperatorType::TABLE_SCAN);
+	auto &tbl_scan = (PhysicalTableScan &)*right;
 	column_ids = std::move(column_ids_p);
 	children.push_back(std::move(left));
 	children.push_back(std::move(right));
@@ -74,11 +76,17 @@ PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOpe
 	for (auto &index_id : index->column_ids) {
 		index_ids.insert(index_id);
 	}
-	for (idx_t column_id = 0; column_id < column_ids.size(); column_id++) {
-		auto it = index_ids.find(column_ids[column_id]);
+
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		auto column_id = column_ids[i];
+		auto it = index_ids.find(column_id);
 		if (it == index_ids.end()) {
-			fetch_ids.push_back(column_ids[column_id]);
-			fetch_types.push_back(children[1]->types[column_id]);
+			fetch_ids.push_back(column_id);
+			if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
+				fetch_types.emplace_back(LogicalType::ROW_TYPE);
+			} else {
+				fetch_types.push_back(tbl_scan.returned_types[column_id]);
+			}
 		}
 	}
 	if (right_projection_map.empty()) {

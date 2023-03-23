@@ -5,6 +5,7 @@
 #include "duckdb/common/types/column_data_collection_segment.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/types/value_map.hpp"
 
 namespace duckdb {
 
@@ -944,6 +945,12 @@ void ColumnDataCollection::Reset() {
 	allocator = make_shared<ColumnDataAllocator>(*allocator);
 }
 
+struct ValueResultEquals {
+	bool operator()(const Value &a, const Value &b) const {
+		return Value::DefaultValuesAreEqual(a, b);
+	}
+};
+
 bool ColumnDataCollection::ResultEquals(const ColumnDataCollection &left, const ColumnDataCollection &right,
                                         string &error_message) {
 	if (left.ColumnCount() != right.ColumnCount()) {
@@ -959,13 +966,43 @@ bool ColumnDataCollection::ResultEquals(const ColumnDataCollection &left, const 
 	for (idx_t r = 0; r < left.Count(); r++) {
 		for (idx_t c = 0; c < left.ColumnCount(); c++) {
 			auto lvalue = left_rows.GetValue(c, r);
-			auto rvalue = left_rows.GetValue(c, r);
+			auto rvalue = right_rows.GetValue(c, r);
 			if (!Value::DefaultValuesAreEqual(lvalue, rvalue)) {
 				error_message =
 				    StringUtil::Format("%s <> %s (row: %lld, col: %lld)\n", lvalue.ToString(), rvalue.ToString(), r, c);
-				return false;
+				break;
 			}
 		}
+		if (!error_message.empty()) {
+			break;
+		}
+	}
+	if (!error_message.empty()) {
+		// do an unordered comparison
+		bool found_all = true;
+		for (idx_t c = 0; c < left.ColumnCount(); c++) {
+			std::unordered_multiset<Value, ValueHashFunction, ValueResultEquals> lvalues;
+			for (idx_t r = 0; r < left.Count(); r++) {
+				auto lvalue = left_rows.GetValue(c, r);
+				lvalues.insert(lvalue);
+			}
+			for (idx_t r = 0; r < right.Count(); r++) {
+				auto rvalue = right_rows.GetValue(c, r);
+				auto entry = lvalues.find(rvalue);
+				if (entry == lvalues.end()) {
+					found_all = false;
+					break;
+				}
+				lvalues.erase(entry);
+			}
+			if (!found_all) {
+				break;
+			}
+		}
+		if (!found_all) {
+			return false;
+		}
+		error_message = string();
 	}
 	return true;
 }
