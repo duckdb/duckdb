@@ -10,7 +10,7 @@
 
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/function/copy_function.hpp"
-#include "duckdb/common/filename_format_creator.hpp"
+#include "duckdb/common/filename_pattern.hpp"
 #include "duckdb/common/local_file_system.hpp"
 
 namespace duckdb {
@@ -25,7 +25,7 @@ public:
 	unique_ptr<FunctionData> bind_data;
 	std::string file_path;
 	bool use_tmp_file;
-	FilenameFormatCreator fmt;
+	FilenamePattern fmt;
 	bool overwrite_or_ignore;
 	bool per_thread_output;
 

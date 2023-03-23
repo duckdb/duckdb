@@ -3,7 +3,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/bind_helpers.hpp"
-#include "duckdb/common/filename_format_creator.hpp"
+#include "duckdb/common/filename_pattern.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/execution/operator/persistent/parallel_csv_reader.hpp"
 #include "duckdb/function/table/read_csv.hpp"
@@ -78,7 +78,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	}
 	bool use_tmp_file = true;
 	bool overwrite_or_ignore = false;
-	FilenameFormatCreator fmt;
+	FilenamePattern fmt;
 	bool user_set_use_tmp_file = false;
 	bool per_thread_output = false;
 	vector<idx_t> partition_cols;
@@ -99,9 +99,9 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 			    option.second.empty() || option.second[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
 			continue;
 		}
-		if (loption == "fileformat") {
+		if (loption == "filenamepattern") {
 			if (!option.second.empty()) {
-				fmt.SetFilenameFormat(option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>());
+				fmt.SetFilenamePattern(option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>());
 			}
 			continue;
 		}

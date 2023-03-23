@@ -31,7 +31,7 @@ add_library_unity(
   field_writer.cpp
   file_buffer.cpp
   file_system.cpp
-  filename_format_creator.cpp
+  filename_pattern.cpp
   fsst.cpp
   gzip_file_system.cpp
   hive_partitioning.cpp

@@ -1,13 +1,13 @@
-#include "duckdb/common/filename_format_creator.hpp"
+#include "duckdb/common/filename_pattern.hpp"
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
-void FilenameFormatCreator::SetFilenameFormat(const string &format) {
+void FilenamePattern::SetFilenamePattern(const string &pattern) {
 	const string id_format {"{i}"};
 	const string uuid_format {"{uuid}"};
 
-	_base = format;
+	_base = pattern;
 
 	_pos = _base.find(id_format);
 	if (_pos != string::npos) {
@@ -24,7 +24,7 @@ void FilenameFormatCreator::SetFilenameFormat(const string &format) {
 	_pos = std::min(_pos, (idx_t)_base.length());
 }
 
-string FilenameFormatCreator::CreateFilename(const FileSystem &fs, const string &path, const string &extension,
+string FilenamePattern::CreateFilename(const FileSystem &fs, const string &path, const string &extension,
                                              idx_t offset) const {
 	string result(_base);
 	string replacement;

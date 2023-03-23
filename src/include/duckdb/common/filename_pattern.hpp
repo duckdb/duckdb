@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/filename_format_creator.hpp
+// duckdb/common/filename_pattern.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -13,16 +13,16 @@
 
 namespace duckdb {
 
-class FilenameFormatCreator {
+class FilenamePattern {
 
 public:
-	FilenameFormatCreator() : _base("data_"), _pos(_base.length()), _uuid(false) {
+	FilenamePattern() : _base("data_"), _pos(_base.length()), _uuid(false) {
 	}
-	~FilenameFormatCreator() {
-	} // dellete?
+	~FilenamePattern() {
+	}
 
 public:
-	void SetFilenameFormat(const string &format);
+	void SetFilenamePattern(const string &pattern);
 	string CreateFilename(const FileSystem &fs, const string &path, const string &extension, idx_t offset) const;
 
 private:

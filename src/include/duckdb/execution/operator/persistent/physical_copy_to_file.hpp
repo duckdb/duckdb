@@ -12,7 +12,7 @@
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/filename_format_creator.hpp"
+#include "duckdb/common/filename_pattern.hpp"
 
 namespace duckdb {
 
@@ -26,7 +26,7 @@ public:
 	unique_ptr<FunctionData> bind_data;
 	string file_path;
 	bool use_tmp_file;
-	FilenameFormatCreator fmt;
+	FilenamePattern fmt;
 	bool overwrite_or_ignore;
 	bool parallel;
 	bool per_thread_output;
