@@ -1392,8 +1392,8 @@ NumpyObjectType DuckDBPyConnection::IsAcceptedNumpyObject(const py::object &obje
 		int dim = -1;
 		for (auto item : py::cast<py::list>(object)) {
 			if (!isValidNumpyDimensions(item, dim)) {
-                                return NumpyObjectType::INVALID;
-                        }
+				return NumpyObjectType::INVALID;
+			}
 		}
 		return NumpyObjectType::LIST;
 	}
