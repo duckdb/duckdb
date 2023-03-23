@@ -4,6 +4,8 @@
 # # stubgen override
 # to help the sanity of maintainers.
 
+from .typing import DuckDBPyType
+
 # We also run this in python3.7, where this is needed
 from typing_extensions import Literal
 import typing
@@ -34,33 +36,6 @@ __standard_vector_size__: int
 STANDARD: ExplainType
 ANALYZE: ExplainType
 
-sqlnull: DuckDBPyType
-boolean: DuckDBPyType
-tinyint: DuckDBPyType
-utinyint: DuckDBPyType
-smallint: DuckDBPyType
-usmallint: DuckDBPyType
-integer: DuckDBPyType
-uinteger: DuckDBPyType
-bigint: DuckDBPyType
-ubigint: DuckDBPyType
-hugeint: DuckDBPyType
-uuid: DuckDBPyType
-float: DuckDBPyType
-double: DuckDBPyType
-date: DuckDBPyType
-timestamp: DuckDBPyType
-timestamp_ms: DuckDBPyType
-timestamp_ns: DuckDBPyType
-timestamp_s: DuckDBPyType
-time: DuckDBPyType
-time_tz: DuckDBPyType
-timestamp_tz: DuckDBPyType
-varchar: DuckDBPyType
-blob: DuckDBPyType
-bit: DuckDBPyType
-interval: DuckDBPyType
-
 __interactive__: bool
 __jupyter__: bool
 
@@ -89,13 +64,6 @@ class ExplainType:
     def name(self) -> str: ...
     @property
     def value(self) -> int: ...
-
-class DuckDBPyType:
-    def __init__(self, type_str: str, connection: DuckDBPyConnection = ...) -> None: ...
-    def __repr__(self) -> str: ...
-    def __eq__(self, other) -> bool: ...
-    def __getattr__(self, name: str): DuckDBPyType
-    def __getitem__(self, name: str): DuckDBPyType
 
 class DuckDBPyConnection:
     def __init__(self, *args, **kwargs) -> None: ...

@@ -50,7 +50,7 @@ shared_ptr<DuckDBPyType> DuckDBPyType::GetAttribute(const string &name) const {
 static LogicalType FromObject(const py::object &object);
 
 namespace {
-enum class PythonTypeObject : uint8_t { INVALID, BASE, UNION, COMPOSITE };
+enum class PythonTypeObject : uint8_t { INVALID, BASE, UNION, COMPOSITE, NUMPY };
 }
 
 static PythonTypeObject GetTypeObjectType(const py::handle &type_object) {
@@ -62,6 +62,10 @@ static PythonTypeObject GetTypeObjectType(const py::handle &type_object) {
 	}
 	if (py::isinstance<PyUnionType>(type_object)) {
 		return PythonTypeObject::UNION;
+	}
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	if (import_cache.numpy().generic.IsInstance(type_object)) {
+		return PythonTypeObject::NUMPY;
 	}
 	return PythonTypeObject::INVALID;
 }
@@ -126,6 +130,43 @@ static bool IsStructType(const py::tuple &args) {
 		}
 	}
 	return true;
+}
+
+static LogicalType FromNumpyType(const py::object &obj) {
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	// We convert these to string because the underlying physical
+	// types of a numpy type aren't consistent on every platform
+	string type_str = py::str(obj.attr("dtype"));
+	if (type_str == "bool") {
+		return LogicalType::BOOLEAN;
+	} else if (type_str == "int8") {
+		return LogicalType::TINYINT;
+	} else if (type_str == "uint8") {
+		return LogicalType::UTINYINT;
+	} else if (type_str == "int16") {
+		return LogicalType::SMALLINT;
+	} else if (type_str == "uint16") {
+		return LogicalType::USMALLINT;
+	} else if (type_str == "int32") {
+		return LogicalType::INTEGER;
+	} else if (type_str == "uint32") {
+		return LogicalType::UINTEGER;
+	} else if (type_str == "int64") {
+		return LogicalType::BIGINT;
+	} else if (type_str == "uint64") {
+		return LogicalType::UBIGINT;
+	} else if (type_str == "float16") {
+		// FIXME: should we even support this?
+		return LogicalType::FLOAT;
+	} else if (type_str == "float32") {
+		return LogicalType::FLOAT;
+	} else if (type_str == "float64") {
+		return LogicalType::DOUBLE;
+	} else if (type_str == "float64") {
+		return LogicalType::DOUBLE;
+	} else {
+		throw NotImplementedException("Can not convert from numpy type '%s' to DuckDBPyType", type_str);
+	}
 }
 
 static child_list_t<LogicalType> ToFields(const py::tuple &fields_p) {
@@ -196,6 +237,9 @@ static LogicalType FromObject(const py::object &object) {
 	case PythonTypeObject::UNION: {
 		return FromUnionType(object);
 	}
+	case PythonTypeObject::NUMPY: {
+		return FromNumpyType(object);
+	}
 	default: {
 		string actual_type = py::str(object.get_type());
 		throw NotImplementedException("Could not convert from object of type '%s' to DuckDBPyType", actual_type);
@@ -229,6 +273,7 @@ void DuckDBPyType::Initialize(py::handle &m) {
 	connection_module.def("__getattr__", &DuckDBPyType::GetAttribute, "Get the child type by 'name'", py::arg("name"));
 	connection_module.def("__getitem__", &DuckDBPyType::GetAttribute, "Get the child type by 'name'", py::arg("name"));
 
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	py::implicitly_convertible<py::str, DuckDBPyType>();
 	py::implicitly_convertible<PyGenericAlias, DuckDBPyType>();
 	py::implicitly_convertible<PyUnionType, DuckDBPyType>();
