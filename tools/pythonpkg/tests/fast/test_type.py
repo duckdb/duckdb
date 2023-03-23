@@ -4,52 +4,50 @@ import pandas as pd
 import pytest
 from typing import Union
 
+from duckdb.typing import SQLNULL, BOOLEAN, TINYINT, UTINYINT, SMALLINT, USMALLINT, INTEGER, UINTEGER, BIGINT, UBIGINT, HUGEINT, UUID, FLOAT, DOUBLE, DATE, TIMESTAMP, TIMESTAMP_MS, TIMESTAMP_NS, TIMESTAMP_S, TIME, TIME_TZ, TIMESTAMP_TZ, VARCHAR, BLOB, BIT, INTERVAL
+
 class TestRelation(object):
     def test_sqltype(self):
         assert str(duckdb.sqltype('struct(a VARCHAR, b BIGINT)')) == 'STRUCT(a VARCHAR, b BIGINT)'
         # todo: add tests with invalid type_str
 
     def test_primitive_types(self):
-        assert str(duckdb.tinyint) == 'TINYINT'
-        assert str(duckdb.smallint) == 'SMALLINT'
-        assert str(duckdb.integer) == 'INTEGER'
-        assert str(duckdb.bigint) == 'BIGINT'
-        assert str(duckdb.sqlnull) == 'NULL'
-        assert str(duckdb.boolean) == 'BOOLEAN'
-        assert str(duckdb.tinyint) == 'TINYINT'
-        assert str(duckdb.utinyint) == 'UTINYINT'
-        assert str(duckdb.smallint) == 'SMALLINT'
-        assert str(duckdb.usmallint) == 'USMALLINT'
-        assert str(duckdb.integer) == 'INTEGER'
-        assert str(duckdb.uinteger) == 'UINTEGER'
-        assert str(duckdb.bigint) == 'BIGINT'
-        assert str(duckdb.ubigint) == 'UBIGINT'
-        assert str(duckdb.hugeint) == 'HUGEINT'
-        assert str(duckdb.uuid) == 'UUID'
-        assert str(duckdb.float) == 'FLOAT'
-        assert str(duckdb.double) == 'DOUBLE'
-        assert str(duckdb.date) == 'DATE'
-        assert str(duckdb.timestamp) == 'TIMESTAMP'
-        assert str(duckdb.timestamp_ms) == 'TIMESTAMP_MS'
-        assert str(duckdb.timestamp_ns) == 'TIMESTAMP_NS'
-        assert str(duckdb.timestamp_s) == 'TIMESTAMP_S'
-        assert str(duckdb.time) == 'TIME'
-        assert str(duckdb.time_tz) == 'TIME WITH TIME ZONE'
-        assert str(duckdb.timestamp_tz) == 'TIMESTAMP WITH TIME ZONE'
-        assert str(duckdb.varchar) == 'VARCHAR'
-        assert str(duckdb.blob) == 'BLOB'
-        assert str(duckdb.bit) == 'BIT'
-        assert str(duckdb.interval) == 'INTERVAL'
+        assert str(SQLNULL) == 'NULL'
+        assert str(BOOLEAN) == 'BOOLEAN'
+        assert str(TINYINT) == 'TINYINT'
+        assert str(UTINYINT) == 'UTINYINT'
+        assert str(SMALLINT) == 'SMALLINT'
+        assert str(USMALLINT) == 'USMALLINT'
+        assert str(INTEGER) == 'INTEGER'
+        assert str(UINTEGER) == 'UINTEGER'
+        assert str(BIGINT) == 'BIGINT'
+        assert str(UBIGINT) == 'UBIGINT'
+        assert str(HUGEINT) == 'HUGEINT'
+        assert str(UUID) == 'UUID'
+        assert str(FLOAT) == 'FLOAT'
+        assert str(DOUBLE) == 'DOUBLE'
+        assert str(DATE) == 'DATE'
+        assert str(TIMESTAMP) == 'TIMESTAMP'
+        assert str(TIMESTAMP_MS) == 'TIMESTAMP_MS'
+        assert str(TIMESTAMP_NS) == 'TIMESTAMP_NS'
+        assert str(TIMESTAMP_S) == 'TIMESTAMP_S'
+        assert str(TIME) == 'TIME'
+        assert str(TIME_TZ) == 'TIME WITH TIME ZONE'
+        assert str(TIMESTAMP_TZ) == 'TIMESTAMP WITH TIME ZONE'
+        assert str(VARCHAR) == 'VARCHAR'
+        assert str(BLOB) == 'BLOB'
+        assert str(BIT) == 'BIT'
+        assert str(INTERVAL) == 'INTERVAL'
 
     def test_array_type(self):
-        type = duckdb.array_type(duckdb.bigint)
+        type = duckdb.array_type(BIGINT)
         assert str(type) == 'BIGINT[]'
 
     def test_struct_type(self):
-        type = duckdb.struct_type({'a': duckdb.bigint, 'b': duckdb.boolean})
+        type = duckdb.struct_type({'a': BIGINT, 'b': BOOLEAN})
         assert str(type) == 'STRUCT(a BIGINT, b BOOLEAN)'
 
-        type = duckdb.struct_type([duckdb.bigint, duckdb.boolean])
+        type = duckdb.struct_type([BIGINT, BOOLEAN])
         assert str(type) == 'STRUCT(v1 BIGINT, v2 BOOLEAN)'
 
     def test_map_type(self):
@@ -70,10 +68,10 @@ class TestRelation(object):
         assert str(type) == 'VARCHAR'
 
     def test_union_type(self):
-        type = duckdb.union_type([duckdb.bigint, duckdb.varchar, duckdb.tinyint])
+        type = duckdb.union_type([BIGINT, VARCHAR, TINYINT])
         assert str(type) == 'UNION(v1 BIGINT, v2 VARCHAR, v3 TINYINT)'
 
-        type = duckdb.union_type({'a': duckdb.bigint, 'b': duckdb.varchar, 'c': duckdb.tinyint})
+        type = duckdb.union_type({'a': BIGINT, 'b': VARCHAR, 'c': TINYINT})
         assert str(type) == 'UNION(a BIGINT, b VARCHAR, c TINYINT)'
     
     import sys
@@ -110,7 +108,7 @@ class TestRelation(object):
         assert str(res.child) == 'UNION(u1 VARCHAR, u2 BIGINT)[]'
 
     def test_attribute_accessor(self):
-        type = duckdb.row_type([duckdb.bigint, duckdb.list_type(duckdb.map_type(duckdb.blob, duckdb.bit))])
+        type = duckdb.row_type([BIGINT, duckdb.list_type(duckdb.map_type(BLOB, BIT))])
         assert hasattr(type, 'a') == False
         assert hasattr(type, 'v1') == True
 

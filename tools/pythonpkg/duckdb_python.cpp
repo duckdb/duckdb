@@ -8,6 +8,7 @@
 #include "duckdb_python/pyconnection.hpp"
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyresult.hpp"
+#include "duckdb_python/typing.hpp"
 #include "duckdb_python/exceptions.hpp"
 #include "duckdb_python/connection_wrapper.hpp"
 
@@ -207,44 +208,10 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         py::arg("connection") = py::none());
 }
 
-static void DefineBaseTypes(py::handle &m) {
-	m.attr("sqlnull") = DuckDBPyType(LogicalType::SQLNULL);
-	m.attr("boolean") = DuckDBPyType(LogicalType::BOOLEAN);
-	m.attr("tinyint") = DuckDBPyType(LogicalType::TINYINT);
-	m.attr("utinyint") = DuckDBPyType(LogicalType::UTINYINT);
-	m.attr("smallint") = DuckDBPyType(LogicalType::SMALLINT);
-	m.attr("usmallint") = DuckDBPyType(LogicalType::USMALLINT);
-	m.attr("integer") = DuckDBPyType(LogicalType::INTEGER);
-	m.attr("uinteger") = DuckDBPyType(LogicalType::UINTEGER);
-	m.attr("bigint") = DuckDBPyType(LogicalType::BIGINT);
-	m.attr("ubigint") = DuckDBPyType(LogicalType::UBIGINT);
-	m.attr("hugeint") = DuckDBPyType(LogicalType::HUGEINT);
-	m.attr("uuid") = DuckDBPyType(LogicalType::UUID);
-	m.attr("float") = DuckDBPyType(LogicalType::FLOAT);
-	m.attr("double") = DuckDBPyType(LogicalType::DOUBLE);
-	m.attr("date") = DuckDBPyType(LogicalType::DATE);
-
-	m.attr("timestamp") = DuckDBPyType(LogicalType::TIMESTAMP);
-	m.attr("timestamp_ms") = DuckDBPyType(LogicalType::TIMESTAMP_MS);
-	m.attr("timestamp_ns") = DuckDBPyType(LogicalType::TIMESTAMP_NS);
-	m.attr("timestamp_s") = DuckDBPyType(LogicalType::TIMESTAMP_S);
-
-	m.attr("time") = DuckDBPyType(LogicalType::TIME);
-
-	m.attr("time_tz") = DuckDBPyType(LogicalType::TIME_TZ);
-	m.attr("timestamp_tz") = DuckDBPyType(LogicalType::TIMESTAMP_TZ);
-
-	m.attr("varchar") = DuckDBPyType(LogicalType::VARCHAR);
-
-	m.attr("blob") = DuckDBPyType(LogicalType::BLOB);
-	m.attr("bit") = DuckDBPyType(LogicalType::BIT);
-	m.attr("interval") = DuckDBPyType(LogicalType::INTERVAL);
-}
-
 PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	DuckDBPyRelation::Initialize(m);
 	DuckDBPyConnection::Initialize(m);
-	DuckDBPyType::Initialize(m);
+	DuckDBPyTyping::Initialize(m);
 	PythonObject::Initialize();
 
 	InitializeConnectionMethods(m);
@@ -262,8 +229,6 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	m.attr("apilevel") = "1.0";
 	m.attr("threadsafety") = 1;
 	m.attr("paramstyle") = "qmark";
-
-	DefineBaseTypes(m);
 
 	py::enum_<duckdb::ExplainType>(m, "ExplainType")
 	    .value("STANDARD", duckdb::ExplainType::EXPLAIN_STANDARD)

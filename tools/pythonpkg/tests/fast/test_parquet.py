@@ -4,8 +4,8 @@ import os
 import tempfile
 import pandas as pd
 
-VARCHAR = duckdb.varchar
-BIGINT = duckdb.bigint
+VARCHAR = duckdb.typing.VARCHAR
+BIGINT = duckdb.typing.BIGINT
 
 filename = os.path.join(os.path.dirname(os.path.realpath(__file__)),'data','binary_string.parquet')
 

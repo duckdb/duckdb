@@ -5,6 +5,8 @@ import os
 import pandas as pd
 import pytest
 
+from duckdb.typing import BIGINT, VARCHAR, TINYINT, BOOLEAN
+
 def get_relation(conn):
     test_df = pd.DataFrame.from_dict({"i":[1, 2, 3, 4], "j":["one", "two", "three", "four"]})
     conn.register("test_df", test_df)
@@ -171,7 +173,7 @@ class TestRelation(object):
         assert projection.columns == ["c2", "c4"]
 
         # select bigint, tinyint and a type that isn't there
-        projection = rel.project([duckdb.bigint, "tinyint", con.struct_type({'a': duckdb.varchar, 'b': duckdb.tinyint})])
+        projection = rel.project([BIGINT, "tinyint", con.struct_type({'a': VARCHAR, 'b': TINYINT})])
         assert projection.columns == ["c0", "c1"]
 
         ## select with empty projection list, not possible
@@ -180,7 +182,7 @@ class TestRelation(object):
         
         # select with type-filter that matches nothing
         with pytest.raises(duckdb.Error):
-            projection = rel.project([duckdb.boolean])
+            projection = rel.project([BOOLEAN])
 
     def test_df_alias(self,duckdb_cursor):
         test_df = pd.DataFrame.from_dict({"i":[1, 2, 3, 4], "j":["one", "two", "three", "four"]})
