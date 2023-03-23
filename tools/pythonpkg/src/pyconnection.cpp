@@ -1274,9 +1274,6 @@ static bool HasJupyterProgressBarDependencies() {
 		// ipywidgets not installed, needed to support the progress bar
 		return false;
 	}
-	if (!import_cache.IPython().IsLoaded()) {
-		return false;
-	}
 	return true;
 }
 
@@ -1295,8 +1292,7 @@ static void SetDefaultConfigArguments(ClientContext &context) {
 	if (!HasJupyterProgressBarDependencies()) {
 		// Disable progress bar altogether
 		config.system_progress_bar_disable_reason =
-		    "to render a progress bar in a Jupyter environment, we require both 'ipywidgets' and 'IPython' to be "
-		    "installed, one or both of those are missing";
+		    "required package 'ipywidgets' is missing, which is needed to render progress bars in Jupyter";
 		config.enable_progress_bar = false;
 		return;
 	}
