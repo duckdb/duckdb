@@ -183,16 +183,15 @@ select count(*) from glob('**/samename/*');
 ----
 8
 
-require notwindows
-
-statement error
-SELECT sum(column0) FROM read_csv('test/sql/copy/csv/data/glob/crawl/d/**/', auto_detect=1);
-----
-IO Error: Could not read from file 
-
 # symlink test: symlinks will not be searched
 query I
 FROM read_csv_auto('test/sql/copy/csv/data/glob/crawl/.symbolic_link/**');
 ----
 -42
 
+require notwindows
+
+statement error
+SELECT sum(column0) FROM read_csv('test/sql/copy/csv/data/glob/crawl/d/**/', auto_detect=1);
+----
+IO Error: Could not read from file 
