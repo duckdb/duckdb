@@ -137,7 +137,7 @@ void Vector::Slice(Vector &other, idx_t offset, idx_t end) {
 			entries[i]->Slice(*other_entries[i], offset, end);
 		}
 		if (offset > 0) {
-			new_vector.validity.Slice(other.validity, offset, end);
+			new_vector.validity.Slice(other.validity, 0, offset, end);
 		} else {
 			new_vector.validity = other.validity;
 		}
@@ -146,7 +146,7 @@ void Vector::Slice(Vector &other, idx_t offset, idx_t end) {
 		Reference(other);
 		if (offset > 0) {
 			data = data + GetTypeIdSize(internal_type) * offset;
-			validity.Slice(other.validity, offset, end);
+			validity.Slice(other.validity, 0, offset, end);
 		}
 	}
 }
