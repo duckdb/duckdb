@@ -41,8 +41,6 @@ public:
 	vector<LogicalType> delim_types;
 	//! Used in perfect hash join
 	PerfectHashJoinStats perfect_join_statistics;
-	//! Whether we can go external (can't yet if recursive CTE)
-	bool can_go_external;
 
 public:
 	// Operator Interface

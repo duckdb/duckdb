@@ -58,7 +58,7 @@ public:
 		// for perfect hash join
 		perfect_join_executor = make_unique<PerfectHashJoinExecutor>(op, *hash_table, op.perfect_join_statistics);
 		// for external hash join
-		external = op.can_go_external && ClientConfig::GetConfig(context).force_external;
+		external = ClientConfig::GetConfig(context).force_external;
 		// Set probe types
 		const auto &payload_types = op.children[0]->types;
 		probe_types.insert(probe_types.end(), op.condition_types.begin(), op.condition_types.end());
@@ -368,7 +368,6 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 
 	sink.external = ht.RequiresExternalJoin(context.config, sink.local_hash_tables);
 	if (sink.external) {
-		D_ASSERT(can_go_external);
 		sink.perfect_join_executor.reset();
 		if (ht.RequiresPartitioning(context.config, sink.local_hash_tables)) {
 			auto new_event = make_shared<HashJoinPartitionEvent>(pipeline, sink, sink.local_hash_tables);
@@ -892,7 +891,6 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 		return;
 	}
 
-	D_ASSERT(can_go_external);
 	if (gstate.global_stage == HashJoinSourceStage::INIT) {
 		gstate.Initialize(context.client, sink);
 	}
