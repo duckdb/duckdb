@@ -5,6 +5,9 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/to_string.hpp"
 
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
+
 namespace duckdb {
 
 PositionalReferenceExpression::PositionalReferenceExpression(idx_t index)
@@ -37,6 +40,17 @@ void PositionalReferenceExpression::Serialize(FieldWriter &writer) const {
 
 unique_ptr<ParsedExpression> PositionalReferenceExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto expression = make_unique<PositionalReferenceExpression>(reader.ReadRequired<idx_t>());
+	return std::move(expression);
+}
+
+void PositionalReferenceExpression::FormatSerialize(FormatSerializer &serializer) const {
+	ParsedExpression::FormatSerialize(serializer);
+	serializer.WriteProperty("index", index);
+}
+
+unique_ptr<ParsedExpression> PositionalReferenceExpression::FormatDeserialize(ExpressionType type,
+                                                                              FormatDeserializer &deserializer) {
+	auto expression = make_unique<PositionalReferenceExpression>(deserializer.ReadProperty<idx_t>("index"));
 	return std::move(expression);
 }
 

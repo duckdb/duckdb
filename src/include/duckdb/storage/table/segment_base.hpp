@@ -13,13 +13,14 @@
 
 namespace duckdb {
 
+template <class T>
 class SegmentBase {
 public:
 	SegmentBase(idx_t start, idx_t count) : start(start), count(count), next(nullptr) {
 	}
 	virtual ~SegmentBase() {
 	}
-	SegmentBase *Next() {
+	T *Next() {
 #ifndef DUCKDB_R_BUILD
 		return next.load();
 #else
@@ -34,9 +35,9 @@ public:
 	//! The next segment after this one
 
 #ifndef DUCKDB_R_BUILD
-	atomic<SegmentBase *> next;
+	atomic<T *> next;
 #else
-	SegmentBase *next;
+	T *next;
 #endif
 };
 

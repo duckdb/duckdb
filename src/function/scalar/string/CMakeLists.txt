@@ -1,3 +1,4 @@
+add_subdirectory(regexp)
 add_library_unity(
   duckdb_func_string
   OBJECT

@@ -17,6 +17,8 @@
 
 namespace duckdb {
 
+class FormatSerializer;
+class FormatDeserializer;
 class Serializer;
 class Deserializer;
 class Value;
@@ -46,7 +48,7 @@ public:
 public:
 	DUCKDB_API hugeint_t() = default;
 	DUCKDB_API hugeint_t(int64_t value); // NOLINT: Allow implicit conversion from `int64_t`
-	DUCKDB_API constexpr hugeint_t(int64_t upper, uint64_t lower): lower(lower), upper(upper) {};
+	DUCKDB_API constexpr hugeint_t(int64_t upper, uint64_t lower): lower(lower), upper(upper) {}
 	DUCKDB_API constexpr hugeint_t(const hugeint_t &rhs) = default;
 	DUCKDB_API constexpr hugeint_t(hugeint_t &&rhs) = default;
 	DUCKDB_API hugeint_t &operator=(const hugeint_t &rhs) = default;
@@ -288,8 +290,8 @@ enum class LogicalTypeId : uint8_t {
 	UNION = 107
 };
 
-struct ExtraTypeInfo;
 
+struct ExtraTypeInfo;
 
 struct aggregate_state_t;
 
@@ -348,6 +350,10 @@ struct LogicalType {
 
 	//! Deserializes a blob back into an LogicalType
 	DUCKDB_API static LogicalType Deserialize(Deserializer &source);
+
+	DUCKDB_API void FormatSerialize(FormatSerializer &serializer) const;
+	DUCKDB_API static LogicalType FormatDeserialize(FormatDeserializer &deserializer);
+
 
 	DUCKDB_API static bool TypeIsTimestamp(LogicalTypeId id) {
 		return (id == LogicalTypeId::TIMESTAMP ||

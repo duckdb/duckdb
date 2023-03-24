@@ -24,6 +24,7 @@ public:
 	string error;
 	HeaderMap headers;
 	string http_url;
+	string body;
 };
 
 struct HTTPParams {

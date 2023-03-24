@@ -43,16 +43,27 @@ export type ExceptionType =
     | "Parameter Not Allowed"  // parameter types not allowed
     | "Dependency"       // dependency
     | "Unknown"
+    | "HTTP"
     ;
 
 /**
  * Standard error shape for DuckDB errors
  */
-export interface DuckDbError extends Error {
+export interface _DuckDbError extends Error {
   errno: -1; // value of ERROR
   code: 'DUCKDB_NODEJS_ERROR';
   errorType: ExceptionType;
 }
+
+export interface HttpError extends _DuckDbError {
+  errorType: 'HTTP';
+  statusCode: number;
+  response: string;
+  reason: string;
+  headers: Record<string, string>;
+}
+
+export type DuckDbError = HttpError | _DuckDbError;
 
 type Callback<T> = (err: DuckDbError | null, res: T) => void;
 
@@ -89,7 +100,7 @@ export class Connection {
   unregister_udf(name: string, callback: Callback<any>): void;
 
   stream(sql: any, ...args: any[]): QueryResult;
-  arrowIPCStream(sql: any, ...args: any[]): IpcResultStreamIterator;
+  arrowIPCStream(sql: any, ...args: any[]): Promise<IpcResultStreamIterator>;
 
   register_buffer(name: string, array: ArrowIterable, force: boolean, callback?: Callback<void>): void;
   unregister_buffer(name: string, callback?: Callback<void>): void;
