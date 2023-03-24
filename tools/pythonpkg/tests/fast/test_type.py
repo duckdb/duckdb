@@ -6,7 +6,7 @@ from typing import Union
 
 from duckdb.typing import SQLNULL, BOOLEAN, TINYINT, UTINYINT, SMALLINT, USMALLINT, INTEGER, UINTEGER, BIGINT, UBIGINT, HUGEINT, UUID, FLOAT, DOUBLE, DATE, TIMESTAMP, TIMESTAMP_MS, TIMESTAMP_NS, TIMESTAMP_S, TIME, TIME_TZ, TIMESTAMP_TZ, VARCHAR, BLOB, BIT, INTERVAL
 
-class TestRelation(object):
+class TestType(object):
     def test_sqltype(self):
         assert str(duckdb.sqltype('struct(a VARCHAR, b BIGINT)')) == 'STRUCT(a VARCHAR, b BIGINT)'
         # todo: add tests with invalid type_str
@@ -106,6 +106,48 @@ class TestRelation(object):
 
         res = duckdb.list_type(list[Union[str, int]])
         assert str(res.child) == 'UNION(u1 VARCHAR, u2 BIGINT)[]'
+
+    def test_implicit_convert_from_numpy(self):
+        np = pytest.importorskip("numpy")
+
+        type_mapping = {
+            'bool': 'BOOLEAN',
+            'int8': 'TINYINT',
+            'uint8': 'UTINYINT',
+            'int16': 'SMALLINT',
+            'uint16': 'USMALLINT',
+            'int32': 'INTEGER',
+            'uint32': 'UINTEGER',
+            'int64': 'BIGINT',
+            'uint64': 'UBIGINT',
+            'float16': 'FLOAT',
+            'float32': 'FLOAT',
+            'float64': 'DOUBLE'
+        }
+
+        builtins = []
+        builtins += [np.bool_]
+        builtins += [np.byte]
+        builtins += [np.ubyte]
+        builtins += [np.short]
+        builtins += [np.ushort]
+        builtins += [np.intc]
+        builtins += [np.uintc]
+        builtins += [np.int_]
+        builtins += [np.uint]
+        builtins += [np.longlong]
+        builtins += [np.ulonglong]
+        builtins += [np.half]
+        builtins += [np.float16]
+        builtins += [np.single]
+        builtins += [np.double]
+        builtins += [np.longdouble]
+
+        for builtin in builtins:
+            type = duckdb.list_type(builtin)
+            dtype_str = str(builtin().dtype)
+            duckdb_type_str = str(type.child)
+            assert type_mapping[dtype_str] == duckdb_type_str
 
     def test_attribute_accessor(self):
         type = duckdb.row_type([BIGINT, duckdb.list_type(duckdb.map_type(BLOB, BIT))])

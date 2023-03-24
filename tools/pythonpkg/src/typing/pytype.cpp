@@ -55,8 +55,7 @@ enum class PythonTypeObject : uint8_t {
 	BASE,      // 'builtin' type objects
 	UNION,     // typing.UnionType
 	COMPOSITE, // list|dict types
-	STRUCT,    // dictionary
-	NUMPY      // numpy types
+	STRUCT     // dictionary
 };
 }
 
@@ -73,10 +72,6 @@ static PythonTypeObject GetTypeObjectType(const py::handle &type_object) {
 	if (py::isinstance<PyUnionType>(type_object)) {
 		return PythonTypeObject::UNION;
 	}
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	if (import_cache.numpy().generic.IsInstance(type_object)) {
-		return PythonTypeObject::NUMPY;
-	}
 	return PythonTypeObject::INVALID;
 }
 
@@ -85,6 +80,43 @@ static LogicalType FromString(const string &type_str, shared_ptr<DuckDBPyConnect
 		connection = DuckDBPyConnection::DefaultConnection();
 	}
 	return TransformStringToLogicalType(type_str, *connection->connection->context);
+}
+
+static bool FromNumpyType(const py::object &type, LogicalType &result) {
+	// Since this is a type, we have to create an instance from it first.
+	auto obj = type();
+	// We convert these to string because the underlying physical
+	// types of a numpy type aren't consistent on every platform
+	string type_str = py::str(obj.attr("dtype"));
+	if (type_str == "bool") {
+		result = LogicalType::BOOLEAN;
+	} else if (type_str == "int8") {
+		result = LogicalType::TINYINT;
+	} else if (type_str == "uint8") {
+		result = LogicalType::UTINYINT;
+	} else if (type_str == "int16") {
+		result = LogicalType::SMALLINT;
+	} else if (type_str == "uint16") {
+		result = LogicalType::USMALLINT;
+	} else if (type_str == "int32") {
+		result = LogicalType::INTEGER;
+	} else if (type_str == "uint32") {
+		result = LogicalType::UINTEGER;
+	} else if (type_str == "int64") {
+		result = LogicalType::BIGINT;
+	} else if (type_str == "uint64") {
+		result = LogicalType::UBIGINT;
+	} else if (type_str == "float16") {
+		// FIXME: should we even support this?
+		result = LogicalType::FLOAT;
+	} else if (type_str == "float32") {
+		result = LogicalType::FLOAT;
+	} else if (type_str == "float64") {
+		result = LogicalType::DOUBLE;
+	} else {
+		return false;
+	}
+	return true;
 }
 
 static LogicalType FromType(const py::type &obj) {
@@ -107,6 +139,12 @@ static LogicalType FromType(const py::type &obj) {
 	if (obj.is(builtins.attr("bool"))) {
 		return LogicalType::BOOLEAN;
 	}
+
+	LogicalType result;
+	if (FromNumpyType(obj, result)) {
+		return result;
+	}
+
 	throw py::type_error("Could not convert from unknown 'type' to DuckDBPyType");
 }
 
@@ -120,43 +158,6 @@ static bool IsMapType(const py::tuple &args) {
 		}
 	}
 	return true;
-}
-
-static LogicalType FromNumpyType(const py::object &obj) {
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	// We convert these to string because the underlying physical
-	// types of a numpy type aren't consistent on every platform
-	string type_str = py::str(obj.attr("dtype"));
-	if (type_str == "bool") {
-		return LogicalType::BOOLEAN;
-	} else if (type_str == "int8") {
-		return LogicalType::TINYINT;
-	} else if (type_str == "uint8") {
-		return LogicalType::UTINYINT;
-	} else if (type_str == "int16") {
-		return LogicalType::SMALLINT;
-	} else if (type_str == "uint16") {
-		return LogicalType::USMALLINT;
-	} else if (type_str == "int32") {
-		return LogicalType::INTEGER;
-	} else if (type_str == "uint32") {
-		return LogicalType::UINTEGER;
-	} else if (type_str == "int64") {
-		return LogicalType::BIGINT;
-	} else if (type_str == "uint64") {
-		return LogicalType::UBIGINT;
-	} else if (type_str == "float16") {
-		// FIXME: should we even support this?
-		return LogicalType::FLOAT;
-	} else if (type_str == "float32") {
-		return LogicalType::FLOAT;
-	} else if (type_str == "float64") {
-		return LogicalType::DOUBLE;
-	} else if (type_str == "float64") {
-		return LogicalType::DOUBLE;
-	} else {
-		throw NotImplementedException("Can not convert from numpy type '%s' to DuckDBPyType", type_str);
-	}
 }
 
 static LogicalType FromUnionType(const py::object &obj) {
@@ -226,9 +227,6 @@ static LogicalType FromObject(const py::object &object) {
 	}
 	case PythonTypeObject::UNION: {
 		return FromUnionType(object);
-	}
-	case PythonTypeObject::NUMPY: {
-		return FromNumpyType(object);
 	}
 	default: {
 		string actual_type = py::str(object.get_type());
