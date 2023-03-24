@@ -23,19 +23,17 @@ struct SelectionVector;
 template <idx_t radix_bits>
 struct RadixPartitioningConstants {
 public:
-	static constexpr const idx_t NUM_RADIX_BITS = radix_bits;
-	static constexpr const idx_t NUM_PARTITIONS = (idx_t)1 << NUM_RADIX_BITS;
-	static constexpr const idx_t TMP_BUF_SIZE = 8;
+	//! Bitmask of the 5th byte
+	static constexpr const idx_t NUM_PARTITIONS = idx_t(1) << radix_bits;
+	static constexpr const hash_t SHIFT = 40;
+	static constexpr const hash_t MASK = (hash_t(1 << radix_bits) - 1) << SHIFT;
 
 public:
-	//! Apply bitmask on the highest bits, and right shift to get a number between 0 and NUM_PARTITIONS
-	static inline hash_t ApplyMask(hash_t hash) {
-		return (hash & MASK) >> (sizeof(hash_t) * 8 - NUM_RADIX_BITS);
+	//! Apply bitmask and right shift to get a number between 0 and NUM_PARTITIONS
+	static inline hash_t ApplyMask(const hash_t &hash) {
+		D_ASSERT((hash & MASK) >> SHIFT < NUM_PARTITIONS);
+		return (hash & MASK) >> SHIFT;
 	}
-
-private:
-	//! Bitmask of the highest bits
-	static constexpr const hash_t MASK = hash_t(-1) ^ ((hash_t(1) << (sizeof(hash_t) * 8 - NUM_RADIX_BITS)) - 1);
 };
 
 //! Generic radix partitioning functions
@@ -43,7 +41,7 @@ struct RadixPartitioning {
 public:
 	static idx_t NumberOfPartitions(idx_t radix_bits) {
 		D_ASSERT(radix_bits != 0);
-		return (idx_t)1 << radix_bits;
+		return idx_t(1) << radix_bits;
 	}
 
 	//! Select using a cutoff on the radix bits of the hash

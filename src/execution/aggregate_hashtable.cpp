@@ -253,28 +253,26 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload,
 idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload,
                                           const vector<idx_t> &filter) {
 	D_ASSERT(!is_finalized);
-
 	if (groups.size() == 0) {
 		return 0;
 	}
-	// dummy
-	SelectionVector new_groups(STANDARD_VECTOR_SIZE);
 
+#ifdef DEBUG
 	D_ASSERT(groups.ColumnCount() + 1 == layout.ColumnCount());
 	for (idx_t i = 0; i < groups.ColumnCount(); i++) {
 		D_ASSERT(groups.GetTypes()[i] == layout.GetTypes()[i]);
 	}
+#endif
 
 	Vector addresses(LogicalType::POINTER);
+	SelectionVector new_groups(STANDARD_VECTOR_SIZE); // Dummy
 	auto new_group_count = FindOrCreateGroups(groups, group_hashes, addresses, new_groups);
 	VectorOperations::AddInPlace(addresses, layout.GetAggrOffset(), payload.size());
 
-	// now every cell has an entry
-	// update the aggregates
-	idx_t payload_idx = 0;
-
+	// Now every cell has an entry, update the aggregates
 	auto &aggregates = layout.GetAggregates();
 	idx_t filter_idx = 0;
+	idx_t payload_idx = 0;
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggr = aggregates[i];
 		if (filter_idx >= filter.size() || i < filter[filter_idx]) {
@@ -291,7 +289,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 			RowOperations::UpdateStates(aggr, addresses, payload, payload_idx, payload.size());
 		}
 
-		// move to the next aggregate
+		// Move to the next aggregate
 		payload_idx += aggr.child_count;
 		VectorOperations::AddInPlace(addresses, aggr.payload_size, payload.size());
 		filter_idx++;
@@ -536,6 +534,7 @@ bool FlushMoveState::Scan() {
 	if (collection.Scan(scan_state, groups)) {
 		collection.Gather(scan_state.chunk_state.row_locations, *FlatVector::IncrementalSelectionVector(),
 		                  groups.size(), hash_col_idx, hashes, *FlatVector::IncrementalSelectionVector());
+		return true;
 	}
 	collection.FinalizePinState(scan_state.pin_state);
 	return false;
