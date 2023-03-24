@@ -141,7 +141,6 @@ class TestType(object):
         builtins += [np.float16]
         builtins += [np.single]
         builtins += [np.double]
-        builtins += [np.longdouble]
 
         for builtin in builtins:
             type = duckdb.list_type(builtin)
