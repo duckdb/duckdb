@@ -474,9 +474,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::DistinctDF(const DataFrame &df, s
 	}
 	return conn->FromDF(df)->Distinct();
 }
-duckdb::pyarrow::RecordBatchReader DuckDBPyRelation::FetchRecordBatchReader(idx_t approx_rows_per_batch) {
+duckdb::pyarrow::RecordBatchReader DuckDBPyRelation::FetchRecordBatchReader(idx_t rows_per_batch) {
 	AssertResult();
-	return result->FetchRecordBatchReader(approx_rows_per_batch);
+	return result->FetchRecordBatchReader(rows_per_batch);
 }
 
 static unique_ptr<QueryResult> PyExecuteRelation(const shared_ptr<Relation> &rel, bool stream_result = false) {
