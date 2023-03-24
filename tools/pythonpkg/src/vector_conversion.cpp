@@ -157,7 +157,7 @@ static void SetInvalidRecursive(Vector &out, idx_t index) {
 
 //! 'count' is the amount of rows in the 'out' vector
 //! 'offset' is the current row number within this vector
-void ScanPandasObject(PandasColumnBindData &bind_data, PyObject *object, idx_t offset, Vector &out) {
+void ScanPandasObject(PyObject *object, idx_t offset, Vector &out) {
 
 	// handle None
 	if (object == Py_None) {
@@ -197,14 +197,14 @@ void VerifyTypeConstraints(Vector &vec, idx_t count) {
 	}
 }
 
-void ScanPandasObjectColumn(PandasColumnBindData &bind_data, PyObject **col, idx_t count, idx_t offset, Vector &out) {
+void VectorConversion::ScanPandasObjectColumn(PyObject **col, idx_t count, idx_t offset, Vector &out) {
 	// numpy_col is a sequential list of objects, that make up one "column" (Vector)
 	out.SetVectorType(VectorType::FLAT_VECTOR);
 	{
 		PythonGILWrapper gil; // We're creating python objects here, so we need the GIL
 		for (idx_t i = 0; i < count; i++) {
 			idx_t source_idx = offset + i;
-			ScanPandasObject(bind_data, col[source_idx], i, out);
+			ScanPandasObject(col[source_idx], i, out);
 		}
 	}
 	VerifyTypeConstraints(out, count);
@@ -295,7 +295,7 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 		// Get the source pointer of the numpy array
 		auto src_ptr = (PyObject **)numpy_col.data();
 		if (out.GetType().id() != LogicalTypeId::VARCHAR) {
-			return ScanPandasObjectColumn(bind_data, src_ptr, count, offset, out);
+			return ScanPandasObjectColumn(src_ptr, count, offset, out);
 		}
 
 		// Get the data pointer and the validity mask of the result vector

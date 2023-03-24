@@ -38,6 +38,10 @@
 #include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/main/relation/value_relation.hpp"
 #include "duckdb_python/filesystem_object.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb_python/vector_conversion.hpp"
+#include "duckdb_python/python_objects.hpp"
 
 #include <random>
 
@@ -112,6 +116,10 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         "List registered filesystems, including builtin ones")
 	    .def("filesystem_is_registered", &DuckDBPyConnection::FileSystemIsRegistered,
 	         "Check if a filesystem with the provided name is currently registered", py::arg("name"));
+
+	m.def("register_scalar", &DuckDBPyConnection::RegisterScalarUDF,
+	      "Register a scalar UDF so it can be used in queries", py::arg("name"), py::arg("function"),
+	      py::arg("arguments"), py::arg("return_type"));
 
 	DefineMethod({"sqltype", "dtype", "type"}, m, &DuckDBPyConnection::Type,
 	             "Create a type object by parsing the 'type_str' string", py::arg("type_str"));
@@ -286,6 +294,72 @@ py::list DuckDBPyConnection::ListFilesystems() {
 bool DuckDBPyConnection::FileSystemIsRegistered(const string &name) {
 	auto subsystems = database->GetFileSystem().ListSubSystems();
 	return std::find(subsystems.begin(), subsystems.end(), name) != subsystems.end();
+}
+
+scalar_function_t CreateScalarUDF(PyObject *function) {
+	// Through the capture of the lambda, we have access to the function pointer
+	// We just need to make sure that it doesn't get garbage collected
+	scalar_function_t func = [=](DataChunk &input, ExpressionState &state, Vector &result) -> void {
+		py::gil_scoped_acquire gil;
+
+		// owning references
+		vector<py::handle> python_objects;
+		vector<PyObject *> python_results;
+		python_results.reserve(input.size());
+		for (idx_t row = 0; row < input.size(); row++) {
+
+			auto bundled_parameters = py::tuple(input.ColumnCount());
+			for (idx_t i = 0; i < input.ColumnCount(); i++) {
+				// Fill the tuple with the arguments for this row
+				auto &column = input.data[i];
+				auto value = column.GetValue(row);
+				bundled_parameters[i] = PythonObject::FromValue(value, column.GetType());
+			}
+
+			// Call the function
+			auto ret = PyObject_CallObject(function, bundled_parameters.ptr());
+			python_objects.push_back(py::handle(ret));
+			python_results.push_back(ret);
+		}
+
+		// Cast the resulting native python to DuckDB, using the return type
+		// result.Resize(input.size());
+		VectorConversion::ScanPandasObjectColumn(python_results.data(), input.size(), 0, result);
+		if (input.AllConstant()) {
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		}
+	};
+	return func;
+}
+
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::object &udf,
+                                                                     const py::list &arguments,
+                                                                     shared_ptr<DuckDBPyType> return_type_p) {
+	if (!connection) {
+		throw ConnectionException("Connection already closed!");
+	}
+	auto &context = *connection->context;
+	auto &catalog = Catalog::GetSystemCatalog(context);
+
+	scalar_function_t func = CreateScalarUDF(udf.ptr());
+
+	// Create the args vector
+	vector<LogicalType> args;
+	for (auto &argument : arguments) {
+		auto type = py::cast<shared_ptr<DuckDBPyType>>(argument);
+		args.push_back(type->Type());
+	}
+
+	ScalarFunction scalar_function(name, std::move(args), return_type_p->Type(), func);
+	CreateScalarFunctionInfo info(scalar_function);
+
+	context.transaction.BeginTransaction();
+	catalog.CreateFunction(context, &info);
+	context.transaction.Commit();
+
+	registered_functions[name] = make_unique<PythonDependencies>(udf);
+
+	return shared_from_this();
 }
 
 void DuckDBPyConnection::Initialize(py::handle &m) {

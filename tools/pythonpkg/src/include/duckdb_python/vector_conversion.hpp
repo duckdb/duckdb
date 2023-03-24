@@ -37,6 +37,8 @@ struct PandasColumnBindData {
 
 class VectorConversion {
 public:
+	static void ScanPandasObjectColumn(PyObject **col, idx_t count, idx_t offset, Vector &out);
+
 	static void NumpyToDuckDB(PandasColumnBindData &bind_data, py::array &numpy_col, idx_t count, idx_t offset,
 	                          Vector &out);
 
