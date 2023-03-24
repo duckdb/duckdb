@@ -53,10 +53,13 @@ RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p
 // Sink
 //===--------------------------------------------------------------------===//
 class RadixHTGlobalState : public GlobalSinkState {
+	constexpr const static idx_t MAX_RADIX_PARTITIONS = 32;
+
 public:
 	explicit RadixHTGlobalState(ClientContext &context)
 	    : is_empty(true), multi_scan(true), partitioned(false),
-	      partition_info((idx_t)TaskScheduler::GetScheduler(context).NumberOfThreads()) {
+	      partition_info(
+	          MinValue<idx_t>(MAX_RADIX_PARTITIONS, TaskScheduler::GetScheduler(context).NumberOfThreads())) {
 	}
 
 	vector<unique_ptr<PartitionableHashTable>> intermediate_hts;
