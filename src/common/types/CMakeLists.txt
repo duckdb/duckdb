@@ -24,6 +24,7 @@ add_library_unity(
   uuid.cpp
   hyperloglog.cpp
   interval.cpp
+  list_segment.cpp
   selection_vector.cpp
   string_heap.cpp
   string_type.cpp

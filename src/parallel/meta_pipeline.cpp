@@ -156,9 +156,6 @@ Pipeline *MetaPipeline::CreateUnionPipeline(Pipeline &current, bool order_matter
 void MetaPipeline::CreateChildPipeline(Pipeline &current, PhysicalOperator *op, Pipeline *last_pipeline) {
 	// rule 2: 'current' must be fully built (down to the source) before creating the child pipeline
 	D_ASSERT(current.source);
-	if (HasRecursiveCTE()) {
-		throw NotImplementedException("Child pipelines are not supported in recursive CTEs yet");
-	}
 
 	// create the child pipeline (same batch index)
 	pipelines.emplace_back(state.CreateChildPipeline(executor, current, op));

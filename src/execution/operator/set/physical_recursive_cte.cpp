@@ -180,10 +180,6 @@ void PhysicalRecursiveCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_
 	auto &executor = meta_pipeline.GetExecutor();
 	executor.AddRecursiveCTE(this);
 
-	if (meta_pipeline.HasRecursiveCTE()) {
-		throw InternalException("Recursive CTE detected WITHIN a recursive CTE node");
-	}
-
 	// the LHS of the recursive CTE is our initial state
 	auto initial_state_pipeline = meta_pipeline.CreateChildMetaPipeline(current, this);
 	initial_state_pipeline->Build(children[0].get());

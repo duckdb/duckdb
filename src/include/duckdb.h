@@ -1711,6 +1711,16 @@ Adds a parameter to the table function.
 DUCKDB_API void duckdb_table_function_add_parameter(duckdb_table_function table_function, duckdb_logical_type type);
 
 /*!
+Adds a named parameter to the table function.
+
+* table_function: The table function
+* name: The name of the parameter
+* type: The type of the parameter to add.
+*/
+DUCKDB_API void duckdb_table_function_add_named_parameter(duckdb_table_function table_function, const char *name,
+                                                          duckdb_logical_type type);
+
+/*!
 Assigns extra information to the table function that can be fetched during binding, etc.
 
 * table_function: The table function
@@ -1817,6 +1827,17 @@ The result must be destroyed with `duckdb_destroy_value`.
 * returns: The value of the parameter. Must be destroyed with `duckdb_destroy_value`.
 */
 DUCKDB_API duckdb_value duckdb_bind_get_parameter(duckdb_bind_info info, idx_t index);
+
+/*!
+Retrieves a named parameter with the given name.
+
+The result must be destroyed with `duckdb_destroy_value`.
+
+* info: The info object
+* name: The name of the parameter
+* returns: The value of the parameter. Must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_API duckdb_value duckdb_bind_get_named_parameter(duckdb_bind_info info, const char *name);
 
 /*!
 Sets the user-provided bind data in the bind object. This object can be retrieved again during execution.

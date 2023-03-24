@@ -6,7 +6,7 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/function/compression_function.hpp"
-#include "duckdb/main/config.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
 

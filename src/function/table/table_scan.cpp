@@ -1,6 +1,5 @@
 #include "duckdb/function/table/table_scan.hpp"
 
-#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/mutex.hpp"
@@ -15,6 +14,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
 
@@ -40,17 +40,14 @@ static storage_t GetStorageIndex(TableCatalogEntry &table, column_t column_id) {
 }
 
 struct TableScanGlobalState : public GlobalTableFunctionState {
-	TableScanGlobalState(ClientContext &context, const FunctionData *bind_data_p) : row_count(0) {
+	TableScanGlobalState(ClientContext &context, const FunctionData *bind_data_p) {
 		D_ASSERT(bind_data_p);
 		auto &bind_data = (const TableScanBindData &)*bind_data_p;
 		max_threads = bind_data.table->GetStorage().MaxThreads(context);
 	}
 
 	ParallelTableScanState state;
-	mutex lock;
 	idx_t max_threads;
-	//! How many rows we already scanned
-	atomic<idx_t> row_count;
 
 	vector<idx_t> projection_ids;
 	vector<LogicalType> scanned_types;
@@ -131,7 +128,6 @@ static void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, Da
 			storage.Scan(transaction, output, state.scan_state);
 		}
 		if (output.size() > 0) {
-			gstate.row_count += output.size();
 			return;
 		}
 		if (!TableScanParallelStateNext(context, data_p.bind_data, data_p.local_state, data_p.global_state)) {
@@ -147,7 +143,6 @@ bool TableScanParallelStateNext(ClientContext &context, const FunctionData *bind
 	auto &state = (TableScanLocalState &)*local_state;
 	auto &storage = bind_data.table->GetStorage();
 
-	lock_guard<mutex> parallel_lock(parallel_state.lock);
 	return storage.NextParallelScan(context, parallel_state.state, state.scan_state);
 }
 
@@ -161,7 +156,9 @@ double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p
 		//! Table is either empty or smaller than a vector size, so it is finished
 		return 100;
 	}
-	auto percentage = 100 * (double(gstate.row_count) / total_rows);
+	idx_t scanned_rows = gstate.state.scan_state.processed_rows;
+	scanned_rows += gstate.state.local_state.processed_rows;
+	auto percentage = 100 * (double(scanned_rows) / total_rows);
 	if (percentage > 100) {
 		//! In case the last chunk has less elements than STANDARD_VECTOR_SIZE, if our percentage is over 100
 		//! It means we finished this table.
@@ -171,12 +168,12 @@ double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p
 }
 
 idx_t TableScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
-                             LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state) {
+                             LocalTableFunctionState *local_state, GlobalTableFunctionState *gstate_p) {
 	auto &state = (TableScanLocalState &)*local_state;
-	if (state.scan_state.table_state.row_group_state.row_group) {
+	if (state.scan_state.table_state.row_group) {
 		return state.scan_state.table_state.batch_index;
 	}
-	if (state.scan_state.local_state.row_group_state.row_group) {
+	if (state.scan_state.local_state.row_group) {
 		return state.scan_state.table_state.batch_index + state.scan_state.local_state.batch_index;
 	}
 	return 0;

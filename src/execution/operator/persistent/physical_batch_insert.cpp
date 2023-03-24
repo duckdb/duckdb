@@ -1,12 +1,13 @@
 #include "duckdb/execution/operator/persistent/physical_batch_insert.hpp"
 
 #include "duckdb/parallel/thread_context.hpp"
-#include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
 

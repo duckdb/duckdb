@@ -1549,7 +1549,7 @@ string_t StringVector::AddStringOrBlob(Vector &vector, string_t data) {
 
 string_t StringVector::EmptyString(Vector &vector, idx_t len) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
-	if (len < string_t::INLINE_LENGTH) {
+	if (len <= string_t::INLINE_LENGTH) {
 		return string_t(len);
 	}
 	if (!vector.auxiliary) {

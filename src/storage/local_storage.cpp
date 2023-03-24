@@ -11,6 +11,7 @@
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
 
@@ -353,6 +354,12 @@ void LocalTableManager::InsertEntry(DataTable *table, shared_ptr<LocalTableStora
 //===--------------------------------------------------------------------===//
 LocalStorage::LocalStorage(ClientContext &context, DuckTransaction &transaction)
     : context(context), transaction(transaction) {
+}
+
+LocalStorage::CommitState::CommitState() {
+}
+
+LocalStorage::CommitState::~CommitState() {
 }
 
 LocalStorage &LocalStorage::Get(DuckTransaction &transaction) {

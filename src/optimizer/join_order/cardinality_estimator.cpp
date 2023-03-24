@@ -8,6 +8,8 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
+#include <cmath>
+
 namespace duckdb {
 
 static TableCatalogEntry *GetCatalogTableEntry(LogicalOperator *op) {
