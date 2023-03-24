@@ -614,6 +614,17 @@ jobs:
         bash scripts/wasm_build_lib.sh relsize eh $(pwd)/..
         bash scripts/wasm_build_lib.sh relsize coi $(pwd)/..
 
+    - name: Package
+      shell: bash
+      run: |
+        zip -r duckdb-wasm32.zip duckdb-wasm/packages/duckdb-wasm/src/bindings
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: duckdb-wasm32
+        path: |
+          duckdb-wasm32.zip
+
  symbol-leakage:
     name: Symbol Leakage
     runs-on: ubuntu-20.04
