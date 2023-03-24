@@ -3,6 +3,8 @@
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/parser/column_definition.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
+
 namespace duckdb {
 
 ColumnDataCheckpointer::ColumnDataCheckpointer(ColumnData &col_data_p, RowGroup &row_group_p,
@@ -161,7 +163,7 @@ void ColumnDataCheckpointer::WriteToDisk() {
 	// first we check the current segments
 	// if there are any persistent segments, we will mark their old block ids as modified
 	// since the segments will be rewritten their old on disk data is no longer required
-	auto &block_manager = col_data.block_manager;
+	auto &block_manager = col_data.GetBlockManager();
 	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
 		auto segment = nodes[segment_idx].node.get();
 		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {

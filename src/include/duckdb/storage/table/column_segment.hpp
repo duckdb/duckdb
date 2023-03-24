@@ -14,7 +14,6 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
 #include "duckdb/storage/storage_lock.hpp"
-#include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/table/segment_base.hpp"
 
@@ -39,8 +38,6 @@ class ColumnSegment : public SegmentBase<ColumnSegment> {
 public:
 	~ColumnSegment();
 
-	//! The index within the segment tree
-	idx_t index;
 	//! The database instance
 	DatabaseInstance &db;
 	//! The type stored in the column

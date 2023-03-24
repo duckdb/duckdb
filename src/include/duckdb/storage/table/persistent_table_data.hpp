@@ -10,7 +10,6 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/storage/table/segment_tree.hpp"
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
 
