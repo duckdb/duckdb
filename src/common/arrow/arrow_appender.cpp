@@ -426,7 +426,7 @@ struct ArrowStructData {
 void AppendListOffsets(ArrowAppendData &append_data, UnifiedVectorFormat &format, idx_t from, idx_t to,
                        vector<sel_t> &child_sel) {
 	// resize the offset buffer - the offset buffer holds the offsets into the child array
-	idx_t size = from - to;
+	idx_t size = to - from;
 	append_data.main_buffer.resize(append_data.main_buffer.size() + sizeof(uint32_t) * (size + 1));
 	auto data = (list_entry_t *)format.data;
 	auto offset_data = (uint32_t *)append_data.main_buffer.data();
