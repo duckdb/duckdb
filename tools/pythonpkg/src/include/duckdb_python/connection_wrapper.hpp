@@ -112,8 +112,7 @@ public:
 	static DataFrame FetchDFChunk(const idx_t vectors_per_chunk = 1, bool date_as_object = false,
 	                              shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static duckdb::pyarrow::Table FetchArrow(idx_t rows_per_batch,
-	                                         shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static duckdb::pyarrow::Table FetchArrow(idx_t rows_per_batch, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static py::dict FetchPyTorch(shared_ptr<DuckDBPyConnection> conn = nullptr);
 

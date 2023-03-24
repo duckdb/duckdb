@@ -476,15 +476,15 @@ struct ArrowListData {
 		SelectionVector child_sel(child_indices.data());
 		auto &child = ListVector::GetEntry(input);
 		auto child_size = child_indices.size();
-		if (size != input_size){
+		if (size != input_size) {
 			// Let's avoid doing this
 			Vector child_copy(child.GetType());
-			child_copy.Slice(child,child_sel,child_size);
+			child_copy.Slice(child, child_sel, child_size);
 			append_data.child_data[0]->append_vector(*append_data.child_data[0], child_copy, 0, child_size, child_size);
-		} else{
+		} else {
 			// We don't care about the vector, slice it
 			child.Slice(child_sel, child_size);
-			append_data.child_data[0]->append_vector(*append_data.child_data[0], child, 0,child_size, child_size);
+			append_data.child_data[0]->append_vector(*append_data.child_data[0], child, 0, child_size, child_size);
 		}
 		append_data.row_count += size;
 	}
@@ -537,15 +537,15 @@ struct ArrowMapData {
 		auto &key_data = *struct_data.child_data[0];
 		auto &value_data = *struct_data.child_data[1];
 
-		if (size != input_size){
+		if (size != input_size) {
 			// Let's avoid doing this
 			Vector key_vector_copy(key_vector.GetType());
-			key_vector_copy.Slice(key_vector,child_sel,list_size);
+			key_vector_copy.Slice(key_vector, child_sel, list_size);
 			Vector value_vector_copy(value_vector.GetType());
-			value_vector_copy.Slice(value_vector,child_sel,list_size);
+			value_vector_copy.Slice(value_vector, child_sel, list_size);
 			key_data.append_vector(key_data, key_vector_copy, 0, list_size, list_size);
 			value_data.append_vector(value_data, value_vector_copy, 0, list_size, list_size);
-		} else{
+		} else {
 			// We don't care about the vector, slice it
 			key_vector.Slice(child_sel, list_size);
 			value_vector.Slice(child_sel, list_size);
@@ -597,7 +597,7 @@ void ArrowAppender::Append(DataChunk &input, idx_t from, idx_t to, idx_t input_s
 	for (idx_t i = 0; i < input.ColumnCount(); i++) {
 		root_data[i]->append_vector(*root_data[i], input.data[i], from, to, input_size);
 	}
-	row_count += to-from;
+	row_count += to - from;
 }
 //===--------------------------------------------------------------------===//
 // Initialize Arrow Child

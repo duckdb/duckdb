@@ -194,7 +194,7 @@ bool ArrowUtil::TryFetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray 
 		count += cur_consumption;
 		appender.Append(*current_chunk.data_chunk, current_chunk.position, current_chunk.position + cur_consumption,
 		                current_chunk.data_chunk->size());
-		current_chunk.position+= cur_consumption;
+		current_chunk.position += cur_consumption;
 	}
 	while (count < chunk_size) {
 		unique_ptr<DataChunk> data_chunk;

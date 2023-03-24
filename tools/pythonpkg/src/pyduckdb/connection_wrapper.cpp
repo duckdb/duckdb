@@ -282,8 +282,7 @@ DataFrame PyConnectionWrapper::FetchDFChunk(const idx_t vectors_per_chunk, bool 
 	return conn->FetchDFChunk(vectors_per_chunk, date_as_object);
 }
 
-duckdb::pyarrow::Table PyConnectionWrapper::FetchArrow(idx_t rows_per_batch,
-                                                       shared_ptr<DuckDBPyConnection> conn) {
+duckdb::pyarrow::Table PyConnectionWrapper::FetchArrow(idx_t rows_per_batch, shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
