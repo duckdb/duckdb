@@ -711,65 +711,63 @@ tuple_data_scatter_function_t GetTupleDataScatterFunction(bool within_list) {
 
 TupleDataScatterFunction TupleDataCollection::GetScatterFunction(const LogicalType &type, bool within_list) {
 	TupleDataScatterFunction result;
-	tuple_data_scatter_function_t function;
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
-		function = GetTupleDataScatterFunction<bool>(within_list);
+		result.function = GetTupleDataScatterFunction<bool>(within_list);
 		break;
 	case PhysicalType::INT8:
-		function = GetTupleDataScatterFunction<int8_t>(within_list);
+		result.function = GetTupleDataScatterFunction<int8_t>(within_list);
 		break;
 	case PhysicalType::INT16:
-		function = GetTupleDataScatterFunction<int16_t>(within_list);
+		result.function = GetTupleDataScatterFunction<int16_t>(within_list);
 		break;
 	case PhysicalType::INT32:
-		function = GetTupleDataScatterFunction<int32_t>(within_list);
+		result.function = GetTupleDataScatterFunction<int32_t>(within_list);
 		break;
 	case PhysicalType::INT64:
-		function = GetTupleDataScatterFunction<int64_t>(within_list);
+		result.function = GetTupleDataScatterFunction<int64_t>(within_list);
 		break;
 	case PhysicalType::INT128:
-		function = GetTupleDataScatterFunction<hugeint_t>(within_list);
+		result.function = GetTupleDataScatterFunction<hugeint_t>(within_list);
 		break;
 	case PhysicalType::UINT8:
-		function = GetTupleDataScatterFunction<uint8_t>(within_list);
+		result.function = GetTupleDataScatterFunction<uint8_t>(within_list);
 		break;
 	case PhysicalType::UINT16:
-		function = GetTupleDataScatterFunction<uint16_t>(within_list);
+		result.function = GetTupleDataScatterFunction<uint16_t>(within_list);
 		break;
 	case PhysicalType::UINT32:
-		function = GetTupleDataScatterFunction<uint32_t>(within_list);
+		result.function = GetTupleDataScatterFunction<uint32_t>(within_list);
 		break;
 	case PhysicalType::UINT64:
-		function = GetTupleDataScatterFunction<uint64_t>(within_list);
+		result.function = GetTupleDataScatterFunction<uint64_t>(within_list);
 		break;
 	case PhysicalType::FLOAT:
-		function = GetTupleDataScatterFunction<float>(within_list);
+		result.function = GetTupleDataScatterFunction<float>(within_list);
 		break;
 	case PhysicalType::DOUBLE:
-		function = GetTupleDataScatterFunction<double>(within_list);
+		result.function = GetTupleDataScatterFunction<double>(within_list);
 		break;
 	case PhysicalType::INTERVAL:
-		function = GetTupleDataScatterFunction<interval_t>(within_list);
+		result.function = GetTupleDataScatterFunction<interval_t>(within_list);
 		break;
 	case PhysicalType::VARCHAR:
-		function = GetTupleDataScatterFunction<string_t>(within_list);
+		result.function = GetTupleDataScatterFunction<string_t>(within_list);
 		break;
 	case PhysicalType::STRUCT: {
-		function = within_list ? TupleDataStructWithinListScatter : TupleDataStructScatter;
+		result.function = within_list ? TupleDataStructWithinListScatter : TupleDataStructScatter;
 		for (const auto &child_type : StructType::GetChildTypes(type)) {
 			result.child_functions.push_back(GetScatterFunction(child_type.second, within_list));
 		}
 		break;
 	}
 	case PhysicalType::LIST:
-		function = within_list ? TupleDataListWithinListScatter : TupleDataListScatter;
+		result.function = within_list ? TupleDataListWithinListScatter : TupleDataListScatter;
 		result.child_functions.emplace_back(GetScatterFunction(ListType::GetChildType(type), true));
 		break;
 	default:
 		throw InternalException("Unsupported type for TupleDataCollection::GetScatterFunction");
 	}
-	result.function = function;
 	return result;
 }
 
@@ -787,7 +785,6 @@ void TupleDataCollection::Gather(Vector &row_locations, const SelectionVector &s
 void TupleDataCollection::Gather(Vector &row_locations, const SelectionVector &scan_sel, const idx_t scan_count,
                                  const vector<column_t> &column_ids, DataChunk &result,
                                  const SelectionVector &target_sel) const {
-	D_ASSERT(column_ids.size() == result.ColumnCount());
 	for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
 		Gather(row_locations, scan_sel, scan_count, column_ids[col_idx], result.data[col_idx], target_sel);
 	}
@@ -1109,65 +1106,63 @@ tuple_data_gather_function_t GetTupleDataGatherFunction(bool within_list) {
 
 TupleDataGatherFunction TupleDataCollection::GetGatherFunction(const LogicalType &type, bool within_list) {
 	TupleDataGatherFunction result;
-	tuple_data_gather_function_t function;
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
-		function = GetTupleDataGatherFunction<bool>(within_list);
+		result.function = GetTupleDataGatherFunction<bool>(within_list);
 		break;
 	case PhysicalType::INT8:
-		function = GetTupleDataGatherFunction<int8_t>(within_list);
+		result.function = GetTupleDataGatherFunction<int8_t>(within_list);
 		break;
 	case PhysicalType::INT16:
-		function = GetTupleDataGatherFunction<int16_t>(within_list);
+		result.function = GetTupleDataGatherFunction<int16_t>(within_list);
 		break;
 	case PhysicalType::INT32:
-		function = GetTupleDataGatherFunction<int32_t>(within_list);
+		result.function = GetTupleDataGatherFunction<int32_t>(within_list);
 		break;
 	case PhysicalType::INT64:
-		function = GetTupleDataGatherFunction<int64_t>(within_list);
+		result.function = GetTupleDataGatherFunction<int64_t>(within_list);
 		break;
 	case PhysicalType::INT128:
-		function = GetTupleDataGatherFunction<hugeint_t>(within_list);
+		result.function = GetTupleDataGatherFunction<hugeint_t>(within_list);
 		break;
 	case PhysicalType::UINT8:
-		function = GetTupleDataGatherFunction<uint8_t>(within_list);
+		result.function = GetTupleDataGatherFunction<uint8_t>(within_list);
 		break;
 	case PhysicalType::UINT16:
-		function = GetTupleDataGatherFunction<uint16_t>(within_list);
+		result.function = GetTupleDataGatherFunction<uint16_t>(within_list);
 		break;
 	case PhysicalType::UINT32:
-		function = GetTupleDataGatherFunction<uint32_t>(within_list);
+		result.function = GetTupleDataGatherFunction<uint32_t>(within_list);
 		break;
 	case PhysicalType::UINT64:
-		function = GetTupleDataGatherFunction<uint64_t>(within_list);
+		result.function = GetTupleDataGatherFunction<uint64_t>(within_list);
 		break;
 	case PhysicalType::FLOAT:
-		function = GetTupleDataGatherFunction<float>(within_list);
+		result.function = GetTupleDataGatherFunction<float>(within_list);
 		break;
 	case PhysicalType::DOUBLE:
-		function = GetTupleDataGatherFunction<double>(within_list);
+		result.function = GetTupleDataGatherFunction<double>(within_list);
 		break;
 	case PhysicalType::INTERVAL:
-		function = GetTupleDataGatherFunction<interval_t>(within_list);
+		result.function = GetTupleDataGatherFunction<interval_t>(within_list);
 		break;
 	case PhysicalType::VARCHAR:
-		function = GetTupleDataGatherFunction<string_t>(within_list);
+		result.function = GetTupleDataGatherFunction<string_t>(within_list);
 		break;
 	case PhysicalType::STRUCT: {
-		function = within_list ? StructWithinListTupleDataGather : StructTupleDataGather;
+		result.function = within_list ? StructWithinListTupleDataGather : StructTupleDataGather;
 		for (const auto &child_type : StructType::GetChildTypes(type)) {
 			result.child_functions.push_back(GetGatherFunction(child_type.second, within_list));
 		}
 		break;
 	}
 	case PhysicalType::LIST:
-		function = within_list ? ListWithinListTupleDataGather : ListTupleDataGather;
+		result.function = within_list ? ListWithinListTupleDataGather : ListTupleDataGather;
 		result.child_functions.push_back(GetGatherFunction(ListType::GetChildType(type), true));
 		break;
 	default:
 		throw InternalException("Unsupported type for TupleDataCollection::GetGatherFunction");
 	}
-	result.function = function;
 	return result;
 }
 

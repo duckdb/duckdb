@@ -422,8 +422,6 @@ void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &ch
 	idx_t elements_found = 0;
 
 	lstate.scan_chunk.Reset();
-	lstate.ht->GetDataCollection().FinalizePinState(lstate.scan_state.scan_state.pin_state);
-	lstate.ht.reset();
 	if (!state.initialized) {
 		lock_guard<mutex> l(state.lock);
 		if (!state.initialized) {

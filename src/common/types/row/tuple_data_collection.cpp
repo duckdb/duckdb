@@ -31,8 +31,8 @@ void TupleDataCollection::Initialize() {
 	gather_functions.reserve(layout.ColumnCount());
 	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
 		auto &type = layout.GetTypes()[col_idx];
-		scatter_functions.emplace_back(GetScatterFunction(type, col_idx));
-		gather_functions.emplace_back(GetGatherFunction(type, col_idx));
+		scatter_functions.emplace_back(GetScatterFunction(type));
+		gather_functions.emplace_back(GetGatherFunction(type));
 	}
 }
 
@@ -186,17 +186,22 @@ void TupleDataCollection::AppendUnified(TupleDataPinState &pin_state, TupleDataC
 
 #ifdef DEBUG
 	Vector heap_locations_copy(LogicalType::POINTER);
-	VectorOperations::Copy(chunk_state.heap_locations, heap_locations_copy, actual_append_count, 0, 0);
+	if (!layout.AllConstant()) {
+		VectorOperations::Copy(chunk_state.heap_locations, heap_locations_copy, actual_append_count, 0, 0);
+	}
 #endif
 
 	Scatter(chunk_state, new_chunk, append_sel, append_count);
 
 #ifdef DEBUG
-	const auto original_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations_copy);
-	const auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
-	const auto offset_heap_locations = FlatVector::GetData<data_ptr_t>(chunk_state.heap_locations);
-	for (idx_t i = 0; i < actual_append_count; i++) {
-		D_ASSERT(offset_heap_locations[i] == original_heap_locations[i] + heap_sizes[i]);
+	// Verify that the size of the data written to the heap is the same as the size we computed it would be
+	if (!layout.AllConstant()) {
+		const auto original_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations_copy);
+		const auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
+		const auto offset_heap_locations = FlatVector::GetData<data_ptr_t>(chunk_state.heap_locations);
+		for (idx_t i = 0; i < actual_append_count; i++) {
+			D_ASSERT(offset_heap_locations[i] == original_heap_locations[i] + heap_sizes[i]);
+		}
 	}
 #endif
 }

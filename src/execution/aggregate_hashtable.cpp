@@ -52,8 +52,6 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
 	data_collection = make_unique<TupleDataCollection>(buffer_manager, layout);
 	data_collection->InitializeAppend(append_state, TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
 
-	empty_ht_entry_ptrs.reserve(STANDARD_VECTOR_SIZE);
-
 	hashes_hdl = buffer_manager.Allocate(Storage::BLOCK_SIZE);
 	hashes_hdl_ptr = hashes_hdl.Ptr();
 
@@ -322,100 +320,84 @@ void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &re
 }
 
 template <class ENTRY>
-idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes, Vector &addresses,
-                                                            SelectionVector &new_groups_out) {
+idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes_v,
+                                                            Vector &addresses_v, SelectionVector &new_groups_out) {
 	D_ASSERT(!is_finalized);
+	D_ASSERT(capacity - Count() >= groups.size());
+	D_ASSERT(groups.ColumnCount() + 1 == layout.ColumnCount());
+	D_ASSERT(capacity - Count() >= groups.size()); // we need to be able to fit at least one vector of data
+	D_ASSERT(group_hashes_v.GetType() == LogicalType::HASH);
+	D_ASSERT(ht_offsets.GetVectorType() == VectorType::FLAT_VECTOR);
+	D_ASSERT(ht_offsets.GetType() == LogicalType::BIGINT);
+	D_ASSERT(addresses_v.GetType() == LogicalType::POINTER);
+	D_ASSERT(hash_salts.GetType() == LogicalType::SMALLINT);
 
 	if (Count() + groups.size() > MaxCapacity()) {
 		throw InternalException("Hash table capacity reached");
 	}
 
-	// resize at 50% capacity, also need to fit the entire vector
+	// Resize at 50% capacity, also need to fit the entire vector
 	if (capacity - Count() <= groups.size() || Count() > capacity / LOAD_FACTOR) {
 		Resize<ENTRY>(capacity * 2);
 	}
 
-	D_ASSERT(capacity - Count() >= groups.size());
-	D_ASSERT(groups.ColumnCount() + 1 == layout.ColumnCount());
-	// we need to be able to fit at least one vector of data
-	D_ASSERT(capacity - Count() >= groups.size());
-	D_ASSERT(group_hashes.GetType() == LogicalType::HASH);
+	group_hashes_v.Flatten(groups.size());
+	auto group_hashes = FlatVector::GetData<hash_t>(group_hashes_v);
 
-	group_hashes.Flatten(groups.size());
-	auto group_hashes_ptr = FlatVector::GetData<hash_t>(group_hashes);
+	addresses_v.Flatten(groups.size());
+	auto addresses = FlatVector::GetData<data_ptr_t>(addresses_v);
 
-	D_ASSERT(ht_offsets.GetVectorType() == VectorType::FLAT_VECTOR);
-	D_ASSERT(ht_offsets.GetType() == LogicalType::BIGINT);
-
-	D_ASSERT(addresses.GetType() == LogicalType::POINTER);
-	addresses.Flatten(groups.size());
-	auto addresses_ptr = FlatVector::GetData<data_ptr_t>(addresses);
-
-	// now compute the entry in the table based on the hash using a modulo
-	UnaryExecutor::Execute<hash_t, uint64_t>(group_hashes, ht_offsets, groups.size(), [&](hash_t element) {
+	// Compute the entry in the table based on the hash using a modulo
+	UnaryExecutor::Execute<hash_t, uint64_t>(group_hashes_v, ht_offsets, groups.size(), [&](hash_t element) {
 		D_ASSERT((element & bitmask) == (element % capacity));
 		return (element & bitmask);
 	});
 	auto ht_offsets_ptr = FlatVector::GetData<uint64_t>(ht_offsets);
 
-	// precompute the hash salts for faster comparison below
-	D_ASSERT(hash_salts.GetType() == LogicalType::SMALLINT);
-	UnaryExecutor::Execute<hash_t, uint16_t>(group_hashes, hash_salts, groups.size(),
+	// Precompute the hash salts for faster comparison below
+	UnaryExecutor::Execute<hash_t, uint16_t>(group_hashes_v, hash_salts, groups.size(),
 	                                         [&](hash_t element) { return (element >> hash_prefix_shift); });
 	auto hash_salts_ptr = FlatVector::GetData<uint16_t>(hash_salts);
 
-	// we start out with all entries [0, 1, 2, ..., groups.size()]
+	// Start out with all entries [0, 1, 2, ..., groups.size()]
 	const SelectionVector *sel_vector = FlatVector::IncrementalSelectionVector();
 
-	idx_t remaining_entries = groups.size();
-
-	// make a chunk that references the groups and the hashes
+	// Make a chunk that references the groups and the hashes and convert to unified format
 	DataChunk group_chunk;
 	group_chunk.InitializeEmpty(layout.GetTypes());
 	for (idx_t grp_idx = 0; grp_idx < groups.ColumnCount(); grp_idx++) {
 		group_chunk.data[grp_idx].Reference(groups.data[grp_idx]);
 	}
-	group_chunk.data[groups.ColumnCount()].Reference(group_hashes);
+	group_chunk.data[groups.ColumnCount()].Reference(group_hashes_v);
 	group_chunk.SetCardinality(groups);
-
-	// convert all vectors to unified format
 	TupleDataCollection::ToUnifiedFormat(append_state.chunk_state, group_chunk);
 	auto group_data = TupleDataCollection::GetVectorData(append_state.chunk_state);
 
 	idx_t new_group_count = 0;
+	idx_t remaining_entries = groups.size();
 	while (remaining_entries > 0) {
 		idx_t new_entry_count = 0;
 		idx_t need_compare_count = 0;
 		idx_t no_match_count = 0;
 
-		// first figure out for each remaining whether or not it belongs to a full or empty group
-		empty_ht_entry_ptrs.clear();
+		// For each remaining entry, figure out whether or not it belongs to a full or empty group
 		for (idx_t i = 0; i < remaining_entries; i++) {
 			const idx_t index = sel_vector->get_index(i);
-			const auto ht_entry_ptr = ((ENTRY *)this->hashes_hdl_ptr) + ht_offsets_ptr[index];
-			if (ht_entry_ptr->page_nr == 0) { // we use page number 0 as a "unused marker"
-				// cell is empty; setup the new entry
-				empty_ht_entry_ptrs.push_back((data_ptr_t)ht_entry_ptr);
-
-				D_ASSERT(group_hashes_ptr[index] >> hash_prefix_shift <= NumericLimits<uint16_t>::Maximum());
+			auto &ht_entry = *(((ENTRY *)this->hashes_hdl_ptr) + ht_offsets_ptr[index]);
+			if (ht_entry.page_nr == 0) { // Cell is unoccupied (we use page number 0 as a "unused marker")
+				D_ASSERT(group_hashes[index] >> hash_prefix_shift <= NumericLimits<uint16_t>::Maximum());
 				D_ASSERT(payload_hds_ptrs.size() < NumericLimits<uint32_t>::Maximum());
 
-				ht_entry_ptr->salt = group_hashes_ptr[index] >> hash_prefix_shift;
+				// Set page nr to 1 for now to mark it as occupied (will be corrected later) and set the salt
+				ht_entry.page_nr = 1;
+				ht_entry.salt = group_hashes[index] >> hash_prefix_shift;
 
-				// page numbers start at one so we can use 0 as empty flag, GetPtr undoes this
-				ht_entry_ptr->page_nr = 1; // Set to 1 for now - will be corrected later
-
-				// update selection lists for outer loops
+				// Update selection lists for outer loops
 				empty_vector.set_index(new_entry_count++, index);
 				new_groups_out.set_index(new_group_count++, index);
-			} else {
-				// cell is occupied: add to check list
-				// only need to check if hash salt in ptr == prefix of hash in payload
-				if (ht_entry_ptr->salt == hash_salts_ptr[index]) {
+			} else { // Cell is occupied: Compare salts
+				if (ht_entry.salt == hash_salts_ptr[index]) {
 					group_compare_vector.set_index(need_compare_count++, index);
-					auto page_ptr = payload_hds_ptrs[ht_entry_ptr->page_nr - 1];
-					auto page_offset = ht_entry_ptr->page_offset * tuple_size;
-					addresses_ptr[index] = page_ptr + page_offset;
 				} else {
 					no_match_vector.set_index(no_match_count++, index);
 				}
@@ -423,40 +405,53 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		}
 
 		if (new_entry_count != 0) {
-			// for each of the locations that are empty, serialize the group columns to the locations
+			// Append everything that belongs to an empty group
 			data_collection->AppendUnified(append_state.pin_state, append_state.chunk_state, group_chunk, empty_vector,
 			                               new_entry_count);
 			RowOperations::InitializeStates(layout, append_state.chunk_state.row_locations,
 			                                *FlatVector::IncrementalSelectionVector(), new_entry_count);
-			{
 
-				D_ASSERT(empty_ht_entry_ptrs.size() == new_entry_count);
-				const auto row_locations = FlatVector::GetData<data_ptr_t>(append_state.chunk_state.row_locations);
-				idx_t block_id = payload_hds_ptrs.size() - 1;
-				UpdateBlockPointers();
-				auto block_pointer = payload_hds_ptrs[block_id];
-				auto block_end = block_pointer + tuples_per_block * tuple_size;
-				for (idx_t append_i = 0; append_i < new_entry_count; append_i++) {
-					const auto &row_location = row_locations[append_i];
-					if (row_location < block_pointer || row_location > block_end) {
-						block_id++;
-						block_pointer = payload_hds_ptrs[block_id];
-						block_end = block_pointer + tuples_per_block * tuple_size;
-					}
-					D_ASSERT(row_location >= block_pointer && row_location < block_end);
-					auto empty_ht_entry = (ENTRY *)empty_ht_entry_ptrs[append_i];
-					empty_ht_entry->page_nr = block_id + 1;
-					empty_ht_entry->page_offset = (row_location - block_pointer) / tuple_size;
+			// Get the pointers to the (possibly) newly created blocks of the data collection
+			idx_t block_id = payload_hds_ptrs.empty() ? 0 : payload_hds_ptrs.size() - 1;
+			UpdateBlockPointers();
+			auto block_pointer = payload_hds_ptrs[block_id];
+			auto block_end = block_pointer + tuples_per_block * tuple_size;
+
+			// Set the page nrs/offsets in the 1st part of the HT now that the data has been appended
+			const auto row_locations = FlatVector::GetData<data_ptr_t>(append_state.chunk_state.row_locations);
+			for (idx_t new_entry_idx = 0; new_entry_idx < new_entry_count; new_entry_idx++) {
+				const auto &row_location = row_locations[new_entry_idx];
+				if (row_location < block_pointer || row_location > block_end) {
+					block_id++;
+					block_pointer = payload_hds_ptrs[block_id];
+					block_end = block_pointer + tuples_per_block * tuple_size;
 				}
+				D_ASSERT(row_location >= block_pointer && row_location < block_end);
+				D_ASSERT((row_location - block_pointer) % tuple_size == 0);
+				const auto index = empty_vector.get_index(new_entry_idx);
+				auto &ht_entry = *(((ENTRY *)this->hashes_hdl_ptr) + ht_offsets_ptr[index]);
+				ht_entry.page_nr = block_id + 1;
+				ht_entry.page_offset = (row_location - block_pointer) / tuple_size;
+				addresses[index] = row_location;
 			}
 		}
 
-		// now we have only the tuples remaining that might match to an existing group,
-		// start performing comparisons with each of the groups
-		RowOperations::Match(group_chunk, group_data.get(), layout, addresses, predicates, group_compare_vector,
-		                     need_compare_count, &no_match_vector, no_match_count);
+		if (need_compare_count != 0) {
+			// Get the pointers to the rows that need to be compared
+			for (idx_t need_compare_idx = 0; need_compare_idx < need_compare_count; need_compare_idx++) {
+				const auto index = group_compare_vector.get_index(need_compare_idx);
+				const auto &ht_entry = *(((ENTRY *)this->hashes_hdl_ptr) + ht_offsets_ptr[index]);
+				auto page_ptr = payload_hds_ptrs[ht_entry.page_nr - 1];
+				auto page_offset = ht_entry.page_offset * tuple_size;
+				addresses[index] = page_ptr + page_offset;
+			}
 
-		// each of the entries that do not match we move them to the next entry in the HT
+			// Perform group comparisons
+			RowOperations::Match(group_chunk, group_data.get(), layout, addresses_v, predicates, group_compare_vector,
+			                     need_compare_count, &no_match_vector, no_match_count);
+		}
+
+		// Linear probing: each of the entries that do not match move to the next entry in the HT
 		for (idx_t i = 0; i < no_match_count; i++) {
 			idx_t index = no_match_vector.get_index(i);
 			ht_offsets_ptr[index]++;
@@ -475,7 +470,7 @@ void GroupedAggregateHashTable::UpdateBlockPointers() {
 	for (const auto &id_and_handle : append_state.pin_state.row_handles) {
 		const auto &id = id_and_handle.first;
 		const auto &handle = id_and_handle.second;
-		if (id > payload_hds_ptrs.size() - 1) {
+		if (payload_hds_ptrs.empty() || id > payload_hds_ptrs.size() - 1) {
 			payload_hds_ptrs.resize(id + 1);
 		}
 		payload_hds_ptrs[id] = handle.Ptr();
@@ -510,13 +505,13 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &a
 }
 
 struct FlushMoveState {
-	FlushMoveState(TupleDataCollection &collection_p)
+	explicit FlushMoveState(TupleDataCollection &collection_p)
 	    : collection(collection_p), hashes(LogicalType::HASH), new_groups(STANDARD_VECTOR_SIZE),
 	      group_addresses(LogicalType::POINTER), new_groups_sel(STANDARD_VECTOR_SIZE) {
 		const auto &layout = collection.GetLayout();
 		vector<column_t> column_ids;
-		column_ids.reserve(layout.ColumnCount() - 2);
-		for (idx_t col_idx = 0; col_idx < layout.ColumnCount() - 2; col_idx++) {
+		column_ids.reserve(layout.ColumnCount() - 1);
+		for (idx_t col_idx = 0; col_idx < layout.ColumnCount() - 1; col_idx++) {
 			column_ids.emplace_back(col_idx);
 		}
 		collection.InitializeScan(scan_state, column_ids, TupleDataPinProperties::DESTROY_AFTER_DONE);
@@ -591,6 +586,7 @@ void GroupedAggregateHashTable::Partition(vector<GroupedAggregateHashTable *> &p
 }
 
 void GroupedAggregateHashTable::InitializeFirstPart() {
+	// TODO: not sure if resize does the job here
 	data_collection->GetBlockPointers(payload_hds_ptrs);
 	switch (entry_type) {
 	case HtEntryType::HT_WIDTH_64:

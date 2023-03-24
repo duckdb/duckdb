@@ -142,7 +142,6 @@ private:
 	idx_t hash_offset;         // Offset into the layout of the hash column
 
 	hash_t hash_prefix_shift;
-	vector<data_ptr_t> empty_ht_entry_ptrs;
 
 	//! Bitmask for getting relevant bits from the hashes to determine the position
 	hash_t bitmask;
@@ -175,7 +174,7 @@ private:
 	template <class ENTRY>
 	void Resize(idx_t size);
 	template <class ENTRY>
-	idx_t FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes, Vector &addresses,
+	idx_t FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes_v, Vector &addresses_v,
 	                                 SelectionVector &new_groups);
 	void UpdateBlockPointers();
 
