@@ -73,7 +73,7 @@ class TestRelation(object):
 
         type = duckdb.union_type({'a': BIGINT, 'b': VARCHAR, 'c': TINYINT})
         assert str(type) == 'UNION(a BIGINT, b VARCHAR, c TINYINT)'
-    
+
     import sys
     @pytest.mark.skipif(sys.version_info < (3,8), reason="requires >=python3.8")
     def test_implicit_convert_from_builtin_type(self):
@@ -92,7 +92,7 @@ class TestRelation(object):
             res = duckdb.list_type(type)
             assert str(res.child) == expected
         
-        res = duckdb.list_type(dict['a': str, 'b': int])
+        res = duckdb.list_type({'a': str, 'b': int})
         assert str(res.child) == 'STRUCT(a VARCHAR, b BIGINT)'
 
         res = duckdb.list_type(dict[str, int])

@@ -50,7 +50,14 @@ shared_ptr<DuckDBPyType> DuckDBPyType::GetAttribute(const string &name) const {
 static LogicalType FromObject(const py::object &object);
 
 namespace {
-enum class PythonTypeObject : uint8_t { INVALID, BASE, UNION, COMPOSITE, NUMPY };
+enum class PythonTypeObject : uint8_t {
+	INVALID,   // not convertible to our type
+	BASE,      // 'builtin' type objects
+	UNION,     // typing.UnionType
+	COMPOSITE, // list|dict types
+	STRUCT,    // dictionary
+	NUMPY      // numpy types
+};
 }
 
 static PythonTypeObject GetTypeObjectType(const py::handle &type_object) {
@@ -59,6 +66,9 @@ static PythonTypeObject GetTypeObjectType(const py::handle &type_object) {
 	}
 	if (py::isinstance<PyGenericAlias>(type_object)) {
 		return PythonTypeObject::COMPOSITE;
+	}
+	if (py::isinstance<py::dict>(type_object)) {
+		return PythonTypeObject::STRUCT;
 	}
 	if (py::isinstance<PyUnionType>(type_object)) {
 		return PythonTypeObject::UNION;
@@ -112,26 +122,6 @@ static bool IsMapType(const py::tuple &args) {
 	return true;
 }
 
-// This allows us to create structs from things like: dict['a': str, 'b': int]
-static bool IsStructType(const py::tuple &args) {
-	py::module_ builtins = py::module_::import("builtins");
-	auto slice = builtins.attr("slice");
-	for (auto &field : args) {
-		if (!py::isinstance(field, slice)) {
-			return false;
-		}
-		auto name = field.attr("start");
-		auto type = field.attr("stop");
-		if (!py::isinstance<py::str>(name)) {
-			return false;
-		}
-		if (GetTypeObjectType(type) == PythonTypeObject::INVALID) {
-			return false;
-		}
-	}
-	return true;
-}
-
 static LogicalType FromNumpyType(const py::object &obj) {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	// We convert these to string because the underlying physical
@@ -169,20 +159,6 @@ static LogicalType FromNumpyType(const py::object &obj) {
 	}
 }
 
-static child_list_t<LogicalType> ToFields(const py::tuple &fields_p) {
-	child_list_t<LogicalType> fields;
-
-	D_ASSERT(IsStructType(fields_p));
-	for (auto &field : fields_p) {
-		auto name_p = field.attr("start");
-		auto type = field.attr("stop");
-		D_ASSERT(py::isinstance<py::str>(name_p));
-		fields.push_back(make_pair(string(py::str(name_p)), FromObject(type)));
-	}
-
-	return fields;
-}
-
 static LogicalType FromUnionType(const py::object &obj) {
 	idx_t index = 1;
 	child_list_t<LogicalType> members;
@@ -214,15 +190,26 @@ static LogicalType FromGenericAlias(const py::object &obj) {
 	if (origin.is(builtins.attr("dict"))) {
 		if (IsMapType(args)) {
 			return LogicalType::MAP(FromObject(args[0]), FromObject(args[1]));
-		} else if (IsStructType(args)) {
-			auto children = ToFields(args);
-			return LogicalType::STRUCT(std::move(children));
 		} else {
-			throw NotImplementedException("Can only create a MAP or STRUCT from a dict if args is formed correctly");
+			throw NotImplementedException("Can only create a MAP from a dict if args is formed correctly");
 		}
 	}
 	string origin_type = py::str(origin);
 	throw InvalidInputException("Could not convert from '%s' to DuckDBPyType", origin_type);
+}
+
+static LogicalType FromDictionary(const py::object &obj) {
+	auto dict = py::reinterpret_steal<py::dict>(obj);
+	child_list_t<LogicalType> children;
+	children.reserve(dict.size());
+	for (auto &item : dict) {
+		auto &name_p = item.first;
+		auto type_p = py::reinterpret_borrow<py::object>(item.second);
+		string name = py::str(name_p);
+		auto type = FromObject(type_p);
+		children.push_back(std::make_pair(name, std::move(type)));
+	}
+	return LogicalType::STRUCT(std::move(children));
 }
 
 static LogicalType FromObject(const py::object &object) {
@@ -233,6 +220,9 @@ static LogicalType FromObject(const py::object &object) {
 	}
 	case PythonTypeObject::COMPOSITE: {
 		return FromGenericAlias(object);
+	}
+	case PythonTypeObject::STRUCT: {
+		return FromDictionary(object);
 	}
 	case PythonTypeObject::UNION: {
 		return FromUnionType(object);
