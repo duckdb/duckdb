@@ -132,19 +132,21 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectFromExpression(const strin
 	return projected_relation;
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const py::object &expr) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const string &expr) {
 	if (!rel) {
 		return nullptr;
 	}
-	if (py::isinstance<py::str>(expr)) {
-		// SQL string
-		string expression = py::str(expr);
-		return ProjectFromExpression(expression);
-	}
-	if (!py::isinstance<py::list>(expr)) {
+	return ProjectFromExpression(expr);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectFromTypes(const py::object &obj) {
+	if (!rel) {
 		return nullptr;
 	}
-	auto list = py::list(expr);
+	if (!py::isinstance<py::list>(obj)) {
+		throw InvalidInputException("'columns_by_type' expects a list containing types");
+	}
+	auto list = py::list(obj);
 	vector<LogicalType> types_filter;
 	// Collect the list of types specified that will be our filter
 	for (auto &item : list) {

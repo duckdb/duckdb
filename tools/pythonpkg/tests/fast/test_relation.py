@@ -29,12 +29,12 @@ class TestRelation(object):
         rel = get_relation(conn)
         assert rel.filter('i > 1').execute().fetchall() == [(2, 'two'), (3, 'three'), (4, 'four')]
 
-    def test_projection_operator(self, duckdb_cursor):
+    def test_projection_operator_single(self, duckdb_cursor):
         conn = duckdb.connect()
         rel = get_relation(conn)
         assert rel.project('i').execute().fetchall() == [(1,), (2,), (3,), (4,)]
 
-    def test_projection_operator(self, duckdb_cursor):
+    def test_projection_operator_double(self, duckdb_cursor):
         conn = duckdb.connect()
         rel = get_relation(conn)
         assert rel.order('j').execute().fetchall() == [(4, 'four'), (1, 'one'), (3, 'three'), (2, 'two')]
@@ -169,20 +169,20 @@ class TestRelation(object):
             """)
         rel = con.table("tbl")
         # select only the varchar columns
-        projection = rel.project(["varchar"])
+        projection = rel.columns_by_type(["varchar"])
         assert projection.columns == ["c2", "c4"]
 
         # select bigint, tinyint and a type that isn't there
-        projection = rel.project([BIGINT, "tinyint", con.struct_type({'a': VARCHAR, 'b': TINYINT})])
+        projection = rel.columns_by_type([BIGINT, "tinyint", con.struct_type({'a': VARCHAR, 'b': TINYINT})])
         assert projection.columns == ["c0", "c1"]
 
         ## select with empty projection list, not possible
         with pytest.raises(duckdb.Error):
-            projection = rel.project([])
+            projection = rel.columns_by_type([])
         
         # select with type-filter that matches nothing
         with pytest.raises(duckdb.Error):
-            projection = rel.project([BOOLEAN])
+            projection = rel.columns_by_type([BOOLEAN])
 
     def test_df_alias(self,duckdb_cursor):
         test_df = pd.DataFrame.from_dict({"i":[1, 2, 3, 4], "j":["one", "two", "three", "four"]})
