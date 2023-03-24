@@ -220,7 +220,7 @@ struct BinaryStrOperator {
 		auto size = input.GetSize();
 
 		// Allocate empty space
-		auto target = StringVector::EmptyString(result, size * 2);
+		auto target = StringVector::EmptyString(result, size * 8);
 		auto output = target.GetDataWriteable();
 
 		for (idx_t i = 0; i < size; ++i) {
@@ -304,7 +304,7 @@ struct FromBinaryOperator {
 		}
 
 		D_ASSERT(size <= NumericLimits<uint32_t>::Maximum());
-		auto buffer_size = (size + 1) / 8;
+		auto buffer_size = (size + 7) / 8;
 
 		// Allocate empty space
 		auto target = StringVector::EmptyString(result, buffer_size);
@@ -343,6 +343,9 @@ static void ToBinaryFunction(DataChunk &args, ExpressionState &state, Vector &re
 	idx_t count = args.size();
 
 	switch (input.GetType().InternalType()) {
+	case PhysicalType::VARCHAR:
+		UnaryExecutor::ExecuteString<string_t, string_t, BinaryStrOperator>(input, result, count);
+		break;
 	case PhysicalType::INT64:
 		UnaryExecutor::ExecuteString<int64_t, string_t, BinaryIntegralOperator>(input, result, count);
 		break;
@@ -403,10 +406,17 @@ void HexFun::RegisterFunction(BuiltinFunctions &set) {
 	to_binary.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::VARCHAR, ToBinaryFunction));
 	to_binary.AddFunction(ScalarFunction({LogicalType::UBIGINT}, LogicalType::VARCHAR, ToBinaryFunction));
 	to_binary.AddFunction(ScalarFunction({LogicalType::HUGEINT}, LogicalType::VARCHAR, ToBinaryFunction));
+	to_binary.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, ToBinaryFunction));
 
 	from_binary.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BLOB, FromBinaryFunction));
 
 	set.AddFunction(to_binary);
+	set.AddFunction(from_binary);
+
+	to_binary.name = "bin";
+	from_binary.name = "unbin";
+	set.AddFunction(to_binary);
+	set.AddFunction(from_binary);
 }
 
 } // namespace duckdb
