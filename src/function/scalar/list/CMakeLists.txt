@@ -8,6 +8,7 @@ add_library_unity(
   array_slice.cpp
   list_extract.cpp
   list_sort.cpp
+  list_reverse.cpp
   list_value.cpp
   range.cpp
   flatten.cpp)

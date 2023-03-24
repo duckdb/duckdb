@@ -18,6 +18,7 @@ void BuiltinFunctions::RegisterNestedFunctions() {
 	Register<ListValueFun>();
 	Register<ListExtractFun>();
 	Register<ListSortFun>();
+	Register<ListReverseFun>();
 	Register<ListRangeFun>();
 	Register<ListFlattenFun>();
 	Register<MapFun>();
