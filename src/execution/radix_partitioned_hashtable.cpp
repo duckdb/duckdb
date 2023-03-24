@@ -1,6 +1,7 @@
 #include "duckdb/execution/radix_partitioned_hashtable.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/parallel/event.hpp"
 
 namespace duckdb {

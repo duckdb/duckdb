@@ -291,7 +291,11 @@ void TransformDuckToArrowChunk(ArrowSchema &arrow_schema, ArrowArray &data, py::
 
 bool DuckDBPyResult::FetchArrowChunk(QueryResult *result, py::list &batches, idx_t rows_per_batch) {
 	ArrowArray data;
-	auto count = ArrowUtil::FetchChunk(result, rows_per_batch, &data);
+	idx_t count;
+	{
+		py::gil_scoped_release release;
+		count = ArrowUtil::FetchChunk(result, rows_per_batch, &data);
+	}
 	if (count == 0) {
 		return false;
 	}
