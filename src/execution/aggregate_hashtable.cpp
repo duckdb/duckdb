@@ -6,6 +6,7 @@
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/types/row/tuple_data_iterator.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -77,30 +78,8 @@ GroupedAggregateHashTable::~GroupedAggregateHashTable() {
 	Destroy();
 }
 
-template <class FUNC>
-void GroupedAggregateHashTable::PayloadApply(FUNC fun) {
-	if (Count() == 0) {
-		return;
-	}
-	idx_t apply_entries = Count();
-	idx_t page_nr = 0;
-	idx_t page_offset = 0;
-
-	for (auto &payload_chunk_ptr : payload_hds_ptrs) {
-		auto this_entries = MinValue(tuples_per_block, apply_entries);
-		page_offset = 0;
-		for (data_ptr_t ptr = payload_chunk_ptr, end = payload_chunk_ptr + this_entries * tuple_size; ptr < end;
-		     ptr += tuple_size) {
-			fun(page_nr, page_offset++, ptr);
-		}
-		apply_entries -= this_entries;
-		page_nr++;
-	}
-	D_ASSERT(apply_entries == 0);
-}
-
 void GroupedAggregateHashTable::Destroy() {
-	// check if there is a destructor
+	// Check if there is an aggregate with a destructor
 	bool has_destructor = false;
 	for (auto &aggr : layout.GetAggregates()) {
 		if (aggr.function.destructor) {
@@ -110,20 +89,13 @@ void GroupedAggregateHashTable::Destroy() {
 	if (!has_destructor) {
 		return;
 	}
-	// there are aggregates with destructors: loop over the hash table
-	// and call the destructor method for each of the aggregates
-	data_ptr_t data_pointers[STANDARD_VECTOR_SIZE];
-	Vector state_vector(LogicalType::POINTER, (data_ptr_t)data_pointers);
-	idx_t count = 0;
 
-	PayloadApply([&](idx_t page_nr, idx_t page_offset, data_ptr_t ptr) {
-		data_pointers[count++] = ptr;
-		if (count == STANDARD_VECTOR_SIZE) {
-			RowOperations::DestroyStates(layout, state_vector, count);
-			count = 0;
-		}
-	});
-	RowOperations::DestroyStates(layout, state_vector, count);
+	// There are aggregates with destructors: Call the destructor for each of the aggregates
+	TupleDataChunkIterator iterator(*data_collection, TupleDataPinProperties::ALREADY_PINNED, false);
+	auto &row_locations = iterator.GetChunkState().row_locations;
+	do {
+		RowOperations::DestroyStates(layout, row_locations, iterator.GetCount());
+	} while (iterator.Next());
 }
 
 template <class ENTRY>
@@ -187,16 +159,14 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 	Verify();
 
 	D_ASSERT(!is_finalized);
+	D_ASSERT(size >= STANDARD_VECTOR_SIZE);
+	D_ASSERT((size & (size - 1)) == 0); // size needs to be a power of 2
 
 	if (size <= capacity) {
 		throw InternalException("Cannot downsize a hash table!");
 	}
-	D_ASSERT(size >= STANDARD_VECTOR_SIZE);
 
-	// size needs to be a power of 2
-	D_ASSERT((size & (size - 1)) == 0);
 	bitmask = size - 1;
-
 	auto byte_size = size * sizeof(ENTRY);
 	if (byte_size > (idx_t)Storage::BLOCK_SIZE) {
 		hashes_hdl = buffer_manager.Allocate(byte_size);
@@ -206,26 +176,48 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 	hashes_end_ptr = hashes_hdl_ptr + byte_size;
 	capacity = size;
 
-	auto hashes_arr = (ENTRY *)hashes_hdl_ptr;
+	if (Count() != 0) {
+		D_ASSERT(!payload_hds_ptrs.empty());
 
-	PayloadApply([&](idx_t page_nr, idx_t page_offset, data_ptr_t ptr) {
-		auto hash = Load<hash_t>(ptr + hash_offset);
-		D_ASSERT((hash & bitmask) == (hash % capacity));
-		auto entry_idx = (idx_t)hash & bitmask;
-		while (hashes_arr[entry_idx].page_nr > 0) {
-			entry_idx++;
-			if (entry_idx >= capacity) {
-				entry_idx = 0;
+		auto hashes_arr = (ENTRY *)hashes_hdl_ptr;
+
+		idx_t block_id = 0;
+		auto block_pointer = payload_hds_ptrs[block_id];
+		auto block_end = block_pointer + tuples_per_block * tuple_size;
+
+		TupleDataChunkIterator iterator(*data_collection, TupleDataPinProperties::ALREADY_PINNED, false);
+		auto row_locations = iterator.GetRowLocations();
+		do {
+			for (idx_t i = 0; i < iterator.GetCount(); i++) {
+				const auto &row_location = row_locations[i];
+				if (row_location < block_pointer || row_location > block_end) {
+					block_id++;
+					block_pointer = payload_hds_ptrs[block_id];
+					block_end = block_pointer + tuples_per_block * tuple_size;
+				}
+				D_ASSERT(row_location >= block_pointer && row_location < block_end);
+				D_ASSERT((row_location - block_pointer) % tuple_size == 0);
+
+				const auto hash = Load<hash_t>(row_location + hash_offset);
+				D_ASSERT((hash & bitmask) == (hash % capacity));
+				D_ASSERT(hash >> hash_prefix_shift <= NumericLimits<uint16_t>::Maximum());
+
+				auto entry_idx = (idx_t)hash & bitmask;
+				while (hashes_arr[entry_idx].page_nr > 0) {
+					entry_idx++;
+					if (entry_idx >= capacity) {
+						entry_idx = 0;
+					}
+				}
+
+				auto &ht_entry = hashes_arr[entry_idx];
+				D_ASSERT(!ht_entry.page_nr);
+				ht_entry.salt = hash >> hash_prefix_shift;
+				ht_entry.page_nr = block_id + 1;
+				ht_entry.page_offset = (row_location - block_pointer) / tuple_size;
 			}
-		}
-
-		D_ASSERT(!hashes_arr[entry_idx].page_nr);
-		D_ASSERT(hash >> hash_prefix_shift <= NumericLimits<uint16_t>::Maximum());
-
-		hashes_arr[entry_idx].salt = hash >> hash_prefix_shift;
-		hashes_arr[entry_idx].page_nr = page_nr + 1;
-		hashes_arr[entry_idx].page_offset = page_offset;
-	});
+		} while (iterator.Next());
+	}
 
 	Verify();
 }
@@ -585,7 +577,6 @@ void GroupedAggregateHashTable::Partition(vector<GroupedAggregateHashTable *> &p
 }
 
 void GroupedAggregateHashTable::InitializeFirstPart() {
-	// TODO: not sure if resize does the job here
 	data_collection->GetBlockPointers(payload_hds_ptrs);
 	switch (entry_type) {
 	case HtEntryType::HT_WIDTH_64:
