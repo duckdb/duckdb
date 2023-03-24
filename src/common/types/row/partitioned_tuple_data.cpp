@@ -32,7 +32,8 @@ PartitionedTupleDataType PartitionedTupleData::GetType() const {
 	return type;
 }
 
-void PartitionedTupleData::InitializeAppendState(PartitionedTupleDataAppendState &state) const {
+void PartitionedTupleData::InitializeAppendState(PartitionedTupleDataAppendState &state,
+                                                 TupleDataPinProperties properties) const {
 	state.partition_sel.Initialize();
 
 	vector<column_t> column_ids;
@@ -41,7 +42,7 @@ void PartitionedTupleData::InitializeAppendState(PartitionedTupleDataAppendState
 		column_ids.emplace_back(col_idx);
 	}
 
-	InitializeAppendStateInternal(state);
+	InitializeAppendStateInternal(state, properties);
 }
 
 void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, DataChunk &input) {
@@ -197,6 +198,30 @@ void PartitionedTupleData::Combine(PartitionedTupleData &other) {
 	}
 }
 
+void PartitionedTupleData::Partition(TupleDataCollection &source) {
+	const auto count_before = source.Count();
+
+	PartitionedTupleDataAppendState append_state;
+	InitializeAppendState(append_state, TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
+
+	TupleDataChunkIterator iterator(source, TupleDataPinProperties::DESTROY_AFTER_DONE, true);
+	auto &chunk_state = iterator.GetChunkState();
+	do {
+		Append(append_state, chunk_state, iterator.GetCount());
+	} while (iterator.Next());
+
+	FlushAppendState(append_state);
+	source.Reset();
+
+#ifdef DEBUG
+	idx_t count_after = 0;
+	for (const auto &partition : partitions) {
+		count_after += partition->Count();
+	}
+	D_ASSERT(count_before == count_after);
+#endif
+}
+
 void PartitionedTupleData::Repartition(PartitionedTupleData &new_partitioned_data) {
 	D_ASSERT(layout.GetTypes() == new_partitioned_data.layout.GetTypes());
 
@@ -217,13 +242,12 @@ void PartitionedTupleData::Repartition(PartitionedTupleData &new_partitioned_dat
 			TupleDataChunkIterator iterator(partition, TupleDataPinProperties::DESTROY_AFTER_DONE, true);
 			auto &chunk_state = iterator.GetChunkState();
 			do {
-				auto count = iterator.GetCount();
-				new_partitioned_data.Append(append_state, chunk_state, count);
+				new_partitioned_data.Append(append_state, chunk_state, iterator.GetCount());
 			} while (iterator.Next());
 
 			RepartitionFinalizeStates(*this, new_partitioned_data, append_state, actual_partition_idx);
 		}
-		partitions[actual_partition_idx] = nullptr;
+		partitions[actual_partition_idx]->Reset();
 	}
 
 	new_partitioned_data.FlushAppendState(append_state);

@@ -37,8 +37,12 @@ Allocator &TupleDataAllocator::GetAllocator() {
 	return buffer_manager.GetBufferAllocator();
 }
 
-const TupleDataLayout &TupleDataAllocator::GetLayout() {
+const TupleDataLayout &TupleDataAllocator::GetLayout() const {
 	return layout;
+}
+
+idx_t TupleDataAllocator::RowBlockCount() const {
+	return row_blocks.size();
 }
 
 void TupleDataAllocator::Build(TupleDataSegment &segment, TupleDataPinState &pin_state,
@@ -236,6 +240,7 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataPinState &pin_sta
 				const auto old_heap_ptr = old_base_heap_ptr + part->heap_block_offset;
 				Vector old_heap_ptrs(Value::POINTER((uintptr_t)old_heap_ptr));
 				Vector new_heap_ptrs(Value::POINTER((uintptr_t)new_heap_ptr));
+				// TODO: recomputation can be done for multiple parts at once using the the old/new heap ptrs vectors
 				RecomputeHeapPointers(old_heap_ptrs, *ConstantVector::ZeroSelectionVector(), row_locations,
 				                      new_heap_ptrs, offset, next, layout, 0);
 				part->base_heap_ptr = base_heap_ptr;

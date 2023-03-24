@@ -1,7 +1,8 @@
 #include "duckdb/execution/radix_partitioned_hashtable.hpp"
-#include "duckdb/parallel/task_scheduler.hpp"
+
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/parallel/event.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 
 namespace duckdb {
 
@@ -326,7 +327,7 @@ public:
 	//! The current position to scan the HT for output tuples
 	idx_t ht_index;
 	//! The set of aggregate scan states
-	unique_ptr<AggregateHTScanState[]> ht_scan_states;
+	unique_ptr<TupleDataParallelScanState[]> ht_scan_states;
 	atomic<bool> initialized;
 	atomic<bool> finished;
 };
@@ -344,8 +345,12 @@ public:
 
 	//! Materialized GROUP BY expressions & aggregates
 	DataChunk scan_chunk;
+	//! HT index
+	idx_t ht_index = DConstants::INVALID_INDEX;
 	//! A reference to the current HT that we are scanning
 	shared_ptr<GroupedAggregateHashTable> ht;
+	//! Scan state for the current HT
+	TupleDataLocalScanState scan_state;
 };
 
 unique_ptr<GlobalSourceState> RadixPartitionedHashTable::GetGlobalSourceState(ClientContext &context) const {
@@ -364,7 +369,7 @@ idx_t RadixPartitionedHashTable::Size(GlobalSinkState &sink_state) const {
 
 	idx_t count = 0;
 	for (const auto &ht : gstate.finalized_hts) {
-		count += ht->Size();
+		count += ht->Count();
 	}
 	return count;
 }
@@ -417,16 +422,28 @@ void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &ch
 	idx_t elements_found = 0;
 
 	lstate.scan_chunk.Reset();
+	lstate.ht->GetDataCollection().FinalizePinState(lstate.scan_state.scan_state.pin_state);
 	lstate.ht.reset();
 	if (!state.initialized) {
 		lock_guard<mutex> l(state.lock);
-		if (!state.ht_scan_states) {
+		if (!state.initialized) {
+			auto &finalized_hts = gstate.finalized_hts;
 			state.ht_scan_states =
-			    unique_ptr<AggregateHTScanState[]>(new AggregateHTScanState[gstate.finalized_hts.size()]);
-		} else {
-			D_ASSERT(state.initialized);
+			    unique_ptr<TupleDataParallelScanState[]>(new TupleDataParallelScanState[finalized_hts.size()]);
+
+			const auto &layout = gstate.finalized_hts[0]->GetDataCollection().GetLayout();
+			vector<column_t> column_ids;
+			column_ids.reserve(layout.ColumnCount() - 1);
+			for (idx_t col_idx = 0; col_idx < layout.ColumnCount() - 1; col_idx++) {
+				column_ids.emplace_back(col_idx);
+			}
+
+			for (idx_t ht_idx = 0; ht_idx < finalized_hts.size(); ht_idx++) {
+				gstate.finalized_hts[ht_idx]->GetDataCollection().InitializeScan(
+				    state.ht_scan_states.get()[ht_idx].scan_state, column_ids);
+			}
+			state.initialized = true;
 		}
-		state.initialized = true;
 	}
 	while (true) {
 		idx_t ht_index;
@@ -439,13 +456,17 @@ void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &ch
 				return;
 			}
 			D_ASSERT(ht_index < gstate.finalized_hts.size());
+			if (lstate.ht_index != DConstants::INVALID_INDEX && ht_index != lstate.ht_index) {
+				lstate.ht->GetDataCollection().FinalizePinState(lstate.scan_state.scan_state.pin_state);
+			}
+			lstate.ht_index = ht_index;
 			lstate.ht = gstate.finalized_hts[ht_index];
 			D_ASSERT(lstate.ht);
 		}
 		D_ASSERT(state.ht_scan_states);
 		auto &scan_state = state.ht_scan_states[ht_index];
 		D_ASSERT(lstate.ht);
-		elements_found = lstate.ht->Scan(scan_state, lstate.scan_chunk);
+		elements_found = lstate.ht->Scan(scan_state, lstate.scan_state, lstate.scan_chunk);
 		if (elements_found > 0) {
 			break;
 		}

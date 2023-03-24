@@ -42,6 +42,7 @@ private:
 struct RadixPartitioning {
 public:
 	static idx_t NumberOfPartitions(idx_t radix_bits) {
+		D_ASSERT(radix_bits != 0);
 		return (idx_t)1 << radix_bits;
 	}
 
@@ -113,7 +114,8 @@ protected:
 	//===--------------------------------------------------------------------===//
 	// Radix Partitioning interface implementation
 	//===--------------------------------------------------------------------===//
-	void InitializeAppendStateInternal(PartitionedTupleDataAppendState &state) const override;
+	void InitializeAppendStateInternal(PartitionedTupleDataAppendState &state,
+	                                   TupleDataPinProperties properties) const override;
 	void ComputePartitionIndices(PartitionedTupleDataAppendState &state, DataChunk &input) override;
 	void ComputePartitionIndices(Vector &row_locations, idx_t count, Vector &partition_indices) const override;
 	bool RepartitionReverseOrder() const override {

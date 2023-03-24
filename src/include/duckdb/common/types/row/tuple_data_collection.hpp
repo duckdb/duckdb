@@ -62,6 +62,8 @@ public:
 	idx_t ChunkCount() const;
 	//! The size (in bytes) of the blocks held by this tuple data collection
 	idx_t SizeInBytes() const;
+	//! Get pointers to the pinned blocks
+	void GetBlockPointers(vector<data_ptr_t> &block_pointers) const;
 
 	//! Gets the scatter function for the given column index
 	static TupleDataScatterFunction GetScatterFunction(const LogicalType &type, bool within_list = false);
@@ -75,11 +77,11 @@ public:
 	void InitializeAppend(TupleDataAppendState &append_state, vector<column_t> column_ids,
 	                      TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE);
 	//! Initializes the Pin state of an Append state
-	//! - useful for optimizing many appends made to the same tuple data collection
+	//! - Useful for optimizing many appends made to the same tuple data collection
 	void InitializeAppend(TupleDataPinState &pin_state,
 	                      TupleDataPinProperties = TupleDataPinProperties::UNPIN_AFTER_DONE);
 	//! Initializes the Chunk state of an Append state
-	//! - useful for optimizing many appends made to the same tuple data collection
+	//! - Useful for optimizing many appends made to the same tuple data collection
 	void InitializeAppend(TupleDataChunkState &chunk_state, vector<column_t> column_ids);
 	//! Append a DataChunk directly to this TupleDataCollection - calls InitializeAppend and Append internally
 	void Append(DataChunk &new_chunk, const SelectionVector &append_sel = *FlatVector::IncrementalSelectionVector(),
@@ -87,18 +89,25 @@ public:
 	//! Append a DataChunk directly to this TupleDataCollection - calls InitializeAppend and Append internally
 	void Append(DataChunk &new_chunk, vector<column_t> column_ids,
 	            const SelectionVector &append_sel = *FlatVector::IncrementalSelectionVector(),
-	            idx_t append_count = DConstants::INVALID_INDEX);
+	            const idx_t append_count = DConstants::INVALID_INDEX);
 	//! Append a DataChunk to this TupleDataCollection using the specified append state
 	void Append(TupleDataAppendState &append_state, DataChunk &new_chunk,
 	            const SelectionVector &append_sel = *FlatVector::IncrementalSelectionVector(),
-	            idx_t append_count = DConstants::INVALID_INDEX);
+	            const idx_t append_count = DConstants::INVALID_INDEX);
 	//! Append a DataChunk to this TupleDataCollection using the specified pin and chunk states
 	void Append(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state, DataChunk &new_chunk,
 	            const SelectionVector &append_sel = *FlatVector::IncrementalSelectionVector(),
-	            idx_t append_count = DConstants::INVALID_INDEX);
+	            const idx_t append_count = DConstants::INVALID_INDEX);
+	//! Append a DataChunk to this TupleDataCollection using the specified pin and chunk states
+	//! - ToUnifiedFormat has already been called
+	void AppendUnified(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state, DataChunk &new_chunk,
+	                   const SelectionVector &append_sel = *FlatVector::IncrementalSelectionVector(),
+	                   const idx_t append_count = DConstants::INVALID_INDEX);
 
 	//! Creates a UnifiedVectorFormat in the given chunk state for the given DataChunk
 	static void ToUnifiedFormat(TupleDataChunkState &chunk_state, DataChunk &new_chunk);
+	//! Gets the UnifiedVectorFormat from the chunk state as an array
+	static unique_ptr<UnifiedVectorFormat[]> GetVectorData(TupleDataChunkState &chunk_state);
 	//! Computes the heap sizes for the new DataChunk that will be appended
 	static void ComputeHeapSizes(TupleDataChunkState &chunk_state, DataChunk &new_chunk,
 	                             const SelectionVector &append_sel, const idx_t append_count);
@@ -131,13 +140,17 @@ public:
 	//! Initializes a chunk with the correct types for a given scan state
 	void InitializeScanChunk(TupleDataScanState &state, DataChunk &chunk) const;
 	//! Initializes a Scan state for scanning all columns
-	void InitializeScan(TupleDataScanState &state) const;
+	void InitializeScan(TupleDataScanState &state,
+	                    TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE) const;
 	//! Initializes a Scan state for scanning a subset of the columns
-	void InitializeScan(TupleDataScanState &state, vector<column_t> column_ids) const;
-	//! Initialize a parallel scan over the column data collection over all columns
-	void InitializeScan(TupleDataParallelScanState &state) const;
-	//! Initialize a parallel scan over the column data collection over a subset of the columns
-	void InitializeScan(TupleDataParallelScanState &gstate, vector<column_t> column_ids) const;
+	void InitializeScan(TupleDataScanState &state, vector<column_t> column_ids,
+	                    TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE) const;
+	//! Initialize a parallel scan over the tuple data collection over all columns
+	void InitializeScan(TupleDataParallelScanState &state,
+	                    TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE) const;
+	//! Initialize a parallel scan over the tuple data collection over a subset of the columns
+	void InitializeScan(TupleDataParallelScanState &gstate, vector<column_t> column_ids,
+	                    TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE) const;
 	//! Scans a DataChunk from the TupleDataCollection
 	bool Scan(TupleDataScanState &state, DataChunk &result);
 	//! Scans a DataChunk from the TupleDataCollection

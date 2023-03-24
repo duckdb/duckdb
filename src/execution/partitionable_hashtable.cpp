@@ -156,7 +156,7 @@ void PartitionableHashTable::Partition() {
 			    context, allocator, group_types, payload_types, bindings, GetHTEntrySize()));
 			partition_hts[r] = radix_partitioned_hts[r].back().get();
 		}
-		unpartitioned_ht->Partition(partition_hts, partition_info.radix_mask, partition_info.RADIX_SHIFT);
+		unpartitioned_ht->Partition(partition_hts, partition_info.radix_bits);
 		unpartitioned_ht.reset();
 	}
 	unpartitioned_hts.clear();

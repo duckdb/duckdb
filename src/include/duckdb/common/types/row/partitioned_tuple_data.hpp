@@ -51,7 +51,8 @@ public:
 	//! Get the partitioning type of this PartitionedTupleData
 	PartitionedTupleDataType GetType() const;
 	//! Initializes a local state for parallel partitioning that can be merged into this PartitionedTupleData
-	void InitializeAppendState(PartitionedTupleDataAppendState &state) const;
+	void InitializeAppendState(PartitionedTupleDataAppendState &state,
+	                           TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE) const;
 	//! Appends a DataChunk to this PartitionedTupleData
 	void Append(PartitionedTupleDataAppendState &state, DataChunk &input);
 	//! Appends rows to this PartitionedTupleData
@@ -60,6 +61,8 @@ public:
 	void FlushAppendState(PartitionedTupleDataAppendState &state);
 	//! Combine another PartitionedTupleData into this PartitionedTupleData
 	void Combine(PartitionedTupleData &other);
+	//! Partition a TupleDataCollection
+	void Partition(TupleDataCollection &source);
 	//! Repartition this PartitionedTupleData into the new PartitionedTupleData
 	void Repartition(PartitionedTupleData &new_partitioned_data);
 	//! Get the partitions in this PartitionedTupleData
@@ -74,7 +77,8 @@ protected:
 	// Partitioning type implementation interface
 	//===--------------------------------------------------------------------===//
 	//! Initialize a PartitionedTupleDataAppendState for this type of partitioning (optional)
-	virtual void InitializeAppendStateInternal(PartitionedTupleDataAppendState &state) const {
+	virtual void InitializeAppendStateInternal(PartitionedTupleDataAppendState &state,
+	                                           TupleDataPinProperties properties) const {
 	}
 	//! Compute the partition indices for this type of partitioning for the input DataChunk and store them in the
 	//! `partition_data` of the local state. If this type creates partitions on the fly (for, e.g., hive), this

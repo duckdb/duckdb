@@ -3,9 +3,9 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/null_value.hpp"
-#include "duckdb/common/types/row/row_data_collection.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -37,22 +37,23 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
                                                      vector<AggregateObject> aggregate_objects_p,
                                                      HtEntryType entry_type)
     : BaseAggregateHashTable(context, allocator, aggregate_objects_p, std::move(payload_types_p)),
-      entry_type(entry_type), capacity(0), entries(0), payload_page_offset(0), is_finalized(false),
-      ht_offsets(LogicalTypeId::BIGINT), hash_salts(LogicalTypeId::SMALLINT),
-      group_compare_vector(STANDARD_VECTOR_SIZE), no_match_vector(STANDARD_VECTOR_SIZE),
-      empty_vector(STANDARD_VECTOR_SIZE) {
+      entry_type(entry_type), capacity(0), is_finalized(false), ht_offsets(LogicalTypeId::BIGINT),
+      hash_salts(LogicalTypeId::SMALLINT), group_compare_vector(STANDARD_VECTOR_SIZE),
+      no_match_vector(STANDARD_VECTOR_SIZE), empty_vector(STANDARD_VECTOR_SIZE) {
 
 	// Append hash column to the end and initialise the row layout
 	group_types_p.emplace_back(LogicalType::HASH);
 	layout.Initialize(std::move(group_types_p), std::move(aggregate_objects_p));
+	tuple_size = layout.GetRowWidth();
+	tuples_per_block = Storage::BLOCK_SIZE / tuple_size;
 
 	// HT layout
 	hash_offset = layout.GetOffsets()[layout.ColumnCount() - 1];
+	data_collection = make_unique<TupleDataCollection>(buffer_manager, layout);
+	data_collection->InitializeAppend(append_state, TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
 
-	tuple_size = layout.GetRowWidth();
+	empty_ht_entry_ptrs.reserve(STANDARD_VECTOR_SIZE);
 
-	D_ASSERT(tuple_size <= Storage::BLOCK_SIZE);
-	tuples_per_block = Storage::BLOCK_SIZE / tuple_size;
 	hashes_hdl = buffer_manager.Allocate(Storage::BLOCK_SIZE);
 	hashes_hdl_ptr = hashes_hdl.Ptr();
 
@@ -72,7 +73,6 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
 	}
 
 	predicates.resize(layout.ColumnCount() - 1, ExpressionType::COMPARE_EQUAL);
-	string_heap = make_unique<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 }
 
 GroupedAggregateHashTable::~GroupedAggregateHashTable() {
@@ -81,10 +81,10 @@ GroupedAggregateHashTable::~GroupedAggregateHashTable() {
 
 template <class FUNC>
 void GroupedAggregateHashTable::PayloadApply(FUNC fun) {
-	if (entries == 0) {
+	if (Count() == 0) {
 		return;
 	}
-	idx_t apply_entries = entries;
+	idx_t apply_entries = Count();
 	idx_t page_nr = 0;
 	idx_t page_offset = 0;
 
@@ -99,13 +99,6 @@ void GroupedAggregateHashTable::PayloadApply(FUNC fun) {
 		page_nr++;
 	}
 	D_ASSERT(apply_entries == 0);
-}
-
-void GroupedAggregateHashTable::NewBlock() {
-	auto pin = buffer_manager.Allocate(Storage::BLOCK_SIZE);
-	payload_hds.push_back(std::move(pin));
-	payload_hds_ptrs.push_back(payload_hds.back().Ptr());
-	payload_page_offset = 0;
 }
 
 void GroupedAggregateHashTable::Destroy() {
@@ -138,12 +131,11 @@ void GroupedAggregateHashTable::Destroy() {
 template <class ENTRY>
 void GroupedAggregateHashTable::VerifyInternal() {
 	auto hashes_ptr = (ENTRY *)hashes_hdl_ptr;
-	D_ASSERT(payload_hds.size() == payload_hds_ptrs.size());
 	idx_t count = 0;
 	for (idx_t i = 0; i < capacity; i++) {
 		if (hashes_ptr[i].page_nr > 0) {
 			D_ASSERT(hashes_ptr[i].page_offset < tuples_per_block);
-			D_ASSERT(hashes_ptr[i].page_nr <= payload_hds.size());
+			D_ASSERT(hashes_ptr[i].page_nr <= payload_hds_ptrs.size());
 			auto ptr = payload_hds_ptrs[hashes_ptr[i].page_nr - 1] + ((hashes_ptr[i].page_offset) * tuple_size);
 			auto hash = Load<hash_t>(ptr + hash_offset);
 			D_ASSERT((hashes_ptr[i].salt) == (hash >> hash_prefix_shift));
@@ -152,7 +144,7 @@ void GroupedAggregateHashTable::VerifyInternal() {
 		}
 	}
 	(void)count;
-	D_ASSERT(count == entries);
+	D_ASSERT(count == Count());
 }
 
 idx_t GroupedAggregateHashTable::GetMaxCapacity(HtEntryType entry_type, idx_t tuple_size) {
@@ -334,19 +326,19 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
                                                             SelectionVector &new_groups_out) {
 	D_ASSERT(!is_finalized);
 
-	if (entries + groups.size() > MaxCapacity()) {
+	if (Count() + groups.size() > MaxCapacity()) {
 		throw InternalException("Hash table capacity reached");
 	}
 
 	// resize at 50% capacity, also need to fit the entire vector
-	if (capacity - entries <= groups.size() || entries > capacity / LOAD_FACTOR) {
+	if (capacity - Count() <= groups.size() || Count() > capacity / LOAD_FACTOR) {
 		Resize<ENTRY>(capacity * 2);
 	}
 
-	D_ASSERT(capacity - entries >= groups.size());
+	D_ASSERT(capacity - Count() >= groups.size());
 	D_ASSERT(groups.ColumnCount() + 1 == layout.ColumnCount());
 	// we need to be able to fit at least one vector of data
-	D_ASSERT(capacity - entries >= groups.size());
+	D_ASSERT(capacity - Count() >= groups.size());
 	D_ASSERT(group_hashes.GetType() == LogicalType::HASH);
 
 	group_hashes.Flatten(groups.size());
@@ -387,7 +379,8 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	group_chunk.SetCardinality(groups);
 
 	// convert all vectors to unified format
-	auto group_data = group_chunk.ToUnifiedFormat();
+	TupleDataCollection::ToUnifiedFormat(append_state.chunk_state, group_chunk);
+	auto group_data = TupleDataCollection::GetVectorData(append_state.chunk_state);
 
 	idx_t new_group_count = 0;
 	while (remaining_entries > 0) {
@@ -396,60 +389,69 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		idx_t no_match_count = 0;
 
 		// first figure out for each remaining whether or not it belongs to a full or empty group
+		empty_ht_entry_ptrs.clear();
 		for (idx_t i = 0; i < remaining_entries; i++) {
 			const idx_t index = sel_vector->get_index(i);
 			const auto ht_entry_ptr = ((ENTRY *)this->hashes_hdl_ptr) + ht_offsets_ptr[index];
 			if (ht_entry_ptr->page_nr == 0) { // we use page number 0 as a "unused marker"
 				// cell is empty; setup the new entry
-				if (payload_page_offset == tuples_per_block || payload_hds.empty()) {
-					NewBlock();
-				}
-
-				auto entry_payload_ptr = payload_hds_ptrs.back() + (payload_page_offset * tuple_size);
+				empty_ht_entry_ptrs.push_back((data_ptr_t)ht_entry_ptr);
 
 				D_ASSERT(group_hashes_ptr[index] >> hash_prefix_shift <= NumericLimits<uint16_t>::Maximum());
-				D_ASSERT(payload_page_offset < tuples_per_block);
-				D_ASSERT(payload_hds.size() < NumericLimits<uint32_t>::Maximum());
-				D_ASSERT(payload_page_offset + 1 < NumericLimits<uint16_t>::Maximum());
+				D_ASSERT(payload_hds_ptrs.size() < NumericLimits<uint32_t>::Maximum());
 
 				ht_entry_ptr->salt = group_hashes_ptr[index] >> hash_prefix_shift;
 
-				// page numbers start at one so we can use 0 as empty flag
-				// GetPtr undoes this
-				ht_entry_ptr->page_nr = payload_hds.size();
-				ht_entry_ptr->page_offset = payload_page_offset++;
+				// page numbers start at one so we can use 0 as empty flag, GetPtr undoes this
+				ht_entry_ptr->page_nr = 1; // Set to 1 for now - will be corrected later
 
 				// update selection lists for outer loops
 				empty_vector.set_index(new_entry_count++, index);
 				new_groups_out.set_index(new_group_count++, index);
-				entries++;
-
-				addresses_ptr[index] = entry_payload_ptr;
-
 			} else {
 				// cell is occupied: add to check list
 				// only need to check if hash salt in ptr == prefix of hash in payload
 				if (ht_entry_ptr->salt == hash_salts_ptr[index]) {
 					group_compare_vector.set_index(need_compare_count++, index);
-
 					auto page_ptr = payload_hds_ptrs[ht_entry_ptr->page_nr - 1];
 					auto page_offset = ht_entry_ptr->page_offset * tuple_size;
 					addresses_ptr[index] = page_ptr + page_offset;
-
 				} else {
 					no_match_vector.set_index(no_match_count++, index);
 				}
 			}
 		}
 
-		// for each of the locations that are empty, serialize the group columns to the locations
-		throw NotImplementedException(
-		    "Use TupleDataCollection::Scatter in GroupedAggregateHashTable::FindOrCreateGroupsInternal");
-		//		RowOperations::Scatter(group_chunk, group_data.get(), layout, addresses, *string_heap, empty_vector,
-		//		                       new_entry_count);
-		RowOperations::InitializeStates(layout, addresses, empty_vector, new_entry_count);
+		if (new_entry_count != 0) {
+			// for each of the locations that are empty, serialize the group columns to the locations
+			data_collection->AppendUnified(append_state.pin_state, append_state.chunk_state, group_chunk, empty_vector,
+			                               new_entry_count);
+			RowOperations::InitializeStates(layout, append_state.chunk_state.row_locations,
+			                                *FlatVector::IncrementalSelectionVector(), new_entry_count);
+			{
 
-		// now we have only the tuples remaining that might match to an existing group
+				D_ASSERT(empty_ht_entry_ptrs.size() == new_entry_count);
+				const auto row_locations = FlatVector::GetData<data_ptr_t>(append_state.chunk_state.row_locations);
+				idx_t block_id = payload_hds_ptrs.size() - 1;
+				UpdateBlockPointers();
+				auto block_pointer = payload_hds_ptrs[block_id];
+				auto block_end = block_pointer + tuples_per_block * tuple_size;
+				for (idx_t append_i = 0; append_i < new_entry_count; append_i++) {
+					const auto &row_location = row_locations[append_i];
+					if (row_location < block_pointer || row_location > block_end) {
+						block_id++;
+						block_pointer = payload_hds_ptrs[block_id];
+						block_end = block_pointer + tuples_per_block * tuple_size;
+					}
+					D_ASSERT(row_location >= block_pointer && row_location < block_end);
+					auto empty_ht_entry = (ENTRY *)empty_ht_entry_ptrs[append_i];
+					empty_ht_entry->page_nr = block_id + 1;
+					empty_ht_entry->page_offset = (row_location - block_pointer) / tuple_size;
+				}
+			}
+		}
+
+		// now we have only the tuples remaining that might match to an existing group,
 		// start performing comparisons with each of the groups
 		RowOperations::Match(group_chunk, group_data.get(), layout, addresses, predicates, group_compare_vector,
 		                     need_compare_count, &no_match_vector, no_match_count);
@@ -467,6 +469,17 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	}
 
 	return new_group_count;
+}
+
+void GroupedAggregateHashTable::UpdateBlockPointers() {
+	for (const auto &id_and_handle : append_state.pin_state.row_handles) {
+		const auto &id = id_and_handle.first;
+		const auto &handle = id_and_handle.second;
+		if (id > payload_hds_ptrs.size() - 1) {
+			payload_hds_ptrs.resize(id + 1);
+		}
+		payload_hds_ptrs[id] = handle.Ptr();
+	}
 }
 
 // this is to support distinct aggregations where we need to record whether we
@@ -497,36 +510,46 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &a
 }
 
 struct FlushMoveState {
-	FlushMoveState(Allocator &allocator, TupleDataLayout &layout)
-	    : new_groups(STANDARD_VECTOR_SIZE), group_addresses(LogicalType::POINTER),
-	      new_groups_sel(STANDARD_VECTOR_SIZE) {
-		vector<LogicalType> group_types(layout.GetTypes().begin(), layout.GetTypes().end() - 1);
-		groups.Initialize(allocator, group_types);
+	FlushMoveState(TupleDataCollection &collection_p)
+	    : collection(collection_p), hashes(LogicalType::HASH), new_groups(STANDARD_VECTOR_SIZE),
+	      group_addresses(LogicalType::POINTER), new_groups_sel(STANDARD_VECTOR_SIZE) {
+		const auto &layout = collection.GetLayout();
+		vector<column_t> column_ids;
+		column_ids.reserve(layout.ColumnCount() - 2);
+		for (idx_t col_idx = 0; col_idx < layout.ColumnCount() - 2; col_idx++) {
+			column_ids.emplace_back(col_idx);
+		}
+		collection.InitializeScan(scan_state, column_ids, TupleDataPinProperties::DESTROY_AFTER_DONE);
+		collection.InitializeScanChunk(scan_state, groups);
+		hash_col_idx = layout.ColumnCount() - 1;
 	}
 
+	bool Scan();
+
+	TupleDataCollection &collection;
+	TupleDataScanState scan_state;
 	DataChunk groups;
+	idx_t hash_col_idx;
+	Vector hashes;
+
 	SelectionVector new_groups;
 	Vector group_addresses;
 	SelectionVector new_groups_sel;
 };
 
-void GroupedAggregateHashTable::FlushMove(FlushMoveState &state, Vector &source_addresses, Vector &source_hashes,
-                                          idx_t count) {
-	D_ASSERT(source_addresses.GetType() == LogicalType::POINTER);
-	D_ASSERT(source_hashes.GetType() == LogicalType::HASH);
-
-	state.groups.Reset();
-	state.groups.SetCardinality(count);
-	for (idx_t col_no = 0; col_no < state.groups.ColumnCount(); col_no++) {
-		auto &column = state.groups.data[col_no];
-		throw NotImplementedException("Use TupleDataCollection::Gather in GroupedAggregateHashTable::FlushMove");
-		//		RowOperations::Gather(source_addresses, *FlatVector::IncrementalSelectionVector(), column,
-		//		                      *FlatVector::IncrementalSelectionVector(), count, layout, col_no);
+bool FlushMoveState::Scan() {
+	if (collection.Scan(scan_state, groups)) {
+		collection.Gather(scan_state.chunk_state.row_locations, *FlatVector::IncrementalSelectionVector(),
+		                  groups.size(), hash_col_idx, hashes, *FlatVector::IncrementalSelectionVector());
 	}
+	collection.FinalizePinState(scan_state.pin_state);
+	return false;
+}
 
-	FindOrCreateGroups(state.groups, source_hashes, state.group_addresses, state.new_groups_sel);
-
-	RowOperations::CombineStates(layout, source_addresses, state.group_addresses, count);
+void GroupedAggregateHashTable::FlushMove(FlushMoveState &state) {
+	FindOrCreateGroups(state.groups, state.hashes, state.group_addresses, state.new_groups_sel);
+	RowOperations::CombineStates(layout, state.scan_state.chunk_state.row_locations, state.group_addresses,
+	                             state.groups.size());
 }
 
 void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
@@ -535,127 +558,60 @@ void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
 	D_ASSERT(other.layout.GetAggrWidth() == layout.GetAggrWidth());
 	D_ASSERT(other.layout.GetDataWidth() == layout.GetDataWidth());
 	D_ASSERT(other.layout.GetRowWidth() == layout.GetRowWidth());
-	D_ASSERT(other.tuples_per_block == tuples_per_block);
 
-	if (other.entries == 0) {
+	if (other.Count() == 0) {
 		return;
 	}
 
-	Vector addresses(LogicalType::POINTER);
-	auto addresses_ptr = FlatVector::GetData<data_ptr_t>(addresses);
+	FlushMoveState state(*other.data_collection);
+	while (state.Scan()) {
+		FlushMove(state);
+	}
 
-	Vector hashes(LogicalType::HASH);
-	auto hashes_ptr = FlatVector::GetData<hash_t>(hashes);
-
-	idx_t group_idx = 0;
-
-	FlushMoveState state(allocator, layout);
-	other.PayloadApply([&](idx_t page_nr, idx_t page_offset, data_ptr_t ptr) {
-		auto hash = Load<hash_t>(ptr + hash_offset);
-
-		hashes_ptr[group_idx] = hash;
-		addresses_ptr[group_idx] = ptr;
-		group_idx++;
-		if (group_idx == STANDARD_VECTOR_SIZE) {
-			FlushMove(state, addresses, hashes, group_idx);
-			group_idx = 0;
-		}
-	});
-	FlushMove(state, addresses, hashes, group_idx);
-	string_heap->Merge(*other.string_heap);
 	Verify();
 }
 
-struct PartitionInfo {
-	PartitionInfo() : addresses(LogicalType::POINTER), hashes(LogicalType::HASH), group_count(0) {
-		addresses_ptr = FlatVector::GetData<data_ptr_t>(addresses);
-		hashes_ptr = FlatVector::GetData<hash_t>(hashes);
-	};
-	Vector addresses;
-	Vector hashes;
-	idx_t group_count;
-	data_ptr_t *addresses_ptr;
-	hash_t *hashes_ptr;
-};
+void GroupedAggregateHashTable::Partition(vector<GroupedAggregateHashTable *> &partition_hts, idx_t radix_bits) {
+	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
+	D_ASSERT(partition_hts.size() == num_partitions);
 
-void GroupedAggregateHashTable::Partition(vector<GroupedAggregateHashTable *> &partition_hts, hash_t mask,
-                                          idx_t shift) {
-	D_ASSERT(partition_hts.size() > 1);
-	vector<PartitionInfo> partition_info(partition_hts.size());
+	// Partition the data
+	auto partitioned_data =
+	    make_unique<RadixPartitionedTupleData>(buffer_manager, layout, radix_bits, layout.ColumnCount() - 1);
+	partitioned_data->Partition(*data_collection);
+	D_ASSERT(partitioned_data->GetPartitions().size() == num_partitions);
 
-	FlushMoveState state(allocator, layout);
-	PayloadApply([&](idx_t page_nr, idx_t page_offset, data_ptr_t ptr) {
-		auto hash = Load<hash_t>(ptr + hash_offset);
-
-		idx_t partition = (hash & mask) >> shift;
-		D_ASSERT(partition < partition_hts.size());
-
-		auto &info = partition_info[partition];
-
-		info.hashes_ptr[info.group_count] = hash;
-		info.addresses_ptr[info.group_count] = ptr;
-		info.group_count++;
-		if (info.group_count == STANDARD_VECTOR_SIZE) {
-			D_ASSERT(partition_hts[partition]);
-			partition_hts[partition]->FlushMove(state, info.addresses, info.hashes, info.group_count);
-			info.group_count = 0;
-		}
-	});
-
-	idx_t info_idx = 0;
-	idx_t total_count = 0;
-	for (auto &partition_entry : partition_hts) {
-		auto &info = partition_info[info_idx++];
-		partition_entry->FlushMove(state, info.addresses, info.hashes, info.group_count);
-
-		partition_entry->string_heap->Merge(*string_heap);
-		partition_entry->Verify();
-		total_count += partition_entry->Size();
+	// Move the partitioned data collections to the partitioned hash tables and initialize the 1st part of the HT
+	auto &partitions = partitioned_data->GetPartitions();
+	for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
+		auto &partition_ht = *partition_hts[partition_idx];
+		partition_ht.data_collection = std::move(partitions[partition_idx]);
+		partition_ht.InitializeFirstPart();
 	}
-	(void)total_count;
-	D_ASSERT(total_count == entries);
 }
 
-idx_t GroupedAggregateHashTable::Scan(AggregateHTScanState &scan_state, DataChunk &result) {
-	idx_t this_n;
-	Vector addresses(LogicalType::POINTER);
-	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
-	{
-		lock_guard<mutex> l(scan_state.lock);
-		if (scan_state.scan_position >= entries) {
-			return 0;
-		}
-		auto remaining = entries - scan_state.scan_position;
-		this_n = MinValue((idx_t)STANDARD_VECTOR_SIZE, remaining);
-
-		auto chunk_idx = scan_state.scan_position / tuples_per_block;
-		auto chunk_offset = (scan_state.scan_position % tuples_per_block) * tuple_size;
-		D_ASSERT(chunk_offset + tuple_size <= Storage::BLOCK_SIZE);
-
-		auto read_ptr = payload_hds_ptrs[chunk_idx++];
-		for (idx_t i = 0; i < this_n; i++) {
-			data_pointers[i] = read_ptr + chunk_offset;
-			chunk_offset += tuple_size;
-			if (chunk_offset >= tuples_per_block * tuple_size) {
-				read_ptr = payload_hds_ptrs[chunk_idx++];
-				chunk_offset = 0;
-			}
-		}
-		scan_state.scan_position += this_n;
+void GroupedAggregateHashTable::InitializeFirstPart() {
+	data_collection->GetBlockPointers(payload_hds_ptrs);
+	switch (entry_type) {
+	case HtEntryType::HT_WIDTH_64:
+		Resize<aggr_ht_entry_64>(Count() * 2L);
+		break;
+	case HtEntryType::HT_WIDTH_32:
+		Resize<aggr_ht_entry_32>(Count() * 2L);
+		break;
+	default:
+		throw InternalException("Unknown HT entry width");
 	}
+}
 
-	result.SetCardinality(this_n);
-	// fetch the group columns (ignoring the final hash column
+idx_t GroupedAggregateHashTable::Scan(TupleDataParallelScanState &gstate, TupleDataLocalScanState &lstate,
+                                      DataChunk &result) {
+	data_collection->Scan(gstate, lstate, result);
+
 	const auto group_cols = layout.ColumnCount() - 1;
-	for (idx_t col_no = 0; col_no < group_cols; col_no++) {
-		auto &column = result.data[col_no];
-		throw NotImplementedException("Need to use TupleDataCollection::Gather in GroupedAggregateHashTable::Scan");
-		//		RowOperations::Gather(addresses, *FlatVector::IncrementalSelectionVector(), column,
-		//		                      *FlatVector::IncrementalSelectionVector(), result.size(), layout, col_no);
-	}
+	RowOperations::FinalizeStates(layout, lstate.scan_state.chunk_state.row_locations, result, group_cols);
 
-	RowOperations::FinalizeStates(layout, addresses, result, group_cols);
-	return this_n;
+	return result.size();
 }
 
 void GroupedAggregateHashTable::Finalize() {

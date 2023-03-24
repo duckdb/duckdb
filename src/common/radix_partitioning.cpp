@@ -147,13 +147,14 @@ void RadixPartitionedTupleData::Initialize() {
 	}
 }
 
-void RadixPartitionedTupleData::InitializeAppendStateInternal(PartitionedTupleDataAppendState &state) const {
+void RadixPartitionedTupleData::InitializeAppendStateInternal(PartitionedTupleDataAppendState &state,
+                                                              TupleDataPinProperties properties) const {
 	// Init pin state per partition
 	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
 	state.partition_pin_states.reserve(num_partitions);
 	for (idx_t i = 0; i < num_partitions; i++) {
 		state.partition_pin_states.emplace_back(make_unique<TupleDataPinState>());
-		partitions[i]->InitializeAppend(*state.partition_pin_states[i], TupleDataPinProperties::UNPIN_AFTER_DONE);
+		partitions[i]->InitializeAppend(*state.partition_pin_states[i], properties);
 	}
 
 	// Init single chunk state
