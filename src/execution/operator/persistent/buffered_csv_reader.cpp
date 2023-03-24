@@ -419,6 +419,7 @@ void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types
 	}
 
 	idx_t best_consistent_rows = 0;
+	idx_t prev_padding_count = 0;
 	for (auto quoterule : quoterule_candidates) {
 		const auto &quote_candidates = quote_candidates_map[static_cast<uint8_t>(quoterule)];
 		for (const auto &quote : quote_candidates) {
@@ -441,20 +442,29 @@ void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types
 
 					idx_t start_row = original_options.skip_rows;
 					idx_t consistent_rows = 0;
-					idx_t num_cols = 0;
-
+					idx_t num_cols = sniffed_column_counts.empty() ? 0 : sniffed_column_counts[0];
+					idx_t padding_count = 0;
+					bool allow_padding = original_options.null_padding;
 					for (idx_t row = 0; row < sniffed_column_counts.size(); row++) {
 						if (sniffed_column_counts[row] == num_cols) {
 							consistent_rows++;
-						} else {
+						} else if (num_cols < sniffed_column_counts[row] && !original_options.skip_rows_set) {
+							// we use the maximum amount of num_cols that we find
 							num_cols = sniffed_column_counts[row];
 							start_row = row + original_options.skip_rows;
 							consistent_rows = 1;
+							padding_count = 0;
+						} else if (num_cols >= sniffed_column_counts[row] && allow_padding) {
+							// we are missing some columns, we can parse this as long as we add padding
+							padding_count++;
 						}
 					}
 
 					// some logic
+					consistent_rows += padding_count;
 					bool more_values = (consistent_rows > best_consistent_rows && num_cols >= best_num_cols);
+					bool require_more_padding = padding_count > prev_padding_count;
+					bool require_less_padding = padding_count < prev_padding_count;
 					bool single_column_before = best_num_cols < 2 && num_cols > best_num_cols;
 					bool rows_consistent =
 					    start_row + consistent_rows - original_options.skip_rows == sniffed_column_counts.size();
@@ -464,16 +474,19 @@ void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types
 
 					if (!requested_types.empty() && requested_types.size() != num_cols) {
 						continue;
-					} else if ((more_values || single_column_before) && rows_consistent) {
+					} else if (rows_consistent && (single_column_before || (more_values && !require_more_padding) ||
+					                               (more_than_one_column && require_less_padding))) {
 						sniff_info.skip_rows = start_row;
 						sniff_info.num_cols = num_cols;
 						sniff_info.new_line = options.new_line;
 						best_consistent_rows = consistent_rows;
 						best_num_cols = num_cols;
+						prev_padding_count = padding_count;
 
 						info_candidates.clear();
 						info_candidates.push_back(sniff_info);
-					} else if (more_than_one_row && more_than_one_column && start_good && rows_consistent) {
+					} else if (more_than_one_row && more_than_one_column && start_good && rows_consistent &&
+					           !require_more_padding) {
 						bool same_quote_is_candidate = false;
 						for (auto &info_candidate : info_candidates) {
 							if (quote.compare(info_candidate.quote) == 0) {

@@ -861,6 +861,7 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["buffer_size"] = LogicalType::UBIGINT;
 	table_function.named_parameters["decimal_separator"] = LogicalType::VARCHAR;
 	table_function.named_parameters["parallel"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["null_padding"] = LogicalType::BOOLEAN;
 }
 
 double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p,
@@ -928,6 +929,7 @@ void BufferedCSVReaderOptions::Serialize(FieldWriter &writer) const {
 	// read options
 	writer.WriteList<string>(names);
 	writer.WriteField<idx_t>(skip_rows);
+	writer.WriteField<bool>(skip_rows_set);
 	writer.WriteField<idx_t>(maximum_line_size);
 	writer.WriteField<bool>(normalize_names);
 	writer.WriteListNoReference<bool>(force_not_null);
@@ -939,6 +941,7 @@ void BufferedCSVReaderOptions::Serialize(FieldWriter &writer) const {
 	writer.WriteField<bool>(include_file_name);
 	writer.WriteField<bool>(include_parsed_hive_partitions);
 	writer.WriteString(decimal_separator);
+	writer.WriteField<bool>(null_padding);
 	// write options
 	writer.WriteListNoReference<bool>(force_quote);
 }
@@ -961,6 +964,7 @@ void BufferedCSVReaderOptions::Deserialize(FieldReader &reader) {
 	// read options
 	names = reader.ReadRequiredList<string>();
 	skip_rows = reader.ReadRequired<idx_t>();
+	skip_rows_set = reader.ReadRequired<bool>();
 	maximum_line_size = reader.ReadRequired<idx_t>();
 	normalize_names = reader.ReadRequired<bool>();
 	force_not_null = reader.ReadRequiredList<bool>();
@@ -972,6 +976,7 @@ void BufferedCSVReaderOptions::Deserialize(FieldReader &reader) {
 	include_file_name = reader.ReadRequired<bool>();
 	include_parsed_hive_partitions = reader.ReadRequired<bool>();
 	decimal_separator = reader.ReadRequired<string>();
+	null_padding = reader.ReadRequired<bool>();
 	// write options
 	force_quote = reader.ReadRequiredList<bool>();
 }
