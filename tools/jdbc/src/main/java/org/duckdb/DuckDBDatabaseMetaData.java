@@ -1081,7 +1081,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public boolean supportsResultSetHoldability(int holdability) throws SQLException {
-		throw new SQLFeatureNotSupportedException("supportsResultSetHoldability");
+                return false;
 	}
 
 	@Override
