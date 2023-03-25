@@ -136,17 +136,13 @@ void Vector::Slice(Vector &other, idx_t offset, idx_t end) {
 		for (idx_t i = 0; i < entries.size(); i++) {
 			entries[i]->Slice(*other_entries[i], offset, end);
 		}
-		if (offset > 0) {
-			new_vector.validity.Slice(other.validity, offset, end);
-		} else {
-			new_vector.validity = other.validity;
-		}
+		new_vector.validity.Slice(other.validity, offset, end - offset);
 		Reference(new_vector);
 	} else {
 		Reference(other);
 		if (offset > 0) {
 			data = data + GetTypeIdSize(internal_type) * offset;
-			validity.Slice(other.validity, offset, end);
+			validity.Slice(other.validity, offset, end - offset);
 		}
 	}
 }
