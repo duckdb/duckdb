@@ -8,7 +8,9 @@ using namespace duckdb;
 // INSERT //
 //////////////
 #define APPEND_BENCHMARK_INSERT(CREATE_STATEMENT, AUTO_COMMIT)                                                         \
-	void Load(DuckDBBenchmarkState *state) override { state->conn.Query(CREATE_STATEMENT); }                           \
+	void Load(DuckDBBenchmarkState *state) override {                                                                  \
+		state->conn.Query(CREATE_STATEMENT);                                                                           \
+	}                                                                                                                  \
 	void RunBenchmark(DuckDBBenchmarkState *state) override {                                                          \
 		if (!AUTO_COMMIT)                                                                                              \
 			state->conn.Query("BEGIN TRANSACTION");                                                                    \
@@ -22,7 +24,9 @@ using namespace duckdb;
 		state->conn.Query("DROP TABLE integers");                                                                      \
 		Load(state);                                                                                                   \
 	}                                                                                                                  \
-	string VerifyResult(QueryResult *result) override { return string(); }                                             \
+	string VerifyResult(QueryResult *result) override {                                                                \
+		return string();                                                                                               \
+	}                                                                                                                  \
 	string BenchmarkInfo() override {                                                                                  \
 		return "Append 100K 4-byte integers to a table using a series of INSERT INTO statements";                      \
 	}
@@ -80,7 +84,9 @@ struct DuckDBPreparedState : public DuckDBBenchmarkState {
 		state->conn.Query("DROP TABLE integers");                                                                      \
 		Load(state);                                                                                                   \
 	}                                                                                                                  \
-	string VerifyResult(QueryResult *result) override { return string(); }                                             \
+	string VerifyResult(QueryResult *result) override {                                                                \
+		return string();                                                                                               \
+	}                                                                                                                  \
 	string BenchmarkInfo() override {                                                                                  \
 		return "Append 100K 4-byte integers to a table using a series of prepared INSERT INTO statements";             \
 	}
@@ -104,7 +110,9 @@ FINISH_BENCHMARK(Append100KIntegersPREPAREDPrimary)
 // APPENDER //
 //////////////
 #define APPEND_BENCHMARK_APPENDER(CREATE_STATEMENT)                                                                    \
-	void Load(DuckDBBenchmarkState *state) override { state->conn.Query(CREATE_STATEMENT); }                           \
+	void Load(DuckDBBenchmarkState *state) override {                                                                  \
+		state->conn.Query(CREATE_STATEMENT);                                                                           \
+	}                                                                                                                  \
 	void RunBenchmark(DuckDBBenchmarkState *state) override {                                                          \
 		state->conn.Query("BEGIN TRANSACTION");                                                                        \
 		Appender appender(state->conn, "integers");                                                                    \
@@ -120,8 +128,12 @@ FINISH_BENCHMARK(Append100KIntegersPREPAREDPrimary)
 		state->conn.Query("DROP TABLE integers");                                                                      \
 		Load(state);                                                                                                   \
 	}                                                                                                                  \
-	string VerifyResult(QueryResult *result) override { return string(); }                                             \
-	string BenchmarkInfo() override { return "Append 100K 4-byte integers to a table using an Appender"; }
+	string VerifyResult(QueryResult *result) override {                                                                \
+		return string();                                                                                               \
+	}                                                                                                                  \
+	string BenchmarkInfo() override {                                                                                  \
+		return "Append 100K 4-byte integers to a table using an Appender";                                             \
+	}
 
 DUCKDB_BENCHMARK(Append100KIntegersAPPENDER, "[append]")
 APPEND_BENCHMARK_APPENDER("CREATE TABLE integers(i INTEGER)")
@@ -155,13 +167,19 @@ FINISH_BENCHMARK(Append100KIntegersAPPENDERPrimary)
 		state->conn.Query("DROP TABLE integers");                                                                      \
 		state->conn.Query(CREATE_STATEMENT);                                                                           \
 	}                                                                                                                  \
-	string GetQuery() override { return "COPY integers FROM 'integers.csv' DELIMITER '|'"; }                           \
+	string GetQuery() override {                                                                                       \
+		return "COPY integers FROM 'integers.csv' DELIMITER '|'";                                                      \
+	}                                                                                                                  \
 	void Cleanup(DuckDBBenchmarkState *state) override {                                                               \
 		state->conn.Query("DROP TABLE integers");                                                                      \
 		state->conn.Query(CREATE_STATEMENT);                                                                           \
 	}                                                                                                                  \
-	string VerifyResult(QueryResult *result) override { return string(); }                                             \
-	string BenchmarkInfo() override { return "Append 100K 4-byte integers to a table using the COPY INTO statement"; }
+	string VerifyResult(QueryResult *result) override {                                                                \
+		return string();                                                                                               \
+	}                                                                                                                  \
+	string BenchmarkInfo() override {                                                                                  \
+		return "Append 100K 4-byte integers to a table using the COPY INTO statement";                                 \
+	}
 
 DUCKDB_BENCHMARK(Append100KIntegersCOPY, "[append]")
 APPEND_BENCHMARK_COPY("CREATE TABLE integers(i INTEGER)")
