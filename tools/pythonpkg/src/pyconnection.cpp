@@ -317,10 +317,11 @@ scalar_function_t CreateScalarUDF(PyObject *function) {
 			}
 
 			// Call the function
-			auto ret = PyObject_CallObject(function, bundled_parameters.ptr());
-			if (!ret) {
-				// likely exception occurred
-				PyErr_PrintEx(1);
+			PyObject *ret = nullptr;
+			ret = PyObject_CallObject(function, bundled_parameters.ptr());
+			if (ret == nullptr && PyErr_Occurred()) {
+				auto exception = py::error_already_set();
+				throw InvalidInputException("Python exception occurred while executing the UDF: %s", exception.what());
 			}
 			python_objects.push_back(py::handle(ret));
 			python_results.push_back(ret);
