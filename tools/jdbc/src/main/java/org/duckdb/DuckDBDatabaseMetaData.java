@@ -1029,7 +1029,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public boolean supportsBatchUpdates() throws SQLException {
-		throw new SQLFeatureNotSupportedException("supportsBatchUpdates");
+                return false;
 	}
 
 	@Override
