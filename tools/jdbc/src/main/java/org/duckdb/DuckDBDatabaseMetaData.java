@@ -1131,7 +1131,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public boolean supportsStoredFunctionsUsingCallSyntax() throws SQLException {
-		throw new SQLFeatureNotSupportedException("supportsStoredFunctionsUsingCallSyntax");
+                return false;
 	}
 
 	@Override
