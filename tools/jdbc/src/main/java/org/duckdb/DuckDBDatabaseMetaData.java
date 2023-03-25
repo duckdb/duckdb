@@ -383,7 +383,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public boolean supportsSchemasInPrivilegeDefinitions() throws SQLException {
-		throw new SQLFeatureNotSupportedException("supportsSchemasInPrivilegeDefinitions");
+                return false;
 	}
 
 	@Override
