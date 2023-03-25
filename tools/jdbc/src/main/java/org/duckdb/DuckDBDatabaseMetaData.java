@@ -228,7 +228,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public boolean supportsConvert(int fromType, int toType) throws SQLException {
-		throw new SQLFeatureNotSupportedException("supportsConvert");
+		return false;
 	}
 
 	@Override
