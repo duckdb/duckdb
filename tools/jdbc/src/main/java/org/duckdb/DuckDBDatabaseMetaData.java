@@ -233,12 +233,12 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public boolean supportsTableCorrelationNames() throws SQLException {
-		throw new SQLFeatureNotSupportedException("supportsTableCorrelationNames");
+		return true;
 	}
 
 	@Override
 	public boolean supportsDifferentTableCorrelationNames() throws SQLException {
-		throw new SQLFeatureNotSupportedException("supportsDifferentTableCorrelationNames");
+		return false;
 	}
 
 	@Override
