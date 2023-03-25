@@ -318,6 +318,10 @@ scalar_function_t CreateScalarUDF(PyObject *function) {
 
 			// Call the function
 			auto ret = PyObject_CallObject(function, bundled_parameters.ptr());
+			if (!ret) {
+				// likely exception occurred
+				PyErr_PrintEx(1);
+			}
 			python_objects.push_back(py::handle(ret));
 			python_results.push_back(ret);
 		}
