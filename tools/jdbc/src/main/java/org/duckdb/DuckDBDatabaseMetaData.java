@@ -1121,7 +1121,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public boolean supportsStatementPooling() throws SQLException {
-		throw new SQLFeatureNotSupportedException("supportsStatementPooling");
+                return false;
 	}
 
 	@Override
