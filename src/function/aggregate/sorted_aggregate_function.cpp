@@ -82,7 +82,7 @@ struct SortedAggregateState {
 	//! Default buffer size, optimised for small group to avoid blowing out memory.
 	static const idx_t BUFFER_CAPACITY = 16;
 
-	SortedAggregateState() : nsel(0) {
+	SortedAggregateState() : nsel(0), offset(0) {
 	}
 
 	static inline void InitializeBuffer(DataChunk &chunk, const vector<LogicalType> &types) {
@@ -169,6 +169,7 @@ struct SortedAggregateState {
 		}
 
 		nsel = 0;
+		offset = 0;
 	}
 
 	void Combine(SortedAggregateBindData &order_bind, SortedAggregateState &other) {
@@ -222,6 +223,7 @@ struct SortedAggregateState {
 	// Selection for scattering
 	SelectionVector sel;
 	idx_t nsel;
+	idx_t offset;
 };
 
 struct SortedAggregateFunction {
@@ -282,15 +284,27 @@ struct SortedAggregateFunction {
 		UnifiedVectorFormat svdata;
 		states.ToUnifiedFormat(count, svdata);
 
-		// Build the selection vector for each state.
+		// Size the selection vector for each state.
 		auto sdata = (SortedAggregateState **)svdata.data;
 		for (idx_t i = 0; i < count; ++i) {
 			auto sidx = svdata.sel->get_index(i);
 			auto order_state = sdata[sidx];
-			if (!order_state->sel.data()) {
-				order_state->sel.Initialize();
+			order_state->nsel++;
+		}
+
+		// Build the selection vector for each state.
+		vector<sel_t> sel_data(count);
+		idx_t start = 0;
+		for (idx_t i = 0; i < count; ++i) {
+			auto sidx = svdata.sel->get_index(i);
+			auto order_state = sdata[sidx];
+			if (!order_state->offset) {
+				//	First one
+				order_state->offset = start;    
+				order_state->sel.Initialize(sel_data.data() + order_state->offset);
+				start += order_state->nsel;
 			}
-			order_state->sel.set_index(order_state->nsel++, i);
+			sel_data[order_state->offset++] = sidx;
 		}
 
 		// Append nonempty slices to the arguments
