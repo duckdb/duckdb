@@ -688,7 +688,6 @@ void GroupedAggregateHashTable::Finalize() {
 
 	// early release hashes, not needed for partition/scan
 	hashes_hdl.Destroy();
-	hashes_block.reset();
 	is_finalized = true;
 }
 
