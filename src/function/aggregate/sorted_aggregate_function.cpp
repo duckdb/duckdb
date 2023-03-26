@@ -300,7 +300,7 @@ struct SortedAggregateFunction {
 			auto order_state = sdata[sidx];
 			if (!order_state->offset) {
 				//	First one
-				order_state->offset = start;    
+				order_state->offset = start;
 				order_state->sel.Initialize(sel_data.data() + order_state->offset);
 				start += order_state->nsel;
 			}
