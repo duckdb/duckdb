@@ -196,15 +196,13 @@ void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkSta
 		llstate.ht->Partition();
 	}
 
-	lock_guard<mutex> glock(gstate.lock);
-
-	if (!llstate.is_empty) {
-		gstate.is_empty = false;
-	}
-
 	// we will never add new values to these HTs so we can drop the first part of the HT
 	llstate.ht->Finalize();
 
+	lock_guard<mutex> glock(gstate.lock);
+	if (!llstate.is_empty) {
+		gstate.is_empty = false;
+	}
 	// at this point we just collect them the PhysicalHashAggregateFinalizeTask (below) will merge them in parallel
 	gstate.intermediate_hts.push_back(std::move(llstate.ht));
 }
