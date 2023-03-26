@@ -85,10 +85,10 @@ public:
 public:
 	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types,
 	                          vector<LogicalType> payload_types, const vector<BoundAggregateExpression *> &aggregates,
-	                          HtEntryType entry_type = HtEntryType::HT_WIDTH_64);
+	                          HtEntryType entry_type = HtEntryType::HT_WIDTH_64, idx_t initial_capacity = InitialCapacity());
 	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types,
 	                          vector<LogicalType> payload_types, vector<AggregateObject> aggregates,
-	                          HtEntryType entry_type = HtEntryType::HT_WIDTH_64);
+	                          HtEntryType entry_type = HtEntryType::HT_WIDTH_64, idx_t initial_capacity = InitialCapacity());
 	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types);
 	~GroupedAggregateHashTable() override;
 
@@ -124,8 +124,12 @@ public:
 	//! Executes the filter(if any) and update the aggregates
 	void Combine(GroupedAggregateHashTable &other);
 
+	static idx_t InitialCapacity();
 	idx_t Size() {
 		return entries;
+	}
+	idx_t Capacity() {
+		return capacity;
 	}
 
 	idx_t ResizeThreshold();

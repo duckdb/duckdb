@@ -21,9 +21,9 @@ using ValidityBytes = RowLayout::ValidityBytes;
 GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, Allocator &allocator,
                                                      vector<LogicalType> group_types, vector<LogicalType> payload_types,
                                                      const vector<BoundAggregateExpression *> &bindings,
-                                                     HtEntryType entry_type)
+                                                     HtEntryType entry_type, idx_t initial_capacity)
     : GroupedAggregateHashTable(context, allocator, std::move(group_types), std::move(payload_types),
-                                AggregateObject::CreateAggregateObjects(bindings), entry_type) {
+                                AggregateObject::CreateAggregateObjects(bindings), entry_type, initial_capacity) {
 }
 
 GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, Allocator &allocator,
@@ -41,7 +41,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
                                                      vector<LogicalType> group_types_p,
                                                      vector<LogicalType> payload_types_p,
                                                      vector<AggregateObject> aggregate_objects_p,
-                                                     HtEntryType entry_type)
+                                                     HtEntryType entry_type, idx_t initial_capacity)
     : BaseAggregateHashTable(context, allocator, aggregate_objects_p, std::move(payload_types_p)),
       entry_type(entry_type), capacity(0), entries(0), payload_page_offset(0), is_finalized(false) {
 	// Append hash column to the end and initialise the row layout
@@ -61,12 +61,12 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
 	switch (entry_type) {
 	case HtEntryType::HT_WIDTH_64: {
 		hash_prefix_shift = (HASH_WIDTH - sizeof(aggr_ht_entry_64::salt)) * 8;
-		Resize<aggr_ht_entry_64>(STANDARD_VECTOR_SIZE * 2L);
+		Resize<aggr_ht_entry_64>(initial_capacity);
 		break;
 	}
 	case HtEntryType::HT_WIDTH_32: {
 		hash_prefix_shift = (HASH_WIDTH - sizeof(aggr_ht_entry_32::salt)) * 8;
-		Resize<aggr_ht_entry_32>(STANDARD_VECTOR_SIZE * 2L);
+		Resize<aggr_ht_entry_32>(initial_capacity);
 		break;
 	}
 	default:
@@ -155,6 +155,11 @@ void GroupedAggregateHashTable::VerifyInternal() {
 	}
 	(void)count;
 	D_ASSERT(count == entries);
+}
+
+
+idx_t GroupedAggregateHashTable::InitialCapacity() {
+	return STANDARD_VECTOR_SIZE * 2;
 }
 
 idx_t GroupedAggregateHashTable::GetMaxCapacity(HtEntryType entry_type, idx_t tuple_size) {
