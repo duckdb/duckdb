@@ -55,6 +55,8 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
 
 	D_ASSERT(tuple_size <= Storage::BLOCK_SIZE);
 	tuples_per_block = Storage::BLOCK_SIZE / tuple_size;
+	hashes_hdl = buffer_manager.Allocate(Storage::BLOCK_SIZE);
+	hashes_hdl_ptr = hashes_hdl.Ptr();
 
 	switch (entry_type) {
 	case HtEntryType::HT_WIDTH_64: {
@@ -157,7 +159,7 @@ void GroupedAggregateHashTable::VerifyInternal() {
 
 
 idx_t GroupedAggregateHashTable::InitialCapacity() {
-	return STANDARD_VECTOR_SIZE * 2ULL;
+	return STANDARD_VECTOR_SIZE * 2;
 }
 
 idx_t GroupedAggregateHashTable::GetMaxCapacity(HtEntryType entry_type, idx_t tuple_size) {
@@ -209,23 +211,14 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 	D_ASSERT(size >= STANDARD_VECTOR_SIZE);
 
 	// size needs to be a power of 2
-	if ((size & (size - 1)) != 0) {
-		throw InternalException("Size needs to be a power of 2");
-	}
+	D_ASSERT((size & (size - 1)) == 0);
 	bitmask = size - 1;
 
-	idx_t byte_size = size * sizeof(ENTRY);
-	idx_t alloc_size = byte_size;
-	if (alloc_size < Storage::BLOCK_SIZE) {
-		alloc_size = Storage::BLOCK_SIZE;
+	auto byte_size = size * sizeof(ENTRY);
+	if (byte_size > (idx_t)Storage::BLOCK_SIZE) {
+		hashes_hdl = buffer_manager.Allocate(byte_size);
+		hashes_hdl_ptr = hashes_hdl.Ptr();
 	}
-	if (hashes_block) {
-		buffer_manager.ReAllocate(hashes_block, alloc_size);
-		hashes_hdl = buffer_manager.Pin(hashes_block);
-	} else {
-		hashes_hdl = buffer_manager.Allocate(alloc_size, false, &hashes_block);
-	}
-	hashes_hdl_ptr = hashes_hdl.Ptr();
 	memset(hashes_hdl_ptr, 0, byte_size);
 	capacity = size;
 
