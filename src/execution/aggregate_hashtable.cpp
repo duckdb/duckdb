@@ -44,7 +44,6 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
                                                      HtEntryType entry_type)
     : BaseAggregateHashTable(context, allocator, aggregate_objects_p, std::move(payload_types_p)),
       entry_type(entry_type), capacity(0), entries(0), payload_page_offset(0), is_finalized(false) {
-
 	// Append hash column to the end and initialise the row layout
 	group_types_p.emplace_back(LogicalType::HASH);
 	layout.Initialize(std::move(group_types_p), std::move(aggregate_objects_p));
@@ -216,7 +215,6 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 		hashes_hdl_ptr = hashes_hdl.Ptr();
 	}
 	memset(hashes_hdl_ptr, 0, byte_size);
-	hashes_end_ptr = hashes_hdl_ptr + byte_size;
 	capacity = size;
 
 	auto hashes_arr = (ENTRY *)hashes_hdl_ptr;
@@ -334,6 +332,10 @@ void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &re
 	RowOperations::FinalizeStates(layout, addresses, result, 0);
 }
 
+idx_t GroupedAggregateHashTable::ResizeThreshold() {
+	return capacity / LOAD_FACTOR;
+}
+
 template <class ENTRY>
 idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(AggregateHTAppendState &state, DataChunk &groups,
                                                             Vector &group_hashes, Vector &addresses,
@@ -345,7 +347,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(AggregateHTAppendSta
 	}
 
 	// resize at 50% capacity, also need to fit the entire vector
-	if (capacity - entries <= groups.size() || entries > capacity / LOAD_FACTOR) {
+	if (capacity - entries <= groups.size() || entries > ResizeThreshold()) {
 		Resize<ENTRY>(capacity * 2);
 	}
 

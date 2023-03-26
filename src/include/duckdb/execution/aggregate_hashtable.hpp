@@ -128,6 +128,7 @@ public:
 		return entries;
 	}
 
+	idx_t ResizeThreshold();
 	idx_t MaxCapacity();
 	static idx_t GetMaxCapacity(HtEntryType entry_type, idx_t tuple_size);
 
@@ -154,7 +155,6 @@ private:
 	//! The hashes of the HT
 	BufferHandle hashes_hdl;
 	data_ptr_t hashes_hdl_ptr;
-	data_ptr_t hashes_end_ptr; // of hashes
 	idx_t hash_offset;         // Offset into the layout of the hash column
 
 	hash_t hash_prefix_shift;
@@ -162,8 +162,6 @@ private:
 
 	//! Bitmask for getting relevant bits from the hashes to determine the position
 	hash_t bitmask;
-
-	vector<unique_ptr<GroupedAggregateHashTable>> distinct_hashes;
 
 	bool is_finalized;
 
