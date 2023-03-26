@@ -176,7 +176,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 //===--------------------------------------------------------------------===//
 class HashAggregateGlobalState : public GlobalSinkState {
 public:
-	HashAggregateGlobalState(const PhysicalHashAggregate &op, ClientContext &context) {
+	HashAggregateGlobalState(const PhysicalHashAggregate &op, ClientContext &context) : sink_time(0), combine_time(0) {
 		grouping_states.reserve(op.groupings.size());
 		for (idx_t i = 0; i < op.groupings.size(); i++) {
 			auto &grouping = op.groupings[i];
@@ -200,6 +200,11 @@ public:
 	vector<LogicalType> payload_types;
 	//! Whether or not the aggregate is finished
 	bool finished = false;
+
+	mutex lock;
+	double sink_time = 0;
+	double combine_time = 0;
+	double finalize_time = 0;
 };
 
 class HashAggregateLocalState : public LocalSinkState {
@@ -229,6 +234,7 @@ public:
 	DataChunk aggregate_input_chunk;
 	vector<HashAggregateGroupingLocalState> grouping_states;
 	AggregateFilterDataSet filter_set;
+	double sink_time = 0;
 };
 
 void PhysicalHashAggregate::SetMultiScan(GlobalSinkState &state) {
@@ -348,6 +354,8 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSink
 		return SinkResultType::NEED_MORE_INPUT;
 	}
 
+	Profiler profiler;
+	profiler.Start();
 	DataChunk &aggregate_input_chunk = llstate.aggregate_input_chunk;
 
 	auto &aggregates = grouped_aggregate_data.aggregates;
@@ -387,6 +395,8 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSink
 		table.Sink(context, *grouping_gstate.table_state, *grouping_lstate.table_state, input, aggregate_input_chunk,
 		           non_distinct_filter);
 	}
+	profiler.End();
+	llstate.sink_time += profiler.Elapsed();
 
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -424,6 +434,8 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalSinkState &
 	auto &gstate = (HashAggregateGlobalState &)state;
 	auto &llstate = (HashAggregateLocalState &)lstate;
 
+	Profiler profiler;
+	profiler.Start();
 	CombineDistinct(context, state, lstate);
 
 	if (CanSkipRegularSink()) {
@@ -437,6 +449,10 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalSinkState &
 		auto &table = grouping.table_data;
 		table.Combine(context, *grouping_gstate.table_state, *grouping_lstate.table_state);
 	}
+	profiler.End();
+	lock_guard<mutex> l(gstate.lock);
+	gstate.sink_time += llstate.sink_time;
+	gstate.combine_time += profiler.Elapsed();
 }
 
 //! REGULAR FINALIZE EVENT
@@ -463,6 +479,11 @@ public:
 		D_ASSERT(!tasks.empty());
 		SetTasks(std::move(tasks));
 	}
+	void AddFinalizeTime(double time) override {
+		lock_guard<mutex> l(gstate.lock);
+		gstate.finalize_time += time;
+	}
+
 };
 
 //! REGULAR FINALIZE FROM DISTINCT FINALIZE
@@ -476,10 +497,16 @@ public:
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
+		Profiler profiler;
+		profiler.Start();
 		op.FinalizeInternal(pipeline, *event, context, gstate, false);
 		D_ASSERT(!gstate.finished);
 		gstate.finished = true;
 		event->FinishTask();
+		profiler.End();
+		lock_guard<mutex> l(gstate.lock);
+		gstate.finalize_time += profiler.Elapsed();
+
 		return TaskExecutionResult::TASK_FINISHED;
 	}
 
@@ -781,6 +808,8 @@ SinkFinalizeType PhysicalHashAggregate::FinalizeInternal(Pipeline &pipeline, Eve
                                                          GlobalSinkState &gstate_p, bool check_distinct) const {
 	auto &gstate = (HashAggregateGlobalState &)gstate_p;
 
+	Profiler profiler;
+	profiler.Start();
 	if (check_distinct && distinct_collection_info) {
 		// There are distinct aggregates
 		// If these are partitioned those need to be combined first
@@ -802,6 +831,11 @@ SinkFinalizeType PhysicalHashAggregate::FinalizeInternal(Pipeline &pipeline, Eve
 		auto new_event = make_shared<HashAggregateMergeEvent>(*this, gstate, &pipeline);
 		event.InsertEvent(std::move(new_event));
 	}
+
+	profiler.End();
+	gstate.finalize_time = profiler.Elapsed();
+	printf("Total sink time - %lf\n", gstate.sink_time);
+	printf("Total combine time - %lf\n", gstate.combine_time);
 	return SinkFinalizeType::READY;
 }
 
@@ -873,6 +907,13 @@ void PhysicalHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk,
 	auto &sink_gstate = (HashAggregateGlobalState &)*sink_state;
 	auto &gstate = (PhysicalHashAggregateGlobalSourceState &)gstate_p;
 	auto &lstate = (PhysicalHashAggregateLocalSourceState &)lstate_p;
+	if (sink_gstate.finalize_time != 0) {
+		lock_guard<mutex> l(sink_gstate.lock);
+		if (sink_gstate.finalize_time != 0) {
+			printf("Finalize time - %lf\n", sink_gstate.finalize_time);
+			sink_gstate.finalize_time = 0;
+		}
+	}
 	while (true) {
 		idx_t radix_idx = gstate.state_index;
 		if (radix_idx >= groupings.size()) {
