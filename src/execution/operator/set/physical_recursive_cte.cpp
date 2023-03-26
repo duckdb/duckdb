@@ -32,6 +32,7 @@ public:
 	    : intermediate_table(context, op.GetTypes()), new_groups(STANDARD_VECTOR_SIZE) {
 		ht = make_unique<GroupedAggregateHashTable>(context, Allocator::Get(context), op.types, vector<LogicalType>(),
 		                                            vector<BoundAggregateExpression *>());
+		ht->InitializeAppend(append_state);
 	}
 
 	unique_ptr<GroupedAggregateHashTable> ht;
@@ -42,6 +43,7 @@ public:
 	bool initialized = false;
 	bool finished_scan = false;
 	SelectionVector new_groups;
+	AggregateHTAppendState append_state;
 };
 
 unique_ptr<GlobalSinkState> PhysicalRecursiveCTE::GetGlobalSinkState(ClientContext &context) const {
@@ -52,7 +54,7 @@ idx_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, RecursiveCTEState &state) 
 	Vector dummy_addresses(LogicalType::POINTER);
 
 	// Use the HT to eliminate duplicate rows
-	idx_t new_group_count = state.ht->FindOrCreateGroups(chunk, dummy_addresses, state.new_groups);
+	idx_t new_group_count = state.ht->FindOrCreateGroups(state.append_state, chunk, dummy_addresses, state.new_groups);
 
 	// we only return entries we have not seen before (i.e. new groups)
 	chunk.Slice(state.new_groups, new_group_count);

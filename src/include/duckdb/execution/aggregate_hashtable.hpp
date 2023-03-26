@@ -62,6 +62,18 @@ struct AggregateHTScanState {
 	idx_t scan_position = 0;
 };
 
+struct AggregateHTAppendState {
+	AggregateHTAppendState();
+
+	Vector ht_offsets;
+	Vector hash_salts;
+	SelectionVector group_compare_vector;
+	SelectionVector no_match_vector;
+	SelectionVector empty_vector;
+	SelectionVector new_groups;
+	Vector addresses;
+};
+
 class GroupedAggregateHashTable : public BaseAggregateHashTable {
 public:
 	//! The hash table load factor, when a resize is triggered
@@ -82,12 +94,17 @@ public:
 	unique_ptr<RowDataCollection> string_heap;
 
 public:
+	//! The append state is a transaction-local state that is used to hold intermediate structures in order to avoid
+	//! re-allocating them constantly
+	void InitializeAppend(AggregateHTAppendState &state);
+
 	//! Add the given data to the HT, computing the aggregates grouped by the
 	//! data in the group chunk. When resize = true, aggregates will not be
 	//! computed but instead just assigned.
-	idx_t AddChunk(DataChunk &groups, DataChunk &payload, const vector<idx_t> &filter);
-	idx_t AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload, const vector<idx_t> &filter);
-	idx_t AddChunk(DataChunk &groups, DataChunk &payload, AggregateType filter);
+	idx_t AddChunk(AggregateHTAppendState &state, DataChunk &groups, DataChunk &payload, const vector<idx_t> &filter);
+	idx_t AddChunk(AggregateHTAppendState &state, DataChunk &groups, Vector &group_hashes, DataChunk &payload,
+	               const vector<idx_t> &filter);
+	idx_t AddChunk(AggregateHTAppendState &state, DataChunk &groups, DataChunk &payload, AggregateType filter);
 
 	//! Scan the HT starting from the scan_position until the result and group
 	//! chunks are filled. scan_position will be updated by this function.
@@ -100,10 +117,11 @@ public:
 	//! Finds or creates groups in the hashtable using the specified group keys. The addresses vector will be filled
 	//! with pointers to the groups in the hash table, and the new_groups selection vector will point to the newly
 	//! created groups. The return value is the amount of newly created groups.
-	idx_t FindOrCreateGroups(DataChunk &groups, Vector &group_hashes, Vector &addresses_out,
+	idx_t FindOrCreateGroups(AggregateHTAppendState &state, DataChunk &groups, Vector &group_hashes,
+	                         Vector &addresses_out, SelectionVector &new_groups_out);
+	idx_t FindOrCreateGroups(AggregateHTAppendState &state, DataChunk &groups, Vector &addresses_out,
 	                         SelectionVector &new_groups_out);
-	idx_t FindOrCreateGroups(DataChunk &groups, Vector &addresses_out, SelectionVector &new_groups_out);
-	void FindOrCreateGroups(DataChunk &groups, Vector &addresses_out);
+	void FindOrCreateGroups(AggregateHTAppendState &state, DataChunk &groups, Vector &addresses_out);
 
 	//! Executes the filter(if any) and update the aggregates
 	void Combine(GroupedAggregateHashTable &other);
@@ -151,12 +169,6 @@ private:
 
 	bool is_finalized;
 
-	// some stuff from FindOrCreateGroupsInternal() to avoid allocation there
-	Vector ht_offsets;
-	Vector hash_salts;
-	SelectionVector group_compare_vector;
-	SelectionVector no_match_vector;
-	SelectionVector empty_vector;
 	vector<ExpressionType> predicates;
 
 private:
@@ -176,8 +188,8 @@ private:
 	template <class ENTRY>
 	void Resize(idx_t size);
 	template <class ENTRY>
-	idx_t FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes, Vector &addresses,
-	                                 SelectionVector &new_groups);
+	idx_t FindOrCreateGroupsInternal(AggregateHTAppendState &state, DataChunk &groups, Vector &group_hashes,
+	                                 Vector &addresses, SelectionVector &new_groups);
 
 	template <class FUNC = std::function<void(idx_t, idx_t, data_ptr_t)>>
 	void PayloadApply(FUNC fun);

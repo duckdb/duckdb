@@ -78,6 +78,7 @@ public:
 	bool is_partitioned = false;
 
 	RadixPartitionInfo partition_info;
+	AggregateHTAppendState append_state;
 };
 
 class RadixHTLocalState : public LocalSinkState {
@@ -151,7 +152,8 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, GlobalSinkState 
 		}
 		D_ASSERT(gstate.finalized_hts.size() == 1);
 		D_ASSERT(gstate.finalized_hts[0]);
-		llstate.total_groups += gstate.finalized_hts[0]->AddChunk(group_chunk, payload_input, filter);
+		llstate.total_groups +=
+		    gstate.finalized_hts[0]->AddChunk(gstate.append_state, group_chunk, payload_input, filter);
 		return;
 	}
 
