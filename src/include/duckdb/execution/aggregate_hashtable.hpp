@@ -157,6 +157,7 @@ private:
 	vector<data_ptr_t> payload_hds_ptrs;
 
 	//! The hashes of the HT
+	shared_ptr<BlockHandle> hashes_block;
 	BufferHandle hashes_hdl;
 	data_ptr_t hashes_hdl_ptr;
 	idx_t hash_offset;         // Offset into the layout of the hash column
