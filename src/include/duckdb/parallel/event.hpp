@@ -52,8 +52,6 @@ public:
 	virtual void PrintPipeline() {
 	}
 
-	virtual void AddFinalizeTime(double time) {}
-
 protected:
 	Executor &executor;
 	//! The current threads working on the event

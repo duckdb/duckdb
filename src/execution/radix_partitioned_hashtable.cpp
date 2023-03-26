@@ -76,7 +76,6 @@ public:
 
 	bool is_finalized = false;
 	bool is_partitioned = false;
-	double finalize_time = 0;
 
 	RadixPartitionInfo partition_info;
 	AggregateHTAppendState append_state;
@@ -292,12 +291,8 @@ public:
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
-		Profiler profiler;
-		profiler.Start();
 		FinalizeHT(state, radix);
 		event->FinishTask();
-		profiler.End();
-		event->AddFinalizeTime(profiler.Elapsed());
 		return TaskExecutionResult::TASK_FINISHED;
 	}
 
