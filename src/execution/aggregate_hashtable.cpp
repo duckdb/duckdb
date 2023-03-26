@@ -243,9 +243,6 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 	Verify();
 }
 
-void GroupedAggregateHashTable::InitializeAppend(AggregateHTAppendState &state) {
-}
-
 idx_t GroupedAggregateHashTable::AddChunk(AggregateHTAppendState &state, DataChunk &groups, DataChunk &payload,
                                           AggregateType filter) {
 	vector<idx_t> aggregate_filter;
@@ -331,7 +328,6 @@ void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &re
 	// find the groups associated with the addresses
 	// FIXME: this should not use the FindOrCreateGroups, creating them is unnecessary
 	AggregateHTAppendState append_state;
-	InitializeAppend(append_state);
 	Vector addresses(LogicalType::POINTER);
 	FindOrCreateGroups(append_state, groups, addresses);
 	// now fetch the aggregates
@@ -369,35 +365,40 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(AggregateHTAppendSta
 	addresses.Flatten(groups.size());
 	auto addresses_ptr = FlatVector::GetData<data_ptr_t>(addresses);
 
-	// now compute the entry in the table based on the hash using a modulo
-	UnaryExecutor::Execute<hash_t, uint64_t>(group_hashes, state.ht_offsets, groups.size(), [&](hash_t element) {
-		D_ASSERT((element & bitmask) == (element % capacity));
-		return (element & bitmask);
-	});
-	auto ht_offsets_ptr = FlatVector::GetData<uint64_t>(state.ht_offsets);
-
-	// precompute the hash salts for faster comparison below
+	// compute the entry in the table based on the hash using a modulo
+	// and precompute the hash salts for faster comparison below
 	D_ASSERT(state.hash_salts.GetType() == LogicalType::SMALLINT);
-	UnaryExecutor::Execute<hash_t, uint16_t>(group_hashes, state.hash_salts, groups.size(),
-	                                         [&](hash_t element) { return (element >> hash_prefix_shift); });
+	auto ht_offsets_ptr = FlatVector::GetData<uint64_t>(state.ht_offsets);
 	auto hash_salts_ptr = FlatVector::GetData<uint16_t>(state.hash_salts);
-
+	for (idx_t r = 0; r < groups.size(); r++) {
+		auto element = group_hashes_ptr[r];
+		D_ASSERT((element & bitmask) == (element % capacity));
+		ht_offsets_ptr[r] = element & bitmask;
+		hash_salts_ptr[r] = element >> hash_prefix_shift;
+	}
 	// we start out with all entries [0, 1, 2, ..., groups.size()]
 	const SelectionVector *sel_vector = FlatVector::IncrementalSelectionVector();
 
 	idx_t remaining_entries = groups.size();
 
 	// make a chunk that references the groups and the hashes
-	DataChunk group_chunk;
-	group_chunk.InitializeEmpty(layout.GetTypes());
-	for (idx_t grp_idx = 0; grp_idx < groups.ColumnCount(); grp_idx++) {
-		group_chunk.data[grp_idx].Reference(groups.data[grp_idx]);
+	if (state.group_chunk.ColumnCount() == 0) {
+		state.group_chunk.InitializeEmpty(layout.GetTypes());
 	}
-	group_chunk.data[groups.ColumnCount()].Reference(group_hashes);
-	group_chunk.SetCardinality(groups);
+	D_ASSERT(state.group_chunk.ColumnCount() == layout.GetTypes().size());
+	for (idx_t grp_idx = 0; grp_idx < groups.ColumnCount(); grp_idx++) {
+		state.group_chunk.data[grp_idx].Reference(groups.data[grp_idx]);
+	}
+	state.group_chunk.data[groups.ColumnCount()].Reference(group_hashes);
+	state.group_chunk.SetCardinality(groups);
 
 	// convert all vectors to unified format
-	auto group_data = group_chunk.ToUnifiedFormat();
+	if (!state.group_data) {
+		state.group_data = unique_ptr<UnifiedVectorFormat[]>(new UnifiedVectorFormat[state.group_chunk.ColumnCount()]);
+	}
+	for (idx_t col_idx = 0; col_idx < state.group_chunk.ColumnCount(); col_idx++) {
+		state.group_chunk.data[col_idx].ToUnifiedFormat(state.group_chunk.size(), state.group_data[col_idx]);
+	}
 
 	idx_t new_group_count = 0;
 	while (remaining_entries > 0) {
@@ -453,14 +454,14 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(AggregateHTAppendSta
 		}
 
 		// for each of the locations that are empty, serialize the group columns to the locations
-		RowOperations::Scatter(group_chunk, group_data.get(), layout, addresses, *string_heap, state.empty_vector,
-		                       new_entry_count);
+		RowOperations::Scatter(state.group_chunk, state.group_data.get(), layout, addresses, *string_heap,
+		                       state.empty_vector, new_entry_count);
 		RowOperations::InitializeStates(layout, addresses, state.empty_vector, new_entry_count);
 
 		// now we have only the tuples remaining that might match to an existing group
 		// start performing comparisons with each of the groups
-		RowOperations::Match(group_chunk, group_data.get(), layout, addresses, predicates, state.group_compare_vector,
-		                     need_compare_count, &state.no_match_vector, no_match_count);
+		RowOperations::Match(state.group_chunk, state.group_data.get(), layout, addresses, predicates,
+		                     state.group_compare_vector, need_compare_count, &state.no_match_vector, no_match_count);
 
 		// each of the entries that do not match we move them to the next entry in the HT
 		for (idx_t i = 0; i < no_match_count; i++) {
@@ -533,7 +534,6 @@ void GroupedAggregateHashTable::FlushMove(FlushMoveState &state, Vector &source_
 	}
 
 	AggregateHTAppendState append_state;
-	InitializeAppend(append_state);
 	FindOrCreateGroups(append_state, state.groups, source_hashes, state.group_addresses, state.new_groups_sel);
 
 	RowOperations::CombineStates(layout, source_addresses, state.group_addresses, count);

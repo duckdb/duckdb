@@ -72,6 +72,8 @@ struct AggregateHTAppendState {
 	SelectionVector empty_vector;
 	SelectionVector new_groups;
 	Vector addresses;
+	unique_ptr<UnifiedVectorFormat[]> group_data;
+	DataChunk group_chunk;
 };
 
 class GroupedAggregateHashTable : public BaseAggregateHashTable {
@@ -94,10 +96,6 @@ public:
 	unique_ptr<RowDataCollection> string_heap;
 
 public:
-	//! The append state is a transaction-local state that is used to hold intermediate structures in order to avoid
-	//! re-allocating them constantly
-	void InitializeAppend(AggregateHTAppendState &state);
-
 	//! Add the given data to the HT, computing the aggregates grouped by the
 	//! data in the group chunk. When resize = true, aggregates will not be
 	//! computed but instead just assigned.

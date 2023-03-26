@@ -32,7 +32,6 @@ public:
 	    : intermediate_table(context, op.GetTypes()), new_groups(STANDARD_VECTOR_SIZE) {
 		ht = make_unique<GroupedAggregateHashTable>(context, Allocator::Get(context), op.types, vector<LogicalType>(),
 		                                            vector<BoundAggregateExpression *>());
-		ht->InitializeAppend(append_state);
 	}
 
 	unique_ptr<GroupedAggregateHashTable> ht;
