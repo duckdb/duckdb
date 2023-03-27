@@ -83,7 +83,7 @@ idx_t PartitionableHashTable::ListAddChunk(HashTableList &list, DataChunk &group
 	if (list.empty() || list.back()->Size() >= list.back()->ResizeThreshold()) {
 		idx_t new_capacity = GroupedAggregateHashTable::InitialCapacity();
 		if (!list.empty()) {
-			new_capacity = list.back()->Capacity() * 2;
+			new_capacity = MinValue<idx_t>(NextPowerOfTwo(list.back()->MaxCapacity()), list.back()->Capacity() * 2);
 			// early release first part of ht and prevent adding of more data
 			list.back()->Finalize();
 		}
