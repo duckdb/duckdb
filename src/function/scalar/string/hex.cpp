@@ -4,8 +4,40 @@
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/storage/compression/chimp/algorithm/chimp_utils.hpp"
 
 namespace duckdb {
+
+static void WriteHexBytes(uint64_t x, char *&output, idx_t leading_zero, idx_t type_size) {
+	D_ASSERT(type_size >= leading_zero);
+
+	idx_t offset = type_size - ((leading_zero / 4) * 4);
+
+	for (; offset >= 4; offset -= 4) {
+		uint8_t byte = (x >> (offset - 4)) & 0x0F;
+		*output = Blob::HEX_TABLE[byte];
+		output++;
+	}
+}
+
+static void WriteBinBytes(uint64_t x, char *&output, idx_t leading_zero, idx_t type_size) {
+	D_ASSERT(type_size >= leading_zero);
+	idx_t offset = type_size - leading_zero;
+	idx_t remainder = 8 - (leading_zero % 8);
+	for (idx_t i = 0; i < remainder; ++i) {
+		*output = ((x >> (offset - 1)) & 0x01) + '0';
+		output++;
+		offset--;
+	}
+
+	for (; offset >= 8; offset -= 8) {
+		uint8_t byte = (x >> (offset - 8)) & 0xFF;
+		for (idx_t i = 8; i >= 1; --i) {
+			*output = ((byte >> (i - 1)) & 0x01) + '0';
+			output++;
+		}
+	}
+}
 
 struct HexStrOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
@@ -69,27 +101,20 @@ struct FromHexOperator {
 struct HexIntegralOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
-		// Sufficient space for maximum length
-		char buffer[sizeof(INPUT_TYPE) * 2];
-		char *ptr = buffer;
-		idx_t buffer_size = 0;
-
-		bool seen_non_zero = false;
-		for (idx_t offset = sizeof(INPUT_TYPE) * 8; offset >= 4; offset -= 4) {
-			uint8_t byte = (input >> (offset - 4)) & 0x0F;
-			if (byte == 0 && !seen_non_zero && offset > 4) {
-				continue;
-			}
-			seen_non_zero = true;
-			*ptr = Blob::HEX_TABLE[byte];
-			ptr++;
-			buffer_size++;
+		if (input == 0) {
+			auto target = StringVector::EmptyString(result, 1);
+			auto output = target.GetDataWriteable();
+			*output = '0';
+			target.Finalize();
+			return target;
 		}
 
-		// Allocate empty space
-		auto target = StringVector::EmptyString(result, buffer_size);
+		idx_t num_leading_zero = CountZeros<uint64_t>::Leading(input);
+
+		auto target = StringVector::EmptyString(result, sizeof(INPUT_TYPE) * 2 - (num_leading_zero / 4));
 		auto output = target.GetDataWriteable();
-		memcpy(output, buffer, buffer_size);
+
+		WriteHexBytes(input, output, num_leading_zero, sizeof(INPUT_TYPE) * 8);
 
 		target.Finalize();
 		return target;
@@ -99,118 +124,42 @@ struct HexIntegralOperator {
 struct HexHugeIntOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
-		char buffer[sizeof(INPUT_TYPE) * 2];
-		char *ptr = buffer;
-		idx_t buffer_size = 0;
+
+		if (input == 0) {
+			auto target = StringVector::EmptyString(result, 1);
+			auto output = target.GetDataWriteable();
+			*output = '0';
+			target.Finalize();
+			return target;
+		}
 
 		uint64_t lower = input.lower;
 		int64_t upper = input.upper;
-
-		bool seen_non_zero = false;
-		for (idx_t offset = 64; offset >= 4; offset -= 4) {
-			uint8_t byte = (upper >> (offset - 4)) & 0x0F;
-
-			if (byte == 0 && !seen_non_zero) {
-				continue;
-			}
-			seen_non_zero = true;
-			*ptr = Blob::HEX_TABLE[byte];
-			ptr++;
-			buffer_size++;
+		idx_t upper_num_leading_zero = CountZeros<uint64_t>::Leading(upper);
+		idx_t lower_num_leading_zero = 0;
+		idx_t num_leading_zero = upper_num_leading_zero;
+		if (upper_num_leading_zero == 64) {
+			lower_num_leading_zero = CountZeros<uint64_t>::Leading(lower);
+			num_leading_zero += lower_num_leading_zero;
 		}
 
-		for (idx_t offset = 64; offset >= 4; offset -= 4) {
-			uint8_t byte = (lower >> (offset - 4)) & 0x0F;
-
-			// at least one byte space
-			if (byte == 0 && !seen_non_zero && offset > 4) {
-				continue;
-			}
-			seen_non_zero = true;
-			*ptr = Blob::HEX_TABLE[byte];
-			ptr++;
-			buffer_size++;
-		}
-
-		// Allocate empty space
-		auto target = StringVector::EmptyString(result, buffer_size);
+		auto target = StringVector::EmptyString(result, sizeof(INPUT_TYPE) * 2 - (num_leading_zero / 4));
 		auto output = target.GetDataWriteable();
-		memcpy(output, buffer, buffer_size);
+
+		WriteHexBytes(upper, output, upper_num_leading_zero, 64);
+		WriteHexBytes(lower, output, lower_num_leading_zero, 64);
 
 		target.Finalize();
 		return target;
 	}
 };
 
+template <class INPUT, class OP>
 static void ToHexFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 1);
 	auto &input = args.data[0];
 	idx_t count = args.size();
-
-	switch (input.GetType().InternalType()) {
-	case PhysicalType::VARCHAR:
-		UnaryExecutor::ExecuteString<string_t, string_t, HexStrOperator>(input, result, count);
-		break;
-	case PhysicalType::INT64:
-		UnaryExecutor::ExecuteString<int64_t, string_t, HexIntegralOperator>(input, result, count);
-		break;
-	case PhysicalType::INT128:
-		UnaryExecutor::ExecuteString<hugeint_t, string_t, HexHugeIntOperator>(input, result, count);
-		break;
-	case PhysicalType::UINT64:
-		UnaryExecutor::ExecuteString<uint64_t, string_t, HexIntegralOperator>(input, result, count);
-		break;
-	default:
-		throw NotImplementedException("Specifier type not implemented");
-	}
-}
-
-static idx_t NumberOfLeadingingZeros(uint64_t x) {
-	if (x == 0)
-		return 64;
-	int n = 1;
-	if (x >> 32 == 0) {
-		n += 32;
-		x <<= 32;
-	}
-	if (x >> 48 == 0) {
-		n += 16;
-		x <<= 16;
-	}
-	if (x >> 56 == 0) {
-		n += 8;
-		x <<= 8;
-	}
-	if (x >> 60 == 0) {
-		n += 4;
-		x <<= 4;
-	}
-
-	if (x >> 62 == 0) {
-		n += 2;
-		x <<= 2;
-	}
-	n -= x >> 63;
-	return n;
-}
-
-static void WriteBinBytes(uint64_t x, char *&output, idx_t leading_zero, idx_t type_size) {
-	D_ASSERT(type_size >= leading_zero);
-	idx_t offset = type_size - leading_zero;
-	idx_t remainder = 8 - (leading_zero % 8);
-	for (idx_t i = 0; i < remainder; ++i) {
-		*output = ((x >> (offset - 1)) & 0x01) + '0';
-		output++;
-		offset--;
-	}
-
-	for (; offset >= 8; offset -= 8) {
-		uint8_t byte = (x >> (offset - 8)) & 0xFF;
-		for (idx_t i = 8; i >= 1; --i) {
-			*output = ((byte >> (i - 1)) & 0x01) + '0';
-			output++;
-		}
-	}
+	UnaryExecutor::ExecuteString<INPUT, string_t, OP>(input, result, count);
 }
 
 struct BinaryStrOperator {
@@ -248,7 +197,7 @@ struct BinaryIntegralOperator {
 			return target;
 		}
 
-		idx_t num_leading_zero = NumberOfLeadingingZeros(input);
+		idx_t num_leading_zero = CountZeros<uint64_t>::Leading(input);
 
 		auto target = StringVector::EmptyString(result, sizeof(INPUT_TYPE) * 8 - num_leading_zero);
 		auto output = target.GetDataWriteable();
@@ -274,11 +223,11 @@ struct BinaryHugeIntOperator {
 
 		uint64_t lower = input.lower;
 		int64_t upper = input.upper;
-		idx_t upper_num_leading_zero = NumberOfLeadingingZeros(upper);
+		idx_t upper_num_leading_zero = CountZeros<uint64_t>::Leading(upper);
 		idx_t lower_num_leading_zero = 0;
 		idx_t num_leading_zero = upper_num_leading_zero;
 		if (upper_num_leading_zero == 64) {
-			lower_num_leading_zero = NumberOfLeadingingZeros(lower);
+			lower_num_leading_zero = CountZeros<uint64_t>::Leading(lower);
 			num_leading_zero += lower_num_leading_zero;
 		}
 
@@ -337,27 +286,12 @@ struct FromBinaryOperator {
 	}
 };
 
+template <class INPUT, class OP>
 static void ToBinaryFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 1);
 	auto &input = args.data[0];
 	idx_t count = args.size();
-
-	switch (input.GetType().InternalType()) {
-	case PhysicalType::VARCHAR:
-		UnaryExecutor::ExecuteString<string_t, string_t, BinaryStrOperator>(input, result, count);
-		break;
-	case PhysicalType::INT64:
-		UnaryExecutor::ExecuteString<int64_t, string_t, BinaryIntegralOperator>(input, result, count);
-		break;
-	case PhysicalType::UINT64:
-		UnaryExecutor::ExecuteString<uint64_t, string_t, BinaryIntegralOperator>(input, result, count);
-		break;
-	case PhysicalType::INT128:
-		UnaryExecutor::ExecuteString<hugeint_t, string_t, BinaryHugeIntOperator>(input, result, count);
-		break;
-	default:
-		throw NotImplementedException("Specifier type not implemented");
-	}
+	UnaryExecutor::ExecuteString<INPUT, string_t, OP>(input, result, count);
 }
 
 static void FromBinaryFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -382,13 +316,17 @@ void HexFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet to_hex("to_hex");
 	ScalarFunctionSet from_hex("from_hex");
 
-	to_hex.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, ToHexFunction));
+	to_hex.AddFunction(
+	    ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, ToHexFunction<string_t, HexStrOperator>));
 
-	to_hex.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::VARCHAR, ToHexFunction));
+	to_hex.AddFunction(
+	    ScalarFunction({LogicalType::BIGINT}, LogicalType::VARCHAR, ToHexFunction<int64_t, HexIntegralOperator>));
 
-	to_hex.AddFunction(ScalarFunction({LogicalType::UBIGINT}, LogicalType::VARCHAR, ToHexFunction));
+	to_hex.AddFunction(
+	    ScalarFunction({LogicalType::UBIGINT}, LogicalType::VARCHAR, ToHexFunction<uint64_t, HexIntegralOperator>));
 
-	to_hex.AddFunction(ScalarFunction({LogicalType::HUGEINT}, LogicalType::VARCHAR, ToHexFunction));
+	to_hex.AddFunction(
+	    ScalarFunction({LogicalType::HUGEINT}, LogicalType::VARCHAR, ToHexFunction<hugeint_t, HexHugeIntOperator>));
 
 	from_hex.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BLOB, FromHexFunction));
 
@@ -403,10 +341,14 @@ void HexFun::RegisterFunction(BuiltinFunctions &set) {
 
 	ScalarFunctionSet to_binary("to_binary");
 	ScalarFunctionSet from_binary("from_binary");
-	to_binary.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::VARCHAR, ToBinaryFunction));
-	to_binary.AddFunction(ScalarFunction({LogicalType::UBIGINT}, LogicalType::VARCHAR, ToBinaryFunction));
-	to_binary.AddFunction(ScalarFunction({LogicalType::HUGEINT}, LogicalType::VARCHAR, ToBinaryFunction));
-	to_binary.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, ToBinaryFunction));
+	to_binary.AddFunction(
+	    ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, ToBinaryFunction<string_t, BinaryStrOperator>));
+	to_binary.AddFunction(ScalarFunction({LogicalType::UBIGINT}, LogicalType::VARCHAR,
+	                                     ToBinaryFunction<uint64_t, BinaryIntegralOperator>));
+	to_binary.AddFunction(
+	    ScalarFunction({LogicalType::BIGINT}, LogicalType::VARCHAR, ToBinaryFunction<int64_t, BinaryIntegralOperator>));
+	to_binary.AddFunction(ScalarFunction({LogicalType::HUGEINT}, LogicalType::VARCHAR,
+	                                     ToBinaryFunction<hugeint_t, BinaryHugeIntOperator>));
 
 	from_binary.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BLOB, FromBinaryFunction));
 
