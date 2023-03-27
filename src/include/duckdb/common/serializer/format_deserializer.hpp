@@ -48,11 +48,7 @@ public:
 		if (present) {
 			auto item = Read<T>();
 			OnOptionalEnd();
-			if (std::is_copy_constructible<T>::value) {
-				return item;
-			} else {
-				return std::move(item);
-			}
+			return item;
 		} else {
 			OnOptionalEnd();
 			return std::forward<T>(default_value);
@@ -82,11 +78,7 @@ public:
 		if (present) {
 			auto item = Read<T>();
 			OnOptionalEnd();
-			if (std::is_copy_constructible<T>::value) {
-				return item;
-			} else {
-				return std::move(item);
-			}
+			return item;
 		} else {
 			OnOptionalEnd();
 			return T();
@@ -122,11 +114,7 @@ private:
 		OnObjectBegin();
 		auto val = T::FormatDeserialize(*this);
 		OnObjectEnd();
-		if (std::is_copy_constructible<T>::value) {
-			return val;
-		} else {
-			return std::move(val);
-		}
+		return val;
 	}
 
 	// Structural Types
@@ -137,11 +125,7 @@ private:
 		OnObjectBegin();
 		auto val = ELEMENT_TYPE::FormatDeserialize(*this);
 		OnObjectEnd();
-		if (std::is_copy_constructible<T>::value) {
-			return val;
-		} else {
-			return std::move(val);
-		}
+		return val;
 	}
 
 	// Deserialize shared_ptr
@@ -151,11 +135,7 @@ private:
 		OnObjectBegin();
 		auto val = ELEMENT_TYPE::FormatDeserialize(*this);
 		OnObjectEnd();
-		if (std::is_copy_constructible<T>::value) {
-			return val;
-		} else {
-			return std::move(val);
-		}
+		return val;
 	}
 
 	// Deserialize a vector
@@ -192,11 +172,7 @@ private:
 			map[std::move(key)] = std::move(value);
 		}
 		OnMapEnd();
-		if(std::is_copy_constructible<T>::value) {
-			return map;
-		} else {
-			return std::move(map);
-		}
+		return map;
 	}
 
 	// Deserialize an unordered set
@@ -209,7 +185,6 @@ private:
 			set.insert(Read<ELEMENT_TYPE>());
 		}
 		OnListEnd();
-
 		return set;
 	}
 
@@ -223,7 +198,6 @@ private:
 			set.insert(Read<ELEMENT_TYPE>());
 		}
 		OnListEnd();
-
 		return set;
 	}
 
