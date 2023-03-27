@@ -53,10 +53,13 @@ RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p
 // Sink
 //===--------------------------------------------------------------------===//
 class RadixHTGlobalState : public GlobalSinkState {
+	constexpr const static idx_t MAX_RADIX_PARTITIONS = 32;
+
 public:
 	explicit RadixHTGlobalState(ClientContext &context)
-	    : is_empty(true), multi_scan(true), total_groups(0),
-	      partition_info((idx_t)TaskScheduler::GetScheduler(context).NumberOfThreads()) {
+	    : is_empty(true), multi_scan(true), partitioned(false),
+	      partition_info(
+	          MinValue<idx_t>(MAX_RADIX_PARTITIONS, TaskScheduler::GetScheduler(context).NumberOfThreads())) {
 	}
 
 	vector<unique_ptr<PartitionableHashTable>> intermediate_hts;
@@ -68,8 +71,8 @@ public:
 	bool multi_scan;
 	//! The lock for updating the global aggregate state
 	mutex lock;
-	//! a counter to determine if we should switch over to partitioning
-	atomic<idx_t> total_groups;
+	//! Whether or not any thread has crossed the partitioning threshold
+	atomic<bool> partitioned;
 
 	bool is_finalized = false;
 	bool is_partitioned = false;
@@ -79,7 +82,7 @@ public:
 
 class RadixHTLocalState : public LocalSinkState {
 public:
-	explicit RadixHTLocalState(const RadixPartitionedHashTable &ht) : is_empty(true) {
+	explicit RadixHTLocalState(const RadixPartitionedHashTable &ht) : total_groups(0), is_empty(true) {
 		// if there are no groups we create a fake group so everything has the same group
 		group_chunk.InitializeEmpty(ht.group_types);
 		if (ht.grouping_set.empty()) {
@@ -90,6 +93,8 @@ public:
 	DataChunk group_chunk;
 	//! The aggregate HT
 	unique_ptr<PartitionableHashTable> ht;
+	//! The total number of groups found by this thread
+	idx_t total_groups;
 
 	//! Whether or not any tuples were added to the HT
 	bool is_empty;
@@ -146,7 +151,7 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, GlobalSinkState 
 		}
 		D_ASSERT(gstate.finalized_hts.size() == 1);
 		D_ASSERT(gstate.finalized_hts[0]);
-		gstate.total_groups += gstate.finalized_hts[0]->AddChunk(group_chunk, payload_input, filter);
+		llstate.total_groups += gstate.finalized_hts[0]->AddChunk(group_chunk, payload_input, filter);
 		return;
 	}
 
@@ -160,9 +165,11 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, GlobalSinkState 
 		                                        group_types, op.payload_types, op.bindings);
 	}
 
-	gstate.total_groups +=
-	    llstate.ht->AddChunk(group_chunk, payload_input,
-	                         gstate.total_groups > radix_limit && gstate.partition_info.n_partitions > 1, filter);
+	llstate.total_groups += llstate.ht->AddChunk(group_chunk, payload_input,
+	                                             gstate.partitioned && gstate.partition_info.n_partitions > 1, filter);
+	if (llstate.total_groups >= radix_limit) {
+		gstate.partitioned = true;
+	}
 }
 
 void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkState &state,
@@ -183,7 +190,7 @@ void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkSta
 		return; // no data
 	}
 
-	if (!llstate.ht->IsPartitioned() && gstate.partition_info.n_partitions > 1 && gstate.total_groups > radix_limit) {
+	if (!llstate.ht->IsPartitioned() && gstate.partition_info.n_partitions > 1 && gstate.partitioned) {
 		llstate.ht->Partition();
 	}
 
