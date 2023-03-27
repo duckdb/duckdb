@@ -19,7 +19,7 @@ string PragmaTableInfo(ClientContext &context, const FunctionParameters &paramet
 
 string PragmaShowTables(ClientContext &context, const FunctionParameters &parameters) {
 	auto catalog = DatabaseManager::GetDefaultDatabase(context);
-	auto schema = context.client_data->catalog_search_path->GetDefault().schema;
+	auto schema = ClientData::Get(context).catalog_search_path->GetDefault().schema;
 	schema = (schema == INVALID_SCHEMA) ? DEFAULT_SCHEMA : schema;
 
 	auto where_clause =
