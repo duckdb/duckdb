@@ -35,7 +35,7 @@ class TestPandasObject(object):
     def test_object_to_string_with_stride(self, duckdb_cursor):
         data = np.array([["a", "b", "c"], [1,2,3], [1, 2, 3], [11, 22, 33]])
         df = pd.DataFrame(data=data[1:,], columns=data[0])
-        res = duckdb.sql('select * from df').fetchall()
+        res = duckdb_cursor.sql('select * from df').fetchall()
         assert res == [('1', '2', '3'), ('1', '2', '3'), ('11', '22', '33')]
 
     def test_2499(self, duckdb_cursor):  
