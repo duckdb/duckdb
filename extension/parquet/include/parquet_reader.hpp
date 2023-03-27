@@ -18,6 +18,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/multi_file_reader_options.hpp"
 #endif
 #include "column_reader.hpp"
 #include "parquet_file_metadata_cache.hpp"
@@ -70,10 +71,8 @@ struct ParquetOptions {
 	explicit ParquetOptions(ClientContext &context);
 
 	bool binary_as_string = false;
-	bool filename = false;
 	bool file_row_number = false;
-	bool hive_partitioning = false;
-	bool union_by_name = false;
+	MultiFileReaderOptions file_options;
 
 public:
 	void Serialize(FieldWriter &writer) const;

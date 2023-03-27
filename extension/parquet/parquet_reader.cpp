@@ -347,7 +347,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 		}
 
 		// if this is a hive partition col, we should not read it at all but instead do a constant reader.
-		if (parquet_options.hive_partitioning && hive_map && depth == 1) {
+		if (parquet_options.file_options.hive_partitioning && hive_map && depth == 1) {
 			auto lookup = hive_map->find(s_ele.name);
 			if (lookup != hive_map->end()) {
 				Value val = Value(lookup->second);
@@ -389,7 +389,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(const duckdb_parquet::forma
 		root_struct_reader.child_readers[column_idx] = std::move(cast_reader);
 	}
 
-	if (parquet_options.filename) {
+	if (parquet_options.file_options.filename) {
 		Value val = Value(file_name);
 		root_struct_reader.child_readers.push_back(make_unique<GeneratedConstantColumnReader>(
 		    *this, LogicalType::VARCHAR, SchemaElement(), next_file_idx, 0, 0, val));
@@ -400,7 +400,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(const duckdb_parquet::forma
 		    make_unique<RowNumberColumnReader>(*this, LogicalType::BIGINT, SchemaElement(), next_file_idx, 0, 0));
 	}
 
-	if (parquet_options.hive_partitioning) {
+	if (parquet_options.file_options.hive_partitioning) {
 		for (auto &partition : *hive_map) {
 			Value val = Value(partition.second);
 			root_struct_reader.child_readers.push_back(make_unique<GeneratedConstantColumnReader>(
@@ -437,7 +437,7 @@ void ParquetReader::InitializeSchema(const vector<string> &expected_names, const
 	}
 
 	// Add generated constant column for filename
-	if (parquet_options.filename) {
+	if (parquet_options.file_options.filename) {
 		if (std::find(names.begin(), names.end(), "filename") != names.end()) {
 			throw BinderException("Using filename option on file with column named filename is not supported");
 		}
@@ -456,7 +456,7 @@ void ParquetReader::InitializeSchema(const vector<string> &expected_names, const
 	}
 
 	// Add generated constant column for filename
-	if (parquet_options.hive_partitioning) {
+	if (parquet_options.file_options.hive_partitioning) {
 		for (auto &part : *hive_map) {
 			// We need to lookup the hive col in the cols of the file to avoid duplicating columns that are both
 			// in the file and the hive path
@@ -566,7 +566,7 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, const
 		}
 	}
 
-	if (parquet_options.hive_partitioning) {
+	if (parquet_options.file_options.hive_partitioning) {
 		hive_map = make_unique<std::map<string, string>>(HivePartitioning::Parse(file_name));
 	}
 
@@ -736,7 +736,7 @@ void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<column_
 
 	state.thrift_file_proto = CreateThriftProtocol(allocator, *state.file_handle, *file_opener, state.prefetch_mode);
 	state.root_reader = CreateReader(GetFileMetadata());
-	if (parquet_options.union_by_name) {
+	if (parquet_options.file_options.union_by_name) {
 		RearrangeChildReaders(state.root_reader, state.column_ids);
 	}
 
