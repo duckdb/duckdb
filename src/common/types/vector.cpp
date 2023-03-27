@@ -1079,6 +1079,7 @@ void Vector::FormatDeserialize(FormatDeserializer &deserializer, idx_t count) {
 			deserializer.SetTag("data");
 			auto read_count = deserializer.OnListBegin();
 			D_ASSERT(read_count == count);
+			(void)read_count; // otherwise unused variable error in release mode
 			for (idx_t i = 0; i < count; i++) {
 				// read the strings
 				auto str = deserializer.ReadString();
@@ -1096,6 +1097,7 @@ void Vector::FormatDeserialize(FormatDeserializer &deserializer, idx_t count) {
 			deserializer.SetTag("children");
 			auto read_size = deserializer.OnListBegin();
 			D_ASSERT(read_size == entries.size());
+			(void)read_size;
 			for (auto &entry : entries) {
 				deserializer.OnObjectBegin();
 				entry->FormatDeserialize(deserializer, count);
@@ -1115,6 +1117,7 @@ void Vector::FormatDeserialize(FormatDeserializer &deserializer, idx_t count) {
 			deserializer.SetTag("entries");
 			auto entries_count = deserializer.OnListBegin();
 			D_ASSERT(entries_count == count);
+			(void)entries_count;
 			for (idx_t i = 0; i < count; i++) {
 				deserializer.OnObjectBegin();
 				deserializer.ReadProperty("offset", list_entries[i].offset);
@@ -1129,6 +1132,7 @@ void Vector::FormatDeserialize(FormatDeserializer &deserializer, idx_t count) {
 			deserializer.OnObjectBegin();
 			child.FormatDeserialize(deserializer, list_size);
 			deserializer.OnObjectEnd();
+			break;
 		}
 		default:
 			throw InternalException("Unimplemented variable width type for Vector::Deserialize!");
