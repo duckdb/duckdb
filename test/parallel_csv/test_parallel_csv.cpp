@@ -39,7 +39,7 @@ idx_t MaxLineSize(string &path) {
 	infile.close();
 	return max_line_size;
 }
-bool CompareResults(vector<unique_ptr<DataChunk>> &ground_truth, vector<unique_ptr<DataChunk>> &result) {
+bool CompareResults(const vector<unique_ptr<DataChunk>> &ground_truth, vector<unique_ptr<DataChunk>> &result) {
 	if (ground_truth.size() != result.size()) {
 		// Sizes dont' match
 		return false;
@@ -85,6 +85,7 @@ vector<unique_ptr<DataChunk>> RunSingleThread(duckdb::Connection &conn, std::str
 	auto data_chunk = q_res->Fetch();
 	while (data_chunk) {
 		ground_truth.emplace_back(std::move(data_chunk));
+		data_chunk = q_res->Fetch();
 	}
 	return ground_truth;
 }
@@ -95,6 +96,7 @@ vector<unique_ptr<DataChunk>> RunParallel(duckdb::Connection &conn, std::string 
 	auto data_chunk = q_res->Fetch();
 	while (data_chunk) {
 		result.emplace_back(std::move(data_chunk));
+		data_chunk = q_res->Fetch();
 	}
 	return result;
 }
@@ -157,32 +159,35 @@ void RunTestOnFolder(const string &path, std::set<std::string> &skip) {
 	}
 }
 
-//TEST_CASE("Test One File", "[parallel-csv]") {
-//	unique_ptr<QueryResult> result;
-//	DuckDB db(nullptr);
-//	Connection con(db);
-//	std::set<std::string> skip;
-//	string file = "test/sql/copy/csv/data/people.csv";
-//	REQUIRE(RunFull(file, skip, con));
-//}
+TEST_CASE("Test One File", "[parallel-csv]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	std::set<std::string> skip;
+	string file = "test/sql/copy/csv/data/people.csv";
+	REQUIRE(RunFull(file, skip, con));
+}
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data", "[parallel-csv]") {
 	std::set<std::string> skip;
-	skip.insert("test/sql/copy/csv/data/people.csv");
 	RunTestOnFolder("test/sql/copy/csv/data/", skip);
 }
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/auto", "[parallel-csv]") {
 	std::set<std::string> skip;
+	// Thread count: 1 Buffer Size: 3 HIB
 	skip.insert("test/sql/copy/csv/data/auto/issue_1254.csv");
+	// Thread count: 1 Buffer Size: 4 HIB
 	skip.insert("test/sql/copy/csv/data/auto/issue_1254_rn.csv");
+	// Thread count: 1 Buffer Size: 15 HIB
 	skip.insert("test/sql/copy/csv/data/auto/normalize_names_1.csv");
+	// Thread count: 1 Buffer Size: 15 HIB
 	skip.insert("test/sql/copy/csv/data/auto/normalize_names_3.csv");
+	// Thread count: 1 Buffer Size: 18 HIB
 	skip.insert("test/sql/copy/csv/data/auto/normalize_names_2.csv");
+	//	Thread count: 1 Buffer Size: 16 HIB
 	skip.insert("test/sql/copy/csv/data/auto/normalize_names_4.csv");
-	skip.insert("test/sql/copy/csv/data/auto/normalize_names_5.csv");
-	skip.insert("test/sql/copy/csv/data/auto/rfc_conform_quote.csv");
-	skip.insert("test/sql/copy/csv/data/auto/rfc_conform.csv");
+	//	Thread count: 1 Buffer Size: 196
 	skip.insert("test/sql/copy/csv/data/auto/titlebasicsdebug.tsv");
 	RunTestOnFolder("test/sql/copy/csv/data/auto/", skip);
 }
@@ -194,7 +199,6 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/auto/glob", "[pa
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/error/date_multiple_file", "[parallel-csv]") {
 	std::set<std::string> skip;
-	skip.insert("test/sql/copy/csv/data/error/date_multiple_file/1.csv");
 	RunTestOnFolder("test/sql/copy/csv/data/error/date_multiple_file/", skip);
 }
 
@@ -215,7 +219,6 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/glob/a3", "[para
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/glob/empty", "[parallel-csv]") {
 	std::set<std::string> skip;
-	skip.insert("test/sql/copy/csv/data/glob/empty/empty.csv");
 	RunTestOnFolder("test/sql/copy/csv/data/glob/empty/", skip);
 }
 
@@ -226,39 +229,33 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/glob/i1", "[para
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/real", "[parallel-csv]") {
 	std::set<std::string> skip;
-	skip.insert("test/sql/copy/csv/data/real/ncvoter.csv");
-	skip.insert("test/sql/copy/csv/data/real/lineitem_sample.csv");
-	skip.insert("test/sql/copy/csv/data/real/web_page.csv");
-	skip.insert("test/sql/copy/csv/data/real/imdb_movie_info_escaped.csv");
-	skip.insert("test/sql/copy/csv/data/real/nfc_normalization.csv");
-	skip.insert("test/sql/copy/csv/data/real/ontime_sample.csv");
+	// Thread count: 1 Buffer Size: 1264
 	skip.insert("test/sql/copy/csv/data/real/voter.tsv");
+	// Thread count: 1 Buffer Size: 1982
 	skip.insert("test/sql/copy/csv/data/real/tmp2013-06-15.csv.gz");
 	RunTestOnFolder("test/sql/copy/csv/data/real/", skip);
 }
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/test", "[parallel-csv]") {
 	std::set<std::string> skip;
-	skip.insert("test/sql/copy/csv/data/test/no_newline_unicode.csv");
-	skip.insert("test/sql/copy/csv/data/test/long_escaped_value_unicode.csv");
+//	Thread count: 1 Buffer Size: 18
 	skip.insert("test/sql/copy/csv/data/test/big_header.csv");
-	skip.insert("test/sql/copy/csv/data/test/new_line_string.csv");
-	skip.insert("test/sql/copy/csv/data/test/blob.csv");
-	skip.insert("test/sql/copy/csv/data/test/test_long_line.csv");
-	skip.insert("test/sql/copy/csv/data/test/long_escaped_value.csv");
-	skip.insert("test/sql/copy/csv/data/test/shared_substring_large.csv");
+	//  Thread count: 1 Buffer Size: 52
+	skip.insert("test/sql/copy/csv/data/test/multi_char_large.csv");
+	// Thread count: 1 Buffer Size: 1
+	skip.insert("test/sql/copy/csv/data/test/many_empty_lines.csv");
+	// Thread count: 1 Buffer Size: 2 HIB
 	skip.insert("test/sql/copy/csv/data/test/windows_newline_empty.csv");
-	skip.insert("test/sql/copy/csv/data/test/multi_char.csv");
-	skip.insert("test/sql/copy/csv/data/test/new_line_string_rn.csv");
-	skip.insert("test/sql/copy/csv/data/test/new_line_string_rn_exc.csv");
+	//	Thread count: 1 Buffer Size: 2196
 	skip.insert("test/sql/copy/csv/data/test/issue3562_assertion.csv.gz");
-	skip.insert("test/sql/copy/csv/data/test/quoted_newline.csv"); // Breaking on buffer size
 	RunTestOnFolder("test/sql/copy/csv/data/test/", skip);
 }
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/zstd", "[parallel-csv]") {
 	std::set<std::string> skip;
+	// Thread count: 1 Buffer Size: 539
 	skip.insert("test/sql/copy/csv/data/zstd/ncvoter.csv.zst");
-	skip.insert("est/sql/copy/csv/data/zstd/lineitem1k.tbl.zst");  // Breaking on buffer size
+	// Thread count: 1 Buffer Size: 1430
+	skip.insert("test/sql/copy/csv/data/zstd/lineitem1k.tbl.zst");  // Breaking on buffer size
 	RunTestOnFolder("test/sql/copy/csv/data/zstd/", skip);
 }
