@@ -158,7 +158,7 @@ void GroupedAggregateHashTable::VerifyInternal() {
 }
 
 idx_t GroupedAggregateHashTable::InitialCapacity() {
-	return STANDARD_VECTOR_SIZE * 2;
+	return STANDARD_VECTOR_SIZE * 2ULL;
 }
 
 idx_t GroupedAggregateHashTable::GetMaxCapacity(HtEntryType entry_type, idx_t tuple_size) {

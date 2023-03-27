@@ -80,10 +80,10 @@ idx_t PartitionableHashTable::ListAddChunk(HashTableList &list, DataChunk &group
                                            DataChunk &payload, const vector<idx_t> &filter) {
 	// If this is false, a single AddChunk would overflow the max capacity
 	D_ASSERT(list.empty() || groups.size() <= list.back()->MaxCapacity());
-	if (list.empty() || list.back()->Size() >= list.back()->ResizeThreshold()) {
+	if (list.empty() || list.back()->Size() + groups.size() >= list.back()->MaxCapacity()) {
 		idx_t new_capacity = GroupedAggregateHashTable::InitialCapacity();
 		if (!list.empty()) {
-			new_capacity = list.back()->Capacity() * 2;
+			new_capacity = list.back()->MaxCapacity();
 			// early release first part of ht and prevent adding of more data
 			list.back()->Finalize();
 		}
