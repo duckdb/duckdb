@@ -206,8 +206,7 @@ public:
 			}
 		}
 
-		FileSystem &fs = FileSystem::GetFileSystem(context);
-		auto files = fs.GlobFiles(info.file_path, context);
+		auto files = MultiFileReader::GetFileList(context, Value(info.file_path), "Parquet");
 
 		// The most likely path (Parquet read without union by name option)
 		if (!parquet_options.file_options.union_by_name) {

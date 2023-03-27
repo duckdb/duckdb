@@ -15,6 +15,7 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/multi_file_reader_options.hpp"
 
 namespace duckdb {
 
@@ -108,12 +109,8 @@ struct BufferedCSVReaderOptions {
 	bool auto_detect = false;
 	//! The file path of the CSV file to read
 	string file_path;
-	//! Whether or not to include a file name column
-	bool include_file_name = false;
-	//! Whether or not to include a parsed hive partition columns
-	bool include_parsed_hive_partitions = false;
-	//! Whether or not to union files with different (but compatible) columns
-	bool union_by_name = false;
+	//! Multi-file reader options
+	MultiFileReaderOptions file_options;
 	//! Buffer Size (Parallel Scan)
 	idx_t buffer_size = CSVBuffer::INITIAL_BUFFER_SIZE_COLOSSAL;
 	//! Decimal separator when reading as numeric

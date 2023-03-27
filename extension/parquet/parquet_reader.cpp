@@ -455,6 +455,8 @@ void ParquetReader::InitializeSchema(const vector<string> &expected_names, const
 		names.emplace_back("file_row_number");
 	}
 
+
+
 	// Add generated constant column for filename
 	if (parquet_options.file_options.hive_partitioning) {
 		for (auto &part : *hive_map) {

@@ -10,7 +10,7 @@
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
-
+#include "duckdb/common/multi_file_reader.hpp"
 #include <limits>
 
 namespace duckdb {
@@ -85,11 +85,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
                                             vector<LogicalType> &expected_types) {
 	auto bind_data = make_unique<ReadCSVData>();
 	bind_data->sql_types = expected_types;
-
-	string file_pattern = info.file_path;
-	vector<string> patterns {file_pattern};
-
-	bind_data->InitializeFiles(context, patterns);
+	bind_data->files = MultiFileReader::GetFileList(context, Value(info.file_path), "CSV");
 
 	auto &options = bind_data->options;
 

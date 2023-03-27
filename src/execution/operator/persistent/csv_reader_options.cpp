@@ -172,8 +172,6 @@ void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value 
 		SetDateFormat(LogicalTypeId::TIMESTAMP, format, true);
 	} else if (loption == "ignore_errors") {
 		ignore_errors = ParseBoolean(value, loption);
-	} else if (loption == "union_by_name") {
-		union_by_name = ParseBoolean(value, loption);
 	} else if (loption == "buffer_size") {
 		buffer_size = ParseInteger(value, loption);
 		if (buffer_size == 0) {
