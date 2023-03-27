@@ -119,7 +119,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 
 	m.def("register_scalar", &DuckDBPyConnection::RegisterScalarUDF,
 	      "Register a scalar UDF so it can be used in queries", py::arg("name"), py::arg("function"),
-	      py::arg("arguments"), py::arg("return_type"));
+	      py::arg("arguments"), py::arg("return_type"), py::kw_only(), py::arg("varargs") = false);
 
 	DefineMethod({"sqltype", "dtype", "type"}, m, &DuckDBPyConnection::Type,
 	             "Create a type object by parsing the 'type_str' string", py::arg("type_str"));
@@ -339,7 +339,8 @@ scalar_function_t CreateScalarUDF(PyObject *function) {
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::object &udf,
                                                                      const py::list &arguments,
-                                                                     shared_ptr<DuckDBPyType> return_type_p) {
+                                                                     shared_ptr<DuckDBPyType> return_type_p,
+                                                                     bool varargs) {
 	if (!connection) {
 		throw ConnectionException("Connection already closed!");
 	}
@@ -356,6 +357,9 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterScalarUDF(const strin
 	}
 
 	ScalarFunction scalar_function(name, std::move(args), return_type_p->Type(), func);
+	if (varargs) {
+		scalar_function.varargs = LogicalType::ANY;
+	}
 	CreateScalarFunctionInfo info(scalar_function);
 
 	context.transaction.BeginTransaction();

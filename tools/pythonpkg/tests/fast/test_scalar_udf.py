@@ -27,6 +27,16 @@ class TestScalarUDF(object):
         res = con.sql('select i, plus_one(i) from test_vector_types(NULL::BIGINT, false) t(i), range(2000)')
         assert len(res) == 22000
 
+    def test_varargs(self, duckdb_cursor):
+        def variable_args(*args):
+            amount = len(args)
+            return amount
+        
+        con = duckdb_cursor
+        con.register_scalar('varargs', variable_args, [], BIGINT, varargs=True)
+        res = con.sql("""select varargs('5', '3', '2', 1, 0.12345)""").fetchall()
+        assert res == [(5,)]
+
     def test_overwrite_name(self, duckdb_cursor):
         # TODO: test proper behavior when you register two functions with the same name
         
