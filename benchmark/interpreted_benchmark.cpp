@@ -314,7 +314,7 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 	auto full_db_path = GetDatabasePath();
 	try {
 		state = make_unique<InterpretedBenchmarkState>(full_db_path);
-	} catch (Exception(e)) {
+	} catch (Exception &e) {
 		// if the connection throws an error, chances are it's a storage format error.
 		// In this case delete the file and connect again.
 		DeleteDatabase(full_db_path);

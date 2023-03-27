@@ -27,18 +27,7 @@
 namespace duckdb {
 
 class ConflictManager;
-
-struct ARTIndexScanState : public IndexScanState {
-
-	//! Scan predicates (single predicate scan or range scan)
-	Value values[2];
-	//! Expressions of the scan predicates
-	ExpressionType expressions[2];
-	bool checked = false;
-	//! All scanned row IDs
-	vector<row_t> result_ids;
-	Iterator iterator;
-};
+struct ARTIndexScanState;
 
 enum class VerifyExistenceType : uint8_t {
 	APPEND = 0,    // appends to a table
@@ -72,7 +61,7 @@ public:
 	          vector<row_t> &result_ids) override;
 
 	//! Called when data is appended to the index. The lock obtained from InitializeLock must be held
-	bool Append(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
+	PreservedError Append(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 	//! Verify that data can be appended to the index without a constraint violation
 	void VerifyAppend(DataChunk &chunk) override;
 	//! Verify that data can be appended to the index without a constraint violation using the conflict manager
@@ -80,7 +69,7 @@ public:
 	//! Delete a chunk of entries from the index. The lock obtained from InitializeLock must be held
 	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 	//! Insert a chunk of entries into the index
-	bool Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
+	PreservedError Insert(IndexLock &lock, DataChunk &data, Vector &row_ids) override;
 
 	//! Construct an ART from a vector of sorted keys
 	bool ConstructFromSorted(idx_t count, vector<Key> &keys, Vector &row_identifiers);

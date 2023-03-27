@@ -34,10 +34,69 @@ using duckdb_parquet::format::Encoding;
 using duckdb_parquet::format::PageType;
 using duckdb_parquet::format::Type;
 
-const uint32_t ParquetDecodeUtils::BITPACK_MASKS[] = {
-    0,       1,       3,        7,        15,       31,        63,        127,       255,        511,       1023,
-    2047,    4095,    8191,     16383,    32767,    65535,     131071,    262143,    524287,     1048575,   2097151,
-    4194303, 8388607, 16777215, 33554431, 67108863, 134217727, 268435455, 536870911, 1073741823, 2147483647};
+const uint64_t ParquetDecodeUtils::BITPACK_MASKS[] = {0,
+                                                      1,
+                                                      3,
+                                                      7,
+                                                      15,
+                                                      31,
+                                                      63,
+                                                      127,
+                                                      255,
+                                                      511,
+                                                      1023,
+                                                      2047,
+                                                      4095,
+                                                      8191,
+                                                      16383,
+                                                      32767,
+                                                      65535,
+                                                      131071,
+                                                      262143,
+                                                      524287,
+                                                      1048575,
+                                                      2097151,
+                                                      4194303,
+                                                      8388607,
+                                                      16777215,
+                                                      33554431,
+                                                      67108863,
+                                                      134217727,
+                                                      268435455,
+                                                      536870911,
+                                                      1073741823,
+                                                      2147483647,
+                                                      4294967295,
+                                                      8589934591,
+                                                      17179869183,
+                                                      34359738367,
+                                                      68719476735,
+                                                      137438953471,
+                                                      274877906943,
+                                                      549755813887,
+                                                      1099511627775,
+                                                      2199023255551,
+                                                      4398046511103,
+                                                      8796093022207,
+                                                      17592186044415,
+                                                      35184372088831,
+                                                      70368744177663,
+                                                      140737488355327,
+                                                      281474976710655,
+                                                      562949953421311,
+                                                      1125899906842623,
+                                                      2251799813685247,
+                                                      4503599627370495,
+                                                      9007199254740991,
+                                                      18014398509481983,
+                                                      36028797018963967,
+                                                      72057594037927935,
+                                                      144115188075855871,
+                                                      288230376151711743,
+                                                      576460752303423487,
+                                                      1152921504606846975,
+                                                      2305843009213693951,
+                                                      4611686018427387903};
 
 const uint8_t ParquetDecodeUtils::BITPACK_DLEN = 8;
 
@@ -449,13 +508,13 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t 
 			// TODO keep this in the state
 			auto read_buf = make_shared<ResizeableBuffer>();
 
-			switch (type.id()) {
-			case LogicalTypeId::INTEGER:
+			switch (type.InternalType()) {
+			case PhysicalType::INT32:
 				read_buf->resize(reader.allocator, sizeof(int32_t) * (read_now - null_count));
 				dbp_decoder->GetBatch<int32_t>(read_buf->ptr, read_now - null_count);
 
 				break;
-			case LogicalTypeId::BIGINT:
+			case PhysicalType::INT64:
 				read_buf->resize(reader.allocator, sizeof(int64_t) * (read_now - null_count));
 				dbp_decoder->GetBatch<int64_t>(read_buf->ptr, read_now - null_count);
 				break;
@@ -1340,8 +1399,29 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 		                                                                            file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:
-		return make_unique<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTime>>(
-		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		if (schema_p.__isset.logicalType && schema_p.logicalType.__isset.TIME) {
+			if (schema_p.logicalType.TIME.unit.__isset.MILLIS) {
+				return make_unique<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTimeMs>>(
+				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+			} else if (schema_p.logicalType.TIME.unit.__isset.MICROS) {
+				return make_unique<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTime>>(
+				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+			} else if (schema_p.logicalType.TIME.unit.__isset.NANOS) {
+				return make_unique<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTimeNs>>(
+				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+			}
+		} else if (schema_p.__isset.converted_type) {
+			switch (schema_p.converted_type) {
+			case ConvertedType::TIME_MICROS:
+				return make_unique<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTime>>(
+				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+			case ConvertedType::TIME_MILLIS:
+				return make_unique<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTimeMs>>(
+				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+			default:
+				break;
+			}
+		}
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
 		return make_unique<StringColumnReader>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);

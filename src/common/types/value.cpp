@@ -330,6 +330,52 @@ Value Value::MaximumValue(const LogicalType &type) {
 	}
 }
 
+Value Value::Infinity(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::DATE:
+		return Value::DATE(date_t::infinity());
+	case LogicalTypeId::TIMESTAMP:
+		return Value::TIMESTAMP(timestamp_t::infinity());
+	case LogicalTypeId::TIMESTAMP_MS:
+		return Value::TIMESTAMPMS(timestamp_t::infinity());
+	case LogicalTypeId::TIMESTAMP_NS:
+		return Value::TIMESTAMPNS(timestamp_t::infinity());
+	case LogicalTypeId::TIMESTAMP_SEC:
+		return Value::TIMESTAMPSEC(timestamp_t::infinity());
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return Value::TIMESTAMPTZ(timestamp_t::infinity());
+	case LogicalTypeId::FLOAT:
+		return Value::FLOAT(std::numeric_limits<float>::infinity());
+	case LogicalTypeId::DOUBLE:
+		return Value::DOUBLE(std::numeric_limits<double>::infinity());
+	default:
+		throw InvalidTypeException(type, "Infinity requires numeric type");
+	}
+}
+
+Value Value::NegativeInfinity(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::DATE:
+		return Value::DATE(date_t::ninfinity());
+	case LogicalTypeId::TIMESTAMP:
+		return Value::TIMESTAMP(timestamp_t::ninfinity());
+	case LogicalTypeId::TIMESTAMP_MS:
+		return Value::TIMESTAMPMS(timestamp_t::ninfinity());
+	case LogicalTypeId::TIMESTAMP_NS:
+		return Value::TIMESTAMPNS(timestamp_t::ninfinity());
+	case LogicalTypeId::TIMESTAMP_SEC:
+		return Value::TIMESTAMPSEC(timestamp_t::ninfinity());
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return Value::TIMESTAMPTZ(timestamp_t::ninfinity());
+	case LogicalTypeId::FLOAT:
+		return Value::FLOAT(-std::numeric_limits<float>::infinity());
+	case LogicalTypeId::DOUBLE:
+		return Value::DOUBLE(-std::numeric_limits<double>::infinity());
+	default:
+		throw InvalidTypeException(type, "NegativeInfinity requires numeric type");
+	}
+}
+
 Value Value::BOOLEAN(int8_t value) {
 	Value result(LogicalType::BOOLEAN);
 	result.value_.boolean = bool(value);
@@ -1229,99 +1275,6 @@ timestamp_t Value::GetValueUnsafe() const {
 
 template <>
 interval_t Value::GetValueUnsafe() const {
-	D_ASSERT(type_.InternalType() == PhysicalType::INTERVAL);
-	return value_.interval;
-}
-
-//===--------------------------------------------------------------------===//
-// GetReferenceUnsafe
-//===--------------------------------------------------------------------===//
-template <>
-int8_t &Value::GetReferenceUnsafe() {
-	D_ASSERT(type_.InternalType() == PhysicalType::INT8 || type_.InternalType() == PhysicalType::BOOL);
-	return value_.tinyint;
-}
-
-template <>
-int16_t &Value::GetReferenceUnsafe() {
-	D_ASSERT(type_.InternalType() == PhysicalType::INT16);
-	return value_.smallint;
-}
-
-template <>
-int32_t &Value::GetReferenceUnsafe() {
-	D_ASSERT(type_.InternalType() == PhysicalType::INT32);
-	return value_.integer;
-}
-
-template <>
-int64_t &Value::GetReferenceUnsafe() {
-	D_ASSERT(type_.InternalType() == PhysicalType::INT64);
-	return value_.bigint;
-}
-
-template <>
-hugeint_t &Value::GetReferenceUnsafe() {
-	D_ASSERT(type_.InternalType() == PhysicalType::INT128);
-	return value_.hugeint;
-}
-
-template <>
-uint8_t &Value::GetReferenceUnsafe() {
-	D_ASSERT(type_.InternalType() == PhysicalType::UINT8);
-	return value_.utinyint;
-}
-
-template <>
-uint16_t &Value::GetReferenceUnsafe() {
-	D_ASSERT(type_.InternalType() == PhysicalType::UINT16);
-	return value_.usmallint;
-}
-
-template <>
-uint32_t &Value::GetReferenceUnsafe() {
-	D_ASSERT(type_.InternalType() == PhysicalType::UINT32);
-	return value_.uinteger;
-}
-
-template <>
-uint64_t &Value::GetReferenceUnsafe() {
-	D_ASSERT(type_.InternalType() == PhysicalType::UINT64);
-	return value_.ubigint;
-}
-
-template <>
-float &Value::GetReferenceUnsafe() {
-	D_ASSERT(type_.InternalType() == PhysicalType::FLOAT);
-	return value_.float_;
-}
-
-template <>
-double &Value::GetReferenceUnsafe() {
-	D_ASSERT(type_.InternalType() == PhysicalType::DOUBLE);
-	return value_.double_;
-}
-
-template <>
-date_t &Value::GetReferenceUnsafe() {
-	D_ASSERT(type_.InternalType() == PhysicalType::INT32);
-	return value_.date;
-}
-
-template <>
-dtime_t &Value::GetReferenceUnsafe() {
-	D_ASSERT(type_.InternalType() == PhysicalType::INT64);
-	return value_.time;
-}
-
-template <>
-timestamp_t &Value::GetReferenceUnsafe() {
-	D_ASSERT(type_.InternalType() == PhysicalType::INT64);
-	return value_.timestamp;
-}
-
-template <>
-interval_t &Value::GetReferenceUnsafe() {
 	D_ASSERT(type_.InternalType() == PhysicalType::INTERVAL);
 	return value_.interval;
 }

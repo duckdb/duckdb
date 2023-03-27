@@ -18,6 +18,10 @@ string JoinRef::ToString() const {
 		result += "NATURAL ";
 		result += JoinTypeToString(type) + " JOIN ";
 		break;
+	case JoinRefType::ASOF:
+		result += "ASOF ";
+		result += JoinTypeToString(type) + " JOIN ";
+		break;
 	case JoinRefType::CROSS:
 		result += ", ";
 		break;
