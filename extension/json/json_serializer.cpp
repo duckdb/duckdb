@@ -57,6 +57,7 @@ void JsonSerializer::OnMapBegin(idx_t count) {
 
 void JsonSerializer::OnMapEntryBegin() {
 	auto new_value = yyjson_mut_obj(doc);
+	PushValue(new_value);
 	stack.push_back(new_value);
 }
 
