@@ -17,6 +17,12 @@ CREATE TABLE db1.table_in_db1(i int);
 statement ok
 CREATE TABLE db2.table_in_db2(i int);
 
+statement ok
+CREATE SCHEMA db2.test_schema;
+
+statement ok
+CREATE TABLE db2.test_schema.table_in_db2_test_schema(i int);
+
 query I
 SHOW TABLES
 ----
@@ -36,3 +42,11 @@ query I
 SHOW TABLES
 ----
 table_in_db2
+
+statement ok
+USE db2.test_schema;
+
+query I
+SHOW TABLES
+----
+table_in_db2_test_schema
