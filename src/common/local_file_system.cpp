@@ -832,6 +832,46 @@ static bool HasGlob(const string &str) {
 	}
 	return false;
 }
+static bool IsCrawl(const string &glob) {
+	// glob must match exactly
+	return glob == "**";
+}
+static bool HasMultipleCrawl(const vector<string> &splits) {
+	return std::count(splits.begin(), splits.end(), "**") > 1;
+}
+static bool IsSymbolicLink(const string &path) {
+#ifndef _WIN32
+	struct stat status;
+	return (lstat(path.c_str(), &status) != -1 && S_ISLNK(status.st_mode));
+#else
+	auto attributes = WindowsGetFileAttributes(path);
+	if (attributes == INVALID_FILE_ATTRIBUTES)
+		return false;
+	return attributes & FILE_ATTRIBUTE_REPARSE_POINT;
+#endif
+}
+
+static void RecursiveGlobDirectories(FileSystem &fs, const string &path, vector<string> &result, bool match_directory,
+                                     bool join_path) {
+
+	fs.ListFiles(path, [&](const string &fname, bool is_directory) {
+		string concat;
+		if (join_path) {
+			concat = fs.JoinPath(path, fname);
+		} else {
+			concat = fname;
+		}
+		if (IsSymbolicLink(concat)) {
+			return;
+		}
+		if (is_directory == match_directory) {
+			result.push_back(concat);
+		}
+		if (is_directory) {
+			RecursiveGlobDirectories(fs, concat, result, match_directory, true);
+		}
+	});
+}
 
 static void GlobFilesInternal(FileSystem &fs, const string &path, const string &glob, bool match_directory,
                               vector<string> &result, bool join_path) {
@@ -933,6 +973,10 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 		}
 	}
 
+	if (HasMultipleCrawl(splits)) {
+		throw IOException("Cannot use multiple \'**\' in one path");
+	}
+
 	for (idx_t i = absolute_path ? 1 : 0; i < splits.size(); i++) {
 		bool is_last_chunk = i + 1 == splits.size();
 		bool has_glob = HasGlob(splits[i]);
@@ -949,14 +993,27 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 				}
 			}
 		} else {
-			if (previous_directories.empty()) {
-				// no previous directories: list in the current path
-				GlobFilesInternal(*this, ".", splits[i], !is_last_chunk, result, false);
+			if (IsCrawl(splits[i])) {
+				if (!is_last_chunk) {
+					result = previous_directories;
+				}
+				if (previous_directories.empty()) {
+					RecursiveGlobDirectories(*this, ".", result, !is_last_chunk, false);
+				} else {
+					for (auto &prev_dir : previous_directories) {
+						RecursiveGlobDirectories(*this, prev_dir, result, !is_last_chunk, true);
+					}
+				}
 			} else {
-				// previous directories
-				// we iterate over each of the previous directories, and apply the glob of the current directory
-				for (auto &prev_directory : previous_directories) {
-					GlobFilesInternal(*this, prev_directory, splits[i], !is_last_chunk, result, true);
+				if (previous_directories.empty()) {
+					// no previous directories: list in the current path
+					GlobFilesInternal(*this, ".", splits[i], !is_last_chunk, result, false);
+				} else {
+					// previous directories
+					// we iterate over each of the previous directories, and apply the glob of the current directory
+					for (auto &prev_directory : previous_directories) {
+						GlobFilesInternal(*this, prev_directory, splits[i], !is_last_chunk, result, true);
+					}
 				}
 			}
 		}

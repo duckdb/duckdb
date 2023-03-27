@@ -25,6 +25,13 @@ public:
 	vector<GroupingSet> grouping_sets;
 };
 
+struct BoundUnnestNode {
+	//! The index of the UNNEST node
+	idx_t index;
+	//! The set of expressions
+	vector<unique_ptr<Expression>> expressions;
+};
+
 //! Bound equivalent of SelectNode
 class BoundSelectNode : public BoundQueryNode {
 public:
@@ -78,9 +85,8 @@ public:
 	//! Window functions to compute (only used if HasWindow is true)
 	vector<unique_ptr<Expression>> windows;
 
-	idx_t unnest_index;
 	//! Unnest expression
-	vector<unique_ptr<Expression>> unnests;
+	unordered_map<idx_t, BoundUnnestNode> unnests;
 
 	//! Index of pruned node
 	idx_t prune_index;

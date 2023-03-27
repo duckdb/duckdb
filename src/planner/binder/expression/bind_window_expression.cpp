@@ -119,10 +119,10 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 	return bound.expr->return_type;
 }
 
-BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
+BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	auto name = window.GetName();
 
-	QueryErrorContext error_context(binder.root_statement, window.query_location);
+	QueryErrorContext error_context(binder.GetRootStatement(), window.query_location);
 	if (inside_window) {
 		throw BinderException(error_context.FormatError("window function calls cannot be nested"));
 	}

@@ -467,6 +467,7 @@ void CheckpointReader::ReadTableData(ClientContext &context, MetaBlockReader &re
 	TableDataReader data_reader(table_data_reader, bound_info);
 
 	data_reader.ReadTableData();
+	bound_info.data->total_rows = reader.Read<idx_t>();
 
 	// Get any indexes block info
 	idx_t num_indexes = reader.Read<idx_t>();

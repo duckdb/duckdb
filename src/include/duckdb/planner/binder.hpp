@@ -73,7 +73,6 @@ struct CorrelatedColumnInfo {
 */
 class Binder : public std::enable_shared_from_this<Binder> {
 	friend class ExpressionBinder;
-	friend class SelectBinder;
 	friend class RecursiveSubqueryPlanner;
 
 public:
@@ -185,6 +184,9 @@ public:
 	BindingMode GetBindingMode();
 	void AddTableName(string table_name);
 	const unordered_set<string> &GetTableNames();
+	SQLStatement *GetRootStatement() {
+		return root_statement;
+	}
 
 	void SetCanContainNulls(bool can_contain_nulls);
 

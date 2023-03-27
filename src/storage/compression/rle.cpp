@@ -6,6 +6,7 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 #include <functional>
 
 namespace duckdb {

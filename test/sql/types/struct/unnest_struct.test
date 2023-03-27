@@ -1,0 +1,114 @@
+# name: test/sql/types/struct/unnest_struct.test
+# description: Test UNNEST of struct fields
+# group: [struct]
+
+require skip_reload
+
+statement ok
+PRAGMA enable_verification
+
+query II
+SELECT UNNEST({'a': 42, 'b': 88})
+----
+42	88
+
+query II
+SELECT a, b FROM (SELECT UNNEST({'a': 42, 'b': 88}))
+----
+42	88
+
+query II
+SELECT UNNEST({'a': 42, 'b': {'c': 88, 'd': 99}})
+----
+42	{'c': 88, 'd': 99}
+
+query III
+SELECT UNNEST({'a': 42, 'b': {'c': 88, 'd': 99}}, recursive := true)
+----
+42	88	99
+
+query III
+SELECT UNNEST({'a': 42, 'b': {'c': {'x': 4}, 'd': 99}}, max_depth := 2)
+----
+42	{'x': 4}	99
+
+query III
+SELECT a, c, d FROM (SELECT UNNEST({'a': 42, 'b': {'c': 88, 'd': 99}}, recursive := true))
+----
+42	88	99
+
+# lists of structs
+query I
+SELECT UNNEST([{'a': 42, 'b': 88}, {'a': NULL, 'b': 99}])
+----
+{'a': 42, 'b': 88}
+{'a': NULL, 'b': 99}
+
+query II
+SELECT UNNEST([{'a': 42, 'b': 88}, {'a': NULL, 'b': 99}], recursive := true)
+----
+42	88
+NULL	99
+
+query I
+SELECT UNNEST([[{'a': 42, 'b': {'x': 99}}, {'a': NULL, 'b': {'x': NULL}}]], max_depth:=1)
+----
+[{'a': 42, 'b': {'x': 99}}, {'a': NULL, 'b': {'x': NULL}}]
+
+query I
+SELECT UNNEST([[{'a': 42, 'b': {'x': 99}}, {'a': NULL, 'b': {'x': NULL}}]], max_depth:=2)
+----
+{'a': 42, 'b': {'x': 99}}
+{'a': NULL, 'b': {'x': NULL}}
+
+query II
+SELECT UNNEST([[{'a': 42, 'b': {'x': 99}}, {'a': NULL, 'b': {'x': NULL}}]], max_depth:=3)
+----
+42	{'x': 99}
+NULL	{'x': NULL}
+
+query II
+SELECT UNNEST([[{'a': 42, 'b': {'x': 99}}, {'a': NULL, 'b': {'x': NULL}}]], max_depth:=4)
+----
+42	99
+NULL	NULL
+
+# struct of lists (unnest only works in the order of "lists -> structs"), we stop after unnesting the struct
+query I
+SELECT UNNEST({'a': [1, 2, 3]}, recursive := true)
+----
+[1, 2, 3]
+
+# mix of unnest of lists and structs
+query III
+SELECT UNNEST({'a': 44, 'b': 88}), UNNEST([1, 2, 3])
+----
+44	88	1
+44	88	2
+44	88	3
+
+query III
+SELECT UNNEST({'a': 44, 'b': 88}), UNNEST([[1, 2, 3], [4, 5]], recursive := true)
+----
+44	88	1
+44	88	2
+44	88	3
+44	88	4
+44	88	5
+
+# duplicate names
+query III
+SELECT a, "a:1", b FROM (SELECT UNNEST({'a': 42, 'b': {'a': 88, 'b': 99}}, recursive := true))
+----
+42	88	99
+
+# unnest of struct must be the root
+statement error
+SELECT UNNEST({'a': 42, 'b': 88}) + 42
+----
+can only be applied as the root element
+
+statement error
+SELECT UNNEST(UNNEST([{'a': 42, 'b': 88}, {'a': NULL, 'b': 99}]))
+----
+Nested UNNEST calls are not supported

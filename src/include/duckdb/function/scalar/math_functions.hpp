@@ -122,4 +122,12 @@ struct IsFiniteFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct GreatestCommonDivisorFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct LeastCommonMultipleFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 } // namespace duckdb

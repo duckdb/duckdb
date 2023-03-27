@@ -1169,6 +1169,7 @@ typedef struct PGUpdateStmt {
 typedef struct PGPivot {
 	PGNodeTag type;
 	PGList *pivot_columns;  /* The column names to pivot on */
+	PGList *unpivot_columns;/* The column names to unpivot */
 	PGList *pivot_value;    /* The set of pivot values */
 	char *pivot_enum;       /* The enum to fetch the unique values from */
 } PGPivot;

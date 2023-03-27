@@ -10,7 +10,7 @@ namespace duckdb {
 
 HavingBinder::HavingBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info,
                            case_insensitive_map_t<idx_t> &alias_map, AggregateHandling aggregate_handling)
-    : SelectBinder(binder, context, node, info), column_alias_binder(node, alias_map),
+    : BaseSelectBinder(binder, context, node, info), column_alias_binder(node, alias_map),
       aggregate_handling(aggregate_handling) {
 	target_type = LogicalType(LogicalTypeId::BOOLEAN);
 }
@@ -28,7 +28,7 @@ BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, i
 		if (depth > 0) {
 			throw BinderException("Having clause cannot reference column in correlated subquery and group by all");
 		}
-		auto expr = duckdb::SelectBinder::BindExpression(expr_ptr, depth);
+		auto expr = duckdb::BaseSelectBinder::BindExpression(expr_ptr, depth);
 		if (expr.HasError()) {
 			return expr;
 		}
@@ -54,7 +54,7 @@ BindResult HavingBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, 
 	case ExpressionClass::COLUMN_REF:
 		return BindColumnRef(expr_ptr, depth, root_expression);
 	default:
-		return duckdb::SelectBinder::BindExpression(expr_ptr, depth);
+		return duckdb::BaseSelectBinder::BindExpression(expr_ptr, depth);
 	}
 }
 
