@@ -22,6 +22,12 @@ class TestPandasObject(object):
         df = con.execute('select * from view2').fetchall()
         assert df == [(1, None, 2),(1, 1.1, 2), (1, 1.1, 2), (1, 1.1, 2)]
 
+    def test_tuple_to_list(self, duckdb_cursor):
+        tuple_df = pd.DataFrame.from_dict(dict(nums=[(1,2,3,),(4,5,6,)]))
+        duckdb_cursor.execute("CREATE TABLE test as SELECT * FROM tuple_df");
+        res = duckdb_cursor.table('test').fetchall()
+        assert res == [([1, 2, 3],), ([4, 5, 6],)]
+
     def test_2273(self, duckdb_cursor):                  
         df_in = pd.DataFrame([[datetime.date(1992, 7, 30)]])
         assert duckdb.query("Select * from df_in").fetchall() == [(datetime.date(1992, 7, 30),)]
