@@ -85,10 +85,12 @@ public:
 public:
 	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types,
 	                          vector<LogicalType> payload_types, const vector<BoundAggregateExpression *> &aggregates,
-	                          HtEntryType entry_type = HtEntryType::HT_WIDTH_64, idx_t initial_capacity = InitialCapacity());
+	                          HtEntryType entry_type = HtEntryType::HT_WIDTH_64,
+	                          idx_t initial_capacity = InitialCapacity());
 	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types,
 	                          vector<LogicalType> payload_types, vector<AggregateObject> aggregates,
-	                          HtEntryType entry_type = HtEntryType::HT_WIDTH_64, idx_t initial_capacity = InitialCapacity());
+	                          HtEntryType entry_type = HtEntryType::HT_WIDTH_64,
+	                          idx_t initial_capacity = InitialCapacity());
 	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types);
 	~GroupedAggregateHashTable() override;
 
@@ -159,7 +161,7 @@ private:
 	//! The hashes of the HT
 	BufferHandle hashes_hdl;
 	data_ptr_t hashes_hdl_ptr;
-	idx_t hash_offset;         // Offset into the layout of the hash column
+	idx_t hash_offset; // Offset into the layout of the hash column
 
 	hash_t hash_prefix_shift;
 	idx_t payload_page_offset;

@@ -157,7 +157,6 @@ void GroupedAggregateHashTable::VerifyInternal() {
 	D_ASSERT(count == entries);
 }
 
-
 idx_t GroupedAggregateHashTable::InitialCapacity() {
 	return STANDARD_VECTOR_SIZE * 2;
 }
