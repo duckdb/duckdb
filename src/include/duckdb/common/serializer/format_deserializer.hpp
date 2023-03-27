@@ -48,7 +48,11 @@ public:
 		if (present) {
 			auto item = Read<T>();
 			OnOptionalEnd();
-			return std::move(item);
+			if (std::is_copy_constructible<T>::value) {
+				return item;
+			} else {
+				return std::move(item);
+			}
 		} else {
 			OnOptionalEnd();
 			return std::forward<T>(default_value);
@@ -78,7 +82,11 @@ public:
 		if (present) {
 			auto item = Read<T>();
 			OnOptionalEnd();
-			return std::move(item);
+			if (std::is_copy_constructible<T>::value) {
+				return item;
+			} else {
+				return std::move(item);
+			}
 		} else {
 			OnOptionalEnd();
 			return T();
@@ -114,7 +122,11 @@ private:
 		OnObjectBegin();
 		auto val = T::FormatDeserialize(*this);
 		OnObjectEnd();
-		return std::move(val);
+		if (std::is_copy_constructible<T>::value) {
+			return val;
+		} else {
+			return std::move(val);
+		}
 	}
 
 	// Structural Types
@@ -123,9 +135,13 @@ private:
 	inline typename std::enable_if<is_unique_ptr<T>::value, T>::type Read() {
 		using ELEMENT_TYPE = typename is_unique_ptr<T>::ELEMENT_TYPE;
 		OnObjectBegin();
-		auto val = std::move(ELEMENT_TYPE::FormatDeserialize(*this));
+		auto val = ELEMENT_TYPE::FormatDeserialize(*this);
 		OnObjectEnd();
-		return std::move(val);
+		if (std::is_copy_constructible<T>::value) {
+			return val;
+		} else {
+			return std::move(val);
+		}
 	}
 
 	// Deserialize shared_ptr
@@ -133,9 +149,13 @@ private:
 	inline typename std::enable_if<is_shared_ptr<T>::value, T>::type Read() {
 		using ELEMENT_TYPE = typename is_shared_ptr<T>::ELEMENT_TYPE;
 		OnObjectBegin();
-		auto val = std::move(ELEMENT_TYPE::FormatDeserialize(*this));
+		auto val = ELEMENT_TYPE::FormatDeserialize(*this);
 		OnObjectEnd();
-		return std::move(val);
+		if (std::is_copy_constructible<T>::value) {
+			return val;
+		} else {
+			return std::move(val);
+		}
 	}
 
 	// Deserialize a vector
@@ -172,8 +192,11 @@ private:
 			map[std::move(key)] = std::move(value);
 		}
 		OnMapEnd();
-
-		return map;
+		if(std::is_copy_constructible<T>::value) {
+			return map;
+		} else {
+			return std::move(map);
+		}
 	}
 
 	// Deserialize an unordered set
