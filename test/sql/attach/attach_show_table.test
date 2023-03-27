@@ -1,0 +1,38 @@
+# name: test/sql/attach/attach_show_table.test
+# description: Show table should respect current scope
+# group: [attach]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH DATABASE ':memory:' AS db1;
+
+statement ok
+ATTACH DATABASE ':memory:' AS db2;
+
+statement ok
+CREATE TABLE db1.table_in_db1(i int);
+
+statement ok
+CREATE TABLE db2.table_in_db2(i int);
+
+query I
+SHOW TABLES
+----
+
+statement ok
+USE db1
+
+query I
+SHOW TABLES
+----
+table_in_db1
+
+statement ok
+USE db2
+
+query I
+SHOW TABLES
+----
+table_in_db2
