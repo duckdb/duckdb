@@ -386,7 +386,7 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 	// Sort on the first expression
 	auto ref = make_unique<BoundReferenceExpression>(order1.expression->return_type, 0);
 	vector<BoundOrderByNode> orders;
-	orders.emplace_back(BoundOrderByNode(order1.type, order1.null_order, std::move(ref)));
+	orders.emplace_back(order1.type, order1.null_order, std::move(ref));
 
 	l1 = make_unique<SortedTable>(context, orders, payload_layout);
 
@@ -422,7 +422,7 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 	// Sort on the first expression
 	orders.clear();
 	ref = make_unique<BoundReferenceExpression>(order2.expression->return_type, 0);
-	orders.emplace_back(BoundOrderByNode(order2.type, order2.null_order, std::move(ref)));
+	orders.emplace_back(order2.type, order2.null_order, std::move(ref));
 
 	ExpressionExecutor executor(context);
 	executor.AddExpression(*orders[0].expression);

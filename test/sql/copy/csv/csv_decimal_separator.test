@@ -105,6 +105,6 @@ Binder Error: Unsupported parameter for DECIMAL_SEPARATOR: should be '.' or ','
 
 # data with mixed separators will fail reading
 statement error
-SELECT * FROM read_csv_auto('data/csv/decimal_separators/mixed_format_fail.csv', header=1, column_types={'foo': 'double'}, decimal_separator=',')
+SELECT * FROM read_csv_auto('data/csv/decimal_separators/mixed_format_fail.csv', header=true, column_types={'foo': 'double'}, decimal_separator=',', skip=0)
 ----
 Could not cast string to double: "5.25" in column "foo"

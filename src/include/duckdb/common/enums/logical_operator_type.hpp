@@ -49,6 +49,7 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_ANY_JOIN = 53,
 	LOGICAL_CROSS_PRODUCT = 54,
 	LOGICAL_POSITIONAL_JOIN = 55,
+	LOGICAL_ASOF_JOIN = 56,
 	// -----------------------------
 	// SetOps
 	// -----------------------------

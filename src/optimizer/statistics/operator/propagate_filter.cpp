@@ -165,7 +165,7 @@ void StatisticsPropagator::UpdateFilterStatistics(Expression &left, Expression &
 	if (left.type == ExpressionType::VALUE_CONSTANT && right.type == ExpressionType::BOUND_COLUMN_REF) {
 		constant = (BoundConstantExpression *)&left;
 		columnref = (BoundColumnRefExpression *)&right;
-		comparison_type = FlipComparisionExpression(comparison_type);
+		comparison_type = FlipComparisonExpression(comparison_type);
 	} else if (left.type == ExpressionType::BOUND_COLUMN_REF && right.type == ExpressionType::VALUE_CONSTANT) {
 		columnref = (BoundColumnRefExpression *)&left;
 		constant = (BoundConstantExpression *)&right;

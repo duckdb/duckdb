@@ -122,8 +122,7 @@ RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &r
 			if (caught_e) {
 				std::rethrow_exception(caught_e);
 			} else if (err == duckdb_httplib_openssl::Error::Success) {
-				throw HTTPException(response.status, response.body, "Request returned HTTP %d for HTTP %s to '%s'",
-				                    status, method, url);
+				throw HTTPException(response, "Request returned HTTP %d for HTTP %s to '%s'", status, method, url);
 			} else {
 				throw IOException("%s error for HTTP %s to '%s'", to_string(err), method, url);
 			}
@@ -320,7 +319,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 					    error += " This could mean the file was changed. Try disabling the duckdb http metadata cache "
 					             "if enabled, and confirm the server supports range requests.";
 				    }
-				    throw HTTPException(response.status, response.body, error);
+				    throw HTTPException(response, error);
 			    }
 			    if (response.status < 300) { // done redirecting
 				    out_offset = 0;
@@ -338,8 +337,10 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 			    if (hfs.state) {
 				    hfs.state->total_bytes_received += data_length;
 			    }
-			    memcpy(buffer_out + out_offset, data, data_length);
-			    out_offset += data_length;
+			    if (buffer_out != nullptr) {
+				    memcpy(buffer_out + out_offset, data, data_length);
+				    out_offset += data_length;
+			    }
 			    return true;
 		    });
 	});
@@ -556,6 +557,7 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 	}
 
 	auto res = hfs.HeadRequest(*this, path, {});
+	string range_length;
 
 	if (res->code != 200) {
 		if ((flags & FileFlags::FILE_FLAGS_WRITE) && res->code == 404) {
@@ -566,9 +568,29 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 			length = 0;
 			return;
 		} else {
-			throw HTTPException(res->code, res->error,
-			                    Exception::ConstructMessage("Unable to connect to URL \"%s\": %s (%s)", res->http_url,
-			                                                to_string(res->code), res->error));
+			// HEAD request fail, use Range request for another try (read only one byte)
+			if ((flags & FileFlags::FILE_FLAGS_READ) && res->code != 404) {
+				auto range_res = hfs.GetRangeRequest(*this, path, {}, 0, nullptr, 2);
+				if (range_res->code != 206) {
+					throw IOException("Unable to connect to URL \"%s\": %d (%s)", path, res->code, res->error);
+				}
+				auto range_find = range_res->headers["Content-Range"].find("/");
+
+				if (range_find == std::string::npos || range_res->headers["Content-Range"].size() < range_find + 1) {
+					throw IOException("Unknown Content-Range Header \"The value of Content-Range Header\":  (%s)",
+					                  range_res->headers["Content-Range"]);
+				}
+
+				range_length = range_res->headers["Content-Range"].substr(range_find + 1);
+				if (range_length == "*") {
+					throw IOException("Unknown total length of the document \"%s\": %d (%s)", path, res->code,
+					                  res->error);
+				}
+				res = std::move(range_res);
+			} else {
+				throw HTTPException(*res, "Unable to connect to URL \"%s\": %s (%s)", res->http_url,
+				                    to_string(res->code), res->error);
+			}
 		}
 	}
 
@@ -582,7 +604,11 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 		length = 0;
 	} else {
 		try {
-			length = std::stoll(res->headers["Content-Length"]);
+			if (res->headers.find("Content-Range") == res->headers.end() || res->headers["Content-Range"].empty()) {
+				length = std::stoll(res->headers["Content-Length"]);
+			} else {
+				length = std::stoll(range_length);
+			}
 		} catch (std::invalid_argument &e) {
 			throw IOException("Invalid Content-Length header received: %s", res->headers["Content-Length"]);
 		} catch (std::out_of_range &e) {
@@ -590,7 +616,6 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 		}
 	}
 	if (length == 0 || http_params.force_download) {
-
 		lock_guard<mutex> lock(state->cached_files_mutex);
 		auto &cached_file = state->cached_files[path];
 
@@ -633,6 +658,7 @@ ResponseWrapper::ResponseWrapper(duckdb_httplib_openssl::Response &res, string &
 		headers[h.first] = h.second;
 	}
 	http_url = original_url;
+	body = res.body;
 }
 
 HTTPFileHandle::~HTTPFileHandle() = default;

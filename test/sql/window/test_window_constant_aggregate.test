@@ -1,0 +1,96 @@
+# name: test/sql/window/test_window_constant_aggregate.test
+# description: Most basic window function
+# group: [window]
+
+statement ok
+PRAGMA enable_verification
+
+# Mix of constant/non-constant aggregate (sum and lead over same OVER clause)
+query IIII
+SELECT part, id, sum(val) OVER(PARTITION BY part), lead(val) OVER(PARTITION BY part) 
+FROM (SELECT range AS id, range % 5 AS part, range AS val FROM range(13)) t
+ORDER BY ALL;
+----
+0	0	15	5
+0	5	15	10
+0	10	15	NULL
+1	1	18	6
+1	6	18	11
+1	11	18	NULL
+2	2	21	7
+2	7	21	12
+2	12	21	NULL
+3	3	11	8
+3	8	11	NULL
+4	4	13	9
+4	9	13	NULL
+
+# Constant aggregate with non-simple_update 
+query III
+SELECT part, id, list(val) OVER(PARTITION BY part)
+FROM (SELECT range AS id, range % 5 AS part, range AS val FROM range(13)) t
+ORDER BY ALL;
+----
+0	0	[0, 5, 10]
+0	5	[0, 5, 10]
+0	10	[0, 5, 10]
+1	1	[1, 6, 11]
+1	6	[1, 6, 11]
+1	11	[1, 6, 11]
+2	2	[2, 7, 12]
+2	7	[2, 7, 12]
+2	12	[2, 7, 12]
+3	3	[3, 8]
+3	8	[3, 8]
+4	4	[4, 9]
+4	9	[4, 9]
+
+# Constant aggregate with not-nicely-aligned partitions (e.g. partitions are 73, 75, 77, 79, 81, 83, ... rows)
+query III
+SELECT part, min(const) AS lo, max(const) AS hi
+FROM (
+	SELECT part, sum(val) OVER(PARTITION BY part) as const
+	FROM (
+		(SELECT 1 AS part, range AS val FROM range(73))
+	UNION ALL
+		(SELECT 2 AS part, range AS val FROM range(75))
+	UNION ALL
+		(SELECT 3 AS part, range AS val FROM range(77))
+	UNION ALL
+		(SELECT 4 AS part, range AS val FROM range(79))
+	UNION ALL
+		(SELECT 5 AS part, range AS val FROM range(81))
+	UNION ALL
+		(SELECT 6 AS part, range AS val FROM range(83))
+	) u
+) t
+GROUP BY ALL
+ORDER BY ALL
+;
+----
+1	2628	2628
+2	2775	2775
+3	2926	2926
+4	3081	3081
+5	3240	3240
+6	3403	3403
+
+# Constant aggregate with large partitions (> vector size), also not nicely-aligned
+query III
+SELECT part, min(const) AS lo, max(const) AS hi
+FROM (
+	SELECT part, sum(val) OVER(PARTITION BY part) AS const
+	FROM (
+		SELECT part, val
+		FROM (
+			(SELECT range as part, random() AS val FROM range(10)) r
+		CROSS JOIN 
+			range(3000)
+		) p
+	) t
+) w
+GROUP BY ALL
+HAVING lo <> hi
+ORDER BY ALL
+;
+----

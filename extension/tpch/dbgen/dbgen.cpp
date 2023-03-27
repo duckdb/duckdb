@@ -19,6 +19,7 @@
 #include "dbgen/dsstypes.h"
 
 #include <cassert>
+#include <cmath>
 #include <mutex>
 
 using namespace duckdb;
@@ -245,14 +246,14 @@ static void append_region(code_t *c, tpch_append_information *info) {
 	append_info.appender->EndRow();
 }
 
-static void gen_tbl(int tnum, DSS_HUGE count, tpch_append_information *info, DBGenContext *dbgen_ctx) {
+static void gen_tbl(int tnum,  DSS_HUGE count, tpch_append_information *info, DBGenContext *dbgen_ctx, idx_t offset=0) {
 	order_t o;
 	supplier_t supp;
 	customer_t cust;
 	part_t part;
 	code_t code;
 
-	for (DSS_HUGE i = 1; count; count--, i++) {
+	for (DSS_HUGE i = offset+1; count; count--, i++) {
 		row_start(tnum, dbgen_ctx);
 		switch (tnum) {
 		case LINE:
@@ -417,7 +418,7 @@ static void CreateTPCHTable(ClientContext &context, string schema, string suffix
 	auto info = make_unique<CreateTableInfo>();
 	info->schema = schema;
 	info->table = T::Name + suffix;
-	info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
+	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	info->temporary = false;
 	for (idx_t i = 0; i < T::ColumnCount; i++) {
 		info->columns.AddColumn(ColumnDefinition(T::Columns[i], T::Types[i]));
@@ -438,13 +439,40 @@ void DBGenWrapper::CreateTPCHSchema(ClientContext &context, string schema, strin
 	CreateTPCHTable<LineitemInfo>(context, schema, suffix);
 }
 
-void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string schema, string suffix) {
+void skip(int table, int children, DSS_HUGE step, DBGenContext &dbgen_ctx){
+	switch (table) {
+	case CUST:
+		sd_cust( children, step, &dbgen_ctx);
+		break;
+		case SUPP:
+		sd_supp( children, step, &dbgen_ctx);
+		break;
+	case NATION:
+		sd_nation( children, step, &dbgen_ctx);
+		break;
+		case REGION:
+		sd_region( children, step, &dbgen_ctx);
+		break;
+	    case ORDER_LINE:
+		sd_line( children, step, &dbgen_ctx);
+		sd_order( children, step, &dbgen_ctx);
+		break;
+		case PART_PSUPP:
+		sd_part( children, step, &dbgen_ctx);
+		sd_psupp( children, step, &dbgen_ctx);
+		break;
+
+	}
+}
+
+void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string schema, string suffix, int children_p, int current_step) {
 	if (flt_scale == 0) {
 		return;
 	}
 
 	// generate the actual data
 	DSS_HUGE rowcnt = 0;
+	DSS_HUGE extra;
 	DSS_HUGE i;
 	// all tables
 	table = (1 << CUST) | (1 << SUPP) | (1 << NATION) | (1 << REGION) | (1 << PART_PSUPP) | (1 << ORDER_LINE);
@@ -472,8 +500,12 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 	tdefs[NATION].base = NATIONS_MAX;
 	tdefs[REGION].base = NATIONS_MAX;
 
-	children = 1;
+	children = children_p;
 	d_path = NULL;
+
+	if (current_step >= children){
+		return;
+	}
 
 	if (flt_scale < MIN_SCALE) {
 		int i;
@@ -490,8 +522,7 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 	} else {
 		dbgen_ctx.scale_factor = (long)flt_scale;
 	}
-
-	load_dists(300 * 1024 * 1024, &dbgen_ctx); // 300MiB
+	load_dists(10 * 1024 * 1024, &dbgen_ctx); // 10MiB
 
 	/* have to do this after init */
 	tdefs[NATION].base = nations.count;
@@ -517,8 +548,20 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 			} else {
 				rowcnt = tdefs[i].base;
 			}
-			// actually doing something
-			gen_tbl((int)i, rowcnt, append_info.get(), &dbgen_ctx);
+			if (children > 1 && current_step != -1){
+				size_t part_size = std::ceil((double)rowcnt / (double)children);
+				 auto part_offset = part_size * current_step;
+				 auto part_end = part_offset + part_size;
+				 rowcnt = part_end > rowcnt? rowcnt - part_offset : part_size;
+				 skip(i,children, part_offset, dbgen_ctx);
+				 if (rowcnt > 0){
+					 // generate part of the table
+					 gen_tbl((int)i, rowcnt, append_info.get(), &dbgen_ctx, part_offset);
+				 }
+			} else{
+				 // generate full table
+				 gen_tbl((int)i, rowcnt, append_info.get(), &dbgen_ctx);
+			}
 		}
 	}
 	// flush any incomplete chunks

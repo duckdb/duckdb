@@ -62,6 +62,7 @@ public:
 		return !active_loops.empty();
 	}
 	void ExecuteCommand(unique_ptr<Command> command);
+	void Reconnect();
 	void StartLoop(LoopDefinition loop);
 	void EndLoop();
 	static string ReplaceLoopIterator(string text, string loop_iterator_name, string replacement);

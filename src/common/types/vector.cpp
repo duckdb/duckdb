@@ -17,6 +17,10 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/fsst.hpp"
 #include "fsst.h"
+#include "duckdb/common/types/bit.hpp"
+
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 #include <cstring> // strlen() on Solaris
 
@@ -132,17 +136,13 @@ void Vector::Slice(Vector &other, idx_t offset, idx_t end) {
 		for (idx_t i = 0; i < entries.size(); i++) {
 			entries[i]->Slice(*other_entries[i], offset, end);
 		}
-		if (offset > 0) {
-			new_vector.validity.Slice(other.validity, offset, end);
-		} else {
-			new_vector.validity = other.validity;
-		}
+		new_vector.validity.Slice(other.validity, offset, end - offset);
 		Reference(new_vector);
 	} else {
 		Reference(other);
 		if (offset > 0) {
 			data = data + GetTypeIdSize(internal_type) * offset;
-			validity.Slice(other.validity, offset, end);
+			validity.Slice(other.validity, offset, end - offset);
 		}
 	}
 }
@@ -241,7 +241,8 @@ struct DataArrays {
 	idx_t type_size;
 	bool is_nested;
 	DataArrays(Vector &vec, data_ptr_t data, VectorBuffer *buffer, idx_t type_size, bool is_nested)
-	    : vec(vec), data(data), buffer(buffer), type_size(type_size), is_nested(is_nested) {};
+	    : vec(vec), data(data), buffer(buffer), type_size(type_size), is_nested(is_nested) {
+	}
 };
 
 void FindChildren(std::vector<DataArrays> &to_resize, VectorBuffer &auxiliary) {
@@ -962,6 +963,141 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 	}
 }
 
+void Vector::FormatSerialize(FormatSerializer &serializer, idx_t count) {
+	auto &type = GetType();
+
+	UnifiedVectorFormat vdata;
+	ToUnifiedFormat(count, vdata);
+
+	const auto write_validity = (count > 0) && !vdata.validity.AllValid();
+	serializer.WriteProperty("has_validity", write_validity);
+	if (write_validity) {
+		ValidityMask flat_mask(count);
+		for (idx_t i = 0; i < count; ++i) {
+			auto row_idx = vdata.sel->get_index(i);
+			flat_mask.Set(i, vdata.validity.RowIsValid(row_idx));
+		}
+		serializer.WriteProperty("validity_mask", (const_data_ptr_t)flat_mask.GetData(),
+		                         flat_mask.ValidityMaskSize(count));
+	}
+	if (TypeIsConstantSize(type.InternalType())) {
+		// constant size type: simple copy
+		idx_t write_size = GetTypeIdSize(type.InternalType()) * count;
+		auto ptr = unique_ptr<data_t[]>(new data_t[write_size]);
+		VectorOperations::WriteToStorage(*this, count, ptr.get());
+		serializer.WriteProperty("data", write_size);
+	} else {
+		switch (type.InternalType()) {
+		case PhysicalType::VARCHAR: {
+			auto strings = (string_t *)vdata.data;
+			for (idx_t i = 0; i < count; i++) {
+				auto idx = vdata.sel->get_index(i);
+				auto source = !vdata.validity.RowIsValid(idx) ? NullValue<string_t>() : strings[idx];
+				string_t str = string_t(source.GetDataUnsafe(), source.GetSize());
+				serializer.WriteProperty("data", str);
+			}
+			break;
+		}
+		case PhysicalType::STRUCT: {
+			Flatten(count);
+			auto &entries = StructVector::GetEntries(*this);
+			for (auto &entry : entries) {
+				entry->FormatSerialize(serializer, count);
+			}
+			break;
+		}
+		case PhysicalType::LIST: {
+			auto &child = ListVector::GetEntry(*this);
+			auto list_size = ListVector::GetListSize(*this);
+
+			// serialize the list entries in a flat array
+			auto data = unique_ptr<list_entry_t[]>(new list_entry_t[count]);
+			auto source_array = (list_entry_t *)vdata.data;
+			for (idx_t i = 0; i < count; i++) {
+				auto idx = vdata.sel->get_index(i);
+				auto source = source_array[idx];
+				data[i].offset = source.offset;
+				data[i].length = source.length;
+			}
+
+			// write the list size
+			serializer.WriteProperty("list_size", list_size);
+			serializer.WriteProperty("data", (data_ptr_t)data.get(), count * sizeof(list_entry_t));
+			child.FormatSerialize(serializer, list_size);
+			break;
+		}
+		default:
+			throw InternalException("Unimplemented variable width type for Vector::Serialize!");
+		}
+	}
+}
+
+void Vector::FormatDeserialize(FormatDeserializer &deserializer, idx_t count) {
+	/*
+	auto &type = GetType();
+
+	auto &validity = FlatVector::Validity(*this);
+	validity.Reset();
+	const auto has_validity = deserializer.ReadProperty<bool>("has_validity");
+	if (has_validity) {
+	    validity.Initialize(count);
+	    source.ReadData((data_ptr_t)validity.GetData(), validity.ValidityMaskSize(count));
+	}
+
+	if (TypeIsConstantSize(type.InternalType())) {
+	    // constant size type: read fixed amount of data from
+	    auto column_size = GetTypeIdSize(type.InternalType()) * count;
+	    auto ptr = unique_ptr<data_t[]>(new data_t[column_size]);
+	    source.ReadData(ptr.get(), column_size);
+
+	    VectorOperations::ReadFromStorage(ptr.get(), count, *this);
+	} else {
+	    switch (type.InternalType()) {
+	    case PhysicalType::VARCHAR: {
+	        auto strings = FlatVector::GetData<string_t>(*this);
+	        for (idx_t i = 0; i < count; i++) {
+	            // read the strings
+	            auto str = source.Read<string>();
+	            // now add the string to the StringHeap of the vector
+	            // and write the pointer into the vector
+	            if (validity.RowIsValid(i)) {
+	                strings[i] = StringVector::AddStringOrBlob(*this, str);
+	            }
+	        }
+	        break;
+	    }
+	    case PhysicalType::STRUCT: {
+	        auto &entries = StructVector::GetEntries(*this);
+	        for (auto &entry : entries) {
+	            entry->FormatDeserialize(deserializer, count);
+	        }
+	        break;
+	    }
+	    case PhysicalType::LIST: {
+	        // read the list size
+	        auto list_size = deserializer.ReadProperty<idx_t>("list_size");
+	        ListVector::Reserve(*this, list_size);
+	        ListVector::SetListSize(*this, list_size);
+
+	        // read the list entry
+	        auto list_entries = FlatVector::GetData(*this);
+	        source.ReadData(list_entries, count * sizeof(list_entry_t));
+
+	        // deserialize the child vector
+	        auto &child = ListVector::GetEntry(*this);
+	        child.Deserialize(list_size, source);
+
+	        break;
+	    }
+	    default:
+	        throw InternalException("Unimplemented variable width type for Vector::Deserialize!");
+	    }
+	}
+	 */
+
+	throw NotImplementedException("TODO: Implement deserialization for DuckDB Vectors");
+}
+
 void Vector::Deserialize(idx_t count, Deserializer &source) {
 	auto &type = GetType();
 
@@ -1147,6 +1283,7 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 				if (validity.RowIsValid(oidx)) {
 					auto buf = strings[oidx].GetDataUnsafe();
 					D_ASSERT(*buf >= 0 && *buf < 8);
+					Bit::Verify(strings[oidx]);
 				}
 			}
 			break;
@@ -1408,7 +1545,7 @@ string_t StringVector::AddStringOrBlob(Vector &vector, string_t data) {
 
 string_t StringVector::EmptyString(Vector &vector, idx_t len) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
-	if (len < string_t::INLINE_LENGTH) {
+	if (len <= string_t::INLINE_LENGTH) {
 		return string_t(len);
 	}
 	if (!vector.auxiliary) {
@@ -1599,122 +1736,6 @@ void ListVector::Reserve(Vector &vector, idx_t required_capacity) {
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::LIST_BUFFER);
 	auto &child_buffer = *((VectorListBuffer *)vector.auxiliary.get());
 	child_buffer.Reserve(required_capacity);
-}
-
-template <class T>
-void TemplatedSearchInMap(Vector &keys, idx_t count, T key, vector<idx_t> &offsets, bool is_key_null, idx_t offset,
-                          idx_t length) {
-	UnifiedVectorFormat vector_data;
-	keys.ToUnifiedFormat(count, vector_data);
-	auto data = (T *)vector_data.data;
-	auto validity_mask = vector_data.validity;
-
-	if (is_key_null) {
-		for (idx_t i = offset; i < offset + length; i++) {
-			if (!validity_mask.RowIsValid(i)) {
-				offsets.push_back(i);
-			}
-		}
-	} else {
-		for (idx_t i = offset; i < offset + length; i++) {
-			if (!validity_mask.RowIsValid(i)) {
-				continue;
-			}
-			if (key == data[i]) {
-				offsets.push_back(i);
-			}
-		}
-	}
-}
-
-template <class T>
-void TemplatedSearchInMap(Vector &keys, idx_t count, const Value &key, vector<idx_t> &offsets, bool is_key_null,
-                          idx_t offset, idx_t length) {
-	TemplatedSearchInMap<T>(keys, count, key.template GetValueUnsafe<T>(), offsets, is_key_null, offset, length);
-}
-
-void SearchStringInMap(Vector &keys, idx_t count, const string &key, vector<idx_t> &offsets, bool is_key_null,
-                       idx_t offset, idx_t length) {
-	UnifiedVectorFormat vector_data;
-	keys.ToUnifiedFormat(count, vector_data);
-	auto data = (string_t *)vector_data.data;
-	auto validity_mask = vector_data.validity;
-	if (is_key_null) {
-		for (idx_t i = offset; i < offset + length; i++) {
-			if (!validity_mask.RowIsValid(i)) {
-				offsets.push_back(i);
-			}
-		}
-	} else {
-		string_t key_str_t(key);
-		for (idx_t i = offset; i < offset + length; i++) {
-			if (!validity_mask.RowIsValid(i)) {
-				continue;
-			}
-			if (Equals::Operation<string_t>(data[i], key_str_t)) {
-				offsets.push_back(i);
-			}
-		}
-	}
-}
-
-vector<idx_t> MapVector::Search(Vector &keys, idx_t count, const Value &key, list_entry_t &entry) {
-	vector<idx_t> offsets;
-
-	switch (keys.GetType().InternalType()) {
-	case PhysicalType::BOOL:
-	case PhysicalType::INT8:
-		TemplatedSearchInMap<int8_t>(keys, count, key, offsets, key.IsNull(), entry.offset, entry.length);
-		break;
-	case PhysicalType::INT16:
-		TemplatedSearchInMap<int16_t>(keys, count, key, offsets, key.IsNull(), entry.offset, entry.length);
-		break;
-	case PhysicalType::INT32:
-		TemplatedSearchInMap<int32_t>(keys, count, key, offsets, key.IsNull(), entry.offset, entry.length);
-		break;
-	case PhysicalType::INT64:
-		TemplatedSearchInMap<int64_t>(keys, count, key, offsets, key.IsNull(), entry.offset, entry.length);
-		break;
-	case PhysicalType::INT128:
-		TemplatedSearchInMap<hugeint_t>(keys, count, key, offsets, key.IsNull(), entry.offset, entry.length);
-		break;
-	case PhysicalType::UINT8:
-		TemplatedSearchInMap<uint8_t>(keys, count, key, offsets, key.IsNull(), entry.offset, entry.length);
-		break;
-	case PhysicalType::UINT16:
-		TemplatedSearchInMap<uint16_t>(keys, count, key, offsets, key.IsNull(), entry.offset, entry.length);
-		break;
-	case PhysicalType::UINT32:
-		TemplatedSearchInMap<uint32_t>(keys, count, key, offsets, key.IsNull(), entry.offset, entry.length);
-		break;
-	case PhysicalType::UINT64:
-		TemplatedSearchInMap<uint64_t>(keys, count, key, offsets, key.IsNull(), entry.offset, entry.length);
-		break;
-	case PhysicalType::FLOAT:
-		TemplatedSearchInMap<float>(keys, count, key, offsets, key.IsNull(), entry.offset, entry.length);
-		break;
-	case PhysicalType::DOUBLE:
-		TemplatedSearchInMap<double>(keys, count, key, offsets, key.IsNull(), entry.offset, entry.length);
-		break;
-	case PhysicalType::INTERVAL:
-		TemplatedSearchInMap<interval_t>(keys, count, key, offsets, key.IsNull(), entry.offset, entry.length);
-		break;
-	case PhysicalType::VARCHAR:
-		SearchStringInMap(keys, count, StringValue::Get(key), offsets, key.IsNull(), entry.offset, entry.length);
-		break;
-	default:
-		throw InvalidTypeException(keys.GetType().id(), "Invalid type for List Vector Search");
-	}
-	return offsets;
-}
-
-Value FlatVector::GetValuesFromOffsets(Vector &values, vector<idx_t> &offsets) {
-	vector<Value> list_values;
-	list_values.reserve(offsets.size());
-	for (auto &offset : offsets) {
-		list_values.push_back(values.GetValue(offset));
-	}
-	return Value::LIST(values.GetType(), std::move(list_values));
 }
 
 idx_t ListVector::GetListSize(const Vector &vec) {

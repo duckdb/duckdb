@@ -1,0 +1,326 @@
+# name: test/sql/join/asof/test_asof_join_doubles.test
+# description: Test As-Of joins for floating point
+# group: [asof]
+
+statement ok
+PRAGMA enable_verification
+
+#
+# Inequality only
+#
+
+# Use doubles for readable infinities
+statement ok
+CREATE TABLE events0 (begin DOUBLE, value INTEGER);
+
+statement ok
+INSERT INTO events0 VALUES
+	(1, 0),
+	(3, 1),
+	(6, 2),
+	(8, 3)
+;
+
+# INNER Window version
+query II nosort inner_inequality
+SELECT p.ts, e.value
+FROM 
+	range(0,10) p(ts)
+JOIN (
+	SELECT value, begin, 
+		LEAD(begin, 1, 'infinity'::DOUBLE) OVER (ORDER BY begin ASC) AS end
+	FROM events0
+) e
+ON p.ts >= e.begin AND p.ts < e.end
+ORDER BY p.ts ASC
+----
+1	0
+2	0
+3	1
+4	1
+5	1
+6	2
+7	2
+8	3
+9	3
+
+# INNER ON inequality only
+query II nosort inner_inequality
+SELECT p.ts, e.value
+FROM range(0,10) p(ts) ASOF JOIN events0 e
+ON p.ts >= e.begin
+ORDER BY p.ts ASC
+----
+
+# INNER USING inequality only
+query II nosort inner_inequality
+SELECT p.begin, e.value
+FROM range(0,10) p(begin) ASOF JOIN events0 e
+USING (begin)
+ORDER BY p.begin ASC
+----
+
+# LEFT Window version
+query II nosort left_inequality
+SELECT p.ts, e.value
+FROM 
+	range(0,10) p(ts)
+LEFT JOIN (
+	SELECT value, begin, 
+		LEAD(begin, 1, 'infinity'::DOUBLE) OVER (ORDER BY begin ASC) AS end
+	FROM events0
+) e
+ON p.ts >= e.begin AND p.ts < e.end
+ORDER BY p.ts ASC NULLS FIRST
+----
+0	NULL
+1	0
+2	0
+3	1
+4	1
+5	1
+6	2
+7	2
+8	3
+9	3
+
+# LEFT ON inequality only
+query II nosort left_inequality
+SELECT p.ts, e.value
+FROM range(0,10) p(ts) ASOF LEFT JOIN events0 e
+ON p.ts >= e.begin
+ORDER BY p.ts ASC NULLS FIRST
+----
+
+# LEFT USING inequality only
+query II nosort left_inequality
+SELECT p.begin, e.value
+FROM range(0,10) p(begin) ASOF LEFT JOIN events0 e
+USING (begin)
+ORDER BY p.begin ASC NULLS FIRST
+----
+
+# Add unmatched right event
+statement ok
+INSERT INTO events0 VALUES (10, 4);
+
+# RIGHT Window version
+query II nosort right_inequality
+SELECT p.ts, e.value
+FROM 
+	range(0,10) p(ts)
+RIGHT JOIN (
+	SELECT value, begin, 
+		LEAD(begin, 1, 'infinity'::DOUBLE) OVER (ORDER BY begin ASC) AS end
+	FROM events0
+) e
+ON p.ts >= e.begin AND p.ts < e.end
+ORDER BY p.ts ASC NULLS LAST
+----
+1	0
+2	0
+3	1
+4	1
+5	1
+6	2
+7	2
+8	3
+9	3
+NULL	4
+
+# RIGHT ON inequality only
+query II nosort right_inequality
+SELECT p.ts, e.value
+FROM range(0,10) p(ts) ASOF RIGHT JOIN events0 e
+ON p.ts >= e.begin
+ORDER BY p.ts ASC NULLS LAST
+----
+
+# RIGHT USING inequality only
+query II nosort right_inequality
+SELECT p.begin, e.value
+FROM range(0,10) p(begin) ASOF RIGHT JOIN events0 e
+USING (begin)
+ORDER BY p.begin ASC NULLS LAST
+----
+
+#
+# With equality
+#
+
+statement ok
+CREATE TABLE events (key INTEGER, begin DOUBLE, value INTEGER);
+
+statement ok
+INSERT INTO events VALUES
+	(1, 1, 0),
+	(1, 3, 1),
+	(1, 6, 2),
+	(1, 8, 3),
+	(2, 0, 10),
+	(2, 7, 20),
+	(2, 11, 30),
+;
+
+statement ok
+CREATE TABLE probes AS
+	SELECT key, ts
+	FROM range(1,3) k(key) CROSS JOIN range(0,10) t(ts)
+
+# INNER Window version
+query III nosort inner_equality
+SELECT p.key, p.ts, e.value
+FROM 
+	probes p
+JOIN (
+	SELECT key, value, begin, 
+		LEAD(begin, 1, 'infinity'::DOUBLE) OVER (PARTITION BY key ORDER BY begin ASC) AS end
+	FROM events
+) e
+ON p.key = e.key AND p.ts >= e.begin AND p.ts < e.end
+ORDER BY 1, 2 ASC
+----
+1	1	0
+1	2	0
+1	3	1
+1	4	1
+1	5	1
+1	6	2
+1	7	2
+1	8	3
+1	9	3
+2	0	10
+2	1	10
+2	2	10
+2	3	10
+2	4	10
+2	5	10
+2	6	10
+2	7	20
+2	8	20
+2	9	20
+
+# INNER ON with equality
+query III nosort inner_equality
+SELECT p.key, p.ts, e.value
+FROM probes p ASOF JOIN events e
+  ON p.key = e.key AND p.ts >= e.begin
+ORDER BY 1, 2 ASC
+----
+
+# INNER USING with equality
+query III nosort inner_equality
+SELECT p.key, p.begin, e.value
+FROM 
+	(SELECT key, ts AS begin FROM probes) p 
+ASOF JOIN 
+	events e
+USING (key, begin)
+ORDER BY 1, 2 ASC
+----
+
+# LEFT Window version
+query III nosort left_equality
+SELECT p.key, p.ts, e.value
+FROM 
+	probes p
+LEFT JOIN (
+	SELECT key, value, begin, 
+		LEAD(begin, 1, 'infinity'::DOUBLE) OVER (PARTITION BY key ORDER BY begin ASC) AS end
+	FROM events
+) e
+ON p.key = e.key AND p.ts >= e.begin AND p.ts < e.end
+ORDER BY 1, 2 ASC NULLS FIRST
+----
+1	0	NULL
+1	1	0
+1	2	0
+1	3	1
+1	4	1
+1	5	1
+1	6	2
+1	7	2
+1	8	3
+1	9	3
+2	0	10
+2	1	10
+2	2	10
+2	3	10
+2	4	10
+2	5	10
+2	6	10
+2	7	20
+2	8	20
+2	9	20
+
+# LEFT ON with equality
+query III nosort left_equality
+SELECT p.key, p.ts, e.value
+FROM probes p ASOF LEFT JOIN events e
+  ON p.key = e.key AND p.ts >= e.begin
+ORDER BY 1, 2 ASC NULLS FIRST
+----
+
+# LEFT USING with equality
+query III nosort left_equality
+SELECT p.key, p.begin, e.value
+FROM 
+	(SELECT key, ts AS begin FROM probes) p 
+ASOF LEFT JOIN 
+	events e
+USING (key, begin)
+ORDER BY 1, 2 ASC NULLS FIRST
+----
+
+# RIGHT Window version
+query III nosort right_equality
+SELECT p.key, p.ts, e.value
+FROM 
+	probes p
+RIGHT JOIN (
+	SELECT key, value, begin, 
+		LEAD(begin, 1, 'infinity'::DOUBLE) OVER (PARTITION BY key ORDER BY begin ASC) AS end
+	FROM events
+) e
+ON p.key = e.key AND p.ts >= e.begin AND p.ts < e.end
+ORDER BY 1 ASC NULLS FIRST, 2
+----
+1	1	0
+1	2	0
+1	3	1
+1	4	1
+1	5	1
+1	6	2
+1	7	2
+1	8	3
+1	9	3
+2	0	10
+2	1	10
+2	2	10
+2	3	10
+2	4	10
+2	5	10
+2	6	10
+2	7	20
+2	8	20
+2	9	20
+NULL	NULL	30
+
+# RIGHT ON with equality
+query III nosort right_equality
+SELECT p.key, p.ts, e.value
+FROM probes p ASOF RIGHT JOIN events e
+  ON p.key = e.key AND p.ts >= e.begin
+ORDER BY 1 ASC NULLS FIRST, 2
+----
+
+# RIGHT USING with equality
+query III nosort right_equality
+SELECT p.key, p.begin, e.value
+FROM 
+	(SELECT key, ts AS begin FROM probes) p 
+ASOF RIGHT JOIN 
+	events e
+USING (key, begin)
+ORDER BY 1 ASC NULLS FIRST, 2
+----

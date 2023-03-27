@@ -2,21 +2,18 @@
 
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/operator/logical_empty_result.hpp"
-#include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/null_filter.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
-#include "duckdb/common/operator/cast_operators.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
 
 namespace duckdb {
 
@@ -604,7 +601,7 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression *expr) {
 
 		// create the ExpressionValueInformation
 		ExpressionValueInformation info;
-		info.comparison_type = left_is_scalar ? FlipComparisionExpression(comparison.type) : comparison.type;
+		info.comparison_type = left_is_scalar ? FlipComparisonExpression(comparison.type) : comparison.type;
 		info.constant = constant_value;
 
 		// get the current bucket of constant values

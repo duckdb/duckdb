@@ -8,6 +8,8 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
+#include <cmath>
+
 namespace duckdb {
 
 static TableCatalogEntry *GetCatalogTableEntry(LogicalOperator *op) {
@@ -39,8 +41,7 @@ void CardinalityEstimator::AddRelationTdom(FilterInfo *filter_info) {
 		}
 	}
 	auto key = ColumnBinding(filter_info->left_binding.table_index, filter_info->left_binding.column_index);
-	column_binding_set_t tmp({key});
-	relations_to_tdoms.emplace_back(RelationsToTDom(tmp));
+	relations_to_tdoms.emplace_back(column_binding_set_t({key}));
 }
 
 bool CardinalityEstimator::SingleColumnFilter(FilterInfo *filter_info) {
@@ -93,7 +94,7 @@ void CardinalityEstimator::AddToEquivalenceSets(FilterInfo *filter_info, vector<
 		column_binding_set_t tmp;
 		tmp.insert(filter_info->left_binding);
 		tmp.insert(filter_info->right_binding);
-		relations_to_tdoms.emplace_back(RelationsToTDom(tmp));
+		relations_to_tdoms.emplace_back(tmp);
 		relations_to_tdoms.back().filters.push_back(filter_info);
 	}
 }
@@ -259,7 +260,7 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet *new_set
 			// connection to any subgraph in subgraphs. Add a new subgraph, and maybe later there will be
 			// a connection.
 			if (!found_match) {
-				subgraphs.emplace_back(Subgraph2Denominator());
+				subgraphs.emplace_back();
 				auto subgraph = &subgraphs.back();
 				subgraph->relations.insert(filter->left_binding.table_index);
 				subgraph->relations.insert(filter->right_binding.table_index);
@@ -310,6 +311,7 @@ static LogicalGet *GetLogicalGet(LogicalOperator *op, idx_t table_index = DConst
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		get = GetLogicalGet(op->children.at(0).get(), table_index);
 		break;
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		LogicalComparisonJoin *join = (LogicalComparisonJoin *)op;
 		// We should never be calling GetLogicalGet without a valid table_index.
@@ -384,6 +386,9 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(vector<NodeOp> *node_op
 				// less than the base table cardinality.
 				join_node->SetCost(join_node->GetBaseTableCardinality());
 			}
+		} else if (op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
+			// AsOf joins have the cardinality of the LHS
+			join_node->SetCost(join_node->GetBaseTableCardinality());
 		}
 		// Total domains can be affected by filters. So we update base table cardinality first
 		EstimateBaseTableCardinality(join_node, op);

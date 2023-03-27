@@ -94,4 +94,8 @@ idx_t DistinctStatistics::GetCount() const {
 	return MinValue<idx_t>(estimate, total_count);
 }
 
+bool DistinctStatistics::TypeIsSupported(const LogicalType &type) {
+	return type.InternalType() != PhysicalType::LIST && type.InternalType() != PhysicalType::STRUCT;
+}
+
 } // namespace duckdb
