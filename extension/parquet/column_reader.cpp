@@ -1401,7 +1401,7 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 	case LogicalTypeId::TIME_TZ:
 		if (schema_p.__isset.logicalType && schema_p.logicalType.__isset.TIME) {
 			if (schema_p.logicalType.TIME.unit.__isset.MILLIS) {
-				return make_unique<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTimeMs>>(
+				return make_unique<CallbackColumnReader<int32_t, dtime_t, ParquetIntToTimeMs>>(
 				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 			} else if (schema_p.logicalType.TIME.unit.__isset.MICROS) {
 				return make_unique<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTime>>(
@@ -1416,7 +1416,7 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 				return make_unique<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTime>>(
 				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 			case ConvertedType::TIME_MILLIS:
-				return make_unique<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTimeMs>>(
+				return make_unique<CallbackColumnReader<int32_t, dtime_t, ParquetIntToTimeMs>>(
 				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 			default:
 				break;
