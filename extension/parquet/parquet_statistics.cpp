@@ -171,7 +171,7 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 			} else if (schema_ele.logicalType.TIME.unit.__isset.MICROS) {
 				return Value::TIME(dtime_t(val));
 			} else {
-				throw InternalException("Timestamp logicalType is set but unit is not defined");
+				throw InternalException("Time logicalType is set but unit is not defined");
 			}
 		}
 		if (schema_ele.converted_type == duckdb_parquet::format::ConvertedType::TIME_MILLIS) {
