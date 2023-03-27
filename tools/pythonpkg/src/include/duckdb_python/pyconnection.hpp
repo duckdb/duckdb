@@ -84,9 +84,9 @@ public:
 
 	shared_ptr<DuckDBPyConnection> Execute(const string &query, py::object params = py::list(), bool many = false);
 
-	shared_ptr<DuckDBPyConnection> Append(const string &name, DataFrame value);
+	shared_ptr<DuckDBPyConnection> Append(const string &name, const DataFrame &value);
 
-	shared_ptr<DuckDBPyConnection> RegisterPythonObject(const string &name, py::object python_object);
+	shared_ptr<DuckDBPyConnection> RegisterPythonObject(const string &name, const py::object &python_object);
 
 	void InstallExtension(const string &extension, bool force_install = false);
 
@@ -177,6 +177,7 @@ public:
 	static shared_ptr<PythonImportCache> import_cache;
 
 	static bool IsPandasDataframe(const py::object &object);
+	static bool IsPolarsDataframe(const py::object &object);
 	static bool IsAcceptedArrowObject(const py::object &object);
 
 	static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_query);
@@ -184,6 +185,7 @@ public:
 private:
 	PathLike GetPathLike(const py::object &object);
 	unique_lock<std::mutex> AcquireConnectionLock();
+
 	static PythonEnvironmentType environment;
 	static void DetectEnvironment();
 };

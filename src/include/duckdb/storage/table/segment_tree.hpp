@@ -56,7 +56,7 @@ public:
 		if (nodes.empty()) {
 			LoadNextSegment(l);
 		}
-		return nodes.empty() ? nullptr : nodes[0].node.get();
+		return GetRootSegmentInternal();
 	}
 	//! Obtains ownership of the data of the segment tree
 	vector<SegmentNode<T>> MoveSegments(SegmentLock &l) {
@@ -258,6 +258,10 @@ private:
 	mutex node_lock;
 
 private:
+	T *GetRootSegmentInternal() {
+		return nodes.empty() ? nullptr : nodes[0].node.get();
+	}
+
 	class SegmentIterationHelper {
 	public:
 		explicit SegmentIterationHelper(SegmentTree &tree) : tree(tree) {
@@ -304,6 +308,9 @@ private:
 
 	//! Load the next segment, if there are any left to load
 	bool LoadNextSegment(SegmentLock &l) {
+		if (!SUPPORTS_LAZY_LOADING) {
+			return false;
+		}
 		if (finished_loading) {
 			return false;
 		}
@@ -317,6 +324,9 @@ private:
 
 	//! Load all segments, if there are any left to load
 	void LoadAllSegments(SegmentLock &l) {
+		if (!SUPPORTS_LAZY_LOADING) {
+			return;
+		}
 		while (LoadNextSegment(l))
 			;
 	}

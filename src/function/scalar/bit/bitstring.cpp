@@ -14,7 +14,7 @@ static void BitStringFunction(DataChunk &args, ExpressionState &state, Vector &r
 		    if (n < 0) {
 			    throw InvalidInputException("The bitstring length cannot be negative");
 		    }
-		    if ((idx_t)n < input.GetSize()) {
+		    if (idx_t(n) < input.GetSize()) {
 			    throw InvalidInputException("Length must be equal or larger than input string");
 		    }
 		    idx_t len;
@@ -22,8 +22,8 @@ static void BitStringFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 		    len = Bit::ComputeBitstringLen(n);
 		    string_t target = StringVector::EmptyString(result, len);
-
 		    Bit::BitString(input, n, target);
+		    target.Finalize();
 		    return target;
 	    });
 }
@@ -68,7 +68,8 @@ static void SetBitOperation(DataChunk &args, ExpressionState &state, Vector &res
 			                              NumericHelper::ToString(Bit::BitLength(input) - 1));
 		    }
 		    string_t target = StringVector::EmptyString(result, input.GetSize());
-		    Bit::SetBit(input, n, new_value, target);
+		    memcpy(target.GetDataWriteable(), input.GetDataUnsafe(), input.GetSize());
+		    Bit::SetBit(target, n, new_value);
 		    return target;
 	    });
 }

@@ -51,7 +51,7 @@ statement ok
 CREATE TABLE test_too_few_rows (a INTEGER, b INTEGER, c VARCHAR, d INTEGER);
 
 statement error
-COPY test_too_few_rows FROM '__TEST_DIR__/test2.csv';
+COPY test_too_few_rows FROM '__TEST_DIR__/test2.csv' (NULL_PADDING 0);
 
 # create CSV file from query
 query I
