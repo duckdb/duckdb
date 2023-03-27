@@ -36,7 +36,7 @@ class TestPandasObject(object):
         data = np.array([["a", "b", "c"], [1,2,3], [1, 2, 3], [11, 22, 33]])
         df = pd.DataFrame(data=data[1:,], columns=data[0])
         res = duckdb.sql('select * from df').fetchall()
-        assert df == [('1', '2', '3'), ('1', '2', '3'), ('11', '22', '33')]
+        assert res == [('1', '2', '3'), ('1', '2', '3'), ('11', '22', '33')]
 
     def test_2499(self, duckdb_cursor):  
         df = pd.DataFrame(
