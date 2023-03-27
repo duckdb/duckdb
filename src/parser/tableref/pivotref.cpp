@@ -347,3 +347,73 @@ unique_ptr<TableRef> PivotRef::FormatDeserialize(FormatDeserializer &source) {
 }
 
 } // namespace duckdb
+
+/*
+ json_serialize_sql('SELECT id, MIN(COLUMNS(''index[0-9]'')) FROM grouped_table GROUP BY all;', format := CAST('t' AS
+BOOLEAN)){ "error": false, "statements": [
+       {
+           "node": {
+               "type": "SELECT_NODE",
+               "modifiers": [],
+               "cte_map": {
+                   "map": []
+               },
+               "select_list": [
+                   {
+                       "class": "COLUMN_REF",
+                       "type": "COLUMN_REF",
+                       "alias": "",
+                       "column_names": [
+                           "id"
+                       ]
+                   },
+                   {
+                       "class": "FUNCTION",
+                       "type": "FUNCTION",
+                       "alias": "",
+                       "function_name": "min",
+                       "schema": "",
+                       "children": [
+                           {
+                               "class": "STAR",
+                               "type": "STAR",
+                               "alias": "",
+                               "relation_name": "",
+                               "exclude_list": [],
+                               "replace_list": [],
+                               "columns": true
+                           }
+                       ],
+                       "filter": null,
+                       "order_bys": {
+                           "type": "ORDER_MODIFIER",
+                           "orders": []
+                       },
+                       "distinct": false,
+                       "is_operator": false,
+                       "export_state": false,
+                       "catalog": ""
+                   }
+               ],
+               "from_table": {
+                   "type": "BASE_TABLE",
+                   "alias": "",
+                   "sample": null,
+                   "schema_name": "",
+                   "table_name": "grouped_table",
+                   "column_name_alias": [],
+                   "catalog_name": ""
+               },
+               "where_clause": null,
+               "group_expressions": [],
+               "group_sets": [],
+               "aggregate_handling": "FORCE_AGGREGATES",
+               "having": null,
+               "sample": null,
+               "qualify": null
+           }
+       }
+   ]
+}D
+
+ */

@@ -20,19 +20,12 @@
 namespace duckdb {
 
 class FormatDeserializer {
+	friend Vector;
+
 protected:
 	bool deserialize_enum_from_string = false;
 
 public:
-	// We fake return-type overloading using templates and enable_if
-	/*
-	template<typename T>
-	T ReadProperty(const char* tag) {
-	    SetTag(tag);
-	    return std::move<T>(Read<T>());
-	}
-	 */
-
 	// Read into an existing value
 	template <typename T>
 	inline void ReadProperty(const char *tag, T &ret) {
@@ -105,6 +98,13 @@ public:
 			ret = T();
 			OnOptionalEnd();
 		}
+	}
+
+	// Special case:
+	// Read into an existing data_ptr_t
+	inline void ReadProperty(const char *tag, data_ptr_t ret, idx_t count) {
+		SetTag(tag);
+		ReadDataPtr(ret, count);
 	}
 
 private:
@@ -307,6 +307,12 @@ private:
 		return ReadInterval();
 	}
 
+	// Deserialize a interval_t
+	template <typename T = void>
+	inline typename std::enable_if<std::is_same<T, hugeint_t>::value, T>::type Read() {
+		return ReadHugeInt();
+	}
+
 protected:
 	virtual void SetTag(const char *tag) {
 		(void)tag;
@@ -359,10 +365,12 @@ protected:
 	virtual uint32_t ReadUnsignedInt32() = 0;
 	virtual int64_t ReadSignedInt64() = 0;
 	virtual uint64_t ReadUnsignedInt64() = 0;
+	virtual hugeint_t ReadHugeInt() = 0;
 	virtual float ReadFloat() = 0;
 	virtual double ReadDouble() = 0;
 	virtual string ReadString() = 0;
 	virtual interval_t ReadInterval() = 0;
+	virtual void ReadDataPtr(data_ptr_t &ptr, idx_t count) = 0;
 };
 
 } // namespace duckdb

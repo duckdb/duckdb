@@ -111,6 +111,10 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 			auto data = yyjson_mut_val_write_opts(result_obj,
 			                                      info.format ? JSONCommon::WRITE_PRETTY_FLAG : JSONCommon::WRITE_FLAG,
 			                                      alc, (size_t *)&len, nullptr);
+			if (data == nullptr) {
+				throw SerializationException(
+				    "Failed to serialize json, perhaps the query contains invalid utf8 characters?");
+			}
 			return StringVector::AddString(result, data, len);
 
 		} catch (Exception &exception) {
@@ -264,5 +268,29 @@ CreateTableFunctionInfo JSONFunctions::GetExecuteJsonSerializedSqlFunction() {
 	                   ExecuteSqlTableFunction::Bind);
 	return CreateTableFunctionInfo(func);
 }
+
+extern unique_ptr<SelectStatement> JsonSerializationVerify(SelectStatement &stmt) {
+	JSONAllocator alc(Allocator::DefaultAllocator());
+	auto doc = JSONCommon::CreateDocument(alc.GetYYJSONAllocator());
+	auto result_obj = yyjson_mut_obj(doc);
+	yyjson_mut_doc_set_root(doc, result_obj);
+
+	auto statements_arr = yyjson_mut_arr(doc);
+
+	auto serializer = JsonSerializer(doc, false, false);
+	stmt.FormatSerialize(serializer);
+	auto json = serializer.GetRootObject();
+
+	yyjson_mut_arr_append(statements_arr, json);
+	yyjson_mut_obj_add_false(doc, result_obj, "error");
+	yyjson_mut_obj_add_val(doc, result_obj, "statements", statements_arr);
+
+	auto str = JSONCommon::WriteVal(result_obj, alc.GetYYJSONAllocator());
+	auto val = DeserializeSelectStatement(str, alc.GetYYJSONAllocator());
+
+	alc.Reset();
+
+	return val;
+};
 
 } // namespace duckdb

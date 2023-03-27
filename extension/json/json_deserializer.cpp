@@ -1,4 +1,5 @@
 #include "json_deserializer.hpp"
+#include "duckdb/common/types/blob.hpp"
 
 namespace duckdb {
 
@@ -125,6 +126,26 @@ void JsonDeserializer::OnMapEnd() {
 	stack.pop_back();
 }
 
+void JsonDeserializer::OnPairBegin() {
+	auto val = GetNextValue();
+	if (!yyjson_is_obj(val)) {
+		ThrowTypeError(val, "object");
+	}
+	Push(val);
+}
+
+void JsonDeserializer::OnPairKeyBegin() {
+	SetTag("key");
+}
+
+void JsonDeserializer::OnPairValueBegin() {
+	SetTag("value");
+}
+
+void JsonDeserializer::OnPairEnd() {
+	stack.pop_back();
+}
+
 bool JsonDeserializer::OnOptionalBegin() {
 	auto val = GetNextValue();
 	if (yyjson_is_null(val)) {
@@ -234,16 +255,41 @@ string JsonDeserializer::ReadString() {
 
 interval_t JsonDeserializer::ReadInterval() {
 	auto val = GetNextValue();
+	if (!yyjson_is_obj(val)) {
+		ThrowTypeError(val, "object");
+	}
+	Push(val);
+	interval_t result;
+	ReadProperty("months", result.months);
+	ReadProperty("days", result.days);
+	ReadProperty("micros", result.micros);
+	Pop();
+	return result;
+}
+
+hugeint_t JsonDeserializer::ReadHugeInt() {
+	auto val = GetNextValue();
+	if (!yyjson_is_obj(val)) {
+		ThrowTypeError(val, "object");
+	}
+	Push(val);
+	hugeint_t result;
+	ReadProperty("upper", result.upper);
+	ReadProperty("lower", result.lower);
+	Pop();
+	return result;
+}
+
+void JsonDeserializer::ReadDataPtr(data_ptr_t &ptr, idx_t count) {
+	auto val = GetNextValue();
 	if (!yyjson_is_str(val)) {
-		ThrowTypeError(val, "interval");
+		ThrowTypeError(val, "string");
 	}
 	auto str = yyjson_get_str(val);
-	interval_t result;
-	if (Interval::FromString(str, result)) {
-		return result;
-	} else {
-		throw SerializationException("Invalid interval format: %s", str);
-	}
+	auto len = yyjson_get_len(val);
+	D_ASSERT(len == count);
+	auto blob = string_t(str, len);
+	Blob::ToString(blob, (char *&)ptr);
 }
 
 } // namespace duckdb

@@ -17,14 +17,9 @@ private:
 	struct StackFrame {
 		yyjson_val *val;
 		yyjson_arr_iter arr_iter;
-
 		explicit StackFrame(yyjson_val *val) : val(val) {
 			yyjson_arr_iter_init(val, &arr_iter);
 		}
-		StackFrame(const StackFrame &) = delete;
-		StackFrame &operator=(const StackFrame &) = delete;
-		StackFrame(StackFrame &&) = default;
-		StackFrame &operator=(StackFrame &&) = default;
 	};
 
 	yyjson_doc *doc;
@@ -69,6 +64,11 @@ private:
 	void OnMapValueBegin() final;
 	bool OnOptionalBegin() final;
 
+	void OnPairBegin() final;
+	void OnPairKeyBegin() final;
+	void OnPairValueBegin() final;
+	void OnPairEnd() final;
+
 	//===--------------------------------------------------------------------===//
 	// Primitive Types
 	//===--------------------------------------------------------------------===//
@@ -85,6 +85,8 @@ private:
 	double ReadDouble() final;
 	string ReadString() final;
 	interval_t ReadInterval() final;
+	hugeint_t ReadHugeInt() final;
+	void ReadDataPtr(data_ptr_t &ptr, idx_t count) final;
 };
 
 } // namespace duckdb
