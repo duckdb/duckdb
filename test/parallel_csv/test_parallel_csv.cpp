@@ -165,7 +165,7 @@ TEST_CASE("Test One File", "[parallel-csv]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	std::set<std::string> skip;
-	string file = "test/sql/copy/csv/data/test/multi_char_large.csv";
+	string file = "test/sql/copy/csv/data/test/many_empty_lines.csv";
 	REQUIRE(RunFull(file, skip, con));
 }
 
@@ -229,8 +229,6 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/test", "[paralle
 	std::set<std::string> skip;
 	//  Thread count: 1 Buffer Size: 52
 	skip.insert("test/sql/copy/csv/data/test/multi_char_large.csv");
-	// Thread count: 1 Buffer Size: 1
-	skip.insert("test/sql/copy/csv/data/test/many_empty_lines.csv");
 	// Thread count: 1 Buffer Size: 2 HIB
 	skip.insert("test/sql/copy/csv/data/test/windows_newline_empty.csv");
 	//	Thread count: 1 Buffer Size: 2196

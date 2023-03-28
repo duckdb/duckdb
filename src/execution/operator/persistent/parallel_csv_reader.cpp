@@ -55,6 +55,10 @@ bool ParallelCSVReader::NewLineDelimiter(bool carry, bool carry_followed_by_nl, 
 
 void ParallelCSVReader::SkipEmptyLines() {
 	idx_t new_pos_buffer = position_buffer;
+	if (parse_chunk.data.size() == 1){
+		// Empty lines are null data.
+		return;
+	}
 	for (; new_pos_buffer < end_buffer; new_pos_buffer++) {
 		if (StringUtil::CharacterIsNewline((*buffer)[new_pos_buffer])) {
 			bool carrier_return = (*buffer)[new_pos_buffer] == '\r';
