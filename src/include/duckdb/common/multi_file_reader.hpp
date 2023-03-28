@@ -99,13 +99,9 @@ struct MultiFileReader {
 			return;
 		}
 		shared_ptr<READER_CLASS> reader;
-		if (return_types.empty()) {
-			reader = make_shared<READER_CLASS>(context, result.files[0], options);
-			return_types = reader->return_types;
-			names = reader->names;
-		} else {
-			reader = make_shared<READER_CLASS>(context, result.files[0], options);
-		}
+		reader = make_shared<READER_CLASS>(context, result.files[0], options);
+		return_types = reader->return_types;
+		names = reader->names;
 		result.Initialize(std::move(reader));
 	}
 

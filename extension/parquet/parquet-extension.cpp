@@ -200,6 +200,8 @@ public:
 			if (loption == "compression" || loption == "codec") {
 				// CODEC option has no effect on parquet read: we determine codec from the file
 				continue;
+			} else if (loption == "binary_as_string") {
+				parquet_options.binary_as_string = true;
 			} else if (loption == "file_row_number") {
 				parquet_options.file_row_number = true;
 			} else {
@@ -278,10 +280,21 @@ public:
 	                                                        ParquetOptions parquet_options) {
 		auto result = make_unique<ParquetReadBindData>();
 		result->files = std::move(files);
-		MultiFileReader::BindReader<ParquetReader>(context, return_types, names, *result, parquet_options);
-		result->reader_bind = MultiFileReader::BindOptions(parquet_options.file_options, result->files, return_types, names);
-		result->types = return_types;
-		result->names = names;
+		MultiFileReader::BindReader<ParquetReader>(context, result->types, result->names, *result, parquet_options);
+		result->reader_bind = MultiFileReader::BindOptions(parquet_options.file_options, result->files, result->types, result->names);
+		if (return_types.empty()) {
+			// no expected types - just copy the types
+			return_types = result->types;
+			names = result->names;
+		} else {
+			if (return_types.size() != result->types.size()) {
+				throw std::runtime_error(StringUtil::Format("Failed to read file \"%s\" - column count mismatch: expected %d columns but found %d", result->files[0], return_types.size(),
+									  result->types.size()));
+			}
+			// expected types - overwrite the types we want to read instead
+			result->types = return_types;
+			result->names = names;
+		}
 		return std::move(result);
 	}
 
