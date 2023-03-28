@@ -291,6 +291,6 @@ extern unique_ptr<SelectStatement> JsonSerializationVerify(SelectStatement &stmt
 	alc.Reset();
 
 	return val;
-};
+}
 
 } // namespace duckdb
