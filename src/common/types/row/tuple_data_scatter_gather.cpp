@@ -365,7 +365,7 @@ void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, DataChunk &n
 	// Set the validity mask for each row before inserting data
 	const auto validity_bytes = ValidityBytes::SizeInBytes(layout.ColumnCount());
 	for (idx_t i = 0; i < append_count; i++) {
-		memset(row_locations[i], ~0, validity_bytes);
+		FastMemset(row_locations[i], ~0, validity_bytes);
 	}
 
 	if (!layout.AllConstant()) {

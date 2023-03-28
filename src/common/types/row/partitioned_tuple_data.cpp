@@ -70,7 +70,7 @@ void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, DataCh
 	}
 
 	// Build the buffer space
-	BuildBufferSpace(state, partition_entries);
+	BuildBufferSpace(state);
 
 	// Now scatter everything in one go
 	partitions[0]->Scatter(state.chunk_state, input, state.partition_sel, input.size());
@@ -99,7 +99,7 @@ void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, TupleD
 	// Build the buffer space
 	state.chunk_state.heap_sizes.Slice(input.heap_sizes, state.partition_sel, count);
 	state.chunk_state.heap_sizes.Flatten(count);
-	BuildBufferSpace(state, partition_entries);
+	BuildBufferSpace(state);
 
 	// Copy the rows
 	partitions[0]->CopyRows(state.chunk_state, input, state.partition_sel, count);
@@ -151,9 +151,8 @@ void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &st
 	}
 }
 
-void PartitionedTupleData::BuildBufferSpace(PartitionedTupleDataAppendState &state,
-                                            const unordered_map<idx_t, list_entry_t> &partition_entries) {
-	for (auto &pc : partition_entries) {
+void PartitionedTupleData::BuildBufferSpace(PartitionedTupleDataAppendState &state) {
+	for (auto &pc : state.partition_entries) {
 		const auto &partition_index = pc.first;
 
 		// Partition, pin state for this partition index

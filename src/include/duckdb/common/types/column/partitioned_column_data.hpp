@@ -10,6 +10,7 @@
 
 #include "column_data_allocator.hpp"
 #include "column_data_collection.hpp"
+#include "duckdb/common/perfect_map_set.hpp"
 
 namespace duckdb {
 
@@ -22,7 +23,7 @@ public:
 public:
 	Vector partition_indices;
 	SelectionVector partition_sel;
-	unordered_map<idx_t, list_entry_t> partition_entries;
+	perfect_map_t<list_entry_t> partition_entries;
 	DataChunk slice_chunk;
 
 	vector<unique_ptr<ColumnDataAppendState>> partition_append_states;

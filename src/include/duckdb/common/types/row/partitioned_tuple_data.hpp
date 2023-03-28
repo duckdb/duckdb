@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/perfect_map_set.hpp"
 #include "duckdb/common/types/row/tuple_data_allocator.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 
@@ -22,7 +23,7 @@ public:
 public:
 	Vector partition_indices;
 	SelectionVector partition_sel;
-	unordered_map<idx_t, list_entry_t> partition_entries;
+	perfect_map_t<list_entry_t> partition_entries;
 
 	vector<unique_ptr<TupleDataPinState>> partition_pin_states;
 	TupleDataChunkState chunk_state;
@@ -112,8 +113,7 @@ protected:
 	//! - returns true if everything belongs to the same partition - stores partition index in single_partition_idx
 	void BuildPartitionSel(PartitionedTupleDataAppendState &state, idx_t count);
 	//! Builds out the buffer space in the partitions
-	void BuildBufferSpace(PartitionedTupleDataAppendState &state,
-	                      const unordered_map<idx_t, list_entry_t> &partition_entries);
+	void BuildBufferSpace(PartitionedTupleDataAppendState &state);
 	//! Create a collection for a specific a partition
 	unique_ptr<TupleDataCollection> CreatePartitionCollection(idx_t partition_index) const {
 		return make_unique<TupleDataCollection>(allocators->allocators[partition_index]);
