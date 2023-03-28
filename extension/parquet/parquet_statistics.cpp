@@ -1,12 +1,11 @@
 #include "parquet_statistics.hpp"
 #include "parquet_decimal_utils.hpp"
 #include "parquet_timestamp.hpp"
-
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/value.hpp"
-
+#include "duckdb/common/types/time.hpp"
 #endif
 
 namespace duckdb {
@@ -155,11 +154,31 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 		return Value::DATE(date_t(Load<int32_t>((data_ptr_t)stats.c_str())));
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ: {
-		if (stats.size() != sizeof(int64_t)) {
+		int64_t val;
+		if (stats.size() == sizeof(int32_t)) {
+			val = Load<int32_t>((data_ptr_t)stats.c_str());
+		} else if (stats.size() == sizeof(int64_t)) {
+			val = Load<int64_t>((data_ptr_t)stats.c_str());
+		} else {
 			throw InternalException("Incorrect stats size for type TIME");
 		}
-		auto time = dtime_t(Load<int64_t>((data_ptr_t)stats.c_str()));
-		return Value::TIME(time);
+		if (schema_ele.__isset.logicalType && schema_ele.logicalType.__isset.TIME) {
+			// logical type
+			if (schema_ele.logicalType.TIME.unit.__isset.MILLIS) {
+				return Value::TIME(Time::FromTimeMs(val));
+			} else if (schema_ele.logicalType.TIME.unit.__isset.NANOS) {
+				return Value::TIME(Time::FromTimeNs(val));
+			} else if (schema_ele.logicalType.TIME.unit.__isset.MICROS) {
+				return Value::TIME(dtime_t(val));
+			} else {
+				throw InternalException("Time logicalType is set but unit is not defined");
+			}
+		}
+		if (schema_ele.converted_type == duckdb_parquet::format::ConvertedType::TIME_MILLIS) {
+			return Value::TIME(Time::FromTimeMs(val));
+		} else {
+			return Value::TIME(dtime_t(val));
+		}
 	}
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ: {

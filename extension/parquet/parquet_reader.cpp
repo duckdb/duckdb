@@ -200,6 +200,11 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 				throw IOException("UTF8 converted type can only be set for Type::(FIXED_LEN_)BYTE_ARRAY");
 			}
 		case ConvertedType::TIME_MILLIS:
+			if (s_ele.type == Type::INT32) {
+				return LogicalType::TIME;
+			} else {
+				throw IOException("TIME_MILLIS converted type can only be set for value of Type::INT32");
+			}
 		case ConvertedType::TIME_MICROS:
 			if (s_ele.type == Type::INT64) {
 				return LogicalType::TIME;
