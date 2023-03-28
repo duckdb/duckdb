@@ -76,6 +76,11 @@ ColumnSegment::ColumnSegment(ColumnSegment &other, idx_t start)
 }
 
 ColumnSegment::~ColumnSegment() {
+	//if (block) {
+	//	// Clean up the pin before destroying the buffer
+	//	auto &buffer_manager = BufferManager::GetBufferManager(db);
+	//	buffer_manager.Unpin(block);
+	//}
 }
 
 //===--------------------------------------------------------------------===//

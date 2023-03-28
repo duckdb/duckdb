@@ -12,13 +12,13 @@ using duckdb::unordered_set;
 
 struct MyBufferManager {
 public:
-	MyBufferManager() : allocated_memory(0), pinned_buffers(0), max_memory(100000000) {
+	MyBufferManager() : allocated_memory(0), max_memory(100000000) {
 	}
 	duckdb::idx_t allocated_memory;
-	duckdb::idx_t pinned_buffers;
 	duckdb::idx_t max_memory;
 #ifdef DEBUG
 	duckdb::mutex lock;
+	unordered_set<data_ptr_t> pinned_buffers;
 	unordered_set<data_ptr_t> allocated_buffers;
 	unordered_set<data_ptr_t> freed_buffers;
 #endif

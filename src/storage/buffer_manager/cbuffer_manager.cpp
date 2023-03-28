@@ -69,9 +69,14 @@ BufferHandle CBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 		// check if the block is already loaded
 		if (handle->state == BlockState::BLOCK_LOADED) {
 			// the block is loaded, increment the reader count and return a pointer to the handle
-			auto &buffer = (ExternalFileBuffer &)*handle->buffer;
-			data_ptr_t allocation = (data_ptr_t)config.pin_func(config.data, buffer.ExternalBufferHandle());
-			buffer.SetAllocation(allocation);
+			auto &buffer = *handle->buffer;
+			auto user_buffer = buffer.InternalBuffer() + Storage::BLOCK_HEADER_SIZE;
+			data_ptr_t allocation = (data_ptr_t)config.pin_func(config.data, user_buffer);
+			if (buffer.type == FileBufferType::EXTERNAL_BUFFER) {
+				//FIXME: how do we set the 'buffer' when this is not an ExternalFileBuffer??
+				auto& external_file_buffer = (ExternalFileBuffer&)buffer;
+				external_file_buffer.SetAllocation(allocation);
+			}
 			handle->readers++;
 			return handle->Load(handle);
 		}
@@ -101,10 +106,11 @@ void CBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 	if (!handle->buffer) {
 		return;
 	}
-	auto &buffer = (ExternalFileBuffer &)*handle->buffer;
+	auto &buffer = *handle->buffer;
 	D_ASSERT(handle->readers > 0);
 	handle->readers--;
-	config.unpin_func(config.data, buffer.ExternalBufferHandle());
+	auto user_buffer = buffer.InternalBuffer() + Storage::BLOCK_HEADER_SIZE;
+	config.unpin_func(config.data, user_buffer);
 	if (handle->readers == 0 && handle->can_destroy) {
 		handle.reset();
 	}

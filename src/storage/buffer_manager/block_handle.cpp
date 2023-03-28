@@ -35,7 +35,9 @@ BlockHandle::~BlockHandle() {
 	if (buffer && state == BlockState::BLOCK_LOADED) {
 		D_ASSERT(memory_charge.size > 0);
 		// the block is still loaded in memory: erase it
-		buffer.reset();
+		if (can_destroy) {
+			buffer.reset();
+		}
 		memory_charge.Resize(0);
 	} else {
 		D_ASSERT(memory_charge.size == 0);

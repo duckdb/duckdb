@@ -50,7 +50,7 @@ void Destroy(void *data, duckdb_buffer buffer, idx_t header_bytes) {
 	//#endif
 
 	// assert that the buffer was not pinned, otherwise it should not be allowed to be destroyed
-	D_ASSERT(my_buffer->pinned == 0);
+	D_ASSERT(my_buffer->pinned <= 1);
 
 	free(my_buffer->allocation);
 	buffer_manager->allocated_memory -= my_buffer->size;
@@ -92,12 +92,12 @@ void *Pin(void *data, duckdb_buffer buffer) {
 		lock_guard<mutex> lock(buffer_manager->lock);
 		// this doesn't really work.. but at least it will segfault if the pointer is faulty
 		D_ASSERT(buffer_manager->allocated_buffers.count((data_ptr_t)buffer));
+		if (my_buffer->pinned == 0) {
+			buffer_manager->pinned_buffers.insert((data_ptr_t)my_buffer);
+		}
 	}
 #endif
 
-	if (my_buffer->pinned == 0) {
-		buffer_manager->pinned_buffers++;
-	}
 	my_buffer->pinned++;
 	return my_buffer->allocation;
 }
@@ -117,10 +117,15 @@ void Unpin(void *data, duckdb_buffer buffer) {
 	D_ASSERT(my_buffer->pinned > 0);
 
 	my_buffer->pinned--;
-	if (my_buffer->pinned == 0) {
-		D_ASSERT(buffer_manager->pinned_buffers > 0);
-		buffer_manager->pinned_buffers--;
+#ifdef DEBUG
+	{
+		lock_guard<mutex> lock(buffer_manager->lock);
+		if (my_buffer->pinned == 0) {
+			D_ASSERT(buffer_manager->pinned_buffers.size() > 0);
+			buffer_manager->pinned_buffers.erase((data_ptr_t)my_buffer);
+		}
 	}
+#endif
 }
 
 idx_t UsedMemory(void *data) {

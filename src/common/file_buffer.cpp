@@ -99,7 +99,9 @@ void FileBuffer::Read(FileHandle &handle, uint64_t location) {
 
 void FileBuffer::Write(FileHandle &handle, uint64_t location) {
 	D_ASSERT(type != FileBufferType::TINY_BUFFER);
-	handle.Write(internal_buffer, internal_size, location);
+	// FIXME: does this need to take Align or SectorSize into account?
+	handle.Write(internal_buffer, Storage::BLOCK_HEADER_SIZE, location);
+	handle.Write(buffer, size, location + Storage::BLOCK_HEADER_SIZE);
 }
 
 void FileBuffer::Clear() {
