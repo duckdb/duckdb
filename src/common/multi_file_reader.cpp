@@ -206,6 +206,7 @@ void MultiFileReader::FinalizeChunk(const MultiFileReaderBindData &bind_data, co
 	for(auto &entry : reader_data.constant_map) {
 		chunk.data[entry.first].Reference(entry.second);
 	}
+	chunk.Verify();
 }
 
 void MultiFileReaderOptions::Serialize(FieldWriter &writer) const {

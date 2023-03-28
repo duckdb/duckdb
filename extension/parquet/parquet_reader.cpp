@@ -249,9 +249,10 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele) {
 	return DeriveLogicalType(s_ele, parquet_options.binary_as_string);
 }
 
-unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData *file_meta_data, idx_t depth,
+unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(idx_t depth,
                                                               idx_t max_define, idx_t max_repeat,
                                                               idx_t &next_schema_idx, idx_t &next_file_idx) {
+	auto file_meta_data = GetFileMetadata();
 	D_ASSERT(file_meta_data);
 	D_ASSERT(next_schema_idx < file_meta_data->schema.size());
 	auto &s_ele = file_meta_data->schema[next_schema_idx];
@@ -281,7 +282,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 
 			auto &child_ele = file_meta_data->schema[next_schema_idx];
 
-			auto child_reader = CreateReaderRecursive(file_meta_data, depth + 1, max_define, max_repeat,
+			auto child_reader = CreateReaderRecursive(depth + 1, max_define, max_repeat,
 			                                          next_schema_idx, next_file_idx);
 			child_types.push_back(make_pair(child_ele.name, child_reader->Type()));
 			child_readers.push_back(std::move(child_reader));
@@ -352,7 +353,8 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 }
 
 // TODO we don't need readers for columns we are not going to read ay
-unique_ptr<ColumnReader> ParquetReader::CreateReader(const duckdb_parquet::format::FileMetaData *file_meta_data) {
+unique_ptr<ColumnReader> ParquetReader::CreateReader() {
+	auto file_meta_data = GetFileMetadata();
 	idx_t next_schema_idx = 0;
 	idx_t next_file_idx = 0;
 
@@ -363,7 +365,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(const duckdb_parquet::forma
 		throw IOException("Parquet reader: root schema element has no children");
 	}
 
-	auto ret = CreateReaderRecursive(file_meta_data, 0, 0, 0, next_schema_idx, next_file_idx);
+	auto ret = CreateReaderRecursive(0, 0, 0, next_schema_idx, next_file_idx);
 	D_ASSERT(next_schema_idx == file_meta_data->schema.size() - 1);
 	D_ASSERT(file_meta_data->row_groups.empty() || next_file_idx == file_meta_data->row_groups[0].columns.size());
 
@@ -386,7 +388,7 @@ void ParquetReader::InitializeSchema() {
 	if (file_meta_data->schema.size() < 2) {
 		throw FormatException("Need at least one non-root column in the file");
 	}
-	auto root_reader = CreateReader(file_meta_data);
+	auto root_reader = CreateReader();
 
 	auto &root_type = root_reader->Type();
 	auto &child_types = StructType::GetChildTypes(root_type);
@@ -451,6 +453,13 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, Parqu
 	InitializeSchema();
 }
 
+ParquetReader::ParquetReader(ClientContext &context_p, ParquetOptions parquet_options_p, shared_ptr<ParquetFileMetadataCache> metadata_p) :
+	allocator(BufferAllocator::Get(context_p)), file_opener(FileSystem::GetFileOpener(context_p)),
+      metadata(std::move(metadata_p)), parquet_options(parquet_options_p) {
+	InitializeSchema();
+}
+
+
 ParquetReader::~ParquetReader() {
 }
 
@@ -460,9 +469,20 @@ const FileMetaData *ParquetReader::GetFileMetadata() {
 	return metadata->metadata.get();
 }
 
-unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(column_t file_col_idx, const FileMetaData *file_meta_data) {
+unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const string &name) {
+	idx_t file_col_idx;
+	for(file_col_idx = 0; file_col_idx < names.size(); file_col_idx++) {
+		if (names[file_col_idx] == name) {
+			break;
+		}
+	}
+	if (file_col_idx == names.size()) {
+		return nullptr;
+	}
+
 	unique_ptr<BaseStatistics> column_stats;
-	auto root_reader = CreateReader(file_meta_data);
+	auto file_meta_data = GetFileMetadata();
+	auto root_reader = CreateReader();
 	auto column_reader = ((StructColumnReader *)root_reader.get())->GetChildReader(file_col_idx);
 
 	for (idx_t row_group_idx = 0; row_group_idx < file_meta_data->row_groups.size(); row_group_idx++) {
@@ -608,7 +628,7 @@ void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<idx_t> 
 	}
 
 	state.thrift_file_proto = CreateThriftProtocol(allocator, *state.file_handle, *file_opener, state.prefetch_mode);
-	state.root_reader = CreateReader(GetFileMetadata());
+	state.root_reader = CreateReader();
 	state.define_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 }
@@ -947,8 +967,6 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		}
 
 		result.Slice(state.sel, sel_size);
-		result.Verify();
-
 	} else {
 		for (idx_t col_idx = 0; col_idx < reader_data.column_ids.size(); col_idx++) {
 			auto file_col_idx = reader_data.column_ids[col_idx];

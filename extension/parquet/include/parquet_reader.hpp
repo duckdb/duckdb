@@ -82,6 +82,7 @@ class ParquetReader {
 public:
 	ParquetReader(Allocator &allocator, unique_ptr<FileHandle> file_handle_p);
 	ParquetReader(ClientContext &context, string file_name, ParquetOptions parquet_options);
+	ParquetReader(ClientContext &context, ParquetOptions parquet_options, shared_ptr<ParquetFileMetadataCache> metadata);
 	~ParquetReader();
 
 	Allocator &allocator;
@@ -102,7 +103,7 @@ public:
 
 	const duckdb_parquet::format::FileMetaData *GetFileMetadata();
 
-	unique_ptr<BaseStatistics> ReadStatistics(column_t column_id, const duckdb_parquet::format::FileMetaData *file_meta_data);
+	unique_ptr<BaseStatistics> ReadStatistics(const string &name);
 	static LogicalType DeriveLogicalType(const SchemaElement &s_ele, bool binary_as_string);
 
 	FileHandle &GetHandle() {
@@ -112,10 +113,9 @@ public:
 private:
 	void InitializeSchema();
 	bool ScanInternal(ParquetReaderScanState &state, DataChunk &output);
-	unique_ptr<ColumnReader> CreateReader(const duckdb_parquet::format::FileMetaData *file_meta_data);
+	unique_ptr<ColumnReader> CreateReader();
 
-	unique_ptr<ColumnReader> CreateReaderRecursive(const duckdb_parquet::format::FileMetaData *file_meta_data,
-	                                               idx_t depth, idx_t max_define, idx_t max_repeat,
+	unique_ptr<ColumnReader> CreateReaderRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
 	                                               idx_t &next_schema_idx, idx_t &next_file_idx);
 	const duckdb_parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
 	uint64_t GetGroupCompressedSize(ParquetReaderScanState &state);

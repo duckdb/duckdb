@@ -41,7 +41,6 @@ namespace duckdb {
 struct ParquetReadBindData : public TableFunctionData {
 	shared_ptr<ParquetReader> initial_reader;
 	vector<string> files;
-	vector<column_t> column_ids;
 	atomic<idx_t> chunk_count;
 	atomic<idx_t> cur_file;
 	vector<string> names;
@@ -226,7 +225,7 @@ public:
 		if (bind_data.files.size() < 2) {
 			if (bind_data.initial_reader) {
 				// most common path, scanning single parquet file
-				return bind_data.initial_reader->ReadStatistics(column_index);
+				return bind_data.initial_reader->ReadStatistics(bind_data.names[column_index]);
 			} else if (!config.options.object_cache_enable) {
 				// our initial reader was reset
 				return nullptr;
@@ -239,9 +238,6 @@ public:
 			// for more than one file, we could be lucky and metadata for *every* file is in the object cache (if
 			// enabled at all)
 			FileSystem &fs = FileSystem::GetFileSystem(context);
-
-			// If we don't have an initial_reader anymore, we may need to allocate a new one here.
-			shared_ptr<ParquetReader> reader;
 
 			for (idx_t file_idx = 0; file_idx < bind_data.files.size(); file_idx++) {
 				auto &file_name = bind_data.files[file_idx];
@@ -257,17 +253,9 @@ public:
 					// missing or invalid metadata entry in cache, no usable stats overall
 					return nullptr;
 				}
-
-				// If we don't have an initial reader anymore we need to create a reader
-				auto &current_reader = bind_data.initial_reader ? bind_data.initial_reader : reader;
-				if (!current_reader) {
-					current_reader = make_shared<ParquetReader>(context, bind_data.files[0], bind_data.parquet_options);
-				}
-
+				ParquetReader reader(context, bind_data.parquet_options, metadata);
 				// get and merge stats for file
-				auto file_stats = current_reader->ReadStatistics(column_index);
-				    ParquetReader::ReadStatistics(*current_reader, current_reader->return_types[column_index],
-				                                  column_index, metadata->metadata.get());
+				auto file_stats = reader.ReadStatistics(bind_data.names[column_index]);
 				if (!file_stats) {
 					return nullptr;
 				}
@@ -292,6 +280,8 @@ public:
 		result->files = std::move(files);
 		MultiFileReader::BindReader<ParquetReader>(context, return_types, names, *result, parquet_options);
 		result->reader_bind = MultiFileReader::BindOptions(parquet_options.file_options, result->files, return_types, names);
+		result->types = return_types;
+		result->names = names;
 		return std::move(result);
 	}
 
@@ -435,14 +425,15 @@ public:
 			if (gstate.CanRemoveFilterColumns()) {
 				data.all_columns.Reset();
 				data.reader->Scan(data.scan_state, data.all_columns);
+				MultiFileReader::FinalizeChunk(bind_data.reader_bind, data.reader->reader_data, data.all_columns);
 				output.ReferenceColumns(data.all_columns, gstate.projection_ids);
 			} else {
 				data.reader->Scan(data.scan_state, output);
+				MultiFileReader::FinalizeChunk(bind_data.reader_bind, data.reader->reader_data, output);
 			}
 
 			bind_data.chunk_count++;
 			if (output.size() > 0) {
-				MultiFileReader::FinalizeChunk(bind_data.reader_bind, data.reader->reader_data, output);
 				return;
 			}
 			if (!ParquetParallelStateNext(context, bind_data, data, gstate)) {
