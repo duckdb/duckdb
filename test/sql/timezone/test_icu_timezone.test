@@ -852,3 +852,13 @@ query I
 SELECT '2023-05-15 12:00:00+00'::TIMESTAMPTZ;
 ----
 2023-05-15 15:00:00+03
+
+# 2023b
+# This year Lebanon springs forward April 20/21 not March 25/26.
+statement ok
+SET TimeZone = 'Asia/Beirut';
+
+query II
+SELECT '2023-03-26 12:00:00+00'::TIMESTAMPTZ, '2023-04-21 12:00:00+00'::TIMESTAMPTZ;
+----
+2023-03-26 14:00:00+02	2023-04-21 15:00:00+03

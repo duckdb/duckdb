@@ -54,9 +54,10 @@ private:
 	vector<idx_t> sel_vector_sizes;
 	DataChunk group_subset, payload_subset;
 	Vector hashes, hashes_subset;
+	AggregateHTAppendState append_state;
 
 	HashTableList unpartitioned_hts;
-	unordered_map<hash_t, HashTableList> radix_partitioned_hts;
+	vector<HashTableList> radix_partitioned_hts;
 	idx_t tuple_size;
 
 private:

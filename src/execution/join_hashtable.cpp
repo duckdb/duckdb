@@ -191,7 +191,9 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 		}
 		info.correlated_payload.SetCardinality(keys);
 		info.correlated_payload.data[0].Reference(keys.data[info.correlated_types.size()]);
-		info.correlated_counts->AddChunk(info.group_chunk, info.correlated_payload, AggregateType::NON_DISTINCT);
+		AggregateHTAppendState append_state;
+		info.correlated_counts->AddChunk(append_state, info.group_chunk, info.correlated_payload,
+		                                 AggregateType::NON_DISTINCT);
 	}
 
 	// prepare the keys for processing
