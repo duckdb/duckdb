@@ -212,27 +212,14 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 
 	// union_col_names will exclude filename and hivepartition
 	if (options.file_options.union_by_name) {
-		case_insensitive_map_t<idx_t> union_names_map;
-		vector<string> union_col_names;
-		vector<LogicalType> union_col_types;
-
-		auto dummy_readers = UnionByName::UnionCols<BufferedCSVReader>(
-		    context, result->files, union_col_types, union_col_names, union_names_map, options);
-
-		dummy_readers = UnionByName::CreateUnionMap<BufferedCSVReader>(
-		    std::move(dummy_readers), union_col_types, union_col_names, union_names_map);
-
-		std::move(dummy_readers.begin(), dummy_readers.end(), std::back_inserter(result->union_readers));
+		MultiFileReader::BindUnionReader<BufferedCSVReader>(context, return_types, names, *result, options);
+		result->initial_reader->insert_cols_idx = result->initial_reader->union_idx_map;
 		for (auto &reader : result->union_readers) {
+			if (!reader) {
+				continue;
+			}
 			reader->insert_cols_idx = reader->union_idx_map;
 		}
-
-		names.assign(union_col_names.begin(), union_col_names.end());
-		return_types.assign(union_col_types.begin(), union_col_types.end());
-		const idx_t first_file_index = 0;
-		result->initial_reader = std::move(result->union_readers[first_file_index]);
-		D_ASSERT(names.size() == return_types.size());
-
 		if (!options.sql_types_per_column.empty()) {
 			auto exception = BufferedCSVReader::ColumnTypesError(options.sql_types_per_column, names);
 			if (!exception.empty()) {
@@ -336,7 +323,6 @@ public:
 
 private:
 	//! File Handle for current file
-	unique_ptr<CSVFileHandle> prev_file_handle;
 	unique_ptr<CSVFileHandle> file_handle;
 	shared_ptr<CSVBuffer> current_buffer;
 	shared_ptr<CSVBuffer> next_buffer;

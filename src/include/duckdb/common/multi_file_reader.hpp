@@ -31,22 +31,9 @@ struct MultiFileReader {
 	//! If "true" the first file has been eliminated
 	DUCKDB_API static bool ComplexFilterPushdown(ClientContext &context, vector<string> &files, const MultiFileReaderOptions &options, LogicalGet &get, vector<unique_ptr<Expression>> &filters);
 
-	// 		return MultiFileReader::BindReader<ParquetReader>(context, files, return_types, names, *result, parquet_options);
 	template<class READER_CLASS, class RESULT_CLASS, class OPTIONS_CLASS>
-	static void BindReader(ClientContext &context, vector<string> files, vector<LogicalType> &return_types, vector<string> &names, RESULT_CLASS &result, OPTIONS_CLASS &options) {
-		result.files = std::move(files);
-		if (!options.file_options.union_by_name) {
-			shared_ptr<READER_CLASS> reader;
-			if (return_types.empty()) {
-				reader = make_shared<READER_CLASS>(context, result.files[0], options);
-				return_types = reader->return_types;
-				names = reader->names;
-			} else {
-				reader = make_shared<READER_CLASS>(context, result.files[0], return_types, options);
-			}
-			result.SetInitialReader(std::move(reader));
-			return;
-		}
+	static void BindUnionReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names, RESULT_CLASS &result, OPTIONS_CLASS &options) {
+		D_ASSERT(options.file_options.union_by_name);
 		case_insensitive_map_t<idx_t> union_names_map;
 		vector<string> union_col_names;
 		vector<LogicalType> union_col_types;
@@ -59,9 +46,25 @@ struct MultiFileReader {
 		std::move(dummy_readers.begin(), dummy_readers.end(), std::back_inserter(result.union_readers));
 		names = union_col_names;
 		return_types = union_col_types;
-		result.SetInitialReader(result.union_readers[0]);
+		result.Initialize(result.union_readers[0]);
 		D_ASSERT(names.size() == return_types.size());
-		result.types = union_col_types;
+	}
+
+	template<class READER_CLASS, class RESULT_CLASS, class OPTIONS_CLASS>
+	static void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names, RESULT_CLASS &result, OPTIONS_CLASS &options) {
+		if (options.file_options.union_by_name) {
+			BindUnionReader<READER_CLASS>(context, return_types, names, result, options);
+			return;
+		}
+		shared_ptr<READER_CLASS> reader;
+		if (return_types.empty()) {
+			reader = make_shared<READER_CLASS>(context, result.files[0], options);
+			return_types = reader->return_types;
+			names = reader->names;
+		} else {
+			reader = make_shared<READER_CLASS>(context, result.files[0], return_types, options);
+		}
+		result.Initialize(std::move(reader));
 	}
 };
 

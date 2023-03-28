@@ -57,13 +57,13 @@ struct ParquetReadBindData : public TableFunctionData {
 	idx_t initial_file_row_groups;
 	ParquetOptions parquet_options;
 
-	void SetInitialReader(shared_ptr<ParquetReader> reader) {
+	void Initialize(shared_ptr<ParquetReader> reader) {
 		initial_reader = std::move(reader);
 		initial_file_cardinality = initial_reader->NumRows();
 		initial_file_row_groups = initial_reader->NumRowGroups();
 		parquet_options = initial_reader->parquet_options;
-		names = initial_reader->names;
-		types = initial_reader->return_types;
+		this->names = initial_reader->names;
+		this->types = initial_reader->return_types;
 	}
 };
 
@@ -211,7 +211,8 @@ public:
 		auto files = MultiFileReader::GetFileList(context, Value(info.file_path), "Parquet");
 
 		auto result = make_unique<ParquetReadBindData>();
-		MultiFileReader::BindReader<ParquetReader>(context, std::move(files), expected_types, expected_names, *result, parquet_options);
+		result->files = std::move(files);
+		MultiFileReader::BindReader<ParquetReader>(context, expected_types, expected_names, *result, parquet_options);
 		return result;
 	}
 
@@ -299,7 +300,8 @@ public:
 	                                                        vector<LogicalType> &return_types, vector<string> &names,
 	                                                        ParquetOptions parquet_options) {
 		auto result = make_unique<ParquetReadBindData>();
-		MultiFileReader::BindReader<ParquetReader>(context, std::move(files), return_types, names, *result, parquet_options);
+		result->files = std::move(files);
+		MultiFileReader::BindReader<ParquetReader>(context, return_types, names, *result, parquet_options);
 		return std::move(result);
 	}
 
