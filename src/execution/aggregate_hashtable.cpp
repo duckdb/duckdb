@@ -178,13 +178,12 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 	}
 	capacity = size;
 
-	bitmask = size - 1;
+	bitmask = capacity - 1;
 	const auto byte_size = capacity * sizeof(ENTRY);
 	if (byte_size > (idx_t)Storage::BLOCK_SIZE) {
 		hashes_hdl = buffer_manager.Allocate(byte_size);
 		hashes_hdl_ptr = hashes_hdl.Ptr();
 	}
-
 	memset(hashes_hdl_ptr, 0, byte_size);
 
 	if (Count() != 0) {
@@ -196,12 +195,13 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 		auto block_end = block_pointer + tuples_per_block * tuple_size;
 
 		TupleDataChunkIterator iterator(*data_collection, TupleDataPinProperties::ALREADY_PINNED, false);
-		auto row_locations = iterator.GetRowLocations();
+		const auto row_locations = iterator.GetRowLocations();
 		do {
 			for (idx_t i = 0; i < iterator.GetCount(); i++) {
 				const auto &row_location = row_locations[i];
 				if (row_location > block_end || row_location < block_pointer) {
 					block_id++;
+					D_ASSERT(block_id < payload_hds_ptrs.size());
 					block_pointer = payload_hds_ptrs[block_id];
 					block_end = block_pointer + tuples_per_block * tuple_size;
 				}
@@ -433,6 +433,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(AggregateHTAppendSta
 				const auto &row_location = row_locations[new_entry_idx];
 				if (row_location > block_end || row_location < block_pointer) {
 					block_id++;
+					D_ASSERT(block_id < payload_hds_ptrs.size());
 					block_pointer = payload_hds_ptrs[block_id];
 					block_end = block_pointer + tuples_per_block * tuple_size;
 				}
@@ -598,7 +599,6 @@ void GroupedAggregateHashTable::Partition(vector<GroupedAggregateHashTable *> &p
 
 void GroupedAggregateHashTable::InitializeFirstPart() {
 	data_collection->GetBlockPointers(payload_hds_ptrs);
-
 	auto size = MaxValue<idx_t>(NextPowerOfTwo(Count() * 2L), capacity);
 	switch (entry_type) {
 	case HtEntryType::HT_WIDTH_64:

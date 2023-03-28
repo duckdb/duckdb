@@ -365,7 +365,7 @@ void TupleDataAllocator::ReleaseOrStoreHandlesInternal(TupleDataSegment &segment
 	do {
 		found_handle = false;
 		for (auto it = handles.begin(); it != handles.end(); it++) {
-			auto block_id = it->first;
+			const auto block_id = it->first;
 			if (block_ids.find(block_id) != block_ids.end()) {
 				// still required: do not release
 				continue;
@@ -373,7 +373,11 @@ void TupleDataAllocator::ReleaseOrStoreHandlesInternal(TupleDataSegment &segment
 			switch (properties) {
 			case TupleDataPinProperties::KEEP_EVERYTHING_PINNED: {
 				lock_guard<mutex> guard(segment.pinned_handles_lock);
-				pinned_handles.emplace_back(std::move(it->second));
+				const auto block_count = block_id + 1;
+				if (block_count > pinned_handles.size()) {
+					pinned_handles.resize(block_count);
+				}
+				pinned_handles[block_id] = std::move(it->second);
 				break;
 			}
 			case TupleDataPinProperties::UNPIN_AFTER_DONE:
