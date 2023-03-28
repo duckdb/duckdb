@@ -49,7 +49,7 @@ static void ConvertKnownColRefToConstants(unique_ptr<Expression> &expr,
 
 		auto lookup = known_column_values.find(bound_colref.binding.column_index);
 		if (lookup != known_column_values.end()) {
-			expr = make_unique<BoundConstantExpression>(Value(lookup->second));
+			expr = make_unique<BoundConstantExpression>(Value(lookup->second).DefaultCastAs(bound_colref.return_type));
 		}
 	} else {
 		ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {

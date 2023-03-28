@@ -113,10 +113,30 @@ MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &opt
 	if (options.hive_partitioning) {
 		D_ASSERT(!files.empty());
 		auto partitions = HivePartitioning::Parse(files[0]);
+		// verify that all files have the same hive partitioning scheme
+		for (auto &f : files) {
+			auto file_partitions = HivePartitioning::Parse(f);
+			for (auto &part_info : partitions) {
+				if (file_partitions.find(part_info.first) == file_partitions.end()) {
+					throw BinderException(
+					    "Hive partition mismatch between file \"%s\" and \"%s\": key \"%s\" not found", files[0], f,
+					    part_info.first);
+				}
+			}
+			if (partitions.size() != file_partitions.size()) {
+				throw BinderException("Hive partition mismatch between file \"%s\" and \"%s\"", files[0], f);
+			}
+		}
 		for (auto &part : partitions) {
 			idx_t hive_partitioning_index = DConstants::INVALID_INDEX;
 			auto lookup = std::find(names.begin(), names.end(), part.first);
-			if (lookup == names.end()) {
+			if (lookup != names.end()) {
+				// hive partitioning column also exists in file - override
+				auto idx = lookup - names.begin();
+				hive_partitioning_index = idx;
+				return_types[idx] = LogicalType::VARCHAR;
+			} else {
+				// hive partitioning column does not exist in file - add a new column containing the key
 				hive_partitioning_index = names.size();
 				return_types.emplace_back(LogicalType::VARCHAR);
 				names.emplace_back(part.first);

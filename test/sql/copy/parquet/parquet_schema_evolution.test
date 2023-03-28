@@ -46,7 +46,7 @@ CREATE TABLE copy_test(a INT, b INT);
 statement error
 COPY copy_test FROM '__TEST_DIR__/evolution_*.parquet'
 ----
-schema mismatch in Parquet glob
+schema mismatch
 
 # copying from one file works, however
 statement ok
