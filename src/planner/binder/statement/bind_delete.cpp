@@ -83,7 +83,7 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 		del->table_index = update_table_index;
 
 		unique_ptr<LogicalOperator> del_as_logicaloperator = std::move(del);
-		return BindReturning(std::move(stmt.returning_list), table, update_table_index,
+		return BindReturning(std::move(stmt.returning_list), table, stmt.table->alias, update_table_index,
 		                     std::move(del_as_logicaloperator), std::move(result));
 	}
 	result.plan = std::move(del);

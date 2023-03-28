@@ -106,8 +106,7 @@ struct AltrepVectorWrapper {
 	void *Dataptr() {
 		if (transformed_vector.data() == R_NilValue) {
 			auto res = rel->GetQueryResult();
-			RProtector r_varvalue;
-			transformed_vector = duckdb_r_allocate(res->types[column_index], r_varvalue, res->RowCount());
+			transformed_vector = duckdb_r_allocate(res->types[column_index], res->RowCount());
 			idx_t dest_offset = 0;
 			for (auto &chunk : res->Collection().Chunks()) {
 				SEXP dest = transformed_vector.data();
@@ -221,7 +220,6 @@ static R_altrep_class_t LogicalTypeToAltrepType(const LogicalType &type) {
 	cpp11::writable::list data_frame(NEW_LIST(ncols));
 	data_frame.attr(R_ClassSymbol) = RStrings::get().dataframe_str;
 	auto relation_wrapper = make_shared<AltrepRelationWrapper>(drel);
-	RProtector r_protector;
 
 	cpp11::external_pointer<AltrepRownamesWrapper> ptr(new AltrepRownamesWrapper(relation_wrapper));
 
@@ -236,7 +234,7 @@ static R_altrep_class_t LogicalTypeToAltrepType(const LogicalType &type) {
 	for (size_t col_idx = 0; col_idx < ncols; col_idx++) {
 		auto &column_type = drel->Columns()[col_idx].Type();
 		cpp11::external_pointer<AltrepVectorWrapper> ptr(new AltrepVectorWrapper(relation_wrapper, col_idx));
-		auto vector_sexp = r_protector.Protect(R_new_altrep(LogicalTypeToAltrepType(column_type), ptr, R_NilValue));
+		cpp11::sexp vector_sexp = R_new_altrep(LogicalTypeToAltrepType(column_type), ptr, R_NilValue);
 		duckdb_r_decorate(column_type, vector_sexp, false);
 		SET_VECTOR_ELT(data_frame, col_idx, vector_sexp);
 	}

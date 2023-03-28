@@ -25,6 +25,7 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/main/relation/join_relation.hpp"
 #include "duckdb/main/relation/value_relation.hpp"
+#include "duckdb/parser/statement/explain_statement.hpp"
 
 namespace duckdb {
 
@@ -303,8 +304,8 @@ unique_ptr<QueryResult> Relation::Query(const string &name, const string &sql) {
 	return Query(sql);
 }
 
-unique_ptr<QueryResult> Relation::Explain() {
-	auto explain = make_shared<ExplainRelation>(shared_from_this());
+unique_ptr<QueryResult> Relation::Explain(ExplainType type) {
+	auto explain = make_shared<ExplainRelation>(shared_from_this(), type);
 	return explain->Execute();
 }
 

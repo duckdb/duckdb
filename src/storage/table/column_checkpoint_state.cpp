@@ -1,12 +1,7 @@
-
 #include "duckdb/storage/table/column_data.hpp"
-
+#include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
-#include "duckdb/storage/table/validity_column_data.hpp"
-#include "duckdb/storage/table/standard_column_data.hpp"
-#include "duckdb/storage/table/list_column_data.hpp"
-#include "duckdb/transaction/transaction.hpp"
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 
@@ -96,7 +91,7 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 	} // LCOV_EXCL_STOP
 
 	// merge the segment stats into the global stats
-	global_stats->Merge(*segment->stats.statistics);
+	global_stats->Merge(segment->stats.statistics);
 
 	// get the buffer of the segment and pin it
 	auto &db = column_data.GetDatabase();
@@ -104,7 +99,7 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 	block_id_t block_id = INVALID_BLOCK;
 	uint32_t offset_in_block = 0;
 
-	if (!segment->stats.statistics->IsConstant()) {
+	if (!segment->stats.statistics.IsConstant()) {
 		// non-constant block
 		PartialBlockAllocation allocation = partial_block_manager.GetBlockAllocation(segment_size);
 		block_id = allocation.state.block_id;
@@ -145,7 +140,7 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 	}
 
 	// construct the data pointer
-	DataPointer data_pointer;
+	DataPointer data_pointer(segment->stats.statistics.Copy());
 	data_pointer.block_pointer.block_id = block_id;
 	data_pointer.block_pointer.offset = offset_in_block;
 	data_pointer.row_start = row_group.start;
@@ -155,7 +150,6 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 	}
 	data_pointer.tuple_count = tuple_count;
 	data_pointer.compression_type = segment->function->type;
-	data_pointer.statistics = segment->stats.statistics->Copy();
 
 	// append the segment to the new segment tree
 	new_tree.AppendSegment(std::move(segment));

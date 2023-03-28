@@ -507,7 +507,7 @@ ScalarFunction ListUniqueFun::GetFunction() {
 }
 
 void ListAggregateFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"list_aggregate", "array_aggregate", "list_aggr", "array_aggr"}, GetFunction());
+	set.AddFunction({"list_aggregate", "array_aggregate", "list_aggr", "array_aggr", "aggregate"}, GetFunction());
 }
 
 void ListDistinctFun::RegisterFunction(BuiltinFunctions &set) {

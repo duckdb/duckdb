@@ -205,9 +205,13 @@ if len(existing_duckdb_dir) == 0:
         # read the include files, source list and include files from the supplied lists
         with open_utf8('sources.list', 'r') as f:
             duckdb_sources = [x for x in f.read().split('\n') if len(x) > 0]
+            if hasattr(sys, 'getandroidapilevel'):
+                duckdb_sources = [x for x in duckdb_sources if 'jemalloc' not in x]
 
         with open_utf8('includes.list', 'r') as f:
             duckdb_includes = [x for x in f.read().split('\n') if len(x) > 0]
+            if hasattr(sys, 'getandroidapilevel'):
+                duckdb_includes = [x for x in duckdb_includes if 'jemalloc' not in x]
 
     source_files += duckdb_sources
     include_directories = duckdb_includes + include_directories
@@ -282,6 +286,7 @@ setup(
     license='MIT',
     data_files = data_files,
     packages=[
+		'pyduckdb',
         'duckdb_query_graph',
         'duckdb-stubs'
     ],

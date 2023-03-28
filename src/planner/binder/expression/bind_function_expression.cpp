@@ -18,13 +18,6 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
                                             unique_ptr<ParsedExpression> *expr_ptr) {
 	// lookup the function in the catalog
 	QueryErrorContext error_context(binder.root_statement, function.query_location);
-
-	if (function.function_name == "unnest" || function.function_name == "unlist") {
-		// special case, not in catalog
-		// TODO make sure someone does not create such a function OR
-		// have unnest live in catalog, too
-		return BindUnnest(function, depth);
-	}
 	auto func = Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function.catalog, function.schema,
 	                              function.function_name, true, error_context);
 	if (!func) {
@@ -38,10 +31,28 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 			                       "function has to be called in a FROM clause (similar to a table).",
 			                       function.function_name)));
 		}
-		// not a table function - search again without if_exists to throw the error
-		Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function.catalog, function.schema,
-		                  function.function_name, false, error_context);
-		throw InternalException("Catalog::GetEntry for scalar function did not throw a second time");
+		// not a table function - check if the schema is set
+		if (!function.schema.empty()) {
+			// the schema is set - check if we can turn this the schema into a column ref
+			string error;
+			unique_ptr<ColumnRefExpression> colref;
+			if (function.catalog.empty()) {
+				colref = make_unique<ColumnRefExpression>(function.schema);
+			} else {
+				colref = make_unique<ColumnRefExpression>(function.schema, function.catalog);
+			}
+			auto new_colref = QualifyColumnName(*colref, error);
+			if (error.empty()) {
+				// we can! transform this into a function call on the column
+				// i.e. "x.lower()" becomes "lower(x)"
+				function.children.insert(function.children.begin(), std::move(colref));
+				function.catalog = INVALID_CATALOG;
+				function.schema = INVALID_SCHEMA;
+			}
+		}
+		// rebind the function
+		func = Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function.catalog, function.schema,
+		                         function.function_name, false, error_context);
 	}
 
 	if (func->type != CatalogType::AGGREGATE_FUNCTION_ENTRY &&
@@ -228,7 +239,7 @@ BindResult ExpressionBinder::BindAggregate(FunctionExpression &expr, AggregateFu
 	return BindResult(binder.FormatError(expr, UnsupportedAggregateMessage()));
 }
 
-BindResult ExpressionBinder::BindUnnest(FunctionExpression &expr, idx_t depth) {
+BindResult ExpressionBinder::BindUnnest(FunctionExpression &expr, idx_t depth, bool root_expression) {
 	return BindResult(binder.FormatError(expr, UnsupportedUnnestMessage()));
 }
 

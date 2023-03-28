@@ -2,6 +2,8 @@
 
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 
@@ -10,15 +12,29 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 string PivotColumn::ToString() const {
 	string result;
-	if (names.size() == 1) {
-		result += KeywordHelper::WriteOptionallyQuoted(names[0]);
-	} else {
+	if (!unpivot_names.empty()) {
+		D_ASSERT(pivot_expressions.empty());
+		// unpivot
+		if (unpivot_names.size() == 1) {
+			result += KeywordHelper::WriteOptionallyQuoted(unpivot_names[0]);
+		} else {
+			result += "(";
+			for (idx_t n = 0; n < unpivot_names.size(); n++) {
+				if (n > 0) {
+					result += ", ";
+				}
+				result += KeywordHelper::WriteOptionallyQuoted(unpivot_names[n]);
+			}
+			result += ")";
+		}
+	} else if (!pivot_expressions.empty()) {
+		// pivot
 		result += "(";
-		for (idx_t n = 0; n < names.size(); n++) {
+		for (idx_t n = 0; n < pivot_expressions.size(); n++) {
 			if (n > 0) {
 				result += ", ";
 			}
-			result += KeywordHelper::WriteOptionallyQuoted(names[n]);
+			result += pivot_expressions[n]->ToString();
 		}
 		result += ")";
 	}
@@ -72,7 +88,10 @@ bool PivotColumnEntry::Equals(const PivotColumnEntry &other) const {
 }
 
 bool PivotColumn::Equals(const PivotColumn &other) const {
-	if (other.names != names) {
+	if (!ExpressionUtil::ListEquals(pivot_expressions, other.pivot_expressions)) {
+		return false;
+	}
+	if (other.unpivot_names != unpivot_names) {
 		return false;
 	}
 	if (other.pivot_enum != pivot_enum) {
@@ -91,7 +110,10 @@ bool PivotColumn::Equals(const PivotColumn &other) const {
 
 PivotColumn PivotColumn::Copy() const {
 	PivotColumn result;
-	result.names = names;
+	for (auto &expr : pivot_expressions) {
+		result.pivot_expressions.push_back(expr->Copy());
+	}
+	result.unpivot_names = unpivot_names;
 	for (auto &entry : entries) {
 		result.entries.push_back(entry.Copy());
 	}
@@ -101,19 +123,37 @@ PivotColumn PivotColumn::Copy() const {
 
 void PivotColumn::Serialize(Serializer &serializer) const {
 	FieldWriter writer(serializer);
-	writer.WriteList<string>(names);
+	writer.WriteSerializableList(pivot_expressions);
+	writer.WriteList<string>(unpivot_names);
 	writer.WriteRegularSerializableList(entries);
 	writer.WriteString(pivot_enum);
 	writer.Finalize();
 }
 
+void PivotColumn::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("pivot_expressions", pivot_expressions);
+	serializer.WriteProperty("unpivot_names", unpivot_names);
+	serializer.WriteProperty("entries", entries);
+	serializer.WriteProperty("pivot_enum", pivot_enum);
+}
+
 PivotColumn PivotColumn::Deserialize(Deserializer &source) {
 	PivotColumn result;
 	FieldReader reader(source);
-	result.names = reader.ReadRequiredList<string>();
+	result.pivot_expressions = reader.ReadRequiredSerializableList<ParsedExpression>();
+	result.unpivot_names = reader.ReadRequiredList<string>();
 	result.entries = reader.ReadRequiredSerializableList<PivotColumnEntry, PivotColumnEntry>();
 	result.pivot_enum = reader.ReadRequired<string>();
 	reader.Finalize();
+	return result;
+}
+
+PivotColumn PivotColumn::FormatDeserialize(FormatDeserializer &source) {
+	PivotColumn result;
+	source.ReadProperty("pivot_expressions", result.pivot_expressions);
+	source.ReadProperty("unpivot_names", result.unpivot_names);
+	source.ReadProperty("entries", result.entries);
+	source.ReadProperty("pivot_enum", result.pivot_enum);
 	return result;
 }
 
@@ -136,6 +176,12 @@ void PivotColumnEntry::Serialize(Serializer &serializer) const {
 	writer.Finalize();
 }
 
+void PivotColumnEntry::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("values", values);
+	serializer.WriteOptionalProperty("star_expr", star_expr);
+	serializer.WriteProperty("alias", alias);
+}
+
 PivotColumnEntry PivotColumnEntry::Deserialize(Deserializer &source) {
 	PivotColumnEntry result;
 	FieldReader reader(source);
@@ -143,6 +189,14 @@ PivotColumnEntry PivotColumnEntry::Deserialize(Deserializer &source) {
 	result.star_expr = reader.ReadOptional<ParsedExpression>(nullptr);
 	result.alias = reader.ReadRequired<string>();
 	reader.Finalize();
+	return result;
+}
+
+PivotColumnEntry PivotColumnEntry::FormatDeserialize(FormatDeserializer &source) {
+	PivotColumnEntry result;
+	source.ReadProperty("values", result.values);
+	source.ReadOptionalProperty("star_expr", result.star_expr);
+	source.ReadProperty("alias", result.alias);
 	return result;
 }
 
@@ -281,6 +335,17 @@ void PivotRef::Serialize(FieldWriter &writer) const {
 	writer.WriteField<bool>(include_nulls);
 }
 
+void PivotRef::FormatSerialize(FormatSerializer &serializer) const {
+	TableRef::FormatSerialize(serializer);
+	serializer.WriteProperty("source", source);
+	serializer.WriteProperty("aggregates", aggregates);
+	serializer.WriteProperty("unpivot_names", unpivot_names);
+	serializer.WriteProperty("pivots", pivots);
+	serializer.WriteProperty("groups", groups);
+	serializer.WriteProperty("column_name_alias", column_name_alias);
+	serializer.WriteProperty("include_nulls", include_nulls);
+}
+
 unique_ptr<TableRef> PivotRef::Deserialize(FieldReader &reader) {
 	auto result = make_uniq<PivotRef>();
 	result->source = reader.ReadRequiredSerializable<TableRef>();
@@ -290,6 +355,18 @@ unique_ptr<TableRef> PivotRef::Deserialize(FieldReader &reader) {
 	result->groups = reader.ReadRequiredList<string>();
 	result->column_name_alias = reader.ReadRequiredList<string>();
 	result->include_nulls = reader.ReadRequired<bool>();
+	return std::move(result);
+}
+
+unique_ptr<TableRef> PivotRef::FormatDeserialize(FormatDeserializer &source) {
+	auto result = make_unique<PivotRef>();
+	source.ReadProperty("source", result->source);
+	source.ReadProperty("aggregates", result->aggregates);
+	source.ReadProperty("unpivot_names", result->unpivot_names);
+	source.ReadProperty("pivots", result->pivots);
+	source.ReadProperty("groups", result->groups);
+	source.ReadProperty("column_name_alias", result->column_name_alias);
+	source.ReadProperty("include_nulls", result->include_nulls);
 	return std::move(result);
 }
 

@@ -1,5 +1,6 @@
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
+#include "duckdb/planner/operator/logical_asof_join.hpp"
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"

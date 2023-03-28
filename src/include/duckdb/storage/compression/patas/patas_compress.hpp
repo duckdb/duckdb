@@ -18,7 +18,7 @@
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
+
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/common/operator/subtract.hpp"
@@ -49,7 +49,7 @@ public:
 			}
 
 			if (is_valid) {
-				NumericStatistics::Update<VALUE_TYPE>(state_wrapper->current_segment->stats, value);
+				NumericStats::Update<VALUE_TYPE>(state_wrapper->current_segment->stats.statistics, value);
 			}
 
 			state_wrapper->WriteValue(Load<EXACT_TYPE>((const_data_ptr_t)&value));

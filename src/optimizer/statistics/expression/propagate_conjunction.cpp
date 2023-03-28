@@ -2,7 +2,6 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 

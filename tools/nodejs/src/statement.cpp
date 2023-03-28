@@ -78,7 +78,7 @@ struct PrepareTask : public Task {
 
 		auto cb = callback.Value();
 		if (statement.statement->HasError()) {
-			cb.MakeCallback(statement.Value(), {Utils::CreateError(env, statement.statement->error.Message())});
+			cb.MakeCallback(statement.Value(), {Utils::CreateError(env, statement.statement->error)});
 			return;
 		}
 		cb.MakeCallback(statement.Value(), {env.Null(), statement.Value()});
@@ -282,11 +282,11 @@ struct RunPreparedTask : public Task {
 			return;
 		}
 		if (statement.statement->HasError()) {
-			cb.MakeCallback(statement.Value(), {Utils::CreateError(env, statement.statement->GetError())});
+			cb.MakeCallback(statement.Value(), {Utils::CreateError(env, statement.statement->GetErrorObject())});
 			return;
 		}
 		if (result->HasError()) {
-			cb.MakeCallback(statement.Value(), {Utils::CreateError(env, result->GetError())});
+			cb.MakeCallback(statement.Value(), {Utils::CreateError(env, result->GetErrorObject())});
 			return;
 		}
 
@@ -427,9 +427,9 @@ struct RunQueryTask : public Task {
 		if (!statement.statement) {
 			deferred.Reject(Utils::CreateError(env, "statement was finalized"));
 		} else if (statement.statement->HasError()) {
-			deferred.Reject(Utils::CreateError(env, statement.statement->GetError()));
+			deferred.Reject(Utils::CreateError(env, statement.statement->GetErrorObject()));
 		} else if (result->HasError()) {
-			deferred.Reject(Utils::CreateError(env, result->GetError()));
+			deferred.Reject(Utils::CreateError(env, result->GetErrorObject()));
 		} else {
 			auto db = statement.connection_ref->database_ref->Value();
 			auto query_result = QueryResult::constructor.New({db});

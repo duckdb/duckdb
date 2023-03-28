@@ -17,8 +17,10 @@ class optional_ptr {
 public:
 	optional_ptr() : ptr(nullptr) {
 	}
-	optional_ptr(T *ptr_p) : ptr(ptr_p) {
-	} // NOLINT: allow implicit creation from pointer
+	optional_ptr(T *ptr_p) : ptr(ptr_p) { // NOLINT: allow implicit creation from pointer
+	}
+	optional_ptr(const unique_ptr<T> &ptr_p) : ptr(ptr_p.get()) { // NOLINT: allow implicit creation from unique pointer
+	}
 
 	operator bool() const {
 		return ptr;
@@ -31,7 +33,7 @@ public:
 	}
 	T *operator->() {
 		if (!ptr) {
-			throw InternalException("Attempting to reference an optional pointer that is not set");
+			throw InternalException("Attempting to call a method on an optional pointer that is not set");
 		}
 		return ptr;
 	}

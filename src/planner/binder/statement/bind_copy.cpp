@@ -158,7 +158,9 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	result.types = {LogicalType::BIGINT};
 	result.names = {"Count"};
 
-	D_ASSERT(!stmt.info->table.empty());
+	if (stmt.info->table.empty()) {
+		throw ParserException("COPY FROM requires a table name to be specified");
+	}
 	// COPY FROM a file
 	// generate an insert statement for the the to-be-inserted table
 	InsertStatement insert;
@@ -185,7 +187,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	vector<string> expected_names;
 	if (!bound_insert.column_index_map.empty()) {
 		expected_names.resize(bound_insert.expected_types.size());
-		for (auto &col : table->GetColumns().Logical()) {
+		for (auto &col : table->GetColumns().Physical()) {
 			auto i = col.Physical();
 			if (bound_insert.column_index_map[i] != DConstants::INVALID_INDEX) {
 				expected_names[bound_insert.column_index_map[i]] = col.Name();
@@ -193,7 +195,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 		}
 	} else {
 		expected_names.reserve(bound_insert.expected_types.size());
-		for (auto &col : table->GetColumns().Logical()) {
+		for (auto &col : table->GetColumns().Physical()) {
 			expected_names.push_back(col.Name());
 		}
 	}

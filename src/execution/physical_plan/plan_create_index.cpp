@@ -6,8 +6,9 @@
 #include "duckdb/execution/operator/order/physical_order.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/function/table/table_scan.hpp"
-#include "duckdb/planner/filter/null_filter.hpp"
 #include "duckdb/planner/operator/logical_create_index.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/table_filter.hpp"
 
 namespace duckdb {

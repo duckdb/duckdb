@@ -3,7 +3,6 @@
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/common/sort/sorted_block.hpp"
-#include "duckdb/storage/statistics/string_statistics.hpp"
 
 #include <algorithm>
 #include <numeric>
@@ -66,9 +65,8 @@ SortLayout::SortLayout(const vector<BoundOrderByNode> &orders)
 			prefix_lengths.back() = GetNestedSortingColSize(col_size, expr.return_type);
 		} else if (physical_type == PhysicalType::VARCHAR) {
 			idx_t size_before = col_size;
-			if (stats.back()) {
-				auto &str_stats = (StringStatistics &)*stats.back();
-				col_size += str_stats.max_string_length;
+			if (stats.back() && StringStats::HasMaxStringLength(*stats.back())) {
+				col_size += StringStats::MaxStringLength(*stats.back());
 				if (col_size > 12) {
 					col_size = 12;
 				} else {
@@ -95,9 +93,9 @@ SortLayout::SortLayout(const vector<BoundOrderByNode> &orders)
 			if (bytes_to_fill == 0) {
 				break;
 			}
-			if (logical_types[col_idx].InternalType() == PhysicalType::VARCHAR && stats[col_idx]) {
-				auto &str_stats = (StringStatistics &)*stats[col_idx];
-				idx_t diff = str_stats.max_string_length - prefix_lengths[col_idx];
+			if (logical_types[col_idx].InternalType() == PhysicalType::VARCHAR && stats[col_idx] &&
+			    StringStats::HasMaxStringLength(*stats[col_idx])) {
+				idx_t diff = StringStats::MaxStringLength(*stats[col_idx]) - prefix_lengths[col_idx];
 				if (diff > 0) {
 					// Increase all sizes accordingly
 					idx_t increase = MinValue(bytes_to_fill, diff);

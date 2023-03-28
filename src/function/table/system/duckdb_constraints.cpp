@@ -204,8 +204,8 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 					const auto &bound_foreign_key = (const BoundForeignKeyConstraint &)bound_constraint;
 					const auto &info = bound_foreign_key.info;
 					// find the other table
-					auto table_entry =
-					    Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, info.schema, info.table, true);
+					auto table_entry = Catalog::GetEntry<TableCatalogEntry>(context, table.catalog->GetName(),
+					                                                        info.schema, info.table, true);
 					if (!table_entry) {
 						throw InternalException("dukdb_constraints: entry %s.%s referenced in foreign key not found",
 						                        info.schema, info.table);

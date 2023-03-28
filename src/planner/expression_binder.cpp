@@ -1,6 +1,7 @@
 #include "duckdb/planner/expression_binder.hpp"
 
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
@@ -52,9 +53,15 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> *expr, 
 		return BindExpression((ConjunctionExpression &)expr_ref, depth);
 	case ExpressionClass::CONSTANT:
 		return BindExpression((ConstantExpression &)expr_ref, depth);
-	case ExpressionClass::FUNCTION:
+	case ExpressionClass::FUNCTION: {
+		auto &function = (FunctionExpression &)expr_ref;
+		if (function.function_name == "unnest" || function.function_name == "unlist") {
+			// special case, not in catalog
+			return BindUnnest(function, depth, root_expression);
+		}
 		// binding function expression has extra parameter needed for macro's
-		return BindExpression((FunctionExpression &)expr_ref, depth, expr);
+		return BindExpression(function, depth, expr);
+	}
 	case ExpressionClass::LAMBDA:
 		return BindExpression((LambdaExpression &)expr_ref, depth, false, LogicalTypeId::INVALID);
 	case ExpressionClass::OPERATOR:
@@ -157,7 +164,7 @@ LogicalType ExpressionBinder::ExchangeType(const LogicalType &type, LogicalTypeI
 		for (auto &child_type : child_types) {
 			child_type.second = ExchangeType(child_type.second, target, new_type);
 		}
-		return LogicalType::STRUCT(std::move(child_types));
+		return LogicalType::STRUCT(child_types);
 	}
 	case LogicalTypeId::UNION: {
 		auto member_types = UnionType::CopyMemberTypes(type);

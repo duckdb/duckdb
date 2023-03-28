@@ -88,9 +88,21 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		root = std::move(qualify);
 	}
 
+<<<<<<< HEAD
 	if (!statement.unnests.empty()) {
 		auto unnest = make_uniq<LogicalUnnest>(statement.unnest_index);
 		unnest->expressions = std::move(statement.unnests);
+=======
+	for (idx_t i = statement.unnests.size(); i > 0; i--) {
+		auto unnest_level = i - 1;
+		auto entry = statement.unnests.find(unnest_level);
+		if (entry == statement.unnests.end()) {
+			throw InternalException("unnests specified at level %d but none were found", unnest_level);
+		}
+		auto &unnest_node = entry->second;
+		auto unnest = make_unique<LogicalUnnest>(unnest_node.index);
+		unnest->expressions = std::move(unnest_node.expressions);
+>>>>>>> master
 		// visit the unnest expressions
 		for (auto &expr : unnest->expressions) {
 			PlanSubqueries(&expr, &root);
@@ -104,8 +116,12 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		PlanSubqueries(&expr, &root);
 	}
 
+<<<<<<< HEAD
 	// create the projection
 	auto proj = make_uniq<LogicalProjection>(statement.projection_index, std::move(statement.select_list));
+=======
+	auto proj = make_unique<LogicalProjection>(statement.projection_index, std::move(statement.select_list));
+>>>>>>> master
 	auto &projection = *proj;
 	proj->AddChild(std::move(root));
 	root = std::move(proj);

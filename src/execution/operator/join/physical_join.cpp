@@ -61,9 +61,6 @@ void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipe
 	bool add_child_pipeline = false;
 	auto &join_op = (PhysicalJoin &)op;
 	if (IsRightOuterJoin(join_op.join_type)) {
-		if (meta_pipeline.HasRecursiveCTE()) {
-			throw NotImplementedException("FULL and RIGHT outer joins are not supported in recursive CTEs yet");
-		}
 		add_child_pipeline = true;
 	}
 

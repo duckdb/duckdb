@@ -1,5 +1,7 @@
 #include "duckdb/parser/expression/between_expression.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 
@@ -43,6 +45,21 @@ unique_ptr<ParsedExpression> BetweenExpression::Deserialize(ExpressionType type,
 	auto lower = source.ReadRequiredSerializable<ParsedExpression>();
 	auto upper = source.ReadRequiredSerializable<ParsedExpression>();
 	return make_uniq<BetweenExpression>(std::move(input), std::move(lower), std::move(upper));
+}
+
+void BetweenExpression::FormatSerialize(FormatSerializer &serializer) const {
+	ParsedExpression::FormatSerialize(serializer);
+	serializer.WriteProperty("input", *input);
+	serializer.WriteProperty("lower", *lower);
+	serializer.WriteProperty("upper", *upper);
+}
+
+unique_ptr<ParsedExpression> BetweenExpression::FormatDeserialize(ExpressionType type,
+                                                                  FormatDeserializer &deserializer) {
+	auto input = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("input");
+	auto lower = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("lower");
+	auto upper = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("upper");
+	return make_unique<BetweenExpression>(std::move(input), std::move(lower), std::move(upper));
 }
 
 } // namespace duckdb

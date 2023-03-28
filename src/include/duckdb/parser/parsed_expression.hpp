@@ -19,6 +19,8 @@ class Serializer;
 class Deserializer;
 class FieldWriter;
 class FieldReader;
+class FormatDeserializer;
+class FormatSerializer;
 
 //!  The ParsedExpression class is a base class that can represent any expression
 //!  part of a SQL statement.
@@ -59,6 +61,9 @@ public:
 	//! Deserializes a blob back into an Expression [CAN THROW:
 	//! SerializationException]
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &source);
+
+	virtual void FormatSerialize(FormatSerializer &serializer) const;
+	static unique_ptr<ParsedExpression> FormatDeserialize(FormatDeserializer &deserializer);
 
 protected:
 	//! Copy base Expression properties from another expression to this one,

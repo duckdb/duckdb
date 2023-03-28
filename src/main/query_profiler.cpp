@@ -1,21 +1,23 @@
 #include "duckdb/main/query_profiler.hpp"
-#include "duckdb/common/to_string.hpp"
+
 #include "duckdb/common/fstream.hpp"
+#include "duckdb/common/http_state.hpp"
+#include "duckdb/common/limits.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/execution/operator/join/physical_delim_join.hpp"
-#include "duckdb/execution/operator/helper/physical_execute.hpp"
-#include "duckdb/common/http_stats.hpp"
+#include "duckdb/common/to_string.hpp"
 #include "duckdb/common/tree_renderer.hpp"
-#include "duckdb/common/limits.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/execution/operator/helper/physical_execute.hpp"
+#include "duckdb/execution/operator/join/physical_delim_join.hpp"
+#include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
-#include <utility>
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+
 #include <algorithm>
+#include <utility>
 
 namespace duckdb {
 
@@ -377,15 +379,15 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 		return;
 	}
 
-	if (context.client_data->http_stats && !context.client_data->http_stats->IsEmpty()) {
+	if (context.client_data->http_state && !context.client_data->http_state->IsEmpty()) {
 		string read =
-		    "in: " + StringUtil::BytesToHumanReadableString(context.client_data->http_stats->total_bytes_received);
+		    "in: " + StringUtil::BytesToHumanReadableString(context.client_data->http_state->total_bytes_received);
 		string written =
-		    "out: " + StringUtil::BytesToHumanReadableString(context.client_data->http_stats->total_bytes_sent);
-		string head = "#HEAD: " + to_string(context.client_data->http_stats->head_count);
-		string get = "#GET: " + to_string(context.client_data->http_stats->get_count);
-		string put = "#PUT: " + to_string(context.client_data->http_stats->put_count);
-		string post = "#POST: " + to_string(context.client_data->http_stats->post_count);
+		    "out: " + StringUtil::BytesToHumanReadableString(context.client_data->http_state->total_bytes_sent);
+		string head = "#HEAD: " + to_string(context.client_data->http_state->head_count);
+		string get = "#GET: " + to_string(context.client_data->http_state->get_count);
+		string put = "#PUT: " + to_string(context.client_data->http_state->put_count);
+		string post = "#POST: " + to_string(context.client_data->http_state->post_count);
 
 		constexpr idx_t TOTAL_BOX_WIDTH = 39;
 		ss << "┌─────────────────────────────────────┐\n";

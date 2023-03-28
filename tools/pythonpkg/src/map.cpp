@@ -41,6 +41,42 @@ static py::handle FunctionCall(NumpyResultConversion &conversion, vector<string>
 	return df;
 }
 
+static bool ContainsNullType(const vector<LogicalType> &types) {
+	for (auto &type : types) {
+		if (type.id() == LogicalTypeId::SQLNULL) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static void OverrideNullType(vector<LogicalType> &return_types, const vector<string> &return_names,
+                             const vector<LogicalType> &original_types, const vector<string> &original_names) {
+	if (!ContainsNullType(return_types)) {
+		// Nothing to override, none of the returned types are NULL
+		return;
+	}
+	if (return_types.size() != original_types.size()) {
+		// FIXME: we can probably infer from the names in this case
+		//  Cant infer what the type should be
+		return;
+	}
+	for (idx_t i = 0; i < return_types.size(); i++) {
+		auto &return_type = return_types[i];
+		auto &original_type = original_types[i];
+
+		if (return_type != LogicalTypeId::SQLNULL) {
+			continue;
+		}
+		if (return_names[i] != original_names[i]) {
+			throw InvalidInputException(
+			    "Returned dataframe contains NULL type, and we could not infer the desired type");
+		}
+		// Override the NULL with the original type
+		return_type = original_type;
+	}
+}
+
 // we call the passed function with a zero-row data frame to infer the output columns and their names.
 // they better not change in the actual execution ^^
 unique_ptr<FunctionData> MapFunction::MapFunctionBind(ClientContext &context, TableFunctionBindInput &input,
@@ -57,6 +93,9 @@ unique_ptr<FunctionData> MapFunction::MapFunctionBind(ClientContext &context, Ta
 	auto df = FunctionCall(conversion, data.in_names, data.function);
 	vector<PandasColumnBindData> pandas_bind_data; // unused
 	VectorConversion::BindPandas(DBConfig::GetConfig(context), df, pandas_bind_data, return_types, names);
+
+	// output types are potentially NULL, this happens for types that map to 'object' dtype
+	OverrideNullType(return_types, names, data.in_types, data.in_names);
 
 	data.out_names = names;
 	data.out_types = return_types;

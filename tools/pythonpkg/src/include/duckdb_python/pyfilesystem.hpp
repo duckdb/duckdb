@@ -9,6 +9,18 @@
 
 namespace duckdb {
 
+class ModifiedMemoryFileSystem : public py::object {
+public:
+	using py::object::object;
+	ModifiedMemoryFileSystem(py::object object) : py::object(object) {
+	}
+
+public:
+	static bool check_(const py::handle &object) {
+		return py::isinstance(object, py::module::import("pyduckdb.filesystem").attr("ModifiedMemoryFileSystem"));
+	}
+};
+
 class AbstractFileSystem : public py::object {
 public:
 	using py::object::object;

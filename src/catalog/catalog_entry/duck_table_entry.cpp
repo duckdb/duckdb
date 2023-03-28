@@ -682,27 +682,8 @@ void DuckTableEntry::SetAsRoot() {
 	storage->info->table = name;
 }
 
-void DuckTableEntry::CommitAlter(AlterInfo &info) {
-	D_ASSERT(info.type == AlterType::ALTER_TABLE);
-	auto &alter_table = (AlterTableInfo &)info;
-	string column_name;
-	switch (alter_table.alter_table_type) {
-	case AlterTableType::REMOVE_COLUMN: {
-		auto &remove_info = (RemoveColumnInfo &)alter_table;
-		column_name = remove_info.removed_column;
-		break;
-	}
-	case AlterTableType::ALTER_COLUMN_TYPE: {
-		auto &change_info = (ChangeColumnTypeInfo &)alter_table;
-		column_name = change_info.column_name;
-		break;
-	}
-	default:
-		break;
-	}
-	if (column_name.empty()) {
-		return;
-	}
+void DuckTableEntry::CommitAlter(string &column_name) {
+	D_ASSERT(!column_name.empty());
 	idx_t removed_index = DConstants::INVALID_INDEX;
 	for (auto &col : columns.Logical()) {
 		if (col.Name() == column_name) {

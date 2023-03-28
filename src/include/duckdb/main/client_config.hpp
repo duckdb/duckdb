@@ -40,6 +40,8 @@ struct ClientConfig {
 	//! to output anything
 	bool emit_profiler_output = true;
 
+	//! system-wide progress bar disable.
+	const char *system_progress_bar_disable_reason = nullptr;
 	//! If the progress bar is enabled or not.
 	bool enable_progress_bar = false;
 	//! If the print of the progress bar is enabled

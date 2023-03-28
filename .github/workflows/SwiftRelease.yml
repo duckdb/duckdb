@@ -1,9 +1,9 @@
 name: SwiftRelease
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
   push:
-    branches: [master]
+    tags:
+      - '**'
 
 env:
   SOURCE_REF: ${{ github.event_name == 'release' && github.ref_name || 'master' }}
@@ -36,13 +36,13 @@ jobs:
           path: 'target-repo'
 
       - name: Generate Swift Package
-        run: python3 source-repo/tools/swiftpm/create_package.py source-repo/tools/swiftpm
+        run: python3 source-repo/tools/swift/create_package.py source-repo/tools/swift
 
       - name: Package Update
         run: |
           mkdir updated-repo
           mv -v target-repo/.git updated-repo/.git
-          mv -v source-repo/tools/swiftpm/duckdb-swift/* updated-repo/
+          mv -v source-repo/tools/swift/duckdb-swift/* updated-repo/
 
       - name: Commit Updated Repo
         run: |

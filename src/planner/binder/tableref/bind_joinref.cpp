@@ -7,9 +7,11 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/planner/expression_binder/lateral_binder.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
 
 namespace duckdb {
 
@@ -23,11 +25,11 @@ static unique_ptr<ParsedExpression> BindColumn(Binder &binder, ClientContext &co
 
 static unique_ptr<ParsedExpression> AddCondition(ClientContext &context, Binder &left_binder, Binder &right_binder,
                                                  const string &left_alias, const string &right_alias,
-                                                 const string &column_name) {
+                                                 const string &column_name, ExpressionType type) {
 	ExpressionBinder expr_binder(left_binder, context);
 	auto left = BindColumn(left_binder, context, left_alias, column_name);
 	auto right = BindColumn(right_binder, context, right_alias, column_name);
-	return make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, std::move(left), std::move(right));
+	return make_uniq<ComparisonExpression>(type, std::move(left), std::move(right));
 }
 
 bool Binder::TryFindBinding(const string &using_column, const string &join_side, string &result) {
@@ -196,12 +198,14 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 		break;
 	}
 	case JoinRefType::REGULAR:
+	case JoinRefType::ASOF:
 		if (!ref.using_columns.empty()) {
 			// USING columns
 			D_ASSERT(!result->condition);
 			extra_using_columns = ref.using_columns;
 		}
 		break;
+
 	case JoinRefType::CROSS:
 	case JoinRefType::POSITIONAL:
 		break;
@@ -239,8 +243,13 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			left_binding = RetrieveUsingBinding(left_binder, left_using_binding, using_column, "left", set.get());
 			right_binding = RetrieveUsingBinding(right_binder, right_using_binding, using_column, "right", set.get());
 
+			// Last column of ASOF JOIN ... USING is >=
+			const auto type = (ref.ref_type == JoinRefType::ASOF && i == extra_using_columns.size() - 1)
+			                      ? ExpressionType::COMPARE_GREATERTHANOREQUALTO
+			                      : ExpressionType::COMPARE_EQUAL;
+
 			extra_conditions.push_back(
-			    AddCondition(context, left_binder, right_binder, left_binding, right_binding, using_column));
+			    AddCondition(context, left_binder, right_binder, left_binding, right_binding, using_column, type));
 
 			AddUsingBindings(*set, left_using_binding, left_binding);
 			AddUsingBindings(*set, right_using_binding, right_binding);
@@ -252,6 +261,8 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			AddUsingBindingSet(std::move(set));
 		}
 	}
+
+	auto right_bindings_list_copy = right_binder.bind_context.GetBindingsList();
 
 	bind_context.AddContext(std::move(left_binder.bind_context));
 	bind_context.AddContext(std::move(right_binder.bind_context));
@@ -269,6 +280,11 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 		WhereBinder binder(*this, context);
 		result->condition = binder.Bind(ref.condition);
 	}
+
+	if (result->type == JoinType::SEMI || result->type == JoinType::ANTI) {
+		bind_context.RemoveContext(right_bindings_list_copy);
+	}
+
 	return std::move(result);
 }
 

@@ -49,6 +49,9 @@ SinkResultType PhysicalVacuum::Sink(ExecutionContext &context, GlobalSinkState &
 	D_ASSERT(lstate.column_distinct_stats.size() == info->column_id_map.size());
 
 	for (idx_t col_idx = 0; col_idx < input.data.size(); col_idx++) {
+		if (!DistinctStatistics::TypeIsSupported(input.data[col_idx].GetType())) {
+			continue;
+		}
 		lstate.column_distinct_stats[col_idx]->Update(input.data[col_idx], input.size(), false);
 	}
 
@@ -72,9 +75,8 @@ SinkFinalizeType PhysicalVacuum::Finalize(Pipeline &pipeline, Event &event, Clie
 
 	auto table = info->table;
 	for (idx_t col_idx = 0; col_idx < sink.column_distinct_stats.size(); col_idx++) {
-		table->GetStorage().SetStatistics(info->column_id_map.at(col_idx), [&](BaseStatistics &stats) {
-			stats.distinct_stats = std::move(sink.column_distinct_stats[col_idx]);
-		});
+		table->GetStorage().SetDistinct(info->column_id_map.at(col_idx),
+		                                std::move(sink.column_distinct_stats[col_idx]));
 	}
 
 	return SinkFinalizeType::READY;

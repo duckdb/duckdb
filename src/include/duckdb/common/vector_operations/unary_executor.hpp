@@ -209,8 +209,8 @@ public:
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class OP>
 	static void ExecuteString(Vector &input, Vector &result, idx_t count) {
-		UnaryExecutor::GenericExecute<string_t, string_t, UnaryStringOperator<OP>>(input, result, count,
-		                                                                           (void *)&result);
+		UnaryExecutor::GenericExecute<INPUT_TYPE, RESULT_TYPE, UnaryStringOperator<OP>>(input, result, count,
+		                                                                                (void *)&result);
 	}
 };
 

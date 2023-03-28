@@ -115,6 +115,15 @@ ConnectionManager &ConnectionManager::Get(DatabaseInstance &db) {
 	return db.GetConnectionManager();
 }
 
+ClientContext *ConnectionManager::GetConnection(DatabaseInstance *db) {
+	for (auto &conn : connections) {
+		if (conn.first->db.get() == db) {
+			return conn.first;
+		}
+	}
+	return nullptr;
+}
+
 ConnectionManager &ConnectionManager::Get(ClientContext &context) {
 	return ConnectionManager::Get(DatabaseInstance::GetDatabase(context));
 }

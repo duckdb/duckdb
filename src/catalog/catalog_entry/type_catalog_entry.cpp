@@ -23,7 +23,13 @@ void TypeCatalogEntry::Serialize(Serializer &serializer) {
 	FieldWriter writer(serializer);
 	writer.WriteString(schema->name);
 	writer.WriteString(name);
-	writer.WriteSerializable(user_type);
+	if (user_type.id() == LogicalTypeId::ENUM) {
+		// We have to serialize Enum Values
+		writer.AddField();
+		user_type.SerializeEnumType(writer.GetSerializer());
+	} else {
+		writer.WriteSerializable(user_type);
+	}
 	writer.Finalize();
 }
 
@@ -43,7 +49,7 @@ string TypeCatalogEntry::ToSQL() {
 	std::stringstream ss;
 	switch (user_type.id()) {
 	case (LogicalTypeId::ENUM): {
-		Vector values_insert_order(EnumType::GetValuesInsertOrder(user_type));
+		auto &values_insert_order = EnumType::GetValuesInsertOrder(user_type);
 		idx_t size = EnumType::GetSize(user_type);
 		ss << "CREATE TYPE ";
 		ss << KeywordHelper::WriteOptionallyQuoted(name);

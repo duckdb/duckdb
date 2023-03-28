@@ -31,6 +31,9 @@ void ReadCSVData::InitializeFiles(ClientContext &context, const vector<string> &
 		auto found_files = fs.GlobFiles(file_pattern, context);
 		files.insert(files.end(), found_files.begin(), found_files.end());
 	}
+	if (files.empty()) {
+		throw IOException("CSV reader needs at least one file to read");
+	}
 }
 
 void ReadCSVData::FinalizeRead(ClientContext &context) {
@@ -50,6 +53,25 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 	}
 }
 
+uint8_t GetCandidateSpecificity(const LogicalType &candidate_type) {
+	//! Const ht with accepted auto_types and their weights in specificity
+	const duckdb::unordered_map<uint8_t, uint8_t> auto_type_candidates_specificity {
+	    {(uint8_t)LogicalTypeId::VARCHAR, 0},  {(uint8_t)LogicalTypeId::TIMESTAMP, 1},
+	    {(uint8_t)LogicalTypeId::DATE, 2},     {(uint8_t)LogicalTypeId::TIME, 3},
+	    {(uint8_t)LogicalTypeId::DOUBLE, 4},   {(uint8_t)LogicalTypeId::FLOAT, 5},
+	    {(uint8_t)LogicalTypeId::BIGINT, 6},   {(uint8_t)LogicalTypeId::INTEGER, 7},
+	    {(uint8_t)LogicalTypeId::SMALLINT, 8}, {(uint8_t)LogicalTypeId::TINYINT, 9},
+	    {(uint8_t)LogicalTypeId::BOOLEAN, 10}, {(uint8_t)LogicalTypeId::SQLNULL, 11}};
+
+	auto id = (uint8_t)candidate_type.id();
+	auto it = auto_type_candidates_specificity.find(id);
+	if (it == auto_type_candidates_specificity.end()) {
+		throw BinderException("Auto Type Candidate of type %s is not accepted as a valid input",
+		                      LogicalTypeIdToString(candidate_type.id()));
+	}
+	return it->second;
+}
+
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctionBindInput &input,
                                             vector<LogicalType> &return_types, vector<string> &names) {
 	auto &config = DBConfig::GetConfig(context);
@@ -61,9 +83,15 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	auto &options = result->options;
 
 	vector<string> patterns;
+	if (input.inputs[0].IsNull()) {
+		throw ParserException("CSV reader cannot take NULL as parameter");
+	}
 	if (input.inputs[0].type().id() == LogicalTypeId::LIST) {
 		// list of globs
 		for (auto &val : ListValue::GetChildren(input.inputs[0])) {
+			if (val.IsNull()) {
+				throw ParserException("CSV reader cannot take NULL input as parameter");
+			}
 			patterns.push_back(StringValue::Get(val));
 		}
 	} else {
@@ -95,6 +123,32 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			}
 			if (names.empty()) {
 				throw BinderException("read_csv requires at least a single column as input!");
+			}
+		} else if (loption == "auto_type_candidates") {
+			options.auto_type_candidates.clear();
+			map<uint8_t, LogicalType> candidate_types;
+			// We always have the extremes of Null and Varchar, so we can default to varchar if the
+			// sniffer is not able to confidently detect that column type
+			candidate_types[GetCandidateSpecificity(LogicalType::VARCHAR)] = LogicalType::VARCHAR;
+			candidate_types[GetCandidateSpecificity(LogicalType::SQLNULL)] = LogicalType::SQLNULL;
+
+			auto &child_type = kv.second.type();
+			if (child_type.id() != LogicalTypeId::LIST) {
+				throw BinderException("read_csv auto_types requires a list as input");
+			}
+			auto &list_children = ListValue::GetChildren(kv.second);
+			if (list_children.empty()) {
+				throw BinderException("auto_type_candidates requires at least one type");
+			}
+			for (auto &child : list_children) {
+				if (child.type().id() != LogicalTypeId::VARCHAR) {
+					throw BinderException("auto_type_candidates requires a type specification as string");
+				}
+				auto candidate_type = TransformStringToLogicalType(StringValue::Get(child), context);
+				candidate_types[GetCandidateSpecificity(candidate_type)] = candidate_type;
+			}
+			for (auto &candidate_type : candidate_types) {
+				options.auto_type_candidates.emplace_back(candidate_type.second);
 			}
 		} else if (loption == "column_names" || loption == "names") {
 			if (!options.name_list.empty()) {
@@ -789,6 +843,7 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["escape"] = LogicalType::VARCHAR;
 	table_function.named_parameters["nullstr"] = LogicalType::VARCHAR;
 	table_function.named_parameters["columns"] = LogicalType::ANY;
+	table_function.named_parameters["auto_type_candidates"] = LogicalType::ANY;
 	table_function.named_parameters["header"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["auto_detect"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["sample_size"] = LogicalType::BIGINT;
@@ -809,6 +864,7 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["buffer_size"] = LogicalType::UBIGINT;
 	table_function.named_parameters["decimal_separator"] = LogicalType::VARCHAR;
 	table_function.named_parameters["parallel"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["null_padding"] = LogicalType::BOOLEAN;
 }
 
 double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p,
@@ -876,6 +932,7 @@ void BufferedCSVReaderOptions::Serialize(FieldWriter &writer) const {
 	// read options
 	writer.WriteList<string>(names);
 	writer.WriteField<idx_t>(skip_rows);
+	writer.WriteField<bool>(skip_rows_set);
 	writer.WriteField<idx_t>(maximum_line_size);
 	writer.WriteField<bool>(normalize_names);
 	writer.WriteListNoReference<bool>(force_not_null);
@@ -887,6 +944,7 @@ void BufferedCSVReaderOptions::Serialize(FieldWriter &writer) const {
 	writer.WriteField<bool>(include_file_name);
 	writer.WriteField<bool>(include_parsed_hive_partitions);
 	writer.WriteString(decimal_separator);
+	writer.WriteField<bool>(null_padding);
 	// write options
 	writer.WriteListNoReference<bool>(force_quote);
 }
@@ -909,6 +967,7 @@ void BufferedCSVReaderOptions::Deserialize(FieldReader &reader) {
 	// read options
 	names = reader.ReadRequiredList<string>();
 	skip_rows = reader.ReadRequired<idx_t>();
+	skip_rows_set = reader.ReadRequired<bool>();
 	maximum_line_size = reader.ReadRequired<idx_t>();
 	normalize_names = reader.ReadRequired<bool>();
 	force_not_null = reader.ReadRequiredList<bool>();
@@ -920,6 +979,7 @@ void BufferedCSVReaderOptions::Deserialize(FieldReader &reader) {
 	include_file_name = reader.ReadRequired<bool>();
 	include_parsed_hive_partitions = reader.ReadRequired<bool>();
 	decimal_separator = reader.ReadRequired<string>();
+	null_padding = reader.ReadRequired<bool>();
 	// write options
 	force_quote = reader.ReadRequiredList<bool>();
 }

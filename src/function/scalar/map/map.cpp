@@ -98,6 +98,52 @@ static void AlignVectorToReference(const Vector &original, const Vector &referen
 	result.Reference(expanded_const);
 }
 
+static bool ListEntriesEqual(Vector &keys, Vector &values, idx_t count) {
+	auto key_count = ListVector::GetListSize(keys);
+	auto value_count = ListVector::GetListSize(values);
+	bool same_vector_type = keys.GetVectorType() == values.GetVectorType();
+
+	D_ASSERT(keys.GetType().id() == LogicalTypeId::LIST);
+	D_ASSERT(values.GetType().id() == LogicalTypeId::LIST);
+
+	UnifiedVectorFormat keys_data;
+	UnifiedVectorFormat values_data;
+
+	keys.ToUnifiedFormat(count, keys_data);
+	values.ToUnifiedFormat(count, values_data);
+
+	auto keys_entries = (list_entry_t *)keys_data.data;
+	auto values_entries = (list_entry_t *)values_data.data;
+
+	if (same_vector_type) {
+		const auto key_data = keys_data.data;
+		const auto value_data = values_data.data;
+
+		if (keys.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			D_ASSERT(values.GetVectorType() == VectorType::CONSTANT_VECTOR);
+			// Only need to compare one entry in this case
+			return memcmp(key_data, value_data, sizeof(list_entry_t)) == 0;
+		}
+
+		// Fast path if the vector types are equal, can just check if the entries are the same
+		if (key_count != value_count) {
+			return false;
+		}
+		return memcmp(key_data, value_data, count * sizeof(list_entry_t)) == 0;
+	}
+
+	// Compare the list_entries one by one
+	for (idx_t i = 0; i < count; i++) {
+		auto keys_idx = keys_data.sel->get_index(i);
+		auto values_idx = values_data.sel->get_index(i);
+
+		if (keys_entries[keys_idx] != values_entries[values_idx]) {
+			return false;
+		}
+	}
+	return true;
+}
+
 static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::MAP);
 
@@ -132,7 +178,7 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	} else if (values_are_const && !keys_are_const) {
 		AlignVectorToReference(args.data[1], args.data[0], args.size(), value_vector);
 	} else {
-		if (key_count != value_count || memcmp(key_data, value_data, args.size() * sizeof(list_entry_t)) != 0) {
+		if (!ListEntriesEqual(args.data[0], args.data[1], args.size())) {
 			throw InvalidInputException("Error in MAP creation: key list and value list do not align. i.e. different "
 			                            "size or incompatible structure");
 		}
