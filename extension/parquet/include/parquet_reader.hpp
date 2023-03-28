@@ -111,6 +111,10 @@ public:
 		return *file_handle;
 	}
 
+	const string &GetFileName() {
+		return file_name;
+	}
+
 private:
 	void InitializeSchema();
 	bool ScanInternal(ParquetReaderScanState &state, DataChunk &output);

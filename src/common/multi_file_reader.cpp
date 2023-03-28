@@ -81,16 +81,17 @@ bool MultiFileReader::ComplexFilterPushdown(ClientContext &context, vector<strin
 	if (!options.hive_partitioning && !options.filename) {
 		return false;
 	}
-	auto initial_filename = files[0];
 
 	unordered_map<string, column_t> column_map;
 	for (idx_t i = 0; i < get.column_ids.size(); i++) {
 		column_map.insert({get.names[get.column_ids[i]], i});
 	}
 
+	auto start_files = files.size();
 	HivePartitioning::ApplyFiltersToFileList(context, files, filters, column_map, get.table_index,
 	                                         options.hive_partitioning, options.filename);
-	if (files.empty() || initial_filename != files[0]) {
+	if (files.size() != start_files) {
+		// we have pruned files
 		return true;
 	}
 	return false;
@@ -109,7 +110,7 @@ MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &opt
 		names.emplace_back("filename");
 	}
 
-	// Add generated constant column for filename
+	// Add generated constant columns from hive partitioning scheme
 	if (options.hive_partitioning) {
 		D_ASSERT(!files.empty());
 		auto partitions = HivePartitioning::Parse(files[0]);
@@ -161,22 +162,34 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderBindData &options, const
 			reader_data.constant_map.push_back(make_pair(i, Value(filename)));
 			continue;
 		}
+		if (!options.hive_partitioning_indexes.empty()) {
+			// hive partition constants
+			auto partitions = HivePartitioning::Parse(filename);
+			D_ASSERT(partitions.size() == options.hive_partitioning_indexes.size());
+			bool found_partition = false;
+			for (auto &entry : options.hive_partitioning_indexes) {
+				if (column_id == entry.second) {
+					reader_data.constant_map.push_back(make_pair(i, Value(partitions[entry.first])));
+					found_partition = true;
+					break;
+				}
+			}
+			if (found_partition) {
+				if (!reader_data.union_null_cols.empty() && reader_data.union_null_cols[column_id]) {
+					// this means a column is (1) a hive partitioned column, and (2) it is present in SOME files (not
+					// all) this leads to weird edge cases so not supported for now
+					throw BinderException("Column in file \"%s\" is both a hive partition and a union by name column - "
+					                      "this is unsupported",
+					                      filename);
+				}
+				continue;
+			}
+		}
 		if (!reader_data.union_null_cols.empty()) {
 			// union by name NULL column
 			if (reader_data.union_null_cols[column_id]) {
 				reader_data.constant_map.push_back(make_pair(i, Value(reader_data.union_col_types[column_id])));
 				continue;
-			}
-		}
-		if (!options.hive_partitioning_indexes.empty()) {
-			// hive partition constants
-			auto partitions = HivePartitioning::Parse(filename);
-			D_ASSERT(partitions.size() == options.hive_partitioning_indexes.size());
-			for (auto &entry : options.hive_partitioning_indexes) {
-				if (column_id == entry.second) {
-					reader_data.constant_map.push_back(make_pair(i, Value(partitions[entry.first])));
-					break;
-				}
 			}
 		}
 	}

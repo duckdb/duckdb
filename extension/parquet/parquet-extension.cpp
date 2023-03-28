@@ -278,9 +278,8 @@ public:
 	                                                        ParquetOptions parquet_options) {
 		auto result = make_unique<ParquetReadBindData>();
 		result->files = std::move(files);
-		MultiFileReader::BindReader<ParquetReader>(context, result->types, result->names, *result, parquet_options);
 		result->reader_bind =
-		    MultiFileReader::BindOptions(parquet_options.file_options, result->files, result->types, result->names);
+		    MultiFileReader::BindReader<ParquetReader>(context, result->types, result->names, *result, parquet_options);
 		if (return_types.empty()) {
 			// no expected types - just copy the types
 			return_types = result->types;
@@ -354,19 +353,17 @@ public:
 
 		result->file_opening = std::vector<bool>(bind_data.files.size(), false);
 		result->file_mutexes = std::unique_ptr<mutex[]>(new mutex[bind_data.files.size()]);
-		if (!bind_data.parquet_options.file_options.union_by_name) {
+		if (bind_data.files.empty()) {
+			result->initial_reader = nullptr;
+		} else if (!bind_data.parquet_options.file_options.union_by_name) {
 			result->readers = std::vector<shared_ptr<ParquetReader>>(bind_data.files.size(), nullptr);
 			if (bind_data.initial_reader) {
 				result->initial_reader = bind_data.initial_reader;
 				result->readers[0] = bind_data.initial_reader;
 			} else {
-				if (bind_data.files.empty()) {
-					result->initial_reader = nullptr;
-				} else {
-					result->initial_reader =
-					    make_shared<ParquetReader>(context, bind_data.files[0], bind_data.parquet_options);
-					result->readers[0] = result->initial_reader;
-				}
+				result->initial_reader =
+				    make_shared<ParquetReader>(context, bind_data.files[0], bind_data.parquet_options);
+				result->readers[0] = result->initial_reader;
 			}
 		} else {
 			result->readers = std::move(bind_data.union_readers);
@@ -526,7 +523,7 @@ public:
 		auto reset_reader = MultiFileReader::ComplexFilterPushdown(context, data->files,
 		                                                           data->parquet_options.file_options, get, filters);
 		if (reset_reader) {
-			data->initial_reader.reset();
+			MultiFileReader::PruneReaders(*data);
 		}
 	}
 

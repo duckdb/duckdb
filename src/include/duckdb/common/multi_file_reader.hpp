@@ -19,7 +19,7 @@ class TableFunction;
 class ClientContext;
 class Value;
 
-//! The bind data for the multi-file reader, obtained through MultiFileReader::BindOptions
+//! The bind data for the multi-file reader, obtained through MultiFileReader::BindReader
 struct MultiFileReaderBindData {
 	//! The index of the filename column (if any)
 	idx_t filename_idx = DConstants::INVALID_INDEX;
@@ -93,37 +93,44 @@ struct MultiFileReader {
 	                                     const MultiFileReaderData &reader_data, DataChunk &chunk);
 
 	template <class READER_CLASS, class RESULT_CLASS, class OPTIONS_CLASS>
-	static void BindUnionReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
-	                            RESULT_CLASS &result, OPTIONS_CLASS &options) {
+	static MultiFileReaderBindData BindUnionReader(ClientContext &context, vector<LogicalType> &return_types,
+	                                               vector<string> &names, RESULT_CLASS &result,
+	                                               OPTIONS_CLASS &options) {
 		D_ASSERT(options.file_options.union_by_name);
 		case_insensitive_map_t<idx_t> union_names_map;
 		vector<string> union_col_names;
 		vector<LogicalType> union_col_types;
-		auto dummy_readers = UnionByName::UnionCols<READER_CLASS>(context, result.files, union_col_types,
+		// obtain the set of union column names + types by unifying the types of all of the files
+		// note that this requires opening readers for each file and reading the metadata of each file
+		auto union_readers = UnionByName::UnionCols<READER_CLASS>(context, result.files, union_col_types,
 		                                                          union_col_names, union_names_map, options);
+		// set up the union column metadata inside all of the readers
+		UnionByName::CreateUnionMap<READER_CLASS>(union_readers, union_col_types, union_col_names, union_names_map);
 
-		dummy_readers = UnionByName::CreateUnionMap<READER_CLASS>(std::move(dummy_readers), union_col_types,
-		                                                          union_col_names, union_names_map);
-
-		std::move(dummy_readers.begin(), dummy_readers.end(), std::back_inserter(result.union_readers));
+		std::move(union_readers.begin(), union_readers.end(), std::back_inserter(result.union_readers));
+		// perform the binding on the obtained set of names + types
+		auto bind_data =
+		    MultiFileReader::BindOptions(options.file_options, result.files, union_col_types, union_col_names);
 		names = union_col_names;
 		return_types = union_col_types;
 		result.Initialize(result.union_readers[0]);
 		D_ASSERT(names.size() == return_types.size());
+		return bind_data;
 	}
 
 	template <class READER_CLASS, class RESULT_CLASS, class OPTIONS_CLASS>
-	static void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
-	                       RESULT_CLASS &result, OPTIONS_CLASS &options) {
+	static MultiFileReaderBindData BindReader(ClientContext &context, vector<LogicalType> &return_types,
+	                                          vector<string> &names, RESULT_CLASS &result, OPTIONS_CLASS &options) {
 		if (options.file_options.union_by_name) {
-			BindUnionReader<READER_CLASS>(context, return_types, names, result, options);
-			return;
+			return BindUnionReader<READER_CLASS>(context, return_types, names, result, options);
+		} else {
+			shared_ptr<READER_CLASS> reader;
+			reader = make_shared<READER_CLASS>(context, result.files[0], options);
+			return_types = reader->return_types;
+			names = reader->names;
+			result.Initialize(std::move(reader));
+			return MultiFileReader::BindOptions(options.file_options, result.files, return_types, names);
 		}
-		shared_ptr<READER_CLASS> reader;
-		reader = make_shared<READER_CLASS>(context, result.files[0], options);
-		return_types = reader->return_types;
-		names = reader->names;
-		result.Initialize(std::move(reader));
 	}
 
 	template <class READER_CLASS>
@@ -135,6 +142,31 @@ struct MultiFileReader {
 		CreateMapping(reader.file_name, reader.return_types, reader.names, global_types, global_names,
 		              global_column_ids, table_filters, reader.reader_data);
 		reader.reader_data.filters = table_filters;
+	}
+
+	template <class BIND_DATA>
+	static void PruneReaders(BIND_DATA &data) {
+		unordered_set<string> file_set;
+		for (auto &file : data.files) {
+			file_set.insert(file);
+		}
+
+		if (data.initial_reader) {
+			// check if the initial reader should still be read
+			auto entry = file_set.find(data.initial_reader->GetFileName());
+			if (entry == file_set.end()) {
+				data.initial_reader.reset();
+			}
+		}
+		for (idx_t r = 0; r < data.union_readers.size(); r++) {
+			// check if the union reader should still be read or not
+			auto entry = file_set.find(data.union_readers[r]->GetFileName());
+			if (entry == file_set.end()) {
+				data.union_readers.erase(data.union_readers.begin() + r);
+				r--;
+				continue;
+			}
+		}
 	}
 };
 
