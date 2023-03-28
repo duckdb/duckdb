@@ -70,9 +70,9 @@ public:
 				union_null_cols[union_idx] = false;
 			}
 
-			reader->union_col_types = union_col_types;
-			reader->union_idx_map = std::move(union_idx_map);
-			reader->union_null_cols = std::move(union_null_cols);
+			reader->reader_data.union_col_types = union_col_types;
+			reader->reader_data.union_idx_map = std::move(union_idx_map);
+			reader->reader_data.union_null_cols = std::move(union_null_cols);
 		}
 		return union_readers;
 	}

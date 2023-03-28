@@ -16,7 +16,7 @@
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/queue.hpp"
 #include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
-
+#include "duckdb/common/multi_file_reader.hpp"
 #include <sstream>
 
 namespace duckdb {
@@ -48,9 +48,7 @@ public:
 	//! remap parse_chunk col to insert_chunk col, because when
 	//! union_by_name option on insert_chunk may have more cols
 	vector<idx_t> insert_cols_idx;
-	vector<idx_t> union_idx_map;
-	vector<bool> union_null_cols;
-	vector<LogicalType> union_col_types;
+	MultiFileReaderData reader_data;
 
 	idx_t linenr = 0;
 	bool linenr_estimated = false;

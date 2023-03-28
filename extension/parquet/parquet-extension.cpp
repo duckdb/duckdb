@@ -450,7 +450,7 @@ public:
 			bind_data.chunk_count++;
 			if (output.size() > 0) {
 				if (bind_data.parquet_options.file_options.union_by_name) {
-					UnionByName::SetNullUnionCols(output, data.reader->union_null_cols);
+					UnionByName::SetNullUnionCols(output, data.reader->reader_data.union_null_cols);
 				}
 				return;
 			}
@@ -489,9 +489,9 @@ public:
 
 			if (parallel_state.readers[parallel_state.file_index]) {
 				const auto &current_reader = parallel_state.readers[parallel_state.file_index];
-				if (current_reader->union_null_cols.empty()) {
-					current_reader->union_null_cols.resize(current_reader->return_types.size());
-					std::fill(current_reader->union_null_cols.begin(), current_reader->union_null_cols.end(), false);
+				if (current_reader->reader_data.union_null_cols.empty()) {
+					current_reader->reader_data.union_null_cols.resize(current_reader->return_types.size());
+					std::fill(current_reader->reader_data.union_null_cols.begin(), current_reader->reader_data.union_null_cols.end(), false);
 				}
 
 				if (parallel_state.row_group_index <

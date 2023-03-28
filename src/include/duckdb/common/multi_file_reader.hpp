@@ -18,6 +18,19 @@ class TableFunction;
 class ClientContext;
 class Value;
 
+struct MultiFileReaderData {
+	//! when reading multiple parquet files (with union by name option)
+	//! TableFunction might return more cols than any single parquet file. Even all parquet files have same
+	//! cols, those files might have cols at different positions and with different logical type.
+	//! e.g. p1.parquet (a INT , b VARCHAR) p2.parquet (c VARCHAR, a VARCHAR)
+	vector<idx_t> union_idx_map;
+	//! If the parquet file dont have union_cols5  union_null_cols[5] will be true.
+	//! some parquet files may not have all union cols.
+	vector<bool> union_null_cols;
+	//! All union cols will cast to same type.
+	vector<LogicalType> union_col_types;
+};
+
 struct MultiFileReader {
 	//! Add the parameters for multi-file readers (e.g. union_by_name, filename) to a table function
 	DUCKDB_API static void AddParameters(TableFunction &table_function);

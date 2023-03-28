@@ -19,6 +19,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/multi_file_reader_options.hpp"
+#include "duckdb/common/multi_file_reader.hpp"
 #endif
 #include "column_reader.hpp"
 #include "parquet_file_metadata_cache.hpp"
@@ -111,16 +112,7 @@ public:
 	//! maps hive partition names to string columns
 	unique_ptr<std::map<string, string>> hive_map;
 
-	//! when reading multiple parquet files (with union by name option)
-	//! TableFunction might return more cols than any single parquet file. Even all parquet files have same
-	//! cols, those files might have cols at different positions and with different logical type.
-	//! e.g. p1.parquet (a INT , b VARCHAR) p2.parquet (c VARCHAR, a VARCHAR)
-	vector<idx_t> union_idx_map;
-	//! If the parquet file dont have union_cols5  union_null_cols[5] will be true.
-	//! some parquet files may not have all union cols.
-	vector<bool> union_null_cols;
-	//! All union cols will cast to same type.
-	vector<LogicalType> union_col_types;
+	MultiFileReaderData reader_data;
 
 public:
 	void InitializeScan(ParquetReaderScanState &state, vector<column_t> column_ids, vector<idx_t> groups_to_read,

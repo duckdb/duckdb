@@ -213,12 +213,12 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	// union_col_names will exclude filename and hivepartition
 	if (options.file_options.union_by_name) {
 		MultiFileReader::BindUnionReader<BufferedCSVReader>(context, return_types, names, *result, options);
-		result->initial_reader->insert_cols_idx = result->initial_reader->union_idx_map;
+		result->initial_reader->insert_cols_idx = result->initial_reader->reader_data.union_idx_map;
 		for (auto &reader : result->union_readers) {
 			if (!reader) {
 				continue;
 			}
-			reader->insert_cols_idx = reader->union_idx_map;
+			reader->insert_cols_idx = reader->reader_data.union_idx_map;
 		}
 		if (!options.sql_types_per_column.empty()) {
 			auto exception = BufferedCSVReader::ColumnTypesError(options.sql_types_per_column, names);
@@ -710,7 +710,7 @@ static void SingleThreadedCSVFunction(ClientContext &context, TableFunctionInput
 	} while (true);
 
 	if (bind_data.options.file_options.union_by_name) {
-		UnionByName::SetNullUnionCols(output, lstate.csv_reader->union_null_cols);
+		UnionByName::SetNullUnionCols(output, lstate.csv_reader->reader_data.union_null_cols);
 	}
 	if (bind_data.options.file_options.filename) {
 		auto &col = output.data[bind_data.filename_col_idx];
