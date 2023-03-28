@@ -212,6 +212,16 @@ void VerifyLineLength(idx_t line_size, idx_t max_line_size) {
 	}
 }
 
+bool AllNewLine(string_t value) {
+	auto value_str = value.GetString();
+	for (idx_t i = 0; i < value.GetSize(); i++) {
+		if (!StringUtil::CharacterIsNewline(value_str[i])) {
+			return false;
+		}
+	}
+	return true;
+}
+
 bool ParallelCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message, bool try_add_line) {
 	// used for parsing algorithm
 	if (start_buffer == buffer_size) {
@@ -487,21 +497,23 @@ final_state : {
 		    (insert_chunk.data.size() == 1 && start_buffer != position_buffer)) {
 			// remaining values to be added to the chunk
 			auto str_value = buffer->GetValue(start_buffer, position_buffer, offset);
-			AddValue(str_value, column, escape_positions, has_quotes);
-			if (try_add_line) {
-				bool success = column == return_types.size();
-				if (success) {
+			if (!AllNewLine(str_value)) {
+				AddValue(str_value, column, escape_positions, has_quotes);
+				if (try_add_line) {
+					bool success = column == return_types.size();
+					if (success) {
+						AddRow(insert_chunk, column, error_message);
+						success = Flush(insert_chunk);
+					}
+					parse_chunk.Reset();
+					reached_remainder_state = false;
+					return success;
+				} else {
+					VerifyLineLength(position_buffer - line_start, options.maximum_line_size);
+					line_start = position_buffer;
 					AddRow(insert_chunk, column, error_message);
-					success = Flush(insert_chunk);
+					verification_positions.end_of_last_line = position_buffer;
 				}
-				parse_chunk.Reset();
-				reached_remainder_state = false;
-				return success;
-			} else {
-				VerifyLineLength(position_buffer - line_start, options.maximum_line_size);
-				line_start = position_buffer;
-				AddRow(insert_chunk, column, error_message);
-				verification_positions.end_of_last_line = position_buffer;
 			}
 		}
 	}
