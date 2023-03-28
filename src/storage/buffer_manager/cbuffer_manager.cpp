@@ -134,6 +134,10 @@ void CBufferManager::DeleteTemporaryFile(block_id_t block_id) {
 	// no op
 }
 
+void CBufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
+	// no op
+}
+
 //===--------------------------------------------------------------------===//
 // Buffer Allocator
 //===--------------------------------------------------------------------===//

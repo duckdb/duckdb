@@ -3,6 +3,7 @@
 #include "duckdb.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/storage/cbuffer_manager.hpp"
+#include "duckdb/common/mutex.hpp"
 #ifdef DEBUG
 #include "duckdb/common/unordered_set.hpp"
 using duckdb::data_ptr_t;
@@ -17,6 +18,7 @@ public:
 	duckdb::idx_t pinned_buffers;
 	duckdb::idx_t max_memory;
 #ifdef DEBUG
+	duckdb::mutex lock;
 	unordered_set<data_ptr_t> allocated_buffers;
 	unordered_set<data_ptr_t> freed_buffers;
 #endif

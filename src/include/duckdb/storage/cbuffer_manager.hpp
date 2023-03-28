@@ -64,6 +64,7 @@ public:
 protected:
 	void PurgeQueue() final override;
 	void DeleteTemporaryFile(block_id_t block_id) final override;
+	void AddToEvictionQueue(shared_ptr<BlockHandle> &handle) final override;
 
 private:
 	static data_ptr_t CBufferAllocatorAllocate(PrivateAllocatorData *private_data, idx_t size);

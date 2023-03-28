@@ -27,7 +27,7 @@ void FileBuffer::Init() {
 
 FileBuffer::FileBuffer(FileBuffer &source, FileBufferType type_p) : allocator(source.allocator), type(type_p) {
 	// take over the structures of the source buffer
-	buffer = source.buffer;
+	buffer = source.Buffer();
 	size = source.size;
 	internal_buffer = source.internal_buffer;
 	internal_size = source.internal_size;

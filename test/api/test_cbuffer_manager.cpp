@@ -1,7 +1,7 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
 #include "tpch-extension.hpp"
-#include "cbuffer_manager_helpers.hpp"
+#include "duckdb/storage/cbuffer_manager_default.hpp"
 
 #include <chrono>
 #include <iostream>
