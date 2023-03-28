@@ -293,7 +293,6 @@ public:
 			}
 			// expected types - overwrite the types we want to read instead
 			result->types = return_types;
-			result->names = names;
 		}
 		return std::move(result);
 	}
