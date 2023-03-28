@@ -92,6 +92,7 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 					if (position_buffer > end_buffer) {
 						return false;
 					}
+					SkipEmptyLines();
 					return true;
 				}
 			}
@@ -236,6 +237,11 @@ bool ParallelCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error
 			finished = true;
 			return true;
 		}
+	}
+	if (position_buffer == buffer_size) {
+		// Nothing to read
+		finished = true;
+		return true;
 	}
 	// Keep track of line size
 	idx_t line_start = position_buffer;
