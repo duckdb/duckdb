@@ -46,6 +46,14 @@ public:
 
 	static unique_ptr<DuckDBPyRelation> Table(const string &tname, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
+	static unique_ptr<DuckDBPyRelation> Values(py::object params = py::none(),
+	                                           shared_ptr<DuckDBPyConnection> conn = nullptr);
+
+	static unique_ptr<DuckDBPyRelation> View(const string &vname, shared_ptr<DuckDBPyConnection> conn = nullptr);
+
+	static unique_ptr<DuckDBPyRelation> TableFunction(const string &fname, py::object params = py::list(),
+	                                                  shared_ptr<DuckDBPyConnection> conn = nullptr);
+
 	static unique_ptr<DuckDBPyRelation> FromParquet(const string &file_glob, bool binary_as_string,
 	                                                bool file_row_number, bool filename, bool hive_partitioning,
 	                                                bool union_by_name, const py::object &compression = py::none(),
@@ -56,8 +64,8 @@ public:
 	                                                 bool union_by_name, const py::object &compression = py::none(),
 	                                                 shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> TableFunction(const string &fname, py::object params = py::list(),
-	                                                  shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static unique_ptr<DuckDBPyRelation> FromArrow(py::object &arrow_object,
+	                                              shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static unique_ptr<DuckDBPyRelation> GetSubstrait(const string &query, shared_ptr<DuckDBPyConnection> conn = nullptr,
 	                                                 bool enable_optimizer = true);
@@ -100,21 +108,6 @@ public:
 	        const py::object &date_format = py::none(), const py::object &timestamp_format = py::none(),
 	        const py::object &sample_size = py::none(), const py::object &all_varchar = py::none(),
 	        const py::object &normalize_names = py::none(), const py::object &filename = py::none());
-
-	static unique_ptr<DuckDBPyRelation> FromParquet(const string &file_glob, bool binary_as_string,
-	                                                bool file_row_number, bool filename, bool hive_partitioning,
-	                                                bool union_by_name, const py::object &compression = py::none(),
-	                                                shared_ptr<DuckDBPyConnection> conn = nullptr);
-
-	static unique_ptr<DuckDBPyRelation> FromParquets(const vector<string> &file_globs, bool binary_as_string,
-	                                                 bool file_row_number, bool filename, bool hive_partitioning,
-	                                                 bool union_by_name, const py::object &compression = py::none(),
-	                                                 shared_ptr<DuckDBPyConnection> conn = nullptr);
-
-	static unique_ptr<DuckDBPyRelation> FromArrow(py::object &arrow_object,
-	                                              shared_ptr<DuckDBPyConnection> conn = nullptr);
-
-	static unique_ptr<DuckDBPyRelation> FromSubstrait(py::bytes &proto, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static py::list FetchAll(shared_ptr<DuckDBPyConnection> conn = nullptr);
 
