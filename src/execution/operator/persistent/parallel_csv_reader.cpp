@@ -55,7 +55,7 @@ bool ParallelCSVReader::NewLineDelimiter(bool carry, bool carry_followed_by_nl, 
 
 void ParallelCSVReader::SkipEmptyLines() {
 	idx_t new_pos_buffer = position_buffer;
-	if (parse_chunk.data.size() == 1){
+	if (parse_chunk.data.size() == 1) {
 		// Empty lines are null data.
 		return;
 	}
@@ -295,7 +295,7 @@ normal : {
 			if (column > 0 || try_add_line || insert_chunk.data.size() == 1) {
 				goto add_row;
 			}
-			if (column == 0 && position_buffer == start_buffer){
+			if (column == 0 && position_buffer == start_buffer) {
 				start_buffer++;
 			}
 		}

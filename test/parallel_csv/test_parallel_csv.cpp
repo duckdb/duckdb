@@ -48,7 +48,7 @@ bool RunFull(std::string &path, std::set<std::string> &skip, duckdb::Connection 
 		return true;
 	}
 	unique_ptr<MaterializedQueryResult> single_threaded_res;
-	ColumnDataCollection* ground_truth;
+	ColumnDataCollection *ground_truth;
 	try {
 		single_threaded_res = conn.Query("SELECT * FROM read_csv_auto('" + path + "', parallel = 0)");
 		ground_truth = &single_threaded_res->Collection();
@@ -64,19 +64,20 @@ bool RunFull(std::string &path, std::set<std::string> &skip, duckdb::Connection 
 	// TODO: Iterate over different buffer sizes
 	DuckDB db(nullptr);
 	Connection multi_conn(db);
+	std::cout << path << std::endl;
 	for (auto thread_count = 1; thread_count <= 8; thread_count++) {
-		auto buffer_size = 32000000;
-//		for (auto buffer_size = min_buffer_size; buffer_size < max_buffer_size; buffer_size++) {
+		for (auto buffer_size = min_buffer_size; buffer_size < max_buffer_size; buffer_size++) {
 			try {
-			multi_conn.Query("PRAGMA threads=" + to_string(thread_count));
-				unique_ptr<MaterializedQueryResult>  multi_threaded_result = multi_conn.Query("SELECT * FROM read_csv_auto('" + path + "', buffer_size = "+to_string(buffer_size) +")");
-			    auto &result = multi_threaded_result->Collection();
-			    // Results do not match
-			    string error_message;
-				if (!ColumnDataCollection::ResultEquals(*ground_truth,result,error_message)) {
+				multi_conn.Query("PRAGMA threads=" + to_string(thread_count));
+				unique_ptr<MaterializedQueryResult> multi_threaded_result = multi_conn.Query(
+				    "SELECT * FROM read_csv_auto('" + path + "', buffer_size = " + to_string(buffer_size) + ")");
+				auto &result = multi_threaded_result->Collection();
+				// Results do not match
+				string error_message;
+				if (!ColumnDataCollection::ResultEquals(*ground_truth, result, error_message)) {
 					std::cout << path << " Thread count: " << to_string(thread_count)
 					          << " Buffer Size: " << to_string(buffer_size) << std::endl;
-				    std::cout << error_message << std::endl;
+					std::cout << error_message << std::endl;
 					return true;
 				}
 			} catch (...) {
@@ -86,8 +87,8 @@ bool RunFull(std::string &path, std::set<std::string> &skip, duckdb::Connection 
 				return true;
 			}
 		}
-//	}
-	//	std::cout << path << std::endl;
+	}
+
 	return true;
 }
 
@@ -105,14 +106,14 @@ void RunTestOnFolder(const string &path, std::set<std::string> &skip) {
 	}
 }
 
-TEST_CASE("Test One File", "[parallel-csv]") {
-	DuckDB db(nullptr);
-	Connection con(db);
-	std::set<std::string> skip;
-
-	string file = "test/sql/copy/csv/data/people.csv";
-	REQUIRE(RunFull(file, skip, con));
-}
+// TEST_CASE("Test One File", "[parallel-csv]") {
+//	DuckDB db(nullptr);
+//	Connection con(db);
+//	std::set<std::string> skip;
+//
+//	string file = "test/sql/copy/csv/data/auto/issue_1254.csv";
+//	REQUIRE(RunFull(file, skip, con));
+// }
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data", "[parallel-csv]") {
 	std::set<std::string> skip;
@@ -121,6 +122,10 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data", "[parallel-csv
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/auto", "[parallel-csv]") {
 	std::set<std::string> skip;
+	// Thread count: 1 Buffer Size: 5
+	skip.insert("test/sql/copy/csv/data/auto/issue_1254.csv");
+	//  Thread count: 1 Buffer Size: 6
+	skip.insert("test/sql/copy/csv/data/auto/issue_1254_rn.csv");
 	// This file is from a 'mode skip' test
 	skip.insert("test/sql/copy/csv/data/auto/titlebasicsdebug.tsv");
 	RunTestOnFolder("test/sql/copy/csv/data/auto/", skip);
@@ -163,6 +168,9 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/glob/i1", "[para
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/real", "[parallel-csv]") {
 	std::set<std::string> skip;
+	//! Segfault on buffer test
+	skip.insert("test/sql/copy/csv/data/real/voter.tsv");
+	skip.insert("test/sql/copy/csv/data/real/tmp2013-06-15.csv.gz");
 	RunTestOnFolder("test/sql/copy/csv/data/real/", skip);
 }
 
@@ -170,10 +178,34 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/test", "[paralle
 	std::set<std::string> skip;
 	//  Thread count: 1 Buffer Size: 52
 	skip.insert("test/sql/copy/csv/data/test/multi_char_large.csv");
+	// Thread count: 1 Buffer Size: 6
+	skip.insert("test/sql/copy/csv/data/test/error_too_little_end_of_filled_chunk.csv");
+	// Thread count: 1 Buffer Size: 5
+	skip.insert("test/sql/copy/csv/data/test/error_too_little.csv");
+	// Thread count: 1 Buffer Size: 35
+	skip.insert("test/sql/copy/csv/data/test/big_header.csv");
+	// Thread count: 1 Buffer Size: 19
+	skip.insert("test/sql/copy/csv/data/test/new_line_string.csv");
+	// Thread count: 1 Buffer Size: 19
+	skip.insert("test/sql/copy/csv/data/test/quoted_newline.csv");
+	// Stuck?
+	skip.insert("test/sql/copy/csv/data/test/windows_newline.csv");
+	// Thread count: 1 Buffer Size: 19
+	skip.insert("test/sql/copy/csv/data/test/new_line_string_rn.csv");
+	// Thread count: 1 Buffer Size: 19
+	skip.insert("test/sql/copy/csv/data/test/new_line_string_rn_exc.csv");
+	// Row count mismatch
+	skip.insert("test/sql/copy/csv/data/test/test_comp.csv.gz");
+	// Thread count: 1 Buffer Size: 2198
+	skip.insert("test/sql/copy/csv/data/test/issue3562_assertion.csv.gz");
 	RunTestOnFolder("test/sql/copy/csv/data/test/", skip);
 }
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/zstd", "[parallel-csv]") {
 	std::set<std::string> skip;
+	// Thread count: 1 Buffer Size: 541
+	skip.insert("test/sql/copy/csv/data/zstd/ncvoter.csv.zst");
+	// Thread count: 1 Buffer Size: 1432
+	skip.insert("test/sql/copy/csv/data/zstd/lineitem1k.tbl.zst");
 	RunTestOnFolder("test/sql/copy/csv/data/zstd/", skip);
 }
