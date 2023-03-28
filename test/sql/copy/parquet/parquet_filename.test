@@ -64,6 +64,20 @@ SELECT i, j, replace(filename, '\', '/') FROM test_copy
 ----
 1	a	data/parquet-testing/glob/t1.parquet
 
+statement ok
+COPY test_copy FROM 'data/parquet-testing/glob/t1.parquet' (FILENAME 1);
+
+query III
+SELECT i, j, replace(filename, '\', '/') FROM test_copy
+----
+1	a	data/parquet-testing/glob/t1.parquet
+1	a	data/parquet-testing/glob/t1.parquet
+
+statement error
+COPY test_copy FROM 'data/parquet-testing/glob/t1.parquet';
+----
+column count mismatch
+
 # Multiple row groups in same file
 statement ok
 CREATE TABLE test_table_large AS SELECT * FROM range(0,10000) tbl(i);

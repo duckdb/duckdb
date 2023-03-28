@@ -191,7 +191,7 @@ void MultiFileReader::CreateMapping(const string &file_name, const vector<Logica
 		auto &global_type = global_types[global_id];
 		auto &local_type = file_types[local_id];
 		if (global_type != local_type) {
-			throw InternalException("FIXME: types are different in MultiFileReader::CreateMapping - add cast");
+			reader_data.cast_map[local_id] = global_type;
 		}
 		// the types are the same - create the mapping
 		reader_data.column_mapping.push_back(i);

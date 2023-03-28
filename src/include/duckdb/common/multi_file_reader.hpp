@@ -50,6 +50,9 @@ struct MultiFileReaderData {
 	optional_ptr<TableFilterSet> filters;
 	//! The constants that should be applied at the various positions
 	vector<pair<idx_t, Value>> constant_map;
+	//! Map of column_id -> cast, used when reading multiple files when files have diverging types
+	//! for the same column
+	unordered_map<column_t, LogicalType> cast_map;
 };
 
 struct MultiFileReader {

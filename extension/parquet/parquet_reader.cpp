@@ -364,12 +364,19 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader() {
 	if (file_meta_data->schema[0].num_children == 0) {
 		throw IOException("Parquet reader: root schema element has no children");
 	}
-
 	auto ret = CreateReaderRecursive(0, 0, 0, next_schema_idx, next_file_idx);
 	D_ASSERT(next_schema_idx == file_meta_data->schema.size() - 1);
 	D_ASSERT(file_meta_data->row_groups.empty() || next_file_idx == file_meta_data->row_groups[0].columns.size());
 
 	auto &root_struct_reader = (StructColumnReader &)*ret;
+	// add casts if required
+	for (auto &entry : reader_data.cast_map) {
+		auto column_idx = entry.first;
+		auto &expected_type = entry.second;
+		auto child_reader = std::move(root_struct_reader.child_readers[column_idx]);
+		auto cast_reader = make_unique<CastColumnReader>(std::move(child_reader), expected_type);
+		root_struct_reader.child_readers[column_idx] = std::move(cast_reader);
+	}
 	if (parquet_options.file_row_number) {
 		root_struct_reader.child_readers.push_back(
 		    make_unique<RowNumberColumnReader>(*this, LogicalType::BIGINT, SchemaElement(), next_file_idx, 0, 0));
