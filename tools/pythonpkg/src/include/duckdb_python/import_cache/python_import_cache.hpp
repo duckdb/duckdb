@@ -49,6 +49,9 @@ public:
 	UUIDCacheItem &uuid() {
 		return LazyLoadModule(uuid_module);
 	}
+	PathLibCacheItem &pathlib() {
+		return LazyLoadModule(pathlib_module);
+	}
 	PandasCacheItem &pandas() {
 		return LazyLoadModule(pandas_module);
 	}
@@ -68,6 +71,7 @@ public:
 private:
 	NumpyCacheItem numpy_module;
 	TypesCacheItem types_module;
+	PathLibCacheItem pathlib_module;
 	PyDuckDBCacheItem pyduckdb_module;
 	DatetimeCacheItem datetime_module;
 	DecimalCacheItem decimal_module;

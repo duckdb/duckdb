@@ -96,7 +96,7 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 	}
 
 	bound_function.return_type = return_type;
-	return make_unique<StructExtractBindData>(key, key_index, return_type);
+	return make_unique<StructExtractBindData>(std::move(key), key_index, std::move(return_type));
 }
 
 static unique_ptr<BaseStatistics> PropagateStructExtractStats(ClientContext &context, FunctionStatisticsInput &input) {

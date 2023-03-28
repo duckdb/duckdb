@@ -42,6 +42,7 @@ public:
 	bool initialized = false;
 	bool finished_scan = false;
 	SelectionVector new_groups;
+	AggregateHTAppendState append_state;
 };
 
 unique_ptr<GlobalSinkState> PhysicalRecursiveCTE::GetGlobalSinkState(ClientContext &context) const {
@@ -52,7 +53,7 @@ idx_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, RecursiveCTEState &state) 
 	Vector dummy_addresses(LogicalType::POINTER);
 
 	// Use the HT to eliminate duplicate rows
-	idx_t new_group_count = state.ht->FindOrCreateGroups(chunk, dummy_addresses, state.new_groups);
+	idx_t new_group_count = state.ht->FindOrCreateGroups(state.append_state, chunk, dummy_addresses, state.new_groups);
 
 	// we only return entries we have not seen before (i.e. new groups)
 	chunk.Slice(state.new_groups, new_group_count);
@@ -179,10 +180,6 @@ void PhysicalRecursiveCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_
 
 	auto &executor = meta_pipeline.GetExecutor();
 	executor.AddRecursiveCTE(this);
-
-	if (meta_pipeline.HasRecursiveCTE()) {
-		throw InternalException("Recursive CTE detected WITHIN a recursive CTE node");
-	}
 
 	// the LHS of the recursive CTE is our initial state
 	auto initial_state_pipeline = meta_pipeline.CreateChildMetaPipeline(current, this);

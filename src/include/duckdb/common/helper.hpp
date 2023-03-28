@@ -114,7 +114,7 @@ const T Load(const_data_ptr_t ptr) {
 }
 
 template <typename T>
-void Store(const T val, data_ptr_t ptr) {
+void Store(const T &val, data_ptr_t ptr) {
 	memcpy(ptr, (void *)&val, sizeof(val));
 }
 

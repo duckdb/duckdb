@@ -20,6 +20,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "EXPRESSION_GET";
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 		return "ANY_JOIN";
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+		return "ASOF_JOIN";
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 		return "COMPARISON_JOIN";
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:

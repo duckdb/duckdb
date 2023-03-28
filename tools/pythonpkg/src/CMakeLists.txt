@@ -14,6 +14,7 @@ add_subdirectory(pandas)
 add_library(
   python_src OBJECT
   array_wrapper.cpp
+  path_like.cpp
   pyconnection.cpp
   python_import_cache.cpp
   pyrelation.cpp

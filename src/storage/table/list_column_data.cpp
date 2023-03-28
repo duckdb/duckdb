@@ -1,6 +1,9 @@
 #include "duckdb/storage/table/list_column_data.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/storage/table/column_checkpoint_state.hpp"
+#include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
 
@@ -29,18 +32,15 @@ void ListColumnData::InitializeScan(ColumnScanState &state) {
 	ColumnData::InitializeScan(state);
 
 	// initialize the validity segment
-	ColumnScanState validity_state;
-	validity.InitializeScan(validity_state);
-	state.child_states.push_back(std::move(validity_state));
+	D_ASSERT(state.child_states.size() == 2);
+	validity.InitializeScan(state.child_states[0]);
 
 	// initialize the child scan
-	ColumnScanState child_state;
-	child_column->InitializeScan(child_state);
-	state.child_states.push_back(std::move(child_state));
+	child_column->InitializeScan(state.child_states[1]);
 }
 
 uint64_t ListColumnData::FetchListOffset(idx_t row_idx) {
-	auto segment = (ColumnSegment *)data.GetSegment(row_idx);
+	auto segment = data.GetSegment(row_idx);
 	ColumnFetchState fetch_state;
 	Vector result(type, 1);
 	segment->FetchRow(fetch_state, row_idx, result, 0);
@@ -57,19 +57,16 @@ void ListColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_
 	ColumnData::InitializeScanWithOffset(state, row_idx);
 
 	// initialize the validity segment
-	ColumnScanState validity_state;
-	validity.InitializeScanWithOffset(validity_state, row_idx);
-	state.child_states.push_back(std::move(validity_state));
+	D_ASSERT(state.child_states.size() == 2);
+	validity.InitializeScanWithOffset(state.child_states[0], row_idx);
 
 	// we need to read the list at position row_idx to get the correct row offset of the child
 	auto child_offset = row_idx == start ? 0 : FetchListOffset(row_idx - 1);
 
 	D_ASSERT(child_offset <= child_column->GetMaxEntry());
-	ColumnScanState child_state;
 	if (child_offset < child_column->GetMaxEntry()) {
-		child_column->InitializeScanWithOffset(child_state, start + child_offset);
+		child_column->InitializeScanWithOffset(state.child_states[1], start + child_offset);
 	}
-	state.child_states.push_back(std::move(child_state));
 }
 
 idx_t ListColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
@@ -289,6 +286,7 @@ void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &sta
 		auto &child_type = ListType::GetChildType(result.GetType());
 		Vector child_scan(child_type, child_scan_count);
 		// seek the scan towards the specified position and read [length] entries
+		child_state->Initialize(child_type);
 		child_column->InitializeScanWithOffset(*child_state, start + start_offset);
 		D_ASSERT(child_type.InternalType() == PhysicalType::STRUCT ||
 		         child_state->row_index + child_scan_count - this->start <= child_column->GetMaxEntry());

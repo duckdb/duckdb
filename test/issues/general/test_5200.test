@@ -1,0 +1,22 @@
+# name: test/issues/general/test_5200.test
+# description: Issue 5200: a CTE SQL cause INTERNAL Error: Recursive CTE detected WITHIN a recursive CTE node then FATAL Error: Failed: database has been invalidated!
+# group: [general]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+with recursive f(n,f) as (  ------- 构造阶乘表
+select 0,1::bigint
+union all
+select n+1,f*(n+1)::bigint from f where n<45
+)
+,t(n,s,f) as (
+select 1,lv-1,1::bigint from (values(1),(2))s(lv)
+union all
+select t.n+1,t.s+f.n,t.f*f.f::bigint
+  from t
+       ,f
+where t.n<9 and f.n<=t.n+1
+)
+select sum(f.f/t.f) from t,f where t.n=4 and t.s>0 and t.s=f.n;

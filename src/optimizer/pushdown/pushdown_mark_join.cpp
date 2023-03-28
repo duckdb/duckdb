@@ -13,7 +13,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 	auto &comp_join = (LogicalComparisonJoin &)*op;
 	D_ASSERT(join.join_type == JoinType::MARK);
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
-	         op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
+	         op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN || op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN);
 
 	right_bindings.insert(comp_join.mark_index);
 	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
@@ -77,7 +77,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 	}
 	op->children[0] = left_pushdown.Rewrite(std::move(op->children[0]));
 	op->children[1] = right_pushdown.Rewrite(std::move(op->children[1]));
-	return FinishPushdown(std::move(op));
+	return PushFinalFilters(std::move(op));
 }
 
 } // namespace duckdb

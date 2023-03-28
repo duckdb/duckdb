@@ -14,6 +14,7 @@
 #include "duckdb/catalog/catalog_transaction.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 #include <functional>
 
@@ -80,6 +81,8 @@ public:
 	DUCKDB_API static Catalog &GetCatalog(ClientContext &context, const string &catalog_name);
 	//! Get the specified Catalog from the DatabaseInstance
 	DUCKDB_API static Catalog &GetCatalog(DatabaseInstance &db, const string &catalog_name);
+	//! Gets the specified Catalog from the database if it exists
+	DUCKDB_API static optional_ptr<Catalog> GetCatalogEntry(ClientContext &context, const string &catalog_name);
 	//! Get the specific Catalog from the AttachedDatabase
 	DUCKDB_API static Catalog &GetCatalog(AttachedDatabase &db);
 

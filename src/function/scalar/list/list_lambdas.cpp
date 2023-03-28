@@ -392,6 +392,8 @@ void ListTransformFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(fun);
 	fun.name = "array_apply";
 	set.AddFunction(fun);
+	fun.name = "apply";
+	set.AddFunction(fun);
 }
 
 void ListFilterFun::RegisterFunction(BuiltinFunctions &set) {
@@ -404,6 +406,8 @@ void ListFilterFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(fun);
 
 	fun.name = "array_filter";
+	set.AddFunction(fun);
+	fun.name = "filter";
 	set.AddFunction(fun);
 }
 

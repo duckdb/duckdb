@@ -111,6 +111,9 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
 	}
 	state.data.Append(input, lstate.batch_index);
 	state.current_offset += input.size();
+	if (state.current_offset == max_element) {
+		return SinkResultType::FINISHED;
+	}
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
