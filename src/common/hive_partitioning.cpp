@@ -64,7 +64,7 @@ static void ConvertKnownColRefToConstants(unique_ptr<Expression> &expr,
 //  - folder/folder/folder/../var1=value1/etc/.//var2=value2
 const string HivePartitioning::REGEX_STRING = "[\\/\\\\]([^\\/\\?\\\\]+)=([^\\/\\n\\?\\\\]+)";
 
-std::map<string, string> HivePartitioning::Parse(string &filename, duckdb_re2::RE2 &regex) {
+std::map<string, string> HivePartitioning::Parse(const string &filename, duckdb_re2::RE2 &regex) {
 	std::map<string, string> result;
 	duckdb_re2::StringPiece input(filename); // Wrap a StringPiece around it
 
@@ -76,7 +76,7 @@ std::map<string, string> HivePartitioning::Parse(string &filename, duckdb_re2::R
 	return result;
 }
 
-std::map<string, string> HivePartitioning::Parse(string &filename) {
+std::map<string, string> HivePartitioning::Parse(const string &filename) {
 	duckdb_re2::RE2 regex(REGEX_STRING);
 	return Parse(filename, regex);
 }
