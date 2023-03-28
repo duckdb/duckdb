@@ -251,7 +251,7 @@ static jobject decode_charbuffer_to_jstring(JNIEnv *env, const char *d_str, idx_
  */
 struct ConnectionHolder {
 	const shared_ptr<duckdb::DuckDB> db;
-	const unique_ptr<duckdb::Connection> connection;
+	const duckdb::unique_ptr<duckdb::Connection> connection;
 
 	ConnectionHolder(shared_ptr<duckdb::DuckDB> _db) : db(_db), connection(make_uniq<duckdb::Connection>(*_db)) {
 	}
