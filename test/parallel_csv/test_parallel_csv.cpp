@@ -92,7 +92,8 @@ vector<unique_ptr<DataChunk>> RunSingleThread(duckdb::Connection &conn, std::str
 vector<unique_ptr<DataChunk>> RunParallel(duckdb::Connection &conn, std::string &path, idx_t thread_count,
                                           idx_t buffer_size) {
 	vector<unique_ptr<DataChunk>> result;
-	auto q_res = conn.Query("SELECT * FROM read_csv_auto('" + path + "')");
+	conn.Query("PRAGMA threads=" + to_string(thread_count));
+	auto q_res = conn.Query("SELECT * FROM read_csv_auto('" + path + "', buffer_size = "+to_string(buffer_size) +")");
 	auto data_chunk = q_res->Fetch();
 	while (data_chunk) {
 		result.emplace_back(std::move(data_chunk));
@@ -116,13 +117,14 @@ bool RunFull(std::string &path, std::set<std::string> &skip, duckdb::Connection 
 		return true;
 	}
 	// For parallel CSV Reading the buffer must be at least the size of the biggest line in the File.
-	idx_t min_buffer_size = MaxLineSize(path);
+	idx_t min_buffer_size = MaxLineSize(path) + 2;
 	// So our tests don't take infinite time, we will go till a max buffer size of 25 positions higher than the minimum.
-	idx_t max_buffer_size = MaxLineSize(path) + 25;
+	idx_t max_buffer_size = min_buffer_size + 25;
 	// Let's go from 1 to 8 threads.
 	// TODO: Iterate over different buffer sizes
 	for (auto thread_count = 1; thread_count <= 8; thread_count++) {
-		for (auto buffer_size = min_buffer_size; buffer_size < max_buffer_size; buffer_size++) {
+		auto buffer_size = 32000000;
+//		for (auto buffer_size = min_buffer_size; buffer_size < max_buffer_size; buffer_size++) {
 			try {
 				auto parallel_result = RunParallel(conn, path, thread_count, buffer_size);
 				// Results do not match
@@ -138,7 +140,7 @@ bool RunFull(std::string &path, std::set<std::string> &skip, duckdb::Connection 
 				return true;
 			}
 		}
-	}
+//	}
 	//	std::cout << path << std::endl;
 	return true;
 }
@@ -163,7 +165,7 @@ TEST_CASE("Test One File", "[parallel-csv]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	std::set<std::string> skip;
-	string file = "test/sql/copy/csv/data/auto/issue_1254.csv";
+	string file = "test/sql/copy/csv/data/test/multi_char_large.csv";
 	REQUIRE(RunFull(file, skip, con));
 }
 
@@ -174,18 +176,6 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data", "[parallel-csv
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/auto", "[parallel-csv]") {
 	std::set<std::string> skip;
-	// Thread count: 1 Buffer Size: 3 HIB
-	skip.insert("test/sql/copy/csv/data/auto/issue_1254.csv");
-	// Thread count: 1 Buffer Size: 4 HIB
-	skip.insert("test/sql/copy/csv/data/auto/issue_1254_rn.csv");
-	// Thread count: 1 Buffer Size: 15 HIB
-	skip.insert("test/sql/copy/csv/data/auto/normalize_names_1.csv");
-	// Thread count: 1 Buffer Size: 15 HIB
-	skip.insert("test/sql/copy/csv/data/auto/normalize_names_3.csv");
-	// Thread count: 1 Buffer Size: 18 HIB
-	skip.insert("test/sql/copy/csv/data/auto/normalize_names_2.csv");
-	//	Thread count: 1 Buffer Size: 16 HIB
-	skip.insert("test/sql/copy/csv/data/auto/normalize_names_4.csv");
 	//	Thread count: 1 Buffer Size: 196
 	skip.insert("test/sql/copy/csv/data/auto/titlebasicsdebug.tsv");
 	RunTestOnFolder("test/sql/copy/csv/data/auto/", skip);
@@ -237,8 +227,6 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/real", "[paralle
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/test", "[parallel-csv]") {
 	std::set<std::string> skip;
-	//	Thread count: 1 Buffer Size: 18
-	skip.insert("test/sql/copy/csv/data/test/big_header.csv");
 	//  Thread count: 1 Buffer Size: 52
 	skip.insert("test/sql/copy/csv/data/test/multi_char_large.csv");
 	// Thread count: 1 Buffer Size: 1

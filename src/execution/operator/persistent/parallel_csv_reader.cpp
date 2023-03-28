@@ -291,6 +291,9 @@ normal : {
 			if (column > 0 || try_add_line || insert_chunk.data.size() == 1) {
 				goto add_row;
 			}
+			if (column == 0 && position_buffer == start_buffer){
+				start_buffer++;
+			}
 		}
 	}
 	if (!BufferRemainder()) {
