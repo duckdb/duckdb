@@ -67,7 +67,7 @@ public:
 	inline LogicalType &GetTypeMutable() {
 		return type_;
 	}
-	inline const LogicalType &type() const {
+	inline const LogicalType &type() const { // NOLINT
 		return type_;
 	}
 	inline bool IsNull() const {
@@ -78,6 +78,10 @@ public:
 	DUCKDB_API static Value MinimumValue(const LogicalType &type);
 	//! Create the highest possible value of a given type (numeric only)
 	DUCKDB_API static Value MaximumValue(const LogicalType &type);
+	//! Create the negative infinite value of a given type (numeric only)
+	DUCKDB_API static Value NegativeInfinity(const LogicalType &type);
+	//! Create the positive infinite value of a given type (numeric only)
+	DUCKDB_API static Value Infinity(const LogicalType &type);
 	//! Create a Numeric value of the specified type with the specified value
 	DUCKDB_API static Value Numeric(const LogicalType &type, int64_t value);
 	DUCKDB_API static Value Numeric(const LogicalType &type, hugeint_t value);
@@ -161,7 +165,7 @@ public:
 
 	//! Create a blob Value from a data pointer and a length: no bytes are interpreted
 	DUCKDB_API static Value BLOB(const_data_ptr_t data, idx_t len);
-	DUCKDB_API static Value BLOB_RAW(const string &data) {
+	DUCKDB_API static Value BLOB_RAW(const string &data) { // NOLINT
 		return Value::BLOB((const_data_ptr_t)data.c_str(), data.size());
 	}
 	//! Creates a blob by casting a specified string to a blob (i.e. interpreting \x characters)
@@ -280,7 +284,7 @@ public:
 
 private:
 	//! The logical of the value
-	LogicalType type_;
+	LogicalType type_; // NOLINT
 
 	//! Whether or not the value is NULL
 	bool is_null;
@@ -297,17 +301,17 @@ private:
 		uint32_t uinteger;
 		uint64_t ubigint;
 		hugeint_t hugeint;
-		float float_;
-		double double_;
+		float float_;   // NOLINT
+		double double_; // NOLINT
 		uintptr_t pointer;
 		uint64_t hash;
 		date_t date;
 		dtime_t time;
 		timestamp_t timestamp;
 		interval_t interval;
-	} value_;
+	} value_; // NOLINT
 
-	shared_ptr<ExtraValueInfo> value_info_;
+	shared_ptr<ExtraValueInfo> value_info_; // NOLINT
 
 private:
 	template <class T>

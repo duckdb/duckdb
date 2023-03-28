@@ -320,7 +320,11 @@ bool BaseCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column, string &error
 	}
 
 	if (column < return_types.size() && mode != ParserMode::SNIFFING_DIALECT) {
-		if (options.ignore_errors) {
+		if (options.null_padding) {
+			for (; column < return_types.size(); column++) {
+				FlatVector::SetNull(parse_chunk.data[column], parse_chunk.size(), true);
+			}
+		} else if (options.ignore_errors) {
 			column = 0;
 			return false;
 		} else {
@@ -498,12 +502,12 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 			}
 
 			// figure out the exact line number
+			UnifiedVectorFormat inserted_column_data;
+			insert_chunk.data[col_idx].ToUnifiedFormat(parse_chunk.size(), inserted_column_data);
 			idx_t row_idx;
 			for (row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
-				auto &inserted_column = insert_chunk.data[col_idx];
 				auto &parsed_column = parse_chunk.data[col_idx];
-
-				if (FlatVector::IsNull(inserted_column, row_idx) && !FlatVector::IsNull(parsed_column, row_idx)) {
+				if (!inserted_column_data.validity.RowIsValid(row_idx) && !FlatVector::IsNull(parsed_column, row_idx)) {
 					break;
 				}
 			}

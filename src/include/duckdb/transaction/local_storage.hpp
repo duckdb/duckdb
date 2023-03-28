@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/storage/table/row_group_collection.hpp"
-#include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
 
@@ -18,6 +17,7 @@ class AttachedDatabase;
 class DataTable;
 class Transaction;
 class WriteAheadLog;
+struct LocalAppendState;
 struct TableAppendState;
 
 class OptimisticDataWriter {
@@ -118,6 +118,9 @@ public:
 
 public:
 	struct CommitState {
+		CommitState();
+		~CommitState();
+
 		unordered_map<DataTable *, unique_ptr<TableAppendState>> append_states;
 	};
 

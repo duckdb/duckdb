@@ -334,7 +334,9 @@ idx_t PhysicalRangeJoin::SelectJoinTail(const ExpressionType &condition, Vector 
 	case ExpressionType::COMPARE_DISTINCT_FROM:
 		return VectorOperations::DistinctFrom(left, right, sel, count, true_sel, nullptr);
 	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		return VectorOperations::NotDistinctFrom(left, right, sel, count, true_sel, nullptr);
 	case ExpressionType::COMPARE_EQUAL:
+		return VectorOperations::Equals(left, right, sel, count, true_sel, nullptr);
 	default:
 		throw InternalException("Unsupported comparison type for PhysicalRangeJoin");
 	}

@@ -10,26 +10,34 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/list_column_data.hpp"
 #include "duckdb/storage/table/standard_column_data.hpp"
-#include "duckdb/transaction/transaction.hpp"
 
 #include "duckdb/storage/table/struct_column_data.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
+#include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/main/attached_database.hpp"
 
 namespace duckdb {
 
 ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
-                       LogicalType type, ColumnData *parent)
-    : block_manager(block_manager), info(info), column_index(column_index), start(start_row), type(std::move(type)),
-      parent(parent), version(0) {
+                       LogicalType type_p, ColumnData *parent)
+    : start(start_row), count(0), block_manager(block_manager), info(info), column_index(column_index),
+      type(std::move(type_p)), parent(parent), version(0) {
+	if (!parent) {
+		stats = make_unique<SegmentStatistics>(type);
+	}
 }
 
 ColumnData::ColumnData(ColumnData &other, idx_t start, ColumnData *parent)
-    : block_manager(other.block_manager), info(other.info), column_index(other.column_index), start(start),
-      type(std::move(other.type)), parent(parent), version(parent ? parent->version + 1 : 0) {
+    : start(start), count(other.count), block_manager(other.block_manager), info(other.info),
+      column_index(other.column_index), type(std::move(other.type)), parent(parent),
+      version(parent ? parent->version + 1 : 0) {
 	if (other.updates) {
 		updates = make_unique<UpdateSegment>(*other.updates, *this);
+	}
+	if (other.stats) {
+		stats = make_unique<SegmentStatistics>(other.stats->statistics.Copy());
 	}
 	idx_t offset = 0;
 	for (auto &segment : other.data.Segments()) {
@@ -61,16 +69,7 @@ void ColumnData::IncrementVersion() {
 }
 
 idx_t ColumnData::GetMaxEntry() {
-	auto l = data.Lock();
-	auto first_segment = data.GetRootSegment(l);
-	auto last_segment = data.GetLastSegment(l);
-	if (!first_segment) {
-		D_ASSERT(!last_segment);
-		return 0;
-	} else {
-		D_ASSERT(last_segment->start >= first_segment->start);
-		return last_segment->start + last_segment->count - first_segment->start;
-	}
+	return count;
 }
 
 void ColumnData::InitializeScan(ColumnScanState &state) {
@@ -81,6 +80,7 @@ void ColumnData::InitializeScan(ColumnScanState &state) {
 	state.initialized = false;
 	state.version = version;
 	state.scan_state.reset();
+	state.last_offset = 0;
 }
 
 void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
@@ -91,6 +91,7 @@ void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx)
 	state.initialized = false;
 	state.version = version;
 	state.scan_state.reset();
+	state.last_offset = 0;
 }
 
 idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining) {
@@ -230,6 +231,46 @@ void ColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector 
 	AppendData(stats, state, vdata, count);
 }
 
+void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t count) {
+	if (parent || !stats) {
+		throw InternalException("ColumnData::Append called on a column with a parent or without stats");
+	}
+	Append(stats->statistics, state, vector, count);
+}
+
+bool ColumnData::CheckZonemap(TableFilter &filter) {
+	if (!stats) {
+		throw InternalException("ColumnData::CheckZonemap called on a column without stats");
+	}
+	auto propagate_result = filter.CheckStatistics(stats->statistics);
+	if (propagate_result == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
+	    propagate_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
+		return false;
+	}
+	return true;
+}
+
+unique_ptr<BaseStatistics> ColumnData::GetStatistics() {
+	if (!stats) {
+		throw InternalException("ColumnData::GetStatistics called on a column without stats");
+	}
+	return stats->statistics.ToUnique();
+}
+
+void ColumnData::MergeStatistics(const BaseStatistics &other) {
+	if (!stats) {
+		throw InternalException("ColumnData::MergeStatistics called on a column without stats");
+	}
+	return stats->statistics.Merge(other);
+}
+
+void ColumnData::MergeIntoStatistics(BaseStatistics &other) {
+	if (!stats) {
+		throw InternalException("ColumnData::MergeIntoStatistics called on a column without stats");
+	}
+	return other.Merge(stats->statistics);
+}
+
 void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	auto l = data.Lock();
 	if (data.IsEmpty(l)) {
@@ -253,6 +294,7 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 
 void ColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) {
 	idx_t offset = 0;
+	this->count += count;
 	while (true) {
 		// append the data from the vector
 		idx_t copied_elements = state.current->Append(state, vdata, offset, count);
@@ -292,6 +334,7 @@ void ColumnData::RevertAppend(row_t start_row) {
 	// remove any segments AFTER this segment: they should be deleted entirely
 	data.EraseSegments(l, segment_index);
 
+	this->count = start_row - this->start;
 	segment->next = nullptr;
 	transient.RevertAppend(start_row);
 }
@@ -412,6 +455,7 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group,
 
 void ColumnData::DeserializeColumn(Deserializer &source) {
 	// load the data pointers for the column
+	this->count = 0;
 	idx_t data_pointer_count = source.Read<idx_t>();
 	for (idx_t data_ptr = 0; data_ptr < data_pointer_count; data_ptr++) {
 		// read the data pointer
@@ -420,14 +464,19 @@ void ColumnData::DeserializeColumn(Deserializer &source) {
 		auto block_pointer_block_id = source.Read<block_id_t>();
 		auto block_pointer_offset = source.Read<uint32_t>();
 		auto compression_type = source.Read<CompressionType>();
-		auto stats = BaseStatistics::Deserialize(source, type);
+		auto segment_stats = BaseStatistics::Deserialize(source, type);
+		if (stats) {
+			stats->statistics.Merge(segment_stats);
+		}
 
-		DataPointer data_pointer(std::move(stats));
+		DataPointer data_pointer(std::move(segment_stats));
 		data_pointer.row_start = row_start;
 		data_pointer.tuple_count = tuple_count;
 		data_pointer.block_pointer.block_id = block_pointer_block_id;
 		data_pointer.block_pointer.offset = block_pointer_offset;
 		data_pointer.compression_type = compression_type;
+
+		this->count += tuple_count;
 
 		// create a persistent segment
 		auto segment = ColumnSegment::CreatePersistentSegment(
@@ -495,14 +544,22 @@ void ColumnData::Verify(RowGroup &parent) {
 #ifdef DEBUG
 	D_ASSERT(this->start == parent.start);
 	data.Verify();
+	if (type.InternalType() == PhysicalType::STRUCT) {
+		// structs don't have segments
+		D_ASSERT(!data.GetRootSegment());
+		return;
+	}
 	idx_t current_index = 0;
 	idx_t current_start = this->start;
+	idx_t total_count = 0;
 	for (auto &segment : data.Segments()) {
 		D_ASSERT(segment.index == current_index);
 		D_ASSERT(segment.start == current_start);
 		current_start += segment.count;
+		total_count += segment.count;
 		current_index++;
 	}
+	D_ASSERT(this->count == total_count);
 #endif
 }
 
