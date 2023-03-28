@@ -1165,9 +1165,7 @@ void DataTable::WALAddIndex(ClientContext &context, unique_ptr<Index> index,
 
 	auto &allocator = Allocator::Get(db);
 
-	DataChunk result;
-	result.Initialize(allocator, index->logical_types);
-
+	// intermediate holds scanned chunks of the underlying data to create the index
 	DataChunk intermediate;
 	vector<LogicalType> intermediate_types;
 	auto column_ids = index->column_ids;
@@ -1178,6 +1176,10 @@ void DataTable::WALAddIndex(ClientContext &context, unique_ptr<Index> index,
 	}
 	intermediate_types.emplace_back(LogicalType::ROW_TYPE);
 	intermediate.Initialize(allocator, intermediate_types);
+
+	// holds the result of executing the index expression on the intermediate chunks
+	DataChunk result;
+	result.Initialize(allocator, index->logical_types);
 
 	// initialize an index scan
 	CreateIndexScanState state;
@@ -1212,6 +1214,8 @@ void DataTable::WALAddIndex(ClientContext &context, unique_ptr<Index> index,
 			}
 		}
 	}
+
+	// NOTE: sequential insertions: no vacuum required
 	info->indexes.AddIndex(std::move(index));
 }
 

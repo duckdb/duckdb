@@ -113,10 +113,12 @@ void OptimisticDataWriter::Rollback() {
 //===--------------------------------------------------------------------===//
 LocalTableStorage::LocalTableStorage(DataTable &table)
     : table(&table), allocator(Allocator::Get(table.db)), deleted_rows(0), optimistic_writer(&table) {
+
 	auto types = table.GetTypes();
 	row_groups = make_shared<RowGroupCollection>(table.info, TableIOManager::Get(table).GetBlockManagerForRowData(),
 	                                             types, MAX_ROW_ID, 0);
 	row_groups->InitializeEmpty();
+
 	table.info->indexes.Scan([&](Index &index) {
 		D_ASSERT(index.type == IndexType::ART);
 		auto &art = (ART &)index;
@@ -510,6 +512,14 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 		storage.AppendToIndexes(transaction, append_state, append_count, true);
 	}
 	transaction.PushAppend(&table, append_state.row_start, append_count);
+
+	// possibly vacuum any excess index data
+	table.info->indexes.Scan([&](Index &index) {
+		D_ASSERT(index.type == IndexType::ART);
+		auto &art = (ART &)index;
+		art.Vacuum();
+		return true;
+	});
 }
 
 void LocalStorage::Commit(LocalStorage::CommitState &commit_state, DuckTransaction &transaction) {
