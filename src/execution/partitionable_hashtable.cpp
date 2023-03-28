@@ -88,7 +88,7 @@ idx_t PartitionableHashTable::ListAddChunk(HashTableList &list, DataChunk &group
 			list.back()->Finalize();
 		}
 		list.push_back(make_uniq<GroupedAggregateHashTable>(context, allocator, group_types, payload_types, bindings,
-		                                                      GetHTEntrySize(), new_capacity));
+		                                                    GetHTEntrySize(), new_capacity));
 	}
 	return list.back()->AddChunk(append_state, groups, group_hashes, payload, filter);
 }

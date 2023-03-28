@@ -327,7 +327,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 		if (child_types.size() > 1 || (!is_list && !is_map && !is_repeated)) {
 			result_type = LogicalType::STRUCT(child_types);
 			result = make_uniq<StructColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
-			                                         std::move(child_readers));
+			                                       std::move(child_readers));
 		} else {
 			// if we have a struct with only a single type, pull up
 			result_type = child_types[0].second;

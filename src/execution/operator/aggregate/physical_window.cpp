@@ -1114,7 +1114,7 @@ WindowExecutor::WindowExecutor(BoundWindowExpression *wexpr, ClientContext &cont
 	//	Check for constant aggregate
 	if (IsConstantAggregate(*wexpr)) {
 		constant_aggregate = make_uniq<WindowConstantAggregate>(*(wexpr->aggregate), wexpr->bind_info.get(),
-		                                                          wexpr->return_type, partition_mask, count);
+		                                                        wexpr->return_type, partition_mask, count);
 	}
 
 	// evaluate the FILTER clause and stuff it into a large mask for compactness and reuse
@@ -1221,7 +1221,7 @@ void WindowExecutor::Finalize(WindowAggregationMode mode) {
 		constant_aggregate->Finalize();
 	} else if (wexpr->aggregate) {
 		segment_tree = make_uniq<WindowSegmentTree>(*(wexpr->aggregate), wexpr->bind_info.get(), wexpr->return_type,
-		                                              &payload_collection, filter_mask, mode);
+		                                            &payload_collection, filter_mask, mode);
 	}
 }
 

@@ -22,7 +22,7 @@ struct BindReplaceDemoFun {
 	};
 
 	static duckdb::unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
-	                                     vector<LogicalType> &return_types, vector<string> &names) {
+	                                             vector<LogicalType> &return_types, vector<string> &names) {
 		auto result = make_uniq<BindReplaceDemoFun::CustomFunctionData>();
 
 		result->current_depth = input.inputs[0].GetValue<int64_t>();

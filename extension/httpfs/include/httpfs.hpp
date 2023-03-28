@@ -100,7 +100,8 @@ public:
 	virtual duckdb::unique_ptr<ResponseWrapper> HeadRequest(FileHandle &handle, string url, HeaderMap header_map);
 	// Get Request with range parameter that GETs exactly buffer_out_len bytes from the url
 	virtual duckdb::unique_ptr<ResponseWrapper> GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map,
-	                                                    idx_t file_offset, char *buffer_out, idx_t buffer_out_len);
+	                                                            idx_t file_offset, char *buffer_out,
+	                                                            idx_t buffer_out_len);
 	// Get Request without a range (i.e., downloads full file)
 	virtual duckdb::unique_ptr<ResponseWrapper> GetRequest(FileHandle &handle, string url, HeaderMap header_map);
 	// Post Request that can handle variable sized responses without a content-length header (needed for s3 multipart)

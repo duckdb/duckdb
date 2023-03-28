@@ -306,7 +306,7 @@ unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunction(Aggre
 	CastToFunctionArguments(bound_function, children);
 
 	return make_uniq<BoundAggregateExpression>(std::move(bound_function), std::move(children), std::move(filter),
-	                                             std::move(bind_info), aggr_type);
+	                                           std::move(bind_info), aggr_type);
 }
 
 } // namespace duckdb

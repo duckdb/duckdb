@@ -302,7 +302,7 @@ void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 	expr = std::move(new_conditions[0]);
 	for (idx_t i = 1; i < new_conditions.size(); i++) {
 		auto and_conj = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(expr),
-		                                                   std::move(new_conditions[i]));
+		                                                 std::move(new_conditions[i]));
 		expr = std::move(and_conj);
 	}
 }

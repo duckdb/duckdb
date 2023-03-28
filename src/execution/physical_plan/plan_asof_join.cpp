@@ -84,7 +84,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAsOfJoin &
 	op.types.emplace_back(asof_type);
 	op.conditions.emplace_back(std::move(asof_upper));
 	auto iejoin = make_uniq<PhysicalIEJoin>(op, std::move(left), std::move(window), std::move(op.conditions),
-	                                          op.join_type, op.estimated_cardinality);
+	                                        op.join_type, op.estimated_cardinality);
 
 	//	Project away asof_temp and anything from the projection maps
 	auto proj = PhysicalProjection::CreateJoinProjection(proj_types, lhs_types, rhs_types, op.left_projection_map,

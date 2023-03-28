@@ -31,7 +31,7 @@ static void ConstructPivots(PivotRef &ref, idx_t pivot_idx, vector<unique_ptr<Pa
 			auto column_ref = pivot.pivot_expressions[v]->Copy();
 			auto constant_value = make_uniq<ConstantExpression>(value);
 			auto comp_expr = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
-			                                                   std::move(column_ref), std::move(constant_value));
+			                                                 std::move(column_ref), std::move(constant_value));
 			if (expr) {
 				expr = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(expr),
 				                                        std::move(comp_expr));
