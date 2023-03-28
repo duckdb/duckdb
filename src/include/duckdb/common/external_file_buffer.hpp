@@ -20,6 +20,7 @@ public:
 	data_ptr_t ExternalBufferHandle() const {
 		return buffer;
 	}
+
 	void SetAllocation(data_ptr_t allocation) {
 		this->allocation = allocation;
 	}

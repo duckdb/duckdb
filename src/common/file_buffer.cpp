@@ -40,6 +40,7 @@ FileBuffer::~FileBuffer() {
 		return;
 	}
 	allocator.FreeData(internal_buffer, internal_size);
+	internal_buffer = nullptr;
 }
 
 data_ptr_t FileBuffer::Buffer() const {
@@ -72,7 +73,7 @@ FileBuffer::MemoryRequirement FileBuffer::CalculateMemory(uint64_t user_size) {
 		result.alloc_size = user_size;
 	} else if (type == FileBufferType::EXTERNAL_BUFFER) {
 		// The responsibility of this is given to a callback instead
-		result.header_size = 0;
+		result.header_size = Storage::BLOCK_HEADER_SIZE;
 		result.alloc_size = user_size;
 	} else {
 		result.header_size = Storage::BLOCK_HEADER_SIZE;

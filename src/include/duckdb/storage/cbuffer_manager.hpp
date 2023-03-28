@@ -8,6 +8,7 @@
 namespace duckdb {
 
 class CBufferManager;
+class ExternalFileBuffer;
 
 typedef void *duckdb_buffer;
 
@@ -69,6 +70,7 @@ private:
 	static void CBufferAllocatorFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size);
 	static data_ptr_t CBufferAllocatorRealloc(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
 	                                          idx_t size);
+	static duckdb_buffer GetUserBuffer(ExternalFileBuffer &buffer);
 
 private:
 	CBufferManagerConfig config;

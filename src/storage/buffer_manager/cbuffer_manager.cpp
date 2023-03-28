@@ -35,8 +35,6 @@ BufferPool &CBufferManager::GetBufferPool() {
 }
 
 shared_ptr<BlockHandle> CBufferManager::RegisterSmallMemory(idx_t block_size) {
-	auto buffer = make_unique<ExternalFileBuffer>(custom_allocator, config, block_size);
-
 	// create a new block pointer for this block
 	auto block = make_shared<BlockHandle>(*block_manager, ++temporary_id);
 	block->memory_usage = block_size;
@@ -57,6 +55,8 @@ void CBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_siz
 
 	// resize and adjust current memory
 	handle->buffer->Resize(block_size);
+	auto &external_file_buffer = (ExternalFileBuffer &)*handle->buffer;
+	external_file_buffer.SetAllocation(nullptr);
 	handle->memory_usage += memory_delta;
 	D_ASSERT(handle->memory_usage == handle->buffer->AllocSize());
 }
