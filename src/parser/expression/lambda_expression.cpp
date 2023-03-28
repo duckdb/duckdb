@@ -54,7 +54,7 @@ unique_ptr<ParsedExpression> LambdaExpression::FormatDeserialize(ExpressionType 
                                                                  FormatDeserializer &deserializer) {
 	auto lhs = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("lhs");
 	auto expr = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("expr");
-	return make_unique<LambdaExpression>(std::move(lhs), std::move(expr));
+	return make_uniq<LambdaExpression>(std::move(lhs), std::move(expr));
 }
 
 } // namespace duckdb

@@ -208,7 +208,7 @@ unique_ptr<BoundCastData> BindUnionToUnionCast(BindCastInput &input, const Logic
 
 unique_ptr<FunctionLocalState> InitUnionToUnionLocalState(CastLocalStateParameters &parameters) {
 	auto &cast_data = (UnionToUnionBoundCastData &)*parameters.cast_data;
-	auto result = make_unique<StructCastLocalState>();
+	auto result = make_uniq<StructCastLocalState>();
 
 	for (auto &entry : cast_data.member_casts) {
 		unique_ptr<FunctionLocalState> child_state;

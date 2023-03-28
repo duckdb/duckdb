@@ -76,7 +76,7 @@ void RecursiveCTENode::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<QueryNode> RecursiveCTENode::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto result = make_unique<RecursiveCTENode>();
+	auto result = make_uniq<RecursiveCTENode>();
 	deserializer.ReadProperty("cte_name", result->ctename);
 	deserializer.ReadProperty("union_all", result->union_all);
 	deserializer.ReadProperty("left", result->left);

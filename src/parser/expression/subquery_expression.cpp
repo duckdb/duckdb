@@ -84,7 +84,7 @@ void SubqueryExpression::FormatSerialize(FormatSerializer &serializer) const {
 
 unique_ptr<ParsedExpression> SubqueryExpression::FormatDeserialize(ExpressionType type,
                                                                    FormatDeserializer &deserializer) {
-	auto expression = make_unique<SubqueryExpression>();
+	auto expression = make_uniq<SubqueryExpression>();
 	deserializer.ReadProperty("subquery_type", expression->subquery_type);
 	deserializer.ReadProperty("subquery", expression->subquery);
 	deserializer.ReadOptionalProperty("child", expression->child);

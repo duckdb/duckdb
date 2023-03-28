@@ -140,7 +140,7 @@ void StarExpression::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<ParsedExpression> StarExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
-	auto result = make_unique<StarExpression>();
+	auto result = make_uniq<StarExpression>();
 	deserializer.ReadProperty("relation_name", result->relation_name);
 	deserializer.ReadProperty("exclude_list", result->exclude_list);
 	deserializer.ReadProperty("replace_list", result->replace_list);

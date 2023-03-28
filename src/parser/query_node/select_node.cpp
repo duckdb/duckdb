@@ -208,7 +208,7 @@ void SelectNode::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<QueryNode> SelectNode::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto result = make_unique<SelectNode>();
+	auto result = make_uniq<SelectNode>();
 
 	deserializer.ReadProperty("select_list", result->select_list);
 	deserializer.ReadOptionalProperty("from_table", result->from_table);

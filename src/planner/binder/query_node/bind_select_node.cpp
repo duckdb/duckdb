@@ -301,7 +301,7 @@ void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 	// set up an AND conjunction between the expanded conditions
 	expr = std::move(new_conditions[0]);
 	for (idx_t i = 1; i < new_conditions.size(); i++) {
-		auto and_conj = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(expr),
+		auto and_conj = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(expr),
 		                                                   std::move(new_conditions[i]));
 		expr = std::move(and_conj);
 	}
@@ -479,7 +479,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 	// push the GROUP BY ALL expressions into the group set
 	for (auto &group_by_all_index : group_by_all_indexes) {
 		auto &expr = result->select_list[group_by_all_index];
-		auto group_ref = make_unique<BoundColumnRefExpression>(
+		auto group_ref = make_uniq<BoundColumnRefExpression>(
 		    expr->return_type, ColumnBinding(result->group_index, result->groups.group_expressions.size()));
 		result->groups.group_expressions.push_back(std::move(expr));
 		expr = std::move(group_ref);

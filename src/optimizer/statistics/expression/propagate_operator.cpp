@@ -64,7 +64,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundOperat
 		}
 		if (!child_stats[0]->CanHaveNoNull()) {
 			// child has no valid values: x IS NULL will always be true
-			*expr_ptr = make_unique<BoundConstantExpression>(Value::BOOLEAN(true));
+			*expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
 			return PropagateExpression(*expr_ptr);
 		}
 		return nullptr;
@@ -76,7 +76,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundOperat
 		}
 		if (!child_stats[0]->CanHaveNoNull()) {
 			// child has no valid values: x IS NOT NULL will always be false
-			*expr_ptr = make_unique<BoundConstantExpression>(Value::BOOLEAN(false));
+			*expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
 			return PropagateExpression(*expr_ptr);
 		}
 		return nullptr;

@@ -28,7 +28,7 @@ unique_ptr<SelectStatement> SelectStatement::Deserialize(Deserializer &source) {
 }
 
 unique_ptr<SelectStatement> SelectStatement::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto result = make_unique<SelectStatement>();
+	auto result = make_uniq<SelectStatement>();
 	deserializer.ReadProperty("node", result->node);
 	return result;
 }

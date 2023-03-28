@@ -359,7 +359,7 @@ unique_ptr<TableRef> PivotRef::Deserialize(FieldReader &reader) {
 }
 
 unique_ptr<TableRef> PivotRef::FormatDeserialize(FormatDeserializer &source) {
-	auto result = make_unique<PivotRef>();
+	auto result = make_uniq<PivotRef>();
 	source.ReadProperty("source", result->source);
 	source.ReadProperty("aggregates", result->aggregates);
 	source.ReadProperty("unpivot_names", result->unpivot_names);

@@ -26,8 +26,8 @@ void SampleOptions::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("seed", seed);
 }
 
-std::unique_ptr<SampleOptions> SampleOptions::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto result = make_unique<SampleOptions>();
+unique_ptr<SampleOptions> SampleOptions::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = make_uniq<SampleOptions>();
 
 	deserializer.ReadProperty("sample_size", result->sample_size);
 	deserializer.ReadProperty("is_percentage", result->is_percentage);

@@ -40,7 +40,7 @@ void BaseTableRef::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<TableRef> BaseTableRef::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto result = make_unique<BaseTableRef>();
+	auto result = make_uniq<BaseTableRef>();
 
 	deserializer.ReadProperty("schema_name", result->schema_name);
 	deserializer.ReadProperty("table_name", result->table_name);

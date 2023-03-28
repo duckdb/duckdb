@@ -449,7 +449,7 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 	auto &bound_function = expr.function;
 	auto &children = expr.children;
 	auto &order_bys = *expr.order_bys;
-	auto sorted_bind = make_unique<SortedAggregateBindData>(context, expr);
+	auto sorted_bind = make_uniq<SortedAggregateBindData>(context, expr);
 
 	if (!sorted_bind->sorted_on_args) {
 		// The arguments are the children plus the sort columns.

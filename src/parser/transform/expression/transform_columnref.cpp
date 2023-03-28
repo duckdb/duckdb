@@ -50,9 +50,9 @@ unique_ptr<ParsedExpression> Transformer::TransformStarExpression(duckdb_libpgqu
 			result->expr.reset();
 		} else if (result->expr->type == ExpressionType::LAMBDA) {
 			vector<unique_ptr<ParsedExpression>> children;
-			children.push_back(make_unique<StarExpression>());
+			children.push_back(make_uniq<StarExpression>());
 			children.push_back(std::move(result->expr));
-			auto list_filter = make_unique<FunctionExpression>("list_filter", std::move(children));
+			auto list_filter = make_uniq<FunctionExpression>("list_filter", std::move(children));
 			result->expr = std::move(list_filter);
 		}
 	}

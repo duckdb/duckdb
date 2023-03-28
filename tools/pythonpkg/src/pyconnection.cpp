@@ -452,7 +452,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 <<<<<<< HEAD
 		    make_uniq<PythonTableArrowArrayStreamFactory>(python_object.ptr(), connection->context->config);
 =======
-		    make_unique<PythonTableArrowArrayStreamFactory>(arrow_object.ptr(), connection->context->config);
+		    make_uniq<PythonTableArrowArrayStreamFactory>(arrow_object.ptr(), connection->context->config);
 >>>>>>> master
 		auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 		auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
@@ -470,7 +470,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 <<<<<<< HEAD
 		    make_shared<PythonDependencies>(make_uniq<RegisteredArrow>(std::move(stream_factory), python_object)));
 =======
-		    make_shared<PythonDependencies>(make_unique<RegisteredArrow>(std::move(stream_factory), arrow_object)));
+		    make_shared<PythonDependencies>(make_uniq<RegisteredArrow>(std::move(stream_factory), arrow_object)));
 >>>>>>> master
 		connection->context->external_dependencies[name] = std::move(dependencies);
 	} else if (DuckDBPyRelation::IsRelation(python_object)) {
@@ -1143,7 +1143,7 @@ static void CreateArrowScan(py::object entry, TableFunctionRef &table_function,
 =======
                             vector<unique_ptr<ParsedExpression>> &children, ClientConfig &config) {
 	string name = "arrow_" + StringUtil::GenerateRandomName();
-	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(entry.ptr(), config);
+	auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(entry.ptr(), config);
 >>>>>>> master
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;

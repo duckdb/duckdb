@@ -99,7 +99,7 @@ void JoinRef::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<TableRef> JoinRef::FormatDeserialize(FormatDeserializer &source) {
-	auto result = make_unique<JoinRef>(JoinRefType::REGULAR);
+	auto result = make_uniq<JoinRef>(JoinRefType::REGULAR);
 
 	source.ReadProperty("left", result->left);
 	source.ReadProperty("right", result->right);

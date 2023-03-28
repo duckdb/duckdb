@@ -165,7 +165,7 @@ unique_ptr<ParsedExpression> WindowExpression::FormatDeserialize(ExpressionType 
                                                                  FormatDeserializer &deserializer) {
 	auto function_name = deserializer.ReadProperty<string>("function_name");
 	auto schema = deserializer.ReadProperty<string>("schema");
-	auto expr = make_unique<WindowExpression>(type, INVALID_CATALOG, std::move(schema), function_name);
+	auto expr = make_uniq<WindowExpression>(type, INVALID_CATALOG, std::move(schema), function_name);
 
 	deserializer.ReadProperty("children", expr->children);
 	deserializer.ReadProperty("partitions", expr->partitions);

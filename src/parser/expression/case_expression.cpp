@@ -91,7 +91,7 @@ void CaseExpression::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<ParsedExpression> CaseExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
-	auto result = make_unique<CaseExpression>();
+	auto result = make_uniq<CaseExpression>();
 	deserializer.ReadProperty("case_checks", result->case_checks);
 	deserializer.ReadProperty("else_expr", result->else_expr);
 	return std::move(result);

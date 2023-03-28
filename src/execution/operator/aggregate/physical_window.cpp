@@ -1113,7 +1113,7 @@ WindowExecutor::WindowExecutor(BoundWindowExpression *wexpr, ClientContext &cont
 
 	//	Check for constant aggregate
 	if (IsConstantAggregate(*wexpr)) {
-		constant_aggregate = make_unique<WindowConstantAggregate>(*(wexpr->aggregate), wexpr->bind_info.get(),
+		constant_aggregate = make_uniq<WindowConstantAggregate>(*(wexpr->aggregate), wexpr->bind_info.get(),
 		                                                          wexpr->return_type, partition_mask, count);
 	}
 
@@ -1925,7 +1925,7 @@ void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, co
 	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
 		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 		auto wexpr = reinterpret_cast<BoundWindowExpression *>(op.select_list[expr_idx].get());
-		auto wexec = make_unique<WindowExecutor>(wexpr, context, partition_mask, count);
+		auto wexec = make_uniq<WindowExecutor>(wexpr, context, partition_mask, count);
 		window_execs.emplace_back(std::move(wexec));
 	}
 

@@ -111,7 +111,7 @@ void ColumnRefExpression::FormatSerialize(FormatSerializer &serializer) const {
 unique_ptr<ParsedExpression> ColumnRefExpression::FormatDeserialize(ExpressionType type,
                                                                     FormatDeserializer &deserializer) {
 	auto column_names = deserializer.ReadProperty<vector<string>>("column_names");
-	auto expression = make_unique<ColumnRefExpression>(std::move(column_names));
+	auto expression = make_uniq<ColumnRefExpression>(std::move(column_names));
 	return std::move(expression);
 }
 

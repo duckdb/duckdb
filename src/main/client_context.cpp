@@ -209,7 +209,7 @@ PreservedError ClientContext::EndQueryInternal(ClientContextLock &lock, bool suc
 }
 
 void ClientContext::CleanupInternal(ClientContextLock &lock, BaseQueryResult *result, bool invalidate_transaction) {
-	client_data->http_state = make_unique<HTTPState>();
+	client_data->http_state = make_uniq<HTTPState>();
 	if (!active_query) {
 		// no query currently active
 		return;
@@ -718,13 +718,6 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 	auto &profiler = QueryProfiler::Get(*this);
 	profiler.StartQuery(query, IsExplainAnalyze(statement ? statement.get() : prepared->unbound_statement.get()));
 
-<<<<<<< HEAD
-	if (IsExplainAnalyze(statement ? statement.get() : prepared->unbound_statement.get())) {
-		client_data->http_stats = make_uniq<HTTPStats>();
-	}
-
-=======
->>>>>>> master
 	bool invalidate_query = true;
 	try {
 		if (statement) {

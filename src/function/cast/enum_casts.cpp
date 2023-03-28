@@ -117,7 +117,7 @@ public:
 
 static unique_ptr<FunctionLocalState> InitEnumCastLocalState(CastLocalStateParameters &parameters) {
 	auto &cast_data = (EnumBoundCastData &)*parameters.cast_data;
-	auto result = make_unique<EnumCastLocalState>();
+	auto result = make_uniq<EnumCastLocalState>();
 
 	if (cast_data.from_varchar_cast.init_local_state) {
 		CastLocalStateParameters from_varchar_params(parameters, cast_data.from_varchar_cast.cast_data);

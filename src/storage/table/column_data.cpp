@@ -25,7 +25,7 @@ ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t c
     : start(start_row), count(0), block_manager(block_manager), info(info), column_index(column_index),
       type(std::move(type_p)), parent(parent), version(0) {
 	if (!parent) {
-		stats = make_unique<SegmentStatistics>(type);
+		stats = make_uniq<SegmentStatistics>(type);
 	}
 }
 
@@ -37,7 +37,7 @@ ColumnData::ColumnData(ColumnData &other, idx_t start, ColumnData *parent)
 		updates = make_uniq<UpdateSegment>(*other.updates, *this);
 	}
 	if (other.stats) {
-		stats = make_unique<SegmentStatistics>(other.stats->statistics.Copy());
+		stats = make_uniq<SegmentStatistics>(other.stats->statistics.Copy());
 	}
 	idx_t offset = 0;
 	for (auto &segment : other.data.Segments()) {

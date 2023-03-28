@@ -50,7 +50,7 @@ void PositionalReferenceExpression::FormatSerialize(FormatSerializer &serializer
 
 unique_ptr<ParsedExpression> PositionalReferenceExpression::FormatDeserialize(ExpressionType type,
                                                                               FormatDeserializer &deserializer) {
-	auto expression = make_unique<PositionalReferenceExpression>(deserializer.ReadProperty<idx_t>("index"));
+	auto expression = make_uniq<PositionalReferenceExpression>(deserializer.ReadProperty<idx_t>("index"));
 	return std::move(expression);
 }
 

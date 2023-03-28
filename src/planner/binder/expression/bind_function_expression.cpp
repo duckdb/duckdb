@@ -37,9 +37,9 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 			string error;
 			unique_ptr<ColumnRefExpression> colref;
 			if (function.catalog.empty()) {
-				colref = make_unique<ColumnRefExpression>(function.schema);
+				colref = make_uniq<ColumnRefExpression>(function.schema);
 			} else {
-				colref = make_unique<ColumnRefExpression>(function.schema, function.catalog);
+				colref = make_uniq<ColumnRefExpression>(function.schema, function.catalog);
 			}
 			auto new_colref = QualifyColumnName(*colref, error);
 			if (error.empty()) {

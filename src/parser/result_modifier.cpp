@@ -24,7 +24,7 @@ void ResultModifier::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("type", type);
 }
 
-std::unique_ptr<ResultModifier> ResultModifier::FormatDeserialize(FormatDeserializer &deserializer) {
+unique_ptr<ResultModifier> ResultModifier::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto type = deserializer.ReadProperty<ResultModifierType>("type");
 
 	unique_ptr<ResultModifier> result;
@@ -148,7 +148,7 @@ void DistinctModifier::FormatSerialize(duckdb::FormatSerializer &serializer) con
 }
 
 unique_ptr<ResultModifier> DistinctModifier::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto mod = make_unique<DistinctModifier>();
+	auto mod = make_uniq<DistinctModifier>();
 	throw NotImplementedException("");
 }
 
@@ -300,7 +300,7 @@ unique_ptr<ResultModifier> LimitPercentModifier::Deserialize(FieldReader &reader
 }
 
 unique_ptr<ResultModifier> LimitPercentModifier::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto mod = make_unique<LimitPercentModifier>();
+	auto mod = make_uniq<LimitPercentModifier>();
 	throw NotImplementedException("err");
 }
 

@@ -152,7 +152,7 @@ unique_ptr<ParsedExpression> FunctionExpression::FormatDeserialize(ExpressionTyp
 	auto catalog = deserializer.ReadProperty<string>("catalog");
 
 	unique_ptr<FunctionExpression> function;
-	function = make_unique<FunctionExpression>(catalog, schema, function_name, std::move(children), std::move(filter),
+	function = make_uniq<FunctionExpression>(catalog, schema, function_name, std::move(children), std::move(filter),
 	                                           std::move(order_bys), distinct, is_operator, export_state);
 	return std::move(function);
 }

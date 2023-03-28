@@ -91,7 +91,7 @@ void SetOperationNode::FormatSerialize(duckdb::FormatSerializer &serializer) con
 }
 
 unique_ptr<QueryNode> SetOperationNode::FormatDeserialize(duckdb::FormatDeserializer &deserializer) {
-	auto result = make_unique<SetOperationNode>();
+	auto result = make_uniq<SetOperationNode>();
 	deserializer.ReadProperty("set_op_type", result->setop_type);
 	deserializer.ReadProperty("left", result->left);
 	deserializer.ReadProperty("right", result->right);

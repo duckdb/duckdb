@@ -44,7 +44,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const string &expr) {
 	if (!rel) {
 		return nullptr;
 	}
-	auto projected_relation = make_unique<DuckDBPyRelation>(rel->Project(expr));
+	auto projected_relation = make_uniq<DuckDBPyRelation>(rel->Project(expr));
 >>>>>>> master
 	projected_relation->rel->extra_dependencies = this->rel->extra_dependencies;
 	return projected_relation;
@@ -543,7 +543,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GetAttribute(const string &name) 
 	if (!rel || !ContainsColumnByName(name)) {
 		throw InvalidInputException("This relation does not contain a column by the name of '%s'", name);
 	}
-	return make_unique<DuckDBPyRelation>(rel->Project({name}));
+	return make_uniq<DuckDBPyRelation>(rel->Project({name}));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Union(DuckDBPyRelation *other) {

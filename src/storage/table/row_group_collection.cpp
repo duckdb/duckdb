@@ -26,7 +26,7 @@ void RowGroupSegmentTree::Initialize(PersistentTableData &data) {
 	current_row_group = 0;
 	max_row_group = data.row_group_count;
 	finished_loading = false;
-	reader = make_unique<MetaBlockReader>(collection.GetBlockManager(), data.block_id);
+	reader = make_uniq<MetaBlockReader>(collection.GetBlockManager(), data.block_id);
 	reader->offset = data.offset;
 }
 
@@ -37,7 +37,7 @@ unique_ptr<RowGroup> RowGroupSegmentTree::LoadSegment() {
 	}
 	auto row_group_pointer = RowGroup::Deserialize(*reader, collection.GetTypes());
 	current_row_group++;
-	return make_unique<RowGroup>(collection, std::move(row_group_pointer));
+	return make_uniq<RowGroup>(collection, std::move(row_group_pointer));
 }
 
 //===--------------------------------------------------------------------===//

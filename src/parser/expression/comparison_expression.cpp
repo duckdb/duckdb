@@ -55,7 +55,7 @@ unique_ptr<ParsedExpression> ComparisonExpression::FormatDeserialize(ExpressionT
                                                                      FormatDeserializer &deserializer) {
 	auto left = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("left");
 	auto right = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("right");
-	return make_unique<ComparisonExpression>(type, std::move(left), std::move(right));
+	return make_uniq<ComparisonExpression>(type, std::move(left), std::move(right));
 }
 
 } // namespace duckdb

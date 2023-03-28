@@ -46,27 +46,27 @@ PhysicalProjection::CreateJoinProjection(vector<LogicalType> proj_types, const v
 
 	if (left_projection_map.empty()) {
 		for (storage_t i = 0; i < lhs_types.size(); ++i) {
-			proj_selects.emplace_back(make_unique<BoundReferenceExpression>(lhs_types[i], i));
+			proj_selects.emplace_back(make_uniq<BoundReferenceExpression>(lhs_types[i], i));
 		}
 	} else {
 		for (auto i : left_projection_map) {
-			proj_selects.emplace_back(make_unique<BoundReferenceExpression>(lhs_types[i], i));
+			proj_selects.emplace_back(make_uniq<BoundReferenceExpression>(lhs_types[i], i));
 		}
 	}
 	const auto left_cols = lhs_types.size();
 
 	if (right_projection_map.empty()) {
 		for (storage_t i = 0; i < rhs_types.size(); ++i) {
-			proj_selects.emplace_back(make_unique<BoundReferenceExpression>(rhs_types[i], left_cols + i));
+			proj_selects.emplace_back(make_uniq<BoundReferenceExpression>(rhs_types[i], left_cols + i));
 		}
 
 	} else {
 		for (auto i : right_projection_map) {
-			proj_selects.emplace_back(make_unique<BoundReferenceExpression>(rhs_types[i], left_cols + i));
+			proj_selects.emplace_back(make_uniq<BoundReferenceExpression>(rhs_types[i], left_cols + i));
 		}
 	}
 
-	return make_unique<PhysicalProjection>(std::move(proj_types), std::move(proj_selects), estimated_cardinality);
+	return make_uniq<PhysicalProjection>(std::move(proj_types), std::move(proj_selects), estimated_cardinality);
 }
 
 string PhysicalProjection::ParamsToString() const {

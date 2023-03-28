@@ -21,7 +21,7 @@ unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastIn
 
 unique_ptr<FunctionLocalState> StructBoundCastData::InitStructCastLocalState(CastLocalStateParameters &parameters) {
 	auto &cast_data = (StructBoundCastData &)*parameters.cast_data;
-	auto result = make_unique<StructCastLocalState>();
+	auto result = make_uniq<StructCastLocalState>();
 
 	for (auto &entry : cast_data.child_cast_info) {
 		unique_ptr<FunctionLocalState> child_state;
