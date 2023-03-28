@@ -73,7 +73,6 @@ jobs:
       shell: bash
       run: make unittestci
 
-
  force-storage:
     name: Force Storage
     runs-on: ubuntu-20.04
@@ -115,6 +114,10 @@ jobs:
     - name: Test
       shell: bash
       run: build/reldebug/test/unittest --force-storage
+
+    - name: Build command log
+      shell: bash
+      run: build/reldebug/test/unittest --log-commands 2>commands && ls -la commands
 
  force-restart:
     name: Force Restart
