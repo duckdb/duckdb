@@ -5,7 +5,6 @@
 
 #include "boolean_column_reader.hpp"
 #include "cast_column_reader.hpp"
-#include "generated_column_reader.hpp"
 #include "row_number_column_reader.hpp"
 #include "callback_column_reader.hpp"
 #include "parquet_decimal_utils.hpp"
@@ -896,22 +895,6 @@ void ListColumnReader::ApplyPendingSkips(idx_t num_values) {
 	if (read != num_values) {
 		throw InternalException("Not all skips done!");
 	}
-}
-
-//===--------------------------------------------------------------------===//
-// Generated Constant Column Reader
-//===--------------------------------------------------------------------===//
-GeneratedConstantColumnReader::GeneratedConstantColumnReader(ParquetReader &reader, LogicalType type_p,
-                                                             const SchemaElement &schema_p, idx_t schema_idx_p,
-                                                             idx_t max_define_p, idx_t max_repeat_p, Value constant_p)
-    : ColumnReader(reader, std::move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p),
-      constant(std::move(constant_p)) {
-}
-idx_t GeneratedConstantColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out,
-                                          uint8_t *repeat_out, Vector &result) {
-	result.SetValue(0, constant);
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	return num_values;
 }
 
 //===--------------------------------------------------------------------===//

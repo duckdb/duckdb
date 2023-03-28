@@ -4,7 +4,6 @@
 #include "column_reader.hpp"
 
 #include "boolean_column_reader.hpp"
-#include "generated_column_reader.hpp"
 #include "row_number_column_reader.hpp"
 #include "cast_column_reader.hpp"
 #include "callback_column_reader.hpp"
