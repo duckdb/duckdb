@@ -4,6 +4,7 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/multi_file_reader.hpp"
 
 namespace duckdb {
 
@@ -11,11 +12,6 @@ JSONScanData::JSONScanData() {
 }
 
 unique_ptr<FunctionData> JSONScanData::Bind(ClientContext &context, TableFunctionBindInput &input) {
-	auto &config = DBConfig::GetConfig(context);
-	if (!config.options.enable_external_access) {
-		throw PermissionException("Scanning JSON files is disabled through configuration");
-	}
-
 	auto result = make_unique<JSONScanData>();
 	auto &options = result->options;
 
@@ -24,16 +20,7 @@ unique_ptr<FunctionData> JSONScanData::Bind(ClientContext &context, TableFunctio
 	options.format = info.format;
 	result->record_type = info.record_type;
 	result->auto_detect = info.auto_detect;
-
-	vector<string> patterns;
-	if (input.inputs[0].type().id() == LogicalTypeId::LIST) { // List of globs
-		for (auto &val : ListValue::GetChildren(input.inputs[0])) {
-			patterns.push_back(StringValue::Get(val));
-		}
-	} else { // Single glob pattern
-		patterns.push_back(StringValue::Get(input.inputs[0]));
-	}
-	InitializeFilePaths(context, patterns, result->file_paths);
+	result->file_paths = MultiFileReader::GetFileList(context, input.inputs[0], "JSON");
 
 	for (auto &kv : input.named_parameters) {
 		auto loption = StringUtil::Lower(kv.first);
@@ -69,15 +56,6 @@ unique_ptr<FunctionData> JSONScanData::Bind(ClientContext &context, TableFunctio
 	}
 
 	return std::move(result);
-}
-
-void JSONScanData::InitializeFilePaths(ClientContext &context, const vector<string> &patterns,
-                                       vector<string> &file_paths) {
-	auto &fs = FileSystem::GetFileSystem(context);
-	for (auto &file_pattern : patterns) {
-		auto found_files = fs.GlobFiles(file_pattern, context);
-		file_paths.insert(file_paths.end(), found_files.begin(), found_files.end());
-	}
 }
 
 void JSONScanData::InitializeFormats() {
