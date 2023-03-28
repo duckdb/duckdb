@@ -293,6 +293,9 @@ void TupleDataCollection::ListWithinListComputeHeapSizes(Vector &heap_sizes_v, V
 	auto &combined_list_entries = combined_list_data.combined_list_entries;
 	const auto child_list_child_count = ListVector::GetListSize(source_v);
 	SelectionVector combined_sel(child_list_child_count);
+	for (idx_t i = 0; i < child_list_child_count; i++) {
+		combined_sel.set_index(i, 0);
+	}
 	idx_t combined_list_offset = 0;
 
 	for (idx_t i = 0; i < append_count; i++) {
