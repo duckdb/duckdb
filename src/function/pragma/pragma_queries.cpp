@@ -1,8 +1,11 @@
+#include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/pragma/pragma_functions.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
@@ -15,7 +18,27 @@ string PragmaTableInfo(ClientContext &context, const FunctionParameters &paramet
 }
 
 string PragmaShowTables(ClientContext &context, const FunctionParameters &parameters) {
-	return "SELECT name FROM sqlite_master ORDER BY name;";
+	auto catalog = DatabaseManager::GetDefaultDatabase(context);
+	auto schema = ClientData::Get(context).catalog_search_path->GetDefault().schema;
+	schema = (schema == INVALID_SCHEMA) ? DEFAULT_SCHEMA : schema; // NOLINT
+
+	auto where_clause =
+	    StringUtil::Join({"where database_name = '", catalog, "' and schema_name = '", schema, "'"}, "");
+	// clang-format off
+	auto pragma_query = StringUtil::Join(
+	    {"with tables as (", 
+						"	SELECT table_name as name FROM duckdb_tables ", where_clause, 
+			 "), views as (",
+						"	SELECT view_name as name FROM duckdb_views ", where_clause, 
+			 "), indexes as (",
+						"	SELECT index_name as name FROM duckdb_indexes ", where_clause, 
+			 "), db_objects as (",
+						"	SELECT name FROM tables UNION ALL SELECT name FROM views UNION ALL SELECT name FROM indexes",
+	     ") SELECT name FROM db_objects ORDER BY name;"
+			}, "");
+	// clang-format on
+
+	return pragma_query;
 }
 
 string PragmaShowTablesExpanded(ClientContext &context, const FunctionParameters &parameters) {
