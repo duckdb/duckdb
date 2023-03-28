@@ -1,4 +1,5 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/common/serializer/enum_serializer.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -243,28 +244,30 @@ static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunct
 	return make_unique<ListSortBindData>(order, null_order, bound_function.return_type, child_type, context);
 }
 
-OrderByNullType GetNullOrder(ClientContext &context, vector<unique_ptr<Expression>> &arguments, idx_t idx) {
+static OrderByNullType GetNullOrder(ClientContext &context, vector<unique_ptr<Expression>> &arguments, idx_t idx) {
 
 	if (!arguments[idx]->IsFoldable()) {
 		throw InvalidInputException("Null sorting order must be a constant");
 	}
 	Value null_order_value = ExpressionExecutor::EvaluateScalar(context, *arguments[idx]);
 	auto null_order_name = StringUtil::Upper(null_order_value.ToString());
-	if (null_order_name != "NULLS FIRST" && null_order_name != "NULLS LAST") {
-		throw InvalidInputException("Null sorting order must be either NULLS FIRST or NULLS LAST");
+	const auto null_order_arg = EnumSerializer::StringToEnum<OrderByNullType>(null_order_name.c_str());
+	switch (null_order_arg) {
+	case OrderByNullType::NULLS_FIRST:
+	case OrderByNullType::NULLS_LAST:
+		return null_order_arg;
+	case OrderByNullType::ORDER_DEFAULT:
+		return DBConfig::GetConfig(context).options.default_null_order;
+	default:
+		throw InvalidInputException("Null sorting order must be either NULLS FIRST, NULLS LAST or DEFAULT");
 	}
-
-	if (null_order_name == "NULLS LAST") {
-		return OrderByNullType::NULLS_LAST;
-	}
-	return OrderByNullType::NULLS_FIRST;
 }
 
 static unique_ptr<FunctionData> ListNormalSortBind(ClientContext &context, ScalarFunction &bound_function,
                                                    vector<unique_ptr<Expression>> &arguments) {
 
-	D_ASSERT(bound_function.arguments.size() >= 1 && bound_function.arguments.size() <= 3);
-	D_ASSERT(arguments.size() >= 1 && arguments.size() <= 3);
+	D_ASSERT(!bound_function.arguments.empty() && bound_function.arguments.size() <= 3);
+	D_ASSERT(!arguments.empty() && arguments.size() <= 3);
 
 	// set default values
 	auto &config = DBConfig::GetConfig(context);
@@ -278,14 +281,18 @@ static unique_ptr<FunctionData> ListNormalSortBind(ClientContext &context, Scala
 			throw InvalidInputException("Sorting order must be a constant");
 		}
 		Value order_value = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
-		auto order_name = StringUtil::Upper(order_value.ToString());
-		if (order_name != "DESC" && order_name != "ASC") {
-			throw InvalidInputException("Sorting order must be either ASC or DESC");
-		}
-		if (order_name == "DESC") {
-			order = OrderType::DESCENDING;
-		} else {
-			order = OrderType::ASCENDING;
+
+		const auto order_name = StringUtil::Upper(order_value.ToString());
+		const auto order_arg = EnumSerializer::StringToEnum<OrderType>(order_name.c_str());
+		switch (order_arg) {
+		case OrderType::ASCENDING:
+		case OrderType::DESCENDING:
+			order = order_arg;
+			break;
+		case OrderType::ORDER_DEFAULT:
+			break;
+		default:
+			throw InvalidInputException("Sorting order must be either ASC, DESC or DEFAULT");
 		}
 	}
 

@@ -424,7 +424,7 @@ bool Deliminator::RemoveInequalityCandidate(unique_ptr<LogicalOperator> *plan, u
 			parent_expr =
 			    make_unique<BoundColumnRefExpression>(parent_expr->alias, parent_expr->return_type, it->first);
 			parent_cond.comparison =
-			    parent_delim_get_side == 0 ? child_cond.comparison : FlipComparisionExpression(child_cond.comparison);
+			    parent_delim_get_side == 0 ? child_cond.comparison : FlipComparisonExpression(child_cond.comparison);
 			break;
 		}
 	}

@@ -122,7 +122,8 @@ struct ParquetWriteGlobalState : public GlobalFunctionData {
 };
 
 struct ParquetWriteLocalState : public LocalFunctionData {
-	explicit ParquetWriteLocalState(ClientContext &context, const vector<LogicalType> &types) : buffer(context, types) {
+	explicit ParquetWriteLocalState(ClientContext &context, const vector<LogicalType> &types)
+	    : buffer(Allocator::Get(context), types) {
 	}
 
 	ColumnDataCollection buffer;
@@ -354,6 +355,7 @@ public:
 		return_types.assign(union_col_types.begin(), union_col_types.end());
 		result->SetInitialReader(result->union_readers[0]);
 		D_ASSERT(names.size() == return_types.size());
+		result->types = union_col_types;
 
 		return std::move(result);
 	}

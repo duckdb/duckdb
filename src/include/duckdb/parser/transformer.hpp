@@ -42,7 +42,7 @@ class Transformer {
 	struct CreatePivotEntry {
 		string enum_name;
 		unique_ptr<SelectNode> base;
-		string column_name;
+		unique_ptr<ParsedExpression> column;
 	};
 
 public:
@@ -71,8 +71,11 @@ private:
 	vector<unique_ptr<CreatePivotEntry>> pivot_entries;
 	//! Sets of stored CTEs, if any
 	vector<CommonTableExpressionMap *> stored_cte_map;
+	//! Whether or not we are currently binding a window definition
+	bool in_window_definition = false;
 
 	void Clear();
+	bool InWindowDefinition();
 
 	void SetParamCount(idx_t new_count) {
 		if (parent) {
@@ -105,7 +108,7 @@ private:
 		return parent ? parent->HasNamedParameters() : !named_param_map.empty();
 	}
 
-	void AddPivotEntry(string enum_name, unique_ptr<SelectNode> source, string column_name);
+	void AddPivotEntry(string enum_name, unique_ptr<SelectNode> source, unique_ptr<ParsedExpression> column);
 	unique_ptr<SQLStatement> GenerateCreateEnumStmt(unique_ptr<CreatePivotEntry> entry);
 	bool HasPivotEntries();
 	idx_t PivotEntryCount();

@@ -54,8 +54,16 @@ date_t ParquetIntToDate(const int32_t &raw_date) {
 	return date_t(raw_date);
 }
 
+dtime_t ParquetIntToTimeMs(const int64_t &raw_time) {
+	return Time::FromTimeMs(raw_time);
+}
+
 dtime_t ParquetIntToTime(const int64_t &raw_time) {
 	return dtime_t(raw_time);
+}
+
+dtime_t ParquetIntToTimeNs(const int64_t &raw_time) {
+	return Time::FromTimeNs(raw_time);
 }
 
 } // namespace duckdb

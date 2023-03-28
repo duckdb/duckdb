@@ -5,6 +5,9 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
+
 namespace duckdb {
 
 ColumnRefExpression::ColumnRefExpression(string column_name, string table_name)
@@ -96,6 +99,18 @@ void ColumnRefExpression::Serialize(FieldWriter &writer) const {
 
 unique_ptr<ParsedExpression> ColumnRefExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto column_names = reader.ReadRequiredList<string>();
+	auto expression = make_unique<ColumnRefExpression>(std::move(column_names));
+	return std::move(expression);
+}
+
+void ColumnRefExpression::FormatSerialize(FormatSerializer &serializer) const {
+	ParsedExpression::FormatSerialize(serializer);
+	serializer.WriteProperty("column_names", column_names);
+}
+
+unique_ptr<ParsedExpression> ColumnRefExpression::FormatDeserialize(ExpressionType type,
+                                                                    FormatDeserializer &deserializer) {
+	auto column_names = deserializer.ReadProperty<vector<string>>("column_names");
 	auto expression = make_unique<ColumnRefExpression>(std::move(column_names));
 	return std::move(expression);
 }

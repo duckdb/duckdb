@@ -191,10 +191,13 @@ vector<string> StringUtil::Split(const string &input, const string &split) {
 
 		// Push the substring [last, next) on to splits
 		string substr = input.substr(last, next - last);
-		if (substr.empty() == false) {
+		if (!substr.empty()) {
 			splits.push_back(substr);
 		}
 		last = next + split_len;
+	}
+	if (splits.empty()) {
+		splits.push_back(input);
 	}
 	return splits;
 }

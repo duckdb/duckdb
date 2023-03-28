@@ -34,7 +34,9 @@ BaseStatistics StructStats::CreateEmpty(LogicalType type) {
 }
 
 const BaseStatistics *StructStats::GetChildStats(const BaseStatistics &stats) {
-	D_ASSERT(stats.GetStatsType() == StatisticsType::STRUCT_STATS);
+	if (stats.GetStatsType() != StatisticsType::STRUCT_STATS) {
+		throw InternalException("Calling StructStats::GetChildStats on stats that is not a struct");
+	}
 	return stats.child_stats.get();
 }
 

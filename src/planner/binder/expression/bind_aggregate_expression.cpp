@@ -7,7 +7,7 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
-#include "duckdb/planner/expression_binder/select_binder.hpp"
+#include "duckdb/planner/expression_binder/base_select_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
@@ -81,7 +81,7 @@ static void NegatePercentileFractions(ClientContext &context, unique_ptr<ParsedE
 	}
 }
 
-BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry *func, idx_t depth) {
+BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry *func, idx_t depth) {
 	// first bind the child of the aggregate expression (if any)
 	this->bound_aggregate = true;
 	unique_ptr<Expression> bound_filter;
@@ -219,7 +219,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 			const auto null_order = (order.null_order == OrderByNullType::ORDER_DEFAULT)
 			                            ? config.options.default_null_order
 			                            : order.null_order;
-			order_bys->orders.emplace_back(BoundOrderByNode(sense, null_order, std::move(order_expr.expr)));
+			order_bys->orders.emplace_back(sense, null_order, std::move(order_expr.expr));
 		}
 	}
 

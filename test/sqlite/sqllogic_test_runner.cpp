@@ -81,14 +81,18 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath) {
 	// now re-open the current database
 
 	db = make_unique<DuckDB>(dbpath, config.get());
-	con = make_unique<Connection>(*db);
-	if (enable_verification) {
-		con->EnableQueryVerification();
-	}
+	Reconnect();
 
 	// load any previously loaded extensions again
 	for (auto &extension : extensions) {
 		ExtensionHelper::LoadExtension(*db, extension);
+	}
+}
+
+void SQLLogicTestRunner::Reconnect() {
+	con = make_unique<Connection>(*db);
+	if (enable_verification) {
+		con->EnableQueryVerification();
 	}
 }
 
@@ -575,8 +579,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				parser.Fail("cannot restart an in-memory database, did you forget to call \"load\"?");
 			}
 			// restart the current database
-			// first clear all connections
 			auto command = make_unique<RestartCommand>(*this);
+			ExecuteCommand(std::move(command));
+		} else if (token.type == SQLLogicTokenType::SQLLOGIC_RECONNECT) {
+			auto command = make_unique<ReconnectCommand>(*this);
 			ExecuteCommand(std::move(command));
 		}
 	}

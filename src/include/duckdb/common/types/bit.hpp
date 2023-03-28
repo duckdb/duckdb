@@ -25,7 +25,6 @@ public:
 	//! Extracts the nth bit from bit string; the first (leftmost) bit is indexed 0
 	DUCKDB_API static idx_t GetBit(string_t bit_string, idx_t n);
 	//! Sets the nth bit in bit string to newvalue; the first (leftmost) bit is indexed 0
-	DUCKDB_API static void SetBit(const string_t &bit_string, idx_t n, idx_t new_value, string_t &result);
 	DUCKDB_API static void SetBit(string_t &bit_string, idx_t n, idx_t new_value);
 	//! Returns first starting index of the specified substring within bits, or zero if it's not present.
 	DUCKDB_API static idx_t BitPosition(string_t substring, string_t bits);
@@ -37,7 +36,7 @@ public:
 	DUCKDB_API static bool TryGetBitStringSize(string_t str, idx_t &result_size, string *error_message);
 	//! Convert a string to a bit. This function should ONLY be called after calling GetBitSize, since it does NOT
 	//! perform data validation.
-	DUCKDB_API static void ToBit(string_t str, data_ptr_t output);
+	DUCKDB_API static void ToBit(string_t str, string_t &output);
 	DUCKDB_API static string ToBit(string_t str);
 	//! Creates a new bitstring of determined length
 	DUCKDB_API static void BitString(const string_t &input, const idx_t &len, string_t &result);
@@ -52,10 +51,12 @@ public:
 	DUCKDB_API static void BitwiseXor(const string_t &rhs, const string_t &lhs, string_t &result);
 	DUCKDB_API static void BitwiseNot(const string_t &rhs, string_t &result);
 
+	DUCKDB_API static void Verify(const string_t &input);
+
 private:
-	//! Returns the amount of padded zeroes to fill up to a full byte. This information is stored in the first byte of
-	//! the bitstring.
-	DUCKDB_API static idx_t GetPadding(const string_t &bit_string);
-	DUCKDB_API static idx_t GetBitSize(string_t str);
+	static void Finalize(string_t &str);
+	static idx_t GetBitInternal(string_t bit_string, idx_t n);
+	static void SetBitInternal(string_t &bit_string, idx_t n, idx_t new_value);
+	static idx_t GetBitIndex(idx_t n);
 };
 } // namespace duckdb

@@ -155,23 +155,28 @@ void GroupedAggregateHashTable::VerifyInternal() {
 	D_ASSERT(count == entries);
 }
 
-idx_t GroupedAggregateHashTable::MaxCapacity() {
-	idx_t max_pages = 0;
-	idx_t max_tuples = 0;
+idx_t GroupedAggregateHashTable::GetMaxCapacity(HtEntryType entry_type, idx_t tuple_size) {
+	idx_t max_pages;
+	idx_t max_tuples;
 
 	switch (entry_type) {
 	case HtEntryType::HT_WIDTH_32:
 		max_pages = NumericLimits<uint8_t>::Maximum();
 		max_tuples = NumericLimits<uint16_t>::Maximum();
 		break;
-	default:
-		D_ASSERT(entry_type == HtEntryType::HT_WIDTH_64);
+	case HtEntryType::HT_WIDTH_64:
 		max_pages = NumericLimits<uint32_t>::Maximum();
 		max_tuples = NumericLimits<uint16_t>::Maximum();
 		break;
+	default:
+		throw InternalException("Unsupported hash table width");
 	}
 
 	return max_pages * MinValue(max_tuples, (idx_t)Storage::BLOCK_SIZE / tuple_size);
+}
+
+idx_t GroupedAggregateHashTable::MaxCapacity() {
+	return GetMaxCapacity(entry_type, tuple_size);
 }
 
 void GroupedAggregateHashTable::Verify() {
