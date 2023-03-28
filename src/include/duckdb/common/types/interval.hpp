@@ -101,8 +101,44 @@ public:
 	static dtime_t Add(dtime_t left, interval_t right, date_t &date);
 
 	//! Comparison operators
-	static bool Equals(interval_t left, interval_t right);
-	static bool GreaterThan(interval_t left, interval_t right);
-	static bool GreaterThanEquals(interval_t left, interval_t right);
+	inline static bool Equals(const interval_t &left, const interval_t &right);
+	inline static bool GreaterThan(const interval_t &left, const interval_t &right);
 };
+static void NormalizeIntervalEntries(interval_t input, int64_t &months, int64_t &days, int64_t &micros) {
+	int64_t extra_months_d = input.days / Interval::DAYS_PER_MONTH;
+	int64_t extra_months_micros = input.micros / Interval::MICROS_PER_MONTH;
+	input.days -= extra_months_d * Interval::DAYS_PER_MONTH;
+	input.micros -= extra_months_micros * Interval::MICROS_PER_MONTH;
+
+	int64_t extra_days_micros = input.micros / Interval::MICROS_PER_DAY;
+	input.micros -= extra_days_micros * Interval::MICROS_PER_DAY;
+
+	months = input.months + extra_months_d + extra_months_micros;
+	days = input.days + extra_days_micros;
+	micros = input.micros;
+}
+
+bool Interval::Equals(const interval_t &left, const interval_t &right) {
+	return left.months == right.months && left.days == right.days && left.micros == right.micros;
+}
+
+bool Interval::GreaterThan(const interval_t &left, const interval_t &right) {
+	int64_t lmonths, ldays, lmicros;
+	int64_t rmonths, rdays, rmicros;
+	NormalizeIntervalEntries(left, lmonths, ldays, lmicros);
+	NormalizeIntervalEntries(right, rmonths, rdays, rmicros);
+
+	if (lmonths > rmonths) {
+		return true;
+	} else if (lmonths < rmonths) {
+		return false;
+	}
+	if (ldays > rdays) {
+		return true;
+	} else if (ldays < rdays) {
+		return false;
+	}
+	return lmicros > rmicros;
+}
+
 } // namespace duckdb

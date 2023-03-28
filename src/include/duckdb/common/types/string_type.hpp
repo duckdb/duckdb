@@ -10,6 +10,7 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/helper.hpp"
 
 #include <cstring>
 
@@ -117,10 +118,79 @@ public:
 
 	void Verify() const;
 	void VerifyNull() const;
+
+	struct StringComparisonOperators {
+		static inline bool Equals(const string_t &a, const string_t &b) {
+#ifdef DUCKDB_DEBUG_NO_INLINE
+			if (a.GetSize() != b.GetSize())
+				return false;
+			return (memcmp(a.GetDataUnsafe(), b.GetDataUnsafe(), a.GetSize()) == 0);
+#endif
+			uint64_t A = Load<uint64_t>((const_data_ptr_t)&a);
+			uint64_t B = Load<uint64_t>((const_data_ptr_t)&b);
+			if (A != B) {
+				// Either length or prefix are different -> not equal
+				return false;
+			}
+			// they have the same length and same prefix!
+			A = Load<uint64_t>((const_data_ptr_t)&a + 8u);
+			B = Load<uint64_t>((const_data_ptr_t)&b + 8u);
+			if (A == B) {
+				// either they are both inlined (so compare equal) or point to the same string (so compare equal)
+				return true;
+			}
+			if (!a.IsInlined()) {
+				// 'long' strings of the same length -> compare pointed value
+				if (memcmp(a.value.pointer.ptr, b.value.pointer.ptr, a.GetSize()) == 0) {
+					return true;
+				}
+			}
+			// either they are short string of same length but different content
+			//     or they point to string with different content
+			//     either way, they can't represent the same underlying string
+			return false;
+		}
+		// compare up to shared length. if still the same, compare lengths
+		static bool GreaterThan(const string_t &left, const string_t &right) {
+			const uint32_t left_length = left.GetSize();
+			const uint32_t right_length = right.GetSize();
+			const uint32_t min_length = std::min<uint32_t>(left_length, right_length);
+
+#ifndef DUCKDB_DEBUG_NO_INLINE
+			uint32_t A = Load<uint32_t>((const_data_ptr_t)left.GetPrefix());
+			uint32_t B = Load<uint32_t>((const_data_ptr_t)right.GetPrefix());
+
+			// Utility to move 0xa1b2c3d4 into 0xd4c3b2a1, basically inverting the order byte-a-byte
+			auto bswap = [](uint32_t v) -> uint32_t {
+				uint32_t t1 = (v >> 16u) | (v << 16u);
+				uint32_t t2 = t1 & 0x00ff00ff;
+				uint32_t t3 = t1 & 0xff00ff00;
+				return (t2 << 8u) | (t3 >> 8u);
+			};
+
+			// Check on prefix -----
+			// We dont' need to mask since:
+			//	if the prefix is greater(after bswap), it will stay greater regardless of the extra bytes
+			// 	if the prefix is smaller(after bswap), it will stay smaller regardless of the extra bytes
+			//	if the prefix is equal, the extra bytes are guaranteed to be /0 for the shorter one
+
+			if (A != B)
+				return bswap(A) > bswap(B);
+#endif
+			auto memcmp_res = memcmp(left.GetDataUnsafe(), right.GetDataUnsafe(), min_length);
+			return memcmp_res > 0 || (memcmp_res == 0 && left_length > right_length);
+		}
+	};
+
+	bool operator==(const string_t &r) const {
+		return StringComparisonOperators::Equals(*this, r);
+	}
+
+	bool operator>(const string_t &r) const {
+		return StringComparisonOperators::GreaterThan(*this, r);
+	}
 	bool operator<(const string_t &r) const {
-		auto this_str = this->GetString();
-		auto r_str = r.GetString();
-		return this_str < r_str;
+		return r > *this;
 	}
 
 private:

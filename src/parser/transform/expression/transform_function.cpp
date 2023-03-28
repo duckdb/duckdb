@@ -1,7 +1,9 @@
+#include "duckdb/common/serializer/enum_serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 
 #include "duckdb/parser/expression/operator_expression.hpp"
@@ -310,6 +312,26 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		coalesce_op->children.push_back(std::move(children[0]));
 		coalesce_op->children.push_back(std::move(children[1]));
 		return std::move(coalesce_op);
+	} else if (lowercase_name == "list" && order_bys->orders.size() == 1) {
+		// list(expr ORDER BY expr <sense> <nulls>) => list_sort(list(expr), <sense>, <nulls>)
+		if (children.size() != 1) {
+			throw ParserException("Wrong number of arguments to LIST.");
+		}
+		auto arg_expr = children[0].get();
+		auto &order_by = order_bys->orders[0];
+		if (arg_expr->Equals(order_by.expression.get())) {
+			auto sense = make_unique<ConstantExpression>(EnumSerializer::EnumToString(order_by.type));
+			auto nulls = make_unique<ConstantExpression>(EnumSerializer::EnumToString(order_by.null_order));
+			order_bys = nullptr;
+			auto unordered = make_unique<FunctionExpression>(
+			    catalog, schema, lowercase_name.c_str(), std::move(children), std::move(filter_expr),
+			    std::move(order_bys), root->agg_distinct, false, root->export_state);
+			lowercase_name = "list_sort";
+			children.clear();
+			children.emplace_back(std::move(unordered));
+			children.emplace_back(std::move(sense));
+			children.emplace_back(std::move(nulls));
+		}
 	}
 
 	auto function = make_unique<FunctionExpression>(std::move(catalog), std::move(schema), lowercase_name.c_str(),

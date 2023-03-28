@@ -110,6 +110,12 @@ struct list_entry_t {
 	list_entry_t() = default;
 	list_entry_t(uint64_t offset, uint64_t length) : offset(offset), length(length) {
 	}
+	inline constexpr bool operator != (const list_entry_t &other) const {
+		return !(*this == other);
+	}
+	inline constexpr bool operator == (const list_entry_t &other) const {
+		return offset == other.offset && length == other.length;
+	}
 
 	uint64_t offset;
 	uint64_t length;

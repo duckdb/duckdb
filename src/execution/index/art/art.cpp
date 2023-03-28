@@ -13,11 +13,24 @@
 #include "duckdb/execution/index/art/node48.hpp"
 #include "duckdb/execution/index/art/node256.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 #include <algorithm>
 #include <cstring>
 
 namespace duckdb {
+
+struct ARTIndexScanState : public IndexScanState {
+
+	//! Scan predicates (single predicate scan or range scan)
+	Value values[2];
+	//! Expressions of the scan predicates
+	ExpressionType expressions[2];
+	bool checked = false;
+	//! All scanned row IDs
+	vector<row_t> result_ids;
+	Iterator iterator;
+};
 
 ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
          const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type,
@@ -651,6 +664,7 @@ bool ART::SearchEqual(Key &key, idx_t max_count, vector<row_t> &result_ids) {
 }
 
 void ART::SearchEqualJoinNoFetch(Key &key, idx_t &result_size) {
+	result_size = 0;
 
 	// we need to look for a leaf
 	auto leaf = Lookup(tree, key, 0);

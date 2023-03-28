@@ -61,7 +61,6 @@ integers
 select
 t2
 tbl
-tbl
 v1
 
 query T
@@ -70,7 +69,6 @@ DESCRIBE TABLES
 integers
 select
 t2
-tbl
 tbl
 v1
 
@@ -81,7 +79,6 @@ PRAGMA show_tables
 integers
 select
 t2
-tbl
 tbl
 v1
 

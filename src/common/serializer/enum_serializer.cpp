@@ -24,11 +24,11 @@ template <>
 OrderType EnumSerializer::StringToEnum(const char *value) {
 	if (StringUtil::Equals(value, "INVALID")) {
 		return OrderType::INVALID;
-	} else if (StringUtil::Equals(value, "ORDER_DEFAULT")) {
+	} else if (StringUtil::Equals(value, "ORDER_DEFAULT") || StringUtil::Equals(value, "DEFAULT")) {
 		return OrderType::ORDER_DEFAULT;
-	} else if (StringUtil::Equals(value, "ASCENDING")) {
+	} else if (StringUtil::Equals(value, "ASCENDING") || StringUtil::Equals(value, "ASC")) {
 		return OrderType::ASCENDING;
-	} else if (StringUtil::Equals(value, "DESCENDING")) {
+	} else if (StringUtil::Equals(value, "DESCENDING") || StringUtil::Equals(value, "DESC")) {
 		return OrderType::DESCENDING;
 	} else {
 		throw NotImplementedException("FromString not implemented for enum value");
@@ -58,11 +58,11 @@ template <>
 OrderByNullType EnumSerializer::StringToEnum(const char *value) {
 	if (StringUtil::Equals(value, "INVALID")) {
 		return OrderByNullType::INVALID;
-	} else if (StringUtil::Equals(value, "ORDER_DEFAULT")) {
+	} else if (StringUtil::Equals(value, "ORDER_DEFAULT") || StringUtil::Equals(value, "DEFAULT")) {
 		return OrderByNullType::ORDER_DEFAULT;
-	} else if (StringUtil::Equals(value, "NULLS_FIRST")) {
+	} else if (StringUtil::Equals(value, "NULLS_FIRST") || StringUtil::Equals(value, "NULLS FIRST")) {
 		return OrderByNullType::NULLS_FIRST;
-	} else if (StringUtil::Equals(value, "NULLS_LAST")) {
+	} else if (StringUtil::Equals(value, "NULLS_LAST") || StringUtil::Equals(value, "NULLS LAST")) {
 		return OrderByNullType::NULLS_LAST;
 	} else {
 		throw NotImplementedException("FromString not implemented for enum value");
@@ -236,6 +236,8 @@ JoinRefType EnumSerializer::StringToEnum(const char *value) {
 		return JoinRefType::CROSS;
 	} else if (StringUtil::Equals(value, "POSITIONAL")) {
 		return JoinRefType::POSITIONAL;
+	} else if (StringUtil::Equals(value, "ASOF")) {
+		return JoinRefType::ASOF;
 	} else {
 		throw NotImplementedException("EnumSerializer::StringToEnum not implemented for enum value");
 	}
@@ -252,6 +254,8 @@ const char *EnumSerializer::EnumToString(JoinRefType value) {
 		return "CROSS";
 	case JoinRefType::POSITIONAL:
 		return "POSITIONAL";
+	case JoinRefType::ASOF:
+		return "ASOF";
 	default:
 		throw NotImplementedException("ToString not implemented for enum value");
 	}

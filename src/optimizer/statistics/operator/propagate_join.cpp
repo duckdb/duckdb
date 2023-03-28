@@ -195,6 +195,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 	switch (join.type) {
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 		PropagateStatistics((LogicalComparisonJoin &)join, node_ptr);
 		break;
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:

@@ -994,7 +994,10 @@ void WindowBoundariesState::Update(const idx_t row_idx, WindowInputColumn &range
 }
 
 struct WindowExecutor {
-	WindowExecutor(BoundWindowExpression *wexpr, ClientContext &context, const idx_t count);
+	static bool IsConstantAggregate(const BoundWindowExpression &wexpr);
+
+	WindowExecutor(BoundWindowExpression *wexpr, ClientContext &context, const ValidityMask &partition_mask,
+	               const idx_t count);
 
 	void Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count);
 	void Finalize(WindowAggregationMode mode);
@@ -1038,9 +1041,67 @@ struct WindowExecutor {
 	// build a segment tree for frame-adhering aggregates
 	// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
 	unique_ptr<WindowSegmentTree> segment_tree = nullptr;
+
+	// all aggregate values are the same for each partition
+	unique_ptr<WindowConstantAggregate> constant_aggregate = nullptr;
 };
 
-WindowExecutor::WindowExecutor(BoundWindowExpression *wexpr, ClientContext &context, const idx_t count)
+bool WindowExecutor::IsConstantAggregate(const BoundWindowExpression &wexpr) {
+	if (!wexpr.aggregate) {
+		return false;
+	}
+
+	//	COUNT(*) is already handled efficiently by segment trees.
+	if (wexpr.children.empty()) {
+		return false;
+	}
+
+	/*
+	    The default framing option is RANGE UNBOUNDED PRECEDING, which
+	    is the same as RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT
+	    ROW; it sets the frame to be all rows from the partition start
+	    up through the current row's last peer (a row that the window's
+	    ORDER BY clause considers equivalent to the current row; all
+	    rows are peers if there is no ORDER BY). In general, UNBOUNDED
+	    PRECEDING means that the frame starts with the first row of the
+	    partition, and similarly UNBOUNDED FOLLOWING means that the
+	    frame ends with the last row of the partition, regardless of
+	    RANGE, ROWS or GROUPS mode. In ROWS mode, CURRENT ROW means that
+	    the frame starts or ends with the current row; but in RANGE or
+	    GROUPS mode it means that the frame starts or ends with the
+	    current row's first or last peer in the ORDER BY ordering. The
+	    offset PRECEDING and offset FOLLOWING options vary in meaning
+	    depending on the frame mode.
+	*/
+	switch (wexpr.start) {
+	case WindowBoundary::UNBOUNDED_PRECEDING:
+		break;
+	case WindowBoundary::CURRENT_ROW_RANGE:
+		if (!wexpr.orders.empty()) {
+			return false;
+		}
+		break;
+	default:
+		return false;
+	}
+
+	switch (wexpr.end) {
+	case WindowBoundary::UNBOUNDED_FOLLOWING:
+		break;
+	case WindowBoundary::CURRENT_ROW_RANGE:
+		if (!wexpr.orders.empty()) {
+			return false;
+		}
+		break;
+	default:
+		return false;
+	}
+
+	return true;
+}
+
+WindowExecutor::WindowExecutor(BoundWindowExpression *wexpr, ClientContext &context, const ValidityMask &partition_mask,
+                               const idx_t count)
     : wexpr(wexpr), bounds(wexpr, count), payload_collection(), payload_executor(context), filter_executor(context),
       leadlag_offset(wexpr->offset_expr.get(), context), leadlag_default(wexpr->default_expr.get(), context),
       boundary_start(wexpr->start_expr.get(), context), boundary_end(wexpr->end_expr.get(), context),
@@ -1049,6 +1110,12 @@ WindowExecutor::WindowExecutor(BoundWindowExpression *wexpr, ClientContext &cont
 
 {
 	// TODO we could evaluate those expressions in parallel
+
+	//	Check for constant aggregate
+	if (IsConstantAggregate(*wexpr)) {
+		constant_aggregate = make_unique<WindowConstantAggregate>(*(wexpr->aggregate), wexpr->bind_info.get(),
+		                                                          wexpr->return_type, partition_mask, count);
+	}
 
 	// evaluate the FILTER clause and stuff it into a large mask for compactness and reuse
 	if (wexpr->filter_expr) {
@@ -1097,11 +1164,25 @@ void WindowExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const i
 
 	const auto count = input_chunk.size();
 
+	idx_t filtered = 0;
+	SelectionVector *filtering = nullptr;
+	if (wexpr->filter_expr) {
+		filtering = &filter_sel;
+		filtered = filter_executor.SelectExpression(input_chunk, filter_sel);
+		for (idx_t f = 0; f < filtered; ++f) {
+			filter_mask.SetValid(input_idx + filter_sel[f]);
+		}
+	}
+
 	if (!wexpr->children.empty()) {
 		payload_chunk.Reset();
 		payload_executor.Execute(input_chunk, payload_chunk);
 		payload_chunk.Verify();
-		payload_collection.Append(payload_chunk, true);
+		if (constant_aggregate) {
+			constant_aggregate->Sink(payload_chunk, filtering, filtered);
+		} else {
+			payload_collection.Append(payload_chunk, true);
+		}
 
 		// process payload chunks while they are still piping hot
 		if (check_nulls) {
@@ -1130,21 +1211,15 @@ void WindowExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const i
 		}
 	}
 
-	if (wexpr->filter_expr) {
-		const auto filtered = filter_executor.SelectExpression(input_chunk, filter_sel);
-		for (idx_t f = 0; f < filtered; ++f) {
-			filter_mask.SetValid(input_idx + filter_sel[f]);
-		}
-	}
-
 	range.Append(input_chunk);
 }
 
 void WindowExecutor::Finalize(WindowAggregationMode mode) {
 	// build a segment tree for frame-adhering aggregates
 	// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
-
-	if (wexpr->aggregate) {
+	if (constant_aggregate) {
+		constant_aggregate->Finalize();
+	} else if (wexpr->aggregate) {
 		segment_tree = make_unique<WindowSegmentTree>(*(wexpr->aggregate), wexpr->bind_info.get(), wexpr->return_type,
 		                                              &payload_collection, filter_mask, mode);
 	}
@@ -1184,7 +1259,11 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 
 		switch (wexpr->type) {
 		case ExpressionType::WINDOW_AGGREGATE: {
-			segment_tree->Compute(result, output_offset, bounds.window_start, bounds.window_end);
+			if (constant_aggregate) {
+				constant_aggregate->Compute(result, output_offset, bounds.window_start, bounds.window_end);
+			} else {
+				segment_tree->Compute(result, output_offset, bounds.window_start, bounds.window_end);
+			}
 			break;
 		}
 		case ExpressionType::WINDOW_ROW_NUMBER: {
@@ -1811,15 +1890,6 @@ void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, co
 		return;
 	}
 
-	// Create the executors for each function
-	window_execs.clear();
-	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
-		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
-		auto wexpr = reinterpret_cast<BoundWindowExpression *>(op.select_list[expr_idx].get());
-		auto wexec = make_unique<WindowExecutor>(wexpr, context, count);
-		window_execs.emplace_back(std::move(wexec));
-	}
-
 	//	Initialise masks to false
 	const auto bit_count = ValidityMask::ValidityMaskSize(count);
 	partition_bits.clear();
@@ -1848,6 +1918,15 @@ void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, co
 		MaterializeSortedData();
 	} else {
 		return;
+	}
+
+	// Create the executors for each function
+	window_execs.clear();
+	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
+		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
+		auto wexpr = reinterpret_cast<BoundWindowExpression *>(op.select_list[expr_idx].get());
+		auto wexec = make_unique<WindowExecutor>(wexpr, context, partition_mask, count);
+		window_execs.emplace_back(std::move(wexec));
 	}
 
 	//	First pass over the input without flushing
