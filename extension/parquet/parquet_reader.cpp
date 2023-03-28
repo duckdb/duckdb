@@ -345,18 +345,6 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 			return make_unique<ListColumnReader>(*this, list_type, s_ele, this_idx, max_define, max_repeat,
 			                                     std::move(element_reader));
 		}
-
-		// if this is a hive partition col, we should not read it at all but instead do a constant reader.
-		if (parquet_options.file_options.hive_partitioning && hive_map && depth == 1) {
-			auto lookup = hive_map->find(s_ele.name);
-			if (lookup != hive_map->end()) {
-				Value val = Value(lookup->second);
-				return make_unique<GeneratedConstantColumnReader>(*this, LogicalType::VARCHAR, SchemaElement(),
-				                                                  next_file_idx++, max_define, max_repeat, val);
-				;
-			}
-		}
-
 		// TODO check return value of derive type or should we only do this on read()
 		return ColumnReader::CreateReader(*this, DeriveLogicalType(s_ele), s_ele, next_file_idx++, max_define,
 		                                  max_repeat);
@@ -380,40 +368,15 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(const duckdb_parquet::forma
 	D_ASSERT(file_meta_data->row_groups.empty() || next_file_idx == file_meta_data->row_groups[0].columns.size());
 
 	auto &root_struct_reader = (StructColumnReader &)*ret;
-	// add casts if required
-	for (auto &entry : cast_map) {
-		auto column_idx = entry.first;
-		auto &expected_type = entry.second;
-		auto child_reader = std::move(root_struct_reader.child_readers[column_idx]);
-		auto cast_reader = make_unique<CastColumnReader>(std::move(child_reader), expected_type);
-		root_struct_reader.child_readers[column_idx] = std::move(cast_reader);
-	}
-
-	if (parquet_options.file_options.filename) {
-		Value val = Value(file_name);
-		root_struct_reader.child_readers.push_back(make_unique<GeneratedConstantColumnReader>(
-		    *this, LogicalType::VARCHAR, SchemaElement(), next_file_idx, 0, 0, val));
-	}
-
 	if (parquet_options.file_row_number) {
 		root_struct_reader.child_readers.push_back(
 		    make_unique<RowNumberColumnReader>(*this, LogicalType::BIGINT, SchemaElement(), next_file_idx, 0, 0));
 	}
 
-	if (parquet_options.file_options.hive_partitioning) {
-		for (auto &partition : *hive_map) {
-			Value val = Value(partition.second);
-			root_struct_reader.child_readers.push_back(make_unique<GeneratedConstantColumnReader>(
-			    *this, LogicalType::VARCHAR, SchemaElement(), next_file_idx, 0, 0, val));
-		}
-	}
-
 	return ret;
 }
 
-void ParquetReader::InitializeSchema(const vector<string> &expected_names, const vector<LogicalType> &expected_types,
-                                     const vector<column_t> &column_ids, const string &initial_filename_p) {
-	D_ASSERT(expected_names.size() == expected_types.size() || (expected_names.empty() && column_ids.empty()));
+void ParquetReader::InitializeSchema() {
 	auto file_meta_data = GetFileMetadata();
 
 	if (file_meta_data->__isset.encryption_algorithm) {
@@ -423,9 +386,6 @@ void ParquetReader::InitializeSchema(const vector<string> &expected_names, const
 	if (file_meta_data->schema.size() < 2) {
 		throw FormatException("Need at least one non-root column in the file");
 	}
-
-	bool has_expected_names = !expected_names.empty();
-	bool has_expected_types = !expected_types.empty();
 	auto root_reader = CreateReader(file_meta_data);
 
 	auto &root_type = root_reader->Type();
@@ -434,15 +394,6 @@ void ParquetReader::InitializeSchema(const vector<string> &expected_names, const
 	for (auto &type_pair : child_types) {
 		names.push_back(type_pair.first);
 		return_types.push_back(type_pair.second);
-	}
-
-	// Add generated constant column for filename
-	if (parquet_options.file_options.filename) {
-		if (std::find(names.begin(), names.end(), "filename") != names.end()) {
-			throw BinderException("Using filename option on file with column named filename is not supported");
-		}
-		return_types.emplace_back(LogicalType::VARCHAR);
-		names.emplace_back("filename");
 	}
 
 	// Add generated constant column for row number
@@ -454,72 +405,6 @@ void ParquetReader::InitializeSchema(const vector<string> &expected_names, const
 		return_types.emplace_back(LogicalType::BIGINT);
 		names.emplace_back("file_row_number");
 	}
-
-
-
-	// Add generated constant column for filename
-	if (parquet_options.file_options.hive_partitioning) {
-		for (auto &part : *hive_map) {
-			// We need to lookup the hive col in the cols of the file to avoid duplicating columns that are both
-			// in the file and the hive path
-			auto lookup =
-			    std::find_if(child_types.begin(), child_types.end(),
-			                 [&part](const std::pair<std::string, LogicalType> &x) { return x.first == part.first; });
-			if (lookup == child_types.end()) {
-				return_types.emplace_back(LogicalType::VARCHAR);
-				names.emplace_back(part.first);
-			}
-		}
-	}
-
-	D_ASSERT(!names.empty());
-	D_ASSERT(!return_types.empty());
-	if (!has_expected_types) {
-		return;
-	}
-	if (!has_expected_names && has_expected_types) {
-		// we ONLY have expected types, but no expected names
-		// in this case we need all types to match in-order
-		if (return_types.size() != expected_types.size()) {
-			throw FormatException("column count mismatch: expected %d columns but found %d", expected_types.size(),
-			                      return_types.size());
-		}
-		for (idx_t col_idx = 0; col_idx < return_types.size(); col_idx++) {
-			if (return_types[col_idx] == expected_types[col_idx]) {
-				continue;
-			}
-			// type mismatch: have to add a cast
-			cast_map[col_idx] = expected_types[col_idx];
-		}
-		return;
-	}
-	D_ASSERT(column_ids.size() > 0);
-	// we have expected types: create a map of name -> column index
-	unordered_map<string, idx_t> name_map;
-	for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
-		name_map[names[col_idx]] = col_idx;
-	}
-	// now for each of the expected names, look it up in the name map and fill the column_id_map
-	D_ASSERT(column_id_map.empty());
-	for (idx_t i = 0; i < column_ids.size(); i++) {
-		if (IsRowIdColumnId(column_ids[i])) {
-			continue;
-		}
-		auto &expected_name = expected_names[column_ids[i]];
-		auto &expected_type = expected_types[column_ids[i]];
-		auto entry = name_map.find(expected_name);
-		if (entry == name_map.end()) {
-			throw FormatException("schema mismatch in Parquet glob: column \"%s\" was read from the original file "
-			                      "\"%s\", but could not be found in file \"%s\"",
-			                      expected_name, initial_filename_p, file_name);
-		}
-		auto column_idx = entry->second;
-		column_id_map.push_back(column_idx);
-		if (expected_type != return_types[column_idx]) {
-			// type mismatch: have to add a cast
-			cast_map[column_idx] = expected_type;
-		}
-	}
 }
 
 ParquetOptions::ParquetOptions(ClientContext &context) {
@@ -529,20 +414,15 @@ ParquetOptions::ParquetOptions(ClientContext &context) {
 	}
 }
 
-ParquetReader::ParquetReader(Allocator &allocator_p, unique_ptr<FileHandle> file_handle_p,
-                             const vector<LogicalType> &expected_types_p, const string &initial_filename_p)
+ParquetReader::ParquetReader(Allocator &allocator_p, unique_ptr<FileHandle> file_handle_p)
     : allocator(allocator_p) {
 	file_name = file_handle_p->path;
 	file_handle = std::move(file_handle_p);
 	metadata = LoadMetadata(allocator, *file_handle, *file_opener);
-	vector<string> expected_names;
-	vector<column_t> expected_column_ids;
-	InitializeSchema(expected_names, expected_types_p, expected_column_ids, initial_filename_p);
+	InitializeSchema();
 }
 
-ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, const vector<string> &expected_names,
-                             const vector<LogicalType> &expected_types_p, const vector<column_t> &column_ids,
-                             ParquetOptions parquet_options_p, const string &initial_filename_p)
+ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, ParquetOptions parquet_options_p)
     : allocator(BufferAllocator::Get(context_p)), file_opener(FileSystem::GetFileOpener(context_p)),
       parquet_options(parquet_options_p) {
 	auto &fs = FileSystem::GetFileSystem(context_p);
@@ -568,11 +448,7 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, const
 		}
 	}
 
-	if (parquet_options.file_options.hive_partitioning) {
-		hive_map = make_unique<std::map<string, string>>(HivePartitioning::Parse(file_name));
-	}
-
-	InitializeSchema(expected_names, expected_types_p, column_ids, initial_filename_p);
+	InitializeSchema();
 }
 
 ParquetReader::~ParquetReader() {
@@ -584,11 +460,9 @@ const FileMetaData *ParquetReader::GetFileMetadata() {
 	return metadata->metadata.get();
 }
 
-// TODO also somewhat ugly, perhaps this can be moved to the column reader too
-unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(ParquetReader &reader, LogicalType &type,
-                                                         column_t file_col_idx, const FileMetaData *file_meta_data) {
+unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(column_t file_col_idx, const FileMetaData *file_meta_data) {
 	unique_ptr<BaseStatistics> column_stats;
-	auto root_reader = reader.CreateReader(file_meta_data);
+	auto root_reader = CreateReader(file_meta_data);
 	auto column_reader = ((StructColumnReader *)root_reader.get())->GetChildReader(file_col_idx);
 
 	for (idx_t row_group_idx = 0; row_group_idx < file_meta_data->row_groups.size(); row_group_idx++) {
@@ -675,17 +549,18 @@ idx_t ParquetReader::GetGroupOffset(ParquetReaderScanState &state) {
 	return min_offset;
 }
 
-void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx) {
+void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t col_idx) {
 	auto &group = GetGroup(state);
-
-	auto column_reader = ((StructColumnReader *)state.root_reader.get())->GetChildReader(state.column_ids[out_col_idx]);
+	auto column_id = reader_data.column_ids[col_idx];
+	auto column_reader = ((StructColumnReader *)state.root_reader.get())->GetChildReader(column_id);
 
 	// TODO move this to columnreader too
-	if (state.filters) {
+	if (reader_data.filters) {
 		auto stats = column_reader->Stats(state.group_idx_list[state.current_group], group.columns);
 		// filters contain output chunk index, not file col idx!
-		auto filter_entry = state.filters->filters.find(out_col_idx);
-		if (stats && filter_entry != state.filters->filters.end()) {
+		auto global_id = reader_data.column_mapping[col_idx];
+		auto filter_entry = reader_data.filters->filters.find(global_id);
+		if (stats && filter_entry != reader_data.filters->filters.end()) {
 			bool skip_chunk = false;
 			auto &filter = *filter_entry->second;
 			auto prune_result = filter.CheckStatistics(*stats);
@@ -712,16 +587,12 @@ idx_t ParquetReader::NumRowGroups() {
 	return GetFileMetadata()->row_groups.size();
 }
 
-void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<column_t> column_ids,
-                                   vector<idx_t> groups_to_read, TableFilterSet *filters) {
+void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<idx_t> groups_to_read) {
 	state.current_group = -1;
 	state.finished = false;
-	state.column_ids = column_id_map.empty() ? std::move(column_ids) : column_id_map;
 	state.group_offset = 0;
 	state.group_idx_list = std::move(groups_to_read);
-	state.filters = filters;
 	state.sel.Initialize(STANDARD_VECTOR_SIZE);
-
 	if (!state.file_handle || state.file_handle->path != file_handle->path) {
 		auto flags = FileFlags::FILE_FLAGS_READ;
 
@@ -738,35 +609,10 @@ void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<column_
 
 	state.thrift_file_proto = CreateThriftProtocol(allocator, *state.file_handle, *file_opener, state.prefetch_mode);
 	state.root_reader = CreateReader(GetFileMetadata());
-	if (parquet_options.file_options.union_by_name) {
-		RearrangeChildReaders(state.root_reader, state.column_ids);
-	}
-
 	state.define_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 }
 
-void ParquetReader::RearrangeChildReaders(unique_ptr<duckdb::ColumnReader> &root_reader, vector<column_t> &column_ids) {
-	auto &root_struct_reader = (StructColumnReader &)*root_reader;
-	unordered_map<idx_t, idx_t> reverse_union_idx;
-
-	for (idx_t col = 0; col < reader_data.union_idx_map.size(); ++col) {
-		auto child_reader = std::move(root_struct_reader.child_readers[col]);
-		auto cast_reader = make_unique<CastColumnReader>(std::move(child_reader), reader_data.union_col_types[reader_data.union_idx_map[col]]);
-		root_struct_reader.child_readers[col] = std::move(cast_reader);
-		reverse_union_idx[reader_data.union_idx_map[col]] = col;
-	}
-
-	vector<bool> column_id_nulls(column_ids.size(), true);
-	for (idx_t col = 0; col < column_ids.size(); ++col) {
-		auto find = reverse_union_idx.find(column_ids[col]);
-		if (find != reverse_union_idx.end()) {
-			column_ids[col] = find->second;
-			column_id_nulls[col] = false;
-		}
-	}
-	reader_data.union_null_cols = std::move(column_id_nulls);
-}
 void FilterIsNull(Vector &v, parquet_filter_t &filter_mask, idx_t count) {
 	if (v.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		auto &mask = ConstantVector::Validity(v);
@@ -960,8 +806,6 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		return false;
 	}
 
-	D_ASSERT(reader_data.union_null_cols.size() >= result.ColumnCount());
-
 	// see if we have to switch to the next row group in the parquet file
 	if (state.current_group < 0 || (int64_t)state.group_offset >= GetGroup(state).num_rows) {
 		state.current_group++;
@@ -977,15 +821,10 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		}
 
 		uint64_t to_scan_compressed_bytes = 0;
-		for (idx_t out_col_idx = 0; out_col_idx < result.ColumnCount(); out_col_idx++) {
-			// this is a special case where we are not interested in the actual contents of the file
-			if (IsRowIdColumnId(state.column_ids[out_col_idx]) || reader_data.union_null_cols[out_col_idx]) {
-				continue;
-			}
+		for (idx_t col_idx = 0; col_idx < reader_data.column_ids.size(); col_idx++) {
+			PrepareRowGroupBuffer(state, col_idx);
 
-			PrepareRowGroupBuffer(state, out_col_idx);
-
-			auto file_col_idx = state.column_ids[out_col_idx];
+			auto file_col_idx = reader_data.column_ids[col_idx];
 
 			auto root_reader = ((StructColumnReader *)state.root_reader.get());
 			to_scan_compressed_bytes += root_reader->GetChildReader(file_col_idx)->TotalCompressedSize();
@@ -1003,7 +842,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				    "Malformed parquet file: sum of total compressed bytes of columns seems incorrect");
 			}
 
-			if (!state.filters && scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
+			if (!reader_data.filters && scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
 				// Prefetch the whole row group
 				if (!state.current_group_prefetched) {
 					auto total_compressed_size = GetGroupCompressedSize(state);
@@ -1015,20 +854,18 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 			} else {
 				// lazy fetching is when all tuples in a column can be skipped. With lazy fetching the buffer is only
 				// fetched on the first read to that buffer.
-				bool lazy_fetch = state.filters;
+				bool lazy_fetch = reader_data.filters;
 
 				// Prefetch column-wise
-				for (idx_t out_col_idx = 0; out_col_idx < result.ColumnCount(); out_col_idx++) {
-
-					if (IsRowIdColumnId(state.column_ids[out_col_idx]) || reader_data.union_null_cols[out_col_idx]) {
-						continue;
-					}
-
-					auto file_col_idx = state.column_ids[out_col_idx];
+				for (idx_t col_idx = 0; col_idx < reader_data.column_ids.size(); col_idx++) {
+					auto file_col_idx = reader_data.column_ids[col_idx];
 					auto root_reader = ((StructColumnReader *)state.root_reader.get());
 
-					bool has_filter =
-					    state.filters && state.filters->filters.find(out_col_idx) != state.filters->filters.end();
+					bool has_filter = false;
+					if (reader_data.filters) {
+						auto entry = reader_data.filters->filters.find(reader_data.column_mapping[col_idx]);
+						has_filter = entry != reader_data.filters->filters.end();
+					}
 					root_reader->GetChildReader(file_col_idx)->RegisterPrefetch(trans, !(lazy_fetch && !has_filter));
 				}
 
@@ -1068,43 +905,38 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 
 	auto root_reader = ((StructColumnReader *)state.root_reader.get());
 
-	if (state.filters) {
-		vector<bool> need_to_read(result.ColumnCount(), true);
-
-		for (idx_t col = 0; col < need_to_read.size(); ++col) {
-			need_to_read[col] = need_to_read[col] && !reader_data.union_null_cols[col];
-		}
+	if (reader_data.filters) {
+		vector<bool> need_to_read(reader_data.column_ids.size(), true);
 
 		// first load the columns that are used in filters
-		for (auto &filter_col : state.filters->filters) {
-			auto file_col_idx = state.column_ids[filter_col.first];
+		for (auto &filter_col : reader_data.filters->filters) {
+			auto file_col_idx = reader_data.column_ids[reader_data.reverse_column_mapping[filter_col.first]];
 			// row_group skipping of columns that are never scanned.
 			if (filter_mask.none()) { // if no rows are left we can stop checking filters
 				break;
 			}
 
-			root_reader->GetChildReader(file_col_idx)
-			    ->Read(result.size(), filter_mask, define_ptr, repeat_ptr, result.data[filter_col.first]);
-
+			auto &result_vector = result.data[filter_col.first];
+			auto child_reader = root_reader->GetChildReader(file_col_idx);
+			child_reader->Read(result.size(), filter_mask, define_ptr, repeat_ptr, result_vector);
 			need_to_read[filter_col.first] = false;
 
 			ApplyFilter(result.data[filter_col.first], *filter_col.second, filter_mask, this_output_chunk_rows);
 		}
 
 		// we still may have to read some cols
-		for (idx_t out_col_idx = 0; out_col_idx < result.ColumnCount(); out_col_idx++) {
-			if (!need_to_read[out_col_idx]) {
+		for (idx_t col_idx = 0; col_idx < reader_data.column_ids.size(); col_idx++) {
+			if (!need_to_read[col_idx]) {
 				continue;
 			}
-			auto file_col_idx = state.column_ids[out_col_idx];
-
+			auto file_col_idx = reader_data.column_ids[col_idx];
 			if (filter_mask.none()) {
 				root_reader->GetChildReader(file_col_idx)->Skip(result.size());
 				continue;
 			}
-			// TODO handle ROWID here, too
-			root_reader->GetChildReader(file_col_idx)
-			    ->Read(result.size(), filter_mask, define_ptr, repeat_ptr, result.data[out_col_idx]);
+			auto &result_vector = result.data[reader_data.column_mapping[col_idx]];
+			auto child_reader = root_reader->GetChildReader(file_col_idx);
+			child_reader->Read(result.size(), filter_mask, define_ptr, repeat_ptr, result_vector);
 		}
 
 		idx_t sel_size = 0;
@@ -1117,21 +949,12 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		result.Slice(state.sel, sel_size);
 		result.Verify();
 
-	} else { // #nofilter, just fricking load the data
-		for (idx_t out_col_idx = 0; out_col_idx < result.ColumnCount(); out_col_idx++) {
-			auto file_col_idx = state.column_ids[out_col_idx];
-
-			if (IsRowIdColumnId(file_col_idx)) {
-				Value constant_42 = Value::BIGINT(42);
-				result.data[out_col_idx].Reference(constant_42);
-				continue;
-			}
-			if (reader_data.union_null_cols[out_col_idx]) {
-				continue;
-			}
-
-			auto rows_read = root_reader->GetChildReader(file_col_idx)
-			                     ->Read(result.size(), filter_mask, define_ptr, repeat_ptr, result.data[out_col_idx]);
+	} else {
+		for (idx_t col_idx = 0; col_idx < reader_data.column_ids.size(); col_idx++) {
+			auto file_col_idx = reader_data.column_ids[col_idx];
+			auto &result_vector = result.data[reader_data.column_mapping[col_idx]];
+			auto child_reader = root_reader->GetChildReader(file_col_idx);
+			auto rows_read = child_reader->Read(result.size(), filter_mask, define_ptr, repeat_ptr, result_vector);
 			if (rows_read != result.size()) {
 				throw InvalidInputException("Mismatch in parquet read for column %llu, expected %llu rows, got %llu",
 				                            file_col_idx, result.size(), rows_read);

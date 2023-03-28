@@ -3,6 +3,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/common/exception.hpp"
 
 namespace duckdb {
 
@@ -77,7 +78,7 @@ bool MultiFileReader::ComplexFilterPushdown(ClientContext &context, vector<strin
 	if (!options.hive_partitioning && !options.filename) {
 		return false;
 	}
-	auto &initial_filename = files[0];
+	auto initial_filename = files[0];
 
 	unordered_map<string, column_t> column_map;
 	for (idx_t i = 0; i < get.column_ids.size(); i++) {
@@ -91,6 +92,120 @@ bool MultiFileReader::ComplexFilterPushdown(ClientContext &context, vector<strin
 		return true;
 	}
 	return false;
+}
+
+MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &options, const vector<string> &files, vector<LogicalType> &return_types, vector<string> &names) {
+	MultiFileReaderBindData bind_data;
+	// Add generated constant column for filename
+	if (options.filename) {
+		if (std::find(names.begin(), names.end(), "filename") != names.end()) {
+			throw BinderException("Using filename option on file with column named filename is not supported");
+		}
+		bind_data.filename_idx = names.size();
+		return_types.emplace_back(LogicalType::VARCHAR);
+		names.emplace_back("filename");
+	}
+
+	// Add generated constant column for filename
+	if (options.hive_partitioning) {
+		D_ASSERT(!files.empty());
+		auto partitions = HivePartitioning::Parse(files[0]);
+		for (auto &part : partitions) {
+			idx_t hive_partitioning_index = DConstants::INVALID_INDEX;
+			auto lookup = std::find(names.begin(), names.end(), part.first);
+			if (lookup == names.end()) {
+				hive_partitioning_index = names.size();
+				return_types.emplace_back(LogicalType::VARCHAR);
+				names.emplace_back(part.first);
+			}
+			bind_data.hive_partitioning_indexes.push_back(make_pair(part.first, hive_partitioning_index));
+		}
+	}
+	return bind_data;
+}
+
+void MultiFileReader::FinalizeBind(const MultiFileReaderBindData &options, const string &filename, const vector<column_t> &global_column_ids, MultiFileReaderData &reader_data) {
+	for(idx_t i = 0; i < global_column_ids.size(); i++) {
+		auto column_id = global_column_ids[i];
+		if (IsRowIdColumnId(column_id)) {
+			// row-id
+			reader_data.constant_map.push_back(make_pair(i, Value::BIGINT(42)));
+			continue;
+		}
+		if (column_id == options.filename_idx) {
+			// filename
+			reader_data.constant_map.push_back(make_pair(i, Value(filename)));
+			continue;
+		}
+		if (!reader_data.union_null_cols.empty()) {
+			// union by name NULL column
+			if (reader_data.union_null_cols[column_id]) {
+				reader_data.constant_map.push_back(make_pair(i, Value(reader_data.union_col_types[column_id])));
+				continue;
+			}
+		}
+		if (!options.hive_partitioning_indexes.empty()) {
+			// hive partition constants
+			auto partitions = HivePartitioning::Parse(filename);
+			D_ASSERT(partitions.size() == options.hive_partitioning_indexes.size());
+			for(auto &entry : options.hive_partitioning_indexes) {
+				if (column_id == entry.second) {
+					reader_data.constant_map.push_back(make_pair(i, Value(partitions[entry.first])));
+					break;
+				}
+			}
+		}
+	}
+}
+
+void MultiFileReader::CreateMapping(const string &file_name, const vector<LogicalType> &file_types, const vector<string> &file_names, const vector<LogicalType> &global_types, const vector<string> &global_names, const vector<column_t> &global_column_ids, MultiFileReaderData &reader_data) {
+	// we have expected types: create a map of name -> column index
+	unordered_map<string, idx_t> name_map;
+	for (idx_t col_idx = 0; col_idx < file_names.size(); col_idx++) {
+		name_map[file_names[col_idx]] = col_idx;
+	}
+	reader_data.reverse_column_mapping.resize(global_types.size(), DConstants::INVALID_INDEX);
+	for(idx_t i = 0; i < global_column_ids.size(); i++) {
+		// check if this is a constant column
+		bool constant = false;
+		for(auto &entry : reader_data.constant_map) {
+			if (entry.first == i) {
+				constant = true;
+				break;
+			}
+		}
+		if (constant) {
+			// this column is constant for this file
+			continue;
+		}
+		// not constant - look up the column in the name map
+		auto global_id = global_column_ids[i];
+		auto &global_name = global_names[global_id];
+		auto entry = name_map.find(global_name);
+		if (entry == name_map.end()) {
+			throw IOException(StringUtil::Format("Failed to read file \"%s\": schema mismatch in glob: column \"%s\" was read from the original file, but could not be found in file \"%s\".\n\nIf you are trying to read files with different schemas, try setting union_by_name=True",
+			                      file_name, global_name, file_name));
+		}
+		// we found the column in the local file - check if the types are the same
+		auto local_id = entry->second;
+		auto &global_type = global_types[global_id];
+		auto &local_type = file_types[local_id];
+		if (global_type != local_type) {
+			throw InternalException("FIXME: types are different in MultiFileReader::CreateMapping - add cast");
+		}
+		// the types are the same - create the mapping
+		reader_data.column_mapping.push_back(i);
+		reader_data.column_ids.push_back(local_id);
+		reader_data.reverse_column_mapping[global_id] = local_id;
+	}
+}
+
+
+void MultiFileReader::FinalizeChunk(const MultiFileReaderBindData &bind_data, const MultiFileReaderData &reader_data, DataChunk &chunk) {
+	// reference all the constants set up in MultiFileReader::FinalizeBind
+	for(auto &entry : reader_data.constant_map) {
+		chunk.data[entry.first].Reference(entry.second);
+	}
 }
 
 void MultiFileReaderOptions::Serialize(FieldWriter &writer) const {
