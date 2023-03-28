@@ -25,7 +25,6 @@ public:
 	unordered_map<idx_t, list_entry_t> partition_entries;
 	DataChunk slice_chunk;
 
-	vector<unique_ptr<DataChunk>> partition_buffers;
 	vector<unique_ptr<ColumnDataAppendState>> partition_append_states;
 };
 
@@ -55,8 +54,6 @@ public:
 	void InitializeAppendState(PartitionedColumnDataAppendState &state) const;
 	//! Appends a DataChunk to this PartitionedColumnData
 	void Append(PartitionedColumnDataAppendState &state, DataChunk &input);
-	//! Flushes any remaining data in the append state into this PartitionedColumnData
-	void FlushAppendState(PartitionedColumnDataAppendState &state);
 	//! Combine another PartitionedColumnData into this PartitionedColumnData
 	void Combine(PartitionedColumnData &other);
 	//! Get the partitions in this PartitionedColumnData
@@ -66,10 +63,6 @@ protected:
 	//===--------------------------------------------------------------------===//
 	// Partitioning type implementation interface
 	//===--------------------------------------------------------------------===//
-	//! Size of the buffers in the append states for this type of partitioning (default 128)
-	virtual idx_t BufferSize() const {
-		return MinValue<idx_t>(128, STANDARD_VECTOR_SIZE);
-	}
 	//! Initialize a PartitionedColumnDataAppendState for this type of partitioning (optional)
 	virtual void InitializeAppendStateInternal(PartitionedColumnDataAppendState &state) const {
 	}
@@ -85,19 +78,12 @@ protected:
 	PartitionedColumnData(PartitionedColumnDataType type, ClientContext &context, vector<LogicalType> types);
 	PartitionedColumnData(const PartitionedColumnData &other);
 
-	//! If the buffer is half full, we append to the partition
-	inline idx_t HalfBufferSize() const {
-		D_ASSERT(IsPowerOfTwo(BufferSize()));
-		return BufferSize() / 2;
-	}
 	//! Create a new shared allocator
 	void CreateAllocator();
 	//! Create a collection for a specific a partition
 	unique_ptr<ColumnDataCollection> CreatePartitionCollection(idx_t partition_index) const {
 		return make_unique<ColumnDataCollection>(allocators->allocators[partition_index], types);
 	}
-	//! Create a DataChunk used for buffering appends to the partition
-	unique_ptr<DataChunk> CreatePartitionBuffer() const;
 
 protected:
 	PartitionedColumnDataType type;

@@ -63,6 +63,8 @@ public:
 	const TupleDataLayout &GetLayout() const;
 	//! Number of row blocks
 	idx_t RowBlockCount() const;
+	//! Number of heap blocks
+	idx_t HeapBlockCount() const;
 
 public:
 	//! Builds out the chunks for next append, given the metadata in the append state

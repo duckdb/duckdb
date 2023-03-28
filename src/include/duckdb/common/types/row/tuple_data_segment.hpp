@@ -95,6 +95,8 @@ public:
 	idx_t SizeInBytes() const;
 	//! Verify counts of the chunks in this segment
 	void Verify() const;
+	//! Verify that all blocks in this segment are pinned
+	void VerifyEverythingPinned() const;
 
 public:
 	//! The allocator for this segment

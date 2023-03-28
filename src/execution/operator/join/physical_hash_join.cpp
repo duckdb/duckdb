@@ -289,6 +289,7 @@ public:
 	}
 
 	void FinishEvent() override {
+		sink.hash_table->GetDataCollection().VerifyEverythingPinned();
 		sink.hash_table->finalized = true;
 	}
 
@@ -640,6 +641,7 @@ void HashJoinGlobalSourceState::TryPrepareNextStage(HashJoinGlobalSinkState &sin
 	switch (global_stage.load()) {
 	case HashJoinSourceStage::BUILD:
 		if (build_chunk_done == build_chunk_count) {
+			sink.hash_table->GetDataCollection().VerifyEverythingPinned();
 			sink.hash_table->finalized = true;
 			PrepareProbe(sink);
 		}

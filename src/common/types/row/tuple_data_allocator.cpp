@@ -45,6 +45,10 @@ idx_t TupleDataAllocator::RowBlockCount() const {
 	return row_blocks.size();
 }
 
+idx_t TupleDataAllocator::HeapBlockCount() const {
+	return heap_blocks.size();
+}
+
 void TupleDataAllocator::Build(TupleDataSegment &segment, TupleDataPinState &pin_state,
                                TupleDataChunkState &chunk_state, const idx_t append_offset, const idx_t append_count) {
 	D_ASSERT(this == segment.allocator.get());

@@ -1082,9 +1082,6 @@ void ProbeSpill::Append(DataChunk &chunk, ProbeSpillLocalAppendState &local_stat
 void ProbeSpill::Finalize() {
 	if (partitioned) {
 		D_ASSERT(local_partitions.size() == local_partition_append_states.size());
-		for (idx_t i = 0; i < local_partition_append_states.size(); i++) {
-			local_partitions[i]->FlushAppendState(*local_partition_append_states[i]);
-		}
 		for (auto &local_partition : local_partitions) {
 			global_partitions->Combine(*local_partition);
 		}

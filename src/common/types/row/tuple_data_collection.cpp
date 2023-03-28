@@ -479,11 +479,19 @@ void TupleDataCollection::Print() {
 void TupleDataCollection::Verify() const {
 #ifdef DEBUG
 	idx_t total_segment_count = 0;
-	for (auto &segment : segments) {
+	for (const auto &segment : segments) {
 		segment.Verify();
 		total_segment_count += segment.count;
 	}
 	D_ASSERT(total_segment_count == this->count);
+#endif
+}
+
+void TupleDataCollection::VerifyEverythingPinned() const {
+#ifdef DEBUG
+	for (const auto &segment : segments) {
+		segment.VerifyEverythingPinned();
+	}
 #endif
 }
 

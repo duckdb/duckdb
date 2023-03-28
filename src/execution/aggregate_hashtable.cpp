@@ -124,6 +124,8 @@ void GroupedAggregateHashTable::VerifyInternal() {
 	}
 	(void)count;
 	D_ASSERT(count == Count());
+
+	data_collection->VerifyEverythingPinned();
 }
 
 idx_t GroupedAggregateHashTable::InitialCapacity() {

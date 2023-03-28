@@ -127,4 +127,11 @@ void TupleDataSegment::Verify() const {
 #endif
 }
 
+void TupleDataSegment::VerifyEverythingPinned() const {
+#ifdef DEBUG
+	D_ASSERT(pinned_row_handles.size() == allocator->RowBlockCount());
+	D_ASSERT(pinned_heap_handles.size() == allocator->HeapBlockCount());
+#endif
+}
+
 } // namespace duckdb

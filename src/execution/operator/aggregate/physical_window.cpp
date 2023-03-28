@@ -200,7 +200,6 @@ void WindowGlobalSinkState::SyncLocalPartition(GroupingPartition &local_partitio
 	auto new_append = make_unique<PartitionedColumnDataAppendState>();
 	new_partition->InitializeAppendState(*new_append);
 
-	local_partition->FlushAppendState(*local_append);
 	auto &local_groups = local_partition->GetPartitions();
 	for (auto &local_group : local_groups) {
 		ColumnDataScanState scanner;
@@ -212,9 +211,6 @@ void WindowGlobalSinkState::SyncLocalPartition(GroupingPartition &local_partitio
 			new_partition->Append(*new_append, scan_chunk);
 		}
 	}
-
-	// The append state has stale pointers to the old local partition, so nuke it from orbit.
-	new_partition->FlushAppendState(*new_append);
 
 	local_partition = std::move(new_partition);
 	local_append = make_unique<PartitionedColumnDataAppendState>();
@@ -243,7 +239,6 @@ void WindowGlobalSinkState::CombineLocalPartition(GroupingPartition &local_parti
 	if (!local_partition) {
 		return;
 	}
-	local_partition->FlushAppendState(*local_append);
 
 	// Make sure grouping_data doesn't change under us.
 	// Combine has an internal mutex, so this is single-threaded anyway.

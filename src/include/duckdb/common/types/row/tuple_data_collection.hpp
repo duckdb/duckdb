@@ -173,6 +173,9 @@ public:
 	//! Prints the string representation of this TupleDataCollection
 	void Print();
 
+	//! Verify that all blocks are pinned
+	void VerifyEverythingPinned() const;
+
 private:
 	//! Initializes the TupleDataCollection (called by the constructor)
 	void Initialize();

@@ -36,12 +36,6 @@ void PartitionedColumnData::InitializeAppendState(PartitionedColumnDataAppendSta
 	InitializeAppendStateInternal(state);
 }
 
-unique_ptr<DataChunk> PartitionedColumnData::CreatePartitionBuffer() const {
-	auto result = make_unique<DataChunk>();
-	result->Initialize(BufferManager::GetBufferManager(context).GetBufferAllocator(), types, BufferSize());
-	return result;
-}
-
 void PartitionedColumnData::Append(PartitionedColumnDataAppendState &state, DataChunk &input) {
 	// Compute partition indices and store them in state.partition_indices
 	ComputePartitionIndices(state, input);
@@ -102,7 +96,6 @@ void PartitionedColumnData::Append(PartitionedColumnDataAppendState &state, Data
 
 		// Partition, buffer, and append state for this partition index
 		auto &partition = *partitions[partition_index];
-		auto &partition_buffer = *state.partition_buffers[partition_index];
 		auto &partition_append_state = *state.partition_append_states[partition_index];
 
 		// Length and offset into the selection vector for this chunk, for this partition
@@ -113,37 +106,12 @@ void PartitionedColumnData::Append(PartitionedColumnDataAppendState &state, Data
 		// Create a selection vector for this partition using the offset into the single selection vector
 		partition_sel.Initialize(all_partitions_sel.data() + partition_offset);
 
-		if (partition_length >= HalfBufferSize()) {
-			// Slice the input chunk using the selection vector
-			state.slice_chunk.Reset();
-			state.slice_chunk.Slice(input, partition_sel, partition_length);
+		// Slice the input chunk using the selection vector
+		state.slice_chunk.Reset();
+		state.slice_chunk.Slice(input, partition_sel, partition_length);
 
-			// Append it to the partition directly
-			partition.Append(partition_append_state, state.slice_chunk);
-		} else {
-			// Append the input chunk to the partition buffer using the selection vector
-			partition_buffer.Append(input, false, &partition_sel, partition_length);
-
-			if (partition_buffer.size() >= HalfBufferSize()) {
-				// Next batch won't fit in the buffer, flush it to the partition
-				partition.Append(partition_append_state, partition_buffer);
-				partition_buffer.Reset();
-				partition_buffer.SetCapacity(BufferSize());
-			}
-		}
-	}
-}
-
-void PartitionedColumnData::FlushAppendState(PartitionedColumnDataAppendState &state) {
-	for (idx_t partition_index = 0; partition_index < partitions.size(); partition_index++) {
-		auto &partition = *partitions[partition_index];
-		auto &partition_buffer = *state.partition_buffers[partition_index];
-		auto &partition_append_state = *state.partition_append_states[partition_index];
-		if (partition_buffer.size() > 0) {
-			partition.Append(partition_append_state, partition_buffer);
-			partition_buffer.Reset();
-			partition_buffer.SetCapacity(BufferSize());
-		}
+		// Append it to the partition directly
+		partition.Append(partition_append_state, state.slice_chunk);
 	}
 }
 

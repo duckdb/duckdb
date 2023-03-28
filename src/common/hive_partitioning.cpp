@@ -200,7 +200,6 @@ void HivePartitionedColumnData::GrowAppendState(PartitionedColumnDataAppendState
 
 	for (idx_t i = current_append_state_size; i < required_append_state_size; i++) {
 		state.partition_append_states.emplace_back(make_unique<ColumnDataAppendState>());
-		state.partition_buffers.emplace_back(CreatePartitionBuffer());
 	}
 }
 
