@@ -88,6 +88,8 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &contex
 		RestartDatabase(context, connection, context.sql_query);
 	}
 
+	if (TestLogCommands())
+		fprintf(stderr, "%s;\n-----\n", context.sql_query.c_str());
 	return connection->Query(context.sql_query);
 }
 

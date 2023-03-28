@@ -21,6 +21,7 @@ namespace duckdb {
 bool TestForceStorage();
 bool TestForceReload();
 bool TestMemoryLeaks();
+bool TestLogCommands();
 void RegisterSqllogictests();
 
 void DeleteDatabase(string path);

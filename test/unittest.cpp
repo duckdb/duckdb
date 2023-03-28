@@ -11,6 +11,7 @@ namespace duckdb {
 static bool test_force_storage = false;
 static bool test_force_reload = false;
 static bool test_memory_leaks = false;
+static bool test_log_commands = false;
 
 bool TestForceStorage() {
 	return test_force_storage;
@@ -22,6 +23,10 @@ bool TestForceReload() {
 
 bool TestMemoryLeaks() {
 	return test_memory_leaks;
+}
+
+bool TestLogCommands() {
+	return test_log_commands;
 }
 
 } // namespace duckdb
@@ -36,6 +41,8 @@ int main(int argc, char *argv[]) {
 			test_force_storage = true;
 		} else if (string(argv[i]) == "--force-reload" || string(argv[i]) == "--force-restart") {
 			test_force_reload = true;
+		} else if (string(argv[i]) == "--log-commands") {
+			test_log_commands = true;
 		} else if (StringUtil::StartsWith(string(argv[i]), "--memory-leak") ||
 		           StringUtil::StartsWith(string(argv[i]), "--test-memory-leak")) {
 			test_memory_leaks = true;

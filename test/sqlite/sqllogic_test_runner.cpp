@@ -86,6 +86,8 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath) {
 	// load any previously loaded extensions again
 	for (auto &extension : extensions) {
 		ExtensionHelper::LoadExtension(*db, extension);
+		if (TestLogCommands())
+			fprintf(stderr, "LOAD %s;\n", extension.c_str());
 	}
 }
 
@@ -190,6 +192,8 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 }
 
 void SQLLogicTestRunner::ExecuteFile(string script) {
+	if (TestLogCommands())
+		fprintf(stderr, "#################\n");
 	SQLLogicParser parser;
 	idx_t skip_level = 0;
 
@@ -212,7 +216,6 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 	if (!success) {
 		FAIL("Could not find test script '" + script + "'. Perhaps run `make sqlite`. ");
 	}
-
 	/* Loop over all records in the file */
 	while (parser.NextStatement()) {
 		// tokenize the current line
@@ -509,6 +512,8 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				skip_reload = true;
 			} else {
 				auto result = ExtensionHelper::LoadExtension(*db, param);
+				if (TestLogCommands())
+					fprintf(stderr, "LOAD %s;\n", param.c_str());
 				if (result == ExtensionLoadResult::LOADED_EXTENSION) {
 					// add the extension to the list of loaded extensions
 					extensions.insert(param);
