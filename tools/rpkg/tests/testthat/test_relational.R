@@ -362,28 +362,30 @@ test_that("R can do comparisons with constant strings and respects the original 
 
 test_that("R strings are not garbage collected", {
   get_string_filter_rel <- function(rel_df) {
-      hel <- "hel"
-      lo <- "lo"
-      o <- "o"
-      const_hello <- expr_constant(paste0(substr(paste0(1, 1, hel, lo), 3, 6), substr(paste0(129, "jk", o, "t"), 6, 6)), TRUE)
-      filter_rel <- rel_filter(rel_df, list(expr_function("eq", list(expr_reference("a"), const_hello))))
+      hel <- "mr."
+      lo <- "du"
+      o <- "ck"
+      const_mrduck <- expr_constant(paste0(substr(paste0(1, 1, hel, lo), 3, 7), substr(paste0(129, "jk", o, "t"), 6, 7)), TRUE)
+      filter_rel <- rel_filter(rel_df, list(expr_function("eq", list(expr_reference("a"), const_mrduck))))
       rm(hel)
       rm(lo)
       rm(o)
       gc()
       return(filter_rel)
   }
-  marhel <- "marhel"
-  lopez <- "lopez"
+  first <- "marm"
+  second <- "r."
+  third <- "du"
+  fourth <- "ckz"
   dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
-  rel_df <- rel_from_df(con, data.frame(a=c(paste0(substr(marhel, 4, 6), substr(lopez, 0, 2)), "world")), TRUE)
+  rel_df <- rel_from_df(con, data.frame(a=c(substr(paste0(first, second, third, fourth), 4, 10), "world")), TRUE)
   filter_rel <- get_string_filter_rel(rel_df)
   # 3 for good measure
   gc()
   gc()
   gc()
   res <- rel_to_altrep(filter_rel)
-  expect_equal(res, data.frame(a=c("hello")))
+  expect_equal(res, data.frame(a=c(paste0("m", "r", ".", "d", "u", "c", "k")))
 })
 
 
