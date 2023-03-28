@@ -18,9 +18,21 @@ bool PyGenericAlias::check_(const py::handle &object) {
 
 // NOLINTNEXTLINE(readability-identifier-naming)
 bool PyUnionType::check_(const py::handle &object) {
+	auto types_loaded = ModuleIsLoaded<TypesCacheItem>();
+	auto typing_loaded = ModuleIsLoaded<TypingCacheItem>();
+
+	if (!types_loaded && !typing_loaded) {
+		return false;
+	}
+
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return py::isinstance(object, py::module::import("typing").attr("_UnionGenericAlias")) ||
-	       import_cache.types().UnionType.IsInstance(object);
+	if (types_loaded && import_cache.types().UnionType.IsInstance(object)) {
+		return true;
+	}
+	if (typing_loaded && import_cache.typing()._UnionGenericAlias.IsInstance(object)) {
+		return true;
+	}
+	return false;
 }
 
 DuckDBPyType::DuckDBPyType(LogicalType type) : type(std::move(type)) {
