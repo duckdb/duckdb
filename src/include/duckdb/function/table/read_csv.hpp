@@ -68,7 +68,6 @@ struct ReadCSVData : public BaseCSVData {
 	//! Whether or not the single-threaded reader should be used
 	bool single_threaded = false;
 
-
 	void Initialize(unique_ptr<BufferedCSVReader> &reader) {
 		this->initial_reader = std::move(reader);
 	}

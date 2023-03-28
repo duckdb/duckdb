@@ -61,8 +61,6 @@ struct ParquetReadBindData : public TableFunctionData {
 		initial_file_cardinality = initial_reader->NumRows();
 		initial_file_row_groups = initial_reader->NumRowGroups();
 		parquet_options = initial_reader->parquet_options;
-		this->names = initial_reader->names;
-		this->types = initial_reader->return_types;
 	}
 };
 
@@ -281,15 +279,17 @@ public:
 		auto result = make_unique<ParquetReadBindData>();
 		result->files = std::move(files);
 		MultiFileReader::BindReader<ParquetReader>(context, result->types, result->names, *result, parquet_options);
-		result->reader_bind = MultiFileReader::BindOptions(parquet_options.file_options, result->files, result->types, result->names);
+		result->reader_bind =
+		    MultiFileReader::BindOptions(parquet_options.file_options, result->files, result->types, result->names);
 		if (return_types.empty()) {
 			// no expected types - just copy the types
 			return_types = result->types;
 			names = result->names;
 		} else {
 			if (return_types.size() != result->types.size()) {
-				throw std::runtime_error(StringUtil::Format("Failed to read file \"%s\" - column count mismatch: expected %d columns but found %d", result->files[0], return_types.size(),
-									  result->types.size()));
+				throw std::runtime_error(StringUtil::Format(
+				    "Failed to read file \"%s\" - column count mismatch: expected %d columns but found %d",
+				    result->files[0], return_types.size(), result->types.size()));
 			}
 			// expected types - overwrite the types we want to read instead
 			result->types = return_types;
@@ -364,7 +364,8 @@ public:
 				if (bind_data.files.empty()) {
 					result->initial_reader = nullptr;
 				} else {
-					result->initial_reader = make_shared<ParquetReader>(context, bind_data.files[0], bind_data.parquet_options);
+					result->initial_reader =
+					    make_shared<ParquetReader>(context, bind_data.files[0], bind_data.parquet_options);
 					result->readers[0] = result->initial_reader;
 				}
 			}
@@ -372,11 +373,12 @@ public:
 			result->readers = std::move(bind_data.union_readers);
 			result->initial_reader = result->readers[0];
 		}
-		for(auto &reader : result->readers) {
+		for (auto &reader : result->readers) {
 			if (!reader) {
 				continue;
 			}
-			MultiFileReader::InitializeReader(*reader, bind_data.reader_bind, bind_data.types, bind_data.names, input.column_ids, input.filters);
+			MultiFileReader::InitializeReader(*reader, bind_data.reader_bind, bind_data.types, bind_data.names,
+			                                  input.column_ids, input.filters);
 		}
 
 		result->column_ids = input.column_ids;
@@ -522,7 +524,8 @@ public:
 	static void ParquetComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
 	                                         vector<unique_ptr<Expression>> &filters) {
 		auto data = (ParquetReadBindData *)bind_data_p;
-		auto reset_reader = MultiFileReader::ComplexFilterPushdown(context, data->files, data->parquet_options.file_options, get, filters);
+		auto reset_reader = MultiFileReader::ComplexFilterPushdown(context, data->files,
+		                                                           data->parquet_options.file_options, get, filters);
 		if (reset_reader) {
 			data->initial_reader.reset();
 		}
@@ -567,7 +570,8 @@ public:
 				shared_ptr<ParquetReader> reader;
 				try {
 					reader = make_shared<ParquetReader>(context, file, pq_options);
-					MultiFileReader::InitializeReader(*reader, bind_data.reader_bind, bind_data.types, bind_data.names, parallel_state.column_ids, parallel_state.filters);
+					MultiFileReader::InitializeReader(*reader, bind_data.reader_bind, bind_data.types, bind_data.names,
+					                                  parallel_state.column_ids, parallel_state.filters);
 				} catch (...) {
 					parallel_lock.lock();
 					parallel_state.error_opening_file = true;

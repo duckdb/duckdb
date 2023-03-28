@@ -24,6 +24,11 @@ SELECT count(filename) FROM parquet_scan('data/parquet-testing/p2.parquet', FILE
 ----
 479
 
+# filter pushdown on filename
+query I
+SELECT count(id) FROM parquet_scan('data/parquet-testing/p2.parquet', FILENAME=1) where filename >= 'data';
+----
+4979
 
 # Filter on non-filename col
 query I

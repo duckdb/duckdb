@@ -249,8 +249,7 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele) {
 	return DeriveLogicalType(s_ele, parquet_options.binary_as_string);
 }
 
-unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(idx_t depth,
-                                                              idx_t max_define, idx_t max_repeat,
+unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
                                                               idx_t &next_schema_idx, idx_t &next_file_idx) {
 	auto file_meta_data = GetFileMetadata();
 	D_ASSERT(file_meta_data);
@@ -282,8 +281,8 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(idx_t depth,
 
 			auto &child_ele = file_meta_data->schema[next_schema_idx];
 
-			auto child_reader = CreateReaderRecursive(depth + 1, max_define, max_repeat,
-			                                          next_schema_idx, next_file_idx);
+			auto child_reader =
+			    CreateReaderRecursive(depth + 1, max_define, max_repeat, next_schema_idx, next_file_idx);
 			child_types.push_back(make_pair(child_ele.name, child_reader->Type()));
 			child_readers.push_back(std::move(child_reader));
 
@@ -423,8 +422,7 @@ ParquetOptions::ParquetOptions(ClientContext &context) {
 	}
 }
 
-ParquetReader::ParquetReader(Allocator &allocator_p, unique_ptr<FileHandle> file_handle_p)
-    : allocator(allocator_p) {
+ParquetReader::ParquetReader(Allocator &allocator_p, unique_ptr<FileHandle> file_handle_p) : allocator(allocator_p) {
 	file_name = file_handle_p->path;
 	file_handle = std::move(file_handle_p);
 	metadata = LoadMetadata(allocator, *file_handle, *file_opener);
@@ -460,12 +458,12 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, Parqu
 	InitializeSchema();
 }
 
-ParquetReader::ParquetReader(ClientContext &context_p, ParquetOptions parquet_options_p, shared_ptr<ParquetFileMetadataCache> metadata_p) :
-	allocator(BufferAllocator::Get(context_p)), file_opener(FileSystem::GetFileOpener(context_p)),
+ParquetReader::ParquetReader(ClientContext &context_p, ParquetOptions parquet_options_p,
+                             shared_ptr<ParquetFileMetadataCache> metadata_p)
+    : allocator(BufferAllocator::Get(context_p)), file_opener(FileSystem::GetFileOpener(context_p)),
       metadata(std::move(metadata_p)), parquet_options(parquet_options_p) {
 	InitializeSchema();
 }
-
 
 ParquetReader::~ParquetReader() {
 }
@@ -478,7 +476,7 @@ const FileMetaData *ParquetReader::GetFileMetadata() {
 
 unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const string &name) {
 	idx_t file_col_idx;
-	for(file_col_idx = 0; file_col_idx < names.size(); file_col_idx++) {
+	for (file_col_idx = 0; file_col_idx < names.size(); file_col_idx++) {
 		if (names[file_col_idx] == name) {
 			break;
 		}
@@ -869,7 +867,8 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				    "Malformed parquet file: sum of total compressed bytes of columns seems incorrect");
 			}
 
-			if (!reader_data.filters && scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
+			if (!reader_data.filters &&
+			    scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
 				// Prefetch the whole row group
 				if (!state.current_group_prefetched) {
 					auto total_compressed_size = GetGroupCompressedSize(state);
@@ -937,18 +936,28 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 
 		// first load the columns that are used in filters
 		for (auto &filter_col : reader_data.filters->filters) {
-			auto file_col_idx = reader_data.column_ids[reader_data.reverse_column_mapping[filter_col.first]];
-			// row_group skipping of columns that are never scanned.
-			if (filter_mask.none()) { // if no rows are left we can stop checking filters
+			if (filter_mask.none()) {
+				// if no rows are left we can stop checking filters
 				break;
 			}
+			auto filter_entry = reader_data.filter_map[filter_col.first];
+			if (filter_entry.is_constant) {
+				// this is a constant vector, look for the constant
+				auto &constant = reader_data.constant_map[filter_entry.index].second;
+				Vector constant_vector(constant);
+				ApplyFilter(constant_vector, *filter_col.second, filter_mask, this_output_chunk_rows);
+			} else {
+				auto id = filter_entry.index;
+				auto file_col_idx = reader_data.column_ids[id];
+				auto result_idx = reader_data.column_mapping[id];
 
-			auto &result_vector = result.data[filter_col.first];
-			auto child_reader = root_reader->GetChildReader(file_col_idx);
-			child_reader->Read(result.size(), filter_mask, define_ptr, repeat_ptr, result_vector);
-			need_to_read[filter_col.first] = false;
+				auto &result_vector = result.data[result_idx];
+				auto child_reader = root_reader->GetChildReader(file_col_idx);
+				child_reader->Read(result.size(), filter_mask, define_ptr, repeat_ptr, result_vector);
+				need_to_read[id] = false;
 
-			ApplyFilter(result.data[filter_col.first], *filter_col.second, filter_mask, this_output_chunk_rows);
+				ApplyFilter(result_vector, *filter_col.second, filter_mask, this_output_chunk_rows);
+			}
 		}
 
 		// we still may have to read some cols

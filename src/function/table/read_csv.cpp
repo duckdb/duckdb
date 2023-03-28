@@ -828,7 +828,8 @@ double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p
 void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
                               vector<unique_ptr<Expression>> &filters) {
 	auto data = (ReadCSVData *)bind_data_p;
-	auto reset_reader = MultiFileReader::ComplexFilterPushdown(context, data->files, data->options.file_options, get, filters);
+	auto reset_reader =
+	    MultiFileReader::ComplexFilterPushdown(context, data->files, data->options.file_options, get, filters);
 	if (reset_reader) {
 		data->initial_reader.reset();
 	}

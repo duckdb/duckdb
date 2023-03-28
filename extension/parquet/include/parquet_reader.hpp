@@ -82,7 +82,8 @@ class ParquetReader {
 public:
 	ParquetReader(Allocator &allocator, unique_ptr<FileHandle> file_handle_p);
 	ParquetReader(ClientContext &context, string file_name, ParquetOptions parquet_options);
-	ParquetReader(ClientContext &context, ParquetOptions parquet_options, shared_ptr<ParquetFileMetadataCache> metadata);
+	ParquetReader(ClientContext &context, ParquetOptions parquet_options,
+	              shared_ptr<ParquetFileMetadataCache> metadata);
 	~ParquetReader();
 
 	Allocator &allocator;
