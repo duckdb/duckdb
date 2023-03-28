@@ -21,10 +21,12 @@ public:
 	}
 	virtual void LoadSubtypes(PythonImportCache &cache) override {
 		UnionType.LoadAttribute("UnionType", cache, *this);
+		GenericAlias.LoadAttribute("GenericAlias", cache, *this);
 	}
 
 public:
 	PythonImportCacheItem UnionType;
+	PythonImportCacheItem GenericAlias;
 };
 
 } // namespace duckdb

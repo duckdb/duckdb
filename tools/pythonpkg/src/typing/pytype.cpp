@@ -8,6 +8,15 @@
 namespace duckdb {
 
 // NOLINTNEXTLINE(readability-identifier-naming)
+bool PyGenericAlias::check_(const py::handle &object) {
+	if (!ModuleIsLoaded<TypesCacheItem>()) {
+		return false;
+	}
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	return import_cache.types().GenericAlias.IsInstance(object);
+}
+
+// NOLINTNEXTLINE(readability-identifier-naming)
 bool PyUnionType::check_(const py::handle &object) {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	return py::isinstance(object, py::module::import("typing").attr("_UnionGenericAlias")) ||
