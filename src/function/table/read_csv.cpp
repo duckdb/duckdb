@@ -64,8 +64,6 @@ uint8_t GetCandidateSpecificity(const LogicalType &candidate_type) {
 
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctionBindInput &input,
                                             vector<LogicalType> &return_types, vector<string> &names) {
-	auto &config = DBConfig::GetConfig(context);
-
 	auto result = make_unique<ReadCSVData>();
 	auto &options = result->options;
 	result->files = MultiFileReader::GetFileList(context, input.inputs[0], "CSV");

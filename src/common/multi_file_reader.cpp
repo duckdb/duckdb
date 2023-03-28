@@ -12,7 +12,7 @@ void MultiFileReader::AddParameters(TableFunction &table_function) {
 	table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
 }
 
-vector<string> MultiFileReader::GetFileList(ClientContext &context, const Value &input, const string &name) {
+vector<string> MultiFileReader::GetFileList(ClientContext &context, const Value &input, const string &name, FileGlobOptions options) {
 	auto &config = DBConfig::GetConfig(context);
 	if (!config.options.enable_external_access) {
 		throw PermissionException("Scanning %s files is disabled through configuration", name);
@@ -24,19 +24,19 @@ vector<string> MultiFileReader::GetFileList(ClientContext &context, const Value 
 	vector<string> files;
 	if (input.type().id() == LogicalTypeId::VARCHAR) {
 		auto file_name = StringValue::Get(input);
-		files = fs.GlobFiles(file_name, context);
+		files = fs.GlobFiles(file_name, context, options);
 	} else if (input.type().id() == LogicalTypeId::LIST) {
 		for (auto &val : ListValue::GetChildren(input)) {
 			if (val.IsNull()) {
 				throw ParserException("%s reader cannot take NULL input as parameter", name);
 			}
-			auto glob_files = fs.GlobFiles(StringValue::Get(val), context);
+			auto glob_files = fs.GlobFiles(StringValue::Get(val), context, options);
 			files.insert(files.end(), glob_files.begin(), glob_files.end());
 		}
 	} else {
-		throw InternalException("Unsupported type for MultiFileReader::ParseInput");
+		throw InternalException("Unsupported type for MultiFileReader::GetFileList");
 	}
-	if (files.empty()) {
+	if (files.empty() && options == FileGlobOptions::DISALLOW_EMPTY) {
 		throw IOException("%s reader needs at least one file to read", name);
 	}
 	return files;
