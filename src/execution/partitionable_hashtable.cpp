@@ -1,5 +1,7 @@
 #include "duckdb/execution/partitionable_hashtable.hpp"
 
+#include "duckdb/common/radix_partitioning.hpp"
+
 namespace duckdb {
 
 RadixPartitionInfo::RadixPartitionInfo(const idx_t n_partitions_upper_bound)

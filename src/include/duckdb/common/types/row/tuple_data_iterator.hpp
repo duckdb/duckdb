@@ -22,7 +22,7 @@ public:
 
 public:
 	//! Whether the iterator is done
-	bool Done();
+	bool Done() const;
 	//! Fetches the next STANDARD_VECTOR_SIZE row locations (and heap locations/sizes if init_heap is true)
 	bool Next();
 	//! Resets the scan indices to the start

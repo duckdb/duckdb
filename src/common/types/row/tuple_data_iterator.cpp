@@ -1,5 +1,7 @@
 #include "duckdb/common/types/row/tuple_data_iterator.hpp"
 
+#include "duckdb/common/types/row/tuple_data_allocator.hpp"
+
 namespace duckdb {
 
 TupleDataChunkIterator::TupleDataChunkIterator(TupleDataCollection &collection_p, TupleDataPinProperties properties_p,
@@ -37,7 +39,7 @@ void TupleDataChunkIterator::InitializeCurrentChunk() {
 	segment.allocator->InitializeChunkState(segment, state.pin_state, state.chunk_state, current_chunk_idx, init_heap);
 }
 
-bool TupleDataChunkIterator::Done() {
+bool TupleDataChunkIterator::Done() const {
 	return current_segment_idx == end_segment_idx && current_chunk_idx == end_chunk_idx;
 }
 

@@ -1,8 +1,8 @@
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 
+#include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
-#include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/row/tuple_data_allocator.hpp"
 
 #include <algorithm>

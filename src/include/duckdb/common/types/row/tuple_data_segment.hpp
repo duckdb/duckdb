@@ -8,9 +8,16 @@
 
 #pragma once
 
+#include "duckdb/common/common.hpp"
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+
 namespace duckdb {
 
 class TupleDataAllocator;
+class TupleDataLayout;
 
 struct TupleDataChunkPart {
 public:

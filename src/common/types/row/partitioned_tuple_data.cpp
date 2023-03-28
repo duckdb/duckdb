@@ -199,7 +199,9 @@ void PartitionedTupleData::Combine(PartitionedTupleData &other) {
 }
 
 void PartitionedTupleData::Partition(TupleDataCollection &source, TupleDataPinProperties properties) {
+#ifdef DEBUG
 	const auto count_before = source.Count();
+#endif
 
 	PartitionedTupleDataAppendState append_state;
 	InitializeAppendState(append_state, properties);
