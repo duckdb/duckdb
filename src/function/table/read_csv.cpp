@@ -216,10 +216,10 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		vector<string> union_col_names;
 		vector<LogicalType> union_col_types;
 
-		auto dummy_readers = UnionByName<BufferedCSVReader, BufferedCSVReaderOptions>::UnionCols(
+		auto dummy_readers = UnionByName::UnionCols<BufferedCSVReader>(
 		    context, result->files, union_col_types, union_col_names, union_names_map, options);
 
-		dummy_readers = UnionByName<BufferedCSVReader, BufferedCSVReaderOptions>::CreateUnionMap(
+		dummy_readers = UnionByName::CreateUnionMap<BufferedCSVReader>(
 		    std::move(dummy_readers), union_col_types, union_col_names, union_names_map);
 
 		std::move(dummy_readers.begin(), dummy_readers.end(), std::back_inserter(result->union_readers));
@@ -724,8 +724,7 @@ static void SingleThreadedCSVFunction(ClientContext &context, TableFunctionInput
 	} while (true);
 
 	if (bind_data.options.file_options.union_by_name) {
-		UnionByName<BufferedCSVReader, BufferedCSVReaderOptions>::SetNullUnionCols(output,
-		                                                                           lstate.csv_reader->union_null_cols);
+		UnionByName::SetNullUnionCols(output, lstate.csv_reader->union_null_cols);
 	}
 	if (bind_data.options.file_options.filename) {
 		auto &col = output.data[bind_data.filename_col_idx];

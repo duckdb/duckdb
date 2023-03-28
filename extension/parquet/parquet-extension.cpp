@@ -62,6 +62,8 @@ struct ParquetReadBindData : public TableFunctionData {
 		initial_file_cardinality = initial_reader->NumRows();
 		initial_file_row_groups = initial_reader->NumRowGroups();
 		parquet_options = initial_reader->parquet_options;
+		names = initial_reader->names;
+		types = initial_reader->return_types;
 	}
 };
 
@@ -208,18 +210,9 @@ public:
 
 		auto files = MultiFileReader::GetFileList(context, Value(info.file_path), "Parquet");
 
-		// The most likely path (Parquet read without union by name option)
-		if (!parquet_options.file_options.union_by_name) {
-			auto result = make_unique<ParquetReadBindData>();
-			result->files = std::move(files);
-			result->SetInitialReader(
-			    make_shared<ParquetReader>(context, result->files[0], expected_types, parquet_options));
-			result->names = result->initial_reader->names;
-			result->types = result->initial_reader->return_types;
-			return std::move(result);
-		} else {
-			return ParquetUnionNamesBind(context, files, expected_types, expected_names, parquet_options);
-		}
+		auto result = make_unique<ParquetReadBindData>();
+		MultiFileReader::BindReader<ParquetReader>(context, std::move(files), expected_types, expected_names, *result, parquet_options);
+		return result;
 	}
 
 	static unique_ptr<BaseStatistics> ParquetScanStats(ClientContext &context, const FunctionData *bind_data_p,
@@ -306,41 +299,7 @@ public:
 	                                                        vector<LogicalType> &return_types, vector<string> &names,
 	                                                        ParquetOptions parquet_options) {
 		auto result = make_unique<ParquetReadBindData>();
-
-		// The most likely path (Parquet Scan without union by name option)
-		if (!parquet_options.file_options.union_by_name) {
-			result->files = std::move(files);
-			result->SetInitialReader(make_shared<ParquetReader>(context, result->files[0], parquet_options));
-			return_types = result->types = result->initial_reader->return_types;
-			names = result->names = result->initial_reader->names;
-			return std::move(result);
-		} else {
-			return ParquetUnionNamesBind(context, files, return_types, names, parquet_options);
-		}
-	}
-
-	static unique_ptr<FunctionData> ParquetUnionNamesBind(ClientContext &context, vector<string> files,
-	                                                      vector<LogicalType> &return_types, vector<string> &names,
-	                                                      ParquetOptions parquet_options) {
-		auto result = make_unique<ParquetReadBindData>();
-		result->files = std::move(files);
-
-		case_insensitive_map_t<idx_t> union_names_map;
-		vector<string> union_col_names;
-		vector<LogicalType> union_col_types;
-		auto dummy_readers = UnionByName<ParquetReader, ParquetOptions>::UnionCols(
-		    context, result->files, union_col_types, union_col_names, union_names_map, parquet_options);
-
-		dummy_readers = UnionByName<ParquetReader, ParquetOptions>::CreateUnionMap(
-		    std::move(dummy_readers), union_col_types, union_col_names, union_names_map);
-
-		std::move(dummy_readers.begin(), dummy_readers.end(), std::back_inserter(result->union_readers));
-		names.assign(union_col_names.begin(), union_col_names.end());
-		return_types.assign(union_col_types.begin(), union_col_types.end());
-		result->SetInitialReader(result->union_readers[0]);
-		D_ASSERT(names.size() == return_types.size());
-		result->types = union_col_types;
-
+		MultiFileReader::BindReader<ParquetReader>(context, std::move(files), return_types, names, *result, parquet_options);
 		return std::move(result);
 	}
 
@@ -489,7 +448,7 @@ public:
 			bind_data.chunk_count++;
 			if (output.size() > 0) {
 				if (bind_data.parquet_options.file_options.union_by_name) {
-					UnionByName<ParquetReader, ParquetOptions>::SetNullUnionCols(output, data.reader->union_null_cols);
+					UnionByName::SetNullUnionCols(output, data.reader->union_null_cols);
 				}
 				return;
 			}
