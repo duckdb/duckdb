@@ -91,7 +91,7 @@ void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, Vector &source_
 		const auto source_data = (string_t *)source_vector_data.data;
 		for (idx_t i = 0; i < append_count; i++) {
 			auto source_idx = source_sel.get_index(append_sel.get_index(i));
-			if (source_validity.RowIsValid(source_idx)) {
+			if (source_validity.RowIsValid(source_idx) && !source_data[source_idx].IsInlined()) {
 				heap_sizes[i] += source_data[source_idx].GetSize();
 			}
 		}

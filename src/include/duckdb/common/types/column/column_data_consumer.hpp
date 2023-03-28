@@ -44,6 +44,10 @@ public:
 public:
 	ColumnDataConsumer(ColumnDataCollection &collection, vector<column_t> column_ids);
 
+	idx_t Count() const {
+		return collection.Count();
+	}
+
 	idx_t ChunkCount() const {
 		return chunk_count;
 	}

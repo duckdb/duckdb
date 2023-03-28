@@ -138,9 +138,11 @@ void PartitionedColumnData::FlushAppendState(PartitionedColumnDataAppendState &s
 	for (idx_t partition_index = 0; partition_index < partitions.size(); partition_index++) {
 		auto &partition = *partitions[partition_index];
 		auto &partition_buffer = *state.partition_buffers[partition_index];
+		auto &partition_append_state = *state.partition_append_states[partition_index];
 		if (partition_buffer.size() > 0) {
-			partition.Append(partition_buffer);
+			partition.Append(partition_append_state, partition_buffer);
 			partition_buffer.Reset();
+			partition_buffer.SetCapacity(BufferSize());
 		}
 	}
 }

@@ -62,7 +62,8 @@ public:
 	//! Combine another PartitionedTupleData into this PartitionedTupleData
 	void Combine(PartitionedTupleData &other);
 	//! Partition a TupleDataCollection
-	void Partition(TupleDataCollection &source);
+	void Partition(TupleDataCollection &source,
+	               TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE);
 	//! Repartition this PartitionedTupleData into the new PartitionedTupleData
 	void Repartition(PartitionedTupleData &new_partitioned_data);
 	//! Get the partitions in this PartitionedTupleData

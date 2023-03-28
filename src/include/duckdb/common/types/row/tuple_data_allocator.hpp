@@ -89,7 +89,8 @@ private:
 	                                  bool init_heap_pointers, bool init_heap_sizes,
 	                                  vector<TupleDataChunkPart *> &parts);
 	//! Internal function for ReleaseOrStoreHandles
-	static void ReleaseOrStoreHandlesInternal(TupleDataSegment &segment, unordered_map<uint32_t, BufferHandle> &handles,
+	static void ReleaseOrStoreHandlesInternal(TupleDataSegment &segment, vector<BufferHandle> &pinned_row_handles,
+	                                          unordered_map<uint32_t, BufferHandle> &handles,
 	                                          const unordered_set<uint32_t> &block_ids, vector<TupleDataBlock> &blocks,
 	                                          TupleDataPinProperties properties);
 	//! Pins the given row block

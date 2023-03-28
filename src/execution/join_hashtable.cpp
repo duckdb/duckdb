@@ -280,7 +280,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 void JoinHashTable::InitializePointerTable() {
 	idx_t capacity = PointerTableCapacity(Count());
 	// size needs to be a power of 2
-	D_ASSERT((capacity & (capacity - 1)) == 0);
+	D_ASSERT(IsPowerOfTwo(capacity));
 
 	if (hash_map.get()) { // There is already a hash map
 		auto current_capacity = hash_map.GetSize() / sizeof(data_ptr_t);
@@ -932,13 +932,13 @@ void JoinHashTable::Reset() {
 }
 
 bool JoinHashTable::PrepareExternalFinalize() {
-	idx_t num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
-	if (sink_collection->Count() == 0 || partition_end == num_partitions) {
-		return false;
-	}
-
 	if (finalized) {
 		Reset();
+	}
+
+	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
+	if (partition_end == num_partitions) {
+		return false;
 	}
 
 	// Start where we left off
@@ -960,7 +960,6 @@ bool JoinHashTable::PrepareExternalFinalize() {
 		data_size = incl_data_size;
 	}
 	partition_end = partition_idx;
-	D_ASSERT(count != 0);
 
 	// Move the partitions to the main data collection
 	for (partition_idx = partition_start; partition_idx < partition_end; partition_idx++) {
@@ -1115,7 +1114,12 @@ void ProbeSpill::PrepareNextProbe() {
 			// Move specific partitions to the global spill collection
 			global_spill_collection = std::move(partitions[ht.partition_start]);
 			for (idx_t i = ht.partition_start + 1; i < ht.partition_end; i++) {
-				global_spill_collection->Combine(*partitions[i]);
+				auto &partition = partitions[i];
+				if (global_spill_collection->Count() == 0) {
+					global_spill_collection = std::move(partition);
+				} else {
+					global_spill_collection->Combine(*partition);
+				}
 			}
 		}
 	}

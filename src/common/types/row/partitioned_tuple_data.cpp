@@ -198,11 +198,11 @@ void PartitionedTupleData::Combine(PartitionedTupleData &other) {
 	}
 }
 
-void PartitionedTupleData::Partition(TupleDataCollection &source) {
+void PartitionedTupleData::Partition(TupleDataCollection &source, TupleDataPinProperties properties) {
 	const auto count_before = source.Count();
 
 	PartitionedTupleDataAppendState append_state;
-	InitializeAppendState(append_state, TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
+	InitializeAppendState(append_state, properties);
 
 	TupleDataChunkIterator iterator(source, TupleDataPinProperties::DESTROY_AFTER_DONE, true);
 	auto &chunk_state = iterator.GetChunkState();

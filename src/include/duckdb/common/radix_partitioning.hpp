@@ -19,14 +19,44 @@ class Vector;
 struct UnifiedVectorFormat;
 struct SelectionVector;
 
+//! Generic radix partitioning functions
+struct RadixPartitioning {
+public:
+	static inline constexpr idx_t NumberOfPartitions(const idx_t &radix_bits) {
+		return idx_t(1) << radix_bits;
+	}
+
+	static inline idx_t RadixBits(const idx_t &n_partitions) {
+		D_ASSERT(IsPowerOfTwo(n_partitions));
+		for (idx_t r = 0; r < sizeof(idx_t) * 8; r++) {
+			if (n_partitions == NumberOfPartitions(r)) {
+				return r;
+			}
+		}
+		throw InternalException("RadixPartitioning::RadixBits unable to find partition count!");
+	}
+
+	static inline constexpr idx_t Shift(const idx_t &radix_bits) {
+		return 48 - radix_bits;
+	}
+
+	static inline constexpr hash_t Mask(const idx_t &radix_bits) {
+		return (hash_t(1 << radix_bits) - 1) << Shift(radix_bits);
+	}
+
+	//! Select using a cutoff on the radix bits of the hash
+	static idx_t Select(Vector &hashes, const SelectionVector *sel, idx_t count, idx_t radix_bits, idx_t cutoff,
+	                    SelectionVector *true_sel, SelectionVector *false_sel);
+};
+
 //! Templated radix partitioning constants, can be templated to the number of radix bits
 template <idx_t radix_bits>
 struct RadixPartitioningConstants {
 public:
-	//! Bitmask of the 5th byte
-	static constexpr const idx_t NUM_PARTITIONS = idx_t(1) << radix_bits;
-	static constexpr const hash_t SHIFT = 40;
-	static constexpr const hash_t MASK = (hash_t(1 << radix_bits) - 1) << SHIFT;
+	//! Bitmask of the upper bits of the 5th byte
+	static constexpr const idx_t NUM_PARTITIONS = RadixPartitioning::NumberOfPartitions(radix_bits);
+	static constexpr const idx_t SHIFT = RadixPartitioning::Shift(radix_bits);
+	static constexpr const hash_t MASK = RadixPartitioning::Mask(radix_bits);
 
 public:
 	//! Apply bitmask and right shift to get a number between 0 and NUM_PARTITIONS
@@ -34,19 +64,6 @@ public:
 		D_ASSERT((hash & MASK) >> SHIFT < NUM_PARTITIONS);
 		return (hash & MASK) >> SHIFT;
 	}
-};
-
-//! Generic radix partitioning functions
-struct RadixPartitioning {
-public:
-	static idx_t NumberOfPartitions(idx_t radix_bits) {
-		D_ASSERT(radix_bits != 0);
-		return idx_t(1) << radix_bits;
-	}
-
-	//! Select using a cutoff on the radix bits of the hash
-	static idx_t Select(Vector &hashes, const SelectionVector *sel, idx_t count, idx_t radix_bits, idx_t cutoff,
-	                    SelectionVector *true_sel, SelectionVector *false_sel);
 };
 
 //! RadixPartitionedColumnData is a PartitionedColumnData that partitions input based on the radix of a hash

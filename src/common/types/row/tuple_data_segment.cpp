@@ -83,7 +83,8 @@ void SwapTupleDataSegment(TupleDataSegment &a, TupleDataSegment &b) {
 	std::swap(a.allocator, b.allocator);
 	std::swap(a.chunks, b.chunks);
 	std::swap(a.count, b.count);
-	std::swap(a.pinned_handles, b.pinned_handles);
+	std::swap(a.pinned_row_handles, b.pinned_row_handles);
+	std::swap(a.pinned_heap_handles, b.pinned_heap_handles);
 }
 
 TupleDataSegment::TupleDataSegment(TupleDataSegment &&other) noexcept {
@@ -111,44 +112,6 @@ idx_t TupleDataSegment::SizeInBytes() const {
 		}
 	}
 	return total_size;
-}
-
-void TupleDataSegment::Combine(TupleDataSegment &other) {
-	D_ASSERT(allocator.get() == other.allocator.get());
-
-	// Merge the chunks in order - should slightly improve sequential scans
-	const idx_t total_chunks = this->chunks.size() + other.chunks.size();
-	vector<TupleDataChunk> combined_chunks;
-	combined_chunks.reserve(total_chunks);
-
-	auto this_it = this->chunks.begin();
-	auto other_it = other.chunks.begin();
-	while (combined_chunks.size() != total_chunks) {
-		if (this_it == chunks.end()) {
-			combined_chunks.push_back(std::move(*other_it));
-			other_it++;
-		} else if (other_it == other.chunks.end()) {
-			combined_chunks.push_back(std::move(*this_it));
-			this_it++;
-		} else if (this_it->parts[0].row_block_index < other_it->parts[0].row_block_index) {
-			combined_chunks.push_back(std::move(*this_it));
-			this_it++;
-		} else {
-			combined_chunks.push_back(std::move(*other_it));
-			other_it++;
-		}
-	}
-	other.chunks.clear();
-	other.count = 0;
-
-	this->chunks = std::move(combined_chunks);
-	this->count += other.count;
-
-	this->pinned_handles.reserve(this->pinned_handles.size() + other.pinned_handles.size());
-	for (auto &other_pinned_handle : other.pinned_handles) {
-		this->pinned_handles.push_back(std::move(other_pinned_handle));
-	}
-	other.pinned_handles.clear();
 }
 
 void TupleDataSegment::Verify() const {

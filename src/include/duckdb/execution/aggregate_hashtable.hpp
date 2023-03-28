@@ -138,8 +138,7 @@ private:
 	//! The hashes of the HT
 	BufferHandle hashes_hdl;
 	data_ptr_t hashes_hdl_ptr;
-	data_ptr_t hashes_end_ptr; // of hashes
-	idx_t hash_offset;         // Offset into the layout of the hash column
+	idx_t hash_offset; // Offset into the layout of the hash column
 
 	hash_t hash_prefix_shift;
 
@@ -161,25 +160,22 @@ private:
 private:
 	GroupedAggregateHashTable(const GroupedAggregateHashTable &) = delete;
 
-	//! Resize the HT to the specified size. Must be larger than the current
-	//! size.
 	void Destroy();
-
 	void Verify();
-
-	void FlushMove(FlushMoveState &state);
-
 	template <class ENTRY>
 	void VerifyInternal();
+	//! Resize the HT to the specified size. Must be larger than the current size.
 	template <class ENTRY>
 	void Resize(idx_t size);
+	//! Initializes the first part of the HT
+	template <class ENTRY>
+	void InitializeHashes();
+	//! Does the actual group matching / creation
 	template <class ENTRY>
 	idx_t FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes_v, Vector &addresses_v,
 	                                 SelectionVector &new_groups);
+	//! Updates payload_hds_ptrs with the new pointers (after appending to data_collection)
 	void UpdateBlockPointers();
-
-	template <class FUNC = std::function<void(idx_t, idx_t, data_ptr_t)>>
-	void PayloadApply(FUNC fun);
 };
 
 } // namespace duckdb

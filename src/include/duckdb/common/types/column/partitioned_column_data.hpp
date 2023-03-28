@@ -87,7 +87,7 @@ protected:
 
 	//! If the buffer is half full, we append to the partition
 	inline idx_t HalfBufferSize() const {
-		D_ASSERT((BufferSize() & (BufferSize() - 1)) == 0); // BufferSize should be a power of two
+		D_ASSERT(IsPowerOfTwo(BufferSize()));
 		return BufferSize() / 2;
 	}
 	//! Create a new shared allocator

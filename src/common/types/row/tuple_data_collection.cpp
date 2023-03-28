@@ -64,10 +64,10 @@ void TupleDataCollection::GetBlockPointers(vector<data_ptr_t> &block_pointers) c
 	D_ASSERT(segments.size() == 1);
 	const auto &segment = segments[0];
 	const auto block_count = segment.allocator->RowBlockCount();
-	D_ASSERT(segment.pinned_handles.size() == block_count);
+	D_ASSERT(segment.pinned_row_handles.size() == block_count);
 	block_pointers.resize(block_count);
 	for (idx_t block_idx = 0; block_idx < block_count; block_idx++) {
-		block_pointers[block_idx] = segment.pinned_handles[block_idx].Ptr();
+		block_pointers[block_idx] = segment.pinned_row_handles[block_idx].Ptr();
 	}
 }
 
@@ -120,8 +120,8 @@ static void InitializeVectorFormat(vector<TupleDataVectorFormat> &vector_data, c
 	vector_data.resize(types.size());
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
 		const auto &type = types[col_idx];
-		switch (type.id()) {
-		case LogicalTypeId::STRUCT: {
+		switch (type.InternalType()) {
+		case PhysicalType::STRUCT: {
 			const auto &child_list = StructType::GetChildTypes(type);
 			vector<LogicalType> child_types;
 			child_types.reserve(child_list.size());
@@ -131,7 +131,7 @@ static void InitializeVectorFormat(vector<TupleDataVectorFormat> &vector_data, c
 			InitializeVectorFormat(vector_data[col_idx].child_formats, child_types);
 			break;
 		}
-		case LogicalTypeId::LIST:
+		case PhysicalType::LIST:
 			InitializeVectorFormat(vector_data[col_idx].child_formats, {ListType::GetChildType(type)});
 			break;
 		default:
@@ -165,7 +165,6 @@ void TupleDataCollection::Append(TupleDataAppendState &append_state, DataChunk &
 
 void TupleDataCollection::Append(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state, DataChunk &new_chunk,
                                  const SelectionVector &append_sel, const idx_t append_count) {
-	D_ASSERT(chunk_state.vector_data.size() == layout.ColumnCount()); // Needs InitializeAppend
 	TupleDataCollection::ToUnifiedFormat(chunk_state, new_chunk);
 	AppendUnified(pin_state, chunk_state, new_chunk, append_sel, append_count);
 }
@@ -191,7 +190,7 @@ void TupleDataCollection::AppendUnified(TupleDataPinState &pin_state, TupleDataC
 	}
 #endif
 
-	Scatter(chunk_state, new_chunk, append_sel, append_count);
+	Scatter(chunk_state, new_chunk, append_sel, actual_append_count);
 
 #ifdef DEBUG
 	// Verify that the size of the data written to the heap is the same as the size we computed it would be
@@ -227,6 +226,7 @@ static inline void ToUnifiedFormatInternal(TupleDataVectorFormat &format, Vector
 }
 
 void TupleDataCollection::ToUnifiedFormat(TupleDataChunkState &chunk_state, DataChunk &new_chunk) {
+	D_ASSERT(chunk_state.vector_data.size() >= chunk_state.column_ids.size()); // Needs InitializeAppend
 	for (const auto &col_idx : chunk_state.column_ids) {
 		ToUnifiedFormatInternal(chunk_state.vector_data[col_idx], new_chunk.data[col_idx], new_chunk.size());
 	}
@@ -312,17 +312,11 @@ void TupleDataCollection::Combine(TupleDataCollection &other) {
 	if (this->layout.GetTypes() != other.GetLayout().GetTypes()) {
 		throw InternalException("Attempting to combine TupleDataCollection with mismatching types");
 	}
-	if (this->segments.size() == 1 && other.segments.size() == 1 &&
-	    this->segments[0].allocator.get() == other.segments[0].allocator.get()) {
-		// Same allocator - combine segments
-		this->segments[0].Combine(other.segments[0]);
-	} else {
-		// Different allocator - append segments
-		for (auto &other_seg : other.segments) {
-			this->segments.emplace_back(std::move(other_seg));
-		}
-	}
 	this->count += other.count;
+	this->segments.reserve(this->segments.size() + other.segments.size());
+	for (auto &other_seg : other.segments) {
+		this->segments.emplace_back(std::move(other_seg));
+	}
 	other.Reset();
 	Verify();
 }
@@ -387,9 +381,8 @@ bool TupleDataCollection::Scan(TupleDataScanState &state, DataChunk &result) {
 	if (!NextScanIndex(state, segment_index, chunk_index)) {
 		return false;
 	}
-	if (segment_index != segment_index_before) {
-		state.pin_state.row_handles.clear();
-		state.pin_state.heap_handles.clear();
+	if (segment_index_before != DConstants::INVALID_INDEX && segment_index != segment_index_before) {
+		FinalizePinState(state.pin_state, segments[segment_index_before]);
 	}
 	ScanAtIndex(state.pin_state, state.chunk_state, state.chunk_state.column_ids, segment_index, chunk_index, result);
 	return true;
@@ -397,19 +390,23 @@ bool TupleDataCollection::Scan(TupleDataScanState &state, DataChunk &result) {
 
 bool TupleDataCollection::Scan(TupleDataParallelScanState &gstate, TupleDataLocalScanState &lstate, DataChunk &result) {
 	auto &scan_state = lstate.scan_state;
+	scan_state.pin_state.properties = gstate.scan_state.pin_state.properties;
+
 	const auto segment_index_before = scan_state.segment_index;
+	idx_t segment_index;
+	idx_t chunk_index;
 	{
 		lock_guard<mutex> guard(gstate.lock);
-		if (!NextScanIndex(gstate.scan_state, scan_state.segment_index, scan_state.chunk_index)) {
+		if (!NextScanIndex(gstate.scan_state, segment_index, chunk_index)) {
 			return false;
 		}
 	}
-	if (scan_state.segment_index != segment_index_before) {
-		scan_state.pin_state.row_handles.clear();
-		scan_state.pin_state.heap_handles.clear();
+	if (segment_index_before != DConstants::INVALID_INDEX && segment_index_before != segment_index) {
+		FinalizePinState(scan_state.pin_state, segments[scan_state.segment_index]);
+		scan_state.segment_index = segment_index;
 	}
-	ScanAtIndex(scan_state.pin_state, scan_state.chunk_state, gstate.scan_state.chunk_state.column_ids,
-	            scan_state.segment_index, scan_state.chunk_index, result);
+	ScanAtIndex(scan_state.pin_state, scan_state.chunk_state, gstate.scan_state.chunk_state.column_ids, segment_index,
+	            chunk_index, result);
 	return true;
 }
 
@@ -431,7 +428,6 @@ bool TupleDataCollection::NextScanIndex(TupleDataScanState &state, idx_t &segmen
 	// Check within the current segment if we still have chunks to scan
 	while (state.chunk_index >= segments[state.segment_index].ChunkCount()) {
 		// Exhausted all chunks for this segment: Move to the next one
-		FinalizePinState(state.pin_state, segments[state.segment_index]);
 		state.segment_index++;
 		state.chunk_index = 0;
 		if (state.segment_index >= segments.size()) {

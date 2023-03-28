@@ -343,11 +343,11 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 void TupleDataAllocator::ReleaseOrStoreHandles(TupleDataPinState &pin_state, TupleDataSegment &segment,
                                                TupleDataChunk &chunk) {
 	D_ASSERT(this == segment.allocator.get());
-	ReleaseOrStoreHandlesInternal(segment, pin_state.row_handles, chunk.row_block_ids, row_blocks,
-	                              pin_state.properties);
+	ReleaseOrStoreHandlesInternal(segment, segment.pinned_row_handles, pin_state.row_handles, chunk.row_block_ids,
+	                              row_blocks, pin_state.properties);
 	if (!layout.AllConstant()) {
-		ReleaseOrStoreHandlesInternal(segment, pin_state.heap_handles, chunk.heap_block_ids, heap_blocks,
-		                              pin_state.properties);
+		ReleaseOrStoreHandlesInternal(segment, segment.pinned_heap_handles, pin_state.heap_handles,
+		                              chunk.heap_block_ids, heap_blocks, pin_state.properties);
 	}
 }
 
@@ -356,7 +356,7 @@ void TupleDataAllocator::ReleaseOrStoreHandles(TupleDataPinState &pin_state, Tup
 	ReleaseOrStoreHandles(pin_state, segment, DUMMY_CHUNK);
 }
 
-void TupleDataAllocator::ReleaseOrStoreHandlesInternal(TupleDataSegment &segment,
+void TupleDataAllocator::ReleaseOrStoreHandlesInternal(TupleDataSegment &segment, vector<BufferHandle> &pinned_handles,
                                                        unordered_map<uint32_t, BufferHandle> &handles,
                                                        const unordered_set<uint32_t> &block_ids,
                                                        vector<TupleDataBlock> &blocks,
@@ -373,7 +373,7 @@ void TupleDataAllocator::ReleaseOrStoreHandlesInternal(TupleDataSegment &segment
 			switch (properties) {
 			case TupleDataPinProperties::KEEP_EVERYTHING_PINNED: {
 				lock_guard<mutex> guard(segment.pinned_handles_lock);
-				segment.pinned_handles.emplace_back(std::move(it->second));
+				pinned_handles.emplace_back(std::move(it->second));
 				break;
 			}
 			case TupleDataPinProperties::UNPIN_AFTER_DONE:

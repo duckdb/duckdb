@@ -86,8 +86,6 @@ public:
 	idx_t ChunkCount() const;
 	//! The size (in bytes) of this segment
 	idx_t SizeInBytes() const;
-	//! Combine another segment into this one
-	void Combine(TupleDataSegment &other);
 	//! Verify counts of the chunks in this segment
 	void Verify() const;
 
@@ -100,8 +98,10 @@ public:
 	idx_t count;
 	//! Lock for modifying pinned_handles
 	mutex pinned_handles_lock;
-	//! Where handles will be stored with TupleDataPinProperties::KEEP_EVERYTHING_PINNED
-	vector<BufferHandle> pinned_handles;
+	//! Where handles to row blocks will be stored with TupleDataPinProperties::KEEP_EVERYTHING_PINNED
+	vector<BufferHandle> pinned_row_handles;
+	//! Where handles to heap blocks will be stored with TupleDataPinProperties::KEEP_EVERYTHING_PINNED
+	vector<BufferHandle> pinned_heap_handles;
 };
 
 } // namespace duckdb
