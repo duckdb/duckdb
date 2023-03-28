@@ -123,7 +123,8 @@ public:
 	idx_t Delete(TransactionData transaction, DataTable *table, row_t *row_ids, idx_t count);
 
 	RowGroupWriteData WriteToDisk(PartialBlockManager &manager, const vector<CompressionType> &compression_types);
-	RowGroupPointer Checkpoint(RowGroupWriter &writer, TableStatistics &global_stats);
+	bool AllDeleted();
+	RowGroupPointer Checkpoint(RowGroupWriter &writer, TableStatistics &global_stats, idx_t deleted_count);
 	static void Serialize(RowGroupPointer &pointer, Serializer &serializer);
 	static RowGroupPointer Deserialize(Deserializer &source, const vector<LogicalType> &columns);
 
@@ -170,6 +171,7 @@ struct VersionNode {
 	unique_ptr<ChunkInfo> info[RowGroup::ROW_GROUP_VECTOR_COUNT];
 
 	void SetStart(idx_t start);
+	idx_t GetCommittedDeletedCount(idx_t count);
 };
 
 } // namespace duckdb

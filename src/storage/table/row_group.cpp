@@ -67,6 +67,22 @@ void VersionNode::SetStart(idx_t start) {
 	}
 }
 
+idx_t VersionNode::GetCommittedDeletedCount(idx_t count) {
+	idx_t deleted_count = 0;
+	for (idx_t r = 0, i = 0; r < count; r += STANDARD_VECTOR_SIZE, i++) {
+		if (!info[i]) {
+			continue;
+		}
+		idx_t max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - r);
+		if (max_count == 0) {
+			break;
+		}
+		deleted_count += info[i]->GetCommittedDeletedCount(max_count);
+
+	}
+	return deleted_count;
+}
+
 RowGroup::~RowGroup() {
 }
 
@@ -796,7 +812,14 @@ RowGroupWriteData RowGroup::WriteToDisk(PartialBlockManager &manager,
 	return result;
 }
 
-RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, TableStatistics &global_stats) {
+bool RowGroup::AllDeleted() {
+	if (!version_info) {
+		return false;
+	}
+	return version_info->GetCommittedDeletedCount(count) == count;
+}
+
+RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, TableStatistics &global_stats, idx_t deleted_count) {
 	RowGroupPointer row_group_pointer;
 
 	vector<CompressionType> compression_types;
@@ -811,7 +834,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, TableStatistics &gl
 
 	// construct the row group pointer and write the column meta data to disk
 	D_ASSERT(result.states.size() == columns.size());
-	row_group_pointer.row_start = start;
+	row_group_pointer.row_start = start - deleted_count;
 	row_group_pointer.tuple_count = count;
 	for (auto &state : result.states) {
 		// get the current position of the table data writer

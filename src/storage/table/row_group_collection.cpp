@@ -577,10 +577,30 @@ void RowGroupCollection::UpdateColumn(TransactionData transaction, Vector &row_i
 // Checkpoint
 //===--------------------------------------------------------------------===//
 void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &global_stats) {
+	idx_t deleted_count = 0;
 	for (auto &row_group : row_groups->Segments()) {
-		auto rowg_writer = writer.GetRowGroupWriter(row_group);
-		auto pointer = row_group.Checkpoint(*rowg_writer, global_stats);
-		writer.AddRowGroup(std::move(pointer), std::move(rowg_writer));
+		if (row_group.AllDeleted()) {
+			deleted_count += row_group.count;
+			continue;
+		}
+		auto row_group_writer = writer.GetRowGroupWriter(row_group);
+		auto pointer = row_group.Checkpoint(*row_group_writer, global_stats, deleted_count);
+		writer.AddRowGroup(std::move(pointer), std::move(row_group_writer));
+	}
+	if (deleted_count > 0) {
+		auto new_row_groups = make_shared<RowGroupSegmentTree>(*this);
+		idx_t start = this->row_start;
+		auto l = new_row_groups->Lock();
+		for (auto &row_group : row_groups->Segments()) {
+			if (row_group.AllDeleted()) {
+				row_group.CommitDrop();
+				continue;
+			}
+			auto new_row_group = make_unique<RowGroup>(row_group, *this, start);
+			start += new_row_group->count;
+			new_row_groups->AppendSegment(l, std::move(new_row_group));
+		}
+		row_groups = std::move(new_row_groups);
 	}
 }
 
