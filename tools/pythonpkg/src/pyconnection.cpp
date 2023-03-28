@@ -1413,5 +1413,4 @@ bool DuckDBPyConnection::IsAcceptedArrowObject(const py::object &object) {
 	       py_import_cache.arrow_dataset().Scanner.IsInstance(object);
 }
 
-
 } // namespace duckdb
