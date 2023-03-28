@@ -51,7 +51,7 @@ bool TupleDataChunkIterator::Next() {
 	const auto segment_idx_before = current_segment_idx;
 	if (!collection.NextScanIndex(state, current_segment_idx, current_chunk_idx) || Done()) {
 		// Drop pins / stores them if TupleDataPinProperties::KEEP_EVERYTHING_PINNED
-		collection.FinalizePinState(state.pin_state, collection.segments[current_segment_idx]);
+		collection.FinalizePinState(state.pin_state, collection.segments[segment_idx_before]);
 		current_segment_idx = end_segment_idx;
 		current_chunk_idx = end_chunk_idx;
 		return false;
