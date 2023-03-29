@@ -5037,17 +5037,17 @@ namespace Catch {
 } // namespace Catch
 
 ///////////////////////////////////////////////////////////////////////////////
-#define OC_make_unique_NAME( root, uniqueSuffix ) root##uniqueSuffix
+#define OC_MAKE_UNIQUE_NAME( root, uniqueSuffix ) root##uniqueSuffix
 #define OC_TEST_CASE2( name, desc, uniqueSuffix ) \
-+(NSString*) OC_make_unique_NAME( Catch_Name_test_, uniqueSuffix ) \
++(NSString*) OC_MAKE_UNIQUE_NAME( Catch_Name_test_, uniqueSuffix ) \
 { \
 return @ name; \
 } \
-+(NSString*) OC_make_unique_NAME( Catch_Description_test_, uniqueSuffix ) \
++(NSString*) OC_MAKE_UNIQUE_NAME( Catch_Description_test_, uniqueSuffix ) \
 { \
 return @ desc; \
 } \
--(void) OC_make_unique_NAME( Catch_TestCase_test_, uniqueSuffix )
+-(void) OC_MAKE_UNIQUE_NAME( Catch_TestCase_test_, uniqueSuffix )
 
 #define OC_TEST_CASE( name, desc ) OC_TEST_CASE2( name, desc, __LINE__ )
 

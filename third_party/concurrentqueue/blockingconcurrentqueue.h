@@ -575,7 +575,7 @@ private:
 	
 private:
 	ConcurrentQueue inner;
-	duckdb::unique_ptr<LightweightSemaphore, void (*)(LightweightSemaphore*)> sema;
+	std::unique_ptr<LightweightSemaphore, void (*)(LightweightSemaphore*)> sema;
 };
 
 
