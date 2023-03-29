@@ -4,6 +4,7 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/storage/buffer/dummy_buffer_pool.hpp"
+#include "duckdb/storage/in_memory_block_manager.hpp"
 
 namespace duckdb {
 
@@ -34,11 +35,12 @@ struct CBufferManagerConfig {
 	duckdb_used_memory_t used_memory_func;
 };
 
-// struct CBufferAllocatorData : public PrivateAllocatorData {
-//	CBufferAllocatorData(CBufferManager &manager) : manager(manager) {
-//	}
-//	CBufferManager &manager;
-//};
+class CustomInMemoryBlockManager : public InMemoryBlockManager {
+public:
+	using InMemoryBlockManager::InMemoryBlockManager;
+public:
+	shared_ptr<BlockHandle> RegisterBlock(block_id_t block_id, bool is_meta_block) final override;
+};
 
 class CBufferManager : public BufferManager {
 public:
@@ -71,7 +73,7 @@ private:
 	// static data_ptr_t CBufferAllocatorRealloc(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
 	//                                          idx_t size);
 
-private:
+public:
 	CBufferManagerConfig config;
 	unique_ptr<BlockManager> block_manager;
 	unique_ptr<DummyBufferPool> buffer_pool;

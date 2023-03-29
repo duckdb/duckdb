@@ -8,12 +8,49 @@
 
 namespace duckdb {
 
+shared_ptr<BlockHandle> CustomInMemoryBlockManager::RegisterBlock(block_id_t block_id, bool is_meta_block) {
+	lock_guard<mutex> lock(blocks_lock);
+	// check if the block already exists
+	auto entry = blocks.find(block_id);
+	if (entry != blocks.end()) {
+		// already exists: check if it hasn't expired yet
+		auto existing_ptr = entry->second.lock();
+		if (existing_ptr) {
+			//! it hasn't! return it
+			return existing_ptr;
+		}
+	}
+	//FIXME: can we just use CBufferManager::RegisterSmallMemory here?
+	auto alloc_size = Storage::BLOCK_ALLOC_SIZE;
+
+	// create a new block pointer for this block
+	auto& cbuffer_manager = (CBufferManager&)buffer_manager;
+	auto &config = cbuffer_manager.config;
+	auto block_handle = config.allocate_func(config.data, Storage::BLOCK_ALLOC_SIZE);
+	auto allocation = (data_ptr_t)config.pin_func(config.data, block_handle);
+
+	// Used to manage the used_memory counter with RAII
+	BufferPoolReservation reservation(cbuffer_manager.GetBufferPool());
+	reservation.size = alloc_size;
+
+	unique_ptr<FileBuffer> buffer = make_unique<ExternalFileBuffer>(allocation, alloc_size);
+	shared_ptr<BlockHandle> result = make_shared<CustomBlockHandle>(block_handle, config, *this, block_id, std::move(buffer),
+	                                           false, alloc_size, std::move(reservation));
+	// for meta block, cache the handle in meta_blocks
+	if (is_meta_block) {
+		meta_blocks[block_id] = result;
+	}
+	// register the block pointer in the set of blocks as a weak pointer
+	blocks[block_id] = weak_ptr<BlockHandle>(result);
+	return result;
+}
+
 Allocator &CBufferManager::GetBufferAllocator() {
 	return allocator;
 }
 
 CBufferManager::CBufferManager(CBufferManagerConfig config_p) : BufferManager(), config(config_p) {
-	block_manager = make_unique<InMemoryBlockManager>(*this);
+	block_manager = make_unique<CustomInMemoryBlockManager>(*this);
 	buffer_pool = make_unique<DummyBufferPool>();
 }
 
