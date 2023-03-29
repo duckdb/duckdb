@@ -27,6 +27,7 @@ const string csv_extensions[5] = {csv, tsv, csv_gz, csv_zst, tbl_zst};
 
 bool debug = false;
 bool RunFull(std::string &path, std::set<std::string> &skip, duckdb::Connection &conn) {
+	bool single_threaded_passed = true;
 	// Here we run the csv file first with the single thread reader.
 	// Then the parallel csv reader with a combination of multiple threads and buffer sizes.
 	if (skip.find(path) != skip.end()) {
@@ -42,7 +43,7 @@ bool RunFull(std::string &path, std::set<std::string> &skip, duckdb::Connection 
 		ground_truth = &single_threaded_res->Collection();
 	} catch (...) {
 		// This means we can't read the file on ST, it's probably a borked file that exists for error checking
-		return true;
+		single_threaded_passed = false;
 	}
 	// For parallel CSV Reading the buffer must be at least the size of the biggest line in the File.
 	idx_t min_buffer_size = conn.context->client_data->max_line_length + 2;
@@ -52,9 +53,9 @@ bool RunFull(std::string &path, std::set<std::string> &skip, duckdb::Connection 
 	// TODO: Iterate over different buffer sizes
 	DuckDB db(nullptr);
 	Connection multi_conn(db);
-//	if (debug) {
-		std::cout << path << std::endl;
-//	}
+	//	if (debug) {
+	std::cout << path << std::endl;
+	//	}
 	for (auto thread_count = 1; thread_count <= 8; thread_count++) {
 		for (auto buffer_size = min_buffer_size; buffer_size < max_buffer_size; buffer_size++) {
 			if (debug) {
@@ -67,6 +68,10 @@ bool RunFull(std::string &path, std::set<std::string> &skip, duckdb::Connection 
 				unique_ptr<MaterializedQueryResult> multi_threaded_result = multi_conn.Query(
 				    "SELECT * FROM read_csv_auto('" + path + "', buffer_size = " + to_string(buffer_size) + ")");
 				auto &result = multi_threaded_result->Collection();
+				if (!single_threaded_passed) {
+					//! oh oh, this should not pass
+					std::cout << path << " Failed on single threaded but succeeded on parallel reading" << std::endl;
+				}
 				// Results do not match
 				string error_message;
 				if (!ColumnDataCollection::ResultEquals(*ground_truth, result, error_message)) {
@@ -76,6 +81,10 @@ bool RunFull(std::string &path, std::set<std::string> &skip, duckdb::Connection 
 					return true;
 				}
 			} catch (...) {
+				if (!single_threaded_passed) {
+					// Two wrongs can make a right
+					continue;
+				}
 				std::cout << "The house is burning" << std::endl;
 				std::cout << path << " Thread count: " << to_string(thread_count)
 				          << " Buffer Size: " << to_string(buffer_size) << std::endl;
@@ -106,7 +115,7 @@ void RunTestOnFolder(const string &path, std::set<std::string> &skip) {
 //	Connection con(db);
 //	std::set<std::string> skip;
 //
-//	string file = "test/sql/copy/csv/data/test/windows_newline.csv";
+//	string file = "data/csv/decimal_separators/mixed_format_fail.csv";
 ////		auto thread_count = 1;
 ////		auto buffer_size = 54;
 ////		con.Query("PRAGMA threads=" + to_string(thread_count));
@@ -167,20 +176,16 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/real", "[paralle
 	std::set<std::string> skip;
 	//! Thread count: 2 Buffer Size: 1266
 	skip.insert("test/sql/copy/csv/data/real/voter.tsv");
-	//! Thread count: 1 Buffer Size: 112 - Row count mismatch
+	//	//! Thread count: 1 Buffer Size: 112 - Row count mismatch
 	skip.insert("test/sql/copy/csv/data/real/tmp2013-06-15.csv.gz");
 	RunTestOnFolder("test/sql/copy/csv/data/real/", skip);
 }
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/test", "[parallel-csv]") {
 	std::set<std::string> skip;
-	//  CSV Auto Can't read this?
-	skip.insert("test/sql/copy/csv/data/test/multi_char_large.csv");
-	// Thread count: 1 Buffer Size: 5 Row count mismatch
-	skip.insert("test/sql/copy/csv/data/test/error_too_little.csv");
-	// Thread count: 1 Buffer Size: 40
+	//	// Thread count: 1 Buffer Size: 40
 	skip.insert("test/sql/copy/csv/data/test/quoted_newline.csv");
-	// Thread count: 1 Buffer Size: 147 Row count mismatch
+	//	// Thread count: 1 Buffer Size: 147 Row count mismatch
 	skip.insert("test/sql/copy/csv/data/test/issue3562_assertion.csv.gz");
 
 	RunTestOnFolder("test/sql/copy/csv/data/test/", skip);
@@ -188,35 +193,26 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/test", "[paralle
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/zstd", "[parallel-csv]") {
 	std::set<std::string> skip;
-	// Thread count: 1 Buffer Size: 541 Row count mismatch
+	//	// Thread count: 1 Buffer Size: 541 Row count mismatch
 	skip.insert("test/sql/copy/csv/data/zstd/ncvoter.csv.zst");
-	// Thread count: 1 Buffer Size: 1432 Row count mismatch
+	//	// Thread count: 1 Buffer Size: 1432 Row count mismatch
 	skip.insert("test/sql/copy/csv/data/zstd/lineitem1k.tbl.zst");
 	RunTestOnFolder("test/sql/copy/csv/data/zstd/", skip);
 }
 
 TEST_CASE("Test Parallel CSV All Files - data/csv", "[parallel-csv]") {
 	std::set<std::string> skip;
-	// Thread count: 1 Buffer Size: 9
-	skip.insert("data/csv/nullpadding_commas.csv");
-	// Thread count: 1 Buffer Size: 379 Row count mismatch
-	skip.insert("data/csv/csv_quoted_newline_odd.csv");
-	// Thread count: 2 Buffer Size: 209
+	//	// Thread count: 2 Buffer Size: 209
 	skip.insert("data/csv/tpcds_59.csv");
-	// Thread count: 1 Buffer Size: 25
+	//	// Thread count: 1 Buffer Size: 25
 	skip.insert("data/csv/nullpadding_big_mixed.csv");
-	//  Thread count: 1 Buffer Size: 20
-	skip.insert("data/csv/issue6764.csv");
-	// Thread count: 1 Buffer Size: 30645
+	//	// Thread count: 1 Buffer Size: 30645
 	skip.insert("data/csv/sequences.csv.gz");
 	RunTestOnFolder("data/csv/", skip);
 }
 
-
 TEST_CASE("Test Parallel CSV All Files - data/csv/decimal_separators", "[parallel-csv]") {
 	std::set<std::string> skip;
-	// Thread count: 1 Buffer Size: 30645
-	skip.insert("data/csv/decimal_separators/mixed_format_fail.csv");
 	RunTestOnFolder("data/csv/decimal_separators/", skip);
 }
 
@@ -224,4 +220,3 @@ TEST_CASE("Test Parallel CSV All Files - data/csv/中文", "[parallel-csv]") {
 	std::set<std::string> skip;
 	RunTestOnFolder("data/csv/中文/", skip);
 }
-

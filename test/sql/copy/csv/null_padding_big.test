@@ -8,32 +8,30 @@ statement ok
 CREATE TABLE test (a VARCHAR, b INTEGER, c INTEGER);
 
 query I
-COPY test FROM 'data/csv/nullpadding_big_mixed.csv' (HEADER)
+INSERT INTO test SELECT * FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', null_padding=True, Header=True)
 ----
 2501
 
 query I
-SELECT COUNT(*) FROM 'data/csv/nullpadding_big_mixed.csv'
+SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', null_padding=True)
 ----
 2501
 
 # one line that requires null padding
 query I
-SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', null_padding=False, ignore_errors=True)
+SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', null_padding=False, ignore_errors=True, parallel = false)
 ----
 2500
 
-query I
+statement error
 SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', parallel=True)
-----
-2501
 
 statement ok
 CREATE TABLE test2 (a VARCHAR, b INTEGER, c INTEGER, d INTEGER);
 
 # all nulls, several lines require NULL padding
 query I
-SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_commas.csv')
+SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_commas.csv', null_padding=True)
 ----
 2500
 

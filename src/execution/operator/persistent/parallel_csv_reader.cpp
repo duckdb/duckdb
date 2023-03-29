@@ -142,7 +142,13 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 		idx_t position_set = position_buffer;
 		start_buffer = position_buffer;
 		// We check if we can add this line
+		//		auto null_padding_setting = options.null_padding;
+		//		auto ignore_errors_setting = options.ignore_errors;
+		//		options.null_padding = false;
+		//		options.ignore_errors = false;
 		successfully_read_first_line = TryParseSimpleCSV(first_line_chunk, error_message, true);
+		//		options.null_padding = null_padding_setting;
+		//		options.ignore_errors = ignore_errors_setting;
 
 		end_buffer = end_buffer_real;
 		start_buffer = position_set;

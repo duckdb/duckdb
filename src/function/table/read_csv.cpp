@@ -43,8 +43,8 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 	bool null_or_empty = options.delimiter.empty() || options.escape.empty() || options.quote.empty() ||
 	                     options.delimiter[0] == '\0' || options.escape[0] == '\0' || options.quote[0] == '\0';
 	bool complex_options = options.delimiter.size() > 1 || options.escape.size() > 1 || options.quote.size() > 1;
-	bool not_supported_options =
-	    options.union_by_name || options.include_file_name || options.include_parsed_hive_partitions;
+	bool not_supported_options = options.union_by_name || options.include_file_name ||
+	                             options.include_parsed_hive_partitions || options.null_padding;
 
 	if (!options.run_parallel || null_or_empty || not_supported_options || complex_options ||
 	    options.new_line == NewLineIdentifier::MIX) {

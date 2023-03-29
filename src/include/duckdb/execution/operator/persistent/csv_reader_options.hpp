@@ -114,7 +114,7 @@ struct BufferedCSVReaderOptions {
 	//! Decimal separator when reading as numeric
 	string decimal_separator = ".";
 	//! Whether or not to pad rows that do not have enough columns with NULL values
-	bool null_padding = true;
+	bool null_padding = false;
 
 	//! If we are running the parallel version of the CSV Reader. In general, the system should always auto-detect
 	//! When it can't execute a parallel run before execution. However, there are (rather specific) situations where
