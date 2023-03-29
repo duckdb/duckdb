@@ -528,8 +528,7 @@ final_state : {
 	if (mode == ParserMode::PARSING) {
 		Flush(insert_chunk);
 	}
-	if (position_buffer != verification_positions.end_of_last_line &&
-	    !StringUtil::CharacterIsNewline((*buffer)[position_buffer - 1])) {
+	if (position_buffer - verification_positions.end_of_last_line > options.buffer_size) {
 		error_message = "Line does not fit in one buffer. Increase the buffer size.";
 		return false;
 	}

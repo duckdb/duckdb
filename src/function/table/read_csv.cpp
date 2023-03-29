@@ -11,6 +11,7 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/client_data.hpp"
 
 #include <limits>
 
@@ -697,6 +698,7 @@ public:
 
 static unique_ptr<GlobalTableFunctionState> SingleThreadedCSVInit(ClientContext &context,
                                                                   TableFunctionInitInput &input) {
+
 	auto &bind_data = (ReadCSVData &)*input.bind_data;
 	auto result = make_unique<SingleThreadedCSVState>(bind_data.files.size());
 	if (bind_data.initial_reader) {

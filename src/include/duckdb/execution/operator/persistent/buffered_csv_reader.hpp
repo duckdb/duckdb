@@ -87,7 +87,7 @@ private:
 	//! Resets the steam
 	void ResetStream();
 	//! Reads a new buffer from the CSV file if the current one has been exhausted
-	bool ReadBuffer(idx_t &start);
+	bool ReadBuffer(idx_t &start, idx_t &line_start);
 	//! Jumps back to the beginning of input stream and resets necessary internal states
 	bool JumpToNextSample();
 	//! Initializes the TextSearchShiftArrays for complex parser
