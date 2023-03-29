@@ -106,6 +106,11 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 		options.file_path = bind_data->files[0];
 		auto initial_reader = make_unique<BufferedCSVReader>(context, options);
 		options = initial_reader->options;
+		bind_data->csv_types = initial_reader->return_types;
+		bind_data->csv_names = initial_reader->names;
+	} else {
+		bind_data->csv_types = expected_types;
+		bind_data->csv_names = expected_names;
 	}
 	return std::move(bind_data);
 }

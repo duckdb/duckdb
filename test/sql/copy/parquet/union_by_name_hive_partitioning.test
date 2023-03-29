@@ -18,20 +18,22 @@ ORDER BY j, x NULLS LAST
 42	84	NULL	NULL
 NULL	128	33	NULL
 
-statement error
+query IIII
 SELECT i, j, k, x
 FROM read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/*.parquet', hive_partitioning=1, union_by_name=1)
 ORDER BY j
 ----
-both a hive partition and a union by name column
+42	84	NULL	1
+42	84	NULL	1
+NULL	128	33	2
 
-statement error
+query IIII
 SELECT i, j, k, x
 FROM read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/*.parquet', hive_partitioning=1, union_by_name=1)
 WHERE x=2
 ORDER BY j
 ----
-both a hive partition and a union by name column
+NULL	128	33	2
 
 query IIII
 SELECT i, j, k, x

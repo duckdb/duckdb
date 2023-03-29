@@ -46,11 +46,6 @@ struct MultiFileFilterEntry {
 };
 
 struct MultiFileReaderData {
-	//! If the parquet file dont have union_cols5  union_null_cols[5] will be true.
-	//! some parquet files may not have all union cols.
-	vector<bool> union_null_cols;
-	//! All union cols will cast to same type.
-	vector<LogicalType> union_col_types;
 	//! The column ids to read from the file
 	vector<idx_t> column_ids;
 	//! The mapping of column id -> result column id
@@ -89,8 +84,11 @@ struct MultiFileReader {
 	                                                      vector<LogicalType> &return_types, vector<string> &names);
 	//! Finalize the bind phase of the multi-file reader after we know (1) the required (output) columns, and (2) the
 	//! pushed down table filters
-	DUCKDB_API static void FinalizeBind(const MultiFileReaderBindData &options, const string &filename,
-	                                    const vector<column_t> &global_column_ids, MultiFileReaderData &reader_data);
+	DUCKDB_API static void FinalizeBind(const MultiFileReaderOptions &file_options,
+	                                    const MultiFileReaderBindData &options, const string &filename,
+	                                    const vector<string> &local_names, const vector<LogicalType> &global_types,
+	                                    const vector<string> &global_names, const vector<column_t> &global_column_ids,
+	                                    MultiFileReaderData &reader_data);
 	//! Create all required mappings from the global types/names to the file-local types/names
 	DUCKDB_API static void CreateMapping(const string &file_name, const vector<LogicalType> &local_types,
 	                                     const vector<string> &local_names, const vector<LogicalType> &global_types,
@@ -107,13 +105,10 @@ struct MultiFileReader {
 		D_ASSERT(options.file_options.union_by_name);
 		vector<string> union_col_names;
 		vector<LogicalType> union_col_types;
-		case_insensitive_map_t<idx_t> union_names_map;
 		// obtain the set of union column names + types by unifying the types of all of the files
 		// note that this requires opening readers for each file and reading the metadata of each file
-		auto union_readers = UnionByName::UnionCols<READER_CLASS>(context, result.files, union_col_types,
-		                                                          union_col_names, union_names_map, options);
-		// set up the union column metadata inside all of the readers
-		UnionByName::CreateUnionMap<READER_CLASS>(union_readers, union_col_types, union_col_names, union_names_map);
+		auto union_readers =
+		    UnionByName::UnionCols<READER_CLASS>(context, result.files, union_col_types, union_col_names, options);
 
 		std::move(union_readers.begin(), union_readers.end(), std::back_inserter(result.union_readers));
 		// perform the binding on the obtained set of names + types
@@ -142,11 +137,12 @@ struct MultiFileReader {
 	}
 
 	template <class READER_CLASS>
-	static void InitializeReader(READER_CLASS &reader, const MultiFileReaderBindData &bind_data,
-	                             const vector<LogicalType> &global_types, const vector<string> &global_names,
-	                             const vector<column_t> &global_column_ids,
+	static void InitializeReader(READER_CLASS &reader, const MultiFileReaderOptions &options,
+	                             const MultiFileReaderBindData &bind_data, const vector<LogicalType> &global_types,
+	                             const vector<string> &global_names, const vector<column_t> &global_column_ids,
 	                             optional_ptr<TableFilterSet> table_filters) {
-		FinalizeBind(bind_data, reader.GetFileName(), global_column_ids, reader.reader_data);
+		FinalizeBind(options, bind_data, reader.GetFileName(), reader.GetNames(), global_types, global_names,
+		             global_column_ids, reader.reader_data);
 		CreateMapping(reader.GetFileName(), reader.GetTypes(), reader.GetNames(), global_types, global_names,
 		              global_column_ids, table_filters, reader.reader_data);
 		reader.reader_data.filters = table_filters;
@@ -178,9 +174,6 @@ struct MultiFileReader {
 	}
 
 private:
-	static void CreatePositionalMapping(const string &file_name, const vector<LogicalType> &local_types,
-	                                    const vector<LogicalType> &global_types,
-	                                    const vector<column_t> &global_column_ids, MultiFileReaderData &reader_data);
 	static void CreateNameMapping(const string &file_name, const vector<LogicalType> &local_types,
 	                              const vector<string> &local_names, const vector<LogicalType> &global_types,
 	                              const vector<string> &global_names, const vector<column_t> &global_column_ids,

@@ -594,8 +594,8 @@ struct SingleThreadedCSVState : public GlobalTableFunctionState {
 			if (!union_by_name) {
 				result->names = csv_names;
 			}
-			MultiFileReader::InitializeReader(*result, bind_data.reader_bind, bind_data.return_types,
-			                                  bind_data.return_names, column_ids, nullptr);
+			MultiFileReader::InitializeReader(*result, bind_data.options.file_options, bind_data.reader_bind,
+			                                  bind_data.return_types, bind_data.return_names, column_ids, nullptr);
 		}
 		total_size = result->file_handle->FileSize();
 		return result;
@@ -638,14 +638,15 @@ static unique_ptr<GlobalTableFunctionState> SingleThreadedCSVInit(ClientContext 
 			bind_data.options = result->initial_reader->options;
 		}
 	}
-	MultiFileReader::InitializeReader(*result->initial_reader, bind_data.reader_bind, bind_data.return_types,
-	                                  bind_data.return_names, input.column_ids, input.filters);
+	MultiFileReader::InitializeReader(*result->initial_reader, bind_data.options.file_options, bind_data.reader_bind,
+	                                  bind_data.return_types, bind_data.return_names, input.column_ids, input.filters);
 	for (auto &reader : bind_data.union_readers) {
 		if (!reader) {
 			continue;
 		}
-		MultiFileReader::InitializeReader(*reader, bind_data.reader_bind, bind_data.return_types,
-		                                  bind_data.return_names, input.column_ids, input.filters);
+		MultiFileReader::InitializeReader(*reader, bind_data.options.file_options, bind_data.reader_bind,
+		                                  bind_data.return_types, bind_data.return_names, input.column_ids,
+		                                  input.filters);
 	}
 	result->column_ids = input.column_ids;
 

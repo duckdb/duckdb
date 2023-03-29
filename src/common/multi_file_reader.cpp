@@ -148,8 +148,17 @@ MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &opt
 	return bind_data;
 }
 
-void MultiFileReader::FinalizeBind(const MultiFileReaderBindData &options, const string &filename,
+void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, const MultiFileReaderBindData &options,
+                                   const string &filename, const vector<string> &local_names,
+                                   const vector<LogicalType> &global_types, const vector<string> &global_names,
                                    const vector<column_t> &global_column_ids, MultiFileReaderData &reader_data) {
+	// create a map of name -> column index
+	case_insensitive_map_t<idx_t> name_map;
+	if (file_options.union_by_name) {
+		for (idx_t col_idx = 0; col_idx < local_names.size(); col_idx++) {
+			name_map[local_names[col_idx]] = col_idx;
+		}
+	}
 	for (idx_t i = 0; i < global_column_ids.size(); i++) {
 		auto column_id = global_column_ids[i];
 		if (IsRowIdColumnId(column_id)) {
@@ -175,60 +184,20 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderBindData &options, const
 				}
 			}
 			if (found_partition) {
-				if (!reader_data.union_null_cols.empty() && reader_data.union_null_cols[column_id]) {
-					// this means a column is (1) a hive partitioned column, and (2) it is present in SOME files (not
-					// all) this leads to weird edge cases so not supported for now
-					throw BinderException("Column in file \"%s\" is both a hive partition and a union by name column - "
-					                      "this is unsupported",
-					                      filename);
-				}
 				continue;
 			}
 		}
-		if (!reader_data.union_null_cols.empty()) {
-			// union by name NULL column
-			if (reader_data.union_null_cols[column_id]) {
-				reader_data.constant_map.push_back(make_pair(i, Value(reader_data.union_col_types[column_id])));
+		if (file_options.union_by_name) {
+			auto &global_name = global_names[column_id];
+			auto entry = name_map.find(global_name);
+			bool not_present_in_file = entry == name_map.end();
+			if (not_present_in_file) {
+				// we need to project a column with name \"global_name\" - but it does not exist in the current file
+				// push a NULL value of the specified type
+				reader_data.constant_map.push_back(make_pair(i, Value(global_types[column_id])));
 				continue;
 			}
 		}
-	}
-}
-void MultiFileReader::CreatePositionalMapping(const string &file_name, const vector<LogicalType> &local_types,
-                                              const vector<LogicalType> &global_types,
-                                              const vector<column_t> &global_column_ids,
-                                              MultiFileReaderData &reader_data) {
-	for (idx_t i = 0; i < global_column_ids.size(); i++) {
-		// check if this is a constant column
-		bool constant = false;
-		for (auto &entry : reader_data.constant_map) {
-			if (entry.first == i) {
-				constant = true;
-				break;
-			}
-		}
-		if (constant) {
-			// this column is constant for this file
-			// skip reading
-			continue;
-		}
-		auto id = global_column_ids[i];
-		if (id >= global_types.size()) {
-			throw InternalException(
-			    "MultiFileReader::CreatePositionalMapping - global_id is out of range in global_types for this file");
-		}
-		if (id >= local_types.size()) {
-			throw InternalException(
-			    "MultiFileReader::CreatePositionalMapping - global_id is out of range in local_types for this file");
-		}
-		auto &global_type = global_types[id];
-		auto &local_type = local_types[id];
-		if (global_type != local_type) {
-			reader_data.cast_map[id] = global_type;
-		}
-		// read the column from this file
-		reader_data.column_mapping.push_back(i);
-		reader_data.column_ids.push_back(id);
 	}
 }
 
@@ -239,7 +208,7 @@ void MultiFileReader::CreateNameMapping(const string &file_name, const vector<Lo
 	D_ASSERT(global_types.size() == global_names.size());
 	D_ASSERT(local_types.size() == local_names.size());
 	// we have expected types: create a map of name -> column index
-	unordered_map<string, idx_t> name_map;
+	case_insensitive_map_t<idx_t> name_map;
 	for (idx_t col_idx = 0; col_idx < local_names.size(); col_idx++) {
 		name_map[local_names[col_idx]] = col_idx;
 	}
@@ -297,12 +266,7 @@ void MultiFileReader::CreateMapping(const string &file_name, const vector<Logica
                                     const vector<string> &local_names, const vector<LogicalType> &global_types,
                                     const vector<string> &global_names, const vector<column_t> &global_column_ids,
                                     optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data) {
-	if (local_names.empty() || global_names.empty()) {
-		CreatePositionalMapping(file_name, local_types, global_types, global_column_ids, reader_data);
-	} else {
-		CreateNameMapping(file_name, local_types, local_names, global_types, global_names, global_column_ids,
-		                  reader_data);
-	}
+	CreateNameMapping(file_name, local_types, local_names, global_types, global_names, global_column_ids, reader_data);
 	if (filters) {
 		reader_data.filter_map.resize(global_types.size());
 		for (idx_t c = 0; c < reader_data.column_mapping.size(); c++) {
