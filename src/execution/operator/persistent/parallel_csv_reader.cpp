@@ -40,7 +40,6 @@ ParallelCSVReader::~ParallelCSVReader() {
 void ParallelCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 	return_types = requested_types;
 	InitParseChunk(return_types.size());
-	InitInsertChunkIdx(return_types.size());
 }
 
 bool ParallelCSVReader::NewLineDelimiter(bool carry, bool carry_followed_by_nl, bool first_char) {

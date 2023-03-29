@@ -114,6 +114,12 @@ public:
 	const string &GetFileName() {
 		return file_name;
 	}
+	const vector<string> &GetNames() {
+		return names;
+	}
+	const vector<LogicalType> &GetTypes() {
+		return return_types;
+	}
 
 private:
 	void InitializeSchema();

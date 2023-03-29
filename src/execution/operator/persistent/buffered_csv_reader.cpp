@@ -250,7 +250,6 @@ void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 		SkipRowsAndReadHeader(options.skip_rows, options.header);
 	}
 	InitParseChunk(return_types.size());
-	InitInsertChunkIdx(return_types.size());
 	// we only need reset support during the automatic CSV type detection
 	// since reset support might require caching (in the case of streams), we disable it for the remainder
 	file_handle->DisableReset();

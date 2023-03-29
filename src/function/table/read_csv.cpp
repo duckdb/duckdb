@@ -203,45 +203,24 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			}
 		}
 		options = initial_reader->options;
-		result->sql_types = initial_reader->return_types;
 		result->initial_reader = std::move(initial_reader);
 	} else {
-		result->sql_types = return_types;
 		D_ASSERT(return_types.size() == names.size());
 	}
-
 	// union_col_names will exclude filename and hivepartition
 	if (options.file_options.union_by_name) {
-		MultiFileReader::BindUnionReader<BufferedCSVReader>(context, return_types, names, *result, options);
-		result->initial_reader->insert_cols_idx = result->initial_reader->reader_data.union_idx_map;
-		for (auto &reader : result->union_readers) {
-			if (!reader) {
-				continue;
-			}
-			reader->insert_cols_idx = reader->reader_data.union_idx_map;
-		}
+		result->reader_bind =
+		    MultiFileReader::BindUnionReader<BufferedCSVReader>(context, return_types, names, *result, options);
 		if (!options.sql_types_per_column.empty()) {
 			auto exception = BufferedCSVReader::ColumnTypesError(options.sql_types_per_column, names);
 			if (!exception.empty()) {
 				throw BinderException(exception);
 			}
 		}
+	} else {
+		result->reader_bind = MultiFileReader::BindOptions(options.file_options, result->files, return_types, names);
 	}
-
-	if (result->options.file_options.filename) {
-		result->filename_col_idx = names.size();
-		return_types.emplace_back(LogicalType::VARCHAR);
-		names.emplace_back("filename");
-	}
-
-	if (result->options.file_options.hive_partitioning) {
-		auto partitions = HivePartitioning::Parse(result->files[0]);
-		result->hive_partition_col_idx = names.size();
-		for (auto &part : partitions) {
-			return_types.emplace_back(LogicalType::VARCHAR);
-			names.emplace_back(part.first);
-		}
-	}
+	result->sql_types = return_types;
 	result->options.names = names;
 	result->FinalizeRead(context);
 	return std::move(result);
@@ -570,6 +549,8 @@ struct SingleThreadedCSVState : public GlobalTableFunctionState {
 	atomic<idx_t> progress_in_files;
 	//! The set of SQL types
 	vector<LogicalType> sql_types;
+	//! The column ids to read
+	vector<column_t> column_ids;
 
 	idx_t MaxThreads() const override {
 		return total_files;
@@ -604,6 +585,8 @@ struct SingleThreadedCSVState : public GlobalTableFunctionState {
 		} else {
 			options.file_path = bind_data.files[file_index];
 			result = make_unique<BufferedCSVReader>(context, std::move(options), sql_types);
+			MultiFileReader::InitializeReader(*result, bind_data.reader_bind, bind_data.sql_types,
+			                                  bind_data.options.names, column_ids, nullptr);
 		}
 		total_size = result->file_handle->FileSize();
 		return result;
@@ -643,6 +626,17 @@ static unique_ptr<GlobalTableFunctionState> SingleThreadedCSVInit(ClientContext 
 			bind_data.options = result->initial_reader->options;
 		}
 	}
+	MultiFileReader::InitializeReader(*result->initial_reader, bind_data.reader_bind, bind_data.sql_types,
+	                                  bind_data.options.names, input.column_ids, input.filters);
+	for (auto &reader : bind_data.union_readers) {
+		if (!reader) {
+			continue;
+		}
+		MultiFileReader::InitializeReader(*reader, bind_data.reader_bind, bind_data.sql_types, bind_data.options.names,
+		                                  input.column_ids, input.filters);
+	}
+	result->column_ids = input.column_ids;
+
 	if (!bind_data.options.file_options.union_by_name) {
 		// if we are reading multiple files - run auto-detect only on the first file
 		// UNLESS union by name is turned on - in that case we assume that different files have different schemas
@@ -705,40 +699,10 @@ static void SingleThreadedCSVFunction(ClientContext &context, TableFunctionInput
 			}
 			lstate.bytes_read = 0;
 		} else {
+			MultiFileReader::FinalizeChunk(bind_data.reader_bind, lstate.csv_reader->reader_data, output);
 			break;
 		}
 	} while (true);
-
-	if (bind_data.options.file_options.union_by_name) {
-		UnionByName::SetNullUnionCols(output, lstate.csv_reader->reader_data.union_null_cols);
-	}
-	if (bind_data.options.file_options.filename) {
-		auto &col = output.data[bind_data.filename_col_idx];
-		col.SetValue(0, Value(lstate.csv_reader->options.file_path));
-		col.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-	if (bind_data.options.file_options.hive_partitioning) {
-		auto partitions = HivePartitioning::Parse(lstate.csv_reader->options.file_path);
-
-		idx_t i = bind_data.hive_partition_col_idx;
-
-		if (partitions.size() != (bind_data.options.names.size() - bind_data.hive_partition_col_idx)) {
-			throw IOException("Hive partition count mismatch, expected " +
-			                  std::to_string(bind_data.options.names.size() - bind_data.hive_partition_col_idx) +
-			                  " hive partitions, got " + std::to_string(partitions.size()) + "\n");
-		}
-
-		for (auto &part : partitions) {
-			if (bind_data.options.names[i] != part.first) {
-				throw IOException("Hive partition names mismatch, expected '" + bind_data.options.names[i] +
-				                  "' but found '" + part.first + "' for file '" + lstate.csv_reader->options.file_path +
-				                  "'");
-			}
-			auto &col = output.data[i++];
-			col.SetValue(0, Value(part.second));
-			col.SetVectorType(VectorType::CONSTANT_VECTOR);
-		}
-	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -810,6 +774,11 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["decimal_separator"] = LogicalType::VARCHAR;
 	table_function.named_parameters["parallel"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["null_padding"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["column_types"] = LogicalType::ANY;
+	table_function.named_parameters["dtypes"] = LogicalType::ANY;
+	table_function.named_parameters["types"] = LogicalType::ANY;
+	table_function.named_parameters["names"] = LogicalType::LIST(LogicalType::VARCHAR);
+	table_function.named_parameters["column_names"] = LogicalType::LIST(LogicalType::VARCHAR);
 	MultiFileReader::AddParameters(table_function);
 }
 
@@ -947,26 +916,15 @@ TableFunction ReadCSVTableFunction::GetFunction(bool list_parameter) {
 	read_csv.deserialize = CSVReaderDeserialize;
 	read_csv.get_batch_index = CSVReaderGetBatchIndex;
 	read_csv.cardinality = CSVReaderCardinality;
+	read_csv.projection_pushdown = true;
 	ReadCSVAddNamedParameters(read_csv);
 	return read_csv;
 }
 
 TableFunction ReadCSVTableFunction::GetAutoFunction(bool list_parameter) {
-	auto parameter = list_parameter ? LogicalType::LIST(LogicalType::VARCHAR) : LogicalType::VARCHAR;
-	TableFunction read_csv_auto("read_csv_auto", {parameter}, ReadCSVFunction, ReadCSVAutoBind, ReadCSVInitGlobal,
-	                            ReadCSVInitLocal);
-	read_csv_auto.table_scan_progress = CSVReaderProgress;
-	read_csv_auto.pushdown_complex_filter = CSVComplexFilterPushdown;
-	read_csv_auto.serialize = CSVReaderSerialize;
-	read_csv_auto.deserialize = CSVReaderDeserialize;
-	read_csv_auto.get_batch_index = CSVReaderGetBatchIndex;
-	read_csv_auto.cardinality = CSVReaderCardinality;
-	ReadCSVAddNamedParameters(read_csv_auto);
-	read_csv_auto.named_parameters["column_types"] = LogicalType::ANY;
-	read_csv_auto.named_parameters["dtypes"] = LogicalType::ANY;
-	read_csv_auto.named_parameters["types"] = LogicalType::ANY;
-	read_csv_auto.named_parameters["names"] = LogicalType::LIST(LogicalType::VARCHAR);
-	read_csv_auto.named_parameters["column_names"] = LogicalType::LIST(LogicalType::VARCHAR);
+	auto read_csv_auto = ReadCSVTableFunction::GetFunction(list_parameter);
+	read_csv_auto.name = "read_csv_auto";
+	read_csv_auto.bind = ReadCSVAutoBind;
 	return read_csv_auto;
 }
 

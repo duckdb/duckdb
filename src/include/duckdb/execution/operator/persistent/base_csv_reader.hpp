@@ -44,10 +44,6 @@ public:
 	BufferedCSVReaderOptions options;
 	vector<LogicalType> return_types;
 	vector<string> names;
-
-	//! remap parse_chunk col to insert_chunk col, because when
-	//! union_by_name option on insert_chunk may have more cols
-	vector<idx_t> insert_cols_idx;
 	MultiFileReaderData reader_data;
 
 	idx_t linenr = 0;
@@ -72,12 +68,17 @@ public:
 	const string &GetFileName() {
 		return options.file_path;
 	}
+	const vector<string> &GetNames() {
+		D_ASSERT(names.empty() || options.names.empty() || names == options.names);
+		return names.empty() ? options.names : names;
+	}
+	const vector<LogicalType> &GetTypes() {
+		return return_types;
+	}
 
 protected:
 	//! Initializes the parse_chunk with varchar columns and aligns info with new number of cols
 	void InitParseChunk(idx_t num_cols);
-	//! Initializes the insert_chunk idx for mapping parse_chunk cols to insert_chunk cols
-	void InitInsertChunkIdx(idx_t num_cols);
 	//! Change the date format for the type to the string
 	void SetDateFormat(const string &format_specifier, const LogicalTypeId &sql_type);
 	//! Try to cast a string value to the specified sql type

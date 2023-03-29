@@ -138,8 +138,8 @@ struct MultiFileReader {
 	                             const vector<LogicalType> &global_types, const vector<string> &global_names,
 	                             const vector<column_t> &global_column_ids,
 	                             optional_ptr<TableFilterSet> table_filters) {
-		FinalizeBind(bind_data, reader.file_name, global_column_ids, reader.reader_data);
-		CreateMapping(reader.file_name, reader.return_types, reader.names, global_types, global_names,
+		FinalizeBind(bind_data, reader.GetFileName(), global_column_ids, reader.reader_data);
+		CreateMapping(reader.GetFileName(), reader.GetTypes(), reader.GetNames(), global_types, global_names,
 		              global_column_ids, table_filters, reader.reader_data);
 		reader.reader_data.filters = table_filters;
 	}
