@@ -855,37 +855,28 @@ void S3FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx
 	}
 }
 
-bool	IsMatch(const string& key, const string& pat) {
+static bool	Match(vector<string>::const_iterator key, vector<string>::const_iterator key_end, vector<string>::const_iterator pattern, vector<string>::const_iterator pattern_end) {
 
-	const vector<string> key_splits = StringUtil::Split(key, "/");
-	const vector<string> pat_splits = StringUtil::Split(pat, "/");
-	
-	if (pat_splits.size() > key_splits.size())	//if the globpattern has more depth than the filepath, it can never match
-		return false;
-	
-	bool crawl = false;
-	idx_t i = 0;
-	idx_t j = 0;
-	while (i < key_splits.size() && j < pat_splits.size()) {
-		if (!crawl && pat_splits[j] == "**") {
-			crawl = true;
-			i++;
-			j++;
-			continue;
-		}
-		if (LikeFun::Glob(key_splits[i].data(), key_splits[i].length(), pat_splits[j].data(), pat_splits[j].length())) {
-			i++;
-			j++;
-			crawl = false;
-		} else if (crawl) {
-			i++;
-		} else {
+	while (key != key_end && pattern != pattern_end){
+		if (*pattern == "**") {
+			if (std::next(pattern) == pattern_end) {
+				return true;
+			}
+			while (key != key_end) {
+				if (Match(key, key_end, std::next(pattern), pattern_end)) {
+					return true;
+				}
+				key++;
+			}
 			return false;
 		}
+		if (!LikeFun::Glob(key->data(), key->length(), pattern->data(), pattern->length())) {
+			return false;
+		}
+		key++;
+		pattern++;
 	}
-	if (crawl)
-		return true;
-	return i == key_splits.size() && j == pat_splits.size();
+	return key == key_end && pattern == pattern_end;
 }
 
 vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener) {
@@ -955,11 +946,12 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 		pattern_trimmed = pattern_trimmed.substr(parsed_s3_url.bucket.length() + 1);
 	}
 
+	vector<string> pattern_splits = StringUtil::Split(pattern_trimmed, "/");
 	vector<string> result;
 	for (const auto &s3_key : s3_keys) {
-
-		bool is_match = IsMatch(s3_key, pattern_trimmed);
-		    // LikeFun::Glob(s3_key.data(), s3_key.length(), pattern_trimmed.data(), pattern_trimmed.length(), false, false);
+	
+		vector<string> key_splits = StringUtil::Split(s3_key, "/");
+		bool is_match = Match(key_splits.begin(), key_splits.end(), pattern_splits.begin(), pattern_splits.end());
 
 		if (is_match) {
 			auto result_full_url = "s3://" + parsed_s3_url.bucket + "/" + s3_key;
