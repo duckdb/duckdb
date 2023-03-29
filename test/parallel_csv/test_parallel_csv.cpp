@@ -31,7 +31,7 @@ idx_t MaxLineSize(string &path) {
 
 	string line;
 	while (getline(infile, line)) {
-		int line_size = line.length();
+		idx_t line_size = line.length();
 		if (line_size > max_line_size) {
 			max_line_size = line_size;
 		}
