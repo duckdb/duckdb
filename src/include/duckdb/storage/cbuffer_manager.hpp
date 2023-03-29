@@ -10,36 +10,35 @@ namespace duckdb {
 class CBufferManager;
 class ExternalFileBuffer;
 
-typedef void *duckdb_buffer;
+typedef void *duckdb_block;
 
 // Callbacks used by the CBufferManager
 
-typedef duckdb_buffer (*duckdb_allocate_buffer_t)(void *data, idx_t size, idx_t header_bytes);
-typedef duckdb_buffer (*duckdb_reallocate_buffer_t)(void *data, duckdb_buffer buffer, idx_t old_size, idx_t new_size,
-                                                    idx_t header_bytes);
-typedef void (*duckdb_destroy_buffer_t)(void *data, duckdb_buffer buffer, idx_t header_bytes);
-typedef void *(*duckdb_pin_buffer_t)(void *data, duckdb_buffer buffer);
-typedef void (*duckdb_unpin_buffer_t)(void *data, duckdb_buffer buffer);
+typedef duckdb_block (*duckdb_create_block_t)(void *data, idx_t size);
+typedef duckdb_block (*duckdb_resize_block_t)(void *data, duckdb_block buffer, idx_t old_size, idx_t new_size);
+typedef void (*duckdb_destroy_block_t)(void *data, duckdb_block buffer);
+typedef void *(*duckdb_pin_block_t)(void *data, duckdb_block buffer);
+typedef void (*duckdb_unpin_block_t)(void *data, duckdb_block buffer);
 typedef idx_t (*duckdb_max_memory_t)(void *data);
 typedef idx_t (*duckdb_used_memory_t)(void *data);
 
 // Contains the information that makes up the custom buffer manager
 struct CBufferManagerConfig {
 	void *data; // Context provided to 'allocate_func'
-	duckdb_allocate_buffer_t allocate_func;
-	duckdb_reallocate_buffer_t reallocate_func;
-	duckdb_destroy_buffer_t destroy_func;
-	duckdb_pin_buffer_t pin_func;
-	duckdb_unpin_buffer_t unpin_func;
+	duckdb_create_block_t allocate_func;
+	duckdb_resize_block_t reallocate_func;
+	duckdb_destroy_block_t destroy_func;
+	duckdb_pin_block_t pin_func;
+	duckdb_unpin_block_t unpin_func;
 	duckdb_max_memory_t max_memory_func;
 	duckdb_used_memory_t used_memory_func;
 };
 
-struct CBufferAllocatorData : public PrivateAllocatorData {
-	CBufferAllocatorData(CBufferManager &manager) : manager(manager) {
-	}
-	CBufferManager &manager;
-};
+// struct CBufferAllocatorData : public PrivateAllocatorData {
+//	CBufferAllocatorData(CBufferManager &manager) : manager(manager) {
+//	}
+//	CBufferManager &manager;
+//};
 
 class CBufferManager : public BufferManager {
 public:
@@ -67,11 +66,10 @@ protected:
 	void AddToEvictionQueue(shared_ptr<BlockHandle> &handle) final override;
 
 private:
-	static data_ptr_t CBufferAllocatorAllocate(PrivateAllocatorData *private_data, idx_t size);
-	static void CBufferAllocatorFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size);
-	static data_ptr_t CBufferAllocatorRealloc(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
-	                                          idx_t size);
-	static duckdb_buffer GetUserBuffer(ExternalFileBuffer &buffer);
+	// static data_ptr_t CBufferAllocatorAllocate(PrivateAllocatorData *private_data, idx_t size);
+	// static void CBufferAllocatorFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size);
+	// static data_ptr_t CBufferAllocatorRealloc(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
+	//                                          idx_t size);
 
 private:
 	CBufferManagerConfig config;
@@ -79,7 +77,7 @@ private:
 	unique_ptr<DummyBufferPool> buffer_pool;
 	//! The temporary id used for managed buffers
 	atomic<block_id_t> temporary_id;
-	Allocator custom_allocator;
+	// Allocator custom_allocator;
 	Allocator allocator;
 };
 

@@ -27,7 +27,7 @@ void FileBuffer::Init() {
 
 FileBuffer::FileBuffer(FileBuffer &source, FileBufferType type_p) : allocator(source.allocator), type(type_p) {
 	// take over the structures of the source buffer
-	buffer = source.Buffer();
+	buffer = source.buffer;
 	size = source.size;
 	internal_buffer = source.internal_buffer;
 	internal_size = source.internal_size;
@@ -41,10 +41,6 @@ FileBuffer::~FileBuffer() {
 	}
 	allocator.FreeData(internal_buffer, internal_size);
 	internal_buffer = nullptr;
-}
-
-data_ptr_t FileBuffer::Buffer() const {
-	return buffer;
 }
 
 void FileBuffer::ReallocBuffer(size_t new_size) {
@@ -98,10 +94,10 @@ void FileBuffer::Read(FileHandle &handle, uint64_t location) {
 }
 
 void FileBuffer::Write(FileHandle &handle, uint64_t location) {
+	// FIXME: DELETE THIS
+	throw NotImplementedException("SKIP THIS TEST, NO PERSISTENT OPERATIONS ALLOWED");
 	D_ASSERT(type != FileBufferType::TINY_BUFFER);
-	// FIXME: does this need to take Align or SectorSize into account?
-	handle.Write(internal_buffer, Storage::BLOCK_HEADER_SIZE, location);
-	handle.Write(buffer, size, location + Storage::BLOCK_HEADER_SIZE);
+	handle.Write(internal_buffer, internal_size, location);
 }
 
 void FileBuffer::Clear() {

@@ -51,6 +51,8 @@ struct TempBufferPoolReservation : BufferPoolReservation {
 	}
 };
 
+enum class BlockHandleType { STANDARD, CUSTOM };
+
 class BlockHandle {
 	friend class BlockManager;
 	friend struct BufferEvictionNode;
@@ -61,10 +63,11 @@ class BlockHandle {
 	friend class StandardBufferPool;
 
 public:
-	BlockHandle(BlockManager &block_manager, block_id_t block_id);
+	BlockHandle(BlockManager &block_manager, block_id_t block_id, BlockHandleType type = BlockHandleType::STANDARD);
 	BlockHandle(BlockManager &block_manager, block_id_t block_id, unique_ptr<FileBuffer> buffer, bool can_destroy,
-	            idx_t block_size, BufferPoolReservation &&reservation);
-	~BlockHandle();
+	            idx_t block_size, BufferPoolReservation &&reservation,
+	            BlockHandleType type = BlockHandleType::STANDARD);
+	virtual ~BlockHandle();
 
 	BlockManager &block_manager;
 
@@ -75,6 +78,14 @@ public:
 
 	int32_t Readers() const {
 		return readers;
+	}
+
+	virtual void ResizeBuffer(uint64_t block_size, int64_t memory_delta) {
+		D_ASSERT(buffer);
+		// resize and adjust current memory
+		buffer->Resize(block_size);
+		memory_usage += memory_delta;
+		D_ASSERT(memory_usage == buffer->AllocSize());
 	}
 
 	inline bool IsSwizzled() const {
@@ -93,7 +104,7 @@ public:
 		return memory_usage;
 	}
 
-private:
+protected:
 	static BufferHandle Load(shared_ptr<BlockHandle> &handle, unique_ptr<FileBuffer> buffer = nullptr);
 	unique_ptr<FileBuffer> UnloadAndTakeBlock();
 	void Unload();
@@ -120,6 +131,8 @@ private:
 	BufferPoolReservation memory_charge;
 	//! Does the block contain any memory pointers?
 	const char *unswizzled;
+	//! The type of block handle
+	BlockHandleType type;
 };
 
 } // namespace duckdb

@@ -40,13 +40,15 @@ public:
 	//! Write the contents of the FileBuffer to the specified location.
 	void Write(FileHandle &handle, uint64_t location);
 
-	virtual data_ptr_t Buffer() const;
+	virtual data_ptr_t Buffer() const {
+		return buffer;
+	}
 
 	void Clear();
 
 	// Same rules as the constructor. We will add room for a header, in addition to
 	// the requested user bytes. We will then sector-align the result.
-	void Resize(uint64_t user_size);
+	virtual void Resize(uint64_t user_size);
 
 	uint64_t AllocSize() const {
 		return internal_size;

@@ -4,6 +4,7 @@
 #include "duckdb/common/external_file_buffer.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/buffer/dummy_buffer_pool.hpp"
+#include "duckdb/storage/buffer/custom_block_handle.hpp"
 
 namespace duckdb {
 
@@ -11,10 +12,7 @@ Allocator &CBufferManager::GetBufferAllocator() {
 	return allocator;
 }
 
-CBufferManager::CBufferManager(CBufferManagerConfig config_p)
-    : BufferManager(), config(config_p),
-      custom_allocator(CBufferAllocatorAllocate, CBufferAllocatorFree, CBufferAllocatorRealloc,
-                       make_unique<CBufferAllocatorData>(*this)) {
+CBufferManager::CBufferManager(CBufferManagerConfig config_p) : BufferManager(), config(config_p) {
 	block_manager = make_unique<InMemoryBlockManager>(*this);
 	buffer_pool = make_unique<DummyBufferPool>();
 }
@@ -24,9 +22,16 @@ BufferHandle CBufferManager::Allocate(idx_t block_size, bool can_destroy, shared
 	shared_ptr<BlockHandle> temp_block; // Doesn't this cause a memory-leak, or at the very least heap-use-after-free???
 	shared_ptr<BlockHandle> *handle_p = block ? block : &temp_block;
 
-	// create a new (UNLOADED) block pointer for this block
-	*handle_p = make_shared<BlockHandle>(*block_manager, ++temporary_id);
-	(*handle_p)->memory_usage = alloc_size;
+	// Used to manage the used_memory counter with RAII
+	BufferPoolReservation reservation(this->GetBufferPool());
+	reservation.size = alloc_size;
+
+	auto custom_handle = config.allocate_func(config.data, alloc_size);
+	auto pinned_allocation = (data_ptr_t)config.pin_func(config.data, custom_handle);
+	unique_ptr<FileBuffer> buffer = make_unique<ExternalFileBuffer>(pinned_allocation, alloc_size);
+	*handle_p = make_shared<CustomBlockHandle>(custom_handle, config, *block_manager, ++temporary_id, std::move(buffer),
+	                                           can_destroy, alloc_size, std::move(reservation));
+
 	return Pin(*handle_p);
 }
 
@@ -35,10 +40,18 @@ BufferPool &CBufferManager::GetBufferPool() {
 }
 
 shared_ptr<BlockHandle> CBufferManager::RegisterSmallMemory(idx_t block_size) {
+	idx_t alloc_size = BufferManager::GetAllocSize(block_size);
 	// create a new block pointer for this block
-	auto block = make_shared<BlockHandle>(*block_manager, ++temporary_id);
-	block->memory_usage = block_size;
-	return block;
+
+	// Used to manage the used_memory counter with RAII
+	BufferPoolReservation reservation(this->GetBufferPool());
+	reservation.size = alloc_size;
+
+	auto custom_handle = config.allocate_func(config.data, alloc_size);
+	auto pinned_allocation = (data_ptr_t)config.pin_func(config.data, custom_handle);
+	unique_ptr<FileBuffer> buffer = make_unique<ExternalFileBuffer>(pinned_allocation, alloc_size);
+	return make_shared<CustomBlockHandle>(custom_handle, config, *block_manager, ++temporary_id, std::move(buffer),
+	                                      false, alloc_size, std::move(reservation));
 }
 
 void CBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) {
@@ -48,17 +61,14 @@ void CBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_siz
 	D_ASSERT(handle->memory_usage == handle->buffer->AllocSize());
 	D_ASSERT(handle->memory_usage == handle->memory_charge.size);
 
+	// FIXME: shouldn't we assert that it's unpinned?
+	// there could be readers who depend on the old allocation
+
 	auto req = handle->buffer->CalculateMemory(block_size);
 	int64_t memory_delta = (int64_t)req.alloc_size - handle->memory_usage;
 
 	handle->memory_charge.Resize(req.alloc_size);
-
-	// resize and adjust current memory
-	handle->buffer->Resize(block_size);
-	auto &external_file_buffer = (ExternalFileBuffer &)*handle->buffer;
-	external_file_buffer.SetAllocation(nullptr);
-	handle->memory_usage += memory_delta;
-	D_ASSERT(handle->memory_usage == handle->buffer->AllocSize());
+	handle->ResizeBuffer(block_size, memory_delta);
 }
 
 BufferHandle CBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
@@ -68,14 +78,10 @@ BufferHandle CBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 		lock_guard<mutex> lock(handle->lock);
 		// check if the block is already loaded
 		if (handle->state == BlockState::BLOCK_LOADED) {
-			// the block is loaded, increment the reader count and return a pointer to the handle
-			auto &buffer = *handle->buffer;
-			auto user_buffer = buffer.InternalBuffer() + Storage::BLOCK_HEADER_SIZE;
-			data_ptr_t allocation = (data_ptr_t)config.pin_func(config.data, user_buffer);
-			if (buffer.type == FileBufferType::EXTERNAL_BUFFER) {
-				//FIXME: how do we set the 'buffer' when this is not an ExternalFileBuffer??
-				auto& external_file_buffer = (ExternalFileBuffer&)buffer;
-				external_file_buffer.SetAllocation(allocation);
+			if (handle->readers == 0) {
+				auto &custom_handle = (CustomBlockHandle &)*handle;
+				// Call pin again to mark that we're using the buffer again
+				(void)config.pin_func(config.data, custom_handle.block);
 			}
 			handle->readers++;
 			return handle->Load(handle);
@@ -86,13 +92,13 @@ BufferHandle CBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	lock_guard<mutex> lock(handle->lock);
 	D_ASSERT(handle->readers == 0);
 	handle->readers = 1;
-	auto new_buffer = make_unique<ExternalFileBuffer>(custom_allocator, config, required_memory);
+
+	auto &custom_handle = (CustomBlockHandle &)*handle;
+	auto allocation = (data_ptr_t)config.pin_func(config.data, custom_handle.block);
+	unique_ptr<FileBuffer> new_buffer = make_unique<ExternalFileBuffer>(allocation, required_memory);
 	TempBufferPoolReservation reservation(*buffer_pool, required_memory);
 	handle->memory_charge = std::move(reservation);
-	auto allocation = (data_ptr_t)(config.pin_func(config.data, new_buffer->ExternalBufferHandle()));
 
-	// We have to do this manually, so 'Load' will just return the buffer
-	new_buffer->SetAllocation(allocation);
 	handle->buffer = std::move(new_buffer);
 	handle->state = BlockState::BLOCK_LOADED;
 	return handle->Load(handle);
@@ -106,13 +112,12 @@ void CBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 	if (!handle->buffer) {
 		return;
 	}
-	auto &buffer = *handle->buffer;
 	D_ASSERT(handle->readers > 0);
 	handle->readers--;
-	auto user_buffer = buffer.InternalBuffer() + Storage::BLOCK_HEADER_SIZE;
-	config.unpin_func(config.data, user_buffer);
-	if (handle->readers == 0 && handle->can_destroy) {
-		handle.reset();
+	auto &custom_handle = (CustomBlockHandle &)*handle;
+	auto user_buffer = custom_handle.block;
+	if (handle->readers == 0) {
+		config.unpin_func(config.data, user_buffer);
 	}
 }
 
@@ -144,28 +149,28 @@ void CBufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 	// no op
 }
 
-//===--------------------------------------------------------------------===//
-// Buffer Allocator
-//===--------------------------------------------------------------------===//
-data_ptr_t CBufferManager::CBufferAllocatorAllocate(PrivateAllocatorData *private_data, idx_t size) {
-	auto &data = (CBufferAllocatorData &)*private_data;
-	auto &config = data.manager.config;
-	duckdb_buffer buffer = config.allocate_func(config.data, size, Storage::BLOCK_HEADER_SIZE);
-	return (data_ptr_t)buffer;
-}
+////===--------------------------------------------------------------------===//
+//// Buffer Allocator
+////===--------------------------------------------------------------------===//
+// data_ptr_t CBufferManager::CBufferAllocatorAllocate(PrivateAllocatorData *private_data, idx_t size) {
+//	auto &data = (CBufferAllocatorData &)*private_data;
+//	auto &config = data.manager.config;
+//	duckdb_block buffer = config.allocate_func(config.data, size);
+//	return (data_ptr_t)buffer;
+//}
 
-void CBufferManager::CBufferAllocatorFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
-	auto &data = (CBufferAllocatorData &)*private_data;
-	auto &config = data.manager.config;
-	config.destroy_func(config.data, pointer, Storage::BLOCK_HEADER_SIZE);
-}
+// void CBufferManager::CBufferAllocatorFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
+//	auto &data = (CBufferAllocatorData &)*private_data;
+//	auto &config = data.manager.config;
+//	config.destroy_func(config.data, pointer);
+//}
 
-data_ptr_t CBufferManager::CBufferAllocatorRealloc(PrivateAllocatorData *private_data, data_ptr_t pointer,
-                                                   idx_t old_size, idx_t size) {
-	auto &data = (CBufferAllocatorData &)*private_data;
-	auto &config = data.manager.config;
-	auto buffer = config.reallocate_func(config.data, pointer, old_size, size, Storage::BLOCK_HEADER_SIZE);
-	return (data_ptr_t)buffer;
-}
+// data_ptr_t CBufferManager::CBufferAllocatorRealloc(PrivateAllocatorData *private_data, data_ptr_t pointer,
+//                                                   idx_t old_size, idx_t size) {
+//	auto &data = (CBufferAllocatorData &)*private_data;
+//	auto &config = data.manager.config;
+//	auto buffer = config.reallocate_func(config.data, pointer, old_size, size);
+//	return (data_ptr_t)buffer;
+//}
 
 } // namespace duckdb

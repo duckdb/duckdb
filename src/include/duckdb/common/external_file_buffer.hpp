@@ -7,28 +7,25 @@ namespace duckdb {
 
 class ExternalFileBuffer : public FileBuffer {
 public:
-	ExternalFileBuffer(Allocator &allocator, CBufferManagerConfig &config, uint64_t size)
-	    : FileBuffer(allocator, FileBufferType::EXTERNAL_BUFFER, size), config(config) {
+	ExternalFileBuffer(data_ptr_t buffer, uint64_t size)
+	    : FileBuffer(Allocator::DefaultAllocator(), FileBufferType::EXTERNAL_BUFFER, 0) {
+		this->internal_buffer = buffer;
+		this->buffer = internal_buffer + Storage::BLOCK_HEADER_SIZE;
+		this->internal_size = size;
+		this->size = internal_size - Storage::BLOCK_HEADER_SIZE;
 	}
 
-public:
-	data_ptr_t Buffer() const final override {
-		// Use a callback to retrieve the actual allocation from an external buffer handle
-		D_ASSERT(allocation);
-		return allocation;
-	}
-	data_ptr_t ExternalBufferHandle() const {
-		return buffer;
+	~ExternalFileBuffer() {
+		buffer = nullptr;
+		internal_buffer = nullptr;
+		size = 0;
+		internal_size = 0;
 	}
 
-	void SetAllocation(data_ptr_t allocation) {
-		this->allocation = allocation;
+	void Resize(uint64_t user_size) final override {
+		throw NotImplementedException(
+		    "This file buffer can not be resized, as the allocation is not owned by the buffer");
 	}
-
-private:
-	//! The allocation associated with the buffer
-	data_ptr_t allocation;
-	CBufferManagerConfig &config;
 };
 
 } // namespace duckdb

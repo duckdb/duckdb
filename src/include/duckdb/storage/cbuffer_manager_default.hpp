@@ -32,11 +32,11 @@ struct MyBuffer {
 };
 
 MyBuffer *CreateBuffer(void *allocation, idx_t size, MyBufferManager *buffer_manager, idx_t header_bytes);
-duckdb_buffer Allocate(void *data, idx_t size, idx_t header_bytes);
-void Destroy(void *data, duckdb_buffer buffer, idx_t header_bytes);
-duckdb_buffer ReAllocate(void *data, duckdb_buffer buffer, idx_t old_size, idx_t new_size, idx_t header_bytes);
-void *Pin(void *data, duckdb_buffer buffer);
-void Unpin(void *data, duckdb_buffer buffer);
+duckdb_block Allocate(void *data, idx_t size, idx_t header_bytes);
+void Destroy(void *data, duckdb_block buffer, idx_t header_bytes);
+duckdb_block ReAllocate(void *data, duckdb_block buffer, idx_t old_size, idx_t new_size, idx_t header_bytes);
+void *Pin(void *data, duckdb_block buffer);
+void Unpin(void *data, duckdb_block buffer);
 idx_t UsedMemory(void *data);
 idx_t MaxMemory(void *data);
 

@@ -4,13 +4,13 @@
 using namespace duckdb;
 using namespace std;
 
-static MyBuffer *GetBuffer(duckdb_buffer buffer, idx_t header_bytes) {
-	return (MyBuffer *)((int8_t *)buffer + header_bytes);
+static MyBuffer *GetBuffer(duckdb_block buffer) {
+	return (MyBuffer *)(buffer);
 }
 
-MyBuffer *CreateBuffer(void *allocation, idx_t size, MyBufferManager *buffer_manager, idx_t header_bytes) {
-	auto malloc_result = malloc(sizeof(MyBuffer) + header_bytes);
-	MyBuffer *buffer = GetBuffer(malloc_result, header_bytes);
+MyBuffer *CreateBuffer(void *allocation, idx_t size, MyBufferManager *buffer_manager) {
+	auto malloc_result = malloc(sizeof(MyBuffer));
+	MyBuffer *buffer = GetBuffer(malloc_result);
 	if (!malloc_result) {
 		free(allocation);
 		throw IOException("Could not allocate %d bytes", sizeof(MyBuffer));
@@ -30,19 +30,19 @@ MyBuffer *CreateBuffer(void *allocation, idx_t size, MyBufferManager *buffer_man
 	return buffer;
 }
 
-duckdb_buffer Allocate(void *data, idx_t size, idx_t header_bytes) {
+duckdb_block Allocate(void *data, idx_t size) {
 	auto my_data = (MyBufferManager *)data;
 	void *allocation = malloc(size);
 	if (!allocation) {
 		throw IOException("Could not allocate %d bytes", size);
 	}
-	auto buffer = CreateBuffer(allocation, size, my_data, header_bytes);
-	return (int8_t *)buffer - header_bytes;
+	auto buffer = CreateBuffer(allocation, size, my_data);
+	return buffer;
 }
 
-void Destroy(void *data, duckdb_buffer buffer, idx_t header_bytes) {
+void Destroy(void *data, duckdb_block buffer) {
 	(void)data;
-	auto my_buffer = GetBuffer(buffer, header_bytes);
+	auto my_buffer = GetBuffer(buffer);
 	auto buffer_manager = my_buffer->buffer_manager;
 	//#ifdef DEBUG
 	//	// This indicates a double-free
@@ -64,9 +64,9 @@ void Destroy(void *data, duckdb_buffer buffer, idx_t header_bytes) {
 	free(buffer);
 }
 
-duckdb_buffer ReAllocate(void *data, duckdb_buffer buffer, idx_t old_size, idx_t new_size, idx_t header_bytes) {
+duckdb_block ReAllocate(void *data, duckdb_block buffer, idx_t old_size, idx_t new_size) {
 	(void)data;
-	auto my_buffer = GetBuffer(buffer, header_bytes);
+	auto my_buffer = GetBuffer(buffer);
 	auto buffer_manager = my_buffer->buffer_manager;
 
 #ifdef DEBUG
@@ -79,11 +79,11 @@ duckdb_buffer ReAllocate(void *data, duckdb_buffer buffer, idx_t old_size, idx_t
 	}
 #endif
 
-	Destroy(data, buffer, header_bytes);
-	return Allocate(buffer_manager, new_size, header_bytes);
+	Destroy(data, buffer);
+	return Allocate(buffer_manager, new_size);
 }
 
-void *Pin(void *data, duckdb_buffer buffer) {
+void *Pin(void *data, duckdb_block buffer) {
 	(void)data;
 	auto my_buffer = (MyBuffer *)buffer;
 	auto buffer_manager = my_buffer->buffer_manager;
@@ -102,7 +102,7 @@ void *Pin(void *data, duckdb_buffer buffer) {
 	return my_buffer->allocation;
 }
 
-void Unpin(void *data, duckdb_buffer buffer) {
+void Unpin(void *data, duckdb_block buffer) {
 	(void)data;
 	auto my_buffer = (MyBuffer *)buffer;
 	auto buffer_manager = my_buffer->buffer_manager;

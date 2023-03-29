@@ -415,13 +415,12 @@ Prototypes used by the callback buffer manager
 * duckdb_buffer *buffer: an opaque user-created buffer created through the 'duckdb_allocate_func'
 * void *data: the user-provided state/context
 */
-typedef void *duckdb_buffer;
-typedef duckdb_buffer (*duckdb_allocate_func)(void *data, idx_t size, idx_t header_bytes);
-typedef duckdb_buffer (*duckdb_reallocate_func)(void *data, duckdb_buffer buffer, idx_t old_size, idx_t new_size,
-                                                idx_t header_bytes);
-typedef void (*duckdb_destroy_func)(void *data, duckdb_buffer buffer, idx_t header_bytes);
-typedef void *(*duckdb_pin_func)(void *data, duckdb_buffer buffer);
-typedef void (*duckdb_unpin_func)(void *data, duckdb_buffer buffer);
+typedef void *duckdb_block;
+typedef duckdb_block (*duckdb_register_memory)(void *data, idx_t size);
+typedef duckdb_block (*duckdb_resize_block)(void *data, duckdb_block buffer, idx_t old_size, idx_t new_size);
+typedef void (*duckdb_destroy_block)(void *data, duckdb_block buffer);
+typedef void *(*duckdb_pin_block)(void *data, duckdb_block buffer);
+typedef void (*duckdb_unpin_block)(void *data, duckdb_block buffer);
 typedef idx_t (*duckdb_max_memory_func)(void *data);
 typedef idx_t (*duckdb_used_memory_func)(void *data);
 
@@ -441,9 +440,9 @@ Functions interacting with this buffer manager are provided as callbacks.
 * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
 */
 DUCKDB_API duckdb_state duckdb_add_custom_buffer_manager(
-    duckdb_config config, void *allocation_context, duckdb_allocate_func allocate_func,
-    duckdb_reallocate_func reallocate_func, duckdb_destroy_func destroy_func, duckdb_pin_func pin_func,
-    duckdb_unpin_func unpin_func, duckdb_max_memory_func max_memory_func, duckdb_used_memory_func used_memory_func);
+    duckdb_config config, void *allocation_context, duckdb_register_memory allocate_func,
+    duckdb_resize_block reallocate_func, duckdb_destroy_block destroy_func, duckdb_pin_block pin_func,
+    duckdb_unpin_block unpin_func, duckdb_max_memory_func max_memory_func, duckdb_used_memory_func used_memory_func);
 
 //===--------------------------------------------------------------------===//
 // Query Execution
