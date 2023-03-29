@@ -345,6 +345,10 @@ public:
 
 	void UpdateVerification(VerificationPositions positions);
 
+	//! We update the last added verification position, it so happens that it was the actual last valid one
+	//! i.e., a buffer that does not contain all empty lines
+	void UpdateLastVerification();
+
 	void IncrementThread();
 
 	void DecrementThread();
@@ -512,6 +516,13 @@ void ParallelCSVGlobalState::UpdateVerification(VerificationPositions positions)
 	}
 }
 
+void ParallelCSVGlobalState::UpdateLastVerification() {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	if (!tuple_end.empty()) {
+		tuple_end.back() = NumericLimits<uint64_t>::Maximum();
+	}
+}
+
 static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext &context,
                                                                   TableFunctionInitInput &input) {
 	auto &bind_data = (ReadCSVData &)*input.bind_data;
@@ -573,11 +584,18 @@ static void ParallelReadCSVFunction(ClientContext &context, TableFunctionInput &
 		}
 		if (csv_local_state.csv_reader->finished) {
 			auto verification_updates = csv_local_state.csv_reader->GetVerificationPositions();
-			if (!csv_local_state.csv_reader->buffer->next_buffer) {
-				// if it's the last line of the file we mark as the maximum
-				verification_updates.end_of_last_line = NumericLimits<uint64_t>::Maximum();
+			if (verification_updates.beginning_of_first_line == verification_updates.end_of_last_line) {
+				// This means the buffer only had invalid lines, hence we don't store this verification update
+				csv_global_state.UpdateLastVerification();
+			} else {
+				// We actually have an update to add
+				if (!csv_local_state.csv_reader->buffer->next_buffer) {
+					// if it's the last line of the file we mark as the maximum
+					verification_updates.end_of_last_line = NumericLimits<uint64_t>::Maximum();
+				}
+				csv_global_state.UpdateVerification(verification_updates);
 			}
-			csv_global_state.UpdateVerification(verification_updates);
+
 			auto next_chunk = csv_global_state.Next(context, bind_data);
 			if (!next_chunk) {
 				csv_global_state.DecrementThread();

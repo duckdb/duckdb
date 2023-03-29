@@ -106,14 +106,20 @@ void RunTestOnFolder(const string &path, std::set<std::string> &skip) {
 	}
 }
 
-// TEST_CASE("Test One File", "[parallel-csv]") {
-//	DuckDB db(nullptr);
-//	Connection con(db);
-//	std::set<std::string> skip;
-//
-//	string file = "test/sql/copy/csv/data/auto/issue_1254.csv";
-//	REQUIRE(RunFull(file, skip, con));
-// }
+TEST_CASE("Test One File", "[parallel-csv]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	std::set<std::string> skip;
+
+	string file = "test/sql/copy/csv/data/real/voter.tsv";
+	//	auto thread_count = 1;
+	//	auto buffer_size = 5;
+	//	con.Query("PRAGMA threads=" + to_string(thread_count));
+	//	unique_ptr<MaterializedQueryResult> multi_threaded_result = con.Query(
+	//	    "SELECT * FROM read_csv_auto('" + file + "', buffer_size = " + to_string(buffer_size) + ")");
+	//	auto &result = multi_threaded_result->Collection();
+	REQUIRE(RunFull(file, skip, con));
+}
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data", "[parallel-csv]") {
 	std::set<std::string> skip;
@@ -122,10 +128,6 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data", "[parallel-csv
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/auto", "[parallel-csv]") {
 	std::set<std::string> skip;
-	// Thread count: 1 Buffer Size: 5
-	skip.insert("test/sql/copy/csv/data/auto/issue_1254.csv");
-	//  Thread count: 1 Buffer Size: 6
-	skip.insert("test/sql/copy/csv/data/auto/issue_1254_rn.csv");
 	// This file is from a 'mode skip' test
 	skip.insert("test/sql/copy/csv/data/auto/titlebasicsdebug.tsv");
 	RunTestOnFolder("test/sql/copy/csv/data/auto/", skip);
