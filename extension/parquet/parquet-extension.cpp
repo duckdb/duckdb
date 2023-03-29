@@ -355,19 +355,21 @@ public:
 		result->file_mutexes = std::unique_ptr<mutex[]>(new mutex[bind_data.files.size()]);
 		if (bind_data.files.empty()) {
 			result->initial_reader = nullptr;
-		} else if (!bind_data.parquet_options.file_options.union_by_name) {
-			result->readers = std::vector<shared_ptr<ParquetReader>>(bind_data.files.size(), nullptr);
+		} else {
+			result->readers = std::move(bind_data.union_readers);
+			if (result->readers.size() != bind_data.files.size()) {
+				result->readers = std::vector<shared_ptr<ParquetReader>>(bind_data.files.size(), nullptr);
+			}
 			if (bind_data.initial_reader) {
-				result->initial_reader = bind_data.initial_reader;
-				result->readers[0] = bind_data.initial_reader;
+				result->initial_reader = std::move(bind_data.initial_reader);
+				result->readers[0] = result->initial_reader;
+			} else if (result->readers[0]) {
+				result->initial_reader = result->readers[0];
 			} else {
 				result->initial_reader =
 				    make_shared<ParquetReader>(context, bind_data.files[0], bind_data.parquet_options);
 				result->readers[0] = result->initial_reader;
 			}
-		} else {
-			result->readers = std::move(bind_data.union_readers);
-			result->initial_reader = result->readers[0];
 		}
 		for (auto &reader : result->readers) {
 			if (!reader) {
