@@ -25,6 +25,9 @@ struct MultiFileReaderBindData {
 	idx_t filename_idx = DConstants::INVALID_INDEX;
 	//! The set of hive partitioning indexes (if any)
 	vector<pair<string, idx_t>> hive_partitioning_indexes;
+
+	DUCKDB_API void Serialize(FieldWriter &writer) const;
+	DUCKDB_API void Deserialize(FieldReader &reader);
 };
 
 struct MultiFileFilterEntry {
@@ -171,13 +174,12 @@ struct MultiFileReader {
 
 private:
 	static void CreatePositionalMapping(const string &file_name, const vector<LogicalType> &local_types,
-										const vector<LogicalType> &global_types,
-										const vector<column_t> &global_column_ids,
-										MultiFileReaderData &reader_data);
+	                                    const vector<LogicalType> &global_types,
+	                                    const vector<column_t> &global_column_ids, MultiFileReaderData &reader_data);
 	static void CreateNameMapping(const string &file_name, const vector<LogicalType> &local_types,
-										const vector<string> &local_names, const vector<LogicalType> &global_types,
-										const vector<string> &global_names, const vector<column_t> &global_column_ids,
-										MultiFileReaderData &reader_data);
+	                              const vector<string> &local_names, const vector<LogicalType> &global_types,
+	                              const vector<string> &global_names, const vector<column_t> &global_column_ids,
+	                              MultiFileReaderData &reader_data);
 };
 
 } // namespace duckdb

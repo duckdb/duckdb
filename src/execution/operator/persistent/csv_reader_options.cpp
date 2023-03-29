@@ -195,7 +195,7 @@ void BufferedCSVReaderOptions::SetWriteOption(const string &loption, const Value
 	}
 
 	if (loption == "force_quote") {
-		force_quote = ParseColumnList(value, names, loption);
+		force_quote = ParseColumnList(value, name_list, loption);
 	} else if (loption == "date_format" || loption == "dateformat") {
 		string format = ParseString(value, loption);
 		SetDateFormat(LogicalTypeId::DATE, format, false);

@@ -43,7 +43,7 @@ struct WriteCSVData : public BaseCSVData {
 	WriteCSVData(string file_path, vector<LogicalType> sql_types, vector<string> names)
 	    : sql_types(std::move(sql_types)) {
 		files.push_back(std::move(file_path));
-		options.names = std::move(names);
+		options.name_list = std::move(names);
 	}
 
 	//! The SQL types to write
@@ -57,8 +57,14 @@ struct WriteCSVData : public BaseCSVData {
 };
 
 struct ReadCSVData : public BaseCSVData {
-	//! The expected SQL types to read
-	vector<LogicalType> sql_types;
+	//! The expected SQL types to read from the file
+	vector<LogicalType> csv_types;
+	//! The expected SQL names to be read from the file
+	vector<string> csv_names;
+	//! The expected SQL types to be returned from the read - including added constants (e.g. filename, hive partitions)
+	vector<LogicalType> return_types;
+	//! The expected SQL names to be returned from the read - including added constants (e.g. filename, hive partitions)
+	vector<string> return_names;
 	//! The initial reader (if any): this is used when automatic detection is used during binding.
 	//! In this case, the CSV reader is already created and might as well be re-used.
 	unique_ptr<BufferedCSVReader> initial_reader;

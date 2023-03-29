@@ -67,8 +67,6 @@ struct BufferedCSVReaderOptions {
 	//! Whether file is compressed or not, and if so which compression type
 	//! AUTO_DETECT (default; infer from file extension)
 	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
-	//! The column names of the columns to read/write
-	vector<string> names;
 
 	//===--------------------------------------------------------------------===//
 	// CSVAutoOptions

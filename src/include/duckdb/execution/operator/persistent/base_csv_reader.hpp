@@ -69,8 +69,7 @@ public:
 		return options.file_path;
 	}
 	const vector<string> &GetNames() {
-		D_ASSERT(names.empty() || options.names.empty() || names == options.names);
-		return names.empty() ? options.names : names;
+		return names;
 	}
 	const vector<LogicalType> &GetTypes() {
 		return return_types;

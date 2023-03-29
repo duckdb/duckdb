@@ -201,13 +201,16 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			} else {
 				D_ASSERT(return_types.size() == names.size());
 			}
+			initial_reader->names = names;
 		}
 		options = initial_reader->options;
 		result->initial_reader = std::move(initial_reader);
 	} else {
 		D_ASSERT(return_types.size() == names.size());
 	}
-	// union_col_names will exclude filename and hivepartition
+	result->csv_types = return_types;
+	result->csv_names = names;
+
 	if (options.file_options.union_by_name) {
 		result->reader_bind =
 		    MultiFileReader::BindUnionReader<BufferedCSVReader>(context, return_types, names, *result, options);
@@ -220,8 +223,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	} else {
 		result->reader_bind = MultiFileReader::BindOptions(options.file_options, result->files, return_types, names);
 	}
-	result->sql_types = return_types;
-	result->options.names = names;
+	result->return_types = return_types;
+	result->return_names = names;
 	result->FinalizeRead(context);
 	return std::move(result);
 }
@@ -415,7 +418,7 @@ unique_ptr<CSVBufferRead> ParallelCSVGlobalState::Next(ClientContext &context, R
 	                                         batch_index++, estimated_linenr);
 	// move the byte index of the CSV reader to the next buffer
 	next_byte += bytes_per_local_state;
-	estimated_linenr += bytes_per_local_state / (bind_data.sql_types.size() * 5); // estimate 5 bytes per column
+	estimated_linenr += bytes_per_local_state / (bind_data.csv_types.size() * 5); // estimate 5 bytes per column
 	if (next_byte >= current_buffer->GetBufferSize()) {
 		// We replace the current buffer with the next buffer
 		next_byte = 0;
@@ -479,7 +482,7 @@ unique_ptr<LocalTableFunctionState> ParallelReadCSVInitLocal(ExecutionContext &c
 	unique_ptr<ParallelCSVReader> csv_reader;
 	if (next_local_buffer) {
 		csv_reader = make_unique<ParallelCSVReader>(context.client, csv_data.options, std::move(next_local_buffer),
-		                                            csv_data.sql_types);
+		                                            csv_data.csv_types);
 	} else {
 		global_state.DecrementThread();
 	}
@@ -548,7 +551,9 @@ struct SingleThreadedCSVState : public GlobalTableFunctionState {
 	//! This goes from [0...next_file] * 100
 	atomic<idx_t> progress_in_files;
 	//! The set of SQL types
-	vector<LogicalType> sql_types;
+	vector<LogicalType> csv_types;
+	//! The set of SQL names to be read from the file
+	vector<string> csv_names;
 	//! The column ids to read
 	vector<column_t> column_ids;
 
@@ -584,9 +589,10 @@ struct SingleThreadedCSVState : public GlobalTableFunctionState {
 			result = std::move(bind_data.union_readers[file_index]);
 		} else {
 			options.file_path = bind_data.files[file_index];
-			result = make_unique<BufferedCSVReader>(context, std::move(options), sql_types);
-			MultiFileReader::InitializeReader(*result, bind_data.reader_bind, bind_data.sql_types,
-			                                  bind_data.options.names, column_ids, nullptr);
+			result = make_unique<BufferedCSVReader>(context, std::move(options), csv_types);
+			result->names = csv_names;
+			MultiFileReader::InitializeReader(*result, bind_data.reader_bind, bind_data.return_types,
+			                                  bind_data.return_names, column_ids, nullptr);
 		}
 		total_size = result->file_handle->FileSize();
 		return result;
@@ -621,19 +627,22 @@ static unique_ptr<GlobalTableFunctionState> SingleThreadedCSVInit(ClientContext 
 		return std::move(result);
 	} else {
 		bind_data.options.file_path = bind_data.files[0];
-		result->initial_reader = make_unique<BufferedCSVReader>(context, bind_data.options, bind_data.sql_types);
+		result->initial_reader = make_unique<BufferedCSVReader>(context, bind_data.options, bind_data.csv_types);
+		if (!bind_data.options.file_options.union_by_name) {
+			result->initial_reader->names = bind_data.csv_names;
+		}
 		if (bind_data.options.auto_detect) {
 			bind_data.options = result->initial_reader->options;
 		}
 	}
-	MultiFileReader::InitializeReader(*result->initial_reader, bind_data.reader_bind, bind_data.sql_types,
-	                                  bind_data.options.names, input.column_ids, input.filters);
+	MultiFileReader::InitializeReader(*result->initial_reader, bind_data.reader_bind, bind_data.return_types,
+	                                  bind_data.return_names, input.column_ids, input.filters);
 	for (auto &reader : bind_data.union_readers) {
 		if (!reader) {
 			continue;
 		}
-		MultiFileReader::InitializeReader(*reader, bind_data.reader_bind, bind_data.sql_types, bind_data.options.names,
-		                                  input.column_ids, input.filters);
+		MultiFileReader::InitializeReader(*reader, bind_data.reader_bind, bind_data.return_types,
+		                                  bind_data.return_names, input.column_ids, input.filters);
 	}
 	result->column_ids = input.column_ids;
 
@@ -643,10 +652,9 @@ static unique_ptr<GlobalTableFunctionState> SingleThreadedCSVInit(ClientContext 
 		// as such, we need to re-run the auto detection on each file
 		bind_data.options.auto_detect = false;
 	}
+	result->csv_types = bind_data.csv_types;
+	result->csv_names = bind_data.csv_names;
 	result->next_file = 1;
-	if (result->initial_reader) {
-		result->sql_types = result->initial_reader->return_types;
-	}
 	return std::move(result);
 }
 
@@ -808,7 +816,7 @@ unique_ptr<NodeStatistics> CSVReaderCardinality(ClientContext &context, const Fu
 	auto &bind_data = (ReadCSVData &)*bind_data_p;
 	idx_t per_file_cardinality = 0;
 	if (bind_data.initial_reader && bind_data.initial_reader->file_handle) {
-		auto estimated_row_width = (bind_data.sql_types.size() * 5);
+		auto estimated_row_width = (bind_data.csv_types.size() * 5);
 		per_file_cardinality = bind_data.initial_reader->file_handle->FileSize() / estimated_row_width;
 	} else {
 		// determined through the scientific method as the average amount of rows in a CSV file
@@ -833,7 +841,6 @@ void BufferedCSVReaderOptions::Serialize(FieldWriter &writer) const {
 	writer.WriteString(null_str);
 	writer.WriteField<FileCompressionType>(compression);
 	// read options
-	writer.WriteList<string>(names);
 	writer.WriteField<idx_t>(skip_rows);
 	writer.WriteField<bool>(skip_rows_set);
 	writer.WriteField<idx_t>(maximum_line_size);
@@ -867,7 +874,6 @@ void BufferedCSVReaderOptions::Deserialize(FieldReader &reader) {
 	null_str = reader.ReadRequired<string>();
 	compression = reader.ReadRequired<FileCompressionType>();
 	// read options
-	names = reader.ReadRequiredList<string>();
 	skip_rows = reader.ReadRequired<idx_t>();
 	skip_rows_set = reader.ReadRequired<bool>();
 	maximum_line_size = reader.ReadRequired<idx_t>();
@@ -888,22 +894,30 @@ void BufferedCSVReaderOptions::Deserialize(FieldReader &reader) {
 static void CSVReaderSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function) {
 	auto &bind_data = (ReadCSVData &)*bind_data_p;
 	writer.WriteList<string>(bind_data.files);
-	writer.WriteRegularSerializableList<LogicalType>(bind_data.sql_types);
+	writer.WriteRegularSerializableList<LogicalType>(bind_data.csv_types);
+	writer.WriteList<string>(bind_data.csv_names);
+	writer.WriteRegularSerializableList<LogicalType>(bind_data.return_types);
+	writer.WriteList<string>(bind_data.return_names);
 	writer.WriteField<idx_t>(bind_data.filename_col_idx);
 	writer.WriteField<idx_t>(bind_data.hive_partition_col_idx);
 	bind_data.options.Serialize(writer);
 	writer.WriteField<bool>(bind_data.single_threaded);
+	bind_data.reader_bind.Serialize(writer);
 }
 
 static unique_ptr<FunctionData> CSVReaderDeserialize(ClientContext &context, FieldReader &reader,
                                                      TableFunction &function) {
 	auto result_data = make_unique<ReadCSVData>();
 	result_data->files = reader.ReadRequiredList<string>();
-	result_data->sql_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+	result_data->csv_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+	result_data->csv_names = reader.ReadRequiredList<string>();
+	result_data->return_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+	result_data->return_names = reader.ReadRequiredList<string>();
 	result_data->filename_col_idx = reader.ReadRequired<idx_t>();
 	result_data->hive_partition_col_idx = reader.ReadRequired<idx_t>();
 	result_data->options.Deserialize(reader);
 	result_data->single_threaded = reader.ReadField<bool>(true);
+	result_data->reader_bind.Deserialize(reader);
 	return std::move(result_data);
 }
 

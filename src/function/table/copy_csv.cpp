@@ -4,7 +4,6 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/execution/operator/persistent/parallel_csv_reader.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/table/read_csv.hpp"
@@ -84,7 +83,9 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &i
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &info, vector<string> &expected_names,
                                             vector<LogicalType> &expected_types) {
 	auto bind_data = make_unique<ReadCSVData>();
-	bind_data->sql_types = expected_types;
+	bind_data->csv_types = expected_types;
+	bind_data->return_types = expected_types;
+	bind_data->return_names = expected_names;
 	bind_data->files = MultiFileReader::GetFileList(context, Value(info.file_path), "CSV");
 
 	auto &options = bind_data->options;
@@ -266,7 +267,7 @@ static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ExecutionContext &c
 
 	// create the chunk with VARCHAR types
 	vector<LogicalType> types;
-	types.resize(csv_data.options.names.size(), LogicalType::VARCHAR);
+	types.resize(csv_data.options.name_list.size(), LogicalType::VARCHAR);
 
 	local_data->cast_chunk.Initialize(Allocator::Get(context.client), types);
 	return std::move(local_data);
@@ -282,12 +283,12 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 	if (options.header) {
 		BufferedSerializer serializer;
 		// write the header line to the file
-		for (idx_t i = 0; i < csv_data.options.names.size(); i++) {
+		for (idx_t i = 0; i < csv_data.options.name_list.size(); i++) {
 			if (i != 0) {
 				serializer.WriteBufferData(options.delimiter);
 			}
-			WriteQuotedString(serializer, csv_data, csv_data.options.names[i].c_str(), csv_data.options.names[i].size(),
-			                  false);
+			WriteQuotedString(serializer, csv_data, csv_data.options.name_list[i].c_str(),
+			                  csv_data.options.name_list[i].size(), false);
 		}
 		serializer.WriteBufferData(csv_data.newline);
 

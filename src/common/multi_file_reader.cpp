@@ -195,13 +195,13 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderBindData &options, const
 	}
 }
 void MultiFileReader::CreatePositionalMapping(const string &file_name, const vector<LogicalType> &local_types,
-                                    const vector<LogicalType> &global_types,
-                                    const vector<column_t> &global_column_ids,
-                                    MultiFileReaderData &reader_data) {
+                                              const vector<LogicalType> &global_types,
+                                              const vector<column_t> &global_column_ids,
+                                              MultiFileReaderData &reader_data) {
 	for (idx_t i = 0; i < global_column_ids.size(); i++) {
 		// check if this is a constant column
 		bool constant = false;
-		for (auto &entry: reader_data.constant_map) {
+		for (auto &entry : reader_data.constant_map) {
 			if (entry.first == i) {
 				constant = true;
 				break;
@@ -214,10 +214,12 @@ void MultiFileReader::CreatePositionalMapping(const string &file_name, const vec
 		}
 		auto id = global_column_ids[i];
 		if (id >= global_types.size()) {
-			throw InternalException("MultiFileReader::CreatePositionalMapping - global_id is out of range in global_types for this file");
+			throw InternalException(
+			    "MultiFileReader::CreatePositionalMapping - global_id is out of range in global_types for this file");
 		}
 		if (id >= local_types.size()) {
-			throw InternalException("MultiFileReader::CreatePositionalMapping - global_id is out of range in local_types for this file");
+			throw InternalException(
+			    "MultiFileReader::CreatePositionalMapping - global_id is out of range in local_types for this file");
 		}
 		auto &global_type = global_types[id];
 		auto &local_type = local_types[id];
@@ -231,9 +233,9 @@ void MultiFileReader::CreatePositionalMapping(const string &file_name, const vec
 }
 
 void MultiFileReader::CreateNameMapping(const string &file_name, const vector<LogicalType> &local_types,
-                                    const vector<string> &local_names, const vector<LogicalType> &global_types,
-                                    const vector<string> &global_names, const vector<column_t> &global_column_ids,
-                                    MultiFileReaderData &reader_data) {
+                                        const vector<string> &local_names, const vector<LogicalType> &global_types,
+                                        const vector<string> &global_names, const vector<column_t> &global_column_ids,
+                                        MultiFileReaderData &reader_data) {
 	D_ASSERT(global_types.size() == global_names.size());
 	D_ASSERT(local_types.size() == local_names.size());
 	// we have expected types: create a map of name -> column index
@@ -257,16 +259,24 @@ void MultiFileReader::CreateNameMapping(const string &file_name, const vector<Lo
 		// not constant - look up the column in the name map
 		auto global_id = global_column_ids[i];
 		if (global_id >= global_types.size()) {
-			throw InternalException("MultiFileReader::CreatePositionalMapping - global_id is out of range in global_types for this file");
+			throw InternalException(
+			    "MultiFileReader::CreatePositionalMapping - global_id is out of range in global_types for this file");
 		}
 		auto &global_name = global_names[global_id];
 		auto entry = name_map.find(global_name);
 		if (entry == name_map.end()) {
-			throw IOException(
-			    StringUtil::Format("Failed to read file \"%s\": schema mismatch in glob: column \"%s\" was read from "
-			                       "the original file, but could not be found in file \"%s\".\n\nIf you are trying to "
-			                       "read files with different schemas, try setting union_by_name=True",
-			                       file_name, global_name, file_name));
+			string candidate_names;
+			for (auto &local_name : local_names) {
+				if (!candidate_names.empty()) {
+					candidate_names += ", ";
+				}
+				candidate_names += local_name;
+			}
+			throw IOException(StringUtil::Format(
+			    "Failed to read file \"%s\": schema mismatch in glob: column \"%s\" was read from "
+			    "the original file, but could not be found in file \"%s\".\nCandidate names: %s\nIf you are trying to "
+			    "read files with different schemas, try setting union_by_name=True",
+			    file_name, global_name, file_name, candidate_names));
 		}
 		// we found the column in the local file - check if the types are the same
 		auto local_id = entry->second;
@@ -287,10 +297,11 @@ void MultiFileReader::CreateMapping(const string &file_name, const vector<Logica
                                     const vector<string> &local_names, const vector<LogicalType> &global_types,
                                     const vector<string> &global_names, const vector<column_t> &global_column_ids,
                                     optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data) {
-	if (global_names.empty()) {
+	if (local_names.empty() || global_names.empty()) {
 		CreatePositionalMapping(file_name, local_types, global_types, global_column_ids, reader_data);
 	} else {
-		CreateNameMapping(file_name, local_types, local_names, global_types, global_names, global_column_ids, reader_data);
+		CreateNameMapping(file_name, local_types, local_names, global_types, global_names, global_column_ids,
+		                  reader_data);
 	}
 	if (filters) {
 		reader_data.filter_map.resize(global_types.size());
@@ -326,6 +337,14 @@ void MultiFileReaderOptions::Deserialize(FieldReader &reader) {
 	filename = reader.ReadRequired<bool>();
 	hive_partitioning = reader.ReadRequired<bool>();
 	union_by_name = reader.ReadRequired<bool>();
+}
+
+void MultiFileReaderBindData::Serialize(FieldWriter &writer) const {
+	writer.WriteField(filename_idx);
+}
+
+void MultiFileReaderBindData::Deserialize(FieldReader &reader) {
+	filename_idx = reader.ReadRequired<idx_t>();
 }
 
 void MultiFileReaderOptions::AddBatchInfo(BindInfo &bind_info) {
