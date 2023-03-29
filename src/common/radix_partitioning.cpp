@@ -1,9 +1,7 @@
 #include "duckdb/common/radix_partitioning.hpp"
 
-#include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
 #include "duckdb/common/types/row/row_data_collection.hpp"
-#include "duckdb/common/types/row/row_layout.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
@@ -116,10 +114,10 @@ void RadixPartitionedColumnData::ComputePartitionIndices(PartitionedColumnDataAp
 //===--------------------------------------------------------------------===//
 // Tuple Data Partitioning
 //===--------------------------------------------------------------------===//
-RadixPartitionedTupleData::RadixPartitionedTupleData(BufferManager &buffer_manager, TupleDataLayout layout_p,
+RadixPartitionedTupleData::RadixPartitionedTupleData(BufferManager &buffer_manager, const TupleDataLayout &layout_p,
                                                      idx_t radix_bits_p, idx_t hash_col_idx_p)
-    : PartitionedTupleData(PartitionedTupleDataType::RADIX, buffer_manager, std::move(layout_p)),
-      radix_bits(radix_bits_p), hash_col_idx(hash_col_idx_p) {
+    : PartitionedTupleData(PartitionedTupleDataType::RADIX, buffer_manager, layout_p.Copy()), radix_bits(radix_bits_p),
+      hash_col_idx(hash_col_idx_p) {
 	D_ASSERT(hash_col_idx < layout.GetTypes().size());
 	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
 	allocators->allocators.reserve(num_partitions);

@@ -12,12 +12,12 @@ namespace duckdb {
 using ValidityBytes = TupleDataLayout::ValidityBytes;
 
 TupleDataCollection::TupleDataCollection(BufferManager &buffer_manager, const TupleDataLayout &layout_p)
-    : layout(layout_p), allocator(make_shared<TupleDataAllocator>(buffer_manager, layout)) {
+    : layout(layout_p.Copy()), allocator(make_shared<TupleDataAllocator>(buffer_manager, layout)) {
 	Initialize();
 }
 
 TupleDataCollection::TupleDataCollection(shared_ptr<TupleDataAllocator> allocator)
-    : layout(allocator->GetLayout()), allocator(std::move(allocator)) {
+    : layout(allocator->GetLayout().Copy()), allocator(std::move(allocator)) {
 	Initialize();
 }
 

@@ -26,11 +26,11 @@ TupleDataBlock &TupleDataBlock::operator=(TupleDataBlock &&other) noexcept {
 }
 
 TupleDataAllocator::TupleDataAllocator(BufferManager &buffer_manager, const TupleDataLayout &layout)
-    : buffer_manager(buffer_manager), layout(layout) {
+    : buffer_manager(buffer_manager), layout(layout.Copy()) {
 }
 
 TupleDataAllocator::TupleDataAllocator(TupleDataAllocator &allocator)
-    : buffer_manager(allocator.buffer_manager), layout(allocator.layout) {
+    : buffer_manager(allocator.buffer_manager), layout(allocator.layout.Copy()) {
 }
 
 Allocator &TupleDataAllocator::GetAllocator() {

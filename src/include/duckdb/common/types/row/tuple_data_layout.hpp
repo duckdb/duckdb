@@ -16,9 +16,6 @@
 
 namespace duckdb {
 
-class TupleDataLayout;
-typedef unordered_map<idx_t, TupleDataLayout> struct_layout_map_t;
-
 class TupleDataLayout {
 public:
 	using Aggregates = vector<AggregateObject>;
@@ -26,6 +23,8 @@ public:
 
 	//! Creates an empty TupleDataLayout
 	TupleDataLayout();
+	//! Create a copy of this TupleDataLayout
+	TupleDataLayout Copy() const;
 
 public:
 	//! Initializes the RowLayout with the specified types and aggregates to an empty RowLayout
@@ -53,8 +52,8 @@ public:
 	}
 	//! Returns a map from column id to the struct RowLayouts
 	const inline TupleDataLayout &GetStructLayout(idx_t col_idx) const {
-		D_ASSERT(struct_layouts.find(col_idx) != struct_layouts.end());
-		return struct_layouts.find(col_idx)->second;
+		D_ASSERT(struct_layouts->find(col_idx) != struct_layouts->end());
+		return struct_layouts->find(col_idx)->second;
 	}
 	//! Returns the total width required for each row, including padding
 	inline idx_t GetRowWidth() const {
@@ -94,7 +93,7 @@ private:
 	//! The aggregate functions
 	Aggregates aggregates;
 	//! Structs are a recursive TupleDataLayout
-	struct_layout_map_t struct_layouts;
+	unique_ptr<unordered_map<idx_t, TupleDataLayout>> struct_layouts;
 	//! The width of the validity header
 	idx_t flag_width;
 	//! The width of the data portion

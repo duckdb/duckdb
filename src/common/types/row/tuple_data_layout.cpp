@@ -8,6 +8,26 @@ TupleDataLayout::TupleDataLayout()
     : flag_width(0), data_width(0), aggr_width(0), row_width(0), all_constant(true), heap_size_offset(0) {
 }
 
+TupleDataLayout TupleDataLayout::Copy() const {
+	TupleDataLayout result;
+	result.types = this->types;
+	result.aggregates = this->aggregates;
+	if (this->struct_layouts) {
+		result.struct_layouts = make_unique<unordered_map<idx_t, TupleDataLayout>>();
+		for (const auto &entry : *this->struct_layouts) {
+			result.struct_layouts->emplace(entry.first, entry.second.Copy());
+		}
+	}
+	result.flag_width = this->flag_width;
+	result.data_width = this->data_width;
+	result.aggr_width = this->aggr_width;
+	result.row_width = this->row_width;
+	result.offsets = this->offsets;
+	result.all_constant = this->all_constant;
+	result.heap_size_offset = this->heap_size_offset;
+	return result;
+}
+
 void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggregates_p, bool align, bool heap_offset_p) {
 	offsets.clear();
 	types = std::move(types_p);
@@ -27,7 +47,10 @@ void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggrega
 			for (auto &ct : child_types) {
 				child_type_vector.emplace_back(ct.second);
 			}
-			auto struct_entry = struct_layouts.emplace(col_idx, TupleDataLayout());
+			if (!struct_layouts) {
+				struct_layouts = make_unique<unordered_map<idx_t, TupleDataLayout>>();
+			}
+			auto struct_entry = struct_layouts->emplace(col_idx, TupleDataLayout());
 			struct_entry.first->second.Initialize(std::move(child_type_vector), false, false);
 			all_constant = all_constant && struct_entry.first->second.AllConstant();
 		} else {
@@ -49,9 +72,8 @@ void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggrega
 		if (TypeIsConstantSize(internal_type) || internal_type == PhysicalType::VARCHAR) {
 			row_width += GetTypeIdSize(type.InternalType());
 		} else if (internal_type == PhysicalType::STRUCT) {
-			D_ASSERT(struct_layouts.find(col_idx) != struct_layouts.end());
 			// Just get the size of the TupleDataLayout of the struct
-			row_width += struct_layouts[col_idx].GetRowWidth();
+			row_width += GetStructLayout(col_idx).GetRowWidth();
 		} else {
 			// Variable size types use pointers to the actual data (can be swizzled).
 			// Again, we would use sizeof(data_ptr_t), but this is not guaranteed to be equal to sizeof(idx_t).

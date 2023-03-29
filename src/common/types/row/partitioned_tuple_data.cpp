@@ -7,13 +7,13 @@
 namespace duckdb {
 
 PartitionedTupleData::PartitionedTupleData(PartitionedTupleDataType type_p, BufferManager &buffer_manager_p,
-                                           TupleDataLayout layout_p)
-    : type(type_p), buffer_manager(buffer_manager_p), layout(std::move(layout_p)),
+                                           const TupleDataLayout &layout_p)
+    : type(type_p), buffer_manager(buffer_manager_p), layout(layout_p.Copy()),
       allocators(make_shared<PartitionTupleDataAllocators>()) {
 }
 
 PartitionedTupleData::PartitionedTupleData(const PartitionedTupleData &other)
-    : type(other.type), buffer_manager(other.buffer_manager), layout(other.layout) {
+    : type(other.type), buffer_manager(other.buffer_manager), layout(other.layout.Copy()) {
 }
 
 unique_ptr<PartitionedTupleData> PartitionedTupleData::CreateShared() {

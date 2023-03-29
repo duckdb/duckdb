@@ -104,7 +104,7 @@ protected:
 
 protected:
 	//! PartitionedTupleData can only be instantiated by derived classes
-	PartitionedTupleData(PartitionedTupleDataType type, BufferManager &buffer_manager, TupleDataLayout layout);
+	PartitionedTupleData(PartitionedTupleDataType type, BufferManager &buffer_manager, const TupleDataLayout &layout);
 	PartitionedTupleData(const PartitionedTupleData &other);
 
 	//! Create a new shared allocator

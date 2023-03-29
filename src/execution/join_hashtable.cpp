@@ -921,8 +921,8 @@ bool JoinHashTable::RequiresPartitioning(ClientConfig &config, vector<unique_ptr
 }
 
 void JoinHashTable::Partition(JoinHashTable &global_ht) {
-	auto new_sink_collection = make_unique_base<PartitionedTupleData, RadixPartitionedTupleData>(
-	    buffer_manager, layout, global_ht.radix_bits, layout.ColumnCount() - 1);
+	auto new_sink_collection =
+	    make_unique<RadixPartitionedTupleData>(buffer_manager, layout, global_ht.radix_bits, layout.ColumnCount() - 1);
 	sink_collection->Repartition(*new_sink_collection);
 	sink_collection = std::move(new_sink_collection);
 	global_ht.Merge(*this);
