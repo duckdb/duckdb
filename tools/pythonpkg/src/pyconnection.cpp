@@ -50,20 +50,6 @@ DBInstanceCache instance_cache;
 shared_ptr<PythonImportCache> DuckDBPyConnection::import_cache = nullptr;
 PythonEnvironmentType DuckDBPyConnection::environment = PythonEnvironmentType::NORMAL;
 
-static std::string GenerateRandomName() {
-	std::random_device rd;
-	std::mt19937 gen(rd());
-	std::uniform_int_distribution<> dis(0, 15);
-
-	std::stringstream ss;
-	int i;
-	ss << std::hex;
-	for (i = 0; i < 16; i++) {
-		ss << dis(gen);
-	}
-	return ss.str();
-}
-
 void DuckDBPyConnection::DetectEnvironment() {
 	// If __main__ does not have a __file__ attribute, we are in interactive mode
 	auto main_module = py::module_::import("__main__");
@@ -551,6 +537,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, co
 	return make_unique<DuckDBPyRelation>(std::move(read_json_relation));
 }
 
+PathLike DuckDBPyConnection::GetPathLike(const py::object &object) {
+	return PathLike::Create(object, *this);
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
     const py::object &name_p, const py::object &header, const py::object &compression, const py::object &sep,
     const py::object &delimiter, const py::object &dtype, const py::object &na_values, const py::object &skiprows,
@@ -561,18 +551,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 		throw ConnectionException("Connection has already been closed");
 	}
 	BufferedCSVReaderOptions options;
-
-	shared_ptr<ExternalDependency> file_like_object_wrapper;
-	string name;
-	if (!py::isinstance<py::str>(name_p)) {
-		// Make sure that the object filesystem is initialized and registered
-		auto &fs = GetObjectFileSystem();
-		name = StringUtil::Format("%s://%s", "DUCKDB_INTERNAL_OBJECTSTORE", GenerateRandomName());
-		fs.attr("add_file")(name_p, name);
-		file_like_object_wrapper = make_unique<PythonDependencies>(make_unique<FileSystemObject>(fs, name));
-	} else {
-		name = py::str(name_p);
-	}
+	auto path_like = GetPathLike(name_p);
+	auto &name = path_like.str;
+	auto file_like_object_wrapper = std::move(path_like.dependency);
 
 	// First check if the header is explicitly set
 	// when false this affects the returned types, so it needs to be known at initialization of the relation
@@ -863,7 +844,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const DataFrame &value) 
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
-	string name = "df_" + GenerateRandomName();
+	string name = "df_" + StringUtil::GenerateRandomName();
 	auto new_df = PandasScanFunction::PandasReplaceCopiedNames(value);
 	vector<Value> params;
 	params.emplace_back(Value::POINTER((uintptr_t)new_df.ptr()));
@@ -880,7 +861,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &file_
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
-	string name = "parquet_" + GenerateRandomName();
+	string name = "parquet_" + StringUtil::GenerateRandomName();
 	vector<Value> params;
 	params.emplace_back(file_glob);
 	named_parameter_map_t named_parameters({{"binary_as_string", Value::BOOLEAN(binary_as_string)},
@@ -906,7 +887,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquets(const vector<strin
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
-	string name = "parquet_" + GenerateRandomName();
+	string name = "parquet_" + StringUtil::GenerateRandomName();
 	vector<Value> params;
 	auto file_globs_as_value = vector<Value>();
 	for (const auto &file : file_globs) {
@@ -935,7 +916,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_obj
 		throw ConnectionException("Connection has already been closed");
 	}
 	py::gil_scoped_acquire acquire;
-	string name = "arrow_object_" + GenerateRandomName();
+	string name = "arrow_object_" + StringUtil::GenerateRandomName();
 	if (!IsAcceptedArrowObject(arrow_object)) {
 		auto py_object_type = string(py::str(arrow_object.get_type().attr("__name__")));
 		throw InvalidInputException("Python Object Type %s is not an accepted Arrow Object.", py_object_type);
@@ -960,7 +941,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromSubstrait(py::bytes &proto)
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
-	string name = "substrait_" + GenerateRandomName();
+	string name = "substrait_" + StringUtil::GenerateRandomName();
 	vector<Value> params;
 	params.emplace_back(Value::BLOB_RAW(proto));
 	return make_unique<DuckDBPyRelation>(connection->TableFunction("from_substrait", params)->Alias(name));
@@ -992,7 +973,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromSubstraitJSON(const string 
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
-	string name = "from_substrait_" + GenerateRandomName();
+	string name = "from_substrait_" + StringUtil::GenerateRandomName();
 	vector<Value> params;
 	params.emplace_back(json);
 	return make_unique<DuckDBPyRelation>(connection->TableFunction("from_substrait_json", params)->Alias(name));
@@ -1148,7 +1129,7 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(co
 
 static void CreateArrowScan(py::object entry, TableFunctionRef &table_function,
                             vector<unique_ptr<ParsedExpression>> &children, ClientConfig &config) {
-	string name = "arrow_" + GenerateRandomName();
+	string name = "arrow_" + StringUtil::GenerateRandomName();
 	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(entry.ptr(), config);
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
@@ -1172,7 +1153,7 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 	auto table_function = make_unique<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
 	if (DuckDBPyConnection::IsPandasDataframe(entry)) {
-		string name = "df_" + GenerateRandomName();
+		string name = "df_" + StringUtil::GenerateRandomName();
 		auto new_df = PandasScanFunction::PandasReplaceCopiedNames(entry);
 		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)new_df.ptr())));
 		table_function->function = make_unique<FunctionExpression>("pandas_scan", std::move(children));

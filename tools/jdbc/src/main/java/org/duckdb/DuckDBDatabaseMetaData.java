@@ -228,17 +228,17 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public boolean supportsConvert(int fromType, int toType) throws SQLException {
-		throw new SQLFeatureNotSupportedException("supportsConvert");
+		return false;
 	}
 
 	@Override
 	public boolean supportsTableCorrelationNames() throws SQLException {
-		throw new SQLFeatureNotSupportedException("supportsTableCorrelationNames");
+		return true;
 	}
 
 	@Override
 	public boolean supportsDifferentTableCorrelationNames() throws SQLException {
-		throw new SQLFeatureNotSupportedException("supportsDifferentTableCorrelationNames");
+		return false;
 	}
 
 	@Override
@@ -383,7 +383,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public boolean supportsSchemasInPrivilegeDefinitions() throws SQLException {
-		throw new SQLFeatureNotSupportedException("supportsSchemasInPrivilegeDefinitions");
+                return false;
 	}
 
 	@Override
@@ -1029,7 +1029,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public boolean supportsBatchUpdates() throws SQLException {
-		throw new SQLFeatureNotSupportedException("supportsBatchUpdates");
+                return false;
 	}
 
 	@Override
@@ -1081,7 +1081,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public boolean supportsResultSetHoldability(int holdability) throws SQLException {
-		throw new SQLFeatureNotSupportedException("supportsResultSetHoldability");
+                return false;
 	}
 
 	@Override
@@ -1121,7 +1121,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public boolean supportsStatementPooling() throws SQLException {
-		throw new SQLFeatureNotSupportedException("supportsStatementPooling");
+                return false;
 	}
 
 	@Override
@@ -1131,7 +1131,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public boolean supportsStoredFunctionsUsingCallSyntax() throws SQLException {
-		throw new SQLFeatureNotSupportedException("supportsStoredFunctionsUsingCallSyntax");
+                return false;
 	}
 
 	@Override
