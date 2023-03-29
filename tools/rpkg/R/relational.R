@@ -160,7 +160,7 @@ rel_order <- rapi_rel_order
 #' null_ptr <- sexp_null_ptr()
 sexp_null_ptr <- rapi_get_null_SEXP_ptr
 
-expr_window <- function(window_function, partitions=list(),
+expr_window <- function(window_function, partitions=list(), order_bys=list(),
                         window_boundary_start="unbounded_preceding",
                         window_boundary_end="current_row_range",
                         start_expr = NULL, end_expr=NULL, offset_expr=NULL, default_expr=NULL) {
@@ -177,7 +177,7 @@ expr_window <- function(window_function, partitions=list(),
     if (is.null(default_expr)) {
       default_expr <- null_ptr
     }
-    expr_window_(window_function, partitions, tolower(window_boundary_start), tolower(window_boundary_end), start_expr, end_expr, offset_expr, default_expr)
+    expr_window_(window_function, partitions, order_bys, tolower(window_boundary_start), tolower(window_boundary_end), start_expr, end_expr, offset_expr, default_expr)
 }
 
 window_boundaries <- c("unbounded_preceding",
@@ -188,11 +188,11 @@ window_boundaries <- c("unbounded_preceding",
                        "expr_following_rows",
                        "expr_preceding_range")
 
-expr_window_ <- function (window_function, partitions=list(), window_boundary_start=window_boundaries,
+expr_window_ <- function (window_function, partitions=list(), order_bys=list(), window_boundary_start=window_boundaries,
           window_boundary_end=window_boundaries, start_expr = list(), end_expr=list(), offset_expr=list(), default_expr=list()) {
     window_boundary_start <- match.arg(window_boundary_start)
     window_boundary_end <- match.arg(window_boundary_end)
-    rapi_expr_window(window_function, partitions, window_boundary_start, window_boundary_end, start_expr, end_expr, offset_expr, default_expr)
+    rapi_expr_window(window_function, partitions, order_bys, window_boundary_start, window_boundary_end, start_expr, end_expr, offset_expr, default_expr)
 }
 
 #' Lazily INNER join two DuckDB relation objects

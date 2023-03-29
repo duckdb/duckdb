@@ -244,7 +244,7 @@ static WindowBoundary StringToWindowBoundary(string &window_boundary) {
 	}
 }
 
-[[cpp11::register]] SEXP rapi_expr_window(duckdb::expr_extptr_t window_function, list partitions,
+[[cpp11::register]] SEXP rapi_expr_window(duckdb::expr_extptr_t window_function, list partitions, list order_bys,
                                           std::string window_boundary_start, std::string window_boundary_end,
                                           duckdb::expr_extptr_t start_expr, duckdb::expr_extptr_t end_expr,
                                           duckdb::expr_extptr_t offset_expr, duckdb::expr_extptr_t default_expr) {
@@ -257,8 +257,9 @@ static WindowBoundary StringToWindowBoundary(string &window_boundary) {
 	auto window_type = WindowExpression::WindowToExpressionType(function.function_name);
 	auto window_expr = make_external<WindowExpression>("duckdb_expr", window_type, "", "", function.function_name);
 
-	for (auto &order : function.order_bys->orders) {
-		window_expr->orders.push_back(OrderByNode(order.type, order.null_order, order.expression->Copy()));
+
+	for (expr_extptr_t expr : order_bys) {
+		window_expr->orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, expr->Copy());
 	}
 
 	if (function.filter) {

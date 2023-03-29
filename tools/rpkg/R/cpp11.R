@@ -72,8 +72,8 @@ rapi_rel_order <- function(rel, orders) {
   .Call(`_duckdb_rapi_rel_order`, rel, orders)
 }
 
-rapi_expr_window <- function(window_function, partitions, window_boundary_start, window_boundary_end, start_expr, end_expr, offset_expr, default_expr) {
-  .Call(`_duckdb_rapi_expr_window`, window_function, partitions, window_boundary_start, window_boundary_end, start_expr, end_expr, offset_expr, default_expr)
+rapi_expr_window <- function(window_function, partitions, order_bys, window_boundary_start, window_boundary_end, start_expr, end_expr, offset_expr, default_expr) {
+  .Call(`_duckdb_rapi_expr_window`, window_function, partitions, order_bys, window_boundary_start, window_boundary_end, start_expr, end_expr, offset_expr, default_expr)
 }
 
 rapi_rel_join <- function(left, right, conds, join) {

@@ -373,8 +373,9 @@ test_that("Window sum with Partition, order, and window boundaries works", {
     rel_a <- rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 1, 1, 2, 2, 2, 2)))
     partitions <- list(expr_reference("b"))
     order_by_a <- list(rapi_rel_order(rel_a, list(expr_reference("a"))))
-    sum_func <- expr_function("sum", list(expr_reference("a")), order_bys=list(expr_reference("a")))
+    sum_func <- expr_function("sum", list(expr_reference("a")))
     sum_window <- expr_window(sum_func, partitions=partitions,
+                                        order_bys=list(expr_reference("a")),
                                         window_boundary_start="expr_preceding_rows",
                                         window_boundary_end="current_row_rows",
                                         start_expr=expr_constant(2))
@@ -391,8 +392,9 @@ test_that("Window boundaries boundaries are CaSe INsenSItive", {
     rel_a <- rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 1, 1, 2, 2, 2, 2)))
     partitions <- list(expr_reference("b"))
     order_by_a <- list(rapi_rel_order(rel_a, list(expr_reference("a"))))
-    sum_func <- expr_function("sum", list(expr_reference("a")), order_bys=list(expr_reference("a")))
+    sum_func <- expr_function("sum", list(expr_reference("a")))
     sum_window <- expr_window(sum_func, partitions=partitions,
+                                        order_bys=list(expr_reference("a")),
                                         window_boundary_start="exPr_PREceding_rOWs",
                                         window_boundary_end="cURrEnt_rOw_RoWs",
                                         start_expr=expr_constant(2))
@@ -413,7 +415,7 @@ test_that("Window avg with a filter expression and partition works", {
     mod_function <- expr_function("mod", list(expr_reference("a"), expr_constant(2)))
     zero <- expr_constant(0)
     filters <- list(expr_function("eq", list(zero, mod_function)))
-    avg_func <- expr_function("avg", args=list(expr_reference("a")), order_bys=list(), filter_bys=filters)
+    avg_func <- expr_function("avg", args=list(expr_reference("a")), filter_bys=filters)
     avg_filter_window <- expr_window(avg_func, partitions=partitions)
 	  expr_set_alias(avg_filter_window, "avg_filter")
     window_proj <- rel_project(rel_a, list(avg_filter_window))
@@ -495,8 +497,8 @@ test_that("You can perform window functions on row_number", {
 # in dplyr min_rank = rank
 test_that("You can perform the window function min_rank", {
     rel_a <- rel_from_df(con, data.frame(a=c(1, 1, 2, 2, 2)))
-    rank_func <- expr_function("rank", list(), order_bys=list(expr_reference("a")))
-    min_rank_window <- expr_window(rank_func)
+    rank_func <- expr_function("rank", list())
+    min_rank_window <- expr_window(rank_func, order_bys=list(expr_reference("a")))
     expr_set_alias(min_rank_window, "window_result")
 	  window_proj <- rel_project(rel_a, list(expr_reference("a"), min_rank_window))
 	  res <- rel_to_altrep(window_proj)
@@ -506,8 +508,8 @@ test_that("You can perform the window function min_rank", {
 
 test_that("You can perform the window function dense_rank", {
     rel_a <- rel_from_df(con, data.frame(a=c(1, 1, 2, 2, 2)))
-    dense_rank_fun <- expr_function("dense_rank", list(), order_bys=list(expr_reference("a")))
-    min_rank_window <- expr_window(dense_rank_fun)
+    dense_rank_fun <- expr_function("dense_rank", list())
+    min_rank_window <- expr_window(dense_rank_fun, order_bys=list(expr_reference("a")))
     expr_set_alias(min_rank_window, "window_result")
 	  window_proj <- rel_project(rel_a, list(expr_reference("a"), min_rank_window))
 	  res <- rel_to_altrep(window_proj)
@@ -517,8 +519,8 @@ test_that("You can perform the window function dense_rank", {
 
 test_that("You can perform the window function cume_dist", {
 	  rel_a <- rel_from_df(con, data.frame(a=c(1, 1, 2, 2, 2)))
-    cume_dist_func <- expr_function("cume_dist", list(), order_bys=list(expr_reference("a")))
-    cume_dist_window <- expr_window(cume_dist_func)
+    cume_dist_func <- expr_function("cume_dist", list())
+    cume_dist_window <- expr_window(cume_dist_func, order_bys=list(expr_reference("a")))
     expr_set_alias(cume_dist_window, "cume_dist")
     window_proj <- rel_project(rel_a, list(expr_reference("a"), cume_dist_window))
     order_proj <- rel_order(window_proj, list(expr_reference("a")))
@@ -529,8 +531,8 @@ test_that("You can perform the window function cume_dist", {
 
 test_that("You can perform the window function percent rank", {
 	  rel_a <- rel_from_df(con, data.frame(a=c(5, 1, 3, 2, 2)))
-    percent_rank_func <- expr_function("percent_rank", list(), order_bys=list(expr_reference("a")))
-    percent_rank_wind <- expr_window(percent_rank_func)
+    percent_rank_func <- expr_function("percent_rank", list())
+    percent_rank_wind <- expr_window(percent_rank_func, order_bys=list(expr_reference("a")))
     expr_set_alias(percent_rank_wind, "percent_rank")
     window_proj <- rel_project(rel_a, list(expr_reference("a"), percent_rank_wind))
     order_proj <- rel_order(window_proj, list(expr_reference("a")))
