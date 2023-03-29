@@ -1,4 +1,4 @@
-# name: test/sql/copy/csv/tpch_parallel_copy.test_slow
+# name: test/sql/copy/csv/tpch_csv_sf01.test_slow
 # description: Test running TPC-H SF0.1 over CSV files
 # group: [csv]
 

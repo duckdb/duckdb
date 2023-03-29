@@ -373,7 +373,9 @@ void MultiFileReaderOptions::AddBatchInfo(BindInfo &bind_info) {
 	bind_info.InsertOption("union_by_name", Value::BOOLEAN(union_by_name));
 }
 
-void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vector<LogicalType> &sql_types, vector<LogicalType> &union_col_types, vector<string> &union_col_names, case_insensitive_map_t<idx_t> &union_names_map) {
+void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vector<LogicalType> &sql_types,
+                                    vector<LogicalType> &union_col_types, vector<string> &union_col_names,
+                                    case_insensitive_map_t<idx_t> &union_names_map) {
 	D_ASSERT(col_names.size() == sql_types.size());
 
 	for (idx_t col = 0; col < col_names.size(); ++col) {

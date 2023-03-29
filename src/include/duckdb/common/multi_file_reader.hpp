@@ -46,11 +46,6 @@ struct MultiFileFilterEntry {
 };
 
 struct MultiFileReaderData {
-	//! when reading multiple parquet files (with union by name option)
-	//! TableFunction might return more cols than any single parquet file. Even all parquet files have same
-	//! cols, those files might have cols at different positions and with different logical type.
-	//! e.g. p1.parquet (a INT , b VARCHAR) p2.parquet (c VARCHAR, a VARCHAR)
-	vector<idx_t> union_idx_map;
 	//! If the parquet file dont have union_cols5  union_null_cols[5] will be true.
 	//! some parquet files may not have all union cols.
 	vector<bool> union_null_cols;
@@ -110,9 +105,9 @@ struct MultiFileReader {
 	                                               vector<string> &names, RESULT_CLASS &result,
 	                                               OPTIONS_CLASS &options) {
 		D_ASSERT(options.file_options.union_by_name);
-		case_insensitive_map_t<idx_t> union_names_map;
 		vector<string> union_col_names;
 		vector<LogicalType> union_col_types;
+		case_insensitive_map_t<idx_t> union_names_map;
 		// obtain the set of union column names + types by unifying the types of all of the files
 		// note that this requires opening readers for each file and reading the metadata of each file
 		auto union_readers = UnionByName::UnionCols<READER_CLASS>(context, result.files, union_col_types,
