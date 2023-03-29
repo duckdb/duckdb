@@ -84,8 +84,8 @@ struct MultiFileReader {
 	DUCKDB_API static void FinalizeBind(const MultiFileReaderBindData &options, const string &filename,
 	                                    const vector<column_t> &global_column_ids, MultiFileReaderData &reader_data);
 	//! Create all required mappings from the global types/names to the file-local types/names
-	DUCKDB_API static void CreateMapping(const string &file_name, const vector<LogicalType> &file_types,
-	                                     const vector<string> &file_names, const vector<LogicalType> &global_types,
+	DUCKDB_API static void CreateMapping(const string &file_name, const vector<LogicalType> &local_types,
+	                                     const vector<string> &local_names, const vector<LogicalType> &global_types,
 	                                     const vector<string> &global_names, const vector<column_t> &global_column_ids,
 	                                     optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data);
 	//! Finalize the reading of a chunk - applying any constants that are required
@@ -168,6 +168,16 @@ struct MultiFileReader {
 			}
 		}
 	}
+
+private:
+	static void CreatePositionalMapping(const string &file_name, const vector<LogicalType> &local_types,
+										const vector<LogicalType> &global_types,
+										const vector<column_t> &global_column_ids,
+										MultiFileReaderData &reader_data);
+	static void CreateNameMapping(const string &file_name, const vector<LogicalType> &local_types,
+										const vector<string> &local_names, const vector<LogicalType> &global_types,
+										const vector<string> &global_names, const vector<column_t> &global_column_ids,
+										MultiFileReaderData &reader_data);
 };
 
 } // namespace duckdb

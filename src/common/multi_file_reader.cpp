@@ -194,15 +194,52 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderBindData &options, const
 		}
 	}
 }
+void MultiFileReader::CreatePositionalMapping(const string &file_name, const vector<LogicalType> &local_types,
+                                    const vector<LogicalType> &global_types,
+                                    const vector<column_t> &global_column_ids,
+                                    MultiFileReaderData &reader_data) {
+	for (idx_t i = 0; i < global_column_ids.size(); i++) {
+		// check if this is a constant column
+		bool constant = false;
+		for (auto &entry: reader_data.constant_map) {
+			if (entry.first == i) {
+				constant = true;
+				break;
+			}
+		}
+		if (constant) {
+			// this column is constant for this file
+			// skip reading
+			continue;
+		}
+		auto id = global_column_ids[i];
+		if (id >= global_types.size()) {
+			throw InternalException("MultiFileReader::CreatePositionalMapping - global_id is out of range in global_types for this file");
+		}
+		if (id >= local_types.size()) {
+			throw InternalException("MultiFileReader::CreatePositionalMapping - global_id is out of range in local_types for this file");
+		}
+		auto &global_type = global_types[id];
+		auto &local_type = local_types[id];
+		if (global_type != local_type) {
+			reader_data.cast_map[id] = global_type;
+		}
+		// read the column from this file
+		reader_data.column_mapping.push_back(i);
+		reader_data.column_ids.push_back(id);
+	}
+}
 
-void MultiFileReader::CreateMapping(const string &file_name, const vector<LogicalType> &file_types,
-                                    const vector<string> &file_names, const vector<LogicalType> &global_types,
+void MultiFileReader::CreateNameMapping(const string &file_name, const vector<LogicalType> &local_types,
+                                    const vector<string> &local_names, const vector<LogicalType> &global_types,
                                     const vector<string> &global_names, const vector<column_t> &global_column_ids,
-                                    optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data) {
+                                    MultiFileReaderData &reader_data) {
+	D_ASSERT(global_types.size() == global_names.size());
+	D_ASSERT(local_types.size() == local_names.size());
 	// we have expected types: create a map of name -> column index
 	unordered_map<string, idx_t> name_map;
-	for (idx_t col_idx = 0; col_idx < file_names.size(); col_idx++) {
-		name_map[file_names[col_idx]] = col_idx;
+	for (idx_t col_idx = 0; col_idx < local_names.size(); col_idx++) {
+		name_map[local_names[col_idx]] = col_idx;
 	}
 	for (idx_t i = 0; i < global_column_ids.size(); i++) {
 		// check if this is a constant column
@@ -219,6 +256,9 @@ void MultiFileReader::CreateMapping(const string &file_name, const vector<Logica
 		}
 		// not constant - look up the column in the name map
 		auto global_id = global_column_ids[i];
+		if (global_id >= global_types.size()) {
+			throw InternalException("MultiFileReader::CreatePositionalMapping - global_id is out of range in global_types for this file");
+		}
 		auto &global_name = global_names[global_id];
 		auto entry = name_map.find(global_name);
 		if (entry == name_map.end()) {
@@ -230,14 +270,27 @@ void MultiFileReader::CreateMapping(const string &file_name, const vector<Logica
 		}
 		// we found the column in the local file - check if the types are the same
 		auto local_id = entry->second;
+		D_ASSERT(global_id < global_types.size());
+		D_ASSERT(local_id < local_types.size());
 		auto &global_type = global_types[global_id];
-		auto &local_type = file_types[local_id];
+		auto &local_type = local_types[local_id];
 		if (global_type != local_type) {
 			reader_data.cast_map[local_id] = global_type;
 		}
 		// the types are the same - create the mapping
 		reader_data.column_mapping.push_back(i);
 		reader_data.column_ids.push_back(local_id);
+	}
+}
+
+void MultiFileReader::CreateMapping(const string &file_name, const vector<LogicalType> &local_types,
+                                    const vector<string> &local_names, const vector<LogicalType> &global_types,
+                                    const vector<string> &global_names, const vector<column_t> &global_column_ids,
+                                    optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data) {
+	if (global_names.empty()) {
+		CreatePositionalMapping(file_name, local_types, global_types, global_column_ids, reader_data);
+	} else {
+		CreateNameMapping(file_name, local_types, local_names, global_types, global_names, global_column_ids, reader_data);
 	}
 	if (filters) {
 		reader_data.filter_map.resize(global_types.size());
