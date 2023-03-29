@@ -19,12 +19,22 @@ class TableFunction;
 class ClientContext;
 class Value;
 
+struct HivePartitioningIndex {
+	HivePartitioningIndex(string value, idx_t index);
+
+	string value;
+	idx_t index;
+
+	DUCKDB_API void Serialize(Serializer &serializer) const;
+	DUCKDB_API static HivePartitioningIndex Deserialize(Deserializer &source);
+};
+
 //! The bind data for the multi-file reader, obtained through MultiFileReader::BindReader
 struct MultiFileReaderBindData {
 	//! The index of the filename column (if any)
 	idx_t filename_idx = DConstants::INVALID_INDEX;
 	//! The set of hive partitioning indexes (if any)
-	vector<pair<string, idx_t>> hive_partitioning_indexes;
+	vector<HivePartitioningIndex> hive_partitioning_indexes;
 
 	DUCKDB_API void Serialize(FieldWriter &writer) const;
 	DUCKDB_API void Deserialize(FieldReader &reader);

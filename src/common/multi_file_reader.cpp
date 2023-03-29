@@ -142,7 +142,7 @@ MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &opt
 				return_types.emplace_back(LogicalType::VARCHAR);
 				names.emplace_back(part.first);
 			}
-			bind_data.hive_partitioning_indexes.push_back(make_pair(part.first, hive_partitioning_index));
+			bind_data.hive_partitioning_indexes.emplace_back(part.first, hive_partitioning_index);
 		}
 	}
 	return bind_data;
@@ -168,8 +168,8 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderBindData &options, const
 			D_ASSERT(partitions.size() == options.hive_partitioning_indexes.size());
 			bool found_partition = false;
 			for (auto &entry : options.hive_partitioning_indexes) {
-				if (column_id == entry.second) {
-					reader_data.constant_map.push_back(make_pair(i, Value(partitions[entry.first])));
+				if (column_id == entry.index) {
+					reader_data.constant_map.push_back(make_pair(i, Value(partitions[entry.value])));
 					found_partition = true;
 					break;
 				}
@@ -341,16 +341,56 @@ void MultiFileReaderOptions::Deserialize(FieldReader &reader) {
 
 void MultiFileReaderBindData::Serialize(FieldWriter &writer) const {
 	writer.WriteField(filename_idx);
+	writer.WriteRegularSerializableList<HivePartitioningIndex>(hive_partitioning_indexes);
 }
 
 void MultiFileReaderBindData::Deserialize(FieldReader &reader) {
 	filename_idx = reader.ReadRequired<idx_t>();
+	hive_partitioning_indexes = reader.ReadRequiredSerializableList<HivePartitioningIndex, HivePartitioningIndex>();
+}
+
+HivePartitioningIndex::HivePartitioningIndex(string value_p, idx_t index) : value(std::move(value_p)), index(index) {
+}
+
+void HivePartitioningIndex::Serialize(Serializer &serializer) const {
+	FieldWriter writer(serializer);
+	writer.WriteString(value);
+	writer.WriteField<idx_t>(index);
+	writer.Finalize();
+}
+
+HivePartitioningIndex HivePartitioningIndex::Deserialize(Deserializer &source) {
+	FieldReader reader(source);
+	auto value = reader.ReadRequired<string>();
+	auto index = reader.ReadRequired<idx_t>();
+	reader.Finalize();
+	return HivePartitioningIndex(std::move(value), index);
 }
 
 void MultiFileReaderOptions::AddBatchInfo(BindInfo &bind_info) {
 	bind_info.InsertOption("filename", Value::BOOLEAN(filename));
 	bind_info.InsertOption("hive_partitioning", Value::BOOLEAN(hive_partitioning));
 	bind_info.InsertOption("union_by_name", Value::BOOLEAN(union_by_name));
+}
+
+void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vector<LogicalType> &sql_types, vector<LogicalType> &union_col_types, vector<string> &union_col_names, case_insensitive_map_t<idx_t> &union_names_map) {
+	D_ASSERT(col_names.size() == sql_types.size());
+
+	for (idx_t col = 0; col < col_names.size(); ++col) {
+		auto union_find = union_names_map.find(col_names[col]);
+
+		if (union_find != union_names_map.end()) {
+			// given same name , union_col's type must compatible with col's type
+			auto &current_type = union_col_types[union_find->second];
+			LogicalType compatible_type;
+			compatible_type = LogicalType::MaxLogicalType(current_type, sql_types[col]);
+			union_col_types[union_find->second] = compatible_type;
+		} else {
+			union_names_map[col_names[col]] = union_col_names.size();
+			union_col_names.emplace_back(col_names[col]);
+			union_col_types.emplace_back(sql_types[col]);
+		}
+	}
 }
 
 } // namespace duckdb

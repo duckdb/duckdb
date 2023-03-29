@@ -3,6 +3,9 @@
 # group: [csv]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 CREATE TABLE test AS SELECT 1 as id, 'value1' as value;
 CREATE TABLE test2 AS SELECT 2 as id, 'value2' as value;
 
@@ -126,3 +129,23 @@ query II
 EXPLAIN select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('data/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1, HEADER=1) where (date_cast=CAST('2012-01-01' as DATE) AND concat(date_cast::VARCHAR, part_cast::VARCHAR) == 'foobar') OR (part_cast=1337) ORDER BY date_cast;
 ----
 physical_plan	<!REGEX>:.*FILTER.*
+
+# projection pushdown
+query I
+select value from read_csv_auto('data/csv/hive-partitioning/different_order/*/*/test.csv', HIVE_PARTITIONING=1, HEADER=1)  order by 1
+----
+value1
+value2
+
+query I
+select part from read_csv_auto('data/csv/hive-partitioning/different_order/*/*/test.csv', HIVE_PARTITIONING=1, HEADER=1)  order by 1
+----
+a
+b
+
+# project only some columns from a hive partition
+query I
+select date from read_csv_auto('data/csv/hive-partitioning/different_order/*/*/test.csv', HIVE_PARTITIONING=1, HEADER=1)  order by 1
+----
+2012-01-01
+2013-01-01

@@ -1,0 +1,55 @@
+# name: test/sql/copy/csv/csv_hive_filename_union.test
+# description: Test the automatic parsing of the hive partitioning scheme
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+# projection pushdown
+query I
+select filename.replace('\', '/').split('/')[-2] from read_csv_auto('data/csv/hive-partitioning/simple/*/*/test.csv', HIVE_PARTITIONING=1, HEADER=1, FILENAME=1)  order by 1
+----
+date=2012-01-01
+date=2013-01-01
+
+query III
+select part, filename.replace('\', '/').split('/')[-2], value from read_csv_auto('data/csv/hive-partitioning/simple/*/*/test.csv', HIVE_PARTITIONING=1, HEADER=1, FILENAME=1)  order by 1
+----
+a	date=2012-01-01	value1
+b	date=2013-01-01	value2
+
+query III
+select part, filename.replace('\', '/').split('/')[-2], value from read_csv_auto('data/csv/hive-partitioning/simple/*/*/test.csv', HIVE_PARTITIONING=1, HEADER=1, FILENAME=1, UNION_BY_NAME=1)  order by 1
+----
+a	date=2012-01-01	value1
+b	date=2013-01-01	value2
+
+statement error
+select * exclude(filename) from read_csv_auto('data/csv/hive-partitioning/mismatching_types/*/*.csv', HIVE_PARTITIONING=1, HEADER=1, FILENAME=1)  order by 1
+----
+Could not convert string
+
+query III
+select * from read_csv_auto('data/csv/hive-partitioning/mismatching_types/*/*.csv', HIVE_PARTITIONING=1, HEADER=1, UNION_BY_NAME=1)  order by 1
+----
+99	world	2
+xxx	42	1
+
+query IIII
+select * exclude(filename), filename.replace('\', '/').split('/')[-2] from read_csv_auto('data/csv/hive-partitioning/mismatching_types/*/*.csv', HIVE_PARTITIONING=1, HEADER=1, FILENAME=1, UNION_BY_NAME=1)  order by 1
+----
+99	world	2	part=2
+xxx	42	1	part=1
+
+query IIII
+select part, filename.replace('\', '/').split('/')[-2], a, b from read_csv_auto('data/csv/hive-partitioning/mismatching_types/*/*.csv', HIVE_PARTITIONING=1, HEADER=1, FILENAME=1, UNION_BY_NAME=1)  order by 1
+----
+1	part=1	xxx	42
+2	part=2	99	world
+
+query II
+select * exclude (filename) from read_csv_auto('data/csv/hive-partitioning/mismatching_types/*/*.csv', HEADER=1, FILENAME=1, UNION_BY_NAME=1)  order by 1
+----
+99	world
+xxx	42
+

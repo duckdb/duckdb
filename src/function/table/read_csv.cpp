@@ -585,12 +585,15 @@ struct SingleThreadedCSVState : public GlobalTableFunctionState {
 		}
 		// reuse csv_readers was created during binding
 		unique_ptr<BufferedCSVReader> result;
-		if (options.file_options.union_by_name) {
+		if (file_index < bind_data.union_readers.size() && bind_data.union_readers[file_index]) {
 			result = std::move(bind_data.union_readers[file_index]);
 		} else {
+			auto union_by_name = options.file_options.union_by_name;
 			options.file_path = bind_data.files[file_index];
 			result = make_unique<BufferedCSVReader>(context, std::move(options), csv_types);
-			result->names = csv_names;
+			if (!union_by_name) {
+				result->names = csv_names;
+			}
 			MultiFileReader::InitializeReader(*result, bind_data.reader_bind, bind_data.return_types,
 			                                  bind_data.return_names, column_ids, nullptr);
 		}
