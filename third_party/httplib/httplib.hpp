@@ -283,7 +283,7 @@ namespace CPPHTTPLIB_NAMESPACE {
 namespace detail {
 
 /*
- * Backport std::make_uniq from C++14.
+ * Backport std::make_unique from C++14.
  *
  * NOTE: This code came up with the following stackoverflow post:
  * https://stackoverflow.com/questions/10149840/c-arrays-and-make-unique
@@ -291,16 +291,16 @@ namespace detail {
  */
 
 template <class T, class... Args>
-typename std::enable_if<!std::is_array<T>::value, duckdb::unique_ptr<T>>::type
-make_uniq(Args &&...args) {
-	return duckdb::unique_ptr<T>(new T(std::forward<Args>(args)...));
+typename std::enable_if<!std::is_array<T>::value, std::unique_ptr<T>>::type
+make_unique(Args &&...args) {
+	return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
 }
 
 template <class T>
-typename std::enable_if<std::is_array<T>::value, duckdb::unique_ptr<T>>::type
-make_uniq(std::size_t n) {
+typename std::enable_if<std::is_array<T>::value, std::unique_ptr<T>>::type
+make_unique(std::size_t n) {
 	typedef typename std::remove_extent<T>::type RT;
-	return duckdb::unique_ptr<T>(new RT[n]);
+	return std::unique_ptr<T>(new RT[n]);
 }
 
 struct ci {
@@ -825,7 +825,7 @@ std::ostream &operator<<(std::ostream &os, const Error &obj);
 
 class Result {
 public:
-	Result(duckdb::unique_ptr<Response> &&res, Error err,
+	Result(std::unique_ptr<Response> &&res, Error err,
 	       Headers &&request_headers = Headers{})
 	    : res_(std::move(res)), err_(err),
 	      request_headers_(std::move(request_headers)) {}
@@ -851,7 +851,7 @@ public:
 	size_t get_request_header_value_count(const char *key) const;
 
 private:
-	duckdb::unique_ptr<Response> res_;
+	std::unique_ptr<Response> res_;
 	Error err_;
 	Headers request_headers_;
 };
@@ -1166,7 +1166,7 @@ private:
 	bool redirect(Request &req, Response &res, Error &error);
 	bool handle_request(Stream &strm, Request &req, Response &res,
 	                    bool close_connection, Error &error);
-	duckdb::unique_ptr<Response> send_with_content_provider(
+	std::unique_ptr<Response> send_with_content_provider(
 	    Request &req,
 	    // const char *method, const char *path, const Headers &headers,
 	    const char *body, size_t content_length, ContentProvider content_provider,
@@ -1389,7 +1389,7 @@ public:
 #endif
 
 private:
-	duckdb::unique_ptr<ClientImpl> cli_;
+	std::unique_ptr<ClientImpl> cli_;
 
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
 	bool is_ssl_ = false;
@@ -3388,18 +3388,18 @@ bool prepare_content_receiver(T &x, int &status,
                               bool decompress, U callback) {
 	if (decompress) {
 		std::string encoding = x.get_header_value("Content-Encoding");
-		duckdb::unique_ptr<decompressor> decompressor;
+		std::unique_ptr<decompressor> decompressor;
 
 		if (encoding == "gzip" || encoding == "deflate") {
 #ifdef CPPHTTPLIB_ZLIB_SUPPORT
-			decompressor = detail::make_uniq<gzip_decompressor>();
+			decompressor = detail::make_unique<gzip_decompressor>();
 #else
 			status = 415;
 			return false;
 #endif
 		} else if (encoding.find("br") != std::string::npos) {
 #ifdef CPPHTTPLIB_BROTLI_SUPPORT
-			decompressor = detail::make_uniq<brotli_decompressor>();
+			decompressor = detail::make_unique<brotli_decompressor>();
 #else
 			status = 415;
 			return false;
@@ -5125,17 +5125,17 @@ Server::write_content_with_provider(Stream &strm, const Request &req,
 		if (res.is_chunked_content_provider_) {
 			auto type = detail::encoding_type(req, res);
 
-			duckdb::unique_ptr<detail::compressor> compressor;
+			std::unique_ptr<detail::compressor> compressor;
 			if (type == detail::EncodingType::Gzip) {
 #ifdef CPPHTTPLIB_ZLIB_SUPPORT
-				compressor = detail::make_uniq<detail::gzip_compressor>();
+				compressor = detail::make_unique<detail::gzip_compressor>();
 #endif
 			} else if (type == detail::EncodingType::Brotli) {
 #ifdef CPPHTTPLIB_BROTLI_SUPPORT
-				compressor = detail::make_uniq<detail::brotli_compressor>();
+				compressor = detail::make_unique<detail::brotli_compressor>();
 #endif
 			} else {
-				compressor = detail::make_uniq<detail::nocompressor>();
+				compressor = detail::make_unique<detail::nocompressor>();
 			}
 			assert(compressor != nullptr);
 
@@ -5321,7 +5321,7 @@ inline bool Server::listen_internal() {
 	is_running_ = true;
 
 	{
-		duckdb::unique_ptr<TaskQueue> task_queue(new_task_queue());
+		std::unique_ptr<TaskQueue> task_queue(new_task_queue());
 
 		while (svr_sock_ != INVALID_SOCKET) {
 #ifndef _WIN32
@@ -5564,17 +5564,17 @@ inline void Server::apply_ranges(const Request &req, Response &res,
 		}
 
 		if (type != detail::EncodingType::None) {
-			duckdb::unique_ptr<detail::compressor> compressor;
+			std::unique_ptr<detail::compressor> compressor;
 			std::string content_encoding;
 
 			if (type == detail::EncodingType::Gzip) {
 #ifdef CPPHTTPLIB_ZLIB_SUPPORT
-				compressor = detail::make_uniq<detail::gzip_compressor>();
+				compressor = detail::make_unique<detail::gzip_compressor>();
 				content_encoding = "gzip";
 #endif
 			} else if (type == detail::EncodingType::Brotli) {
 #ifdef CPPHTTPLIB_BROTLI_SUPPORT
-				compressor = detail::make_uniq<detail::brotli_compressor>();
+				compressor = detail::make_unique<detail::brotli_compressor>();
 				content_encoding = "br";
 #endif
 			}
@@ -6006,7 +6006,7 @@ inline Result ClientImpl::send(const Request &req) {
 }
 
 inline Result ClientImpl::send_(Request &&req) {
-	auto res = detail::make_uniq<Response>();
+	auto res = detail::make_unique<Response>();
 	auto error = Error::Success;
 	auto ret = send(req, *res, error);
 	return Result{ret ? std::move(res) : nullptr, error, std::move(req.headers)};
@@ -6134,14 +6134,14 @@ inline bool ClientImpl::write_content_with_provider(Stream &strm,
 
 	if (req.is_chunked_content_provider_) {
 		// TODO: Brotli suport
-		duckdb::unique_ptr<detail::compressor> compressor;
+		std::unique_ptr<detail::compressor> compressor;
 #ifdef CPPHTTPLIB_ZLIB_SUPPORT
 		if (compress_) {
-			compressor = detail::make_uniq<detail::gzip_compressor>();
+			compressor = detail::make_unique<detail::gzip_compressor>();
 		} else
 #endif
 		{
-			compressor = detail::make_uniq<detail::nocompressor>();
+			compressor = detail::make_unique<detail::nocompressor>();
 		}
 
 		return detail::write_content_chunked(strm, req.content_provider_,
@@ -6267,7 +6267,7 @@ inline bool ClientImpl::write_request(Stream &strm, Request &req,
 	return true;
 }
 
-inline duckdb::unique_ptr<Response> ClientImpl::send_with_content_provider(
+inline std::unique_ptr<Response> ClientImpl::send_with_content_provider(
     Request &req,
     // const char *method, const char *path, const Headers &headers,
     const char *body, size_t content_length, ContentProvider content_provider,
@@ -6346,7 +6346,7 @@ inline duckdb::unique_ptr<Response> ClientImpl::send_with_content_provider(
 		}
 	}
 
-	auto res = detail::make_uniq<Response>();
+	auto res = detail::make_unique<Response>();
 	return send(req, *res, error) ? std::move(res) : nullptr;
 }
 
@@ -7789,27 +7789,27 @@ inline Client::Client(const std::string &scheme_host_port,
 
 		if (is_ssl) {
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
-			cli_ = detail::make_uniq<SSLClient>(host.c_str(), port,
+			cli_ = detail::make_unique<SSLClient>(host.c_str(), port,
 			                                      client_cert_path, client_key_path);
 			is_ssl_ = is_ssl;
 #endif
 		} else {
-			cli_ = detail::make_uniq<ClientImpl>(host.c_str(), port,
+			cli_ = detail::make_unique<ClientImpl>(host.c_str(), port,
 			                                       client_cert_path, client_key_path);
 		}
 	} else {
-		cli_ = detail::make_uniq<ClientImpl>(scheme_host_port, 80,
+		cli_ = detail::make_unique<ClientImpl>(scheme_host_port, 80,
 		                                       client_cert_path, client_key_path);
 	}
 }
 
 inline Client::Client(const std::string &host, int port)
-    : cli_(detail::make_uniq<ClientImpl>(host, port)) {}
+    : cli_(detail::make_unique<ClientImpl>(host, port)) {}
 
 inline Client::Client(const std::string &host, int port,
                       const std::string &client_cert_path,
                       const std::string &client_key_path)
-    : cli_(detail::make_uniq<ClientImpl>(host, port, client_cert_path,
+    : cli_(detail::make_unique<ClientImpl>(host, port, client_cert_path,
                                            client_key_path)) {}
 
 inline Client::~Client() {}
