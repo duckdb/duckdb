@@ -591,14 +591,14 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: mymindstorm/setup-emsdk@v11
+    - uses: mymindstorm/setup-emsdk@v12
 
     - name: Setup
       shell: bash
       run: |
         git clone --recurse-submodules https://github.com/duckdb/duckdb-wasm
         cd duckdb-wasm
-        git checkout 2cee83b1
+        git checkout 53e4aad8ac21808a19e834df9ef559a9889f2671
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -613,6 +613,17 @@ jobs:
         bash scripts/wasm_build_lib.sh relsize mvp $(pwd)/..
         bash scripts/wasm_build_lib.sh relsize eh $(pwd)/..
         bash scripts/wasm_build_lib.sh relsize coi $(pwd)/..
+
+    - name: Package
+      shell: bash
+      run: |
+        zip -r duckdb-wasm32.zip duckdb-wasm/packages/duckdb-wasm/src/bindings
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: duckdb-wasm32
+        path: |
+          duckdb-wasm32.zip
 
  symbol-leakage:
     name: Symbol Leakage
