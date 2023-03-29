@@ -141,14 +141,11 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 		}
 		idx_t position_set = position_buffer;
 		start_buffer = position_buffer;
-		// We check if we can add this line
-		//		auto null_padding_setting = options.null_padding;
-		//		auto ignore_errors_setting = options.ignore_errors;
-		//		options.null_padding = false;
-		//		options.ignore_errors = false;
-		successfully_read_first_line = TryParseSimpleCSV(first_line_chunk, error_message, true);
-		//		options.null_padding = null_padding_setting;
-		//		options.ignore_errors = ignore_errors_setting;
+		try {
+			successfully_read_first_line = TryParseSimpleCSV(first_line_chunk, error_message, true);
+		} catch (...) {
+			successfully_read_first_line = false;
+		}
 
 		end_buffer = end_buffer_real;
 		start_buffer = position_set;
@@ -449,7 +446,7 @@ unquote : {
 		goto add_value;
 	} else if (StringUtil::CharacterIsNewline(c)) {
 		offset = 1;
-		D_ASSERT(column == insert_chunk.ColumnCount() - 1);
+		D_ASSERT(try_add_line || (!try_add_line && column == insert_chunk.ColumnCount() - 1));
 		goto add_row;
 	} else if (position_buffer >= end_buffer) {
 		// reached end of buffer

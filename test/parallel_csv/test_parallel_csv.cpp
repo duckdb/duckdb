@@ -115,9 +115,9 @@ void RunTestOnFolder(const string &path, std::set<std::string> &skip) {
 //	Connection con(db);
 //	std::set<std::string> skip;
 //
-//	string file = "data/csv/decimal_separators/mixed_format_fail.csv";
+//	string file = "data/csv/sequences.csv.gz";
 ////		auto thread_count = 1;
-////		auto buffer_size = 54;
+////		auto buffer_size = 40;
 ////		con.Query("PRAGMA threads=" + to_string(thread_count));
 ////		unique_ptr<MaterializedQueryResult> multi_threaded_result = con.Query(
 ////		    "SELECT * FROM read_csv_auto('" + file + "', buffer_size = " + to_string(buffer_size) + ")");
@@ -183,8 +183,6 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/real", "[paralle
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/test", "[parallel-csv]") {
 	std::set<std::string> skip;
-	//	// Thread count: 1 Buffer Size: 40
-	skip.insert("test/sql/copy/csv/data/test/quoted_newline.csv");
 	//	// Thread count: 1 Buffer Size: 147 Row count mismatch
 	skip.insert("test/sql/copy/csv/data/test/issue3562_assertion.csv.gz");
 
