@@ -26,24 +26,24 @@ class PythonDependencies : public ExternalDependency {
 public:
 	explicit PythonDependencies(py::function map_function)
 	    : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY), map_function(std::move(map_function)) {};
-	explicit PythonDependencies(duckdb::unique_ptr<RegisteredObject> py_object)
+	explicit PythonDependencies(unique_ptr<RegisteredObject> py_object)
 	    : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY) {
 		py_object_list.push_back(std::move(py_object));
 	};
-	explicit PythonDependencies(duckdb::unique_ptr<RegisteredObject> py_object_original,
-	                            duckdb::unique_ptr<RegisteredObject> py_object_copy)
+	explicit PythonDependencies(unique_ptr<RegisteredObject> py_object_original,
+	                            unique_ptr<RegisteredObject> py_object_copy)
 	    : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY) {
 		py_object_list.push_back(std::move(py_object_original));
 		py_object_list.push_back(std::move(py_object_copy));
 	};
 	py::function map_function;
-	vector<duckdb::unique_ptr<RegisteredObject>> py_object_list;
+	vector<unique_ptr<RegisteredObject>> py_object_list;
 };
 
 struct DuckDBPyRelation {
 public:
 	explicit DuckDBPyRelation(shared_ptr<Relation> rel);
-	explicit DuckDBPyRelation(duckdb::unique_ptr<DuckDBPyResult> result);
+	explicit DuckDBPyRelation(unique_ptr<DuckDBPyResult> result);
 
 public:
 	static void Initialize(py::handle &m);
@@ -56,7 +56,7 @@ public:
 
 	py::str GetAlias();
 
-	duckdb::unique_ptr<DuckDBPyRelation> SetAlias(const string &expr);
+	unique_ptr<DuckDBPyRelation> SetAlias(const string &expr);
 
 	unique_ptr<DuckDBPyRelation> Project(const string &expr);
 
@@ -66,46 +66,44 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Aggregate(const string &expr, const string &groups = "");
 
-	duckdb::unique_ptr<DuckDBPyRelation> GenericAggregator(const string &function_name,
-	                                                       const string &aggregated_columns, const string &groups = "",
-	                                                       const string &function_parameter = "",
-	                                                       const string &projected_columns = "");
+	unique_ptr<DuckDBPyRelation> GenericAggregator(const string &function_name, const string &aggregated_columns,
+	                                               const string &groups = "", const string &function_parameter = "",
+	                                               const string &projected_columns = "");
 
-	duckdb::unique_ptr<DuckDBPyRelation> Sum(const string &sum_columns, const string &groups = "");
+	unique_ptr<DuckDBPyRelation> Sum(const string &sum_columns, const string &groups = "");
 
-	duckdb::unique_ptr<DuckDBPyRelation> Count(const string &count_columns, const string &groups = "");
+	unique_ptr<DuckDBPyRelation> Count(const string &count_columns, const string &groups = "");
 
-	duckdb::unique_ptr<DuckDBPyRelation> Median(const string &median_columns, const string &groups = "");
+	unique_ptr<DuckDBPyRelation> Median(const string &median_columns, const string &groups = "");
 
-	duckdb::unique_ptr<DuckDBPyRelation> Quantile(const string &q, const string &quantile_columns,
-	                                              const string &groups = "");
+	unique_ptr<DuckDBPyRelation> Quantile(const string &q, const string &quantile_columns, const string &groups = "");
 
-	duckdb::unique_ptr<DuckDBPyRelation> Min(const string &min_columns, const string &groups = "");
+	unique_ptr<DuckDBPyRelation> Min(const string &min_columns, const string &groups = "");
 
-	duckdb::unique_ptr<DuckDBPyRelation> Max(const string &max_columns, const string &groups = "");
+	unique_ptr<DuckDBPyRelation> Max(const string &max_columns, const string &groups = "");
 
-	duckdb::unique_ptr<DuckDBPyRelation> Mean(const string &mean_columns, const string &groups = "");
+	unique_ptr<DuckDBPyRelation> Mean(const string &mean_columns, const string &groups = "");
 
-	duckdb::unique_ptr<DuckDBPyRelation> Var(const string &var_columns, const string &groups = "");
+	unique_ptr<DuckDBPyRelation> Var(const string &var_columns, const string &groups = "");
 
-	duckdb::unique_ptr<DuckDBPyRelation> STD(const string &std_columns, const string &groups = "");
+	unique_ptr<DuckDBPyRelation> STD(const string &std_columns, const string &groups = "");
 
-	duckdb::unique_ptr<DuckDBPyRelation> ValueCounts(const string &std_columns, const string &groups = "");
+	unique_ptr<DuckDBPyRelation> ValueCounts(const string &std_columns, const string &groups = "");
 
-	duckdb::unique_ptr<DuckDBPyRelation> MAD(const string &aggr_columns, const string &groups = "");
+	unique_ptr<DuckDBPyRelation> MAD(const string &aggr_columns, const string &groups = "");
 
-	duckdb::unique_ptr<DuckDBPyRelation> Mode(const string &aggr_columns, const string &groups = "");
+	unique_ptr<DuckDBPyRelation> Mode(const string &aggr_columns, const string &groups = "");
 
-	duckdb::unique_ptr<DuckDBPyRelation> Abs(const string &aggr_columns);
-	duckdb::unique_ptr<DuckDBPyRelation> Prod(const string &aggr_columns, const string &groups = "");
+	unique_ptr<DuckDBPyRelation> Abs(const string &aggr_columns);
+	unique_ptr<DuckDBPyRelation> Prod(const string &aggr_columns, const string &groups = "");
 
-	duckdb::unique_ptr<DuckDBPyRelation> Skew(const string &aggr_columns, const string &groups = "");
+	unique_ptr<DuckDBPyRelation> Skew(const string &aggr_columns, const string &groups = "");
 
-	duckdb::unique_ptr<DuckDBPyRelation> Kurt(const string &aggr_columns, const string &groups = "");
+	unique_ptr<DuckDBPyRelation> Kurt(const string &aggr_columns, const string &groups = "");
 
-	duckdb::unique_ptr<DuckDBPyRelation> SEM(const string &aggr_columns, const string &groups = "");
+	unique_ptr<DuckDBPyRelation> SEM(const string &aggr_columns, const string &groups = "");
 
-	duckdb::unique_ptr<DuckDBPyRelation> Describe();
+	unique_ptr<DuckDBPyRelation> Describe();
 
 	string ToSQL();
 
@@ -115,13 +113,13 @@ public:
 
 	py::tuple Shape();
 
-	duckdb::unique_ptr<DuckDBPyRelation> Unique(const string &aggr_columns);
+	unique_ptr<DuckDBPyRelation> Unique(const string &aggr_columns);
 
-	duckdb::unique_ptr<DuckDBPyRelation> GenericWindowFunction(const string &function_name, const string &aggr_columns);
-	duckdb::unique_ptr<DuckDBPyRelation> CumSum(const string &aggr_columns);
-	duckdb::unique_ptr<DuckDBPyRelation> CumProd(const string &aggr_columns);
-	duckdb::unique_ptr<DuckDBPyRelation> CumMax(const string &aggr_columns);
-	duckdb::unique_ptr<DuckDBPyRelation> CumMin(const string &aggr_columns);
+	unique_ptr<DuckDBPyRelation> GenericWindowFunction(const string &function_name, const string &aggr_columns);
+	unique_ptr<DuckDBPyRelation> CumSum(const string &aggr_columns);
+	unique_ptr<DuckDBPyRelation> CumProd(const string &aggr_columns);
+	unique_ptr<DuckDBPyRelation> CumMax(const string &aggr_columns);
+	unique_ptr<DuckDBPyRelation> CumMin(const string &aggr_columns);
 
 	unique_ptr<DuckDBPyRelation> Distinct();
 
@@ -149,15 +147,15 @@ public:
 
 	duckdb::pyarrow::RecordBatchReader ToRecordBatch(idx_t batch_size);
 
-	duckdb::unique_ptr<DuckDBPyRelation> Union(DuckDBPyRelation *other);
+	unique_ptr<DuckDBPyRelation> Union(DuckDBPyRelation *other);
 
-	duckdb::unique_ptr<DuckDBPyRelation> Except(DuckDBPyRelation *other);
+	unique_ptr<DuckDBPyRelation> Except(DuckDBPyRelation *other);
 
-	duckdb::unique_ptr<DuckDBPyRelation> Intersect(DuckDBPyRelation *other);
+	unique_ptr<DuckDBPyRelation> Intersect(DuckDBPyRelation *other);
 
-	duckdb::unique_ptr<DuckDBPyRelation> Map(py::function fun);
+	unique_ptr<DuckDBPyRelation> Map(py::function fun);
 
-	duckdb::unique_ptr<DuckDBPyRelation> Join(DuckDBPyRelation *other, const string &condition, const string &type);
+	unique_ptr<DuckDBPyRelation> Join(DuckDBPyRelation *other, const string &condition, const string &type);
 
 	void ToParquet(const string &filename, const py::object &compression = py::none());
 
@@ -168,9 +166,9 @@ public:
 	           const py::object &encoding = py::none(), const py::object &compression = py::none());
 
 	// should this return a rel with the new view?
-	duckdb::unique_ptr<DuckDBPyRelation> CreateView(const string &view_name, bool replace = true);
+	unique_ptr<DuckDBPyRelation> CreateView(const string &view_name, bool replace = true);
 
-	duckdb::unique_ptr<DuckDBPyRelation> Query(const string &view_name, const string &sql_query);
+	unique_ptr<DuckDBPyRelation> Query(const string &view_name, const string &sql_query);
 
 	// Update the internal result of the relation
 	DuckDBPyRelation &Execute();
@@ -206,7 +204,7 @@ private:
 	void AssertRelation() const;
 	bool ContainsColumnByName(const string &name) const;
 	void ExecuteOrThrow(bool stream_result = false);
-	duckdb::unique_ptr<QueryResult> ExecuteInternal(bool stream_result = false);
+	unique_ptr<QueryResult> ExecuteInternal(bool stream_result = false);
 
 private:
 	shared_ptr<Relation> rel;

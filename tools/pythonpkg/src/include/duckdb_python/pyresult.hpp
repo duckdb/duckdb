@@ -17,7 +17,7 @@ namespace duckdb {
 
 struct DuckDBPyResult {
 public:
-	explicit DuckDBPyResult(duckdb::unique_ptr<QueryResult> result);
+	explicit DuckDBPyResult(unique_ptr<QueryResult> result);
 
 public:
 	Optional<py::tuple> Fetchone();
@@ -48,7 +48,7 @@ public:
 
 	bool IsClosed() const;
 
-	duckdb::unique_ptr<DataChunk> FetchChunk();
+	unique_ptr<DataChunk> FetchChunk();
 
 	const vector<string> &GetNames();
 	const vector<LogicalType> &GetTypes();
@@ -64,14 +64,14 @@ private:
 
 	void ChangeToTZType(DataFrame &df);
 	void ChangeDateToDatetime(DataFrame &df);
-	duckdb::unique_ptr<DataChunk> FetchNext(QueryResult &result);
-	duckdb::unique_ptr<DataChunk> FetchNextRaw(QueryResult &result);
+	unique_ptr<DataChunk> FetchNext(QueryResult &result);
+	unique_ptr<DataChunk> FetchNextRaw(QueryResult &result);
 
 private:
 	idx_t chunk_offset = 0;
 
-	duckdb::unique_ptr<QueryResult> result;
-	duckdb::unique_ptr<DataChunk> current_chunk;
+	unique_ptr<QueryResult> result;
+	unique_ptr<DataChunk> current_chunk;
 	// Holds the categories of Categorical/ENUM types
 	unordered_map<idx_t, py::list> categories;
 	// Holds the categorical type of Categorical/ENUM types

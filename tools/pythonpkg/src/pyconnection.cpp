@@ -326,7 +326,7 @@ unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(const string &query,
 		params = py::list();
 	}
 	result = nullptr;
-	duckdb::unique_ptr<PreparedStatement> prep;
+	unique_ptr<PreparedStatement> prep;
 	{
 		py::gil_scoped_release release;
 		unique_lock<std::mutex> lock(py_connection_lock);
@@ -382,7 +382,7 @@ unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(const string &query,
 			                            py::len(single_query_params));
 		}
 		auto args = DuckDBPyConnection::TransformPythonParamList(single_query_params);
-		duckdb::unique_ptr<QueryResult> res;
+		unique_ptr<QueryResult> res;
 		{
 			py::gil_scoped_release release;
 			unique_lock<std::mutex> lock(py_connection_lock);
@@ -449,11 +449,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 			arrow_object = python_object;
 		}
 		auto stream_factory =
-<<<<<<< HEAD
-		    make_uniq<PythonTableArrowArrayStreamFactory>(python_object.ptr(), connection->context->config);
-=======
 		    make_uniq<PythonTableArrowArrayStreamFactory>(arrow_object.ptr(), connection->context->config);
->>>>>>> master
 		auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 		auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
 		{
@@ -467,11 +463,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 		}
 		vector<shared_ptr<ExternalDependency>> dependencies;
 		dependencies.push_back(
-<<<<<<< HEAD
-		    make_shared<PythonDependencies>(make_uniq<RegisteredArrow>(std::move(stream_factory), python_object)));
-=======
 		    make_shared<PythonDependencies>(make_uniq<RegisteredArrow>(std::move(stream_factory), arrow_object)));
->>>>>>> master
 		connection->context->external_dependencies[name] = std::move(dependencies);
 	} else if (DuckDBPyRelation::IsRelation(python_object)) {
 		auto pyrel = py::cast<DuckDBPyRelation *>(python_object);
@@ -1136,15 +1128,9 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(co
 }
 
 static void CreateArrowScan(py::object entry, TableFunctionRef &table_function,
-<<<<<<< HEAD
-                            vector<duckdb::unique_ptr<ParsedExpression>> &children, ClientConfig &config) {
-	string name = "arrow_" + GenerateRandomName();
-	auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(entry.ptr(), config);
-=======
                             vector<unique_ptr<ParsedExpression>> &children, ClientConfig &config) {
 	string name = "arrow_" + StringUtil::GenerateRandomName();
 	auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(entry.ptr(), config);
->>>>>>> master
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
 
@@ -1157,15 +1143,15 @@ static void CreateArrowScan(py::object entry, TableFunctionRef &table_function,
 	    make_uniq<PythonDependencies>(make_uniq<RegisteredArrow>(std::move(stream_factory), entry));
 }
 
-static duckdb::unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, ClientConfig &config,
-                                                   py::object &current_frame) {
+static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, ClientConfig &config,
+                                           py::object &current_frame) {
 	if (!dict.contains(table_name)) {
 		// not present in the globals
 		return nullptr;
 	}
 	auto entry = dict[table_name];
 	auto table_function = make_uniq<TableFunctionRef>();
-	vector<duckdb::unique_ptr<ParsedExpression>> children;
+	vector<unique_ptr<ParsedExpression>> children;
 	if (DuckDBPyConnection::IsPandasDataframe(entry)) {
 		string name = "df_" + StringUtil::GenerateRandomName();
 		auto new_df = PandasScanFunction::PandasReplaceCopiedNames(entry);
@@ -1206,8 +1192,8 @@ static duckdb::unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &tabl
 	return std::move(table_function);
 }
 
-static duckdb::unique_ptr<TableRef> ScanReplacement(ClientContext &context, const string &table_name,
-                                                    ReplacementScanData *data) {
+static unique_ptr<TableRef> ScanReplacement(ClientContext &context, const string &table_name,
+                                            ReplacementScanData *data) {
 	py::gil_scoped_acquire acquire;
 	auto py_table_name = py::str(table_name);
 	// Here we do an exhaustive search on the frame lineage

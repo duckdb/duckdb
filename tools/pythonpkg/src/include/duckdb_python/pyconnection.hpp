@@ -28,16 +28,16 @@ struct DuckDBPyRelation;
 class RegisteredArrow : public RegisteredObject {
 
 public:
-	RegisteredArrow(duckdb::unique_ptr<PythonTableArrowArrayStreamFactory> arrow_factory_p, py::object obj_p)
+	RegisteredArrow(unique_ptr<PythonTableArrowArrayStreamFactory> arrow_factory_p, py::object obj_p)
 	    : RegisteredObject(std::move(obj_p)), arrow_factory(std::move(arrow_factory_p)) {};
-	duckdb::unique_ptr<PythonTableArrowArrayStreamFactory> arrow_factory;
+	unique_ptr<PythonTableArrowArrayStreamFactory> arrow_factory;
 };
 
 struct DuckDBPyConnection : public std::enable_shared_from_this<DuckDBPyConnection> {
 public:
 	shared_ptr<DuckDB> database;
-	duckdb::unique_ptr<Connection> connection;
-	duckdb::unique_ptr<DuckDBPyRelation> result;
+	unique_ptr<Connection> connection;
+	unique_ptr<DuckDBPyRelation> result;
 	vector<shared_ptr<DuckDBPyConnection>> cursors;
 	unordered_map<string, shared_ptr<Relation>> temporary_views;
 	std::mutex py_connection_lock;
@@ -74,14 +74,13 @@ public:
 	        const py::object &all_varchar = py::none(), const py::object &normalize_names = py::none(),
 	        const py::object &filename = py::none());
 
-	duckdb::unique_ptr<DuckDBPyRelation> ReadJSON(const string &filename, const py::object &columns = py::none(),
-	                                              const py::object &sample_size = py::none(),
-	                                              const py::object &maximum_depth = py::none());
+	unique_ptr<DuckDBPyRelation> ReadJSON(const string &filename, const py::object &columns = py::none(),
+	                                      const py::object &sample_size = py::none(),
+	                                      const py::object &maximum_depth = py::none());
 
 	shared_ptr<DuckDBPyConnection> ExecuteMany(const string &query, py::object params = py::list());
 
-	duckdb::unique_ptr<QueryResult> ExecuteInternal(const string &query, py::object params = py::list(),
-	                                                bool many = false);
+	unique_ptr<QueryResult> ExecuteInternal(const string &query, py::object params = py::list(), bool many = false);
 
 	shared_ptr<DuckDBPyConnection> Execute(const string &query, py::object params = py::list(), bool many = false);
 
@@ -93,36 +92,36 @@ public:
 
 	void LoadExtension(const string &extension);
 
-	duckdb::unique_ptr<DuckDBPyRelation> FromQuery(const string &query, const string &alias = "query_relation");
-	duckdb::unique_ptr<DuckDBPyRelation> RunQuery(const string &query, const string &alias = "query_relation");
+	unique_ptr<DuckDBPyRelation> FromQuery(const string &query, const string &alias = "query_relation");
+	unique_ptr<DuckDBPyRelation> RunQuery(const string &query, const string &alias = "query_relation");
 
-	duckdb::unique_ptr<DuckDBPyRelation> Table(const string &tname);
+	unique_ptr<DuckDBPyRelation> Table(const string &tname);
 
-	duckdb::unique_ptr<DuckDBPyRelation> Values(py::object params = py::none());
+	unique_ptr<DuckDBPyRelation> Values(py::object params = py::none());
 
-	duckdb::unique_ptr<DuckDBPyRelation> View(const string &vname);
+	unique_ptr<DuckDBPyRelation> View(const string &vname);
 
-	duckdb::unique_ptr<DuckDBPyRelation> TableFunction(const string &fname, py::object params = py::list());
+	unique_ptr<DuckDBPyRelation> TableFunction(const string &fname, py::object params = py::list());
 
-	duckdb::unique_ptr<DuckDBPyRelation> FromDF(const DataFrame &value);
+	unique_ptr<DuckDBPyRelation> FromDF(const DataFrame &value);
 
-	duckdb::unique_ptr<DuckDBPyRelation> FromParquet(const string &file_glob, bool binary_as_string,
-	                                                 bool file_row_number, bool filename, bool hive_partitioning,
-	                                                 bool union_by_name, const py::object &compression = py::none());
+	unique_ptr<DuckDBPyRelation> FromParquet(const string &file_glob, bool binary_as_string, bool file_row_number,
+	                                         bool filename, bool hive_partitioning, bool union_by_name,
+	                                         const py::object &compression = py::none());
 
-	duckdb::unique_ptr<DuckDBPyRelation> FromParquets(const vector<string> &file_globs, bool binary_as_string,
-	                                                  bool file_row_number, bool filename, bool hive_partitioning,
-	                                                  bool union_by_name, const py::object &compression = py::none());
+	unique_ptr<DuckDBPyRelation> FromParquets(const vector<string> &file_globs, bool binary_as_string,
+	                                          bool file_row_number, bool filename, bool hive_partitioning,
+	                                          bool union_by_name, const py::object &compression = py::none());
 
-	duckdb::unique_ptr<DuckDBPyRelation> FromArrow(py::object &arrow_object);
+	unique_ptr<DuckDBPyRelation> FromArrow(py::object &arrow_object);
 
-	duckdb::unique_ptr<DuckDBPyRelation> FromSubstrait(py::bytes &proto);
+	unique_ptr<DuckDBPyRelation> FromSubstrait(py::bytes &proto);
 
-	duckdb::unique_ptr<DuckDBPyRelation> GetSubstrait(const string &query, bool enable_optimizer = true);
+	unique_ptr<DuckDBPyRelation> GetSubstrait(const string &query, bool enable_optimizer = true);
 
-	duckdb::unique_ptr<DuckDBPyRelation> GetSubstraitJSON(const string &query, bool enable_optimizer = true);
+	unique_ptr<DuckDBPyRelation> GetSubstraitJSON(const string &query, bool enable_optimizer = true);
 
-	duckdb::unique_ptr<DuckDBPyRelation> FromSubstraitJSON(const string &json);
+	unique_ptr<DuckDBPyRelation> FromSubstraitJSON(const string &json);
 
 	unordered_set<string> GetTableNames(const string &query);
 
@@ -181,7 +180,7 @@ public:
 	static bool IsPolarsDataframe(const py::object &object);
 	static bool IsAcceptedArrowObject(const py::object &object);
 
-	static duckdb::unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_query);
+	static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_query);
 
 private:
 	PathLike GetPathLike(const py::object &object);

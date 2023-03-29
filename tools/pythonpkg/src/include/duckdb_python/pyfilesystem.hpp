@@ -65,8 +65,8 @@ protected:
 	}
 
 public:
-	duckdb::unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock,
-	                                        FileCompressionType compression, FileOpener *opener) override;
+	unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock,
+	                                FileCompressionType compression, FileOpener *opener) override;
 	void Seek(duckdb::FileHandle &handle, uint64_t location) override;
 	FileType GetFileType(FileHandle &handle) override {
 		return FileType::FILE_TYPE_REGULAR;

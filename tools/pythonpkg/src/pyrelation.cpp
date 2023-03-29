@@ -28,8 +28,7 @@ DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel_p) : rel(std::move(r
 	}
 }
 
-DuckDBPyRelation::DuckDBPyRelation(duckdb::unique_ptr<DuckDBPyResult> result_p)
-    : rel(nullptr), result(std::move(result_p)) {
+DuckDBPyRelation::DuckDBPyRelation(unique_ptr<DuckDBPyResult> result_p) : rel(nullptr), result(std::move(result_p)) {
 	if (!result) {
 		throw InternalException("DuckDBPyRelation created without a result");
 	}
@@ -38,14 +37,10 @@ DuckDBPyRelation::DuckDBPyRelation(duckdb::unique_ptr<DuckDBPyResult> result_p)
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const string &expr) {
-<<<<<<< HEAD
-	auto projected_relation = make_uniq<DuckDBPyRelation>(rel->Project(expr));
-=======
 	if (!rel) {
 		return nullptr;
 	}
 	auto projected_relation = make_uniq<DuckDBPyRelation>(rel->Project(expr));
->>>>>>> master
 	projected_relation->rel->extra_dependencies = this->rel->extra_dependencies;
 	return projected_relation;
 }
