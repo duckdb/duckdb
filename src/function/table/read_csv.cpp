@@ -246,7 +246,7 @@ public:
 	ParallelCSVGlobalState(ClientContext &context, unique_ptr<CSVFileHandle> file_handle_p,
 	                       vector<string> &files_path_p, idx_t system_threads_p, idx_t buffer_size_p,
 	                       idx_t rows_to_skip, bool force_parallelism_p, vector<column_t> column_ids_p)
-	    :  file_handle(std::move(file_handle_p)), system_threads(system_threads_p), buffer_size(buffer_size_p),
+	    : file_handle(std::move(file_handle_p)), system_threads(system_threads_p), buffer_size(buffer_size_p),
 	      force_parallelism(force_parallelism_p), column_ids(std::move(column_ids_p)) {
 		current_file_path = files_path_p[0];
 		estimated_linenr = rows_to_skip;
@@ -272,6 +272,7 @@ public:
 	atomic<idx_t> bytes_read;
 	//! Size of current file
 	idx_t file_size;
+
 public:
 	idx_t MaxThreads() const override;
 	//! Updates the CSV reader with the next buffer to read. Returns false if no more buffers are available.
@@ -400,7 +401,8 @@ void ParallelCSVGlobalState::Verify() {
 	}
 }
 
-bool ParallelCSVGlobalState::Next(ClientContext &context, ReadCSVData &bind_data, unique_ptr<ParallelCSVReader> &reader) {
+bool ParallelCSVGlobalState::Next(ClientContext &context, ReadCSVData &bind_data,
+                                  unique_ptr<ParallelCSVReader> &reader) {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	if (!current_buffer) {
 		// This means we are done with the current file, we need to go to the next one (if exists).
@@ -435,11 +437,21 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, ReadCSVData &bind_data
 	if (!reader || reader->options.file_path != current_file_path) {
 		// we either don't have a reader, or the reader was created for a different file
 		// we need to create a new reader and instantiate it
-		reader = make_unique<ParallelCSVReader>(context, bind_data.options, std::move(result), bind_data.csv_types);
+		if (bind_data.union_readers[file_index - 1]) {
+			// we are doing UNION BY NAME - fetch the options from the union reader for this file
+			auto &union_reader = *bind_data.union_readers[file_index - 1];
+			reader = make_unique<ParallelCSVReader>(context, union_reader.options, std::move(result),
+			                                        union_reader.GetTypes());
+			reader->names = union_reader.GetNames();
+		} else {
+			// regular file - use the standard options
+			reader = make_unique<ParallelCSVReader>(context, bind_data.options, std::move(result), bind_data.csv_types);
+			reader->options.file_path = current_file_path;
+			reader->names = bind_data.csv_names;
+		}
 		reader->options.file_path = current_file_path;
-		reader->names = bind_data.csv_names;
 		MultiFileReader::InitializeReader(*reader, bind_data.options.file_options, bind_data.reader_bind,
-										  bind_data.return_types, bind_data.return_names, column_ids, nullptr);
+		                                  bind_data.return_types, bind_data.return_names, column_ids, nullptr);
 	} else {
 		// update the current reader
 		reader->SetBufferRead(std::move(result));
@@ -470,9 +482,9 @@ static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext 
 	file_handle = ReadCSV::OpenCSV(bind_data.options.file_path, bind_data.options.compression, context);
 	idx_t rows_to_skip =
 	    bind_data.options.skip_rows + (bind_data.options.has_header && bind_data.options.header ? 1 : 0);
-	return make_unique<ParallelCSVGlobalState>(context, std::move(file_handle), bind_data.files,
-	                                           context.db->NumberOfThreads(), bind_data.options.buffer_size,
-	                                           rows_to_skip, ClientConfig::GetConfig(context).verify_parallelism, input.column_ids);
+	return make_unique<ParallelCSVGlobalState>(
+	    context, std::move(file_handle), bind_data.files, context.db->NumberOfThreads(), bind_data.options.buffer_size,
+	    rows_to_skip, ClientConfig::GetConfig(context).verify_parallelism, input.column_ids);
 }
 
 //===--------------------------------------------------------------------===//
