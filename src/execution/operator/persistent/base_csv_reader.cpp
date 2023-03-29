@@ -61,6 +61,13 @@ void BaseCSVReader::InitParseChunk(idx_t num_cols) {
 	}
 }
 
+void BaseCSVReader::InitializeProjection() {
+	for(idx_t i = 0; i < GetTypes().size(); i++) {
+		reader_data.column_ids.push_back(i);
+		reader_data.column_mapping.push_back(i);
+	}
+}
+
 void BaseCSVReader::SetDateFormat(const string &format_specifier, const LogicalTypeId &sql_type) {
 	options.has_format[sql_type] = true;
 	auto &date_format = options.date_format[sql_type];
@@ -438,6 +445,9 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 
 	// convert the columns in the parsed chunk to the types of the table
 	insert_chunk.SetCardinality(parse_chunk);
+	if (reader_data.column_ids.empty() && !reader_data.empty_columns) {
+		throw InternalException("BaseCSVReader::Flush called on a CSV reader that was not correctly initialized. Call MultiFileReader::InitializeReader or InitializeProjection");
+	}
 	D_ASSERT(reader_data.column_ids.size() == reader_data.column_mapping.size());
 	for (idx_t c = 0; c < reader_data.column_ids.size(); c++) {
 		auto col_idx = reader_data.column_ids[c];

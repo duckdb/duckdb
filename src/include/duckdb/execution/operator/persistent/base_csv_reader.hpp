@@ -74,6 +74,8 @@ public:
 	const vector<LogicalType> &GetTypes() {
 		return return_types;
 	}
+	//! Initialize projection indices to select all columns
+	void InitializeProjection();
 
 protected:
 	//! Initializes the parse_chunk with varchar columns and aligns info with new number of cols

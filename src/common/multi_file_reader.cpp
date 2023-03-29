@@ -260,6 +260,7 @@ void MultiFileReader::CreateNameMapping(const string &file_name, const vector<Lo
 		reader_data.column_mapping.push_back(i);
 		reader_data.column_ids.push_back(local_id);
 	}
+	reader_data.empty_columns = reader_data.column_ids.empty();
 }
 
 void MultiFileReader::CreateMapping(const string &file_name, const vector<LogicalType> &local_types,

@@ -437,7 +437,7 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, ReadCSVData &bind_data
 	if (!reader || reader->options.file_path != current_file_path) {
 		// we either don't have a reader, or the reader was created for a different file
 		// we need to create a new reader and instantiate it
-		if (bind_data.union_readers[file_index - 1]) {
+		if (file_index > 0 && file_index <= bind_data.union_readers.size() && bind_data.union_readers[file_index - 1]) {
 			// we are doing UNION BY NAME - fetch the options from the union reader for this file
 			auto &union_reader = *bind_data.union_readers[file_index - 1];
 			reader = make_unique<ParallelCSVReader>(context, union_reader.options, std::move(result),
@@ -447,7 +447,7 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, ReadCSVData &bind_data
 			// regular file - use the standard options
 			reader = make_unique<ParallelCSVReader>(context, bind_data.options, std::move(result), bind_data.csv_types);
 			reader->options.file_path = current_file_path;
-			reader->names = bind_data.csv_names;
+			reader->names = bind_data.return_names;
 		}
 		reader->options.file_path = current_file_path;
 		MultiFileReader::InitializeReader(*reader, bind_data.options.file_options, bind_data.reader_bind,

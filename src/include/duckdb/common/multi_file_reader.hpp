@@ -51,6 +51,8 @@ struct MultiFileReaderData {
 	//! The mapping of column id -> result column id
 	//! The result chunk will be filled as follows: chunk.data[column_mapping[i]] = ReadColumn(column_ids[i]);
 	vector<idx_t> column_mapping;
+	//! Whether or not there are no columns to read. This can happen when a file only consists of constants
+	bool empty_columns = false;
 	//! Filters can point to either (1) local columns in the file, or (2) constant values in the `constant_map`
 	//! This map specifies where the to-be-filtered value can be found
 	vector<MultiFileFilterEntry> filter_map;
