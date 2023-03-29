@@ -12,7 +12,7 @@ using duckdb::unordered_set;
 
 struct MyBufferManager {
 public:
-	MyBufferManager() : allocated_memory(0), max_memory(100000000) {
+	MyBufferManager() : allocated_memory(0), max_memory(12000000000 ) {
 	}
 	duckdb::idx_t allocated_memory;
 	duckdb::idx_t max_memory;

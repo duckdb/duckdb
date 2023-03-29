@@ -568,6 +568,9 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				config->options.use_temporary_directory = true;
 				config->options.access_mode = AccessMode::AUTOMATIC;
 			}
+			if (!dbpath.empty() && dbpath != ":memory:") {
+				parser.Fail("NO PERSISTENT TESTS");
+			}
 			// now create the database file
 			LoadDatabase(dbpath);
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_RESTART) {
