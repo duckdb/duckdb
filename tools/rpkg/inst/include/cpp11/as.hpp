@@ -4,7 +4,7 @@
 
 #include <cmath>            // for modf
 #include <initializer_list> // for initializer_list
-#include <memory>           // for std::shared_ptr, std::weak_ptr, duckdb::unique_ptr
+#include <memory>           // for std::shared_ptr, std::weak_ptr, std::unique_ptr
 #include <stdexcept>
 #include <string>      // for string, basic_string
 #include <type_traits> // for decay, enable_if, is_same, is_convertible
@@ -27,7 +27,7 @@ template <typename T>
 struct is_smart_ptr<std::shared_ptr<T>> : std::true_type {};
 
 template <typename T>
-struct is_smart_ptr<duckdb::unique_ptr<T>> : std::true_type {};
+struct is_smart_ptr<std::unique_ptr<T>> : std::true_type {};
 
 template <typename T>
 struct is_smart_ptr<std::weak_ptr<T>> : std::true_type {};
