@@ -8,7 +8,6 @@ namespace duckdb {
 
 LeafSegment *LeafSegment::Initialize(ART &art, const idx_t &position) {
 	auto segment = LeafSegment::Get(art, position);
-	art.IncreaseMemorySize(sizeof(LeafSegment));
 
 	segment->next = DConstants::INVALID_INDEX;
 	return segment;

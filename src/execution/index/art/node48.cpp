@@ -14,7 +14,6 @@ Node48 *Node48::New(ART &art, ARTNode &node) {
 	node.SetPtr(art.n48_nodes->New(), ARTNodeType::NODE_48);
 
 	auto n48 = art.n48_nodes->Get<Node48>(node.GetPtr());
-	art.IncreaseMemorySize(sizeof(Node48));
 
 	n48->count = 0;
 	n48->prefix.Initialize();
@@ -45,8 +44,6 @@ void Node48::Free(ART &art, ARTNode &node) {
 			}
 		}
 	}
-
-	art.DecreaseMemorySize(sizeof(Node48));
 }
 
 Node48 *Node48::GrowNode16(ART &art, ARTNode &node48, ARTNode &node16) {
@@ -248,8 +245,6 @@ void Node48::Deserialize(ART &art, MetaBlockReader &reader) {
 	for (idx_t i = 0; i < ARTNode::NODE_48_CAPACITY; i++) {
 		children[i] = ARTNode(reader);
 	}
-
-	art.IncreaseMemorySize(sizeof(Node48));
 }
 
 void Node48::Vacuum(ART &art, const vector<bool> &vacuum_nodes) {

@@ -26,7 +26,6 @@ void Prefix::Free(ART &art) {
 	auto position = data.position;
 	while (position != DConstants::INVALID_INDEX) {
 		auto next_position = PrefixSegment::Get(art, position)->next;
-		art.DecreaseMemorySize(sizeof(PrefixSegment));
 		PrefixSegment::Free(art, position);
 		position = next_position;
 	}

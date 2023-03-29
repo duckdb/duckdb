@@ -51,7 +51,7 @@ unique_ptr<GlobalSinkState> PhysicalCreateIndex::GetGlobalSinkState(ClientContex
 	case IndexType::ART: {
 		auto &storage = table.GetStorage();
 		state->global_index = make_unique<ART>(storage_ids, TableIOManager::Get(storage), unbound_expressions,
-		                                       info->constraint_type, storage.db, true);
+		                                       info->constraint_type, storage.db);
 		break;
 	}
 	default:
@@ -68,7 +68,7 @@ unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionConte
 	case IndexType::ART: {
 		auto &storage = table.GetStorage();
 		state->local_index = make_unique<ART>(storage_ids, TableIOManager::Get(storage), unbound_expressions,
-		                                      info->constraint_type, storage.db, false);
+		                                      info->constraint_type, storage.db);
 		break;
 	}
 	default:
@@ -96,9 +96,9 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, GlobalSinkSt
 	ART::GenerateKeys(lstate.arena_allocator, lstate.key_chunk, lstate.keys);
 
 	auto &storage = table.GetStorage();
-	auto art = make_unique<ART>(lstate.local_index->column_ids, lstate.local_index->table_io_manager,
-	                            lstate.local_index->unbound_expressions, lstate.local_index->constraint_type,
-	                            storage.db, false);
+	auto art =
+	    make_unique<ART>(lstate.local_index->column_ids, lstate.local_index->table_io_manager,
+	                     lstate.local_index->unbound_expressions, lstate.local_index->constraint_type, storage.db);
 	if (!art->ConstructFromSorted(lstate.key_chunk.size(), lstate.keys, row_identifiers)) {
 		throw ConstraintException("Data contains duplicates on indexed column(s)");
 	}
@@ -133,7 +133,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
 	}
 
-	// TODO: track memory
+	state.global_index.get()->UpdateMemoryUsage();
 
 	auto &schema = *table.schema;
 	auto index_entry = (DuckIndexEntry *)schema.CreateIndex(context, info.get(), &table);

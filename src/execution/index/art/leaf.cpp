@@ -14,7 +14,6 @@ Leaf *Leaf::New(ART &art, ARTNode &node, const Key &key, const uint32_t &depth, 
 	node.SetPtr(art.leaves->New(), ARTNodeType::LEAF);
 
 	auto leaf = art.leaves->Get<Leaf>(node.GetPtr());
-	art.IncreaseMemorySize(sizeof(Leaf));
 
 	// set the fields of the leaf
 	leaf->count = 1;
@@ -39,7 +38,6 @@ Leaf *Leaf::New(ART &art, ARTNode &node, const Key &key, const uint32_t &depth, 
 	node.SetPtr(art.leaves->New(), ARTNodeType::LEAF);
 
 	auto leaf = art.leaves->Get<Leaf>(node.GetPtr());
-	art.IncreaseMemorySize(sizeof(Leaf));
 
 	// set the fields of the leaf
 	leaf->count = 0;
@@ -70,13 +68,10 @@ void Leaf::Free(ART &art, ARTNode &node) {
 		auto position = leaf->row_ids.position;
 		while (position != DConstants::INVALID_INDEX) {
 			auto next_position = LeafSegment::Get(art, position)->next;
-			art.DecreaseMemorySize(sizeof(LeafSegment));
 			LeafSegment::Free(art, position);
 			position = next_position;
 		}
 	}
-
-	art.DecreaseMemorySize(sizeof(Leaf));
 }
 
 void Leaf::InitializeMerge(ART &art, const idx_t &buffer_count) {
@@ -187,7 +182,6 @@ void Leaf::Remove(ART &art, const row_t &row_id) {
 
 		auto temp_row_id = segment->row_ids[0] == row_id ? segment->row_ids[1] : segment->row_ids[0];
 
-		art.DecreaseMemorySize(sizeof(LeafSegment));
 		LeafSegment::Free(art, row_ids.position);
 		row_ids.inlined = temp_row_id;
 		count--;
@@ -245,7 +239,6 @@ void Leaf::Remove(ART &art, const row_t &row_id) {
 
 			// the segment following next_segment is the tail of the segment list
 			if (next_segment->next == DConstants::INVALID_INDEX) {
-				art.DecreaseMemorySize(sizeof(LeafSegment));
 				LeafSegment::Free(art, segment->next);
 				segment->next = DConstants::INVALID_INDEX;
 			}

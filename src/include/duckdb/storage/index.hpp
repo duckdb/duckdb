@@ -32,8 +32,7 @@ struct IndexScanState;
 class Index {
 public:
 	Index(AttachedDatabase &db, IndexType type, TableIOManager &table_io_manager, const vector<column_t> &column_ids,
-	      const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type,
-	      bool track_memory);
+	      const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type);
 	virtual ~Index() = default;
 
 	//! The type of the index
@@ -57,11 +56,10 @@ public:
 	AttachedDatabase &db;
 	//! Buffer manager of the database instance
 	BufferManager &buffer_manager;
+
 	//! The size of the index in memory
-	//! This does not track the size of the index meta information, but only allocated nodes and leaves
+	//! This does not track the size of the index meta information, but only allocated nodes and prefixes
 	idx_t memory_size;
-	//! Flag determining if this index's size is tracked by the buffer manager
-	bool track_memory;
 
 public:
 	//! Initialize a single predicate scan on the index with the given expression and column IDs
@@ -107,17 +105,8 @@ public:
 	//! Returns the string representation of an index
 	virtual string ToString() = 0;
 
-	//! Increases the in-memory size value
-	inline void IncreaseMemorySize(idx_t size) {
-	    // TODO
-	    //		memory_size += size;
-	};
-	//! Decreases the in-memory size value
-	inline void DecreaseMemorySize(idx_t size) {
-	    // TODO
-	    //		D_ASSERT(memory_size >= size);
-	    //		memory_size -= size;
-	};
+	//! Increases or decreases the in-memory size
+	virtual void UpdateMemoryUsage() = 0;
 
 	//! Returns true if the index is affected by updates on the specified column IDs, and false otherwise
 	bool IndexIsUpdated(const vector<PhysicalIndex> &column_ids) const;

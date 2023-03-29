@@ -43,7 +43,7 @@ public:
 	//! Constructs an ART
 	ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	    const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type,
-	    AttachedDatabase &db, bool track_memory, idx_t block_id = DConstants::INVALID_INDEX,
+	    AttachedDatabase &db, idx_t block_id = DConstants::INVALID_INDEX,
 	    idx_t block_offset = DConstants::INVALID_INDEX);
 	~ART() override;
 
@@ -111,8 +111,10 @@ public:
 	//! Performs constraint checking for a chunk of input data
 	void CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_manager) override;
 
-	//! Returns the string representation of an ART
+	//! Returns the string representation of the ART
 	string ToString() override;
+	//! Increases or decreases the in-memory size of the ART
+	void UpdateMemoryUsage() override;
 
 private:
 	//! Insert a row ID into a leaf

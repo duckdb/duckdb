@@ -14,7 +14,6 @@ Node16 *Node16::New(ART &art, ARTNode &node) {
 	node.SetPtr(art.n16_nodes->New(), ARTNodeType::NODE_16);
 
 	auto n16 = art.n16_nodes->Get<Node16>(node.GetPtr());
-	art.IncreaseMemorySize(sizeof(Node16));
 
 	n16->count = 0;
 	n16->prefix.Initialize();
@@ -39,8 +38,6 @@ void Node16::Free(ART &art, ARTNode &node) {
 			ARTNode::Free(art, n16->children[i]);
 		}
 	}
-
-	art.DecreaseMemorySize(sizeof(Node16));
 }
 
 Node16 *Node16::GrowNode4(ART &art, ARTNode &node16, ARTNode &node4) {
@@ -245,8 +242,6 @@ void Node16::Deserialize(ART &art, MetaBlockReader &reader) {
 	for (idx_t i = 0; i < ARTNode::NODE_16_CAPACITY; i++) {
 		children[i] = ARTNode(reader);
 	}
-
-	art.IncreaseMemorySize(sizeof(Node16));
 }
 
 void Node16::Vacuum(ART &art, const vector<bool> &vacuum_nodes) {

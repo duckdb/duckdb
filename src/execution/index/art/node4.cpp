@@ -13,7 +13,6 @@ Node4 *Node4::New(ART &art, ARTNode &node) {
 	node.SetPtr(art.n4_nodes->New(), ARTNodeType::NODE_4);
 
 	auto n4 = art.n4_nodes->Get<Node4>(node.GetPtr());
-	art.IncreaseMemorySize(sizeof(Node4));
 
 	n4->count = 0;
 	n4->prefix.Initialize();
@@ -38,8 +37,6 @@ void Node4::Free(ART &art, ARTNode &node) {
 			ARTNode::Free(art, n4->children[i]);
 		}
 	}
-
-	art.DecreaseMemorySize(sizeof(Node4));
 }
 
 Node4 *Node4::ShrinkNode16(ART &art, ARTNode &node4, ARTNode &node16) {
@@ -226,8 +223,6 @@ void Node4::Deserialize(ART &art, MetaBlockReader &reader) {
 	for (idx_t i = 0; i < ARTNode::NODE_4_CAPACITY; i++) {
 		children[i] = ARTNode(reader);
 	}
-
-	art.IncreaseMemorySize(sizeof(Node4));
 }
 
 void Node4::Vacuum(ART &art, const vector<bool> &vacuum_nodes) {

@@ -85,6 +85,11 @@ public:
 		return (T *)Get(position);
 	}
 
+	//! Returns the allocated memory size in bytes
+	inline idx_t GetMemoryUsage() const {
+		return buffers.size() * BUFFER_ALLOCATION_SIZE;
+	}
+
 	//! Merge another FixedSizeAllocator with this allocator. Both must have the same allocation size
 	void Merge(FixedSizeAllocator &other);
 

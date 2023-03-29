@@ -13,7 +13,6 @@ Node256 *Node256::New(ART &art, ARTNode &node) {
 	node.SetPtr(art.n256_nodes->New(), ARTNodeType::NODE_256);
 
 	auto n256 = art.n256_nodes->Get<Node256>(node.GetPtr());
-	art.IncreaseMemorySize(sizeof(Node256));
 
 	n256->count = 0;
 	n256->prefix.Initialize();
@@ -40,8 +39,6 @@ void Node256::Free(ART &art, ARTNode &node) {
 			}
 		}
 	}
-
-	art.DecreaseMemorySize(sizeof(Node256));
 }
 
 Node256 *Node256::GrowNode48(ART &art, ARTNode &node256, ARTNode &node48) {
@@ -181,8 +178,6 @@ void Node256::Deserialize(ART &art, MetaBlockReader &reader) {
 	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
 		children[i] = ARTNode(reader);
 	}
-
-	art.IncreaseMemorySize(sizeof(Node256));
 }
 
 void Node256::Vacuum(ART &art, const vector<bool> &vacuum_nodes) {

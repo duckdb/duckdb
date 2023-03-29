@@ -556,14 +556,6 @@ void BufferPool::SetLimit(idx_t limit, const char *exception_postscript) {
 	}
 }
 
-void BufferManager::IncreaseUsedMemory(idx_t size) {
-	ReserveMemory(size);
-}
-
-void BufferManager::DecreaseUsedMemory(idx_t size) {
-	FreeReservedMemory(size);
-}
-
 //===--------------------------------------------------------------------===//
 // Temporary File Management
 //===--------------------------------------------------------------------===//

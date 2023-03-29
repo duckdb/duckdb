@@ -34,7 +34,6 @@ public:
 	//! Free a prefix segment
 	static inline void Free(ART &art, const idx_t &position) {
 		art.prefix_segments->Free(position);
-		art.DecreaseMemorySize(sizeof(PrefixSegment));
 	}
 	//! Initialize all the fields of the segment
 	static PrefixSegment *Initialize(ART &art, const idx_t &position);

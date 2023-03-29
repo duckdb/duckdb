@@ -386,7 +386,7 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetaBlockReader &reader
 	case IndexType::ART: {
 		auto &storage = table_catalog->GetStorage();
 		auto art = make_unique<ART>(info->column_ids, TableIOManager::Get(storage), std::move(unbound_expressions),
-		                            info->constraint_type, storage.db, true, root_block_id, root_offset);
+		                            info->constraint_type, storage.db, root_block_id, root_offset);
 		index_catalog->index = art.get();
 
 		// NOTE: lazy loading: no vacuum required

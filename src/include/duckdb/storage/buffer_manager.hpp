@@ -123,11 +123,6 @@ public:
 		return buffer_pool.maximum_memory;
 	}
 
-	//! Increases the currently allocated memory, but the actual allocation does not go through the buffer manager
-	void IncreaseUsedMemory(idx_t size);
-	//! Decrease the currently allocated memory, but the actual deallocation does not go through the buffer manager
-	void DecreaseUsedMemory(idx_t size);
-
 	const string &GetTemporaryDirectory() {
 		return temp_directory;
 	}

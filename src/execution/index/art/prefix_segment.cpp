@@ -11,7 +11,6 @@ PrefixSegment::PrefixSegment() : next(0) {
 
 PrefixSegment *PrefixSegment::Initialize(ART &art, const idx_t &position) {
 	auto segment = PrefixSegment::Get(art, position);
-	art.IncreaseMemorySize(sizeof(PrefixSegment));
 
 	segment->next = DConstants::INVALID_INDEX;
 	return segment;

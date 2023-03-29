@@ -34,9 +34,9 @@ struct ARTIndexScanState : public IndexScanState {
 
 ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
          const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type,
-         AttachedDatabase &db, bool track_memory, idx_t block_id, idx_t block_offset)
+         AttachedDatabase &db, idx_t block_id, idx_t block_offset)
 
-    : Index(db, IndexType::ART, table_io_manager, column_ids, unbound_expressions, constraint_type, track_memory) {
+    : Index(db, IndexType::ART, table_io_manager, column_ids, unbound_expressions, constraint_type) {
 
 	if (!Radix::IsLittleEndian()) {
 		throw NotImplementedException("ART indexes are not supported on big endian architectures");
@@ -55,6 +55,7 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	tree.Reset();
 	if (block_id != DConstants::INVALID_INDEX) {
 		tree.Deserialize(*this, block_id, block_offset);
+		UpdateMemoryUsage();
 	}
 	serialized_data_pointer = BlockPointer(block_id, block_offset);
 
@@ -84,6 +85,7 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 ART::~ART() {
 	if (tree) {
 		tree.Reset();
+		buffer_manager.FreeReservedMemory(memory_size);
 	}
 }
 
@@ -352,8 +354,6 @@ PreservedError ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
 	D_ASSERT(logical_types[0] == input.data[0].GetType());
 
-	// TODO: track old vs. new memory size
-
 	// generate the keys for the given input
 	ArenaAllocator arena_allocator(BufferAllocator::Get(db));
 	vector<Key> keys(input.size());
@@ -389,8 +389,7 @@ PreservedError ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 		}
 	}
 
-	// TODO: verify and track old vs. new memory size
-
+	UpdateMemoryUsage();
 	if (failed_index != DConstants::INVALID_INDEX) {
 		return PreservedError(ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicate key \"%s\"",
 		                                          AppendRowError(input, failed_index)));
@@ -531,8 +530,6 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 	vector<Key> keys(expression.size());
 	GenerateKeys(arena_allocator, expression, keys);
 
-	// TODO: track old vs. new memory size
-
 	// now erase the elements from the database
 	row_ids.Flatten(input.size());
 	auto row_identifiers = FlatVector::GetData<row_t>(row_ids);
@@ -553,7 +550,7 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 #endif
 	}
 
-	// TODO: verify and track old vs. new memory size
+	UpdateMemoryUsage();
 }
 
 void ART::Erase(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id) {
@@ -647,8 +644,7 @@ static Key CreateKey(ArenaAllocator &allocator, PhysicalType type, Value &value)
 bool ART::SearchEqual(Key &key, idx_t max_count, vector<row_t> &result_ids) {
 
 	auto leaf = (Leaf *)(Lookup(tree, key, 0));
-
-	// TODO: track memory
+	UpdateMemoryUsage();
 
 	if (!leaf) {
 		return true;
@@ -664,14 +660,13 @@ bool ART::SearchEqual(Key &key, idx_t max_count, vector<row_t> &result_ids) {
 }
 
 void ART::SearchEqualJoinNoFetch(Key &key, idx_t &result_size) {
-	result_size = 0;
 
 	// we need to look for a leaf
 	auto leaf = Lookup(tree, key, 0);
-
-	// TODO: track memory
+	UpdateMemoryUsage();
 
 	if (!leaf) {
+		result_size = 0;
 		return;
 	}
 	result_size = leaf->count;
@@ -731,8 +726,6 @@ Leaf *ART::Lookup(ARTNode node, const Key &key, idx_t depth) {
 bool ART::SearchGreater(ARTIndexScanState *state, Key &key, bool inclusive, idx_t max_count,
                         vector<row_t> &result_ids) {
 
-	// TODO: track old vs. new memory size
-
 	Iterator *it = &state->iterator;
 
 	// greater than scan: first set the iterator to the node at which we will start our scan by finding the lowest node
@@ -741,15 +734,16 @@ bool ART::SearchGreater(ARTIndexScanState *state, Key &key, bool inclusive, idx_
 		it->art = this;
 		bool found = it->LowerBound(tree, key, inclusive);
 		if (!found) {
-			// TODO: verify and track old vs. new memory size
+			UpdateMemoryUsage();
 			return true;
 		}
 	}
+
 	// after that we continue the scan; we don't need to check the bounds as any value following this value is
 	// automatically bigger and hence satisfies our predicate
 	Key empty_key = Key();
 	auto success = it->Scan(empty_key, max_count, result_ids, false);
-	// TODO: verify and track old vs. new memory size
+	UpdateMemoryUsage();
 	return success;
 }
 
@@ -764,7 +758,6 @@ bool ART::SearchLess(ARTIndexScanState *state, Key &upper_bound, bool inclusive,
 		return true;
 	}
 
-	// TODO: track old vs. new memory size
 	Iterator *it = &state->iterator;
 
 	if (!it->art) {
@@ -773,13 +766,14 @@ bool ART::SearchLess(ARTIndexScanState *state, Key &upper_bound, bool inclusive,
 		it->FindMinimum(tree);
 		// early out min value higher than upper bound query
 		if (it->cur_key > upper_bound) {
-			// TODO: verify and track old vs. new memory size
+			UpdateMemoryUsage();
 			return true;
 		}
 	}
+
 	// now continue the scan until we reach the upper bound
 	auto success = it->Scan(upper_bound, max_count, result_ids, inclusive);
-	// TODO: verify and track old vs. new memory size
+	UpdateMemoryUsage();
 	return success;
 }
 
@@ -790,7 +784,6 @@ bool ART::SearchLess(ARTIndexScanState *state, Key &upper_bound, bool inclusive,
 bool ART::SearchCloseRange(ARTIndexScanState *state, Key &lower_bound, Key &upper_bound, bool left_inclusive,
                            bool right_inclusive, idx_t max_count, vector<row_t> &result_ids) {
 
-	// TODO: track old vs. new memory size
 	Iterator *it = &state->iterator;
 
 	// first find the first node that satisfies the left predicate
@@ -798,13 +791,14 @@ bool ART::SearchCloseRange(ARTIndexScanState *state, Key &lower_bound, Key &uppe
 		it->art = this;
 		bool found = it->LowerBound(tree, lower_bound, left_inclusive);
 		if (!found) {
-			// TODO: verify and track old vs. new memory size
+			UpdateMemoryUsage();
 			return true;
 		}
 	}
+
 	// now continue the scan until we reach the upper bound
 	auto success = it->Scan(upper_bound, max_count, result_ids, right_inclusive);
-	// TODO: verify and track old vs. new memory size
+	UpdateMemoryUsage();
 	return success;
 }
 
@@ -929,8 +923,6 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 	// don't alter the index during constraint checking
 	lock_guard<mutex> l(lock);
 
-	// TODO: track old vs. new memory size
-
 	// first resolve the expressions for the index
 	DataChunk expression_chunk;
 	expression_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);
@@ -969,10 +961,9 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 	}
 
 	conflict_manager.FinishLookup();
-	// TODO: verify and track old vs. new memory size
+	UpdateMemoryUsage();
 
 	if (found_conflict == DConstants::INVALID_INDEX) {
-		// No conflicts detected
 		return;
 	}
 
@@ -986,14 +977,15 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 //===--------------------------------------------------------------------===//
 
 BlockPointer ART::Serialize(MetaBlockWriter &writer) {
+
 	lock_guard<mutex> l(lock);
-	// TODO: track old vs. new memory size
 	if (tree) {
 		serialized_data_pointer = tree.Serialize(*this, writer);
 	} else {
 		serialized_data_pointer = {(block_id_t)DConstants::INVALID_INDEX, (uint32_t)DConstants::INVALID_INDEX};
 	}
-	// TODO: verify and track old vs. new memory size
+
+	UpdateMemoryUsage();
 	return serialized_data_pointer;
 }
 
@@ -1048,6 +1040,7 @@ void ART::Vacuum() {
 
 	// finalize the vacuum operation
 	FinalizeVacuum(allocators, vacuum_nodes);
+	UpdateMemoryUsage();
 }
 
 //===--------------------------------------------------------------------===//
@@ -1085,7 +1078,6 @@ bool ART::MergeIndexes(IndexLock &state, Index *other_index) {
 	if (!tree.Merge(*this, other_art->tree)) {
 		return false;
 	}
-
 	return true;
 }
 
@@ -1094,10 +1086,12 @@ bool ART::MergeIndexes(IndexLock &state, Index *other_index) {
 //===--------------------------------------------------------------------===//
 
 string ART::ToString() {
+	string str = "[empty]";
 	if (tree) {
-		return tree.ToString(*this);
+		str = tree.ToString(*this);
 	}
-	return "[empty]";
+	UpdateMemoryUsage();
+	return str;
 }
 
 vector<FixedSizeAllocator *> ART::GetAllocators() const {
@@ -1113,6 +1107,22 @@ vector<FixedSizeAllocator *> ART::GetAllocators() const {
 	allocators.push_back(n256_nodes.get());
 
 	return allocators;
+}
+
+void ART::UpdateMemoryUsage() {
+
+	idx_t current_size = 0;
+	for (const auto &allocator : GetAllocators()) {
+		current_size += allocator->GetMemoryUsage();
+	}
+
+	if (current_size > memory_size) {
+		buffer_manager.ReserveMemory(current_size - memory_size);
+	} else if (memory_size > current_size) {
+		buffer_manager.FreeReservedMemory(memory_size - current_size);
+	}
+
+	memory_size = current_size;
 }
 
 } // namespace duckdb

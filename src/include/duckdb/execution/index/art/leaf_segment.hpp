@@ -30,7 +30,6 @@ public:
 	//! Free a leaf segment
 	static inline void Free(ART &art, const idx_t &position) {
 		art.leaf_segments->Free(position);
-		art.DecreaseMemorySize(sizeof(LeafSegment));
 	}
 	//! Initialize all the fields of the segment
 	static LeafSegment *Initialize(ART &art, const idx_t &position);
