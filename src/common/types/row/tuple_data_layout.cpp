@@ -94,18 +94,4 @@ void TupleDataLayout::Initialize(Aggregates aggregates_p, bool align, bool heap_
 	Initialize(vector<LogicalType>(), std::move(aggregates_p), align, heap_offset_p);
 }
 
-RowLayout TupleDataLayout::GetRowLayout() const {
-	RowLayout result;
-	result.types = types;
-	result.aggregates = aggregates;
-	result.flag_width = flag_width;
-	result.data_width = data_width;
-	result.aggr_width = aggr_width;
-	result.row_width = row_width;
-	result.offsets = offsets;
-	result.all_constant = all_constant;
-	result.heap_pointer_offset = heap_size_offset;
-	return result;
-}
-
 } // namespace duckdb

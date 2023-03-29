@@ -1,3 +1,4 @@
+#include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 

@@ -16,6 +16,9 @@
 
 namespace duckdb {
 
+class TupleDataLayout;
+typedef unordered_map<idx_t, TupleDataLayout> struct_layout_map_t;
+
 class TupleDataLayout {
 public:
 	using Aggregates = vector<AggregateObject>;
@@ -31,6 +34,7 @@ public:
 	void Initialize(vector<LogicalType> types, bool align = true, bool heap_offset = true);
 	//! Initializes the RowLayout with the specified aggregates to an empty RowLayout
 	void Initialize(Aggregates aggregates_p, bool align = true, bool heap_offset = true);
+
 	//! Returns the number of data columns
 	inline idx_t ColumnCount() const {
 		return types.size();
@@ -83,16 +87,14 @@ public:
 	inline idx_t GetHeapSizeOffset() const {
 		return heap_size_offset;
 	}
-	//! RowLayout for compatibility reasons (mostly compatible - slight differences)
-	RowLayout GetRowLayout() const;
 
 private:
 	//! The types of the data columns
 	vector<LogicalType> types;
 	//! The aggregate functions
 	Aggregates aggregates;
-	//! Structs are a recursive RowLayout
-	unordered_map<idx_t, TupleDataLayout> struct_layouts;
+	//! Structs are a recursive TupleDataLayout
+	struct_layout_map_t struct_layouts;
 	//! The width of the validity header
 	idx_t flag_width;
 	//! The width of the data portion
