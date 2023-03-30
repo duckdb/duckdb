@@ -48,7 +48,7 @@ public:
 
 	// Same rules as the constructor. We will add room for a header, in addition to
 	// the requested user bytes. We will then sector-align the result.
-	virtual void Resize(uint64_t user_size);
+	void Resize(uint64_t user_size);
 
 	uint64_t AllocSize() const {
 		return internal_size;
