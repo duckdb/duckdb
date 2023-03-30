@@ -7,19 +7,13 @@ statement ok
 ATTACH '__TEST_DIR__/database.db' as persistent;
 
 statement ok
-CREATE TABLE persistent.T1 (A0 int);
+CREATE OR REPLACE TABLE persistent.T1 (A0 int);
 
 statement ok
 insert into persistent.T1 values (5);
 
-statement error
-SELECT column_name from pragma_storage_info('persistent.T1');
-----
-Catalog Error: Table with name T1 does not exist!
-Did you mean "persistent.main.T1"?
-
 query I
-SELECT column_name from pragma_storage_info('persistent.main.T1');
+SELECT column_name from pragma_storage_info('persistent.T1');
 ----
 A0
 A0
