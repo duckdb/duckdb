@@ -2,8 +2,6 @@
 # description: Test the glob "**" in s3
 # group: [s3]
 
-# files from: 's3://test-bucket/glob_ss/'
-
 require parquet
 
 require httpfs
@@ -180,7 +178,29 @@ FROM GLOB('s3://test-bucket/glob_ss/**/a/t0.csv');
 ----
 s3://test-bucket/glob_ss/a/t0.csv
 
+### these next 3 require 'first_wildcard_pos == string::npos' to not trigger a return
+# #   sanity check
+# query I
+# FROM GLOB('s3://test-bucket/glob_ss/partitioned');
+# ----
 
+# #   sanity check
+# query I
+# SELECT COUNT(*) FROM GLOB('s3://test-bucket/glob_ss/partitioned');
+# ----
+# 0
+
+# #   sanity check
+# query I
+# SELECT COUNT(*) FROM GLOB('s3://test-bucket/glob_ss/partitioned/');
+# ----
+# 0
+
+#   sanity check
+query I
+SELECT COUNT(*) FROM GLOB('s3://test-bucket/glob_ss/partitioned/*');
+----
+0
 
 #	partitioned mytable
 statement ok
