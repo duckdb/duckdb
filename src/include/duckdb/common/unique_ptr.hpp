@@ -1,5 +1,7 @@
 #pragma once
 
+#ifdef DEBUG
+
 #include "duckdb/common/unique_ptr_utils.hpp"
 
 #include <memory>
@@ -40,3 +42,12 @@ public:
 };
 
 } // namespace duckdb
+#else
+
+#include <memory>
+
+namespace duckdb {
+	using std::unique_ptr;
+} //namespace duckdb
+
+#endif
