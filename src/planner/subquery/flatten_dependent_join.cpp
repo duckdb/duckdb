@@ -441,7 +441,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		// add the correlated columns to the PARTITION BY clauses in the Window
 		for (auto &expr : window.expressions) {
 			D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
-			auto &w = (BoundWindowExpression &)*expr;
+			auto &w = expr->Cast<BoundWindowExpression>();
 			for (idx_t i = 0; i < correlated_columns.size(); i++) {
 				w.partitions.push_back(make_unique<BoundColumnRefExpression>(
 				    correlated_columns[i].type,

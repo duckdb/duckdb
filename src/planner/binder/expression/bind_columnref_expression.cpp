@@ -83,7 +83,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr) {
 	switch (expr->type) {
 	case ExpressionType::COLUMN_REF: {
-		auto &colref = (ColumnRefExpression &)*expr;
+		auto &colref = expr->Cast<ColumnRefExpression>();
 		string error_message;
 		auto new_expr = QualifyColumnName(colref, error_message);
 		if (new_expr) {
@@ -96,7 +96,7 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr) {
 		break;
 	}
 	case ExpressionType::POSITIONAL_REFERENCE: {
-		auto &ref = (PositionalReferenceExpression &)*expr;
+		auto &ref = expr->Cast<PositionalReferenceExpression>();
 		if (ref.alias.empty()) {
 			string table_name, column_name;
 			auto error = binder.bind_context.BindColumn(ref, table_name, column_name);
@@ -124,7 +124,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructExtract(unique_ptr<Pa
 	// we need to transform the struct extract if it is inside a lambda expression
 	// because we cannot bind to an existing table, so we remove the dummy table also
 	if (lambda_bindings && base->type == ExpressionType::COLUMN_REF) {
-		auto &lambda_column_ref = (ColumnRefExpression &)*base;
+		auto &lambda_column_ref = base->Cast<ColumnRefExpression>();
 		D_ASSERT(!lambda_column_ref.column_names.empty());
 
 		if (lambda_column_ref.column_names[0].find(DummyBinding::DUMMY_NAME) != string::npos) {
@@ -304,7 +304,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 		return result;
 	}
 
-	auto &colref = (ColumnRefExpression &)*expr;
+	auto &colref = expr->Cast<ColumnRefExpression>();
 	D_ASSERT(colref.IsQualified());
 	auto &table_name = colref.GetTableName();
 

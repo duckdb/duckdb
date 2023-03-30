@@ -31,7 +31,7 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
 	for (auto &expr : aggregates) {
 		D_ASSERT(expr->expression_class == ExpressionClass::BOUND_AGGREGATE);
 		D_ASSERT(expr->IsAggregate());
-		auto &aggr = (BoundAggregateExpression &)*expr;
+		auto &aggr = expr->Cast<BoundAggregateExpression>();
 		bindings.push_back(&aggr);
 
 		D_ASSERT(!aggr.IsDistinct());
@@ -51,13 +51,13 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
 	// filter_indexes must be pre-built, not lazily instantiated in parallel...
 	idx_t aggregate_input_idx = 0;
 	for (auto &aggregate : aggregates) {
-		auto &aggr = (BoundAggregateExpression &)*aggregate;
+		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
 		aggregate_input_idx += aggr.children.size();
 	}
 	for (auto &aggregate : aggregates) {
-		auto &aggr = (BoundAggregateExpression &)*aggregate;
+		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
 		if (aggr.filter) {
-			auto &bound_ref_expr = (BoundReferenceExpression &)*aggr.filter;
+			auto &bound_ref_expr = aggr.filter->Cast<BoundReferenceExpression>();
 			auto it = filter_indexes.find(aggr.filter.get());
 			if (it == filter_indexes.end()) {
 				filter_indexes[aggr.filter.get()] = bound_ref_expr.index;
@@ -123,20 +123,20 @@ SinkResultType PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, Glo
 	for (idx_t group_idx = 0; group_idx < groups.size(); group_idx++) {
 		auto &group = groups[group_idx];
 		D_ASSERT(group->type == ExpressionType::BOUND_REF);
-		auto &bound_ref_expr = (BoundReferenceExpression &)*group;
+		auto &bound_ref_expr = group->Cast<BoundReferenceExpression>();
 		group_chunk.data[group_idx].Reference(input.data[bound_ref_expr.index]);
 	}
 	idx_t aggregate_input_idx = 0;
 	for (auto &aggregate : aggregates) {
-		auto &aggr = (BoundAggregateExpression &)*aggregate;
+		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
 		for (auto &child_expr : aggr.children) {
 			D_ASSERT(child_expr->type == ExpressionType::BOUND_REF);
-			auto &bound_ref_expr = (BoundReferenceExpression &)*child_expr;
+			auto &bound_ref_expr = child_expr->Cast<BoundReferenceExpression>();
 			aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[bound_ref_expr.index]);
 		}
 	}
 	for (auto &aggregate : aggregates) {
-		auto &aggr = (BoundAggregateExpression &)*aggregate;
+		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
 		if (aggr.filter) {
 			auto it = filter_indexes.find(aggr.filter.get());
 			D_ASSERT(it != filter_indexes.end());
@@ -205,7 +205,7 @@ string PhysicalPerfectHashAggregate::ParamsToString() const {
 			result += "\n";
 		}
 		result += aggregates[i]->GetName();
-		auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
+		auto &aggregate = aggregates[i]->Cast<BoundAggregateExpression>();
 		if (aggregate.filter) {
 			result += " Filter: " + aggregate.filter->GetName();
 		}

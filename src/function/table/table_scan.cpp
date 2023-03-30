@@ -245,7 +245,7 @@ static void IndexScanFunction(ClientContext &context, TableFunctionInput &data_p
 
 static void RewriteIndexExpression(Index &index, LogicalGet &get, Expression &expr, bool &rewrite_possible) {
 	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &bound_colref = (BoundColumnRefExpression &)expr;
+		auto &bound_colref = expr.Cast<BoundColumnRefExpression>();
 		// bound column ref: rewrite to fit in the current set of bound column ids
 		bound_colref.binding.table_index = get.table_index;
 		column_t referenced_column = index.column_ids[bound_colref.binding.column_index];
@@ -348,7 +348,7 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 				}
 			} else if (expr->type == ExpressionType::COMPARE_BETWEEN) {
 				// BETWEEN expression
-				auto &between = (BoundBetweenExpression &)*expr;
+				auto &between = expr->Cast<BoundBetweenExpression>();
 				if (!between.input->Equals(index_expression.get())) {
 					// expression doesn't match the current index expression
 					continue;

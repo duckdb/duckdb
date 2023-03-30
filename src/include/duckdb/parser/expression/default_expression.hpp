@@ -14,6 +14,8 @@ namespace duckdb {
 //! Represents the default value of a column
 class DefaultExpression : public ParsedExpression {
 public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::DEFAULT;
+public:
 	DefaultExpression();
 
 public:

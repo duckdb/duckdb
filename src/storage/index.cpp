@@ -69,7 +69,7 @@ void Index::ExecuteExpressions(DataChunk &input, DataChunk &result) {
 
 unique_ptr<Expression> Index::BindExpression(unique_ptr<Expression> expr) {
 	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &bound_colref = (BoundColumnRefExpression &)*expr;
+		auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
 		return make_unique<BoundReferenceExpression>(expr->return_type, column_ids[bound_colref.binding.column_index]);
 	}
 	ExpressionIterator::EnumerateChildren(

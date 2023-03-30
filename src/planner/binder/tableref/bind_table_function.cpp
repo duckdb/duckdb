@@ -34,7 +34,7 @@ bool Binder::BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &e
 	unique_ptr<QueryNode> subquery_node;
 	if (expressions.size() == 1 && expressions[0]->type == ExpressionType::SUBQUERY) {
 		// general case: argument is a subquery, bind it as part of the node
-		auto &se = (SubqueryExpression &)*expressions[0];
+		auto &se = expressions[0]->Cast<SubqueryExpression>();
 		subquery_node = std::move(se.subquery->node);
 	} else {
 		// special case: non-subquery parameter to table-in table-out function
@@ -67,9 +67,9 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 		// hack to make named parameters work
 		if (child->type == ExpressionType::COMPARE_EQUAL) {
 			// comparison, check if the LHS is a columnref
-			auto &comp = (ComparisonExpression &)*child;
+			auto &comp = child->Cast<ComparisonExpression>();
 			if (comp.left->type == ExpressionType::COLUMN_REF) {
-				auto &colref = (ColumnRefExpression &)*comp.left;
+				auto &colref = comp.left->Cast<ColumnRefExpression>();
 				if (!colref.IsQualified()) {
 					parameter_name = colref.GetColumnName();
 					child = std::move(comp.right);
@@ -82,7 +82,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 				return false;
 			}
 			auto binder = Binder::CreateBinder(this->context, this, true);
-			auto &se = (SubqueryExpression &)*child;
+			auto &se = child->Cast<SubqueryExpression>();
 			auto node = binder->BindNode(*se.subquery->node);
 			subquery = make_unique<BoundSubqueryRef>(std::move(binder), std::move(node));
 			seen_subquery = true;

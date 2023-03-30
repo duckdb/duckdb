@@ -89,8 +89,8 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 					    cond.right->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
 						// comparison join between two bound column refs
 						// we can replace any reference to the RHS (build-side) with a reference to the LHS (probe-side)
-						auto &lhs_col = (BoundColumnRefExpression &)*cond.left;
-						auto &rhs_col = (BoundColumnRefExpression &)*cond.right;
+						auto &lhs_col = cond.left->Cast<BoundColumnRefExpression>();
+						auto &rhs_col = cond.right->Cast<BoundColumnRefExpression>();
 						// if there are any columns that refer to the RHS,
 						auto colrefs = column_references.find(rhs_col.binding);
 						if (colrefs != column_references.end()) {

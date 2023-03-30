@@ -22,7 +22,7 @@ namespace duckdb {
 static bool CreateJoinCondition(Expression &expr, const unordered_set<idx_t> &left_bindings,
                                 const unordered_set<idx_t> &right_bindings, vector<JoinCondition> &conditions) {
 	// comparison
-	auto &comparison = (BoundComparisonExpression &)expr;
+	auto &comparison = expr.Cast<BoundComparisonExpression>();
 	auto left_side = JoinSide::GetJoinSide(*comparison.left, left_bindings, right_bindings);
 	auto right_side = JoinSide::GetJoinSide(*comparison.right, left_bindings, right_bindings);
 	if (left_side != JoinSide::BOTH && right_side != JoinSide::BOTH) {
@@ -202,7 +202,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 
 static bool HasCorrelatedColumns(Expression &expression) {
 	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &colref = (BoundColumnRefExpression &)expression;
+		auto &colref = expression.Cast<BoundColumnRefExpression>();
 		if (colref.depth > 0) {
 			return true;
 		}

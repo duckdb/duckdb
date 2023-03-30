@@ -46,7 +46,7 @@ public:
 
 		for (idx_t expr_idx = 0; expr_idx < expressions.size(); expr_idx++) {
 			auto &expr = *expressions[expr_idx];
-			auto &wexpr = (BoundWindowExpression &)expr;
+			auto &wexpr = expr.Cast<BoundWindowExpression>();
 			switch (expr.GetExpressionType()) {
 			case ExpressionType::WINDOW_AGGREGATE: {
 				auto &aggregate = *wexpr.aggregate;
@@ -122,7 +122,7 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 		switch (expr.GetExpressionType()) {
 		case ExpressionType::WINDOW_AGGREGATE: {
 			//	Establish the aggregation environment
-			auto &wexpr = (BoundWindowExpression &)expr;
+			auto &wexpr = expr.Cast<BoundWindowExpression>();
 			auto &aggregate = *wexpr.aggregate;
 			auto &statev = state.statev;
 			state.state_ptr = state.aggregate_states[expr_idx].data();

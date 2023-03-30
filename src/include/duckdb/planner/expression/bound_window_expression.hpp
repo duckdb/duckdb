@@ -18,6 +18,8 @@ class AggregateFunction;
 
 class BoundWindowExpression : public Expression {
 public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_WINDOW;
+public:
 	BoundWindowExpression(ExpressionType type, LogicalType return_type, unique_ptr<AggregateFunction> aggregate,
 	                      unique_ptr<FunctionData> bind_info);
 

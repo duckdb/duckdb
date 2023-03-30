@@ -53,7 +53,7 @@ static void ConstructPivots(PivotRef &ref, idx_t pivot_idx, vector<unique_ptr<Pa
 			// construct the aggregates
 			for (auto &aggr : ref.aggregates) {
 				auto copy = aggr->Copy();
-				auto &function = (FunctionExpression &)*copy;
+				auto &function = copy->Cast<FunctionExpression>();
 				// add the filter and alias to the aggregate function
 				function.filter = expr->Copy();
 				if (ref.aggregates.size() > 1 || !function.alias.empty()) {
@@ -73,7 +73,7 @@ static void ConstructPivots(PivotRef &ref, idx_t pivot_idx, vector<unique_ptr<Pa
 
 static void ExtractPivotExpressions(ParsedExpression &expr, case_insensitive_set_t &handled_columns) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto &child_colref = (ColumnRefExpression &)expr;
+		auto &child_colref = expr.Cast<ColumnRefExpression>();
 		if (child_colref.IsQualified()) {
 			throw BinderException("PIVOT expression cannot contain qualified columns");
 		}
@@ -165,7 +165,7 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 			if (entry->type != ExpressionType::COLUMN_REF) {
 				throw InternalException("Unexpected child of pivot source - not a ColumnRef");
 			}
-			auto &columnref = (ColumnRefExpression &)*entry;
+			auto &columnref = entry->Cast<ColumnRefExpression>();
 			if (handled_columns.find(columnref.GetColumnName()) == handled_columns.end()) {
 				// not handled - add to grouping set
 				select_node->groups.group_expressions.push_back(
@@ -212,7 +212,7 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 				if (col->type != ExpressionType::COLUMN_REF) {
 					throw InternalException("Unexpected child of unpivot star - not a ColumnRef");
 				}
-				auto &columnref = (ColumnRefExpression &)*col;
+				auto &columnref = col->Cast<ColumnRefExpression>();
 				PivotColumnEntry new_entry;
 				new_entry.values.emplace_back(columnref.GetColumnName());
 				new_entry.alias = columnref.GetColumnName();
@@ -236,7 +236,7 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 		if (col_expr->type != ExpressionType::COLUMN_REF) {
 			throw InternalException("Unexpected child of pivot source - not a ColumnRef");
 		}
-		auto &columnref = (ColumnRefExpression &)*col_expr;
+		auto &columnref = col_expr->Cast<ColumnRefExpression>();
 		auto &column_name = columnref.GetColumnName();
 		auto entry = handled_columns.find(column_name);
 		if (entry == handled_columns.end()) {

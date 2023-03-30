@@ -54,7 +54,7 @@ void ReplaceDefaultExpression(unique_ptr<ParsedExpression> &expr, const ColumnDe
 void QualifyColumnReferences(unique_ptr<ParsedExpression> &expr, const string &table_name) {
 	// To avoid ambiguity with 'excluded', we explicitly qualify all column references
 	if (expr->type == ExpressionType::COLUMN_REF) {
-		auto &column_ref = (ColumnRefExpression &)*expr;
+		auto &column_ref = expr->Cast<ColumnRefExpression>();
 		if (column_ref.IsQualified()) {
 			return;
 		}
@@ -68,7 +68,7 @@ void QualifyColumnReferences(unique_ptr<ParsedExpression> &expr, const string &t
 // Replace binding.table_index with 'dest' if it's 'source'
 void ReplaceColumnBindings(Expression &expr, idx_t source, idx_t dest) {
 	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &bound_columnref = (BoundColumnRefExpression &)expr;
+		auto &bound_columnref = expr.Cast<BoundColumnRefExpression>();
 		if (bound_columnref.binding.table_index == source) {
 			bound_columnref.binding.table_index = dest;
 		}

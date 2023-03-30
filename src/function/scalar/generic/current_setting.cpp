@@ -25,7 +25,7 @@ public:
 };
 
 static void CurrentSettingFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = (CurrentSettingBindData &)*func_expr.bind_info;
 	result.Reference(info.value);
 }

@@ -422,7 +422,7 @@ string Binder::FormatErrorRecursive(idx_t query_location, const string &message,
 // FIXME: this is extremely naive
 void VerifyNotExcluded(ParsedExpression &expr) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto &column_ref = (ColumnRefExpression &)expr;
+		auto &column_ref = expr.Cast<ColumnRefExpression>();
 		if (!column_ref.IsQualified()) {
 			return;
 		}

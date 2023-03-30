@@ -100,7 +100,7 @@ TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vec
 static void ReplaceAliases(ParsedExpression &expr, const ColumnList &list,
                            const unordered_map<idx_t, string> &alias_map) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto &colref = (ColumnRefExpression &)expr;
+		auto &colref = expr.Cast<ColumnRefExpression>();
 		D_ASSERT(!colref.IsQualified());
 		auto &col_names = colref.column_names;
 		D_ASSERT(col_names.size() == 1);
@@ -114,7 +114,7 @@ static void ReplaceAliases(ParsedExpression &expr, const ColumnList &list,
 
 static void BakeTableName(ParsedExpression &expr, const string &table_name) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto &colref = (ColumnRefExpression &)expr;
+		auto &colref = expr.Cast<ColumnRefExpression>();
 		D_ASSERT(!colref.IsQualified());
 		auto &col_names = colref.column_names;
 		col_names.insert(col_names.begin(), table_name);

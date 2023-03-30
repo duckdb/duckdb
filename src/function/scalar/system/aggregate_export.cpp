@@ -28,7 +28,7 @@ struct ExportAggregateBindData : public FunctionData {
 	}
 
 	static ExportAggregateBindData &GetFrom(ExpressionState &state) {
-		auto &func_expr = (BoundFunctionExpression &)state.expr;
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		return (ExportAggregateBindData &)*func_expr.bind_info;
 	}
 };

@@ -109,7 +109,7 @@ static void RegexpMatchesFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto &strings = args.data[0];
 	auto &patterns = args.data[1];
 
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = (RegexpMatchesBindData &)*func_expr.bind_info;
 
 	if (info.constant_pattern) {
@@ -163,7 +163,7 @@ static unique_ptr<FunctionData> RegexReplaceBind(ClientContext &context, ScalarF
 }
 
 static void RegexReplaceFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = (RegexpReplaceBindData &)*func_expr.bind_info;
 
 	auto &strings = args.data[0];
@@ -254,7 +254,7 @@ static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarF
 }
 
 static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	const auto &info = (RegexpExtractBindData &)*func_expr.bind_info;
 
 	auto &strings = args.data[0];

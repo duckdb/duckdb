@@ -36,7 +36,7 @@ static bool Disjoint(unordered_set<T> &a, unordered_set<T> &b) {
 //! Extract the set of relations referred to inside an expression
 bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings) {
 	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &colref = (BoundColumnRefExpression &)expression;
+		auto &colref = expression.Cast<BoundColumnRefExpression>();
 		D_ASSERT(colref.depth == 0);
 		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
 		// map the base table index to the relation index used by the JoinOrderOptimizer
@@ -66,7 +66,7 @@ void JoinOrderOptimizer::GetColumnBinding(Expression &expression, ColumnBinding 
 	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
 		// Here you have a filter on a single column in a table. Return a binding for the column
 		// being filtered on so the filter estimator knows what HLL count to pull
-		auto &colref = (BoundColumnRefExpression &)expression;
+		auto &colref = expression.Cast<BoundColumnRefExpression>();
 		D_ASSERT(colref.depth == 0);
 		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
 		// map the base table index to the relation index used by the JoinOrderOptimizer
@@ -762,7 +762,7 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 				          JoinRelationSet::IsSubset(right.first, f->left_set)));
 				JoinCondition cond;
 				D_ASSERT(condition->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
-				auto &comparison = (BoundComparisonExpression &)*condition;
+				auto &comparison = condition->Cast<BoundComparisonExpression>();
 				// we need to figure out which side is which by looking at the relations available to us
 				bool invert = !JoinRelationSet::IsSubset(left.first, f->left_set);
 				cond.left = !invert ? std::move(comparison.left) : std::move(comparison.right);
@@ -841,7 +841,7 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 				// create the join condition
 				JoinCondition cond;
 				D_ASSERT(filter->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
-				auto &comparison = (BoundComparisonExpression &)*filter;
+				auto &comparison = filter->Cast<BoundComparisonExpression>();
 				// we need to figure out which side is which by looking at the relations available to us
 				cond.left = !invert ? std::move(comparison.left) : std::move(comparison.right);
 				cond.right = !invert ? std::move(comparison.right) : std::move(comparison.left);

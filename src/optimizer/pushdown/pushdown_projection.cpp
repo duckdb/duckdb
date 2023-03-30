@@ -8,7 +8,7 @@ namespace duckdb {
 
 static unique_ptr<Expression> ReplaceProjectionBindings(LogicalProjection &proj, unique_ptr<Expression> expr) {
 	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &colref = (BoundColumnRefExpression &)*expr;
+		auto &colref = expr->Cast<BoundColumnRefExpression>();
 		D_ASSERT(colref.binding.table_index == proj.table_index);
 		D_ASSERT(colref.binding.column_index < proj.expressions.size());
 		D_ASSERT(colref.depth == 0);

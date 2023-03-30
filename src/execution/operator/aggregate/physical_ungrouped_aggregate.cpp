@@ -37,7 +37,7 @@ struct AggregateState {
 	explicit AggregateState(const vector<unique_ptr<Expression>> &aggregate_expressions) {
 		for (auto &aggregate : aggregate_expressions) {
 			D_ASSERT(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
-			auto &aggr = (BoundAggregateExpression &)*aggregate;
+			auto &aggr = aggregate->Cast<BoundAggregateExpression>();
 			auto state = unique_ptr<data_t[]>(new data_t[aggr.function.state_size()]);
 			aggr.function.initialize(state.get());
 			aggregates.push_back(std::move(state));
@@ -106,7 +106,7 @@ public:
 		vector<AggregateObject> aggregate_objects;
 		for (auto &aggregate : op.aggregates) {
 			D_ASSERT(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
-			auto &aggr = (BoundAggregateExpression &)*aggregate;
+			auto &aggr = aggregate->Cast<BoundAggregateExpression>();
 			// initialize the payload chunk
 			for (auto &child : aggr.children) {
 				payload_types.push_back(child->return_type);
@@ -186,7 +186,7 @@ void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, GlobalS
 	auto &distinct_filter = distinct_info.Indices();
 
 	for (auto &idx : distinct_indices) {
-		auto &aggregate = (BoundAggregateExpression &)*aggregates[idx];
+		auto &aggregate = aggregates[idx]->Cast<BoundAggregateExpression>();
 
 		idx_t table_idx = distinct_info.table_map[idx];
 		if (!distinct_data->radix_tables[table_idx]) {
@@ -232,7 +232,7 @@ SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, Globa
 	idx_t next_payload_idx = 0;
 
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
-		auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
+		auto &aggregate = aggregates[aggr_idx]->Cast<BoundAggregateExpression>();
 
 		payload_idx = next_payload_idx;
 		next_payload_idx = payload_idx + aggregate.children.size();
@@ -311,7 +311,7 @@ void PhysicalUngroupedAggregate::Combine(ExecutionContext &context, GlobalSinkSt
 	CombineDistinct(context, state, lstate);
 
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
-		auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
+		auto &aggregate = aggregates[aggr_idx]->Cast<BoundAggregateExpression>();
 
 		if (aggregate.IsDistinct()) {
 			continue;
@@ -353,7 +353,7 @@ public:
 		idx_t next_payload_idx = 0;
 
 		for (idx_t i = 0; i < aggregates.size(); i++) {
-			auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
+			auto &aggregate = aggregates[i]->Cast<BoundAggregateExpression>();
 
 			// Forward the payload idx
 			payload_idx = next_payload_idx;
@@ -534,7 +534,7 @@ unique_ptr<GlobalSourceState> PhysicalUngroupedAggregate::GetGlobalSourceState(C
 void VerifyNullHandling(DataChunk &chunk, AggregateState &state, const vector<unique_ptr<Expression>> &aggregates) {
 #ifdef DEBUG
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
-		auto &aggr = (BoundAggregateExpression &)*aggregates[aggr_idx];
+		auto &aggr = aggregates[aggr_idx]->Cast<BoundAggregateExpression>();
 		if (state.counts[aggr_idx] == 0 && aggr.function.null_handling == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 			// Default is when 0 values go in, NULL comes out
 			UnifiedVectorFormat vdata;
@@ -557,7 +557,7 @@ void PhysicalUngroupedAggregate::GetData(ExecutionContext &context, DataChunk &c
 	// initialize the result chunk with the aggregate values
 	chunk.SetCardinality(1);
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
-		auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
+		auto &aggregate = aggregates[aggr_idx]->Cast<BoundAggregateExpression>();
 
 		Vector state_vector(Value::POINTER((uintptr_t)gstate.state.aggregates[aggr_idx].get()));
 		AggregateInputData aggr_input_data(aggregate.bind_info.get(), Allocator::DefaultAllocator());
@@ -570,7 +570,7 @@ void PhysicalUngroupedAggregate::GetData(ExecutionContext &context, DataChunk &c
 string PhysicalUngroupedAggregate::ParamsToString() const {
 	string result;
 	for (idx_t i = 0; i < aggregates.size(); i++) {
-		auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
+		auto &aggregate = aggregates[i]->Cast<BoundAggregateExpression>();
 		if (i > 0) {
 			result += "\n";
 		}

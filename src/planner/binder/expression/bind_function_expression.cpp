@@ -155,7 +155,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	}
 
 	// bind the lambda parameter
-	auto &lambda_expr = (LambdaExpression &)*function.children[1];
+	auto &lambda_expr = function.children[1]->Cast<LambdaExpression>();
 	BindResult bind_lambda_result = BindExpression(lambda_expr, depth, true, list_child_type);
 
 	if (bind_lambda_result.HasError()) {
@@ -199,7 +199,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 		throw BinderException(binder.FormatError(function, error));
 	}
 
-	auto &bound_function_expr = (BoundFunctionExpression &)*result;
+	auto &bound_function_expr = result->Cast<BoundFunctionExpression>();
 	D_ASSERT(bound_function_expr.children.size() == 2);
 
 	// remove the lambda expression from the children

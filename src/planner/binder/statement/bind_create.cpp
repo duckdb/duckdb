@@ -135,7 +135,7 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 static void QualifyFunctionNames(ClientContext &context, unique_ptr<ParsedExpression> &expr) {
 	switch (expr->GetExpressionClass()) {
 	case ExpressionClass::FUNCTION: {
-		auto &func = (FunctionExpression &)*expr;
+		auto &func = expr->Cast<FunctionExpression>();
 		auto function = (StandardEntry *)Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, func.catalog,
 		                                                   func.schema, func.function_name, true);
 		if (function) {
@@ -364,7 +364,7 @@ void ExpressionContainsGeneratedColumn(const ParsedExpression &expr, const unord
 		return;
 	}
 	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto &column_ref = (ColumnRefExpression &)expr;
+		auto &column_ref = expr.Cast<ColumnRefExpression>();
 		auto &name = column_ref.GetColumnName();
 		if (gcols.count(name)) {
 			contains_gcol = true;

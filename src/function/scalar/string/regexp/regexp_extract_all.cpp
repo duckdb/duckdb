@@ -144,7 +144,7 @@ RegexStringPieceArgs &GetGroupsBuffer(const RegexpBaseBindData &info, Expression
 }
 
 void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	const auto &info = (RegexpBaseBindData &)*func_expr.bind_info;
 
 	auto &strings = args.data[0];

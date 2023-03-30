@@ -16,7 +16,7 @@ void BoundParameterExpression::Invalidate(Expression &expr) {
 	if (expr.type != ExpressionType::VALUE_PARAMETER) {
 		throw InternalException("BoundParameterExpression::Invalidate requires a parameter as input");
 	}
-	auto &bound_parameter = (BoundParameterExpression &)expr;
+	auto &bound_parameter = expr.Cast<BoundParameterExpression>();
 	bound_parameter.return_type = LogicalTypeId::SQLNULL;
 	bound_parameter.parameter_data->return_type = LogicalTypeId::INVALID;
 }

@@ -121,7 +121,7 @@ void RadixPartitionedHashTable::PopulateGroupChunk(DataChunk &group_chunk, DataC
 		// Retrieve the expression containing the index in the input chunk
 		auto &group = op.groups[group_idx];
 		D_ASSERT(group->type == ExpressionType::BOUND_REF);
-		auto &bound_ref_expr = (BoundReferenceExpression &)*group;
+		auto &bound_ref_expr = group->Cast<BoundReferenceExpression>();
 		// Reference from input_chunk[group.index] -> group_chunk[chunk_index]
 		group_chunk.data[chunk_index++].Reference(input_chunk.data[bound_ref_expr.index]);
 	}
@@ -399,7 +399,7 @@ void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &ch
 		}
 		for (idx_t i = 0; i < op.aggregates.size(); i++) {
 			D_ASSERT(op.aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
-			auto &aggr = (BoundAggregateExpression &)*op.aggregates[i];
+			auto &aggr = op.aggregates[i]->Cast<BoundAggregateExpression>();
 			auto aggr_state = unique_ptr<data_t[]>(new data_t[aggr.function.state_size()]);
 			aggr.function.initialize(aggr_state.get());
 

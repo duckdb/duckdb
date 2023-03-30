@@ -16,7 +16,7 @@ DistinctAggregateCollectionInfo::DistinctAggregateCollectionInfo(const vector<un
 
 	total_child_count = 0;
 	for (idx_t i = 0; i < aggregate_count; i++) {
-		auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
+		auto &aggregate = aggregates[i]->Cast<BoundAggregateExpression>();
 
 		if (!aggregate.IsDistinct()) {
 			continue;
@@ -35,7 +35,7 @@ DistinctAggregateState::DistinctAggregateState(const DistinctAggregateData &data
 
 	idx_t aggregate_count = data.info.aggregates.size();
 	for (idx_t i = 0; i < aggregate_count; i++) {
-		auto &aggregate = (BoundAggregateExpression &)*data.info.aggregates[i];
+		auto &aggregate = data.info.aggregates[i]->Cast<BoundAggregateExpression>();
 
 		// Initialize the child executor and get the payload types for every aggregate
 		for (auto &child : aggregate.children) {
@@ -80,7 +80,7 @@ DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionIn
 	grouping_sets.resize(info.table_count);
 
 	for (auto &i : info.indices) {
-		auto &aggregate = (BoundAggregateExpression &)*info.aggregates[i];
+		auto &aggregate = info.aggregates[i]->Cast<BoundAggregateExpression>();
 
 		D_ASSERT(info.table_map.count(i));
 		idx_t table_idx = info.table_map.at(i);
@@ -128,8 +128,8 @@ struct FindMatchingAggregate {
 			return false;
 		}
 		for (idx_t i = 0; i < aggr.children.size(); i++) {
-			auto &other_child = (BoundReferenceExpression &)*other.children[i];
-			auto &aggr_child = (BoundReferenceExpression &)*aggr.children[i];
+			auto &other_child = other.children[i]->Cast<BoundReferenceExpression>();
+			auto &aggr_child = aggr.children[i]->Cast<BoundReferenceExpression>();
 			if (other_child.index != aggr_child.index) {
 				return false;
 			}
@@ -145,7 +145,7 @@ idx_t DistinctAggregateCollectionInfo::CreateTableIndexMap() {
 	D_ASSERT(table_map.empty());
 	for (auto &agg_idx : indices) {
 		D_ASSERT(agg_idx < aggregates.size());
-		auto &aggregate = (BoundAggregateExpression &)*aggregates[agg_idx];
+		auto &aggregate = aggregates[agg_idx]->Cast<BoundAggregateExpression>();
 
 		auto matching_inputs =
 		    std::find_if(table_inputs.begin(), table_inputs.end(), FindMatchingAggregate(std::ref(aggregate)));
@@ -179,7 +179,7 @@ static vector<idx_t> GetDistinctIndices(vector<unique_ptr<Expression>> &aggregat
 	vector<idx_t> distinct_indices;
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggregate = aggregates[i];
-		auto &aggr = (BoundAggregateExpression &)*aggregate;
+		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
 		if (aggr.IsDistinct()) {
 			distinct_indices.push_back(i);
 		}

@@ -245,7 +245,7 @@ struct ICULocalTimestampFunc : public ICUDateFunc {
 	}
 
 	static timestamp_t GetLocalTimestamp(ExpressionState &state) {
-		auto &func_expr = (BoundFunctionExpression &)state.expr;
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = (BindDataNow &)*func_expr.bind_info;
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
@@ -294,7 +294,7 @@ struct ICULocalTimeFunc : public ICUDateFunc {
 struct ICUTimeZoneFunc : public ICUDateFunc {
 	template <typename OP>
 	static void Execute(DataChunk &input, ExpressionState &state, Vector &result) {
-		auto &func_expr = (BoundFunctionExpression &)state.expr;
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = (BindData &)*func_expr.bind_info;
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();

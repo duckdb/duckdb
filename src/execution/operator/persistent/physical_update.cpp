@@ -80,7 +80,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, GlobalSinkState &
 		} else {
 			D_ASSERT(expressions[i]->type == ExpressionType::BOUND_REF);
 			// index into child chunk
-			auto &binding = (BoundReferenceExpression &)*expressions[i];
+			auto &binding = expressions[i]->Cast<BoundReferenceExpression>();
 			update_chunk.data[i].Reference(chunk.data[binding.index]);
 		}
 	}

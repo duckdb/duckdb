@@ -118,7 +118,7 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 			}
 			vector<unique_ptr<ParsedExpression>> new_list;
 			for (idx_t i = 0; i < star_list.size(); i++) {
-				auto &colref = (ColumnRefExpression &)*star_list[i];
+				auto &colref = star_list[i]->Cast<ColumnRefExpression>();
 				if (!RE2::PartialMatch(colref.GetColumnName(), regex)) {
 					continue;
 				}

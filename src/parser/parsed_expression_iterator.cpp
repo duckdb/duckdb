@@ -29,14 +29,14 @@ void ParsedExpressionIterator::EnumerateChildren(
     ParsedExpression &expr, const std::function<void(unique_ptr<ParsedExpression> &child)> &callback) {
 	switch (expr.expression_class) {
 	case ExpressionClass::BETWEEN: {
-		auto &cast_expr = (BetweenExpression &)expr;
+		auto &cast_expr = expr.Cast<BetweenExpression>();
 		callback(cast_expr.input);
 		callback(cast_expr.lower);
 		callback(cast_expr.upper);
 		break;
 	}
 	case ExpressionClass::CASE: {
-		auto &case_expr = (CaseExpression &)expr;
+		auto &case_expr = expr.Cast<CaseExpression>();
 		for (auto &check : case_expr.case_checks) {
 			callback(check.when_expr);
 			callback(check.then_expr);
@@ -45,23 +45,23 @@ void ParsedExpressionIterator::EnumerateChildren(
 		break;
 	}
 	case ExpressionClass::CAST: {
-		auto &cast_expr = (CastExpression &)expr;
+		auto &cast_expr = expr.Cast<CastExpression>();
 		callback(cast_expr.child);
 		break;
 	}
 	case ExpressionClass::COLLATE: {
-		auto &cast_expr = (CollateExpression &)expr;
+		auto &cast_expr = expr.Cast<CollateExpression>();
 		callback(cast_expr.child);
 		break;
 	}
 	case ExpressionClass::COMPARISON: {
-		auto &comp_expr = (ComparisonExpression &)expr;
+		auto &comp_expr = expr.Cast<ComparisonExpression>();
 		callback(comp_expr.left);
 		callback(comp_expr.right);
 		break;
 	}
 	case ExpressionClass::CONJUNCTION: {
-		auto &conj_expr = (ConjunctionExpression &)expr;
+		auto &conj_expr = expr.Cast<ConjunctionExpression>();
 		for (auto &child : conj_expr.children) {
 			callback(child);
 		}
@@ -69,7 +69,7 @@ void ParsedExpressionIterator::EnumerateChildren(
 	}
 
 	case ExpressionClass::FUNCTION: {
-		auto &func_expr = (FunctionExpression &)expr;
+		auto &func_expr = expr.Cast<FunctionExpression>();
 		for (auto &child : func_expr.children) {
 			callback(child);
 		}
@@ -84,34 +84,34 @@ void ParsedExpressionIterator::EnumerateChildren(
 		break;
 	}
 	case ExpressionClass::LAMBDA: {
-		auto &lambda_expr = (LambdaExpression &)expr;
+		auto &lambda_expr = expr.Cast<LambdaExpression>();
 		callback(lambda_expr.lhs);
 		callback(lambda_expr.expr);
 		break;
 	}
 	case ExpressionClass::OPERATOR: {
-		auto &op_expr = (OperatorExpression &)expr;
+		auto &op_expr = expr.Cast<OperatorExpression>();
 		for (auto &child : op_expr.children) {
 			callback(child);
 		}
 		break;
 	}
 	case ExpressionClass::STAR: {
-		auto &star_expr = (StarExpression &)expr;
+		auto &star_expr = expr.Cast<StarExpression>();
 		if (star_expr.expr) {
 			callback(star_expr.expr);
 		}
 		break;
 	}
 	case ExpressionClass::SUBQUERY: {
-		auto &subquery_expr = (SubqueryExpression &)expr;
+		auto &subquery_expr = expr.Cast<SubqueryExpression>();
 		if (subquery_expr.child) {
 			callback(subquery_expr.child);
 		}
 		break;
 	}
 	case ExpressionClass::WINDOW: {
-		auto &window_expr = (WindowExpression &)expr;
+		auto &window_expr = expr.Cast<WindowExpression>();
 		for (auto &partition : window_expr.partitions) {
 			callback(partition);
 		}

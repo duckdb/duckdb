@@ -7,7 +7,7 @@ namespace duckdb {
 
 static void ReplaceFilterTableIndex(Expression &expr, LogicalSetOperation &setop) {
 	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &colref = (BoundColumnRefExpression &)expr;
+		auto &colref = expr.Cast<BoundColumnRefExpression>();
 		D_ASSERT(colref.depth == 0);
 
 		colref.binding.table_index = setop.table_index;

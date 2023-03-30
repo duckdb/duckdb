@@ -454,7 +454,7 @@ PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expr
 	is_order_dependent = false;
 	for (auto &expr : select_list) {
 		D_ASSERT(expr->expression_class == ExpressionClass::BOUND_WINDOW);
-		auto &bound_window = (BoundWindowExpression &)*expr;
+		auto &bound_window = expr->Cast<BoundWindowExpression>();
 		if (bound_window.partitions.empty() && bound_window.orders.empty()) {
 			is_order_dependent = true;
 		}

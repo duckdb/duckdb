@@ -85,7 +85,7 @@ SequenceCatalogEntry *BindSequence(ClientContext &context, const string &name) {
 
 template <class OP>
 static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = (NextvalBindData &)*func_expr.bind_info;
 	auto &input = args.data[0];
 

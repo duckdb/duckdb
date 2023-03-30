@@ -40,7 +40,7 @@ static unordered_map<column_t, string> GetKnownColumnValues(string &filename,
 static void ConvertKnownColRefToConstants(unique_ptr<Expression> &expr,
                                           unordered_map<column_t, string> &known_column_values, idx_t table_index) {
 	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &bound_colref = (BoundColumnRefExpression &)*expr;
+		auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
 
 		// This bound column ref is for another table
 		if (table_index != bound_colref.binding.table_index) {

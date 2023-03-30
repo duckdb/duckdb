@@ -91,7 +91,7 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &str_arg = args.data[0];
 		auto &fmt_arg = args.data[1];
 
-		auto &func_expr = (BoundFunctionExpression &)state.expr;
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = (ICUStrptimeBindData &)*func_expr.bind_info;
 		CalendarPtr calendar(info.calendar->clone());
 		auto &format = info.format;
@@ -283,7 +283,7 @@ struct ICUStrftime : public ICUDateFunc {
 		auto &src_arg = args.data[0];
 		auto &fmt_arg = args.data[1];
 
-		auto &func_expr = (BoundFunctionExpression &)state.expr;
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = (BindData &)*func_expr.bind_info;
 		CalendarPtr calendar(info.calendar->clone());
 		const auto tz_name = info.tz_setting.c_str();

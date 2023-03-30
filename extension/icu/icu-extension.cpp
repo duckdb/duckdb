@@ -86,7 +86,7 @@ static int32_t ICUGetSortKey(icu::Collator &collator, string_t input, unique_ptr
 static void ICUCollateFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	const char HEX_TABLE[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = (IcuBindData &)*func_expr.bind_info;
 	auto &collator = *info.collator;
 

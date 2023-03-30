@@ -45,7 +45,7 @@ BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> *expr_p
 idx_t BaseSelectBinder::TryBindGroup(ParsedExpression &expr, idx_t depth) {
 	// first check the group alias map, if expr is a ColumnRefExpression
 	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto &colref = (ColumnRefExpression &)expr;
+		auto &colref = expr.Cast<ColumnRefExpression>();
 		if (!colref.IsQualified()) {
 			auto alias_entry = info.alias_map.find(colref.column_names[0]);
 			if (alias_entry != info.alias_map.end()) {
@@ -100,7 +100,7 @@ BindResult BaseSelectBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_pt
 			}
 			auto result = BindResult(node.select_list[index]->Copy());
 			if (result.expression->type == ExpressionType::BOUND_COLUMN_REF) {
-				auto &result_expr = (BoundColumnRefExpression &)*result.expression;
+				auto &result_expr = result.expression->Cast<BoundColumnRefExpression>();
 				result_expr.depth = depth;
 			}
 			return result;

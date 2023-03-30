@@ -74,13 +74,13 @@ void DeliminatorPlanUpdater::VisitOperator(LogicalOperator &op) {
 			}
 			auto rhs = cond.right.get();
 			while (rhs->type == ExpressionType::OPERATOR_CAST) {
-				auto &cast = (BoundCastExpression &)*rhs;
+				auto &cast = rhs->Cast<BoundCastExpression>();
 				rhs = cast.child.get();
 			}
 			if (rhs->type != ExpressionType::BOUND_COLUMN_REF) {
 				throw InternalException("Error in Deliminator: expected a bound column reference");
 			}
-			auto &colref = (BoundColumnRefExpression &)*rhs;
+			auto &colref = rhs->Cast<BoundColumnRefExpression>();
 			if (projection_map.find(colref.binding) != projection_map.end()) {
 				// value on the right is a projection of removed DelimGet
 				for (idx_t i = 0; i < decs->size(); i++) {
@@ -376,7 +376,7 @@ bool Deliminator::RemoveInequalityCandidate(unique_ptr<LogicalOperator> *plan, u
 			// can only deal with colrefs
 			return false;
 		}
-		auto &parent_colref = (BoundColumnRefExpression &)*parent_expr;
+		auto &parent_colref = parent_expr->Cast<BoundColumnRefExpression>();
 		auto it = updater.reverse_proj_or_agg_map.find(parent_colref.binding);
 		if (it == updater.reverse_proj_or_agg_map.end()) {
 			// refers to a column that was not in the child DelimGet join
@@ -414,7 +414,7 @@ bool Deliminator::RemoveInequalityCandidate(unique_ptr<LogicalOperator> *plan, u
 	// this time without checks because we already did them, and replace the expressions
 	for (auto &parent_cond : parent_delim_join.conditions) {
 		auto &parent_expr = parent_delim_get_side == 0 ? parent_cond.left : parent_cond.right;
-		auto &parent_colref = (BoundColumnRefExpression &)*parent_expr;
+		auto &parent_colref = parent_expr->Cast<BoundColumnRefExpression>();
 		auto it = updater.reverse_proj_or_agg_map.find(parent_colref.binding);
 		auto child_expr = it->second;
 		for (auto &child_cond : join.conditions) {

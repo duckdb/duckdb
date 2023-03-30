@@ -27,7 +27,7 @@ bool LogicalFilter::SplitPredicates(vector<unique_ptr<Expression>> &expressions)
 	bool found_conjunction = false;
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		if (expressions[i]->type == ExpressionType::CONJUNCTION_AND) {
-			auto &conjunction = (BoundConjunctionExpression &)*expressions[i];
+			auto &conjunction = expressions[i]->Cast<BoundConjunctionExpression>();
 			found_conjunction = true;
 			// AND expression, append the other children
 			for (idx_t k = 1; k < conjunction.children.size(); k++) {

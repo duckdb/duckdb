@@ -11,7 +11,7 @@ LateralBinder::LateralBinder(Binder &binder, ClientContext &context) : Expressio
 
 void LateralBinder::ExtractCorrelatedColumns(Expression &expr) {
 	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &bound_colref = (BoundColumnRefExpression &)expr;
+		auto &bound_colref = expr.Cast<BoundColumnRefExpression>();
 		if (bound_colref.depth > 0) {
 			// add the correlated column info
 			CorrelatedColumnInfo info(bound_colref);

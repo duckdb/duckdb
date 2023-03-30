@@ -23,7 +23,7 @@ public:
 };
 
 static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = (ConstantOrNullBindData &)*func_expr.bind_info;
 	result.Reference(info.value);
 	for (idx_t idx = 1; idx < args.ColumnCount(); idx++) {

@@ -166,7 +166,7 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 	auto list_entries = (list_entry_t *)lists_data.data;
 
 	// get the lambda expression
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = (ListLambdaBindData &)*func_expr.bind_info;
 	auto &lambda_expr = info.lambda_expr;
 

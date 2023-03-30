@@ -11,7 +11,7 @@ using Filter = FilterPushdown::Filter;
 
 static void ExtractFilterBindings(Expression &expr, vector<ColumnBinding> &bindings) {
 	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &colref = (BoundColumnRefExpression &)expr;
+		auto &colref = expr.Cast<BoundColumnRefExpression>();
 		bindings.push_back(colref.binding);
 	}
 	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { ExtractFilterBindings(child, bindings); });
@@ -19,7 +19,7 @@ static void ExtractFilterBindings(Expression &expr, vector<ColumnBinding> &bindi
 
 static unique_ptr<Expression> ReplaceGroupBindings(LogicalAggregate &proj, unique_ptr<Expression> expr) {
 	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &colref = (BoundColumnRefExpression &)*expr;
+		auto &colref = expr->Cast<BoundColumnRefExpression>();
 		D_ASSERT(colref.binding.table_index == proj.group_index);
 		D_ASSERT(colref.binding.column_index < proj.groups.size());
 		D_ASSERT(colref.depth == 0);

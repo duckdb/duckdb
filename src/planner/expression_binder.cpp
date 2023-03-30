@@ -54,7 +54,7 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> *expr, 
 	case ExpressionClass::CONSTANT:
 		return BindExpression((ConstantExpression &)expr_ref, depth);
 	case ExpressionClass::FUNCTION: {
-		auto &function = (FunctionExpression &)expr_ref;
+		auto &function = expr_ref.Cast<FunctionExpression>();
 		if (function.function_name == "unnest" || function.function_name == "unlist") {
 			// special case, not in catalog
 			return BindUnnest(function, depth, root_expression);
@@ -113,7 +113,7 @@ void ExpressionBinder::BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth
 
 void ExpressionBinder::ExtractCorrelatedExpressions(Binder &binder, Expression &expr) {
 	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &bound_colref = (BoundColumnRefExpression &)expr;
+		auto &bound_colref = expr.Cast<BoundColumnRefExpression>();
 		if (bound_colref.depth > 0) {
 			binder.AddCorrelatedColumn(CorrelatedColumnInfo(bound_colref));
 		}

@@ -169,23 +169,23 @@ void StatementSimplifier::SimplifyExpression(unique_ptr<ParsedExpression> &expr)
 	SimplifyReplace(expr, constant);
 	switch (expr_class) {
 	case ExpressionClass::CONJUNCTION: {
-		auto &conj = (ConjunctionExpression &)*expr;
+		auto &conj = expr->Cast<ConjunctionExpression>();
 		SimplifyListReplace(expr, conj.children);
 		break;
 	}
 	case ExpressionClass::FUNCTION: {
-		auto &func = (FunctionExpression &)*expr;
+		auto &func = expr->Cast<FunctionExpression>();
 		SimplifyListReplace(expr, func.children);
 		SimplifyListReplaceNull(func.children);
 		break;
 	}
 	case ExpressionClass::OPERATOR: {
-		auto &op = (OperatorExpression &)*expr;
+		auto &op = expr->Cast<OperatorExpression>();
 		SimplifyListReplace(expr, op.children);
 		break;
 	}
 	case ExpressionClass::CASE: {
-		auto &op = (CaseExpression &)*expr;
+		auto &op = expr->Cast<CaseExpression>();
 		SimplifyReplace(expr, op.else_expr);
 		for (auto &case_check : op.case_checks) {
 			SimplifyReplace(expr, case_check.then_expr);
@@ -194,12 +194,12 @@ void StatementSimplifier::SimplifyExpression(unique_ptr<ParsedExpression> &expr)
 		break;
 	}
 	case ExpressionClass::CAST: {
-		auto &cast = (CastExpression &)*expr;
+		auto &cast = expr->Cast<CastExpression>();
 		SimplifyReplace(expr, cast.child);
 		break;
 	}
 	case ExpressionClass::COLLATE: {
-		auto &collate = (CollateExpression &)*expr;
+		auto &collate = expr->Cast<CollateExpression>();
 		SimplifyReplace(expr, collate.child);
 		break;
 	}

@@ -230,7 +230,7 @@ static bool PlanIndexJoin(ClientContext &context, LogicalComparisonJoin &op, uni
 
 static void RewriteJoinCondition(Expression &expr, idx_t offset) {
 	if (expr.type == ExpressionType::BOUND_REF) {
-		auto &ref = (BoundReferenceExpression &)expr;
+		auto &ref = expr.Cast<BoundReferenceExpression>();
 		ref.index += offset;
 	}
 	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { RewriteJoinCondition(child, offset); });

@@ -14,7 +14,7 @@ using Filter = FilterPushdown::Filter;
 
 static unique_ptr<Expression> ReplaceColRefWithNull(unique_ptr<Expression> expr, unordered_set<idx_t> &right_bindings) {
 	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &bound_colref = (BoundColumnRefExpression &)*expr;
+		auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
 		if (right_bindings.find(bound_colref.binding.table_index) != right_bindings.end()) {
 			// bound colref belongs to RHS
 			// replace it with a constant NULL

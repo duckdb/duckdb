@@ -21,7 +21,7 @@ public:
 };
 
 static void StatsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = (StatsBindData &)*func_expr.bind_info;
 	if (info.stats.empty()) {
 		info.stats = "No statistics";

@@ -74,7 +74,7 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto alc = local_state.json_allocator.GetYYJSONAllocator();
 	auto &inputs = args.data[0];
 
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	const auto &info = (JsonSerializeBindData &)*func_expr.bind_info;
 
 	UnaryExecutor::Execute<string_t, string_t>(inputs, result, args.size(), [&](string_t input) {
