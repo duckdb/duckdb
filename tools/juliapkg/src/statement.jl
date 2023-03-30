@@ -2,21 +2,22 @@ mutable struct Stmt <: DBInterface.Statement
     con::Connection
     handle::duckdb_prepared_statement
     sql::AbstractString
+    result_type::Type
 
-    function Stmt(con::Connection, sql::AbstractString)
+    function Stmt(con::Connection, sql::AbstractString, result_type::Type)
         handle = Ref{duckdb_prepared_statement}()
         if duckdb_prepare(con.handle, sql, handle) != DuckDBSuccess
             error_message = unsafe_string(duckdb_prepare_error(handle))
             duckdb_destroy_prepare(handle)
             throw(QueryException(error_message))
         end
-        stmt = new(con, handle[], sql)
+        stmt = new(con, handle[], sql, result_type)
         finalizer(_close_stmt, stmt)
         return stmt
     end
 
-    function Stmt(db::DB, sql::AbstractString)
-        return Stmt(db.main_connection, sql)
+    function Stmt(db::DB, sql::AbstractString, result_type::Type)
+        return Stmt(db.main_connection, sql, result_type)
     end
 end
 

@@ -25,6 +25,8 @@ struct DBGenFunctionData : public TableFunctionData {
 	string schema = DEFAULT_SCHEMA;
 	string suffix;
 	bool overwrite = false;
+	uint32_t children = 1;
+	int step = -1;
 };
 
 static unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableFunctionBindInput &input,
@@ -39,8 +41,16 @@ static unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableFunctionB
 			result->suffix = StringValue::Get(kv.second);
 		} else if (kv.first == "overwrite") {
 			result->overwrite = BooleanValue::Get(kv.second);
+		} else if (kv.first == "children") {
+			result->children = UIntegerValue::Get(kv.second);
+		} else if (kv.first == "step") {
+			result->step = UIntegerValue::Get(kv.second);
 		}
 	}
+	if (result->children != 1 && result->step == -1) {
+		throw InvalidInputException("Step must be defined when children are defined");
+	}
+
 	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");
 	return std::move(result);
@@ -52,7 +62,7 @@ static void DbgenFunction(ClientContext &context, TableFunctionInput &data_p, Da
 		return;
 	}
 	tpch::DBGenWrapper::CreateTPCHSchema(context, data.schema, data.suffix);
-	tpch::DBGenWrapper::LoadTPCHData(context, data.sf, data.schema, data.suffix);
+	tpch::DBGenWrapper::LoadTPCHData(context, data.sf, data.schema, data.suffix, data.children, data.step);
 
 	data.finished = true;
 }
@@ -154,6 +164,8 @@ void TPCHExtension::Load(DuckDB &db) {
 	dbgen_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
 	dbgen_func.named_parameters["schema"] = LogicalType::VARCHAR;
 	dbgen_func.named_parameters["suffix"] = LogicalType::VARCHAR;
+	dbgen_func.named_parameters["children"] = LogicalType::UINTEGER;
+	dbgen_func.named_parameters["step"] = LogicalType::UINTEGER;
 	CreateTableFunctionInfo dbgen_info(dbgen_func);
 
 	// create the dbgen function

@@ -48,6 +48,7 @@ protected:
 
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalAggregate &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalAnyJoin &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalAsOfJoin &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalColumnDataGet &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalComparisonJoin &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCreate &op);
@@ -87,9 +88,6 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalUnnest &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalRecursiveCTE &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCTERef &op);
-
-	unique_ptr<PhysicalOperator> CreateDistinctOn(unique_ptr<PhysicalOperator> child,
-	                                              vector<unique_ptr<Expression>> distinct_targets);
 
 	unique_ptr<PhysicalOperator> ExtractAggregateExpressions(unique_ptr<PhysicalOperator> child,
 	                                                         vector<unique_ptr<Expression>> &expressions,

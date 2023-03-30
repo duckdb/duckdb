@@ -11,8 +11,22 @@
 #include <sstream>
 #include <stdarg.h>
 #include <string.h>
+#include <random>
 
 namespace duckdb {
+
+string StringUtil::GenerateRandomName(idx_t length) {
+	std::random_device rd;
+	std::mt19937 gen(rd());
+	std::uniform_int_distribution<> dis(0, 15);
+
+	std::stringstream ss;
+	ss << std::hex;
+	for (idx_t i = 0; i < length; i++) {
+		ss << dis(gen);
+	}
+	return ss.str();
+}
 
 bool StringUtil::Contains(const string &haystack, const string &needle) {
 	return (haystack.find(needle) != string::npos);
@@ -191,10 +205,13 @@ vector<string> StringUtil::Split(const string &input, const string &split) {
 
 		// Push the substring [last, next) on to splits
 		string substr = input.substr(last, next - last);
-		if (substr.empty() == false) {
+		if (!substr.empty()) {
 			splits.push_back(substr);
 		}
 		last = next + split_len;
+	}
+	if (splits.empty()) {
+		splits.push_back(input);
 	}
 	return splits;
 }

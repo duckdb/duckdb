@@ -39,6 +39,7 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_unique<EqualOrNullSimplification>(rewriter));
 	rewriter.rules.push_back(make_unique<MoveConstantsRule>(rewriter));
 	rewriter.rules.push_back(make_unique<LikeOptimizationRule>(rewriter));
+	rewriter.rules.push_back(make_unique<OrderedAggregateOptimizer>(rewriter));
 	rewriter.rules.push_back(make_unique<RegexOptimizationRule>(rewriter));
 	rewriter.rules.push_back(make_unique<EmptyNeedleRemovalRule>(rewriter));
 	rewriter.rules.push_back(make_unique<EnumComparisonRule>(rewriter));

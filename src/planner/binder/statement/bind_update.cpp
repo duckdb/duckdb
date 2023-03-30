@@ -195,11 +195,13 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	AddCTEMap(stmt.cte_map);
 
 	if (stmt.from_table) {
+		auto from_binder = Binder::CreateBinder(context, this);
 		BoundJoinRef bound_crossproduct(JoinRefType::CROSS);
 		bound_crossproduct.left = std::move(bound_table);
-		bound_crossproduct.right = Bind(*stmt.from_table);
+		bound_crossproduct.right = from_binder->Bind(*stmt.from_table);
 		root = CreatePlan(bound_crossproduct);
 		get = (LogicalGet *)root->children[0].get();
+		bind_context.AddContext(std::move(from_binder->bind_context));
 	} else {
 		root = CreatePlan(*bound_table);
 		get = (LogicalGet *)root.get();
@@ -251,7 +253,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	if (!stmt.returning_list.empty()) {
 		unique_ptr<LogicalOperator> update_as_logicaloperator = std::move(update);
 
-		return BindReturning(std::move(stmt.returning_list), table, update_table_index,
+		return BindReturning(std::move(stmt.returning_list), table, stmt.table->alias, update_table_index,
 		                     std::move(update_as_logicaloperator), std::move(result));
 	}
 

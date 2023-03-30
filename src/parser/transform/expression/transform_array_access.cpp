@@ -49,6 +49,17 @@ unique_ptr<ParsedExpression> Transformer::TransformArrayAccess(duckdb_libpgquery
 			result = make_unique<OperatorExpression>(ExpressionType::STRUCT_EXTRACT, std::move(children));
 			break;
 		}
+		case duckdb_libpgquery::T_PGFuncCall: {
+			auto func = (duckdb_libpgquery::PGFuncCall *)target;
+			auto function = TransformFuncCall(func);
+			if (function->type != ExpressionType::FUNCTION) {
+				throw ParserException("%s.%s() call must be a function", result->ToString(), function->ToString());
+			}
+			auto &f = (FunctionExpression &)*function;
+			f.children.insert(f.children.begin(), std::move(result));
+			result = std::move(function);
+			break;
+		}
 		default:
 			throw NotImplementedException("Unimplemented subscript type");
 		}

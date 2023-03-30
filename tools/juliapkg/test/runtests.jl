@@ -24,6 +24,7 @@ test_files = [
     "test_tpch.jl",
     "test_buffer_manager.jl",
     "test_tpch_multithread.jl"
+    "test_stream_data_chunk.jl"
 ]
 
 if size(ARGS)[1] > 0

@@ -79,6 +79,7 @@ struct FirstFunctionString : public FirstFunctionBase {
 			}
 		} else {
 			state->is_set = true;
+			state->is_null = false;
 			if (value.IsInlined()) {
 				state->value = value;
 			} else {

@@ -1,7 +1,9 @@
+#include "duckdb/common/serializer/enum_serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 
 #include "duckdb/parser/expression/operator_expression.hpp"
@@ -24,7 +26,7 @@ static ExpressionType WindowToExpressionType(string &fun_name) {
 		return ExpressionType::WINDOW_FIRST_VALUE;
 	} else if (fun_name == "last_value" || fun_name == "last") {
 		return ExpressionType::WINDOW_LAST_VALUE;
-	} else if (fun_name == "nth_value" || fun_name == "last") {
+	} else if (fun_name == "nth_value") {
 		return ExpressionType::WINDOW_NTH_VALUE;
 	} else if (fun_name == "cume_dist") {
 		return ExpressionType::WINDOW_CUME_DIST;
@@ -94,6 +96,27 @@ void Transformer::TransformWindowFrame(duckdb_libpgquery::PGWindowDef *window_sp
 	}
 }
 
+bool Transformer::ExpressionIsEmptyStar(ParsedExpression &expr) {
+	if (expr.expression_class != ExpressionClass::STAR) {
+		return false;
+	}
+	auto &star = (StarExpression &)expr;
+	if (!star.columns && star.exclude_list.empty() && star.replace_list.empty()) {
+		return true;
+	}
+	return false;
+}
+
+bool Transformer::InWindowDefinition() {
+	if (in_window_definition) {
+		return true;
+	}
+	if (parent) {
+		return parent->InWindowDefinition();
+	}
+	return false;
+}
+
 unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::PGFuncCall *root) {
 	auto name = root->funcname;
 	string catalog, schema, function_name;
@@ -113,12 +136,25 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		schema = INVALID_SCHEMA;
 		function_name = reinterpret_cast<duckdb_libpgquery::PGValue *>(name->head->data.ptr_value)->val.str;
 	} else {
-		throw InternalException("TransformFuncCall - Expected 1, 2 or 3 qualifications");
+		throw ParserException("TransformFuncCall - Expected 1, 2 or 3 qualifications");
+	}
+
+	//  transform children
+	vector<unique_ptr<ParsedExpression>> children;
+	if (root->args) {
+		TransformExpressionList(*root->args, children);
+	}
+	if (children.size() == 1 && ExpressionIsEmptyStar(*children[0]) && !root->agg_distinct && !root->agg_order) {
+		// COUNT(*) gets translated into COUNT()
+		children.clear();
 	}
 
 	auto lowercase_name = StringUtil::Lower(function_name);
-
 	if (root->over) {
+		if (InWindowDefinition()) {
+			throw ParserException("window functions are not allowed in window definitions");
+		}
+
 		const auto win_fun_type = WindowToExpressionType(lowercase_name);
 		if (win_fun_type == ExpressionType::INVALID) {
 			throw InternalException("Unknown/unsupported window function");
@@ -151,39 +187,32 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			expr->filter_expr = std::move(filter_expr);
 		}
 
-		if (root->args) {
-			vector<unique_ptr<ParsedExpression>> function_list;
-			TransformExpressionList(*root->args, function_list);
-
-			if (win_fun_type == ExpressionType::WINDOW_AGGREGATE) {
-				for (auto &child : function_list) {
-					expr->children.push_back(std::move(child));
+		if (win_fun_type == ExpressionType::WINDOW_AGGREGATE) {
+			expr->children = std::move(children);
+		} else {
+			if (!children.empty()) {
+				expr->children.push_back(std::move(children[0]));
+			}
+			if (win_fun_type == ExpressionType::WINDOW_LEAD || win_fun_type == ExpressionType::WINDOW_LAG) {
+				if (children.size() > 1) {
+					expr->offset_expr = std::move(children[1]);
+				}
+				if (children.size() > 2) {
+					expr->default_expr = std::move(children[2]);
+				}
+				if (children.size() > 3) {
+					throw ParserException("Incorrect number of parameters for function %s", lowercase_name);
+				}
+			} else if (win_fun_type == ExpressionType::WINDOW_NTH_VALUE) {
+				if (children.size() > 1) {
+					expr->children.push_back(std::move(children[1]));
+				}
+				if (children.size() > 2) {
+					throw ParserException("Incorrect number of parameters for function %s", lowercase_name);
 				}
 			} else {
-				if (!function_list.empty()) {
-					expr->children.push_back(std::move(function_list[0]));
-				}
-				if (win_fun_type == ExpressionType::WINDOW_LEAD || win_fun_type == ExpressionType::WINDOW_LAG) {
-					if (function_list.size() > 1) {
-						expr->offset_expr = std::move(function_list[1]);
-					}
-					if (function_list.size() > 2) {
-						expr->default_expr = std::move(function_list[2]);
-					}
-					if (function_list.size() > 3) {
-						throw ParserException("Incorrect number of parameters for function %s", lowercase_name);
-					}
-				} else if (win_fun_type == ExpressionType::WINDOW_NTH_VALUE) {
-					if (function_list.size() > 1) {
-						expr->children.push_back(std::move(function_list[1]));
-					}
-					if (function_list.size() > 2) {
-						throw ParserException("Incorrect number of parameters for function %s", lowercase_name);
-					}
-				} else {
-					if (function_list.size() > 1) {
-						throw ParserException("Incorrect number of parameters for function %s", lowercase_name);
-					}
+				if (children.size() > 1) {
+					throw ParserException("Incorrect number of parameters for function %s", lowercase_name);
 				}
 			}
 		}
@@ -205,8 +234,10 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			window_ref = it->second;
 			D_ASSERT(window_ref);
 		}
+		in_window_definition = true;
 		TransformWindowDef(window_ref, expr.get());
 		TransformWindowFrame(window_spec, expr.get());
+		in_window_definition = false;
 		expr->query_location = root->location;
 		return std::move(expr);
 	}
@@ -215,14 +246,6 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		throw ParserException("IGNORE NULLS is not supported for non-window functions");
 	}
 
-	//  TransformExpressionList??
-	vector<unique_ptr<ParsedExpression>> children;
-	if (root->args != nullptr) {
-		for (auto node = root->args->head; node != nullptr; node = node->next) {
-			auto child_expr = TransformExpression((duckdb_libpgquery::PGNode *)node->data.ptr_value);
-			children.push_back(std::move(child_expr));
-		}
-	}
 	unique_ptr<ParsedExpression> filter_expr;
 	if (root->agg_filter) {
 		filter_expr = TransformExpression(root->agg_filter);
@@ -289,6 +312,26 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		coalesce_op->children.push_back(std::move(children[0]));
 		coalesce_op->children.push_back(std::move(children[1]));
 		return std::move(coalesce_op);
+	} else if (lowercase_name == "list" && order_bys->orders.size() == 1) {
+		// list(expr ORDER BY expr <sense> <nulls>) => list_sort(list(expr), <sense>, <nulls>)
+		if (children.size() != 1) {
+			throw ParserException("Wrong number of arguments to LIST.");
+		}
+		auto arg_expr = children[0].get();
+		auto &order_by = order_bys->orders[0];
+		if (arg_expr->Equals(order_by.expression.get())) {
+			auto sense = make_unique<ConstantExpression>(EnumSerializer::EnumToString(order_by.type));
+			auto nulls = make_unique<ConstantExpression>(EnumSerializer::EnumToString(order_by.null_order));
+			order_bys = nullptr;
+			auto unordered = make_unique<FunctionExpression>(
+			    catalog, schema, lowercase_name.c_str(), std::move(children), std::move(filter_expr),
+			    std::move(order_bys), root->agg_distinct, false, root->export_state);
+			lowercase_name = "list_sort";
+			children.clear();
+			children.emplace_back(std::move(unordered));
+			children.emplace_back(std::move(sense));
+			children.emplace_back(std::move(nulls));
+		}
 	}
 
 	auto function = make_unique<FunctionExpression>(std::move(catalog), std::move(schema), lowercase_name.c_str(),

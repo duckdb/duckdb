@@ -81,8 +81,9 @@ class TestPythonFilesystem:
 
     def test_unregister_builtin(self, require: Callable[[str], DuckDBPyConnection]):
         duckdb_cursor = require('httpfs')
-        assert 'S3FileSystem' in duckdb_cursor.list_filesystems()
+        assert duckdb_cursor.filesystem_is_registered('S3FileSystem') == True
         duckdb_cursor.unregister_filesystem('S3FileSystem')
+        assert duckdb_cursor.filesystem_is_registered('S3FileSystem') == False
 
     def test_multiple_protocol_filesystems(self, duckdb_cursor: DuckDBPyConnection):
         class ExtendedMemoryFileSystem(MemoryFileSystem):
@@ -145,7 +146,6 @@ class TestPythonFilesystem:
 
         local = fs.LocalFileSystem()
         local_fsspec = ArrowFSWrapper(local, skip_instance_cache=True)
-        local_fsspec.protocol = "local"
         # posix calls here required as ArrowFSWrapper only supports url-like paths (not Windows paths)
         filename = str(PurePosixPath(tmp_path.as_posix()) / "test.csv")
         with local_fsspec.open(filename, mode='w') as f:

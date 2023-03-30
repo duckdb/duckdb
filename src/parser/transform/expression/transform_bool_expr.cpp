@@ -37,7 +37,7 @@ unique_ptr<ParsedExpression> Transformer::TransformBoolExpr(duckdb_libpgquery::P
 			           next->type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
 				// NOT on a comparison: we can negate the comparison
 				// e.g. NOT(x > y) is equivalent to x <= y
-				next->type = NegateComparisionExpression(next->type);
+				next->type = NegateComparisonExpression(next->type);
 				result = std::move(next);
 			} else {
 				result = make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(next));
