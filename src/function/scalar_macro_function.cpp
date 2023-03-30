@@ -21,7 +21,7 @@ ScalarMacroFunction::ScalarMacroFunction(unique_ptr<ParsedExpression> expression
 ScalarMacroFunction::ScalarMacroFunction(void) : MacroFunction(MacroType::SCALAR_MACRO) {
 }
 
-unique_ptr<MacroFunction> ScalarMacroFunction::Copy() {
+unique_ptr<MacroFunction> ScalarMacroFunction::Copy() const {
 	auto result = make_unique<ScalarMacroFunction>();
 	result->expression = expression->Copy();
 	CopyProperties(*result);
@@ -42,7 +42,7 @@ void RemoveQualificationRecursive(unique_ptr<ParsedExpression> &expr) {
 	}
 }
 
-string ScalarMacroFunction::ToSQL(const string &schema, const string &name) {
+string ScalarMacroFunction::ToSQL(const string &schema, const string &name) const {
 	// In case of nested macro's we need to fix it a bit
 	auto expression_copy = expression->Copy();
 	RemoveQualificationRecursive(expression_copy);

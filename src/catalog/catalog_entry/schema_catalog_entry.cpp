@@ -33,7 +33,7 @@ SimilarCatalogEntry SchemaCatalogEntry::GetSimilarEntry(CatalogTransaction trans
 	return result;
 }
 
-void SchemaCatalogEntry::Serialize(Serializer &serializer) {
+void SchemaCatalogEntry::Serialize(Serializer &serializer) const {
 	FieldWriter writer(serializer);
 	writer.WriteString(name);
 	writer.Finalize();
@@ -49,7 +49,7 @@ unique_ptr<CreateSchemaInfo> SchemaCatalogEntry::Deserialize(Deserializer &sourc
 	return info;
 }
 
-string SchemaCatalogEntry::ToSQL() {
+string SchemaCatalogEntry::ToSQL() const {
 	std::stringstream ss;
 	ss << "CREATE SCHEMA " << name << ";";
 	return ss.str();

@@ -663,7 +663,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::DropForeignKeyConstraint(ClientContext 
 	return make_unique<DuckTableEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
 }
 
-unique_ptr<CatalogEntry> DuckTableEntry::Copy(ClientContext &context) {
+unique_ptr<CatalogEntry> DuckTableEntry::Copy(ClientContext &context) const {
 	auto create_info = make_unique<CreateTableInfo>(schema, name);
 	create_info->columns = columns.Copy();
 

@@ -140,12 +140,12 @@ static vector<AutoCompleteCandidate> SuggestColumnName(ClientContext &context) {
 	auto all_entries = GetAllTables(context, false);
 	for (auto &entry : all_entries) {
 		if (entry->type == CatalogType::TABLE_ENTRY) {
-			auto &table = (TableCatalogEntry &)*entry;
+			auto &table = entry->Cast<TableCatalogEntry>();
 			for (auto &col : table.GetColumns().Logical()) {
 				suggestions.emplace_back(col.GetName(), 1);
 			}
 		} else if (entry->type == CatalogType::VIEW_ENTRY) {
-			auto &view = (ViewCatalogEntry &)*entry;
+			auto &view = entry->Cast<ViewCatalogEntry>();
 			for (auto &col : view.aliases) {
 				suggestions.emplace_back(col, 1);
 			}

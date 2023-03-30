@@ -69,7 +69,7 @@ string MacroFunction::ValidateArguments(MacroFunction &macro_def, const string &
 	return error;
 }
 
-void MacroFunction::CopyProperties(MacroFunction &other) {
+void MacroFunction::CopyProperties(MacroFunction &other) const {
 	other.type = type;
 	for (auto &param : parameters) {
 		other.parameters.push_back(param->Copy());
@@ -79,7 +79,7 @@ void MacroFunction::CopyProperties(MacroFunction &other) {
 	}
 }
 
-string MacroFunction::ToSQL(const string &schema, const string &name) {
+string MacroFunction::ToSQL(const string &schema, const string &name) const {
 	vector<string> param_strings;
 	for (auto &param : parameters) {
 		param_strings.push_back(param->ToString());

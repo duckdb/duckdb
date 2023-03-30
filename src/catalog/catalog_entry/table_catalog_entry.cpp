@@ -51,7 +51,7 @@ vector<LogicalType> TableCatalogEntry::GetTypes() {
 	return types;
 }
 
-void TableCatalogEntry::Serialize(Serializer &serializer) {
+void TableCatalogEntry::Serialize(Serializer &serializer) const {
 	D_ASSERT(!internal);
 
 	FieldWriter writer(serializer);
@@ -160,7 +160,7 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 	return ss.str();
 }
 
-string TableCatalogEntry::ToSQL() {
+string TableCatalogEntry::ToSQL() const {
 	std::stringstream ss;
 
 	ss << "CREATE TABLE ";

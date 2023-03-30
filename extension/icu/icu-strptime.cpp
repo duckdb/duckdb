@@ -145,7 +145,7 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &catalog = Catalog::GetSystemCatalog(context);
 		auto entry = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, name);
 		D_ASSERT(entry && entry->type == CatalogType::SCALAR_FUNCTION_ENTRY);
-		auto &func = (ScalarFunctionCatalogEntry &)*entry;
+		auto &func = entry->Cast<ScalarFunctionCatalogEntry>();
 		vector<LogicalType> types {LogicalType::VARCHAR, LogicalType::VARCHAR};
 		string error;
 

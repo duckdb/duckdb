@@ -116,7 +116,7 @@ void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 		if (entry->type != CatalogType::TABLE_ENTRY) {
 			continue;
 		}
-		auto &table = (TableCatalogEntry &)*entry;
+		auto &table = entry->Cast<TableCatalogEntry>();
 		auto storage_info = table.GetStorageInfo(context);
 		// return values:
 		idx_t col = 0;

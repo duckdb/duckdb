@@ -137,7 +137,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 		auto &entry = data.entries[data.offset];
 		D_ASSERT(entry->type == CatalogType::TABLE_ENTRY);
 
-		auto &table = (TableCatalogEntry &)*entry;
+		auto &table = entry->Cast<TableCatalogEntry>();
 		auto &constraints = table.GetConstraints();
 		bool is_duck_table = table.IsDuckTable();
 		for (; data.constraint_offset < constraints.size() && count < STANDARD_VECTOR_SIZE; data.constraint_offset++) {

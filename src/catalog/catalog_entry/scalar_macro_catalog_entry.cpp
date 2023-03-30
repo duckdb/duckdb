@@ -19,7 +19,7 @@ ScalarMacroCatalogEntry::ScalarMacroCatalogEntry(Catalog *catalog, SchemaCatalog
     : MacroCatalogEntry(catalog, schema, info) {
 }
 
-void ScalarMacroCatalogEntry::Serialize(Serializer &main_serializer) {
+void ScalarMacroCatalogEntry::Serialize(Serializer &main_serializer) const {
 	D_ASSERT(!internal);
 	auto &scalar_function = (ScalarMacroFunction &)*function;
 	FieldWriter writer(main_serializer);
@@ -62,7 +62,7 @@ TableMacroCatalogEntry::TableMacroCatalogEntry(Catalog *catalog, SchemaCatalogEn
     : MacroCatalogEntry(catalog, schema, info) {
 }
 
-void TableMacroCatalogEntry::Serialize(Serializer &main_serializer) {
+void TableMacroCatalogEntry::Serialize(Serializer &main_serializer) const {
 	D_ASSERT(!internal);
 	FieldWriter writer(main_serializer);
 
