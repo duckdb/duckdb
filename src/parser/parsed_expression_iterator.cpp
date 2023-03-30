@@ -251,13 +251,13 @@ void ParsedExpressionIterator::EnumerateQueryNodeChildren(
     QueryNode &node, const std::function<void(unique_ptr<ParsedExpression> &child)> &callback) {
 	switch (node.type) {
 	case QueryNodeType::RECURSIVE_CTE_NODE: {
-		auto &rcte_node = (RecursiveCTENode &)node;
+		auto &rcte_node = node.Cast<RecursiveCTENode>();
 		EnumerateQueryNodeChildren(*rcte_node.left, callback);
 		EnumerateQueryNodeChildren(*rcte_node.right, callback);
 		break;
 	}
 	case QueryNodeType::SELECT_NODE: {
-		auto &sel_node = (SelectNode &)node;
+		auto &sel_node = node.Cast<SelectNode>();
 		for (idx_t i = 0; i < sel_node.select_list.size(); i++) {
 			callback(sel_node.select_list[i]);
 		}
@@ -278,7 +278,7 @@ void ParsedExpressionIterator::EnumerateQueryNodeChildren(
 		break;
 	}
 	case QueryNodeType::SET_OPERATION_NODE: {
-		auto &setop_node = (SetOperationNode &)node;
+		auto &setop_node = node.Cast<SetOperationNode>();
 		EnumerateQueryNodeChildren(*setop_node.left, callback);
 		EnumerateQueryNodeChildren(*setop_node.right, callback);
 		break;

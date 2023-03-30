@@ -265,7 +265,7 @@ vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(const string &s
 	if (select.node->type != QueryNodeType::SELECT_NODE) {
 		throw ParserException("Expected a single SELECT node");
 	}
-	auto &select_node = (SelectNode &)*select.node;
+	auto &select_node = select.node->Cast<SelectNode>();
 	return std::move(select_node.select_list);
 }
 
@@ -283,7 +283,7 @@ vector<OrderByNode> Parser::ParseOrderList(const string &select_list, ParserOpti
 	if (select.node->type != QueryNodeType::SELECT_NODE) {
 		throw ParserException("Expected a single SELECT node");
 	}
-	auto &select_node = (SelectNode &)*select.node;
+	auto &select_node = select.node->Cast<SelectNode>();
 	if (select_node.modifiers.empty() || select_node.modifiers[0]->type != ResultModifierType::ORDER_MODIFIER ||
 	    select_node.modifiers.size() != 1) {
 		throw ParserException("Expected a single ORDER clause");
@@ -322,7 +322,7 @@ vector<vector<unique_ptr<ParsedExpression>>> Parser::ParseValuesList(const strin
 	if (select.node->type != QueryNodeType::SELECT_NODE) {
 		throw ParserException("Expected a single SELECT node");
 	}
-	auto &select_node = (SelectNode &)*select.node;
+	auto &select_node = select.node->Cast<SelectNode>();
 	if (!select_node.from_table || select_node.from_table->type != TableReferenceType::EXPRESSION_LIST) {
 		throw ParserException("Expected a single VALUES statement");
 	}

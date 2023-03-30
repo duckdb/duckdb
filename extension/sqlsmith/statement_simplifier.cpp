@@ -138,10 +138,10 @@ void StatementSimplifier::Simplify(QueryNode &node) {
 	Simplify(node.cte_map);
 	switch (node.type) {
 	case QueryNodeType::SELECT_NODE:
-		Simplify((SelectNode &)node);
+		Simplify(node.Cast<SelectNode>());
 		break;
 	case QueryNodeType::SET_OPERATION_NODE:
-		Simplify((SetOperationNode &)node);
+		Simplify(node.Cast<SetOperationNode>());
 		break;
 	case QueryNodeType::RECURSIVE_CTE_NODE:
 	default:

@@ -14,6 +14,7 @@
 #include "duckdb/planner/expression_binder/returning_binder.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_sample.hpp"
+#include "duckdb/parser/query_node/list.hpp"
 
 #include <algorithm>
 
@@ -111,14 +112,14 @@ unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
 	unique_ptr<BoundQueryNode> result;
 	switch (node.type) {
 	case QueryNodeType::SELECT_NODE:
-		result = BindNode((SelectNode &)node);
+		result = BindNode(node.Cast<SelectNode>());
 		break;
 	case QueryNodeType::RECURSIVE_CTE_NODE:
-		result = BindNode((RecursiveCTENode &)node);
+		result = BindNode(node.Cast<RecursiveCTENode>());
 		break;
 	default:
 		D_ASSERT(node.type == QueryNodeType::SET_OPERATION_NODE);
-		result = BindNode((SetOperationNode &)node);
+		result = BindNode(node.Cast<SetOperationNode>());
 		break;
 	}
 	return result;

@@ -24,7 +24,7 @@ unique_ptr<QueryNode> FilterRelation::GetQueryNode() {
 		// child node is a join: push filter into WHERE clause of select node
 		auto child_node = child->GetQueryNode();
 		D_ASSERT(child_node->type == QueryNodeType::SELECT_NODE);
-		auto &select_node = (SelectNode &)*child_node;
+		auto &select_node = child_node->Cast<SelectNode>();
 		if (!select_node.where_clause) {
 			select_node.where_clause = condition->Copy();
 		} else {
