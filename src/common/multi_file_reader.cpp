@@ -5,6 +5,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/common/hive_partitioning.hpp"
 
 namespace duckdb {
 

@@ -13,13 +13,16 @@
 #include "duckdb/common/enums/file_glob_options.hpp"
 #include "duckdb/common/union_by_name.hpp"
 #include "duckdb/common/optional_ptr.hpp"
-#include "duckdb/common/pair.hpp"
+#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 class TableFunction;
 class TableFunctionSet;
+class TableFilterSet;
+class LogicalGet;
+class Expression;
 class ClientContext;
-class Value;
+class DataChunk;
 
 struct HivePartitioningIndex {
 	HivePartitioningIndex(string value, idx_t index);

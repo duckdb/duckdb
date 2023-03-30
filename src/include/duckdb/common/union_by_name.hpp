@@ -10,6 +10,7 @@
 
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
 
