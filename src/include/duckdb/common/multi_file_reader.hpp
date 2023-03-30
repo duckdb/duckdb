@@ -86,9 +86,6 @@ struct MultiFileReader {
 	//! Performs any globbing for the multi-file reader and returns a list of files to be read
 	DUCKDB_API static vector<string> GetFileList(ClientContext &context, const Value &input, const string &name,
 	                                             FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
-	//! Parse the named parameters of a multi-file reader for a COPY statement
-	DUCKDB_API static bool ParseCopyOption(const string &key, const vector<Value> &values,
-	                                       MultiFileReaderOptions &options);
 	//! Parse the named parameters of a multi-file reader
 	DUCKDB_API static bool ParseOption(const string &key, const Value &val, MultiFileReaderOptions &options);
 	//! Perform complex filter pushdown into the multi-file reader, potentially filtering out files that should be read

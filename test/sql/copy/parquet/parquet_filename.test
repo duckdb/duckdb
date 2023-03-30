@@ -62,7 +62,7 @@ statement ok
 CREATE TABLE test_copy (i INT, j VARCHAR, filename VARCHAR);
 
 statement ok
-COPY test_copy FROM 'data/parquet-testing/glob/t1.parquet' (FILENAME 1, BINARY_AS_STRING 1);
+INSERT INTO test_copy FROM read_parquet('data/parquet-testing/glob/t1.parquet', filename=1, binary_as_string=1);
 
 query III
 SELECT i, j, replace(filename, '\', '/') FROM test_copy
@@ -70,7 +70,7 @@ SELECT i, j, replace(filename, '\', '/') FROM test_copy
 1	a	data/parquet-testing/glob/t1.parquet
 
 statement ok
-COPY test_copy FROM 'data/parquet-testing/glob/t1.parquet' (FILENAME 1);
+INSERT INTO test_copy FROM read_parquet('data/parquet-testing/glob/t1.parquet', filename=1);
 
 query III
 SELECT i, j, replace(filename, '\', '/') FROM test_copy

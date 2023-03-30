@@ -186,9 +186,6 @@ public:
 		ParquetOptions parquet_options(context);
 
 		for (auto &option : info.options) {
-			if (MultiFileReader::ParseCopyOption(option.first, option.second, parquet_options.file_options)) {
-				continue;
-			}
 			auto loption = StringUtil::Lower(option.first);
 			if (loption == "compression" || loption == "codec") {
 				// CODEC option has no effect on parquet read: we determine codec from the file

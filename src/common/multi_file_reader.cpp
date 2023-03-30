@@ -60,20 +60,6 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 	return true;
 }
 
-bool MultiFileReader::ParseCopyOption(const string &key, const vector<Value> &values, MultiFileReaderOptions &options) {
-	auto loption = StringUtil::Lower(key);
-	if (loption == "filename") {
-		options.filename = true;
-	} else if (loption == "hive_partitioning") {
-		options.hive_partitioning = true;
-	} else if (loption == "union_by_name") {
-		options.union_by_name = true;
-	} else {
-		return false;
-	}
-	return true;
-}
-
 bool MultiFileReader::ComplexFilterPushdown(ClientContext &context, vector<string> &files,
                                             const MultiFileReaderOptions &options, LogicalGet &get,
                                             vector<unique_ptr<Expression>> &filters) {

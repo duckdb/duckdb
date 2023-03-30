@@ -84,6 +84,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
                                             vector<LogicalType> &expected_types) {
 	auto bind_data = make_unique<ReadCSVData>();
 	bind_data->csv_types = expected_types;
+	bind_data->csv_names = expected_names;
 	bind_data->return_types = expected_types;
 	bind_data->return_names = expected_names;
 	bind_data->files = MultiFileReader::GetFileList(context, Value(info.file_path), "CSV");
@@ -104,13 +105,9 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	bind_data->FinalizeRead(context);
 	if (!bind_data->single_threaded && options.auto_detect) {
 		options.file_path = bind_data->files[0];
-		auto initial_reader = make_unique<BufferedCSVReader>(context, options);
+		options.name_list = expected_names;
+		auto initial_reader = make_unique<BufferedCSVReader>(context, options, expected_types);
 		options = initial_reader->options;
-		bind_data->csv_types = initial_reader->return_types;
-		bind_data->csv_names = initial_reader->names;
-	} else {
-		bind_data->csv_types = expected_types;
-		bind_data->csv_names = expected_names;
 	}
 	return std::move(bind_data);
 }
