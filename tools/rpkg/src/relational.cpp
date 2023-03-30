@@ -257,7 +257,6 @@ static WindowBoundary StringToWindowBoundary(string &window_boundary) {
 	auto window_type = WindowExpression::WindowToExpressionType(function.function_name);
 	auto window_expr = make_external<WindowExpression>("duckdb_expr", window_type, "", "", function.function_name);
 
-
 	for (expr_extptr_t expr : order_bys) {
 		window_expr->orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, expr->Copy());
 	}

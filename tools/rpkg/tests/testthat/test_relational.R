@@ -496,6 +496,7 @@ test_that("You can perform window functions on row_number", {
 # these tests come from https://dplyr.tidyverse.org/articles/window-functions.html
 # in dplyr min_rank = rank
 test_that("You can perform the window function min_rank", {
+    # select rank() OVER (order by a) from t1
     rel_a <- rel_from_df(con, data.frame(a=c(1, 1, 2, 2, 2)))
     rank_func <- expr_function("rank", list())
     min_rank_window <- expr_window(rank_func, order_bys=list(expr_reference("a")))
@@ -507,6 +508,7 @@ test_that("You can perform the window function min_rank", {
 })
 
 test_that("You can perform the window function dense_rank", {
+    # select dense_rank() OVER (order by a) from t1;
     rel_a <- rel_from_df(con, data.frame(a=c(1, 1, 2, 2, 2)))
     dense_rank_fun <- expr_function("dense_rank", list())
     min_rank_window <- expr_window(dense_rank_fun, order_bys=list(expr_reference("a")))
@@ -518,6 +520,7 @@ test_that("You can perform the window function dense_rank", {
 })
 
 test_that("You can perform the window function cume_dist", {
+    # select cume_dist() OVER (order by a) from t1;
 	  rel_a <- rel_from_df(con, data.frame(a=c(1, 1, 2, 2, 2)))
     cume_dist_func <- expr_function("cume_dist", list())
     cume_dist_window <- expr_window(cume_dist_func, order_bys=list(expr_reference("a")))
@@ -530,6 +533,7 @@ test_that("You can perform the window function cume_dist", {
 })
 
 test_that("You can perform the window function percent rank", {
+    # select percent_rank() OVER (order by a) from t1;
 	  rel_a <- rel_from_df(con, data.frame(a=c(5, 1, 3, 2, 2)))
     percent_rank_func <- expr_function("percent_rank", list())
     percent_rank_wind <- expr_window(percent_rank_func, order_bys=list(expr_reference("a")))
