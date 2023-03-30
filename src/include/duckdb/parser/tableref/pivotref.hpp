@@ -52,6 +52,8 @@ struct PivotColumn {
 //! Represents a PIVOT or UNPIVOT expression
 class PivotRef : public TableRef {
 public:
+	static constexpr const TableReferenceType TYPE = TableReferenceType::PIVOT;
+public:
 	explicit PivotRef() : TableRef(TableReferenceType::PIVOT), include_nulls(false) {
 	}
 

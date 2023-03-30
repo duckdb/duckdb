@@ -72,18 +72,18 @@ void StatementSimplifier::SimplifyOptional(unique_ptr<T> &opt) {
 void StatementSimplifier::Simplify(TableRef &ref) {
 	switch (ref.type) {
 	case TableReferenceType::SUBQUERY: {
-		auto &subquery = (SubqueryRef &)ref;
+		auto &subquery = ref.Cast<SubqueryRef>();
 		Simplify(*subquery.subquery->node);
 		break;
 	}
 	case TableReferenceType::JOIN: {
-		auto &cp = (JoinRef &)ref;
+		auto &cp = ref.Cast<JoinRef>();
 		Simplify(*cp.left);
 		Simplify(*cp.right);
 		break;
 	}
 	case TableReferenceType::EXPRESSION_LIST: {
-		auto &expr_list = (ExpressionListRef &)ref;
+		auto &expr_list = ref.Cast<ExpressionListRef>();
 		if (expr_list.values.size() == 1) {
 			SimplifyList(expr_list.values[0]);
 		} else if (expr_list.values.size() > 1) {

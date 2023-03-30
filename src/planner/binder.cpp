@@ -6,13 +6,12 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/list.hpp"
-#include "duckdb/parser/tableref/joinref.hpp"
+#include "duckdb/parser/tableref/list.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression_binder/returning_binder.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_sample.hpp"
 
@@ -154,25 +153,25 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	unique_ptr<BoundTableRef> result;
 	switch (ref.type) {
 	case TableReferenceType::BASE_TABLE:
-		result = Bind((BaseTableRef &)ref);
+		result = Bind(ref.Cast<BaseTableRef>());
 		break;
 	case TableReferenceType::JOIN:
-		result = Bind((JoinRef &)ref);
+		result = Bind(ref.Cast<JoinRef>());
 		break;
 	case TableReferenceType::SUBQUERY:
-		result = Bind((SubqueryRef &)ref);
+		result = Bind(ref.Cast<SubqueryRef>());
 		break;
 	case TableReferenceType::EMPTY:
-		result = Bind((EmptyTableRef &)ref);
+		result = Bind(ref.Cast<EmptyTableRef>());
 		break;
 	case TableReferenceType::TABLE_FUNCTION:
-		result = Bind((TableFunctionRef &)ref);
+		result = Bind(ref.Cast<TableFunctionRef>());
 		break;
 	case TableReferenceType::EXPRESSION_LIST:
-		result = Bind((ExpressionListRef &)ref);
+		result = Bind(ref.Cast<ExpressionListRef>());
 		break;
 	case TableReferenceType::PIVOT:
-		result = Bind((PivotRef &)ref);
+		result = Bind(ref.Cast<PivotRef>());
 		break;
 	case TableReferenceType::CTE:
 	case TableReferenceType::INVALID:

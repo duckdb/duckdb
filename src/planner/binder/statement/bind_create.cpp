@@ -278,7 +278,7 @@ static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vecto
 		if (constr->type != ConstraintType::UNIQUE) {
 			continue;
 		}
-		auto &unique = (UniqueConstraint &)*constr;
+		auto &unique = constr->Cast<UniqueConstraint>();
 		if (find_primary_key && !unique.is_primary_key) {
 			continue;
 		}
@@ -390,7 +390,7 @@ static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) 
 	for (auto &constr : table_info.constraints) {
 		switch (constr->type) {
 		case ConstraintType::CHECK: {
-			auto &constraint = (CheckConstraint &)*constr;
+			auto &constraint = constr->Cast<CheckConstraint>();
 			auto &expr = constraint.expression;
 			bool contains_generated_column = false;
 			ExpressionContainsGeneratedColumn(*expr, generated_columns, contains_generated_column);
@@ -400,14 +400,14 @@ static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) 
 			break;
 		}
 		case ConstraintType::NOT_NULL: {
-			auto &constraint = (NotNullConstraint &)*constr;
+			auto &constraint = constr->Cast<NotNullConstraint>();
 			if (table_info.columns.GetColumn(constraint.index).Generated()) {
 				return true;
 			}
 			break;
 		}
 		case ConstraintType::UNIQUE: {
-			auto &constraint = (UniqueConstraint &)*constr;
+			auto &constraint = constr->Cast<UniqueConstraint>();
 			auto index = constraint.index;
 			if (index.index == DConstants::INVALID_INDEX) {
 				for (auto &col : constraint.columns) {
@@ -532,7 +532,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			if (cond->type != ConstraintType::FOREIGN_KEY) {
 				continue;
 			}
-			auto &fk = (ForeignKeyConstraint &)*cond;
+			auto &fk = cond->Cast<ForeignKeyConstraint>();
 			if (fk.info.type != ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
 				continue;
 			}

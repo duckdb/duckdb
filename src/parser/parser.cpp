@@ -326,7 +326,7 @@ vector<vector<unique_ptr<ParsedExpression>>> Parser::ParseValuesList(const strin
 	if (!select_node.from_table || select_node.from_table->type != TableReferenceType::EXPRESSION_LIST) {
 		throw ParserException("Expected a single VALUES statement");
 	}
-	auto &values_list = (ExpressionListRef &)*select_node.from_table;
+	auto &values_list = select_node.from_table->Cast<ExpressionListRef>();
 	return std::move(values_list.values);
 }
 

@@ -82,7 +82,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBTablesInit(ClientContext &context, Ta
 static bool TableHasPrimaryKey(TableCatalogEntry &table) {
 	for (auto &constraint : table.GetConstraints()) {
 		if (constraint->type == ConstraintType::UNIQUE) {
-			auto &unique = (UniqueConstraint &)*constraint;
+			auto &unique = constraint->Cast<UniqueConstraint>();
 			if (unique.is_primary_key) {
 				return true;
 			}

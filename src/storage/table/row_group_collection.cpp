@@ -705,7 +705,7 @@ void RowGroupCollection::VerifyNewConstraint(DataTable &parent, const BoundConst
 		return;
 	}
 	// scan the original table, check if there's any null value
-	auto &not_null_constraint = (BoundNotNullConstraint &)constraint;
+	auto &not_null_constraint = constraint.Cast<BoundNotNullConstraint>();
 	vector<LogicalType> scan_types;
 	auto physical_index = not_null_constraint.index.index;
 	D_ASSERT(physical_index < types.size());

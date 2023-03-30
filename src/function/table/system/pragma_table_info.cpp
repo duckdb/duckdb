@@ -71,14 +71,14 @@ static void CheckConstraints(TableCatalogEntry *table, const ColumnDefinition &c
 	for (auto &constraint : table->GetConstraints()) {
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
-			auto &not_null = (NotNullConstraint &)*constraint;
+			auto &not_null = constraint->Cast<NotNullConstraint>();
 			if (not_null.index == column.Logical()) {
 				out_not_null = true;
 			}
 			break;
 		}
 		case ConstraintType::UNIQUE: {
-			auto &unique = (UniqueConstraint &)*constraint;
+			auto &unique = constraint->Cast<UniqueConstraint>();
 
 			if (unique.is_primary_key) {
 				if (unique.index == column.Logical()) {

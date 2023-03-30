@@ -202,7 +202,7 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
     TableRef &ref, const std::function<void(unique_ptr<ParsedExpression> &child)> &callback) {
 	switch (ref.type) {
 	case TableReferenceType::EXPRESSION_LIST: {
-		auto &el_ref = (ExpressionListRef &)ref;
+		auto &el_ref = ref.Cast<ExpressionListRef>();
 		for (idx_t i = 0; i < el_ref.values.size(); i++) {
 			for (idx_t j = 0; j < el_ref.values[i].size(); j++) {
 				callback(el_ref.values[i][j]);
@@ -211,7 +211,7 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 		break;
 	}
 	case TableReferenceType::JOIN: {
-		auto &j_ref = (JoinRef &)ref;
+		auto &j_ref = ref.Cast<JoinRef>();
 		EnumerateTableRefChildren(*j_ref.left, callback);
 		EnumerateTableRefChildren(*j_ref.right, callback);
 		if (j_ref.condition) {
@@ -220,7 +220,7 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 		break;
 	}
 	case TableReferenceType::PIVOT: {
-		auto &p_ref = (PivotRef &)ref;
+		auto &p_ref = ref.Cast<PivotRef>();
 		EnumerateTableRefChildren(*p_ref.source, callback);
 		for (auto &aggr : p_ref.aggregates) {
 			callback(aggr);
@@ -228,12 +228,12 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 		break;
 	}
 	case TableReferenceType::SUBQUERY: {
-		auto &sq_ref = (SubqueryRef &)ref;
+		auto &sq_ref = ref.Cast<SubqueryRef>();
 		EnumerateQueryNodeChildren(*sq_ref.subquery->node, callback);
 		break;
 	}
 	case TableReferenceType::TABLE_FUNCTION: {
-		auto &tf_ref = (TableFunctionRef &)ref;
+		auto &tf_ref = ref.Cast<TableFunctionRef>();
 		callback(tf_ref.function);
 		break;
 	}

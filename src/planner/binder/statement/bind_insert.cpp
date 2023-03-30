@@ -200,7 +200,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 		throw BinderException("Can only update base table!");
 	}
 
-	auto &table_ref = (BaseTableRef &)*stmt.table_ref;
+	auto &table_ref = stmt.table_ref->Cast<BaseTableRef>();
 	const string &table_alias = !table_ref.alias.empty() ? table_ref.alias : table_ref.table_name;
 
 	auto &on_conflict = *stmt.on_conflict_info;
@@ -460,7 +460,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	// special case: check if we are inserting from a VALUES statement
 	auto values_list = stmt.GetValuesList();
 	if (values_list) {
-		auto &expr_list = (ExpressionListRef &)*values_list;
+		auto &expr_list = values_list->Cast<ExpressionListRef>();
 		expr_list.expected_types.resize(expected_columns);
 		expr_list.expected_names.resize(expected_columns);
 
