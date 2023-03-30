@@ -280,7 +280,7 @@ void MultiFileReader::FinalizeChunk(const MultiFileReaderBindData &bind_data, co
 	chunk.Verify();
 }
 
-TableFunctionSet MultiFileReader::CreateFunctionSet(TableFunction table_function) {
+TableFunctionSet MultiFileReader::CreateFunctionSet(const TableFunction &table_function) {
 	TableFunctionSet function_set(table_function.name);
 	function_set.AddFunction(table_function);
 	D_ASSERT(table_function.arguments.size() == 1 && table_function.arguments[0] == LogicalType::VARCHAR);
