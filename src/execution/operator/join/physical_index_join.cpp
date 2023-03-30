@@ -165,7 +165,7 @@ void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &input, Data
 void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, DataChunk &input, OperatorState &state_p) const {
 
 	auto &state = (IndexJoinOperatorState &)state_p;
-	auto &art = (ART &)*index;
+	auto &art = index->Cast<ART>();;
 
 	// generate the keys for this chunk
 	state.arena_allocator.Reset();
