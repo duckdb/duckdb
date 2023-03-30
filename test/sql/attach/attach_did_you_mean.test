@@ -17,7 +17,7 @@ CREATE TABLE db1.test(a INTEGER);
 statement error
 SELECT * FROM test;
 ----
-Did you mean "db1.test"
+Did you mean "db1.main.test"
 
 statement ok
 CREATE SCHEMA db1.myschema
@@ -48,7 +48,7 @@ SELECT * FROM myschema.blablabla
 statement error
 SELECT * FROM hello;
 ----
-Did you mean "memory.hello"
+Did you mean "memory.main.hello"
 
 statement ok
 SELECT * FROM memory.hello
@@ -69,4 +69,4 @@ SELECT * FROM db1.main.test
 statement error
 SELECT * FROM hello;
 ----
-Did you mean "memory.hello"
+Did you mean "memory.main.hello"
