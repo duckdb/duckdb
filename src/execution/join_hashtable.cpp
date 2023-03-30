@@ -284,11 +284,11 @@ void JoinHashTable::InitializePointerTable() {
 	// size needs to be a power of 2
 	D_ASSERT(IsPowerOfTwo(capacity));
 
-	if (hash_map.get()) { // There is already a hash map
+	if (hash_map.get()) {                  // There is already a hash map
 		auto current_capacity = hash_map.GetSize() / sizeof(data_ptr_t);
 		if (capacity > current_capacity) { // Need more space
 			hash_map = buffer_manager.GetBufferAllocator().Allocate(capacity * sizeof(data_ptr_t));
-		} else { // Just roll with the current hash map
+		} else {                           // Just roll with the current hash map
 			capacity = current_capacity;
 		}
 	} else { // Allocate a hash map
@@ -1082,6 +1082,9 @@ void ProbeSpill::Append(DataChunk &chunk, ProbeSpillLocalAppendState &local_stat
 void ProbeSpill::Finalize() {
 	if (partitioned) {
 		D_ASSERT(local_partitions.size() == local_partition_append_states.size());
+		for (idx_t i = 0; i < local_partition_append_states.size(); i++) {
+			local_partitions[i]->FlushAppendState(*local_partition_append_states[i]);
+		}
 		for (auto &local_partition : local_partitions) {
 			global_partitions->Combine(*local_partition);
 		}

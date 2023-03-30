@@ -101,6 +101,7 @@ void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gst
 
 	if (partition_output) {
 		auto &fs = FileSystem::GetFileSystem(context.client);
+		l.part_buffer->FlushAppendState(*l.part_buffer_append_state);
 		auto &partitions = l.part_buffer->GetPartitions();
 		auto partition_key_map = l.part_buffer->GetReverseMap();
 
