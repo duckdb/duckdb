@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types.hpp"
-#include "row_layout.hpp"
+#include "duckdb/common/types/row/row_layout.hpp"
 
 namespace duckdb {
 

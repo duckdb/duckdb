@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 
 namespace duckdb {
 
@@ -28,8 +28,8 @@ struct BlockMetaData {
 
 class ColumnDataAllocator {
 public:
-	ColumnDataAllocator(Allocator &allocator);
-	ColumnDataAllocator(BufferManager &buffer_manager);
+	explicit ColumnDataAllocator(Allocator &allocator);
+	explicit ColumnDataAllocator(BufferManager &buffer_manager);
 	ColumnDataAllocator(ClientContext &context, ColumnDataAllocatorType allocator_type);
 	ColumnDataAllocator(ColumnDataAllocator &allocator);
 

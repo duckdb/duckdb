@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "column_data_scan_states.hpp"
+#include "duckdb/common/types/column/column_data_scan_states.hpp"
 
 namespace duckdb {
 class ColumnDataCollection;

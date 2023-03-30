@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "column_data_allocator.hpp"
-#include "column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_allocator.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 
 namespace duckdb {
 

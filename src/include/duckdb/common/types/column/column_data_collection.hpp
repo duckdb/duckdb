@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "column_data_collection_iterators.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/types/column/column_data_collection_iterators.hpp"
 
 namespace duckdb {
 class BufferManager;
