@@ -54,7 +54,7 @@ select * exclude (filename) from read_csv_auto('data/csv/hive-partitioning/misma
 xxx	42
 
 statement error
-select * from read_csv_auto('data/csv/hive-partitioning/mismatching_contents/*/*.csv', HEADER=1)  order by 1
+select * from read_csv_auto(['data/csv/hive-partitioning/mismatching_contents/part=1/test.csv', 'data/csv/hive-partitioning/mismatching_contents/part=2/test.csv'], HEADER=1)  order by 1
 ----
 field value out of range
 
