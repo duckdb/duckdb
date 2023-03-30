@@ -14,11 +14,12 @@ struct BlockedAllocator {
 		throw NotImplementedException("This allocator can't free");
 	}
 	static data_ptr_t BlockedRealloc(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
-											idx_t size) {
+	                                 idx_t size) {
 		throw NotImplementedException("This allocator can't resize");
 	}
 	static Allocator &Get() {
-		static Allocator allocator(BlockedAllocator::BlockedAllocate, BlockedAllocator::BlockedDeallocate, BlockedAllocator::BlockedRealloc, nullptr);
+		static Allocator allocator(BlockedAllocator::BlockedAllocate, BlockedAllocator::BlockedDeallocate,
+		                           BlockedAllocator::BlockedRealloc, nullptr);
 		return allocator;
 	}
 };
