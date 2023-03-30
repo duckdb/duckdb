@@ -21,6 +21,8 @@ namespace duckdb {
  */
 class StringUtil {
 public:
+	static string GenerateRandomName(idx_t length = 16);
+
 	static uint8_t GetHexValue(char c) {
 		if (c >= '0' && c <= '9') {
 			return c - '0';

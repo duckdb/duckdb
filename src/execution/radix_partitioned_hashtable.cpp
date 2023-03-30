@@ -78,6 +78,7 @@ public:
 	bool is_partitioned = false;
 
 	RadixPartitionInfo partition_info;
+	AggregateHTAppendState append_state;
 };
 
 class RadixHTLocalState : public LocalSinkState {
@@ -151,7 +152,8 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, GlobalSinkState 
 		}
 		D_ASSERT(gstate.finalized_hts.size() == 1);
 		D_ASSERT(gstate.finalized_hts[0]);
-		llstate.total_groups += gstate.finalized_hts[0]->AddChunk(group_chunk, payload_input, filter);
+		llstate.total_groups +=
+		    gstate.finalized_hts[0]->AddChunk(gstate.append_state, group_chunk, payload_input, filter);
 		return;
 	}
 
@@ -194,15 +196,13 @@ void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkSta
 		llstate.ht->Partition();
 	}
 
-	lock_guard<mutex> glock(gstate.lock);
-
-	if (!llstate.is_empty) {
-		gstate.is_empty = false;
-	}
-
 	// we will never add new values to these HTs so we can drop the first part of the HT
 	llstate.ht->Finalize();
 
+	lock_guard<mutex> glock(gstate.lock);
+	if (!llstate.is_empty) {
+		gstate.is_empty = false;
+	}
 	// at this point we just collect them the PhysicalHashAggregateFinalizeTask (below) will merge them in parallel
 	gstate.intermediate_hts.push_back(std::move(llstate.ht));
 }
