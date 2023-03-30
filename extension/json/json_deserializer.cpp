@@ -14,14 +14,25 @@ yyjson_val *JsonDeserializer::GetNextValue() {
 	yyjson_val *val;
 	if (yyjson_is_obj(parent_val.val)) {
 		val = yyjson_obj_get(parent_val.val, current_tag);
+		if (!val) {
+			const char *json = yyjson_val_write(Current().val, 0, nullptr);
+			auto msg =
+			    StringUtil::Format("Expected but did not find property '%s' in json object: '%s'", current_tag, json);
+			free((void *)json);
+			throw ParserException(msg);
+		}
 	} else if (yyjson_is_arr(parent_val.val)) {
 		val = yyjson_arr_iter_next(&parent_val.arr_iter);
+		if (!val) {
+			const char *json = yyjson_val_write(Current().val, 0, nullptr);
+			auto msg =
+			    StringUtil::Format("Expected but did not find another value after exhausting json array: '%s'", json);
+			free((void *)json);
+			throw ParserException(msg);
+		}
 	} else {
 		// unreachable?
 		throw InternalException("Cannot get value from non-array/object");
-	}
-	if (!val) {
-		throw InternalException("Value/Array empty");
 	}
 	return val;
 }

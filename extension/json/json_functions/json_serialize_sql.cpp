@@ -156,7 +156,6 @@ CreateScalarFunctionInfo JSONFunctions::GetSerializeSqlFunction() {
 //----------------------------------------------------------------------
 // JSON DESERIALIZE
 //----------------------------------------------------------------------
-
 static unique_ptr<SelectStatement> DeserializeSelectStatement(string_t input, yyjson_alc *alc) {
 	auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);
 	if (!doc) {
@@ -190,6 +189,9 @@ static unique_ptr<SelectStatement> DeserializeSelectStatement(string_t input, yy
 	return SelectStatement::FormatDeserialize(deserializer);
 }
 
+//----------------------------------------------------------------------
+// JSON DESERIALIZE SQL FUNCTION
+//----------------------------------------------------------------------
 static void JsonDeserializeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 
 	auto &local_state = JSONFunctionLocalState::ResetAndGet(state);
@@ -202,6 +204,16 @@ static void JsonDeserializeFunction(DataChunk &args, ExpressionState &state, Vec
 	});
 }
 
+CreateScalarFunctionInfo JSONFunctions::GetDeserializeSqlFunction() {
+	ScalarFunctionSet set("json_deserialize_sql");
+	set.AddFunction(ScalarFunction({JSONCommon::JSONType()}, LogicalType::VARCHAR, JsonDeserializeFunction, nullptr,
+	                               nullptr, nullptr, JSONFunctionLocalState::Init));
+	return CreateScalarFunctionInfo(set);
+}
+
+//----------------------------------------------------------------------
+// JSON EXECUTE SERIALIZED SQL (PRAGMA)
+//----------------------------------------------------------------------
 static string ExecuteJsonSerializedSqlPragmaFunction(ClientContext &context, const FunctionParameters &parameters) {
 	JSONFunctionLocalState local_state(context);
 	auto alc = local_state.json_allocator.GetYYJSONAllocator();
@@ -211,19 +223,14 @@ static string ExecuteJsonSerializedSqlPragmaFunction(ClientContext &context, con
 	return stmt->ToString();
 }
 
-CreateScalarFunctionInfo JSONFunctions::GetDeserializeSqlFunction() {
-	ScalarFunctionSet set("json_deserialize_sql");
-	set.AddFunction(ScalarFunction({JSONCommon::JSONType()}, LogicalType::VARCHAR, JsonDeserializeFunction, nullptr,
-	                               nullptr, nullptr, JSONFunctionLocalState::Init));
-	return CreateScalarFunctionInfo(set);
-}
-
 CreatePragmaFunctionInfo JSONFunctions::GetExecuteJsonSerializedSqlPragmaFunction() {
 	return CreatePragmaFunctionInfo(PragmaFunction::PragmaCall(
 	    "json_execute_serialized_sql", ExecuteJsonSerializedSqlPragmaFunction, {LogicalType::VARCHAR}));
 }
 
-/// EXECUTE JSON SERIALIZED SQL (TABLE FUNCTION)
+//----------------------------------------------------------------------
+// JSON EXECUTE SERIALIZED SQL (TABLE FUNCTION)
+//----------------------------------------------------------------------
 struct ExecuteSqlTableFunction {
 	struct BindData : public TableFunctionData {
 		shared_ptr<Relation> plan;
@@ -267,30 +274,6 @@ CreateTableFunctionInfo JSONFunctions::GetExecuteJsonSerializedSqlFunction() {
 	TableFunction func("json_execute_serialized_sql", {LogicalType::VARCHAR}, ExecuteSqlTableFunction::Function,
 	                   ExecuteSqlTableFunction::Bind);
 	return CreateTableFunctionInfo(func);
-}
-
-extern unique_ptr<SelectStatement> JsonSerializationVerify(SelectStatement &stmt) {
-	JSONAllocator alc(Allocator::DefaultAllocator());
-	auto doc = JSONCommon::CreateDocument(alc.GetYYJSONAllocator());
-	auto result_obj = yyjson_mut_obj(doc);
-	yyjson_mut_doc_set_root(doc, result_obj);
-
-	auto statements_arr = yyjson_mut_arr(doc);
-
-	auto serializer = JsonSerializer(doc, false, false);
-	stmt.FormatSerialize(serializer);
-	auto json = serializer.GetRootObject();
-
-	yyjson_mut_arr_append(statements_arr, json);
-	yyjson_mut_obj_add_false(doc, result_obj, "error");
-	yyjson_mut_obj_add_val(doc, result_obj, "statements", statements_arr);
-
-	auto str = JSONCommon::WriteVal(result_obj, alc.GetYYJSONAllocator());
-	auto val = DeserializeSelectStatement(str, alc.GetYYJSONAllocator());
-
-	alc.Reset();
-
-	return val;
 }
 
 } // namespace duckdb
