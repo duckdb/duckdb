@@ -140,11 +140,11 @@ BoundStatement Binder::Bind(QueryNode &node) {
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundQueryNode &node) {
 	switch (node.type) {
 	case QueryNodeType::SELECT_NODE:
-		return CreatePlan((BoundSelectNode &)node);
+		return CreatePlan(node.Cast<BoundSelectNode>());
 	case QueryNodeType::SET_OPERATION_NODE:
-		return CreatePlan((BoundSetOperationNode &)node);
+		return CreatePlan(node.Cast<BoundSetOperationNode>());
 	case QueryNodeType::RECURSIVE_CTE_NODE:
-		return CreatePlan((BoundRecursiveCTENode &)node);
+		return CreatePlan(node.Cast<BoundRecursiveCTENode>());
 	default:
 		throw InternalException("Unsupported bound query node type");
 	}

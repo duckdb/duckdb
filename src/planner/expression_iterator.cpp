@@ -187,19 +187,19 @@ void ExpressionIterator::EnumerateQueryNodeChildren(BoundQueryNode &node,
                                                     const std::function<void(Expression &child)> &callback) {
 	switch (node.type) {
 	case QueryNodeType::SET_OPERATION_NODE: {
-		auto &bound_setop = (BoundSetOperationNode &)node;
+		auto &bound_setop = node.Cast<BoundSetOperationNode>();
 		EnumerateQueryNodeChildren(*bound_setop.left, callback);
 		EnumerateQueryNodeChildren(*bound_setop.right, callback);
 		break;
 	}
 	case QueryNodeType::RECURSIVE_CTE_NODE: {
-		auto &cte_node = (BoundRecursiveCTENode &)node;
+		auto &cte_node = node.Cast<BoundRecursiveCTENode>();
 		EnumerateQueryNodeChildren(*cte_node.left, callback);
 		EnumerateQueryNodeChildren(*cte_node.right, callback);
 		break;
 	}
 	case QueryNodeType::SELECT_NODE: {
-		auto &bound_select = (BoundSelectNode &)node;
+		auto &bound_select = node.Cast<BoundSelectNode>();
 		for (auto &expr : bound_select.select_list) {
 			EnumerateExpression(expr, callback);
 		}
