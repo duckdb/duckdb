@@ -124,6 +124,9 @@ private:
 	                                        const vector<LogicalType> &requested_types,
 	                                        vector<vector<LogicalType>> &best_sql_types_candidates,
 	                                        map<LogicalTypeId, vector<string>> &best_format_candidates);
+
+	//! Skip Empty lines for tables with over one column
+	void SkipEmptyLines();
 };
 
 } // namespace duckdb

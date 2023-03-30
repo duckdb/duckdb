@@ -1031,13 +1031,16 @@ add_row : {
 	bool carriage_return = buffer[position] == '\r';
 	AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
 	finished_chunk = AddRow(insert_chunk, column, error_message);
+
 	if (!error_message.empty()) {
 		return false;
 	}
 	// increase position by 1 and move start to the new position
 	offset = 0;
 	has_quotes = false;
-	start = ++position;
+	position++;
+	SkipEmptyLines();
+	start = position;
 	if (position >= buffer_size && !ReadBuffer(start, line_start)) {
 		// file ends right after newline, go to final state
 		goto final_state;
@@ -1172,6 +1175,7 @@ final_state:
 		// remaining values to be added to the chunk
 		AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
 		finished_chunk = AddRow(insert_chunk, column, error_message);
+		SkipEmptyLines();
 		if (!error_message.empty()) {
 			return false;
 		}
@@ -1184,6 +1188,30 @@ final_state:
 
 	end_of_file_reached = true;
 	return true;
+}
+
+void BufferedCSVReader::SkipEmptyLines() {
+	idx_t new_pos_buffer = position;
+	if (parse_chunk.data.size() == 1) {
+		// Empty lines are null data.
+		return;
+	}
+	for (; new_pos_buffer < buffer_size; new_pos_buffer++) {
+		if (StringUtil::CharacterIsNewline(buffer[new_pos_buffer])) {
+			bool carrier_return = buffer[new_pos_buffer] == '\r';
+			new_pos_buffer++;
+			if (carrier_return && new_pos_buffer < buffer_size && buffer[new_pos_buffer] == '\n') {
+				position++;
+			}
+			if (new_pos_buffer > buffer_size) {
+				return;
+			}
+			position = new_pos_buffer;
+			return;
+		} else if (buffer[new_pos_buffer] != ' ') {
+			return;
+		}
+	}
 }
 
 bool BufferedCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message) {
@@ -1262,7 +1290,9 @@ add_row : {
 	// increase position by 1 and move start to the new position
 	offset = 0;
 	has_quotes = false;
-	start = ++position;
+	position++;
+	SkipEmptyLines();
+	start = position;
 	line_start = position;
 	if (position >= buffer_size && !ReadBuffer(start, line_start)) {
 		// file ends right after delimiter, go to final state
@@ -1375,6 +1405,7 @@ final_state:
 		// remaining values to be added to the chunk
 		AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
 		finished_chunk = AddRow(insert_chunk, column, error_message);
+		SkipEmptyLines();
 		if (context.client_data->max_line_length < position - line_start) {
 			context.client_data->max_line_length = position - line_start;
 		}
