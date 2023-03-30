@@ -855,9 +855,10 @@ void S3FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx
 	}
 }
 
-static bool	Match(vector<string>::const_iterator key, vector<string>::const_iterator key_end, vector<string>::const_iterator pattern, vector<string>::const_iterator pattern_end) {
+static bool Match(vector<string>::const_iterator key, vector<string>::const_iterator key_end,
+                  vector<string>::const_iterator pattern, vector<string>::const_iterator pattern_end) {
 
-	while (key != key_end && pattern != pattern_end){
+	while (key != key_end && pattern != pattern_end) {
 		if (*pattern == "**") {
 			if (std::next(pattern) == pattern_end) {
 				return true;
@@ -949,7 +950,7 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 	vector<string> pattern_splits = StringUtil::Split(pattern_trimmed, "/");
 	vector<string> result;
 	for (const auto &s3_key : s3_keys) {
-	
+
 		vector<string> key_splits = StringUtil::Split(s3_key, "/");
 		bool is_match = Match(key_splits.begin(), key_splits.end(), pattern_splits.begin(), pattern_splits.end());
 

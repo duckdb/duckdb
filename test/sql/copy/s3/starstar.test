@@ -1,6 +1,7 @@
 # name: test/sql/copy/s3/starstar.test
 # description: Test the glob "**" in s3
 # group: [s3]
+
 # files from: 's3://test-bucket/glob_ss/'
 
 require parquet
