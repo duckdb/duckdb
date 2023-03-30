@@ -242,13 +242,10 @@ static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector
 // Regexp Extract Struct
 //===--------------------------------------------------------------------===//
 static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	const auto &info = (RegexpExtractBindData &)*func_expr.bind_info;
 	auto &lstate = (RegexLocalState &)*ExecuteFunctionState::GetFunctionState(state);
 
 	const auto count = args.size();
 	auto &input = args.data[0];
-	D_ASSERT(info.constant_pattern);
 
 	auto &child_entries = StructVector::GetEntries(result);
 	const auto groupSize = child_entries.size();
