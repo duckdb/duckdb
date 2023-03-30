@@ -1,7 +1,5 @@
 #pragma once
 
-#ifdef DEBUG
-
 #include "duckdb/common/unique_ptr_utils.hpp"
 
 #include <memory>
@@ -19,12 +17,16 @@ public:
 	using original::original;
 
 	typename add_lvalue_reference<_Tp>::type operator*() const {
+		#ifdef DEBUG
 		__unique_ptr_utils::AssertNotNull((void *)original::get());
+		#endif
 		return *(original::get());
 	}
 
 	typename original::pointer operator->() const {
+		#ifdef DEBUG
 		__unique_ptr_utils::AssertNotNull((void *)original::get());
+		#endif
 		return original::get();
 	}
 };
@@ -36,18 +38,12 @@ public:
 	using original::original;
 
 	typename add_lvalue_reference<_Tp>::type operator[](size_t __i) const {
+		#ifdef DEBUG
 		__unique_ptr_utils::AssertNotNull((void *)original::get());
+		#endif
 		return (original::get())[__i];
 	}
 };
 
 } // namespace duckdb
-#else
 
-#include <memory>
-
-namespace duckdb {
-	using std::unique_ptr;
-} //namespace duckdb
-
-#endif
