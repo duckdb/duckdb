@@ -414,18 +414,14 @@ void FindMinimalQualification(ClientContext &context, const string &catalog_name
 			break;
 		}
 	}
-	// even if 'found', we have to qualify the default schema
-	// because 2-part qualified names are assumed to be schema.name, not catalog.name
+	if (found) {
+		qualify_database = true;
+		qualify_schema = false;
+		return;
+	}
 	// need to qualify both catalog and schema
 	qualify_database = true;
 	qualify_schema = true;
-	if (found) {
-		// 2 part qualified names assume first part is schema
-		// so if only the catalog is necessary, it still needs to be qualified with 'main'
-		qualify_database = true;
-		qualify_schema = true;
-		return;
-	}
 }
 
 CatalogException Catalog::UnrecognizedConfigurationError(ClientContext &context, const string &name) {
