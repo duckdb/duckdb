@@ -40,9 +40,9 @@ SELECT * FROM test2;
 8	16	64
 9	18	81    
 
-# Test with the FILENAMEPATTERN option. "{uuid}" will be replaced with a unique string.
+# Test with the FILENAME_PATTERN option. "{uuid}" will be replaced with a unique string.
 statement ok
-COPY test2 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), FILENAMEPATTERN "leadingpart_{uuid}");
+COPY test2 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PATTERN "leadingpart_{uuid}");
 
 # the filename contains a uuid
 query III
@@ -52,7 +52,7 @@ SELECT * FROM '__TEST_DIR__/part/a=9/leadingpart_????????-????-4???-????-???????
 
 # create a second file in the same partition dirs. This is the append workflow
 statement ok
-COPY test3 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), overwrite_or_ignore TRUE, FILENAMEPATTERN "leadingpart_{uuid}_trailingpart");
+COPY test3 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), overwrite_or_ignore TRUE, FILENAME_PATTERN "leadingpart_{uuid}_trailingpart");
 
 # the filename contains a uuid
 query III sort
@@ -85,9 +85,9 @@ SELECT * FROM '__TEST_DIR__/part/a=9/*.parquet';
 9	27	729
 9	36	6561
 
-# Test where the FILENAMEPATTERN does not contain "{i}" or "{uuid}". 
+# Test where the FILENAME_PATTERN does not contain "{i}" or "{uuid}". 
 statement ok
-COPY test5 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), overwrite_or_ignore TRUE, FILENAMEPATTERN "basename");
+COPY test5 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), overwrite_or_ignore TRUE, FILENAME_PATTERN "basename");
 
 # the file has the name of the given input
 query III sort
@@ -110,9 +110,9 @@ COPY test5 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a));
 ----
 IO Error: Directory
 
-# Test where the FILENAMEPATTERN param has no value (for a directory that does not yet exist)
+# Test where the FILENAME_PATTERN param has no value (for a directory that does not yet exist)
 statement ok
-COPY test4 TO '__TEST_DIR__/to_be_overwritten' (FORMAT PARQUET, PARTITION_BY (a), FILENAMEPATTERN);
+COPY test4 TO '__TEST_DIR__/to_be_overwritten' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PATTERN);
 
 query III sort
 SELECT * FROM '__TEST_DIR__/to_be_overwritten/a=9/data_[0-9]*.parquet';
@@ -130,7 +130,7 @@ SELECT * FROM '__TEST_DIR__/to_be_overwritten/a=9/data_[0-9]*.parquet';
 
 # Test with a combination of {i} and {uuid}
 statement ok
-COPY test5 TO '__TEST_DIR__/incorrect_pos' (FORMAT PARQUET, PARTITION_BY (a), filenamepattern "a_name_{i}oh_{uuid}_really");
+COPY test5 TO '__TEST_DIR__/incorrect_pos' (FORMAT PARQUET, PARTITION_BY (a), filenam_epattern "a_name_{i}oh_{uuid}_really");
 
 query III sort
 SELECT * FROM '__TEST_DIR__/incorrect_pos/a=5/a_name_oh_????????-????-4???-????-????????????_really.parquet';
@@ -139,7 +139,7 @@ SELECT * FROM '__TEST_DIR__/incorrect_pos/a=5/a_name_oh_????????-????-4???-????-
 
 # Test "{uuid}" with per_thread_output TRUE
 statement ok
-COPY testpto TO '__TEST_DIR__/pto' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE, overwrite_or_ignore true, FILENAMEPATTERN "basename_{uuid}");
+COPY testpto TO '__TEST_DIR__/pto' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE, overwrite_or_ignore true, FILENAME_PATTERN "basename_{uuid}");
 
 query I sort
 SELECT COUNT(*) FROM '__TEST_DIR__/pto/basename_????????-????-4???-????-????????????.parquet';

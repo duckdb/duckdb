@@ -114,7 +114,7 @@ void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gst
 		for (idx_t i = 0; i < partitions.size(); i++) {
 			string hive_path =
 			    CreateDirRecursive(partition_columns, names, partition_key_map[i]->values, trimmed_path, fs);
-			string full_path(fmt.CreateFilename(fs, hive_path, function.extension, l.writer_offset));
+			string full_path(filename_pattern.CreateFilename(fs, hive_path, function.extension, l.writer_offset));
 			if (fs.FileExists(full_path) && !overwrite_or_ignore) {
 				throw IOException("failed to create " + full_path +
 				                  ", file exists! Enable OVERWRITE_OR_IGNORE option to force writing");
@@ -187,7 +187,7 @@ unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContex
 			this_file_offset = g.last_file_offset++;
 		}
 		auto &fs = FileSystem::GetFileSystem(context.client);
-		string output_path(fmt.CreateFilename(fs, file_path, function.extension, this_file_offset));
+		string output_path(filename_pattern.CreateFilename(fs, file_path, function.extension, this_file_offset));
 		if (fs.FileExists(output_path) && !overwrite_or_ignore) {
 			throw IOException("%s exists! Enable OVERWRITE_OR_IGNORE option to force writing", output_path);
 		}

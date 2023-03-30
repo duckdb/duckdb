@@ -25,7 +25,7 @@ public:
 	unique_ptr<FunctionData> bind_data;
 	std::string file_path;
 	bool use_tmp_file;
-	FilenamePattern fmt;
+	FilenamePattern filename_pattern;
 	bool overwrite_or_ignore;
 	bool per_thread_output;
 

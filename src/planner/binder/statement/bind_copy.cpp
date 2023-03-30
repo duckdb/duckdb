@@ -78,7 +78,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	}
 	bool use_tmp_file = true;
 	bool overwrite_or_ignore = false;
-	FilenamePattern fmt;
+	FilenamePattern filename_pattern;
 	bool user_set_use_tmp_file = false;
 	bool per_thread_output = false;
 	vector<idx_t> partition_cols;
@@ -99,9 +99,10 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 			    option.second.empty() || option.second[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
 			continue;
 		}
-		if (loption == "filenamepattern") {
+		if (loption == "filename_pattern") {
 			if (!option.second.empty()) {
-				fmt.SetFilenamePattern(option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>());
+				filename_pattern.SetFilenamePattern(
+				    option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>());
 			}
 			continue;
 		}
@@ -142,7 +143,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	copy->file_path = stmt.info->file_path;
 	copy->use_tmp_file = use_tmp_file;
 	copy->overwrite_or_ignore = overwrite_or_ignore;
-	copy->fmt = fmt;
+	copy->filename_pattern = filename_pattern;
 	copy->per_thread_output = per_thread_output;
 	copy->partition_output = !partition_cols.empty();
 	copy->partition_columns = std::move(partition_cols);
