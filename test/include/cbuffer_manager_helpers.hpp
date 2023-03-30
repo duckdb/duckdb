@@ -31,10 +31,10 @@ struct MyBuffer {
 	duckdb::idx_t size;
 };
 
-MyBuffer *CreateBuffer(void *allocation, idx_t size, MyBufferManager *buffer_manager, idx_t header_bytes);
-duckdb_block Allocate(void *data, idx_t size, idx_t header_bytes);
-void Destroy(void *data, duckdb_block buffer, idx_t header_bytes);
-duckdb_block ReAllocate(void *data, duckdb_block buffer, idx_t old_size, idx_t new_size, idx_t header_bytes);
+MyBuffer *CreateBuffer(void *allocation, idx_t size, MyBufferManager *buffer_manager);
+duckdb_block Allocate(void *data, idx_t size);
+void Destroy(void *data, duckdb_block buffer);
+duckdb_block ReAllocate(void *data, duckdb_block buffer, idx_t old_size, idx_t new_size);
 void *Pin(void *data, duckdb_block buffer);
 void Unpin(void *data, duckdb_block buffer);
 idx_t UsedMemory(void *data);
