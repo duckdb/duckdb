@@ -941,9 +941,9 @@ static unique_ptr<FunctionData> CSVReaderDeserialize(ClientContext &context, Fie
 	return std::move(result_data);
 }
 
-TableFunction ReadCSVTableFunction::GetFunction(bool list_parameter) {
-	auto parameter = list_parameter ? LogicalType::LIST(LogicalType::VARCHAR) : LogicalType::VARCHAR;
-	TableFunction read_csv("read_csv", {parameter}, ReadCSVFunction, ReadCSVBind, ReadCSVInitGlobal, ReadCSVInitLocal);
+TableFunction ReadCSVTableFunction::GetFunction() {
+	TableFunction read_csv("read_csv", {LogicalType::VARCHAR}, ReadCSVFunction, ReadCSVBind, ReadCSVInitGlobal,
+	                       ReadCSVInitLocal);
 	read_csv.table_scan_progress = CSVReaderProgress;
 	read_csv.pushdown_complex_filter = CSVComplexFilterPushdown;
 	read_csv.serialize = CSVReaderSerialize;
@@ -955,23 +955,16 @@ TableFunction ReadCSVTableFunction::GetFunction(bool list_parameter) {
 	return read_csv;
 }
 
-TableFunction ReadCSVTableFunction::GetAutoFunction(bool list_parameter) {
-	auto read_csv_auto = ReadCSVTableFunction::GetFunction(list_parameter);
+TableFunction ReadCSVTableFunction::GetAutoFunction() {
+	auto read_csv_auto = ReadCSVTableFunction::GetFunction();
 	read_csv_auto.name = "read_csv_auto";
 	read_csv_auto.bind = ReadCSVAutoBind;
 	return read_csv_auto;
 }
 
 void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	TableFunctionSet read_csv("read_csv");
-	read_csv.AddFunction(ReadCSVTableFunction::GetFunction());
-	read_csv.AddFunction(ReadCSVTableFunction::GetFunction(true));
-	set.AddFunction(read_csv);
-
-	TableFunctionSet read_csv_auto("read_csv_auto");
-	read_csv_auto.AddFunction(ReadCSVTableFunction::GetAutoFunction());
-	read_csv_auto.AddFunction(ReadCSVTableFunction::GetAutoFunction(true));
-	set.AddFunction(read_csv_auto);
+	set.AddFunction(MultiFileReader::CreateFunctionSet(ReadCSVTableFunction::GetFunction()));
+	set.AddFunction(MultiFileReader::CreateFunctionSet(ReadCSVTableFunction::GetAutoFunction()));
 }
 
 unique_ptr<TableRef> ReadCSVReplacement(ClientContext &context, const string &table_name, ReplacementScanData *data) {

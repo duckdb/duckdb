@@ -4,6 +4,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/function/function_set.hpp"
 
 namespace duckdb {
 
@@ -290,6 +291,15 @@ void MultiFileReader::FinalizeChunk(const MultiFileReaderBindData &bind_data, co
 		chunk.data[entry.column_id].Reference(entry.value);
 	}
 	chunk.Verify();
+}
+
+TableFunctionSet MultiFileReader::CreateFunctionSet(TableFunction table_function) {
+	TableFunctionSet function_set(table_function.name);
+	function_set.AddFunction(table_function);
+	D_ASSERT(table_function.arguments.size() == 1 && table_function.arguments[0] == LogicalType::VARCHAR);
+	table_function.arguments[0] = LogicalType::LIST(LogicalType::VARCHAR);
+	function_set.AddFunction(table_function);
+	return function_set;
 }
 
 void MultiFileReaderOptions::Serialize(FieldWriter &writer) const {

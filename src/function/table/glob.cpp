@@ -45,11 +45,8 @@ static void GlobFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 }
 
 void GlobTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	TableFunctionSet glob("glob");
-	glob.AddFunction(TableFunction({LogicalType::VARCHAR}, GlobFunction, GlobFunctionBind, GlobFunctionInit));
-	glob.AddFunction(
-	    TableFunction({LogicalType::LIST(LogicalType::VARCHAR)}, GlobFunction, GlobFunctionBind, GlobFunctionInit));
-	set.AddFunction(glob);
+	TableFunction glob_function("glob", {LogicalType::VARCHAR}, GlobFunction, GlobFunctionBind, GlobFunctionInit);
+	set.AddFunction(MultiFileReader::CreateFunctionSet(glob_function));
 }
 
 } // namespace duckdb

@@ -158,8 +158,7 @@ BindInfo ParquetGetBatchInfo(const FunctionData *bind_data) {
 class ParquetScanFunction {
 public:
 	static TableFunctionSet GetFunctionSet() {
-		TableFunctionSet set("parquet_scan");
-		TableFunction table_function({LogicalType::VARCHAR}, ParquetScanImplementation, ParquetScanBind,
+		TableFunction table_function("parquet_scan", {LogicalType::VARCHAR}, ParquetScanImplementation, ParquetScanBind,
 		                             ParquetScanInitGlobal, ParquetScanInitLocal);
 		table_function.statistics = ParquetScanStats;
 		table_function.cardinality = ParquetCardinality;
@@ -177,11 +176,7 @@ public:
 		table_function.filter_pushdown = true;
 		table_function.filter_prune = true;
 		table_function.pushdown_complex_filter = ParquetComplexFilterPushdown;
-		set.AddFunction(table_function);
-
-		table_function.arguments = {LogicalType::LIST(LogicalType::VARCHAR)};
-		set.AddFunction(table_function);
-		return set;
+		return MultiFileReader::CreateFunctionSet(table_function);
 	}
 
 	static unique_ptr<FunctionData> ParquetReadBind(ClientContext &context, CopyInfo &info,
@@ -705,10 +700,10 @@ void ParquetExtension::Load(DuckDB &db) {
 	pq_scan.name = "parquet_scan";
 
 	ParquetMetaDataFunction meta_fun;
-	CreateTableFunctionInfo meta_cinfo(meta_fun);
+	CreateTableFunctionInfo meta_cinfo(MultiFileReader::CreateFunctionSet(meta_fun));
 
 	ParquetSchemaFunction schema_fun;
-	CreateTableFunctionInfo schema_cinfo(schema_fun);
+	CreateTableFunctionInfo schema_cinfo(MultiFileReader::CreateFunctionSet(schema_fun));
 
 	CopyFunction function("parquet");
 	function.copy_to_bind = ParquetWriteBind;

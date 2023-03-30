@@ -17,6 +17,7 @@
 
 namespace duckdb {
 class TableFunction;
+class TableFunctionSet;
 class ClientContext;
 class Value;
 
@@ -47,7 +48,8 @@ struct MultiFileFilterEntry {
 };
 
 struct MultiFileConstantEntry {
-	MultiFileConstantEntry(idx_t column_id, Value value_p) : column_id(column_id), value(std::move(value_p)) {}
+	MultiFileConstantEntry(idx_t column_id, Value value_p) : column_id(column_id), value(std::move(value_p)) {
+	}
 
 	//! The column id to apply the constant value to
 	idx_t column_id;
@@ -109,6 +111,8 @@ struct MultiFileReader {
 	//! Finalize the reading of a chunk - applying any constants that are required
 	DUCKDB_API static void FinalizeChunk(const MultiFileReaderBindData &bind_data,
 	                                     const MultiFileReaderData &reader_data, DataChunk &chunk);
+	//! Creates a table function set from a single reader function (including e.g. list parameters, etc)
+	DUCKDB_API static TableFunctionSet CreateFunctionSet(TableFunction table_function);
 
 	template <class READER_CLASS, class RESULT_CLASS, class OPTIONS_CLASS>
 	static MultiFileReaderBindData BindUnionReader(ClientContext &context, vector<LogicalType> &return_types,

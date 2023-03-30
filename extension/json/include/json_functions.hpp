@@ -70,7 +70,7 @@ public:
 	static vector<CreateTableFunctionInfo> GetTableFunctions();
 	static unique_ptr<TableRef> ReadJSONReplacement(ClientContext &context, const string &table_name,
 	                                                ReplacementScanData *data);
-	static TableFunction GetReadJSONTableFunction(bool list_parameter, shared_ptr<JSONScanInfo> function_info);
+	static TableFunction GetReadJSONTableFunction(shared_ptr<JSONScanInfo> function_info);
 	static CreateCopyFunctionInfo GetJSONCopyFunction();
 	static void RegisterCastFunctions(CastFunctionSet &casts);
 
