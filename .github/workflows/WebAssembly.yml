@@ -109,9 +109,9 @@ jobs:
       shell: bash
       run: |
         cd duckdb-wasm
-        bash tools/wasm/scripts/wasm_build_lib.sh relsize mvp $(pwd)/..
-        bash tools/wasm/scripts/wasm_build_lib.sh relsize eh $(pwd)/..
-        bash tools/wasm/scripts/wasm_build_lib.sh relsize coi $(pwd)/..
+        bash scripts/wasm_build_lib.sh relsize mvp $(pwd)/..
+        bash scripts/wasm_build_lib.sh relsize eh $(pwd)/..
+        bash scripts/wasm_build_lib.sh relsize coi $(pwd)/..
 
     - name: Package
       shell: bash
