@@ -24,6 +24,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownInnerJoin(unique_ptr<Logical
 			// filter statically evaluates to false, strip tree
 			return make_unique<LogicalEmptyResult>(std::move(op));
 		}
+	} else if (op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
+		// Don't mess with non-standard condition interpretations
+		return FinishPushdown(std::move(op));
 	} else {
 		// comparison join
 		D_ASSERT(op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN);

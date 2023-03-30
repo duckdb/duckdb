@@ -213,4 +213,8 @@ struct JaroWinklerFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct HexFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 } // namespace duckdb

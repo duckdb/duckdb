@@ -14,7 +14,6 @@
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/types/constraint_conflict_info.hpp"
@@ -27,6 +26,7 @@ class Transaction;
 class ConflictManager;
 
 struct IndexLock;
+struct IndexScanState;
 
 //! The index is an abstract base class that serves as the basis for indexes
 class Index {
