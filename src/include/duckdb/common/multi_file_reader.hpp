@@ -13,6 +13,7 @@
 #include "duckdb/common/enums/file_glob_options.hpp"
 #include "duckdb/common/union_by_name.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/pair.hpp"
 
 namespace duckdb {
 class TableFunction;
@@ -45,6 +46,15 @@ struct MultiFileFilterEntry {
 	bool is_constant = false;
 };
 
+struct MultiFileConstantEntry {
+	MultiFileConstantEntry(idx_t column_id, Value value_p) : column_id(column_id), value(std::move(value_p)) {}
+
+	//! The column id to apply the constant value to
+	idx_t column_id;
+	//! The constant value
+	Value value;
+};
+
 struct MultiFileReaderData {
 	//! The column ids to read from the file
 	vector<idx_t> column_ids;
@@ -59,7 +69,7 @@ struct MultiFileReaderData {
 	//! The set of table filters
 	optional_ptr<TableFilterSet> filters;
 	//! The constants that should be applied at the various positions
-	vector<pair<idx_t, Value>> constant_map;
+	vector<MultiFileConstantEntry> constant_map;
 	//! Map of column_id -> cast, used when reading multiple files when files have diverging types
 	//! for the same column
 	unordered_map<column_t, LogicalType> cast_map;

@@ -942,7 +942,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 			auto filter_entry = reader_data.filter_map[filter_col.first];
 			if (filter_entry.is_constant) {
 				// this is a constant vector, look for the constant
-				auto &constant = reader_data.constant_map[filter_entry.index].second;
+				auto &constant = reader_data.constant_map[filter_entry.index].value;
 				Vector constant_vector(constant);
 				ApplyFilter(constant_vector, *filter_col.second, filter_mask, this_output_chunk_rows);
 			} else {

@@ -6,8 +6,8 @@ statement ok
 SET experimental_parallel_csv=true;
 
 # force parallelism of the queries
-#statement ok
-#PRAGMA verify_parallelism
+statement ok
+PRAGMA verify_parallelism
 
 query IIII
 SELECT id, value, a, part
