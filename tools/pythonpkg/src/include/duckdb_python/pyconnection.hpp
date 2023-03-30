@@ -91,7 +91,7 @@ public:
 	shared_ptr<DuckDBPyType> Type(const string &type_str);
 
 	shared_ptr<DuckDBPyConnection> RegisterScalarUDF(const string &name, const py::object &udf,
-	                                                 const py::list &arguments, shared_ptr<DuckDBPyType> return_type,
+	                                                 const py::object &arguments, shared_ptr<DuckDBPyType> return_type,
 	                                                 bool varargs = false);
 
 	shared_ptr<DuckDBPyConnection> ExecuteMany(const string &query, py::object params = py::list());
