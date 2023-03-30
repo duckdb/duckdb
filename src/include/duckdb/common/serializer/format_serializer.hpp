@@ -166,7 +166,7 @@ protected:
 
 	// class or struct implementing `FormatSerialize(FormatSerializer& FormatSerializer)`;
 	template <typename T>
-	typename std::enable_if<has_serialize_v<T>(), void>::type WriteValue(T &value) {
+	typename std::enable_if<has_serialize<T>::value>::type WriteValue(T &value) {
 		// Else, we defer to the .FormatSerialize method
 		OnObjectBegin();
 		value.FormatSerialize(*this);
