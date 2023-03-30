@@ -10,7 +10,7 @@
 #endif
 
 #include <cstdio>
-#include <inttypes.h>
+#include <cinttypes>
 
 namespace duckdb {
 
