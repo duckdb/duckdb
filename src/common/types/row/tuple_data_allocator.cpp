@@ -269,9 +269,12 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataPinState &pin_sta
 	D_ASSERT(offset <= STANDARD_VECTOR_SIZE);
 }
 
-static inline void VerifyStrings(const data_ptr_t row_locations[], const idx_t col_idx, const idx_t col_offset,
-                                 const idx_t offset, const idx_t count) {
+static inline void VerifyStrings(const LogicalTypeId type_id, const data_ptr_t row_locations[], const idx_t col_idx,
+                                 const idx_t col_offset, const idx_t offset, const idx_t count) {
 #ifdef DEBUG
+	if (type_id == LogicalTypeId::BLOB) {
+		return;
+	}
 	idx_t entry_idx;
 	idx_t idx_in_entry;
 	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
@@ -300,7 +303,8 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 
 	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
 		const auto &col_offset = base_col_offset + layout.GetOffsets()[col_idx];
-		switch (layout.GetTypes()[col_idx].InternalType()) {
+		const auto &type = layout.GetTypes()[col_idx];
+		switch (type.InternalType()) {
 		case PhysicalType::VARCHAR: {
 			for (idx_t i = 0; i < count; i++) {
 				const auto idx = offset + i;
@@ -314,7 +318,7 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 					Store<data_ptr_t>(new_heap_ptr + diff, string_location + string_t::HEADER_SIZE);
 				}
 			}
-			VerifyStrings(row_locations, col_idx, col_offset, offset, count);
+			VerifyStrings(type.id(), row_locations, col_idx, col_offset, offset, count);
 			break;
 		}
 		case PhysicalType::LIST: {

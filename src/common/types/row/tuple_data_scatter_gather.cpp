@@ -74,6 +74,10 @@ void TupleDataCollection::ComputeHeapSizes(TupleDataChunkState &chunk_state, Dat
 	}
 }
 
+static inline idx_t StringHeapSize(const string_t &val) {
+	return val.IsInlined() ? 0 : val.GetSize();
+}
+
 void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, Vector &source_v, TupleDataVectorFormat &source_format,
                                            const SelectionVector &append_sel, const idx_t append_count) {
 	const auto type = source_v.GetType().InternalType();
@@ -92,9 +96,11 @@ void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, Vector &source_
 		// Only non-inlined strings are stored in the heap
 		const auto source_data = (string_t *)source_vector_data.data;
 		for (idx_t i = 0; i < append_count; i++) {
-			auto source_idx = source_sel.get_index(append_sel.get_index(i));
-			if (source_validity.RowIsValid(source_idx) && !source_data[source_idx].IsInlined()) {
-				heap_sizes[i] += source_data[source_idx].GetSize();
+			const auto source_idx = source_sel.get_index(append_sel.get_index(i));
+			if (source_validity.RowIsValid(source_idx)) {
+				heap_sizes[i] += StringHeapSize(source_data[source_idx]);
+			} else {
+				heap_sizes[i] += StringHeapSize(NullValue<string_t>());
 			}
 		}
 		break;
@@ -177,7 +183,7 @@ void TupleDataCollection::ComputeFixedWithinListHeapSizes(Vector &heap_sizes_v, 
 	D_ASSERT(TypeIsConstantSize(source_v.GetType().InternalType()));
 	const auto type_size = GetTypeIdSize(source_v.GetType().InternalType());
 	for (idx_t i = 0; i < append_count; i++) {
-		auto list_idx = list_sel.get_index(append_sel.get_index(i));
+		const auto list_idx = list_sel.get_index(append_sel.get_index(i));
 		if (!list_validity.RowIsValid(list_idx)) {
 			continue; // Original list entry is invalid - no need to serialize the child
 		}
@@ -211,7 +217,7 @@ void TupleDataCollection::StringWithinListComputeHeapSizes(Vector &heap_sizes_v,
 	auto heap_sizes = FlatVector::GetData<idx_t>(heap_sizes_v);
 
 	for (idx_t i = 0; i < append_count; i++) {
-		auto list_idx = list_sel.get_index(append_sel.get_index(i));
+		const auto list_idx = list_sel.get_index(append_sel.get_index(i));
 		if (!list_validity.RowIsValid(list_idx)) {
 			continue; // Original list entry is invalid - no need to serialize the child
 		}
@@ -228,7 +234,7 @@ void TupleDataCollection::StringWithinListComputeHeapSizes(Vector &heap_sizes_v,
 
 		// Plus all the actual strings
 		for (idx_t child_i = 0; child_i < list_length; child_i++) {
-			auto child_source_idx = source_sel.get_index(list_offset + child_i);
+			const auto child_source_idx = source_sel.get_index(list_offset + child_i);
 			if (source_validity.RowIsValid(child_source_idx)) {
 				heap_size += data[child_source_idx].GetSize();
 			}
@@ -249,7 +255,7 @@ void TupleDataCollection::StructWithinListComputeHeapSizes(Vector &heap_sizes_v,
 	auto heap_sizes = FlatVector::GetData<idx_t>(heap_sizes_v);
 
 	for (idx_t i = 0; i < append_count; i++) {
-		auto list_idx = list_sel.get_index(append_sel.get_index(i));
+		const auto list_idx = list_sel.get_index(append_sel.get_index(i));
 		if (!list_validity.RowIsValid(list_idx)) {
 			continue; // Original list entry is invalid - no need to serialize the child
 		}
@@ -301,7 +307,7 @@ void TupleDataCollection::ListWithinListComputeHeapSizes(Vector &heap_sizes_v, V
 	idx_t combined_list_offset = 0;
 
 	for (idx_t i = 0; i < append_count; i++) {
-		auto list_idx = list_sel.get_index(append_sel.get_index(i));
+		const auto list_idx = list_sel.get_index(append_sel.get_index(i));
 		if (!list_validity.RowIsValid(list_idx)) {
 			continue; // Original list entry is invalid - no need to serialize the child list
 		}
@@ -318,7 +324,7 @@ void TupleDataCollection::ListWithinListComputeHeapSizes(Vector &heap_sizes_v, V
 
 		idx_t child_list_size = 0;
 		for (idx_t child_i = 0; child_i < list_length; child_i++) {
-			auto child_list_idx = child_list_sel.get_index(list_offset + child_i);
+			const auto child_list_idx = child_list_sel.get_index(list_offset + child_i);
 			const auto &child_list_entry = child_list_entries[child_list_idx];
 			if (child_list_validity.RowIsValid(child_list_idx)) {
 				const auto &child_list_offset = child_list_entry.offset;
@@ -416,7 +422,7 @@ static void TupleDataTemplatedScatter(Vector &source, const TupleDataVectorForma
 	const auto offset_in_row = layout.GetOffsets()[col_idx];
 	if (validity.AllValid()) {
 		for (idx_t i = 0; i < append_count; i++) {
-			auto source_idx = source_sel.get_index(append_sel.get_index(i));
+			const auto source_idx = source_sel.get_index(append_sel.get_index(i));
 			TupleDataValueStore<T>(data[source_idx], target_locations[i], offset_in_row, target_heap_locations[i]);
 		}
 	} else {
@@ -453,7 +459,7 @@ static void TupleDataStructScatter(Vector &source, const TupleDataVectorFormat &
 	// Set validity of the STRUCT in this layout
 	if (!validity.AllValid()) {
 		for (idx_t i = 0; i < append_count; i++) {
-			auto source_idx = source_sel.get_index(append_sel.get_index(i));
+			const auto source_idx = source_sel.get_index(append_sel.get_index(i));
 			if (!validity.RowIsValid(source_idx)) {
 				ValidityBytes(target_locations[i]).SetInvalidUnsafe(entry_idx, idx_in_entry);
 			}
@@ -512,7 +518,7 @@ static void TupleDataListScatter(Vector &source, const TupleDataVectorFormat &so
 	// Set validity of the LIST in this layout, and store pointer to where it's stored
 	const auto offset_in_row = layout.GetOffsets()[col_idx];
 	for (idx_t i = 0; i < append_count; i++) {
-		auto source_idx = source_sel.get_index(append_sel.get_index(i));
+		const auto source_idx = source_sel.get_index(append_sel.get_index(i));
 		if (validity.RowIsValid(source_idx)) {
 			auto &target_heap_location = target_heap_locations[i];
 			Store<data_ptr_t>(target_heap_location, target_locations[i] + offset_in_row);
@@ -556,7 +562,7 @@ static void TupleDataTemplatedWithinListScatter(Vector &source, const TupleDataV
 	auto target_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
 
 	for (idx_t i = 0; i < append_count; i++) {
-		auto list_idx = list_sel.get_index(append_sel.get_index(i));
+		const auto list_idx = list_sel.get_index(append_sel.get_index(i));
 		if (!list_validity.RowIsValid(list_idx)) {
 			continue; // Original list entry is invalid - no need to serialize the child
 		}
@@ -578,7 +584,7 @@ static void TupleDataTemplatedWithinListScatter(Vector &source, const TupleDataV
 
 		// Store the data and validity belonging to this list entry
 		for (idx_t child_i = 0; child_i < list_length; child_i++) {
-			auto child_source_idx = source_sel.get_index(list_offset + child_i);
+			const auto child_source_idx = source_sel.get_index(list_offset + child_i);
 			if (source_validity.RowIsValid(child_source_idx)) {
 				TupleDataWithinListValueStore<T>(data[child_source_idx],
 				                                 child_data_location + child_i * TupleDataWithinListFixedSize<T>(),
@@ -611,7 +617,7 @@ static void TupleDataStructWithinListScatter(Vector &source, const TupleDataVect
 
 	// Initialize the validity of the STRUCTs
 	for (idx_t i = 0; i < append_count; i++) {
-		auto list_idx = list_sel.get_index(append_sel.get_index(i));
+		const auto list_idx = list_sel.get_index(append_sel.get_index(i));
 		if (!list_validity.RowIsValid(list_idx)) {
 			continue; // Original list entry is invalid - no need to serialize the child
 		}
@@ -629,7 +635,7 @@ static void TupleDataStructWithinListScatter(Vector &source, const TupleDataVect
 
 		// Store the validity belonging to this list entry
 		for (idx_t child_i = 0; child_i < list_length; child_i++) {
-			auto child_source_idx = source_sel.get_index(list_offset + child_i);
+			const auto child_source_idx = source_sel.get_index(list_offset + child_i);
 			if (!source_validity.RowIsValid(child_source_idx)) {
 				child_mask.SetInvalidUnsafe(child_i);
 			}
@@ -668,7 +674,7 @@ static void TupleDataListWithinListScatter(Vector &child_list, const TupleDataVe
 	auto target_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
 
 	for (idx_t i = 0; i < append_count; i++) {
-		auto list_idx = list_sel.get_index(append_sel.get_index(i));
+		const auto list_idx = list_sel.get_index(append_sel.get_index(i));
 		if (!list_validity.RowIsValid(list_idx)) {
 			continue; // Original list entry is invalid - no need to serialize the child list
 		}
@@ -689,7 +695,7 @@ static void TupleDataListWithinListScatter(Vector &child_list, const TupleDataVe
 		target_heap_location += list_length * sizeof(uint64_t);
 
 		for (idx_t child_i = 0; child_i < list_length; child_i++) {
-			auto child_list_idx = child_list_sel.get_index(list_offset + child_i);
+			const auto child_list_idx = child_list_sel.get_index(list_offset + child_i);
 			if (child_list_validity.RowIsValid(child_list_idx)) {
 				const auto &child_list_length = child_list_entries[child_list_idx].length;
 				Store<uint64_t>(child_list_length, child_data_location + child_i * sizeof(uint64_t));
@@ -905,8 +911,8 @@ static void ListTupleDataGather(const TupleDataLayout &layout, Vector &row_locat
 	const auto offset_in_row = layout.GetOffsets()[col_idx];
 	uint64_t target_list_offset = 0;
 	for (idx_t i = 0; i < scan_count; i++) {
-		auto source_idx = scan_sel.get_index(i);
-		auto target_idx = target_sel.get_index(i);
+		const auto source_idx = scan_sel.get_index(i);
+		const auto target_idx = target_sel.get_index(i);
 
 		const auto &source_row = source_locations[source_idx];
 		ValidityBytes row_mask(source_row);
@@ -915,7 +921,7 @@ static void ListTupleDataGather(const TupleDataLayout &layout, Vector &row_locat
 			source_heap_location = Load<data_ptr_t>(source_row + offset_in_row);
 
 			// Load list size and skip over
-			auto list_length = Load<uint64_t>(source_heap_location);
+			const auto list_length = Load<uint64_t>(source_heap_location);
 			source_heap_location += sizeof(uint64_t);
 
 			// Initialize list entry, and increment offset
@@ -956,7 +962,7 @@ static void TemplatedWithinListTupleDataGather(const TupleDataLayout &layout, Ve
 
 	uint64_t target_offset = list_size_before;
 	for (idx_t i = 0; i < scan_count; i++) {
-		auto source_idx = scan_sel.get_index(i);
+		const auto source_idx = scan_sel.get_index(i);
 		if (!source_heap_validity.RowIsValid(source_idx)) {
 			continue;
 		}
@@ -1002,7 +1008,7 @@ static void StructWithinListTupleDataGather(const TupleDataLayout &layout, Vecto
 
 	uint64_t target_offset = list_size_before;
 	for (idx_t i = 0; i < scan_count; i++) {
-		auto source_idx = scan_sel.get_index(i);
+		const auto source_idx = scan_sel.get_index(i);
 		if (!source_heap_validity.RowIsValid(source_idx)) {
 			continue;
 		}
@@ -1056,7 +1062,7 @@ static void ListWithinListTupleDataGather(const TupleDataLayout &layout, Vector 
 	uint64_t target_offset = list_size_before;
 	uint64_t target_child_offset = child_list_size_before;
 	for (idx_t i = 0; i < scan_count; i++) {
-		auto source_idx = scan_sel.get_index(i);
+		const auto source_idx = scan_sel.get_index(i);
 		if (!source_heap_validity.RowIsValid(source_idx)) {
 			continue;
 		}
