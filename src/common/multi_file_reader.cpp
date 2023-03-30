@@ -284,8 +284,9 @@ TableFunctionSet MultiFileReader::CreateFunctionSet(const TableFunction &table_f
 	TableFunctionSet function_set(table_function.name);
 	function_set.AddFunction(table_function);
 	D_ASSERT(table_function.arguments.size() == 1 && table_function.arguments[0] == LogicalType::VARCHAR);
-	table_function.arguments[0] = LogicalType::LIST(LogicalType::VARCHAR);
-	function_set.AddFunction(table_function);
+	TableFunction copy = table_function;
+	copy.arguments[0] = LogicalType::LIST(LogicalType::VARCHAR);
+	function_set.AddFunction(std::move(copy));
 	return function_set;
 }
 
