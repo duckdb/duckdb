@@ -35,13 +35,6 @@ struct CBufferManagerConfig {
 	duckdb_used_memory_t used_memory_func;
 };
 
-class CustomInMemoryBlockManager : public InMemoryBlockManager {
-public:
-	using InMemoryBlockManager::InMemoryBlockManager;
-public:
-	shared_ptr<BlockHandle> RegisterBlock(block_id_t block_id, bool is_meta_block) final override;
-};
-
 class CBufferManager : public BufferManager {
 public:
 	CBufferManager(CBufferManagerConfig config);

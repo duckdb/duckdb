@@ -65,7 +65,7 @@ public:
 	virtual idx_t FreeBlocks() = 0;
 
 	//! Register a block with the given block id in the base file
-	virtual shared_ptr<BlockHandle> RegisterBlock(block_id_t block_id, bool is_meta_block = false);
+	shared_ptr<BlockHandle> RegisterBlock(block_id_t block_id, bool is_meta_block = false);
 	//! Clear cached handles for meta blocks
 	void ClearMetaBlockHandles();
 	//! Convert an existing in-memory buffer into a persistent disk-backed block
@@ -76,7 +76,7 @@ public:
 	static BlockManager &GetBlockManager(ClientContext &context);
 	static BlockManager &GetBlockManager(DatabaseInstance &db);
 
-protected:
+private:
 	//! The lock for the set of blocks
 	mutex blocks_lock;
 	//! A mapping of block id -> BlockHandle

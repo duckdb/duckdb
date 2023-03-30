@@ -21,6 +21,7 @@ shared_ptr<BlockHandle> BlockManager::RegisterBlock(block_id_t block_id, bool is
 			return existing_ptr;
 		}
 	}
+	throw InternalException("SKIP THIS TEST, NO PERSISTENT OPERATIONS ALLOWED");
 	// create a new block pointer for this block
 	auto result = make_shared<BlockHandle>(*this, block_id);
 	// for meta block, cache the handle in meta_blocks
