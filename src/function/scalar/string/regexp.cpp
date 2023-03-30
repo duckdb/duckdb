@@ -218,41 +218,6 @@ bool RegexpExtractBindData::Equals(const FunctionData &other_p) const {
 	return RegexpBaseBindData::Equals(other) && group_string == other.group_string;
 }
 
-static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarFunction &bound_function,
-                                                 vector<unique_ptr<Expression>> &arguments) {
-	D_ASSERT(arguments.size() >= 2);
-
-	duckdb_re2::RE2::Options options;
-
-	string constant_string;
-	bool constant_pattern = TryParseConstantPattern(context, *arguments[1], constant_string);
-
-	string group_string = "";
-	if (arguments.size() >= 3) {
-		if (arguments[2]->HasParameter()) {
-			throw ParameterNotResolvedException();
-		}
-		if (!arguments[2]->IsFoldable()) {
-			throw InvalidInputException("Group index field field must be a constant!");
-		}
-		Value group = ExpressionExecutor::EvaluateScalar(context, *arguments[2]);
-		if (!group.IsNull()) {
-			auto group_idx = group.GetValue<int32_t>();
-			if (group_idx < 0 || group_idx > 9) {
-				throw InvalidInputException("Group index must be between 0 and 9!");
-			}
-			group_string = "\\" + to_string(group_idx);
-		}
-	} else {
-		group_string = "\\0";
-	}
-	if (arguments.size() >= 4) {
-		ParseRegexOptions(context, *arguments[3], options);
-	}
-	return make_unique<RegexpExtractBindData>(options, std::move(constant_string), constant_pattern,
-	                                          std::move(group_string));
-}
-
 static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	const auto &info = (RegexpExtractBindData &)*func_expr.bind_info;
@@ -271,6 +236,155 @@ static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector
 			                                                      return Extract(input, result, re, info.rewrite);
 		                                                      });
 	}
+}
+
+//===--------------------------------------------------------------------===//
+// Regexp Extract Struct
+//===--------------------------------------------------------------------===//
+static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &func_expr = (BoundFunctionExpression &)state.expr;
+	const auto &info = (RegexpExtractBindData &)*func_expr.bind_info;
+	auto &lstate = (RegexLocalState &)*ExecuteFunctionState::GetFunctionState(state);
+
+	const auto count = args.size();
+	auto &input = args.data[0];
+	D_ASSERT(info.constant_pattern);
+
+	auto &child_entries = StructVector::GetEntries(result);
+	const auto groupSize = child_entries.size();
+
+	vector<RE2::Arg> argv(groupSize);
+	vector<RE2::Arg *> groups(groupSize);
+	vector<duckdb_re2::StringPiece> ws(groupSize);
+	for (size_t i = 0; i < groupSize; ++i) {
+		groups[i] = &argv[i];
+		argv[i] = &ws[i];
+	}
+
+	std::string str;
+	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+
+		if (ConstantVector::IsNull(input)) {
+			ConstantVector::SetNull(result, true);
+		} else {
+			ConstantVector::SetNull(result, false);
+			auto idata = ConstantVector::GetData<string_t>(input);
+			str = idata[0].GetString();
+			auto match = duckdb_re2::RE2::PartialMatchN(str, lstate.constant_pattern, groups.data(), groups.size());
+			for (size_t col = 0; col < child_entries.size(); ++col) {
+				auto &child_entry = child_entries[col];
+				ConstantVector::SetNull(*child_entry, false);
+				auto &extracted = ws[col];
+				auto cdata = ConstantVector::GetData<string_t>(*child_entry);
+				cdata[0] = StringVector::AddString(*child_entry, extracted.data(), match ? extracted.size() : 0);
+			}
+		}
+	} else {
+		UnifiedVectorFormat iunified;
+		input.ToUnifiedFormat(count, iunified);
+
+		const auto &ivalidity = iunified.validity;
+		auto idata = (const string_t *)iunified.data;
+
+		// Start with a valid flat vector
+		result.SetVectorType(VectorType::FLAT_VECTOR);
+		auto &res_valid = FlatVector::Validity(result);
+		if (res_valid.GetData()) {
+			res_valid.SetAllValid(count);
+		}
+
+		// Start with valid children
+		for (size_t col = 0; col < child_entries.size(); ++col) {
+			auto &child_entry = child_entries[col];
+			child_entry->SetVectorType(VectorType::FLAT_VECTOR);
+			auto &child_validity = FlatVector::Validity(*child_entry);
+			if (child_validity.GetData()) {
+				child_validity.SetAllValid(count);
+			}
+		}
+
+		for (idx_t i = 0; i < count; ++i) {
+			const auto idx = iunified.sel->get_index(i);
+			if (ivalidity.RowIsValid(idx)) {
+				str = idata[idx].GetString();
+				auto match = duckdb_re2::RE2::PartialMatchN(str, lstate.constant_pattern, groups.data(), groups.size());
+				for (size_t col = 0; col < child_entries.size(); ++col) {
+					auto &child_entry = child_entries[col];
+					auto cdata = FlatVector::GetData<string_t>(*child_entry);
+					auto &extracted = ws[col];
+					cdata[i] = StringVector::AddString(*child_entry, extracted.data(), match ? extracted.size() : 0);
+				}
+			} else {
+				FlatVector::SetNull(result, i, true);
+			}
+		}
+	}
+}
+
+static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarFunction &bound_function,
+                                                 vector<unique_ptr<Expression>> &arguments) {
+	D_ASSERT(arguments.size() >= 2);
+
+	duckdb_re2::RE2::Options options;
+
+	string constant_string;
+	bool constant_pattern = TryParseConstantPattern(context, *arguments[1], constant_string);
+
+	if (arguments.size() >= 4) {
+		ParseRegexOptions(context, *arguments[3], options);
+	}
+
+	string group_string = "\\0";
+	if (arguments.size() >= 3) {
+		if (arguments[2]->HasParameter()) {
+			throw ParameterNotResolvedException();
+		}
+		if (!arguments[2]->IsFoldable()) {
+			throw InvalidInputException("Group specification field must be a constant!");
+		}
+		Value group = ExpressionExecutor::EvaluateScalar(context, *arguments[2]);
+		if (group.IsNull()) {
+			group_string = "";
+		} else if (group.type().id() == LogicalTypeId::LIST) {
+			if (!constant_pattern) {
+				throw BinderException("%s with LIST requires a constant pattern", bound_function.name);
+			}
+			auto &list_children = ListValue::GetChildren(group);
+			if (list_children.empty()) {
+				throw BinderException("%s requires non-empty lists of capture names", bound_function.name);
+			}
+			unordered_set<string> name_collision_set;
+			child_list_t<LogicalType> struct_children;
+			for (const auto &child : list_children) {
+				if (child.IsNull()) {
+					throw BinderException("NULL group name in %s", bound_function.name);
+				}
+				const auto group_name = child.ToString();
+				if (name_collision_set.find(group_name) != name_collision_set.end()) {
+					throw BinderException("Duplicate group name \"%s\" in %s", group_name, bound_function.name);
+				}
+				name_collision_set.insert(group_name);
+				struct_children.emplace_back(make_pair(group_name, LogicalType::VARCHAR));
+			}
+			bound_function.return_type = LogicalType::STRUCT(struct_children);
+
+			duckdb_re2::StringPiece constant_piece(constant_string.c_str(), constant_string.size());
+			RE2 constant_pattern(constant_piece, options);
+			if (size_t(constant_pattern.NumberOfCapturingGroups()) < list_children.size()) {
+				throw BinderException("Not enough group names in %s", bound_function.name);
+			}
+		} else {
+			auto group_idx = group.GetValue<int32_t>();
+			if (group_idx < 0 || group_idx > 9) {
+				throw InvalidInputException("Group index must be between 0 and 9!");
+			}
+			group_string = "\\" + to_string(group_idx);
+		}
+	}
+
+	return make_unique<RegexpExtractBindData>(options, std::move(constant_string), constant_pattern,
+	                                          std::move(group_string));
 }
 
 void RegexpFun::RegisterFunction(BuiltinFunctions &set) {
@@ -315,6 +429,16 @@ void RegexpFun::RegisterFunction(BuiltinFunctions &set) {
 	    {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::INTEGER, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	    RegexExtractFunction, RegexExtractBind, nullptr, nullptr, RegexInitLocalState, LogicalType::INVALID,
 	    FunctionSideEffects::NO_SIDE_EFFECTS, FunctionNullHandling::SPECIAL_HANDLING));
+	// REGEXP_EXTRACT(<string>, <pattern>, [<group 1 name>[, <group n name>]...])
+	regexp_extract.AddFunction(ScalarFunction(
+	    {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::LIST(LogicalType::VARCHAR)}, LogicalType::VARCHAR,
+	    RegexExtractStructFunction, RegexExtractBind, nullptr, nullptr, RegexInitLocalState, LogicalType::INVALID,
+	    FunctionSideEffects::NO_SIDE_EFFECTS, FunctionNullHandling::SPECIAL_HANDLING));
+	// REGEXP_EXTRACT(<string>, <pattern>, [<group 1 name>[, <group n name>]...], <options>)
+	regexp_extract.AddFunction(ScalarFunction(
+	    {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::LIST(LogicalType::VARCHAR), LogicalType::VARCHAR},
+	    LogicalType::VARCHAR, RegexExtractStructFunction, RegexExtractBind, nullptr, nullptr, RegexInitLocalState,
+	    LogicalType::INVALID, FunctionSideEffects::NO_SIDE_EFFECTS, FunctionNullHandling::SPECIAL_HANDLING));
 
 	ScalarFunctionSet regexp_extract_all("regexp_extract_all");
 	regexp_extract_all.AddFunction(ScalarFunction(
