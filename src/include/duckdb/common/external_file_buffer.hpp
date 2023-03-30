@@ -5,6 +5,8 @@
 
 namespace duckdb {
 
+//! FileBuffer class that holds borrowed memory
+//! because the memory isn't owned by the file buffer, the destructor is a no-op
 class ExternalFileBuffer : public FileBuffer {
 public:
 	ExternalFileBuffer(data_ptr_t buffer, uint64_t size)

@@ -40,7 +40,6 @@ FileBuffer::~FileBuffer() {
 		return;
 	}
 	allocator.FreeData(internal_buffer, internal_size);
-	internal_buffer = nullptr;
 }
 
 void FileBuffer::ReallocBuffer(size_t new_size) {

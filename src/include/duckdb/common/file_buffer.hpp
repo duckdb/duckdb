@@ -40,7 +40,7 @@ public:
 	//! Write the contents of the FileBuffer to the specified location.
 	void Write(FileHandle &handle, uint64_t location);
 
-	virtual data_ptr_t Buffer() const {
+	data_ptr_t Buffer() const {
 		return buffer;
 	}
 
