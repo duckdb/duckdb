@@ -5,7 +5,6 @@
 statement ok
 SET experimental_parallel_csv=true;
 
-# force parallelism of the queries
 statement ok
 PRAGMA verify_parallelism
 
@@ -17,7 +16,6 @@ ORDER BY id
 1	value1	aaa	a
 2	value2	NULL	b
 
-# FIXME - this produces wrong results with verify_parallelism
 query IIII
 SELECT k, c, ts, replace(filename, '\', '/')
 FROM read_csv_auto('data/csv/union-by-name/ubn[!1-2].csv',FILENAME=TRUE ,UNION_BY_NAME=TRUE)
@@ -29,9 +27,6 @@ ORDER BY c
 NULL	100	Monday	data/csv/union-by-name/ubn4.csv
 NULL	200	Sunday	data/csv/union-by-name/ubn4.csv
 NULL	300	Friday	data/csv/union-by-name/ubn4.csv
-
-# FIXME - these are producing wrong results
-mode skip
 
 query IIIII
 SELECT  a, b, c, ts, k
@@ -102,5 +97,3 @@ Sunday
 NULL
 NULL
 NULL
-
-mode unskip

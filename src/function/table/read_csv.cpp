@@ -447,7 +447,7 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, ReadCSVData &bind_data
 			// regular file - use the standard options
 			reader = make_unique<ParallelCSVReader>(context, bind_data.options, std::move(result), bind_data.csv_types);
 			reader->options.file_path = current_file_path;
-			reader->names = bind_data.return_names;
+			reader->names = bind_data.csv_names;
 		}
 		reader->options.file_path = current_file_path;
 		MultiFileReader::InitializeReader(*reader, bind_data.options.file_options, bind_data.reader_bind,
