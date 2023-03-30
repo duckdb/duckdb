@@ -1291,7 +1291,6 @@ add_row : {
 	offset = 0;
 	has_quotes = false;
 	position++;
-	SkipEmptyLines();
 	start = position;
 	line_start = position;
 	if (position >= buffer_size && !ReadBuffer(start, line_start)) {
@@ -1303,6 +1302,9 @@ add_row : {
 		goto carriage_return;
 	} else {
 		SetNewLineDelimiter();
+		SkipEmptyLines();
+		start = position;
+		line_start = position;
 		// \n newline, move to value start
 		if (finished_chunk) {
 			return true;
@@ -1395,6 +1397,9 @@ carriage_return:
 	if (finished_chunk) {
 		return true;
 	}
+	SkipEmptyLines();
+	start = position;
+	line_start = position;
 	goto value_start;
 final_state:
 	if (finished_chunk) {
@@ -1425,6 +1430,9 @@ final_state:
 }
 
 bool BufferedCSVReader::ReadBuffer(idx_t &start, idx_t &line_start) {
+	if (start > buffer_size) {
+		return false;
+	}
 	auto old_buffer = std::move(buffer);
 
 	// the remaining part of the last buffer

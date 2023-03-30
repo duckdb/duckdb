@@ -109,11 +109,11 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 			return false;
 		}
 		SkipEmptyLines();
-			if (verification_positions.beginning_of_first_line == 0) {
-		verification_positions.beginning_of_first_line = position_buffer;
-	}
+		if (verification_positions.beginning_of_first_line == 0) {
+			verification_positions.beginning_of_first_line = position_buffer;
+		}
 
-	verification_positions.end_of_last_line = position_buffer;
+		verification_positions.end_of_last_line = position_buffer;
 		return true;
 	}
 
@@ -143,12 +143,14 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 		}
 		SkipEmptyLines();
 
-		if (position_buffer >= end_buffer) {
+		if (position_buffer > buffer_size) {
 			break;
 		}
-		if (!StringUtil::CharacterIsNewline((*buffer)[position_buffer - 1])){
+
+		if (position_buffer >= end_buffer && !StringUtil::CharacterIsNewline((*buffer)[position_buffer - 1])) {
 			break;
 		}
+
 		if (position_buffer > end_buffer && options.new_line == NewLineIdentifier::CARRY_ON &&
 		    (*buffer)[position_buffer - 1] == '\n') {
 			break;
@@ -260,11 +262,6 @@ bool ParallelCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error
 	if ((start_buffer == buffer->buffer_start || start_buffer == buffer->buffer_end) && !try_add_line) {
 		// First time reading this buffer piece
 		if (!SetPosition(insert_chunk)) {
-			// This means the buffer size does not contain a new line
-			if (position_buffer - start_buffer == options.buffer_size) {
-				error_message = "Line does not fit in one buffer. Increase the buffer size.";
-				return false;
-			}
 			finished = true;
 			return true;
 		}
@@ -361,7 +358,6 @@ add_row : {
 	offset = 0;
 	has_quotes = false;
 	position_buffer++;
-	SkipEmptyLines();
 	start_buffer = position_buffer;
 	verification_positions.end_of_last_line = position_buffer;
 	if (reached_remainder_state) {
@@ -382,6 +378,8 @@ add_row : {
 			// increase position by 1 and move start to the new position
 			start_buffer = ++position_buffer;
 			verification_positions.end_of_last_line = position_buffer;
+			SkipEmptyLines();
+			start_buffer = position_buffer;
 			if (reached_remainder_state) {
 				goto final_state;
 			}
@@ -403,6 +401,8 @@ add_row : {
 			error_message = "Wrong NewLine Identifier. Expecting \\r or \\n";
 			return false;
 		}
+		SkipEmptyLines();
+		start_buffer = position_buffer;
 		// \n newline, move to value start
 		if (finished_chunk) {
 			goto final_state;
@@ -523,7 +523,7 @@ final_state : {
 		    (insert_chunk.data.size() == 1 && start_buffer != position_buffer)) {
 			// remaining values to be added to the chunk
 			auto str_value = buffer->GetValue(start_buffer, position_buffer, offset);
-			if (!AllNewLine(str_value) || offset != 0) {
+			if (!AllNewLine(str_value) || offset == 0) {
 				AddValue(str_value, column, escape_positions, has_quotes);
 				if (try_add_line) {
 					bool success = column == return_types.size();
@@ -562,6 +562,7 @@ final_state : {
 			}
 		}
 	}
+	//	insert_chunk.Print();
 	return true;
 };
 }

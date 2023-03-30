@@ -25,7 +25,7 @@ const string tbl_zst = "tbl.zst";
 
 const string csv_extensions[5] = {csv, tsv, csv_gz, csv_zst, tbl_zst};
 
-bool debug = false;
+bool debug = true;
 bool RunFull(std::string &path, std::set<std::string> &skip, duckdb::Connection &conn) {
 	bool single_threaded_passed;
 	// Here we run the csv file first with the single thread reader.
@@ -38,13 +38,13 @@ bool RunFull(std::string &path, std::set<std::string> &skip, duckdb::Connection 
 	conn.context->client_data->max_line_length = 0;
 	unique_ptr<MaterializedQueryResult> single_threaded_res;
 	ColumnDataCollection *ground_truth = nullptr;
-		single_threaded_res = conn.Query("SELECT * FROM read_csv_auto('" + path + "', parallel = 0) ORDER BY ALL");
-	    if (single_threaded_res->HasError()){
-			single_threaded_passed = false;
-	    } else{
-		    single_threaded_passed = true;
-		    ground_truth = &single_threaded_res->Collection();
-	    }
+	single_threaded_res = conn.Query("SELECT * FROM read_csv_auto('" + path + "', parallel = 0) ORDER BY ALL");
+	if (single_threaded_res->HasError()) {
+		single_threaded_passed = false;
+	} else {
+		single_threaded_passed = true;
+		ground_truth = &single_threaded_res->Collection();
+	}
 
 	// For parallel CSV Reading the buffer must be at least the size of the biggest line in the File.
 	idx_t min_buffer_size = conn.context->client_data->max_line_length + 2;
@@ -53,52 +53,53 @@ bool RunFull(std::string &path, std::set<std::string> &skip, duckdb::Connection 
 	// Let's go from 1 to 8 threads.
 	// TODO: Iterate over different buffer sizes
 
-		if (debug) {
-	std::cout << path << std::endl;
-		}
-	for (auto thread_count = 2; thread_count <= 8; thread_count++) {
-		    DuckDB db(nullptr);
+	if (debug) {
+		std::cout << path << std::endl;
+	}
+	for (auto thread_count = 1; thread_count <= 8; thread_count++) {
+		DuckDB db(nullptr);
 		Connection multi_conn(db);
 		for (auto buffer_size = min_buffer_size; buffer_size < max_buffer_size; buffer_size++) {
 			if (debug) {
 				std::cout << " Thread count: " << to_string(thread_count) << " Buffer Size: " << to_string(buffer_size)
 				          << std::endl;
 			}
-				multi_conn.Query("SET preserve_insertion_order=false;");
-				multi_conn.Query("PRAGMA threads=" + to_string(thread_count));
-				unique_ptr<MaterializedQueryResult> multi_threaded_result = multi_conn.Query(
-				    "SELECT * FROM read_csv_auto('" + path + "', buffer_size = " + to_string(buffer_size) + ") ORDER BY ALL");
-			    bool multi_threaded_passed;
-			    ColumnDataCollection *result = nullptr;
-			    if (multi_threaded_result->HasError()){
-					multi_threaded_passed = false;
-				} else{
-					multi_threaded_passed = true;
-					result = &multi_threaded_result->Collection();
-				}
-			    if (!single_threaded_passed && !multi_threaded_passed){
-				    // Two wrongs can make a right
-					continue;
-			    }
-			    if (!single_threaded_passed && multi_threaded_passed) {
-					//! oh oh, this should not pass
-					std::cout << path << " Failed on single threaded but succeeded on parallel reading" << std::endl;
-				    return true;
-				}
-			    if (!multi_threaded_passed){
-				    std::cout << path << " Multithreaded failed" << std::endl;
-				    std::cout << multi_threaded_result->GetError() << std::endl;
-				    return true;
-			    }
-				// Results do not match
-				string error_message;
-				if (!ColumnDataCollection::ResultEquals(*ground_truth, *result, error_message,true)) {
-					std::cout << path << " Thread count: " << to_string(thread_count)
-					          << " Buffer Size: " << to_string(buffer_size) << std::endl;
-					std::cout << error_message << std::endl;
-					return true;
-				}
+			multi_conn.Query("SET preserve_insertion_order=false;");
+			multi_conn.Query("PRAGMA threads=" + to_string(thread_count));
+			unique_ptr<MaterializedQueryResult> multi_threaded_result =
+			    multi_conn.Query("SELECT * FROM read_csv_auto('" + path + "', buffer_size = " + to_string(buffer_size) +
+			                     ") ORDER BY ALL");
+			bool multi_threaded_passed;
+			ColumnDataCollection *result = nullptr;
+			if (multi_threaded_result->HasError()) {
+				multi_threaded_passed = false;
+			} else {
+				multi_threaded_passed = true;
+				result = &multi_threaded_result->Collection();
 			}
+			if (!single_threaded_passed && !multi_threaded_passed) {
+				// Two wrongs can make a right
+				continue;
+			}
+			if (!single_threaded_passed && multi_threaded_passed) {
+				//! oh oh, this should not pass
+				std::cout << path << " Failed on single threaded but succeeded on parallel reading" << std::endl;
+				return true;
+			}
+			if (!multi_threaded_passed) {
+				std::cout << path << " Multithreaded failed" << std::endl;
+				std::cout << multi_threaded_result->GetError() << std::endl;
+				return true;
+			}
+			// Results do not match
+			string error_message;
+			if (!ColumnDataCollection::ResultEquals(*ground_truth, *result, error_message, true)) {
+				std::cout << path << " Thread count: " << to_string(thread_count)
+				          << " Buffer Size: " << to_string(buffer_size) << std::endl;
+				std::cout << error_message << std::endl;
+				return true;
+			}
+		}
 	}
 
 	return true;
@@ -118,22 +119,22 @@ void RunTestOnFolder(const string &path, std::set<std::string> &skip) {
 	}
 }
 
-// TEST_CASE("Test One File", "[parallel-csv]") {
-//	DuckDB db(nullptr);
-//	Connection con(db);
-//	std::set<std::string> skip;
-//	con.Query("SET preserve_insertion_order=false;");
-//
-//	string file = "test/sql/copy/csv/data/auto/utf8bom.csv";
-////		auto thread_count = 2;
-////		auto buffer_size = 1266;
-////		con.Query("PRAGMA threads=" + to_string(thread_count));
-////		unique_ptr<MaterializedQueryResult> multi_threaded_result = con.Query(
-////		    "SELECT * FROM read_csv_auto('" + file + "', buffer_size = " + to_string(buffer_size) + ")");
-////		auto &result = multi_threaded_result->Collection();
-////	    auto rows = result.GetRows();
-//	REQUIRE(RunFull(file, skip, con));
-//}
+TEST_CASE("Test One File", "[parallel-csv]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	std::set<std::string> skip;
+	con.Query("SET preserve_insertion_order=false;");
+
+	string file = "/Users/holanda/Desktop/ips.csv.gz";
+	//		auto thread_count = 2;
+	//		auto buffer_size = 1266;
+	//		con.Query("PRAGMA threads=" + to_string(thread_count));
+	//		unique_ptr<MaterializedQueryResult> multi_threaded_result = con.Query(
+	//		    "SELECT * FROM read_csv_auto('" + file + "', buffer_size = " + to_string(buffer_size) + ")");
+	//		auto &result = multi_threaded_result->Collection();
+	//	    auto rows = result.GetRows();
+	REQUIRE(RunFull(file, skip, con));
+}
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data", "[parallel-csv]") {
 	std::set<std::string> skip;
@@ -144,22 +145,11 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/auto", "[paralle
 	std::set<std::string> skip;
 	// This file is from a 'mode skip' test
 	skip.insert("test/sql/copy/csv/data/auto/titlebasicsdebug.tsv");
-	skip.insert("test/sql/copy/csv/data/auto/utf8bom.csv");
-	skip.insert("test/sql/copy/csv/data/auto/multi_column_string_mix.csv");
-	skip.insert("test/sql/copy/csv/data/auto/test_multiple_columns_rn.csv");
-	skip.insert("test/sql/copy/csv/data/auto/multi_column_string_r_n.csv");
-	skip.insert("test/sql/copy/csv/data/auto/multi_column_string_mix.csv");
-	skip.insert("test/sql/copy/csv/data/auto/issue_1254_rn.csv");
-	skip.insert("test/sql/copy/csv/data/auto/test_single_column_rn.csv");
 	RunTestOnFolder("test/sql/copy/csv/data/auto/", skip);
 }
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/auto/glob", "[parallel-csv]") {
 	std::set<std::string> skip;
-	skip.insert("test/sql/copy/csv/data/auto/glob/0.csv");
-
-	skip.insert("test/sql/copy/csv/data/auto/glob/1.csv");
-
 	RunTestOnFolder("test/sql/copy/csv/data/auto/glob/", skip);
 }
 
@@ -204,13 +194,7 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/real", "[paralle
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/test", "[parallel-csv]") {
 	std::set<std::string> skip;
-	skip.insert("test/sql/copy/csv/data/test/multi_column_string_rn.csv");
-	skip.insert("test/sql/copy/csv/data/test/windows_newline.csv");
-	skip.insert("test/sql/copy/csv/data/test/mixed_line_endings.csv");
-	skip.insert("test/sql/copy/csv/data/test/new_line_string_rn.csv");
-	skip.insert("test/sql/copy/csv/data/test/new_line_string_rn_exc.csv");
 	skip.insert("test/sql/copy/csv/data/test/issue3562_assertion.csv.gz");
-	skip.insert("test/sql/copy/csv/data/test/multi_column_integer_rn.csv.gz");
 	RunTestOnFolder("test/sql/copy/csv/data/test/", skip);
 }
 
@@ -225,8 +209,9 @@ TEST_CASE("Test Parallel CSV All Files - data/csv", "[parallel-csv]") {
 	std::set<std::string> skip;
 	skip.insert("data/csv/tpcds_59.csv");
 	skip.insert("data/csv/nullpadding_big_mixed.csv");
-	skip.insert("data/csv/sequences.csv.gz");
-	skip.insert("data/csv/comma_decimal_null.csv");
+	skip.insert("data/csv/ips.csv.gz");
+	//	skip.insert("data/csv/sequences.csv.gz");
+	//	skip.insert("data/csv/comma_decimal_null.csv");
 	RunTestOnFolder("data/csv/", skip);
 }
 
