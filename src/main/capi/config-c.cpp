@@ -69,10 +69,9 @@ void duckdb_destroy_config(duckdb_config *config) {
 }
 
 duckdb_state duckdb_add_custom_buffer_manager(duckdb_config config, void *allocation_context,
-                                              duckdb_allocate_func allocate_func,
-                                              duckdb_reallocate_func reallocate_func, duckdb_destroy_func destroy_func,
-                                              duckdb_pin_func pin_func, duckdb_unpin_func unpin_func,
-                                              duckdb_max_memory_func max_memory_func,
+                                              duckdb_register_memory allocate_func, duckdb_resize_block reallocate_func,
+                                              duckdb_destroy_block destroy_func, duckdb_pin_block pin_func,
+                                              duckdb_unpin_block unpin_func, duckdb_max_memory_func max_memory_func,
                                               duckdb_used_memory_func used_memory_func) {
 
 	// 'allocation_context' is allowed to be NULL, we don't dereference it anyways

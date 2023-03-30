@@ -156,10 +156,7 @@ void StandardBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t bl
 		handle->memory_charge.Resize(req.alloc_size);
 	}
 
-	// resize and adjust current memory
-	handle->buffer->Resize(block_size);
-	handle->memory_usage += memory_delta;
-	D_ASSERT(handle->memory_usage == handle->buffer->AllocSize());
+	handle->ResizeBuffer(block_size, memory_delta);
 }
 
 BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {

@@ -9,18 +9,19 @@
 
 namespace duckdb {
 
-BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p)
+BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, BlockHandleType type)
     : block_manager(block_manager), readers(0), block_id(block_id_p), buffer(nullptr), eviction_timestamp(0),
-      can_destroy(false), memory_charge(block_manager.buffer_manager.GetBufferPool()), unswizzled(nullptr) {
+      can_destroy(false), memory_charge(block_manager.buffer_manager.GetBufferPool()), unswizzled(nullptr), type(type) {
 	eviction_timestamp = 0;
 	state = BlockState::BLOCK_UNLOADED;
 	memory_usage = Storage::BLOCK_ALLOC_SIZE;
 }
 
 BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, unique_ptr<FileBuffer> buffer_p,
-                         bool can_destroy_p, idx_t block_size, BufferPoolReservation &&reservation)
+                         bool can_destroy_p, idx_t block_size, BufferPoolReservation &&reservation,
+                         BlockHandleType type)
     : block_manager(block_manager), readers(0), block_id(block_id_p), eviction_timestamp(0), can_destroy(can_destroy_p),
-      memory_charge(block_manager.buffer_manager.GetBufferPool()), unswizzled(nullptr) {
+      memory_charge(block_manager.buffer_manager.GetBufferPool()), unswizzled(nullptr), type(type) {
 	buffer = std::move(buffer_p);
 	state = BlockState::BLOCK_LOADED;
 	memory_usage = block_size;
@@ -35,7 +36,9 @@ BlockHandle::~BlockHandle() {
 	if (buffer && state == BlockState::BLOCK_LOADED) {
 		D_ASSERT(memory_charge.size > 0);
 		// the block is still loaded in memory: erase it
-		buffer.reset();
+		if (can_destroy) {
+			buffer.reset();
+		}
 		memory_charge.Resize(0);
 	} else {
 		D_ASSERT(memory_charge.size == 0);
