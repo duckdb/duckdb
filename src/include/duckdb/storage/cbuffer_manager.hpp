@@ -4,7 +4,6 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/storage/buffer/dummy_buffer_pool.hpp"
-#include "duckdb/storage/in_memory_block_manager.hpp"
 
 namespace duckdb {
 
@@ -60,19 +59,12 @@ protected:
 	void DeleteTemporaryFile(block_id_t block_id) final override;
 	void AddToEvictionQueue(shared_ptr<BlockHandle> &handle) final override;
 
-private:
-	// static data_ptr_t CBufferAllocatorAllocate(PrivateAllocatorData *private_data, idx_t size);
-	// static void CBufferAllocatorFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size);
-	// static data_ptr_t CBufferAllocatorRealloc(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
-	//                                          idx_t size);
-
 public:
 	CBufferManagerConfig config;
 	unique_ptr<BlockManager> block_manager;
 	unique_ptr<DummyBufferPool> buffer_pool;
 	//! The temporary id used for managed buffers
 	atomic<block_id_t> temporary_id;
-	// Allocator custom_allocator;
 	Allocator allocator;
 };
 

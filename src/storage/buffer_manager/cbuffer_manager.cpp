@@ -149,28 +149,4 @@ void CBufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 	// no op
 }
 
-////===--------------------------------------------------------------------===//
-//// Buffer Allocator
-////===--------------------------------------------------------------------===//
-// data_ptr_t CBufferManager::CBufferAllocatorAllocate(PrivateAllocatorData *private_data, idx_t size) {
-//	auto &data = (CBufferAllocatorData &)*private_data;
-//	auto &config = data.manager.config;
-//	duckdb_block buffer = config.allocate_func(config.data, size);
-//	return (data_ptr_t)buffer;
-//}
-
-// void CBufferManager::CBufferAllocatorFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
-//	auto &data = (CBufferAllocatorData &)*private_data;
-//	auto &config = data.manager.config;
-//	config.destroy_func(config.data, pointer);
-//}
-
-// data_ptr_t CBufferManager::CBufferAllocatorRealloc(PrivateAllocatorData *private_data, data_ptr_t pointer,
-//                                                   idx_t old_size, idx_t size) {
-//	auto &data = (CBufferAllocatorData &)*private_data;
-//	auto &config = data.manager.config;
-//	auto buffer = config.reallocate_func(config.data, pointer, old_size, size);
-//	return (data_ptr_t)buffer;
-//}
-
 } // namespace duckdb
