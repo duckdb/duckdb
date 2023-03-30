@@ -130,7 +130,7 @@ SELECT * FROM '__TEST_DIR__/to_be_overwritten/a=9/data_[0-9]*.parquet';
 
 # Test with a combination of {i} and {uuid}
 statement ok
-COPY test5 TO '__TEST_DIR__/incorrect_pos' (FORMAT PARQUET, PARTITION_BY (a), filenam_epattern "a_name_{i}oh_{uuid}_really");
+COPY test5 TO '__TEST_DIR__/incorrect_pos' (FORMAT PARQUET, PARTITION_BY (a), filename_pattern "a_name_{i}oh_{uuid}_really");
 
 query III sort
 SELECT * FROM '__TEST_DIR__/incorrect_pos/a=5/a_name_oh_????????-????-4???-????-????????????_really.parquet';
