@@ -151,7 +151,7 @@ void ExpressionIterator::EnumerateTableRefChildren(BoundTableRef &ref,
                                                    const std::function<void(Expression &child)> &callback) {
 	switch (ref.type) {
 	case TableReferenceType::EXPRESSION_LIST: {
-		auto &bound_expr_list = (BoundExpressionListRef &)ref;
+		auto &bound_expr_list = ref.Cast<BoundExpressionListRef>();
 		for (auto &expr_list : bound_expr_list.values) {
 			for (auto &expr : expr_list) {
 				EnumerateExpression(expr, callback);
@@ -160,7 +160,7 @@ void ExpressionIterator::EnumerateTableRefChildren(BoundTableRef &ref,
 		break;
 	}
 	case TableReferenceType::JOIN: {
-		auto &bound_join = (BoundJoinRef &)ref;
+		auto &bound_join = ref.Cast<BoundJoinRef>();
 		if (bound_join.condition) {
 			EnumerateExpression(bound_join.condition, callback);
 		}
@@ -169,7 +169,7 @@ void ExpressionIterator::EnumerateTableRefChildren(BoundTableRef &ref,
 		break;
 	}
 	case TableReferenceType::SUBQUERY: {
-		auto &bound_subquery = (BoundSubqueryRef &)ref;
+		auto &bound_subquery = ref.Cast<BoundSubqueryRef>();
 		EnumerateQueryNodeChildren(*bound_subquery.subquery, callback);
 		break;
 	}

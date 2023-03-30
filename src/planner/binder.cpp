@@ -187,25 +187,25 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 	unique_ptr<LogicalOperator> root;
 	switch (ref.type) {
 	case TableReferenceType::BASE_TABLE:
-		root = CreatePlan((BoundBaseTableRef &)ref);
+		root = CreatePlan(ref.Cast<BoundBaseTableRef>());
 		break;
 	case TableReferenceType::SUBQUERY:
-		root = CreatePlan((BoundSubqueryRef &)ref);
+		root = CreatePlan(ref.Cast<BoundSubqueryRef>());
 		break;
 	case TableReferenceType::JOIN:
-		root = CreatePlan((BoundJoinRef &)ref);
+		root = CreatePlan(ref.Cast<BoundJoinRef>());
 		break;
 	case TableReferenceType::TABLE_FUNCTION:
-		root = CreatePlan((BoundTableFunction &)ref);
+		root = CreatePlan(ref.Cast<BoundTableFunction>());
 		break;
 	case TableReferenceType::EMPTY:
-		root = CreatePlan((BoundEmptyTableRef &)ref);
+		root = CreatePlan(ref.Cast<BoundEmptyTableRef>());
 		break;
 	case TableReferenceType::EXPRESSION_LIST:
-		root = CreatePlan((BoundExpressionListRef &)ref);
+		root = CreatePlan(ref.Cast<BoundExpressionListRef>());
 		break;
 	case TableReferenceType::CTE:
-		root = CreatePlan((BoundCTERef &)ref);
+		root = CreatePlan(ref.Cast<BoundCTERef>());
 		break;
 	case TableReferenceType::INVALID:
 	default:
