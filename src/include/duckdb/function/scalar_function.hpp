@@ -29,13 +29,13 @@ class ScalarFunctionCatalogEntry;
 
 struct FunctionStatisticsInput {
 	FunctionStatisticsInput(BoundFunctionExpression &expr_p, FunctionData *bind_data_p,
-	                        vector<unique_ptr<BaseStatistics>> &child_stats_p, unique_ptr<Expression> *expr_ptr_p)
+	                        vector<BaseStatistics> &child_stats_p, unique_ptr<Expression> *expr_ptr_p)
 	    : expr(expr_p), bind_data(bind_data_p), child_stats(child_stats_p), expr_ptr(expr_ptr_p) {
 	}
 
 	BoundFunctionExpression &expr;
 	FunctionData *bind_data;
-	vector<unique_ptr<BaseStatistics>> &child_stats;
+	vector<BaseStatistics> &child_stats;
 	unique_ptr<Expression> *expr_ptr;
 };
 

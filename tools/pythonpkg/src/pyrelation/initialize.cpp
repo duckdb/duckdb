@@ -146,7 +146,7 @@ static void InitializeSetOperators(py::class_<DuckDBPyRelation> &m) {
 static void InitializeMetaQueries(py::class_<DuckDBPyRelation> &m) {
 	m.def("describe", &DuckDBPyRelation::Describe,
 	      "Gives basic statistics (e.g., min,max) and if null exists for each column of the relation.")
-	    .def("explain", &DuckDBPyRelation::Explain);
+	    .def("explain", &DuckDBPyRelation::Explain, py::arg("type") = "standard");
 }
 
 void DuckDBPyRelation::Initialize(py::handle &m) {
@@ -156,6 +156,13 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	InitializeSetOperators(relation_module);
 	InitializeMetaQueries(relation_module);
 	InitializeConsumers(relation_module);
+
+	relation_module.def("__getattr__", &DuckDBPyRelation::GetAttribute,
+	                    "Get a projection relation created from this relation, on the provided column name",
+	                    py::arg("name"));
+	relation_module.def("__getitem__", &DuckDBPyRelation::GetAttribute,
+	                    "Get a projection relation created from this relation, on the provided column name",
+	                    py::arg("name"));
 
 	relation_module
 	    .def("filter", &DuckDBPyRelation::Filter, "Filter the relation object by the filter in filter_expr",

@@ -7,7 +7,6 @@
 #include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_positional_join.hpp"
-#include "duckdb/storage/statistics/validity_statistics.hpp"
 
 namespace duckdb {
 
@@ -196,6 +195,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 	switch (join.type) {
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 		PropagateStatistics((LogicalComparisonJoin &)join, node_ptr);
 		break;
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
@@ -210,7 +210,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 		for (auto &binding : right_bindings) {
 			auto stats = statistics_map.find(binding);
 			if (stats != statistics_map.end()) {
-				stats->second->validity_stats = make_unique<ValidityStatistics>(true);
+				stats->second->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 			}
 		}
 	}
@@ -219,7 +219,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 		for (auto &binding : left_bindings) {
 			auto stats = statistics_map.find(binding);
 			if (stats != statistics_map.end()) {
-				stats->second->validity_stats = make_unique<ValidityStatistics>(true);
+				stats->second->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 			}
 		}
 	}
@@ -265,7 +265,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalPosi
 	for (auto &binding : left_bindings) {
 		auto stats = statistics_map.find(binding);
 		if (stats != statistics_map.end()) {
-			stats->second->validity_stats = make_unique<ValidityStatistics>(true);
+			stats->second->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 		}
 	}
 
@@ -274,7 +274,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalPosi
 	for (auto &binding : right_bindings) {
 		auto stats = statistics_map.find(binding);
 		if (stats != statistics_map.end()) {
-			stats->second->validity_stats = make_unique<ValidityStatistics>(true);
+			stats->second->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 		}
 	}
 

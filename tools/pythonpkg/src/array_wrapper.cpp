@@ -535,55 +535,41 @@ RawArrayWrapper::RawArrayWrapper(const LogicalType &type) : data(nullptr), type(
 	}
 }
 
-void RawArrayWrapper::Initialize(idx_t capacity) {
-	string dtype;
+string RawArrayWrapper::DuckDBToNumpyDtype(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
-		dtype = "bool";
-		break;
+		return "bool";
 	case LogicalTypeId::TINYINT:
-		dtype = "int8";
-		break;
+		return "int8";
 	case LogicalTypeId::SMALLINT:
-		dtype = "int16";
-		break;
+		return "int16";
 	case LogicalTypeId::INTEGER:
-		dtype = "int32";
-		break;
+		return "int32";
 	case LogicalTypeId::BIGINT:
-		dtype = "int64";
-		break;
+		return "int64";
 	case LogicalTypeId::UTINYINT:
-		dtype = "uint8";
-		break;
+		return "uint8";
 	case LogicalTypeId::USMALLINT:
-		dtype = "uint16";
-		break;
+		return "uint16";
 	case LogicalTypeId::UINTEGER:
-		dtype = "uint32";
-		break;
+		return "uint32";
 	case LogicalTypeId::UBIGINT:
-		dtype = "uint64";
-		break;
+		return "uint64";
 	case LogicalTypeId::FLOAT:
-		dtype = "float32";
-		break;
+		return "float32";
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
-		dtype = "float64";
-		break;
+		return "float64";
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::DATE:
-		dtype = "datetime64[ns]";
-		break;
+		return "datetime64[ns]";
 	case LogicalTypeId::INTERVAL:
-		dtype = "timedelta64[ns]";
-		break;
+		return "timedelta64[ns]";
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::VARCHAR:
@@ -593,23 +579,27 @@ void RawArrayWrapper::Initialize(idx_t capacity) {
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::STRUCT:
 	case LogicalTypeId::UUID:
-		dtype = "object";
-		break;
+		return "object";
 	case LogicalTypeId::ENUM: {
 		auto size = EnumType::GetSize(type);
 		if (size <= (idx_t)NumericLimits<int8_t>::Maximum()) {
-			dtype = "int8";
+			return "int8";
 		} else if (size <= (idx_t)NumericLimits<int16_t>::Maximum()) {
-			dtype = "int16";
+			return "int16";
 		} else if (size <= (idx_t)NumericLimits<int32_t>::Maximum()) {
-			dtype = "int32";
+			return "int32";
 		} else {
 			throw InternalException("Size not supported on ENUM types");
 		}
-	} break;
+	}
 	default:
 		throw NotImplementedException("Unsupported type \"%s\"", type.ToString());
 	}
+}
+
+void RawArrayWrapper::Initialize(idx_t capacity) {
+	string dtype = DuckDBToNumpyDtype(type);
+
 	array = py::array(py::dtype(dtype), capacity);
 	data = (data_ptr_t)array.mutable_data();
 }

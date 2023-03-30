@@ -25,6 +25,7 @@ add_library_unity(
   uuid.cpp
   hyperloglog.cpp
   interval.cpp
+  list_segment.cpp
   partitioned_column_data.cpp
   row_data_collection.cpp
   row_data_collection_scanner.cpp

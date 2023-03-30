@@ -208,6 +208,16 @@ void duckdb_table_function_add_parameter(duckdb_table_function function, duckdb_
 	tf->arguments.push_back(*logical_type);
 }
 
+void duckdb_table_function_add_named_parameter(duckdb_table_function function, const char *name,
+                                               duckdb_logical_type type) {
+	if (!function || !type) {
+		return;
+	}
+	auto tf = (duckdb::TableFunction *)function;
+	auto logical_type = (duckdb::LogicalType *)type;
+	tf->named_parameters.insert({name, *logical_type});
+}
+
 void duckdb_table_function_set_extra_info(duckdb_table_function function, void *extra_info,
                                           duckdb_delete_callback_t destroy) {
 	if (!function) {
@@ -317,6 +327,19 @@ duckdb_value duckdb_bind_get_parameter(duckdb_bind_info info, idx_t index) {
 	}
 	auto bind_info = (duckdb::CTableInternalBindInfo *)info;
 	return reinterpret_cast<duckdb_value>(new duckdb::Value(bind_info->input.inputs[index]));
+}
+
+duckdb_value duckdb_bind_get_named_parameter(duckdb_bind_info info, const char *name) {
+	if (!info || !name) {
+		return nullptr;
+	}
+	auto bind_info = (duckdb::CTableInternalBindInfo *)info;
+	auto t = bind_info->input.named_parameters.find(name);
+	if (t == bind_info->input.named_parameters.end()) {
+		return nullptr;
+	} else {
+		return reinterpret_cast<duckdb_value>(new duckdb::Value(t->second));
+	}
 }
 
 void duckdb_bind_set_bind_data(duckdb_bind_info info, void *bind_data, duckdb_delete_callback_t destroy) {

@@ -1,9 +1,11 @@
 #include "duckdb/common/hive_partitioning.hpp"
-#include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/optimizer/filter_combiner.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "re2/re2.h"
 
 namespace duckdb {

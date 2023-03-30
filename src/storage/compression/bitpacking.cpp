@@ -1,16 +1,16 @@
 #include "duckdb/common/bitpacking.hpp"
 
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/types/null_value.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
+
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 #include <functional>
 
@@ -455,8 +455,8 @@ public:
 			state->current_segment->count += count;
 
 			if (WRITE_STATISTICS && !state->state.all_invalid) {
-				NumericStatistics::Update<T>(state->current_segment->stats, state->state.minimum);
-				NumericStatistics::Update<T>(state->current_segment->stats, state->state.maximum);
+				NumericStats::Update<T>(state->current_segment->stats.statistics, state->state.minimum);
+				NumericStats::Update<T>(state->current_segment->stats.statistics, state->state.maximum);
 			}
 		}
 	};

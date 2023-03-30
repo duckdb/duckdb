@@ -519,12 +519,12 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
 	@Override
 	public <T> T unwrap(Class<T> iface) throws SQLException {
-		throw new SQLFeatureNotSupportedException("unwrap");
+		return JdbcUtils.unwrap(this, iface);
 	}
 
 	@Override
-	public boolean isWrapperFor(Class<?> iface) throws SQLException {
-		throw new SQLFeatureNotSupportedException("isWrapperFor");
+	public boolean isWrapperFor(Class<?> iface) {
+		return iface.isInstance(this);
 	}
 
 	@Override

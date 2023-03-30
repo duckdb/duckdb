@@ -307,7 +307,7 @@ typedef struct PGFuncCall {
 typedef struct PGAStar {
 	PGNodeTag type;
 	char *relation;       /* relation name (optional) */
-	char *regex;          /* optional: REGEX to select columns */
+	PGNode *expr;         /* optional: the expression (regex or list) to select columns */
 	PGList *except_list;  /* optional: EXCLUDE list */
 	PGList *replace_list; /* optional: REPLACE list */
 	bool columns;         /* whether or not this is a columns list */
@@ -1169,6 +1169,7 @@ typedef struct PGUpdateStmt {
 typedef struct PGPivot {
 	PGNodeTag type;
 	PGList *pivot_columns;  /* The column names to pivot on */
+	PGList *unpivot_columns;/* The column names to unpivot */
 	PGList *pivot_value;    /* The set of pivot values */
 	char *pivot_enum;       /* The enum to fetch the unique values from */
 } PGPivot;

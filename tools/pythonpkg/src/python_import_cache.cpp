@@ -40,7 +40,9 @@ void PythonImportCacheItem::LoadModule(const string &name, PythonImportCache &ca
 		object = AddCache(cache, std::move(py::module::import(name.c_str())));
 	} catch (py::error_already_set &e) {
 		if (IsRequired()) {
-			throw InvalidInputException("Required module '%s' failed to import", name);
+			PyErr_PrintEx(1);
+			throw InvalidInputException(
+			    "Required module '%s' failed to import, due to the following Python exception:\n%s", name, e.what());
 		}
 		return;
 	}

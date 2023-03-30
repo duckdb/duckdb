@@ -12,6 +12,11 @@
 
 namespace duckdb {
 
+using regexp_util::CreateStringPiece;
+using regexp_util::Extract;
+using regexp_util::ParseRegexOptions;
+using regexp_util::TryParseConstantPattern;
+
 static bool RegexOptionsEquals(const duckdb_re2::RE2::Options &opt_a, const duckdb_re2::RE2::Options &opt_b) {
 	return opt_a.case_sensitive() == opt_b.case_sensitive();
 }
@@ -32,10 +37,6 @@ bool RegexpBaseBindData::Equals(const FunctionData &other_p) const {
 	       RegexOptionsEquals(options, other.options);
 }
 
-static inline duckdb_re2::StringPiece CreateStringPiece(string_t &input) {
-	return duckdb_re2::StringPiece(input.GetDataUnsafe(), input.GetSize());
-}
-
 unique_ptr<FunctionLocalState> RegexInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr,
                                                    FunctionData *bind_data) {
 	auto &info = (RegexpBaseBindData &)*bind_data;
@@ -43,75 +44,6 @@ unique_ptr<FunctionLocalState> RegexInitLocalState(ExpressionState &state, const
 		return make_unique<RegexLocalState>(info);
 	}
 	return nullptr;
-}
-
-static void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, bool *global_replace = nullptr) {
-	for (idx_t i = 0; i < options.size(); i++) {
-		switch (options[i]) {
-		case 'c':
-			// case-sensitive matching
-			result.set_case_sensitive(true);
-			break;
-		case 'i':
-			// case-insensitive matching
-			result.set_case_sensitive(false);
-			break;
-		case 'l':
-			// literal matching
-			result.set_literal(true);
-			break;
-		case 'm':
-		case 'n':
-		case 'p':
-			// newline-sensitive matching
-			result.set_dot_nl(false);
-			break;
-		case 's':
-			// non-newline-sensitive matching
-			result.set_dot_nl(true);
-			break;
-		case 'g':
-			// global replace, only available for regexp_replace
-			if (global_replace) {
-				*global_replace = true;
-			} else {
-				throw InvalidInputException("Option 'g' (global replace) is only valid for regexp_replace");
-			}
-			break;
-		case ' ':
-		case '\t':
-		case '\n':
-			// ignore whitespace
-			break;
-		default:
-			throw InvalidInputException("Unrecognized Regex option %c", options[i]);
-		}
-	}
-}
-
-void ParseRegexOptions(ClientContext &context, Expression &expr, RE2::Options &target, bool *global_replace = nullptr) {
-	if (expr.HasParameter()) {
-		throw ParameterNotResolvedException();
-	}
-	if (!expr.IsFoldable()) {
-		throw InvalidInputException("Regex options field must be a constant");
-	}
-	Value options_str = ExpressionExecutor::EvaluateScalar(context, expr);
-	if (!options_str.IsNull() && options_str.type().id() == LogicalTypeId::VARCHAR) {
-		ParseRegexOptions(StringValue::Get(options_str), target, global_replace);
-	}
-}
-
-static bool TryParseConstantPattern(ClientContext &context, Expression &expr, string &constant_string) {
-	if (!expr.IsFoldable()) {
-		return false;
-	}
-	Value pattern_str = ExpressionExecutor::EvaluateScalar(context, expr);
-	if (!pattern_str.IsNull() && pattern_str.type().id() == LogicalTypeId::VARCHAR) {
-		constant_string = StringValue::Get(pattern_str);
-		return true;
-	}
-	return false;
 }
 
 //===--------------------------------------------------------------------===//
@@ -321,13 +253,6 @@ static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarF
 	                                          std::move(group_string));
 }
 
-inline static string_t Extract(const string_t &input, Vector &result, const RE2 &re,
-                               const duckdb_re2::StringPiece &rewrite) {
-	std::string extracted;
-	RE2::Extract(input.GetString(), re, rewrite, &extracted);
-	return StringVector::AddString(result, extracted.c_str(), extracted.size());
-}
-
 static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	const auto &info = (RegexpExtractBindData &)*func_expr.bind_info;
@@ -391,10 +316,26 @@ void RegexpFun::RegisterFunction(BuiltinFunctions &set) {
 	    RegexExtractFunction, RegexExtractBind, nullptr, nullptr, RegexInitLocalState, LogicalType::INVALID,
 	    FunctionSideEffects::NO_SIDE_EFFECTS, FunctionNullHandling::SPECIAL_HANDLING));
 
+	ScalarFunctionSet regexp_extract_all("regexp_extract_all");
+	regexp_extract_all.AddFunction(ScalarFunction(
+	    {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::LIST(LogicalType::VARCHAR),
+	    RegexpExtractAll::Execute, RegexpExtractAll::Bind, nullptr, nullptr, RegexpExtractAll::InitLocalState,
+	    LogicalType::INVALID, FunctionSideEffects::NO_SIDE_EFFECTS, FunctionNullHandling::SPECIAL_HANDLING));
+	regexp_extract_all.AddFunction(ScalarFunction(
+	    {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::INTEGER}, LogicalType::LIST(LogicalType::VARCHAR),
+	    RegexpExtractAll::Execute, RegexpExtractAll::Bind, nullptr, nullptr, RegexpExtractAll::InitLocalState,
+	    LogicalType::INVALID, FunctionSideEffects::NO_SIDE_EFFECTS, FunctionNullHandling::SPECIAL_HANDLING));
+	regexp_extract_all.AddFunction(
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::INTEGER, LogicalType::VARCHAR},
+	                   LogicalType::LIST(LogicalType::VARCHAR), RegexpExtractAll::Execute, RegexpExtractAll::Bind,
+	                   nullptr, nullptr, RegexpExtractAll::InitLocalState, LogicalType::INVALID,
+	                   FunctionSideEffects::NO_SIDE_EFFECTS, FunctionNullHandling::SPECIAL_HANDLING));
+
 	set.AddFunction(regexp_full_match);
 	set.AddFunction(regexp_partial_match);
 	set.AddFunction(regexp_replace);
 	set.AddFunction(regexp_extract);
+	set.AddFunction(regexp_extract_all);
 }
 
 } // namespace duckdb
