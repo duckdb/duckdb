@@ -29,11 +29,11 @@ BoundStatement Binder::Bind(ResetVariableStatement &stmt) {
 BoundStatement Binder::Bind(SetStatement &stmt) {
 	switch (stmt.set_type) {
 	case SetType::SET: {
-		auto &set_stmt = (SetVariableStatement &)stmt;
+		auto &set_stmt = stmt.Cast<SetVariableStatement>();
 		return Bind(set_stmt);
 	}
 	case SetType::RESET: {
-		auto &set_stmt = (ResetVariableStatement &)stmt;
+		auto &set_stmt = stmt.Cast<ResetVariableStatement>();
 		return Bind(set_stmt);
 	}
 	default:

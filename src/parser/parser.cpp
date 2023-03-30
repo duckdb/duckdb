@@ -178,7 +178,7 @@ void Parser::ParseQuery(const string &query) {
 		for (auto &statement : statements) {
 			statement->query = query;
 			if (statement->type == StatementType::CREATE_STATEMENT) {
-				auto &create = (CreateStatement &)*statement;
+				auto &create = statement->Cast<CreateStatement>();
 				create.info->sql = query.substr(statement->stmt_location, statement->stmt_length);
 			}
 		}
@@ -261,7 +261,7 @@ vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(const string &s
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
 		throw ParserException("Expected a single SELECT statement");
 	}
-	auto &select = (SelectStatement &)*parser.statements[0];
+	auto &select = parser.statements[0]->Cast<SelectStatement>();
 	if (select.node->type != QueryNodeType::SELECT_NODE) {
 		throw ParserException("Expected a single SELECT node");
 	}
@@ -279,7 +279,7 @@ vector<OrderByNode> Parser::ParseOrderList(const string &select_list, ParserOpti
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
 		throw ParserException("Expected a single SELECT statement");
 	}
-	auto &select = (SelectStatement &)*parser.statements[0];
+	auto &select = parser.statements[0]->Cast<SelectStatement>();
 	if (select.node->type != QueryNodeType::SELECT_NODE) {
 		throw ParserException("Expected a single SELECT node");
 	}
@@ -303,7 +303,7 @@ void Parser::ParseUpdateList(const string &update_list, vector<string> &update_c
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::UPDATE_STATEMENT) {
 		throw ParserException("Expected a single UPDATE statement");
 	}
-	auto &update = (UpdateStatement &)*parser.statements[0];
+	auto &update = parser.statements[0]->Cast<UpdateStatement>();
 	update_columns = std::move(update.set_info->columns);
 	expressions = std::move(update.set_info->expressions);
 }
@@ -318,7 +318,7 @@ vector<vector<unique_ptr<ParsedExpression>>> Parser::ParseValuesList(const strin
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
 		throw ParserException("Expected a single SELECT statement");
 	}
-	auto &select = (SelectStatement &)*parser.statements[0];
+	auto &select = parser.statements[0]->Cast<SelectStatement>();
 	if (select.node->type != QueryNodeType::SELECT_NODE) {
 		throw ParserException("Expected a single SELECT node");
 	}
@@ -337,7 +337,7 @@ ColumnList Parser::ParseColumnList(const string &column_list, ParserOptions opti
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::CREATE_STATEMENT) {
 		throw ParserException("Expected a single CREATE statement");
 	}
-	auto &create = (CreateStatement &)*parser.statements[0];
+	auto &create = parser.statements[0]->Cast<CreateStatement>();
 	if (create.info->type != CatalogType::TABLE_ENTRY) {
 		throw InternalException("Expected a single CREATE TABLE statement");
 	}

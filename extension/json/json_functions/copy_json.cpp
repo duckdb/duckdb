@@ -13,7 +13,7 @@ namespace duckdb {
 
 static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	auto stmt_copy = stmt.Copy();
-	auto &copy = (CopyStatement &)*stmt_copy;
+	auto &copy = stmt_copy->Cast<CopyStatement>();
 	auto &info = *copy.info;
 
 	// Bind the select statement of the original to resolve the types

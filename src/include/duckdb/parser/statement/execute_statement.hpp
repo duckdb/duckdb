@@ -16,6 +16,8 @@ namespace duckdb {
 
 class ExecuteStatement : public SQLStatement {
 public:
+	static constexpr const StatementType TYPE = StatementType::EXECUTE_STATEMENT;
+public:
 	ExecuteStatement();
 
 	string name;

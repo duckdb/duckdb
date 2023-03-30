@@ -15,6 +15,8 @@ namespace duckdb {
 
 class DetachStatement : public SQLStatement {
 public:
+	static constexpr const StatementType TYPE = StatementType::DETACH_STATEMENT;
+public:
 	DetachStatement();
 
 	unique_ptr<DetachInfo> info;

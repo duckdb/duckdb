@@ -597,7 +597,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		    make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, std::move(stmt.info), schema);
 		if (create_type_info.query) {
 			// CREATE TYPE mood AS ENUM (SELECT 'happy')
-			auto &select_stmt = (SelectStatement &)*create_type_info.query;
+			auto &select_stmt = create_type_info.query->Cast<SelectStatement>();
 			auto &query_node = *select_stmt.node;
 
 			// We always add distinct modifier implicitly

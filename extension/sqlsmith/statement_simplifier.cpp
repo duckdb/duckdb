@@ -277,16 +277,16 @@ void StatementSimplifier::Simplify(UpdateStatement &stmt) {
 void StatementSimplifier::Simplify(SQLStatement &stmt) {
 	switch (stmt.type) {
 	case StatementType::SELECT_STATEMENT:
-		Simplify((SelectStatement &)stmt);
+		Simplify(stmt.Cast<SelectStatement>());
 		break;
 	case StatementType::INSERT_STATEMENT:
-		Simplify((InsertStatement &)stmt);
+		Simplify(stmt.Cast<InsertStatement>());
 		break;
 	case StatementType::UPDATE_STATEMENT:
-		Simplify((UpdateStatement &)stmt);
+		Simplify(stmt.Cast<UpdateStatement>());
 		break;
 	case StatementType::DELETE_STATEMENT:
-		Simplify((DeleteStatement &)stmt);
+		Simplify(stmt.Cast<DeleteStatement>());
 		break;
 	default:
 		throw InvalidInputException("Expected a single SELECT, INSERT or UPDATE statement");

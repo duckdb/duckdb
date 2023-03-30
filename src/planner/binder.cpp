@@ -46,53 +46,53 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 	root_statement = &statement;
 	switch (statement.type) {
 	case StatementType::SELECT_STATEMENT:
-		return Bind((SelectStatement &)statement);
+		return Bind(statement.Cast<SelectStatement>());
 	case StatementType::INSERT_STATEMENT:
-		return Bind((InsertStatement &)statement);
+		return Bind(statement.Cast<InsertStatement>());
 	case StatementType::COPY_STATEMENT:
-		return Bind((CopyStatement &)statement);
+		return Bind(statement.Cast<CopyStatement>());
 	case StatementType::DELETE_STATEMENT:
-		return Bind((DeleteStatement &)statement);
+		return Bind(statement.Cast<DeleteStatement>());
 	case StatementType::UPDATE_STATEMENT:
-		return Bind((UpdateStatement &)statement);
+		return Bind(statement.Cast<UpdateStatement>());
 	case StatementType::RELATION_STATEMENT:
-		return Bind((RelationStatement &)statement);
+		return Bind(statement.Cast<RelationStatement>());
 	case StatementType::CREATE_STATEMENT:
-		return Bind((CreateStatement &)statement);
+		return Bind(statement.Cast<CreateStatement>());
 	case StatementType::DROP_STATEMENT:
-		return Bind((DropStatement &)statement);
+		return Bind(statement.Cast<DropStatement>());
 	case StatementType::ALTER_STATEMENT:
-		return Bind((AlterStatement &)statement);
+		return Bind(statement.Cast<AlterStatement>());
 	case StatementType::TRANSACTION_STATEMENT:
-		return Bind((TransactionStatement &)statement);
+		return Bind(statement.Cast<TransactionStatement>());
 	case StatementType::PRAGMA_STATEMENT:
-		return Bind((PragmaStatement &)statement);
+		return Bind(statement.Cast<PragmaStatement>());
 	case StatementType::EXPLAIN_STATEMENT:
-		return Bind((ExplainStatement &)statement);
+		return Bind(statement.Cast<ExplainStatement>());
 	case StatementType::VACUUM_STATEMENT:
-		return Bind((VacuumStatement &)statement);
+		return Bind(statement.Cast<VacuumStatement>());
 	case StatementType::SHOW_STATEMENT:
-		return Bind((ShowStatement &)statement);
+		return Bind(statement.Cast<ShowStatement>());
 	case StatementType::CALL_STATEMENT:
-		return Bind((CallStatement &)statement);
+		return Bind(statement.Cast<CallStatement>());
 	case StatementType::EXPORT_STATEMENT:
-		return Bind((ExportStatement &)statement);
+		return Bind(statement.Cast<ExportStatement>());
 	case StatementType::SET_STATEMENT:
-		return Bind((SetStatement &)statement);
+		return Bind(statement.Cast<SetStatement>());
 	case StatementType::LOAD_STATEMENT:
-		return Bind((LoadStatement &)statement);
+		return Bind(statement.Cast<LoadStatement>());
 	case StatementType::EXTENSION_STATEMENT:
-		return Bind((ExtensionStatement &)statement);
+		return Bind(statement.Cast<ExtensionStatement>());
 	case StatementType::PREPARE_STATEMENT:
-		return Bind((PrepareStatement &)statement);
+		return Bind(statement.Cast<PrepareStatement>());
 	case StatementType::EXECUTE_STATEMENT:
-		return Bind((ExecuteStatement &)statement);
+		return Bind(statement.Cast<ExecuteStatement>());
 	case StatementType::LOGICAL_PLAN_STATEMENT:
-		return Bind((LogicalPlanStatement &)statement);
+		return Bind(statement.Cast<LogicalPlanStatement>());
 	case StatementType::ATTACH_STATEMENT:
-		return Bind((AttachStatement &)statement);
+		return Bind(statement.Cast<AttachStatement>());
 	case StatementType::DETACH_STATEMENT:
-		return Bind((DetachStatement &)statement);
+		return Bind(statement.Cast<DetachStatement>());
 	default: // LCOV_EXCL_START
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));

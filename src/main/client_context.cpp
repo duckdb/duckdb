@@ -304,7 +304,7 @@ static bool IsExplainAnalyze(SQLStatement *statement) {
 	if (statement->type != StatementType::EXPLAIN_STATEMENT) {
 		return false;
 	}
-	auto &explain = (ExplainStatement &)*statement;
+	auto &explain = statement->Cast<ExplainStatement>();
 	return explain.explain_type == ExplainType::EXPLAIN_ANALYZE;
 }
 
