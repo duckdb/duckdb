@@ -984,13 +984,13 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		filter_info->filter_index = i;
 		// now check if it can be used as a join predicate
 		if (filter->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
-			auto comparison = (BoundComparisonExpression *)filter.get();
+			auto &comparison = filter->Cast<BoundComparisonExpression>();
 			// extract the bindings that are required for the left and right side of the comparison
 			unordered_set<idx_t> left_bindings, right_bindings;
-			ExtractBindings(*comparison->left, left_bindings);
-			ExtractBindings(*comparison->right, right_bindings);
-			GetColumnBinding(*comparison->left, filter_info->left_binding);
-			GetColumnBinding(*comparison->right, filter_info->right_binding);
+			ExtractBindings(*comparison.left, left_bindings);
+			ExtractBindings(*comparison.right, right_bindings);
+			GetColumnBinding(*comparison.left, filter_info->left_binding);
+			GetColumnBinding(*comparison.right, filter_info->right_binding);
 			if (!left_bindings.empty() && !right_bindings.empty()) {
 				// both the left and the right side have bindings
 				// first create the relation sets, if they do not exist

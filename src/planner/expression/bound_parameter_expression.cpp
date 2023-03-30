@@ -47,8 +47,8 @@ bool BoundParameterExpression::Equals(const BaseExpression *other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundParameterExpression *)other_p;
-	return parameter_nr == other->parameter_nr;
+	auto &other = other_p->Cast<BoundParameterExpression>();
+	return parameter_nr == other.parameter_nr;
 }
 
 hash_t BoundParameterExpression::Hash() const {

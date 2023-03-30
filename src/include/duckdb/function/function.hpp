@@ -107,7 +107,7 @@ public:
 	LogicalType varargs;
 
 public:
-	DUCKDB_API virtual string ToString();
+	DUCKDB_API virtual string ToString() const;
 
 	DUCKDB_API bool HasVarArgs() const;
 };
@@ -122,8 +122,8 @@ public:
 	named_parameter_type_map_t named_parameters;
 
 public:
-	DUCKDB_API string ToString() override;
-	DUCKDB_API bool HasNamedParameters();
+	DUCKDB_API string ToString() const override;
+	DUCKDB_API bool HasNamedParameters() const;
 };
 
 class BaseScalarFunction : public SimpleFunction {
@@ -145,7 +145,7 @@ public:
 public:
 	DUCKDB_API hash_t Hash() const;
 
-	DUCKDB_API string ToString() override;
+	DUCKDB_API string ToString() const override;
 };
 
 } // namespace duckdb

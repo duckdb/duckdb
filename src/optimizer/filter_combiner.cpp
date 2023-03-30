@@ -897,8 +897,8 @@ unique_ptr<Expression> FilterCombiner::FindTransitiveFilter(Expression *expr) {
 	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
 		for (idx_t i = 0; i < remaining_filters.size(); i++) {
 			if (remaining_filters[i]->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
-				auto comparison = (BoundComparisonExpression *)remaining_filters[i].get();
-				if (expr->Equals(comparison->right.get()) && comparison->type != ExpressionType::COMPARE_NOTEQUAL) {
+				auto &comparison = remaining_filters[i]->Cast<BoundComparisonExpression>();
+				if (expr->Equals(comparison.right.get()) && comparison.type != ExpressionType::COMPARE_NOTEQUAL) {
 					auto filter = std::move(remaining_filters[i]);
 					remaining_filters.erase(remaining_filters.begin() + i);
 					return filter;

@@ -59,7 +59,7 @@ public:
 
 	string ToString() const override;
 
-	bool KeysAreCompatible(const BoundWindowExpression *other) const;
+	bool KeysAreCompatible(const BoundWindowExpression &other) const;
 	bool Equals(const BaseExpression *other) const override;
 
 	unique_ptr<Expression> Copy() override;

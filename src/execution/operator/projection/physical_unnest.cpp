@@ -19,9 +19,9 @@ public:
 		vector<LogicalType> list_data_types;
 		for (auto &exp : select_list) {
 			D_ASSERT(exp->type == ExpressionType::BOUND_UNNEST);
-			auto bue = (BoundUnnestExpression *)exp.get();
-			list_data_types.push_back(bue->child->return_type);
-			executor.AddExpression(*bue->child.get());
+			auto &bue = exp->Cast<BoundUnnestExpression>();
+			list_data_types.push_back(bue.child->return_type);
+			executor.AddExpression(*bue.child.get());
 		}
 
 		auto &allocator = Allocator::Get(context);

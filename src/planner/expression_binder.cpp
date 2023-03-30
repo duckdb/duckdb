@@ -1,15 +1,9 @@
 #include "duckdb/planner/expression_binder.hpp"
 
-#include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/parser/expression/positional_reference_expression.hpp"
-#include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/expression/list.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/expression/bound_cast_expression.hpp"
-#include "duckdb/planner/expression/bound_default_expression.hpp"
-#include "duckdb/planner/expression/bound_parameter_expression.hpp"
-#include "duckdb/planner/expression/bound_subquery_expression.hpp"
+#include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
@@ -200,12 +194,11 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 		if (!success) {
 			throw BinderException(error_msg);
 		}
-		auto bound_expr = (BoundExpression *)expr.get();
-		ExtractCorrelatedExpressions(binder, *bound_expr->expr);
+		auto &bound_expr = expr->Cast<BoundExpression>();
+		ExtractCorrelatedExpressions(binder, *bound_expr.expr);
 	}
-	D_ASSERT(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
-	auto bound_expr = (BoundExpression *)expr.get();
-	unique_ptr<Expression> result = std::move(bound_expr->expr);
+	auto &bound_expr = expr->Cast<BoundExpression>();
+	unique_ptr<Expression> result = std::move(bound_expr.expr);
 	if (target_type.id() != LogicalTypeId::INVALID) {
 		// the binder has a specific target type: add a cast to that type
 		result = BoundCastExpression::AddCastToType(context, std::move(result), target_type);
@@ -243,11 +236,10 @@ string ExpressionBinder::Bind(unique_ptr<ParsedExpression> *expr, idx_t depth, b
 	}
 	// successfully bound: replace the node with a BoundExpression
 	*expr = make_unique<BoundExpression>(std::move(result.expression));
-	auto be = (BoundExpression *)expr->get();
-	D_ASSERT(be);
-	be->alias = alias;
+	auto &be = (*expr)->Cast<BoundExpression>();
+	be.alias = alias;
 	if (!alias.empty()) {
-		be->expr->alias = alias;
+		be.expr->alias = alias;
 	}
 	return string();
 }

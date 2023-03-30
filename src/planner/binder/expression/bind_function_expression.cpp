@@ -164,11 +164,10 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 		// successfully bound: replace the node with a BoundExpression
 		auto alias = function.children[1]->alias;
 		function.children[1] = make_unique<BoundExpression>(std::move(bind_lambda_result.expression));
-		auto be = (BoundExpression *)function.children[1].get();
-		D_ASSERT(be);
-		be->alias = alias;
+		auto &be = function.children[1]->Cast<BoundExpression>();
+		be.alias = alias;
 		if (!alias.empty()) {
-			be->expr->alias = alias;
+			be.expr->alias = alias;
 		}
 	}
 

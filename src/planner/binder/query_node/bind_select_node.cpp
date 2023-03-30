@@ -137,8 +137,8 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 			D_ASSERT(!order.orders.empty());
 			auto &order_binders = order_binder.GetBinders();
 			if (order.orders.size() == 1 && order.orders[0].expression->type == ExpressionType::STAR) {
-				auto star = (StarExpression *)order.orders[0].expression.get();
-				if (star->exclude_list.empty() && star->replace_list.empty() && !star->expr) {
+				auto &star = order.orders[0].expression->Cast<StarExpression>();
+				if (star.exclude_list.empty() && star.replace_list.empty() && !star.expr) {
 					// ORDER BY ALL
 					// replace the order list with the all elements in the SELECT list
 					auto order_type = order.orders[0].type;

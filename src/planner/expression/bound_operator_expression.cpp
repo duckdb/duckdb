@@ -18,8 +18,8 @@ bool BoundOperatorExpression::Equals(const BaseExpression *other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundOperatorExpression *)other_p;
-	if (!ExpressionUtil::ListEquals(children, other->children)) {
+	auto &other = other_p->Cast<BoundOperatorExpression>();
+	if (!ExpressionUtil::ListEquals(children, other.children)) {
 		return false;
 	}
 	return true;

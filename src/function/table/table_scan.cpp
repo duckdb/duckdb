@@ -321,13 +321,13 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 				// bindings[0] = the expression
 				// bindings[1] = the index expression
 				// bindings[2] = the constant
-				auto comparison = (BoundComparisonExpression *)bindings[0];
+				auto &comparison = bindings[0]->Cast<BoundComparisonExpression>();
 				D_ASSERT(bindings[0]->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
 				D_ASSERT(bindings[2]->type == ExpressionType::VALUE_CONSTANT);
 
-				auto constant_value = ((BoundConstantExpression *)bindings[2])->value;
-				auto comparison_type = comparison->type;
-				if (comparison->left->type == ExpressionType::VALUE_CONSTANT) {
+				auto constant_value = bindings[2]->Cast<BoundConstantExpression>().value;
+				auto comparison_type = comparison.type;
+				if (comparison.left->type == ExpressionType::VALUE_CONSTANT) {
 					// the expression is on the right side, we flip them around
 					comparison_type = FlipComparisonExpression(comparison_type);
 				}

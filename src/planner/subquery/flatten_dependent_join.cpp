@@ -58,8 +58,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoin(unique_
 bool SubqueryDependentFilter(Expression *expr) {
 	if (expr->expression_class == ExpressionClass::BOUND_CONJUNCTION &&
 	    expr->GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
-		auto bound_conjuction = (BoundConjunctionExpression *)expr;
-		for (auto &child : bound_conjuction->children) {
+		auto &bound_conjuction = expr->Cast<BoundConjunctionExpression>();
+		for (auto &child : bound_conjuction.children) {
 			if (SubqueryDependentFilter(child.get())) {
 				return true;
 			}
@@ -181,8 +181,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			// NULL or a value
 			unique_ptr<LogicalComparisonJoin> join = make_unique<LogicalComparisonJoin>(JoinType::INNER);
 			for (auto &aggr_exp : aggr.expressions) {
-				auto b_aggr_exp = (BoundAggregateExpression *)aggr_exp.get();
-				if (!b_aggr_exp->PropagatesNullValues() || any_join || !parent_propagate_null_values) {
+				auto &b_aggr_exp = aggr_exp->Cast<BoundAggregateExpression>();
+				if (!b_aggr_exp.PropagatesNullValues() || any_join || !parent_propagate_null_values) {
 					join = make_unique<LogicalComparisonJoin>(JoinType::LEFT);
 					break;
 				}
@@ -204,9 +204,9 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			// ELSE COUNT(*) END
 			for (idx_t i = 0; i < aggr.expressions.size(); i++) {
 				D_ASSERT(aggr.expressions[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
-				auto bound = (BoundAggregateExpression *)&*aggr.expressions[i];
+				auto &bound = aggr.expressions[i]->Cast<BoundAggregateExpression>();
 				vector<LogicalType> arguments;
-				if (bound->function == CountFun::GetFunction() || bound->function == CountStarFun::GetFunction()) {
+				if (bound.function == CountFun::GetFunction() || bound.function == CountStarFun::GetFunction()) {
 					// have to replace this ColumnBinding with the CASE expression
 					replacement_map[ColumnBinding(aggr.aggregate_index, i)] = i;
 				}

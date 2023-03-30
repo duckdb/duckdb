@@ -194,19 +194,19 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	QueryErrorContext error_context(root_statement, ref.query_location);
 
 	D_ASSERT(ref.function->type == ExpressionType::FUNCTION);
-	auto fexpr = (FunctionExpression *)ref.function.get();
+	auto &fexpr = ref.function->Cast<FunctionExpression>();
 
 	TableFunctionCatalogEntry *function = nullptr;
 
 	// fetch the function from the catalog
-	auto func_catalog = Catalog::GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, fexpr->catalog, fexpr->schema,
-	                                      fexpr->function_name, false, error_context);
+	auto func_catalog = Catalog::GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, fexpr.catalog, fexpr.schema,
+	                                      fexpr.function_name, false, error_context);
 
 	if (func_catalog->type == CatalogType::TABLE_FUNCTION_ENTRY) {
 		function = (TableFunctionCatalogEntry *)func_catalog;
 	} else if (func_catalog->type == CatalogType::TABLE_MACRO_ENTRY) {
 		auto macro_func = (TableMacroCatalogEntry *)func_catalog;
-		auto query_node = BindTableMacro(*fexpr, macro_func, 0);
+		auto query_node = BindTableMacro(fexpr, macro_func, 0);
 		D_ASSERT(query_node);
 
 		auto binder = Binder::CreateBinder(context, this);
@@ -232,7 +232,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	named_parameter_map_t named_parameters;
 	unique_ptr<BoundSubqueryRef> subquery;
 	string error;
-	if (!BindTableFunctionParameters(*function, fexpr->children, arguments, parameters, named_parameters, subquery,
+	if (!BindTableFunctionParameters(*function, fexpr.children, arguments, parameters, named_parameters, subquery,
 	                                 error)) {
 		throw BinderException(FormatError(ref, error));
 	}
@@ -264,7 +264,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		input_table_types = subquery->subquery->types;
 		input_table_names = subquery->subquery->names;
 	}
-	auto get = BindTableFunctionInternal(table_function, ref.alias.empty() ? fexpr->function_name : ref.alias,
+	auto get = BindTableFunctionInternal(table_function, ref.alias.empty() ? fexpr.function_name : ref.alias,
 	                                     std::move(parameters), std::move(named_parameters),
 	                                     std::move(input_table_types), std::move(input_table_names),
 	                                     ref.column_name_alias, std::move(ref.external_dependency));

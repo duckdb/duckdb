@@ -31,8 +31,8 @@ bool BoundColumnRefExpression::Equals(const BaseExpression *other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundColumnRefExpression *)other_p;
-	return other->binding == binding && other->depth == depth;
+	auto &other = other_p->Cast<BoundColumnRefExpression>();
+	return other.binding == binding && other.depth == depth;
 }
 
 string BoundColumnRefExpression::ToString() const {

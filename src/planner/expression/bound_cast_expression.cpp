@@ -173,11 +173,11 @@ bool BoundCastExpression::Equals(const BaseExpression *other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundCastExpression *)other_p;
-	if (!Expression::Equals(child.get(), other->child.get())) {
+	auto &other = other_p->Cast<BoundCastExpression>();
+	if (!Expression::Equals(child.get(), other.child.get())) {
 		return false;
 	}
-	if (try_cast != other->try_cast) {
+	if (try_cast != other.try_cast) {
 		return false;
 	}
 	return true;
