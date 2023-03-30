@@ -122,10 +122,10 @@ protected:
 
 	void ReduceExpressionDepth(Expression &expr) {
 		if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-			ReduceColumnRefDepth((BoundColumnRefExpression &)expr);
+			ReduceColumnRefDepth(expr.Cast<BoundColumnRefExpression>());
 		}
 		if (expr.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
-			ReduceExpressionSubquery((BoundSubqueryExpression &)expr);
+			ReduceExpressionSubquery(expr.Cast<BoundSubqueryExpression>());
 		}
 	}
 

@@ -45,7 +45,7 @@ string MacroFunction::ValidateArguments(MacroFunction &macro_def, const string &
 		error = StringUtil::Format(
 		    "Macro function '%s(%s)' requires ", name,
 		    StringUtil::Join(parameters, parameters.size(), ", ", [](const unique_ptr<ParsedExpression> &p) {
-			    return ((ColumnRefExpression &)*p).column_names[0];
+			    return (p->Cast<ColumnRefExpression>()).column_names[0];
 		    }));
 		error += parameters.size() == 1 ? "a single positional argument"
 		                                : StringUtil::Format("%i positional arguments", parameters.size());

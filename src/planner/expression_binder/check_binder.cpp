@@ -20,7 +20,7 @@ BindResult CheckBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, i
 	case ExpressionClass::SUBQUERY:
 		return BindResult("cannot use subquery in check constraint");
 	case ExpressionClass::COLUMN_REF:
-		return BindCheckColumn((ColumnRefExpression &)expr);
+		return BindCheckColumn(expr.Cast<ColumnRefExpression>());
 	default:
 		return ExpressionBinder::BindExpression(expr_ptr, depth);
 	}

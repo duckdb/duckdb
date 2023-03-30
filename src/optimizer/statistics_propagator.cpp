@@ -64,25 +64,25 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(Expression 
                                                                      unique_ptr<Expression> *expr_ptr) {
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_AGGREGATE:
-		return PropagateExpression((BoundAggregateExpression &)expr, expr_ptr);
+		return PropagateExpression(expr.Cast<BoundAggregateExpression>(), expr_ptr);
 	case ExpressionClass::BOUND_BETWEEN:
-		return PropagateExpression((BoundBetweenExpression &)expr, expr_ptr);
+		return PropagateExpression(expr.Cast<BoundBetweenExpression>(), expr_ptr);
 	case ExpressionClass::BOUND_CASE:
-		return PropagateExpression((BoundCaseExpression &)expr, expr_ptr);
+		return PropagateExpression(expr.Cast<BoundCaseExpression>(), expr_ptr);
 	case ExpressionClass::BOUND_CONJUNCTION:
-		return PropagateExpression((BoundConjunctionExpression &)expr, expr_ptr);
+		return PropagateExpression(expr.Cast<BoundConjunctionExpression>(), expr_ptr);
 	case ExpressionClass::BOUND_FUNCTION:
-		return PropagateExpression((BoundFunctionExpression &)expr, expr_ptr);
+		return PropagateExpression(expr.Cast<BoundFunctionExpression>(), expr_ptr);
 	case ExpressionClass::BOUND_CAST:
-		return PropagateExpression((BoundCastExpression &)expr, expr_ptr);
+		return PropagateExpression(expr.Cast<BoundCastExpression>(), expr_ptr);
 	case ExpressionClass::BOUND_COMPARISON:
-		return PropagateExpression((BoundComparisonExpression &)expr, expr_ptr);
+		return PropagateExpression(expr.Cast<BoundComparisonExpression>(), expr_ptr);
 	case ExpressionClass::BOUND_CONSTANT:
-		return PropagateExpression((BoundConstantExpression &)expr, expr_ptr);
+		return PropagateExpression(expr.Cast<BoundConstantExpression>(), expr_ptr);
 	case ExpressionClass::BOUND_COLUMN_REF:
-		return PropagateExpression((BoundColumnRefExpression &)expr, expr_ptr);
+		return PropagateExpression(expr.Cast<BoundColumnRefExpression>(), expr_ptr);
 	case ExpressionClass::BOUND_OPERATOR:
-		return PropagateExpression((BoundOperatorExpression &)expr, expr_ptr);
+		return PropagateExpression(expr.Cast<BoundOperatorExpression>(), expr_ptr);
 	default:
 		break;
 	}

@@ -39,7 +39,7 @@ BindResult QualifyBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr,
 	}
 	switch (expr.expression_class) {
 	case ExpressionClass::WINDOW:
-		return BindWindow((WindowExpression &)expr, depth);
+		return BindWindow(expr.Cast<WindowExpression>(), depth);
 	case ExpressionClass::COLUMN_REF:
 		return BindColumnRef(expr_ptr, depth, root_expression);
 	default:

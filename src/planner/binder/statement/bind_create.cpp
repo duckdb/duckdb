@@ -146,7 +146,7 @@ static void QualifyFunctionNames(ClientContext &context, unique_ptr<ParsedExpres
 	}
 	case ExpressionClass::SUBQUERY: {
 		// replacing parameters within a subquery is slightly different
-		auto &sq = ((SubqueryExpression &)*expr).subquery;
+		auto &sq = (expr->Cast<SubqueryExpression>()).subquery;
 		ParsedExpressionIterator::EnumerateQueryNodeChildren(
 		    *sq->node, [&](unique_ptr<ParsedExpression> &child) { QualifyFunctionNames(context, child); });
 		break;
@@ -172,7 +172,7 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	vector<string> dummy_names;
 	// positional parameters
 	for (idx_t i = 0; i < base.function->parameters.size(); i++) {
-		auto param = (ColumnRefExpression &)*base.function->parameters[i];
+		auto param = base.function->parameters[i]->Cast<ColumnRefExpression>();
 		if (param.IsQualified()) {
 			throw BinderException("Invalid parameter name '%s': must be unqualified", param.ToString());
 		}
@@ -181,7 +181,7 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	}
 	// default parameters
 	for (auto it = base.function->default_parameters.begin(); it != base.function->default_parameters.end(); it++) {
-		auto &val = (ConstantExpression &)*it->second;
+		auto &val = it->second->Cast<ConstantExpression>();
 		dummy_types.push_back(val.value.type());
 		dummy_names.push_back(it->first);
 	}

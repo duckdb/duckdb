@@ -272,14 +272,14 @@ bool FilterCombiner::HasFilters() {
 // 		auto &comp_in_exp = filter->Cast<BoundOperatorExpression>();
 // 		if (comp_in_exp.children[0]->type == ExpressionType::BOUND_COLUMN_REF) {
 // 			Value *min = nullptr, *max = nullptr;
-// 			auto &column_ref = (BoundColumnRefExpression &)*comp_in_exp.children[0].get();
+// 			auto &column_ref = comp_in_exp.children[0]->Cast<BoundColumnRefExpression>();
 // 			for (size_t i {1}; i < comp_in_exp.children.size(); i++) {
 // 				if (comp_in_exp.children[i]->type != ExpressionType::VALUE_CONSTANT) {
 // 					//! This indicates the column has a comparison that is not with a constant
 // 					not_constants.insert(column_ids[column_ref.binding.column_index]);
 // 					break;
 // 				} else {
-// 					auto &const_value_expr = (BoundConstantExpression &)*comp_in_exp.children[i].get();
+// 					auto &const_value_expr = comp_in_exp.children[i]->Cast<BoundConstantExpression>();
 // 					if (const_value_expr.value.IsNull()) {
 // 						return checks;
 // 					}
@@ -440,8 +440,8 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			    func.children[0]->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
 			    func.children[1]->type == ExpressionType::VALUE_CONSTANT) {
 				//! This is a like function.
-				auto &column_ref = (BoundColumnRefExpression &)*func.children[0].get();
-				auto &constant_value_expr = (BoundConstantExpression &)*func.children[1].get();
+				auto &column_ref = func.children[0]->Cast<BoundColumnRefExpression>();
+				auto &constant_value_expr = func.children[1]->Cast<BoundConstantExpression>();
 				auto like_string = StringValue::Get(constant_value_expr.value);
 				if (like_string.empty()) {
 					continue;
@@ -459,8 +459,8 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			if (func.function.name == "~~" && func.children[0]->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
 			    func.children[1]->type == ExpressionType::VALUE_CONSTANT) {
 				//! This is a like function.
-				auto &column_ref = (BoundColumnRefExpression &)*func.children[0].get();
-				auto &constant_value_expr = (BoundConstantExpression &)*func.children[1].get();
+				auto &column_ref = func.children[0]->Cast<BoundColumnRefExpression>();
+				auto &constant_value_expr = func.children[1]->Cast<BoundConstantExpression>();
 				auto &like_string = StringValue::Get(constant_value_expr.value);
 				if (like_string[0] == '%' || like_string[0] == '_') {
 					//! We have no prefix so nothing to pushdown
@@ -499,7 +499,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			if (func.children[0]->expression_class != ExpressionClass::BOUND_COLUMN_REF) {
 				continue;
 			}
-			auto &column_ref = (BoundColumnRefExpression &)*func.children[0].get();
+			auto &column_ref = func.children[0]->Cast<BoundColumnRefExpression>();
 			auto column_index = column_ids[column_ref.binding.column_index];
 			if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
 				break;
@@ -514,7 +514,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			if (!children_constant) {
 				continue;
 			}
-			auto &fst_const_value_expr = (BoundConstantExpression &)*func.children[1].get();
+			auto &fst_const_value_expr = func.children[1]->Cast<BoundConstantExpression>();
 			auto &type = fst_const_value_expr.value.type();
 
 			//! Check if values are consecutive, if yes transform them to >= <= (only for integers)
@@ -525,7 +525,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 
 			bool can_simplify_in_clause = true;
 			for (idx_t i = 1; i < func.children.size(); i++) {
-				auto &const_value_expr = (BoundConstantExpression &)*func.children[i].get();
+				auto &const_value_expr = func.children[i]->Cast<BoundConstantExpression>();
 				if (const_value_expr.value.IsNull()) {
 					can_simplify_in_clause = false;
 					break;
@@ -615,7 +615,7 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression *expr) {
 		auto transitive_filter = FindTransitiveFilter(non_scalar);
 		if (transitive_filter != nullptr) {
 			// try to add transitive filters
-			if (AddTransitiveFilters((BoundComparisonExpression &)*transitive_filter) == FilterResult::UNSUPPORTED) {
+			if (AddTransitiveFilters(transitive_filter->Cast<BoundComparisonExpression>()) == FilterResult::UNSUPPORTED) {
 				// in case of unsuccessful re-add filter into remaining ones
 				remaining_filters.push_back(std::move(transitive_filter));
 			}
@@ -876,7 +876,7 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 		auto transitive_filter = FindTransitiveFilter(comparison.left.get());
 		if (transitive_filter != nullptr) {
 			// try to add transitive filters
-			if (AddTransitiveFilters((BoundComparisonExpression &)*transitive_filter) == FilterResult::UNSUPPORTED) {
+			if (AddTransitiveFilters(transitive_filter->Cast<BoundComparisonExpression>()) == FilterResult::UNSUPPORTED) {
 				// in case of unsuccessful re-add filter into remaining ones
 				remaining_filters.push_back(std::move(transitive_filter));
 			}

@@ -50,7 +50,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 			// the MARK join is always TRUE or FALSE, and never NULL this happens in the case of a correlated EXISTS
 			// clause
 			if (filters[i]->filter->type == ExpressionType::OPERATOR_NOT) {
-				auto &op_expr = (BoundOperatorExpression &)*filters[i]->filter;
+				auto &op_expr = filters[i]->filter->Cast<BoundOperatorExpression>();
 				if (op_expr.children[0]->type == ExpressionType::BOUND_COLUMN_REF) {
 					// the filter is NOT(marker), check the join conditions
 					bool all_null_values_are_equal = true;

@@ -30,7 +30,7 @@ BindResult TableFunctionBinder::BindExpression(unique_ptr<ParsedExpression> *exp
 	auto &expr = **expr_ptr;
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::COLUMN_REF:
-		return BindColumnReference((ColumnRefExpression &)expr, depth);
+		return BindColumnReference(expr.Cast<ColumnRefExpression>(), depth);
 	case ExpressionClass::SUBQUERY:
 		throw BinderException("Table function cannot contain subqueries");
 	case ExpressionClass::DEFAULT:

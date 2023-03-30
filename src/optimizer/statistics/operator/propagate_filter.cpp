@@ -155,10 +155,10 @@ void StatisticsPropagator::UpdateFilterStatistics(Expression &left, Expression &
 	// any column ref involved in a comparison will not be null after the comparison
 	bool compare_distinct = IsCompareDistinct(comparison_type);
 	if (!compare_distinct && left.type == ExpressionType::BOUND_COLUMN_REF) {
-		SetStatisticsNotNull(((BoundColumnRefExpression &)left).binding);
+		SetStatisticsNotNull((left.Cast<BoundColumnRefExpression>()).binding);
 	}
 	if (!compare_distinct && right.type == ExpressionType::BOUND_COLUMN_REF) {
-		SetStatisticsNotNull(((BoundColumnRefExpression &)right).binding);
+		SetStatisticsNotNull((right.Cast<BoundColumnRefExpression>()).binding);
 	}
 	// check if this is a comparison between a constant and a column ref
 	BoundConstantExpression *constant = nullptr;

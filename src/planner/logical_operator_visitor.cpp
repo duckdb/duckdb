@@ -130,52 +130,52 @@ void LogicalOperatorVisitor::VisitExpression(unique_ptr<Expression> *expression)
 	unique_ptr<Expression> result;
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_AGGREGATE:
-		result = VisitReplace((BoundAggregateExpression &)expr, expression);
+		result = VisitReplace(expr.Cast<BoundAggregateExpression>(), expression);
 		break;
 	case ExpressionClass::BOUND_BETWEEN:
-		result = VisitReplace((BoundBetweenExpression &)expr, expression);
+		result = VisitReplace(expr.Cast<BoundBetweenExpression>(), expression);
 		break;
 	case ExpressionClass::BOUND_CASE:
-		result = VisitReplace((BoundCaseExpression &)expr, expression);
+		result = VisitReplace(expr.Cast<BoundCaseExpression>(), expression);
 		break;
 	case ExpressionClass::BOUND_CAST:
-		result = VisitReplace((BoundCastExpression &)expr, expression);
+		result = VisitReplace(expr.Cast<BoundCastExpression>(), expression);
 		break;
 	case ExpressionClass::BOUND_COLUMN_REF:
-		result = VisitReplace((BoundColumnRefExpression &)expr, expression);
+		result = VisitReplace(expr.Cast<BoundColumnRefExpression>(), expression);
 		break;
 	case ExpressionClass::BOUND_COMPARISON:
-		result = VisitReplace((BoundComparisonExpression &)expr, expression);
+		result = VisitReplace(expr.Cast<BoundComparisonExpression>(), expression);
 		break;
 	case ExpressionClass::BOUND_CONJUNCTION:
-		result = VisitReplace((BoundConjunctionExpression &)expr, expression);
+		result = VisitReplace(expr.Cast<BoundConjunctionExpression>(), expression);
 		break;
 	case ExpressionClass::BOUND_CONSTANT:
-		result = VisitReplace((BoundConstantExpression &)expr, expression);
+		result = VisitReplace(expr.Cast<BoundConstantExpression>(), expression);
 		break;
 	case ExpressionClass::BOUND_FUNCTION:
-		result = VisitReplace((BoundFunctionExpression &)expr, expression);
+		result = VisitReplace(expr.Cast<BoundFunctionExpression>(), expression);
 		break;
 	case ExpressionClass::BOUND_SUBQUERY:
-		result = VisitReplace((BoundSubqueryExpression &)expr, expression);
+		result = VisitReplace(expr.Cast<BoundSubqueryExpression>(), expression);
 		break;
 	case ExpressionClass::BOUND_OPERATOR:
-		result = VisitReplace((BoundOperatorExpression &)expr, expression);
+		result = VisitReplace(expr.Cast<BoundOperatorExpression>(), expression);
 		break;
 	case ExpressionClass::BOUND_PARAMETER:
-		result = VisitReplace((BoundParameterExpression &)expr, expression);
+		result = VisitReplace(expr.Cast<BoundParameterExpression>(), expression);
 		break;
 	case ExpressionClass::BOUND_REF:
-		result = VisitReplace((BoundReferenceExpression &)expr, expression);
+		result = VisitReplace(expr.Cast<BoundReferenceExpression>(), expression);
 		break;
 	case ExpressionClass::BOUND_DEFAULT:
-		result = VisitReplace((BoundDefaultExpression &)expr, expression);
+		result = VisitReplace(expr.Cast<BoundDefaultExpression>(), expression);
 		break;
 	case ExpressionClass::BOUND_WINDOW:
-		result = VisitReplace((BoundWindowExpression &)expr, expression);
+		result = VisitReplace(expr.Cast<BoundWindowExpression>(), expression);
 		break;
 	case ExpressionClass::BOUND_UNNEST:
-		result = VisitReplace((BoundUnnestExpression &)expr, expression);
+		result = VisitReplace(expr.Cast<BoundUnnestExpression>(), expression);
 		break;
 	default:
 		throw InternalException("Unrecognized expression type in logical operator visitor");

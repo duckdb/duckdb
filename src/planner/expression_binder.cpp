@@ -38,21 +38,21 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> *expr, 
 	auto &expr_ref = **expr;
 	switch (expr_ref.expression_class) {
 	case ExpressionClass::BETWEEN:
-		return BindExpression((BetweenExpression &)expr_ref, depth);
+		return BindExpression(expr_ref.Cast<BetweenExpression>(), depth);
 	case ExpressionClass::CASE:
-		return BindExpression((CaseExpression &)expr_ref, depth);
+		return BindExpression(expr_ref.Cast<CaseExpression>(), depth);
 	case ExpressionClass::CAST:
-		return BindExpression((CastExpression &)expr_ref, depth);
+		return BindExpression(expr_ref.Cast<CastExpression>(), depth);
 	case ExpressionClass::COLLATE:
-		return BindExpression((CollateExpression &)expr_ref, depth);
+		return BindExpression(expr_ref.Cast<CollateExpression>(), depth);
 	case ExpressionClass::COLUMN_REF:
-		return BindExpression((ColumnRefExpression &)expr_ref, depth);
+		return BindExpression(expr_ref.Cast<ColumnRefExpression>(), depth);
 	case ExpressionClass::COMPARISON:
-		return BindExpression((ComparisonExpression &)expr_ref, depth);
+		return BindExpression(expr_ref.Cast<ComparisonExpression>(), depth);
 	case ExpressionClass::CONJUNCTION:
-		return BindExpression((ConjunctionExpression &)expr_ref, depth);
+		return BindExpression(expr_ref.Cast<ConjunctionExpression>(), depth);
 	case ExpressionClass::CONSTANT:
-		return BindExpression((ConstantExpression &)expr_ref, depth);
+		return BindExpression(expr_ref.Cast<ConstantExpression>(), depth);
 	case ExpressionClass::FUNCTION: {
 		auto &function = expr_ref.Cast<FunctionExpression>();
 		if (function.function_name == "unnest" || function.function_name == "unlist") {
@@ -63,15 +63,15 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> *expr, 
 		return BindExpression(function, depth, expr);
 	}
 	case ExpressionClass::LAMBDA:
-		return BindExpression((LambdaExpression &)expr_ref, depth, false, LogicalTypeId::INVALID);
+		return BindExpression(expr_ref.Cast<LambdaExpression>(), depth, false, LogicalTypeId::INVALID);
 	case ExpressionClass::OPERATOR:
-		return BindExpression((OperatorExpression &)expr_ref, depth);
+		return BindExpression(expr_ref.Cast<OperatorExpression>(), depth);
 	case ExpressionClass::SUBQUERY:
-		return BindExpression((SubqueryExpression &)expr_ref, depth);
+		return BindExpression(expr_ref.Cast<SubqueryExpression>(), depth);
 	case ExpressionClass::PARAMETER:
-		return BindExpression((ParameterExpression &)expr_ref, depth);
+		return BindExpression(expr_ref.Cast<ParameterExpression>(), depth);
 	case ExpressionClass::POSITIONAL_REFERENCE:
-		return BindExpression((PositionalReferenceExpression &)expr_ref, depth);
+		return BindExpression(expr_ref.Cast<PositionalReferenceExpression>(), depth);
 	case ExpressionClass::STAR:
 		return BindResult(binder.FormatError(expr_ref, "STAR expression is not supported here"));
 	default:

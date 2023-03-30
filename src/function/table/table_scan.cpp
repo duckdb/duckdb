@@ -358,10 +358,10 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 					// not a constant comparison
 					continue;
 				}
-				low_value = ((BoundConstantExpression &)*between.lower).value;
+				low_value = (between.lower->Cast<BoundConstantExpression>()).value;
 				low_comparison_type = between.lower_inclusive ? ExpressionType::COMPARE_GREATERTHANOREQUALTO
 				                                              : ExpressionType::COMPARE_GREATERTHAN;
-				high_value = ((BoundConstantExpression &)*between.upper).value;
+				high_value = (between.upper->Cast<BoundConstantExpression>()).value;
 				high_comparison_type = between.upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO
 				                                               : ExpressionType::COMPARE_LESSTHAN;
 				break;
