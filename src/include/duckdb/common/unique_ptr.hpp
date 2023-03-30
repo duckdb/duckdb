@@ -17,16 +17,16 @@ public:
 	using original::original;
 
 	typename add_lvalue_reference<_Tp>::type operator*() const {
-		#ifdef DEBUG
+#ifdef DEBUG
 		__unique_ptr_utils::AssertNotNull((void *)original::get());
-		#endif
+#endif
 		return *(original::get());
 	}
 
 	typename original::pointer operator->() const {
-		#ifdef DEBUG
+#ifdef DEBUG
 		__unique_ptr_utils::AssertNotNull((void *)original::get());
-		#endif
+#endif
 		return original::get();
 	}
 };
@@ -38,12 +38,11 @@ public:
 	using original::original;
 
 	typename add_lvalue_reference<_Tp>::type operator[](size_t __i) const {
-		#ifdef DEBUG
+#ifdef DEBUG
 		__unique_ptr_utils::AssertNotNull((void *)original::get());
-		#endif
+#endif
 		return (original::get())[__i];
 	}
 };
 
 } // namespace duckdb
-
