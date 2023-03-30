@@ -44,13 +44,13 @@ void Destroy(void *data, duckdb_block buffer) {
 	(void)data;
 	auto my_buffer = GetBuffer(buffer);
 	auto buffer_manager = my_buffer->buffer_manager;
-	//#ifdef DEBUG
-	//	// This indicates a double-free
-	//	D_ASSERT(buffer_manager->allocated_buffers.count((data_ptr_t)my_buffer));
-	//#endif
+	#ifdef DEBUG
+		// This indicates a double-free
+		D_ASSERT(buffer_manager->allocated_buffers.count((data_ptr_t)my_buffer));
+	#endif
 
 	// assert that the buffer was not pinned, otherwise it should not be allowed to be destroyed
-	D_ASSERT(my_buffer->pinned <= 1);
+	D_ASSERT(my_buffer->pinned == 0);
 
 	free(my_buffer->allocation);
 	buffer_manager->allocated_memory -= my_buffer->size;
