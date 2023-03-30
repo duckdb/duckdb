@@ -11,8 +11,8 @@
 #include "duckdb/common/types.hpp"
 
 namespace duckdb {
-class FieldWriter;
-class FieldReader;
+class Serializer;
+class Deserializer;
 struct BindInfo;
 
 struct MultiFileReaderOptions {
@@ -20,8 +20,8 @@ struct MultiFileReaderOptions {
 	bool hive_partitioning = false;
 	bool union_by_name = false;
 
-	DUCKDB_API void Serialize(FieldWriter &writer) const;
-	DUCKDB_API void Deserialize(FieldReader &reader);
+	DUCKDB_API void Serialize(Serializer &serializer) const;
+	DUCKDB_API static MultiFileReaderOptions Deserialize(Deserializer &source);
 	DUCKDB_API void AddBatchInfo(BindInfo &bind_info);
 };
 

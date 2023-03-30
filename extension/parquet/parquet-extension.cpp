@@ -132,13 +132,13 @@ struct ParquetWriteLocalState : public LocalFunctionData {
 void ParquetOptions::Serialize(FieldWriter &writer) const {
 	writer.WriteField<bool>(binary_as_string);
 	writer.WriteField<bool>(file_row_number);
-	file_options.Serialize(writer);
+	writer.WriteSerializable(file_options);
 }
 
 void ParquetOptions::Deserialize(FieldReader &reader) {
 	binary_as_string = reader.ReadRequired<bool>();
 	file_row_number = reader.ReadRequired<bool>();
-	file_options.Deserialize(reader);
+	file_options = reader.ReadRequiredSerializable<MultiFileReaderOptions, MultiFileReaderOptions>();
 }
 
 BindInfo ParquetGetBatchInfo(const FunctionData *bind_data) {

@@ -873,7 +873,7 @@ void BufferedCSVReaderOptions::Serialize(FieldWriter &writer) const {
 	writer.WriteString(file_path);
 	writer.WriteString(decimal_separator);
 	writer.WriteField<bool>(null_padding);
-	file_options.Serialize(writer);
+	writer.WriteSerializable(file_options);
 	// write options
 	writer.WriteListNoReference<bool>(force_quote);
 }
@@ -906,7 +906,7 @@ void BufferedCSVReaderOptions::Deserialize(FieldReader &reader) {
 	file_path = reader.ReadRequired<string>();
 	decimal_separator = reader.ReadRequired<string>();
 	null_padding = reader.ReadRequired<bool>();
-	file_options.Deserialize(reader);
+	file_options = reader.ReadRequiredSerializable<MultiFileReaderOptions, MultiFileReaderOptions>();
 	// write options
 	force_quote = reader.ReadRequiredList<bool>();
 }
@@ -922,7 +922,7 @@ static void CSVReaderSerialize(FieldWriter &writer, const FunctionData *bind_dat
 	writer.WriteField<idx_t>(bind_data.hive_partition_col_idx);
 	bind_data.options.Serialize(writer);
 	writer.WriteField<bool>(bind_data.single_threaded);
-	bind_data.reader_bind.Serialize(writer);
+	writer.WriteSerializable(bind_data.reader_bind);
 }
 
 static unique_ptr<FunctionData> CSVReaderDeserialize(ClientContext &context, FieldReader &reader,
@@ -937,7 +937,7 @@ static unique_ptr<FunctionData> CSVReaderDeserialize(ClientContext &context, Fie
 	result_data->hive_partition_col_idx = reader.ReadRequired<idx_t>();
 	result_data->options.Deserialize(reader);
 	result_data->single_threaded = reader.ReadField<bool>(true);
-	result_data->reader_bind.Deserialize(reader);
+	result_data->reader_bind = reader.ReadRequiredSerializable<MultiFileReaderBindData, MultiFileReaderBindData>();
 	return std::move(result_data);
 }
 

@@ -303,26 +303,39 @@ TableFunctionSet MultiFileReader::CreateFunctionSet(TableFunction table_function
 	return function_set;
 }
 
-void MultiFileReaderOptions::Serialize(FieldWriter &writer) const {
+void MultiFileReaderOptions::Serialize(Serializer &serializer) const {
+	FieldWriter writer(serializer);
 	writer.WriteField<bool>(filename);
 	writer.WriteField<bool>(hive_partitioning);
 	writer.WriteField<bool>(union_by_name);
+	writer.Finalize();
 }
 
-void MultiFileReaderOptions::Deserialize(FieldReader &reader) {
-	filename = reader.ReadRequired<bool>();
-	hive_partitioning = reader.ReadRequired<bool>();
-	union_by_name = reader.ReadRequired<bool>();
+MultiFileReaderOptions MultiFileReaderOptions::Deserialize(Deserializer &source) {
+	MultiFileReaderOptions result;
+	FieldReader reader(source);
+	result.filename = reader.ReadRequired<bool>();
+	result.hive_partitioning = reader.ReadRequired<bool>();
+	result.union_by_name = reader.ReadRequired<bool>();
+	reader.Finalize();
+	return result;
 }
 
-void MultiFileReaderBindData::Serialize(FieldWriter &writer) const {
+void MultiFileReaderBindData::Serialize(Serializer &serializer) const {
+	FieldWriter writer(serializer);
 	writer.WriteField(filename_idx);
 	writer.WriteRegularSerializableList<HivePartitioningIndex>(hive_partitioning_indexes);
+	writer.Finalize();
 }
 
-void MultiFileReaderBindData::Deserialize(FieldReader &reader) {
-	filename_idx = reader.ReadRequired<idx_t>();
-	hive_partitioning_indexes = reader.ReadRequiredSerializableList<HivePartitioningIndex, HivePartitioningIndex>();
+MultiFileReaderBindData MultiFileReaderBindData::Deserialize(Deserializer &source) {
+	MultiFileReaderBindData result;
+	FieldReader reader(source);
+	result.filename_idx = reader.ReadRequired<idx_t>();
+	result.hive_partitioning_indexes =
+	    reader.ReadRequiredSerializableList<HivePartitioningIndex, HivePartitioningIndex>();
+	reader.Finalize();
+	return result;
 }
 
 HivePartitioningIndex::HivePartitioningIndex(string value_p, idx_t index) : value(std::move(value_p)), index(index) {
