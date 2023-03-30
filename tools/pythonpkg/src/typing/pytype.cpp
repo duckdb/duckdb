@@ -8,10 +8,31 @@
 namespace duckdb {
 
 // NOLINTNEXTLINE(readability-identifier-naming)
-bool PyUnionType::check_(const py::handle &object) {
+bool PyGenericAlias::check_(const py::handle &object) {
+	if (!ModuleIsLoaded<TypesCacheItem>()) {
+		return false;
+	}
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return py::isinstance(object, py::module::import("typing").attr("_UnionGenericAlias")) ||
-	       import_cache.types().UnionType.IsInstance(object);
+	return import_cache.types().GenericAlias.IsInstance(object);
+}
+
+// NOLINTNEXTLINE(readability-identifier-naming)
+bool PyUnionType::check_(const py::handle &object) {
+	auto types_loaded = ModuleIsLoaded<TypesCacheItem>();
+	auto typing_loaded = ModuleIsLoaded<TypingCacheItem>();
+
+	if (!types_loaded && !typing_loaded) {
+		return false;
+	}
+
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	if (types_loaded && import_cache.types().UnionType.IsInstance(object)) {
+		return true;
+	}
+	if (typing_loaded && import_cache.typing()._UnionGenericAlias.IsInstance(object)) {
+		return true;
+	}
+	return false;
 }
 
 DuckDBPyType::DuckDBPyType(LogicalType type) : type(std::move(type)) {
@@ -242,10 +263,9 @@ void DuckDBPyType::Initialize(py::handle &m) {
 	connection_module.def("__eq__", &DuckDBPyType::Equals, "Compare two types for equality", py::arg("other"));
 	connection_module.def("__eq__", &DuckDBPyType::EqualsString, "Compare two types for equality", py::arg("other"));
 	connection_module.def(py::init<>([](const string &type_str, shared_ptr<DuckDBPyConnection> connection = nullptr) {
-		                      auto ltype = FromString(type_str, std::move(connection));
-		                      return make_shared<DuckDBPyType>(ltype);
-	                      }),
-	                      py::arg("type_str"), py::arg("connection") = py::none());
+		auto ltype = FromString(type_str, std::move(connection));
+		return make_shared<DuckDBPyType>(ltype);
+	}));
 	connection_module.def(py::init<>([](const PyGenericAlias &obj) {
 		auto ltype = FromGenericAlias(obj);
 		return make_shared<DuckDBPyType>(ltype);
@@ -262,10 +282,10 @@ void DuckDBPyType::Initialize(py::handle &m) {
 	connection_module.def("__getitem__", &DuckDBPyType::GetAttribute, "Get the child type by 'name'", py::arg("name"));
 
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	py::implicitly_convertible<py::object, DuckDBPyType>();
 	py::implicitly_convertible<py::str, DuckDBPyType>();
 	py::implicitly_convertible<PyGenericAlias, DuckDBPyType>();
 	py::implicitly_convertible<PyUnionType, DuckDBPyType>();
-	py::implicitly_convertible<py::object, DuckDBPyType>();
 }
 
 string DuckDBPyType::ToString() const {

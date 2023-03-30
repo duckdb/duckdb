@@ -49,7 +49,6 @@ static child_list_t<LogicalType> GetChildList(const py::object &container) {
 }
 
 shared_ptr<DuckDBPyType> DuckDBPyConnection::StructType(const py::object &fields) {
-	bool is_list = py::isinstance<py::list>(fields);
 	child_list_t<LogicalType> types = GetChildList(fields);
 	if (types.empty()) {
 		throw InvalidInputException("Can not create an empty struct type!");

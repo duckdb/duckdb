@@ -12,21 +12,19 @@
 
 namespace duckdb {
 
-struct TypesCacheItem : public PythonImportCacheItem {
+struct TypingCacheItem : public PythonImportCacheItem {
 public:
-	static constexpr const char *Name = "types";
+	static constexpr const char *Name = "typing";
 
 public:
-	~TypesCacheItem() override {
+	~TypingCacheItem() override {
 	}
 	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		UnionType.LoadAttribute("UnionType", cache, *this);
-		GenericAlias.LoadAttribute("GenericAlias", cache, *this);
+		_UnionGenericAlias.LoadAttribute("_UnionGenericAlias", cache, *this);
 	}
 
 public:
-	PythonImportCacheItem UnionType;
-	PythonImportCacheItem GenericAlias;
+	PythonImportCacheItem _UnionGenericAlias;
 };
 
 } // namespace duckdb

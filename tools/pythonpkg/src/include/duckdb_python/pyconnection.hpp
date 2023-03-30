@@ -16,6 +16,7 @@
 #include "duckdb_python/pandas_type.hpp"
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pytype.hpp"
+#include "duckdb_python/path_like.hpp"
 #include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
 #include "duckdb_python/pyfilesystem.hpp"
 
@@ -91,7 +92,8 @@ public:
 	shared_ptr<DuckDBPyType> Type(const string &type_str);
 
 	shared_ptr<DuckDBPyConnection> RegisterScalarUDF(const string &name, const py::object &udf,
-	                                                 const py::object &arguments, shared_ptr<DuckDBPyType> return_type,
+	                                                 const py::object &arguments = py::none(),
+	                                                 shared_ptr<DuckDBPyType> return_type = nullptr,
 	                                                 bool varargs = false);
 
 	shared_ptr<DuckDBPyConnection> ExecuteMany(const string &query, py::object params = py::list());
@@ -199,6 +201,9 @@ public:
 	static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_query);
 
 private:
+	PathLike GetPathLike(const py::object &object);
+	unique_lock<std::mutex> AcquireConnectionLock();
+
 	static PythonEnvironmentType environment;
 	static void DetectEnvironment();
 };

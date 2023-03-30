@@ -1,7 +1,7 @@
 import pandas as pd
 import duckdb
 import datetime
-from numpy import array
+import numpy as np
 import random
 
 class TestPandasObject(object):
@@ -32,11 +32,18 @@ class TestPandasObject(object):
         df_in = pd.DataFrame([[datetime.date(1992, 7, 30)]])
         assert duckdb.query("Select * from df_in").fetchall() == [(datetime.date(1992, 7, 30),)]
 
+    def test_object_to_string_with_stride(self, duckdb_cursor):
+        data = np.array([["a", "b", "c"], [1,2,3], [1, 2, 3], [11, 22, 33]])
+        df = pd.DataFrame(data=data[1:,], columns=data[0])
+        duckdb_cursor.register("object_with_strides", df)
+        res = duckdb_cursor.sql('select * from object_with_strides').fetchall()
+        assert res == [('1', '2', '3'), ('1', '2', '3'), ('11', '22', '33')]
+
     def test_2499(self, duckdb_cursor):  
         df = pd.DataFrame(
             [
                 [
-                    array([
+                    np.array([
                             {'a': 0.881040697801939},
                             {'a': 0.9922600577751953},
                             {'a': 0.1589674833259317},
@@ -45,7 +52,7 @@ class TestPandasObject(object):
                     ], dtype=object)
                 ],
                 [
-                    array([
+                    np.array([
                             {'a': 0.8759413504156746},
                             {'a': 0.055784331256246156},
                             {'a': 0.8605151517439655},
@@ -54,7 +61,7 @@ class TestPandasObject(object):
                     ], dtype=object)
                 ],
                 [
-                    array([
+                    np.array([
                             {'a': 0.9697093934032401},
                             {'a': 0.9529257667149468},
                             {'a': 0.21398182248591713},

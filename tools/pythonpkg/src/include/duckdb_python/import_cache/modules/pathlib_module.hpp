@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb_python/import_cache/modules/types_module.hpp
+// duckdb_python/import_cache/modules/pathlib_module.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,21 +12,24 @@
 
 namespace duckdb {
 
-struct TypesCacheItem : public PythonImportCacheItem {
+struct PathLibCacheItem : public PythonImportCacheItem {
 public:
-	static constexpr const char *Name = "types";
+	static constexpr const char *Name = "pathlib";
 
 public:
-	~TypesCacheItem() override {
+	~PathLibCacheItem() override {
 	}
 	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		UnionType.LoadAttribute("UnionType", cache, *this);
-		GenericAlias.LoadAttribute("GenericAlias", cache, *this);
+		Path.LoadAttribute("Path", cache, *this);
 	}
 
 public:
-	PythonImportCacheItem UnionType;
-	PythonImportCacheItem GenericAlias;
+	PythonImportCacheItem Path;
+
+protected:
+	bool IsRequired() const override final {
+		return false;
+	}
 };
 
 } // namespace duckdb

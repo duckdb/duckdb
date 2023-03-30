@@ -33,7 +33,7 @@ class TestScalarUDF(object):
             return amount
         
         con = duckdb_cursor
-        con.register_scalar('varargs', variable_args, [], BIGINT, varargs=True)
+        con.register_scalar('varargs', variable_args, None, BIGINT, varargs=True)
         res = con.sql("""select varargs('5', '3', '2', 1, 0.12345)""").fetchall()
         assert res == [(5,)]
 

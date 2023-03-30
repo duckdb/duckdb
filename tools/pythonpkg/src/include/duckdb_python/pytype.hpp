@@ -10,9 +10,7 @@ public:
 	using py::object::object;
 
 public:
-	static bool check_(const py::handle &object) {
-		return py::isinstance(object, py::module::import("types").attr("GenericAlias"));
-	}
+	static bool check_(const py::handle &object);
 };
 
 class PyUnionType : public py::object {

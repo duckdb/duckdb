@@ -19,6 +19,16 @@ namespace pybind11 {
 bool gil_check();
 void gil_assert();
 
+template <class T>
+bool try_cast(const object &object, T &result) {
+	try {
+		result = cast<T>(object);
+	} catch (cast_error &e) {
+		return false;
+	}
+	return true;
+}
+
 } // namespace pybind11
 
 namespace duckdb {

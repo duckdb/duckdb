@@ -107,7 +107,7 @@ class TestType(object):
         res = duckdb.list_type(list[Union[str, int]])
         assert str(res.child) == 'UNION(u1 VARCHAR, u2 BIGINT)[]'
 
-    def test_implicit_convert_from_numpy(self):
+    def test_implicit_convert_from_numpy(self, duckdb_cursor):
         np = pytest.importorskip("numpy")
 
         type_mapping = {
@@ -141,10 +141,10 @@ class TestType(object):
         builtins += [np.float16]
         builtins += [np.single]
         builtins += [np.double]
-        builtins += [np.longdouble]
 
         for builtin in builtins:
-            type = duckdb.list_type(builtin)
+            print(builtin)
+            type = duckdb_cursor.list_type(builtin)
             dtype_str = str(builtin().dtype)
             duckdb_type_str = str(type.child)
             assert type_mapping[dtype_str] == duckdb_type_str

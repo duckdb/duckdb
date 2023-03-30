@@ -38,6 +38,12 @@ DuckDBPyRelation::DuckDBPyRelation(unique_ptr<DuckDBPyResult> result_p) : rel(nu
 	this->names = result->GetNames();
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectFromExpression(const string &expression) {
+	auto projected_relation = make_unique<DuckDBPyRelation>(rel->Project(expression));
+	projected_relation->rel->extra_dependencies = this->rel->extra_dependencies;
+	return projected_relation;
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const string &expr) {
 	if (!rel) {
 		return nullptr;
