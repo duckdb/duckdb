@@ -143,10 +143,12 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 		}
 		SkipEmptyLines();
 
-		if (position_buffer >= end_buffer && !StringUtil::CharacterIsNewline((*buffer)[position_buffer - 1])) {
+		if (position_buffer >= end_buffer) {
 			break;
 		}
-
+		if (!StringUtil::CharacterIsNewline((*buffer)[position_buffer - 1])){
+			break;
+		}
 		if (position_buffer > end_buffer && options.new_line == NewLineIdentifier::CARRY_ON &&
 		    (*buffer)[position_buffer - 1] == '\n') {
 			break;
