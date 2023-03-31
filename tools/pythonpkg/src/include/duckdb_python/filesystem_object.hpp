@@ -7,7 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
-#include "duckdb_python/registered_py_object.hpp"
+#include "duckdb_python/pybind11/registered_py_object.hpp"
 #include "duckdb_python/pyfilesystem.hpp"
 
 namespace duckdb {

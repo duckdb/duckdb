@@ -1,4 +1,4 @@
-#include "include/duckdb_python/arrow_array_stream.hpp"
+#include "duckdb_python/arrow/arrow_array_stream.hpp"
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/common.hpp"

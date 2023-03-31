@@ -17,18 +17,11 @@
 
 namespace duckdb {
 
-struct NumPyArrayWrapper {
-	explicit NumPyArrayWrapper(py::array numpy_array) : numpy_array(std::move(numpy_array)) {
-	}
-
-	py::array numpy_array;
-};
-
 struct PandasColumnBindData {
 	PandasType pandas_type;
 	py::array numpy_col;
 	idx_t numpy_stride;
-	unique_ptr<NumPyArrayWrapper> mask;
+	unique_ptr<RegisteredArray> mask;
 	// Only for categorical types
 	string internal_categorical_type;
 	// When object types are cast we must hold their data somewhere

@@ -7,17 +7,17 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
-#include "duckdb_python/arrow_array_stream.hpp"
+#include "duckdb_python/arrow/arrow_array_stream.hpp"
 #include "duckdb.hpp"
 #include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb_python/import_cache/python_import_cache.hpp"
-#include "duckdb_python/registered_py_object.hpp"
 #include "duckdb_python/pandas/pandas_type.hpp"
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/path_like.hpp"
 #include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
 #include "duckdb_python/pyfilesystem.hpp"
+#include "duckdb_python/pybind11/registered_py_object.hpp"
 
 namespace duckdb {
 
