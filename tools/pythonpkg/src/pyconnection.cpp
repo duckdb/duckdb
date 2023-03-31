@@ -1350,7 +1350,7 @@ bool DuckDBPyConnection::IsPandasDataframe(const py::object &object) {
 	return import_cache.pandas().DataFrame.IsInstance(object);
 }
 
-bool isValidNumpyDimensions(const py::handle &object, int &dim) {
+bool IsValidNumpyDimensions(const py::handle &object, int &dim) {
 	// check the dimensions of numpy arrays
 	// should only be called by IsAcceptedNumpyObject
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
@@ -1383,7 +1383,7 @@ NumpyObjectType DuckDBPyConnection::IsAcceptedNumpyObject(const py::object &obje
 	} else if (py::isinstance<py::dict>(object)) {
 		int dim = -1;
 		for (auto item : py::cast<py::dict>(object)) {
-			if (!isValidNumpyDimensions(item.second, dim)) {
+			if (!IsValidNumpyDimensions(item.second, dim)) {
 				return NumpyObjectType::INVALID;
 			}
 		}
@@ -1391,7 +1391,7 @@ NumpyObjectType DuckDBPyConnection::IsAcceptedNumpyObject(const py::object &obje
 	} else if (py::isinstance<py::list>(object)) {
 		int dim = -1;
 		for (auto item : py::cast<py::list>(object)) {
-			if (!isValidNumpyDimensions(item, dim)) {
+			if (!IsValidNumpyDimensions(item, dim)) {
 				return NumpyObjectType::INVALID;
 			}
 		}
