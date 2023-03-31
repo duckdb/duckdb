@@ -501,7 +501,7 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 
 			// figure out the exact line number
 			UnifiedVectorFormat inserted_column_data;
-			insert_chunk.data[col_idx].ToUnifiedFormat(parse_chunk.size(), inserted_column_data);
+			result_vector.ToUnifiedFormat(parse_chunk.size(), inserted_column_data);
 			idx_t row_idx;
 			for (row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
 				if (!inserted_column_data.validity.RowIsValid(row_idx) && !FlatVector::IsNull(parse_vector, row_idx)) {
