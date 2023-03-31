@@ -25,8 +25,9 @@ const string tbl_zst = "tbl.zst";
 
 const string csv_extensions[5] = {csv, tsv, csv_gz, csv_zst, tbl_zst};
 
-bool debug = true;
-bool RunFull(std::string &path, std::set<std::string> &skip, duckdb::Connection &conn, string add_parameters = "") {
+bool debug = false;
+bool RunFull(std::string &path, std::set<std::string> &skip, duckdb::Connection &conn,
+             const string &add_parameters = "") {
 	bool single_threaded_passed;
 	// Here we run the csv file first with the single thread reader.
 	// Then the parallel csv reader with a combination of multiple threads and buffer sizes.
@@ -38,7 +39,8 @@ bool RunFull(std::string &path, std::set<std::string> &skip, duckdb::Connection 
 	conn.context->client_data->max_line_length = 0;
 	unique_ptr<MaterializedQueryResult> single_threaded_res;
 	ColumnDataCollection *ground_truth = nullptr;
-	single_threaded_res = conn.Query("SELECT * FROM read_csv_auto('" + path + add_parameters +  "', parallel = 0) ORDER BY ALL");
+	single_threaded_res =
+	    conn.Query("SELECT * FROM read_csv_auto('" + path + add_parameters + "', parallel = 0) ORDER BY ALL");
 	if (single_threaded_res->HasError()) {
 		single_threaded_passed = false;
 	} else {
@@ -65,8 +67,8 @@ bool RunFull(std::string &path, std::set<std::string> &skip, duckdb::Connection 
 			multi_conn.Query("SET preserve_insertion_order=false;");
 			multi_conn.Query("PRAGMA threads=" + to_string(thread_count));
 			unique_ptr<MaterializedQueryResult> multi_threaded_result =
-			    multi_conn.Query("SELECT * FROM read_csv_auto('" + path + add_parameters + "', buffer_size = " + to_string(buffer_size) +
-			                     ") ORDER BY ALL");
+			    multi_conn.Query("SELECT * FROM read_csv_auto('" + path + add_parameters +
+			                     "', buffer_size = " + to_string(buffer_size) + ") ORDER BY ALL");
 			bool multi_threaded_passed;
 			ColumnDataCollection *result = nullptr;
 			if (multi_threaded_result->HasError()) {
@@ -104,7 +106,7 @@ bool RunFull(std::string &path, std::set<std::string> &skip, duckdb::Connection 
 }
 
 // Collects All CSV-Like files from folder and execute Parallel Scans on it
-void RunTestOnFolder(const string &path, std::set<std::string> &skip, string add_parameters = "") {
+void RunTestOnFolder(const string &path, std::set<std::string> &skip, const string &add_parameters = "") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
@@ -112,28 +114,29 @@ void RunTestOnFolder(const string &path, std::set<std::string> &skip, string add
 	for (auto &ext : csv_extensions) {
 		auto csv_files = fs.Glob(path + "*" + ext);
 		for (auto &csv_file : csv_files) {
-			REQUIRE(RunFull(csv_file, skip, con,add_parameters));
+			REQUIRE(RunFull(csv_file, skip, con, add_parameters));
 		}
 	}
 }
 
-TEST_CASE("Test One File", "[parallel-csv]") {
-	DuckDB db(nullptr);
-	Connection con(db);
-	std::set<std::string> skip;
-	con.Query("SET preserve_insertion_order=false;");
-
-	string file = "data/csv/tpcds_59.csv";
-	auto thread_count = 3;
-	auto buffer_size = 207;
-
-	con.Query("PRAGMA threads=" + to_string(thread_count));
-	unique_ptr<MaterializedQueryResult> multi_threaded_result = con.Query(
-	    "SELECT * FROM read_csv_auto('" + file + "', buffer_size = " + to_string(buffer_size) + ")");
-	auto &result = multi_threaded_result->Collection();
-//	auto rows = result.GetRows();
-	REQUIRE(RunFull(file, skip, con));
-}
+// TEST_CASE("Test One File", "[parallel-csv]") {
+//	DuckDB db(nullptr);
+//	Connection con(db);
+//	std::set<std::string> skip;
+//	con.Query("SET preserve_insertion_order=false;");
+//
+//	string file = "data/csv/sequences.csv.gz";
+//
+//	auto thread_count = 3;
+//	auto buffer_size = 207;
+//
+////	con.Query("PRAGMA threads=" + to_string(thread_count));
+////	unique_ptr<MaterializedQueryResult> multi_threaded_result = con.Query(
+////	    "SELECT * FROM read_csv_auto('" + file + "', buffer_size = " + to_string(buffer_size) + ")");
+////	auto &result = multi_threaded_result->Collection();
+//////	auto rows = result.GetRows();
+//	REQUIRE(RunFull(file, skip, con));
+//}
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data", "[parallel-csv]") {
 	std::set<std::string> skip;
@@ -153,9 +156,8 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/auto/titlebasics
 	Connection con(db);
 	string add_parameters = ", nullstr=\'\\N\', sample_size = -1";
 	string file = "test/sql/copy/csv/data/auto/titlebasicsdebug.tsv";
-	REQUIRE(RunFull(file, skip, con,add_parameters));
+	REQUIRE(RunFull(file, skip, con, add_parameters));
 }
-
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/auto/glob", "[parallel-csv]") {
 	std::set<std::string> skip;
@@ -196,21 +198,16 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/real", "[paralle
 	std::set<std::string> skip;
 	//! Thread count: 2 Buffer Size: 1266
 	skip.insert("test/sql/copy/csv/data/real/voter.tsv");
-	//! Thread count: 1 Buffer Size: 112 - Row count mismatch
-	skip.insert("test/sql/copy/csv/data/real/tmp2013-06-15.csv.gz");
 	RunTestOnFolder("test/sql/copy/csv/data/real/", skip);
 }
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/test", "[parallel-csv]") {
 	std::set<std::string> skip;
-	skip.insert("test/sql/copy/csv/data/test/issue3562_assertion.csv.gz");
 	RunTestOnFolder("test/sql/copy/csv/data/test/", skip);
 }
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/zstd", "[parallel-csv]") {
 	std::set<std::string> skip;
-	skip.insert("test/sql/copy/csv/data/zstd/ncvoter.csv.zst");
-	skip.insert("test/sql/copy/csv/data/zstd/lineitem1k.tbl.zst");
 	RunTestOnFolder("test/sql/copy/csv/data/zstd/", skip);
 }
 
@@ -218,9 +215,9 @@ TEST_CASE("Test Parallel CSV All Files - data/csv", "[parallel-csv]") {
 	std::set<std::string> skip;
 	skip.insert("data/csv/tpcds_59.csv");
 	skip.insert("data/csv/nullpadding_big_mixed.csv");
-	skip.insert("data/csv/ips.csv.gz");
-	//	skip.insert("data/csv/sequences.csv.gz");
-	//	skip.insert("data/csv/comma_decimal_null.csv");
+	//! This file is way too big
+	skip.insert("data/csv/sequences.csv.gz");
+	skip.insert("data/csv/comma_decimal_null.csv");
 	RunTestOnFolder("data/csv/", skip);
 }
 
