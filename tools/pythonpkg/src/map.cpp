@@ -1,6 +1,6 @@
 #include "duckdb_python/map.hpp"
 #include "duckdb_python/vector_conversion.hpp"
-#include "duckdb_python/array_wrapper.hpp"
+#include "duckdb_python/numpy/array_wrapper.hpp"
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {

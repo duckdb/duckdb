@@ -8,4 +8,4 @@ struct PythonGILWrapper {
 	py::gil_scoped_acquire acquire;
 };
 
-} //namespace duckdb
+} // namespace duckdb

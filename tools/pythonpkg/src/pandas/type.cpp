@@ -1,4 +1,4 @@
-#include "duckdb_python/pandas_type.hpp"
+#include "duckdb_python/pandas/pandas_type.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/string_util.hpp"

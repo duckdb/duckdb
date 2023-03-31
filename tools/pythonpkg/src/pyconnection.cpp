@@ -25,7 +25,7 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb_python/arrow_array_stream.hpp"
 #include "duckdb_python/map.hpp"
-#include "duckdb_python/pandas_scan.hpp"
+#include "duckdb_python/pandas/pandas_scan.hpp"
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/python_conversion.hpp"

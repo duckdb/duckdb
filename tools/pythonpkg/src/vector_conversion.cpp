@@ -7,9 +7,9 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb_python/pandas_type.hpp"
-#include "duckdb_python/pandas_analyzer.hpp"
-#include "duckdb_python/pandas_type.hpp"
+#include "duckdb_python/pandas/pandas_type.hpp"
+#include "duckdb_python/pandas/pandas_analyzer.hpp"
+#include "duckdb_python/pandas/pandas_type.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 
 namespace duckdb {
@@ -127,21 +127,6 @@ static string_t DecodePythonUnicode(T *codepoints, idx_t codepoint_count, Vector
 	}
 	result.Finalize();
 	return result;
-}
-
-template <typename T>
-bool TryCast(const py::object stuf, T &value) {
-	try {
-		value = stuf.cast<T>();
-		return true;
-	} catch (py::cast_error &e) {
-		return false;
-	}
-}
-
-template <typename T>
-T Cast(const py::object obj) {
-	return obj.cast<T>();
 }
 
 static void SetInvalidRecursive(Vector &out, idx_t index) {

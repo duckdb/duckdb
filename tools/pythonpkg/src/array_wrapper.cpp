@@ -1,4 +1,4 @@
-#include "duckdb_python/array_wrapper.hpp"
+#include "duckdb_python/numpy/array_wrapper.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/time.hpp"

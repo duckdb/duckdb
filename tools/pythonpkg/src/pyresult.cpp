@@ -12,7 +12,7 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/uuid.hpp"
-#include "duckdb_python/array_wrapper.hpp"
+#include "duckdb_python/numpy/array_wrapper.hpp"
 #include "duckdb/common/exception.hpp"
 
 namespace duckdb {

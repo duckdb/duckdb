@@ -1,5 +1,5 @@
-#include "duckdb_python/pandas_scan.hpp"
-#include "duckdb_python/array_wrapper.hpp"
+#include "duckdb_python/pandas/pandas_scan.hpp"
+#include "duckdb_python/numpy/array_wrapper.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb_python/vector_conversion.hpp"

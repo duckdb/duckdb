@@ -13,7 +13,7 @@
 #include "duckdb.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb_python/pybind11/python_object_container.hpp"
-#include "duckdb_python/pandas_analyzer.hpp"
+#include "duckdb_python/pandas/pandas_analyzer.hpp"
 
 namespace duckdb {
 

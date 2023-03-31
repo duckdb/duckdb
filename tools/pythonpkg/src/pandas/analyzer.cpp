@@ -1,7 +1,7 @@
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
-#include "duckdb_python/pandas_analyzer.hpp"
+#include "duckdb_python/pandas/pandas_analyzer.hpp"
 #include "duckdb_python/python_conversion.hpp"
 #include "duckdb/common/types/decimal.hpp"
 

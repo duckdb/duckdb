@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb_python/pandas_analyzer.hpp
+// duckdb_python/pandas/pandas_analyzer.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,7 +12,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb_python/pybind11/gil_wrapper.hpp"
-#include "duckdb_python/pandas_type.hpp"
+#include "duckdb_python/pandas/pandas_type.hpp"
 #include "duckdb_python/python_conversion.hpp"
 
 namespace duckdb {
