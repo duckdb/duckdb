@@ -18,10 +18,10 @@ namespace duckdb {
 
 void AssertIndexInBounds(idx_t index, idx_t size);
 
-template <class _Tp, class _Allocator = allocator<_Tp>>
-class vector : public std::vector<_Tp, _Allocator> {
+template <class _Tp, typename __Allocator = allocator<_Tp>>
+class vector : public std::vector<_Tp, __Allocator> {
 public:
-	using original = std::vector<_Tp, _Allocator>;
+	using original = std::vector<_Tp, __Allocator>;
 	using original::original;
 
 	typename original::reference operator[](typename original::size_type __n) {
