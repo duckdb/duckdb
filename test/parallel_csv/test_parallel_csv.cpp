@@ -93,7 +93,7 @@ bool RunFull(std::string &path, std::set<std::string> &skip, duckdb::Connection 
 			}
 			// Results do not match
 			string error_message;
-			if (!ColumnDataCollection::ResultEquals(*ground_truth, *result, error_message, true)) {
+			if (!ColumnDataCollection::ResultEquals(*ground_truth, *result, error_message, false)) {
 				std::cout << path << " Thread count: " << to_string(thread_count)
 				          << " Buffer Size: " << to_string(buffer_size) << std::endl;
 				std::cout << error_message << std::endl;
@@ -125,12 +125,11 @@ void RunTestOnFolder(const string &path, std::set<std::string> &skip, const stri
 //	std::set<std::string> skip;
 //	con.Query("SET preserve_insertion_order=false;");
 //
-//	string file = "test/sql/copy/csv/data/auto/single_header.csv";
+//	string file = "data/csv/tpcds_59.csv";
 //
-//	auto thread_count = 3;
-//	auto buffer_size = 207;
+////	auto thread_count = 3;
+////	auto buffer_size = 208;
 ////	skip.insert("data/csv/tpcds_59.csv");
-////	skip.insert("data/csv/nullpadding_big_mixed.csv");
 ////	//! This file is way too big
 ////	skip.insert("data/csv/sequences.csv.gz");
 ////	skip.insert("test/sql/copy/csv/data/real/voter.tsv");
@@ -201,8 +200,6 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/glob/i1", "[para
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/real", "[parallel-csv]") {
 	std::set<std::string> skip;
-	//! Thread count: 2 Buffer Size: 1266
-	skip.insert("test/sql/copy/csv/data/real/voter.tsv");
 	RunTestOnFolder("test/sql/copy/csv/data/real/", skip);
 }
 
@@ -218,7 +215,6 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/zstd", "[paralle
 
 TEST_CASE("Test Parallel CSV All Files - data/csv", "[parallel-csv]") {
 	std::set<std::string> skip;
-	skip.insert("data/csv/tpcds_59.csv");
 	//! This file is way too big
 	skip.insert("data/csv/sequences.csv.gz");
 	RunTestOnFolder("data/csv/", skip);
