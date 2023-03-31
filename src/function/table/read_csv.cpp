@@ -240,7 +240,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		}
 		options = initial_reader->options;
 		result->sql_types = initial_reader->return_types;
-		result->initial_reader = std::move(initial_reader);
 	} else {
 		result->sql_types = return_types;
 		D_ASSERT(return_types.size() == names.size());
@@ -449,13 +448,15 @@ bool ParallelCSVGlobalState::Finished() {
 void ParallelCSVGlobalState::Verify() {
 	// All threads are done, we run some magic sweet verification code
 	if (running_threads == 0) {
+		// figure out max value of last_pos
+		auto max_value = *max_element(std::begin(tuple_end), std::end(tuple_end));
 		for (auto &last_pos : tuple_end) {
 			auto first_pos = tuple_start.find(last_pos);
 			if (first_pos == tuple_start.end()) {
 				// this might be necessary due to carriage returns outside buffer scopes.
 				first_pos = tuple_start.find(last_pos + 1);
 			}
-			if (first_pos == tuple_start.end() && last_pos != NumericLimits<uint64_t>::Maximum()) {
+			if (first_pos == tuple_start.end() && last_pos != max_value) {
 				string error = "Not possible to read this CSV File with multithreading. Tuple: " + to_string(last_pos) +
 				               " does not have a match\n";
 				error += "End Lines: \n";
@@ -585,15 +586,7 @@ static void ParallelReadCSVFunction(ClientContext &context, TableFunctionInput &
 		}
 		if (csv_local_state.csv_reader->finished) {
 			auto verification_updates = csv_local_state.csv_reader->GetVerificationPositions();
-			if (verification_updates.beginning_of_first_line == verification_updates.end_of_last_line) {
-				// This means the buffer only had invalid lines, hence we don't store this verification update
-				csv_global_state.UpdateLastVerification();
-			} else {
-				// We actually have an update to add
-				if (!csv_local_state.csv_reader->buffer->next_buffer) {
-					// if it's the last line of the file we mark as the maximum
-					verification_updates.end_of_last_line = NumericLimits<uint64_t>::Maximum();
-				}
+			if (verification_updates.beginning_of_first_line != verification_updates.end_of_last_line) {
 				csv_global_state.UpdateVerification(verification_updates);
 			}
 
