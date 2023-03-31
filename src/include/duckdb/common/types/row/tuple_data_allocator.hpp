@@ -85,7 +85,7 @@ private:
 	                                  const idx_t append_offset, const idx_t append_count);
 	//! Internal function for InitializeChunkState
 	void InitializeChunkStateInternal(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state, idx_t offset,
-	                                  bool init_heap_pointers, bool init_heap_sizes,
+	                                  bool recompute, bool init_heap_pointers, bool init_heap_sizes,
 	                                  vector<TupleDataChunkPart *> &parts);
 	//! Internal function for ReleaseOrStoreHandles
 	static void ReleaseOrStoreHandlesInternal(TupleDataSegment &segment, vector<BufferHandle> &pinned_row_handles,

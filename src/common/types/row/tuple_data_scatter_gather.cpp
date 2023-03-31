@@ -277,6 +277,27 @@ void TupleDataCollection::StructWithinListComputeHeapSizes(Vector &heap_sizes_v,
 	}
 }
 
+static void ApplySliceRecursive(Vector &source_v, TupleDataVectorFormat &source_format,
+                                const SelectionVector &combined_sel, const idx_t count) {
+	D_ASSERT(source_format.combined_list_data);
+	auto &combined_list_data = *source_format.combined_list_data;
+
+	combined_list_data.selection_data = source_format.data.sel->Slice(combined_sel, count);
+	source_format.data.owned_sel.Initialize(combined_list_data.selection_data);
+	source_format.data.sel = &source_format.data.owned_sel;
+
+	if (source_v.GetType().InternalType() == PhysicalType::STRUCT) {
+		// We have to apply it to the child vectors too
+		auto &struct_sources = StructVector::GetEntries(source_v);
+		for (idx_t struct_col_idx = 0; struct_col_idx < struct_sources.size(); struct_col_idx++) {
+			auto &struct_source = *struct_sources[struct_col_idx];
+			auto &struct_format = source_format.child_formats[struct_col_idx];
+			struct_format.combined_list_data = make_unique<CombinedListData>();
+			ApplySliceRecursive(struct_source, struct_format, *source_format.data.sel, count);
+		}
+	}
+}
+
 void TupleDataCollection::ListWithinListComputeHeapSizes(Vector &heap_sizes_v, Vector &source_v,
                                                          TupleDataVectorFormat &source_format,
                                                          const SelectionVector &append_sel, const idx_t append_count,
@@ -296,8 +317,9 @@ void TupleDataCollection::ListWithinListComputeHeapSizes(Vector &heap_sizes_v, V
 	auto heap_sizes = FlatVector::GetData<idx_t>(heap_sizes_v);
 
 	// Construct combined list entries and a selection vector for the child list child
-	source_format.combined_list_data = make_unique<CombinedListData>();
-	auto &combined_list_data = *source_format.combined_list_data;
+	auto &child_format = source_format.child_formats[0];
+	child_format.combined_list_data = make_unique<CombinedListData>();
+	auto &combined_list_data = *child_format.combined_list_data;
 	auto &combined_list_entries = combined_list_data.combined_list_entries;
 	const auto child_list_child_count = ListVector::GetListSize(source_v);
 	SelectionVector combined_sel(child_list_child_count);
@@ -354,13 +376,10 @@ void TupleDataCollection::ListWithinListComputeHeapSizes(Vector &heap_sizes_v, V
 
 	// Combine the selection vectors
 	D_ASSERT(source_format.child_formats.size() == 1);
-	auto &child_format = source_format.child_formats[0];
-	combined_list_data.selection_data = child_format.data.sel->Slice(combined_sel, child_list_child_count);
-	child_format.data.owned_sel.Initialize(combined_list_data.selection_data);
-	child_format.data.sel = &child_format.data.owned_sel;
+	auto &child_source = ListVector::GetEntry(source_v);
+	ApplySliceRecursive(child_source, child_format, combined_sel, child_list_child_count);
 
 	// Recurse
-	auto &child_source = ListVector::GetEntry(source_v);
 	TupleDataCollection::WithinListHeapComputeSizes(heap_sizes_v, child_source, child_format, append_sel, append_count,
 	                                                combined_child_list_data);
 }
@@ -709,7 +728,7 @@ static void TupleDataListWithinListScatter(Vector &child_list, const TupleDataVe
 	D_ASSERT(child_functions.size() == 1);
 	auto &child_vec = ListVector::GetEntry(child_list);
 	auto &child_format = child_list_format.child_formats[0];
-	auto &combined_child_list_data = child_list_format.combined_list_data->combined_data;
+	auto &combined_child_list_data = child_format.combined_list_data->combined_data;
 	const auto &child_function = child_functions[0];
 	child_function.function(child_vec, child_format, append_sel, append_count, layout, row_locations, heap_locations,
 	                        col_idx, combined_child_list_data, child_function.child_functions);
