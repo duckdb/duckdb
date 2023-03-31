@@ -13,8 +13,13 @@
 #include <pybind11/stl.h>
 #include <vector>
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace pybind11 {
+namespace detail {
+template <typename Type, typename Alloc>
+struct type_caster<duckdb::vector<Type, Alloc>> : list_caster<duckdb::vector<Type, Alloc>, Type> {};
+} // namespace detail
 
 bool gil_check();
 void gil_assert();
