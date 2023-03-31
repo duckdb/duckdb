@@ -25,7 +25,7 @@ const string tbl_zst = "tbl.zst";
 
 const string csv_extensions[5] = {csv, tsv, csv_gz, csv_zst, tbl_zst};
 
-bool debug = false;
+bool debug = true;
 bool RunFull(std::string &path, std::set<std::string> &skip, duckdb::Connection &conn,
              const string &add_parameters = "") {
 	bool single_threaded_passed;
@@ -119,24 +119,29 @@ void RunTestOnFolder(const string &path, std::set<std::string> &skip, const stri
 	}
 }
 
-// TEST_CASE("Test One File", "[parallel-csv]") {
-//	DuckDB db(nullptr);
-//	Connection con(db);
-//	std::set<std::string> skip;
-//	con.Query("SET preserve_insertion_order=false;");
+ TEST_CASE("Test One File", "[parallel-csv]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	std::set<std::string> skip;
+	con.Query("SET preserve_insertion_order=false;");
+
+	string file = "data/csv/nullpadding_big_mixed.csv";
+
+	auto thread_count = 3;
+	auto buffer_size = 207;
+//	skip.insert("data/csv/tpcds_59.csv");
+//	skip.insert("data/csv/nullpadding_big_mixed.csv");
+//	//! This file is way too big
+//	skip.insert("data/csv/sequences.csv.gz");
+//	skip.insert("test/sql/copy/csv/data/real/voter.tsv");
 //
-//	string file = "data/csv/sequences.csv.gz";
-//
-//	auto thread_count = 3;
-//	auto buffer_size = 207;
-//
-////	con.Query("PRAGMA threads=" + to_string(thread_count));
-////	unique_ptr<MaterializedQueryResult> multi_threaded_result = con.Query(
-////	    "SELECT * FROM read_csv_auto('" + file + "', buffer_size = " + to_string(buffer_size) + ")");
-////	auto &result = multi_threaded_result->Collection();
-//////	auto rows = result.GetRows();
-//	REQUIRE(RunFull(file, skip, con));
-//}
+//	con.Query("PRAGMA threads=" + to_string(thread_count));
+//	unique_ptr<MaterializedQueryResult> multi_threaded_result = con.Query(
+//	    "SELECT * FROM read_csv_auto('" + file + "', buffer_size = " + to_string(buffer_size) + ")");
+//	auto &result = multi_threaded_result->Collection();
+////	auto rows = result.GetRows();
+	REQUIRE(RunFull(file, skip, con));
+}
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data", "[parallel-csv]") {
 	std::set<std::string> skip;
@@ -217,7 +222,6 @@ TEST_CASE("Test Parallel CSV All Files - data/csv", "[parallel-csv]") {
 	skip.insert("data/csv/nullpadding_big_mixed.csv");
 	//! This file is way too big
 	skip.insert("data/csv/sequences.csv.gz");
-	skip.insert("data/csv/comma_decimal_null.csv");
 	RunTestOnFolder("data/csv/", skip);
 }
 
