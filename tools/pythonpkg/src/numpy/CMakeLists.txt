@@ -3,8 +3,8 @@ include_directories(${pybind11_INCLUDE_DIR})
 include_directories(${PYTHON_INCLUDE_DIRS})
 find_package(pybind11 REQUIRED)
 
-add_library(python_pandas OBJECT type.cpp scan.cpp analyzer.cpp bind.cpp)
+add_library(python_numpy OBJECT numpy_scan.cpp)
 
 set(ALL_OBJECT_FILES
-    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:python_pandas>
+    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:python_numpy>
     PARENT_SCOPE)

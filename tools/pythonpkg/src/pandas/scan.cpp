@@ -1,8 +1,9 @@
 #include "duckdb_python/pandas/pandas_scan.hpp"
+#include "duckdb_python/pandas/pandas_bind.hpp"
 #include "duckdb_python/numpy/array_wrapper.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb_python/vector_conversion.hpp"
+#include "duckdb_python/numpy/numpy_scan.hpp"
 #include "duckdb/main/client_context.hpp"
 
 #include "duckdb/common/atomic.hpp"
@@ -73,7 +74,7 @@ unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &conte
 	py::handle df((PyObject *)(input.inputs[0].GetPointer()));
 
 	vector<PandasColumnBindData> pandas_bind_data;
-	VectorConversion::BindPandas(DBConfig::GetConfig(context), df, pandas_bind_data, return_types, names);
+	Pandas::Bind(DBConfig::GetConfig(context), df, pandas_bind_data, return_types, names);
 
 	auto df_columns = py::list(df.attr("columns"));
 	auto get_fun = df.attr("__getitem__");
@@ -156,8 +157,8 @@ void PandasScanFunction::PandasScanFunc(ClientContext &context, TableFunctionInp
 		if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
 			output.data[idx].Sequence(state.start, 1, this_count);
 		} else {
-			VectorConversion::NumpyToDuckDB(data.pandas_bind_data[col_idx], data.pandas_bind_data[col_idx].numpy_col,
-			                                this_count, state.start, output.data[idx]);
+			Numpy::Scan(data.pandas_bind_data[col_idx], data.pandas_bind_data[col_idx].numpy_col, this_count,
+			            state.start, output.data[idx]);
 		}
 	}
 	state.start += this_count;

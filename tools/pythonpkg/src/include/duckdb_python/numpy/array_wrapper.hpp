@@ -16,7 +16,6 @@ namespace duckdb {
 struct RegisteredArray {
 	explicit RegisteredArray(py::array numpy_array) : numpy_array(std::move(numpy_array)) {
 	}
-
 	py::array numpy_array;
 };
 
