@@ -79,7 +79,7 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 	}
 
 	// For aggregates you can add orders
-	auto order_modifier = make_unique<OrderModifier>();
+	auto order_modifier = make_uniq<OrderModifier>();
 	for (expr_extptr_t expr : order_bys) {
 		order_modifier->orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, expr->Copy());
 	}
@@ -93,7 +93,7 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 		for (expr_extptr_t expr : filter_bys) {
 			filters.push_back(expr->Copy());
 		}
-		filter_expr = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(filters));
+		filter_expr = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(filters));
 	}
 
 	auto func_expr = make_external<FunctionExpression>("duckdb_expr", name, std::move(children));
