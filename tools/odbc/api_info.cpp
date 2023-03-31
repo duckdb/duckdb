@@ -6,8 +6,8 @@
 using duckdb::ApiInfo;
 using duckdb::idx_t;
 using duckdb::TypeInfo;
-using std::string;
 using duckdb::vector;
+using std::string;
 
 /*** ODBC API Functions ********************************/
 SQLRETURN SQL_API SQLGetFunctions(SQLHDBC connection_handle, SQLUSMALLINT function_id, SQLUSMALLINT *supported_ptr) {
