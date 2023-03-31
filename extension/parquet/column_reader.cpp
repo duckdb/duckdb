@@ -921,8 +921,7 @@ RowNumberColumnReader::RowNumberColumnReader(ParquetReader &reader, LogicalType 
     : ColumnReader(reader, std::move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p) {
 }
 
-unique_ptr<BaseStatistics> RowNumberColumnReader::Stats(idx_t row_group_idx_p,
-                                                        const vector<ColumnChunk> &columns) {
+unique_ptr<BaseStatistics> RowNumberColumnReader::Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns) {
 	auto stats = NumericStats::CreateUnknown(type);
 	auto &row_groups = reader.GetFileMetadata()->row_groups;
 	D_ASSERT(row_group_idx_p < row_groups.size());

@@ -22,7 +22,7 @@ struct BindReplaceDemoFun {
 	};
 
 	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
-	                                     vector<LogicalType> &return_types, vector<string> &names) {
+	                                     duckdb::vector<LogicalType> &return_types, duckdb::vector<string> &names) {
 		auto result = make_unique<BindReplaceDemoFun::CustomFunctionData>();
 
 		result->current_depth = input.inputs[0].GetValue<int64_t>();
@@ -49,7 +49,7 @@ struct BindReplaceDemoFun {
 			auto join_node = make_unique<JoinRef>(JoinRefType::CROSS);
 
 			// Construct LHS TableFunctionRef
-			vector<unique_ptr<ParsedExpression>> left_children;
+			duckdb::vector<unique_ptr<ParsedExpression>> left_children;
 			left_children.push_back(make_unique<ConstantExpression>(Value(depth - 1)));
 			left_children.push_back(make_unique<ConstantExpression>(Value(name + "L")));
 			auto tf_ref_left = make_unique<TableFunctionRef>();
@@ -58,7 +58,7 @@ struct BindReplaceDemoFun {
 			join_node->left = std::move(tf_ref_left);
 
 			// Construct RHS TableFunctionRef
-			vector<unique_ptr<ParsedExpression>> right_children;
+			duckdb::vector<unique_ptr<ParsedExpression>> right_children;
 			right_children.push_back(make_unique<ConstantExpression>(Value(depth - 1)));
 			right_children.push_back(make_unique<ConstantExpression>(Value(name + "R")));
 			auto tf_ref_right = make_unique<TableFunctionRef>();
@@ -117,7 +117,7 @@ struct BindReplaceDemoFun2 {
 			return nullptr;
 		}
 
-		vector<unique_ptr<ParsedExpression>> children;
+		duckdb::vector<unique_ptr<ParsedExpression>> children;
 		children.push_back(make_unique<ConstantExpression>(Value(value)));
 		auto tf_ref = make_unique<TableFunctionRef>();
 		tf_ref->function = make_unique<FunctionExpression>("range", std::move(children));

@@ -64,7 +64,7 @@ struct has_deserialize<
 template <typename T>
 struct is_vector : std::false_type {};
 template <typename T>
-struct is_vector<typename std::vector<T>> : std::true_type {
+struct is_vector<typename duckdb::vector<T>> : std::true_type {
 	typedef T ELEMENT_TYPE;
 };
 

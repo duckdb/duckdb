@@ -8,7 +8,11 @@
 #include <string>
 #include <regex>
 
-using std::unique_ptr;
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/vector.hpp"
+
+using duckdb::unique_ptr;
+using duckdb::vector;
 
 namespace node_duckdb {
 
@@ -32,7 +36,7 @@ Napi::Object Statement::Init(Napi::Env env, Napi::Object exports) {
 
 static unique_ptr<duckdb::PreparedStatement> PrepareManyInternal(Statement &statement) {
 	auto &connection = statement.connection_ref->connection;
-	std::vector<unique_ptr<duckdb::SQLStatement>> statements;
+	vector<unique_ptr<duckdb::SQLStatement>> statements;
 	try {
 		if (connection == nullptr) {
 			throw duckdb::ConnectionException("Connection was never established or has been closed already");
