@@ -184,7 +184,7 @@ void ScanPandasObjectColumn(PandasColumnBindData &bind_data, PyObject **col, idx
 //! 'offset' is the offset within the column
 //! 'count' is the amount of values we will convert in this batch
 void Numpy::Scan(PandasColumnBindData &bind_data, py::array &numpy_col, idx_t count, idx_t offset, Vector &out) {
-	switch (bind_data.pandas_type) {
+	switch (bind_data.numpy_type) {
 	case NumpyNullableType::BOOL:
 		ScanPandasMasked<bool>(bind_data, count, offset, out);
 		break;
@@ -281,7 +281,7 @@ void Numpy::Scan(PandasColumnBindData &bind_data, py::array &numpy_col, idx_t co
 
 			// Get the pointer to the object
 			PyObject *val = src_ptr[source_idx];
-			if (bind_data.pandas_type == NumpyNullableType::OBJECT && !PyUnicode_CheckExact(val)) {
+			if (bind_data.numpy_type == NumpyNullableType::OBJECT && !PyUnicode_CheckExact(val)) {
 				if (val == Py_None) {
 					out_mask.SetInvalid(row);
 					continue;

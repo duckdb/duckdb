@@ -11,7 +11,7 @@ namespace duckdb {
 struct RegisteredArray;
 
 struct PandasColumnBindData {
-	NumpyNullableType pandas_type;
+	NumpyNullableType numpy_type;
 	py::array numpy_col;
 	idx_t numpy_stride;
 	unique_ptr<RegisteredArray> mask;

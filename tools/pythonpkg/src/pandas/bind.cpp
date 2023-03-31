@@ -24,7 +24,7 @@ void Pandas::Bind(const DBConfig &config, py::handle df, vector<PandasColumnBind
 		PandasColumnBindData bind_data;
 
 		names.emplace_back(py::str(df_columns[col_idx]));
-		bind_data.pandas_type = ConvertNumpyType(df_types[col_idx]);
+		bind_data.numpy_type = ConvertNumpyType(df_types[col_idx]);
 		bool column_has_mask = py::hasattr(get_fun(df_columns[col_idx]).attr("array"), "_mask");
 
 		if (column_has_mask) {
@@ -33,7 +33,7 @@ void Pandas::Bind(const DBConfig &config, py::handle df, vector<PandasColumnBind
 		}
 
 		auto column = get_fun(df_columns[col_idx]);
-		if (bind_data.pandas_type == NumpyNullableType::CATEGORY) {
+		if (bind_data.numpy_type == NumpyNullableType::CATEGORY) {
 			// for category types, we create an ENUM type for string or use the converted numpy type for the rest
 			D_ASSERT(py::hasattr(column, "cat"));
 			D_ASSERT(py::hasattr(column.attr("cat"), "categories"));
@@ -41,7 +41,7 @@ void Pandas::Bind(const DBConfig &config, py::handle df, vector<PandasColumnBind
 			auto categories_pd_type = ConvertNumpyType(categories.attr("dtype"));
 			if (categories_pd_type == NumpyNullableType::OBJECT) {
 				// Let's hope the object type is a string.
-				bind_data.pandas_type = NumpyNullableType::CATEGORY;
+				bind_data.numpy_type = NumpyNullableType::CATEGORY;
 				auto enum_name = string(py::str(df_columns[col_idx]));
 				vector<string> enum_entries = py::cast<vector<string>>(categories);
 				idx_t size = enum_entries.size();
@@ -59,14 +59,14 @@ void Pandas::Bind(const DBConfig &config, py::handle df, vector<PandasColumnBind
 				bind_data.numpy_col = py::array(column.attr("to_numpy")());
 				auto numpy_type = bind_data.numpy_col.attr("dtype");
 				// for category types (non-strings), we use the converted numpy type
-				bind_data.pandas_type = ConvertNumpyType(numpy_type);
-				duckdb_col_type = NumpyToLogicalType(bind_data.pandas_type);
+				bind_data.numpy_type = ConvertNumpyType(numpy_type);
+				duckdb_col_type = NumpyToLogicalType(bind_data.numpy_type);
 			}
-		} else if (bind_data.pandas_type == NumpyNullableType::FLOAT_16) {
+		} else if (bind_data.numpy_type == NumpyNullableType::FLOAT_16) {
 			auto pandas_array = get_fun(df_columns[col_idx]).attr("array");
 			bind_data.numpy_col = py::array(column.attr("to_numpy")("float32"));
-			bind_data.pandas_type = NumpyNullableType::FLOAT_32;
-			duckdb_col_type = NumpyToLogicalType(bind_data.pandas_type);
+			bind_data.numpy_type = NumpyNullableType::FLOAT_32;
+			duckdb_col_type = NumpyToLogicalType(bind_data.numpy_type);
 		} else {
 			auto pandas_array = get_fun(df_columns[col_idx]).attr("array");
 			if (py::hasattr(pandas_array, "_data")) {
@@ -79,10 +79,10 @@ void Pandas::Bind(const DBConfig &config, py::handle df, vector<PandasColumnBind
 				// Otherwise we have to get it through 'to_numpy()'
 				bind_data.numpy_col = py::array(column.attr("to_numpy")());
 			}
-			duckdb_col_type = NumpyToLogicalType(bind_data.pandas_type);
+			duckdb_col_type = NumpyToLogicalType(bind_data.numpy_type);
 		}
 		// Analyze the inner data type of the 'object' column
-		if (bind_data.pandas_type == NumpyNullableType::OBJECT) {
+		if (bind_data.numpy_type == NumpyNullableType::OBJECT) {
 			PandasAnalyzer analyzer(config);
 			if (analyzer.Analyze(get_fun(df_columns[col_idx]))) {
 				duckdb_col_type = analyzer.AnalyzedType();
