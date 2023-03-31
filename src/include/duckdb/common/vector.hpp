@@ -25,11 +25,15 @@ public:
 	using original::original;
 
 	typename original::reference operator[](typename original::size_type __n) {
+#ifdef DEBUG
 		AssertIndexInBounds(__n, original::size());
+#endif
 		return original::operator[](__n);
 	}
 	typename original::const_reference operator[](typename original::size_type __n) const {
+#ifdef DEBUG
 		AssertIndexInBounds(__n, original::size());
+#endif
 		return original::operator[](__n);
 	}
 };
