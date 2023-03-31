@@ -1,6 +1,7 @@
 #include "duckdb/execution/column_binding_resolver.hpp"
 
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_create_index.hpp"
 #include "duckdb/planner/operator/logical_delim_join.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
@@ -17,7 +18,10 @@ ColumnBindingResolver::ColumnBindingResolver() {
 }
 
 void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
-	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN || op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
 		// special case: comparison join
 		auto &comp_join = (LogicalComparisonJoin &)op;
 		// first get the bindings of the LHS and resolve the LHS expressions
@@ -40,27 +44,36 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		// finally update the bindings with the result bindings of the join
 		bindings = op.GetColumnBindings();
 		return;
-	} else if (op.type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
+	}
+	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
 		// ANY join, this join is different because we evaluate the expression on the bindings of BOTH join sides at
 		// once i.e. we set the bindings first to the bindings of the entire join, and then resolve the expressions of
 		// this operator
 		VisitOperatorChildren(op);
 		bindings = op.GetColumnBindings();
+		auto &any_join = (LogicalAnyJoin &)op;
+		if (any_join.join_type == JoinType::SEMI || any_join.join_type == JoinType::ANTI) {
+			auto right_bindings = op.children[1]->GetColumnBindings();
+			bindings.insert(bindings.end(), right_bindings.begin(), right_bindings.end());
+		}
 		VisitOperatorExpressions(op);
 		return;
-	} else if (op.type == LogicalOperatorType::LOGICAL_CREATE_INDEX) {
+	}
+	case LogicalOperatorType::LOGICAL_CREATE_INDEX: {
 		// CREATE INDEX statement, add the columns of the table with table index 0 to the binding set
 		// afterwards bind the expressions of the CREATE INDEX statement
 		auto &create_index = (LogicalCreateIndex &)op;
 		bindings = LogicalOperator::GenerateColumnBindings(0, create_index.table.GetColumns().LogicalColumnCount());
 		VisitOperatorExpressions(op);
 		return;
-	} else if (op.type == LogicalOperatorType::LOGICAL_GET) {
+	}
+	case LogicalOperatorType::LOGICAL_GET: {
 		//! We first need to update the current set of bindings and then visit operator expressions
 		bindings = op.GetColumnBindings();
 		VisitOperatorExpressions(op);
 		return;
-	} else if (op.type == LogicalOperatorType::LOGICAL_INSERT) {
+	}
+	case LogicalOperatorType::LOGICAL_INSERT: {
 		//! We want to execute the normal path, but also add a dummy 'excluded' binding if there is a
 		// ON CONFLICT DO UPDATE clause
 		auto &insert_op = (LogicalInsert &)op;
@@ -82,6 +95,9 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 			bindings = op.GetColumnBindings();
 			return;
 		}
+	}
+	default:
+		break;
 	}
 	// general case
 	// first visit the children of this operator

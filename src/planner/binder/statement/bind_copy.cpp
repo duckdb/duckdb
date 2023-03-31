@@ -23,16 +23,6 @@
 
 namespace duckdb {
 
-static vector<idx_t> ColumnListToIndices(const vector<bool> &vec) {
-	vector<idx_t> ret;
-	for (idx_t i = 0; i < vec.size(); i++) {
-		if (vec[i]) {
-			ret.push_back(i);
-		}
-	}
-	return ret;
-}
-
 vector<string> GetUniqueNames(const vector<string> &original_names) {
 	unordered_set<string> name_set;
 	vector<string> unique_names;
@@ -115,7 +105,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 		}
 		if (loption == "partition_by") {
 			auto converted = ConvertVectorToValue(std::move(option.second));
-			partition_cols = ColumnListToIndices(ParseColumnList(converted, select_node.names, loption));
+			partition_cols = ParseColumnsOrdered(converted, select_node.names, loption);
 			continue;
 		}
 		stmt.info->options[option.first] = option.second;
@@ -168,7 +158,9 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	result.types = {LogicalType::BIGINT};
 	result.names = {"Count"};
 
-	D_ASSERT(!stmt.info->table.empty());
+	if (stmt.info->table.empty()) {
+		throw ParserException("COPY FROM requires a table name to be specified");
+	}
 	// COPY FROM a file
 	// generate an insert statement for the the to-be-inserted table
 	InsertStatement insert;
@@ -195,7 +187,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	vector<string> expected_names;
 	if (!bound_insert.column_index_map.empty()) {
 		expected_names.resize(bound_insert.expected_types.size());
-		for (auto &col : table->GetColumns().Logical()) {
+		for (auto &col : table->GetColumns().Physical()) {
 			auto i = col.Physical();
 			if (bound_insert.column_index_map[i] != DConstants::INVALID_INDEX) {
 				expected_names[bound_insert.column_index_map[i]] = col.Name();
@@ -203,7 +195,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 		}
 	} else {
 		expected_names.reserve(bound_insert.expected_types.size());
-		for (auto &col : table->GetColumns().Logical()) {
+		for (auto &col : table->GetColumns().Physical()) {
 			expected_names.push_back(col.Name());
 		}
 	}

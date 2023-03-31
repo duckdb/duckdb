@@ -68,7 +68,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 	// for a comparison join we create a FilterCombiner that checks if we can push conditions on LHS join conditions
 	// into the RHS of the join
 	FilterCombiner filter_combiner(optimizer);
-	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+	const auto isComparison = (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
+	                           op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN);
+	if (isComparison) {
 		// add all comparison conditions
 		auto &comparison_join = (LogicalComparisonJoin &)*op;
 		for (auto &cond : comparison_join.conditions) {
@@ -82,7 +84,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 		if (side == JoinSide::LEFT) {
 			// bindings match left side
 			// we can push the filter into the left side
-			if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+			if (isComparison) {
 				// we MIGHT be able to push it down the RHS as well, but only if it is a comparison that matches the
 				// join predicates we use the FilterCombiner to figure this out add the expression to the FilterCombiner
 				filter_combiner.AddFilter(filters[i]->filter->Copy());
@@ -122,16 +124,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 	right_pushdown.GenerateFilters();
 	op->children[0] = left_pushdown.Rewrite(std::move(op->children[0]));
 	op->children[1] = right_pushdown.Rewrite(std::move(op->children[1]));
-	if (filters.empty()) {
-		// no filters to push
-		return op;
-	}
-	auto filter = make_unique<LogicalFilter>();
-	for (auto &f : filters) {
-		filter->expressions.push_back(std::move(f->filter));
-	}
-	filter->children.push_back(std::move(op));
-	return std::move(filter);
+	return PushFinalFilters(std::move(op));
 }
 
 } // namespace duckdb

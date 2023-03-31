@@ -36,7 +36,7 @@ void Index::InitializeLock(IndexLock &state) {
 	state.index_lock = unique_lock<mutex>(lock);
 }
 
-bool Index::Append(DataChunk &entries, Vector &row_identifiers) {
+PreservedError Index::Append(DataChunk &entries, Vector &row_identifiers) {
 	IndexLock state;
 	InitializeLock(state);
 	return Append(state, entries, row_identifiers);
@@ -86,8 +86,19 @@ bool Index::IndexIsUpdated(const vector<PhysicalIndex> &column_ids) const {
 	return false;
 }
 
-BlockPointer Index::Serialize(duckdb::MetaBlockWriter &writer) {
+BlockPointer Index::Serialize(MetaBlockWriter &writer) {
 	throw NotImplementedException("The implementation of this index serialization does not exist.");
+}
+
+string Index::AppendRowError(DataChunk &input, idx_t index) {
+	string error;
+	for (idx_t c = 0; c < input.ColumnCount(); c++) {
+		if (c > 0) {
+			error += ", ";
+		}
+		error += input.GetValue(c, index).ToString();
+	}
+	return error;
 }
 
 } // namespace duckdb

@@ -9,6 +9,18 @@
 
 namespace duckdb {
 
+class ModifiedMemoryFileSystem : public py::object {
+public:
+	using py::object::object;
+	ModifiedMemoryFileSystem(py::object object) : py::object(object) {
+	}
+
+public:
+	static bool check_(const py::handle &object) {
+		return py::isinstance(object, py::module::import("pyduckdb.filesystem").attr("ModifiedMemoryFileSystem"));
+	}
+};
+
 class AbstractFileSystem : public py::object {
 public:
 	using py::object::object;
@@ -29,7 +41,7 @@ public:
 	}
 
 	static const py::object &GetHandle(const FileHandle &handle) {
-		return ((PythonFileHandle &)handle).handle;
+		return ((const PythonFileHandle &)handle).handle;
 	}
 
 private:
@@ -39,16 +51,8 @@ class PythonFilesystem : public FileSystem {
 private:
 	const vector<string> protocols;
 	const AbstractFileSystem filesystem;
-	string stripPrefix(string input) {
-		for (const auto &protocol : protocols) {
-			auto prefix = protocol + "://";
-			if (StringUtil::StartsWith(input, prefix)) {
-				return input.substr(prefix.size());
-			}
-		}
-		return input;
-	}
 	std::string DecodeFlags(uint8_t flags);
+	bool Exists(const string &filename, const char *func_name) const;
 
 public:
 	explicit PythonFilesystem(vector<string> protocols, AbstractFileSystem filesystem)
@@ -87,6 +91,14 @@ public:
 	void MoveFile(const string &source, const string &dest) override;
 	time_t GetLastModifiedTime(FileHandle &handle) override;
 	void FileSync(FileHandle &handle) override;
+	bool DirectoryExists(const string &directory) override;
+	void CreateDirectory(const string &directory) override;
+	void RemoveDirectory(const string &directory) override;
+	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
+	               FileOpener *opener = nullptr) override;
+	void Truncate(FileHandle &handle, int64_t new_size) override;
+	bool IsPipe(const string &filename) override;
+	idx_t SeekPosition(FileHandle &handle) override;
 };
 
 } // namespace duckdb

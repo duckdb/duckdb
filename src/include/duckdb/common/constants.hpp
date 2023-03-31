@@ -15,25 +15,6 @@
 
 namespace duckdb {
 
-// API versions
-// if no explicit API version is defined, the latest API version is used
-// Note that using older API versions (i.e. not using DUCKDB_API_LATEST) is deprecated.
-// These will not be supported long-term, and will be removed in future versions.
-
-#ifndef DUCKDB_API_0_3_1
-#define DUCKDB_API_0_3_1 1
-#endif
-#ifndef DUCKDB_API_0_3_2
-#define DUCKDB_API_0_3_2 2
-#endif
-#ifndef DUCKDB_API_LATEST
-#define DUCKDB_API_LATEST DUCKDB_API_0_3_2
-#endif
-
-#ifndef DUCKDB_API_VERSION
-#define DUCKDB_API_VERSION DUCKDB_API_LATEST
-#endif
-
 //! inline std directives that we use frequently
 #ifndef DUCKDB_DEBUG_MOVE
 using std::move;

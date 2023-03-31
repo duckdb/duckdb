@@ -1,14 +1,18 @@
 name: CodeQuality
 on:
-  schedule:
-    - cron: "0 2 * * *"
+  workflow_dispatch:
+  repository_dispatch:
   push:
     branches:
       - '**'
       - '!master'
       - '!feature'
+    tags:
+      - '**'
     paths-ignore:
       - '**.md'
+      - '.github/workflows/**'
+      - '!.github/workflows/CodeQuality.yml'
 
   pull_request:
     paths-ignore:
@@ -73,7 +77,7 @@ jobs:
       - name: Cache clang-tidy
         id: date
         shell: bash
-        run: echo "::set-output name=now::$(date)"
+        run: echo "name=now::$(date)" >> $GITHUB_OUTPUT
 
       - name: Cache clang-tidy
         uses: actions/cache@v3
@@ -121,7 +125,7 @@ jobs:
           curl --fail --data-binary @.codecov.yml https://codecov.io/validate
 
       - name: Set up Python 3.9
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 

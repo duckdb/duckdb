@@ -122,7 +122,8 @@ struct ParquetWriteGlobalState : public GlobalFunctionData {
 };
 
 struct ParquetWriteLocalState : public LocalFunctionData {
-	explicit ParquetWriteLocalState(ClientContext &context, const vector<LogicalType> &types) : buffer(context, types) {
+	explicit ParquetWriteLocalState(ClientContext &context, const vector<LogicalType> &types)
+	    : buffer(Allocator::Get(context), types) {
 	}
 
 	ColumnDataCollection buffer;
@@ -221,10 +222,7 @@ public:
 		}
 
 		FileSystem &fs = FileSystem::GetFileSystem(context);
-		auto files = fs.Glob(info.file_path, context);
-		if (files.empty()) {
-			throw FileSystem::MissingFileException(info.file_path, context);
-		}
+		auto files = fs.GlobFiles(info.file_path, context);
 
 		// The most likely path (Parquet read without union by name option)
 		if (!parquet_options.union_by_name) {
@@ -357,17 +355,13 @@ public:
 		return_types.assign(union_col_types.begin(), union_col_types.end());
 		result->SetInitialReader(result->union_readers[0]);
 		D_ASSERT(names.size() == return_types.size());
+		result->types = union_col_types;
 
 		return std::move(result);
 	}
 
 	static vector<string> ParquetGlob(FileSystem &fs, const string &glob, ClientContext &context) {
-		auto files = fs.Glob(glob, FileSystem::GetFileOpener(context));
-
-		if (files.empty()) {
-			throw FileSystem::MissingFileException(glob, context);
-		}
-		return files;
+		return fs.GlobFiles(glob, context);
 	}
 
 	static unique_ptr<FunctionData> ParquetScanBind(ClientContext &context, TableFunctionBindInput &input,
@@ -376,7 +370,10 @@ public:
 		if (!config.options.enable_external_access) {
 			throw PermissionException("Scanning Parquet files is disabled through configuration");
 		}
-		auto file_name = input.inputs[0].GetValue<string>();
+		if (input.inputs[0].IsNull()) {
+			throw ParserException("Parquet reader cannot take NULL list as parameter");
+		}
+		auto file_name = StringValue::Get(input.inputs[0]);
 		ParquetOptions parquet_options(context);
 		for (auto &kv : input.named_parameters) {
 			auto loption = StringUtil::Lower(kv.first);
@@ -403,10 +400,16 @@ public:
 		if (!config.options.enable_external_access) {
 			throw PermissionException("Scanning Parquet files is disabled through configuration");
 		}
+		if (input.inputs[0].IsNull()) {
+			throw ParserException("Parquet reader cannot take NULL list as parameter");
+		}
 		FileSystem &fs = FileSystem::GetFileSystem(context);
 		vector<string> files;
 		for (auto &val : ListValue::GetChildren(input.inputs[0])) {
-			auto glob_files = ParquetGlob(fs, val.ToString(), context);
+			if (val.IsNull()) {
+				throw ParserException("Parquet reader cannot take NULL input as parameter");
+			}
+			auto glob_files = ParquetGlob(fs, StringValue::Get(val), context);
 			files.insert(files.end(), glob_files.begin(), glob_files.end());
 		}
 		if (files.empty()) {

@@ -11,8 +11,22 @@
 #include <sstream>
 #include <stdarg.h>
 #include <string.h>
+#include <random>
 
 namespace duckdb {
+
+string StringUtil::GenerateRandomName(idx_t length) {
+	std::random_device rd;
+	std::mt19937 gen(rd());
+	std::uniform_int_distribution<> dis(0, 15);
+
+	std::stringstream ss;
+	ss << std::hex;
+	for (idx_t i = 0; i < length; i++) {
+		ss << dis(gen);
+	}
+	return ss.str();
+}
 
 bool StringUtil::Contains(const string &haystack, const string &needle) {
 	return (haystack.find(needle) != string::npos);
@@ -191,10 +205,13 @@ vector<string> StringUtil::Split(const string &input, const string &split) {
 
 		// Push the substring [last, next) on to splits
 		string substr = input.substr(last, next - last);
-		if (substr.empty() == false) {
+		if (!substr.empty()) {
 			splits.push_back(substr);
 		}
 		last = next + split_len;
+	}
+	if (splits.empty()) {
+		splits.push_back(input);
 	}
 	return splits;
 }
@@ -249,7 +266,7 @@ private:
 };
 
 // adapted from https://en.wikibooks.org/wiki/Algorithm_Implementation/Strings/Levenshtein_distance#C++
-idx_t StringUtil::LevenshteinDistance(const string &s1_p, const string &s2_p) {
+idx_t StringUtil::LevenshteinDistance(const string &s1_p, const string &s2_p, idx_t not_equal_penalty) {
 	auto s1 = StringUtil::Lower(s1_p);
 	auto s2 = StringUtil::Lower(s2_p);
 	idx_t len1 = s1.size();
@@ -273,7 +290,7 @@ idx_t StringUtil::LevenshteinDistance(const string &s1_p, const string &s2_p) {
 			// d[i][j] = std::min({ d[i - 1][j] + 1,
 			//                      d[i][j - 1] + 1,
 			//                      d[i - 1][j - 1] + (s1[i - 1] == s2[j - 1] ? 0 : 1) });
-			int equal = s1[i - 1] == s2[j - 1] ? 0 : 1;
+			int equal = s1[i - 1] == s2[j - 1] ? 0 : not_equal_penalty;
 			idx_t adjacent_score1 = array.Score(i - 1, j) + 1;
 			idx_t adjacent_score2 = array.Score(i, j - 1) + 1;
 			idx_t adjacent_score3 = array.Score(i - 1, j - 1) + equal;
@@ -285,15 +302,19 @@ idx_t StringUtil::LevenshteinDistance(const string &s1_p, const string &s2_p) {
 	return array.Score(len1, len2);
 }
 
+idx_t StringUtil::SimilarityScore(const string &s1, const string &s2) {
+	return LevenshteinDistance(s1, s2, 3);
+}
+
 vector<string> StringUtil::TopNLevenshtein(const vector<string> &strings, const string &target, idx_t n,
                                            idx_t threshold) {
 	vector<pair<string, idx_t>> scores;
 	scores.reserve(strings.size());
 	for (auto &str : strings) {
 		if (target.size() < str.size()) {
-			scores.emplace_back(str, LevenshteinDistance(str.substr(0, target.size()), target));
+			scores.emplace_back(str, SimilarityScore(str.substr(0, target.size()), target));
 		} else {
-			scores.emplace_back(str, LevenshteinDistance(str, target));
+			scores.emplace_back(str, SimilarityScore(str, target));
 		}
 	}
 	return TopNStrings(scores, n, threshold);

@@ -15,6 +15,7 @@
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/storage/storage_info.hpp"
 
@@ -77,6 +78,9 @@ protected:
 	void ReplayCreateTableMacro();
 	void ReplayDropTableMacro();
 
+	void ReplayCreateIndex();
+	void ReplayDropIndex();
+
 	void ReplayUseTable();
 	void ReplayInsert();
 	void ReplayDelete();
@@ -125,12 +129,15 @@ public:
 	void WriteCreateTableMacro(TableMacroCatalogEntry *entry);
 	void WriteDropTableMacro(TableMacroCatalogEntry *entry);
 
+	void WriteCreateIndex(IndexCatalogEntry *entry);
+	void WriteDropIndex(IndexCatalogEntry *entry);
+
 	void WriteCreateType(TypeCatalogEntry *entry);
 	void WriteDropType(TypeCatalogEntry *entry);
 	//! Sets the table used for subsequent insert/delete/update commands
 	void WriteSetTable(string &schema, string &table);
 
-	void WriteAlter(AlterInfo &info);
+	void WriteAlter(data_ptr_t ptr, idx_t data_size);
 
 	void WriteInsert(DataChunk &chunk);
 	void WriteDelete(DataChunk &chunk);

@@ -5,7 +5,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/sort/sort.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/constraints/list.hpp"
@@ -23,6 +22,8 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/common/types/constraint_conflict_info.hpp"
+#include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
 
@@ -45,7 +46,7 @@ DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_m
 	auto types = GetTypes();
 	this->row_groups =
 	    make_shared<RowGroupCollection>(info, TableIOManager::Get(*this).GetBlockManagerForRowData(), types, 0);
-	if (data && !data->row_groups.empty()) {
+	if (data && data->row_group_count > 0) {
 		this->row_groups->Initialize(*data);
 	} else {
 		this->row_groups->InitializeEmpty();
@@ -728,8 +729,7 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::functi
 	CreateIndexScanState state;
 
 	InitializeScanWithOffset(state, column_ids, row_start, row_start + count);
-	auto row_start_aligned = state.table_state.row_group_state.row_group->start +
-	                         state.table_state.row_group_state.vector_index * STANDARD_VECTOR_SIZE;
+	auto row_start_aligned = state.table_state.row_group->start + state.table_state.vector_index * STANDARD_VECTOR_SIZE;
 
 	idx_t current_row = row_start_aligned;
 	while (current_row < end) {
@@ -819,9 +819,10 @@ void DataTable::RevertAppend(idx_t start_row, idx_t count) {
 //===--------------------------------------------------------------------===//
 // Indexes
 //===--------------------------------------------------------------------===//
-bool DataTable::AppendToIndexes(TableIndexList &indexes, DataChunk &chunk, row_t row_start) {
+PreservedError DataTable::AppendToIndexes(TableIndexList &indexes, DataChunk &chunk, row_t row_start) {
+	PreservedError error;
 	if (indexes.Empty()) {
-		return true;
+		return error;
 	}
 	// first generate the vector of row identifiers
 	Vector row_identifiers(LogicalType::ROW_TYPE);
@@ -832,11 +833,13 @@ bool DataTable::AppendToIndexes(TableIndexList &indexes, DataChunk &chunk, row_t
 	// now append the entries to the indices
 	indexes.Scan([&](Index &index) {
 		try {
-			if (!index.Append(chunk, row_identifiers)) {
-				append_failed = true;
-				return true;
-			}
-		} catch (...) {
+			error = index.Append(chunk, row_identifiers);
+		} catch (Exception &ex) {
+			error = PreservedError(ex);
+		} catch (std::exception &ex) {
+			error = PreservedError(ex);
+		}
+		if (error) {
 			append_failed = true;
 			return true;
 		}
@@ -850,12 +853,11 @@ bool DataTable::AppendToIndexes(TableIndexList &indexes, DataChunk &chunk, row_t
 		for (auto *index : already_appended) {
 			index->Delete(chunk, row_identifiers);
 		}
-		return false;
 	}
-	return true;
+	return error;
 }
 
-bool DataTable::AppendToIndexes(DataChunk &chunk, row_t row_start) {
+PreservedError DataTable::AppendToIndexes(DataChunk &chunk, row_t row_start) {
 	D_ASSERT(is_root);
 	return AppendToIndexes(info->indexes, chunk, row_start);
 }
@@ -1144,15 +1146,78 @@ void DataTable::UpdateColumn(TableCatalogEntry &table, ClientContext &context, V
 }
 
 //===--------------------------------------------------------------------===//
-// Create Index Scan
+// Index Scan
 //===--------------------------------------------------------------------===//
-void DataTable::InitializeCreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids) {
+void DataTable::InitializeWALCreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids) {
 	// we grab the append lock to make sure nothing is appended until AFTER we finish the index scan
 	state.append_lock = std::unique_lock<mutex>(append_lock);
-	row_groups->InitializeCreateIndexScan(state);
 	InitializeScan(state, column_ids);
 }
 
+void DataTable::WALAddIndex(ClientContext &context, unique_ptr<Index> index,
+                            const vector<unique_ptr<Expression>> &expressions) {
+
+	// if the data table is empty
+	if (row_groups->IsEmpty()) {
+		info->indexes.AddIndex(std::move(index));
+		return;
+	}
+
+	auto &allocator = Allocator::Get(db);
+
+	DataChunk result;
+	result.Initialize(allocator, index->logical_types);
+
+	DataChunk intermediate;
+	vector<LogicalType> intermediate_types;
+	auto column_ids = index->column_ids;
+	column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
+	for (auto &id : index->column_ids) {
+		auto &col = column_definitions[id];
+		intermediate_types.push_back(col.Type());
+	}
+	intermediate_types.emplace_back(LogicalType::ROW_TYPE);
+	intermediate.Initialize(allocator, intermediate_types);
+
+	// initialize an index scan
+	CreateIndexScanState state;
+	InitializeWALCreateIndexScan(state, column_ids);
+
+	if (!is_root) {
+		throw InternalException("Error during WAL replay. Cannot add an index to a table that has been altered.");
+	}
+
+	// now start incrementally building the index
+	{
+		IndexLock lock;
+		index->InitializeLock(lock);
+
+		while (true) {
+			intermediate.Reset();
+			result.Reset();
+			// scan a new chunk from the table to index
+			CreateIndexScan(state, intermediate, TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
+			if (intermediate.size() == 0) {
+				// finished scanning for index creation
+				// release all locks
+				break;
+			}
+			// resolve the expressions for this chunk
+			index->ExecuteExpressions(intermediate, result);
+
+			// insert into the index
+			auto error = index->Insert(lock, result, intermediate.data[intermediate.ColumnCount() - 1]);
+			if (error) {
+				throw InternalException("Error during WAL replay: %s", error.Message());
+			}
+		}
+	}
+	info->indexes.AddIndex(std::move(index));
+}
+
+//===--------------------------------------------------------------------===//
+// Statistics
+//===--------------------------------------------------------------------===//
 unique_ptr<BaseStatistics> DataTable::GetStatistics(ClientContext &context, column_t column_id) {
 	if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
 		return nullptr;
@@ -1160,9 +1225,9 @@ unique_ptr<BaseStatistics> DataTable::GetStatistics(ClientContext &context, colu
 	return row_groups->CopyStats(column_id);
 }
 
-void DataTable::SetStatistics(column_t column_id, const std::function<void(BaseStatistics &)> &set_fun) {
+void DataTable::SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats) {
 	D_ASSERT(column_id != COLUMN_IDENTIFIER_ROW_ID);
-	row_groups->SetStatistics(column_id, set_fun);
+	row_groups->SetDistinct(column_id, std::move(distinct_stats));
 }
 
 //===--------------------------------------------------------------------===//
@@ -1171,10 +1236,8 @@ void DataTable::SetStatistics(column_t column_id, const std::function<void(BaseS
 void DataTable::Checkpoint(TableDataWriter &writer) {
 	// checkpoint each individual row group
 	// FIXME: we might want to combine adjacent row groups in case they have had deletions...
-	vector<unique_ptr<BaseStatistics>> global_stats;
-	for (idx_t i = 0; i < column_definitions.size(); i++) {
-		global_stats.push_back(row_groups->CopyStats(i));
-	}
+	TableStatistics global_stats;
+	row_groups->CopyStats(global_stats);
 
 	row_groups->Checkpoint(writer, global_stats);
 

@@ -18,21 +18,25 @@
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 
 namespace duckdb {
 
 bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
-	auto initial_reader = make_unique<BufferedFileReader>(FileSystem::Get(database), path.c_str());
+	Connection con(database.GetDatabase());
+	auto initial_reader = make_unique<BufferedFileReader>(FileSystem::Get(database), path.c_str(), con.context.get());
 	if (initial_reader->Finished()) {
 		// WAL is empty
 		return false;
 	}
-	Connection con(database.GetDatabase());
+
 	con.BeginTransaction();
 
 	// first deserialize the WAL to look for a checkpoint flag
 	// if there is a checkpoint flag, we might have already flushed the contents of the WAL to disk
 	ReplayState checkpoint_state(database, *con.context, *initial_reader);
+	initial_reader->catalog = &checkpoint_state.catalog;
 	checkpoint_state.deserialize_only = true;
 	try {
 		while (true) {
@@ -68,7 +72,8 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 	}
 
 	// we need to recover from the WAL: actually set up the replay state
-	BufferedFileReader reader(FileSystem::Get(database), path.c_str());
+	BufferedFileReader reader(FileSystem::Get(database), path.c_str(), con.context.get());
+	reader.catalog = &checkpoint_state.catalog;
 	ReplayState state(database, *con.context, reader);
 
 	// replay the WAL
@@ -154,6 +159,12 @@ void ReplayState::ReplayEntry(WALType entry_type) {
 	case WALType::DROP_TABLE_MACRO:
 		ReplayDropTableMacro();
 		break;
+	case WALType::CREATE_INDEX:
+		ReplayCreateIndex();
+		break;
+	case WALType::DROP_INDEX:
+		ReplayDropIndex();
+		break;
 	case WALType::USE_TABLE:
 		ReplayUseTable();
 		break;
@@ -184,6 +195,7 @@ void ReplayState::ReplayEntry(WALType entry_type) {
 // Replay Table
 //===--------------------------------------------------------------------===//
 void ReplayState::ReplayCreateTable() {
+
 	auto info = TableCatalogEntry::Deserialize(source, context);
 	if (deserialize_only) {
 		return;
@@ -270,10 +282,9 @@ void ReplayState::ReplayDropSchema() {
 //===--------------------------------------------------------------------===//
 void ReplayState::ReplayCreateType() {
 	auto info = TypeCatalogEntry::Deserialize(source);
-	if (deserialize_only) {
+	if (Catalog::TypeExists(context, info->catalog, info->schema, info->name)) {
 		return;
 	}
-
 	catalog.CreateType(context, info.get());
 }
 
@@ -370,6 +381,66 @@ void ReplayState::ReplayCreateTableMacro() {
 void ReplayState::ReplayDropTableMacro() {
 	DropInfo info;
 	info.type = CatalogType::TABLE_MACRO_ENTRY;
+	info.schema = source.Read<string>();
+	info.name = source.Read<string>();
+	if (deserialize_only) {
+		return;
+	}
+
+	catalog.DropEntry(context, &info);
+}
+
+//===--------------------------------------------------------------------===//
+// Replay Index
+//===--------------------------------------------------------------------===//
+void ReplayState::ReplayCreateIndex() {
+
+	auto info = IndexCatalogEntry::Deserialize(source, context);
+	if (deserialize_only) {
+		return;
+	}
+
+	// get the physical table to which we'll add the index
+	auto table = catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->table->table_name);
+	auto &data_table = table->GetStorage();
+
+	// bind the parsed expressions
+	if (info->expressions.empty()) {
+		for (auto &parsed_expr : info->parsed_expressions) {
+			info->expressions.push_back(parsed_expr->Copy());
+		}
+	}
+	auto binder = Binder::CreateBinder(context);
+	auto expressions = binder->BindCreateIndexExpressions(table, info.get());
+
+	// create the empty index
+	unique_ptr<Index> index;
+	switch (info->index_type) {
+	case IndexType::ART: {
+		index = make_unique<ART>(info->column_ids, TableIOManager::Get(data_table), expressions, info->constraint_type,
+		                         data_table.db, true);
+		break;
+	}
+	default:
+		throw InternalException("Unimplemented index type");
+	}
+
+	// add the index to the catalog
+	auto index_entry = (DuckIndexEntry *)catalog.CreateIndex(context, info.get());
+	index_entry->index = index.get();
+	index_entry->info = data_table.info;
+	for (auto &parsed_expr : info->parsed_expressions) {
+		index_entry->parsed_expressions.push_back(parsed_expr->Copy());
+	}
+
+	// physically add the index to the data table storage
+	data_table.WALAddIndex(context, std::move(index), expressions);
+}
+
+void ReplayState::ReplayDropIndex() {
+
+	DropInfo info;
+	info.type = CatalogType::INDEX_ENTRY;
 	info.schema = source.Read<string>();
 	info.name = source.Read<string>();
 	if (deserialize_only) {

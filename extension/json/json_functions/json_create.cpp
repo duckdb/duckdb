@@ -56,7 +56,7 @@ static LogicalType GetJSONType(unordered_map<string, unique_ptr<Vector>> &const_
 	// The nested types need to conform as well
 	case LogicalTypeId::LIST:
 		return LogicalType::LIST(GetJSONType(const_struct_names, ListType::GetChildType(type)));
-	// Struct and MAP are treated as JSON objects
+	// Struct and MAP are treated as JSON values
 	case LogicalTypeId::STRUCT: {
 		child_list_t<LogicalType> child_types;
 		for (const auto &child_type : StructType::GetChildTypes(type)) {
@@ -247,14 +247,14 @@ static void TemplatedCreateValues(yyjson_mut_doc *doc, yyjson_mut_val *vals[], V
 
 static void CreateValuesStruct(const JSONCreateFunctionData &info, yyjson_mut_doc *doc, yyjson_mut_val *vals[],
                                Vector &value_v, idx_t count) {
-	// Structs become objects, therefore we initialize vals to JSON objects
+	// Structs become values, therefore we initialize vals to JSON values
 	for (idx_t i = 0; i < count; i++) {
 		vals[i] = yyjson_mut_obj(doc);
 	}
 	// Initialize re-usable array for the nested values
 	auto nested_vals = (yyjson_mut_val **)doc->alc.malloc(doc->alc.ctx, sizeof(yyjson_mut_val *) * count);
 
-	// Add the key/value pairs to the objects
+	// Add the key/value pairs to the values
 	auto &entries = StructVector::GetEntries(value_v);
 	for (idx_t entry_i = 0; entry_i < entries.size(); entry_i++) {
 		auto &struct_key_v = *info.const_struct_names.at(StructType::GetChildName(value_v.GetType(), entry_i));
@@ -284,7 +284,7 @@ static void CreateValuesMap(const JSONCreateFunctionData &info, yyjson_mut_doc *
 	auto map_val_count = ListVector::GetListSize(value_v);
 	auto nested_vals = (yyjson_mut_val **)doc->alc.malloc(doc->alc.ctx, sizeof(yyjson_mut_val *) * map_val_count);
 	CreateValues(info, doc, nested_vals, map_val_v, map_val_count);
-	// Add the key/value pairs to the objects
+	// Add the key/value pairs to the values
 	UnifiedVectorFormat map_data;
 	value_v.ToUnifiedFormat(count, map_data);
 	auto map_key_list_entries = (list_entry_t *)map_data.data;
@@ -308,7 +308,7 @@ static void CreateValuesMap(const JSONCreateFunctionData &info, yyjson_mut_doc *
 
 static void CreateValuesUnion(const JSONCreateFunctionData &info, yyjson_mut_doc *doc, yyjson_mut_val *vals[],
                               Vector &value_v, idx_t count) {
-	// Structs become objects, therefore we initialize vals to JSON objects
+	// Structs become values, therefore we initialize vals to JSON values
 	for (idx_t i = 0; i < count; i++) {
 		vals[i] = yyjson_mut_obj(doc);
 	}
@@ -320,7 +320,7 @@ static void CreateValuesUnion(const JSONCreateFunctionData &info, yyjson_mut_doc
 	UnifiedVectorFormat tag_data;
 	tag_v.ToUnifiedFormat(count, tag_data);
 
-	// Add the key/value pairs to the objects
+	// Add the key/value pairs to the values
 	for (idx_t member_idx = 0; member_idx < UnionType::GetMemberCount(value_v.GetType()); member_idx++) {
 		auto &member_val_v = UnionVector::GetMember(value_v, member_idx);
 		auto &member_key_v = *info.const_struct_names.at(UnionType::GetMemberName(value_v.GetType(), member_idx));
@@ -425,7 +425,7 @@ static void ObjectFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 	auto alc = lstate.json_allocator.GetYYJSONAllocator();
 
-	// Initialize objects
+	// Initialize values
 	const idx_t count = args.size();
 	auto doc = JSONCommon::CreateDocument(alc);
 	yyjson_mut_val *objs[STANDARD_VECTOR_SIZE];
@@ -440,7 +440,7 @@ static void ObjectFunction(DataChunk &args, ExpressionState &state, Vector &resu
 		Vector &value_v = args.data[pair_idx * 2 + 1];
 		CreateKeyValuePairs(info, doc, objs, vals, key_v, value_v, count);
 	}
-	// Write JSON objects to string
+	// Write JSON values to string
 	auto objects = FlatVector::GetData<string_t>(result);
 	for (idx_t i = 0; i < count; i++) {
 		objects[i] = JSONCommon::WriteVal<yyjson_mut_val>(objs[i], alc);

@@ -46,12 +46,16 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 			// ALTER TABLE statement, read the extra data after the entry
 			auto extra_data_size = Load<idx_t>(dataptr);
 			auto extra_data = (data_ptr_t)(dataptr + sizeof(idx_t));
-			// deserialize it
+
 			BufferedDeserializer source(extra_data, extra_data_size);
-			auto info = AlterInfo::Deserialize(source);
-			// write the alter table in the log
-			table_entry->CommitAlter(*info);
-			log->WriteAlter(*info);
+			string column_name = source.Read<string>();
+
+			if (!column_name.empty()) {
+				// write the alter table in the log
+				table_entry->CommitAlter(column_name);
+			}
+
+			log->WriteAlter(source.ptr, source.endptr - source.ptr);
 		} else {
 			// CREATE TABLE statement
 			log->WriteCreateTable((TableCatalogEntry *)parent);
@@ -71,9 +75,9 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 			auto extra_data = (data_ptr_t)(dataptr + sizeof(idx_t));
 			// deserialize it
 			BufferedDeserializer source(extra_data, extra_data_size);
-			auto info = AlterInfo::Deserialize(source);
+			string column_name = source.Read<string>();
 			// write the alter table in the log
-			log->WriteAlter(*info);
+			log->WriteAlter(source.ptr, source.endptr - source.ptr);
 		} else {
 			log->WriteCreateView((ViewCatalogEntry *)parent);
 		}
@@ -87,7 +91,9 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 	case CatalogType::TABLE_MACRO_ENTRY:
 		log->WriteCreateTableMacro((TableMacroCatalogEntry *)parent);
 		break;
-
+	case CatalogType::INDEX_ENTRY:
+		log->WriteCreateIndex((IndexCatalogEntry *)parent);
+		break;
 	case CatalogType::TYPE_ENTRY:
 		log->WriteCreateType((TypeCatalogEntry *)parent);
 		break;
@@ -119,6 +125,8 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 			log->WriteDropType((TypeCatalogEntry *)entry);
 			break;
 		case CatalogType::INDEX_ENTRY:
+			log->WriteDropIndex((IndexCatalogEntry *)entry);
+			break;
 		case CatalogType::PREPARED_STATEMENT:
 		case CatalogType::SCALAR_FUNCTION_ENTRY:
 			// do nothing, indexes/prepared statements/functions aren't persisted to disk
@@ -127,7 +135,6 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 			throw InternalException("Don't know how to drop this type!");
 		}
 		break;
-	case CatalogType::INDEX_ENTRY:
 	case CatalogType::PREPARED_STATEMENT:
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
 	case CatalogType::SCALAR_FUNCTION_ENTRY:

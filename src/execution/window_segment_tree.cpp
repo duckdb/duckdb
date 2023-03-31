@@ -6,6 +6,178 @@
 
 namespace duckdb {
 
+//===--------------------------------------------------------------------===//
+// WindowAggregateState
+//===--------------------------------------------------------------------===//
+
+WindowAggregateState::WindowAggregateState(AggregateFunction &aggregate, FunctionData *bind_info,
+                                           const LogicalType &result_type_p)
+    : aggregate(aggregate), bind_info(bind_info), result_type(result_type_p), state(aggregate.state_size()),
+      statev(Value::POINTER((idx_t)state.data())), statep(Value::POINTER((idx_t)state.data())) {
+	statev.SetVectorType(VectorType::FLAT_VECTOR); // Prevent conversion of results to constants
+}
+
+WindowAggregateState::~WindowAggregateState() {
+}
+
+void WindowAggregateState::AggregateInit() {
+	aggregate.initialize(state.data());
+}
+
+void WindowAggregateState::AggegateFinal(Vector &result, idx_t rid) {
+	AggregateInputData aggr_input_data(bind_info, Allocator::DefaultAllocator());
+	aggregate.finalize(statev, aggr_input_data, result, 1, rid);
+
+	if (aggregate.destructor) {
+		aggregate.destructor(statev, 1);
+	}
+}
+
+void WindowAggregateState::Sink(DataChunk &payload_chunk, SelectionVector *filter_sel, idx_t filtered) {
+}
+
+void WindowAggregateState::Finalize() {
+}
+
+void WindowAggregateState::Compute(Vector &result, idx_t rid, idx_t start, idx_t end) {
+}
+
+//===--------------------------------------------------------------------===//
+// WindowConstantAggregate
+//===--------------------------------------------------------------------===//
+
+WindowConstantAggregate::WindowConstantAggregate(AggregateFunction &aggregate, FunctionData *bind_info,
+                                                 const LogicalType &result_type, const ValidityMask &partition_mask,
+                                                 const idx_t count)
+    : WindowAggregateState(aggregate, bind_info, result_type), partition(0), row(0) {
+
+	// Locate the partition boundaries
+	idx_t start = 0;
+	if (partition_mask.AllValid()) {
+		partition_offsets.emplace_back(0);
+	} else {
+		idx_t entry_idx;
+		idx_t shift;
+		while (start < count) {
+			partition_mask.GetEntryIndex(start, entry_idx, shift);
+
+			//	If start is aligned with the start of a block,
+			//	and the block is blank, then skip forward one block.
+			const auto block = partition_mask.GetValidityEntry(entry_idx);
+			if (partition_mask.NoneValid(block) && !shift) {
+				start += ValidityMask::BITS_PER_VALUE;
+				continue;
+			}
+
+			// Loop over the block
+			for (; shift < ValidityMask::BITS_PER_VALUE && start < count; ++shift, ++start) {
+				if (partition_mask.RowIsValid(block, shift)) {
+					partition_offsets.emplace_back(start);
+				}
+			}
+		}
+	}
+
+	//	Initialise the vector for caching the results
+	results = make_unique<Vector>(result_type, partition_offsets.size());
+	partition_offsets.emplace_back(count);
+
+	//	Start the first aggregate
+	AggregateInit();
+}
+
+void WindowConstantAggregate::Sink(DataChunk &payload_chunk, SelectionVector *filter_sel, idx_t filtered) {
+	const auto chunk_begin = row;
+	const auto chunk_end = chunk_begin + payload_chunk.size();
+
+	if (!inputs.ColumnCount() && payload_chunk.ColumnCount()) {
+		inputs.Initialize(Allocator::DefaultAllocator(), payload_chunk.GetTypes());
+	}
+
+	AggregateInputData aggr_input_data(bind_info, Allocator::DefaultAllocator());
+	idx_t begin = 0;
+	idx_t filter_idx = 0;
+	auto partition_end = partition_offsets[partition + 1];
+	while (row < chunk_end) {
+		if (row == partition_end) {
+			AggegateFinal(*results, partition++);
+			AggregateInit();
+			partition_end = partition_offsets[partition + 1];
+		}
+		partition_end = MinValue(partition_end, chunk_end);
+		auto end = partition_end - chunk_begin;
+
+		inputs.Reset();
+		if (begin) {
+			for (idx_t c = 0; c < payload_chunk.ColumnCount(); ++c) {
+				inputs.data[c].Slice(payload_chunk.data[c], begin, end);
+			}
+		} else {
+			inputs.Reference(payload_chunk);
+		}
+		inputs.SetCardinality(end - begin);
+
+		// Slice to any filtered rows
+		SelectionVector sel;
+		if (filter_sel) {
+			//	Find the first value in [begin, end)
+			for (; filter_idx < filtered; ++filter_idx) {
+				auto idx = filter_sel->get_index(filter_idx);
+				if (idx >= begin) {
+					break;
+				}
+			}
+			sel.Initialize(filter_sel->data());
+			idx_t nsel = 0;
+			for (; filter_idx < filtered; ++filter_idx, ++nsel) {
+				auto idx = filter_sel->get_index(filter_idx);
+				if (idx >= end) {
+					break;
+				}
+			}
+
+			if (nsel != inputs.size()) {
+				inputs.Slice(sel, nsel);
+			}
+		}
+
+		//	Aggregate the filtered rows into a single state
+		const auto count = inputs.size();
+		if (aggregate.simple_update) {
+			aggregate.simple_update(inputs.data.data(), aggr_input_data, inputs.ColumnCount(), state.data(), count);
+		} else {
+			aggregate.update(inputs.data.data(), aggr_input_data, inputs.ColumnCount(), statep, count);
+		}
+
+		//	Skip filtered rows too!
+		row += end - begin;
+		begin = end;
+	}
+}
+
+void WindowConstantAggregate::Finalize() {
+	AggegateFinal(*results, partition++);
+
+	partition = 0;
+	row = 0;
+}
+
+void WindowConstantAggregate::Compute(Vector &target, idx_t rid, idx_t start, idx_t end) {
+	//	Find the partition containing [start, end)
+	while (start < partition_offsets[partition] || partition_offsets[partition + 1] <= start) {
+		++partition;
+	}
+	D_ASSERT(partition_offsets[partition] <= start);
+	D_ASSERT(partition + 1 < partition_offsets.size());
+	D_ASSERT(end <= partition_offsets[partition + 1]);
+
+	// Copy the value
+	VectorOperations::Copy(*results, target, partition + 1, partition, rid);
+}
+
+//===--------------------------------------------------------------------===//
+// WindowSegmentTree
+//===--------------------------------------------------------------------===//
 WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData *bind_info,
                                      const LogicalType &result_type_p, DataChunk *input,
                                      const ValidityMask &filter_mask_p, WindowAggregationMode mode_p)
@@ -107,7 +279,7 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 	if (l_idx == 0) {
 		ExtractFrame(begin, end);
 		AggregateInputData aggr_input_data(bind_info, Allocator::DefaultAllocator());
-		D_ASSERT(inputs.data.size() > 0);
+		D_ASSERT(!inputs.data.empty());
 		aggregate.update(&inputs.data[0], aggr_input_data, input_ref->ColumnCount(), s, inputs.size());
 	} else {
 		// find out where the states begin

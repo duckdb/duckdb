@@ -93,6 +93,7 @@ static DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "fdiv", {"x", "y", nullptr}, "floor(x/y)"},
 	{DEFAULT_SCHEMA, "fmod", {"x", "y", nullptr}, "(x-y*floor(x/y))"},
 	{DEFAULT_SCHEMA, "count_if", {"l", nullptr}, "sum(if(l, 1, 0))"},
+	{DEFAULT_SCHEMA, "split_part", {"string", "delimiter", "position", nullptr}, "coalesce(string_split(string, delimiter)[position],'')"},
 
 	// algebraic list aggregates
 	{DEFAULT_SCHEMA, "list_avg", {"l", nullptr}, "list_aggr(l, 'avg')"},
@@ -129,6 +130,9 @@ static DefaultMacro internal_macros[] = {
 
 	// nested list aggregates
 	{DEFAULT_SCHEMA, "list_histogram", {"l", nullptr}, "list_aggr(l, 'histogram')"},
+
+	// date functions
+	{DEFAULT_SCHEMA, "date_add", {"date", "interval", nullptr}, "date + interval"},
 
 	{nullptr, nullptr, {nullptr}, nullptr}
 	};

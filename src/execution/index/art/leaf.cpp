@@ -109,9 +109,9 @@ void Leaf::Insert(ART &art, row_t row_id) {
 	if (count == capacity) {
 		// grow array
 		if (IsInlined()) {
-			art.memory_size += (capacity + 1) * sizeof(row_t);
+			art.IncreaseMemorySize((capacity + 1) * sizeof(row_t));
 		} else {
-			art.memory_size += capacity * sizeof(row_t);
+			art.IncreaseMemorySize(capacity * sizeof(row_t));
 		}
 		row_ids = Resize(row_ids, count, capacity * 2);
 	}
@@ -143,6 +143,7 @@ void Leaf::Remove(ART &art, row_t row_id) {
 		return;
 	}
 
+	auto capacity = GetCapacity();
 	count--;
 	if (count == 1) {
 		// after erasing we can now inline the leaf
@@ -150,18 +151,16 @@ void Leaf::Remove(ART &art, row_t row_id) {
 		auto remaining_row_id = row_ids[0] == row_id ? row_ids[1] : row_ids[0];
 		DeleteArray<row_t>(rowids.ptr, rowids.ptr[0] + 1);
 		rowids.inlined = remaining_row_id;
-		D_ASSERT(art.memory_size >= sizeof(row_t));
-		art.memory_size -= 2 * sizeof(row_t);
+		art.DecreaseMemorySize(capacity * sizeof(row_t));
 		return;
 	}
 
 	// shrink array, if less than half full
-	auto capacity = GetCapacity();
+	capacity = GetCapacity();
 	if (capacity > 2 && count < capacity / 2) {
 
 		auto new_capacity = capacity / 2;
-		D_ASSERT(art.memory_size >= (capacity - new_capacity) * sizeof(row_t));
-		art.memory_size -= (capacity - new_capacity) * sizeof(row_t);
+		art.DecreaseMemorySize((capacity - new_capacity) * sizeof(row_t));
 
 		auto new_allocation = AllocateArray<row_t>(new_capacity + 1);
 		new_allocation[0] = new_capacity;
@@ -200,7 +199,7 @@ void Leaf::Merge(ART &art, Node *&l_node, Node *&r_node) {
 	if (l_n->count + r_n->count > l_capacity) {
 		auto capacity = l_n->GetCapacity();
 		auto new_capacity = NextPowerOfTwo(l_n->count + r_n->count);
-		art.memory_size += sizeof(row_t) * (new_capacity - capacity);
+		art.IncreaseMemorySize(sizeof(row_t) * (new_capacity - capacity));
 		l_row_ids = l_n->Resize(l_row_ids, l_n->count, new_capacity);
 	}
 

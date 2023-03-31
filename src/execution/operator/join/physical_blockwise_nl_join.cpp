@@ -87,11 +87,23 @@ public:
 	OuterJoinMarker left_outer;
 	SelectionVector match_sel;
 	ExpressionExecutor executor;
+	DataChunk intermediate_chunk;
 };
 
 unique_ptr<OperatorState> PhysicalBlockwiseNLJoin::GetOperatorState(ExecutionContext &context) const {
 	auto &gstate = (BlockwiseNLJoinGlobalState &)*sink_state;
-	return make_unique<BlockwiseNLJoinState>(context, gstate.right_chunks, *this);
+	auto result = make_unique<BlockwiseNLJoinState>(context, gstate.right_chunks, *this);
+	if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
+		vector<LogicalType> intermediate_types;
+		for (auto &type : children[0]->types) {
+			intermediate_types.emplace_back(type);
+		}
+		for (auto &type : children[1]->types) {
+			intermediate_types.emplace_back(type);
+		}
+		result->intermediate_chunk.Initialize(Allocator::DefaultAllocator(), intermediate_types);
+	}
+	return std::move(result);
 }
 
 OperatorResultType PhysicalBlockwiseNLJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input,
@@ -111,44 +123,79 @@ OperatorResultType PhysicalBlockwiseNLJoin::ExecuteInternal(ExecutionContext &co
 		}
 	}
 
+	DataChunk *intermediate_chunk = &chunk;
+	if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
+		intermediate_chunk = &state.intermediate_chunk;
+		intermediate_chunk->Reset();
+	}
+
 	// now perform the actual join
-	// we perform a cross product, then execute the expression directly on the cross product' result
+	// we perform a cross product, then execute the expression directly on the cross product result
 	idx_t result_count = 0;
+	bool found_match[STANDARD_VECTOR_SIZE] = {false};
+
 	do {
-		auto result = state.cross_product.Execute(input, chunk);
+		auto result = state.cross_product.Execute(input, *intermediate_chunk);
 		if (result == OperatorResultType::NEED_MORE_INPUT) {
 			// exhausted input, have to pull new LHS chunk
 			if (state.left_outer.Enabled()) {
 				// left join: before we move to the next chunk, see if we need to output any vectors that didn't
 				// have a match found
-				state.left_outer.ConstructLeftJoinResult(input, chunk);
+				state.left_outer.ConstructLeftJoinResult(input, *intermediate_chunk);
 				state.left_outer.Reset();
 			}
+
+			if (join_type == JoinType::SEMI) {
+				PhysicalJoin::ConstructSemiJoinResult(input, chunk, found_match);
+			}
+			if (join_type == JoinType::ANTI) {
+				PhysicalJoin::ConstructAntiJoinResult(input, chunk, found_match);
+			}
+
 			return OperatorResultType::NEED_MORE_INPUT;
 		}
 
 		// now perform the computation
-		result_count = state.executor.SelectExpression(chunk, state.match_sel);
+		result_count = state.executor.SelectExpression(*intermediate_chunk, state.match_sel);
+
+		// handle anti and semi joins with different logic
 		if (result_count > 0) {
 			// found a match!
-			// check if the cross product is scanning the LHS or the RHS in its entirety
-			if (!state.cross_product.ScanLHS()) {
-				// set the match flags in the LHS
-				state.left_outer.SetMatches(state.match_sel, result_count);
-				// set the match flag in the RHS
-				gstate.right_outer.SetMatch(state.cross_product.ScanPosition() + state.cross_product.PositionInChunk());
+			// handle anti semi join conditions first
+			if (join_type == JoinType::ANTI || join_type == JoinType::SEMI) {
+				if (state.cross_product.ScanLHS()) {
+					found_match[state.cross_product.PositionInChunk()] = true;
+				} else {
+					for (idx_t i = 0; i < result_count; i++) {
+						found_match[state.match_sel.get_index(i)] = true;
+					}
+				}
+				intermediate_chunk->Reset();
+				// trick the loop to continue as semi and anti joins will never produce more output than
+				// the LHS cardinality
+				result_count = 0;
 			} else {
-				// set the match flag in the LHS
-				state.left_outer.SetMatch(state.cross_product.PositionInChunk());
-				// set the match flags in the RHS
-				gstate.right_outer.SetMatches(state.match_sel, result_count, state.cross_product.ScanPosition());
+				// check if the cross product is scanning the LHS or the RHS in its entirety
+				if (!state.cross_product.ScanLHS()) {
+					// set the match flags in the LHS
+					state.left_outer.SetMatches(state.match_sel, result_count);
+					// set the match flag in the RHS
+					gstate.right_outer.SetMatch(state.cross_product.ScanPosition() +
+					                            state.cross_product.PositionInChunk());
+				} else {
+					// set the match flag in the LHS
+					state.left_outer.SetMatch(state.cross_product.PositionInChunk());
+					// set the match flags in the RHS
+					gstate.right_outer.SetMatches(state.match_sel, result_count, state.cross_product.ScanPosition());
+				}
+				intermediate_chunk->Slice(state.match_sel, result_count);
 			}
-			chunk.Slice(state.match_sel, result_count);
 		} else {
 			// no result: reset the chunk
-			chunk.Reset();
+			intermediate_chunk->Reset();
 		}
 	} while (result_count == 0);
+
 	return OperatorResultType::HAVE_MORE_OUTPUT;
 }
 

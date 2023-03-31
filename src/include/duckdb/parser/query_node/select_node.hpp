@@ -21,7 +21,7 @@ namespace duckdb {
 //! SelectNode represents a standard SELECT statement
 class SelectNode : public QueryNode {
 public:
-	SelectNode();
+	DUCKDB_API SelectNode();
 
 	//! The projection list
 	vector<unique_ptr<ParsedExpression>> select_list;
@@ -49,13 +49,18 @@ public:
 	string ToString() const override;
 
 	bool Equals(const QueryNode *other) const override;
+
 	//! Create a copy of this SelectNode
 	unique_ptr<QueryNode> Copy() const override;
 
 	//! Serializes a QueryNode to a stand-alone binary blob
 	void Serialize(FieldWriter &writer) const override;
+
 	//! Deserializes a blob back into a QueryNode
 	static unique_ptr<QueryNode> Deserialize(FieldReader &reader);
+
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<QueryNode> FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 } // namespace duckdb

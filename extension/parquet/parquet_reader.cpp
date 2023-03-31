@@ -200,6 +200,11 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 				throw IOException("UTF8 converted type can only be set for Type::(FIXED_LEN_)BYTE_ARRAY");
 			}
 		case ConvertedType::TIME_MILLIS:
+			if (s_ele.type == Type::INT32) {
+				return LogicalType::TIME;
+			} else {
+				throw IOException("TIME_MILLIS converted type can only be set for value of Type::INT32");
+			}
 		case ConvertedType::TIME_MICROS:
 			if (s_ele.type == Type::INT64) {
 				return LogicalType::TIME;
@@ -320,7 +325,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 			                                     std::move(struct_reader));
 		}
 		if (child_types.size() > 1 || (!is_list && !is_map && !is_repeated)) {
-			result_type = LogicalType::STRUCT(std::move(child_types));
+			result_type = LogicalType::STRUCT(child_types);
 			result = make_unique<StructColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
 			                                         std::move(child_readers));
 		} else {

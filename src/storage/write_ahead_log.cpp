@@ -119,7 +119,7 @@ void WriteAheadLog::WriteSequenceValue(SequenceCatalogEntry *entry, SequenceValu
 }
 
 //===--------------------------------------------------------------------===//
-// MACRO'S
+// MACROS
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateMacro(ScalarMacroCatalogEntry *entry) {
 	if (skip_writing) {
@@ -151,6 +151,26 @@ void WriteAheadLog::WriteDropTableMacro(TableMacroCatalogEntry *entry) {
 		return;
 	}
 	writer->Write<WALType>(WALType::DROP_TABLE_MACRO);
+	writer->WriteString(entry->schema->name);
+	writer->WriteString(entry->name);
+}
+
+//===--------------------------------------------------------------------===//
+// Indexes
+//===--------------------------------------------------------------------===//
+void WriteAheadLog::WriteCreateIndex(IndexCatalogEntry *entry) {
+	if (skip_writing) {
+		return;
+	}
+	writer->Write<WALType>(WALType::CREATE_INDEX);
+	entry->Serialize(*writer);
+}
+
+void WriteAheadLog::WriteDropIndex(IndexCatalogEntry *entry) {
+	if (skip_writing) {
+		return;
+	}
+	writer->Write<WALType>(WALType::DROP_INDEX);
 	writer->WriteString(entry->schema->name);
 	writer->WriteString(entry->name);
 }
@@ -261,12 +281,12 @@ void WriteAheadLog::WriteUpdate(DataChunk &chunk, const vector<column_t> &column
 //===--------------------------------------------------------------------===//
 // Write ALTER Statement
 //===--------------------------------------------------------------------===//
-void WriteAheadLog::WriteAlter(AlterInfo &info) {
+void WriteAheadLog::WriteAlter(data_ptr_t ptr, idx_t data_size) {
 	if (skip_writing) {
 		return;
 	}
 	writer->Write<WALType>(WALType::ALTER_INFO);
-	info.Serialize(*writer);
+	writer->WriteData(ptr, data_size);
 }
 
 //===--------------------------------------------------------------------===//

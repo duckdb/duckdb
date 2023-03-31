@@ -14,6 +14,7 @@
 #include "duckdb/catalog/catalog_transaction.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 #include <functional>
 
@@ -29,6 +30,7 @@ struct CreateFunctionInfo;
 struct CreateViewInfo;
 struct CreateSequenceInfo;
 struct CreateCollationInfo;
+struct CreateIndexInfo;
 struct CreateTypeInfo;
 struct CreateTableInfo;
 struct DatabaseSize;
@@ -79,6 +81,8 @@ public:
 	DUCKDB_API static Catalog &GetCatalog(ClientContext &context, const string &catalog_name);
 	//! Get the specified Catalog from the DatabaseInstance
 	DUCKDB_API static Catalog &GetCatalog(DatabaseInstance &db, const string &catalog_name);
+	//! Gets the specified Catalog from the database if it exists
+	DUCKDB_API static optional_ptr<Catalog> GetCatalogEntry(ClientContext &context, const string &catalog_name);
 	//! Get the specific Catalog from the AttachedDatabase
 	DUCKDB_API static Catalog &GetCatalog(AttachedDatabase &db);
 
@@ -137,6 +141,9 @@ public:
 	//! Creates a collation in the catalog
 	DUCKDB_API CatalogEntry *CreateCollation(CatalogTransaction transaction, CreateCollationInfo *info);
 	DUCKDB_API CatalogEntry *CreateCollation(ClientContext &context, CreateCollationInfo *info);
+	//! Creates an index in the catalog
+	DUCKDB_API CatalogEntry *CreateIndex(CatalogTransaction transaction, CreateIndexInfo *info);
+	DUCKDB_API CatalogEntry *CreateIndex(ClientContext &context, CreateIndexInfo *info);
 
 	//! Creates a table in the catalog.
 	DUCKDB_API CatalogEntry *CreateTable(CatalogTransaction transaction, SchemaCatalogEntry *schema,
@@ -153,7 +160,7 @@ public:
 	//! Create a scalar or aggregate function in the catalog
 	DUCKDB_API CatalogEntry *CreateFunction(CatalogTransaction transaction, SchemaCatalogEntry *schema,
 	                                        CreateFunctionInfo *info);
-	//! Creates a table in the catalog.
+	//! Creates a view in the catalog
 	DUCKDB_API CatalogEntry *CreateView(CatalogTransaction transaction, SchemaCatalogEntry *schema,
 	                                    CreateViewInfo *info);
 	//! Creates a table in the catalog.
@@ -200,6 +207,9 @@ public:
 
 	DUCKDB_API static LogicalType GetType(ClientContext &context, const string &catalog_name, const string &schema,
 	                                      const string &name);
+
+	static bool TypeExists(ClientContext &context, const string &catalog_name, const string &schema,
+	                       const string &name);
 
 	template <class T>
 	T *GetEntry(ClientContext &context, const string &schema_name, const string &name, bool if_exists = false,
@@ -250,6 +260,8 @@ public:
 	DUCKDB_API static vector<SchemaCatalogEntry *> GetAllSchemas(ClientContext &context);
 
 	virtual void Verify();
+
+	static CatalogException UnrecognizedConfigurationError(ClientContext &context, const string &name);
 
 protected:
 	//! Reference to the database

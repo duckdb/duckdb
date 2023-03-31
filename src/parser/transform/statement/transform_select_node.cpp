@@ -8,7 +8,7 @@
 
 namespace duckdb {
 
-unique_ptr<QueryNode> Transformer::TransformSelectNode(duckdb_libpgquery::PGSelectStmt *stmt) {
+unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PGSelectStmt *stmt) {
 	D_ASSERT(stmt->type == duckdb_libpgquery::T_PGSelectStmt);
 	auto stack_checker = StackCheck();
 
@@ -26,8 +26,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(duckdb_libpgquery::PGSele
 				auto window_def = reinterpret_cast<duckdb_libpgquery::PGWindowDef *>(window_ele->data.ptr_value);
 				D_ASSERT(window_def);
 				D_ASSERT(window_def->name);
-				auto window_name = StringUtil::Lower(string(window_def->name));
-
+				string window_name(window_def->name);
 				auto it = window_clauses.find(window_name);
 				if (it != window_clauses.end()) {
 					throw ParserException("window \"%s\" is already defined", window_name);

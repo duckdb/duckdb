@@ -258,6 +258,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 
 	// serialize the AlterInfo into a temporary buffer
 	BufferedSerializer serializer;
+	serializer.WriteString(alter_info->GetColumnName());
 	alter_info->Serialize(serializer);
 	BinaryData serialized_alter = serializer.GetData();
 
@@ -460,7 +461,7 @@ SimilarCatalogEntry CatalogSet::SimilarEntry(CatalogTransaction transaction, con
 	for (auto &kv : mapping) {
 		auto mapping_value = GetMapping(transaction, kv.first);
 		if (mapping_value && !mapping_value->deleted) {
-			auto ldist = StringUtil::LevenshteinDistance(kv.first, name);
+			auto ldist = StringUtil::SimilarityScore(kv.first, name);
 			if (ldist < result.distance) {
 				result.distance = ldist;
 				result.name = kv.first;

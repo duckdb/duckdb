@@ -84,7 +84,7 @@ select * from '__TEST_DIR__/my_file.json'
 bar	0
 baz	1
 
-# we can read objects from a top-level list
+# we can read values from a top-level list
 query I
 select * from 'data/json/top_level_array.json'
 ----
@@ -96,11 +96,12 @@ select count(*) from 'data/json/top_level_array.json'
 ----
 2
 
-# for maximum_depth=0 this is an array of objects
+# for maximum_depth=0 this is two records of JSON
 query I
 select * from read_json_auto('data/json/top_level_array.json', maximum_depth=0)
 ----
-[{"conclusion":"cancelled"}, {"conclusion":"cancelled"}]
+{"conclusion":"cancelled"}
+{"conclusion":"cancelled"}
 
 # for 1 it's 1 column of JSON
 query I

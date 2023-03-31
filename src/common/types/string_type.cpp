@@ -20,7 +20,7 @@ void string_t::Verify() const {
 	for (idx_t i = 0; i < MinValue<uint32_t>(PREFIX_LENGTH, GetSize()); i++) {
 		D_ASSERT(GetPrefix()[i] == dataptr[i]);
 	}
-	// verify that for strings with length < INLINE_LENGTH, the rest of the string is zero
+	// verify that for strings with length <= INLINE_LENGTH, the rest of the string is zero
 	for (idx_t i = GetSize(); i < INLINE_LENGTH; i++) {
 		D_ASSERT(GetDataUnsafe()[i] == '\0');
 	}

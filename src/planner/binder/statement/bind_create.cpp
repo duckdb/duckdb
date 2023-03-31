@@ -441,8 +441,9 @@ unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateS
 
 	auto &get = (LogicalGet &)*plan;
 	// bind the index expressions
-	vector<unique_ptr<Expression>> expressions;
 	IndexBinder index_binder(binder, binder.context);
+	vector<unique_ptr<Expression>> expressions;
+	expressions.reserve(base.expressions.size());
 	for (auto &expr : base.expressions) {
 		expressions.push_back(index_binder.Bind(expr));
 	}
@@ -467,7 +468,6 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
-	properties.return_type = StatementReturnType::NOTHING;
 
 	auto catalog_type = stmt.info->type;
 	switch (catalog_type) {
@@ -675,6 +675,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	default:
 		throw Exception("Unrecognized type!");
 	}
+	properties.return_type = StatementReturnType::NOTHING;
 	properties.allow_stream_result = false;
 	return result;
 }

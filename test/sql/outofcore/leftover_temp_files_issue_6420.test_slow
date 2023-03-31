@@ -1,0 +1,102 @@
+# name: test/sql/outofcore/leftover_temp_files_issue_6420.test_slow
+# description: Issue #6420: Large joins in persistent databases have left over temporary directory
+# group: [outofcore]
+
+load __TEST_DIR__/leftover_temp_files.db
+
+require tpch
+
+statement ok
+SET threads=8
+
+statement ok
+SET memory_limit='1GB';
+
+statement ok
+CALL dbgen(sf=1);
+
+statement ok
+ALTER TABLE lineitem RENAME TO lineitem1
+
+statement ok
+CREATE TABLE lineitem2 AS FROM lineitem1
+
+# creating and dropping a temp table should not leave temp files
+statement ok
+CREATE OR REPLACE TEMPORARY TABLE ans as select l1.* from lineitem1 l1;
+
+query I
+SELECT COUNT(*) > 0 FROM duckdb_temporary_files()
+----
+true
+
+statement ok
+DROP TABLE ans;
+
+query I
+SELECT COUNT(*) > 0 FROM duckdb_temporary_files()
+----
+false
+
+# creating and dropping a table with an ORDER BY should not leave temp files
+statement ok
+CREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, l1.* from lineitem1 l1 ORDER BY l_orderkey, l_returnflag
+
+query I
+SELECT COUNT(*) > 0 FROM duckdb_temporary_files()
+----
+true
+
+statement ok
+DROP TABLE ans;
+
+query I
+SELECT COUNT(*) > 0 FROM duckdb_temporary_files()
+----
+false
+
+# performing a small hash join should not leave temp files
+statement ok
+CREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, l2.* from lineitem1 l1 JOIN (FROM lineitem2 l2 WHERE l_orderkey<10000) AS l2 USING (l_orderkey, l_linenumber)
+
+statement ok
+DROP TABLE ans;
+
+query I
+SELECT COUNT(*) > 0 FROM duckdb_temporary_files()
+----
+false
+
+# performing a large window function
+statement ok
+CREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, row_number() OVER (PARTITION BY l_orderkey, l_linenumber ORDER BY l_orderkey) from lineitem1 l1
+
+query I
+SELECT COUNT(*) > 0 FROM duckdb_temporary_files()
+----
+true
+
+statement ok
+DROP TABLE ans;
+
+query I
+SELECT COUNT(*) > 0 FROM duckdb_temporary_files()
+----
+false
+
+# performing a large hash join should not leave temp files
+statement ok
+CREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, l2.* from lineitem1 l1 JOIN lineitem2 l2 USING (l_orderkey, l_linenumber)
+
+query I
+SELECT COUNT(*) > 0 FROM duckdb_temporary_files()
+----
+true
+
+statement ok
+DROP TABLE ans;
+
+query I
+SELECT COUNT(*) > 0 FROM duckdb_temporary_files()
+----
+false

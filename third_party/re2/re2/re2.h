@@ -475,6 +475,8 @@ class RE2 {
     ANCHOR_BOTH         // Anchor at start and end
   };
 
+  Anchor Anchored() const;
+
   // Return the number of capturing subpatterns, or -1 if the
   // regexp wasn't valid on construction.  The overall match ($0)
   // does not count: if the regexp is "(a)(b)", returns 2.

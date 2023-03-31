@@ -97,6 +97,14 @@ public:
 	void ExecuteInternal(ExecuteContext &context) const override;
 };
 
+class ReconnectCommand : public Command {
+public:
+	ReconnectCommand(SQLLogicTestRunner &runner);
+
+public:
+	void ExecuteInternal(ExecuteContext &context) const override;
+};
+
 class LoopCommand : public Command {
 public:
 	LoopCommand(SQLLogicTestRunner &runner, LoopDefinition definition_p);

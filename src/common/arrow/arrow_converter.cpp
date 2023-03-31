@@ -150,7 +150,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		child.format = "tsm:";
 		break;
 	case LogicalTypeId::INTERVAL:
-		child.format = "tDm";
+		child.format = "tin";
 		break;
 	case LogicalTypeId::DECIMAL: {
 		uint8_t width, scale;

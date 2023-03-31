@@ -1,24 +1,29 @@
 name: Python
 on:
-  schedule:
-    - cron: "0 2 * * *"
+  workflow_dispatch:
+  repository_dispatch:
   push:
     branches:
       - '**'
       - '!master'
       - '!feature'
+    tags:
+      - '**'
     paths-ignore:
       - '**.md'
+      - 'examples/**'
+      - 'test/**'
+      - 'tools/**'
+      - '!tools/pythonpkg/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Python.yml'
   pull_request:
     paths-ignore:
       - '**.md'
       - 'examples/**'
       - 'test/**'
-      - 'tools/odbc/**'
-      - 'tools/jdbc/**'
-      - 'tools/juliapkg/**'
-      - 'tools/nodejs/**'
-      - 'tools/rpkg/**'
+      - 'tools/**'
+      - '!tools/pythonpkg/**'
       - '.github/workflows/**'
       - '!.github/workflows/Python.yml'
 
@@ -46,9 +51,9 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
-        python-version: '3.7'
+        python-version: '3.9'
 
     - name: Install
       shell: bash
@@ -106,7 +111,7 @@ jobs:
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
         treat_warn_as_error: 0
 
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       with:
         name: manylinux-extensions-x86_64
         path: |
@@ -141,7 +146,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -210,7 +215,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.7'
 
@@ -275,7 +280,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.7'
 
@@ -319,7 +324,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.7'
 
@@ -398,7 +403,8 @@ jobs:
       - name: Install Python Test Dependencies
         shell: bash
         run: |
-          ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pip install numpy pandas pyarrow pytest psutil
+          cd tools/pythonpkg
+          ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pip install -r requirements-dev.txt
 
       - name: Install DuckDB Python
         shell: bash
@@ -425,7 +431,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.7'
 

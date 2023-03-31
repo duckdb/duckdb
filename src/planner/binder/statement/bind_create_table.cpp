@@ -3,6 +3,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/constraints/list.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder/check_binder.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
@@ -16,6 +17,8 @@
 #include "duckdb/parser/expression/list.hpp"
 #include "duckdb/common/index_map.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/expression_binder/index_binder.hpp"
+#include "duckdb/parser/parsed_data/create_index_info.hpp"
 
 #include <algorithm>
 
@@ -117,9 +120,15 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 			         fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE);
 			physical_index_set_t fk_key_set, pk_key_set;
 			for (idx_t i = 0; i < fk.info.pk_keys.size(); i++) {
+				if (pk_key_set.find(fk.info.pk_keys[i]) != pk_key_set.end()) {
+					throw BinderException("Duplicate primary key referenced in FOREIGN KEY constraint");
+				}
 				pk_key_set.insert(fk.info.pk_keys[i]);
 			}
 			for (idx_t i = 0; i < fk.info.fk_keys.size(); i++) {
+				if (fk_key_set.find(fk.info.fk_keys[i]) != fk_key_set.end()) {
+					throw BinderException("Duplicate key specified in FOREIGN KEY constraint");
+				}
 				fk_key_set.insert(fk.info.fk_keys[i]);
 			}
 			info.bound_constraints.push_back(
@@ -290,6 +299,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			result->dependencies.AddDependency(type_dependency);
 		}
 	}
+	result->dependencies.VerifyDependencies(schema->catalog, result->Base().table);
 	properties.allow_stream_result = false;
 	return result;
 }
@@ -298,6 +308,18 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	auto &base = (CreateTableInfo &)*info;
 	auto schema = BindCreateSchema(base);
 	return BindCreateTableInfo(std::move(info), schema);
+}
+
+vector<unique_ptr<Expression>> Binder::BindCreateIndexExpressions(TableCatalogEntry *table, CreateIndexInfo *info) {
+
+	auto index_binder = IndexBinder(*this, this->context, table, info);
+	vector<unique_ptr<Expression>> expressions;
+	expressions.reserve(info->expressions.size());
+	for (auto &expr : info->expressions) {
+		expressions.push_back(index_binder.Bind(expr));
+	}
+
+	return expressions;
 }
 
 } // namespace duckdb

@@ -30,6 +30,11 @@ public:
 	}
 
 	string ParamsToString() const override;
+
+	static unique_ptr<PhysicalOperator>
+	CreateJoinProjection(vector<LogicalType> proj_types, const vector<LogicalType> &lhs_types,
+	                     const vector<LogicalType> &rhs_types, const vector<idx_t> &left_projection_map,
+	                     const vector<idx_t> &right_projection_map, const idx_t estimated_cardinality);
 };
 
 } // namespace duckdb

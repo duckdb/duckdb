@@ -2,13 +2,13 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/trigonometric_functions.hpp"
 #include "duckdb/common/operator/abs.hpp"
+#include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/likely.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/common/types/bit.hpp"
 #include <cmath>
 #include <errno.h>
@@ -77,25 +77,22 @@ static unique_ptr<BaseStatistics> PropagateAbsStats(ClientContext &context, Func
 	auto &expr = input.expr;
 	D_ASSERT(child_stats.size() == 1);
 	// can only propagate stats if the children have stats
-	if (!child_stats[0]) {
-		return nullptr;
-	}
-	auto &lstats = (NumericStatistics &)*child_stats[0];
+	auto &lstats = child_stats[0];
 	Value new_min, new_max;
 	bool potential_overflow = true;
-	if (!lstats.min.IsNull() && !lstats.max.IsNull()) {
+	if (NumericStats::HasMinMax(lstats)) {
 		switch (expr.return_type.InternalType()) {
 		case PhysicalType::INT8:
-			potential_overflow = lstats.min.GetValue<int8_t>() == NumericLimits<int8_t>::Minimum();
+			potential_overflow = NumericStats::Min(lstats).GetValue<int8_t>() == NumericLimits<int8_t>::Minimum();
 			break;
 		case PhysicalType::INT16:
-			potential_overflow = lstats.min.GetValue<int16_t>() == NumericLimits<int16_t>::Minimum();
+			potential_overflow = NumericStats::Min(lstats).GetValue<int16_t>() == NumericLimits<int16_t>::Minimum();
 			break;
 		case PhysicalType::INT32:
-			potential_overflow = lstats.min.GetValue<int32_t>() == NumericLimits<int32_t>::Minimum();
+			potential_overflow = NumericStats::Min(lstats).GetValue<int32_t>() == NumericLimits<int32_t>::Minimum();
 			break;
 		case PhysicalType::INT64:
-			potential_overflow = lstats.min.GetValue<int64_t>() == NumericLimits<int64_t>::Minimum();
+			potential_overflow = NumericStats::Min(lstats).GetValue<int64_t>() == NumericLimits<int64_t>::Minimum();
 			break;
 		default:
 			return nullptr;
@@ -108,8 +105,8 @@ static unique_ptr<BaseStatistics> PropagateAbsStats(ClientContext &context, Func
 		// no potential overflow
 
 		// compute stats
-		auto current_min = lstats.min.GetValue<int64_t>();
-		auto current_max = lstats.max.GetValue<int64_t>();
+		auto current_min = NumericStats::Min(lstats).GetValue<int64_t>();
+		auto current_max = NumericStats::Max(lstats).GetValue<int64_t>();
 
 		int64_t min_val, max_val;
 
@@ -125,16 +122,17 @@ static unique_ptr<BaseStatistics> PropagateAbsStats(ClientContext &context, Func
 		} else {
 			// if both current_min and current_max are > 0, then the abs is a no-op and can be removed entirely
 			*input.expr_ptr = std::move(input.expr.children[0]);
-			return std::move(child_stats[0]);
+			return child_stats[0].ToUnique();
 		}
 		new_min = Value::Numeric(expr.return_type, min_val);
 		new_max = Value::Numeric(expr.return_type, max_val);
 		expr.function.function = ScalarFunction::GetScalarUnaryFunction<AbsOperator>(expr.return_type);
 	}
-	auto stats = make_unique<NumericStatistics>(expr.return_type, std::move(new_min), std::move(new_max),
-	                                            StatisticsType::LOCAL_STATS);
-	stats->validity_stats = lstats.validity_stats->Copy();
-	return std::move(stats);
+	auto stats = NumericStats::CreateEmpty(expr.return_type);
+	NumericStats::SetMin(stats, new_min);
+	NumericStats::SetMax(stats, new_max);
+	stats.CopyValidity(lstats);
+	return stats.ToUnique();
 }
 
 template <class OP>
@@ -1162,6 +1160,92 @@ struct EvenOperator {
 void EvenFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("even", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                               ScalarFunction::UnaryFunction<double, double, EvenOperator>));
+}
+
+//===--------------------------------------------------------------------===//
+// gcd
+//===--------------------------------------------------------------------===//
+
+// should be replaced with std::gcd in a newer C++ standard
+template <class TA>
+TA GreatestCommonDivisor(TA left, TA right) {
+	TA a = left;
+	TA b = right;
+
+	// This protects the following modulo operations from a corner case,
+	// where we would get a runtime error due to an integer overflow.
+	if ((left == NumericLimits<TA>::Minimum() && right == -1) ||
+	    (left == -1 && right == NumericLimits<TA>::Minimum())) {
+		return 1;
+	}
+
+	while (true) {
+		if (a == 0) {
+			return TryAbsOperator::Operation<TA, TA>(b);
+		}
+		b %= a;
+
+		if (b == 0) {
+			return TryAbsOperator::Operation<TA, TA>(a);
+		}
+		a %= b;
+	}
+}
+
+struct GreatestCommonDivisorOperator {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA left, TB right) {
+		return GreatestCommonDivisor(left, right);
+	}
+};
+
+void GreatestCommonDivisorFun::RegisterFunction(BuiltinFunctions &set) {
+	ScalarFunctionSet funcs("gcd");
+
+	funcs.AddFunction(
+	    ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT}, LogicalType::BIGINT,
+	                   ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, GreatestCommonDivisorOperator>));
+	funcs.AddFunction(
+	    ScalarFunction({LogicalType::HUGEINT, LogicalType::HUGEINT}, LogicalType::HUGEINT,
+	                   ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, GreatestCommonDivisorOperator>));
+
+	set.AddFunction(funcs);
+	funcs.name = "greatest_common_divisor";
+	set.AddFunction(funcs);
+}
+
+//===--------------------------------------------------------------------===//
+// lcm
+//===--------------------------------------------------------------------===//
+
+// should be replaced with std::lcm in a newer C++ standard
+struct LeastCommonMultipleOperator {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA left, TB right) {
+		if (left == 0 || right == 0) {
+			return 0;
+		}
+		TR result;
+		if (!TryMultiplyOperator::Operation<TA, TB, TR>(left, right / GreatestCommonDivisor(left, right), result)) {
+			throw OutOfRangeException("lcm value is out of range");
+		}
+		return TryAbsOperator::Operation<TR, TR>(result);
+	}
+};
+
+void LeastCommonMultipleFun::RegisterFunction(BuiltinFunctions &set) {
+	ScalarFunctionSet funcs("lcm");
+
+	funcs.AddFunction(
+	    ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT}, LogicalType::BIGINT,
+	                   ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, LeastCommonMultipleOperator>));
+	funcs.AddFunction(
+	    ScalarFunction({LogicalType::HUGEINT, LogicalType::HUGEINT}, LogicalType::HUGEINT,
+	                   ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, LeastCommonMultipleOperator>));
+
+	set.AddFunction(funcs);
+	funcs.name = "least_common_multiple";
+	set.AddFunction(funcs);
 }
 
 } // namespace duckdb
