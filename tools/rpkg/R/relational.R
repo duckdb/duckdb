@@ -31,7 +31,9 @@ expr_constant <- rapi_expr_constant
 #' @noRd
 #' @examples
 #' call_expr <- expr_function("ABS", list(expr_constant(-42)))
-expr_function <- rapi_expr_function
+expr_function <- function(name, args, order_bys = list(), filter_bys = list()) {
+  rapi_expr_function(name, args, order_bys, filter_bys)
+}
 
 #' Convert an expression to a string for debugging purposes
 #' @param expr the expression
@@ -150,6 +152,48 @@ rel_aggregate <- rapi_rel_aggregate
 #' rel <- rel_from_df(con, mtcars)
 #' rel2 <- rel_order(rel, list(expr_reference("hp")))
 rel_order <- rapi_rel_order
+
+#' Get an external pointer pointing to NULL
+#' @return an external pointer pointing to null_ptr.
+#' @noRd
+#' @examples
+#' null_ptr <- sexp_null_ptr()
+sexp_null_ptr <- rapi_get_null_SEXP_ptr
+
+expr_window <- function(window_function, partitions=list(), order_bys=list(),
+                        window_boundary_start="unbounded_preceding",
+                        window_boundary_end="current_row_range",
+                        start_expr = NULL, end_expr=NULL, offset_expr=NULL, default_expr=NULL) {
+    null_ptr <- sexp_null_ptr()
+    if (is.null(start_expr)) {
+      start_expr <- null_ptr
+    }
+    if (is.null(end_expr)) {
+      end_expr <- null_ptr
+    }
+    if (is.null(offset_expr)) {
+      offset_expr <- null_ptr
+    }
+    if (is.null(default_expr)) {
+      default_expr <- null_ptr
+    }
+    expr_window_(window_function, partitions, order_bys, tolower(window_boundary_start), tolower(window_boundary_end), start_expr, end_expr, offset_expr, default_expr)
+}
+
+window_boundaries <- c("unbounded_preceding",
+                       "unbounded_following",
+                       "current_row_range",
+                       "current_row_rows",
+                       "expr_preceding_rows",
+                       "expr_following_rows",
+                       "expr_preceding_range")
+
+expr_window_ <- function (window_function, partitions=list(), order_bys=list(), window_boundary_start=window_boundaries,
+          window_boundary_end=window_boundaries, start_expr = list(), end_expr=list(), offset_expr=list(), default_expr=list()) {
+    window_boundary_start <- match.arg(window_boundary_start)
+    window_boundary_end <- match.arg(window_boundary_end)
+    rapi_expr_window(window_function, partitions, order_bys, window_boundary_start, window_boundary_end, start_expr, end_expr, offset_expr, default_expr)
+}
 
 #' Lazily INNER join two DuckDB relation objects
 #' @param left the left-hand-side DuckDB relation object
