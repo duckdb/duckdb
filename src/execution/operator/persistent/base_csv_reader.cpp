@@ -530,9 +530,11 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 		for (idx_t row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
 			bool failed = false;
 			for (idx_t c = 0; c < reader_data.column_ids.size(); c++) {
+				auto col_idx = reader_data.column_ids[c];
+				auto result_idx = reader_data.column_mapping[c];
 
-				auto &parse_vector = parse_chunk.data[c];
-				auto &result_vector = insert_chunk.data[c];
+				auto &parse_vector = parse_chunk.data[col_idx];
+				auto &result_vector = insert_chunk.data[result_idx];
 
 				bool was_already_null = FlatVector::IsNull(parse_vector, row_idx);
 				if (!was_already_null && FlatVector::IsNull(result_vector, row_idx)) {
