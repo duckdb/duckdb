@@ -19,6 +19,9 @@ static bool IsDateTime(const string &col_type_str) {
 PandasType ConvertPandasType(const py::object &col_type) {
 	auto col_type_str = string(py::str(col_type));
 
+	// pandas.core.dtypes.base.StorageExtensionDtype
+	// this object also contains a 'numpy_dtype' attribute, which might be useful
+
 	if (col_type_str == "bool" || col_type_str == "boolean") {
 		return PandasType::BOOL;
 	} else if (col_type_str == "uint8" || col_type_str == "UInt8") {

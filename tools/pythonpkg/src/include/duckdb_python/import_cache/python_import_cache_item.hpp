@@ -8,10 +8,9 @@
 
 #pragma once
 
-#include "duckdb_python/pybind_wrapper.hpp"
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb_python/python_object_container.hpp"
 
 namespace duckdb {
 

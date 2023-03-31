@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb_python/pybind_wrapper.hpp"
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb.hpp"
 #include "arrow_array_stream.hpp"
 #include "duckdb/main/external_dependencies.hpp"
@@ -16,7 +16,8 @@
 #include "duckdb_python/registered_py_object.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
-#include "duckdb_python/explain_enum.hpp"
+#include "duckdb_python/pybind11/conversions/explain_enum.hpp"
+#include "duckdb_python/pybind11/dataframe.hpp"
 
 namespace duckdb {
 

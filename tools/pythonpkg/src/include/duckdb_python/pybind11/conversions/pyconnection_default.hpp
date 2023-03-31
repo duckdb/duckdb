@@ -1,6 +1,6 @@
 #pragma once
 
-#include "duckdb_python/pyconnection.hpp"
+#include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb/common/helper.hpp"
 
 using duckdb::DuckDBPyConnection;

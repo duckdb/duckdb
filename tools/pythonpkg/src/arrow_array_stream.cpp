@@ -8,7 +8,7 @@
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 
-#include "duckdb_python/pyconnection.hpp"
+#include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyresult.hpp"
 

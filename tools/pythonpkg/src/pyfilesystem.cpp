@@ -1,8 +1,8 @@
 #include "duckdb_python/pyfilesystem.hpp"
 
 #include "duckdb/common/string_util.hpp"
-#include "duckdb_python/pybind_wrapper.hpp"
-#include "duckdb_python/python_object_container.hpp"
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
+#include "duckdb_python/pybind11/gil_wrapper.hpp"
 
 namespace duckdb {
 

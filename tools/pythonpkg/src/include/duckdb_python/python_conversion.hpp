@@ -10,7 +10,7 @@
 
 #include "array_wrapper.hpp"
 #include "duckdb.hpp"
-#include "duckdb_python/pybind_wrapper.hpp"
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb_python/python_objects.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/hugeint.hpp"

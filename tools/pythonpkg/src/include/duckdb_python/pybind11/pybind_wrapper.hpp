@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb_python/pybind_wrapper.hpp
+// duckdb_python/pybind11//pybind_wrapper.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -11,7 +11,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
-#include <vector>
+#include "duckdb/common/vector.hpp"
 #include "duckdb/common/assert.hpp"
 
 namespace pybind11 {

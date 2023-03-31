@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb_python/pandas_dataframe.hpp
+// duckdb_python/pybind11/dataframe.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types.hpp"
-#include "duckdb_python/pybind_wrapper.hpp"
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
 
 namespace duckdb {
 
@@ -35,3 +35,12 @@ public:
 	static bool check_(const py::handle &object); // NOLINT
 };
 } // namespace duckdb
+
+namespace pybind11 {
+namespace detail {
+template <>
+struct handle_type_name<duckdb::DataFrame> {
+	static constexpr auto name = _("pandas.DataFrame");
+};
+} // namespace detail
+} // namespace pybind11

@@ -7,9 +7,9 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
-#include "arrow_array_stream.hpp"
+#include "duckdb_python/arrow_array_stream.hpp"
 #include "duckdb.hpp"
-#include "duckdb_python/pybind_wrapper.hpp"
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb_python/import_cache/python_import_cache.hpp"
 #include "duckdb_python/registered_py_object.hpp"
@@ -190,10 +190,14 @@ private:
 	static void DetectEnvironment();
 };
 
+static bool ModuleIsLoaded(const char* module_name) {
+	auto dict = pybind11::module_::import("sys").attr("modules");
+	return dict.contains(py::str(module_name));
+}
+
 template <class T>
 static bool ModuleIsLoaded() {
-	auto dict = pybind11::module_::import("sys").attr("modules");
-	return dict.contains(py::str(T::Name));
+	return ModuleIsLoaded(T::Name);
 }
 
 } // namespace duckdb

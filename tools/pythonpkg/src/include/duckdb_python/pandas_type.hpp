@@ -9,8 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types.hpp"
-#include "duckdb_python/pybind_wrapper.hpp"
-#include "duckdb_python/dataframe.hpp"
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
 
 namespace duckdb {
 // Pandas has two different sets of types
@@ -47,12 +46,3 @@ PandasType ConvertPandasType(const py::object &col_type);
 LogicalType PandasToLogicalType(const PandasType &col_type);
 
 } // namespace duckdb
-
-namespace pybind11 {
-namespace detail {
-template <>
-struct handle_type_name<duckdb::DataFrame> {
-	static constexpr auto name = _("pandas.DataFrame");
-};
-} // namespace detail
-} // namespace pybind11

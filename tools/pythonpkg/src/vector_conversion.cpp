@@ -1,5 +1,5 @@
 #include "duckdb_python/pyrelation.hpp"
-#include "duckdb_python/pyconnection.hpp"
+#include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/vector_conversion.hpp"
 #include "duckdb_python/python_conversion.hpp"
@@ -422,7 +422,6 @@ void VectorConversion::BindPandas(const DBConfig &config, py::handle df, vector<
 	if (py::len(df_columns) == 0 || py::len(df_types) == 0 || py::len(df_columns) != py::len(df_types)) {
 		throw InvalidInputException("Need a DataFrame with at least one column");
 	}
-	py::array column_attributes = df.attr("columns").attr("values");
 
 	// loop over every column
 	for (idx_t col_idx = 0; col_idx < py::len(df_columns); col_idx++) {

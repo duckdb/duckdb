@@ -1,8 +1,8 @@
 #include "duckdb_python/python_conversion.hpp"
-#include "duckdb_python/pybind_wrapper.hpp"
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
 
 #include "duckdb_python/pyrelation.hpp"
-#include "duckdb_python/pyconnection.hpp"
+#include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
 
 #include "datetime.h" //From Python

@@ -1,5 +1,5 @@
-#include "duckdb_python/dataframe.hpp"
-#include "duckdb_python/pyconnection.hpp"
+#include "duckdb_python/pybind11/dataframe.hpp"
+#include "duckdb_python/pyconnection/pyconnection.hpp"
 
 namespace duckdb {
 bool PolarsDataFrame::IsDataFrame(const py::handle &object) {

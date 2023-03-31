@@ -1,4 +1,4 @@
-#include "duckdb_python/pyconnection.hpp"
+#include "duckdb_python/pyconnection/pyconnection.hpp"
 
 #include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/common/arrow/arrow.hpp"

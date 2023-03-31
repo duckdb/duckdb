@@ -8,11 +8,11 @@
 
 #pragma once
 
-#include "duckdb_python/pybind_wrapper.hpp"
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
 
 #include "duckdb.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb_python/python_object_container.hpp"
+#include "duckdb_python/pybind11/python_object_container.hpp"
 #include "duckdb_python/pandas_analyzer.hpp"
 
 namespace duckdb {

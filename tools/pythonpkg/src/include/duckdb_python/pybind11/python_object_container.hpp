@@ -1,24 +1,22 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb_python/python_object_container.hpp
+// duckdb_python/pybind11/python_object_container.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
-#include "duckdb_python/pybind_wrapper.hpp"
+
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb_python/pybind11/gil_wrapper.hpp"
 
 namespace duckdb {
 
 template <typename TGT_PY_TYPE, typename SRC_PY_TYPE>
 struct PythonAssignmentFunction {
 	typedef void (*assign_t)(TGT_PY_TYPE &, SRC_PY_TYPE &);
-};
-
-struct PythonGILWrapper {
-	py::gil_scoped_acquire acquire;
 };
 
 //! Every Python Object Must be created through our container
