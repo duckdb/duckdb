@@ -464,6 +464,9 @@ void VectorConversion::BindPandas(const DBConfig &config, py::handle df, vector<
 			if (py::hasattr(pandas_array, "_data")) {
 				// This means we can access the numpy array directly
 				bind_data.numpy_col = get_fun(df_columns[col_idx]).attr("array").attr("_data");
+			} else if (py::hasattr(pandas_array, "asi8")) {
+				// This is a datetime object, has the option to get the array as int64_t's
+				bind_data.numpy_col = py::array(pandas_array.attr("asi8"));
 			} else {
 				// Otherwise we have to get it through 'to_numpy()'
 				bind_data.numpy_col = py::array(column.attr("to_numpy")());
