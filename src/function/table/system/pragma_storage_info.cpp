@@ -11,6 +11,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
+#include "duckdb/planner/binder.hpp"
 
 #include <algorithm>
 
@@ -78,6 +79,7 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 	auto qname = QualifiedName::Parse(input.inputs[0].GetValue<string>());
 
 	// look up the table name in the catalog
+	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
 	auto table_entry = Catalog::GetEntry<TableCatalogEntry>(context, qname.catalog, qname.schema, qname.name);
 	auto result = make_unique<PragmaStorageFunctionData>(table_entry);
 	result->storage_info = table_entry->GetStorageInfo(context);
