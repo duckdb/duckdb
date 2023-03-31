@@ -281,17 +281,20 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 
 void JoinHashTable::InitializePointerTable() {
 	idx_t capacity = PointerTableCapacity(Count());
-	// size needs to be a power of 2
 	D_ASSERT(IsPowerOfTwo(capacity));
 
-	if (hash_map.get()) {                  // There is already a hash map
+	if (hash_map.get()) {
+		// There is already a hash map
 		auto current_capacity = hash_map.GetSize() / sizeof(data_ptr_t);
-		if (capacity > current_capacity) { // Need more space
+		if (capacity > current_capacity) {
+			// Need more space
 			hash_map = buffer_manager.GetBufferAllocator().Allocate(capacity * sizeof(data_ptr_t));
-		} else {                           // Just roll with the current hash map
+		} else {
+			// Just use the current hash map
 			capacity = current_capacity;
 		}
-	} else { // Allocate a hash map
+	} else {
+		// Allocate a hash map
 		hash_map = buffer_manager.GetBufferAllocator().Allocate(capacity * sizeof(data_ptr_t));
 	}
 	D_ASSERT(hash_map.GetSize() == capacity * sizeof(data_ptr_t));

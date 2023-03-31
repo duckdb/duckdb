@@ -303,15 +303,27 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 
 	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
 		const auto &col_offset = base_col_offset + layout.GetOffsets()[col_idx];
+
+		// Precompute mask indexes
+		idx_t entry_idx;
+		idx_t idx_in_entry;
+		ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
+
 		const auto &type = layout.GetTypes()[col_idx];
 		switch (type.InternalType()) {
 		case PhysicalType::VARCHAR: {
 			for (idx_t i = 0; i < count; i++) {
 				const auto idx = offset + i;
+				const auto &row_location = row_locations[idx];
+				ValidityBytes row_mask(row_location);
+				if (!row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry)) {
+					continue;
+				}
+
 				const auto &old_heap_ptr = old_heap_locations[old_heap_sel.get_index(idx)];
 				const auto &new_heap_ptr = new_heap_locations[new_heap_sel.get_index(idx)];
 
-				const auto string_location = row_locations[idx] + col_offset;
+				const auto string_location = row_location + col_offset;
 				if (Load<uint32_t>(string_location) > string_t::INLINE_LENGTH) {
 					const auto diff = Load<data_ptr_t>(string_location + string_t::HEADER_SIZE) - old_heap_ptr;
 					D_ASSERT(diff >= 0);
@@ -324,10 +336,16 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 		case PhysicalType::LIST: {
 			for (idx_t i = 0; i < count; i++) {
 				const auto idx = offset + i;
+				const auto &row_location = row_locations[idx];
+				ValidityBytes row_mask(row_location);
+				if (!row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry)) {
+					continue;
+				}
+
 				const auto &old_heap_ptr = old_heap_locations[old_heap_sel.get_index(idx)];
 				const auto &new_heap_ptr = new_heap_locations[new_heap_sel.get_index(idx)];
 
-				const auto &pointer_location = row_locations[idx] + col_offset;
+				const auto &pointer_location = row_location + col_offset;
 				const auto diff = Load<data_ptr_t>(pointer_location) - old_heap_ptr;
 				D_ASSERT(diff >= 0);
 				Store<data_ptr_t>(new_heap_ptr + diff, pointer_location);
