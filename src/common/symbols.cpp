@@ -6,6 +6,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/list.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/common/vector.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/execution/join_hashtable.hpp"
