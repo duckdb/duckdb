@@ -23,6 +23,9 @@ class vector : public std::vector<_Tp, __Allocator> {
 public:
 	using original = std::vector<_Tp, __Allocator>;
 	using original::original;
+	using size_type = typename original::size_type;
+	using const_reference = typename original::const_reference;
+	using reference = typename original::reference;
 
 	typename original::reference operator[](typename original::size_type __n) {
 #ifdef DEBUG
