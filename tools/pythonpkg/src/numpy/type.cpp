@@ -25,7 +25,7 @@ static bool IsDateTime(const string &col_type_str) {
 	return false;
 }
 
-NumpyNullableType ConvertNumpyType(const py::object &col_type) {
+NumpyNullableType ConvertNumpyType(const py::handle &col_type) {
 	auto col_type_str = string(py::str(col_type));
 
 	// pandas.core.dtypes.base.StorageExtensionDtype

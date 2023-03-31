@@ -42,7 +42,7 @@ enum class NumpyNullableType : uint8_t {
 
 };
 
-NumpyNullableType ConvertNumpyType(const py::object &col_type);
+NumpyNullableType ConvertNumpyType(const py::handle &col_type);
 LogicalType NumpyToLogicalType(const NumpyNullableType &col_type);
 
 } // namespace duckdb
