@@ -88,8 +88,8 @@ static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, 
 	}
 	// push the filter into the LogicalFilter
 	D_ASSERT(node->type == LogicalOperatorType::LOGICAL_FILTER);
-	auto filter = (LogicalFilter *)node.get();
-	filter->expressions.push_back(std::move(expr));
+	auto &filter = node->Cast<LogicalFilter>();
+	filter.expressions.push_back(std::move(expr));
 	return node;
 }
 
@@ -195,35 +195,35 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 	}
 	case LogicalOperatorType::LOGICAL_GET: {
 		// base table scan, add to set of relations
-		auto get = (LogicalGet *)op;
+		auto &get = op->Cast<LogicalGet>();
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
 		idx_t relation_id = relations.size();
 		//! make sure the optimizer has knowledge of the exact column bindings as well.
-		auto table_index = get->table_index;
+		auto table_index = get.table_index;
 		relation_mapping[table_index] = relation_id;
-		cardinality_estimator.AddRelationColumnMapping(get, relation_id);
+		cardinality_estimator.AddRelationColumnMapping(&get, relation_id);
 		relations.push_back(std::move(relation));
 		return true;
 	}
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
 		// base table scan, add to set of relations
-		auto get = (LogicalExpressionGet *)op;
+		auto &get = op->Cast<LogicalExpressionGet>();
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
 		//! make sure the optimizer has knowledge of the exact column bindings as well.
-		relation_mapping[get->table_index] = relations.size();
+		relation_mapping[get.table_index] = relations.size();
 		relations.push_back(std::move(relation));
 		return true;
 	}
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN: {
 		// table function call, add to set of relations
-		auto dummy_scan = (LogicalDummyScan *)op;
+		auto &dummy_scan = op->Cast<LogicalDummyScan>();
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
-		relation_mapping[dummy_scan->table_index] = relations.size();
+		relation_mapping[dummy_scan.table_index] = relations.size();
 		relations.push_back(std::move(relation));
 		return true;
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
-		auto proj = (LogicalProjection *)op;
+		auto &proj = op->Cast<LogicalProjection>();
 		// we run the join order optimizer within the subquery as well
 		JoinOrderOptimizer optimizer(context);
 		op->children[0] = optimizer.Optimize(std::move(op->children[0]));
@@ -236,10 +236,10 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		optimizer.cardinality_estimator.CopyRelationMap(child_binding_maps.at(0));
 		// This logical projection may sit on top of a logical comparison join that has been pushed down
 		// we want to copy the binding info of both tables
-		relation_mapping[proj->table_index] = relation_id;
+		relation_mapping[proj.table_index] = relation_id;
 		for (auto &binding_info : child_binding_maps.at(0)) {
 			cardinality_estimator.AddRelationToColumnMapping(
-			    ColumnBinding(proj->table_index, binding_info.first.column_index), binding_info.second);
+			    ColumnBinding(proj.table_index, binding_info.first.column_index), binding_info.second);
 			cardinality_estimator.AddColumnToRelationMap(binding_info.second.table_index,
 			                                             binding_info.second.column_index);
 		}

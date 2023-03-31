@@ -114,7 +114,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map);
 		rewriter.VisitOperator(*plan);
 		// now we add all the columns of the delim_scan to the projection list
-		auto proj = (LogicalProjection *)plan.get();
+		auto &proj = plan->Cast<LogicalProjection>();
 		for (idx_t i = 0; i < correlated_columns.size(); i++) {
 			auto &col = correlated_columns[i];
 			auto colref = make_unique<BoundColumnRefExpression>(
@@ -122,7 +122,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			plan->expressions.push_back(std::move(colref));
 		}
 
-		base_binding.table_index = proj->table_index;
+		base_binding.table_index = proj.table_index;
 		this->delim_offset = base_binding.column_index = plan->expressions.size() - correlated_columns.size();
 		this->data_offset = 0;
 		return plan;
@@ -493,18 +493,18 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map);
 		rewriter.VisitOperator(*plan);
 		// now we add all the correlated columns to each of the expressions of the expression scan
-		auto expr_get = (LogicalExpressionGet *)plan.get();
+		auto &expr_get = plan->Cast<LogicalExpressionGet>();
 		for (idx_t i = 0; i < correlated_columns.size(); i++) {
-			for (auto &expr_list : expr_get->expressions) {
+			for (auto &expr_list : expr_get.expressions) {
 				auto colref = make_unique<BoundColumnRefExpression>(
 				    correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
 				expr_list.push_back(std::move(colref));
 			}
-			expr_get->expr_types.push_back(correlated_columns[i].type);
+			expr_get.expr_types.push_back(correlated_columns[i].type);
 		}
 
-		base_binding.table_index = expr_get->table_index;
-		this->delim_offset = base_binding.column_index = expr_get->expr_types.size() - correlated_columns.size();
+		base_binding.table_index = expr_get.table_index;
+		this->delim_offset = base_binding.column_index = expr_get.expr_types.size() - correlated_columns.size();
 		this->data_offset = 0;
 		return plan;
 	}
