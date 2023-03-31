@@ -20,6 +20,7 @@ namespace duckdb {
 class LambdaExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::LAMBDA;
+
 public:
 	LambdaExpression(unique_ptr<ParsedExpression> lhs, unique_ptr<ParsedExpression> expr);
 

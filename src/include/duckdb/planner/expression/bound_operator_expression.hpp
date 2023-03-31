@@ -15,6 +15,7 @@ namespace duckdb {
 class BoundOperatorExpression : public Expression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_OPERATOR;
+
 public:
 	BoundOperatorExpression(ExpressionType type, LogicalType return_type);
 

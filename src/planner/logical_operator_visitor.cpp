@@ -21,7 +21,7 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
                                                   const std::function<void(unique_ptr<Expression> *child)> &callback) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
-		auto &get = (LogicalExpressionGet &)op;
+		auto &get = op.Cast<LogicalExpressionGet>();
 		for (auto &expr_list : get.expressions) {
 			for (auto &expr : expr_list) {
 				callback(&expr);
@@ -30,21 +30,21 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_ORDER_BY: {
-		auto &order = (LogicalOrder &)op;
+		auto &order = op.Cast<LogicalOrder>();
 		for (auto &node : order.orders) {
 			callback(&node.expression);
 		}
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_TOP_N: {
-		auto &order = (LogicalTopN &)op;
+		auto &order = op.Cast<LogicalTopN>();
 		for (auto &node : order.orders) {
 			callback(&node.expression);
 		}
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_DISTINCT: {
-		auto &distinct = (LogicalDistinct &)op;
+		auto &distinct = op.Cast<LogicalDistinct>();
 		for (auto &target : distinct.distinct_targets) {
 			callback(&target);
 		}
@@ -56,7 +56,7 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_INSERT: {
-		auto &insert = (LogicalInsert &)op;
+		auto &insert = op.Cast<LogicalInsert>();
 		if (insert.on_conflict_condition) {
 			callback(&insert.on_conflict_condition);
 		}
@@ -69,12 +69,12 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
-			auto &delim_join = (LogicalDelimJoin &)op;
+			auto &delim_join = op.Cast<LogicalDelimJoin>();
 			for (auto &expr : delim_join.duplicate_eliminated_columns) {
 				callback(&expr);
 			}
 		}
-		auto &join = (LogicalComparisonJoin &)op;
+		auto &join = op.Cast<LogicalComparisonJoin>();
 		for (auto &cond : join.conditions) {
 			callback(&cond.left);
 			callback(&cond.right);
@@ -82,12 +82,12 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
-		auto &join = (LogicalAnyJoin &)op;
+		auto &join = op.Cast<LogicalAnyJoin>();
 		callback(&join.condition);
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_LIMIT: {
-		auto &limit = (LogicalLimit &)op;
+		auto &limit = op.Cast<LogicalLimit>();
 		if (limit.limit) {
 			callback(&limit.limit);
 		}
@@ -107,7 +107,7 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
-		auto &aggr = (LogicalAggregate &)op;
+		auto &aggr = op.Cast<LogicalAggregate>();
 		for (auto &group : aggr.groups) {
 			callback(&group);
 		}

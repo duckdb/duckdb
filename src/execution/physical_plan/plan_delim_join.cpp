@@ -22,7 +22,7 @@ static void GatherDelimScans(PhysicalOperator *op, vector<PhysicalOperator *> &d
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimJoin &op) {
 	// first create the underlying join
-	auto plan = CreatePlan((LogicalComparisonJoin &)op);
+	auto plan = CreatePlan(op.Cast<LogicalComparisonJoin>());
 	// this should create a join, not a cross product
 	D_ASSERT(plan && plan->type != PhysicalOperatorType::CROSS_PRODUCT);
 	// duplicate eliminated join

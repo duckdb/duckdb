@@ -16,6 +16,7 @@ namespace duckdb {
 class SubqueryRef : public TableRef {
 public:
 	static constexpr const TableReferenceType TYPE = TableReferenceType::SUBQUERY;
+
 public:
 	DUCKDB_API explicit SubqueryRef(unique_ptr<SelectStatement> subquery, string alias = string());
 

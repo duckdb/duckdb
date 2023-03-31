@@ -15,6 +15,7 @@ namespace duckdb {
 class DefaultExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::DEFAULT;
+
 public:
 	DefaultExpression();
 

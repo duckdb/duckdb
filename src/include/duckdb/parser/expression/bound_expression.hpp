@@ -21,6 +21,7 @@ namespace duckdb {
 class BoundExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_EXPRESSION;
+
 public:
 	BoundExpression(unique_ptr<Expression> expr);
 

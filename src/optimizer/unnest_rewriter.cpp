@@ -276,7 +276,7 @@ void UnnestRewriter::UpdateBoundUnnestBindings(UnnestRewriterPlanUpdater &update
 void UnnestRewriter::GetDelimColumns(LogicalOperator &op) {
 
 	D_ASSERT(op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
-	auto &delim_join = (LogicalDelimJoin &)op;
+	auto &delim_join = op.Cast<LogicalDelimJoin>();
 	for (idx_t i = 0; i < delim_join.duplicate_eliminated_columns.size(); i++) {
 		auto &expr = *delim_join.duplicate_eliminated_columns[i];
 		D_ASSERT(expr.type == ExpressionType::BOUND_COLUMN_REF);
@@ -294,7 +294,7 @@ void UnnestRewriter::GetLHSExpressions(LogicalOperator &op) {
 	bool set_alias = false;
 	// we can easily extract the alias for LOGICAL_PROJECTION(s)
 	if (op.type == LogicalOperatorType::LOGICAL_PROJECTION) {
-		auto &proj = (LogicalProjection &)op;
+		auto &proj = op.Cast<LogicalProjection>();
 		if (proj.expressions.size() == op.types.size()) {
 			set_alias = true;
 		}
@@ -303,7 +303,7 @@ void UnnestRewriter::GetLHSExpressions(LogicalOperator &op) {
 	for (idx_t i = 0; i < op.types.size(); i++) {
 		lhs_bindings.emplace_back(col_bindings[i], op.types[i]);
 		if (set_alias) {
-			auto &proj = (LogicalProjection &)op;
+			auto &proj = op.Cast<LogicalProjection>();
 			lhs_bindings.back().alias = proj.expressions[i]->alias;
 		}
 	}

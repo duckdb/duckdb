@@ -16,6 +16,7 @@ namespace duckdb {
 class ForeignKeyConstraint : public Constraint {
 public:
 	static constexpr const ConstraintType TYPE = ConstraintType::FOREIGN_KEY;
+
 public:
 	DUCKDB_API ForeignKeyConstraint(vector<string> pk_columns, vector<string> fk_columns, ForeignKeyInfo info);
 

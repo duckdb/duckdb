@@ -38,6 +38,7 @@ protected:
 class UpdateStatement : public SQLStatement {
 public:
 	static constexpr const StatementType TYPE = StatementType::UPDATE_STATEMENT;
+
 public:
 	UpdateStatement();
 

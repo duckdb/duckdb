@@ -17,6 +17,7 @@ namespace duckdb {
 class ConstantExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::CONSTANT;
+
 public:
 	DUCKDB_API explicit ConstantExpression(Value val);
 

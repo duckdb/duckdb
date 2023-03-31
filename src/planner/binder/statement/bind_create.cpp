@@ -509,7 +509,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		if (bound_table->type != TableReferenceType::BASE_TABLE) {
 			throw BinderException("Can only create an index over a base table!");
 		}
-		auto &table_binding = bound_table->Cast<BoundBaseTableRef>();;
+		auto &table_binding = bound_table->Cast<BoundBaseTableRef>();
+		;
 		auto table = table_binding.table;
 		if (table->temporary) {
 			stmt.info->temporary = true;

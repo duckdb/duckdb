@@ -17,6 +17,7 @@ namespace duckdb {
 class RecursiveCTENode : public QueryNode {
 public:
 	static constexpr const QueryNodeType TYPE = QueryNodeType::RECURSIVE_CTE_NODE;
+
 public:
 	RecursiveCTENode() : QueryNode(QueryNodeType::RECURSIVE_CTE_NODE) {
 	}

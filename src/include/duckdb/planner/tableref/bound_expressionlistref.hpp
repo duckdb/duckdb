@@ -16,6 +16,7 @@ namespace duckdb {
 class BoundExpressionListRef : public BoundTableRef {
 public:
 	static constexpr const TableReferenceType TYPE = TableReferenceType::EXPRESSION_LIST;
+
 public:
 	BoundExpressionListRef() : BoundTableRef(TableReferenceType::EXPRESSION_LIST) {
 	}

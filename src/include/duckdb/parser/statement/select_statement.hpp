@@ -24,6 +24,7 @@ class FormatDeserializer;
 class SelectStatement : public SQLStatement {
 public:
 	static constexpr const StatementType TYPE = StatementType::SELECT_STATEMENT;
+
 public:
 	DUCKDB_API SelectStatement() : SQLStatement(StatementType::SELECT_STATEMENT) {
 	}

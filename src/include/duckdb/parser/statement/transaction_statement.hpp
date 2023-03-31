@@ -16,6 +16,7 @@ namespace duckdb {
 class TransactionStatement : public SQLStatement {
 public:
 	static constexpr const StatementType TYPE = StatementType::TRANSACTION_STATEMENT;
+
 public:
 	explicit TransactionStatement(TransactionType type);
 

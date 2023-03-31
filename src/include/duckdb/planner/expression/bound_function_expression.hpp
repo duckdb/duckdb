@@ -18,6 +18,7 @@ class ScalarFunctionCatalogEntry;
 class BoundFunctionExpression : public Expression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_FUNCTION;
+
 public:
 	BoundFunctionExpression(LogicalType return_type, ScalarFunction bound_function,
 	                        vector<unique_ptr<Expression>> arguments, unique_ptr<FunctionData> bind_info,

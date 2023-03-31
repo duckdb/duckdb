@@ -16,6 +16,7 @@ namespace duckdb {
 class BoundUnnestExpression : public Expression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_UNNEST;
+
 public:
 	explicit BoundUnnestExpression(LogicalType return_type);
 

@@ -18,7 +18,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownInnerJoin(unique_ptr<Logical
 	}
 	// inner join: gather all the conditions of the inner join and add to the filter list
 	if (op->type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
-		auto &any_join = (LogicalAnyJoin &)join;
+		auto &any_join = join.Cast<LogicalAnyJoin>();
 		// any join: only one filter to add
 		if (AddFilter(std::move(any_join.condition)) == FilterResult::UNSATISFIABLE) {
 			// filter statically evaluates to false, strip tree
@@ -30,7 +30,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownInnerJoin(unique_ptr<Logical
 	} else {
 		// comparison join
 		D_ASSERT(op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN);
-		auto &comp_join = (LogicalComparisonJoin &)join;
+		auto &comp_join = join.Cast<LogicalComparisonJoin>();
 		// turn the conditions into filters
 		for (auto &i : comp_join.conditions) {
 			auto condition = JoinCondition::CreateExpression(std::move(i));

@@ -18,6 +18,7 @@ namespace duckdb {
 class SetOperationNode : public QueryNode {
 public:
 	static constexpr const QueryNodeType TYPE = QueryNodeType::SET_OPERATION_NODE;
+
 public:
 	SetOperationNode() : QueryNode(QueryNodeType::SET_OPERATION_NODE) {
 	}

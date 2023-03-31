@@ -17,6 +17,7 @@ namespace duckdb {
 class CastExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::CAST;
+
 public:
 	DUCKDB_API CastExpression(LogicalType target, unique_ptr<ParsedExpression> child, bool try_cast = false);
 

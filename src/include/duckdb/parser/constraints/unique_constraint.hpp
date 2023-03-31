@@ -16,6 +16,7 @@ namespace duckdb {
 class UniqueConstraint : public Constraint {
 public:
 	static constexpr const ConstraintType TYPE = ConstraintType::UNIQUE;
+
 public:
 	DUCKDB_API UniqueConstraint(LogicalIndex index, bool is_primary_key);
 	DUCKDB_API UniqueConstraint(vector<string> columns, bool is_primary_key);

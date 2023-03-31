@@ -20,6 +20,7 @@ namespace duckdb {
 class BoundJoinRef : public BoundTableRef {
 public:
 	static constexpr const TableReferenceType TYPE = TableReferenceType::JOIN;
+
 public:
 	explicit BoundJoinRef(JoinRefType ref_type)
 	    : BoundTableRef(TableReferenceType::JOIN), type(JoinType::INNER), ref_type(ref_type), lateral(false) {

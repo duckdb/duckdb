@@ -16,6 +16,7 @@ namespace duckdb {
 class BoundEmptyTableRef : public BoundTableRef {
 public:
 	static constexpr const TableReferenceType TYPE = TableReferenceType::EMPTY;
+
 public:
 	explicit BoundEmptyTableRef(idx_t bind_index) : BoundTableRef(TableReferenceType::EMPTY), bind_index(bind_index) {
 	}

@@ -18,6 +18,7 @@ namespace duckdb {
 class SubqueryExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::SUBQUERY;
+
 public:
 	SubqueryExpression();
 

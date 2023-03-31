@@ -17,6 +17,7 @@ namespace duckdb {
 class CopyStatement : public SQLStatement {
 public:
 	static constexpr const StatementType TYPE = StatementType::COPY_STATEMENT;
+
 public:
 	CopyStatement();
 

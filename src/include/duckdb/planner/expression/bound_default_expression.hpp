@@ -15,6 +15,7 @@ namespace duckdb {
 class BoundDefaultExpression : public Expression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_DEFAULT;
+
 public:
 	explicit BoundDefaultExpression(LogicalType type = LogicalType())
 	    : Expression(ExpressionType::VALUE_DEFAULT, ExpressionClass::BOUND_DEFAULT, type) {

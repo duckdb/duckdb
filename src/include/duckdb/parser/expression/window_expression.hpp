@@ -32,6 +32,7 @@ const char *ToString(WindowBoundary value);
 class WindowExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::WINDOW;
+
 public:
 	WindowExpression(ExpressionType type, string catalog_name, string schema_name, const string &function_name);
 

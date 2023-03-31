@@ -15,6 +15,7 @@ namespace duckdb {
 class MultiStatement : public SQLStatement {
 public:
 	static constexpr const StatementType TYPE = StatementType::MULTI_STATEMENT;
+
 public:
 	MultiStatement();
 

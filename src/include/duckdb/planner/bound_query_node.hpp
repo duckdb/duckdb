@@ -36,20 +36,20 @@ public:
 	virtual idx_t GetRootIndex() = 0;
 
 public:
-	template<class TARGET>
+	template <class TARGET>
 	TARGET &Cast() {
 		if (type != TARGET::TYPE) {
 			throw InternalException("Failed to cast bound query node to type - query node type mismatch");
 		}
-		return (TARGET &) *this;
+		return (TARGET &)*this;
 	}
 
-	template<class TARGET>
+	template <class TARGET>
 	const TARGET &Cast() const {
 		if (type != TARGET::TYPE) {
 			throw InternalException("Failed to cast bound query node to type - query node type mismatch");
 		}
-		return (const TARGET &) *this;
+		return (const TARGET &)*this;
 	}
 };
 

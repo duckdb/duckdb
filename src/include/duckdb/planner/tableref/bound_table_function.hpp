@@ -17,6 +17,7 @@ namespace duckdb {
 class BoundTableFunction : public BoundTableRef {
 public:
 	static constexpr const TableReferenceType TYPE = TableReferenceType::TABLE_FUNCTION;
+
 public:
 	explicit BoundTableFunction(unique_ptr<LogicalOperator> get)
 	    : BoundTableRef(TableReferenceType::TABLE_FUNCTION), get(std::move(get)) {

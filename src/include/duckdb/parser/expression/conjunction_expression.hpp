@@ -17,6 +17,7 @@ namespace duckdb {
 class ConjunctionExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::CONJUNCTION;
+
 public:
 	DUCKDB_API explicit ConjunctionExpression(ExpressionType type);
 	DUCKDB_API ConjunctionExpression(ExpressionType type, vector<unique_ptr<ParsedExpression>> children);

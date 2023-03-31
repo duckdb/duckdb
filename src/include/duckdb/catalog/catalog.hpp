@@ -289,16 +289,16 @@ private:
 	virtual void DropSchema(ClientContext &context, DropInfo *info) = 0;
 
 public:
-	template<class TARGET>
+	template <class TARGET>
 	TARGET &Cast() {
 		D_ASSERT(dynamic_cast<TARGET *>(this));
-		return (TARGET &) *this;
+		return (TARGET &)*this;
 	}
 
-	template<class TARGET>
+	template <class TARGET>
 	const TARGET &Cast() const {
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
-		return (const TARGET &) *this;
+		return (const TARGET &)*this;
 	}
 };
 

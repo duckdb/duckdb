@@ -4,6 +4,13 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_empty_result.hpp"
+#include "duckdb/planner/operator/logical_cross_product.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_join.hpp"
+#include "duckdb/planner/operator/logical_positional_join.hpp"
+#include "duckdb/planner/operator/logical_set_operation.hpp"
+#include "duckdb/planner/operator/logical_order.hpp"
+#include "duckdb/planner/operator/logical_window.hpp"
 
 namespace duckdb {
 
@@ -26,31 +33,31 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
                                                                      unique_ptr<LogicalOperator> *node_ptr) {
 	switch (node.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-		return PropagateStatistics((LogicalAggregate &)node, node_ptr);
+		return PropagateStatistics(node.Cast<LogicalAggregate>(), node_ptr);
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
-		return PropagateStatistics((LogicalCrossProduct &)node, node_ptr);
+		return PropagateStatistics(node.Cast<LogicalCrossProduct>(), node_ptr);
 	case LogicalOperatorType::LOGICAL_FILTER:
-		return PropagateStatistics((LogicalFilter &)node, node_ptr);
+		return PropagateStatistics(node.Cast<LogicalFilter>(), node_ptr);
 	case LogicalOperatorType::LOGICAL_GET:
-		return PropagateStatistics((LogicalGet &)node, node_ptr);
+		return PropagateStatistics(node.Cast<LogicalGet>(), node_ptr);
 	case LogicalOperatorType::LOGICAL_PROJECTION:
-		return PropagateStatistics((LogicalProjection &)node, node_ptr);
+		return PropagateStatistics(node.Cast<LogicalProjection>(), node_ptr);
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
-		return PropagateStatistics((LogicalJoin &)node, node_ptr);
+		return PropagateStatistics(node.Cast<LogicalJoin>(), node_ptr);
 	case LogicalOperatorType::LOGICAL_POSITIONAL_JOIN:
-		return PropagateStatistics((LogicalPositionalJoin &)node, node_ptr);
+		return PropagateStatistics(node.Cast<LogicalPositionalJoin>(), node_ptr);
 	case LogicalOperatorType::LOGICAL_UNION:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
-		return PropagateStatistics((LogicalSetOperation &)node, node_ptr);
+		return PropagateStatistics(node.Cast<LogicalSetOperation>(), node_ptr);
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
-		return PropagateStatistics((LogicalOrder &)node, node_ptr);
+		return PropagateStatistics(node.Cast<LogicalOrder>(), node_ptr);
 	case LogicalOperatorType::LOGICAL_WINDOW:
-		return PropagateStatistics((LogicalWindow &)node, node_ptr);
+		return PropagateStatistics(node.Cast<LogicalWindow>(), node_ptr);
 	default:
 		return PropagateChildren(node, node_ptr);
 	}

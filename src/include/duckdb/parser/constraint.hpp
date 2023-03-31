@@ -69,20 +69,20 @@ public:
 	DUCKDB_API static unique_ptr<Constraint> Deserialize(Deserializer &source);
 
 public:
-	template<class TARGET>
+	template <class TARGET>
 	TARGET &Cast() {
 		if (type != TARGET::TYPE) {
 			throw InternalException("Failed to cast constraint to type - constraint type mismatch");
 		}
-		return (TARGET &) *this;
+		return (TARGET &)*this;
 	}
 
-	template<class TARGET>
+	template <class TARGET>
 	const TARGET &Cast() const {
 		if (type != TARGET::TYPE) {
 			throw InternalException("Failed to cast constraint to type - constraint type mismatch");
 		}
-		return (const TARGET &) *this;
+		return (const TARGET &)*this;
 	}
 };
 } // namespace duckdb

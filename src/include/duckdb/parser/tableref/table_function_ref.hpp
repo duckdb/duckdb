@@ -19,6 +19,7 @@ namespace duckdb {
 class TableFunctionRef : public TableRef {
 public:
 	static constexpr const TableReferenceType TYPE = TableReferenceType::TABLE_FUNCTION;
+
 public:
 	DUCKDB_API TableFunctionRef();
 

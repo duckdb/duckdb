@@ -342,10 +342,10 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				cond.right = std::move(right);
 				cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 
-				auto &comparison_join = (LogicalComparisonJoin &)join;
+				auto &comparison_join = join.Cast<LogicalComparisonJoin>();
 				comparison_join.conditions.push_back(std::move(cond));
 			} else {
-				auto &any_join = (LogicalAnyJoin &)join;
+				auto &any_join = join.Cast<LogicalAnyJoin>();
 				auto comparison = make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
 				                                                         std::move(left), std::move(right));
 				auto conjunction = make_unique<BoundConjunctionExpression>(

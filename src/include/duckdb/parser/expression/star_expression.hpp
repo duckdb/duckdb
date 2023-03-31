@@ -17,6 +17,7 @@ namespace duckdb {
 class StarExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::STAR;
+
 public:
 	StarExpression(string relation_name = string());
 

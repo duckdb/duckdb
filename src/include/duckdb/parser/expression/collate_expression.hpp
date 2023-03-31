@@ -16,6 +16,7 @@ namespace duckdb {
 class CollateExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::COLLATE;
+
 public:
 	CollateExpression(string collation, unique_ptr<ParsedExpression> child);
 

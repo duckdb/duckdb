@@ -16,6 +16,9 @@ namespace duckdb {
 //! LogicalDistinct filters duplicate entries from its child operator
 class LogicalDistinct : public LogicalOperator {
 public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_DISTINCT;
+
+public:
 	LogicalDistinct() : LogicalOperator(LogicalOperatorType::LOGICAL_DISTINCT) {
 	}
 	explicit LogicalDistinct(vector<unique_ptr<Expression>> targets)

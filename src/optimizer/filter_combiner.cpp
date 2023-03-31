@@ -615,7 +615,8 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression *expr) {
 		auto transitive_filter = FindTransitiveFilter(non_scalar);
 		if (transitive_filter != nullptr) {
 			// try to add transitive filters
-			if (AddTransitiveFilters(transitive_filter->Cast<BoundComparisonExpression>()) == FilterResult::UNSUPPORTED) {
+			if (AddTransitiveFilters(transitive_filter->Cast<BoundComparisonExpression>()) ==
+			    FilterResult::UNSUPPORTED) {
 				// in case of unsuccessful re-add filter into remaining ones
 				remaining_filters.push_back(std::move(transitive_filter));
 			}
@@ -876,7 +877,8 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 		auto transitive_filter = FindTransitiveFilter(comparison.left.get());
 		if (transitive_filter != nullptr) {
 			// try to add transitive filters
-			if (AddTransitiveFilters(transitive_filter->Cast<BoundComparisonExpression>()) == FilterResult::UNSUPPORTED) {
+			if (AddTransitiveFilters(transitive_filter->Cast<BoundComparisonExpression>()) ==
+			    FilterResult::UNSUPPORTED) {
 				// in case of unsuccessful re-add filter into remaining ones
 				remaining_filters.push_back(std::move(transitive_filter));
 			}

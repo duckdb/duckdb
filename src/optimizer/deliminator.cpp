@@ -66,7 +66,7 @@ void DeliminatorPlanUpdater::VisitOperator(LogicalOperator &op) {
 	VisitOperatorChildren(op);
 	VisitOperatorExpressions(op);
 	if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN && DelimGetCount(op) == 0) {
-		auto &delim_join = (LogicalDelimJoin &)op;
+		auto &delim_join = op.Cast<LogicalDelimJoin>();
 		auto decs = &delim_join.duplicate_eliminated_columns;
 		for (auto &cond : delim_join.conditions) {
 			if (!IsEqualityJoinCondition(cond)) {
@@ -236,7 +236,7 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *plan, unique_ptr<
 			}
 		}
 	} else {
-		auto &agg = (LogicalAggregate &)proj_or_agg;
+		auto &agg = proj_or_agg.Cast<LogicalAggregate>();
 
 		// Create a vector of all exprs in the agg
 		vector<Expression *> all_agg_exprs;

@@ -16,6 +16,7 @@ namespace duckdb {
 class PrepareStatement : public SQLStatement {
 public:
 	static constexpr const StatementType TYPE = StatementType::PREPARE_STATEMENT;
+
 public:
 	PrepareStatement();
 

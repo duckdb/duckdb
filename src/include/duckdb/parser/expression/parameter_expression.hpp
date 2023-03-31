@@ -14,6 +14,7 @@ namespace duckdb {
 class ParameterExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::PARAMETER;
+
 public:
 	ParameterExpression();
 

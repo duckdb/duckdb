@@ -25,6 +25,7 @@ struct CaseCheck {
 class CaseExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::CASE;
+
 public:
 	DUCKDB_API CaseExpression();
 
