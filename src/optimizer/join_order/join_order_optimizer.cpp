@@ -120,7 +120,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 	}
 
 	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-		auto &join = (LogicalComparisonJoin &)*op;
+		auto &join = op->Cast<LogicalComparisonJoin>();
 		if (join.join_type == JoinType::INNER) {
 			// extract join conditions from inner join
 			filter_operators.push_back(op);
@@ -870,7 +870,7 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 				} else {
 					D_ASSERT(node->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
 					         node->type == LogicalOperatorType::LOGICAL_ASOF_JOIN);
-					auto &comp_join = (LogicalComparisonJoin &)*node;
+					auto &comp_join = node->Cast<LogicalComparisonJoin>();
 					comp_join.conditions.push_back(std::move(cond));
 				}
 			}
@@ -949,7 +949,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	for (auto &f_op : filter_operators) {
 		if (f_op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
 		    f_op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
-			auto &join = (LogicalComparisonJoin &)*f_op;
+			auto &join = f_op->Cast<LogicalComparisonJoin>();
 			D_ASSERT(join.join_type == JoinType::INNER);
 			D_ASSERT(join.expressions.empty());
 			for (auto &cond : join.conditions) {

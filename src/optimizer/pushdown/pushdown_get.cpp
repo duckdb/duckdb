@@ -10,7 +10,7 @@ namespace duckdb {
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_GET);
-	auto &get = (LogicalGet &)*op;
+	auto &get = op->Cast<LogicalGet>();
 
 	if (get.function.pushdown_complex_filter || get.function.filter_pushdown) {
 		// this scan supports some form of filter push-down

@@ -377,7 +377,7 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(vector<NodeOp> *node_op
 		auto op = (*node_ops)[i].op;
 		join_node->SetBaseTableCardinality(op->EstimateCardinality(context));
 		if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-			auto &join = (LogicalComparisonJoin &)*op;
+			auto &join = op->Cast<LogicalComparisonJoin>();
 			if (join.join_type == JoinType::LEFT) {
 				// If a base op is a Logical Comparison join it is probably a left join,
 				// so the cost of the larger table is a fine estimate.

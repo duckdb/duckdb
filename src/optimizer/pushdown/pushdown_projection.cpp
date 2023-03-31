@@ -22,7 +22,7 @@ static unique_ptr<Expression> ReplaceProjectionBindings(LogicalProjection &proj,
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownProjection(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_PROJECTION);
-	auto &proj = (LogicalProjection &)*op;
+	auto &proj = op->Cast<LogicalProjection>();
 	// push filter through logical projection
 	// all the BoundColumnRefExpressions in the filter should refer to the LogicalProjection
 	// we can rewrite them by replacing those references with the expression of the LogicalProjection node

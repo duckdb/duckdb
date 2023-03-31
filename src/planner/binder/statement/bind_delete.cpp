@@ -25,7 +25,7 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	auto table = table_binding.table;
 
 	auto root = CreatePlan(*bound_table);
-	auto &get = (LogicalGet &)*root;
+	auto &get = root->Cast<LogicalGet>();
 	D_ASSERT(root->type == LogicalOperatorType::LOGICAL_GET);
 
 	if (!table->temporary) {

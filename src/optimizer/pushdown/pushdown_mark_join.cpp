@@ -9,8 +9,8 @@ using Filter = FilterPushdown::Filter;
 unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalOperator> op,
                                                              unordered_set<idx_t> &left_bindings,
                                                              unordered_set<idx_t> &right_bindings) {
-	auto &join = (LogicalJoin &)*op;
-	auto &comp_join = (LogicalComparisonJoin &)*op;
+	auto &join = op->Cast<LogicalJoin>();
+	auto &comp_join = op->Cast<LogicalComparisonJoin>();
 	D_ASSERT(join.join_type == JoinType::MARK);
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
 	         op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN || op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN);

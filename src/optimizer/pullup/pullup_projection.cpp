@@ -79,7 +79,7 @@ unique_ptr<LogicalOperator> FilterPullup::PullupProjection(unique_ptr<LogicalOpe
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_PROJECTION);
 	op->children[0] = Rewrite(std::move(op->children[0]));
 	if (!filters_expr_pullup.empty()) {
-		auto &proj = (LogicalProjection &)*op;
+		auto &proj = op->Cast<LogicalProjection>();
 		// INTERSECT, EXCEPT, and DISTINCT
 		if (!can_add_column) {
 			// special treatment for operators that cannot add columns, e.g., INTERSECT, EXCEPT, and DISTINCT

@@ -439,7 +439,7 @@ unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateS
 	D_ASSERT(plan->type == LogicalOperatorType::LOGICAL_GET);
 	auto &base = (CreateIndexInfo &)*stmt.info;
 
-	auto &get = (LogicalGet &)*plan;
+	auto &get = plan->Cast<LogicalGet>();
 	// bind the index expressions
 	IndexBinder index_binder(binder, binder.context);
 	vector<unique_ptr<Expression>> expressions;

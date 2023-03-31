@@ -128,7 +128,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		return plan;
 	}
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
-		auto &aggr = (LogicalAggregate &)*plan;
+		auto &aggr = plan->Cast<LogicalAggregate>();
 		// aggregate and group by
 		// first we flatten the dependent join in the child of the projection
 		for (auto &expr : plan->expressions) {
@@ -264,7 +264,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-		auto &join = (LogicalJoin &)*plan;
+		auto &join = plan->Cast<LogicalJoin>();
 		D_ASSERT(plan->children.size() == 2);
 		// check the correlated expressions in the children of the join
 		bool left_has_correlation = has_correlated_expressions.find(plan->children[0].get())->second;
@@ -359,7 +359,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		return plan;
 	}
 	case LogicalOperatorType::LOGICAL_LIMIT: {
-		auto &limit = (LogicalLimit &)*plan;
+		auto &limit = plan->Cast<LogicalLimit>();
 		if (limit.limit || limit.offset) {
 			throw ParserException("Non-constant limit or offset not supported in correlated subquery");
 		}
@@ -435,7 +435,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		throw ParserException("Limit percent operator not supported in correlated subquery");
 	}
 	case LogicalOperatorType::LOGICAL_WINDOW: {
-		auto &window = (LogicalWindow &)*plan;
+		auto &window = plan->Cast<LogicalWindow>();
 		// push into children
 		plan->children[0] = PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values);
 		// add the correlated columns to the PARTITION BY clauses in the Window
@@ -453,7 +453,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
 	case LogicalOperatorType::LOGICAL_UNION: {
-		auto &setop = (LogicalSetOperation &)*plan;
+		auto &setop = plan->Cast<LogicalSetOperation>();
 		// set operator, push into both children
 #ifdef DEBUG
 		plan->children[0]->ResolveOperatorTypes();
@@ -475,7 +475,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		return plan;
 	}
 	case LogicalOperatorType::LOGICAL_DISTINCT: {
-		auto &distinct = (LogicalDistinct &)*plan;
+		auto &distinct = plan->Cast<LogicalDistinct>();
 		// push down into child
 		distinct.children[0] = PushDownDependentJoin(std::move(distinct.children[0]));
 		// add all correlated columns to the distinct targets
@@ -512,7 +512,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		plan->children[0] = PushDownDependentJoin(std::move(plan->children[0]));
 		return plan;
 	case LogicalOperatorType::LOGICAL_GET: {
-		auto &get = (LogicalGet &)*plan;
+		auto &get = plan->Cast<LogicalGet>();
 		if (get.children.size() != 1) {
 			throw InternalException("Flatten dependent joins - logical get encountered without children");
 		}

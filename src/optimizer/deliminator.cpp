@@ -187,7 +187,7 @@ static bool ChildJoinTypeCanBeDeliminated(JoinType &join_type) {
 bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *plan, unique_ptr<LogicalOperator> *candidate,
                                   DeliminatorPlanUpdater &updater) {
 	auto &proj_or_agg = **candidate;
-	auto &join = (LogicalComparisonJoin &)*proj_or_agg.children[0];
+	auto &join = proj_or_agg.children[0]->Cast<LogicalComparisonJoin>();
 	if (!ChildJoinTypeCanBeDeliminated(join.join_type)) {
 		return false;
 	}
@@ -200,7 +200,7 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *plan, unique_ptr<
 	if (join.children[delim_idx]->type == LogicalOperatorType::LOGICAL_FILTER) {
 		filter = (LogicalFilter *)join.children[delim_idx].get();
 	}
-	auto &delim_get = (LogicalDelimGet &)*(filter ? filter->children[0].get() : join.children[delim_idx].get());
+	auto &delim_get = (filter ? filter->children[0] : join.children[delim_idx])->Cast<LogicalDelimGet>();
 	if (join.conditions.size() != delim_get.chunk_types.size()) {
 		// joining with DelimGet adds new information
 		return false;
@@ -345,7 +345,7 @@ bool Deliminator::RemoveInequalityCandidate(unique_ptr<LogicalOperator> *plan, u
 		}
 
 		// we can only remove inequality join with a DelimGet if the parent DelimJoin has one of these join types
-		auto &delim_join = (LogicalDelimJoin &)*dj;
+		auto &delim_join = dj->Cast<LogicalDelimJoin>();
 		if (!InequalityDelimJoinCanBeEliminated(delim_join.join_type)) {
 			continue;
 		}
@@ -359,8 +359,8 @@ bool Deliminator::RemoveInequalityCandidate(unique_ptr<LogicalOperator> *plan, u
 
 	// we found the parent delim join, and we may be able to remove the child DelimGet join
 	// but we need to make sure that their conditions refer to exactly the same columns
-	auto &parent_delim_join = (LogicalDelimJoin &)*parent;
-	auto &join = (LogicalComparisonJoin &)*proj_or_agg.children[0];
+	auto &parent_delim_join = parent->Cast<LogicalDelimJoin>();
+	auto &join = proj_or_agg.children[0]->Cast<LogicalComparisonJoin>();
 	if (parent_delim_join.conditions.size() != join.conditions.size()) {
 		// different number of conditions, can't replace
 		return false;

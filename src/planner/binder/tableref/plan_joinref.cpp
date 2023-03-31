@@ -64,7 +64,7 @@ void LogicalComparisonJoin::ExtractJoinConditions(JoinType type, unique_ptr<Logi
 					right_child = std::move(filter);
 				}
 				// push the expression into the filter
-				auto &filter = (LogicalFilter &)*right_child;
+				auto &filter = right_child->Cast<LogicalFilter>();
 				filter.expressions.push_back(std::move(expr));
 				continue;
 			}
@@ -286,7 +286,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	}
 	for (auto &child : join->children) {
 		if (child->type == LogicalOperatorType::LOGICAL_FILTER) {
-			auto &filter = (LogicalFilter &)*child;
+			auto &filter = child->Cast<LogicalFilter>();
 			for (auto &expr : filter.expressions) {
 				PlanSubqueries(&expr, &filter.children[0]);
 			}
@@ -300,7 +300,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		// comparison join
 		// in this join we visit the expressions on the LHS with the LHS as root node
 		// and the expressions on the RHS with the RHS as root node
-		auto &comp_join = (LogicalComparisonJoin &)*join;
+		auto &comp_join = join->Cast<LogicalComparisonJoin>();
 		for (idx_t i = 0; i < comp_join.conditions.size(); i++) {
 			PlanSubqueries(&comp_join.conditions[i].left, &comp_join.children[0]);
 			PlanSubqueries(&comp_join.conditions[i].right, &comp_join.children[1]);
@@ -308,7 +308,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
-		auto &any_join = (LogicalAnyJoin &)*join;
+		auto &any_join = join->Cast<LogicalAnyJoin>();
 		// for the any join we just visit the condition
 		if (any_join.condition->HasSubquery()) {
 			throw NotImplementedException("Cannot perform non-inner join on subquery!");
