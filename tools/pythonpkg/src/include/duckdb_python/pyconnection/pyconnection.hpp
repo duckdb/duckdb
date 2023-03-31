@@ -190,14 +190,10 @@ private:
 	static void DetectEnvironment();
 };
 
-static bool ModuleIsLoaded(const char *module_name) {
-	auto dict = pybind11::module_::import("sys").attr("modules");
-	return dict.contains(py::str(module_name));
-}
-
-template <class T>
+template <typename T>
 static bool ModuleIsLoaded() {
-	return ModuleIsLoaded(T::Name);
+	auto dict = pybind11::module_::import("sys").attr("modules");
+	return dict.contains(py::str(T::Name));
 }
 
 } // namespace duckdb

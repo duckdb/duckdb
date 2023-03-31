@@ -408,6 +408,8 @@ void VectorConversion::BindPandas(const DBConfig &config, py::handle df, vector<
 		throw InvalidInputException("Need a DataFrame with at least one column");
 	}
 
+	py::array column_attributes = df.attr("columns").attr("values");
+
 	// loop over every column
 	for (idx_t col_idx = 0; col_idx < py::len(df_columns); col_idx++) {
 		LogicalType duckdb_col_type;
