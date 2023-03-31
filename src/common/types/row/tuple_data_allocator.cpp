@@ -54,7 +54,7 @@ void TupleDataAllocator::Build(TupleDataSegment &segment, TupleDataPinState &pin
 	D_ASSERT(this == segment.allocator.get());
 	auto &chunks = segment.chunks;
 	if (!chunks.empty()) {
-		ReleaseOrStoreHandles(pin_state, segment, chunks.back());
+		ReleaseOrStoreHandles(pin_state, segment, chunks.back(), true);
 	}
 
 	// Build the chunk parts for the incoming data
@@ -172,8 +172,11 @@ void TupleDataAllocator::InitializeChunkState(TupleDataSegment &segment, TupleDa
 	D_ASSERT(chunk_idx < segment.ChunkCount());
 	auto &chunk = segment.chunks[chunk_idx];
 
-	// Release or store any handles that are no longer required
-	ReleaseOrStoreHandles(pin_state, segment, chunk);
+	// Release or store any handles that are no longer required:
+	// We can't release the heap here if the current chunk's heap_block_ids is empty, because if we are iterating with
+	// PinProperties::DESTROY_AFTER_DONE, we might destroy a heap block that is needed by a later chunk, e.g.,
+	// when chunk 0 needs heap block 0, chunk 1 does not need any heap blocks, and chunk 2 needs heap block 0 again
+	ReleaseOrStoreHandles(pin_state, segment, chunk, !chunk.heap_block_ids.empty());
 
 	vector<TupleDataChunkPart *> parts;
 	parts.reserve(chunk.parts.size());
@@ -367,11 +370,11 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 }
 
 void TupleDataAllocator::ReleaseOrStoreHandles(TupleDataPinState &pin_state, TupleDataSegment &segment,
-                                               TupleDataChunk &chunk) {
+                                               TupleDataChunk &chunk, bool release_heap) {
 	D_ASSERT(this == segment.allocator.get());
 	ReleaseOrStoreHandlesInternal(segment, segment.pinned_row_handles, pin_state.row_handles, chunk.row_block_ids,
 	                              row_blocks, pin_state.properties);
-	if (!layout.AllConstant()) {
+	if (!layout.AllConstant() && release_heap) {
 		ReleaseOrStoreHandlesInternal(segment, segment.pinned_heap_handles, pin_state.heap_handles,
 		                              chunk.heap_block_ids, heap_blocks, pin_state.properties);
 	}
@@ -379,7 +382,7 @@ void TupleDataAllocator::ReleaseOrStoreHandles(TupleDataPinState &pin_state, Tup
 
 void TupleDataAllocator::ReleaseOrStoreHandles(TupleDataPinState &pin_state, TupleDataSegment &segment) {
 	static TupleDataChunk DUMMY_CHUNK;
-	ReleaseOrStoreHandles(pin_state, segment, DUMMY_CHUNK);
+	ReleaseOrStoreHandles(pin_state, segment, DUMMY_CHUNK, true);
 }
 
 void TupleDataAllocator::ReleaseOrStoreHandlesInternal(TupleDataSegment &segment, vector<BufferHandle> &pinned_handles,
@@ -427,7 +430,9 @@ BufferHandle &TupleDataAllocator::PinRowBlock(TupleDataPinState &pin_state, cons
 	const auto &row_block_index = part.row_block_index;
 	auto it = pin_state.row_handles.find(row_block_index);
 	if (it == pin_state.row_handles.end()) {
+		D_ASSERT(row_block_index < row_blocks.size());
 		auto &row_block = row_blocks[row_block_index];
+		D_ASSERT(row_block.handle);
 		D_ASSERT(part.row_block_offset < row_block.size);
 		D_ASSERT(part.row_block_offset + part.count * layout.GetRowWidth() <= row_block.size);
 		it = pin_state.row_handles.emplace(row_block_index, buffer_manager.Pin(row_block.handle)).first;
@@ -439,7 +444,9 @@ BufferHandle &TupleDataAllocator::PinHeapBlock(TupleDataPinState &pin_state, con
 	const auto &heap_block_index = part.heap_block_index;
 	auto it = pin_state.heap_handles.find(heap_block_index);
 	if (it == pin_state.heap_handles.end()) {
+		D_ASSERT(heap_block_index < heap_blocks.size());
 		auto &heap_block = heap_blocks[heap_block_index];
+		D_ASSERT(heap_block.handle);
 		D_ASSERT(part.heap_block_offset < heap_block.size);
 		D_ASSERT(part.heap_block_offset + part.total_heap_size <= heap_block.size);
 		it = pin_state.heap_handles.emplace(heap_block_index, buffer_manager.Pin(heap_block.handle)).first;

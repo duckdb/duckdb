@@ -147,6 +147,7 @@ HashTableList PartitionableHashTable::GetPartition(idx_t partition) {
 	D_ASSERT(radix_partitioned_hts.size() > partition);
 	return std::move(radix_partitioned_hts[partition]);
 }
+
 HashTableList PartitionableHashTable::GetUnpartitioned() {
 	D_ASSERT(!IsPartitioned());
 	return std::move(unpartitioned_hts);

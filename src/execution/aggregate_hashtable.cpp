@@ -594,6 +594,7 @@ void GroupedAggregateHashTable::Partition(vector<GroupedAggregateHashTable *> &p
 		auto &partition_ht = *partition_hts[partition_idx];
 		partition_ht.data_collection = std::move(partitions[partition_idx]);
 		partition_ht.InitializeFirstPart();
+		partition_ht.Verify();
 	}
 }
 
