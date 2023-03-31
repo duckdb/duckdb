@@ -26,7 +26,7 @@ const string tbl_zst = "tbl.zst";
 const string csv_extensions[5] = {csv, tsv, csv_gz, csv_zst, tbl_zst};
 
 bool debug = true;
-bool RunFull(std::string &path, std::set<std::string> &skip, duckdb::Connection &conn) {
+bool RunFull(std::string &path, std::set<std::string> &skip, duckdb::Connection &conn, string add_parameters = "") {
 	bool single_threaded_passed;
 	// Here we run the csv file first with the single thread reader.
 	// Then the parallel csv reader with a combination of multiple threads and buffer sizes.
@@ -38,7 +38,7 @@ bool RunFull(std::string &path, std::set<std::string> &skip, duckdb::Connection 
 	conn.context->client_data->max_line_length = 0;
 	unique_ptr<MaterializedQueryResult> single_threaded_res;
 	ColumnDataCollection *ground_truth = nullptr;
-	single_threaded_res = conn.Query("SELECT * FROM read_csv_auto('" + path + "', parallel = 0) ORDER BY ALL");
+	single_threaded_res = conn.Query("SELECT * FROM read_csv_auto('" + path + add_parameters +  "', parallel = 0) ORDER BY ALL");
 	if (single_threaded_res->HasError()) {
 		single_threaded_passed = false;
 	} else {
@@ -48,11 +48,9 @@ bool RunFull(std::string &path, std::set<std::string> &skip, duckdb::Connection 
 
 	// For parallel CSV Reading the buffer must be at least the size of the biggest line in the File.
 	idx_t min_buffer_size = conn.context->client_data->max_line_length + 2;
-	// So our tests don't take infinite time, we will go till a max buffer size of 25 positions higher than the minimum.
+	// So our tests don't take infinite time, we will go till a max buffer size of 5 positions higher than the minimum.
 	idx_t max_buffer_size = min_buffer_size + 5;
 	// Let's go from 1 to 8 threads.
-	// TODO: Iterate over different buffer sizes
-
 	if (debug) {
 		std::cout << path << std::endl;
 	}
@@ -67,7 +65,7 @@ bool RunFull(std::string &path, std::set<std::string> &skip, duckdb::Connection 
 			multi_conn.Query("SET preserve_insertion_order=false;");
 			multi_conn.Query("PRAGMA threads=" + to_string(thread_count));
 			unique_ptr<MaterializedQueryResult> multi_threaded_result =
-			    multi_conn.Query("SELECT * FROM read_csv_auto('" + path + "', buffer_size = " + to_string(buffer_size) +
+			    multi_conn.Query("SELECT * FROM read_csv_auto('" + path + add_parameters + "', buffer_size = " + to_string(buffer_size) +
 			                     ") ORDER BY ALL");
 			bool multi_threaded_passed;
 			ColumnDataCollection *result = nullptr;
@@ -106,7 +104,7 @@ bool RunFull(std::string &path, std::set<std::string> &skip, duckdb::Connection 
 }
 
 // Collects All CSV-Like files from folder and execute Parallel Scans on it
-void RunTestOnFolder(const string &path, std::set<std::string> &skip) {
+void RunTestOnFolder(const string &path, std::set<std::string> &skip, string add_parameters = "") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
@@ -114,7 +112,7 @@ void RunTestOnFolder(const string &path, std::set<std::string> &skip) {
 	for (auto &ext : csv_extensions) {
 		auto csv_files = fs.Glob(path + "*" + ext);
 		for (auto &csv_file : csv_files) {
-			REQUIRE(RunFull(csv_file, skip, con));
+			REQUIRE(RunFull(csv_file, skip, con,add_parameters));
 		}
 	}
 }
@@ -125,14 +123,15 @@ TEST_CASE("Test One File", "[parallel-csv]") {
 	std::set<std::string> skip;
 	con.Query("SET preserve_insertion_order=false;");
 
-	string file = "/Users/holanda/Desktop/ips.csv.gz";
-	//		auto thread_count = 2;
-	//		auto buffer_size = 1266;
-	//		con.Query("PRAGMA threads=" + to_string(thread_count));
-	//		unique_ptr<MaterializedQueryResult> multi_threaded_result = con.Query(
-	//		    "SELECT * FROM read_csv_auto('" + file + "', buffer_size = " + to_string(buffer_size) + ")");
-	//		auto &result = multi_threaded_result->Collection();
-	//	    auto rows = result.GetRows();
+	string file = "data/csv/tpcds_59.csv";
+	auto thread_count = 3;
+	auto buffer_size = 207;
+
+	con.Query("PRAGMA threads=" + to_string(thread_count));
+	unique_ptr<MaterializedQueryResult> multi_threaded_result = con.Query(
+	    "SELECT * FROM read_csv_auto('" + file + "', buffer_size = " + to_string(buffer_size) + ")");
+	auto &result = multi_threaded_result->Collection();
+//	auto rows = result.GetRows();
 	REQUIRE(RunFull(file, skip, con));
 }
 
@@ -147,6 +146,16 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/auto", "[paralle
 	skip.insert("test/sql/copy/csv/data/auto/titlebasicsdebug.tsv");
 	RunTestOnFolder("test/sql/copy/csv/data/auto/", skip);
 }
+//! Test case with specific parameters that allow us to run the titlebasicsdebug.tsv we were skipping
+TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/auto/titlebasicsdebug.tsv", "[parallel-csv]") {
+	std::set<std::string> skip;
+	DuckDB db(nullptr);
+	Connection con(db);
+	string add_parameters = ", nullstr=\'\\N\', sample_size = -1";
+	string file = "test/sql/copy/csv/data/auto/titlebasicsdebug.tsv";
+	REQUIRE(RunFull(file, skip, con,add_parameters));
+}
+
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/auto/glob", "[parallel-csv]") {
 	std::set<std::string> skip;
