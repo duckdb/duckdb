@@ -71,6 +71,12 @@ void TupleDataCollection::GetBlockPointers(vector<data_ptr_t> &block_pointers) c
 	}
 }
 
+void TupleDataCollection::Unpin() {
+	for (auto &segment : segments) {
+		segment.Unpin();
+	}
+}
+
 void VerifyAppendColumns(const TupleDataLayout &layout, const vector<column_t> &column_ids) {
 #ifdef DEBUG
 	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {

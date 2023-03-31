@@ -116,6 +116,12 @@ idx_t TupleDataSegment::SizeInBytes() const {
 	return total_size;
 }
 
+void TupleDataSegment::Unpin() {
+	lock_guard<mutex> guard(pinned_handles_lock);
+	pinned_row_handles.clear();
+	pinned_heap_handles.clear();
+}
+
 void TupleDataSegment::Verify() const {
 #ifdef DEBUG
 	idx_t total_count = 0;

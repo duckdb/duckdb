@@ -93,6 +93,9 @@ public:
 	idx_t ChunkCount() const;
 	//! The size (in bytes) of this segment
 	idx_t SizeInBytes() const;
+	//! Unpins all held pins
+	void Unpin();
+
 	//! Verify counts of the chunks in this segment
 	void Verify() const;
 	//! Verify that all blocks in this segment are pinned

@@ -64,6 +64,8 @@ public:
 	idx_t SizeInBytes() const;
 	//! Get pointers to the pinned blocks
 	void GetBlockPointers(vector<data_ptr_t> &block_pointers) const;
+	//! Unpins all held pins
+	void Unpin();
 
 	//! Gets the scatter function for the given column index
 	static TupleDataScatterFunction GetScatterFunction(const LogicalType &type, bool within_list = false);

@@ -628,8 +628,10 @@ void GroupedAggregateHashTable::Finalize() {
 		return;
 	}
 
-	// early release hashes, not needed for partition/scan
+	// Early release hashes (not needed for partition/scan) and data collection (will be pinned again when scanning)
 	hashes_hdl.Destroy();
+	data_collection->Unpin();
+
 	is_finalized = true;
 }
 
