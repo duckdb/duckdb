@@ -10,6 +10,15 @@ static bool IsDateTime(const string &col_type_str) {
 	if (StringUtil::StartsWith(col_type_str, "datetime64[ns")) {
 		return true;
 	}
+	if (StringUtil::StartsWith(col_type_str, "datetime64[us")) {
+		return true;
+	}
+	if (StringUtil::StartsWith(col_type_str, "datetime64[ms")) {
+		return true;
+	}
+	if (StringUtil::StartsWith(col_type_str, "datetime64[s")) {
+		return true;
+	}
 	if (col_type_str == "<M8[ns]") {
 		return true;
 	}
