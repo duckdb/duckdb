@@ -98,8 +98,8 @@ public:
 	//! index must also be locked during the merge
 	bool MergeIndexes(IndexLock &state, Index *other_index) override;
 
-	//! Traverses an ART and vacuums the qualifying nodes
-	void Vacuum();
+	//! Traverses an ART and vacuums the qualifying nodes. The lock obtained from InitializeLock must be held
+	void Vacuum(IndexLock &state) override;
 
 	//! Generate ART keys for an input chunk
 	static void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, vector<Key> &keys);

@@ -102,6 +102,11 @@ public:
 	//! Obtains a lock and calls MergeIndexes while holding that lock
 	bool MergeIndexes(Index *other_index);
 
+	//! Traverses an ART and vacuums the qualifying nodes. The lock obtained from InitializeLock must be held
+	virtual void Vacuum(IndexLock &state) = 0;
+	//! Obtains a lock and calls Vacuum while holding that lock
+	void Vacuum();
+
 	//! Returns the string representation of an index
 	virtual string ToString() = 0;
 

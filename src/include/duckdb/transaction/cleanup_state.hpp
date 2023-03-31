@@ -10,6 +10,7 @@
 
 #include "duckdb/transaction/undo_buffer.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/unordered_set.hpp"
 
 namespace duckdb {
 class DataTable;
@@ -21,6 +22,9 @@ class CleanupState {
 public:
 	CleanupState();
 	~CleanupState();
+
+	// data for index vacuum
+	unordered_set<DataTable *> indexed_tables;
 
 public:
 	void CleanupEntry(UndoFlags type, data_ptr_t data);

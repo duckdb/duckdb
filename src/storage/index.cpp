@@ -54,12 +54,23 @@ bool Index::MergeIndexes(Index *other_index) {
 	InitializeLock(state);
 
 	switch (this->type) {
-	case IndexType::ART: {
-		auto art = (ART *)this;
-		return art->MergeIndexes(state, other_index);
-	}
+	case IndexType::ART:
+		return ((ART *)this)->MergeIndexes(state, other_index);
 	default:
 		throw InternalException("Unimplemented index type for merge");
+	}
+}
+
+void Index::Vacuum() {
+
+	IndexLock state;
+	InitializeLock(state);
+
+	switch (this->type) {
+	case IndexType::ART:
+		return ((ART *)this)->Vacuum(state);
+	default:
+		throw InternalException("Unimplemented index type for vacuum");
 	}
 }
 

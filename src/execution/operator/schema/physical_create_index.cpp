@@ -149,15 +149,9 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 	}
 
 	// vacuum excess memory
-	switch (info->index_type) {
-	case IndexType::ART: {
-		((ART *)state.global_index.get())->Vacuum();
-		break;
-	}
-	default:
-		throw InternalException("Unimplemented index type");
-	}
+	state.global_index->Vacuum();
 
+	// add index to storage
 	storage.info->indexes.AddIndex(std::move(state.global_index));
 	return SinkFinalizeType::READY;
 }

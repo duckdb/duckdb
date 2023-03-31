@@ -39,8 +39,8 @@ public:
 	//! Other constants
 	static constexpr idx_t BUFFER_ALLOCATION_SIZE = Storage::BLOCK_ALLOC_SIZE;
 	static constexpr uint8_t OFFSET_SHIFT = sizeof(uint8_t) * 8 * 4;
-	// we can approx. gain one MB by vacuuming this allocator
-	static constexpr uint8_t VACUUM_THRESHOLD = 4;
+	// we can vacuum 10% or more of the ARTs total memory usage
+	static constexpr uint8_t VACUUM_THRESHOLD = 10;
 
 	//! Constants for offset calculations
 	static constexpr idx_t BASE[] = {0x00000000FFFFFFFF, 0x0000FFFF, 0x00FF, 0x0F, 0x3, 0x1};
@@ -84,6 +84,9 @@ public:
 	inline T *Get(const idx_t &position) const {
 		return (T *)Get(position);
 	}
+
+	//! Resets the allocator, which e.g. becomes necessary during DELETE FROM table
+	void Reset();
 
 	//! Returns the allocated memory size in bytes
 	inline idx_t GetMemoryUsage() const {

@@ -7,52 +7,132 @@ require noforcestorage
 require skip_reload
 
 statement ok
-CREATE FUNCTION memory_usage_to_bytes(x) AS CASE
+CREATE FUNCTION mem_to_bytes(x) AS CASE
     WHEN CONTAINS(x, 'KB') THEN REPLACE(x, 'KB', '')::INT * 1000
     WHEN CONTAINS(x, 'MB') THEN REPLACE(x, 'MB', '')::INT * 1000 * 1000
     WHEN CONTAINS(x, 'GB') THEN REPLACE(x, 'GB', '')::INT * 1000 * 1000 * 1000
     WHEN CONTAINS(x, 'TB') THEN REPLACE(x, 'TB', '')::INT * 1000 * 1000 * 1000 * 1000
-    ELSE x::INT END
+    WHEN x = '0 bytes' THEN 0
+    ELSE x::INT END;
 
-# regular table
-statement ok
-create table integers(i integer);
-
-statement ok
-insert into integers select * from range(1000000);
+# store the memory usage of 1M integers in base table
+# verify that the memory increases and drops again
 
 statement ok
-create temporary table base_memory as select memory_usage_to_bytes(memory_usage) AS usage from pragma_database_size();
+CREATE TABLE temp (i integer);
 
 statement ok
-drop table integers
+CREATE TABLE empty AS
+SELECT mem_to_bytes(memory_usage) AS usage FROM pragma_database_size();
 
-# verify that the memory dropped again
+statement ok
+INSERT INTO temp SELECT * FROM range(1000000);
+
+statement ok
+CREATE TABLE base AS
+SELECT mem_to_bytes(memory_usage) AS usage FROM pragma_database_size();
+
 query I
-SELECT memory_usage_to_bytes(current_usage.memory_usage) * 10 < base_memory.usage FROM pragma_database_size() current_usage, base_memory;
+SELECT base.usage > empty.usage
+FROM base, empty;
 ----
 true
 
-# table with primary key
 statement ok
-create table integers(i integer primary key);
+DROP TABLE temp
 
 statement ok
-insert into integers select * from range(1000000);
-
-statement ok
-create temporary table index_memory as select memory_usage_to_bytes(memory_usage) AS usage from pragma_database_size();
+UPDATE empty SET usage = (SELECT mem_to_bytes(current.memory_usage) FROM pragma_database_size() AS current);
 
 query I
-SELECT index_memory.usage > 2 * base_memory.usage FROM base_memory, index_memory
+SELECT mem_to_bytes(current.memory_usage) == empty.usage
+FROM pragma_database_size() current, empty;
+----
+true
+
+# create a table with a primary key and store the memory usage
+# verify that the memory drops when deleting all entries from the table
+
+statement ok
+CREATE TABLE t (i integer PRIMARY KEY);
+
+statement ok
+INSERT INTO t SELECT * FROM range(1000000);
+
+query I
+SELECT mem_to_bytes(current.memory_usage) > 2 * base.usage
+FROM base, pragma_database_size() current;
 ----
 1
 
 statement ok
-DROP TABLE integers
+DELETE FROM t
 
-# verify that the memory dropped again
 query I
-SELECT memory_usage_to_bytes(current_usage.memory_usage) * 10 < index_memory.usage FROM pragma_database_size() current_usage, index_memory;
+SELECT mem_to_bytes(current.memory_usage) == base.usage
+FROM pragma_database_size() current, base;
 ----
 true
+
+statement ok
+DROP TABLE t;
+
+query I
+SELECT mem_to_bytes(current.memory_usage) == empty.usage
+FROM pragma_database_size() current, empty;
+----
+true
+
+# create a table with a primary key and store the memory usage
+# now verify that the memory drops, but this time drop the whole table instead of deleting entries from it
+
+statement ok
+CREATE TABLE t (i integer PRIMARY KEY);
+
+statement ok
+INSERT INTO t SELECT * FROM range(1000000);
+
+query I
+SELECT mem_to_bytes(current.memory_usage) > 2 * base.usage
+FROM base, pragma_database_size() current;
+----
+1
+
+statement ok
+DROP TABLE t
+
+query I
+SELECT mem_to_bytes(current.memory_usage) == empty.usage
+FROM pragma_database_size() current, empty;
+----
+true
+
+# create a table with a primary key and store the memory usage
+# verify that the memory decreases by approximately half when deleting half the entries
+
+statement ok
+CREATE TABLE t (i integer PRIMARY KEY);
+
+statement ok
+INSERT INTO t SELECT * FROM range(1000000);
+
+query I
+SELECT mem_to_bytes(current.memory_usage) > 2 * base.usage
+FROM base, pragma_database_size() current;
+----
+1
+
+statement ok
+CREATE TABLE pk_mem AS
+SELECT mem_to_bytes(memory_usage) AS usage FROM pragma_database_size();
+
+statement ok
+DELETE FROM t WHERE i > 500000;
+
+query I
+SELECT mem_to_bytes(current.memory_usage) * 3 > pk_mem.usage
+    AND mem_to_bytes(current.memory_usage) < pk_mem.usage
+FROM pragma_database_size() current, pk_mem;
+----
+true
+

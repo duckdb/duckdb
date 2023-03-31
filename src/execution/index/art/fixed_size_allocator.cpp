@@ -93,6 +93,16 @@ void FixedSizeAllocator::Free(const idx_t &position) {
 	total_allocations--;
 }
 
+void FixedSizeAllocator::Reset() {
+
+	for (auto &buffer : buffers) {
+		Allocator::DefaultAllocator().FreeData(buffer.ptr, BUFFER_ALLOCATION_SIZE);
+	}
+	buffers.clear();
+	buffers_with_free_space.clear();
+	total_allocations = 0;
+}
+
 void FixedSizeAllocator::Merge(FixedSizeAllocator &other) {
 
 	if (allocation_size != other.allocation_size) {
@@ -123,9 +133,16 @@ bool FixedSizeAllocator::InitializeVacuum() {
 
 	// vacuum_count buffers can be freed
 	auto vacuum_count = total_free_positions / allocations_per_buffer / 2;
-	if (vacuum_count < VACUUM_THRESHOLD) {
+
+	// calculate the vacuum threshold adaptively
+	idx_t memory_usage = GetMemoryUsage();
+	idx_t excess_memory_usage = vacuum_count * BUFFER_ALLOCATION_SIZE;
+	auto excess_percentage = (double)excess_memory_usage / (double)memory_usage;
+	auto threshold = (double)VACUUM_THRESHOLD / 100.0;
+	if (excess_percentage < threshold) {
 		return false;
 	}
+
 	vacuum_threshold = buffers.size() - vacuum_count;
 
 	// remove all invalid buffers from the available buffer list to ensure that we do not reuse them

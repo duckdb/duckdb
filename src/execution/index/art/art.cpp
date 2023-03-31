@@ -1012,13 +1012,21 @@ void ART::FinalizeVacuum(vector<FixedSizeAllocator *> &allocators, vector<bool> 
 	}
 }
 
-void ART::Vacuum() {
+void ART::Vacuum(IndexLock &state) {
 
-	if (!tree) {
+	if (!tree && !memory_size) {
 		return;
 	}
 
 	auto allocators = GetAllocators();
+
+	if (!tree) {
+		for (auto &allocator : allocators) {
+			allocator->Reset();
+		}
+		UpdateMemoryUsage();
+		return;
+	}
 
 	// vacuum nodes holds true, if an allocator needs a vacuum, and false otherwise
 	auto vacuum_nodes = InitializeVacuum(allocators);

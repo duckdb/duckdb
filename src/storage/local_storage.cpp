@@ -522,10 +522,8 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 
 	// possibly vacuum any excess index data
 	table.info->indexes.Scan([&](Index &index) {
-		D_ASSERT(index.type == IndexType::ART);
-		auto &art = (ART &)index;
-		art.Vacuum();
-		return true;
+		index.Vacuum();
+		return false;
 	});
 }
 
@@ -538,7 +536,6 @@ void LocalStorage::Commit(LocalStorage::CommitState &commit_state, DuckTransacti
 		auto table = entry.first;
 		auto storage = entry.second.get();
 		Flush(*table, *storage);
-
 		entry.second.reset();
 	}
 }
