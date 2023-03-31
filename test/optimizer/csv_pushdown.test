@@ -1,6 +1,6 @@
 # name: test/optimizer/csv_pushdown.test
 # description: Test CSV pushdown
-# group: [plan]
+# group: [optimizer]
 
 loop i 0 2
 
