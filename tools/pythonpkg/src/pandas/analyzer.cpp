@@ -306,10 +306,10 @@ LogicalType PandasAnalyzer::GetItemType(py::handle ele, bool &can_convert) {
 		return GetItemType(ele.attr("tolist")(), can_convert);
 	}
 	case PythonObjectType::NdArray: {
-		auto extended_type = ConvertPandasType(ele.attr("dtype"));
+		auto extended_type = ConvertNumpyType(ele.attr("dtype"));
 		LogicalType ltype;
-		ltype = PandasToLogicalType(extended_type);
-		if (extended_type == PandasType::OBJECT) {
+		ltype = NumpyToLogicalType(extended_type);
+		if (extended_type == NumpyNullableType::OBJECT) {
 			LogicalType converted_type = InnerAnalyze(ele, can_convert, false, 1);
 			if (can_convert) {
 				ltype = converted_type;

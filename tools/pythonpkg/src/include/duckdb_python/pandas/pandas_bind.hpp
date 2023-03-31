@@ -2,7 +2,7 @@
 
 #include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb_python/pybind11/python_object_container.hpp"
-#include "duckdb_python/pandas/pandas_type.hpp"
+#include "duckdb_python/numpy/numpy_type.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/main/config.hpp"
 
@@ -11,7 +11,7 @@ namespace duckdb {
 struct RegisteredArray;
 
 struct PandasColumnBindData {
-	PandasType pandas_type;
+	NumpyNullableType pandas_type;
 	py::array numpy_col;
 	idx_t numpy_stride;
 	unique_ptr<RegisteredArray> mask;

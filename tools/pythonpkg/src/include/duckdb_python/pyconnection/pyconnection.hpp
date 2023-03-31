@@ -12,7 +12,7 @@
 #include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb_python/import_cache/python_import_cache.hpp"
-#include "duckdb_python/pandas/pandas_type.hpp"
+#include "duckdb_python/numpy/numpy_type.hpp"
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/path_like.hpp"
 #include "duckdb/execution/operator/persistent/csv_reader_options.hpp"

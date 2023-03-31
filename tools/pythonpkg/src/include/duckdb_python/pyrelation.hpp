@@ -12,7 +12,7 @@
 #include "duckdb.hpp"
 #include "duckdb_python/arrow/arrow_array_stream.hpp"
 #include "duckdb/main/external_dependencies.hpp"
-#include "duckdb_python/pandas/pandas_type.hpp"
+#include "duckdb_python/numpy/numpy_type.hpp"
 #include "duckdb_python/pybind11/registered_py_object.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"

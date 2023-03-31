@@ -7,9 +7,9 @@
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb_python/pandas/pandas_bind.hpp"
-#include "duckdb_python/pandas/pandas_type.hpp"
+#include "duckdb_python/numpy/numpy_type.hpp"
 #include "duckdb_python/pandas/pandas_analyzer.hpp"
-#include "duckdb_python/pandas/pandas_type.hpp"
+#include "duckdb_python/numpy/numpy_type.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb_python/numpy/numpy_scan.hpp"
 
@@ -185,41 +185,41 @@ void ScanPandasObjectColumn(PandasColumnBindData &bind_data, PyObject **col, idx
 //! 'count' is the amount of values we will convert in this batch
 void Numpy::Scan(PandasColumnBindData &bind_data, py::array &numpy_col, idx_t count, idx_t offset, Vector &out) {
 	switch (bind_data.pandas_type) {
-	case PandasType::BOOL:
+	case NumpyNullableType::BOOL:
 		ScanPandasMasked<bool>(bind_data, count, offset, out);
 		break;
-	case PandasType::UINT_8:
+	case NumpyNullableType::UINT_8:
 		ScanPandasMasked<uint8_t>(bind_data, count, offset, out);
 		break;
-	case PandasType::UINT_16:
+	case NumpyNullableType::UINT_16:
 		ScanPandasMasked<uint16_t>(bind_data, count, offset, out);
 		break;
-	case PandasType::UINT_32:
+	case NumpyNullableType::UINT_32:
 		ScanPandasMasked<uint32_t>(bind_data, count, offset, out);
 		break;
-	case PandasType::UINT_64:
+	case NumpyNullableType::UINT_64:
 		ScanPandasMasked<uint64_t>(bind_data, count, offset, out);
 		break;
-	case PandasType::INT_8:
+	case NumpyNullableType::INT_8:
 		ScanPandasMasked<int8_t>(bind_data, count, offset, out);
 		break;
-	case PandasType::INT_16:
+	case NumpyNullableType::INT_16:
 		ScanPandasMasked<int16_t>(bind_data, count, offset, out);
 		break;
-	case PandasType::INT_32:
+	case NumpyNullableType::INT_32:
 		ScanPandasMasked<int32_t>(bind_data, count, offset, out);
 		break;
-	case PandasType::INT_64:
+	case NumpyNullableType::INT_64:
 		ScanPandasMasked<int64_t>(bind_data, count, offset, out);
 		break;
-	case PandasType::FLOAT_32:
+	case NumpyNullableType::FLOAT_32:
 		ScanPandasFpColumn<float>((float *)numpy_col.data(), bind_data.numpy_stride, count, offset, out);
 		break;
-	case PandasType::FLOAT_64:
+	case NumpyNullableType::FLOAT_64:
 		ScanPandasFpColumn<double>((double *)numpy_col.data(), bind_data.numpy_stride, count, offset, out);
 		break;
-	case PandasType::DATETIME:
-	case PandasType::DATETIME_TZ: {
+	case NumpyNullableType::DATETIME:
+	case NumpyNullableType::DATETIME_TZ: {
 		auto src_ptr = (int64_t *)numpy_col.data();
 		auto tgt_ptr = FlatVector::GetData<timestamp_t>(out);
 		auto &mask = FlatVector::Validity(out);
@@ -235,7 +235,7 @@ void Numpy::Scan(PandasColumnBindData &bind_data, py::array &numpy_col, idx_t co
 		}
 		break;
 	}
-	case PandasType::TIMEDELTA: {
+	case NumpyNullableType::TIMEDELTA: {
 		auto src_ptr = (int64_t *)numpy_col.data();
 		auto tgt_ptr = FlatVector::GetData<interval_t>(out);
 		auto &mask = FlatVector::Validity(out);
@@ -260,7 +260,7 @@ void Numpy::Scan(PandasColumnBindData &bind_data, py::array &numpy_col, idx_t co
 		}
 		break;
 	}
-	case PandasType::OBJECT: {
+	case NumpyNullableType::OBJECT: {
 		//! We have determined the underlying logical type of this object column
 		// Get the source pointer of the numpy array
 		auto src_ptr = (PyObject **)numpy_col.data();
@@ -281,7 +281,7 @@ void Numpy::Scan(PandasColumnBindData &bind_data, py::array &numpy_col, idx_t co
 
 			// Get the pointer to the object
 			PyObject *val = src_ptr[source_idx];
-			if (bind_data.pandas_type == PandasType::OBJECT && !PyUnicode_CheckExact(val)) {
+			if (bind_data.pandas_type == NumpyNullableType::OBJECT && !PyUnicode_CheckExact(val)) {
 				if (val == Py_None) {
 					out_mask.SetInvalid(row);
 					continue;
@@ -359,7 +359,7 @@ void Numpy::Scan(PandasColumnBindData &bind_data, py::array &numpy_col, idx_t co
 		}
 		break;
 	}
-	case PandasType::CATEGORY: {
+	case NumpyNullableType::CATEGORY: {
 		switch (out.GetType().InternalType()) {
 		case PhysicalType::UINT8:
 			ScanPandasCategory<uint8_t>(numpy_col, count, offset, out, bind_data.internal_categorical_type);

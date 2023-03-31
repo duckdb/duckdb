@@ -12,7 +12,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb_python/pybind11/gil_wrapper.hpp"
-#include "duckdb_python/pandas/pandas_type.hpp"
+#include "duckdb_python/numpy/numpy_type.hpp"
 #include "duckdb_python/python_conversion.hpp"
 
 namespace duckdb {
