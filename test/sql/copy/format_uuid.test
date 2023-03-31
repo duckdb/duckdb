@@ -13,17 +13,9 @@ PRAGMA threads=4;
 # Create some tables
 statement ok
 CREATE TABLE test2 as SELECT i as a, (i*2) as b, power(i,2) as c from range(0,10) tbl(i);
-
-statement ok
 CREATE TABLE test3 as SELECT i as a, (i*3) as b, power(i,3) as c from range(0,10) tbl(i);
-
-statement ok
 CREATE TABLE test4 as SELECT i as a, (i*4) as b, power(i,4) as c from range(0,10) tbl(i);
-
-statement ok
 CREATE TABLE test5 as SELECT i as a, (i*5) as b, power(i,5) as c from range(0,10) tbl(i);
-
-statement ok
 CREATE TABLE testpto as SELECT i as a, (i*10) as b, (i*100) as c from range(0,10000) tbl(i);
 
 query III
@@ -110,12 +102,19 @@ COPY test5 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a));
 ----
 IO Error: Directory
 
+
+
 # Test where the FILENAME_PATTERN param has no value (for a directory that does not yet exist)
 statement ok
 COPY test4 TO '__TEST_DIR__/to_be_overwritten' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PATTERN);
 
+query I
+SELECT COUNT(*) FROM GLOB('__TEST_DIR__/to_be_overwritten/a=9/*');
+----
+1
+
 query III sort
-SELECT * FROM '__TEST_DIR__/to_be_overwritten/a=9/data_[0-9]*.parquet';
+SELECT * FROM '__TEST_DIR__/to_be_overwritten/a=9/data_0.parquet';
 ----
 9	36	6561
 
@@ -123,10 +122,47 @@ SELECT * FROM '__TEST_DIR__/to_be_overwritten/a=9/data_[0-9]*.parquet';
 statement ok
 COPY test5 TO '__TEST_DIR__/to_be_overwritten' (FORMAT PARQUET, PARTITION_BY (a), overwrite_or_ignore);
 
+query I
+SELECT COUNT(*) FROM GLOB('__TEST_DIR__/to_be_overwritten/a=9/*');
+----
+1
+
 query III sort
-SELECT * FROM '__TEST_DIR__/to_be_overwritten/a=9/data_[0-9]*.parquet';
+SELECT * FROM '__TEST_DIR__/to_be_overwritten/a=9/data_0*.parquet';
 ----
 9	45	59049
+
+
+
+# Test where the FILENAME_PATTERN param has a value (for a directory that does not yet exist)
+statement ok
+COPY test4 TO '__TEST_DIR__/directory0/' (FORMAT PARQUET, PARTITION_BY (a), filename_pattern "my_filename");
+
+query I
+SELECT COUNT(*) FROM GLOB('__TEST_DIR__/directory0/a=7/*');
+----
+1
+
+query III sort
+SELECT * FROM '__TEST_DIR__/directory0/a=7/my_filename0.parquet';
+----
+7	28	2401
+
+# Test where overwrite_or_ignore param == true, and filename_pattern is set to an existing file
+statement ok
+COPY test5 TO '__TEST_DIR__/directory0' (FORMAT PARQUET, PARTITION_BY (a), overwrite_or_ignore TRUE, FILENAME_PATTERN "my_filename");
+
+query I
+SELECT COUNT(*) FROM GLOB('__TEST_DIR__/directory0/a=7/*');
+----
+1
+
+query III sort
+SELECT * FROM '__TEST_DIR__/directory0/a=7/my_filename0.parquet';
+----
+7	35	16807
+
+
 
 # Test with a combination of {i} and {uuid}
 statement ok
