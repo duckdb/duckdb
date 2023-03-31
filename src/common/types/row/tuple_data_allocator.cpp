@@ -269,7 +269,8 @@ static inline void VerifyStrings(const LogicalTypeId type_id, const data_ptr_t r
                                  const idx_t base_col_offset, const idx_t col_offset, const idx_t offset,
                                  const idx_t count) {
 #ifdef DEBUG
-	if (type_id == LogicalTypeId::BLOB) {
+	if (type_id != LogicalTypeId::VARCHAR) {
+		// Make sure we don't verify BLOB / AGGREGATE_STATE
 		return;
 	}
 	idx_t entry_idx;
