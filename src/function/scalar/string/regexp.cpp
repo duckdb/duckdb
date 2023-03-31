@@ -249,6 +249,11 @@ static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, 
 
 	auto &child_entries = StructVector::GetEntries(result);
 	const auto groupSize = child_entries.size();
+	// Reference the 'input' StringBuffer, because we won't need to allocate new data
+	// for the result, all returned strings are substrings of the originals
+	for (auto &child_entry : child_entries) {
+		child_entry->SetAuxiliary(input.GetAuxiliary());
+	}
 
 	vector<RE2::Arg> argv(groupSize);
 	vector<RE2::Arg *> groups(groupSize);
@@ -274,7 +279,7 @@ static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, 
 				ConstantVector::SetNull(*child_entry, false);
 				auto &extracted = ws[col];
 				auto cdata = ConstantVector::GetData<string_t>(*child_entry);
-				cdata[0] = StringVector::AddString(*child_entry, extracted.data(), match ? extracted.size() : 0);
+				cdata[0] = string_t(extracted.data(), match ? extracted.size() : 0);
 			}
 		}
 	} else {
@@ -310,7 +315,7 @@ static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, 
 					auto &child_entry = child_entries[col];
 					auto cdata = FlatVector::GetData<string_t>(*child_entry);
 					auto &extracted = ws[col];
-					cdata[i] = StringVector::AddString(*child_entry, extracted.data(), match ? extracted.size() : 0);
+					cdata[i] = string_t(extracted.data(), match ? extracted.size() : 0);
 				}
 			} else {
 				FlatVector::SetNull(result, i, true);
