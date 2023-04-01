@@ -12,9 +12,7 @@ namespace {
 struct __unique_ptr_utils {
 	static inline void AssertNotNull(void *ptr) {
 		if (DUCKDB_UNLIKELY(!ptr)) {
-#ifdef DEBUG
 			throw InternalException("Attempted to dereference unique_ptr that is NULL!");
-#endif
 		}
 	}
 };
