@@ -20,4 +20,7 @@
 	DO_PRAGMA(clang diagnostic push)                                                                                   \
 	DO_PRAGMA(clang diagnostic ignored #warnoption)
 #define RESET_WARN() DO_PRAGMA(clang diagnostic pop)
+#else
+#define DISABLE_WARN(x)
+#define RESET_WARN()
 #endif
