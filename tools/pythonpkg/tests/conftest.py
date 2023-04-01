@@ -13,6 +13,32 @@ def duckdb_empty_cursor(request):
     return cursor
 
 
+def numpy_pandas_df(*args, **kwargs):
+	pandas = pytest.importorskip("pandas")
+	return pandas.DataFrame(*args, **kwargs)
+
+def arrow_pandas_df(*args, **kwargs):
+	df = numpy_pandas_df(*args, **kwargs);
+	return df.convert_dtypes(dtype_backend="pyarrow")
+
+class NumpyPandas:
+	def __init__(self):
+		self.backend = 'numpy_nullable'
+		self.DataFrame = numpy_pandas_df
+		self.pandas = pytest.importorskip("pandas")
+	def __getattr__(self, __name: str):
+		item = eval(f'self.pandas.{__name}')
+		return item
+
+class ArrowPandas:
+	def __init__(self):
+		self.backend = 'pyarrow'
+		self.DataFrame = arrow_pandas_df
+		self.pandas = pytest.importorskip("pandas")
+	def __getattr__(self, __name: str):
+		item = eval(f'self.pandas.{__name}')
+		return item
+
 @pytest.fixture(scope="function")
 def require():
     def _require(extension_name, db_name=''):

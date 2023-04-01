@@ -31,6 +31,10 @@ NumpyNullableType ConvertNumpyType(const py::handle &col_type) {
 	// pandas.core.dtypes.base.StorageExtensionDtype
 	// this object also contains a 'numpy_dtype' attribute, which might be useful
 
+	if (StringUtil::EndsWith(col_type_str, "[pyarrow]")) {
+		col_type_str = col_type_str.substr(0, col_type_str.size() - string("[pyarrow]").size());
+	}
+
 	if (col_type_str == "bool" || col_type_str == "boolean") {
 		return NumpyNullableType::BOOL;
 	} else if (col_type_str == "uint8" || col_type_str == "UInt8") {

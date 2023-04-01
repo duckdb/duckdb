@@ -24,7 +24,7 @@ public:
 		types = py::list(df.attr("dtypes"));
 		getter = df.attr("__getitem__");
 	}
-	PandasColumn operator[](idx_t index) {
+	PandasColumn operator[](idx_t index) const {
 		D_ASSERT(index < names.size());
 		auto column = getter(names[index]);
 		auto type = types[index];

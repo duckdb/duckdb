@@ -345,8 +345,9 @@ LogicalType PandasAnalyzer::InnerAnalyze(py::handle column, bool &can_convert, b
 	// Keys are not guaranteed to start at 0 for Series, use the internal __array__ instead
 	auto pandas_module = py::module::import("pandas");
 	auto pandas_series = pandas_module.attr("core").attr("series").attr("Series");
+
 	if (py::isinstance(column, pandas_series)) {
-		column = column.attr("__array__")();
+		column = column.attr("_values");
 	}
 	auto row = column.attr("__getitem__");
 
