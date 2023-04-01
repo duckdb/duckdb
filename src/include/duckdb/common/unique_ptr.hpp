@@ -1,22 +1,29 @@
 #pragma once
 
-#include "duckdb/common/unique_ptr_utils.hpp"
+#include "duckdb/common/exception.hpp"
 
 #include <memory>
 #include <type_traits>
 
-using std::add_lvalue_reference;
-using std::default_delete;
-
 namespace duckdb {
 
-template <class _Tp, class _Dp = default_delete<_Tp>>
+namespace {
+struct __unique_ptr_utils {
+	static inline void AssertNotNull(void *ptr) {
+		if (!ptr) {
+			throw InternalException("Attempted to dereference unique_ptr that is NULL!");
+		}
+	}
+};
+} // namespace
+
+template <class _Tp, class _Dp = std::default_delete<_Tp>>
 class unique_ptr : public std::unique_ptr<_Tp, _Dp> {
 public:
 	using original = std::unique_ptr<_Tp, _Dp>;
 	using original::original;
 
-	typename add_lvalue_reference<_Tp>::type operator*() const {
+	typename std::add_lvalue_reference<_Tp>::type operator*() const {
 #ifdef DEBUG
 		__unique_ptr_utils::AssertNotNull((void *)original::get());
 #endif
@@ -37,7 +44,7 @@ public:
 	using original = std::unique_ptr<_Tp[], _Dp>;
 	using original::original;
 
-	typename add_lvalue_reference<_Tp>::type operator[](size_t __i) const {
+	typename std::add_lvalue_reference<_Tp>::type operator[](size_t __i) const {
 #ifdef DEBUG
 		__unique_ptr_utils::AssertNotNull((void *)original::get());
 #endif
