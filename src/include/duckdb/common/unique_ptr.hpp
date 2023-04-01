@@ -11,7 +11,9 @@ namespace {
 struct __unique_ptr_utils {
 	static inline void AssertNotNull(void *ptr) {
 		if (!ptr) {
+#ifdef DEBUG
 			throw InternalException("Attempted to dereference unique_ptr that is NULL!");
+#endif
 		}
 	}
 };
@@ -24,9 +26,7 @@ public:
 	using original::original;
 
 	typename std::add_lvalue_reference<_Tp>::type operator*() const {
-#ifdef DEBUG
 		__unique_ptr_utils::AssertNotNull((void *)original::get());
-#endif
 		return *(original::get());
 	}
 
@@ -45,9 +45,7 @@ public:
 	using original::original;
 
 	typename std::add_lvalue_reference<_Tp>::type operator[](size_t __i) const {
-#ifdef DEBUG
 		__unique_ptr_utils::AssertNotNull((void *)original::get());
-#endif
 		return (original::get())[__i];
 	}
 };
