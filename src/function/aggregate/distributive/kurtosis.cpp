@@ -2,22 +2,31 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include <cstdint>
+#include <limits>
+#include <type_traits>
+using std::uint64_t;
 
 namespace duckdb {
 
 struct KurtosisState {
 	idx_t n;
-	double sum;
-	double sum_sqr;
-	double sum_cub;
-	double sum_four;
+	double m1;
+	double m2;
+	double m3;
+	double m4;
 };
 
+struct KurtosisFlagBiasCorrection {};
+
+struct KurtosisFlagNoBiasCorrection {};
+
+template <class KurtosisFlag>
 struct KurtosisOperation {
 	template <class STATE>
 	static void Initialize(STATE *state) {
 		state->n = 0;
-		state->sum = state->sum_sqr = state->sum_cub = state->sum_four = 0.0;
+		state->m1 = state->m2 = state->m3 = state->m4 = 0.0;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
@@ -28,13 +37,39 @@ struct KurtosisOperation {
 		}
 	}
 
+	/*
+	Formula here is taken from wikipedia:
+		https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Higher-order_statistics
+	But adds a bias correction at the end in the case of sample kurtosis.
+	A reference for the correction can be found on:
+	Joanes, Derrick N., and Christine A. Gill.
+	"Comparing measures of sample skewness and kurtosis."
+	Journal of the Royal Statistical Society: Series D (The Statistician) 47.1 (1998): 183-189.
+	*/
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *data, ValidityMask &mask, idx_t idx) {
+		const double n1 = state->n;
 		state->n++;
-		state->sum += data[idx];
-		state->sum_sqr += pow(data[idx], 2);
-		state->sum_cub += pow(data[idx], 3);
-		state->sum_four += pow(data[idx], 4);
+
+		const double delta = data[idx] - state->m1;
+		const double delta_n = delta / state->n;
+		const double delta_n2 = delta_n * delta_n;
+		const double term1 = delta * delta_n * n1;
+		// Note: for n<=2^32, this can be calculated more precisely with integer types
+		double n_poly;
+		if (state->n <= UINT32_MAX) {
+			const uint64_t n_u64 = state->n;
+			n_poly = n_u64 * n_u64 - uint64_t(3) * n_u64 + uint64_t(3);
+		}
+		else {
+			const double n_dbl = state->n;
+			n_poly = n_dbl * n_dbl - 3.0 * n_dbl + 3.0;
+		}
+
+		state->m1 += delta_n;
+		state->m4 += term1 * delta_n2 * n_poly + 6.0 * delta_n2 * state->m2 - 4.0 * delta_n * state->m3;
+		state->m3 += term1 * delta_n * (state->n - idx_t(2)) - 3.0 * delta_n * state->m2;
+		state->m2 += term1;
 	}
 
 	template <class STATE, class OP>
@@ -43,37 +78,45 @@ struct KurtosisOperation {
 			return;
 		}
 		target->n += source.n;
-		target->sum += source.sum;
-		target->sum_sqr += source.sum_sqr;
-		target->sum_cub += source.sum_cub;
-		target->sum_four += source.sum_four;
+		target->m1 += source.m1;
+		target->m2 += source.m2;
+		target->m3 += source.m3;
+		target->m4 += source.m4;
 	}
 
 	template <class TARGET_TYPE, class STATE>
 	static void Finalize(Vector &result, AggregateInputData &, STATE *state, TARGET_TYPE *target, ValidityMask &mask,
 	                     idx_t idx) {
-		auto n = (double)state->n;
-		if (n <= 3) {
+		if (state->n <= 3 || !state->m2) {
 			mask.SetInvalid(idx);
 			return;
 		}
-		double temp = 1 / n;
-		//! This is necessary due to linux 32 bits
-		long double temp_aux = 1 / n;
-		if (state->sum_sqr - state->sum * state->sum * temp == 0 ||
-		    state->sum_sqr - state->sum * state->sum * temp_aux == 0) {
-			mask.SetInvalid(idx);
-			return;
-		}
-		double m4 =
-		    temp * (state->sum_four - 4 * state->sum_cub * state->sum * temp +
-		            6 * state->sum_sqr * state->sum * state->sum * temp * temp - 3 * pow(state->sum, 4) * pow(temp, 3));
 
-		double m2 = temp * (state->sum_sqr - state->sum * state->sum * temp);
-		if (((m2 * m2) - 3 * (n - 1)) == 0 || ((n - 2) * (n - 3)) == 0) { // LCOV_EXCL_START
+		const idx_t n1 = state->n - idx_t(1);
+		if (((state->m2 * state->m2) - 3 * n1) == 0) { // LCOV_EXCL_START
 			mask.SetInvalid(idx);
 		} // LCOV_EXCL_STOP
-		target[idx] = (n - 1) * ((n + 1) * m4 / (m2 * m2) - 3 * (n - 1)) / ((n - 2) * (n - 3));
+
+		if (std::is_same<KurtosisFlag, KurtosisFlagNoBiasCorrection>::value) {
+			target[idx] = (state->n * state->m4) / (state->m2 * state->m2) - 3.0;
+		}
+		else {
+			const double g2 = (state->n * state->m4) / (state->m2 * state->m2);
+			const double cdiff = 3.0 * (state->n - idx_t(1));
+			double ratio;
+			if (state->n <= UINT32_MAX) {
+				const uint64_t n_u64 = state->n;
+				const uint64_t div = (n_u64 - uint64_t(2)) * (n_u64 - uint64_t(3));
+				ratio = static_cast<double>(n_u64 - uint64_t(1)) / static_cast<double>(div);
+			}
+			else {
+				const double n_dbl = state->n;
+				ratio = (n_dbl - 1.0) / ((n_dbl - 2.0) * (n_dbl - 3.0));
+			}
+
+			target[idx] = ratio * ((state->n + 1.0) * g2 - cdiff);
+		}
+
 		if (!Value::DoubleIsFinite(target[idx])) {
 			throw OutOfRangeException("Kurtosis is out of range!");
 		}
@@ -85,10 +128,29 @@ struct KurtosisOperation {
 };
 
 void KurtosisFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet function_set("kurtosis");
-	function_set.AddFunction(AggregateFunction::UnaryAggregate<KurtosisState, double, double, KurtosisOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE));
-	set.AddFunction(function_set);
+	AggregateFunctionSet kurtosis_fun("kurtosis");
+	kurtosis_fun.AddFunction(
+		AggregateFunction::UnaryAggregate<KurtosisState, double, double, KurtosisOperation<KurtosisFlagBiasCorrection>>(
+			LogicalType::DOUBLE, LogicalType::DOUBLE
+		)
+	);
+	set.AddFunction(kurtosis_fun);
+
+	AggregateFunctionSet kurtosis_samp_fun("kurtosis_samp");
+	kurtosis_samp_fun.AddFunction(
+		AggregateFunction::UnaryAggregate<KurtosisState, double, double, KurtosisOperation<KurtosisFlagBiasCorrection>>(
+			LogicalType::DOUBLE, LogicalType::DOUBLE
+		)
+	);
+	set.AddFunction(kurtosis_samp_fun);
+
+	AggregateFunctionSet kurtosis_pop_fun("kurtosis_pop");
+	kurtosis_pop_fun.AddFunction(
+		AggregateFunction::UnaryAggregate<KurtosisState, double, double, KurtosisOperation<KurtosisFlagNoBiasCorrection>>(
+			LogicalType::DOUBLE, LogicalType::DOUBLE
+		)
+	);
+	set.AddFunction(kurtosis_pop_fun);
 }
 
 } // namespace duckdb
