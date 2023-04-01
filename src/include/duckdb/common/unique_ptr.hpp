@@ -2,6 +2,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/likely.hpp"
+#include "duckdb/common/warn.hpp"
 
 #include <memory>
 #include <type_traits>
@@ -34,10 +35,11 @@ public:
 		return original::get();
 	}
 
-	// This is necessary to tell clang-tidy that it reinitializes the variable after a move
-	[[clang::reinitializes]] inline void reset(typename original::pointer ptr = typename original::pointer()) throw() {
-		original::reset(ptr);
-	}
+	NOWARN(
+	    -Wattributes,
+	    // This is necessary to tell clang-tidy that it reinitializes the variable after a move
+	    [[clang::reinitializes]] inline void reset(
+	        typename original::pointer ptr = typename original::pointer()) throw() { original::reset(ptr); })
 };
 
 template <class _Tp, class _Dp>
