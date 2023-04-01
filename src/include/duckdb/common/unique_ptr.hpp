@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/likely.hpp"
 
 #include <memory>
 #include <type_traits>
@@ -10,7 +11,7 @@ namespace duckdb {
 namespace {
 struct __unique_ptr_utils {
 	static inline void AssertNotNull(void *ptr) {
-		if (!ptr) {
+		if (DUCKDB_UNLIKELY(!ptr)) {
 #ifdef DEBUG
 			throw InternalException("Attempted to dereference unique_ptr that is NULL!");
 #endif
@@ -31,10 +32,13 @@ public:
 	}
 
 	typename original::pointer operator->() const {
-#ifdef DEBUG
 		__unique_ptr_utils::AssertNotNull((void *)original::get());
-#endif
 		return original::get();
+	}
+
+	// This is necessary to tell clang-tidy that it reinitializes the variable after a move
+	[[clang::reinitializes]] inline void reset(typename original::pointer ptr = typename original::pointer()) throw() {
+		original::reset(ptr);
 	}
 };
 

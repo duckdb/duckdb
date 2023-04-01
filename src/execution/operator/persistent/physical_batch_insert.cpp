@@ -192,6 +192,7 @@ public:
 					for (idx_t i = start_batch_index; i <= end_batch_index; i++) {
 						if (i == batch_index) {
 							merge_collections.push_back(std::move(current_collection));
+							current_collection.reset();
 							continue;
 						}
 						auto can_merge = CheckMerge(i, merge_collections);
@@ -204,6 +205,7 @@ public:
 			if (merge_collections.empty()) {
 				// no collections to merge together - add the collection to the batch index
 				collections[batch_index] = std::move(current_collection);
+				current_collection.reset();
 			}
 		}
 		if (!merge_collections.empty()) {
