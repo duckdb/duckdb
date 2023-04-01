@@ -39,7 +39,7 @@ public:
 	    -Wattributes,
 	    // This is necessary to tell clang-tidy that it reinitializes the variable after a move
 	    [[clang::reinitializes]] inline void reset(
-	        typename original::pointer ptr = typename original::pointer()) throw() { original::reset(ptr); })
+	        typename original::pointer ptr = typename original::pointer()) noexcept { original::reset(ptr); })
 };
 
 template <class _Tp, class _Dp>
