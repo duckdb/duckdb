@@ -9,10 +9,9 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 #include <string.h>
 #include <type_traits>
-
-using std::remove_extent;
 
 #ifdef _MSC_VER
 #define suint64_t int64_t
@@ -69,7 +68,7 @@ inline
 typename __unique_if<_Tp>::__unique_array_unknown_bound
 make_uniq(size_t __n)
 {
-    typedef typename remove_extent<_Tp>::type _Up;
+    typedef typename std::remove_extent<_Tp>::type _Up;
     return unique_ptr<_Tp>(new _Up[__n]());
 }
 

@@ -1,6 +1,7 @@
 #include "duckdb/common/pipe_file_system.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 class PipeFile : public FileHandle {
