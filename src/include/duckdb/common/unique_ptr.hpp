@@ -35,11 +35,12 @@ public:
 		return original::get();
 	}
 
-	NOWARN(
-	    -Wattributes,
-	    // This is necessary to tell clang-tidy that it reinitializes the variable after a move
-	    [[clang::reinitializes]] inline void reset(
-	        typename original::pointer ptr = typename original::pointer()) noexcept { original::reset(ptr); })
+	DISABLE_WARN(-Wattributes)
+	// This is necessary to tell clang-tidy that it reinitializes the variable after a move
+	[[clang::reinitializes]] inline void reset(typename original::pointer ptr = typename original::pointer()) noexcept {
+		original::reset(ptr);
+	}
+	RESET_WARN()
 };
 
 template <class _Tp, class _Dp>

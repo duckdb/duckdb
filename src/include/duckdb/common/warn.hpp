@@ -9,8 +9,15 @@
 #pragma once
 
 #define DO_PRAGMA(x) _Pragma(#x)
-#define NOWARN(warnoption, ...)                                                                                        \
+
+#if defined(__GNUC__)
+#define DISABLE_WARN(warnoption)                                                                                       \
 	DO_PRAGMA(GCC diagnostic push)                                                                                     \
-	DO_PRAGMA(GCC diagnostic ignored #warnoption)                                                                      \
-	__VA_ARGS__                                                                                                        \
-	DO_PRAGMA(GCC diagnostic pop)
+	DO_PRAGMA(GCC diagnostic ignored #warnoption)
+#define RESET_WARN() DO_PRAGMA(GCC diagnostic pop)
+#elif defined(__clang__)
+#define DISABLE_WARN(warnoption)                                                                                       \
+	DO_PRAGMA(clang diagnostic push)                                                                                   \
+	DO_PRAGMA(clang diagnostic ignored #warnoption)
+#define RESET_WARN() DO_PRAGMA(clang diagnostic pop)
+#endif
