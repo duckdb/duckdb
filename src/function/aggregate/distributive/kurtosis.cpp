@@ -39,7 +39,7 @@ struct KurtosisOperation {
 
 	/*
 	Formula here is taken from wikipedia:
-		https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Higher-order_statistics
+	    https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Higher-order_statistics
 	But adds a bias correction at the end in the case of sample kurtosis.
 	A reference for the correction can be found on:
 	Joanes, Derrick N., and Christine A. Gill.
@@ -60,8 +60,7 @@ struct KurtosisOperation {
 		if (state->n <= UINT32_MAX) {
 			const uint64_t n_u64 = state->n;
 			n_poly = n_u64 * n_u64 - uint64_t(3) * n_u64 + uint64_t(3);
-		}
-		else {
+		} else {
 			const double n_dbl = state->n;
 			n_poly = n_dbl * n_dbl - 3.0 * n_dbl + 3.0;
 		}
@@ -99,8 +98,7 @@ struct KurtosisOperation {
 
 		if (std::is_same<KurtosisFlag, KurtosisFlagNoBiasCorrection>::value) {
 			target[idx] = (state->n * state->m4) / (state->m2 * state->m2) - 3.0;
-		}
-		else {
+		} else {
 			const double g2 = (state->n * state->m4) / (state->m2 * state->m2);
 			const double cdiff = 3.0 * (state->n - idx_t(1));
 			double ratio;
@@ -108,8 +106,7 @@ struct KurtosisOperation {
 				const uint64_t n_u64 = state->n;
 				const uint64_t div = (n_u64 - uint64_t(2)) * (n_u64 - uint64_t(3));
 				ratio = static_cast<double>(n_u64 - uint64_t(1)) / static_cast<double>(div);
-			}
-			else {
+			} else {
 				const double n_dbl = state->n;
 				ratio = (n_dbl - 1.0) / ((n_dbl - 2.0) * (n_dbl - 3.0));
 			}
@@ -130,26 +127,20 @@ struct KurtosisOperation {
 void KurtosisFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet kurtosis_fun("kurtosis");
 	kurtosis_fun.AddFunction(
-		AggregateFunction::UnaryAggregate<KurtosisState, double, double, KurtosisOperation<KurtosisFlagBiasCorrection>>(
-			LogicalType::DOUBLE, LogicalType::DOUBLE
-		)
-	);
+	    AggregateFunction::UnaryAggregate<KurtosisState, double, double, KurtosisOperation<KurtosisFlagBiasCorrection>>(
+	        LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(kurtosis_fun);
 
 	AggregateFunctionSet kurtosis_samp_fun("kurtosis_samp");
 	kurtosis_samp_fun.AddFunction(
-		AggregateFunction::UnaryAggregate<KurtosisState, double, double, KurtosisOperation<KurtosisFlagBiasCorrection>>(
-			LogicalType::DOUBLE, LogicalType::DOUBLE
-		)
-	);
+	    AggregateFunction::UnaryAggregate<KurtosisState, double, double, KurtosisOperation<KurtosisFlagBiasCorrection>>(
+	        LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(kurtosis_samp_fun);
 
 	AggregateFunctionSet kurtosis_pop_fun("kurtosis_pop");
-	kurtosis_pop_fun.AddFunction(
-		AggregateFunction::UnaryAggregate<KurtosisState, double, double, KurtosisOperation<KurtosisFlagNoBiasCorrection>>(
-			LogicalType::DOUBLE, LogicalType::DOUBLE
-		)
-	);
+	kurtosis_pop_fun.AddFunction(AggregateFunction::UnaryAggregate<KurtosisState, double, double,
+	                                                               KurtosisOperation<KurtosisFlagNoBiasCorrection>>(
+	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(kurtosis_pop_fun);
 }
 
