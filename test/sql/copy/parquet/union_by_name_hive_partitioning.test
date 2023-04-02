@@ -1,0 +1,99 @@
+# name: test/sql/copy/parquet/union_by_name_hive_partitioning.test
+# description: Test union by name with hive partitioning
+# group: [parquet]
+
+require parquet
+
+statement error
+SELECT * FROM read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/*.parquet', hive_partitioning=1)
+----
+schema mismatch
+
+query IIII
+SELECT i, j, k, x
+FROM read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/*.parquet', hive_partitioning=0, union_by_name=1)
+ORDER BY j, x NULLS LAST
+----
+42	84	NULL	1
+42	84	NULL	NULL
+NULL	128	33	NULL
+
+query IIII
+SELECT i, j, k, x
+FROM read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/*.parquet', hive_partitioning=1, union_by_name=1)
+ORDER BY j
+----
+42	84	NULL	1
+42	84	NULL	1
+NULL	128	33	2
+
+query IIII
+SELECT i, j, k, x
+FROM read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/*.parquet', hive_partitioning=1, union_by_name=1)
+WHERE x=2
+ORDER BY j
+----
+NULL	128	33	2
+
+query IIII
+SELECT i, j, k, x
+FROM read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/f2.parquet', hive_partitioning=1, union_by_name=1)
+ORDER BY j
+----
+42	84	NULL	1
+NULL	128	33	2
+
+query IIII
+SELECT i, j, k, x
+FROM read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/f2.parquet', hive_partitioning=1, union_by_name=1)
+WHERE k IS NULL
+ORDER BY j
+----
+42	84	NULL	1
+
+query IIII
+SELECT i, j, k, x
+FROM read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/f2.parquet', hive_partitioning=1, union_by_name=1)
+WHERE k IS NOT DISTINCT FROM NULL
+ORDER BY j
+----
+42	84	NULL	1
+
+query IIII
+SELECT i, j, k, x
+FROM read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/f2.parquet', hive_partitioning=1, union_by_name=1)
+WHERE k>0
+ORDER BY j
+----
+NULL	128	33	2
+
+query IIIII
+SELECT i, j, k, x, filename.replace('\', '/').split('/')[-2]
+FROM read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/f2.parquet', hive_partitioning=1, union_by_name=1, filename=1)
+WHERE k>0
+ORDER BY j
+----
+NULL	128	33	2	x=2
+
+query IIIII
+SELECT i, j, k, x, filename.replace('\', '/').split('/')[-2]
+FROM read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/f2.parquet', hive_partitioning=1, union_by_name=1, filename=1)
+WHERE filename.replace('\', '/') >= 'data/parquet-testing/hive-partitioning/union_by_name/x=2'
+ORDER BY j
+----
+NULL	128	33	2	x=2
+
+query IIIII
+SELECT i, j, k, x, filename.replace('\', '/').split('/')[-2]
+FROM read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/f2.parquet', hive_partitioning=1, union_by_name=1, filename=1)
+WHERE filename.replace('\', '/') < 'data/parquet-testing/hive-partitioning/union_by_name/x=2'
+ORDER BY j
+----
+42	84	NULL	1	x=1
+
+query IIIII
+SELECT i, j, k, x, filename.replace('\', '/').split('/')[-2]
+FROM read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/f2.parquet', hive_partitioning=1, union_by_name=1, filename=1)
+WHERE filename.replace('\', '/') < 'data/parquet-testing/hive-partitioning/union_by_name/x=1'
+ORDER BY j
+----
