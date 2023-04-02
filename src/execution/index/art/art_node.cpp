@@ -1,5 +1,6 @@
 #include "duckdb/execution/index/art/art_node.hpp"
 
+#include "duckdb/common/swap.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
@@ -39,13 +40,14 @@ void ARTNode::New(ART &art, ARTNode &node, const ARTNodeType &type) {
 		Node256::New(art, node);
 		break;
 	default:
-		throw InternalException("Invalid node type for Initialize.");
+		throw InternalException("Invalid node type for New.");
 	}
 }
 
 void ARTNode::Free(ART &art, ARTNode &node) {
 
 	// recursively free all nodes that are in-memory, and skip swizzled and empty nodes
+
 	if (!node) {
 		return;
 	}
@@ -78,7 +80,7 @@ void ARTNode::Free(ART &art, ARTNode &node) {
 			art.n256_nodes->Free(position);
 			break;
 		default:
-			throw InternalException("Invalid node type for Delete.");
+			throw InternalException("Invalid node type for Free.");
 		}
 	}
 
@@ -176,8 +178,7 @@ ARTNode *ARTNode::GetChild(ART &art, const idx_t &position) const {
 
 	// unswizzle the ART node before returning it
 	if (child->IsSwizzled()) {
-		auto block = child->GetBlockInfo();
-		child->Deserialize(art, block.block_id, block.offset);
+		child->Deserialize(art, child->GetBlockPointer());
 	}
 	return child;
 }
@@ -301,8 +302,7 @@ BlockPointer ARTNode::Serialize(ART &art, MetaBlockWriter &writer) {
 	}
 
 	if (IsSwizzled()) {
-		auto block = GetBlockInfo();
-		Deserialize(art, block.block_id, block.offset);
+		Deserialize(art, GetBlockPointer());
 	}
 
 	switch (DecodeARTNodeType()) {
@@ -321,10 +321,10 @@ BlockPointer ARTNode::Serialize(ART &art, MetaBlockWriter &writer) {
 	}
 }
 
-void ARTNode::Deserialize(ART &art, idx_t block_id, idx_t offset) {
+void ARTNode::Deserialize(ART &art, const BlockPointer &block) {
 
-	MetaBlockReader reader(art.table_io_manager.GetIndexBlockManager(), block_id);
-	reader.offset = offset;
+	MetaBlockReader reader(art.table_io_manager.GetIndexBlockManager(), block.block_id);
+	reader.offset = block.offset;
 
 	auto type_byte = reader.Read<uint8_t>();
 	ARTNodeType type((ARTNodeType)(type_byte));
@@ -395,8 +395,7 @@ idx_t ARTNode::GetCapacity() const {
 Prefix *ARTNode::GetPrefix(ART &art) {
 
 	if (IsSwizzled()) {
-		auto block_info = GetBlockInfo();
-		Deserialize(art, block_info.block_id, block_info.offset);
+		Deserialize(art, GetBlockPointer());
 	}
 
 	D_ASSERT(!IsSwizzled());
@@ -440,8 +439,7 @@ void ARTNode::InitializeMerge(ART &art, const vector<idx_t> &buffer_counts) {
 	}
 
 	if (IsSwizzled()) {
-		auto block_info = GetBlockInfo();
-		Deserialize(art, block_info.block_id, block_info.offset);
+		Deserialize(art, GetBlockPointer());
 	}
 
 	// if not all prefixes are inlined
@@ -499,10 +497,9 @@ bool ARTNode::ResolvePrefixes(ART &art, ARTNode &other) {
 
 	// make sure that r_node has the longer (or equally long) prefix
 	if (GetPrefix(art)->count > other.GetPrefix(art)->count) {
-		std::swap(*this, other);
+		swap(*this, other);
 	}
 
-	ARTNode null_parent;
 	auto &l_node = *this;
 	auto &r_node = other;
 	auto l_prefix = l_node.GetPrefix(art);
@@ -569,7 +566,7 @@ bool ARTNode::MergeInternal(ART &art, ARTNode &other) {
 	// because maybe there is enough free space in the bigger node to fit the smaller one
 	// without too much recursion
 	if (this->DecodeARTNodeType() < other.DecodeARTNodeType()) {
-		std::swap(*this, other);
+		swap(*this, other);
 	}
 
 	ARTNode empty_node;
@@ -620,20 +617,20 @@ bool ARTNode::MergeInternal(ART &art, ARTNode &other) {
 // Vacuum
 //===--------------------------------------------------------------------===//
 
-void ARTNode::Vacuum(ART &art, ARTNode &node, const vector<bool> &vacuum_nodes) {
+void ARTNode::Vacuum(ART &art, ARTNode &node, const vector<bool> &vacuum_flags) {
 
 	if (node.IsSwizzled()) {
 		return;
 	}
 
 	// possibly vacuum prefix segments, if not all prefixes are inlined
-	if (vacuum_nodes[(uint8_t)ARTNodeType::PREFIX_SEGMENT - 1] != 0) {
+	if (vacuum_flags[(uint8_t)ARTNodeType::PREFIX_SEGMENT - 1] != 0) {
 		// vacuum prefix segments
 		node.GetPrefix(art)->Vacuum(art);
 	}
 
 	auto type = node.DecodeARTNodeType();
-	auto needs_vacuum = vacuum_nodes[(uint8_t)type - 1];
+	auto needs_vacuum = vacuum_flags[(uint8_t)type - 1];
 	auto ptr = node.GetPtr();
 
 	switch (type) {
@@ -642,7 +639,7 @@ void ARTNode::Vacuum(ART &art, ARTNode &node, const vector<bool> &vacuum_nodes) 
 			node.SetPtr(art.leaves->Vacuum(ptr), type);
 		}
 		// possibly vacuum leaf segments, if not all leaves are inlined
-		if (vacuum_nodes[(uint8_t)ARTNodeType::LEAF_SEGMENT - 1] != 0) {
+		if (vacuum_flags[(uint8_t)ARTNodeType::LEAF_SEGMENT - 1] != 0) {
 			art.leaves->Get<Leaf>(node.GetPtr())->Vacuum(art);
 		}
 		return;
@@ -651,22 +648,22 @@ void ARTNode::Vacuum(ART &art, ARTNode &node, const vector<bool> &vacuum_nodes) 
 		if (needs_vacuum && art.n4_nodes->NeedsVacuum(ptr)) {
 			node.SetPtr(art.n4_nodes->Vacuum(ptr), type);
 		}
-		return art.n4_nodes->Get<Node4>(node.GetPtr())->Vacuum(art, vacuum_nodes);
+		return art.n4_nodes->Get<Node4>(node.GetPtr())->Vacuum(art, vacuum_flags);
 	case ARTNodeType::NODE_16:
 		if (needs_vacuum && art.n16_nodes->NeedsVacuum(ptr)) {
 			node.SetPtr(art.n16_nodes->Vacuum(ptr), type);
 		}
-		return art.n16_nodes->Get<Node16>(node.GetPtr())->Vacuum(art, vacuum_nodes);
+		return art.n16_nodes->Get<Node16>(node.GetPtr())->Vacuum(art, vacuum_flags);
 	case ARTNodeType::NODE_48:
 		if (needs_vacuum && art.n48_nodes->NeedsVacuum(ptr)) {
 			node.SetPtr(art.n48_nodes->Vacuum(ptr), type);
 		}
-		return art.n48_nodes->Get<Node48>(node.GetPtr())->Vacuum(art, vacuum_nodes);
+		return art.n48_nodes->Get<Node48>(node.GetPtr())->Vacuum(art, vacuum_flags);
 	case ARTNodeType::NODE_256:
 		if (needs_vacuum && art.n256_nodes->NeedsVacuum(ptr)) {
 			node.SetPtr(art.n256_nodes->Vacuum(ptr), type);
 		}
-		return art.n256_nodes->Get<Node256>(node.GetPtr())->Vacuum(art, vacuum_nodes);
+		return art.n256_nodes->Get<Node256>(node.GetPtr())->Vacuum(art, vacuum_flags);
 	default:
 		throw InternalException("Invalid node type for Vacuum.");
 	}

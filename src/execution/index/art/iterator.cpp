@@ -232,14 +232,14 @@ bool Iterator::LowerBound(ARTNode node, const Key &key, const bool &is_inclusive
 
 		// equal case:
 		node_prefix = node.GetPrefix(*art);
-		uint32_t mismatch_pos = node_prefix->KeyMismatchPosition(*art, key, depth);
+		auto mismatch_pos = node_prefix->KeyMismatchPosition(*art, key, depth);
 		if (mismatch_pos != node_prefix->count) {
 			if (node_prefix->GetByte(*art, mismatch_pos) < key[depth + mismatch_pos]) {
-				// Less
+				// less
 				PopNode();
 				return Next();
 			}
-			// Greater
+			// greater
 			top.position = DConstants::INVALID_INDEX;
 			return Next();
 		}

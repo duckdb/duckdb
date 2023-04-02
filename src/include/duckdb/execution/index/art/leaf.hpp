@@ -60,7 +60,7 @@ public:
 	inline bool IsInlined() const {
 		return count <= 1;
 	}
-	//! Get the row ID at pos
+	//! Get the row ID at the position
 	row_t GetRowId(ART &art, const idx_t &position) const;
 	//! Returns the position of a row ID, and an invalid index, if the leaf does not contain the row ID
 	uint32_t FindRowId(ART &art, idx_t &position, const row_t &row_id) const;
@@ -78,7 +78,7 @@ public:
 
 private:
 	//! Moves the inlined row ID onto a leaf segment, does not change the size
-	//! so this will be an (temporarily) invalid leaf
+	//! so this will be a (temporarily) invalid leaf
 	void MoveInlinedToSegment(ART &art);
 };
 

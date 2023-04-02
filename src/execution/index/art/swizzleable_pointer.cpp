@@ -29,7 +29,7 @@ SwizzleablePointer::SwizzleablePointer(MetaBlockReader &reader) {
 	pointer |= mask;
 }
 
-BlockPointer SwizzleablePointer::GetBlockInfo() {
+BlockPointer SwizzleablePointer::GetBlockPointer() {
 
 	D_ASSERT(IsSwizzled());
 	idx_t pointer_size = sizeof(pointer) * 8;

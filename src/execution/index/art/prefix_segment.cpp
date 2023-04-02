@@ -11,7 +11,6 @@ PrefixSegment::PrefixSegment() : next(0) {
 
 PrefixSegment *PrefixSegment::Initialize(ART &art, const idx_t &position) {
 	auto segment = PrefixSegment::Get(art, position);
-
 	segment->next = DConstants::INVALID_INDEX;
 	return segment;
 }
@@ -35,10 +34,8 @@ PrefixSegment *PrefixSegment::Append(ART &art, uint32_t &count, const uint8_t &b
 PrefixSegment *PrefixSegment::GetTail(ART &art) {
 
 	auto segment = this;
-	auto position = next;
-	while (position != DConstants::INVALID_INDEX) {
-		segment = PrefixSegment::Get(art, position);
-		position = segment->next;
+	while (segment->next != DConstants::INVALID_INDEX) {
+		segment = PrefixSegment::Get(art, segment->next);
 	}
 	return segment;
 }

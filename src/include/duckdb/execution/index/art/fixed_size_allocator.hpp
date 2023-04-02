@@ -39,10 +39,10 @@ public:
 	//! Other constants
 	static constexpr idx_t BUFFER_ALLOCATION_SIZE = Storage::BLOCK_ALLOC_SIZE;
 	static constexpr uint8_t OFFSET_SHIFT = sizeof(uint8_t) * 8 * 4;
-	// we can vacuum 10% or more of the ARTs total memory usage
+	//! We can vacuum 10% or more of the total memory usage of the allocator
 	static constexpr uint8_t VACUUM_THRESHOLD = 10;
 
-	//! Constants for offset calculations
+	//! Constants for fast offset calculations in the bitmask
 	static constexpr idx_t BASE[] = {0x00000000FFFFFFFF, 0x0000FFFF, 0x00FF, 0x0F, 0x3, 0x1};
 	static constexpr uint8_t SHIFT[] = {32, 16, 8, 4, 2, 1};
 
@@ -98,7 +98,7 @@ public:
 
 	//! Initialize a vacuum operation, and return true, if the allocator needs a vacuum
 	bool InitializeVacuum();
-	//! Finalize a vacuum operation by freeing all buffers exceeding vacuum_threshold
+	//! Finalize a vacuum operation by freeing all buffers exceeding the vacuum_threshold
 	void FinalizeVacuum();
 	//! Returns true, if a position qualifies for a vacuum operation, and false otherwise
 	inline bool NeedsVacuum(const idx_t &position) const {

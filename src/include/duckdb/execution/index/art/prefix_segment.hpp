@@ -24,10 +24,12 @@ public:
 	//! The position of the next segment, if the prefix exceeds this segment
 	idx_t next;
 
+public:
 	//! Get a new pointer to a prefix segment, might cause a new buffer allocation
 	static inline void New(ART &art, idx_t &new_position) {
 		art.prefix_segments->New(new_position);
 	}
+	//! Return a new pointer to a prefix segment, might cause a new buffer allocation
 	static inline idx_t New(ART &art) {
 		return art.prefix_segments->New();
 	}

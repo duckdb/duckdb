@@ -388,8 +388,6 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetaBlockReader &reader
 		auto art = make_unique<ART>(info->column_ids, TableIOManager::Get(storage), std::move(unbound_expressions),
 		                            info->constraint_type, storage.db, root_block_id, root_offset);
 		index_catalog->index = art.get();
-
-		// NOTE: lazy loading: no vacuum required
 		storage.info->indexes.AddIndex(std::move(art));
 		break;
 	}

@@ -84,6 +84,6 @@ public:
 	void Deserialize(ART &art, MetaBlockReader &reader);
 
 	//! Vacuum the children of the node
-	void Vacuum(ART &art, const vector<bool> &vacuum_nodes);
+	void Vacuum(ART &art, const vector<bool> &vacuum_flags);
 };
 } // namespace duckdb

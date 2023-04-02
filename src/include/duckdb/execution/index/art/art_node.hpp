@@ -66,12 +66,12 @@ public:
 	//! Set the leftmost byte to contain the node type
 	inline void EncodeARTNodeType(const ARTNodeType &type) {
 		// left shift the type by 7 bytes
-		auto type_64_bit = (idx_t)type;
-		type_64_bit <<= ((sizeof(idx_t) - sizeof(uint8_t)) * 8);
+		auto type_as_idx_t = (idx_t)type;
+		type_as_idx_t <<= ((sizeof(idx_t) - sizeof(uint8_t)) * 8);
 
 		// ensure that we do not overwrite any bits
 		D_ASSERT((pointer & FixedSizeAllocator::BUFFER_ID_AND_OFFSET_TO_ZERO) == 0);
-		pointer |= type_64_bit;
+		pointer |= type_as_idx_t;
 		D_ASSERT(DecodeARTNodeType() == type);
 	}
 	//! Retrieve the node type from the leftmost byte
@@ -90,14 +90,14 @@ public:
 		EncodeARTNodeType(type);
 	}
 
-	//! Replace a child node at pos
+	//! Replace the child node at pos
 	void ReplaceChild(ART &art, const idx_t &position, ARTNode &child);
-	//! Insert a child node at byte
+	//! Insert the child node at byte
 	static void InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child);
 	//! Delete the child node at pos
 	static void DeleteChild(ART &art, ARTNode &node, idx_t position);
 
-	//! Get the child at the specified position in the node. pos must be between [0, count)
+	//! Get the child at the specified position in the node. The position must be between [0, count)
 	ARTNode *GetChild(ART &art, const idx_t &position) const;
 	//! Get the byte at the specified position
 	uint8_t GetKeyByte(ART &art, const idx_t &position) const;
@@ -116,23 +116,23 @@ public:
 	//! DConstants::INVALID_INDEX, then the first valid position and byte in the node are returned
 	idx_t GetNextPositionAndByte(ART &art, idx_t pos, uint8_t &byte) const;
 
-	//! Serialize an ART node
+	//! Serialize the node
 	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);
-	//! Deserialize this node
-	void Deserialize(ART &art, idx_t block_id, idx_t offset);
+	//! Deserialize the node
+	void Deserialize(ART &art, const BlockPointer &block);
 
-	//! Returns the string representation of a node
+	//! Returns the string representation of the node
 	string ToString(ART &art) const;
-	//! Returns the capacity of a node
+	//! Returns the capacity of the node
 	idx_t GetCapacity() const;
-	//! Returns a pointer to the prefix of a node
+	//! Returns a pointer to the prefix of the node
 	Prefix *GetPrefix(ART &art);
 	//! Returns the matching node type for a given count
 	static ARTNodeType GetARTNodeTypeByCount(const idx_t &count);
 
-	//! Initializes a merge by fully deserializing the subtree of a node and incrementing its buffer IDs
+	//! Initializes a merge by fully deserializing the subtree of the node and incrementing its buffer IDs
 	void InitializeMerge(ART &art, const vector<idx_t> &buffer_counts);
-	//! Merge a node into this node
+	//! Merge another node into this node
 	bool Merge(ART &art, ARTNode &other);
 	//! Merge two nodes by first resolving their prefixes
 	bool ResolvePrefixes(ART &art, ARTNode &other);
@@ -140,7 +140,7 @@ public:
 	bool MergeInternal(ART &art, ARTNode &other);
 
 	//! Vacuum all nodes that exceed their respective vacuum thresholds
-	static void Vacuum(ART &art, ARTNode &node, const vector<bool> &vacuum_nodes);
+	static void Vacuum(ART &art, ARTNode &node, const vector<bool> &vacuum_flags);
 };
 
 } // namespace duckdb

@@ -13,6 +13,7 @@
 #include "duckdb/common/unordered_set.hpp"
 
 namespace duckdb {
+
 class DataTable;
 
 struct DeleteInfo;
@@ -23,7 +24,7 @@ public:
 	CleanupState();
 	~CleanupState();
 
-	// data for index vacuum
+	// all tables with indexes that possibly need a vacuum (after e.g. a delete)
 	unordered_set<DataTable *> indexed_tables;
 
 public:

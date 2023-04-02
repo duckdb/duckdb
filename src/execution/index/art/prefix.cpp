@@ -50,9 +50,6 @@ void Prefix::Initialize(ART &art, const Key &key, const uint32_t &depth, const u
 		segment = segment->Append(art, count, key.data[depth + i]);
 	}
 	D_ASSERT(count == count_p);
-
-	// NOTE: we do not increase the memory size for a prefix, because a prefix is assumed to be part
-	// of another node, and already accounted for when tracking the memory size of that node
 }
 
 void Prefix::Initialize(ART &art, const Prefix &other, const uint32_t &count_p) {
@@ -220,7 +217,7 @@ uint8_t Prefix::Reduce(ART &art, const idx_t &n) {
 		src_segment = PrefixSegment::Get(art, src_segment->next);
 	}
 
-	// iterate all segments starting at the source segment and copy, i.e. shift, their data
+	// iterate all segments starting at the source segment and shift their data
 	auto dst_segment = PrefixSegment::Get(art, data.position);
 	while (true) {
 		auto copy_count = MinValue(ARTNode::PREFIX_SEGMENT_SIZE - offset, remaining);
@@ -434,7 +431,7 @@ void Prefix::MoveInlinedToSegment(ART &art) {
 
 	// move data
 	D_ASSERT(ARTNode::PREFIX_SEGMENT_SIZE >= ARTNode::PREFIX_INLINE_BYTES);
-	memmove(segment->bytes, data.inlined, count);
+	memcpy(segment->bytes, data.inlined, count);
 	data.position = position;
 }
 
@@ -447,7 +444,7 @@ void Prefix::MoveSegmentToInlined(ART &art) {
 	auto segment = PrefixSegment::Get(art, data.position);
 
 	// move data
-	memmove(data.inlined, segment->bytes, count);
+	memcpy(data.inlined, segment->bytes, count);
 
 	// free segment
 	PrefixSegment::Free(art, position);

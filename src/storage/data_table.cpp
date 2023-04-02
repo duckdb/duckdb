@@ -1215,7 +1215,6 @@ void DataTable::WALAddIndex(ClientContext &context, unique_ptr<Index> index,
 		}
 	}
 
-	// NOTE: sequential insertions: no vacuum required
 	info->indexes.AddIndex(std::move(index));
 }
 

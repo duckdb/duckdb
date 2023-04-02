@@ -54,7 +54,8 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	// set the root node of the tree
 	tree.Reset();
 	if (block_id != DConstants::INVALID_INDEX) {
-		tree.Deserialize(*this, block_id, block_offset);
+		BlockPointer block(block_id, block_offset);
+		tree.Deserialize(*this, block);
 		UpdateMemoryUsage();
 	}
 	serialized_data_pointer = BlockPointer(block_id, block_offset);
@@ -1003,10 +1004,10 @@ vector<bool> ART::InitializeVacuum(vector<FixedSizeAllocator *> &allocators) {
 	return vacuum_nodes;
 }
 
-void ART::FinalizeVacuum(vector<FixedSizeAllocator *> &allocators, vector<bool> &vacuum_nodes) {
+void ART::FinalizeVacuum(vector<FixedSizeAllocator *> &allocators, vector<bool> &vacuum_flags) {
 
 	for (idx_t i = 0; i < allocators.size(); i++) {
-		if (vacuum_nodes[i]) {
+		if (vacuum_flags[i]) {
 			allocators[i]->FinalizeVacuum();
 		}
 	}
@@ -1028,13 +1029,13 @@ void ART::Vacuum(IndexLock &state) {
 		return;
 	}
 
-	// vacuum nodes holds true, if an allocator needs a vacuum, and false otherwise
-	auto vacuum_nodes = InitializeVacuum(allocators);
+	// holds true, if an allocator needs a vacuum, and false otherwise
+	auto vacuum_flags = InitializeVacuum(allocators);
 
 	// skip vacuum if no allocators require it
 	auto perform_vacuum = false;
-	for (const auto &vacuum_node : vacuum_nodes) {
-		if (vacuum_node) {
+	for (const auto &vacuum_flag : vacuum_flags) {
+		if (vacuum_flag) {
 			perform_vacuum = true;
 			break;
 		}
@@ -1044,10 +1045,10 @@ void ART::Vacuum(IndexLock &state) {
 	}
 
 	// traverse the allocated memory of the tree to perform a vacuum
-	ARTNode::Vacuum(*this, tree, vacuum_nodes);
+	ARTNode::Vacuum(*this, tree, vacuum_flags);
 
 	// finalize the vacuum operation
-	FinalizeVacuum(allocators, vacuum_nodes);
+	FinalizeVacuum(allocators, vacuum_flags);
 	UpdateMemoryUsage();
 }
 

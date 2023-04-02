@@ -11,7 +11,6 @@ namespace duckdb {
 Node256 *Node256::New(ART &art, ARTNode &node) {
 
 	node.SetPtr(art.n256_nodes->New(), ARTNodeType::NODE_256);
-
 	auto n256 = art.n256_nodes->Get<Node256>(node.GetPtr());
 
 	n256->count = 0;
@@ -31,12 +30,14 @@ void Node256::Free(ART &art, ARTNode &node) {
 
 	auto n256 = art.n256_nodes->Get<Node256>(node.GetPtr());
 
+	if (!n256->count) {
+		return;
+	}
+
 	// free all children
-	if (n256->count) {
-		for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
-			if (n256->children[i]) {
-				ARTNode::Free(art, n256->children[i]);
-			}
+	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
+		if (n256->children[i]) {
+			ARTNode::Free(art, n256->children[i]);
 		}
 	}
 }
@@ -77,10 +78,8 @@ void Node256::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode 
 	D_ASSERT(!node.IsSwizzled());
 	auto n256 = art.n256_nodes->Get<Node256>(node.GetPtr());
 
-#ifdef DEBUG
 	// ensure that there is no other child at the same byte
 	D_ASSERT(!n256->children[byte]);
-#endif
 
 	n256->count++;
 	n256->children[byte] = child;
@@ -106,10 +105,7 @@ void Node256::DeleteChild(ART &art, ARTNode &node, idx_t position) {
 idx_t Node256::GetChildPositionGreaterEqual(const uint8_t &byte, bool &inclusive) const {
 	for (idx_t position = byte; position < ARTNode::NODE_256_CAPACITY; position++) {
 		if (children[position]) {
-			inclusive = false;
-			if (position == byte) {
-				inclusive = true;
-			}
+			inclusive = position == byte;
 			return position;
 		}
 	}
@@ -180,11 +176,11 @@ void Node256::Deserialize(ART &art, MetaBlockReader &reader) {
 	}
 }
 
-void Node256::Vacuum(ART &art, const vector<bool> &vacuum_nodes) {
+void Node256::Vacuum(ART &art, const vector<bool> &vacuum_flags) {
 
 	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
 		if (children[i]) {
-			ARTNode::Vacuum(art, children[i], vacuum_nodes);
+			ARTNode::Vacuum(art, children[i], vacuum_flags);
 		}
 	}
 }

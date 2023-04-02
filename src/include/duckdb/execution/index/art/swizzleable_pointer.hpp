@@ -33,8 +33,8 @@ public:
 	inline bool IsSwizzled() const {
 		return (pointer >> (sizeof(pointer) * 8 - 1)) & 1;
 	}
-	//! Get the block info from a swizzled pointer
-	BlockPointer GetBlockInfo();
+	//! Get the block pointer from a swizzled pointer
+	BlockPointer GetBlockPointer();
 	//! Returns true, if the pointer is set, else false
 	inline explicit operator bool() const {
 		return pointer;

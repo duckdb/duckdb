@@ -12,7 +12,6 @@ namespace duckdb {
 Leaf *Leaf::New(ART &art, ARTNode &node, const Key &key, const uint32_t &depth, const row_t &row_id) {
 
 	node.SetPtr(art.leaves->New(), ARTNodeType::LEAF);
-
 	auto leaf = art.leaves->Get<Leaf>(node.GetPtr());
 
 	// set the fields of the leaf
@@ -36,7 +35,6 @@ Leaf *Leaf::New(ART &art, ARTNode &node, const Key &key, const uint32_t &depth, 
 	}
 
 	node.SetPtr(art.leaves->New(), ARTNodeType::LEAF);
-
 	auto leaf = art.leaves->Get<Leaf>(node.GetPtr());
 
 	// set the fields of the leaf
@@ -112,7 +110,6 @@ void Leaf::Merge(ART &art, ARTNode &other) {
 		// row ID was inlined, move to a new segment
 		auto position = LeafSegment::New(art);
 		segment = LeafSegment::Initialize(art, position);
-		D_ASSERT(ARTNode::LEAF_SEGMENT_SIZE >= 1);
 		segment->row_ids[0] = row_ids.inlined;
 		row_ids.position = position;
 	} else {
@@ -157,7 +154,8 @@ void Leaf::Insert(ART &art, const row_t &row_id) {
 
 	// append to the tail
 	auto first_segment = LeafSegment::Get(art, row_ids.position);
-	first_segment->GetTail(art)->Append(art, count, row_id);
+	auto tail = first_segment->GetTail(art);
+	tail->Append(art, count, row_id);
 }
 
 void Leaf::Remove(ART &art, const row_t &row_id) {
@@ -180,15 +178,14 @@ void Leaf::Remove(ART &art, const row_t &row_id) {
 			return;
 		}
 
-		auto temp_row_id = segment->row_ids[0] == row_id ? segment->row_ids[1] : segment->row_ids[0];
-
+		auto remaining_row_id = segment->row_ids[0] == row_id ? segment->row_ids[1] : segment->row_ids[0];
 		LeafSegment::Free(art, row_ids.position);
-		row_ids.inlined = temp_row_id;
+		row_ids.inlined = remaining_row_id;
 		count--;
 		return;
 	}
 
-	// find the row ID, and the segment containing that row ID
+	// find the row ID, and the segment containing that row ID (stored in position)
 	auto position = row_ids.position;
 	auto copy_idx = FindRowId(art, position, row_id);
 	if (copy_idx == (uint32_t)DConstants::INVALID_INDEX) {
@@ -227,7 +224,7 @@ void Leaf::Remove(ART &art, const row_t &row_id) {
 		position = segment->next;
 	}
 
-	// true, if we need to delete the last segment
+	// this evaluates to true, if we need to delete the last segment
 	if (count % ARTNode::LEAF_SEGMENT_SIZE == 1) {
 		position = row_ids.position;
 		while (position != DConstants::INVALID_INDEX) {
@@ -237,7 +234,7 @@ void Leaf::Remove(ART &art, const row_t &row_id) {
 			D_ASSERT(segment->next != DConstants::INVALID_INDEX);
 			auto next_segment = LeafSegment::Get(art, segment->next);
 
-			// the segment following next_segment is the tail of the segment list
+			// next_segment is the tail of the segment list
 			if (next_segment->next == DConstants::INVALID_INDEX) {
 				LeafSegment::Free(art, segment->next);
 				segment->next = DConstants::INVALID_INDEX;
@@ -271,12 +268,10 @@ uint32_t Leaf::FindRowId(ART &art, idx_t &position, const row_t &row_id) const {
 
 	D_ASSERT(!IsInlined());
 
-	auto next_position = position;
 	auto remaining = count;
-	while (next_position != DConstants::INVALID_INDEX) {
+	while (position != DConstants::INVALID_INDEX) {
 
-		position = next_position;
-		auto segment = LeafSegment::Get(art, next_position);
+		auto segment = LeafSegment::Get(art, position);
 		auto search_count = MinValue(ARTNode::LEAF_SEGMENT_SIZE, remaining);
 
 		// search in this segment
@@ -288,7 +283,7 @@ uint32_t Leaf::FindRowId(ART &art, idx_t &position, const row_t &row_id) const {
 
 		// adjust loop variables
 		remaining -= search_count;
-		next_position = segment->next;
+		position = segment->next;
 	}
 	return (uint32_t)DConstants::INVALID_INDEX;
 }
@@ -404,7 +399,6 @@ void Leaf::MoveInlinedToSegment(ART &art) {
 	auto segment = LeafSegment::Initialize(art, position);
 
 	// move row ID
-	D_ASSERT(ARTNode::LEAF_SEGMENT_SIZE >= 1);
 	segment->row_ids[0] = row_ids.inlined;
 	row_ids.position = position;
 }

@@ -50,9 +50,12 @@ public:
 	//! Root of the tree
 	ARTNode tree;
 
-	//! Fixed-size allocators for each node type
+	//! Fixed-size allocator for prefixes exceeding eight bytes
 	unique_ptr<FixedSizeAllocator> prefix_segments;
+	//! Fixed-size allocator for not-inlined leaves (more than one row ID)
 	unique_ptr<FixedSizeAllocator> leaf_segments;
+
+	//! Fixed-size allocators for the different node types
 	unique_ptr<FixedSizeAllocator> leaves;
 	unique_ptr<FixedSizeAllocator> n4_nodes;
 	unique_ptr<FixedSizeAllocator> n16_nodes;
@@ -145,7 +148,7 @@ private:
 	vector<bool> InitializeVacuum(vector<FixedSizeAllocator *> &allocators);
 	//! Finalizes a vacuum operation by calling the finalize operation of all qualifying
 	//! fixed size allocators
-	void FinalizeVacuum(vector<FixedSizeAllocator *> &allocators, vector<bool> &vacuum_nodes);
+	void FinalizeVacuum(vector<FixedSizeAllocator *> &allocators, vector<bool> &vacuum_flags);
 };
 
 } // namespace duckdb

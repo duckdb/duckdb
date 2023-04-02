@@ -12,7 +12,6 @@ namespace duckdb {
 Node48 *Node48::New(ART &art, ARTNode &node) {
 
 	node.SetPtr(art.n48_nodes->New(), ARTNodeType::NODE_48);
-
 	auto n48 = art.n48_nodes->Get<Node48>(node.GetPtr());
 
 	n48->count = 0;
@@ -22,6 +21,7 @@ Node48 *Node48::New(ART &art, ARTNode &node) {
 		n48->child_index[i] = ARTNode::EMPTY_MARKER;
 	}
 
+	// necessary for faster child insertion/deletion
 	for (idx_t i = 0; i < ARTNode::NODE_48_CAPACITY; i++) {
 		n48->children[i].Reset();
 	}
@@ -36,12 +36,14 @@ void Node48::Free(ART &art, ARTNode &node) {
 
 	auto n48 = art.n48_nodes->Get<Node48>(node.GetPtr());
 
+	if (!n48->count) {
+		return;
+	}
+
 	// free all children
-	if (n48->count) {
-		for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
-			if (n48->child_index[i] != ARTNode::EMPTY_MARKER) {
-				ARTNode::Free(art, n48->children[n48->child_index[i]]);
-			}
+	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
+		if (n48->child_index[i] != ARTNode::EMPTY_MARKER) {
+			ARTNode::Free(art, n48->children[n48->child_index[i]]);
 		}
 	}
 }
@@ -63,6 +65,7 @@ Node48 *Node48::GrowNode16(ART &art, ARTNode &node48, ARTNode &node16) {
 		n48->children[i] = n16->children[i];
 	}
 
+	// necessary for faster child insertion/deletion
 	for (idx_t i = n16->count; i < ARTNode::NODE_48_CAPACITY; i++) {
 		n48->children[i].Reset();
 	}
@@ -90,6 +93,7 @@ Node48 *Node48::ShrinkNode256(ART &art, ARTNode &node48, ARTNode &node256) {
 		}
 	}
 
+	// necessary for faster child insertion/deletion
 	for (idx_t i = n48->count; i < ARTNode::NODE_48_CAPACITY; i++) {
 		n48->children[i].Reset();
 	}
@@ -114,10 +118,8 @@ void Node48::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &
 	D_ASSERT(!node.IsSwizzled());
 	auto n48 = art.n48_nodes->Get<Node48>(node.GetPtr());
 
-#ifdef DEBUG
 	// ensure that there is no other child at the same byte
 	D_ASSERT(n48->child_index[byte] == ARTNode::EMPTY_MARKER);
-#endif
 
 	// insert new child node into node
 	if (n48->count < ARTNode::NODE_48_CAPACITY) {
@@ -163,10 +165,7 @@ void Node48::DeleteChild(ART &art, ARTNode &node, idx_t position) {
 idx_t Node48::GetChildPositionGreaterEqual(const uint8_t &byte, bool &inclusive) const {
 	for (idx_t position = byte; position < ARTNode::NODE_256_CAPACITY; position++) {
 		if (child_index[position] != ARTNode::EMPTY_MARKER) {
-			inclusive = false;
-			if (position == byte) {
-				inclusive = true;
-			}
+			inclusive = position == byte;
 			return position;
 		}
 	}
@@ -247,11 +246,11 @@ void Node48::Deserialize(ART &art, MetaBlockReader &reader) {
 	}
 }
 
-void Node48::Vacuum(ART &art, const vector<bool> &vacuum_nodes) {
+void Node48::Vacuum(ART &art, const vector<bool> &vacuum_flags) {
 
 	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
 		if (child_index[i] != ARTNode::EMPTY_MARKER) {
-			ARTNode::Vacuum(art, children[child_index[i]], vacuum_nodes);
+			ARTNode::Vacuum(art, children[child_index[i]], vacuum_flags);
 		}
 	}
 }

@@ -12,6 +12,8 @@ constexpr uint8_t FixedSizeAllocator::SHIFT[];
 FixedSizeAllocator::FixedSizeAllocator(const idx_t &allocation_size)
     : allocation_size(allocation_size), total_allocations(0) {
 
+	// calculate how many allocations fit into one buffer
+
 	idx_t bits_per_value = sizeof(validity_t) * 8;
 	idx_t curr_alloc_size = 0;
 
