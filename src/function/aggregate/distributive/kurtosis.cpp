@@ -57,7 +57,7 @@ struct KurtosisOperation {
 		const double term1 = delta * delta_n * n1;
 		// Note: for n<=2^32, this can be calculated more precisely with integer types
 		double n_poly;
-		if (state->n <= UINT32_MAX) {
+		if (state->n > 3 && state->n <= UINT32_MAX) {
 			const uint64_t n_u64 = state->n;
 			n_poly = n_u64 * n_u64 - uint64_t(3) * n_u64 + uint64_t(3);
 		} else {
@@ -102,7 +102,7 @@ struct KurtosisOperation {
 			const double g2 = (state->n * state->m4) / (state->m2 * state->m2);
 			const double cdiff = 3.0 * (state->n - idx_t(1));
 			double ratio;
-			if (state->n <= UINT32_MAX) {
+			if (state->n > 3 && state->n <= UINT32_MAX) {
 				const uint64_t n_u64 = state->n;
 				const uint64_t div = (n_u64 - uint64_t(2)) * (n_u64 - uint64_t(3));
 				ratio = static_cast<double>(n_u64 - uint64_t(1)) / static_cast<double>(div);
@@ -111,7 +111,7 @@ struct KurtosisOperation {
 				ratio = (n_dbl - 1.0) / ((n_dbl - 2.0) * (n_dbl - 3.0));
 			}
 
-			target[idx] = ratio * ((state->n + 1.0) * g2 - cdiff);
+			target[idx] = ratio * ((state->n + idx_t(1)) * g2 - cdiff);
 		}
 
 		if (!Value::DoubleIsFinite(target[idx])) {
