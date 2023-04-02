@@ -1,0 +1,21 @@
+# name: test/sql/attach/attach_pragma_storage_info.test
+# group: [attach]
+
+require skip_reload
+
+load __TEST_DIR__/alter_dependency_conflict.db
+
+statement ok
+ATTACH '__TEST_DIR__/database.db' as persistent;
+
+statement ok
+CREATE OR REPLACE TABLE persistent.T1 (A0 int);
+
+statement ok
+insert into persistent.T1 values (5);
+
+query I
+SELECT column_name from pragma_storage_info('persistent.T1');
+----
+A0
+A0
