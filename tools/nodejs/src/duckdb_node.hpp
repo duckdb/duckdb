@@ -6,6 +6,10 @@
 #include <queue>
 #include <unordered_map>
 
+#include "duckdb/common/vector.hpp"
+
+using duckdb::vector;
+
 namespace node_duckdb {
 
 struct Task {

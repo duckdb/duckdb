@@ -12,20 +12,25 @@
 #include "duckdb/common/constants.hpp"
 #include <vector>
 
-using std::allocator;
-
 namespace duckdb {
 
+// TODO: inline this, needs changes to 'exception.hpp' and other headers to avoid circular dependency
 void AssertIndexInBounds(idx_t index, idx_t size);
 
-template <class _Tp, typename __Allocator = allocator<_Tp>>
-class vector : public std::vector<_Tp, __Allocator> {
+template <class _Tp>
+class vector : public std::vector<_Tp, std::allocator<_Tp>> {
 public:
-	using original = std::vector<_Tp, __Allocator>;
+	using _Allocator = std::allocator<_Tp>;
+	using original = std::vector<_Tp, _Allocator>;
 	using original::original;
 	using size_type = typename original::size_type;
 	using const_reference = typename original::const_reference;
 	using reference = typename original::reference;
+
+	// TODO: add [[ clang:reinitializes ]] attribute
+	inline void clear() noexcept {
+		original::clear();
+	}
 
 	typename original::reference operator[](typename original::size_type __n) {
 #ifdef DEBUG
