@@ -263,7 +263,6 @@ static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, 
 		argv[i] = &ws[i];
 	}
 
-	std::string str;
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 
@@ -272,7 +271,7 @@ static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, 
 		} else {
 			ConstantVector::SetNull(result, false);
 			auto idata = ConstantVector::GetData<string_t>(input);
-			str = idata[0].GetString();
+			auto str = CreateStringPiece(idata[0]);
 			auto match = duckdb_re2::RE2::PartialMatchN(str, lstate.constant_pattern, groups.data(), groups.size());
 			for (size_t col = 0; col < child_entries.size(); ++col) {
 				auto &child_entry = child_entries[col];
@@ -309,7 +308,7 @@ static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, 
 		for (idx_t i = 0; i < count; ++i) {
 			const auto idx = iunified.sel->get_index(i);
 			if (ivalidity.RowIsValid(idx)) {
-				str = idata[idx].GetString();
+				auto str = CreateStringPiece(idata[idx]);
 				auto match = duckdb_re2::RE2::PartialMatchN(str, lstate.constant_pattern, groups.data(), groups.size());
 				for (size_t col = 0; col < child_entries.size(); ++col) {
 					auto &child_entry = child_entries[col];
