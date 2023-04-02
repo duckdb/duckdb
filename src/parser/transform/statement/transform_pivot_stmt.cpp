@@ -65,6 +65,7 @@ unique_ptr<SQLStatement> Transformer::GenerateCreateEnumStmt(unique_ptr<CreatePi
 	select_node->where_clause = std::move(is_not_null);
 
 	// order by the column
+	select_node->modifiers.push_back(make_unique<DistinctModifier>());
 	auto modifier = make_unique<OrderModifier>();
 	modifier->orders.emplace_back(OrderType::ASCENDING, OrderByNullType::ORDER_DEFAULT, std::move(columnref));
 	select_node->modifiers.push_back(std::move(modifier));
