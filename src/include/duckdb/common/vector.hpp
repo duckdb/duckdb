@@ -17,10 +17,9 @@ namespace duckdb {
 // TODO: inline this, needs changes to 'exception.hpp' and other headers to avoid circular dependency
 void AssertIndexInBounds(idx_t index, idx_t size);
 
-template <class _Tp>
-class vector : public std::vector<_Tp, std::allocator<_Tp>> {
+template <class _Tp, class _Allocator = std::allocator<_Tp>>
+class vector : public std::vector<_Tp, _Allocator> {
 public:
-	using _Allocator = std::allocator<_Tp>;
 	using original = std::vector<_Tp, _Allocator>;
 	using original::original;
 	using size_type = typename original::size_type;

@@ -11,15 +11,12 @@
 #pragma once
 
 #include <memory>
-#include <string>
-#include <vector>
 #include "benchmark_configuration.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
-
-using std::string;
-using std::unique_ptr;
-using std::vector;
 
 //! Base class for any state that has to be kept by a Benchmark
 struct BenchmarkState {
