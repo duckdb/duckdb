@@ -21,7 +21,7 @@ struct KurtosisFlagBiasCorrection {};
 
 struct KurtosisFlagNoBiasCorrection {};
 
-template <class KurtosisFlag>
+template <class KURTOSIS_FLAG>
 struct KurtosisOperation {
 	template <class STATE>
 	static void Initialize(STATE *state) {
@@ -96,7 +96,7 @@ struct KurtosisOperation {
 			mask.SetInvalid(idx);
 		} // LCOV_EXCL_STOP
 
-		if (std::is_same<KurtosisFlag, KurtosisFlagNoBiasCorrection>::value) {
+		if (std::is_same<KURTOSIS_FLAG, KurtosisFlagNoBiasCorrection>::value) {
 			target[idx] = (state->n * state->m4) / (state->m2 * state->m2) - 3.0;
 		} else {
 			const double g2 = (state->n * state->m4) / (state->m2 * state->m2);
