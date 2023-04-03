@@ -108,17 +108,29 @@ void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, TupleD
 void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &state, idx_t count) {
 	const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
 	auto &partition_entries = state.partition_entries;
+	auto &partition_entries_arr = state.partition_entries_arr;
 	partition_entries.clear();
+
+	const auto max_partition_index = MaxPartitionIndex();
+	const auto use_arr = max_partition_index < PartitionedTupleDataAppendState::MAP_THRESHOLD;
 
 	switch (state.partition_indices.GetVectorType()) {
 	case VectorType::FLAT_VECTOR:
-		for (idx_t i = 0; i < count; i++) {
-			const auto &partition_index = partition_indices[i];
-			auto partition_entry = partition_entries.find(partition_index);
-			if (partition_entry == partition_entries.end()) {
-				partition_entries[partition_index] = list_entry_t(0, 1);
-			} else {
-				partition_entry->second.length++;
+		if (use_arr) {
+			std::fill_n(partition_entries_arr, max_partition_index + 1, list_entry_t(0, 0));
+			for (idx_t i = 0; i < count; i++) {
+				const auto &partition_index = partition_indices[i];
+				partition_entries_arr[partition_index].length++;
+			}
+		} else {
+			for (idx_t i = 0; i < count; i++) {
+				const auto &partition_index = partition_indices[i];
+				auto partition_entry = partition_entries.find(partition_index);
+				if (partition_entry == partition_entries.end()) {
+					partition_entries.emplace(partition_index, list_entry_t(0, 1));
+				} else {
+					partition_entry->second.length++;
+				}
 			}
 		}
 		break;
@@ -136,18 +148,41 @@ void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &st
 
 	// Compute offsets from the counts
 	idx_t offset = 0;
-	for (auto &pc : partition_entries) {
-		auto &partition_entry = pc.second;
-		partition_entry.offset = offset;
-		offset += partition_entry.length;
+	if (use_arr) {
+		for (idx_t partition_index = 0; partition_index <= max_partition_index; partition_index++) {
+			auto &partition_entry = partition_entries_arr[partition_index];
+			partition_entry.offset = offset;
+			offset += partition_entry.length;
+		}
+	} else {
+		for (auto &pc : partition_entries) {
+			auto &partition_entry = pc.second;
+			partition_entry.offset = offset;
+			offset += partition_entry.length;
+		}
 	}
 
 	// Now initialize a single selection vector that acts as a selection vector for every partition
 	auto &all_partitions_sel = state.partition_sel;
-	for (idx_t i = 0; i < count; i++) {
-		const auto &partition_index = partition_indices[i];
-		auto &partition_offset = partition_entries[partition_index].offset;
-		all_partitions_sel[partition_offset++] = i;
+	if (use_arr) {
+		for (idx_t i = 0; i < count; i++) {
+			const auto &partition_index = partition_indices[i];
+			auto &partition_offset = partition_entries_arr[partition_index].offset;
+			all_partitions_sel[partition_offset++] = i;
+		}
+		// Now just add it to the map anyway so the rest of the functionality is shared
+		for (idx_t partition_index = 0; partition_index <= max_partition_index; partition_index++) {
+			const auto &partition_entry = partition_entries_arr[partition_index];
+			if (partition_entry.length != 0) {
+				partition_entries.emplace(partition_index, partition_entry);
+			}
+		}
+	} else {
+		for (idx_t i = 0; i < count; i++) {
+			const auto &partition_index = partition_indices[i];
+			auto &partition_offset = partition_entries[partition_index].offset;
+			all_partitions_sel[partition_offset++] = i;
+		}
 	}
 }
 

@@ -23,7 +23,10 @@ public:
 public:
 	Vector partition_indices;
 	SelectionVector partition_sel;
+
+	static constexpr idx_t MAP_THRESHOLD = 32;
 	perfect_map_t<list_entry_t> partition_entries;
+	list_entry_t partition_entries_arr[MAP_THRESHOLD];
 
 	vector<unique_ptr<TupleDataPinState>> partition_pin_states;
 	TupleDataChunkState chunk_state;
@@ -92,6 +95,11 @@ protected:
 	virtual void ComputePartitionIndices(Vector &row_locations, idx_t count, Vector &partition_indices) const {
 		throw NotImplementedException("ComputePartitionIndices for this type of PartitionedTupleData");
 	}
+	//! Maximum partition index (optional)
+	virtual idx_t MaxPartitionIndex() const {
+		return DConstants::INVALID_INDEX;
+	}
+
 	//! Whether or not to iterate over the original partitions in reverse order when repartitioning (optional)
 	virtual bool RepartitionReverseOrder() const {
 		return false;
