@@ -70,8 +70,6 @@ struct PivotBindState {
 	vector<string> group_names;
 	vector<string> aggregate_names;
 	vector<string> internal_aggregate_names;
-	vector<string> internal_pivot_names;
-	vector<string> internal_map_names;
 };
 
 static unique_ptr<SelectNode> PivotInitialAggregate(PivotBindState &bind_state, PivotRef &ref,
@@ -161,11 +159,10 @@ static unique_ptr<SelectNode> PivotListAggregate(PivotBindState &bind_state, Piv
 		aggregate->alias = bind_state.internal_aggregate_names[aggr];
 		subquery_stage2->select_list.push_back(std::move(aggregate));
 	}
-	// FIXME: we should have one list for all of these (as a concatenation of strings maybe?)
-	idx_t pivot_count = 0;
+	// construct the pivot list
+	auto pivot_name = "__internal_pivot_name";
+	unique_ptr<ParsedExpression> expr;
 	for (auto &pivot : ref.pivots) {
-		auto pivot_name = "__internal_pivot_name" + to_string(++pivot_count);
-		unique_ptr<ParsedExpression> expr;
 		for (auto &pivot_expr : pivot.pivot_expressions) {
 			// coalesce(pivot::VARCHAR, 'NULL')
 			auto cast = make_unique<CastExpression>(LogicalType::VARCHAR, std::move(pivot_expr));
@@ -187,15 +184,15 @@ static unique_ptr<SelectNode> PivotListAggregate(PivotBindState &bind_state, Piv
 				expr = std::move(concat);
 			}
 		}
-		// list(coalesce)
-		vector<unique_ptr<ParsedExpression>> list_children;
-		list_children.push_back(std::move(expr));
-		auto aggregate = make_unique<FunctionExpression>("list", std::move(list_children));
-
-		aggregate->alias = pivot_name;
-		subquery_stage2->select_list.push_back(std::move(aggregate));
-		bind_state.internal_pivot_names.push_back(std::move(pivot_name));
 	}
+	// list(coalesce)
+	vector<unique_ptr<ParsedExpression>> list_children;
+	list_children.push_back(std::move(expr));
+	auto aggregate = make_unique<FunctionExpression>("list", std::move(list_children));
+
+	aggregate->alias = pivot_name;
+	subquery_stage2->select_list.push_back(std::move(aggregate));
+
 	subquery_stage2->from_table = std::move(subquery_ref);
 	return subquery_stage2;
 }
