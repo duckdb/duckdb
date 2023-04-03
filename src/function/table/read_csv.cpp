@@ -522,9 +522,11 @@ void ParallelCSVGlobalState::UpdateVerification(VerificationPositions positions,
 		if (positions.end_of_last_line > max_tuple_end) {
 			max_tuple_end = positions.end_of_last_line;
 		}
-		if (file_number_p == tuple_start.size()) {
-			tuple_start.emplace_back();
-			tuple_end.emplace_back();
+		if (file_number_p <= tuple_start.size()) {
+			vector<idx_t> empty_tuple_end;
+			set<idx_t> empty_set;
+			tuple_start.emplace_back(empty_set);
+			tuple_end.emplace_back(empty_tuple_end);
 		}
 		tuple_start[file_number_p].insert(positions.beginning_of_first_line);
 		tuple_end[file_number_p].push_back(positions.end_of_last_line);
