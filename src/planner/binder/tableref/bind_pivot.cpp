@@ -295,7 +295,7 @@ unique_ptr<BoundTableRef> Binder::BindBoundPivot(PivotRef &ref) {
 }
 
 unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<ParsedExpression>> all_columns) {
-	const static idx_t PIVOT_EXPRESSION_LIMIT = 10000;
+	const static idx_t PIVOT_EXPRESSION_LIMIT = 100000;
 	// keep track of the columns by which we pivot/aggregate
 	// any columns which are not pivoted/aggregated on are added to the GROUP BY clause
 	case_insensitive_set_t handled_columns;
