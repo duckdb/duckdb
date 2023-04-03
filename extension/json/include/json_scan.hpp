@@ -86,7 +86,6 @@ public:
 	JSONScanData();
 
 	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input);
-	static void InitializeFilePaths(ClientContext &context, const vector<string> &patterns, vector<string> &file_paths);
 	void InitializeFormats();
 
 	void Serialize(FieldWriter &writer);
