@@ -271,7 +271,7 @@ unique_ptr<BoundTableRef> Binder::BindBoundPivot(PivotRef &ref) {
 			auto name = pivot_value.name;
 			if (aggregates.size() > 1 || !aggr_name.empty()) {
 				// if there are multiple aggregates specified we add the name of the aggregate as well
-				name += +"_" + (aggr_name.empty() ? aggr->GetName() : aggr_name);
+				name += "_" + (aggr_name.empty() ? aggr->GetName() : aggr_name);
 			}
 			string pivot_str;
 			for (auto &value : pivot_value.values) {
@@ -291,6 +291,7 @@ unique_ptr<BoundTableRef> Binder::BindBoundPivot(PivotRef &ref) {
 	result->bound_pivot.types = types;
 	auto subquery_alias = ref.alias.empty() ? "__unnamed_pivot" : ref.alias;
 	bind_context.AddGenericBinding(result->bind_index, subquery_alias, names, types);
+	MoveCorrelatedExpressions(*result->child_binder);
 	return result;
 }
 

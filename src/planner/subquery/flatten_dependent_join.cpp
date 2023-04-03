@@ -508,6 +508,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		this->data_offset = 0;
 		return plan;
 	}
+	case LogicalOperatorType::LOGICAL_PIVOT:
+		throw BinderException("PIVOT is not supported in correlated subqueries yet");
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 		plan->children[0] = PushDownDependentJoin(std::move(plan->children[0]));
 		return plan;
