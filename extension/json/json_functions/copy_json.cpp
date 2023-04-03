@@ -113,7 +113,6 @@ CreateCopyFunctionInfo JSONFunctions::GetJSONCopyFunction() {
 
 	function.copy_from_bind = CopyFromJSONBind;
 	function.copy_from_function = JSONFunctions::GetReadJSONTableFunction(
-	    false,
 	    make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT, JSONRecordType::RECORDS, false));
 
 	return CreateCopyFunctionInfo(function);

@@ -15,14 +15,16 @@
 
 namespace duckdb {
 struct ParallelTableScanState;
-
+struct ParallelCollectionScanState;
+class CreateIndexScanState;
+class CollectionScanState;
 class PersistentTableData;
 class TableDataWriter;
 class TableIndexList;
 class TableStatistics;
-
+struct TableAppendState;
+class DuckTransaction;
 class BoundConstraint;
-
 class RowGroupSegmentTree;
 
 class RowGroupCollection {
@@ -48,8 +50,8 @@ public:
 	void InitializeCreateIndexScan(CreateIndexScanState &state);
 	void InitializeScanWithOffset(CollectionScanState &state, const vector<column_t> &column_ids, idx_t start_row,
 	                              idx_t end_row);
-	static bool InitializeScanInRowGroup(CollectionScanState &state, ParallelCollectionScanState &parallel_state,
-	                                     idx_t vector_index, idx_t max_row);
+	static bool InitializeScanInRowGroup(CollectionScanState &state, RowGroupCollection &collection,
+	                                     RowGroup &row_group, idx_t vector_index, idx_t max_row);
 	void InitializeParallelScan(ParallelCollectionScanState &state);
 	bool NextParallelScan(ClientContext &context, ParallelCollectionScanState &state, CollectionScanState &scan_state);
 
@@ -99,6 +101,15 @@ public:
 	unique_ptr<BaseStatistics> CopyStats(column_t column_id);
 	void SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats);
 
+	AttachedDatabase &GetAttached();
+	DatabaseInstance &GetDatabase();
+	BlockManager &GetBlockManager() {
+		return block_manager;
+	}
+	DataTableInfo &GetTableInfo() {
+		return *info;
+	}
+
 private:
 	bool IsEmpty(SegmentLock &) const;
 
@@ -107,7 +118,9 @@ private:
 	BlockManager &block_manager;
 	//! The number of rows in the table
 	atomic<idx_t> total_rows;
+	//! The data table info
 	shared_ptr<DataTableInfo> info;
+	//! The column types of the row group collection
 	vector<LogicalType> types;
 	idx_t row_start;
 	//! The segment trees holding the various row_groups of the table

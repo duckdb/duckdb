@@ -24,6 +24,7 @@
 
 #include "duckdb/storage/compression/chimp/algorithm/flag_buffer.hpp"
 #include "duckdb/storage/compression/chimp/algorithm/leading_zero_buffer.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
 

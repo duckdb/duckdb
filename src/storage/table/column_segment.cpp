@@ -3,13 +3,12 @@
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
-#include "duckdb/planner/filter/null_filter.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 #include <cstring>
 
@@ -217,12 +216,12 @@ void ColumnSegment::MarkAsPersistent(shared_ptr<BlockHandle> block_p, uint32_t o
 // Filter Selection
 //===--------------------------------------------------------------------===//
 template <class T, class OP, bool HAS_NULL>
-static idx_t TemplatedFilterSelection(T *vec, T *predicate, SelectionVector &sel, idx_t approved_tuple_count,
+static idx_t TemplatedFilterSelection(T *vec, T predicate, SelectionVector &sel, idx_t approved_tuple_count,
                                       ValidityMask &mask, SelectionVector &result_sel) {
 	idx_t result_count = 0;
 	for (idx_t i = 0; i < approved_tuple_count; i++) {
 		auto idx = sel.get_index(i);
-		if ((!HAS_NULL || mask.RowIsValid(idx)) && OP::Operation(vec[idx], *predicate)) {
+		if ((!HAS_NULL || mask.RowIsValid(idx)) && OP::Operation(vec[idx], predicate)) {
 			result_sel.set_index(result_count++, idx);
 		}
 	}
@@ -230,7 +229,7 @@ static idx_t TemplatedFilterSelection(T *vec, T *predicate, SelectionVector &sel
 }
 
 template <class T>
-static void FilterSelectionSwitch(T *vec, T *predicate, SelectionVector &sel, idx_t &approved_tuple_count,
+static void FilterSelectionSwitch(T *vec, T predicate, SelectionVector &sel, idx_t &approved_tuple_count,
                                   ExpressionType comparison_type, ValidityMask &mask) {
 	SelectionVector new_sel(approved_tuple_count);
 	// the inplace loops take the result as the last parameter
@@ -371,104 +370,91 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &result, const
 		switch (result.GetType().InternalType()) {
 		case PhysicalType::UINT8: {
 			auto result_flat = FlatVector::GetData<uint8_t>(result);
-			Vector predicate_vector(constant_filter.constant);
-			auto predicate = FlatVector::GetData<uint8_t>(predicate_vector);
+			auto predicate = UTinyIntValue::Get(constant_filter.constant);
 			FilterSelectionSwitch<uint8_t>(result_flat, predicate, sel, approved_tuple_count,
 			                               constant_filter.comparison_type, mask);
 			break;
 		}
 		case PhysicalType::UINT16: {
 			auto result_flat = FlatVector::GetData<uint16_t>(result);
-			Vector predicate_vector(constant_filter.constant);
-			auto predicate = FlatVector::GetData<uint16_t>(predicate_vector);
+			auto predicate = USmallIntValue::Get(constant_filter.constant);
 			FilterSelectionSwitch<uint16_t>(result_flat, predicate, sel, approved_tuple_count,
 			                                constant_filter.comparison_type, mask);
 			break;
 		}
 		case PhysicalType::UINT32: {
 			auto result_flat = FlatVector::GetData<uint32_t>(result);
-			Vector predicate_vector(constant_filter.constant);
-			auto predicate = FlatVector::GetData<uint32_t>(predicate_vector);
+			auto predicate = UIntegerValue::Get(constant_filter.constant);
 			FilterSelectionSwitch<uint32_t>(result_flat, predicate, sel, approved_tuple_count,
 			                                constant_filter.comparison_type, mask);
 			break;
 		}
 		case PhysicalType::UINT64: {
 			auto result_flat = FlatVector::GetData<uint64_t>(result);
-			Vector predicate_vector(constant_filter.constant);
-			auto predicate = FlatVector::GetData<uint64_t>(predicate_vector);
+			auto predicate = UBigIntValue::Get(constant_filter.constant);
 			FilterSelectionSwitch<uint64_t>(result_flat, predicate, sel, approved_tuple_count,
 			                                constant_filter.comparison_type, mask);
 			break;
 		}
 		case PhysicalType::INT8: {
 			auto result_flat = FlatVector::GetData<int8_t>(result);
-			Vector predicate_vector(constant_filter.constant);
-			auto predicate = FlatVector::GetData<int8_t>(predicate_vector);
+			auto predicate = TinyIntValue::Get(constant_filter.constant);
 			FilterSelectionSwitch<int8_t>(result_flat, predicate, sel, approved_tuple_count,
 			                              constant_filter.comparison_type, mask);
 			break;
 		}
 		case PhysicalType::INT16: {
 			auto result_flat = FlatVector::GetData<int16_t>(result);
-			Vector predicate_vector(constant_filter.constant);
-			auto predicate = FlatVector::GetData<int16_t>(predicate_vector);
+			auto predicate = SmallIntValue::Get(constant_filter.constant);
 			FilterSelectionSwitch<int16_t>(result_flat, predicate, sel, approved_tuple_count,
 			                               constant_filter.comparison_type, mask);
 			break;
 		}
 		case PhysicalType::INT32: {
 			auto result_flat = FlatVector::GetData<int32_t>(result);
-			Vector predicate_vector(constant_filter.constant);
-			auto predicate = FlatVector::GetData<int32_t>(predicate_vector);
+			auto predicate = IntegerValue::Get(constant_filter.constant);
 			FilterSelectionSwitch<int32_t>(result_flat, predicate, sel, approved_tuple_count,
 			                               constant_filter.comparison_type, mask);
 			break;
 		}
 		case PhysicalType::INT64: {
 			auto result_flat = FlatVector::GetData<int64_t>(result);
-			Vector predicate_vector(constant_filter.constant);
-			auto predicate = FlatVector::GetData<int64_t>(predicate_vector);
+			auto predicate = BigIntValue::Get(constant_filter.constant);
 			FilterSelectionSwitch<int64_t>(result_flat, predicate, sel, approved_tuple_count,
 			                               constant_filter.comparison_type, mask);
 			break;
 		}
 		case PhysicalType::INT128: {
 			auto result_flat = FlatVector::GetData<hugeint_t>(result);
-			Vector predicate_vector(constant_filter.constant);
-			auto predicate = FlatVector::GetData<hugeint_t>(predicate_vector);
+			auto predicate = HugeIntValue::Get(constant_filter.constant);
 			FilterSelectionSwitch<hugeint_t>(result_flat, predicate, sel, approved_tuple_count,
 			                                 constant_filter.comparison_type, mask);
 			break;
 		}
 		case PhysicalType::FLOAT: {
 			auto result_flat = FlatVector::GetData<float>(result);
-			Vector predicate_vector(constant_filter.constant);
-			auto predicate = FlatVector::GetData<float>(predicate_vector);
+			auto predicate = FloatValue::Get(constant_filter.constant);
 			FilterSelectionSwitch<float>(result_flat, predicate, sel, approved_tuple_count,
 			                             constant_filter.comparison_type, mask);
 			break;
 		}
 		case PhysicalType::DOUBLE: {
 			auto result_flat = FlatVector::GetData<double>(result);
-			Vector predicate_vector(constant_filter.constant);
-			auto predicate = FlatVector::GetData<double>(predicate_vector);
+			auto predicate = DoubleValue::Get(constant_filter.constant);
 			FilterSelectionSwitch<double>(result_flat, predicate, sel, approved_tuple_count,
 			                              constant_filter.comparison_type, mask);
 			break;
 		}
 		case PhysicalType::VARCHAR: {
 			auto result_flat = FlatVector::GetData<string_t>(result);
-			Vector predicate_vector(constant_filter.constant);
-			auto predicate = FlatVector::GetData<string_t>(predicate_vector);
+			auto predicate = string_t(StringValue::Get(constant_filter.constant));
 			FilterSelectionSwitch<string_t>(result_flat, predicate, sel, approved_tuple_count,
 			                                constant_filter.comparison_type, mask);
 			break;
 		}
 		case PhysicalType::BOOL: {
 			auto result_flat = FlatVector::GetData<bool>(result);
-			Vector predicate_vector(constant_filter.constant);
-			auto predicate = FlatVector::GetData<bool>(predicate_vector);
+			auto predicate = BooleanValue::Get(constant_filter.constant);
 			FilterSelectionSwitch<bool>(result_flat, predicate, sel, approved_tuple_count,
 			                            constant_filter.comparison_type, mask);
 			break;

@@ -1,0 +1,28 @@
+# name: test/sql/copy/csv/recursive_csv_union_by_name.test
+# description: Test read CSV function in a recursive CTE with union by name
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create view r AS from read_csv_auto('data/csv/hive-partitioning/mismatching_contents/*/*.csv', HEADER=1, UNION_BY_NAME=1, HIVE_PARTITIONING=1)
+
+query II
+WITH RECURSIVE t(i, j) AS
+(
+	SELECT 1, 0
+	UNION ALL
+	(
+		SELECT i + 1, j + a
+		FROM t, r
+		WHERE i <= part
+	)
+)
+SELECT * FROM t ORDER BY i;
+----
+1	0
+2	42
+2	42
+3	84
+3	84

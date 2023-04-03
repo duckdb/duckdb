@@ -16,10 +16,11 @@ namespace duckdb {
 // Join Reference Types
 //===--------------------------------------------------------------------===//
 enum class JoinRefType : uint8_t {
-	REGULAR,   // Explicit conditions
-	NATURAL,   // Implied conditions
-	CROSS,     // No condition
-	POSITIONAL // Positional condition
+	REGULAR,    // Explicit conditions
+	NATURAL,    // Implied conditions
+	CROSS,      // No condition
+	POSITIONAL, // Positional condition
+	ASOF        // AsOf conditions
 };
 
 const char *ToString(JoinRefType value);

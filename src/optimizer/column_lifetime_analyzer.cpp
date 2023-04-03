@@ -57,6 +57,7 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		analyzer.VisitOperator(*op.children[0]);
 		return;
 	}
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		if (everything_referenced) {

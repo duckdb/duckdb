@@ -1,7 +1,9 @@
+#include "duckdb/common/serializer/enum_serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 
 #include "duckdb/parser/expression/operator_expression.hpp"
@@ -10,34 +12,6 @@
 #include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
-
-static ExpressionType WindowToExpressionType(string &fun_name) {
-	if (fun_name == "rank") {
-		return ExpressionType::WINDOW_RANK;
-	} else if (fun_name == "rank_dense" || fun_name == "dense_rank") {
-		return ExpressionType::WINDOW_RANK_DENSE;
-	} else if (fun_name == "percent_rank") {
-		return ExpressionType::WINDOW_PERCENT_RANK;
-	} else if (fun_name == "row_number") {
-		return ExpressionType::WINDOW_ROW_NUMBER;
-	} else if (fun_name == "first_value" || fun_name == "first") {
-		return ExpressionType::WINDOW_FIRST_VALUE;
-	} else if (fun_name == "last_value" || fun_name == "last") {
-		return ExpressionType::WINDOW_LAST_VALUE;
-	} else if (fun_name == "nth_value") {
-		return ExpressionType::WINDOW_NTH_VALUE;
-	} else if (fun_name == "cume_dist") {
-		return ExpressionType::WINDOW_CUME_DIST;
-	} else if (fun_name == "lead") {
-		return ExpressionType::WINDOW_LEAD;
-	} else if (fun_name == "lag") {
-		return ExpressionType::WINDOW_LAG;
-	} else if (fun_name == "ntile") {
-		return ExpressionType::WINDOW_NTILE;
-	}
-
-	return ExpressionType::WINDOW_AGGREGATE;
-}
 
 void Transformer::TransformWindowDef(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr) {
 	D_ASSERT(window_spec);
@@ -153,7 +127,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			throw ParserException("window functions are not allowed in window definitions");
 		}
 
-		const auto win_fun_type = WindowToExpressionType(lowercase_name);
+		const auto win_fun_type = WindowExpression::WindowToExpressionType(lowercase_name);
 		if (win_fun_type == ExpressionType::INVALID) {
 			throw InternalException("Unknown/unsupported window function");
 		}
@@ -310,6 +284,26 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		coalesce_op->children.push_back(std::move(children[0]));
 		coalesce_op->children.push_back(std::move(children[1]));
 		return std::move(coalesce_op);
+	} else if (lowercase_name == "list" && order_bys->orders.size() == 1) {
+		// list(expr ORDER BY expr <sense> <nulls>) => list_sort(list(expr), <sense>, <nulls>)
+		if (children.size() != 1) {
+			throw ParserException("Wrong number of arguments to LIST.");
+		}
+		auto arg_expr = children[0].get();
+		auto &order_by = order_bys->orders[0];
+		if (arg_expr->Equals(order_by.expression.get())) {
+			auto sense = make_unique<ConstantExpression>(EnumSerializer::EnumToString(order_by.type));
+			auto nulls = make_unique<ConstantExpression>(EnumSerializer::EnumToString(order_by.null_order));
+			order_bys = nullptr;
+			auto unordered = make_unique<FunctionExpression>(
+			    catalog, schema, lowercase_name.c_str(), std::move(children), std::move(filter_expr),
+			    std::move(order_bys), root->agg_distinct, false, root->export_state);
+			lowercase_name = "list_sort";
+			children.clear();
+			children.emplace_back(std::move(unordered));
+			children.emplace_back(std::move(sense));
+			children.emplace_back(std::move(nulls));
+		}
 	}
 
 	auto function = make_unique<FunctionExpression>(std::move(catalog), std::move(schema), lowercase_name.c_str(),
