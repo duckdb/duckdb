@@ -615,7 +615,7 @@ test_that("R strings are not garbage collected", {
   gc()
   gc()
   res <- rel_to_altrep(filter_rel)
-  expect_equal(res, data.frame(a=c(paste0("m", "r", ".", "d", "u", "c", "k")))
+  expect_equal(res, data.frame(a=c(paste0("m", "r", ".", "d", "u", "c", "k"))))
 })
 
 test_that("anti joins for eq_na_matches works", {
