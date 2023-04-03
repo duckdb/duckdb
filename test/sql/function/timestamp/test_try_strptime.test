@@ -1,4 +1,4 @@
-# name: test/sql/function/timestamp/test_strptime.test
+# name: test/sql/function/timestamp/test_try_strptime.test
 # description: Test try_strptime function
 # group: [timestamp]
 
