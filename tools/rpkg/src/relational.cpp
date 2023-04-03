@@ -383,6 +383,10 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 	return rel->rel->ToString();
 }
 
+[[cpp11::register]] std::string rapi_rel_to_sql(duckdb::rel_extptr_t rel) {
+	return rel->rel->GetQueryNode()->ToString();
+}
+
 [[cpp11::register]] SEXP rapi_rel_explain(duckdb::rel_extptr_t rel) {
 	return result_to_df(rel->rel->Explain());
 }

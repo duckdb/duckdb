@@ -352,3 +352,15 @@ rel_from_altrep_df <- rapi_rel_from_altrep_df
 #' str(df)
 #' stopifnot(df_is_materialized(df))
 df_is_materialized <- rapi_df_is_materialized
+
+
+
+#' Convert a relation to a SQL string
+#' @param rel the DuckDB relation object
+#' @return a SQL string
+#' @noRd
+#' @examples
+#' con <- DBI::dbConnect(duckdb())
+#' rel <- rel_from_df(con, mtcars)
+#' print(rel_to_sql(rel))
+rel_to_sql <- rapi_rel_to_sql
