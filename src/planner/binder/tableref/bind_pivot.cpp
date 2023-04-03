@@ -243,7 +243,6 @@ void ExtractPivotAggregates(BoundTableRef &node, vector<unique_ptr<Expression>> 
 }
 
 unique_ptr<BoundTableRef> Binder::BindBoundPivot(PivotRef &ref) {
-	D_ASSERT(!ref.bound_pivot_values.empty());
 	// bind the child table in a child binder
 	auto result = make_unique<BoundPivotRef>();
 	result->bind_index = GenerateTableIndex();
@@ -530,7 +529,7 @@ unique_ptr<BoundTableRef> Binder::Bind(PivotRef &ref) {
 	if (!ref.source) {
 		throw InternalException("Pivot without a source!?");
 	}
-	if (!ref.bound_pivot_values.empty()) {
+	if (!ref.bound_pivot_values.empty() || !ref.bound_group_names.empty() || !ref.bound_aggregate_names.empty()) {
 		// bound pivot
 		return BindBoundPivot(ref);
 	}

@@ -49,7 +49,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDistinct &
 				requires_projection = true;
 			}
 		} else {
-			if (!op.distinct_on) {
+			if (!op.distinct_on && op.order_by) {
 				throw InternalException("Entry that is not a group, but not a DISTINCT ON aggregate");
 			}
 			// entry is not one of the groups: need to push a FIRST aggregate
