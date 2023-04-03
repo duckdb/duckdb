@@ -448,6 +448,9 @@ bool ParallelCSVGlobalState::Finished() {
 void ParallelCSVGlobalState::Verify() {
 	// All threads are done, we run some magic sweet verification code
 	if (running_threads == 0) {
+		if (tuple_end.empty()) {
+			return;
+		}
 		// figure out max value of last_pos
 		auto max_value = *max_element(std::begin(tuple_end), std::end(tuple_end));
 		for (auto &last_pos : tuple_end) {
