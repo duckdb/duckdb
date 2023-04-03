@@ -152,7 +152,7 @@ private:
 	}
 
 	static SEXP TransformChildFilters(SEXP functions, const string &column_name, const string op,
-	                                  vector<unique_ptr<TableFilter>> &filters, string &timezone_config) {
+	                                  vector<duckdb::unique_ptr<TableFilter>> &filters, string &timezone_config) {
 		auto fit = filters.begin();
 		cpp11::sexp conjunction_sexp = TransformFilterExpression(**fit, column_name, functions, timezone_config);
 		fit++;
@@ -208,7 +208,7 @@ unique_ptr<TableRef> duckdb::ArrowScanReplacement(ClientContext &context, const 
 	for (auto &e : db_wrapper->arrow_scans) {
 		if (e.first == table_name) {
 			auto table_function = make_uniq<TableFunctionRef>();
-			vector<unique_ptr<ParsedExpression>> children;
+			vector<duckdb::unique_ptr<ParsedExpression>> children;
 			children.push_back(make_uniq<ConstantExpression>(Value::POINTER((uintptr_t)R_ExternalPtrAddr(e.second))));
 			children.push_back(
 			    make_uniq<ConstantExpression>(Value::POINTER((uintptr_t)RArrowTabularStreamFactory::Produce)));

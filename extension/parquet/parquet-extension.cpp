@@ -180,8 +180,8 @@ public:
 	}
 
 	static unique_ptr<FunctionData> ParquetReadBind(ClientContext &context, CopyInfo &info,
-	                                                vector<string> &expected_names,
-	                                                vector<LogicalType> &expected_types) {
+	                                                        vector<string> &expected_names,
+	                                                        vector<LogicalType> &expected_types) {
 		D_ASSERT(expected_names.size() == expected_types.size());
 		ParquetOptions parquet_options(context);
 
@@ -204,7 +204,7 @@ public:
 	}
 
 	static unique_ptr<BaseStatistics> ParquetScanStats(ClientContext &context, const FunctionData *bind_data_p,
-	                                                   column_t column_index) {
+	                                                           column_t column_index) {
 		auto &bind_data = (ParquetReadBindData &)*bind_data_p;
 
 		if (IsRowIdColumnId(column_index)) {
@@ -339,7 +339,7 @@ public:
 	}
 
 	static unique_ptr<GlobalTableFunctionState> ParquetScanInitGlobal(ClientContext &context,
-	                                                                  TableFunctionInitInput &input) {
+	                                                                          TableFunctionInitInput &input) {
 		auto &bind_data = (ParquetReadBindData &)*input.bind_data;
 		auto result = make_uniq<ParquetReadGlobalState>();
 
@@ -408,7 +408,7 @@ public:
 	}
 
 	static unique_ptr<FunctionData> ParquetScanDeserialize(ClientContext &context, FieldReader &reader,
-	                                                       TableFunction &function) {
+	                                                               TableFunction &function) {
 		auto files = reader.ReadRequiredList<string>();
 		auto types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 		auto names = reader.ReadRequiredList<string>();
@@ -447,7 +447,8 @@ public:
 		} while (true);
 	}
 
-	static unique_ptr<NodeStatistics> ParquetCardinality(ClientContext &context, const FunctionData *bind_data) {
+	static unique_ptr<NodeStatistics> ParquetCardinality(ClientContext &context,
+	                                                             const FunctionData *bind_data) {
 		auto &data = (ParquetReadBindData &)*bind_data;
 		return make_uniq<NodeStatistics>(data.initial_file_cardinality * data.files.size());
 	}

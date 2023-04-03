@@ -443,8 +443,8 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, ReadCSVData &bind_data
 		if (file_index > 0 && file_index <= bind_data.union_readers.size() && bind_data.union_readers[file_index - 1]) {
 			// we are doing UNION BY NAME - fetch the options from the union reader for this file
 			auto &union_reader = *bind_data.union_readers[file_index - 1];
-			reader =
-			    make_uniq<ParallelCSVReader>(context, union_reader.options, std::move(result), union_reader.GetTypes());
+			reader = make_uniq<ParallelCSVReader>(context, union_reader.options, std::move(result),
+			                                        union_reader.GetTypes());
 			reader->names = union_reader.GetNames();
 		} else {
 			// regular file - use the standard options
@@ -485,9 +485,9 @@ static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext 
 	file_handle = ReadCSV::OpenCSV(bind_data.options.file_path, bind_data.options.compression, context);
 	idx_t rows_to_skip =
 	    bind_data.options.skip_rows + (bind_data.options.has_header && bind_data.options.header ? 1 : 0);
-	return make_uniq<ParallelCSVGlobalState>(context, std::move(file_handle), bind_data.files,
-	                                         context.db->NumberOfThreads(), bind_data.options.buffer_size, rows_to_skip,
-	                                         ClientConfig::GetConfig(context).verify_parallelism, input.column_ids);
+	return make_uniq<ParallelCSVGlobalState>(
+	    context, std::move(file_handle), bind_data.files, context.db->NumberOfThreads(), bind_data.options.buffer_size,
+	    rows_to_skip, ClientConfig::GetConfig(context).verify_parallelism, input.column_ids);
 }
 
 //===--------------------------------------------------------------------===//
