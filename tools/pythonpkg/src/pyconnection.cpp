@@ -1143,6 +1143,23 @@ static void CreateArrowScan(py::object entry, TableFunctionRef &table_function,
 	    make_unique<PythonDependencies>(make_unique<RegisteredArrow>(std::move(stream_factory), entry));
 }
 
+static bool IsArrowBackedDataFrame(const py::object &df) {
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	D_ASSERT(py::isinstance(df, import_cache.pandas().DataFrame()));
+
+	py::list dtypes = df.attr("dtypes");
+	if (dtypes.empty()) {
+		return false;
+	}
+	// TODO: make this optional, will throw on pandas < 2.0.0
+	auto arrow_dtype =
+	    py::module_::import("pandas").attr("core").attr("arrays").attr("arrow").attr("dtype").attr("ArrowDtype");
+	if (py::isinstance(dtypes[0], arrow_dtype)) {
+		return true;
+	}
+	return false;
+}
+
 static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, ClientConfig &config,
                                            py::object &current_frame) {
 	if (!dict.contains(table_name)) {
@@ -1153,12 +1170,28 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 	auto table_function = make_unique<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
 	if (DuckDBPyConnection::IsPandasDataframe(entry)) {
-		string name = "df_" + StringUtil::GenerateRandomName();
-		auto new_df = PandasScanFunction::PandasReplaceCopiedNames(entry);
-		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)new_df.ptr())));
-		table_function->function = make_unique<FunctionExpression>("pandas_scan", std::move(children));
-		table_function->external_dependency = make_unique<PythonDependencies>(make_unique<RegisteredObject>(entry),
-		                                                                      make_unique<RegisteredObject>(new_df));
+		if (IsArrowBackedDataFrame(entry)) {
+			// Construct a pyarrow.lib.Table from the internal arrays
+			py::list names = entry.attr("columns");
+			auto getter = entry.attr("__getitem__");
+			py::list array_list;
+			for (auto &name : names) {
+				py::object column = getter(name);
+				auto array = column.attr("array").attr("__arrow_array__")();
+				array_list.append(array);
+			}
+			auto table = py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_arrays")(
+			    array_list, py::arg("names") = names);
+			CreateArrowScan(table, *table_function, children, config);
+		} else {
+			string name = "df_" + StringUtil::GenerateRandomName();
+			auto new_df = PandasScanFunction::PandasReplaceCopiedNames(entry);
+			children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)new_df.ptr())));
+			table_function->function = make_unique<FunctionExpression>("pandas_scan", std::move(children));
+			table_function->external_dependency = make_unique<PythonDependencies>(
+			    make_unique<RegisteredObject>(entry), make_unique<RegisteredObject>(new_df));
+		}
+
 	} else if (DuckDBPyConnection::IsAcceptedArrowObject(entry)) {
 		CreateArrowScan(entry, *table_function, children, config);
 	} else if (DuckDBPyRelation::IsRelation(entry)) {
