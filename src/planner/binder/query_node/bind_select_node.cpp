@@ -61,7 +61,7 @@ unique_ptr<Expression> Binder::BindDelimiter(ClientContext &context, OrderBinder
 	return expr;
 }
 
-duckdb::unique_ptr<BoundResultModifier> Binder::BindLimit(OrderBinder &order_binder, LimitModifier &limit_mod) {
+unique_ptr<BoundResultModifier> Binder::BindLimit(OrderBinder &order_binder, LimitModifier &limit_mod) {
 	auto result = make_uniq<BoundLimitModifier>();
 	if (limit_mod.limit) {
 		Value val;

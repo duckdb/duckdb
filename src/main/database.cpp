@@ -144,9 +144,9 @@ string DatabaseInstance::ExtractDatabaseType(string &path) {
 	return string();
 }
 
-duckdb::unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(AttachInfo &info, const string &type,
-                                                                              AccessMode access_mode) {
-	duckdb::unique_ptr<AttachedDatabase> attached_database;
+unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(AttachInfo &info, const string &type,
+                                                                      AccessMode access_mode) {
+	unique_ptr<AttachedDatabase> attached_database;
 	if (!type.empty()) {
 		// find the storage extensionon database
 		auto entry = config.storage_extensions.find(type);

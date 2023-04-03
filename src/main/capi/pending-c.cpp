@@ -8,6 +8,7 @@ using duckdb::PendingExecutionResult;
 using duckdb::PendingQueryResult;
 using duckdb::PendingStatementWrapper;
 using duckdb::PreparedStatementWrapper;
+using duckdb::unique_ptr;
 
 duckdb_state duckdb_pending_prepared_internal(duckdb_prepared_statement prepared_statement,
                                               duckdb_pending_result *out_result, bool allow_streaming) {
@@ -102,7 +103,7 @@ duckdb_state duckdb_execute_pending(duckdb_pending_result pending_result, duckdb
 		return DuckDBError;
 	}
 
-	duckdb::unique_ptr<duckdb::QueryResult> result;
+	unique_ptr<duckdb::QueryResult> result;
 	result = wrapper->statement->Execute();
 	wrapper->statement.reset();
 	return duckdb_translate_result(std::move(result), out_result);

@@ -2,6 +2,8 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 
 using duckdb::DatabaseData;
+using duckdb::make_uniq;
+using duckdb::unique_ptr;
 
 struct CAPITaskState {
 	CAPITaskState(duckdb::DatabaseInstance &db)
@@ -9,7 +11,7 @@ struct CAPITaskState {
 	}
 
 	duckdb::DatabaseInstance &db;
-	duckdb::unique_ptr<duckdb::atomic<bool>> marker;
+	unique_ptr<duckdb::atomic<bool>> marker;
 	duckdb::atomic<idx_t> execute_count;
 };
 

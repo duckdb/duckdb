@@ -29,7 +29,7 @@ public:
 	unique_ptr<FunctionData> Copy() const override;
 	bool Equals(const FunctionData &other_p) const override;
 	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
-	                                             vector<unique_ptr<Expression>> &arguments);
+	                                     vector<unique_ptr<Expression>> &arguments);
 
 public:
 	const bool constant;
@@ -44,7 +44,7 @@ public:
 	unique_ptr<FunctionData> Copy() const override;
 	bool Equals(const FunctionData &other_p) const override;
 	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
-	                                             vector<unique_ptr<Expression>> &arguments);
+	                                     vector<unique_ptr<Expression>> &arguments);
 
 public:
 	const vector<string> paths;
@@ -57,7 +57,7 @@ public:
 	explicit JSONFunctionLocalState(Allocator &allocator);
 	explicit JSONFunctionLocalState(ClientContext &context);
 	static unique_ptr<FunctionLocalState> Init(ExpressionState &state, const BoundFunctionExpression &expr,
-	                                                   FunctionData *bind_data);
+	                                           FunctionData *bind_data);
 	static JSONFunctionLocalState &ResetAndGet(ExpressionState &state);
 
 public:

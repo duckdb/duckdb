@@ -77,7 +77,7 @@ struct AltrepRelationWrapper {
 	}
 
 	shared_ptr<Relation> rel;
-	duckdb::unique_ptr<QueryResult> res;
+	unique_ptr<QueryResult> res;
 };
 
 struct AltrepRownamesWrapper {
