@@ -16,6 +16,7 @@
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/planner/tableref/bound_subqueryref.hpp"
 #include "duckdb/planner/tableref/bound_pivotref.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 namespace duckdb {
 
@@ -129,7 +130,7 @@ static unique_ptr<SelectNode> PivotInitialAggregate(PivotBindState &bind_state, 
 		bind_state.aggregate_names.push_back(aggregate->alias);
 		bind_state.internal_aggregate_names.push_back(aggregate_alias);
 		aggregate->alias = std::move(aggregate_alias);
-		subquery_stage1->select_list.push_back(aggregate->Copy());
+		subquery_stage1->select_list.push_back(std::move(aggregate));
 	}
 	return subquery_stage1;
 }
@@ -188,7 +189,6 @@ static unique_ptr<SelectNode> PivotFinalOperator(PivotBindState &bind_state, Piv
 	auto subquery_ref = make_unique<SubqueryRef>(std::move(subquery_select));
 
 	auto bound_pivot = make_unique<PivotRef>();
-	bound_pivot->aggregates = std::move(ref.aggregates);
 	bound_pivot->bound_pivot_values = std::move(pivot_values);
 	bound_pivot->bound_group_names = std::move(bind_state.group_names);
 	bound_pivot->source = std::move(subquery_ref);
@@ -198,6 +198,28 @@ static unique_ptr<SelectNode> PivotFinalOperator(PivotBindState &bind_state, Piv
 	return final_pivot_operator;
 }
 
+void ExtractPivotAggregates(BoundTableRef &node, vector<unique_ptr<Expression>> &aggregates) {
+	if (node.type != TableReferenceType::SUBQUERY) {
+		throw InternalException("Pivot - Expected a subquery");
+	}
+	auto &subq = (BoundSubqueryRef &)node;
+	if (subq.subquery->type != QueryNodeType::SELECT_NODE) {
+		throw InternalException("Pivot - Expected a select node");
+	}
+	auto &select = (BoundSelectNode &)*subq.subquery;
+	if (select.from_table->type != TableReferenceType::SUBQUERY) {
+		throw InternalException("Pivot - Expected another subquery");
+	}
+	auto &subq2 = (BoundSubqueryRef &)*select.from_table;
+	if (subq2.subquery->type != QueryNodeType::SELECT_NODE) {
+		throw InternalException("Pivot - Expected another select node");
+	}
+	auto &select2 = (BoundSelectNode &)*subq2.subquery;
+	for (auto &aggr : select2.aggregates) {
+		aggregates.push_back(aggr->Copy());
+	}
+}
+
 unique_ptr<BoundTableRef> Binder::BindBoundPivot(PivotRef &ref) {
 	D_ASSERT(!ref.bound_pivot_values.empty());
 	// bind the child table in a child binder
@@ -205,6 +227,8 @@ unique_ptr<BoundTableRef> Binder::BindBoundPivot(PivotRef &ref) {
 	result->bind_index = GenerateTableIndex();
 	result->child_binder = Binder::CreateBinder(context, this);
 	result->child = result->child_binder->Bind(*ref.source);
+
+	ExtractPivotAggregates(*result->child, result->bound_pivot.aggregates);
 
 	vector<string> child_names;
 	vector<LogicalType> child_types;
@@ -309,15 +333,12 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 	// - the groups (i.e. the future row names
 	// - the aggregates (i.e. the values of the pivot columns)
 
-	// executing a pivot statement happens in four stages
+	// executing a pivot statement happens in three stages
 	// 1) execute the query "SELECT {groups}, {pivots}, {aggregates} FROM {from_clause} GROUP BY {groups}, {pivots}
 	// this computes all values that are required in the final result, but not yet in the correct orientation
 	// 2) execute the query "SELECT {groups}, LIST({pivots}), LIST({aggregates}) FROM [Q1] GROUP BY {groups}
 	// this pushes all pivots and aggregates that belong to a specific group together in an aligned manner
-	// 3) execute the query "SELECT {groups}, MAP(pivot_list, aggregate_list) AS m FROM [Q2]
-	// this constructs a MAP vector that we will use to lookup the final value for each pivoted element
-	// 4) execute the query "SELECT {groups}, m[pivot_val1] AS pivot_val1, m[pivot_val2] AS pivot_val2, m[pivot_val3],
-	// ... FROM [Q3] this constructs the fully pivoted final result
+	// 3) push a PIVOT operator, that performs the actual pivoting of the values into the different columns
 
 	PivotBindState bind_state;
 	// Pivot Stage 1

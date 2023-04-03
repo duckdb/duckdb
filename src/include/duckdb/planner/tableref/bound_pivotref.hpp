@@ -12,6 +12,7 @@
 #include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/parser/tableref/pivotref.hpp"
+#include "duckdb/function/aggregate_function.hpp"
 
 namespace duckdb {
 
@@ -22,13 +23,13 @@ struct BoundPivotInfo {
 	vector<LogicalType> types;
 	//! The set of values to pivot on
 	vector<PivotValueElement> pivot_values;
+	//! The set of aggregate functions that is being executed
+	vector<unique_ptr<Expression>> aggregates;
 };
-
 
 class BoundPivotRef : public BoundTableRef {
 public:
-	explicit BoundPivotRef()
-	    : BoundTableRef(TableReferenceType::PIVOT) {
+	explicit BoundPivotRef() : BoundTableRef(TableReferenceType::PIVOT) {
 	}
 
 	idx_t bind_index;

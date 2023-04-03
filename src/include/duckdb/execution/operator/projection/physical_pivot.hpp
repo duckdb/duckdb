@@ -23,8 +23,8 @@ public:
 	BoundPivotInfo bound_pivot;
 	//! The map for pivot value -> column index
 	string_map_t<idx_t> pivot_map;
-	//! The empty aggregate value
-	Value empty_aggregate;
+	//! The empty aggregate values
+	vector<Value> empty_aggregates;
 
 public:
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,

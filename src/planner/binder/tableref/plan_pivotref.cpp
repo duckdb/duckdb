@@ -10,4 +10,4 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundPivotRef &ref) {
 	return result;
 }
 
-}
+} // namespace duckdb
