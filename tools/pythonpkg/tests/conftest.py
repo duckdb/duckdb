@@ -5,6 +5,11 @@ from os.path import abspath, join, dirname, normpath
 import glob
 import duckdb
 
+try:
+	import pandas
+	pyarrow_dtype = pandas.core.arrays.arrow.dtype.ArrowDtype
+except:
+	pyarrow_dtype = None
 
 @pytest.fixture(scope="function")
 def duckdb_empty_cursor(request):
@@ -30,10 +35,18 @@ class NumpyPandas:
 		item = eval(f'self.pandas.{__name}')
 		return item
 
+def convert_arrow_to_numpy_backend(df):
+	pandas = pytest.importorskip("pandas")
+	names = df.columns
+	df_content = {}
+	for name in names:
+		df_content[name] = df[name].array.__arrow_array__()
+	# This should convert the pyarrow chunked arrays into numpy arrays
+	return pandas.DataFrame(df_content)
+
 def convert_to_numpy(df):
-	print("DF", df.dtypes)
-	df = df.convert_dtypes(dtype_backend='numpy_nullable')
-	print("DF", df.dtypes)
+	if any([True for x in df.dtypes if isinstance(x, pyarrow_dtype)]):
+		return convert_arrow_to_numpy_backend(df)
 	return df
 
 def convert_and_equal(df1, df2):
@@ -50,6 +63,9 @@ class ArrowMockTesting:
 		item = eval(f'self.testing.{__name}')
 		return item
 
+# This converts dataframes constructed with 'DataFrame(...)' to pyarrow backed dataframes
+# Assert equal does the opposite, turning all pyarrow backed dataframes into numpy backed ones
+# this is done because we don't produce pyarrow backed dataframes yet
 class ArrowPandas:
 	def __init__(self):
 		self.backend = 'pyarrow'

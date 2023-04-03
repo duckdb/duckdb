@@ -6,8 +6,6 @@ from conftest import NumpyPandas, ArrowPandas
 
 class TestInsert(object):
 	
-	# TODO: add production of pyarrow backed pandas dataframes
-	# currently the 'pandas.testing.assert_frame_equal' would fail because we still produce numpy-backed dataframes
 	@pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
 	def test_insert(self, pandas):
 		test_df = pandas.DataFrame({"i":[1, 2, 3], "j":["one", "two", "three"]})
