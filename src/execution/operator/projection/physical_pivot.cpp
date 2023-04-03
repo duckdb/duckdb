@@ -3,37 +3,25 @@
 
 namespace duckdb {
 
-PhysicalPivot::PhysicalPivot(vector<LogicalType> types_p, unique_ptr<PhysicalOperator> child, vector<PivotValueElement> pivot_values_p) :
-	PhysicalOperator(PhysicalOperatorType::PIVOT, std::move(types_p), child->estimated_cardinality), pivot_values(std::move(pivot_values_p)) {
+PhysicalPivot::PhysicalPivot(vector<LogicalType> types_p, unique_ptr<PhysicalOperator> child, vector<PivotValueElement> pivot_values_p, idx_t group_count) :
+	PhysicalOperator(PhysicalOperatorType::PIVOT, std::move(types_p), child->estimated_cardinality), group_count(group_count), pivot_values(std::move(pivot_values_p)) {
 	children.push_back(std::move(child));
-	idx_t group_count = 1;
 	for(idx_t p = 0; p < pivot_values.size(); p++) {
 		pivot_map[pivot_values[p].name] = group_count + p;
 	}
 	empty_aggregate = Value(types[1]);
 }
 
-class PhysicalPivotState : public OperatorState {
-public:
-	PhysicalPivotState(ClientContext &context) {
-	}
-};
-
-unique_ptr<OperatorState> PhysicalPivot::GetOperatorState(ExecutionContext &context) const  {
-	return make_unique<PhysicalPivotState>(context.client);
-}
-
 OperatorResultType PhysicalPivot::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 						   GlobalOperatorState &gstate, OperatorState &state) const  {
 	// copy the groups as-is
-	idx_t group_count = 1;
 	for(idx_t i = 0; i < group_count; i++) {
 		chunk.data[i].Reference(input.data[i]);
 	}
-	auto pivot_value_lists = FlatVector::GetData<list_entry_t>(input.data[1]);
-	auto &pivot_value_children = ListVector::GetEntry(input.data[1]);
-	auto pivot_column_lists = FlatVector::GetData<list_entry_t>(input.data[2]);
-	auto &pivot_column_values = ListVector::GetEntry(input.data[2]);
+	auto pivot_value_lists = FlatVector::GetData<list_entry_t>(input.data[group_count]);
+	auto &pivot_value_children = ListVector::GetEntry(input.data[group_count]);
+	auto pivot_column_lists = FlatVector::GetData<list_entry_t>(input.data[group_count + 1]);
+	auto &pivot_column_values = ListVector::GetEntry(input.data[group_count + 1]);
 	auto pivot_columns = FlatVector::GetData<string_t>(pivot_column_values);
 
 	// move the pivots to the given columns

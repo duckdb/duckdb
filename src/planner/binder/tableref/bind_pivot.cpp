@@ -204,6 +204,7 @@ unique_ptr<BoundTableRef> Binder::BindBoundPivot(PivotRef &ref) {
 	result->bind_index = GenerateTableIndex();
 	result->child_binder = Binder::CreateBinder(context, this);
 	result->child = result->child_binder->Bind(*ref.source);
+	result->group_count = ref.bound_group_names.size();
 
 	vector<string> child_names;
 	vector<LogicalType> child_types;

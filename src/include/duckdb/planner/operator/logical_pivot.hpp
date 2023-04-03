@@ -20,6 +20,8 @@ public:
 	LogicalPivot(idx_t pivot_idx, unique_ptr<LogicalOperator> plan);
 
 	idx_t pivot_index;
+	//! The number of groups
+	idx_t group_count;
 	//! The return types of the pivot operator
 	vector<LogicalType> return_types;
 	//! The set of values to pivot on

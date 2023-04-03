@@ -18,8 +18,11 @@ namespace duckdb {
 //! PhysicalPivot implements the physical PIVOT operation
 class PhysicalPivot : public PhysicalOperator {
 public:
-	PhysicalPivot(vector<LogicalType> types, unique_ptr<PhysicalOperator> child, vector<PivotValueElement> pivot_values);
+	PhysicalPivot(vector<LogicalType> types, unique_ptr<PhysicalOperator> child, vector<PivotValueElement> pivot_values, idx_t group_count);
 
+	//! The amount of groups
+	idx_t group_count;
+	//! The pivot values
 	vector<PivotValueElement> pivot_values;
 	//! The map for pivot value -> column index
 	string_map_t<idx_t> pivot_map;
@@ -27,7 +30,6 @@ public:
 	Value empty_aggregate;
 
 public:
-	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                           GlobalOperatorState &gstate, OperatorState &state) const override;
 
