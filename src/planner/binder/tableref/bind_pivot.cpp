@@ -3,6 +3,7 @@
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
@@ -14,13 +15,9 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/planner/tableref/bound_subqueryref.hpp"
+#include "duckdb/planner/tableref/bound_pivotref.hpp"
 
 namespace duckdb {
-
-struct PivotValueElement {
-	vector<Value> values;
-	string name;
-};
 
 static void ConstructPivots(PivotRef &ref, vector<PivotValueElement> &pivot_values, idx_t pivot_idx = 0,
                             PivotValueElement current_value = PivotValueElement()) {
@@ -76,7 +73,9 @@ struct PivotBindState {
 	vector<string> internal_map_names;
 };
 
-static unique_ptr<SelectNode> PivotStageOne(PivotBindState &bind_state, PivotRef &ref, vector<unique_ptr<ParsedExpression>> all_columns, const case_insensitive_set_t &handled_columns) {
+static unique_ptr<SelectNode> PivotInitialAggregate(PivotBindState &bind_state, PivotRef &ref,
+                                                    vector<unique_ptr<ParsedExpression>> all_columns,
+                                                    const case_insensitive_set_t &handled_columns) {
 	auto subquery_stage1 = make_unique<SelectNode>();
 	subquery_stage1->from_table = std::move(ref.source);
 	if (ref.groups.empty()) {
@@ -135,7 +134,8 @@ static unique_ptr<SelectNode> PivotStageOne(PivotBindState &bind_state, PivotRef
 	return subquery_stage1;
 }
 
-static unique_ptr<SelectNode> PivotStageTwo(PivotBindState &bind_state, PivotRef &ref, unique_ptr<SelectNode> subquery_stage1) {
+static unique_ptr<SelectNode> PivotListAggregate(PivotBindState &bind_state, PivotRef &ref,
+                                                 unique_ptr<SelectNode> subquery_stage1) {
 	auto subquery_stage2 = make_unique<SelectNode>();
 	// wrap the subquery of stage 1
 	auto subquery_select = make_unique<SelectStatement>();
@@ -152,7 +152,7 @@ static unique_ptr<SelectNode> PivotStageTwo(PivotBindState &bind_state, PivotRef
 	}
 
 	// construct the list aggregates
-	for(idx_t aggr = 0; aggr < bind_state.internal_aggregate_names.size(); aggr++) {
+	for (idx_t aggr = 0; aggr < bind_state.internal_aggregate_names.size(); aggr++) {
 		auto colref = make_unique<ColumnRefExpression>(bind_state.internal_aggregate_names[aggr]);
 		vector<unique_ptr<ParsedExpression>> list_children;
 		list_children.push_back(std::move(colref));
@@ -166,7 +166,8 @@ static unique_ptr<SelectNode> PivotStageTwo(PivotBindState &bind_state, PivotRef
 		for (auto &pivot_expr : pivot.pivot_expressions) {
 			auto pivot_name = "__internal_pivot_name" + to_string(++pivot_count);
 			vector<unique_ptr<ParsedExpression>> list_children;
-			list_children.push_back(std::move(pivot_expr));
+			auto cast = make_unique<CastExpression>(LogicalType::VARCHAR, std::move(pivot_expr));
+			list_children.push_back(std::move(cast));
 			auto aggregate = make_unique<FunctionExpression>("list", std::move(list_children));
 			aggregate->alias = pivot_name;
 			subquery_stage2->select_list.push_back(std::move(aggregate));
@@ -177,71 +178,55 @@ static unique_ptr<SelectNode> PivotStageTwo(PivotBindState &bind_state, PivotRef
 	return subquery_stage2;
 }
 
-static unique_ptr<SelectNode> PivotStageThree(PivotBindState &bind_state, PivotRef &ref, unique_ptr<SelectNode> subquery_stage2) {
-	auto subquery_stage3 = make_unique<SelectNode>();
+static unique_ptr<SelectNode> PivotFinalOperator(PivotBindState &bind_state, PivotRef &ref,
+                                                 unique_ptr<SelectNode> subquery,
+                                                 vector<PivotValueElement> pivot_values) {
+	auto final_pivot_operator = make_unique<SelectNode>();
 	// wrap the subquery of stage 1
 	auto subquery_select = make_unique<SelectStatement>();
-	subquery_select->node = std::move(subquery_stage2);
+	subquery_select->node = std::move(subquery);
 	auto subquery_ref = make_unique<SubqueryRef>(std::move(subquery_select));
 
-	// add all of the groups
-	for (idx_t gr = 0; gr < bind_state.internal_group_names.size(); gr++) {
-		auto group_reference = make_unique<ColumnRefExpression>(bind_state.internal_group_names[gr]);
-		group_reference->alias = bind_state.internal_group_names[gr];
-		subquery_stage3->select_list.push_back(std::move(group_reference));
-	}
+	auto bound_pivot = make_unique<PivotRef>();
+	bound_pivot->bound_pivot_values = std::move(pivot_values);
+	bound_pivot->bound_group_names = std::move(bind_state.group_names);
+	bound_pivot->source = std::move(subquery_ref);
 
-	// construct the MAPs
-	D_ASSERT(bind_state.internal_pivot_names.size() == bind_state.internal_aggregate_names.size());
-	for(idx_t i = 0; i < bind_state.internal_pivot_names.size(); i++) {
-		auto map_name = "__internal_pivot_map" + to_string(i + 1);
-		vector<unique_ptr<ParsedExpression>> map_children;
-		map_children.push_back(make_unique<ColumnRefExpression>(bind_state.internal_pivot_names[i]));
-		map_children.push_back(make_unique<ColumnRefExpression>(bind_state.internal_aggregate_names[i]));
-		auto function = make_unique<FunctionExpression>("map", std::move(map_children));
-		function->alias = map_name;
-		bind_state.internal_map_names.push_back(std::move(map_name));
-		subquery_stage3->select_list.push_back(std::move(function));
-	}
-	subquery_stage3->from_table = std::move(subquery_ref);
-	return subquery_stage3;
+	final_pivot_operator->select_list.push_back(make_unique<StarExpression>());
+	final_pivot_operator->from_table = std::move(bound_pivot);
+	return final_pivot_operator;
 }
 
-static unique_ptr<SelectNode> PivotStageFour(PivotBindState &bind_state, PivotRef &ref, unique_ptr<SelectNode> subquery_stage3, vector<PivotValueElement> pivot_values) {
-	auto subquery_stage4 = make_unique<SelectNode>();
-	// wrap the subquery of stage 1
-	auto subquery_select = make_unique<SelectStatement>();
-	subquery_select->node = std::move(subquery_stage3);
-	auto subquery_ref = make_unique<SubqueryRef>(std::move(subquery_select));
+unique_ptr<BoundTableRef> Binder::BindBoundPivot(PivotRef &ref) {
+	D_ASSERT(!ref.bound_pivot_values.empty());
+	// bind the child table in a child binder
+	auto result = make_unique<BoundPivotRef>();
+	result->bind_index = GenerateTableIndex();
+	result->child_binder = Binder::CreateBinder(context, this);
+	result->child = result->child_binder->Bind(*ref.source);
 
-	// add all of the groups
-	for (idx_t gr = 0; gr < bind_state.internal_group_names.size(); gr++) {
-		auto group_reference = make_unique<ColumnRefExpression>(bind_state.internal_group_names[gr]);
-		group_reference->alias = bind_state.group_names[gr];
-		subquery_stage4->select_list.push_back(std::move(group_reference));
-	}
+	vector<string> child_names;
+	vector<LogicalType> child_types;
+	result->child_binder->bind_context.GetTypesAndNames(child_names, child_types);
 
-	// construct the map extract calls
-	for(auto &pivot_value : pivot_values) {
-		// FIXME
-		if (pivot_value.values.size() != 1) {
-			throw InternalException("FIXME multiple pivots");
-		}
-		for(auto &internal_map : bind_state.internal_map_names) {
-			vector<unique_ptr<ParsedExpression>> map_children;
-			map_children.push_back(make_unique<ColumnRefExpression>(internal_map));
-			map_children.push_back(make_unique<ConstantExpression>(std::move(pivot_value.values[0])));
-			auto function = make_unique<FunctionExpression>("map_extract", std::move(map_children));
-			vector<unique_ptr<ParsedExpression>> array_children;
-			array_children.push_back(std::move(function));
-			array_children.push_back(make_unique<ConstantExpression>(Value::INTEGER(1)));
-			function = make_unique<FunctionExpression>("array_extract", std::move(array_children));
-			function->alias = std::move(pivot_value.name);
-			subquery_stage4->select_list.push_back(std::move(function));
-		}
+	vector<string> names;
+	vector<LogicalType> types;
+	// emit the groups
+	for (idx_t i = 0; i < ref.bound_group_names.size(); i++) {
+		names.push_back(ref.bound_group_names[i]);
+		types.push_back(child_types[i]);
 	}
-	subquery_stage4->from_table = std::move(subquery_ref);
-	return subquery_stage4;
+	// emit the pivot values
+	auto aggregate_type = ListType::GetChildType(child_types[ref.bound_group_names.size()]);
+	for (idx_t i = 0; i < ref.bound_pivot_values.size(); i++) {
+		names.push_back(ref.bound_pivot_values[i].name);
+		types.push_back(aggregate_type);
+	}
+	result->types = types;
+	result->pivot_values = std::move(ref.bound_pivot_values);
+	auto subquery_alias = ref.alias.empty() ? "__unnamed_pivot" : ref.alias;
+	bind_context.AddGenericBinding(result->bind_index, subquery_alias, names, types);
+	return result;
 }
 
 unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<ParsedExpression>> all_columns) {
@@ -329,28 +314,22 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 	// this pushes all pivots and aggregates that belong to a specific group together in an aligned manner
 	// 3) execute the query "SELECT {groups}, MAP(pivot_list, aggregate_list) AS m FROM [Q2]
 	// this constructs a MAP vector that we will use to lookup the final value for each pivoted element
-	// 4) execute the query "SELECT {groups}, m[pivot_val1] AS pivot_val1, m[pivot_val2] AS pivot_val2, m[pivot_val3], ... FROM [Q3]
-	// this constructs the fully pivoted final result
+	// 4) execute the query "SELECT {groups}, m[pivot_val1] AS pivot_val1, m[pivot_val2] AS pivot_val2, m[pivot_val3],
+	// ... FROM [Q3] this constructs the fully pivoted final result
 
 	PivotBindState bind_state;
 	// Pivot Stage 1
 	// SELECT {groups}, {pivots}, {aggregates} FROM {from_clause} GROUP BY {groups}, {pivots}
-	auto subquery_stage1 = PivotStageOne(bind_state, ref, std::move(all_columns), handled_columns);
+	auto subquery_stage1 = PivotInitialAggregate(bind_state, ref, std::move(all_columns), handled_columns);
 
 	// Pivot stage 2
 	// SELECT {groups}, LIST({pivots}), LIST({aggregates}) FROM [Q1] GROUP BY {groups}
-	auto subquery_stage2 = PivotStageTwo(bind_state, ref, std::move(subquery_stage1));
+	auto subquery_stage2 = PivotListAggregate(bind_state, ref, std::move(subquery_stage1));
 
-	// FIXME: 
 	// Pivot stage 3
-	// SELECT {groups}, MAP(pivot_list, aggregate_list) AS m FROM [Q2]
-	auto subquery_stage3 = PivotStageThree(bind_state, ref, std::move(subquery_stage2));
-
-	// Pivot stage 4
-	// SELECT {groups}, m[pivot_val1] AS pivot_val1, m[pivot_val2] AS pivot_val2, m[pivot_val3], ... FROM [Q3]
-	auto subquery_stage4 = PivotStageFour(bind_state, ref, std::move(subquery_stage3), std::move(pivot_values));
-
-	return subquery_stage4;
+	// construct the final pivot operator
+	auto pivot_node = PivotFinalOperator(bind_state, ref, std::move(subquery_stage2), std::move(pivot_values));
+	return pivot_node;
 }
 
 unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
@@ -485,6 +464,10 @@ unique_ptr<BoundTableRef> Binder::Bind(PivotRef &ref) {
 	if (!ref.source) {
 		throw InternalException("Pivot without a source!?");
 	}
+	if (!ref.bound_pivot_values.empty()) {
+		// bound pivot
+		return BindBoundPivot(ref);
+	}
 
 	// bind the source of the pivot
 	// we need to do this to be able to expand star expressions
@@ -512,8 +495,8 @@ unique_ptr<BoundTableRef> Binder::Bind(PivotRef &ref) {
 	unique_ptr<BoundTableRef> result;
 	MoveCorrelatedExpressions(*child_binder);
 	result = make_unique<BoundSubqueryRef>(std::move(child_binder), std::move(bound_select_node));
-	auto alias = ref.alias.empty() ? "__unnamed_pivot" : ref.alias;
-	SubqueryRef subquery_ref(nullptr, alias);
+	auto subquery_alias = ref.alias.empty() ? "__unnamed_pivot" : ref.alias;
+	SubqueryRef subquery_ref(nullptr, subquery_alias);
 	subquery_ref.column_name_alias = std::move(ref.column_name_alias);
 	if (where_clause) {
 		// if a WHERE clause was provided - bind a subquery holding the WHERE clause
