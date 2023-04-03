@@ -10,6 +10,7 @@ unique_ptr<BoundTableRef> Binder::Bind(SubqueryRef &ref, CommonTableExpressionIn
 	if (cte) {
 		binder->bound_ctes.insert(cte);
 	}
+	binder->alias = ref.alias.empty() ? "unnamed_subquery" : ref.alias;
 	auto subquery = binder->BindNode(*ref.subquery->node);
 	idx_t bind_index = subquery->GetRootIndex();
 	string subquery_alias;
@@ -18,7 +19,6 @@ unique_ptr<BoundTableRef> Binder::Bind(SubqueryRef &ref, CommonTableExpressionIn
 	} else {
 		subquery_alias = ref.alias;
 	}
-	binder->alias = subquery_alias;
 	auto result = make_unique<BoundSubqueryRef>(std::move(binder), std::move(subquery));
 	bind_context.AddSubquery(bind_index, subquery_alias, ref, *result->subquery);
 	MoveCorrelatedExpressions(*result->binder);
