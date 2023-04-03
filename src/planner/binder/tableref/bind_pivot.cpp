@@ -236,7 +236,8 @@ unique_ptr<BoundTableRef> Binder::BindBoundPivot(PivotRef &ref) {
 	result->child_binder = Binder::CreateBinder(context, this);
 	result->child = result->child_binder->Bind(*ref.source);
 
-	ExtractPivotAggregates(*result->child, result->bound_pivot.aggregates);
+	auto &aggregates = result->bound_pivot.aggregates;
+	ExtractPivotAggregates(*result->child, aggregates);
 
 	vector<string> child_names;
 	vector<LogicalType> child_types;
@@ -249,12 +250,18 @@ unique_ptr<BoundTableRef> Binder::BindBoundPivot(PivotRef &ref) {
 		names.push_back(ref.bound_group_names[i]);
 		types.push_back(child_types[i]);
 	}
-	// emit the pivot values
-	auto aggregate_type = ListType::GetChildType(child_types[ref.bound_group_names.size()]);
-	for (idx_t i = 0; i < ref.bound_pivot_values.size(); i++) {
-		result->bound_pivot.pivot_values.push_back(ref.bound_pivot_values[i].values[0].ToString());
-		names.push_back(ref.bound_pivot_values[i].name);
-		types.push_back(aggregate_type);
+	// emit the pivot columns
+	for (auto &pivot_value : ref.bound_pivot_values) {
+		for(auto &aggr : aggregates) {
+			auto name = pivot_value.name;
+			if (aggregates.size() > 1 || !aggr->alias.empty()) {
+				// if there are multiple aggregates specified we add the name of the aggregate as well
+				name += + "_" + aggr->GetName();
+			}
+			result->bound_pivot.pivot_values.push_back(pivot_value.values[0].ToString());
+			names.push_back(std::move(name));
+			types.push_back(aggr->return_type);
+		}
 	}
 	result->bound_pivot.group_count = ref.bound_group_names.size();
 	result->bound_pivot.types = types;
@@ -503,7 +510,7 @@ unique_ptr<BoundTableRef> Binder::Bind(PivotRef &ref) {
 	// bind the source of the pivot
 	// we need to do this to be able to expand star expressions
 	auto copied_source = ref.source->Copy();
-	auto star_binder = Binder::CreateBinder(context);
+	auto star_binder = Binder::CreateBinder(context, this);
 	star_binder->Bind(*copied_source);
 
 	// figure out the set of column names that are in the source of the pivot
