@@ -10,20 +10,17 @@
 
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/parser/tableref/pivotref.hpp"
 #include "duckdb/common/string_map_set.hpp"
+#include "duckdb/planner/tableref/bound_pivotref.hpp"
 
 namespace duckdb {
 
 //! PhysicalPivot implements the physical PIVOT operation
 class PhysicalPivot : public PhysicalOperator {
 public:
-	PhysicalPivot(vector<LogicalType> types, unique_ptr<PhysicalOperator> child, vector<PivotValueElement> pivot_values, idx_t group_count);
+	PhysicalPivot(vector<LogicalType> types, unique_ptr<PhysicalOperator> child, BoundPivotInfo bound_pivot);
 
-	//! The amount of groups
-	idx_t group_count;
-	//! The pivot values
-	vector<PivotValueElement> pivot_values;
+	BoundPivotInfo bound_pivot;
 	//! The map for pivot value -> column index
 	string_map_t<idx_t> pivot_map;
 	//! The empty aggregate value

@@ -3,35 +3,38 @@
 
 namespace duckdb {
 
-PhysicalPivot::PhysicalPivot(vector<LogicalType> types_p, unique_ptr<PhysicalOperator> child, vector<PivotValueElement> pivot_values_p, idx_t group_count) :
-	PhysicalOperator(PhysicalOperatorType::PIVOT, std::move(types_p), child->estimated_cardinality), group_count(group_count), pivot_values(std::move(pivot_values_p)) {
+PhysicalPivot::PhysicalPivot(vector<LogicalType> types_p, unique_ptr<PhysicalOperator> child, BoundPivotInfo bound_pivot_p) :
+	PhysicalOperator(PhysicalOperatorType::PIVOT, std::move(types_p), child->estimated_cardinality), bound_pivot(std::move(bound_pivot_p)) {
 	children.push_back(std::move(child));
-	for(idx_t p = 0; p < pivot_values.size(); p++) {
-		pivot_map[pivot_values[p].name] = group_count + p;
+	for(idx_t p = 0; p < bound_pivot.pivot_values.size(); p++) {
+		pivot_map[bound_pivot.pivot_values[p].name] = bound_pivot.group_count + p;
 	}
-	empty_aggregate = Value(types[1]);
+	empty_aggregate = Value(types[bound_pivot.group_count]);
 }
 
 OperatorResultType PhysicalPivot::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 						   GlobalOperatorState &gstate, OperatorState &state) const  {
 	// copy the groups as-is
-	for(idx_t i = 0; i < group_count; i++) {
+	for(idx_t i = 0; i < bound_pivot.group_count; i++) {
 		chunk.data[i].Reference(input.data[i]);
 	}
-	auto pivot_value_lists = FlatVector::GetData<list_entry_t>(input.data[group_count]);
-	auto &pivot_value_children = ListVector::GetEntry(input.data[group_count]);
-	auto pivot_column_lists = FlatVector::GetData<list_entry_t>(input.data[group_count + 1]);
-	auto &pivot_column_values = ListVector::GetEntry(input.data[group_count + 1]);
+	auto pivot_value_lists = FlatVector::GetData<list_entry_t>(input.data[bound_pivot.group_count]);
+	auto &pivot_value_children = ListVector::GetEntry(input.data[bound_pivot.group_count]);
+	auto pivot_column_lists = FlatVector::GetData<list_entry_t>(input.data[bound_pivot.group_count + 1]);
+	auto &pivot_column_values = ListVector::GetEntry(input.data[bound_pivot.group_count + 1]);
 	auto pivot_columns = FlatVector::GetData<string_t>(pivot_column_values);
+
+	// initialize all aggregate columns with the empty aggregate value
+	for(idx_t c = bound_pivot.group_count; c < chunk.ColumnCount(); c++) {
+		chunk.data[c].Reference(empty_aggregate);
+		chunk.data[c].Flatten(input.size());
+	}
 
 	// move the pivots to the given columns
 	for(idx_t r = 0; r < input.size(); r++) {
 		auto list = pivot_value_lists[r];
 		if (list.offset != pivot_column_lists[r].offset || list.length != pivot_column_lists[r].length) {
 			throw InternalException("Pivot - unaligned lists between values and columns!?");
-		}
-		for(idx_t c = group_count; c < chunk.ColumnCount(); c++) {
-			chunk.data[c].SetValue(r, empty_aggregate);
 		}
 		for(idx_t l = 0; l < list.length; l++) {
 			// figure out the column value number of this list

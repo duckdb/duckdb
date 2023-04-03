@@ -15,7 +15,16 @@
 
 namespace duckdb {
 
-//! Represents a join
+struct BoundPivotInfo {
+	//! The number of group columns
+	idx_t group_count;
+	//! The set of types
+	vector<LogicalType> types;
+	//! The set of values to pivot on
+	vector<PivotValueElement> pivot_values;
+};
+
+
 class BoundPivotRef : public BoundTableRef {
 public:
 	explicit BoundPivotRef()
@@ -27,11 +36,7 @@ public:
 	shared_ptr<Binder> child_binder;
 	//! The child node of the pivot
 	unique_ptr<BoundTableRef> child;
-	//! The number of group columns
-	idx_t group_count;
-	//! The set of types
-	vector<LogicalType> types;
-	//! The set of values to pivot on
-	vector<PivotValueElement> pivot_values;
+	//! The bound pivot info
+	BoundPivotInfo bound_pivot;
 };
 } // namespace duckdb

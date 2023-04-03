@@ -12,20 +12,17 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/parser/tableref/pivotref.hpp"
+#include "duckdb/planner/tableref/bound_pivotref.hpp"
 
 namespace duckdb {
 
 class LogicalPivot : public LogicalOperator {
 public:
-	LogicalPivot(idx_t pivot_idx, unique_ptr<LogicalOperator> plan);
+	LogicalPivot(idx_t pivot_idx, unique_ptr<LogicalOperator> plan, BoundPivotInfo info);
 
 	idx_t pivot_index;
-	//! The number of groups
-	idx_t group_count;
-	//! The return types of the pivot operator
-	vector<LogicalType> return_types;
-	//! The set of values to pivot on
-	vector<PivotValueElement> pivot_values;
+	//! The bound pivot info
+	BoundPivotInfo bound_pivot;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;

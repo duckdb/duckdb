@@ -129,7 +129,7 @@ static unique_ptr<SelectNode> PivotInitialAggregate(PivotBindState &bind_state, 
 		bind_state.aggregate_names.push_back(aggregate->alias);
 		bind_state.internal_aggregate_names.push_back(aggregate_alias);
 		aggregate->alias = std::move(aggregate_alias);
-		subquery_stage1->select_list.push_back(std::move(aggregate));
+		subquery_stage1->select_list.push_back(aggregate->Copy());
 	}
 	return subquery_stage1;
 }
@@ -188,6 +188,7 @@ static unique_ptr<SelectNode> PivotFinalOperator(PivotBindState &bind_state, Piv
 	auto subquery_ref = make_unique<SubqueryRef>(std::move(subquery_select));
 
 	auto bound_pivot = make_unique<PivotRef>();
+	bound_pivot->aggregates = std::move(ref.aggregates);
 	bound_pivot->bound_pivot_values = std::move(pivot_values);
 	bound_pivot->bound_group_names = std::move(bind_state.group_names);
 	bound_pivot->source = std::move(subquery_ref);
@@ -204,7 +205,6 @@ unique_ptr<BoundTableRef> Binder::BindBoundPivot(PivotRef &ref) {
 	result->bind_index = GenerateTableIndex();
 	result->child_binder = Binder::CreateBinder(context, this);
 	result->child = result->child_binder->Bind(*ref.source);
-	result->group_count = ref.bound_group_names.size();
 
 	vector<string> child_names;
 	vector<LogicalType> child_types;
@@ -223,8 +223,9 @@ unique_ptr<BoundTableRef> Binder::BindBoundPivot(PivotRef &ref) {
 		names.push_back(ref.bound_pivot_values[i].name);
 		types.push_back(aggregate_type);
 	}
-	result->types = types;
-	result->pivot_values = std::move(ref.bound_pivot_values);
+	result->bound_pivot.group_count = ref.bound_group_names.size();
+	result->bound_pivot.types = types;
+	result->bound_pivot.pivot_values = std::move(ref.bound_pivot_values);
 	auto subquery_alias = ref.alias.empty() ? "__unnamed_pivot" : ref.alias;
 	bind_context.AddGenericBinding(result->bind_index, subquery_alias, names, types);
 	return result;
