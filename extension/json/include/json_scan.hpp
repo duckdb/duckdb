@@ -85,8 +85,7 @@ struct JSONScanData : public TableFunctionData {
 public:
 	JSONScanData();
 
-	static duckdb::unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input);
-	static void InitializeFilePaths(ClientContext &context, const vector<string> &patterns, vector<string> &file_paths);
+	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input);
 	void InitializeFormats();
 
 	void Serialize(FieldWriter &writer);

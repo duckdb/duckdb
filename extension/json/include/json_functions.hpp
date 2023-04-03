@@ -26,10 +26,10 @@ class BuiltinFunctions;
 struct JSONReadFunctionData : public FunctionData {
 public:
 	JSONReadFunctionData(bool constant, string path_p, idx_t len);
-	duckdb::unique_ptr<FunctionData> Copy() const override;
+	unique_ptr<FunctionData> Copy() const override;
 	bool Equals(const FunctionData &other_p) const override;
-	static duckdb::unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
-	                                             vector<duckdb::unique_ptr<Expression>> &arguments);
+	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
+	                                             vector<unique_ptr<Expression>> &arguments);
 
 public:
 	const bool constant;
@@ -41,10 +41,10 @@ public:
 struct JSONReadManyFunctionData : public FunctionData {
 public:
 	JSONReadManyFunctionData(vector<string> paths_p, vector<size_t> lens_p);
-	duckdb::unique_ptr<FunctionData> Copy() const override;
+	unique_ptr<FunctionData> Copy() const override;
 	bool Equals(const FunctionData &other_p) const override;
-	static duckdb::unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
-	                                             vector<duckdb::unique_ptr<Expression>> &arguments);
+	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
+	                                             vector<unique_ptr<Expression>> &arguments);
 
 public:
 	const vector<string> paths;
@@ -56,7 +56,7 @@ struct JSONFunctionLocalState : public FunctionLocalState {
 public:
 	explicit JSONFunctionLocalState(Allocator &allocator);
 	explicit JSONFunctionLocalState(ClientContext &context);
-	static duckdb::unique_ptr<FunctionLocalState> Init(ExpressionState &state, const BoundFunctionExpression &expr,
+	static unique_ptr<FunctionLocalState> Init(ExpressionState &state, const BoundFunctionExpression &expr,
 	                                                   FunctionData *bind_data);
 	static JSONFunctionLocalState &ResetAndGet(ExpressionState &state);
 
@@ -68,9 +68,9 @@ class JSONFunctions {
 public:
 	static vector<CreateScalarFunctionInfo> GetScalarFunctions();
 	static vector<CreateTableFunctionInfo> GetTableFunctions();
-	static duckdb::unique_ptr<TableRef> ReadJSONReplacement(ClientContext &context, const string &table_name,
-	                                                        ReplacementScanData *data);
-	static TableFunction GetReadJSONTableFunction(bool list_parameter, shared_ptr<JSONScanInfo> function_info);
+	static unique_ptr<TableRef> ReadJSONReplacement(ClientContext &context, const string &table_name,
+	                                                ReplacementScanData *data);
+	static TableFunction GetReadJSONTableFunction(shared_ptr<JSONScanInfo> function_info);
 	static CreateCopyFunctionInfo GetJSONCopyFunction();
 	static void RegisterCastFunctions(CastFunctionSet &casts);
 
