@@ -11,9 +11,11 @@ namespace duckdb {
 namespace {
 struct __unique_ptr_utils {
 	static inline void AssertNotNull(void *ptr) {
+#ifdef DEBUG
 		if (DUCKDB_UNLIKELY(!ptr)) {
 			throw InternalException("Attempted to dereference unique_ptr that is NULL!");
 		}
+#endif
 	}
 };
 } // namespace
