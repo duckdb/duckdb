@@ -43,6 +43,10 @@ unique_ptr<T> make_unique(Args &&... args) {
 #else // Visual Studio has make_unique
 using std::make_unique;
 #endif
+template <typename T, typename... Args>
+duckdb::unique_ptr<T> make_uniq(Args &&... args) {
+	return unique_ptr<T>(new T(std::forward<Args>(args)...));
+}
 template <typename S, typename T, typename... Args>
 unique_ptr<S> make_unique_base(Args &&... args) {
 	return unique_ptr<S>(new T(std::forward<Args>(args)...));
