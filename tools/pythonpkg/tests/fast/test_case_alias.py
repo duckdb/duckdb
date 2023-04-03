@@ -2,10 +2,12 @@ import pandas
 import numpy as np
 import datetime
 import duckdb
+import pytest
+from conftest import NumpyPandas, ArrowPandas
 
 class TestCaseAlias(object):
-    def test_case_alias(self, duckdb_cursor):
-        import pandas
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_case_alias(self, duckdb_cursor, pandas):
         import numpy as np
         import datetime
         import duckdb

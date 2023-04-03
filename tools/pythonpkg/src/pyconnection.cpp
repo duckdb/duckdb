@@ -88,6 +88,37 @@ bool DuckDBPyConnection::IsJupyter() {
 	return DuckDBPyConnection::environment == PythonEnvironmentType::JUPYTER;
 }
 
+static bool IsArrowBackedDataFrame(const py::object &df) {
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	D_ASSERT(py::isinstance(df, import_cache.pandas().DataFrame()));
+
+	py::list dtypes = df.attr("dtypes");
+	if (dtypes.empty()) {
+		return false;
+	}
+	// TODO: make this optional, will throw on pandas < 2.0.0
+	auto arrow_dtype =
+	    py::module_::import("pandas").attr("core").attr("arrays").attr("arrow").attr("dtype").attr("ArrowDtype");
+	if (py::isinstance(dtypes[0], arrow_dtype)) {
+		return true;
+	}
+	return false;
+}
+
+py::object ArrowTableFromDataframe(const py::object &df) {
+	// Construct a pyarrow.lib.Table from the internal arrays
+	py::list names = df.attr("columns");
+	auto getter = df.attr("__getitem__");
+	py::list array_list;
+	for (auto &name : names) {
+		py::object column = getter(name);
+		auto array = column.attr("array").attr("__arrow_array__")();
+		array_list.append(array);
+	}
+	return py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_arrays")(
+		array_list, py::arg("names") = names);
+}
+
 static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>> &m) {
 	m.def("cursor", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
 	    .def("register_filesystem", &DuckDBPyConnection::RegisterFilesystem, "Register a fsspec compliant filesystem",
@@ -845,6 +876,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const DataFrame &value) 
 		throw ConnectionException("Connection has already been closed");
 	}
 	string name = "df_" + StringUtil::GenerateRandomName();
+	if (IsArrowBackedDataFrame(value)) {
+		auto table = ArrowTableFromDataframe(value);
+		return DuckDBPyConnection::FromArrow(table);
+	}
 	auto new_df = PandasScanFunction::PandasReplaceCopiedNames(value);
 	vector<Value> params;
 	params.emplace_back(Value::POINTER((uintptr_t)new_df.ptr()));
@@ -1143,23 +1178,6 @@ static void CreateArrowScan(py::object entry, TableFunctionRef &table_function,
 	    make_unique<PythonDependencies>(make_unique<RegisteredArrow>(std::move(stream_factory), entry));
 }
 
-static bool IsArrowBackedDataFrame(const py::object &df) {
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	D_ASSERT(py::isinstance(df, import_cache.pandas().DataFrame()));
-
-	py::list dtypes = df.attr("dtypes");
-	if (dtypes.empty()) {
-		return false;
-	}
-	// TODO: make this optional, will throw on pandas < 2.0.0
-	auto arrow_dtype =
-	    py::module_::import("pandas").attr("core").attr("arrays").attr("arrow").attr("dtype").attr("ArrowDtype");
-	if (py::isinstance(dtypes[0], arrow_dtype)) {
-		return true;
-	}
-	return false;
-}
-
 static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, ClientConfig &config,
                                            py::object &current_frame) {
 	if (!dict.contains(table_name)) {
@@ -1171,17 +1189,7 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 	vector<unique_ptr<ParsedExpression>> children;
 	if (DuckDBPyConnection::IsPandasDataframe(entry)) {
 		if (IsArrowBackedDataFrame(entry)) {
-			// Construct a pyarrow.lib.Table from the internal arrays
-			py::list names = entry.attr("columns");
-			auto getter = entry.attr("__getitem__");
-			py::list array_list;
-			for (auto &name : names) {
-				py::object column = getter(name);
-				auto array = column.attr("array").attr("__arrow_array__")();
-				array_list.append(array);
-			}
-			auto table = py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_arrays")(
-			    array_list, py::arg("names") = names);
+			auto table = ArrowTableFromDataframe(entry);
 			CreateArrowScan(table, *table_function, children, config);
 		} else {
 			string name = "df_" + StringUtil::GenerateRandomName();
