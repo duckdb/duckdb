@@ -30,12 +30,34 @@ class NumpyPandas:
 		item = eval(f'self.pandas.{__name}')
 		return item
 
+def convert_to_numpy(df):
+	print("DF", df.dtypes)
+	df = df.convert_dtypes(dtype_backend='numpy_nullable')
+	print("DF", df.dtypes)
+	return df
+
+def convert_and_equal(df1, df2):
+	print('assert_frame_equal')
+	df1 = convert_to_numpy(df1)
+	df2 = convert_to_numpy(df2)
+	pytest.importorskip("pandas").testing.assert_frame_equal(df1, df2)
+
+class ArrowMockTesting:
+	def __init__(self):
+		self.testing = pytest.importorskip("pandas").testing
+		self.assert_frame_equal = convert_and_equal
+	def __getattr__(self, __name: str):
+		item = eval(f'self.testing.{__name}')
+		return item
+
 class ArrowPandas:
 	def __init__(self):
 		self.backend = 'pyarrow'
 		self.DataFrame = arrow_pandas_df
 		self.pandas = pytest.importorskip("pandas")
+		self.testing = ArrowMockTesting()
 	def __getattr__(self, __name: str):
+		print(__name)
 		item = eval(f'self.pandas.{__name}')
 		return item
 
