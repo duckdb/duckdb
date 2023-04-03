@@ -74,7 +74,9 @@ class BoundDistinctModifier : public BoundResultModifier {
 public:
 	BoundDistinctModifier();
 
-	//! list of distinct on targets (if any)
+	//! Whether or not this is a DISTINCT or DISTINCT ON
+	bool distinct_on;
+	//! list of distinct on targets
 	vector<unique_ptr<Expression>> target_distincts;
 };
 
