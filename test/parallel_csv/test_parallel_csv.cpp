@@ -229,3 +229,8 @@ TEST_CASE("Test Parallel CSV All Files - data/csv/中文", "[parallel-csv]") {
 	std::set<std::string> skip;
 	RunTestOnFolder("data/csv/中文/", skip);
 }
+
+TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/abac", "[parallel-csv]") {
+	std::set<std::string> skip;
+	RunTestOnFolder("test/sql/copy/csv/data/abac/", skip);
+}

@@ -235,8 +235,12 @@ void VerifyLineLength(idx_t line_size, idx_t max_line_size) {
 	}
 }
 
-bool AllNewLine(string_t value) {
+bool AllNewLine(string_t value, idx_t column_amount) {
 	auto value_str = value.GetString();
+	if (value_str.empty() && column_amount == 1) {
+		// This is a one column (empty)
+		return false;
+	}
 	for (idx_t i = 0; i < value.GetSize(); i++) {
 		if (!StringUtil::CharacterIsNewline(value_str[i])) {
 			return false;
@@ -523,7 +527,7 @@ final_state : {
 		    (insert_chunk.data.size() == 1 && start_buffer != position_buffer)) {
 			// remaining values to be added to the chunk
 			auto str_value = buffer->GetValue(start_buffer, position_buffer, offset);
-			if (!AllNewLine(str_value) || offset == 0) {
+			if (!AllNewLine(str_value, insert_chunk.data.size()) || offset == 0) {
 				AddValue(str_value, column, escape_positions, has_quotes);
 				if (try_add_line) {
 					bool success = column == return_types.size();
