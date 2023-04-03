@@ -113,13 +113,25 @@ string PhysicalTableScan::ParamsToString() const {
 		result += "\n[INFOSEPARATOR]\n";
 	}
 	if (function.projection_pushdown) {
-		for (idx_t i = 0; i < projection_ids.size(); i++) {
-			const auto &column_id = column_ids[projection_ids[i]];
-			if (column_id < names.size()) {
-				if (i > 0) {
-					result += "\n";
+		if (function.filter_prune) {
+			for (idx_t i = 0; i < projection_ids.size(); i++) {
+				const auto &column_id = column_ids[projection_ids[i]];
+				if (column_id < names.size()) {
+					if (i > 0) {
+						result += "\n";
+					}
+					result += names[column_id];
 				}
-				result += names[column_id];
+			}
+		} else {
+			for (idx_t i = 0; i < column_ids.size(); i++) {
+				const auto &column_id = column_ids[i];
+				if (column_id < names.size()) {
+					if (i > 0) {
+						result += "\n";
+					}
+					result += names[column_id];
+				}
 			}
 		}
 	}

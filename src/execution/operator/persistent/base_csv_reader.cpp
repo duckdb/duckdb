@@ -61,9 +61,10 @@ void BaseCSVReader::InitParseChunk(idx_t num_cols) {
 	}
 }
 
-void BaseCSVReader::InitInsertChunkIdx(idx_t num_cols) {
-	for (idx_t col = 0; col < num_cols; ++col) {
-		insert_cols_idx.push_back(col);
+void BaseCSVReader::InitializeProjection() {
+	for (idx_t i = 0; i < GetTypes().size(); i++) {
+		reader_data.column_ids.push_back(i);
+		reader_data.column_mapping.push_back(i);
 	}
 }
 
@@ -400,42 +401,36 @@ void BaseCSVReader::VerifyUTF8(idx_t col_idx) {
 }
 
 bool TryCastDecimalVectorCommaSeparated(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector,
-                                        idx_t count, string &error_message, LogicalType &result_type) {
+                                        idx_t count, string &error_message, const LogicalType &result_type) {
 	auto width = DecimalType::GetWidth(result_type);
 	auto scale = DecimalType::GetScale(result_type);
 	switch (result_type.InternalType()) {
 	case PhysicalType::INT16:
 		return TemplatedTryCastDecimalVector<TryCastToDecimalCommaSeparated, int16_t>(
 		    options, input_vector, result_vector, count, error_message, width, scale);
-		break;
 	case PhysicalType::INT32:
 		return TemplatedTryCastDecimalVector<TryCastToDecimalCommaSeparated, int32_t>(
 		    options, input_vector, result_vector, count, error_message, width, scale);
-		break;
 	case PhysicalType::INT64:
 		return TemplatedTryCastDecimalVector<TryCastToDecimalCommaSeparated, int64_t>(
 		    options, input_vector, result_vector, count, error_message, width, scale);
-		break;
 	case PhysicalType::INT128:
 		return TemplatedTryCastDecimalVector<TryCastToDecimalCommaSeparated, hugeint_t>(
 		    options, input_vector, result_vector, count, error_message, width, scale);
-		break;
 	default:
 		throw InternalException("Unimplemented physical type for decimal");
 	}
 }
 
 bool TryCastFloatingVectorCommaSeparated(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector,
-                                         idx_t count, string &error_message, LogicalType &result_type) {
+                                         idx_t count, string &error_message, const LogicalType &result_type) {
 	switch (result_type.InternalType()) {
 	case PhysicalType::DOUBLE:
 		return TemplatedTryCastFloatingVector<TryCastErrorMessageCommaSeparated, double>(
 		    options, input_vector, result_vector, count, error_message);
-		break;
 	case PhysicalType::FLOAT:
 		return TemplatedTryCastFloatingVector<TryCastErrorMessageCommaSeparated, float>(
 		    options, input_vector, result_vector, count, error_message);
-		break;
 	default:
 		throw InternalException("Unimplemented physical type for floating");
 	}
@@ -450,41 +445,44 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 
 	// convert the columns in the parsed chunk to the types of the table
 	insert_chunk.SetCardinality(parse_chunk);
-	for (idx_t col_idx = 0; col_idx < return_types.size(); col_idx++) {
-		auto insert_idx = insert_cols_idx[col_idx];
-		auto &type = return_types[col_idx];
+	if (reader_data.column_ids.empty() && !reader_data.empty_columns) {
+		throw InternalException("BaseCSVReader::Flush called on a CSV reader that was not correctly initialized. Call "
+		                        "MultiFileReader::InitializeReader or InitializeProjection");
+	}
+	D_ASSERT(reader_data.column_ids.size() == reader_data.column_mapping.size());
+	for (idx_t c = 0; c < reader_data.column_ids.size(); c++) {
+		auto col_idx = reader_data.column_ids[c];
+		auto result_idx = reader_data.column_mapping[c];
+		auto &parse_vector = parse_chunk.data[col_idx];
+		auto &result_vector = insert_chunk.data[result_idx];
+		auto &type = result_vector.GetType();
 		if (type.id() == LogicalTypeId::VARCHAR) {
 			// target type is varchar: no need to convert
 			// just test that all strings are valid utf-8 strings
 			VerifyUTF8(col_idx);
 			// reinterpret rather than reference so we can deal with user-defined types
-			insert_chunk.data[insert_idx].Reinterpret(parse_chunk.data[col_idx]);
-
+			result_vector.Reinterpret(parse_vector);
 		} else {
 			string error_message;
 			bool success;
 			if (options.has_format[LogicalTypeId::DATE] && type.id() == LogicalTypeId::DATE) {
 				// use the date format to cast the chunk
-				success = TryCastDateVector(options, parse_chunk.data[col_idx], insert_chunk.data[insert_idx],
-				                            parse_chunk.size(), error_message);
-			} else if (options.has_format[LogicalTypeId::TIMESTAMP] &&
-			           return_types[col_idx].id() == LogicalTypeId::TIMESTAMP) {
+				success = TryCastDateVector(options, parse_vector, result_vector, parse_chunk.size(), error_message);
+			} else if (options.has_format[LogicalTypeId::TIMESTAMP] && type.id() == LogicalTypeId::TIMESTAMP) {
 				// use the date format to cast the chunk
-				success = TryCastTimestampVector(options, parse_chunk.data[col_idx], insert_chunk.data[insert_idx],
-				                                 parse_chunk.size(), error_message);
-			} else if (options.decimal_separator != "." && (return_types[col_idx].id() == LogicalTypeId::FLOAT ||
-			                                                return_types[col_idx].id() == LogicalTypeId::DOUBLE)) {
-				success = TryCastFloatingVectorCommaSeparated(options, parse_chunk.data[col_idx],
-				                                              insert_chunk.data[insert_idx], parse_chunk.size(),
-				                                              error_message, return_types[col_idx]);
-			} else if (options.decimal_separator != "." && return_types[col_idx].id() == LogicalTypeId::DECIMAL) {
-				success = TryCastDecimalVectorCommaSeparated(options, parse_chunk.data[col_idx],
-				                                             insert_chunk.data[insert_idx], parse_chunk.size(),
-				                                             error_message, return_types[col_idx]);
+				success =
+				    TryCastTimestampVector(options, parse_vector, result_vector, parse_chunk.size(), error_message);
+			} else if (options.decimal_separator != "." &&
+			           (type.id() == LogicalTypeId::FLOAT || type.id() == LogicalTypeId::DOUBLE)) {
+				success = TryCastFloatingVectorCommaSeparated(options, parse_vector, result_vector, parse_chunk.size(),
+				                                              error_message, type);
+			} else if (options.decimal_separator != "." && type.id() == LogicalTypeId::DECIMAL) {
+				success = TryCastDecimalVectorCommaSeparated(options, parse_vector, result_vector, parse_chunk.size(),
+				                                             error_message, type);
 			} else {
 				// target type is not varchar: perform a cast
-				success = VectorOperations::TryCast(context, parse_chunk.data[col_idx], insert_chunk.data[insert_idx],
-				                                    parse_chunk.size(), &error_message);
+				success =
+				    VectorOperations::TryCast(context, parse_vector, result_vector, parse_chunk.size(), &error_message);
 			}
 			if (success) {
 				continue;
@@ -503,11 +501,10 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 
 			// figure out the exact line number
 			UnifiedVectorFormat inserted_column_data;
-			insert_chunk.data[col_idx].ToUnifiedFormat(parse_chunk.size(), inserted_column_data);
+			result_vector.ToUnifiedFormat(parse_chunk.size(), inserted_column_data);
 			idx_t row_idx;
 			for (row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
-				auto &parsed_column = parse_chunk.data[col_idx];
-				if (!inserted_column_data.validity.RowIsValid(row_idx) && !FlatVector::IsNull(parsed_column, row_idx)) {
+				if (!inserted_column_data.validity.RowIsValid(row_idx) && !FlatVector::IsNull(parse_vector, row_idx)) {
 					break;
 				}
 			}
@@ -527,19 +524,20 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 	}
 	if (conversion_error_ignored) {
 		D_ASSERT(options.ignore_errors);
-		SelectionVector succesful_rows;
-		succesful_rows.Initialize(parse_chunk.size());
+		SelectionVector succesful_rows(parse_chunk.size());
 		idx_t sel_size = 0;
 
 		for (idx_t row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
 			bool failed = false;
-			for (idx_t column_idx = 0; column_idx < return_types.size(); column_idx++) {
+			for (idx_t c = 0; c < reader_data.column_ids.size(); c++) {
+				auto col_idx = reader_data.column_ids[c];
+				auto result_idx = reader_data.column_mapping[c];
 
-				auto &inserted_column = insert_chunk.data[column_idx];
-				auto &parsed_column = parse_chunk.data[column_idx];
+				auto &parse_vector = parse_chunk.data[col_idx];
+				auto &result_vector = insert_chunk.data[result_idx];
 
-				bool was_already_null = FlatVector::IsNull(parsed_column, row_idx);
-				if (!was_already_null && FlatVector::IsNull(inserted_column, row_idx)) {
+				bool was_already_null = FlatVector::IsNull(parse_vector, row_idx);
+				if (!was_already_null && FlatVector::IsNull(result_vector, row_idx)) {
 					failed = true;
 					break;
 				}
