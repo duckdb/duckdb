@@ -1,10 +1,12 @@
-import pandas
 import numpy as np
 import datetime
 import duckdb
+import pytest
+from conftest import NumpyPandas, ArrowPandas
 
 class TestPandasNaN(object):
-    def test_pandas_nan(self, duckdb_cursor):
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_pandas_nan(self, duckdb_cursor, pandas):
         # create a DataFrame with some basic values
         df = pandas.DataFrame([{"col1": "val1", "col2": 1.05},{"col1": "val3", "col2": np.NaN}])
         # create a new column (newcol1) that includes either NaN or values from col1
@@ -40,5 +42,3 @@ class TestPandasNaN(object):
         assert result_df['newcol1'][1] == df['newcol1'][1]
         assert pandas.isnull(result_df['datetest'][0])
         assert result_df['datetest'][1] == df['datetest'][1]
-
-        

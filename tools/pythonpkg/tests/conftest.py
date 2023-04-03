@@ -73,7 +73,6 @@ class ArrowPandas:
 		self.pandas = pytest.importorskip("pandas")
 		self.testing = ArrowMockTesting()
 	def __getattr__(self, __name: str):
-		print(__name)
 		item = eval(f'self.pandas.{__name}')
 		return item
 
