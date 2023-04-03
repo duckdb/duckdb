@@ -327,8 +327,8 @@ public:
 		for (idx_t i = 0; i < rows_to_skip; i++) {
 			file_handle->ReadLine();
 		}
-		current_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position);
-		next_buffer = current_buffer->Next(*file_handle, buffer_size, current_csv_position);
+		current_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position, file_number);
+		next_buffer = current_buffer->Next(*file_handle, buffer_size, current_csv_position, file_number);
 		running_threads = MaxThreads();
 	}
 	ParallelCSVGlobalState() {
@@ -343,11 +343,7 @@ public:
 	//! Verify if the CSV File was read correctly
 	void Verify();
 
-	void UpdateVerification(VerificationPositions positions);
-
-	//! We update the last added verification position, it so happens that it was the actual last valid one
-	//! i.e., a buffer that does not contain all empty lines
-	void UpdateLastVerification();
+	void UpdateVerification(VerificationPositions positions, idx_t file_number);
 
 	void IncrementThread();
 
@@ -407,11 +403,13 @@ private:
 	bool force_parallelism;
 	//! Current (Global) position of CSV
 	idx_t current_csv_position = 0;
+	//! Current File Number
+	idx_t file_number = 0;
 	idx_t max_tuple_end = 0;
 	//! the vector stores positions where threads ended the last line they read in the CSV File, and the set stores
 	//! positions where they started reading the first line.
-	vector<idx_t> tuple_end;
-	set<idx_t> tuple_start;
+	vector<vector<idx_t>> tuple_end;
+	vector<set<idx_t>> tuple_start;
 	idx_t running_threads = 0;
 };
 
@@ -451,27 +449,33 @@ void ParallelCSVGlobalState::Verify() {
 		if (tuple_end.empty()) {
 			return;
 		}
-		// figure out max value of last_pos
-		auto max_value = *max_element(std::begin(tuple_end), std::end(tuple_end));
-		for (auto &last_pos : tuple_end) {
-			auto first_pos = tuple_start.find(last_pos);
-			if (first_pos == tuple_start.end()) {
-				// this might be necessary due to carriage returns outside buffer scopes.
-				first_pos = tuple_start.find(last_pos + 1);
-			}
-			if (first_pos == tuple_start.end() && last_pos != max_value) {
-				string error = "Not possible to read this CSV File with multithreading. Tuple: " + to_string(last_pos) +
-				               " does not have a match\n";
-				error += "End Lines: \n";
-				for (auto &end_line : tuple_end) {
-					error += to_string(end_line) + "\n";
+		D_ASSERT(tuple_end.size() == tuple_start.size());
+		for (idx_t i = 0; i < tuple_start.size(); i++) {
+			auto &current_tuple_end = tuple_end[i];
+			auto &current_tuple_start = tuple_start[i];
+			// figure out max value of last_pos
+			auto max_value = *max_element(std::begin(current_tuple_end), std::end(current_tuple_end));
+			for (auto &last_pos : current_tuple_end) {
+				auto first_pos = current_tuple_start.find(last_pos);
+				if (first_pos == current_tuple_start.end()) {
+					// this might be necessary due to carriage returns outside buffer scopes.
+					first_pos = current_tuple_start.find(last_pos + 1);
 				}
-				error += "Start Lines: \n";
-				for (auto &start_line : tuple_start) {
-					error += to_string(start_line) + "\n";
+				if (first_pos == current_tuple_start.end() && last_pos != max_value) {
+					string error =
+					    "Not possible to read this CSV File with multithreading. Tuple: " + to_string(last_pos) +
+					    " does not have a match\n";
+					error += "End Lines: \n";
+					for (auto &end_line : current_tuple_end) {
+						error += to_string(end_line) + "\n";
+					}
+					error += "Start Lines: \n";
+					for (auto &start_line : current_tuple_start) {
+						error += to_string(start_line) + "\n";
+					}
+					throw InvalidInputException(
+					    "CSV File not supported for multithreading. Please run single-threaded CSV Reading");
 				}
-				throw InvalidInputException(
-				    "CSV File not supported for multithreading. Please run single-threaded CSV Reading");
 			}
 		}
 	}
@@ -485,8 +489,10 @@ unique_ptr<CSVBufferRead> ParallelCSVGlobalState::Next(ClientContext &context, R
 			current_file_path = bind_data.files[file_index++];
 			file_handle = ReadCSV::OpenCSV(current_file_path, bind_data.options.compression, context);
 			current_csv_position = 0;
-			current_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position);
-			next_buffer = current_buffer->Next(*file_handle, buffer_size, current_csv_position);
+			file_number++;
+			current_buffer =
+			    make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position, file_number);
+			next_buffer = current_buffer->Next(*file_handle, buffer_size, current_csv_position, file_number);
 		} else {
 			// We are done scanning.
 			return nullptr;
@@ -505,26 +511,23 @@ unique_ptr<CSVBufferRead> ParallelCSVGlobalState::Next(ClientContext &context, R
 		current_buffer = next_buffer;
 		if (next_buffer) {
 			// Next buffer gets the next-next buffer
-			next_buffer = next_buffer->Next(*file_handle, buffer_size, current_csv_position);
+			next_buffer = next_buffer->Next(*file_handle, buffer_size, current_csv_position, file_number);
 		}
 	}
 	return result;
 }
-void ParallelCSVGlobalState::UpdateVerification(VerificationPositions positions) {
+void ParallelCSVGlobalState::UpdateVerification(VerificationPositions positions, idx_t file_number_p) {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	if (positions.beginning_of_first_line < positions.end_of_last_line) {
 		if (positions.end_of_last_line > max_tuple_end) {
 			max_tuple_end = positions.end_of_last_line;
 		}
-		tuple_start.insert(positions.beginning_of_first_line);
-		tuple_end.push_back(positions.end_of_last_line);
-	}
-}
-
-void ParallelCSVGlobalState::UpdateLastVerification() {
-	lock_guard<mutex> parallel_lock(main_mutex);
-	if (!tuple_end.empty()) {
-		tuple_end.back() = NumericLimits<uint64_t>::Maximum();
+		if (file_number_p == tuple_start.size()) {
+			tuple_start.emplace_back();
+			tuple_end.emplace_back();
+		}
+		tuple_start[file_number_p].insert(positions.beginning_of_first_line);
+		tuple_end[file_number_p].push_back(positions.end_of_last_line);
 	}
 }
 
@@ -590,7 +593,8 @@ static void ParallelReadCSVFunction(ClientContext &context, TableFunctionInput &
 		if (csv_local_state.csv_reader->finished) {
 			auto verification_updates = csv_local_state.csv_reader->GetVerificationPositions();
 			if (verification_updates.beginning_of_first_line != verification_updates.end_of_last_line) {
-				csv_global_state.UpdateVerification(verification_updates);
+				csv_global_state.UpdateVerification(verification_updates,
+				                                    csv_local_state.csv_reader->buffer->buffer->GetFileNumber());
 			}
 
 			auto next_chunk = csv_global_state.Next(context, bind_data);
