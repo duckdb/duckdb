@@ -64,7 +64,7 @@ OperatorResultType PhysicalPivot::Execute(ExecutionContext &context, DataChunk &
 				continue;
 			}
 			auto column_idx = entry->second;
-			for(idx_t aggr = 0; aggr < empty_aggregates.size(); aggr++) {
+			for (idx_t aggr = 0; aggr < empty_aggregates.size(); aggr++) {
 				auto pivot_value_lists = FlatVector::GetData<list_entry_t>(input.data[bound_pivot.group_count + aggr]);
 				auto &pivot_value_child = ListVector::GetEntry(input.data[bound_pivot.group_count + aggr]);
 				if (list.offset != pivot_value_lists[r].offset || list.length != pivot_value_lists[r].length) {

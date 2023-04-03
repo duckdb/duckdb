@@ -164,24 +164,37 @@ static unique_ptr<SelectNode> PivotListAggregate(PivotBindState &bind_state, Piv
 	// FIXME: we should have one list for all of these (as a concatenation of strings maybe?)
 	idx_t pivot_count = 0;
 	for (auto &pivot : ref.pivots) {
+		auto pivot_name = "__internal_pivot_name" + to_string(++pivot_count);
+		unique_ptr<ParsedExpression> expr;
 		for (auto &pivot_expr : pivot.pivot_expressions) {
-			auto pivot_name = "__internal_pivot_name" + to_string(++pivot_count);
-
 			// coalesce(pivot::VARCHAR, 'NULL')
 			auto cast = make_unique<CastExpression>(LogicalType::VARCHAR, std::move(pivot_expr));
 			vector<unique_ptr<ParsedExpression>> coalesce_children;
 			coalesce_children.push_back(std::move(cast));
 			coalesce_children.push_back(make_unique<ConstantExpression>(Value("NULL")));
-			auto coalesce = make_unique<OperatorExpression>(ExpressionType::OPERATOR_COALESCE, std::move(coalesce_children));
-			// list(coalesce)
-			vector<unique_ptr<ParsedExpression>> list_children;
-			list_children.push_back(std::move(coalesce));
-			auto aggregate = make_unique<FunctionExpression>("list", std::move(list_children));
+			auto coalesce =
+			    make_unique<OperatorExpression>(ExpressionType::OPERATOR_COALESCE, std::move(coalesce_children));
 
-			aggregate->alias = pivot_name;
-			subquery_stage2->select_list.push_back(std::move(aggregate));
-			bind_state.internal_pivot_names.push_back(std::move(pivot_name));
+			if (!expr) {
+				expr = std::move(coalesce);
+			} else {
+				// string concat
+				vector<unique_ptr<ParsedExpression>> concat_children;
+				concat_children.push_back(std::move(expr));
+				concat_children.push_back(make_unique<ConstantExpression>(Value("_")));
+				concat_children.push_back(std::move(coalesce));
+				auto concat = make_unique<FunctionExpression>("concat", std::move(concat_children));
+				expr = std::move(concat);
+			}
 		}
+		// list(coalesce)
+		vector<unique_ptr<ParsedExpression>> list_children;
+		list_children.push_back(std::move(expr));
+		auto aggregate = make_unique<FunctionExpression>("list", std::move(list_children));
+
+		aggregate->alias = pivot_name;
+		subquery_stage2->select_list.push_back(std::move(aggregate));
+		bind_state.internal_pivot_names.push_back(std::move(pivot_name));
 	}
 	subquery_stage2->from_table = std::move(subquery_ref);
 	return subquery_stage2;
@@ -199,6 +212,7 @@ static unique_ptr<SelectNode> PivotFinalOperator(PivotBindState &bind_state, Piv
 	auto bound_pivot = make_unique<PivotRef>();
 	bound_pivot->bound_pivot_values = std::move(pivot_values);
 	bound_pivot->bound_group_names = std::move(bind_state.group_names);
+	bound_pivot->bound_aggregate_names = std::move(bind_state.aggregate_names);
 	bound_pivot->source = std::move(subquery_ref);
 
 	final_pivot_operator->select_list.push_back(make_unique<StarExpression>());
@@ -238,6 +252,9 @@ unique_ptr<BoundTableRef> Binder::BindBoundPivot(PivotRef &ref) {
 
 	auto &aggregates = result->bound_pivot.aggregates;
 	ExtractPivotAggregates(*result->child, aggregates);
+	if (aggregates.size() != ref.bound_aggregate_names.size()) {
+		throw InternalException("Pivot - aggregate count mismatch");
+	}
 
 	vector<string> child_names;
 	vector<LogicalType> child_types;
@@ -252,13 +269,24 @@ unique_ptr<BoundTableRef> Binder::BindBoundPivot(PivotRef &ref) {
 	}
 	// emit the pivot columns
 	for (auto &pivot_value : ref.bound_pivot_values) {
-		for(auto &aggr : aggregates) {
+		for (idx_t aggr_idx = 0; aggr_idx < ref.bound_aggregate_names.size(); aggr_idx++) {
+			auto &aggr = aggregates[aggr_idx];
+			auto &aggr_name = ref.bound_aggregate_names[aggr_idx];
 			auto name = pivot_value.name;
-			if (aggregates.size() > 1 || !aggr->alias.empty()) {
+			if (aggregates.size() > 1 || !aggr_name.empty()) {
 				// if there are multiple aggregates specified we add the name of the aggregate as well
-				name += + "_" + aggr->GetName();
+				name += +"_" + (aggr_name.empty() ? aggr->GetName() : aggr_name);
 			}
-			result->bound_pivot.pivot_values.push_back(pivot_value.values[0].ToString());
+			string pivot_str;
+			for (auto &value : pivot_value.values) {
+				auto str = value.ToString();
+				if (pivot_str.empty()) {
+					pivot_str = std::move(str);
+				} else {
+					pivot_str += "_" + str;
+				}
+			}
+			result->bound_pivot.pivot_values.push_back(std::move(pivot_str));
 			names.push_back(std::move(name));
 			types.push_back(aggr->return_type);
 		}
