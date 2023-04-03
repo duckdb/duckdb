@@ -1191,24 +1191,12 @@ final_state:
 }
 
 void BufferedCSVReader::SkipEmptyLines() {
-	idx_t new_pos_buffer = position;
 	if (parse_chunk.data.size() == 1) {
 		// Empty lines are null data.
 		return;
 	}
-	for (; new_pos_buffer < buffer_size; new_pos_buffer++) {
-		if (StringUtil::CharacterIsNewline(buffer[new_pos_buffer])) {
-			bool carrier_return = buffer[new_pos_buffer] == '\r';
-			new_pos_buffer++;
-			if (carrier_return && new_pos_buffer < buffer_size && buffer[new_pos_buffer] == '\n') {
-				position++;
-			}
-			if (new_pos_buffer > buffer_size) {
-				return;
-			}
-			position = new_pos_buffer;
-			return;
-		} else if (buffer[new_pos_buffer] != ' ') {
+	for (; position < buffer_size; position++) {
+		if (!StringUtil::CharacterIsNewline(buffer[position])) {
 			return;
 		}
 	}
@@ -1303,8 +1291,13 @@ add_row : {
 	} else {
 		SetNewLineDelimiter();
 		SkipEmptyLines();
+
 		start = position;
 		line_start = position;
+		if (position >= buffer_size && !ReadBuffer(start, line_start)) {
+			// file ends right after delimiter, go to final state
+			goto final_state;
+		}
 		// \n newline, move to value start
 		if (finished_chunk) {
 			return true;
@@ -1400,6 +1393,11 @@ carriage_return:
 	SkipEmptyLines();
 	start = position;
 	line_start = position;
+	if (position >= buffer_size && !ReadBuffer(start, line_start)) {
+		// file ends right after delimiter, go to final state
+		goto final_state;
+	}
+
 	goto value_start;
 final_state:
 	if (finished_chunk) {
