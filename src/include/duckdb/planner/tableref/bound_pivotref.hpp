@@ -22,7 +22,7 @@ struct BoundPivotInfo {
 	//! The set of types
 	vector<LogicalType> types;
 	//! The set of values to pivot on
-	vector<PivotValueElement> pivot_values;
+	vector<string> pivot_values;
 	//! The set of aggregate functions that is being executed
 	vector<unique_ptr<Expression>> aggregates;
 };

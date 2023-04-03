@@ -90,7 +90,7 @@ static unique_ptr<SelectNode> PivotInitialAggregate(PivotBindState &bind_state, 
 				// not handled - add to grouping set
 				subquery_stage1->groups.group_expressions.push_back(
 				    make_unique<ConstantExpression>(Value::INTEGER(subquery_stage1->select_list.size() + 1)));
-				subquery_stage1->select_list.push_back(std::move(entry));
+				subquery_stage1->select_list.push_back(make_unique<ColumnRefExpression>(columnref.GetColumnName()));
 			}
 		}
 	} else {
@@ -166,10 +166,18 @@ static unique_ptr<SelectNode> PivotListAggregate(PivotBindState &bind_state, Piv
 	for (auto &pivot : ref.pivots) {
 		for (auto &pivot_expr : pivot.pivot_expressions) {
 			auto pivot_name = "__internal_pivot_name" + to_string(++pivot_count);
-			vector<unique_ptr<ParsedExpression>> list_children;
+
+			// coalesce(pivot::VARCHAR, 'NULL')
 			auto cast = make_unique<CastExpression>(LogicalType::VARCHAR, std::move(pivot_expr));
-			list_children.push_back(std::move(cast));
+			vector<unique_ptr<ParsedExpression>> coalesce_children;
+			coalesce_children.push_back(std::move(cast));
+			coalesce_children.push_back(make_unique<ConstantExpression>(Value("NULL")));
+			auto coalesce = make_unique<OperatorExpression>(ExpressionType::OPERATOR_COALESCE, std::move(coalesce_children));
+			// list(coalesce)
+			vector<unique_ptr<ParsedExpression>> list_children;
+			list_children.push_back(std::move(coalesce));
 			auto aggregate = make_unique<FunctionExpression>("list", std::move(list_children));
+
 			aggregate->alias = pivot_name;
 			subquery_stage2->select_list.push_back(std::move(aggregate));
 			bind_state.internal_pivot_names.push_back(std::move(pivot_name));
@@ -244,12 +252,12 @@ unique_ptr<BoundTableRef> Binder::BindBoundPivot(PivotRef &ref) {
 	// emit the pivot values
 	auto aggregate_type = ListType::GetChildType(child_types[ref.bound_group_names.size()]);
 	for (idx_t i = 0; i < ref.bound_pivot_values.size(); i++) {
+		result->bound_pivot.pivot_values.push_back(ref.bound_pivot_values[i].values[0].ToString());
 		names.push_back(ref.bound_pivot_values[i].name);
 		types.push_back(aggregate_type);
 	}
 	result->bound_pivot.group_count = ref.bound_group_names.size();
 	result->bound_pivot.types = types;
-	result->bound_pivot.pivot_values = std::move(ref.bound_pivot_values);
 	auto subquery_alias = ref.alias.empty() ? "__unnamed_pivot" : ref.alias;
 	bind_context.AddGenericBinding(result->bind_index, subquery_alias, names, types);
 	return result;

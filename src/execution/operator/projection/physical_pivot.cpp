@@ -9,7 +9,7 @@ PhysicalPivot::PhysicalPivot(vector<LogicalType> types_p, unique_ptr<PhysicalOpe
       bound_pivot(std::move(bound_pivot_p)) {
 	children.push_back(std::move(child));
 	for (idx_t p = 0; p < bound_pivot.pivot_values.size(); p++) {
-		pivot_map[StringValue::Get(bound_pivot.pivot_values[p].values[0])] = bound_pivot.group_count + p;
+		pivot_map[bound_pivot.pivot_values[p]] = bound_pivot.group_count + p;
 	}
 	// extract the empty aggregate expressions
 	for (auto &aggr_expr : bound_pivot.aggregates) {
