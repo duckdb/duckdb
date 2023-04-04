@@ -29,7 +29,7 @@ bool CollateExpression::Equal(const CollateExpression *a, const CollateExpressio
 }
 
 unique_ptr<ParsedExpression> CollateExpression::Copy() const {
-	auto copy = make_unique<CollateExpression>(collation, child->Copy());
+	auto copy = make_uniq<CollateExpression>(collation, child->Copy());
 	copy->CopyProperties(*this);
 	return std::move(copy);
 }
@@ -42,7 +42,7 @@ void CollateExpression::Serialize(FieldWriter &writer) const {
 unique_ptr<ParsedExpression> CollateExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto child = reader.ReadRequiredSerializable<ParsedExpression>();
 	auto collation = reader.ReadRequired<string>();
-	return make_unique_base<ParsedExpression, CollateExpression>(collation, std::move(child));
+	return make_uniq_base<ParsedExpression, CollateExpression>(collation, std::move(child));
 }
 
 void CollateExpression::FormatSerialize(FormatSerializer &serializer) const {
@@ -55,7 +55,7 @@ unique_ptr<ParsedExpression> CollateExpression::FormatDeserialize(ExpressionType
                                                                   FormatDeserializer &deserializer) {
 	auto child = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("child");
 	auto collation = deserializer.ReadProperty<string>("collation");
-	return make_unique_base<ParsedExpression, CollateExpression>(collation, std::move(child));
+	return make_uniq_base<ParsedExpression, CollateExpression>(collation, std::move(child));
 }
 
 } // namespace duckdb

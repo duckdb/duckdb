@@ -35,11 +35,11 @@ public:
 };
 
 unique_ptr<OperatorState> PhysicalStreamingLimit::GetOperatorState(ExecutionContext &context) const {
-	return make_unique<StreamingLimitOperatorState>(*this);
+	return make_uniq<StreamingLimitOperatorState>(*this);
 }
 
 unique_ptr<GlobalOperatorState> PhysicalStreamingLimit::GetGlobalOperatorState(ClientContext &context) const {
-	return make_unique<StreamingLimitGlobalState>();
+	return make_uniq<StreamingLimitGlobalState>();
 }
 
 OperatorResultType PhysicalStreamingLimit::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,

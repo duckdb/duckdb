@@ -268,7 +268,7 @@ public:
 	static unique_ptr<FunctionData> ParquetScanBindInternal(ClientContext &context, vector<string> files,
 	                                                        vector<LogicalType> &return_types, vector<string> &names,
 	                                                        ParquetOptions parquet_options) {
-		auto result = make_unique<ParquetReadBindData>();
+		auto result = make_uniq<ParquetReadBindData>();
 		result->files = std::move(files);
 		result->reader_bind =
 		    MultiFileReader::BindReader<ParquetReader>(context, result->types, result->names, *result, parquet_options);
@@ -326,7 +326,7 @@ public:
 		auto &bind_data = (ParquetReadBindData &)*input.bind_data;
 		auto &gstate = (ParquetReadGlobalState &)*gstate_p;
 
-		auto result = make_unique<ParquetReadLocalState>();
+		auto result = make_uniq<ParquetReadLocalState>();
 		result->is_parallel = true;
 		result->batch_index = 0;
 		if (input.CanRemoveFilterColumns()) {
@@ -341,10 +341,10 @@ public:
 	static unique_ptr<GlobalTableFunctionState> ParquetScanInitGlobal(ClientContext &context,
 	                                                                  TableFunctionInitInput &input) {
 		auto &bind_data = (ParquetReadBindData &)*input.bind_data;
-		auto result = make_unique<ParquetReadGlobalState>();
+		auto result = make_uniq<ParquetReadGlobalState>();
 
 		result->file_opening = std::vector<bool>(bind_data.files.size(), false);
-		result->file_mutexes = std::unique_ptr<mutex[]>(new mutex[bind_data.files.size()]);
+		result->file_mutexes = unique_ptr<mutex[]>(new mutex[bind_data.files.size()]);
 		if (bind_data.files.empty()) {
 			result->initial_reader = nullptr;
 		} else {
@@ -449,7 +449,7 @@ public:
 
 	static unique_ptr<NodeStatistics> ParquetCardinality(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = (ParquetReadBindData &)*bind_data;
-		return make_unique<NodeStatistics>(data.initial_file_cardinality * data.files.size());
+		return make_uniq<NodeStatistics>(data.initial_file_cardinality * data.files.size());
 	}
 
 	static idx_t ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data) {
@@ -583,7 +583,7 @@ public:
 
 unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info, vector<string> &names,
                                           vector<LogicalType> &sql_types) {
-	auto bind_data = make_unique<ParquetWriteBindData>();
+	auto bind_data = make_uniq<ParquetWriteBindData>();
 	for (auto &option : info.options) {
 		auto loption = StringUtil::Lower(option.first);
 		if (loption == "row_group_size" || loption == "chunk_size") {
@@ -617,13 +617,13 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info
 
 unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &context, FunctionData &bind_data,
                                                             const string &file_path) {
-	auto global_state = make_unique<ParquetWriteGlobalState>();
+	auto global_state = make_uniq<ParquetWriteGlobalState>();
 	auto &parquet_bind = (ParquetWriteBindData &)bind_data;
 
 	auto &fs = FileSystem::GetFileSystem(context);
 	global_state->writer =
-	    make_unique<ParquetWriter>(fs, file_path, FileSystem::GetFileOpener(context), parquet_bind.sql_types,
-	                               parquet_bind.column_names, parquet_bind.codec);
+	    make_uniq<ParquetWriter>(fs, file_path, FileSystem::GetFileOpener(context), parquet_bind.sql_types,
+	                             parquet_bind.column_names, parquet_bind.codec);
 	return std::move(global_state);
 }
 
@@ -659,7 +659,7 @@ void ParquetWriteFinalize(ClientContext &context, FunctionData &bind_data, Globa
 
 unique_ptr<LocalFunctionData> ParquetWriteInitializeLocal(ExecutionContext &context, FunctionData &bind_data_p) {
 	auto &bind_data = (ParquetWriteBindData &)bind_data_p;
-	return make_unique<ParquetWriteLocalState>(context.client, bind_data.sql_types);
+	return make_uniq<ParquetWriteLocalState>(context.client, bind_data.sql_types);
 }
 
 //===--------------------------------------------------------------------===//
@@ -679,16 +679,16 @@ unique_ptr<TableRef> ParquetScanReplacement(ClientContext &context, const string
 	if (!StringUtil::EndsWith(lower_name, ".parquet") && !StringUtil::Contains(lower_name, ".parquet?")) {
 		return nullptr;
 	}
-	auto table_function = make_unique<TableFunctionRef>();
+	auto table_function = make_uniq<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(make_unique<ConstantExpression>(Value(table_name)));
-	table_function->function = make_unique<FunctionExpression>("parquet_scan", std::move(children));
+	children.push_back(make_uniq<ConstantExpression>(Value(table_name)));
+	table_function->function = make_uniq<FunctionExpression>("parquet_scan", std::move(children));
 	return std::move(table_function);
 }
 
 void ParquetExtension::Load(DuckDB &db) {
 	auto &fs = db.GetFileSystem();
-	fs.RegisterSubSystem(FileCompressionType::ZSTD, make_unique<ZStdFileSystem>());
+	fs.RegisterSubSystem(FileCompressionType::ZSTD, make_uniq<ZStdFileSystem>());
 
 	auto scan_fun = ParquetScanFunction::GetFunctionSet();
 	CreateTableFunctionInfo cinfo(scan_fun);

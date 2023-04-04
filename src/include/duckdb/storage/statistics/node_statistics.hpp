@@ -39,15 +39,15 @@ public:
 	static unique_ptr<NodeStatistics> Deserialize(Deserializer &source) {
 		bool has_estimated_cardinality = source.Read<bool>();
 		if (!has_estimated_cardinality) {
-			return make_unique<NodeStatistics>();
+			return make_uniq<NodeStatistics>();
 		}
 		idx_t estimated_cardinality = source.Read<idx_t>();
 		bool has_max_cardinality = source.Read<bool>();
 		if (!has_max_cardinality) {
-			return make_unique<NodeStatistics>(estimated_cardinality);
+			return make_uniq<NodeStatistics>(estimated_cardinality);
 		}
 		idx_t max_cardinality = source.Read<idx_t>();
-		return make_unique<NodeStatistics>(estimated_cardinality, max_cardinality);
+		return make_uniq<NodeStatistics>(estimated_cardinality, max_cardinality);
 	}
 
 	//! Whether or not the node has an estimated cardinality specified

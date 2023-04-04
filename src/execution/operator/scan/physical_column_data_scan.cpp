@@ -17,7 +17,7 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalColumnDataScan::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<PhysicalColumnDataScanState>();
+	return make_uniq<PhysicalColumnDataScanState>();
 }
 
 void PhysicalColumnDataScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,

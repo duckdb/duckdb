@@ -208,7 +208,7 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &ca
 	names.push_back(table_name);
 	names.push_back(column_name);
 
-	auto result = make_unique<ColumnRefExpression>(std::move(names));
+	auto result = make_uniq<ColumnRefExpression>(std::move(names));
 	auto binding = GetBinding(table_name, error_message);
 	if (!binding) {
 		return std::move(result);
@@ -297,7 +297,7 @@ BindResult BindContext::BindColumn(PositionalReferenceExpression &ref, idx_t dep
 	if (!error.empty()) {
 		return BindResult(error);
 	}
-	auto column_ref = make_unique<ColumnRefExpression>(column_name, table_name);
+	auto column_ref = make_uniq<ColumnRefExpression>(column_name, table_name);
 	return BindColumn(*column_ref, depth);
 }
 
@@ -347,21 +347,21 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 					// we have not! output the using column
 					if (using_binding->primary_binding.empty()) {
 						// no primary binding: output a coalesce
-						auto coalesce = make_unique<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
+						auto coalesce = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
 						for (auto &child_binding : using_binding->bindings) {
-							coalesce->children.push_back(make_unique<ColumnRefExpression>(column_name, child_binding));
+							coalesce->children.push_back(make_uniq<ColumnRefExpression>(column_name, child_binding));
 						}
 						coalesce->alias = column_name;
 						new_select_list.push_back(std::move(coalesce));
 					} else {
 						// primary binding: output the qualified column ref
 						new_select_list.push_back(
-						    make_unique<ColumnRefExpression>(column_name, using_binding->primary_binding));
+						    make_uniq<ColumnRefExpression>(column_name, using_binding->primary_binding));
 					}
 					handled_using_columns.insert(using_binding);
 					continue;
 				}
-				new_select_list.push_back(make_unique<ColumnRefExpression>(column_name, binding->alias));
+				new_select_list.push_back(make_uniq<ColumnRefExpression>(column_name, binding->alias));
 			}
 		}
 	} else {
@@ -395,7 +395,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 					continue;
 				}
 				column_names[2] = child.first;
-				new_select_list.push_back(make_unique<ColumnRefExpression>(column_names));
+				new_select_list.push_back(make_uniq<ColumnRefExpression>(column_names));
 			}
 		} else {
 			for (auto &column_name : binding->names) {
@@ -403,7 +403,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 					continue;
 				}
 
-				new_select_list.push_back(make_unique<ColumnRefExpression>(column_name, binding->alias));
+				new_select_list.push_back(make_uniq<ColumnRefExpression>(column_name, binding->alias));
 			}
 		}
 	}
@@ -432,13 +432,13 @@ void BindContext::AddBinding(const string &alias, unique_ptr<Binding> binding) {
 void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<string> &names,
                                const vector<LogicalType> &types, vector<column_t> &bound_column_ids,
                                StandardEntry *entry, bool add_row_id) {
-	AddBinding(alias, make_unique<TableBinding>(alias, types, names, bound_column_ids, entry, index, add_row_id));
+	AddBinding(alias, make_uniq<TableBinding>(alias, types, names, bound_column_ids, entry, index, add_row_id));
 }
 
 void BindContext::AddTableFunction(idx_t index, const string &alias, const vector<string> &names,
                                    const vector<LogicalType> &types, vector<column_t> &bound_column_ids,
                                    StandardEntry *entry) {
-	AddBinding(alias, make_unique<TableBinding>(alias, types, names, bound_column_ids, entry, index));
+	AddBinding(alias, make_uniq<TableBinding>(alias, types, names, bound_column_ids, entry, index));
 }
 
 static string AddColumnNameToBinding(const string &base_name, case_insensitive_set_t &current_names) {
@@ -478,7 +478,7 @@ void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref
 void BindContext::AddEntryBinding(idx_t index, const string &alias, const vector<string> &names,
                                   const vector<LogicalType> &types, StandardEntry *entry) {
 	D_ASSERT(entry);
-	AddBinding(alias, make_unique<EntryBinding>(alias, types, names, index, *entry));
+	AddBinding(alias, make_uniq<EntryBinding>(alias, types, names, index, *entry));
 }
 
 void BindContext::AddView(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery,
@@ -494,7 +494,7 @@ void BindContext::AddSubquery(idx_t index, const string &alias, TableFunctionRef
 
 void BindContext::AddGenericBinding(idx_t index, const string &alias, const vector<string> &names,
                                     const vector<LogicalType> &types) {
-	AddBinding(alias, make_unique<Binding>(BindingType::BASE, alias, types, names, index));
+	AddBinding(alias, make_uniq<Binding>(BindingType::BASE, alias, types, names, index));
 }
 
 void BindContext::AddCTEBinding(idx_t index, const string &alias, const vector<string> &names,

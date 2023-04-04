@@ -119,7 +119,7 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 
 	if (remaining_data > 0) {
 		// create a new chunk and fill it with the remainder
-		auto chunk = make_unique<DataChunk>();
+		auto chunk = make_uniq<DataChunk>();
 		chunk->Initialize(allocator, types);
 		new_chunk.Copy(*chunk, offset);
 		chunks.push_back(std::move(chunk));
@@ -139,7 +139,7 @@ void ChunkCollection::Fuse(ChunkCollection &other) {
 	if (count == 0) {
 		chunks.reserve(other.ChunkCount());
 		for (idx_t chunk_idx = 0; chunk_idx < other.ChunkCount(); ++chunk_idx) {
-			auto lhs = make_unique<DataChunk>();
+			auto lhs = make_uniq<DataChunk>();
 			auto &rhs = other.GetChunk(chunk_idx);
 			lhs->data.reserve(rhs.data.size());
 			for (auto &v : rhs.data) {

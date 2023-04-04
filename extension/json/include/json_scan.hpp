@@ -123,7 +123,7 @@ public:
 	string timestamp_format;
 
 	//! Stored readers for when we're detecting the schema
-	vector<unique_ptr<BufferedJSONReader>> stored_readers;
+	vector<duckdb::unique_ptr<BufferedJSONReader>> stored_readers;
 	//! Candidate date formats
 	DateFormatMap date_format_map;
 };
@@ -156,7 +156,7 @@ public:
 
 	mutex lock;
 	//! One JSON reader per file
-	vector<unique_ptr<BufferedJSONReader>> json_readers;
+	vector<duckdb::unique_ptr<BufferedJSONReader>> json_readers;
 	//! Current file/batch index
 	idx_t file_index;
 	atomic<idx_t> batch_index;
@@ -252,7 +252,7 @@ private:
 struct JSONGlobalTableFunctionState : public GlobalTableFunctionState {
 public:
 	JSONGlobalTableFunctionState(ClientContext &context, TableFunctionInitInput &input);
-	static unique_ptr<GlobalTableFunctionState> Init(ClientContext &context, TableFunctionInitInput &input);
+	static duckdb::unique_ptr<GlobalTableFunctionState> Init(ClientContext &context, TableFunctionInitInput &input);
 	idx_t MaxThreads() const override;
 
 public:
@@ -262,8 +262,8 @@ public:
 struct JSONLocalTableFunctionState : public LocalTableFunctionState {
 public:
 	JSONLocalTableFunctionState(ClientContext &context, JSONScanGlobalState &gstate);
-	static unique_ptr<LocalTableFunctionState> Init(ExecutionContext &context, TableFunctionInitInput &input,
-	                                                GlobalTableFunctionState *global_state);
+	static duckdb::unique_ptr<LocalTableFunctionState> Init(ExecutionContext &context, TableFunctionInitInput &input,
+	                                                        GlobalTableFunctionState *global_state);
 	idx_t GetBatchIndex() const;
 
 public:
@@ -307,7 +307,7 @@ public:
 			per_file_cardinality = data.stored_readers[0]->GetFileHandle().FileSize() / 420;
 		}
 		// Obviously this can be improved but this is better than defaulting to 0
-		return make_unique<NodeStatistics>(per_file_cardinality * data.file_paths.size());
+		return make_uniq<NodeStatistics>(per_file_cardinality * data.file_paths.size());
 	}
 
 	static void JSONScanSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function) {
@@ -315,9 +315,9 @@ public:
 		bind_data.Serialize(writer);
 	}
 
-	static unique_ptr<FunctionData> JSONScanDeserialize(ClientContext &context, FieldReader &reader,
-	                                                    TableFunction &function) {
-		auto result = make_unique<JSONScanData>();
+	static duckdb::unique_ptr<FunctionData> JSONScanDeserialize(ClientContext &context, FieldReader &reader,
+	                                                            TableFunction &function) {
+		auto result = make_uniq<JSONScanData>();
 		result->Deserialize(reader);
 		return std::move(result);
 	}

@@ -16,12 +16,12 @@ unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastIn
 		auto child_cast = input.GetCastFunction(source_child_types[i].second, result_child_types[i].second);
 		child_cast_info.push_back(std::move(child_cast));
 	}
-	return make_unique<StructBoundCastData>(std::move(child_cast_info), target);
+	return make_uniq<StructBoundCastData>(std::move(child_cast_info), target);
 }
 
 unique_ptr<FunctionLocalState> StructBoundCastData::InitStructCastLocalState(CastLocalStateParameters &parameters) {
 	auto &cast_data = (StructBoundCastData &)*parameters.cast_data;
-	auto result = make_unique<StructCastLocalState>();
+	auto result = make_uniq<StructCastLocalState>();
 
 	for (auto &entry : cast_data.child_cast_info) {
 		unique_ptr<FunctionLocalState> child_state;

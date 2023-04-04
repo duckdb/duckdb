@@ -9,7 +9,7 @@ void LogicalDummyScan::Serialize(FieldWriter &writer) const {
 
 unique_ptr<LogicalOperator> LogicalDummyScan::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto table_index = reader.ReadRequired<idx_t>();
-	return make_unique<LogicalDummyScan>(table_index);
+	return make_uniq<LogicalDummyScan>(table_index);
 }
 
 vector<idx_t> LogicalDummyScan::GetTableIndex() const {

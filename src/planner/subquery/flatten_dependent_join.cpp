@@ -84,7 +84,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		this->base_binding = ColumnBinding(delim_index, 0);
 		this->delim_offset = left_columns;
 		this->data_offset = 0;
-		auto delim_scan = make_unique<LogicalDelimGet>(delim_index, delim_types);
+		auto delim_scan = make_uniq<LogicalDelimGet>(delim_index, delim_types);
 		return LogicalCrossProduct::Create(std::move(plan), std::move(delim_scan));
 	}
 	switch (plan->type) {
@@ -117,7 +117,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		auto proj = (LogicalProjection *)plan.get();
 		for (idx_t i = 0; i < correlated_columns.size(); i++) {
 			auto &col = correlated_columns[i];
-			auto colref = make_unique<BoundColumnRefExpression>(
+			auto colref = make_uniq<BoundColumnRefExpression>(
 			    col.name, col.type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
 			plan->expressions.push_back(std::move(colref));
 		}
@@ -145,7 +145,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		auto new_group_count = perform_delim ? correlated_columns.size() : 1;
 		for (idx_t i = 0; i < new_group_count; i++) {
 			auto &col = correlated_columns[i];
-			auto colref = make_unique<BoundColumnRefExpression>(
+			auto colref = make_uniq<BoundColumnRefExpression>(
 			    col.name, col.type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
 			for (auto &set : aggr.grouping_sets) {
 				set.insert(aggr.groups.size());
@@ -161,13 +161,13 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			for (idx_t i = 0; i < correlated_columns.size(); i++) {
 				auto &col = correlated_columns[i];
 				auto first_aggregate = FirstFun::GetFunction(col.type);
-				auto colref = make_unique<BoundColumnRefExpression>(
+				auto colref = make_uniq<BoundColumnRefExpression>(
 				    col.name, col.type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
 				vector<unique_ptr<Expression>> aggr_children;
 				aggr_children.push_back(std::move(colref));
 				auto first_fun =
-				    make_unique<BoundAggregateExpression>(std::move(first_aggregate), std::move(aggr_children), nullptr,
-				                                          nullptr, AggregateType::NON_DISTINCT);
+				    make_uniq<BoundAggregateExpression>(std::move(first_aggregate), std::move(aggr_children), nullptr,
+				                                        nullptr, AggregateType::NON_DISTINCT);
 				aggr.expressions.push_back(std::move(first_fun));
 			}
 		} else {
@@ -179,23 +179,23 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			// we have to perform a LEFT OUTER JOIN between the result of this aggregate and the delim scan
 			// FIXME: this does not always have to be a LEFT OUTER JOIN, depending on whether aggr.expressions return
 			// NULL or a value
-			unique_ptr<LogicalComparisonJoin> join = make_unique<LogicalComparisonJoin>(JoinType::INNER);
+			unique_ptr<LogicalComparisonJoin> join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
 			for (auto &aggr_exp : aggr.expressions) {
 				auto b_aggr_exp = (BoundAggregateExpression *)aggr_exp.get();
 				if (!b_aggr_exp->PropagatesNullValues() || any_join || !parent_propagate_null_values) {
-					join = make_unique<LogicalComparisonJoin>(JoinType::LEFT);
+					join = make_uniq<LogicalComparisonJoin>(JoinType::LEFT);
 					break;
 				}
 			}
 			auto left_index = binder.GenerateTableIndex();
-			auto delim_scan = make_unique<LogicalDelimGet>(left_index, delim_types);
+			auto delim_scan = make_uniq<LogicalDelimGet>(left_index, delim_types);
 			join->children.push_back(std::move(delim_scan));
 			join->children.push_back(std::move(plan));
 			for (idx_t i = 0; i < new_group_count; i++) {
 				auto &col = correlated_columns[i];
 				JoinCondition cond;
-				cond.left = make_unique<BoundColumnRefExpression>(col.name, col.type, ColumnBinding(left_index, i));
-				cond.right = make_unique<BoundColumnRefExpression>(
+				cond.left = make_uniq<BoundColumnRefExpression>(col.name, col.type, ColumnBinding(left_index, i));
+				cond.right = make_uniq<BoundColumnRefExpression>(
 				    correlated_columns[i].type, ColumnBinding(delim_table_index, delim_column_offset + i));
 				cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 				join->conditions.push_back(std::move(cond));
@@ -243,16 +243,16 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		}
 		// both sides have correlation
 		// turn into an inner join
-		auto join = make_unique<LogicalComparisonJoin>(JoinType::INNER);
+		auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
 		plan->children[0] = PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values);
 		auto left_binding = this->base_binding;
 		plan->children[1] = PushDownDependentJoinInternal(std::move(plan->children[1]), parent_propagate_null_values);
 		// add the correlated columns to the join conditions
 		for (idx_t i = 0; i < correlated_columns.size(); i++) {
 			JoinCondition cond;
-			cond.left = make_unique<BoundColumnRefExpression>(
+			cond.left = make_uniq<BoundColumnRefExpression>(
 			    correlated_columns[i].type, ColumnBinding(left_binding.table_index, left_binding.column_index + i));
-			cond.right = make_unique<BoundColumnRefExpression>(
+			cond.right = make_uniq<BoundColumnRefExpression>(
 			    correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
 			cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 			join->conditions.push_back(std::move(cond));
@@ -330,9 +330,9 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		}
 		// add the correlated columns to the join conditions
 		for (idx_t i = 0; i < correlated_columns.size(); i++) {
-			auto left = make_unique<BoundColumnRefExpression>(
+			auto left = make_uniq<BoundColumnRefExpression>(
 			    correlated_columns[i].type, ColumnBinding(left_binding.table_index, left_binding.column_index + i));
-			auto right = make_unique<BoundColumnRefExpression>(
+			auto right = make_uniq<BoundColumnRefExpression>(
 			    correlated_columns[i].type, ColumnBinding(right_binding.table_index, right_binding.column_index + i));
 
 			if (join.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
@@ -346,9 +346,9 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				comparison_join.conditions.push_back(std::move(cond));
 			} else {
 				auto &any_join = (LogicalAnyJoin &)join;
-				auto comparison = make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
-				                                                         std::move(left), std::move(right));
-				auto conjunction = make_unique<BoundConjunctionExpression>(
+				auto comparison = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
+				                                                       std::move(left), std::move(right));
+				auto conjunction = make_uniq<BoundConjunctionExpression>(
 				    ExpressionType::CONJUNCTION_AND, std::move(comparison), std::move(any_join.condition));
 				any_join.condition = std::move(conjunction);
 			}
@@ -378,13 +378,13 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		auto child_column_count = child->GetColumnBindings().size();
 		// we push a row_number() OVER (PARTITION BY [correlated columns])
 		auto window_index = binder.GenerateTableIndex();
-		auto window = make_unique<LogicalWindow>(window_index);
-		auto row_number = make_unique<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT,
-		                                                     nullptr, nullptr);
+		auto window = make_uniq<LogicalWindow>(window_index);
+		auto row_number =
+		    make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT, nullptr, nullptr);
 		auto partition_count = perform_delim ? correlated_columns.size() : 1;
 		for (idx_t i = 0; i < partition_count; i++) {
 			auto &col = correlated_columns[i];
-			auto colref = make_unique<BoundColumnRefExpression>(
+			auto colref = make_uniq<BoundColumnRefExpression>(
 			    col.name, col.type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
 			row_number->partitions.push_back(std::move(colref));
 		}
@@ -401,23 +401,23 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 
 		// add a filter based on the row_number
 		// the filter we add is "row_number > offset AND row_number <= offset + limit"
-		auto filter = make_unique<LogicalFilter>();
+		auto filter = make_uniq<LogicalFilter>();
 		unique_ptr<Expression> condition;
 		auto row_num_ref =
-		    make_unique<BoundColumnRefExpression>(rownum_alias, LogicalType::BIGINT, ColumnBinding(window_index, 0));
+		    make_uniq<BoundColumnRefExpression>(rownum_alias, LogicalType::BIGINT, ColumnBinding(window_index, 0));
 
 		int64_t upper_bound_limit = NumericLimits<int64_t>::Maximum();
 		TryAddOperator::Operation(limit.offset_val, limit.limit_val, upper_bound_limit);
-		auto upper_bound = make_unique<BoundConstantExpression>(Value::BIGINT(upper_bound_limit));
-		condition = make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO,
-		                                                   row_num_ref->Copy(), std::move(upper_bound));
+		auto upper_bound = make_uniq<BoundConstantExpression>(Value::BIGINT(upper_bound_limit));
+		condition = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO, row_num_ref->Copy(),
+		                                                 std::move(upper_bound));
 		// we only need to add "row_number >= offset + 1" if offset is bigger than 0
 		if (limit.offset_val > 0) {
-			auto lower_bound = make_unique<BoundConstantExpression>(Value::BIGINT(limit.offset_val));
-			auto lower_comp = make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHAN,
-			                                                         row_num_ref->Copy(), std::move(lower_bound));
-			auto conj = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(lower_comp),
-			                                                    std::move(condition));
+			auto lower_bound = make_uniq<BoundConstantExpression>(Value::BIGINT(limit.offset_val));
+			auto lower_comp = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHAN,
+			                                                       row_num_ref->Copy(), std::move(lower_bound));
+			auto conj = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(lower_comp),
+			                                                  std::move(condition));
 			condition = std::move(conj);
 		}
 		filter->expressions.push_back(std::move(condition));
@@ -443,7 +443,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 			auto &w = (BoundWindowExpression &)*expr;
 			for (idx_t i = 0; i < correlated_columns.size(); i++) {
-				w.partitions.push_back(make_unique<BoundColumnRefExpression>(
+				w.partitions.push_back(make_uniq<BoundColumnRefExpression>(
 				    correlated_columns[i].type,
 				    ColumnBinding(base_binding.table_index, base_binding.column_index + i)));
 			}
@@ -480,7 +480,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		distinct.children[0] = PushDownDependentJoin(std::move(distinct.children[0]));
 		// add all correlated columns to the distinct targets
 		for (idx_t i = 0; i < correlated_columns.size(); i++) {
-			distinct.distinct_targets.push_back(make_unique<BoundColumnRefExpression>(
+			distinct.distinct_targets.push_back(make_uniq<BoundColumnRefExpression>(
 			    correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i)));
 		}
 		return plan;
@@ -496,7 +496,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		auto expr_get = (LogicalExpressionGet *)plan.get();
 		for (idx_t i = 0; i < correlated_columns.size(); i++) {
 			for (auto &expr_list : expr_get->expressions) {
-				auto colref = make_unique<BoundColumnRefExpression>(
+				auto colref = make_uniq<BoundColumnRefExpression>(
 				    correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
 				expr_list.push_back(std::move(colref));
 			}

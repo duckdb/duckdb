@@ -55,11 +55,11 @@ static unique_ptr<FunctionData> PragmaTableInfoBind(ClientContext &context, Tabl
 	// look up the table name in the catalog
 	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
 	auto entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, qname.catalog, qname.schema, qname.name);
-	return make_unique<PragmaTableFunctionData>(entry);
+	return make_uniq<PragmaTableFunctionData>(entry);
 }
 
 unique_ptr<GlobalTableFunctionState> PragmaTableInfoInit(ClientContext &context, TableFunctionInitInput &input) {
-	return make_unique<PragmaTableOperatorData>();
+	return make_uniq<PragmaTableOperatorData>();
 }
 
 static void CheckConstraints(TableCatalogEntry *table, const ColumnDefinition &column, bool &out_not_null,

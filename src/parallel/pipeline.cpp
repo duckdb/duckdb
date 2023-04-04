@@ -31,7 +31,7 @@ public:
 public:
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
 		if (!pipeline_executor) {
-			pipeline_executor = make_unique<PipelineExecutor>(pipeline.GetClientContext(), pipeline);
+			pipeline_executor = make_uniq<PipelineExecutor>(pipeline.GetClientContext(), pipeline);
 		}
 		if (mode == TaskExecutionMode::PROCESS_PARTIAL) {
 			bool finished = pipeline_executor->Execute(PARTIAL_CHUNK_COUNT);
@@ -69,7 +69,7 @@ bool Pipeline::GetProgress(double &current_percentage, idx_t &source_cardinality
 
 void Pipeline::ScheduleSequentialTask(shared_ptr<Event> &event) {
 	vector<unique_ptr<Task>> tasks;
-	tasks.push_back(make_unique<PipelineTask>(*this, event));
+	tasks.push_back(make_uniq<PipelineTask>(*this, event));
 	event->SetTasks(std::move(tasks));
 }
 
@@ -140,7 +140,7 @@ bool Pipeline::LaunchScanTasks(shared_ptr<Event> &event, idx_t max_threads) {
 	// launch a task for every thread
 	vector<unique_ptr<Task>> tasks;
 	for (idx_t i = 0; i < max_threads; i++) {
-		tasks.push_back(make_unique<PipelineTask>(*this, event));
+		tasks.push_back(make_uniq<PipelineTask>(*this, event));
 	}
 	event->SetTasks(std::move(tasks));
 	return true;

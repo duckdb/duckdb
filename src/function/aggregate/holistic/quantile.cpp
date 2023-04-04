@@ -436,7 +436,7 @@ struct QuantileBindData : public FunctionData {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<QuantileBindData>(*this);
+		return make_uniq<QuantileBindData>(*this);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
@@ -1186,12 +1186,12 @@ static void QuantileSerialize(FieldWriter &writer, const FunctionData *bind_data
 unique_ptr<FunctionData> QuantileDeserialize(ClientContext &context, FieldReader &reader,
                                              AggregateFunction &bound_function) {
 	auto quantiles = reader.ReadRequiredList<Value>();
-	return make_unique<QuantileBindData>(std::move(quantiles));
+	return make_uniq<QuantileBindData>(std::move(quantiles));
 }
 
 unique_ptr<FunctionData> BindMedian(ClientContext &context, AggregateFunction &function,
                                     vector<unique_ptr<Expression>> &arguments) {
-	return make_unique<QuantileBindData>(Value::DECIMAL(int16_t(5), 2, 1));
+	return make_uniq<QuantileBindData>(Value::DECIMAL(int16_t(5), 2, 1));
 }
 
 unique_ptr<FunctionData> BindMedianDecimal(ClientContext &context, AggregateFunction &function,
@@ -1248,7 +1248,7 @@ unique_ptr<FunctionData> BindQuantile(ClientContext &context, AggregateFunction 
 	}
 
 	Function::EraseArgument(function, arguments, arguments.size() - 1);
-	return make_unique<QuantileBindData>(quantiles);
+	return make_uniq<QuantileBindData>(quantiles);
 }
 
 static void QuantileDecimalSerialize(FieldWriter &writer, const FunctionData *bind_data_p,

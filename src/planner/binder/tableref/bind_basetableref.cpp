@@ -46,7 +46,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			// There is a CTE binding in the BindContext.
 			// This can only be the case if there is a recursive CTE present.
 			auto index = GenerateTableIndex();
-			auto result = make_unique<BoundCTERef>(index, ctebinding->index);
+			auto result = make_uniq<BoundCTERef>(index, ctebinding->index);
 			auto b = ctebinding;
 			auto alias = ref.alias.empty() ? ref.table_name : ref.alias;
 			auto names = BindContext::AliasColumnNames(alias, b->names, ref.column_name_alias);
@@ -105,7 +105,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			vector<LogicalType> types {LogicalType::INTEGER};
 			vector<string> names {"__dummy_col" + to_string(table_index)};
 			bind_context.AddGenericBinding(table_index, alias, names, types);
-			return make_unique_base<BoundTableRef, BoundEmptyTableRef>(table_index);
+			return make_uniq_base<BoundTableRef, BoundEmptyTableRef>(table_index);
 		}
 		// could not find an alternative: bind again to get the error
 		table_or_view = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, ref.catalog_name, ref.schema_name,
@@ -135,11 +135,11 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		}
 		table_names = BindContext::AliasColumnNames(alias, table_names, ref.column_name_alias);
 
-		auto logical_get = make_unique<LogicalGet>(table_index, scan_function, std::move(bind_data),
-		                                           std::move(return_types), std::move(return_names));
+		auto logical_get = make_uniq<LogicalGet>(table_index, scan_function, std::move(bind_data),
+		                                         std::move(return_types), std::move(return_names));
 		bind_context.AddBaseTable(table_index, alias, table_names, table_types, logical_get->column_ids,
 		                          logical_get->GetTable());
-		return make_unique_base<BoundTableRef, BoundBaseTableRef>(table, std::move(logical_get));
+		return make_uniq_base<BoundTableRef, BoundBaseTableRef>(table, std::move(logical_get));
 	}
 	case CatalogType::VIEW_ENTRY: {
 		// the node is a view: get the query that the view represents
