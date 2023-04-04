@@ -17,6 +17,7 @@ class CompressedFile;
 struct StreamData {
 	// various buffers & pointers
 	bool write = false;
+	bool refresh = false;
 	unique_ptr<data_t[]> in_buff;
 	unique_ptr<data_t[]> out_buff;
 	data_ptr_t out_buff_start = nullptr;

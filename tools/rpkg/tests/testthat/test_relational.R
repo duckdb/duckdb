@@ -146,7 +146,6 @@ test_that("Inner join returns all inner relations", {
     expect_equal(rel_df, expected_result)
 })
 
-
 test_that("Left join returns all left relations", {
     dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
     left <- rel_from_df(con, data.frame(left_a=c(1, 2, 3), left_b=c(1, 1, 2)))
@@ -187,11 +186,11 @@ test_that("Full join returns all outer relations", {
 })
 
 test_that("cross join works", {
-   left <- duckdb:::rel_from_df(con, data.frame(left_a=c(1, 2, 3), left_b=c(1, 1, 2)))
-   right <- duckdb:::rel_from_df(con, data.frame(right_a=c(1, 4, 5), right_b=c(7, 8, 9)))
-   cross <- duckdb:::rel_join(left, right, list(), "cross")
-   order_by <- duckdb:::rel_order(cross, list(duckdb:::expr_reference("right_a"), duckdb:::expr_reference("right_a")))
-   rel_df <- duckdb:::rel_to_altrep(order_by)
+   left <- rel_from_df(con, data.frame(left_a=c(1, 2, 3), left_b=c(1, 1, 2)))
+   right <- rel_from_df(con, data.frame(right_a=c(1, 4, 5), right_b=c(7, 8, 9)))
+   cross <- rel_join(left, right, list(), "cross")
+   order_by <- rel_order(cross, list(expr_reference("right_a"), expr_reference("right_a")))
+   rel_df <- rel_to_altrep(order_by)
    dim(rel_df)
    expected_result <- data.frame(left_a=c(1, 2, 3, 1, 2, 3, 1, 2, 3),
                                  left_b=c(1, 1, 2, 1, 1, 2, 1, 1, 2),
@@ -201,25 +200,24 @@ test_that("cross join works", {
 })
 
 test_that("semi join works", {
-    left <- duckdb:::rel_from_df(con, data.frame(left_b=c(1, 5, 6)))
-    right <- duckdb:::rel_from_df(con, data.frame(right_a=c(1, 2, 3), right_b=c(1, 1, 2)))
+    left <- rel_from_df(con, data.frame(left_b=c(1, 5, 6)))
+    right <- rel_from_df(con, data.frame(right_a=c(1, 2, 3), right_b=c(1, 1, 2)))
     cond <- list(expr_function("eq", list(expr_reference("left_b"), expr_reference("right_a"))))
     # select * from left semi join right on (left_b = right_a)
-    rel2 <- duckdb:::rel_join(left, right, cond, "semi")
-    rel_df <- duckdb:::rel_to_altrep(rel2)
+    rel2 <- rel_join(left, right, cond, "semi")
+    rel_df <- rel_to_altrep(rel2)
     dim(rel_df)
     expected_result <- data.frame(left_b=c(1))
     expect_equal(rel_df, expected_result)
 })
 
-
 test_that("anti join works", {
-    left <- duckdb:::rel_from_df(con, data.frame(left_b=c(1, 5, 6)))
-    right <- duckdb:::rel_from_df(con, data.frame(right_a=c(1, 2, 3), right_b=c(1, 1, 2)))
+    left <- rel_from_df(con, data.frame(left_b=c(1, 5, 6)))
+    right <- rel_from_df(con, data.frame(right_a=c(1, 2, 3), right_b=c(1, 1, 2)))
     cond <- list(expr_function("eq", list(expr_reference("left_b"), expr_reference("right_a"))))
     # select * from left anti join right on (left_b = right_a)
-    rel2 <- duckdb:::rel_join(left, right, cond, "anti")
-    rel_df <- duckdb:::rel_to_altrep(rel2)
+    rel2 <- rel_join(left, right, cond, "anti")
+    rel_df <- rel_to_altrep(rel2)
     dim(rel_df)
     expected_result <- data.frame(left_b=c(5, 6))
     expect_equal(rel_df, expected_result)
@@ -314,6 +312,240 @@ test_that("Symmetric difference returns the symmetric difference", {
     expect_equal(rel_df, expected_result)
 })
 
+test_that("rel aggregate with no groups but a sum over a column, sums the column", {
+   rel_a <- rel_from_df(con, data.frame(a=c(1, 2), b=c(3, 4)))
+   aggrs <- list(sum = expr_function("sum", list(expr_reference("a"))))
+   res <- rel_aggregate(rel_a, list(), aggrs)
+   rel_df <- rel_to_altrep(res)
+   expected_result <- data.frame(sum=c(3))
+   expect_equal(rel_df, expected_result)
+})
+
+test_that("rel aggregate with groups and aggregate function works", {
+   rel_a <- rel_from_df(con, data.frame(a=c(1, 2, 5, 5), b=c(3, 3, 4, 4)))
+   aggrs <- list(sum = expr_function("sum", list(expr_reference("a"))))
+   res <- rel_aggregate(rel_a, list(expr_reference("b")), aggrs)
+   rel_df <- rel_to_altrep(res)
+   expected_result <- data.frame(b=c(3, 4), sum=c(3, 10))
+   expect_equal(rel_df, expected_result)
+})
+
+test_that("Window sum expression function test works", {
+#   select j, i, sum(i) over (partition by j) from a order by 1,2
+    rel_a <- rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
+    sum_func <- expr_function("sum", list(expr_reference("a")))
+    aggrs <- expr_window(sum_func, partitions=list(expr_reference("b")))
+    expr_set_alias(aggrs, "window_result")
+    window_proj <- rel_project(rel_a, list(expr_reference("a"), aggrs))
+    order_over_window <- rapi_rel_order(window_proj, list(expr_reference("window_result")))
+    res <- rel_to_altrep(order_over_window)
+    expected_result <- data.frame(a=c(1:8), window_result=c(3, 3, 7, 7, 11, 11, 15, 15))
+    expect_equal(res, expected_result)
+})
+
+test_that("Window count function works", {
+#   select a, b, count(b) over (partition by a) from a order by a
+    rel_a <- rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
+    count_func <- expr_function("count", list(expr_reference("a")))
+    count <-  expr_window(count_func, partitions=list(expr_reference("b")))
+    expr_set_alias(count, "window_result")
+    window_proj <- rel_project(rel_a, list(count))
+    res <- rel_to_altrep(window_proj)
+    expected_result <- data.frame(window_result=c(2, 2, 2, 2, 2, 2, 2, 2))
+    expect_equal(res, expected_result)
+})
+
+test_that("Window avg function works", {
+#     select a, b, avg(b) over (partition by a) from a order by a
+    rel_a <- rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
+    avg_func <- expr_function("avg", list(expr_reference("a")))
+    avg_window <- expr_window(avg_func, partitions=list(expr_reference("b")))
+    expr_set_alias(avg_window, "window_result")
+    window_proj <- rel_project(rel_a, list(avg_window))
+    ordered <- rel_order(window_proj, list(expr_reference("window_result")))
+    res <- rel_to_altrep(ordered)
+    expected_result <- data.frame(window_result=c(1.5, 1.5, 3.5, 3.5, 5.5, 5.5, 7.5, 7.5))
+    expect_equal(res, expected_result)
+})
+
+test_that("Window sum with Partition, order, and window boundaries works", {
+#     SUM(x) OVER (partition by b ROWS BETWEEN 3 PRECEDING AND CURRENT ROW)
+    rel_a <- rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 1, 1, 2, 2, 2, 2)))
+    partitions <- list(expr_reference("b"))
+    order_by_a <- list(rapi_rel_order(rel_a, list(expr_reference("a"))))
+    sum_func <- expr_function("sum", list(expr_reference("a")))
+    sum_window <- expr_window(sum_func, partitions=partitions,
+                                        order_bys=list(expr_reference("a")),
+                                        window_boundary_start="expr_preceding_rows",
+                                        window_boundary_end="current_row_rows",
+                                        start_expr=expr_constant(2))
+    expr_set_alias(sum_window, "window_result")
+    window_proj <- rel_project(rel_a, list(expr_reference("a"), sum_window))
+    proj_order <-rel_order(window_proj, list(expr_reference("a")))
+    res <- rel_to_altrep(proj_order)
+    expected_result <- data.frame(a=c(1:8), window_result=c(1, 3, 6, 9, 5, 11, 18, 21))
+    expect_equal(res, expected_result)
+})
+
+test_that("Window boundaries boundaries are CaSe INsenSItive", {
+#     SUM(x) OVER (partition by b ROWS BETWEEN 3 PRECEDING AND CURRENT ROW)
+    rel_a <- rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 1, 1, 2, 2, 2, 2)))
+    partitions <- list(expr_reference("b"))
+    order_by_a <- list(rapi_rel_order(rel_a, list(expr_reference("a"))))
+    sum_func <- expr_function("sum", list(expr_reference("a")))
+    sum_window <- expr_window(sum_func, partitions=partitions,
+                                        order_bys=list(expr_reference("a")),
+                                        window_boundary_start="exPr_PREceding_rOWs",
+                                        window_boundary_end="cURrEnt_rOw_RoWs",
+                                        start_expr=expr_constant(2))
+    expr_set_alias(sum_window, "window_result")
+    window_proj <- rel_project(rel_a, list(expr_reference("a"), sum_window))
+    proj_order <-rel_order(window_proj, list(expr_reference("a")))
+    res <- rel_to_altrep(proj_order)
+    expected_result <- data.frame(a=c(1:8), window_result=c(1, 3, 6, 9, 5, 11, 18, 21))
+    expect_equal(res, expected_result)
+})
+
+test_that("Window avg with a filter expression and partition works", {
+#   select a, b, avg(a) FILTER (WHERE x % 2 = 0) over (partition by b)
+    DBI::dbExecute(con, "CREATE OR REPLACE MACRO mod(a, b) as a % b")
+    DBI::dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) as a = b")
+    rel_a <- rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
+    partitions <- list(expr_reference("b"))
+    mod_function <- expr_function("mod", list(expr_reference("a"), expr_constant(2)))
+    zero <- expr_constant(0)
+    filters <- list(expr_function("eq", list(zero, mod_function)))
+    avg_func <- expr_function("avg", args=list(expr_reference("a")), filter_bys=filters)
+    avg_filter_window <- expr_window(avg_func, partitions=partitions)
+	  expr_set_alias(avg_filter_window, "avg_filter")
+    window_proj <- rel_project(rel_a, list(avg_filter_window))
+    proj_order <- rel_order(window_proj, list(expr_reference("avg_filter")))
+    expected_result <- data.frame(avg_filter=c(2, 2, 4, 4, 6, 6, 8, 8))
+    res <- rel_to_altrep(proj_order)
+    expect_equal(res, expected_result)
+})
+
+test_that("Window lag function works as expected", {
+#   select a, b, lag(a, 1) OVER () order by a
+    rel_a <- rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
+    lag <- expr_function("lag", list(expr_reference("a")))
+    window_lag <- expr_window(lag, offset_expr=expr_constant(1))
+	  expr_set_alias(window_lag, "lag")
+	  proj_window <- rel_project(rel_a, list(expr_reference("a"), window_lag))
+    order_over_window <- rapi_rel_order(proj_window, list(expr_reference("a")))
+    expected_result <- data.frame(a=c(1:8), lag=c(NA, 1, 2, 3, 4, 5, 6, 7))
+    res <- rel_to_altrep(order_over_window)
+    expect_equal(res, expected_result)
+})
+
+
+test_that("function name for window is case insensitive", {
+#   select a, b, lag(a, 1) OVER () order by a
+    rel_a <- rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
+    lag <- expr_function("LAG", list(expr_reference("a")))
+    window_lag <- expr_window(lag, offset_expr=expr_constant(1))
+	  expr_set_alias(window_lag, "lag")
+	  proj_window <- rel_project(rel_a, list(expr_reference("a"), window_lag))
+    order_over_window <- rapi_rel_order(proj_window, list(expr_reference("a")))
+    expected_result <- data.frame(a=c(1:8), lag=c(NA, 1, 2, 3, 4, 5, 6, 7))
+    res <- rel_to_altrep(order_over_window)
+    expect_equal(res, expected_result)
+})
+
+test_that("Window lead function works as expected", {
+#   select a, b, lag(a, 1) OVER () order by a
+    rel_a <- rel_from_df(con, data.frame(a=c(1:8),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
+    lead <- expr_function("lead", list(expr_reference("a")))
+    window_lead <- expr_window(lead, offset_expr=expr_constant(1))
+	  expr_set_alias(window_lead, "lead")
+	  proj_window <- rel_project(rel_a, list(expr_reference("a"), window_lead))
+    order_over_window <- rapi_rel_order(proj_window, list(expr_reference("a")))
+    expected_result <- data.frame(a=c(1:8), lead=c(2, 3, 4, 5, 6, 7, 8, NA))
+    res <- rel_to_altrep(order_over_window)
+    expect_equal(res, expected_result)
+})
+
+test_that("Window function with string aggregate works", {
+#   select j, s, string_agg(s, '|') over (partition by b) from a order by j, s;
+    rel_a <- rel_from_df(con, data.frame(r=c(1, 2, 3, 4), a=c("hello", "Big", "world", "42"),b=c(1, 1, 2, 2)))
+    str_agg <- expr_function("string_agg", list(expr_reference("a")))
+    partitions <- list(expr_reference("b"))
+    window_str_cat <- expr_window(str_agg, partitions=partitions)
+    expr_set_alias(window_str_cat, "str_agg_res")
+    proj_window <- rel_project(rel_a, list(expr_reference("r"), window_str_cat))
+    order_over_window <- rapi_rel_order(proj_window, list(expr_reference("r")))
+    expected_result <- data.frame(r=c(1:4), str_agg_res=c("hello,Big", "hello,Big", "world,42", "world,42"))
+    res <- rel_to_altrep(order_over_window)
+    expect_equal(res, expected_result)
+})
+
+test_that("You can perform window functions on row_number", {
+	  # select a, b, row_number() OVER () from tmp order by a;
+    rel_a <- rel_from_df(con, data.frame(a=c(8:1),b=c(1, 1, 2, 2, 3, 3, 4, 4)))
+    row_number <- expr_function("row_number", list())
+    window_function <- expr_window(row_number)
+    expr_set_alias(window_function, "row_number")
+    proj <- rel_project(rel_a, list(expr_reference("a"), window_function))
+    order_by_a <- rel_order(proj, list(expr_reference("a")))
+    expected_result <- data.frame(a=c(1:8), row_number=(8:1))
+    res <- rel_to_altrep(order_by_a)
+    expect_equal(res, expected_result)
+})
+
+# also tests order by inside the rank function.
+# these tests come from https://dplyr.tidyverse.org/articles/window-functions.html
+# in dplyr min_rank = rank
+test_that("You can perform the window function min_rank", {
+    # select rank() OVER (order by a) from t1
+    rel_a <- rel_from_df(con, data.frame(a=c(1, 1, 2, 2, 2)))
+    rank_func <- expr_function("rank", list())
+    min_rank_window <- expr_window(rank_func, order_bys=list(expr_reference("a")))
+    expr_set_alias(min_rank_window, "window_result")
+	  window_proj <- rel_project(rel_a, list(expr_reference("a"), min_rank_window))
+	  res <- rel_to_altrep(window_proj)
+	  expected_result <- data.frame(a=c(1, 1, 2, 2, 2), window_result=c(1, 1, 3, 3, 3))
+    expect_equal(res, expected_result)
+})
+
+test_that("You can perform the window function dense_rank", {
+    # select dense_rank() OVER (order by a) from t1;
+    rel_a <- rel_from_df(con, data.frame(a=c(1, 1, 2, 2, 2)))
+    dense_rank_fun <- expr_function("dense_rank", list())
+    min_rank_window <- expr_window(dense_rank_fun, order_bys=list(expr_reference("a")))
+    expr_set_alias(min_rank_window, "window_result")
+	  window_proj <- rel_project(rel_a, list(expr_reference("a"), min_rank_window))
+	  res <- rel_to_altrep(window_proj)
+	  expected_result <- data.frame(a=c(1, 1, 2, 2, 2), window_result=c(1, 1, 2, 2, 2))
+    expect_equal(res, expected_result)
+})
+
+test_that("You can perform the window function cume_dist", {
+    # select cume_dist() OVER (order by a) from t1;
+	  rel_a <- rel_from_df(con, data.frame(a=c(1, 1, 2, 2, 2)))
+    cume_dist_func <- expr_function("cume_dist", list())
+    cume_dist_window <- expr_window(cume_dist_func, order_bys=list(expr_reference("a")))
+    expr_set_alias(cume_dist_window, "cume_dist")
+    window_proj <- rel_project(rel_a, list(expr_reference("a"), cume_dist_window))
+    order_proj <- rel_order(window_proj, list(expr_reference("a")))
+    res <- rel_to_altrep(order_proj)
+    expected_result <- data.frame(a=c(1, 1, 2, 2, 2), cume_dist=c(0.4, 0.4, 1.0, 1.0, 1.0))
+    expect_equal(res, expected_result)
+})
+
+test_that("You can perform the window function percent rank", {
+    # select percent_rank() OVER (order by a) from t1;
+	  rel_a <- rel_from_df(con, data.frame(a=c(5, 1, 3, 2, 2)))
+    percent_rank_func <- expr_function("percent_rank", list())
+    percent_rank_wind <- expr_window(percent_rank_func, order_bys=list(expr_reference("a")))
+    expr_set_alias(percent_rank_wind, "percent_rank")
+    window_proj <- rel_project(rel_a, list(expr_reference("a"), percent_rank_wind))
+    order_proj <- rel_order(window_proj, list(expr_reference("a")))
+    res <- rel_to_altrep(order_proj)
+    expected_result <- data.frame(a=c(1, 2, 2, 3, 5), percent_rank=c(0.00, 0.25, 0.25, 0.75, 1.00))
+    expect_equal(res, expected_result)
+})
+
+# with and without offsets
 test_that("R semantics for adding NaNs is respected", {
    dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
    test_df_a <- rel_from_df(con, data.frame(a=c(1, 2), b=c(3, 4)))
@@ -326,16 +558,13 @@ test_that("R semantics for adding NaNs is respected", {
    expect_true(is.na(res[[1]]))
 })
 
-
 test_that("R semantics for arithmetics sum function are respected", {
-   dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
-   test_df_a <- rel_from_df(con, data.frame(a=c(1:5, NaN)))
-   sum_rel <- rapi_expr_function("sum", list(expr_reference("a")))
-   ans <- rapi_rel_aggregate(test_df_a, list(), list(sum_rel))
-   res <- rapi_rel_to_df(ans)
-   expect_true(is.na(res[[1]]))
+   test_df_a <- rel_from_df(con, data.frame(a=c(1:5, NA)))
+   sum_rel <- expr_function("sum", list(expr_reference("a")))
+   ans <- rel_aggregate(test_df_a, list(), list(sum_rel))
+   res <- rel_to_altrep(ans)
+   expect_equal(res[[1]], 15)
 })
-
 
 test_that("anti joins for eq_na_matches works", {
    dbExecute(con, 'CREATE OR REPLACE MACRO "___eq_na_matches_na"(a, b) AS ((a IS NULL AND b IS NULL) OR (a = b))')
@@ -347,7 +576,6 @@ test_that("anti joins for eq_na_matches works", {
    expect_equal(res, data.frame(x=c(1, 1)))
 })
 
-
 test_that("semi joins for eq_na_matches works", {
    dbExecute(con, 'CREATE OR REPLACE MACRO "___eq_na_matches_na"(a, b) AS ((a IS NULL AND b IS NULL) OR (a = b))')
    rel1 <- rel_from_df(con, data.frame(x = c(1, 1, 2, 2)))
@@ -357,5 +585,4 @@ test_that("semi joins for eq_na_matches works", {
    res <- rel_to_altrep(out)
    expect_equal(res, data.frame(x=c(2, 2)))
 })
-
 

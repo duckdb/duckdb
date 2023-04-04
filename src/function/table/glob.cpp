@@ -3,6 +3,7 @@
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/common/multi_file_reader.hpp"
 
 namespace duckdb {
 
@@ -12,13 +13,8 @@ struct GlobFunctionBindData : public TableFunctionData {
 
 static unique_ptr<FunctionData> GlobFunctionBind(ClientContext &context, TableFunctionBindInput &input,
                                                  vector<LogicalType> &return_types, vector<string> &names) {
-	auto &config = DBConfig::GetConfig(context);
-	if (!config.options.enable_external_access) {
-		throw PermissionException("Globbing is disabled through configuration");
-	}
 	auto result = make_unique<GlobFunctionBindData>();
-	auto &fs = FileSystem::GetFileSystem(context);
-	result->files = fs.Glob(StringValue::Get(input.inputs[0]), context);
+	result->files = MultiFileReader::GetFileList(context, input.inputs[0], "Globbing", FileGlobOptions::ALLOW_EMPTY);
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("file");
 	return std::move(result);
@@ -49,9 +45,8 @@ static void GlobFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 }
 
 void GlobTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	TableFunctionSet glob("glob");
-	glob.AddFunction(TableFunction({LogicalType::VARCHAR}, GlobFunction, GlobFunctionBind, GlobFunctionInit));
-	set.AddFunction(glob);
+	TableFunction glob_function("glob", {LogicalType::VARCHAR}, GlobFunction, GlobFunctionBind, GlobFunctionInit);
+	set.AddFunction(MultiFileReader::CreateFunctionSet(glob_function));
 }
 
 } // namespace duckdb

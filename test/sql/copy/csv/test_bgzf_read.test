@@ -1,0 +1,20 @@
+# name: test/sql/copy/csv/test_bgzf_read.test
+# description: Test that (concatenated) gzip archives with bgzf extra field can be read
+# group: [csv]
+
+statement ok
+CREATE TABLE bgzf AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/bgzf.gz');
+
+query I
+SELECT COUNT(*) FROM bgzf;
+----
+7
+
+statement ok
+CREATE TABLE concat AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/concat.gz');
+
+query I
+SELECT COUNT(*) FROM concat;
+----
+14
+
