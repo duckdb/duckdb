@@ -479,6 +479,14 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 		unpivot_names.emplace_back(!entry.alias.empty() ? entry.alias : generated_name);
 	}
 	vector<vector<unique_ptr<ParsedExpression>>> unpivot_expressions;
+	for (idx_t v_idx = 1; v_idx < unpivot.entries.size(); v_idx++) {
+		if (unpivot.entries[v_idx].values.size() != unpivot.entries[0].values.size()) {
+			throw BinderException(
+			    "UNPIVOT value count mismatch - entry has %llu values, but expected all entries to have %llu values",
+			    unpivot.entries[v_idx].values.size(), unpivot.entries[0].values.size());
+		}
+	}
+
 	for (idx_t v_idx = 0; v_idx < unpivot.entries[0].values.size(); v_idx++) {
 		vector<unique_ptr<ParsedExpression>> expressions;
 		expressions.reserve(unpivot.entries.size());
