@@ -87,7 +87,7 @@ class PhysicalOperator {
 public:
 	PhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types, idx_t estimated_cardinality)
 	    : type(type), types(std::move(types)), estimated_cardinality(estimated_cardinality) {
-		estimated_props = make_unique<EstimatedProperties>(estimated_cardinality, 0);
+		estimated_props = make_uniq<EstimatedProperties>(estimated_cardinality, 0);
 	}
 
 	virtual ~PhysicalOperator() {

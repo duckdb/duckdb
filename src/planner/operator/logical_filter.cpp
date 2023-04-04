@@ -51,7 +51,7 @@ void LogicalFilter::Serialize(FieldWriter &writer) const {
 unique_ptr<LogicalOperator> LogicalFilter::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto expressions = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 	auto projection_map = reader.ReadRequiredList<idx_t>();
-	auto result = make_unique<LogicalFilter>();
+	auto result = make_uniq<LogicalFilter>();
 	result->expressions = std::move(expressions);
 	result->projection_map = std::move(projection_map);
 	return std::move(result);

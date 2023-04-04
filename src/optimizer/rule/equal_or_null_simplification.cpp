@@ -8,27 +8,27 @@ namespace duckdb {
 
 EqualOrNullSimplification::EqualOrNullSimplification(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on OR conjunction
-	auto op = make_unique<ConjunctionExpressionMatcher>();
-	op->expr_type = make_unique<SpecificExpressionTypeMatcher>(ExpressionType::CONJUNCTION_OR);
+	auto op = make_uniq<ConjunctionExpressionMatcher>();
+	op->expr_type = make_uniq<SpecificExpressionTypeMatcher>(ExpressionType::CONJUNCTION_OR);
 	op->policy = SetMatcher::Policy::SOME;
 
 	// equi comparison on one side
-	auto equal_child = make_unique<ComparisonExpressionMatcher>();
-	equal_child->expr_type = make_unique<SpecificExpressionTypeMatcher>(ExpressionType::COMPARE_EQUAL);
+	auto equal_child = make_uniq<ComparisonExpressionMatcher>();
+	equal_child->expr_type = make_uniq<SpecificExpressionTypeMatcher>(ExpressionType::COMPARE_EQUAL);
 	equal_child->policy = SetMatcher::Policy::SOME;
 	op->matchers.push_back(std::move(equal_child));
 
 	// AND conjuction on the other
-	auto and_child = make_unique<ConjunctionExpressionMatcher>();
-	and_child->expr_type = make_unique<SpecificExpressionTypeMatcher>(ExpressionType::CONJUNCTION_AND);
+	auto and_child = make_uniq<ConjunctionExpressionMatcher>();
+	and_child->expr_type = make_uniq<SpecificExpressionTypeMatcher>(ExpressionType::CONJUNCTION_AND);
 	and_child->policy = SetMatcher::Policy::SOME;
 
 	// IS NULL tests inside AND
-	auto isnull_child = make_unique<ExpressionMatcher>();
-	isnull_child->expr_type = make_unique<SpecificExpressionTypeMatcher>(ExpressionType::OPERATOR_IS_NULL);
-	// I could try to use std::make_unique for a copy, but it's available from C++14 only
-	auto isnull_child2 = make_unique<ExpressionMatcher>();
-	isnull_child2->expr_type = make_unique<SpecificExpressionTypeMatcher>(ExpressionType::OPERATOR_IS_NULL);
+	auto isnull_child = make_uniq<ExpressionMatcher>();
+	isnull_child->expr_type = make_uniq<SpecificExpressionTypeMatcher>(ExpressionType::OPERATOR_IS_NULL);
+	// I could try to use std::make_uniq for a copy, but it's available from C++14 only
+	auto isnull_child2 = make_uniq<ExpressionMatcher>();
+	isnull_child2->expr_type = make_uniq<SpecificExpressionTypeMatcher>(ExpressionType::OPERATOR_IS_NULL);
 	and_child->matchers.push_back(std::move(isnull_child));
 	and_child->matchers.push_back(std::move(isnull_child2));
 
@@ -78,8 +78,8 @@ static unique_ptr<Expression> TryRewriteEqualOrIsNull(const Expression *equal_ex
 		}
 	}
 	if (valid && a_is_null_found && b_is_null_found) {
-		return make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
-		                                              std::move(equal_cast->left), std::move(equal_cast->right));
+		return make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
+		                                            std::move(equal_cast->left), std::move(equal_cast->right));
 	}
 	return nullptr;
 }

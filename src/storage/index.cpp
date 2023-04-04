@@ -70,7 +70,7 @@ void Index::ExecuteExpressions(DataChunk &input, DataChunk &result) {
 unique_ptr<Expression> Index::BindExpression(unique_ptr<Expression> expr) {
 	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &bound_colref = (BoundColumnRefExpression &)*expr;
-		return make_unique<BoundReferenceExpression>(expr->return_type, column_ids[bound_colref.binding.column_index]);
+		return make_uniq<BoundReferenceExpression>(expr->return_type, column_ids[bound_colref.binding.column_index]);
 	}
 	ExpressionIterator::EnumerateChildren(
 	    *expr, [this](unique_ptr<Expression> &expr) { expr = BindExpression(std::move(expr)); });

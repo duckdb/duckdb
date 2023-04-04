@@ -8,8 +8,8 @@ namespace duckdb {
 
 unique_ptr<CreateStatement> Transformer::TransformCreateDatabase(duckdb_libpgquery::PGNode *node) {
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGCreateDatabaseStmt *>(node);
-	auto result = make_unique<CreateStatement>();
-	auto info = make_unique<CreateDatabaseInfo>();
+	auto result = make_uniq<CreateStatement>();
+	auto info = make_uniq<CreateDatabaseInfo>();
 
 	info->path = stmt->path ? stmt->path : string();
 

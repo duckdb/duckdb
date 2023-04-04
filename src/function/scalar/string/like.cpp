@@ -170,12 +170,12 @@ struct LikeMatcher : public FunctionData {
 		if (segments.empty()) {
 			return nullptr;
 		}
-		return make_unique<LikeMatcher>(std::move(like_pattern), std::move(segments), has_start_percentage,
-		                                has_end_percentage);
+		return make_uniq<LikeMatcher>(std::move(like_pattern), std::move(segments), has_start_percentage,
+		                              has_end_percentage);
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<LikeMatcher>(like_pattern, segments, has_start_percentage, has_end_percentage);
+		return make_uniq<LikeMatcher>(like_pattern, segments, has_start_percentage, has_end_percentage);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {

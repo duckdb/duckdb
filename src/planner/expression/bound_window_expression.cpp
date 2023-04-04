@@ -85,11 +85,11 @@ bool BoundWindowExpression::KeysAreCompatible(const BoundWindowExpression *other
 }
 
 unique_ptr<Expression> BoundWindowExpression::Copy() {
-	auto new_window = make_unique<BoundWindowExpression>(type, return_type, nullptr, nullptr);
+	auto new_window = make_uniq<BoundWindowExpression>(type, return_type, nullptr, nullptr);
 	new_window->CopyProperties(*this);
 
 	if (aggregate) {
-		new_window->aggregate = make_unique<AggregateFunction>(*aggregate);
+		new_window->aggregate = make_uniq<AggregateFunction>(*aggregate);
 	}
 	if (bind_info) {
 		new_window->bind_info = bind_info->Copy();
@@ -156,14 +156,13 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(ExpressionDeserializat
 	if (has_aggregate) {
 		auto aggr_function = FunctionSerializer::Deserialize<AggregateFunction, AggregateFunctionCatalogEntry>(
 		    reader, state, CatalogType::AGGREGATE_FUNCTION_ENTRY, children, bind_info);
-		aggregate = make_unique<AggregateFunction>(std::move(aggr_function));
+		aggregate = make_uniq<AggregateFunction>(std::move(aggr_function));
 		return_type = aggregate->return_type;
 	} else {
 		children = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 		return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	}
-	auto result =
-	    make_unique<BoundWindowExpression>(state.type, return_type, std::move(aggregate), std::move(bind_info));
+	auto result = make_uniq<BoundWindowExpression>(state.type, return_type, std::move(aggregate), std::move(bind_info));
 
 	result->partitions = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 	result->orders = reader.ReadRequiredSerializableList<BoundOrderByNode, BoundOrderByNode>(state.gstate);

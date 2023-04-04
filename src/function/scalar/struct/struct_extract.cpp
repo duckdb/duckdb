@@ -18,7 +18,7 @@ struct StructExtractBindData : public FunctionData {
 
 public:
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<StructExtractBindData>(key, index, type);
+		return make_uniq<StructExtractBindData>(key, index, type);
 	}
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = (const StructExtractBindData &)other_p;
@@ -96,7 +96,7 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 	}
 
 	bound_function.return_type = return_type;
-	return make_unique<StructExtractBindData>(std::move(key), key_index, std::move(return_type));
+	return make_uniq<StructExtractBindData>(std::move(key), key_index, std::move(return_type));
 }
 
 static unique_ptr<BaseStatistics> PropagateStructExtractStats(ClientContext &context, FunctionStatisticsInput &input) {

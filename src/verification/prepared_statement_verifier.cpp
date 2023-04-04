@@ -14,7 +14,7 @@ PreparedStatementVerifier::PreparedStatementVerifier(unique_ptr<SQLStatement> st
 }
 
 unique_ptr<StatementVerifier> PreparedStatementVerifier::Create(const SQLStatement &statement) {
-	return make_unique<PreparedStatementVerifier>(statement.Copy());
+	return make_uniq<PreparedStatementVerifier>(statement.Copy());
 }
 
 void PreparedStatementVerifier::Extract() {
@@ -25,15 +25,15 @@ void PreparedStatementVerifier::Extract() {
 	statement->n_param = values.size();
 	// create the PREPARE and EXECUTE statements
 	string name = "__duckdb_verification_prepared_statement";
-	auto prepare = make_unique<PrepareStatement>();
+	auto prepare = make_uniq<PrepareStatement>();
 	prepare->name = name;
 	prepare->statement = std::move(statement);
 
-	auto execute = make_unique<ExecuteStatement>();
+	auto execute = make_uniq<ExecuteStatement>();
 	execute->name = name;
 	execute->values = std::move(values);
 
-	auto dealloc = make_unique<DropStatement>();
+	auto dealloc = make_uniq<DropStatement>();
 	dealloc->info->type = CatalogType::PREPARED_STATEMENT;
 	dealloc->info->name = string(name);
 
@@ -60,7 +60,7 @@ void PreparedStatementVerifier::ConvertConstants(unique_ptr<ParsedExpression> &c
 			values.push_back(std::move(child));
 		}
 		// replace it with an expression
-		auto parameter = make_unique<ParameterExpression>();
+		auto parameter = make_uniq<ParameterExpression>();
 		parameter->parameter_nr = index + 1;
 		parameter->alias = alias;
 		child = std::move(parameter);
@@ -90,11 +90,11 @@ bool PreparedStatementVerifier::Run(
 		materialized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(execute_result));
 	} catch (const Exception &ex) {
 		if (ex.type != ExceptionType::PARAMETER_NOT_ALLOWED) {
-			materialized_result = make_unique<MaterializedQueryResult>(PreservedError(ex));
+			materialized_result = make_uniq<MaterializedQueryResult>(PreservedError(ex));
 		}
 		failed = true;
 	} catch (std::exception &ex) {
-		materialized_result = make_unique<MaterializedQueryResult>(PreservedError(ex));
+		materialized_result = make_uniq<MaterializedQueryResult>(PreservedError(ex));
 		failed = true;
 	}
 	run(string(), std::move(dealloc_statement));

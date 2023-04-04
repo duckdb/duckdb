@@ -26,7 +26,7 @@ public:
 	idx_t Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
 	           Vector &result) override;
 
-	unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns) override;
+	duckdb::unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns) override;
 
 	void InitializeRead(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) override;
 

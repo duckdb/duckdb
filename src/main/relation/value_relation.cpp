@@ -16,7 +16,7 @@ ValueRelation::ValueRelation(const std::shared_ptr<ClientContext> &context, cons
 		auto &list = values[row_idx];
 		vector<unique_ptr<ParsedExpression>> expressions;
 		for (idx_t col_idx = 0; col_idx < list.size(); col_idx++) {
-			expressions.push_back(make_unique<ConstantExpression>(list[col_idx]));
+			expressions.push_back(make_uniq<ConstantExpression>(list[col_idx]));
 		}
 		this->expressions.push_back(std::move(expressions));
 	}
@@ -31,14 +31,14 @@ ValueRelation::ValueRelation(const std::shared_ptr<ClientContext> &context, cons
 }
 
 unique_ptr<QueryNode> ValueRelation::GetQueryNode() {
-	auto result = make_unique<SelectNode>();
-	result->select_list.push_back(make_unique<StarExpression>());
+	auto result = make_uniq<SelectNode>();
+	result->select_list.push_back(make_uniq<StarExpression>());
 	result->from_table = GetTableRef();
 	return std::move(result);
 }
 
 unique_ptr<TableRef> ValueRelation::GetTableRef() {
-	auto table_ref = make_unique<ExpressionListRef>();
+	auto table_ref = make_uniq<ExpressionListRef>();
 	// set the expected types/names
 	if (columns.empty()) {
 		// no columns yet: only set up names

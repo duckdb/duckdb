@@ -12,7 +12,7 @@ void LogicalOrder::Serialize(FieldWriter &writer) const {
 unique_ptr<LogicalOperator> LogicalOrder::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto orders = reader.ReadRequiredSerializableList<BoundOrderByNode, BoundOrderByNode>(state.gstate);
 	auto projections = reader.ReadRequiredList<idx_t>();
-	auto result = make_unique<LogicalOrder>(std::move(orders));
+	auto result = make_uniq<LogicalOrder>(std::move(orders));
 	result->projections = std::move(projections);
 	return std::move(result);
 }
