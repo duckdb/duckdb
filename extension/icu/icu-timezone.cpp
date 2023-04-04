@@ -123,7 +123,7 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 	}
 
 	static bool CastFromNaive(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-		auto &cast_data = (CastData &)*parameters.cast_data;
+		auto &cast_data = parameters.cast_data->Cast<CastData>();
 		auto info = (BindData *)cast_data.info.get();
 		CalendarPtr calendar(info->calendar->clone());
 
@@ -186,7 +186,7 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 	}
 
 	static bool CastToNaive(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-		auto &cast_data = (CastData &)*parameters.cast_data;
+		auto &cast_data = parameters.cast_data->Cast<CastData>();
 		auto info = (BindData *)cast_data.info.get();
 		CalendarPtr calendar(info->calendar->clone());
 

@@ -83,8 +83,8 @@ struct CTableLocalInitData : public LocalTableFunctionState {
 };
 
 struct CTableInternalInitInfo {
-	CTableInternalInitInfo(const CTableBindData &bind_data, CTableInitData &init_data, const vector<column_t> &column_ids,
-	                       TableFilterSet *filters)
+	CTableInternalInitInfo(const CTableBindData &bind_data, CTableInitData &init_data,
+	                       const vector<column_t> &column_ids, TableFilterSet *filters)
 	    : bind_data(bind_data), init_data(init_data), column_ids(column_ids), filters(filters), success(true) {
 	}
 
