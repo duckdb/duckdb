@@ -29,12 +29,12 @@ static void ConstructPivots(PivotRef &ref, idx_t pivot_idx, vector<unique_ptr<Pa
 		for (idx_t v = 0; v < entry.values.size(); v++) {
 			auto &value = entry.values[v];
 			auto column_ref = pivot.pivot_expressions[v]->Copy();
-			auto constant_value = make_unique<ConstantExpression>(value);
-			auto comp_expr = make_unique<ComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
-			                                                   std::move(column_ref), std::move(constant_value));
+			auto constant_value = make_uniq<ConstantExpression>(value);
+			auto comp_expr = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
+			                                                 std::move(column_ref), std::move(constant_value));
 			if (expr) {
-				expr = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(expr),
-				                                          std::move(comp_expr));
+				expr = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(expr),
+				                                        std::move(comp_expr));
 			} else {
 				expr = std::move(comp_expr);
 			}
@@ -104,7 +104,7 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 	value_set_t pivots;
 
 	// now handle the pivots
-	auto select_node = make_unique<SelectNode>();
+	auto select_node = make_uniq<SelectNode>();
 	// first add all pivots to the set of handled columns, and check for duplicates
 	idx_t total_pivots = 1;
 	for (auto &pivot : ref.pivots) {
@@ -169,7 +169,7 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 			if (handled_columns.find(columnref.GetColumnName()) == handled_columns.end()) {
 				// not handled - add to grouping set
 				select_node->groups.group_expressions.push_back(
-				    make_unique<ConstantExpression>(Value::INTEGER(select_node->select_list.size() + 1)));
+				    make_uniq<ConstantExpression>(Value::INTEGER(select_node->select_list.size() + 1)));
 				select_node->select_list.push_back(std::move(entry));
 			}
 		}
@@ -177,8 +177,8 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 		// if rows are specified only the columns mentioned in rows are added as groups
 		for (auto &row : ref.groups) {
 			select_node->groups.group_expressions.push_back(
-			    make_unique<ConstantExpression>(Value::INTEGER(select_node->select_list.size() + 1)));
-			select_node->select_list.push_back(make_unique<ColumnRefExpression>(row));
+			    make_uniq<ConstantExpression>(Value::INTEGER(select_node->select_list.size() + 1)));
+			select_node->select_list.push_back(make_uniq<ColumnRefExpression>(row));
 		}
 	}
 	// add the pivot expressions to the select list
@@ -195,7 +195,7 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 	D_ASSERT(ref.pivots.size() == 1);
 
 	unique_ptr<ParsedExpression> expr;
-	auto select_node = make_unique<SelectNode>();
+	auto select_node = make_uniq<SelectNode>();
 
 	// handle the pivot
 	auto &unpivot = ref.pivots[0];
@@ -273,17 +273,17 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 		vector<unique_ptr<ParsedExpression>> expressions;
 		expressions.reserve(unpivot.entries.size());
 		for (auto &entry : unpivot.entries) {
-			expressions.push_back(make_unique<ColumnRefExpression>(entry.values[v_idx].ToString()));
+			expressions.push_back(make_uniq<ColumnRefExpression>(entry.values[v_idx].ToString()));
 		}
 		unpivot_expressions.push_back(std::move(expressions));
 	}
 
 	// construct the UNNEST expression for the set of names (constant)
 	auto unpivot_list = Value::LIST(LogicalType::VARCHAR, std::move(unpivot_names));
-	auto unpivot_name_expr = make_unique<ConstantExpression>(std::move(unpivot_list));
+	auto unpivot_name_expr = make_uniq<ConstantExpression>(std::move(unpivot_list));
 	vector<unique_ptr<ParsedExpression>> unnest_name_children;
 	unnest_name_children.push_back(std::move(unpivot_name_expr));
-	auto unnest_name_expr = make_unique<FunctionExpression>("unnest", std::move(unnest_name_children));
+	auto unnest_name_expr = make_uniq<FunctionExpression>("unnest", std::move(unnest_name_children));
 	unnest_name_expr->alias = unpivot.unpivot_names[0];
 	select_node->select_list.push_back(std::move(unnest_name_expr));
 
@@ -293,20 +293,20 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 		                      unpivot_expressions.size());
 	}
 	for (idx_t i = 0; i < unpivot_expressions.size(); i++) {
-		auto list_expr = make_unique<FunctionExpression>("list_value", std::move(unpivot_expressions[i]));
+		auto list_expr = make_uniq<FunctionExpression>("list_value", std::move(unpivot_expressions[i]));
 		vector<unique_ptr<ParsedExpression>> unnest_val_children;
 		unnest_val_children.push_back(std::move(list_expr));
-		auto unnest_val_expr = make_unique<FunctionExpression>("unnest", std::move(unnest_val_children));
+		auto unnest_val_expr = make_uniq<FunctionExpression>("unnest", std::move(unnest_val_children));
 		auto unnest_name = i < ref.column_name_alias.size() ? ref.column_name_alias[i] : ref.unpivot_names[i];
 		unnest_val_expr->alias = unnest_name;
 		select_node->select_list.push_back(std::move(unnest_val_expr));
 		if (!ref.include_nulls) {
 			// if we are running with EXCLUDE NULLS we need to add an IS NOT NULL filter
-			auto colref = make_unique<ColumnRefExpression>(unnest_name);
-			auto filter = make_unique<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, std::move(colref));
+			auto colref = make_uniq<ColumnRefExpression>(unnest_name);
+			auto filter = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, std::move(colref));
 			if (where_clause) {
-				where_clause = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
-				                                                  std::move(where_clause), std::move(filter));
+				where_clause = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
+				                                                std::move(where_clause), std::move(filter));
 			} else {
 				where_clause = std::move(filter);
 			}
@@ -326,7 +326,7 @@ unique_ptr<BoundTableRef> Binder::Bind(PivotRef &ref) {
 
 	// figure out the set of column names that are in the source of the pivot
 	vector<unique_ptr<ParsedExpression>> all_columns;
-	child_binder->ExpandStarExpression(make_unique<StarExpression>(), all_columns);
+	child_binder->ExpandStarExpression(make_uniq<StarExpression>(), all_columns);
 
 	unique_ptr<SelectNode> select_node;
 	unique_ptr<ParsedExpression> where_clause;
@@ -342,7 +342,7 @@ unique_ptr<BoundTableRef> Binder::Bind(PivotRef &ref) {
 
 	unique_ptr<BoundTableRef> result;
 	MoveCorrelatedExpressions(*child_binder);
-	result = make_unique<BoundSubqueryRef>(std::move(child_binder), std::move(bound_select_node));
+	result = make_uniq<BoundSubqueryRef>(std::move(child_binder), std::move(bound_select_node));
 	auto alias = ref.alias.empty() ? "__unnamed_pivot" : ref.alias;
 	SubqueryRef subquery_ref(nullptr, alias);
 	subquery_ref.column_name_alias = std::move(ref.column_name_alias);
@@ -351,13 +351,13 @@ unique_ptr<BoundTableRef> Binder::Bind(PivotRef &ref) {
 		// we need to bind a new subquery here because the WHERE clause has to be applied AFTER the unnest
 		child_binder = Binder::CreateBinder(context, this);
 		child_binder->bind_context.AddSubquery(root_index, subquery_ref.alias, subquery_ref, *bound_select_ptr);
-		auto where_query = make_unique<SelectNode>();
-		where_query->select_list.push_back(make_unique<StarExpression>());
+		auto where_query = make_uniq<SelectNode>();
+		where_query->select_list.push_back(make_uniq<StarExpression>());
 		where_query->where_clause = std::move(where_clause);
 		bound_select_node = child_binder->BindSelectNode(*where_query, std::move(result));
 		bound_select_ptr = bound_select_node.get();
 		root_index = bound_select_node->GetRootIndex();
-		result = make_unique<BoundSubqueryRef>(std::move(child_binder), std::move(bound_select_node));
+		result = make_uniq<BoundSubqueryRef>(std::move(child_binder), std::move(bound_select_node));
 	}
 	bind_context.AddSubquery(root_index, subquery_ref.alias, subquery_ref, *bound_select_ptr);
 	return result;

@@ -31,7 +31,7 @@ public:
 private:
 	OdbcHandleStmt *stmt_ref;
 	// main structure to hold the fetched chunks
-	std::vector<unique_ptr<DataChunk>> chunks;
+	std::vector<duckdb::unique_ptr<DataChunk>> chunks;
 	// used by fetch prior
 	duckdb::idx_t current_chunk_idx;
 	duckdb::DataChunk *current_chunk;

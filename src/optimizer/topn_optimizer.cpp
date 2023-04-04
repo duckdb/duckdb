@@ -15,7 +15,7 @@ unique_ptr<LogicalOperator> TopN::Optimize(unique_ptr<LogicalOperator> op) {
 		// This optimization doesn't apply when OFFSET is present without LIMIT
 		// Or if offset is not constant
 		if (limit.limit_val != NumericLimits<int64_t>::Maximum() || limit.offset) {
-			auto topn = make_unique<LogicalTopN>(std::move(order_by.orders), limit.limit_val, limit.offset_val);
+			auto topn = make_uniq<LogicalTopN>(std::move(order_by.orders), limit.limit_val, limit.offset_val);
 			topn->AddChild(std::move(order_by.children[0]));
 			op = std::move(topn);
 		}

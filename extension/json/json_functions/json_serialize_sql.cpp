@@ -16,7 +16,7 @@ struct JsonSerializeBindData : public FunctionData {
 
 public:
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<JsonSerializeBindData>(skip_if_null, skip_if_empty, format);
+		return make_uniq<JsonSerializeBindData>(skip_if_null, skip_if_empty, format);
 	}
 	bool Equals(const FunctionData &other_p) const override {
 		return true;
@@ -66,7 +66,7 @@ static unique_ptr<FunctionData> JsonSerializeBind(ClientContext &context, Scalar
 			throw BinderException(StringUtil::Format("Unknown argument to json_serialize_sql: %s", arg->alias.c_str()));
 		}
 	}
-	return make_unique<JsonSerializeBindData>(skip_if_null, skip_if_empty, format);
+	return make_uniq<JsonSerializeBindData>(skip_if_null, skip_if_empty, format);
 }
 
 static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vector &result) {

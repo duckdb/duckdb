@@ -34,7 +34,7 @@ ListLambdaBindData::ListLambdaBindData(const LogicalType &stype_p, unique_ptr<Ex
 }
 
 unique_ptr<FunctionData> ListLambdaBindData::Copy() const {
-	return make_unique<ListLambdaBindData>(stype, lambda_expr->Copy());
+	return make_uniq<ListLambdaBindData>(stype, lambda_expr->Copy());
 }
 
 bool ListLambdaBindData::Equals(const FunctionData &other_p) const {
@@ -328,7 +328,7 @@ static unique_ptr<FunctionData> ListLambdaBind(ClientContext &context, ScalarFun
 		bound_function.arguments.pop_back();
 		bound_function.arguments[0] = LogicalType::SQLNULL;
 		bound_function.return_type = LogicalType::SQLNULL;
-		return make_unique<VariableReturnBindData>(bound_function.return_type);
+		return make_uniq<VariableReturnBindData>(bound_function.return_type);
 	}
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
@@ -339,7 +339,7 @@ static unique_ptr<FunctionData> ListLambdaBind(ClientContext &context, ScalarFun
 
 	// get the lambda expression and put it in the bind info
 	auto lambda_expr = std::move(bound_lambda_expr.lambda_expr);
-	return make_unique<ListLambdaBindData>(bound_function.return_type, std::move(lambda_expr));
+	return make_uniq<ListLambdaBindData>(bound_function.return_type, std::move(lambda_expr));
 }
 
 static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, ScalarFunction &bound_function,

@@ -136,7 +136,7 @@ void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const
                                                    const string &file_path) {
 	collection.Reset();
 	ParquetOptions parquet_options(context);
-	auto reader = make_unique<ParquetReader>(context, file_path, parquet_options);
+	auto reader = make_uniq<ParquetReader>(context, file_path, parquet_options);
 	idx_t count = 0;
 	DataChunk current_chunk;
 	current_chunk.Initialize(context, return_types);
@@ -345,7 +345,7 @@ void ParquetMetaDataOperatorData::LoadSchemaData(ClientContext &context, const v
                                                  const string &file_path) {
 	collection.Reset();
 	ParquetOptions parquet_options(context);
-	auto reader = make_unique<ParquetReader>(context, file_path, parquet_options);
+	auto reader = make_uniq<ParquetReader>(context, file_path, parquet_options);
 	idx_t count = 0;
 	DataChunk current_chunk;
 	current_chunk.Initialize(context, return_types);
@@ -410,7 +410,7 @@ unique_ptr<FunctionData> ParquetMetaDataBind(ClientContext &context, TableFuncti
 		ParquetMetaDataOperatorData::BindMetaData(return_types, names);
 	}
 
-	auto result = make_unique<ParquetMetaDataBindData>();
+	auto result = make_uniq<ParquetMetaDataBindData>();
 	result->return_types = return_types;
 	result->files = MultiFileReader::GetFileList(context, input.inputs[0], "Parquet");
 	return std::move(result);
@@ -421,7 +421,7 @@ unique_ptr<GlobalTableFunctionState> ParquetMetaDataInit(ClientContext &context,
 	auto &bind_data = (ParquetMetaDataBindData &)*input.bind_data;
 	D_ASSERT(!bind_data.files.empty());
 
-	auto result = make_unique<ParquetMetaDataOperatorData>(context, bind_data.return_types);
+	auto result = make_uniq<ParquetMetaDataOperatorData>(context, bind_data.return_types);
 	if (SCHEMA) {
 		result->LoadSchemaData(context, bind_data.return_types, bind_data.files[0]);
 	} else {

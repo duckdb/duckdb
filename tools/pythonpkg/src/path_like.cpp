@@ -22,7 +22,7 @@ PathLike PathLike::Create(const py::object &object, DuckDBPyConnection &connecti
 	auto &fs = connection.GetObjectFileSystem();
 	result.str = StringUtil::Format("%s://%s", "DUCKDB_INTERNAL_OBJECTSTORE", StringUtil::GenerateRandomName());
 	fs.attr("add_file")(object, result.str);
-	result.dependency = make_unique<PythonDependencies>(make_unique<FileSystemObject>(fs, result.str));
+	result.dependency = make_uniq<PythonDependencies>(make_uniq<FileSystemObject>(fs, result.str));
 	return result;
 }
 

@@ -32,7 +32,7 @@ SQLLogicTestRunner::~SQLLogicTestRunner() {
 	}
 }
 
-void SQLLogicTestRunner::ExecuteCommand(unique_ptr<Command> command) {
+void SQLLogicTestRunner::ExecuteCommand(duckdb::unique_ptr<Command> command) {
 	if (InLoop()) {
 		active_loops.back()->loop_commands.push_back(std::move(command));
 	} else {
@@ -42,7 +42,7 @@ void SQLLogicTestRunner::ExecuteCommand(unique_ptr<Command> command) {
 }
 
 void SQLLogicTestRunner::StartLoop(LoopDefinition definition) {
-	auto loop = make_unique<LoopCommand>(*this, std::move(definition));
+	auto loop = make_uniq<LoopCommand>(*this, std::move(definition));
 	auto loop_ptr = loop.get();
 	if (InLoop()) {
 		// already in a loop: add it to the currently active loop
@@ -80,7 +80,7 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath) {
 	named_connection_map.clear();
 	// now re-open the current database
 
-	db = make_unique<DuckDB>(dbpath, config.get());
+	db = make_uniq<DuckDB>(dbpath, config.get());
 	Reconnect();
 
 	// load any previously loaded extensions again
@@ -90,7 +90,7 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath) {
 }
 
 void SQLLogicTestRunner::Reconnect() {
-	con = make_unique<Connection>(*db);
+	con = make_uniq<Connection>(*db);
 	if (enable_verification) {
 		con->EnableQueryVerification();
 	}
@@ -256,7 +256,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			if (token.parameters.size() < 1) {
 				parser.Fail("statement requires at least one parameter (statement ok/error)");
 			}
-			auto command = make_unique<Statement>(*this);
+			auto command = make_uniq<Statement>(*this);
 
 			// parse the first parameter
 			if (token.parameters[0] == "ok") {
@@ -292,7 +292,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			if (token.parameters.size() < 1) {
 				parser.Fail("query requires at least one parameter (query III)");
 			}
-			auto command = make_unique<Query>(*this);
+			auto command = make_uniq<Query>(*this);
 
 			// parse the expected column count
 			command->expected_column_count = 0;
@@ -579,10 +579,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				parser.Fail("cannot restart an in-memory database, did you forget to call \"load\"?");
 			}
 			// restart the current database
-			auto command = make_unique<RestartCommand>(*this);
+			auto command = make_uniq<RestartCommand>(*this);
 			ExecuteCommand(std::move(command));
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_RECONNECT) {
-			auto command = make_unique<ReconnectCommand>(*this);
+			auto command = make_uniq<ReconnectCommand>(*this);
 			ExecuteCommand(std::move(command));
 		}
 	}

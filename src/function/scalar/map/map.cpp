@@ -231,7 +231,7 @@ static unique_ptr<FunctionData> MapBind(ClientContext &context, ScalarFunction &
 	bound_function.return_type =
 	    LogicalType::MAP(ListType::GetChildType(child_types[0].second), ListType::GetChildType(child_types[1].second));
 
-	return make_unique<VariableReturnBindData>(bound_function.return_type);
+	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
 void MapFun::RegisterFunction(BuiltinFunctions &set) {

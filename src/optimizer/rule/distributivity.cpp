@@ -10,8 +10,8 @@ namespace duckdb {
 
 DistributivityRule::DistributivityRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// we match on an OR expression within a LogicalFilter node
-	root = make_unique<ExpressionMatcher>();
-	root->expr_type = make_unique<SpecificExpressionTypeMatcher>(ExpressionType::CONJUNCTION_OR);
+	root = make_uniq<ExpressionMatcher>();
+	root->expr_type = make_uniq<SpecificExpressionTypeMatcher>(ExpressionType::CONJUNCTION_OR);
 }
 
 void DistributivityRule::AddExpressionSet(Expression &expr, expression_set_t &set) {
@@ -83,7 +83,7 @@ unique_ptr<Expression> DistributivityRule::Apply(LogicalOperator &op, vector<Exp
 	}
 	// now for each of the remaining expressions in the candidate set we know that it is contained in all branches of
 	// the OR
-	auto new_root = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
+	auto new_root = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
 	for (auto &expr : candidate_set) {
 		D_ASSERT(initial_or->children.size() > 0);
 
@@ -119,7 +119,7 @@ unique_ptr<Expression> DistributivityRule::Apply(LogicalOperator &op, vector<Exp
 		new_root->children.push_back(std::move(initial_or->children[0]));
 	} else if (initial_or->children.size() > 1) {
 		// multiple children still remain: push them into a new OR and add that to the new root
-		auto new_or = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
+		auto new_or = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
 		for (auto &child : initial_or->children) {
 			new_or->children.push_back(std::move(child));
 		}

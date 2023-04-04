@@ -501,7 +501,7 @@ struct ArrowMapData {
 
 		auto &key_type = MapType::KeyType(type);
 		auto &value_type = MapType::ValueType(type);
-		auto internal_struct = make_unique<ArrowAppendData>();
+		auto internal_struct = make_uniq<ArrowAppendData>();
 		internal_struct->child_data.push_back(InitializeArrowChild(key_type, capacity));
 		internal_struct->child_data.push_back(InitializeArrowChild(value_type, capacity));
 
@@ -690,7 +690,7 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 }
 
 unique_ptr<ArrowAppendData> InitializeArrowChild(const LogicalType &type, idx_t capacity) {
-	auto result = make_unique<ArrowAppendData>();
+	auto result = make_uniq<ArrowAppendData>();
 	InitializeFunctionPointers(*result, type);
 
 	auto byte_count = (capacity + 7) / 8;
@@ -712,7 +712,7 @@ static void ReleaseDuckDBArrowAppendArray(ArrowArray *array) {
 // Finalize Arrow Child
 //===--------------------------------------------------------------------===//
 ArrowArray *FinalizeArrowChild(const LogicalType &type, ArrowAppendData &append_data) {
-	auto result = make_unique<ArrowArray>();
+	auto result = make_uniq<ArrowArray>();
 
 	result->private_data = nullptr;
 	result->release = ReleaseDuckDBArrowAppendArray;
@@ -736,7 +736,7 @@ ArrowArray *FinalizeArrowChild(const LogicalType &type, ArrowAppendData &append_
 //! Returns the underlying arrow array
 ArrowArray ArrowAppender::Finalize() {
 	D_ASSERT(root_data.size() == types.size());
-	auto root_holder = make_unique<ArrowAppendData>();
+	auto root_holder = make_uniq<ArrowAppendData>();
 
 	ArrowArray result;
 	root_holder->child_pointers.resize(types.size());

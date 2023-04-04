@@ -45,7 +45,7 @@ AddTableFunctionOverloadInfo::~AddTableFunctionOverloadInfo() {
 }
 
 unique_ptr<AlterInfo> AddTableFunctionOverloadInfo::Copy() const {
-	return make_unique_base<AlterInfo, AddTableFunctionOverloadInfo>(GetAlterEntryData(), new_overloads);
+	return make_uniq_base<AlterInfo, AddTableFunctionOverloadInfo>(GetAlterEntryData(), new_overloads);
 }
 
 } // namespace duckdb

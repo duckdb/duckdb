@@ -43,13 +43,13 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	}
 
 	// initialize all allocators
-	prefix_segments = make_unique<FixedSizeAllocator>(sizeof(PrefixSegment), buffer_manager);
-	leaf_segments = make_unique<FixedSizeAllocator>(sizeof(LeafSegment), buffer_manager);
-	leaves = make_unique<FixedSizeAllocator>(sizeof(Leaf), buffer_manager);
-	n4_nodes = make_unique<FixedSizeAllocator>(sizeof(Node4), buffer_manager);
-	n16_nodes = make_unique<FixedSizeAllocator>(sizeof(Node16), buffer_manager);
-	n48_nodes = make_unique<FixedSizeAllocator>(sizeof(Node48), buffer_manager);
-	n256_nodes = make_unique<FixedSizeAllocator>(sizeof(Node256), buffer_manager);
+	prefix_segments = make_uniq<FixedSizeAllocator>(sizeof(PrefixSegment), buffer_manager);
+	leaf_segments = make_uniq<FixedSizeAllocator>(sizeof(LeafSegment), buffer_manager);
+	leaves = make_uniq<FixedSizeAllocator>(sizeof(Leaf), buffer_manager);
+	n4_nodes = make_uniq<FixedSizeAllocator>(sizeof(Node4), buffer_manager);
+	n16_nodes = make_uniq<FixedSizeAllocator>(sizeof(Node16), buffer_manager);
+	n48_nodes = make_uniq<FixedSizeAllocator>(sizeof(Node48), buffer_manager);
+	n256_nodes = make_uniq<FixedSizeAllocator>(sizeof(Node256), buffer_manager);
 
 	// set the root node of the tree
 	tree.Reset();
@@ -93,7 +93,7 @@ ART::~ART() {
 unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(const Transaction &transaction, const Value &value,
                                                               const ExpressionType expression_type) {
 	// initialize point lookup
-	auto result = make_unique<ARTIndexScanState>();
+	auto result = make_uniq<ARTIndexScanState>();
 	result->values[0] = value;
 	result->expressions[0] = expression_type;
 	return std::move(result);
@@ -104,7 +104,7 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(const Transaction &t
                                                             const Value &high_value,
                                                             const ExpressionType high_expression_type) {
 	// initialize range lookup
-	auto result = make_unique<ARTIndexScanState>();
+	auto result = make_uniq<ARTIndexScanState>();
 	result->values[0] = low_value;
 	result->expressions[0] = low_expression_type;
 	result->values[1] = high_value;

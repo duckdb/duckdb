@@ -32,7 +32,7 @@ PhysicalTableInOutFunction::PhysicalTableInOutFunction(vector<LogicalType> types
 
 unique_ptr<OperatorState> PhysicalTableInOutFunction::GetOperatorState(ExecutionContext &context) const {
 	auto &gstate = (TableInOutGlobalState &)*op_state;
-	auto result = make_unique<TableInOutLocalState>();
+	auto result = make_uniq<TableInOutLocalState>();
 	if (function.init_local) {
 		TableFunctionInitInput input(bind_data.get(), column_ids, vector<idx_t>(), nullptr);
 		result->local_state = function.init_local(context, input, gstate.global_state.get());
@@ -44,7 +44,7 @@ unique_ptr<OperatorState> PhysicalTableInOutFunction::GetOperatorState(Execution
 }
 
 unique_ptr<GlobalOperatorState> PhysicalTableInOutFunction::GetGlobalOperatorState(ClientContext &context) const {
-	auto result = make_unique<TableInOutGlobalState>();
+	auto result = make_uniq<TableInOutGlobalState>();
 	if (function.init_global) {
 		TableFunctionInitInput input(bind_data.get(), column_ids, vector<idx_t>(), nullptr);
 		result->global_state = function.init_global(context, input);

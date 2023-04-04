@@ -50,18 +50,18 @@ SinkFinalizeType PhysicalBatchCollector::Finalize(Pipeline &pipeline, Event &eve
 	auto &gstate = (BatchCollectorGlobalState &)gstate_p;
 	auto collection = gstate.data.FetchCollection();
 	D_ASSERT(collection);
-	auto result = make_unique<MaterializedQueryResult>(statement_type, properties, names, std::move(collection),
-	                                                   context.GetClientProperties());
+	auto result = make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(collection),
+	                                                 context.GetClientProperties());
 	gstate.result = std::move(result);
 	return SinkFinalizeType::READY;
 }
 
 unique_ptr<LocalSinkState> PhysicalBatchCollector::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<BatchCollectorLocalState>(context.client, *this);
+	return make_uniq<BatchCollectorLocalState>(context.client, *this);
 }
 
 unique_ptr<GlobalSinkState> PhysicalBatchCollector::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<BatchCollectorGlobalState>(context, *this);
+	return make_uniq<BatchCollectorGlobalState>(context, *this);
 }
 
 unique_ptr<QueryResult> PhysicalBatchCollector::GetResult(GlobalSinkState &state) {

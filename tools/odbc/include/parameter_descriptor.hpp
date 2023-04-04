@@ -31,8 +31,8 @@ public:
 
 public:
 	// implicitly allocated descriptors
-	unique_ptr<OdbcHandleDesc> apd;
-	unique_ptr<OdbcHandleDesc> ipd;
+	duckdb::unique_ptr<OdbcHandleDesc> apd;
+	duckdb::unique_ptr<OdbcHandleDesc> ipd;
 
 private:
 	SQLRETURN SetValue(idx_t rec_idx);
@@ -63,7 +63,7 @@ private:
 	OdbcHandleDesc *cur_apd;
 
 	//! a pool of allocated parameters during SQLPutData for character data
-	vector<unique_ptr<char[]>> pool_allocated_ptr;
+	vector<duckdb::unique_ptr<char[]>> pool_allocated_ptr;
 	//! Index of the
 	idx_t paramset_idx;
 	idx_t cur_paramset_idx;

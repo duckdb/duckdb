@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-class DuckDBPyConnection;
+struct DuckDBPyConnection;
 
 struct PathLike {
 	static PathLike Create(const py::object &object, DuckDBPyConnection &connection);

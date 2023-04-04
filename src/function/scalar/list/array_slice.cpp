@@ -187,7 +187,7 @@ static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFun
 		throw BinderException("ARRAY_SLICE can only operate on LISTs and VARCHARs");
 	}
 
-	return make_unique<VariableReturnBindData>(bound_function.return_type);
+	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
 void ArraySliceFun::RegisterFunction(BuiltinFunctions &set) {
