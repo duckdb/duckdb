@@ -54,7 +54,7 @@ PyArrowObjectType GetArrowType(const py::handle &obj);
 
 class PythonTableArrowArrayStreamFactory {
 public:
-	explicit PythonTableArrowArrayStreamFactory(PyObject *arrow_table, ClientConfig &config)
+	explicit PythonTableArrowArrayStreamFactory(PyObject *arrow_table, const ClientConfig &config)
 	    : arrow_object(arrow_table), config(config) {};
 
 	//! Produces an Arrow Scanner, should be only called once when initializing Scan States
@@ -66,15 +66,15 @@ public:
 	//! Arrow Object (i.e., Scanner, Record Batch Reader, Table, Dataset)
 	PyObject *arrow_object;
 
-	ClientConfig &config;
+	const ClientConfig &config;
 
 private:
 	//! We transform a TableFilterSet to an Arrow Expression Object
 	static py::object TransformFilter(TableFilterSet &filters, std::unordered_map<idx_t, string> &columns,
-	                                  ClientConfig &config);
+	                                  const ClientConfig &config);
 
 	static py::object ProduceScanner(py::object &arrow_scanner, py::handle &arrow_obj_handle,
-	                                 ArrowStreamParameters &parameters, ClientConfig &config);
+	                                 ArrowStreamParameters &parameters, const ClientConfig &config);
 };
 } // namespace duckdb
 
