@@ -49,7 +49,7 @@ static void ConstructPivots(PivotRef &ref, vector<PivotValueElement> &pivot_valu
 			pivot_values.push_back(std::move(new_value));
 		} else {
 			// need to recurse
-			ConstructPivots(ref, pivot_values, pivot_idx + 1, std::move(new_value));
+			ConstructPivots(ref, pivot_values, pivot_idx + 1, new_value);
 		}
 	}
 }
