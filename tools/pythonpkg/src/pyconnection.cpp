@@ -292,7 +292,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterScalarUDF(const strin
 	catalog.CreateFunction(context, &info);
 	context.transaction.Commit();
 
-	registered_functions[name] = make_unique<PythonDependencies>(udf);
+	registered_functions[name] = make_uniq<PythonDependencies>(udf);
 
 	return shared_from_this();
 }
