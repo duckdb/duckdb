@@ -87,9 +87,9 @@ duckdb_block ReAllocate(void *data, duckdb_block buffer, idx_t old_size, idx_t n
 void *Pin(void *data, duckdb_block buffer) {
 	(void)data;
 	auto my_buffer = (MyBuffer *)buffer;
-	auto buffer_manager = my_buffer->buffer_manager;
 #ifdef DEBUG
 	{
+		auto buffer_manager = my_buffer->buffer_manager;
 		lock_guard<mutex> lock(buffer_manager->lock);
 		// this doesn't really work.. but at least it will segfault if the pointer is faulty
 		D_ASSERT(buffer_manager->allocated_buffers.count((data_ptr_t)buffer));
@@ -106,9 +106,9 @@ void *Pin(void *data, duckdb_block buffer) {
 void Unpin(void *data, duckdb_block buffer) {
 	(void)data;
 	auto my_buffer = (MyBuffer *)buffer;
-	auto buffer_manager = my_buffer->buffer_manager;
 #ifdef DEBUG
 	{
+		auto buffer_manager = my_buffer->buffer_manager;
 		lock_guard<mutex> lock(buffer_manager->lock);
 		D_ASSERT(buffer_manager->allocated_buffers.count((data_ptr_t)buffer));
 	}
