@@ -240,6 +240,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		}
 		options = initial_reader->options;
 		result->sql_types = initial_reader->return_types;
+		result->initial_reader = std::move(initial_reader);
 	} else {
 		result->sql_types = return_types;
 		D_ASSERT(return_types.size() == names.size());
@@ -819,6 +820,18 @@ static void SingleThreadedCSVFunction(ClientContext &context, TableFunctionInput
 //===--------------------------------------------------------------------===//
 static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = (ReadCSVData &)*input.bind_data;
+	auto &fs = FileSystem::GetFileSystem(context);
+	bool file_exists = true;
+	for (auto& file: bind_data.files ){
+		if (!fs.FileExists(file)){
+			file_exists = false;
+			break;
+		}
+	}
+	bind_data.single_threaded = bind_data.single_threaded  || ! file_exists;
+	if (file_exists){
+		bind_data.initial_reader.reset();
+	}
 	if (bind_data.single_threaded) {
 		return SingleThreadedCSVInit(context, input);
 	} else {
