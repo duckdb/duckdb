@@ -1103,7 +1103,7 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 
 	// create the versions for this segment, if there are none yet
 	if (!root) {
-		root = make_unique<UpdateNode>();
+		root = make_uniq<UpdateNode>();
 	}
 
 	// get the vector index based on the first id
@@ -1166,9 +1166,9 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 		node->Verify();
 	} else {
 		// there is no version info yet: create the top level update info and fill it with the updates
-		auto result = make_unique<UpdateNodeData>();
+		auto result = make_uniq<UpdateNodeData>();
 
-		result->info = make_unique<UpdateInfo>();
+		result->info = make_uniq<UpdateInfo>();
 		result->tuples = unique_ptr<sel_t[]>(new sel_t[STANDARD_VECTOR_SIZE]);
 		result->tuple_data = unique_ptr<data_t[]>(new data_t[STANDARD_VECTOR_SIZE * type_size]);
 		result->info->tuples = result->tuples.get();

@@ -1,4 +1,5 @@
 #include "duckdb/storage/block_manager.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 

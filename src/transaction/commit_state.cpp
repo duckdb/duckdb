@@ -155,7 +155,7 @@ void CommitState::WriteDelete(DeleteInfo *info) {
 	SwitchTable(info->table->info.get(), UndoFlags::DELETE_TUPLE);
 
 	if (!delete_chunk) {
-		delete_chunk = make_unique<DataChunk>();
+		delete_chunk = make_uniq<DataChunk>();
 		vector<LogicalType> delete_types = {LogicalType::ROW_TYPE};
 		delete_chunk->Initialize(Allocator::DefaultAllocator(), delete_types);
 	}
@@ -184,7 +184,7 @@ void CommitState::WriteUpdate(UpdateInfo *info) {
 	}
 	update_types.emplace_back(LogicalType::ROW_TYPE);
 
-	update_chunk = make_unique<DataChunk>();
+	update_chunk = make_uniq<DataChunk>();
 	update_chunk->Initialize(Allocator::DefaultAllocator(), update_types);
 
 	// fetch the updated values from the base segment

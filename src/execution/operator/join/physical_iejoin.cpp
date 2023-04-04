@@ -89,13 +89,13 @@ public:
 		lhs_layout.Initialize(op.children[0]->types);
 		vector<BoundOrderByNode> lhs_order;
 		lhs_order.emplace_back(op.lhs_orders[0][0].Copy());
-		tables[0] = make_unique<GlobalSortedTable>(context, lhs_order, lhs_layout);
+		tables[0] = make_uniq<GlobalSortedTable>(context, lhs_order, lhs_layout);
 
 		RowLayout rhs_layout;
 		rhs_layout.Initialize(op.children[1]->types);
 		vector<BoundOrderByNode> rhs_order;
 		rhs_order.emplace_back(op.rhs_orders[0][0].Copy());
-		tables[1] = make_unique<GlobalSortedTable>(context, rhs_order, rhs_layout);
+		tables[1] = make_uniq<GlobalSortedTable>(context, rhs_order, rhs_layout);
 	}
 
 	IEJoinGlobalState(IEJoinGlobalState &prev)
@@ -122,7 +122,7 @@ public:
 
 unique_ptr<GlobalSinkState> PhysicalIEJoin::GetGlobalSinkState(ClientContext &context) const {
 	D_ASSERT(!sink_state);
-	return make_unique<IEJoinGlobalState>(context, *this);
+	return make_uniq<IEJoinGlobalState>(context, *this);
 }
 
 unique_ptr<LocalSinkState> PhysicalIEJoin::GetLocalSinkState(ExecutionContext &context) const {
@@ -131,7 +131,7 @@ unique_ptr<LocalSinkState> PhysicalIEJoin::GetLocalSinkState(ExecutionContext &c
 		const auto &ie_sink = (IEJoinGlobalState &)*sink_state;
 		sink_child = ie_sink.child;
 	}
-	return make_unique<IEJoinLocalState>(context.client, *this, sink_child);
+	return make_uniq<IEJoinLocalState>(context.client, *this, sink_child);
 }
 
 SinkResultType PhysicalIEJoin::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
@@ -384,11 +384,11 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 	payload_layout.Initialize(types);
 
 	// Sort on the first expression
-	auto ref = make_unique<BoundReferenceExpression>(order1.expression->return_type, 0);
+	auto ref = make_uniq<BoundReferenceExpression>(order1.expression->return_type, 0);
 	vector<BoundOrderByNode> orders;
 	orders.emplace_back(order1.type, order1.null_order, std::move(ref));
 
-	l1 = make_unique<SortedTable>(context, orders, payload_layout);
+	l1 = make_uniq<SortedTable>(context, orders, payload_layout);
 
 	// LHS has positive rids
 	ExpressionExecutor l_executor(context);
@@ -404,8 +404,8 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 
 	Sort(*l1);
 
-	op1 = make_unique<SBIterator>(l1->global_sort_state, cmp1);
-	off1 = make_unique<SBIterator>(l1->global_sort_state, cmp1);
+	op1 = make_uniq<SBIterator>(l1->global_sort_state, cmp1);
+	off1 = make_uniq<SBIterator>(l1->global_sort_state, cmp1);
 
 	// We don't actually need the L1 column, just its sort key, which is in the sort blocks
 	li = ExtractColumn<int64_t>(*l1, types.size() - 1);
@@ -421,13 +421,13 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 
 	// Sort on the first expression
 	orders.clear();
-	ref = make_unique<BoundReferenceExpression>(order2.expression->return_type, 0);
+	ref = make_uniq<BoundReferenceExpression>(order2.expression->return_type, 0);
 	orders.emplace_back(order2.type, order2.null_order, std::move(ref));
 
 	ExpressionExecutor executor(context);
 	executor.AddExpression(*orders[0].expression);
 
-	l2 = make_unique<SortedTable>(context, orders, payload_layout);
+	l2 = make_uniq<SortedTable>(context, orders, payload_layout);
 	for (idx_t base = 0, block_idx = 0; block_idx < l1->BlockCount(); ++block_idx) {
 		base += AppendKey(*l1, executor, *l2, 1, base, block_idx);
 	}
@@ -451,8 +451,8 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 
 	// 11. for(i←1 to n) do
 	const auto &cmp2 = op.conditions[1].comparison;
-	op2 = make_unique<SBIterator>(l2->global_sort_state, cmp2);
-	off2 = make_unique<SBIterator>(l2->global_sort_state, cmp2);
+	op2 = make_uniq<SBIterator>(l2->global_sort_state, cmp2);
+	off2 = make_uniq<SBIterator>(l2->global_sort_state, cmp2);
 	i = 0;
 	j = 0;
 	(void)NextRow();
@@ -846,7 +846,7 @@ public:
 			lstate.right_block_index = b2;
 			lstate.right_base = right_bases[b2];
 
-			lstate.joiner = make_unique<IEJoinUnion>(client, op, left_table, b1, right_table, b2);
+			lstate.joiner = make_uniq<IEJoinUnion>(client, op, left_table, b1, right_table, b2);
 			return;
 		}
 
@@ -919,12 +919,12 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalIEJoin::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<IEJoinGlobalSourceState>(*this);
+	return make_uniq<IEJoinGlobalSourceState>(*this);
 }
 
 unique_ptr<LocalSourceState> PhysicalIEJoin::GetLocalSourceState(ExecutionContext &context,
                                                                  GlobalSourceState &gstate) const {
-	return make_unique<IEJoinLocalSourceState>(context.client, *this);
+	return make_uniq<IEJoinLocalSourceState>(context.client, *this);
 }
 
 void PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result, GlobalSourceState &gstate,

@@ -13,7 +13,7 @@ void CreateCopyFunctionInfo::SerializeInternal(Serializer &) const {
 }
 
 unique_ptr<CreateInfo> CreateCopyFunctionInfo::Copy() const {
-	auto result = make_unique<CreateCopyFunctionInfo>(function);
+	auto result = make_uniq<CreateCopyFunctionInfo>(function);
 	CopyProperties(*result);
 	return std::move(result);
 }

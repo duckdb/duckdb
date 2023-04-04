@@ -9,7 +9,9 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 #include <string.h>
+#include <type_traits>
 
 #ifdef _MSC_VER
 #define suint64_t int64_t
@@ -35,20 +37,48 @@ namespace duckdb {
 #define DUCKDB_EXPLICIT_FALLTHROUGH
 #endif
 
-#if !defined(_MSC_VER) && (__cplusplus < 201402L)
-template <typename T, typename... Args>
-unique_ptr<T> make_unique(Args &&... args) {
-	return unique_ptr<T>(new T(std::forward<Args>(args)...));
+template<class _Tp>
+struct __unique_if
+{
+    typedef unique_ptr<_Tp> __unique_single;
+};
+
+template<class _Tp>
+struct __unique_if<_Tp[]>
+{
+    typedef unique_ptr<_Tp[]> __unique_array_unknown_bound;
+};
+
+template<class _Tp, size_t _Np>
+struct __unique_if<_Tp[_Np]>
+{
+    typedef void __unique_array_known_bound;
+};
+
+template<class _Tp, class... _Args>
+inline 
+typename __unique_if<_Tp>::__unique_single
+make_uniq(_Args&&... __args)
+{
+    return unique_ptr<_Tp>(new _Tp(std::forward<_Args>(__args)...));
 }
-#else // Visual Studio has make_unique
-using std::make_unique;
-#endif
-template <typename T, typename... Args>
-duckdb::unique_ptr<T> make_uniq(Args &&... args) {
-	return unique_ptr<T>(new T(std::forward<Args>(args)...));
+
+template<class _Tp>
+inline 
+typename __unique_if<_Tp>::__unique_array_unknown_bound
+make_uniq(size_t __n)
+{
+    typedef typename std::remove_extent<_Tp>::type _Up;
+    return unique_ptr<_Tp>(new _Up[__n]());
 }
+
+template<class _Tp, class... _Args>
+    typename __unique_if<_Tp>::__unique_array_known_bound
+    make_uniq(_Args&&...) = delete;
+
+
 template <typename S, typename T, typename... Args>
-unique_ptr<S> make_unique_base(Args &&... args) {
+unique_ptr<S> make_uniq_base(Args &&... args) {
 	return unique_ptr<S>(new T(std::forward<Args>(args)...));
 }
 
@@ -67,7 +97,7 @@ struct SharedConstructor {
 struct UniqueConstructor {
 	template <class T, typename... ARGS>
 	static unique_ptr<T> Create(ARGS &&...args) {
-		return make_unique<T>(std::forward<ARGS>(args)...);
+		return make_uniq<T>(std::forward<ARGS>(args)...);
 	}
 };
 
@@ -78,6 +108,11 @@ typename std::remove_reference<T>::type&& move(T&& t) noexcept {
 	static_assert(sizeof(T) == 0, "Use std::move instead of unqualified move or duckdb::move");
 }
 #endif
+
+template <class T, class... _Args>
+static duckdb::unique_ptr<T> make_unique(_Args&&... __args) {
+	static_assert(sizeof(T) == 0, "Use make_uniq instead of make_unique!");
+}
 
 template <typename T>
 T MaxValue(T a, T b) {

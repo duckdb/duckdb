@@ -88,7 +88,7 @@ hash_t ColumnRefExpression::Hash() const {
 }
 
 unique_ptr<ParsedExpression> ColumnRefExpression::Copy() const {
-	auto copy = make_unique<ColumnRefExpression>(column_names);
+	auto copy = make_uniq<ColumnRefExpression>(column_names);
 	copy->CopyProperties(*this);
 	return std::move(copy);
 }
@@ -99,7 +99,7 @@ void ColumnRefExpression::Serialize(FieldWriter &writer) const {
 
 unique_ptr<ParsedExpression> ColumnRefExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto column_names = reader.ReadRequiredList<string>();
-	auto expression = make_unique<ColumnRefExpression>(std::move(column_names));
+	auto expression = make_uniq<ColumnRefExpression>(std::move(column_names));
 	return std::move(expression);
 }
 
@@ -111,7 +111,7 @@ void ColumnRefExpression::FormatSerialize(FormatSerializer &serializer) const {
 unique_ptr<ParsedExpression> ColumnRefExpression::FormatDeserialize(ExpressionType type,
                                                                     FormatDeserializer &deserializer) {
 	auto column_names = deserializer.ReadProperty<vector<string>>("column_names");
-	auto expression = make_unique<ColumnRefExpression>(std::move(column_names));
+	auto expression = make_uniq<ColumnRefExpression>(std::move(column_names));
 	return std::move(expression);
 }
 

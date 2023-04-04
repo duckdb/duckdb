@@ -45,7 +45,7 @@ bool BoundCaseExpression::Equals(const BaseExpression *other_p) const {
 }
 
 unique_ptr<Expression> BoundCaseExpression::Copy() {
-	auto new_case = make_unique<BoundCaseExpression>(return_type);
+	auto new_case = make_uniq<BoundCaseExpression>(return_type);
 	for (auto &check : case_checks) {
 		BoundCaseCheck new_check;
 		new_check.when_expr = check.when_expr->Copy();
@@ -87,7 +87,7 @@ unique_ptr<Expression> BoundCaseExpression::Deserialize(ExpressionDeserializatio
 	auto case_checks = reader.ReadRequiredSerializableList<BoundCaseCheck, BoundCaseCheck>(state.gstate);
 	auto else_expr = reader.ReadRequiredSerializable<Expression>(state.gstate);
 
-	auto result = make_unique<BoundCaseExpression>(return_type);
+	auto result = make_uniq<BoundCaseExpression>(return_type);
 	result->else_expr = std::move(else_expr);
 	result->case_checks = std::move(case_checks);
 	return std::move(result);

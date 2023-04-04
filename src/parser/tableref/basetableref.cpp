@@ -40,7 +40,7 @@ void BaseTableRef::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<TableRef> BaseTableRef::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto result = make_unique<BaseTableRef>();
+	auto result = make_uniq<BaseTableRef>();
 
 	deserializer.ReadProperty("schema_name", result->schema_name);
 	deserializer.ReadProperty("table_name", result->table_name);
@@ -51,7 +51,7 @@ unique_ptr<TableRef> BaseTableRef::FormatDeserialize(FormatDeserializer &deseria
 }
 
 unique_ptr<TableRef> BaseTableRef::Deserialize(FieldReader &reader) {
-	auto result = make_unique<BaseTableRef>();
+	auto result = make_uniq<BaseTableRef>();
 
 	result->schema_name = reader.ReadRequired<string>();
 	result->table_name = reader.ReadRequired<string>();
@@ -62,7 +62,7 @@ unique_ptr<TableRef> BaseTableRef::Deserialize(FieldReader &reader) {
 }
 
 unique_ptr<TableRef> BaseTableRef::Copy() {
-	auto copy = make_unique<BaseTableRef>();
+	auto copy = make_uniq<BaseTableRef>();
 
 	copy->catalog_name = catalog_name;
 	copy->schema_name = schema_name;

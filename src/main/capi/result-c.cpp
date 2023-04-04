@@ -497,7 +497,7 @@ duckdb_data_chunk duckdb_result_get_chunk(duckdb_result result, idx_t chunk_idx)
 	if (chunk_idx >= collection.ChunkCount()) {
 		return nullptr;
 	}
-	auto chunk = duckdb::make_unique<duckdb::DataChunk>();
+	auto chunk = duckdb::make_uniq<duckdb::DataChunk>();
 	chunk->Initialize(duckdb::Allocator::DefaultAllocator(), collection.Types());
 	collection.FetchChunk(chunk_idx, *chunk);
 	return reinterpret_cast<duckdb_data_chunk>(chunk.release());

@@ -13,7 +13,7 @@ struct GlobFunctionBindData : public TableFunctionData {
 
 static unique_ptr<FunctionData> GlobFunctionBind(ClientContext &context, TableFunctionBindInput &input,
                                                  vector<LogicalType> &return_types, vector<string> &names) {
-	auto result = make_unique<GlobFunctionBindData>();
+	auto result = make_uniq<GlobFunctionBindData>();
 	result->files = MultiFileReader::GetFileList(context, input.inputs[0], "Globbing", FileGlobOptions::ALLOW_EMPTY);
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("file");
@@ -28,7 +28,7 @@ struct GlobFunctionState : public GlobalTableFunctionState {
 };
 
 static unique_ptr<GlobalTableFunctionState> GlobFunctionInit(ClientContext &context, TableFunctionInitInput &input) {
-	return make_unique<GlobFunctionState>();
+	return make_uniq<GlobFunctionState>();
 }
 
 static void GlobFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {

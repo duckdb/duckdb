@@ -1,5 +1,6 @@
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/block.hpp"
+#include "duckdb/storage/block_manager.hpp"
 
 namespace duckdb {
 

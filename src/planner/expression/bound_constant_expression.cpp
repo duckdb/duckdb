@@ -28,7 +28,7 @@ hash_t BoundConstantExpression::Hash() const {
 }
 
 unique_ptr<Expression> BoundConstantExpression::Copy() {
-	auto copy = make_unique<BoundConstantExpression>(value);
+	auto copy = make_uniq<BoundConstantExpression>(value);
 	copy->CopyProperties(*this);
 	return std::move(copy);
 }
@@ -40,7 +40,7 @@ void BoundConstantExpression::Serialize(FieldWriter &writer) const {
 unique_ptr<Expression> BoundConstantExpression::Deserialize(ExpressionDeserializationState &state,
                                                             FieldReader &reader) {
 	auto value = Value::Deserialize(reader.GetSource());
-	return make_unique<BoundConstantExpression>(value);
+	return make_uniq<BoundConstantExpression>(value);
 }
 
 } // namespace duckdb

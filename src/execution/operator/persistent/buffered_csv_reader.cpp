@@ -809,7 +809,7 @@ vector<LogicalType> BufferedCSVReader::RefineTypeDetection(const vector<LogicalT
 				if ((sample_chunk_idx)*options.sample_chunk_size <= options.buffer_size) {
 					// cache parse chunk
 					// create a new chunk and fill it with the remainder
-					auto chunk = make_unique<DataChunk>();
+					auto chunk = make_uniq<DataChunk>();
 					auto parse_chunk_types = parse_chunk.GetTypes();
 					chunk->Move(parse_chunk);
 					cached_chunks.push(std::move(chunk));

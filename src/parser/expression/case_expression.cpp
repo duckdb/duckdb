@@ -46,7 +46,7 @@ bool CaseExpression::Equal(const CaseExpression *a, const CaseExpression *b) {
 }
 
 unique_ptr<ParsedExpression> CaseExpression::Copy() const {
-	auto copy = make_unique<CaseExpression>();
+	auto copy = make_uniq<CaseExpression>();
 	copy->CopyProperties(*this);
 	for (auto &check : case_checks) {
 		CaseCheck new_check;
@@ -71,7 +71,7 @@ void CaseExpression::Serialize(FieldWriter &writer) const {
 }
 
 unique_ptr<ParsedExpression> CaseExpression::Deserialize(ExpressionType type, FieldReader &reader) {
-	auto result = make_unique<CaseExpression>();
+	auto result = make_uniq<CaseExpression>();
 	auto &source = reader.GetSource();
 	auto count = reader.ReadRequired<uint32_t>();
 	for (idx_t i = 0; i < count; i++) {
@@ -91,7 +91,7 @@ void CaseExpression::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<ParsedExpression> CaseExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
-	auto result = make_unique<CaseExpression>();
+	auto result = make_uniq<CaseExpression>();
 	deserializer.ReadProperty("case_checks", result->case_checks);
 	deserializer.ReadProperty("else_expr", result->else_expr);
 	return std::move(result);

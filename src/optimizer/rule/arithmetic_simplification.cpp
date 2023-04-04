@@ -9,16 +9,16 @@ namespace duckdb {
 
 ArithmeticSimplificationRule::ArithmeticSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on an OperatorExpression that has a ConstantExpression as child
-	auto op = make_unique<FunctionExpressionMatcher>();
-	op->matchers.push_back(make_unique<ConstantExpressionMatcher>());
-	op->matchers.push_back(make_unique<ExpressionMatcher>());
+	auto op = make_uniq<FunctionExpressionMatcher>();
+	op->matchers.push_back(make_uniq<ConstantExpressionMatcher>());
+	op->matchers.push_back(make_uniq<ExpressionMatcher>());
 	op->policy = SetMatcher::Policy::SOME;
 	// we only match on simple arithmetic expressions (+, -, *, /)
-	op->function = make_unique<ManyFunctionMatcher>(unordered_set<string> {"+", "-", "*", "/"});
+	op->function = make_uniq<ManyFunctionMatcher>(unordered_set<string> {"+", "-", "*", "/"});
 	// and only with numeric results
-	op->type = make_unique<IntegerTypeMatcher>();
-	op->matchers[0]->type = make_unique<IntegerTypeMatcher>();
-	op->matchers[1]->type = make_unique<IntegerTypeMatcher>();
+	op->type = make_uniq<IntegerTypeMatcher>();
+	op->matchers[0]->type = make_uniq<IntegerTypeMatcher>();
+	op->matchers[1]->type = make_uniq<IntegerTypeMatcher>();
 	root = std::move(op);
 }
 
@@ -31,7 +31,7 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 	(void)root;
 	// any arithmetic operator involving NULL is always NULL
 	if (constant->value.IsNull()) {
-		return make_unique<BoundConstantExpression>(Value(root->return_type));
+		return make_uniq<BoundConstantExpression>(Value(root->return_type));
 	}
 	auto &func_name = root->function.name;
 	if (func_name == "+") {
@@ -63,7 +63,7 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 				return std::move(root->children[1 - constant_child]);
 			} else if (constant->value == 0) {
 				// divide by 0, replace with NULL
-				return make_unique<BoundConstantExpression>(Value(root->return_type));
+				return make_uniq<BoundConstantExpression>(Value(root->return_type));
 			}
 		}
 	}

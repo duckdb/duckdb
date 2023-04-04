@@ -35,7 +35,7 @@ hash_t BoundReferenceExpression::Hash() const {
 }
 
 unique_ptr<Expression> BoundReferenceExpression::Copy() {
-	return make_unique<BoundReferenceExpression>(alias, return_type, index);
+	return make_uniq<BoundReferenceExpression>(alias, return_type, index);
 }
 
 void BoundReferenceExpression::Serialize(FieldWriter &writer) const {
@@ -49,7 +49,7 @@ unique_ptr<Expression> BoundReferenceExpression::Deserialize(ExpressionDeseriali
 	auto alias = reader.ReadRequired<string>();
 	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	auto index = reader.ReadRequired<idx_t>();
-	return make_unique<BoundReferenceExpression>(alias, return_type, index);
+	return make_uniq<BoundReferenceExpression>(alias, return_type, index);
 }
 
 } // namespace duckdb
