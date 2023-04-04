@@ -13,7 +13,7 @@ using regexp_util::TryParseConstantPattern;
 
 unique_ptr<FunctionLocalState>
 RegexpExtractAll::InitLocalState(ExpressionState &state, const BoundFunctionExpression &expr, FunctionData *bind_data) {
-	auto &info = (RegexpBaseBindData &)*bind_data;
+	auto &info = bind_data->Cast<RegexpBaseBindData>();
 	if (info.constant_pattern) {
 		return make_unique<RegexLocalState>(info, true);
 	}
@@ -145,7 +145,7 @@ RegexStringPieceArgs &GetGroupsBuffer(const RegexpBaseBindData &info, Expression
 
 void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	const auto &info = (RegexpBaseBindData &)*func_expr.bind_info;
+	const auto &info = func_expr.bind_info->Cast<RegexpBaseBindData>();
 
 	auto &strings = args.data[0];
 	auto &patterns = args.data[1];

@@ -52,7 +52,7 @@ public:
 	};
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (AverageDecimalBindData &)other_p;
+		auto &other = other_p.Cast<AverageDecimalBindData>();
 		return scale == other.scale;
 	}
 };
@@ -76,7 +76,7 @@ template <class T>
 static T GetAverageDivident(uint64_t count, FunctionData *bind_data) {
 	T divident = T(count);
 	if (bind_data) {
-		auto &avg_bind_data = (AverageDecimalBindData &)*bind_data;
+		auto &avg_bind_data = bind_data->Cast<AverageDecimalBindData>();
 		divident *= avg_bind_data.scale;
 	}
 	return divident;

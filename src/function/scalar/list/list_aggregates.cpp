@@ -158,7 +158,7 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 
 	// get the aggregate function
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = (ListAggregatesBindData &)*func_expr.bind_info;
+	auto &info = func_expr.bind_info->Cast<ListAggregatesBindData>();
 	auto &aggr = info.aggr_expr->Cast<BoundAggregateExpression>();
 	AggregateInputData aggr_input_data(aggr.bind_info.get(), Allocator::DefaultAllocator());
 

@@ -75,7 +75,7 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto &inputs = args.data[0];
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	const auto &info = (JsonSerializeBindData &)*func_expr.bind_info;
+	const auto &info = func_expr.bind_info->Cast<JsonSerializeBindData>();
 
 	UnaryExecutor::Execute<string_t, string_t>(inputs, result, args.size(), [&](string_t input) {
 		auto doc = JSONCommon::CreateDocument(alc);

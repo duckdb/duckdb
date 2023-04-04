@@ -36,7 +36,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	unique_ptr<TableFilterSet> table_filters;
 	op.info->column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
 
-	auto &bind_data = (TableScanBindData &)*op.bind_data;
+	auto &bind_data = op.bind_data->Cast<TableScanBindData>();
 	bind_data.is_create_index = true;
 
 	auto table_scan =

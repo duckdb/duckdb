@@ -109,7 +109,7 @@ unique_ptr<OperatorState> PhysicalIndexJoin::GetOperatorState(ExecutionContext &
 void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                OperatorState &state_p) const {
 	auto &phy_tbl_scan = (PhysicalTableScan &)*children[1];
-	auto &bind_tbl = (TableScanBindData &)*phy_tbl_scan.bind_data;
+	auto &bind_tbl = phy_tbl_scan.bind_data->Cast<TableScanBindData>();
 	auto &transaction = DuckTransaction::Get(context.client, *bind_tbl.table->catalog);
 	auto &state = (IndexJoinOperatorState &)state_p;
 

@@ -56,6 +56,12 @@ struct FunctionData {
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
 		return (const TARGET &)*this;
 	}
+	// FIXME: this function should be removed in the future
+	template <class TARGET>
+	TARGET &CastNoConst() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return (TARGET &)*this;
+	}
 };
 
 struct TableFunctionData : public FunctionData {

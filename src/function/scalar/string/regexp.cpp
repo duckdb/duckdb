@@ -32,14 +32,14 @@ RegexpBaseBindData::~RegexpBaseBindData() {
 }
 
 bool RegexpBaseBindData::Equals(const FunctionData &other_p) const {
-	auto &other = (RegexpBaseBindData &)other_p;
+	auto &other = other_p.Cast<RegexpBaseBindData>();
 	return constant_pattern == other.constant_pattern && constant_string == other.constant_string &&
 	       RegexOptionsEquals(options, other.options);
 }
 
 unique_ptr<FunctionLocalState> RegexInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr,
                                                    FunctionData *bind_data) {
-	auto &info = (RegexpBaseBindData &)*bind_data;
+	auto &info = bind_data->Cast<RegexpBaseBindData>();
 	if (info.constant_pattern) {
 		return make_unique<RegexLocalState>(info);
 	}
@@ -110,7 +110,7 @@ static void RegexpMatchesFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto &patterns = args.data[1];
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = (RegexpMatchesBindData &)*func_expr.bind_info;
+	auto &info = func_expr.bind_info->Cast<RegexpMatchesBindData>();
 
 	if (info.constant_pattern) {
 		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
@@ -164,7 +164,7 @@ static unique_ptr<FunctionData> RegexReplaceBind(ClientContext &context, ScalarF
 
 static void RegexReplaceFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = (RegexpReplaceBindData &)*func_expr.bind_info;
+	auto &info = func_expr.bind_info->Cast<RegexpReplaceBindData>();
 
 	auto &strings = args.data[0];
 	auto &patterns = args.data[1];
@@ -255,7 +255,7 @@ static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarF
 
 static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	const auto &info = (RegexpExtractBindData &)*func_expr.bind_info;
+	const auto &info = func_expr.bind_info->Cast<RegexpExtractBindData>();
 
 	auto &strings = args.data[0];
 	auto &patterns = args.data[1];

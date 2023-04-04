@@ -118,7 +118,7 @@ static void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_d
 	auto states = (ListAggState **)sdata.data;
 	RecursiveFlatten(input, count);
 
-	auto &list_bind_data = (ListBindData &)*aggr_input_data.bind_data;
+	auto &list_bind_data = aggr_input_data.bind_data->Cast<ListBindData>();
 
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
@@ -138,7 +138,7 @@ static void ListCombineFunction(Vector &state, Vector &combined, AggregateInputD
 	state.ToUnifiedFormat(count, sdata);
 	auto states_ptr = (ListAggState **)sdata.data;
 
-	auto &list_bind_data = (ListBindData &)*aggr_input_data.bind_data;
+	auto &list_bind_data = aggr_input_data.bind_data->Cast<ListBindData>();
 
 	auto combined_ptr = FlatVector::GetData<ListAggState *>(combined);
 	for (idx_t i = 0; i < count; i++) {
@@ -185,7 +185,7 @@ static void ListFinalize(Vector &state_vector, AggregateInputData &aggr_input_da
 	auto result_data = FlatVector::GetData<list_entry_t>(result);
 	size_t total_len = ListVector::GetListSize(result);
 
-	auto &list_bind_data = (ListBindData &)*aggr_input_data.bind_data;
+	auto &list_bind_data = aggr_input_data.bind_data->Cast<ListBindData>();
 
 	for (idx_t i = 0; i < count; i++) {
 

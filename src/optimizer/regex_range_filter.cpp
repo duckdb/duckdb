@@ -33,7 +33,7 @@ unique_ptr<LogicalOperator> RegexRangeFilter::Rewrite(unique_ptr<LogicalOperator
 			if (func.function.name != "regexp_full_match" || func.children.size() != 2) {
 				continue;
 			}
-			auto &info = (RegexpMatchesBindData &)*func.bind_info;
+			auto &info = func.bind_info->Cast<RegexpMatchesBindData>();
 			if (!info.range_success) {
 				continue;
 			}

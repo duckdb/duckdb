@@ -28,7 +28,7 @@ struct ICUStrptime : public ICUDateFunc {
 		StrpTimeFormat format;
 
 		bool Equals(const FunctionData &other_p) const override {
-			auto &other = (ICUStrptimeBindData &)other_p;
+			auto &other = other_p.Cast<ICUStrptimeBindData>();
 			return format.format_specifier == other.format.format_specifier;
 		}
 		unique_ptr<FunctionData> Copy() const override {
@@ -92,7 +92,7 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &fmt_arg = args.data[1];
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = (ICUStrptimeBindData &)*func_expr.bind_info;
+		auto &info = func_expr.bind_info->Cast<ICUStrptimeBindData>();
 		CalendarPtr calendar(info.calendar->clone());
 		auto &format = info.format;
 

@@ -61,7 +61,7 @@ static unique_ptr<LocalTableFunctionState> UnnestLocalInit(ExecutionContext &con
 }
 
 static unique_ptr<GlobalTableFunctionState> UnnestInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto &bind_data = (UnnestBindData &)*input.bind_data;
+	auto &bind_data = input.bind_data->Cast<UnnestBindData>();
 	auto result = make_unique<UnnestGlobalState>();
 	auto ref = make_unique<BoundReferenceExpression>(bind_data.input_type, 0);
 	auto bound_unnest = make_unique<BoundUnnestExpression>(ListType::GetChildType(bind_data.input_type));

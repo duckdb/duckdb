@@ -211,7 +211,7 @@ static unique_ptr<GlobalTableFunctionState> DataFrameScanInitGlobal(ClientContex
 
 static bool DataFrameScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
                                            DataFrameLocalState &local_state, DataFrameGlobalState &global_state) {
-	auto &bind_data = (const DataFrameScanBindData &)*bind_data_p;
+	auto &bind_data = bind_data_p->Cast<DataFrameScanBindData>();
 
 	lock_guard<mutex> parallel_lock(global_state.lock);
 	if (global_state.position >= bind_data.row_count) {
@@ -251,7 +251,7 @@ struct DedupPointerEnumType {
 };
 
 static void DataFrameScanFunc(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
-	auto &bind_data = (DataFrameScanBindData &)*data.bind_data;
+	auto &bind_data = data.bind_data->Cast<DataFrameScanBindData>();
 	auto &operator_data = data.local_state->Cast<DataFrameLocalState>();
 	auto &gstate = data.global_state->Cast<DataFrameGlobalState>();
 	if (operator_data.position >= operator_data.count) {
@@ -410,7 +410,7 @@ static void DataFrameScanFunc(ClientContext &context, TableFunctionInput &data, 
 }
 
 static unique_ptr<NodeStatistics> DataFrameScanCardinality(ClientContext &context, const FunctionData *bind_data_p) {
-	auto &bind_data = (DataFrameScanBindData &)*bind_data_p;
+	auto &bind_data = bind_data_p->Cast<DataFrameScanBindData>();
 	return make_unique<NodeStatistics>(bind_data.row_count, bind_data.row_count);
 }
 

@@ -61,7 +61,7 @@ struct IcuBindData : public FunctionData {
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (IcuBindData &)other_p;
+		auto &other = other_p.Cast<IcuBindData>();
 		return language == other.language && country == other.country;
 	}
 };
@@ -87,7 +87,7 @@ static void ICUCollateFunction(DataChunk &args, ExpressionState &state, Vector &
 	const char HEX_TABLE[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = (IcuBindData &)*func_expr.bind_info;
+	auto &info = func_expr.bind_info->Cast<IcuBindData>();
 	auto &collator = *info.collator;
 
 	unique_ptr<char[]> buffer;

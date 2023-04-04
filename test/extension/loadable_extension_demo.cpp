@@ -136,7 +136,7 @@ public:
 	}
 
 	static void QuackFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-		auto &bind_data = (QuackBindData &)*data_p.bind_data;
+		auto &bind_data = data_p.bind_data->Cast<QuackBindData>();
 		auto &data = (QuackGlobalData &)*data_p.global_state;
 		if (data.offset >= bind_data.number_of_quacks) {
 			// finished returning values

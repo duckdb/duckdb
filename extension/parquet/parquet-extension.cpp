@@ -240,7 +240,7 @@ public:
 
 	static unique_ptr<BaseStatistics> ParquetScanStats(ClientContext &context, const FunctionData *bind_data_p,
 	                                                   column_t column_index) {
-		auto &bind_data = (ParquetReadBindData &)*bind_data_p;
+		auto &bind_data = bind_data_p->CastNoConst<ParquetReadBindData>();
 
 		if (IsRowIdColumnId(column_index)) {
 			return nullptr;
@@ -435,7 +435,7 @@ public:
 
 	static double ParquetProgress(ClientContext &context, const FunctionData *bind_data_p,
 	                              const GlobalTableFunctionState *global_state) {
-		auto &bind_data = (ParquetReadBindData &)*bind_data_p;
+		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
 		if (bind_data.files.empty()) {
 			return 100.0;
 		}
@@ -450,7 +450,7 @@ public:
 
 	static unique_ptr<LocalTableFunctionState>
 	ParquetScanInitLocal(ExecutionContext &context, TableFunctionInitInput &input, GlobalTableFunctionState *gstate_p) {
-		auto &bind_data = (ParquetReadBindData &)*input.bind_data;
+		auto &bind_data = input.bind_data->Cast<ParquetReadBindData>();
 		auto &gstate = gstate_p->Cast<ParquetReadGlobalState>();
 
 		auto result = make_unique<ParquetReadLocalState>();
@@ -469,7 +469,7 @@ public:
 
 	static unique_ptr<GlobalTableFunctionState> ParquetScanInitGlobal(ClientContext &context,
 	                                                                  TableFunctionInitInput &input) {
-		auto &bind_data = (ParquetReadBindData &)*input.bind_data;
+		auto &bind_data = input.bind_data->Cast<ParquetReadBindData>();
 
 		auto result = make_unique<ParquetReadGlobalState>();
 
@@ -522,7 +522,7 @@ public:
 
 	static void ParquetScanSerialize(FieldWriter &writer, const FunctionData *bind_data_p,
 	                                 const TableFunction &function) {
-		auto &bind_data = (ParquetReadBindData &)*bind_data_p;
+		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
 		writer.WriteList<string>(bind_data.files);
 		writer.WriteRegularSerializableList(bind_data.types);
 		writer.WriteList<string>(bind_data.names);
@@ -546,7 +546,7 @@ public:
 		}
 		auto &data = data_p.local_state->Cast<ParquetReadLocalState>();
 		auto &gstate = data_p.global_state->Cast<ParquetReadGlobalState>();
-		auto &bind_data = (ParquetReadBindData &)*data_p.bind_data;
+		auto &bind_data = data_p.bind_data->CastNoConst<ParquetReadBindData>();
 
 		do {
 			if (gstate.CanRemoveFilterColumns()) {
@@ -571,12 +571,12 @@ public:
 	}
 
 	static unique_ptr<NodeStatistics> ParquetCardinality(ClientContext &context, const FunctionData *bind_data) {
-		auto &data = (ParquetReadBindData &)*bind_data;
+		auto &data = bind_data->Cast<ParquetReadBindData>();
 		return make_unique<NodeStatistics>(data.initial_file_cardinality * data.files.size());
 	}
 
 	static idx_t ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data) {
-		auto &data = (ParquetReadBindData &)*bind_data;
+		auto &data = bind_data->Cast<ParquetReadBindData>();
 		return data.initial_file_row_groups * data.files.size();
 	}
 
@@ -760,7 +760,7 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info
 unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &context, FunctionData &bind_data,
                                                             const string &file_path) {
 	auto global_state = make_unique<ParquetWriteGlobalState>();
-	auto &parquet_bind = (ParquetWriteBindData &)bind_data;
+	auto &parquet_bind = bind_data.Cast<ParquetWriteBindData>();
 
 	auto &fs = FileSystem::GetFileSystem(context);
 	global_state->writer =
@@ -771,7 +771,7 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 
 void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_p, GlobalFunctionData &gstate,
                       LocalFunctionData &lstate, DataChunk &input) {
-	auto &bind_data = (ParquetWriteBindData &)bind_data_p;
+	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
 	auto &local_state = lstate.Cast<ParquetWriteLocalState>();
 
@@ -800,7 +800,7 @@ void ParquetWriteFinalize(ClientContext &context, FunctionData &bind_data, Globa
 }
 
 unique_ptr<LocalFunctionData> ParquetWriteInitializeLocal(ExecutionContext &context, FunctionData &bind_data_p) {
-	auto &bind_data = (ParquetWriteBindData &)bind_data_p;
+	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
 	return make_unique<ParquetWriteLocalState>(context.client, bind_data.sql_types);
 }
 

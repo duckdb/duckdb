@@ -559,7 +559,7 @@ idx_t CardinalityEstimator::InspectTableFilters(idx_t cardinality, LogicalOperat
 	for (auto &it : table_filters->filters) {
 		column_statistics = nullptr;
 		if (get->bind_data && get->function.name.compare("seq_scan") == 0) {
-			auto &table_scan_bind_data = (TableScanBindData &)*get->bind_data;
+			auto &table_scan_bind_data = get->bind_data->Cast<TableScanBindData>();
 			column_statistics = get->function.statistics(context, &table_scan_bind_data, it.first);
 		}
 		if (it.second->filter_type == TableFilterType::CONJUNCTION_AND) {
