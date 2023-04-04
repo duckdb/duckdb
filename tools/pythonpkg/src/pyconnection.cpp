@@ -99,10 +99,13 @@ static bool IsArrowBackedDataFrame(const py::object &df) {
 	// TODO: make this optional, will throw on pandas < 2.0.0
 	auto arrow_dtype =
 	    py::module_::import("pandas").attr("core").attr("arrays").attr("arrow").attr("dtype").attr("ArrowDtype");
-	if (py::isinstance(dtypes[0], arrow_dtype)) {
-		return true;
+	// Frankenstein dataframes are a thing, so we might have to deal with mixed pyarrow and numpy somewhere else
+	for (auto &dtype : dtypes) {
+		if (!py::isinstance(dtype, arrow_dtype)) {
+			return false;
+		}
 	}
-	return false;
+	return true;
 }
 
 py::object ArrowTableFromDataframe(const py::object &df) {
