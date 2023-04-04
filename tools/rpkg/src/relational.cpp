@@ -13,6 +13,7 @@
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
+#include "duckdb/parser/expression/window_expression.hpp"
 
 #include "duckdb/main/relation/filter_relation.hpp"
 #include "duckdb/main/relation/projection_relation.hpp"
@@ -40,7 +41,6 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 	((sexp)extptr).attr("class") = rclass;
 	return extptr;
 }
-
 // DuckDB Expressions
 
 [[cpp11::register]] SEXP rapi_expr_reference(std::string name, std::string table) {
@@ -63,7 +63,7 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 	return make_external<ConstantExpression>("duckdb_expr", RApiTypes::SexpToValue(val, 0));
 }
 
-[[cpp11::register]] SEXP rapi_expr_function(std::string name, list args) {
+[[cpp11::register]] SEXP rapi_expr_function(std::string name, list args, list order_bys, list filter_bys) {
 	if (name.size() == 0) {
 		stop("expr_function: Zero length name");
 	}
@@ -77,7 +77,33 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 		// and an error is thrown. If the alias is removed, the error is not thrown.
 		children.back()->alias = "";
 	}
-	return make_external<FunctionExpression>("duckdb_expr", name, std::move(children));
+
+	// For aggregates you can add orders
+	auto order_modifier = make_unique<OrderModifier>();
+	for (expr_extptr_t expr : order_bys) {
+		order_modifier->orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, expr->Copy());
+	}
+
+	// For Aggregates you can add filters
+	unique_ptr<ParsedExpression> filter_expr;
+	if (filter_bys.size() == 1) {
+		filter_expr = ((expr_extptr_t)filter_bys[0])->Copy();
+	} else {
+		vector<unique_ptr<ParsedExpression>> filters;
+		for (expr_extptr_t expr : filter_bys) {
+			filters.push_back(expr->Copy());
+		}
+		filter_expr = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(filters));
+	}
+
+	auto func_expr = make_external<FunctionExpression>("duckdb_expr", name, std::move(children));
+	if (!order_bys.empty()) {
+		func_expr->order_bys = std::move(order_modifier);
+	}
+	if (!filter_bys.empty()) {
+		func_expr->filter = std::move(filter_expr);
+	}
+	return func_expr;
 }
 
 [[cpp11::register]] void rapi_expr_set_alias(duckdb::expr_extptr_t expr, std::string alias) {
@@ -198,6 +224,71 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 	return make_external_prot<RelationWrapper>("duckdb_relation", prot, res);
 }
 
+static WindowBoundary StringToWindowBoundary(string &window_boundary) {
+	if (window_boundary == "unbounded_preceding") {
+		return WindowBoundary::UNBOUNDED_PRECEDING;
+	} else if (window_boundary == "unbounded_following") {
+		return WindowBoundary::UNBOUNDED_FOLLOWING;
+	} else if (window_boundary == "current_row_range") {
+		return WindowBoundary::CURRENT_ROW_RANGE;
+	} else if (window_boundary == "current_row_rows") {
+		return WindowBoundary::CURRENT_ROW_ROWS;
+	} else if (window_boundary == "expr_preceding_rows") {
+		return WindowBoundary::EXPR_PRECEDING_ROWS;
+	} else if (window_boundary == "expr_following_rows") {
+		return WindowBoundary::EXPR_FOLLOWING_ROWS;
+	} else if (window_boundary == "expr_preceding_range") {
+		return WindowBoundary::EXPR_PRECEDING_RANGE;
+	} else {
+		return WindowBoundary::EXPR_FOLLOWING_RANGE;
+	}
+}
+
+[[cpp11::register]] SEXP rapi_expr_window(duckdb::expr_extptr_t window_function, list partitions, list order_bys,
+                                          std::string window_boundary_start, std::string window_boundary_end,
+                                          duckdb::expr_extptr_t start_expr, duckdb::expr_extptr_t end_expr,
+                                          duckdb::expr_extptr_t offset_expr, duckdb::expr_extptr_t default_expr) {
+
+	if (!window_function || window_function->type != ExpressionType::FUNCTION) {
+		stop("expected function expression");
+	}
+
+	auto &function = (FunctionExpression &)*window_function;
+	auto window_type = WindowExpression::WindowToExpressionType(function.function_name);
+	auto window_expr = make_external<WindowExpression>("duckdb_expr", window_type, "", "", function.function_name);
+
+	for (expr_extptr_t expr : order_bys) {
+		window_expr->orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, expr->Copy());
+	}
+
+	if (function.filter) {
+		window_expr->filter_expr = function.filter->Copy();
+	}
+
+	window_expr->start = StringToWindowBoundary(window_boundary_start);
+	window_expr->end = StringToWindowBoundary(window_boundary_end);
+	for (auto &child : function.children) {
+		window_expr->children.push_back(child->Copy());
+	}
+	for (expr_extptr_t partition : partitions) {
+		window_expr->partitions.push_back(partition->Copy());
+	}
+	if (start_expr) {
+		window_expr->start_expr = start_expr->Copy();
+	}
+	if (end_expr) {
+		window_expr->end_expr = end_expr->Copy();
+	}
+	if (offset_expr) {
+		window_expr->offset_expr = offset_expr->Copy();
+	}
+	if (default_expr) {
+		window_expr->default_expr = default_expr->Copy();
+	}
+
+	return window_expr;
+}
+
 [[cpp11::register]] SEXP rapi_rel_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds,
                                        std::string join) {
 	auto join_type = JoinType::INNER;
@@ -298,6 +389,12 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 
 [[cpp11::register]] std::string rapi_rel_alias(duckdb::rel_extptr_t rel) {
 	return rel->rel->GetAlias();
+}
+
+// Call this function to avoid passing an empty list if an argument is optional
+[[cpp11::register]] SEXP rapi_get_null_SEXP_ptr() {
+	auto ret = make_external<ConstantExpression>("duckdb_null_ptr", nullptr);
+	return ret;
 }
 
 [[cpp11::register]] SEXP rapi_rel_set_alias(duckdb::rel_extptr_t rel, std::string alias) {

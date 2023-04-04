@@ -2,6 +2,7 @@
 #include "json_scan.hpp"
 #include "json_structure.hpp"
 #include "json_transform.hpp"
+#include "duckdb/common/multi_file_reader.hpp"
 
 namespace duckdb {
 
@@ -270,10 +271,9 @@ static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p,
 	}
 }
 
-TableFunction JSONFunctions::GetReadJSONTableFunction(bool list_parameter, shared_ptr<JSONScanInfo> function_info) {
-	auto parameter = list_parameter ? LogicalType::LIST(LogicalType::VARCHAR) : LogicalType::VARCHAR;
-	TableFunction table_function({parameter}, ReadJSONFunction, ReadJSONBind, JSONGlobalTableFunctionState::Init,
-	                             JSONLocalTableFunctionState::Init);
+TableFunction JSONFunctions::GetReadJSONTableFunction(shared_ptr<JSONScanInfo> function_info) {
+	TableFunction table_function({LogicalType::VARCHAR}, ReadJSONFunction, ReadJSONBind,
+	                             JSONGlobalTableFunctionState::Init, JSONLocalTableFunctionState::Init);
 
 	JSONScan::TableFunctionDefaults(table_function);
 	table_function.named_parameters["columns"] = LogicalType::ANY;
@@ -293,46 +293,36 @@ TableFunction JSONFunctions::GetReadJSONTableFunction(bool list_parameter, share
 	return table_function;
 }
 
-TableFunction GetReadJSONAutoTableFunction(bool list_parameter, shared_ptr<JSONScanInfo> function_info) {
-	auto table_function = JSONFunctions::GetReadJSONTableFunction(list_parameter, std::move(function_info));
-	table_function.named_parameters["maximum_depth"] = LogicalType::BIGINT;
-	return table_function;
+CreateTableFunctionInfo CreateJSONFunctionInfo(string name, shared_ptr<JSONScanInfo> info, bool auto_function = false) {
+	auto table_function = JSONFunctions::GetReadJSONTableFunction(std::move(info));
+	table_function.name = std::move(name);
+	if (auto_function) {
+		table_function.named_parameters["maximum_depth"] = LogicalType::BIGINT;
+	}
+	return CreateTableFunctionInfo(MultiFileReader::CreateFunctionSet(table_function));
 }
 
 CreateTableFunctionInfo JSONFunctions::GetReadJSONFunction() {
-	TableFunctionSet function_set("read_json");
-	auto function_info =
+	auto info =
 	    make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::UNSTRUCTURED, JSONRecordType::RECORDS, false);
-	function_set.AddFunction(JSONFunctions::GetReadJSONTableFunction(false, function_info));
-	function_set.AddFunction(JSONFunctions::GetReadJSONTableFunction(true, function_info));
-	return CreateTableFunctionInfo(function_set);
+	return CreateJSONFunctionInfo("read_json", std::move(info));
 }
 
 CreateTableFunctionInfo JSONFunctions::GetReadNDJSONFunction() {
-	TableFunctionSet function_set("read_ndjson");
-	auto function_info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED,
-	                                               JSONRecordType::RECORDS, false);
-	function_set.AddFunction(JSONFunctions::GetReadJSONTableFunction(false, function_info));
-	function_set.AddFunction(JSONFunctions::GetReadJSONTableFunction(true, function_info));
-	return CreateTableFunctionInfo(function_set);
+	auto info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED,
+	                                      JSONRecordType::RECORDS, false);
+	return CreateJSONFunctionInfo("read_ndjson", std::move(info));
 }
 
 CreateTableFunctionInfo JSONFunctions::GetReadJSONAutoFunction() {
-	TableFunctionSet function_set("read_json_auto");
-	auto function_info =
-	    make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT, JSONRecordType::AUTO, true);
-	function_set.AddFunction(GetReadJSONAutoTableFunction(false, function_info));
-	function_set.AddFunction(GetReadJSONAutoTableFunction(true, function_info));
-	return CreateTableFunctionInfo(function_set);
+	auto info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT, JSONRecordType::AUTO, true);
+	return CreateJSONFunctionInfo("read_json_auto", std::move(info), true);
 }
 
 CreateTableFunctionInfo JSONFunctions::GetReadNDJSONAutoFunction() {
-	TableFunctionSet function_set("read_ndjson_auto");
-	auto function_info =
+	auto info =
 	    make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED, JSONRecordType::AUTO, true);
-	function_set.AddFunction(GetReadJSONAutoTableFunction(false, function_info));
-	function_set.AddFunction(GetReadJSONAutoTableFunction(true, function_info));
-	return CreateTableFunctionInfo(function_set);
+	return CreateJSONFunctionInfo("read_ndjson_auto", std::move(info), true);
 }
 
 } // namespace duckdb

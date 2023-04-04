@@ -40,8 +40,8 @@ rapi_expr_constant <- function(val) {
   .Call(`_duckdb_rapi_expr_constant`, val)
 }
 
-rapi_expr_function <- function(name, args) {
-  .Call(`_duckdb_rapi_expr_function`, name, args)
+rapi_expr_function <- function(name, args, order_bys, filter_bys) {
+  .Call(`_duckdb_rapi_expr_function`, name, args, order_bys, filter_bys)
 }
 
 rapi_expr_set_alias <- function(expr, alias) {
@@ -70,6 +70,10 @@ rapi_rel_aggregate <- function(rel, groups, aggregates) {
 
 rapi_rel_order <- function(rel, orders) {
   .Call(`_duckdb_rapi_rel_order`, rel, orders)
+}
+
+rapi_expr_window <- function(window_function, partitions, order_bys, window_boundary_start, window_boundary_end, start_expr, end_expr, offset_expr, default_expr) {
+  .Call(`_duckdb_rapi_expr_window`, window_function, partitions, order_bys, window_boundary_start, window_boundary_end, start_expr, end_expr, offset_expr, default_expr)
 }
 
 rapi_rel_join <- function(left, right, conds, join) {
@@ -102,6 +106,10 @@ rapi_rel_explain <- function(rel) {
 
 rapi_rel_alias <- function(rel) {
   .Call(`_duckdb_rapi_rel_alias`, rel)
+}
+
+rapi_get_null_SEXP_ptr <- function() {
+  .Call(`_duckdb_rapi_get_null_SEXP_ptr`)
 }
 
 rapi_rel_set_alias <- function(rel, alias) {
