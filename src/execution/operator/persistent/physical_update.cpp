@@ -170,7 +170,7 @@ unique_ptr<GlobalSourceState> PhysicalUpdate::GetGlobalSourceState(ClientContext
 
 void PhysicalUpdate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                              LocalSourceState &lstate) const {
-	auto &state = (UpdateSourceState &)gstate;
+	auto &state = gstate.Cast<UpdateSourceState>();
 	auto &g = sink_state->Cast<UpdateGlobalState>();
 	if (state.finished) {
 		return;

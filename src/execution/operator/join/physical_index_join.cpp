@@ -111,7 +111,7 @@ void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &input, Data
 	auto &phy_tbl_scan = (PhysicalTableScan &)*children[1];
 	auto &bind_tbl = phy_tbl_scan.bind_data->Cast<TableScanBindData>();
 	auto &transaction = DuckTransaction::Get(context.client, *bind_tbl.table->catalog);
-	auto &state = (IndexJoinOperatorState &)state_p;
+	auto &state = state_p.Cast<IndexJoinOperatorState>();
 
 	auto &tbl = bind_tbl.table->GetStorage();
 	idx_t output_sel_idx = 0;
@@ -164,7 +164,7 @@ void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &input, Data
 
 void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, DataChunk &input, OperatorState &state_p) const {
 
-	auto &state = (IndexJoinOperatorState &)state_p;
+	auto &state = state_p.Cast<IndexJoinOperatorState>();
 	auto &art = index->Cast<ART>();
 	;
 
@@ -198,7 +198,7 @@ void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, DataChunk &inpu
 
 OperatorResultType PhysicalIndexJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                       GlobalOperatorState &gstate, OperatorState &state_p) const {
-	auto &state = (IndexJoinOperatorState &)state_p;
+	auto &state = state_p.Cast<IndexJoinOperatorState>();
 
 	state.result_size = 0;
 	if (state.first_fetch) {

@@ -401,7 +401,7 @@ unique_ptr<GlobalSourceState> PhysicalBatchInsert::GetGlobalSourceState(ClientCo
 
 void PhysicalBatchInsert::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                                   LocalSourceState &lstate) const {
-	auto &state = (BatchInsertSourceState &)gstate;
+	auto &state = gstate.Cast<BatchInsertSourceState>();
 	auto &insert_gstate = sink_state->Cast<BatchInsertGlobalState>();
 	if (state.finished) {
 		return;

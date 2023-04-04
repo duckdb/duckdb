@@ -74,7 +74,7 @@ unique_ptr<GlobalSourceState> PhysicalCreateType::GetGlobalSourceState(ClientCon
 
 void PhysicalCreateType::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                                  LocalSourceState &lstate) const {
-	auto &state = (CreateTypeSourceState &)gstate;
+	auto &state = gstate.Cast<CreateTypeSourceState>();
 	if (state.finished) {
 		return;
 	}

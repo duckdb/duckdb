@@ -88,7 +88,7 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, GlobalSinkSt
                                          DataChunk &input) const {
 
 	D_ASSERT(input.ColumnCount() >= 2);
-	auto &lstate = (CreateIndexLocalSinkState &)lstate_p;
+	auto &lstate = lstate_p.Cast<CreateIndexLocalSinkState>();
 	auto &row_identifiers = input.data[input.ColumnCount() - 1];
 
 	// generate the keys for the given input
@@ -114,8 +114,8 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, GlobalSinkSt
 void PhysicalCreateIndex::Combine(ExecutionContext &context, GlobalSinkState &gstate_p,
                                   LocalSinkState &lstate_p) const {
 
-	auto &gstate = (CreateIndexGlobalSinkState &)gstate_p;
-	auto &lstate = (CreateIndexLocalSinkState &)lstate_p;
+	auto &gstate = gstate_p.Cast<CreateIndexGlobalSinkState>();
+	auto &lstate = lstate_p.Cast<CreateIndexLocalSinkState>();
 
 	// merge the local index into the global index
 	if (!gstate.global_index->MergeIndexes(*lstate.local_index)) {
@@ -128,7 +128,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 
 	// here, we just set the resulting global index as the newly created index of the table
 
-	auto &state = (CreateIndexGlobalSinkState &)gstate_p;
+	auto &state = gstate_p.Cast<CreateIndexGlobalSinkState>();
 	auto &storage = table.GetStorage();
 	if (!storage.IsRoot()) {
 		throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");

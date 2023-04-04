@@ -380,8 +380,8 @@ idx_t RadixPartitionedHashTable::Size(GlobalSinkState &sink_state) const {
 void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSinkState &sink_state,
                                         GlobalSourceState &gsstate, LocalSourceState &lsstate) const {
 	auto &gstate = sink_state.Cast<RadixHTGlobalState>();
-	auto &state = (RadixHTGlobalSourceState &)gsstate;
-	auto &lstate = (RadixHTLocalSourceState &)lsstate;
+	auto &state = gsstate.Cast<RadixHTGlobalSourceState>();
+	auto &lstate = lsstate.Cast<RadixHTLocalSourceState>();
 	D_ASSERT(gstate.is_finalized);
 	if (state.finished) {
 		return;

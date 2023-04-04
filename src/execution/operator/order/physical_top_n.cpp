@@ -485,7 +485,7 @@ void PhysicalTopN::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSo
 	if (limit == 0) {
 		return;
 	}
-	auto &state = (TopNOperatorState &)gstate_p;
+	auto &state = gstate_p.Cast<TopNOperatorState>();
 	auto &gstate = sink_state->Cast<TopNGlobalState>();
 
 	if (!state.initialized) {

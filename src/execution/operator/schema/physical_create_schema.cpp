@@ -20,7 +20,7 @@ unique_ptr<GlobalSourceState> PhysicalCreateSchema::GetGlobalSourceState(ClientC
 
 void PhysicalCreateSchema::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                                    LocalSourceState &lstate) const {
-	auto &state = (CreateSchemaSourceState &)gstate;
+	auto &state = gstate.Cast<CreateSchemaSourceState>();
 	if (state.finished) {
 		return;
 	}

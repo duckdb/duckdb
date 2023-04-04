@@ -33,7 +33,6 @@ public:
 	virtual void Finalize(PhysicalOperator *op, ExecutionContext &context) {
 	}
 
-
 	template <class TARGET>
 	TARGET &Cast() {
 		D_ASSERT(dynamic_cast<TARGET *>(this));

@@ -149,7 +149,7 @@ unique_ptr<GlobalSourceState> PhysicalLimit::GetGlobalSourceState(ClientContext 
 void PhysicalLimit::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                             LocalSourceState &lstate) const {
 	auto &gstate = sink_state->Cast<LimitGlobalState>();
-	auto &state = (LimitSourceState &)gstate_p;
+	auto &state = gstate_p.Cast<LimitSourceState>();
 	while (state.current_offset < gstate.limit + gstate.offset) {
 		if (!state.initialized) {
 			gstate.data.InitializeScan(state.scan_state);

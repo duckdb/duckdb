@@ -129,7 +129,7 @@ unique_ptr<OperatorState> PhysicalCrossProduct::GetOperatorState(ExecutionContex
 
 OperatorResultType PhysicalCrossProduct::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                          GlobalOperatorState &gstate, OperatorState &state_p) const {
-	auto &state = (CrossProductOperatorState &)state_p;
+	auto &state = state_p.Cast<CrossProductOperatorState>();
 	return state.executor.Execute(input, chunk);
 }
 

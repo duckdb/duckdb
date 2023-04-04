@@ -71,8 +71,8 @@ unique_ptr<LocalSinkState> PhysicalOrder::GetLocalSinkState(ExecutionContext &co
 
 SinkResultType PhysicalOrder::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
                                    DataChunk &input) const {
-	auto &gstate = (OrderGlobalSinkState &)gstate_p;
-	auto &lstate = (OrderLocalSinkState &)lstate_p;
+	auto &gstate = gstate_p.Cast<OrderGlobalSinkState>();
+	auto &lstate = lstate_p.Cast<OrderLocalSinkState>();
 
 	auto &global_sort_state = gstate.global_sort_state;
 	auto &local_sort_state = lstate.local_sort_state;
@@ -103,8 +103,8 @@ SinkResultType PhysicalOrder::Sink(ExecutionContext &context, GlobalSinkState &g
 }
 
 void PhysicalOrder::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {
-	auto &gstate = (OrderGlobalSinkState &)gstate_p;
-	auto &lstate = (OrderLocalSinkState &)lstate_p;
+	auto &gstate = gstate_p.Cast<OrderGlobalSinkState>();
+	auto &lstate = lstate_p.Cast<OrderLocalSinkState>();
 	gstate.global_sort_state.AddLocalState(lstate.local_sort_state);
 }
 
@@ -165,7 +165,7 @@ public:
 
 SinkFinalizeType PhysicalOrder::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                          GlobalSinkState &gstate_p) const {
-	auto &state = (OrderGlobalSinkState &)gstate_p;
+	auto &state = gstate_p.Cast<OrderGlobalSinkState>();
 	auto &global_sort_state = state.global_sort_state;
 
 	if (global_sort_state.sorted_blocks.empty()) {
@@ -215,7 +215,7 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalOrder::GetGlobalSourceState(ClientContext &context) const {
-	auto &sink = (OrderGlobalSinkState &)*this->sink_state;
+	auto &sink = this->sink_state->Cast<OrderGlobalSinkState>();
 	return make_unique<PhysicalOrderGlobalSourceState>(sink);
 }
 
@@ -251,7 +251,7 @@ void PhysicalOrder::GetData(ExecutionContext &context, DataChunk &chunk, GlobalS
 	}
 
 	if (!lstate.scanner) {
-		auto &sink = (OrderGlobalSinkState &)*this->sink_state;
+		auto &sink = this->sink_state->Cast<OrderGlobalSinkState>();
 		auto &global_sort_state = sink.global_sort_state;
 		lstate.scanner = make_unique<PayloadScanner>(global_sort_state, lstate.batch_index, true);
 	}

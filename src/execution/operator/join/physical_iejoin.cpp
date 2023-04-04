@@ -701,7 +701,7 @@ public:
 };
 
 void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &chunk, LocalSourceState &state_p) const {
-	auto &state = (IEJoinLocalSourceState &)state_p;
+	auto &state = state_p.Cast<IEJoinLocalSourceState>();
 	auto &ie_sink = sink_state->Cast<IEJoinGlobalState>();
 	auto &left_table = *ie_sink.tables[0];
 	auto &right_table = *ie_sink.tables[1];
@@ -930,8 +930,8 @@ unique_ptr<LocalSourceState> PhysicalIEJoin::GetLocalSourceState(ExecutionContex
 void PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result, GlobalSourceState &gstate,
                              LocalSourceState &lstate) const {
 	auto &ie_sink = sink_state->Cast<IEJoinGlobalState>();
-	auto &ie_gstate = (IEJoinGlobalSourceState &)gstate;
-	auto &ie_lstate = (IEJoinLocalSourceState &)lstate;
+	auto &ie_gstate = gstate.Cast<IEJoinGlobalSourceState>();
+	auto &ie_lstate = lstate.Cast<IEJoinLocalSourceState>();
 
 	ie_gstate.Initialize(ie_sink);
 
