@@ -385,7 +385,7 @@ static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarF
 	}
 
 	return make_uniq<RegexpExtractBindData>(options, std::move(constant_string), constant_pattern,
-	                                          std::move(group_string));
+	                                        std::move(group_string));
 }
 
 void RegexpFun::RegisterFunction(BuiltinFunctions &set) {
