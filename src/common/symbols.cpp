@@ -39,6 +39,7 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/types/column_data_collection.hpp"
 #include "duckdb/common/types/column_data_allocator.hpp"
+#include "duckdb/common/vector.hpp"
 
 using namespace duckdb;
 
@@ -147,30 +148,29 @@ template class unique_ptr<PrivateAllocatorData>;
 
 } // namespace duckdb
 
-template class std::shared_ptr<Relation>;
-template class std::shared_ptr<Event>;
-template class std::shared_ptr<Pipeline>;
-template class std::shared_ptr<MetaPipeline>;
-template class std::shared_ptr<RowGroupCollection>;
-template class std::shared_ptr<ColumnDataAllocator>;
-template class std::shared_ptr<PreparedStatementData>;
-template class std::weak_ptr<Pipeline>;
-
 #define INSTANTIATE_VECTOR(VECTOR_DEFINITION)                                                                          \
-	template VECTOR_DEFINITION::size_type VECTOR_DEFINITION::size() const;                                             \
-	template VECTOR_DEFINITION::const_reference VECTOR_DEFINITION::operator[](VECTOR_DEFINITION::size_type n) const;   \
-	template VECTOR_DEFINITION::reference VECTOR_DEFINITION::operator[](VECTOR_DEFINITION::size_type n);               \
-	template VECTOR_DEFINITION::const_reference VECTOR_DEFINITION::back() const;                                       \
-	template VECTOR_DEFINITION::reference VECTOR_DEFINITION::back();                                                   \
-	template VECTOR_DEFINITION::const_reference VECTOR_DEFINITION::front() const;                                      \
-	template VECTOR_DEFINITION::reference VECTOR_DEFINITION::front();
+	template std::VECTOR_DEFINITION::size_type std::VECTOR_DEFINITION::size() const;                                   \
+	template std::VECTOR_DEFINITION::const_reference std::VECTOR_DEFINITION::operator[](                               \
+	    std::VECTOR_DEFINITION::size_type n) const;                                                                    \
+	template std::VECTOR_DEFINITION::reference std::VECTOR_DEFINITION::operator[](                                     \
+	    std::VECTOR_DEFINITION::size_type n);                                                                          \
+	template std::VECTOR_DEFINITION::const_reference std::VECTOR_DEFINITION::back() const;                             \
+	template std::VECTOR_DEFINITION::reference std::VECTOR_DEFINITION::back();                                         \
+	template std::VECTOR_DEFINITION::const_reference std::VECTOR_DEFINITION::front() const;                            \
+	template std::VECTOR_DEFINITION::reference std::VECTOR_DEFINITION::front();
+
+template class duckdb::vector<ExpressionType>;
+template class duckdb::vector<uint64_t>;
+template class duckdb::vector<string>;
+template class duckdb::vector<PhysicalType>;
+template class duckdb::vector<Value>;
+template class duckdb::vector<int>;
+template class duckdb::vector<duckdb::vector<Expression *>>;
+template class duckdb::vector<LogicalType>;
 
 INSTANTIATE_VECTOR(vector<ColumnDefinition>)
-template class vector<ExpressionType>;
 INSTANTIATE_VECTOR(vector<JoinCondition>)
 INSTANTIATE_VECTOR(vector<OrderByNode>)
-template class vector<uint64_t>;
-template class vector<string>;
 INSTANTIATE_VECTOR(vector<Expression *>)
 INSTANTIATE_VECTOR(vector<BoundParameterExpression *>)
 INSTANTIATE_VECTOR(vector<unique_ptr<Expression>>)
@@ -180,21 +180,25 @@ INSTANTIATE_VECTOR(vector<unique_ptr<PhysicalOperator>>)
 INSTANTIATE_VECTOR(vector<unique_ptr<LogicalOperator>>)
 INSTANTIATE_VECTOR(vector<unique_ptr<Transaction>>)
 INSTANTIATE_VECTOR(vector<unique_ptr<JoinNode>>)
-template class vector<PhysicalType>;
-template class vector<Value>;
-template class vector<int>;
 INSTANTIATE_VECTOR(vector<unique_ptr<Rule>>)
 INSTANTIATE_VECTOR(vector<std::shared_ptr<Event>>)
 INSTANTIATE_VECTOR(vector<unique_ptr<Pipeline>>)
 INSTANTIATE_VECTOR(vector<std::shared_ptr<Pipeline>>)
 INSTANTIATE_VECTOR(vector<std::weak_ptr<Pipeline>>)
 INSTANTIATE_VECTOR(vector<std::shared_ptr<MetaPipeline>>)
-template class vector<vector<Expression *>>;
-template class vector<LogicalType>;
 INSTANTIATE_VECTOR(vector<unique_ptr<JoinHashTable>>)
 INSTANTIATE_VECTOR(vector<unique_ptr<ColumnDataCollection>>)
 INSTANTIATE_VECTOR(vector<std::shared_ptr<ColumnDataAllocator>>)
 INSTANTIATE_VECTOR(vector<unique_ptr<RowDataBlock>>)
+
+template class std::shared_ptr<Relation>;
+template class std::shared_ptr<Event>;
+template class std::shared_ptr<Pipeline>;
+template class std::shared_ptr<MetaPipeline>;
+template class std::shared_ptr<RowGroupCollection>;
+template class std::shared_ptr<ColumnDataAllocator>;
+template class std::shared_ptr<PreparedStatementData>;
+template class std::weak_ptr<Pipeline>;
 
 #if !defined(__clang__)
 template struct std::atomic<uint64_t>;
