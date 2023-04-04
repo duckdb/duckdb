@@ -95,12 +95,6 @@ public:
 		param_count = py::len(sig_params);
 		parameters.reserve(param_count);
 		auto params = py::dict(sig_params);
-		// TODO: check the 'kind' of the 'inspect.Parameter' object
-		// 0 'POSITIONAL_ONLY'
-		// 1 'POSITIONAL_OR_KEYWORD'
-		// 2 'VAR_POSITIONAL
-		// 3 'KEYWORD_ONLY'
-		// 4 'VAR_KEYWORD'
 		for (auto &item : params) {
 			auto &key = item.first;
 			auto &value = item.second;

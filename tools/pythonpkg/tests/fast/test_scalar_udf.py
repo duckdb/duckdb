@@ -27,6 +27,17 @@ class TestScalarUDF(object):
         res = con.sql('select i, plus_one(i) from test_vector_types(NULL::BIGINT, false) t(i), range(2000)')
         assert len(res) == 22000
 
+    def test_detected_parameters(self):
+        def concatenate(a: str, b: str):
+            return a + b
+        
+        con = duckdb.connect()
+        con.register_scalar('py_concatenate', concatenate, None, VARCHAR)
+        res = con.sql("""
+            select py_concatenate('5','3');
+        """).fetchall()
+        assert res[0][0] == '53'
+
     def test_detected_return_type(self):
         def add_nums(*args) -> int:
             sum = 0;
@@ -35,11 +46,11 @@ class TestScalarUDF(object):
             return sum
 
         con = duckdb.connect()
-        con.register_scalar('add_nums', add_nums, None)
+        con.register_scalar('add_nums', add_nums)
         res = con.sql("""
             select add_nums(5,3,2,1);
-        """)
-        print(res)
+        """).fetchall()
+        assert res[0][0] == 11
 
     def test_varargs(self):
         def variable_args(*args):
