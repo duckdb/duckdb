@@ -17,6 +17,7 @@
 #include "duckdb/planner/tableref/bound_subqueryref.hpp"
 #include "duckdb/planner/tableref/bound_pivotref.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/main/client_config.hpp"
 
 namespace duckdb {
 
