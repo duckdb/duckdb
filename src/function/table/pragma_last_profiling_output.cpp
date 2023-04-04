@@ -61,7 +61,7 @@ unique_ptr<GlobalTableFunctionState> PragmaLastProfilingOutputInit(ClientContext
 }
 
 static void PragmaLastProfilingOutputFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &state = (PragmaLastProfilingOutputOperatorData &)*data_p.global_state;
+	auto &state = data_p.global_state->Cast<PragmaLastProfilingOutputOperatorData>();
 	auto &data = (PragmaLastProfilingOutputData &)*data_p.bind_data;
 	if (!state.initialized) {
 		// create a ColumnDataCollection

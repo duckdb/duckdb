@@ -165,7 +165,7 @@ static void PragmaTableInfoView(PragmaTableOperatorData &data, ViewCatalogEntry 
 
 static void PragmaTableInfoFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &bind_data = (PragmaTableFunctionData &)*data_p.bind_data;
-	auto &state = (PragmaTableOperatorData &)*data_p.global_state;
+	auto &state = data_p.global_state->Cast<PragmaTableOperatorData>();
 	switch (bind_data.entry->type) {
 	case CatalogType::TABLE_ENTRY:
 		PragmaTableInfoTable(state, (TableCatalogEntry *)bind_data.entry, output);

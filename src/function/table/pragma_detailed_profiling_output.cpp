@@ -108,7 +108,7 @@ static void ExtractFunctions(ColumnDataCollection &collection, ExpressionInfo &i
 
 static void PragmaDetailedProfilingOutputFunction(ClientContext &context, TableFunctionInput &data_p,
                                                   DataChunk &output) {
-	auto &state = (PragmaDetailedProfilingOutputOperatorData &)*data_p.global_state;
+	auto &state = data_p.global_state->Cast<PragmaDetailedProfilingOutputOperatorData>();
 	auto &data = (PragmaDetailedProfilingOutputData &)*data_p.bind_data;
 
 	if (!state.initialized) {
