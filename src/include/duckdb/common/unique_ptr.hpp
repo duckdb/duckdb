@@ -35,7 +35,12 @@ public:
 		__unique_ptr_utils::AssertNotNull((void *)original::get());
 		return original::get();
 	}
-
+	template <class X, typename std::enable_if<std::is_base_of<_Tp, X>::value, void>::type >
+	unique_ptr(unique_ptr<X, std::default_delete<X>>&& ptr) : std::unique_ptr<_Tp, _Dp>(std::move(ptr)) {
+	}
+	template <class X, class DX, typename std::enable_if<std::is_base_of<_Tp, X>::value, void>::type >
+	unique_ptr(unique_ptr<X, DX>&& ptr) : std::unique_ptr<_Tp, _Dp>(std::move(ptr)) {
+	}
 #ifdef DUCKDB_CLANG_TIDY
 	// This is necessary to tell clang-tidy that it reinitializes the variable after a move
 	[[clang::reinitializes]]
