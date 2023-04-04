@@ -70,7 +70,7 @@ BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	if (colref.alias.empty()) {
 		colref.alias = names[column_index];
 	}
-	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), sql_type, binding, depth));
+	return BindResult(make_uniq<BoundColumnRefExpression>(colref.GetName(), sql_type, binding, depth));
 }
 
 StandardEntry *Binding::GetStandardEntry() {
@@ -210,7 +210,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 		}
 	}
 	ColumnBinding binding = GetColumnBinding(column_index);
-	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), col_type, binding, depth));
+	return BindResult(make_uniq<BoundColumnRefExpression>(colref.GetName(), col_type, binding, depth));
 }
 
 StandardEntry *TableBinding::GetStandardEntry() {
@@ -235,7 +235,7 @@ BindResult DummyBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	ColumnBinding binding(index, column_index);
 
 	// we are binding a parameter to create the dummy binding, no arguments are supplied
-	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), types[column_index], binding, depth));
+	return BindResult(make_uniq<BoundColumnRefExpression>(colref.GetName(), types[column_index], binding, depth));
 }
 
 BindResult DummyBinding::Bind(ColumnRefExpression &colref, idx_t lambda_index, idx_t depth) {
@@ -245,7 +245,7 @@ BindResult DummyBinding::Bind(ColumnRefExpression &colref, idx_t lambda_index, i
 	}
 	ColumnBinding binding(index, column_index);
 	return BindResult(
-	    make_unique<BoundLambdaRefExpression>(colref.GetName(), types[column_index], binding, lambda_index, depth));
+	    make_uniq<BoundLambdaRefExpression>(colref.GetName(), types[column_index], binding, lambda_index, depth));
 }
 
 unique_ptr<ParsedExpression> DummyBinding::ParamToArg(ColumnRefExpression &colref) {

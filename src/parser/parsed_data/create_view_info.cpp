@@ -20,7 +20,7 @@ CreateViewInfo::CreateViewInfo(SchemaCatalogEntry *schema, string view_name)
 }
 
 unique_ptr<CreateInfo> CreateViewInfo::Copy() const {
-	auto result = make_unique<CreateViewInfo>(catalog, schema, view_name);
+	auto result = make_uniq<CreateViewInfo>(catalog, schema, view_name);
 	CopyProperties(*result);
 	result->aliases = aliases;
 	result->types = types;
@@ -29,7 +29,7 @@ unique_ptr<CreateInfo> CreateViewInfo::Copy() const {
 }
 
 unique_ptr<CreateViewInfo> CreateViewInfo::Deserialize(Deserializer &deserializer) {
-	auto result = make_unique<CreateViewInfo>();
+	auto result = make_uniq<CreateViewInfo>();
 	result->DeserializeBase(deserializer);
 
 	FieldReader reader(deserializer);

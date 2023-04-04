@@ -83,7 +83,7 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 			// not there yet: push the expression
 			idx_t new_column_index = state.expressions.size();
 			state.column_map[bound_column_ref.binding] = new_column_index;
-			state.expressions.push_back(make_unique<BoundColumnRefExpression>(
+			state.expressions.push_back(make_uniq<BoundColumnRefExpression>(
 			    bound_column_ref.alias, bound_column_ref.return_type, bound_column_ref.binding));
 			bound_column_ref.binding = ColumnBinding(state.projection_index, new_column_index);
 		} else {
@@ -110,8 +110,8 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 				state.cached_expressions.push_back(std::move(*expr_ptr));
 			}
 			// replace the original expression with a bound column ref
-			*expr_ptr = make_unique<BoundColumnRefExpression>(alias, type,
-			                                                  ColumnBinding(state.projection_index, node.column_index));
+			*expr_ptr = make_uniq<BoundColumnRefExpression>(alias, type,
+			                                                ColumnBinding(state.projection_index, node.column_index));
 			return;
 		}
 	}
@@ -147,7 +147,7 @@ void CommonSubExpressionOptimizer::ExtractCommonSubExpresions(LogicalOperator &o
 	    op, [&](unique_ptr<Expression> *child) { PerformCSEReplacement(child, state); });
 	D_ASSERT(state.expressions.size() > 0);
 	// create a projection node as the child of this node
-	auto projection = make_unique<LogicalProjection>(state.projection_index, std::move(state.expressions));
+	auto projection = make_uniq<LogicalProjection>(state.projection_index, std::move(state.expressions));
 	projection->children.push_back(std::move(op.children[0]));
 	op.children[0] = std::move(projection);
 }

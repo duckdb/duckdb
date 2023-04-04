@@ -16,7 +16,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgque
 	D_ASSERT(stmt);
 	D_ASSERT(stmt->function || stmt->query);
 
-	auto result = make_unique<CreateStatement>();
+	auto result = make_uniq<CreateStatement>();
 	auto qname = TransformQualifiedName(stmt->name);
 
 	unique_ptr<MacroFunction> macro_func;
@@ -24,10 +24,10 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgque
 	// function can be null here
 	if (stmt->function) {
 		auto expression = TransformExpression(stmt->function);
-		macro_func = make_unique<ScalarMacroFunction>(std::move(expression));
+		macro_func = make_uniq<ScalarMacroFunction>(std::move(expression));
 	} else if (stmt->query) {
 		auto query_node = TransformSelect(stmt->query, true)->node->Copy();
-		macro_func = make_unique<TableMacroFunction>(std::move(query_node));
+		macro_func = make_uniq<TableMacroFunction>(std::move(query_node));
 	}
 	if (HasPivotEntries()) {
 		throw ParserException("Cannot use PIVOT statement syntax in a macro. Use the SQL standard PIVOT syntax in the "
@@ -35,7 +35,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgque
 	}
 
 	auto info =
-	    make_unique<CreateMacroInfo>((stmt->function ? CatalogType::MACRO_ENTRY : CatalogType::TABLE_MACRO_ENTRY));
+	    make_uniq<CreateMacroInfo>((stmt->function ? CatalogType::MACRO_ENTRY : CatalogType::TABLE_MACRO_ENTRY));
 	info->catalog = qname.catalog;
 	info->schema = qname.schema;
 	info->name = qname.name;

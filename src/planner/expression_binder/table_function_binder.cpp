@@ -22,7 +22,7 @@ BindResult TableFunctionBinder::BindColumnReference(ColumnRefExpression &expr, i
 	}
 
 	auto result_name = StringUtil::Join(expr.column_names, ".");
-	return BindResult(make_unique<BoundConstantExpression>(Value(result_name)));
+	return BindResult(make_uniq<BoundConstantExpression>(Value(result_name)));
 }
 
 BindResult TableFunctionBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,

@@ -11,7 +11,7 @@ namespace duckdb {
 
 unique_ptr<Expression> JoinCondition::CreateExpression(JoinCondition cond) {
 	auto bound_comparison =
-	    make_unique<BoundComparisonExpression>(cond.comparison, std::move(cond.left), std::move(cond.right));
+	    make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left), std::move(cond.right));
 	return std::move(bound_comparison);
 }
 
@@ -22,8 +22,8 @@ unique_ptr<Expression> JoinCondition::CreateExpression(vector<JoinCondition> con
 		if (!result) {
 			result = std::move(expr);
 		} else {
-			auto conj = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(expr),
-			                                                    std::move(result));
+			auto conj = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(expr),
+			                                                  std::move(result));
 			result = std::move(conj);
 		}
 	}

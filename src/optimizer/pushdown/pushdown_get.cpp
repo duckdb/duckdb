@@ -39,7 +39,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 		}
 		// re-generate the filters
 		for (auto &expr : expressions) {
-			auto f = make_unique<Filter>();
+			auto f = make_uniq<Filter>();
 			f->filter = std::move(expr);
 			f->ExtractBindings();
 			filters.push_back(std::move(f));

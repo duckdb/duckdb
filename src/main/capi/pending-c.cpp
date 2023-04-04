@@ -3,7 +3,7 @@
 #include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/common/preserved_error.hpp"
 
-using duckdb::make_unique;
+using duckdb::make_uniq;
 using duckdb::PendingExecutionResult;
 using duckdb::PendingQueryResult;
 using duckdb::PendingStatementWrapper;
@@ -20,9 +20,9 @@ duckdb_state duckdb_pending_prepared_internal(duckdb_prepared_statement prepared
 	try {
 		result->statement = wrapper->statement->PendingQuery(wrapper->values, allow_streaming);
 	} catch (const duckdb::Exception &ex) {
-		result->statement = make_unique<PendingQueryResult>(duckdb::PreservedError(ex));
+		result->statement = make_uniq<PendingQueryResult>(duckdb::PreservedError(ex));
 	} catch (std::exception &ex) {
-		result->statement = make_unique<PendingQueryResult>(duckdb::PreservedError(ex));
+		result->statement = make_uniq<PendingQueryResult>(duckdb::PreservedError(ex));
 	}
 	duckdb_state return_value = !result->statement->HasError() ? DuckDBSuccess : DuckDBError;
 	*out_result = (duckdb_pending_result)result;
@@ -102,7 +102,7 @@ duckdb_state duckdb_execute_pending(duckdb_pending_result pending_result, duckdb
 		return DuckDBError;
 	}
 
-	std::unique_ptr<duckdb::QueryResult> result;
+	duckdb::unique_ptr<duckdb::QueryResult> result;
 	result = wrapper->statement->Execute();
 	wrapper->statement.reset();
 	return duckdb_translate_result(std::move(result), out_result);

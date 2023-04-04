@@ -7,7 +7,7 @@ namespace duckdb {
 
 OrderedAggregateOptimizer::OrderedAggregateOptimizer(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// we match on an OR expression within a LogicalFilter node
-	root = make_unique<ExpressionMatcher>();
+	root = make_uniq<ExpressionMatcher>();
 	root->expr_class = ExpressionClass::BOUND_AGGREGATE;
 }
 

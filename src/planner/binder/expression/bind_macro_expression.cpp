@@ -75,7 +75,7 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacro
 		// now push the defaults into the positionals
 		positionals.push_back(std::move(defaults[it->first]));
 	}
-	auto new_macro_binding = make_unique<DummyBinding>(types, names, macro_func->name);
+	auto new_macro_binding = make_uniq<DummyBinding>(types, names, macro_func->name);
 	new_macro_binding->arguments = &positionals;
 	macro_binding = new_macro_binding.get();
 

@@ -58,7 +58,7 @@ hash_t BoundParameterExpression::Hash() const {
 }
 
 unique_ptr<Expression> BoundParameterExpression::Copy() {
-	auto result = make_unique<BoundParameterExpression>(parameter_nr);
+	auto result = make_uniq<BoundParameterExpression>(parameter_nr);
 	result->parameter_data = parameter_data;
 	result->return_type = return_type;
 	result->CopyProperties(*this);
@@ -75,7 +75,7 @@ unique_ptr<Expression> BoundParameterExpression::Deserialize(ExpressionDeseriali
                                                              FieldReader &reader) {
 	auto &global_parameter_set = state.gstate.parameter_data;
 	auto parameter_nr = reader.ReadRequired<idx_t>();
-	auto result = make_unique<BoundParameterExpression>(parameter_nr);
+	auto result = make_uniq<BoundParameterExpression>(parameter_nr);
 	result->return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	auto parameter_data = reader.ReadRequiredSerializable<BoundParameterData, shared_ptr<BoundParameterData>>();
 	// check if we have already deserialized a parameter with this number

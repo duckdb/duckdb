@@ -32,7 +32,7 @@ void SequenceCatalogEntry::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<CreateSequenceInfo> SequenceCatalogEntry::Deserialize(Deserializer &source) {
-	auto info = make_unique<CreateSequenceInfo>();
+	auto info = make_uniq<CreateSequenceInfo>();
 
 	FieldReader reader(source);
 	info->schema = reader.ReadRequired<string>();

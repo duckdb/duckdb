@@ -83,8 +83,8 @@ shared_ptr<Relation> Relation::Filter(const vector<string> &expressions) {
 
 	auto expr = std::move(expression_list[0]);
 	for (idx_t i = 1; i < expression_list.size(); i++) {
-		expr = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(expr),
-		                                          std::move(expression_list[i]));
+		expr = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(expr),
+		                                        std::move(expression_list[i]));
 	}
 	return make_shared<FilterRelation>(shared_from_this(), std::move(expr));
 }
@@ -188,9 +188,9 @@ string Relation::GetAlias() {
 }
 
 unique_ptr<TableRef> Relation::GetTableRef() {
-	auto select = make_unique<SelectStatement>();
+	auto select = make_uniq<SelectStatement>();
 	select->node = GetQueryNode();
-	return make_unique<SubqueryRef>(std::move(select), GetAlias());
+	return make_uniq<SubqueryRef>(std::move(select), GetAlias());
 }
 
 unique_ptr<QueryResult> Relation::Execute() {

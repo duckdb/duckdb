@@ -43,7 +43,7 @@ BindResult AlterBinder::BindColumn(ColumnRefExpression &colref) {
 		throw BinderException("Using generated columns in alter statement not supported");
 	}
 	bound_columns.push_back(idx);
-	return BindResult(make_unique<BoundReferenceExpression>(table.GetColumn(idx).Type(), bound_columns.size() - 1));
+	return BindResult(make_uniq<BoundReferenceExpression>(table.GetColumn(idx).Type(), bound_columns.size() - 1));
 }
 
 } // namespace duckdb

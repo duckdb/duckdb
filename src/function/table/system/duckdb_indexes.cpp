@@ -61,7 +61,7 @@ static unique_ptr<FunctionData> DuckDBIndexesBind(ClientContext &context, TableF
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBIndexesInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_unique<DuckDBIndexesData>();
+	auto result = make_uniq<DuckDBIndexesData>();
 
 	// scan all the schemas for tables and collect them and collect them
 	auto schemas = Catalog::GetAllSchemas(context);

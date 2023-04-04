@@ -24,7 +24,7 @@ struct ApproximateQuantileBindData : public FunctionData {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<ApproximateQuantileBindData>(quantiles);
+		return make_uniq<ApproximateQuantileBindData>(quantiles);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
@@ -45,7 +45,7 @@ struct ApproximateQuantileBindData : public FunctionData {
 	static unique_ptr<FunctionData> Deserialize(ClientContext &context, FieldReader &reader,
 	                                            AggregateFunction &bound_function) {
 		auto quantiles = reader.ReadRequiredList<float>();
-		return make_unique<ApproximateQuantileBindData>(std::move(quantiles));
+		return make_uniq<ApproximateQuantileBindData>(std::move(quantiles));
 	}
 
 	vector<float> quantiles;
@@ -185,7 +185,7 @@ unique_ptr<FunctionData> BindApproxQuantile(ClientContext &context, AggregateFun
 
 	// remove the quantile argument so we can use the unary aggregate
 	Function::EraseArgument(function, arguments, arguments.size() - 1);
-	return make_unique<ApproximateQuantileBindData>(quantiles);
+	return make_uniq<ApproximateQuantileBindData>(quantiles);
 }
 
 unique_ptr<FunctionData> BindApproxQuantileDecimal(ClientContext &context, AggregateFunction &function,

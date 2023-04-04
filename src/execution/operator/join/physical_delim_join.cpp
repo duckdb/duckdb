@@ -22,7 +22,7 @@ PhysicalDelimJoin::PhysicalDelimJoin(vector<LogicalType> types, unique_ptr<Physi
 
 	// we replace it with a PhysicalColumnDataScan, that scans the ColumnDataCollection that we keep cached
 	// the actual chunk collection to scan will be created in the DelimJoinGlobalState
-	auto cached_chunk_scan = make_unique<PhysicalColumnDataScan>(
+	auto cached_chunk_scan = make_uniq<PhysicalColumnDataScan>(
 	    children[0]->GetTypes(), PhysicalOperatorType::COLUMN_DATA_SCAN, estimated_cardinality);
 	join->children[0] = std::move(cached_chunk_scan);
 }
@@ -76,7 +76,7 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalDelimJoin::GetGlobalSinkState(ClientContext &context) const {
-	auto state = make_unique<DelimJoinGlobalState>(context, *this);
+	auto state = make_uniq<DelimJoinGlobalState>(context, *this);
 	distinct->sink_state = distinct->GetGlobalSinkState(context);
 	if (delim_scans.size() > 1) {
 		PhysicalHashAggregate::SetMultiScan(*distinct->sink_state);
@@ -85,7 +85,7 @@ unique_ptr<GlobalSinkState> PhysicalDelimJoin::GetGlobalSinkState(ClientContext 
 }
 
 unique_ptr<LocalSinkState> PhysicalDelimJoin::GetLocalSinkState(ExecutionContext &context) const {
-	auto state = make_unique<DelimJoinLocalState>(context.client, *this);
+	auto state = make_uniq<DelimJoinLocalState>(context.client, *this);
 	state->distinct_state = distinct->GetLocalSinkState(context);
 	return std::move(state);
 }

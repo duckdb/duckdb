@@ -92,7 +92,7 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalExport::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<ExportSourceState>();
+	return make_uniq<ExportSourceState>();
 }
 
 void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,

@@ -225,7 +225,7 @@ void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> *plan_ptr, un
 
 		// add the new expressions
 		for (idx_t expr_idx = 0; expr_idx < lhs_bindings.size(); expr_idx++) {
-			auto new_expr = make_unique<BoundColumnRefExpression>(
+			auto new_expr = make_uniq<BoundColumnRefExpression>(
 			    lhs_bindings[expr_idx].alias, lhs_bindings[expr_idx].type, lhs_bindings[expr_idx].binding);
 			proj.expressions.push_back(std::move(new_expr));
 

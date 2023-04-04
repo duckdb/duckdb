@@ -33,7 +33,7 @@ unique_ptr<QueryNode> AggregateRelation::GetQueryNode() {
 		result = child->GetQueryNode();
 	} else {
 		// child node is not a join: create a new select node and push the child as a table reference
-		auto select = make_unique<SelectNode>();
+		auto select = make_uniq<SelectNode>();
 		select->from_table = child->GetTableRef();
 		result = std::move(select);
 	}

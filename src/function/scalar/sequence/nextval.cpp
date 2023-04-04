@@ -22,7 +22,7 @@ struct NextvalBindData : public FunctionData {
 	SequenceCatalogEntry *sequence;
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<NextvalBindData>(sequence);
+		return make_uniq<NextvalBindData>(sequence);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
@@ -123,7 +123,7 @@ static unique_ptr<FunctionData> NextValBind(ClientContext &context, ScalarFuncti
 			sequence = BindSequence(context, seqname.ToString());
 		}
 	}
-	return make_unique<NextvalBindData>(sequence);
+	return make_uniq<NextvalBindData>(sequence);
 }
 
 static void NextValDependency(BoundFunctionExpression &expr, DependencyList &dependencies) {

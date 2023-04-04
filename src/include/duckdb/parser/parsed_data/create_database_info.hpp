@@ -24,7 +24,7 @@ struct CreateDatabaseInfo : public CreateInfo {
 
 public:
 	unique_ptr<CreateInfo> Copy() const override {
-		auto result = make_unique<CreateDatabaseInfo>();
+		auto result = make_uniq<CreateDatabaseInfo>();
 		CopyProperties(*result);
 		result->name = name;
 		result->path = path;
@@ -32,7 +32,7 @@ public:
 	}
 
 	static unique_ptr<CreateDatabaseInfo> Deserialize(Deserializer &deserializer) {
-		auto result = make_unique<CreateDatabaseInfo>();
+		auto result = make_uniq<CreateDatabaseInfo>();
 		result->DeserializeBase(deserializer);
 		return result;
 	}

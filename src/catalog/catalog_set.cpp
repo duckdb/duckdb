@@ -106,7 +106,7 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 		// first create a dummy deleted entry for this entry
 		// so transactions started before the commit of this transaction don't
 		// see it yet
-		auto dummy_node = make_unique<CatalogEntry>(CatalogType::INVALID, value->catalog, name);
+		auto dummy_node = make_uniq<CatalogEntry>(CatalogType::INVALID, value->catalog, name);
 		dummy_node->timestamp = 0;
 		dummy_node->deleted = true;
 		dummy_node->set = this;
@@ -301,7 +301,7 @@ void CatalogSet::DropEntryInternal(CatalogTransaction transaction, EntryIndex en
 	// create a new entry and replace the currently stored one
 	// set the timestamp to the timestamp of the current transaction
 	// and point it at the dummy node
-	auto value = make_unique<CatalogEntry>(CatalogType::DELETED_ENTRY, entry.catalog, entry.name);
+	auto value = make_uniq<CatalogEntry>(CatalogType::DELETED_ENTRY, entry.catalog, entry.name);
 	value->timestamp = transaction.transaction_id;
 	value->set = this;
 	value->deleted = true;
@@ -395,7 +395,7 @@ MappingValue *CatalogSet::GetMapping(CatalogTransaction transaction, const strin
 
 void CatalogSet::PutMapping(CatalogTransaction transaction, const string &name, EntryIndex entry_index) {
 	auto entry = mapping.find(name);
-	auto new_value = make_unique<MappingValue>(std::move(entry_index));
+	auto new_value = make_uniq<MappingValue>(std::move(entry_index));
 	new_value->timestamp = transaction.transaction_id;
 	if (entry != mapping.end()) {
 		if (HasConflict(transaction, entry->second->timestamp)) {
@@ -410,7 +410,7 @@ void CatalogSet::PutMapping(CatalogTransaction transaction, const string &name, 
 void CatalogSet::DeleteMapping(CatalogTransaction transaction, const string &name) {
 	auto entry = mapping.find(name);
 	D_ASSERT(entry != mapping.end());
-	auto delete_marker = make_unique<MappingValue>(entry->second->index.Copy());
+	auto delete_marker = make_uniq<MappingValue>(entry->second->index.Copy());
 	delete_marker->deleted = true;
 	delete_marker->timestamp = transaction.transaction_id;
 	delete_marker->child = std::move(entry->second);

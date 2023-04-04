@@ -20,7 +20,7 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalDrop::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<DropSourceState>();
+	return make_uniq<DropSourceState>();
 }
 
 void PhysicalDrop::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,

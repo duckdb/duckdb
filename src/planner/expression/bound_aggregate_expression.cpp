@@ -74,8 +74,8 @@ unique_ptr<Expression> BoundAggregateExpression::Copy() {
 	}
 	auto new_bind_info = bind_info ? bind_info->Copy() : nullptr;
 	auto new_filter = filter ? filter->Copy() : nullptr;
-	auto copy = make_unique<BoundAggregateExpression>(function, std::move(new_children), std::move(new_filter),
-	                                                  std::move(new_bind_info), aggr_type);
+	auto copy = make_uniq<BoundAggregateExpression>(function, std::move(new_children), std::move(new_filter),
+	                                                std::move(new_bind_info), aggr_type);
 	copy->CopyProperties(*this);
 	copy->order_bys = order_bys ? order_bys->Copy() : nullptr;
 	return std::move(copy);
@@ -99,8 +99,8 @@ unique_ptr<Expression> BoundAggregateExpression::Deserialize(ExpressionDeseriali
 	auto function = FunctionSerializer::Deserialize<AggregateFunction, AggregateFunctionCatalogEntry>(
 	    reader, state, CatalogType::AGGREGATE_FUNCTION_ENTRY, children, bind_info);
 
-	return make_unique<BoundAggregateExpression>(function, std::move(children), std::move(filter), std::move(bind_info),
-	                                             distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT);
+	return make_uniq<BoundAggregateExpression>(function, std::move(children), std::move(filter), std::move(bind_info),
+	                                           distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT);
 }
 
 } // namespace duckdb

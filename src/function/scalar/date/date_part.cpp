@@ -1290,7 +1290,7 @@ struct StructDatePart {
 		}
 
 		unique_ptr<FunctionData> Copy() const override {
-			return make_unique<BindData>(stype, part_codes);
+			return make_uniq<BindData>(stype, part_codes);
 		}
 	};
 
@@ -1333,7 +1333,7 @@ struct StructDatePart {
 
 		Function::EraseArgument(bound_function, arguments, 0);
 		bound_function.return_type = LogicalType::STRUCT(struct_children);
-		return make_unique<BindData>(bound_function.return_type, part_codes);
+		return make_uniq<BindData>(bound_function.return_type, part_codes);
 	}
 
 	template <typename INPUT_TYPE>
@@ -1456,7 +1456,7 @@ struct StructDatePart {
 	                                                    ScalarFunction &bound_function) {
 		auto stype = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 		auto part_codes = reader.ReadRequiredList<DatePartSpecifier>();
-		return make_unique<BindData>(std::move(stype), std::move(part_codes));
+		return make_uniq<BindData>(std::move(stype), std::move(part_codes));
 	}
 
 	template <typename INPUT_TYPE>

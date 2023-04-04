@@ -66,7 +66,7 @@ bool JoinRef::Equals(const TableRef *other_p) const {
 }
 
 unique_ptr<TableRef> JoinRef::Copy() {
-	auto copy = make_unique<JoinRef>(ref_type);
+	auto copy = make_uniq<JoinRef>(ref_type);
 	copy->left = left->Copy();
 	copy->right = right->Copy();
 	if (condition) {
@@ -99,7 +99,7 @@ void JoinRef::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<TableRef> JoinRef::FormatDeserialize(FormatDeserializer &source) {
-	auto result = make_unique<JoinRef>(JoinRefType::REGULAR);
+	auto result = make_uniq<JoinRef>(JoinRefType::REGULAR);
 
 	source.ReadProperty("left", result->left);
 	source.ReadProperty("right", result->right);
@@ -112,7 +112,7 @@ unique_ptr<TableRef> JoinRef::FormatDeserialize(FormatDeserializer &source) {
 }
 
 unique_ptr<TableRef> JoinRef::Deserialize(FieldReader &reader) {
-	auto result = make_unique<JoinRef>(JoinRefType::REGULAR);
+	auto result = make_uniq<JoinRef>(JoinRefType::REGULAR);
 	result->left = reader.ReadRequiredSerializable<TableRef>();
 	result->right = reader.ReadRequiredSerializable<TableRef>();
 	result->condition = reader.ReadOptional<ParsedExpression>(nullptr);

@@ -62,7 +62,7 @@ DistinctAggregateState::DistinctAggregateState(const DistinctAggregateData &data
 		}
 
 		// This is used in Finalize to get the data from the radix table
-		distinct_output_chunks[table_idx] = make_unique<DataChunk>();
+		distinct_output_chunks[table_idx] = make_uniq<DataChunk>();
 		distinct_output_chunks[table_idx]->Initialize(client, chunk_types);
 	}
 }
@@ -100,10 +100,10 @@ DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionIn
 			grouping_set.insert(set_idx + group_by_size);
 		}
 		// Create the hashtable for the aggregate
-		grouped_aggregate_data[table_idx] = make_unique<GroupedAggregateData>();
+		grouped_aggregate_data[table_idx] = make_uniq<GroupedAggregateData>();
 		grouped_aggregate_data[table_idx]->InitializeDistinct(info.aggregates[i], group_expressions);
 		radix_tables[table_idx] =
-		    make_unique<RadixPartitionedHashTable>(grouping_set, *grouped_aggregate_data[table_idx]);
+		    make_uniq<RadixPartitionedHashTable>(grouping_set, *grouped_aggregate_data[table_idx]);
 
 		// Fill the chunk_types (only contains the payload of the distinct aggregates)
 		vector<LogicalType> chunk_types;
@@ -193,7 +193,7 @@ DistinctAggregateCollectionInfo::Create(vector<unique_ptr<Expression>> &aggregat
 	if (indices.empty()) {
 		return nullptr;
 	}
-	return make_unique<DistinctAggregateCollectionInfo>(aggregates, std::move(indices));
+	return make_uniq<DistinctAggregateCollectionInfo>(aggregates, std::move(indices));
 }
 
 bool DistinctAggregateData::IsDistinct(idx_t index) const {

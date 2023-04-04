@@ -75,7 +75,7 @@ vector<PivotColumn> Transformer::TransformPivotList(duckdb_libpgquery::PGList *l
 }
 
 unique_ptr<TableRef> Transformer::TransformPivot(duckdb_libpgquery::PGPivotExpr *root) {
-	auto result = make_unique<PivotRef>();
+	auto result = make_uniq<PivotRef>();
 	result->source = TransformTableRefNode(root->source);
 	if (root->aggrs) {
 		TransformExpressionList(*root->aggrs, result->aggregates);

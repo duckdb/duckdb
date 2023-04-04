@@ -7,7 +7,7 @@ namespace duckdb {
 
 InClauseSimplificationRule::InClauseSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on InClauseExpression that has a ConstantExpression as a check
-	auto op = make_unique<InClauseExpressionMatcher>();
+	auto op = make_uniq<InClauseExpressionMatcher>();
 	op->policy = SetMatcher::Policy::SOME;
 	root = std::move(op);
 }
@@ -40,7 +40,7 @@ unique_ptr<Expression> InClauseSimplificationRule::Apply(LogicalOperator &op, ve
 		if (!new_constant) {
 			return nullptr;
 		} else {
-			auto new_constant_expr = make_unique<BoundConstantExpression>(constant_value);
+			auto new_constant_expr = make_uniq<BoundConstantExpression>(constant_value);
 			cast_list.push_back(std::move(new_constant_expr));
 		}
 	}

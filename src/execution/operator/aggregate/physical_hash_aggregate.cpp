@@ -21,7 +21,7 @@ HashAggregateGroupingData::HashAggregateGroupingData(GroupingSet &grouping_set_p
                                                      unique_ptr<DistinctAggregateCollectionInfo> &info)
     : table_data(grouping_set_p, grouped_aggregate_data) {
 	if (info) {
-		distinct_data = make_unique<DistinctAggregateData>(*info, grouping_set_p, &grouped_aggregate_data.groups);
+		distinct_data = make_uniq<DistinctAggregateData>(*info, grouping_set_p, &grouped_aggregate_data.groups);
 	}
 }
 
@@ -33,7 +33,7 @@ HashAggregateGroupingGlobalState::HashAggregateGroupingGlobalState(const HashAgg
                                                                    ClientContext &context) {
 	table_state = data.table_data.GetGlobalSinkState(context);
 	if (data.HasDistinct()) {
-		distinct_state = make_unique<DistinctAggregateState>(*data.distinct_data, context);
+		distinct_state = make_uniq<DistinctAggregateState>(*data.distinct_data, context);
 	}
 }
 
@@ -243,11 +243,11 @@ void PhysicalHashAggregate::SetMultiScan(GlobalSinkState &state) {
 }
 
 unique_ptr<GlobalSinkState> PhysicalHashAggregate::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<HashAggregateGlobalState>(*this, context);
+	return make_uniq<HashAggregateGlobalState>(*this, context);
 }
 
 unique_ptr<LocalSinkState> PhysicalHashAggregate::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<HashAggregateLocalState>(*this, context);
+	return make_uniq<HashAggregateLocalState>(*this, context);
 }
 
 void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, GlobalSinkState &state,
@@ -505,7 +505,7 @@ public:
 public:
 	void Schedule() override {
 		vector<unique_ptr<Task>> tasks;
-		tasks.push_back(make_unique<HashAggregateFinalizeTask>(*pipeline, shared_from_this(), gstate, context, op));
+		tasks.push_back(make_uniq<HashAggregateFinalizeTask>(*pipeline, shared_from_this(), gstate, context, op));
 		D_ASSERT(!tasks.empty());
 		SetTasks(std::move(tasks));
 	}
@@ -655,8 +655,8 @@ public:
 		auto number_of_threads = scheduler.NumberOfThreads();
 		tasks.reserve(number_of_threads);
 		for (int32_t i = 0; i < number_of_threads; i++) {
-			tasks.push_back(make_unique<HashDistinctAggregateFinalizeTask>(*pipeline, shared_from_this(), gstate,
-			                                                               context, op, global_sources));
+			tasks.push_back(make_uniq<HashDistinctAggregateFinalizeTask>(*pipeline, shared_from_this(), gstate, context,
+			                                                             op, global_sources));
 		}
 		D_ASSERT(!tasks.empty());
 		SetTasks(std::move(tasks));
@@ -848,7 +848,7 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalHashAggregate::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<PhysicalHashAggregateGlobalSourceState>(context, *this);
+	return make_uniq<PhysicalHashAggregateGlobalSourceState>(context, *this);
 }
 
 class PhysicalHashAggregateLocalSourceState : public LocalSourceState {
@@ -865,7 +865,7 @@ public:
 
 unique_ptr<LocalSourceState> PhysicalHashAggregate::GetLocalSourceState(ExecutionContext &context,
                                                                         GlobalSourceState &gstate) const {
-	return make_unique<PhysicalHashAggregateLocalSourceState>(context, *this);
+	return make_uniq<PhysicalHashAggregateLocalSourceState>(context, *this);
 }
 
 void PhysicalHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,

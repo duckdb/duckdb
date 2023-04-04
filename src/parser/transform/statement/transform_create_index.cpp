@@ -33,7 +33,7 @@ vector<unique_ptr<ParsedExpression>> Transformer::TransformIndexParameters(duckd
 
 		if (index_element->name) {
 			// create a column reference expression
-			expressions.push_back(make_unique<ColumnRefExpression>(index_element->name, relation_name));
+			expressions.push_back(make_uniq<ColumnRefExpression>(index_element->name, relation_name));
 		} else {
 			// parse the index expression
 			D_ASSERT(index_element->expr);
@@ -46,8 +46,8 @@ vector<unique_ptr<ParsedExpression>> Transformer::TransformIndexParameters(duckd
 unique_ptr<CreateStatement> Transformer::TransformCreateIndex(duckdb_libpgquery::PGNode *node) {
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGIndexStmt *>(node);
 	D_ASSERT(stmt);
-	auto result = make_unique<CreateStatement>();
-	auto info = make_unique<CreateIndexInfo>();
+	auto result = make_uniq<CreateStatement>();
+	auto info = make_uniq<CreateIndexInfo>();
 	if (stmt->unique) {
 		info->constraint_type = IndexConstraintType::UNIQUE;
 	} else {
@@ -59,7 +59,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateIndex(duckdb_libpgquery:
 	info->expressions = TransformIndexParameters(stmt->indexParams, stmt->relation->relname);
 
 	info->index_type = StringToIndexType(string(stmt->accessMethod));
-	auto tableref = make_unique<BaseTableRef>();
+	auto tableref = make_uniq<BaseTableRef>();
 	tableref->table_name = stmt->relation->relname;
 	if (stmt->relation->schemaname) {
 		tableref->schema_name = stmt->relation->schemaname;

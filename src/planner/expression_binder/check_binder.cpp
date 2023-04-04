@@ -35,7 +35,7 @@ BindResult ExpressionBinder::BindQualifiedColumnName(ColumnRefExpression &colref
 	if (colref.column_names[0] == table_name) {
 		struct_start++;
 	}
-	auto result = make_unique_base<ParsedExpression, ColumnRefExpression>(colref.column_names.back());
+	auto result = make_uniq_base<ParsedExpression, ColumnRefExpression>(colref.column_names.back());
 	for (idx_t i = struct_start; i + 1 < colref.column_names.size(); i++) {
 		result = CreateStructExtract(std::move(result), colref.column_names[i]);
 	}
@@ -70,7 +70,7 @@ BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
 	}
 	bound_columns.insert(col.Physical());
 	D_ASSERT(col.StorageOid() != DConstants::INVALID_INDEX);
-	return BindResult(make_unique<BoundReferenceExpression>(col.Type(), col.StorageOid()));
+	return BindResult(make_uniq<BoundReferenceExpression>(col.Type(), col.StorageOid()));
 }
 
 } // namespace duckdb

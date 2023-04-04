@@ -64,8 +64,8 @@ unique_ptr<Expression> BoundFunctionExpression::Copy() {
 	}
 	unique_ptr<FunctionData> new_bind_info = bind_info ? bind_info->Copy() : nullptr;
 
-	auto copy = make_unique<BoundFunctionExpression>(return_type, function, std::move(new_children),
-	                                                 std::move(new_bind_info), is_operator);
+	auto copy = make_uniq<BoundFunctionExpression>(return_type, function, std::move(new_children),
+	                                               std::move(new_bind_info), is_operator);
 	copy->CopyProperties(*this);
 	return std::move(copy);
 }
@@ -90,7 +90,7 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(ExpressionDeserializ
 	    reader, state, CatalogType::SCALAR_FUNCTION_ENTRY, children, bind_info);
 
 	auto return_type = function.return_type;
-	return make_unique<BoundFunctionExpression>(std::move(return_type), std::move(function), std::move(children),
-	                                            std::move(bind_info), is_operator);
+	return make_uniq<BoundFunctionExpression>(std::move(return_type), std::move(function), std::move(children),
+	                                          std::move(bind_info), is_operator);
 }
 } // namespace duckdb

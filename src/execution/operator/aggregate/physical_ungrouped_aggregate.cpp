@@ -27,7 +27,7 @@ PhysicalUngroupedAggregate::PhysicalUngroupedAggregate(vector<LogicalType> types
 	if (!distinct_collection_info) {
 		return;
 	}
-	distinct_data = make_unique<DistinctAggregateData>(*distinct_collection_info);
+	distinct_data = make_uniq<DistinctAggregateData>(*distinct_collection_info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -78,7 +78,7 @@ public:
 	UngroupedAggregateGlobalState(const PhysicalUngroupedAggregate &op, ClientContext &client)
 	    : state(op.aggregates), finished(false) {
 		if (op.distinct_data) {
-			distinct_state = make_unique<DistinctAggregateState>(*op.distinct_data, client);
+			distinct_state = make_uniq<DistinctAggregateState>(*op.distinct_data, client);
 		}
 	}
 
@@ -163,13 +163,13 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalUngroupedAggregate::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<UngroupedAggregateGlobalState>(*this, context);
+	return make_uniq<UngroupedAggregateGlobalState>(*this, context);
 }
 
 unique_ptr<LocalSinkState> PhysicalUngroupedAggregate::GetLocalSinkState(ExecutionContext &context) const {
 	D_ASSERT(sink_state);
 	auto &gstate = *sink_state;
-	return make_unique<UngroupedAggregateLocalState>(*this, children[0]->GetTypes(), gstate, context);
+	return make_uniq<UngroupedAggregateLocalState>(*this, children[0]->GetTypes(), gstate, context);
 }
 
 void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
@@ -437,8 +437,8 @@ public:
 public:
 	void Schedule() override {
 		vector<unique_ptr<Task>> tasks;
-		tasks.push_back(make_unique<UngroupedDistinctAggregateFinalizeTask>(pipeline->executor, shared_from_this(),
-		                                                                    gstate, context, op));
+		tasks.push_back(make_uniq<UngroupedDistinctAggregateFinalizeTask>(pipeline->executor, shared_from_this(),
+		                                                                  gstate, context, op));
 		D_ASSERT(!tasks.empty());
 		SetTasks(std::move(tasks));
 	}
@@ -528,7 +528,7 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalUngroupedAggregate::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<UngroupedAggregateState>();
+	return make_uniq<UngroupedAggregateState>();
 }
 
 void VerifyNullHandling(DataChunk &chunk, AggregateState &state, const vector<unique_ptr<Expression>> &aggregates) {

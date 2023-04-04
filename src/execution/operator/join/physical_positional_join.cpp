@@ -41,7 +41,7 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalPositionalJoin::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<PositionalJoinGlobalState>(context, *this);
+	return make_uniq<PositionalJoinGlobalState>(context, *this);
 }
 
 SinkResultType PhysicalPositionalJoin::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,

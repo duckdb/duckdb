@@ -133,11 +133,11 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, GlobalSinkState &
 }
 
 unique_ptr<GlobalSinkState> PhysicalUpdate::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<UpdateGlobalState>(context, GetTypes());
+	return make_uniq<UpdateGlobalState>(context, GetTypes());
 }
 
 unique_ptr<LocalSinkState> PhysicalUpdate::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<UpdateLocalState>(context.client, expressions, table.GetTypes(), bound_defaults);
+	return make_uniq<UpdateLocalState>(context.client, expressions, table.GetTypes(), bound_defaults);
 }
 
 void PhysicalUpdate::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {
@@ -165,7 +165,7 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalUpdate::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<UpdateSourceState>(*this);
+	return make_uniq<UpdateSourceState>(*this);
 }
 
 void PhysicalUpdate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,

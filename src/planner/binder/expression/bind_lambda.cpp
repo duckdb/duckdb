@@ -97,8 +97,8 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 		throw BinderException(result.error);
 	}
 
-	return BindResult(make_unique<BoundLambdaExpression>(ExpressionType::LAMBDA, LogicalType::LAMBDA,
-	                                                     std::move(result.expression), params_strings.size()));
+	return BindResult(make_uniq<BoundLambdaExpression>(ExpressionType::LAMBDA, LogicalType::LAMBDA,
+	                                                   std::move(result.expression), params_strings.size()));
 }
 
 void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &original,
@@ -122,12 +122,12 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 			D_ASSERT(lambda_binding.types.size() == 1);
 			// refers to a lambda parameter outside of the current lambda function
 			replacement =
-			    make_unique<BoundReferenceExpression>(lambda_binding.names[0], lambda_binding.types[0],
-			                                          lambda_bindings->size() - bound_lambda_ref.lambda_index + 1);
+			    make_uniq<BoundReferenceExpression>(lambda_binding.names[0], lambda_binding.types[0],
+			                                        lambda_bindings->size() - bound_lambda_ref.lambda_index + 1);
 
 		} else {
 			// refers to current lambda parameter
-			replacement = make_unique<BoundReferenceExpression>(alias, list_child_type, 0);
+			replacement = make_uniq<BoundReferenceExpression>(alias, list_child_type, 0);
 		}
 
 	} else {
@@ -138,8 +138,8 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 		}
 
 		// this is not a lambda parameter, so we need to create a new argument for the arguments vector
-		replacement = make_unique<BoundReferenceExpression>(original->alias, original->return_type,
-		                                                    captures.size() + index_offset + 1);
+		replacement = make_uniq<BoundReferenceExpression>(original->alias, original->return_type,
+		                                                  captures.size() + index_offset + 1);
 		captures.push_back(std::move(original));
 	}
 }

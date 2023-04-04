@@ -223,8 +223,8 @@ struct ICUDatePart : public ICUDateFunc {
 			return BindData::Equals(other_p) && adapters == other.adapters;
 		}
 
-		unique_ptr<FunctionData> Copy() const override {
-			return make_unique<BindAdapterData>(*this);
+		duckdb::unique_ptr<FunctionData> Copy() const override {
+			return make_uniq<BindAdapterData>(*this);
 		}
 	};
 
@@ -356,22 +356,22 @@ struct ICUDatePart : public ICUDateFunc {
 	}
 
 	template <typename BIND_TYPE>
-	static unique_ptr<FunctionData> BindAdapter(ClientContext &context, ScalarFunction &bound_function,
-	                                            vector<unique_ptr<Expression>> &arguments,
-	                                            typename BIND_TYPE::adapter_t adapter) {
-		return make_unique<BIND_TYPE>(context, adapter);
+	static duckdb::unique_ptr<FunctionData> BindAdapter(ClientContext &context, ScalarFunction &bound_function,
+	                                                    vector<duckdb::unique_ptr<Expression>> &arguments,
+	                                                    typename BIND_TYPE::adapter_t adapter) {
+		return make_uniq<BIND_TYPE>(context, adapter);
 	}
 
-	static unique_ptr<FunctionData> BindDatePart(ClientContext &context, ScalarFunction &bound_function,
-	                                             vector<unique_ptr<Expression>> &arguments) {
+	static duckdb::unique_ptr<FunctionData> BindDatePart(ClientContext &context, ScalarFunction &bound_function,
+	                                                     vector<duckdb::unique_ptr<Expression>> &arguments) {
 		using data_t = BindAdapterData<int64_t>;
 		auto adapter =
 		    (arguments.size() == 1) ? PartCodeAdapterFactory(GetDatePartSpecifier(bound_function.name)) : nullptr;
 		return BindAdapter<data_t>(context, bound_function, arguments, adapter);
 	}
 
-	static unique_ptr<FunctionData> BindStruct(ClientContext &context, ScalarFunction &bound_function,
-	                                           vector<unique_ptr<Expression>> &arguments) {
+	static duckdb::unique_ptr<FunctionData> BindStruct(ClientContext &context, ScalarFunction &bound_function,
+	                                                   vector<duckdb::unique_ptr<Expression>> &arguments) {
 		using data_t = BindAdapterData<int64_t>;
 		using adapters_t = data_t::adapters_t;
 
@@ -412,7 +412,7 @@ struct ICUDatePart : public ICUDateFunc {
 
 		Function::EraseArgument(bound_function, arguments, 0);
 		bound_function.return_type = LogicalType::STRUCT(std::move(struct_children));
-		return make_unique<data_t>(context, adapters);
+		return make_uniq<data_t>(context, adapters);
 	}
 
 	static void SerializeFunction(FieldWriter &writer, const FunctionData *bind_data_p,
@@ -420,8 +420,8 @@ struct ICUDatePart : public ICUDateFunc {
 		throw NotImplementedException("FIXME: serialize icu-datepart");
 	}
 
-	static unique_ptr<FunctionData> DeserializeFunction(ClientContext &context, FieldReader &reader,
-	                                                    ScalarFunction &bound_function) {
+	static duckdb::unique_ptr<FunctionData> DeserializeFunction(ClientContext &context, FieldReader &reader,
+	                                                            ScalarFunction &bound_function) {
 		throw NotImplementedException("FIXME: serialize icu-datepart");
 	}
 
@@ -464,8 +464,8 @@ struct ICUDatePart : public ICUDateFunc {
 		catalog.AddFunction(context, &func_info);
 	}
 
-	static unique_ptr<FunctionData> BindLastDate(ClientContext &context, ScalarFunction &bound_function,
-	                                             vector<unique_ptr<Expression>> &arguments) {
+	static duckdb::unique_ptr<FunctionData> BindLastDate(ClientContext &context, ScalarFunction &bound_function,
+	                                                     vector<duckdb::unique_ptr<Expression>> &arguments) {
 		using data_t = BindAdapterData<date_t>;
 		return BindAdapter<data_t>(context, bound_function, arguments, MakeLastDay);
 	}

@@ -270,12 +270,12 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *plan, unique_ptr<
 
 	// make a filter if needed
 	if (!nulls_are_not_equal_exprs.empty() || filter != nullptr) {
-		auto filter_op = make_unique<LogicalFilter>();
+		auto filter_op = make_uniq<LogicalFilter>();
 		if (!nulls_are_not_equal_exprs.empty()) {
 			// add an IS NOT NULL filter that was implicitly in JoinCondition::null_values_are_equal
 			for (auto &expr : nulls_are_not_equal_exprs) {
 				auto is_not_null_expr =
-				    make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
+				    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
 				is_not_null_expr->children.push_back(expr->Copy());
 				filter_op->expressions.push_back(std::move(is_not_null_expr));
 			}
@@ -421,8 +421,7 @@ bool Deliminator::RemoveInequalityCandidate(unique_ptr<LogicalOperator> *plan, u
 			if (!child_cond.left->Equals(child_expr) && !child_cond.right->Equals(child_expr)) {
 				continue;
 			}
-			parent_expr =
-			    make_unique<BoundColumnRefExpression>(parent_expr->alias, parent_expr->return_type, it->first);
+			parent_expr = make_uniq<BoundColumnRefExpression>(parent_expr->alias, parent_expr->return_type, it->first);
 			parent_cond.comparison =
 			    parent_delim_get_side == 0 ? child_cond.comparison : FlipComparisonExpression(child_cond.comparison);
 			break;

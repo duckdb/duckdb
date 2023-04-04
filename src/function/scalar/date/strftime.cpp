@@ -603,7 +603,7 @@ struct StrfTimeBindData : public FunctionData {
 	bool is_null;
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<StrfTimeBindData>(format, format_string, is_null);
+		return make_uniq<StrfTimeBindData>(format, format_string, is_null);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
@@ -633,7 +633,7 @@ static unique_ptr<FunctionData> StrfTimeBindFunction(ClientContext &context, Sca
 			throw InvalidInputException("Failed to parse format specifier %s: %s", format_string, error);
 		}
 	}
-	return make_unique<StrfTimeBindData>(format, format_string, is_null);
+	return make_uniq<StrfTimeBindData>(format, format_string, is_null);
 }
 
 void StrfTimeFormat::ConvertDateVector(Vector &input, Vector &result, idx_t count) {
@@ -1195,7 +1195,7 @@ struct StrpTimeBindData : public FunctionData {
 	string format_string;
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<StrpTimeBindData>(format, format_string);
+		return make_uniq<StrpTimeBindData>(format, format_string);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
@@ -1228,7 +1228,7 @@ static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, Sca
 			bound_function.return_type = LogicalType::TIMESTAMP_TZ;
 		}
 	}
-	return make_unique<StrpTimeBindData>(format, format_string);
+	return make_uniq<StrpTimeBindData>(format, format_string);
 }
 
 StrpTimeFormat::ParseResult StrpTimeFormat::Parse(const string &format_string, const string &text) {

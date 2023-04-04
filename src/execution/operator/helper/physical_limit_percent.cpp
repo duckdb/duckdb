@@ -40,7 +40,7 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalLimitPercent::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<LimitPercentGlobalState>(context, *this);
+	return make_uniq<LimitPercentGlobalState>(context, *this);
 }
 
 SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
@@ -98,7 +98,7 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalLimitPercent::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<LimitPercentOperatorState>(*this);
+	return make_uniq<LimitPercentOperatorState>(*this);
 }
 
 void PhysicalLimitPercent::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,

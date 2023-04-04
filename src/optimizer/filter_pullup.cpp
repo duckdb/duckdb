@@ -65,7 +65,7 @@ unique_ptr<LogicalOperator> FilterPullup::PullupCrossProduct(unique_ptr<LogicalO
 
 unique_ptr<LogicalOperator> FilterPullup::GeneratePullupFilter(unique_ptr<LogicalOperator> child,
                                                                vector<unique_ptr<Expression>> &expressions) {
-	unique_ptr<LogicalFilter> filter = make_unique<LogicalFilter>();
+	unique_ptr<LogicalFilter> filter = make_uniq<LogicalFilter>();
 	for (idx_t i = 0; i < expressions.size(); ++i) {
 		filter->expressions.push_back(std::move(expressions[i]));
 	}

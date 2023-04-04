@@ -33,7 +33,7 @@ static unique_ptr<FunctionData> DuckDBDatabasesBind(ClientContext &context, Tabl
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBDatabasesInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_unique<DuckDBDatabasesData>();
+	auto result = make_uniq<DuckDBDatabasesData>();
 
 	// scan all the schemas for tables and collect them and collect them
 	auto &db_manager = DatabaseManager::Get(context);

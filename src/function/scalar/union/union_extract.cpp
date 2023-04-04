@@ -17,7 +17,7 @@ struct UnionExtractBindData : public FunctionData {
 
 public:
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<UnionExtractBindData>(key, index, type);
+		return make_uniq<UnionExtractBindData>(key, index, type);
 	}
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = (const UnionExtractBindData &)other_p;
@@ -94,7 +94,7 @@ static unique_ptr<FunctionData> UnionExtractBind(ClientContext &context, ScalarF
 	}
 
 	bound_function.return_type = return_type;
-	return make_unique<UnionExtractBindData>(key, key_index, return_type);
+	return make_uniq<UnionExtractBindData>(key, key_index, return_type);
 }
 
 void UnionExtractFun::RegisterFunction(BuiltinFunctions &set) {

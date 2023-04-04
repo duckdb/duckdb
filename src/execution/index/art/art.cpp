@@ -89,7 +89,7 @@ ART::~ART() {
 unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(const Transaction &transaction, const Value &value,
                                                               ExpressionType expression_type) {
 	// initialize point lookup
-	auto result = make_unique<ARTIndexScanState>();
+	auto result = make_uniq<ARTIndexScanState>();
 	result->values[0] = value;
 	result->expressions[0] = expression_type;
 	return std::move(result);
@@ -99,7 +99,7 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transac
                                                             ExpressionType low_expression_type, const Value &high_value,
                                                             ExpressionType high_expression_type) {
 	// initialize range lookup
-	auto result = make_unique<ARTIndexScanState>();
+	auto result = make_uniq<ARTIndexScanState>();
 	result->values[0] = low_value;
 	result->expressions[0] = low_expression_type;
 	result->values[1] = high_value;

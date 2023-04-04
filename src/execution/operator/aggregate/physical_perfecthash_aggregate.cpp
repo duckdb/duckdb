@@ -71,8 +71,8 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
 
 unique_ptr<PerfectAggregateHashTable> PhysicalPerfectHashAggregate::CreateHT(Allocator &allocator,
                                                                              ClientContext &context) const {
-	return make_unique<PerfectAggregateHashTable>(context, allocator, group_types, payload_types, aggregate_objects,
-	                                              group_minima, required_bits);
+	return make_uniq<PerfectAggregateHashTable>(context, allocator, group_types, payload_types, aggregate_objects,
+	                                            group_minima, required_bits);
 }
 
 //===--------------------------------------------------------------------===//
@@ -107,11 +107,11 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalPerfectHashAggregate::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<PerfectHashAggregateGlobalState>(*this, context);
+	return make_uniq<PerfectHashAggregateGlobalState>(*this, context);
 }
 
 unique_ptr<LocalSinkState> PhysicalPerfectHashAggregate::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<PerfectHashAggregateLocalState>(*this, context);
+	return make_uniq<PerfectHashAggregateLocalState>(*this, context);
 }
 
 SinkResultType PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, GlobalSinkState &state,
@@ -181,7 +181,7 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalPerfectHashAggregate::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<PerfectHashAggregateState>();
+	return make_uniq<PerfectHashAggregateState>();
 }
 
 void PhysicalPerfectHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,

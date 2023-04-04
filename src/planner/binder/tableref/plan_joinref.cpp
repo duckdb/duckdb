@@ -59,7 +59,7 @@ void LogicalComparisonJoin::ExtractJoinConditions(JoinType type, unique_ptr<Logi
 				// filter is on RHS and the join is a LEFT OUTER join, we can push it in the right child
 				if (right_child->type != LogicalOperatorType::LOGICAL_FILTER) {
 					// not a filter yet, push a new empty filter
-					auto filter = make_unique<LogicalFilter>();
+					auto filter = make_uniq<LogicalFilter>();
 					filter->AddChild(std::move(right_child));
 					right_child = std::move(filter);
 				}
@@ -154,14 +154,14 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 	if ((need_to_consider_arbitrary_expressions && !arbitrary_expressions.empty()) || conditions.empty()) {
 		if (arbitrary_expressions.empty()) {
 			// all conditions were pushed down, add TRUE predicate
-			arbitrary_expressions.push_back(make_unique<BoundConstantExpression>(Value::BOOLEAN(true)));
+			arbitrary_expressions.push_back(make_uniq<BoundConstantExpression>(Value::BOOLEAN(true)));
 		}
 		for (auto &condition : conditions) {
 			arbitrary_expressions.push_back(JoinCondition::CreateExpression(std::move(condition)));
 		}
 		// if we get here we could not create any JoinConditions
 		// turn this into an arbitrary expression join
-		auto any_join = make_unique<LogicalAnyJoin>(type);
+		auto any_join = make_uniq<LogicalAnyJoin>(type);
 		// create the condition
 		any_join->children.push_back(std::move(left_child));
 		any_join->children.push_back(std::move(right_child));
@@ -169,7 +169,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 		// do the same with any remaining conditions
 		any_join->condition = std::move(arbitrary_expressions[0]);
 		for (idx_t i = 1; i < arbitrary_expressions.size(); i++) {
-			any_join->condition = make_unique<BoundConjunctionExpression>(
+			any_join->condition = make_uniq<BoundConjunctionExpression>(
 			    ExpressionType::CONJUNCTION_AND, std::move(any_join->condition), std::move(arbitrary_expressions[i]));
 		}
 		return std::move(any_join);
@@ -178,9 +178,9 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 		// create a LogicalComparisonJoin
 		unique_ptr<LogicalComparisonJoin> comp_join;
 		if (reftype == JoinRefType::ASOF) {
-			comp_join = make_unique<LogicalAsOfJoin>(type);
+			comp_join = make_uniq<LogicalAsOfJoin>(type);
 		} else {
-			comp_join = make_unique<LogicalComparisonJoin>(type);
+			comp_join = make_uniq<LogicalComparisonJoin>(type);
 		}
 		comp_join->conditions = std::move(conditions);
 		comp_join->children.push_back(std::move(left_child));
@@ -188,7 +188,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 		if (!arbitrary_expressions.empty()) {
 			// we have some arbitrary expressions as well
 			// add them to a filter
-			auto filter = make_unique<LogicalFilter>();
+			auto filter = make_uniq<LogicalFilter>();
 			for (auto &expr : arbitrary_expressions) {
 				filter->expressions.push_back(std::move(expr));
 			}
@@ -265,7 +265,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		// this will be later turned into a proper join by the join order optimizer
 		auto root = LogicalCrossProduct::Create(std::move(left), std::move(right));
 
-		auto filter = make_unique<LogicalFilter>(std::move(ref.condition));
+		auto filter = make_uniq<LogicalFilter>(std::move(ref.condition));
 		// visit the expressions in the filter
 		for (auto &expression : filter->expressions) {
 			PlanSubqueries(&expression, &root);

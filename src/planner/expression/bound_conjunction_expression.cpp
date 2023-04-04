@@ -33,7 +33,7 @@ bool BoundConjunctionExpression::PropagatesNullValues() const {
 }
 
 unique_ptr<Expression> BoundConjunctionExpression::Copy() {
-	auto copy = make_unique<BoundConjunctionExpression>(type);
+	auto copy = make_uniq<BoundConjunctionExpression>(type);
 	for (auto &expr : children) {
 		copy->children.push_back(expr->Copy());
 	}
@@ -48,7 +48,7 @@ void BoundConjunctionExpression::Serialize(FieldWriter &writer) const {
 unique_ptr<Expression> BoundConjunctionExpression::Deserialize(ExpressionDeserializationState &state,
                                                                FieldReader &reader) {
 	auto children = reader.ReadRequiredSerializableList<Expression>(state.gstate);
-	auto res = make_unique<BoundConjunctionExpression>(state.type);
+	auto res = make_uniq<BoundConjunctionExpression>(state.type);
 	res->children = std::move(children);
 	return std::move(res);
 }

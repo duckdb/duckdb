@@ -7,7 +7,7 @@ namespace duckdb {
 
 CaseSimplificationRule::CaseSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on a CaseExpression that has a ConstantExpression as a check
-	auto op = make_unique<CaseExpressionMatcher>();
+	auto op = make_uniq<CaseExpressionMatcher>();
 	root = std::move(op);
 }
 

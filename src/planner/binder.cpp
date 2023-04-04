@@ -213,7 +213,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 	}
 	// plan the sample clause
 	if (ref.sample) {
-		root = make_unique<LogicalSample>(std::move(ref.sample), std::move(root));
+		root = make_uniq<LogicalSample>(std::move(ref.sample), std::move(root));
 	}
 	return root;
 }
@@ -473,7 +473,7 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 		projection_expressions.push_back(std::move(expr));
 	}
 
-	auto projection = make_unique<LogicalProjection>(GenerateTableIndex(), std::move(projection_expressions));
+	auto projection = make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(projection_expressions));
 	projection->AddChild(std::move(child_operator));
 	D_ASSERT(result.types.size() == result.names.size());
 	result.plan = std::move(projection);

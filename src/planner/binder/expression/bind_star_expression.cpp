@@ -37,7 +37,7 @@ bool Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpressi
 			}
 			D_ASSERT(!values.empty());
 
-			expr = make_unique<ConstantExpression>(Value::LIST(LogicalType::VARCHAR, values));
+			expr = make_uniq<ConstantExpression>(Value::LIST(LogicalType::VARCHAR, values));
 			return true;
 		}
 		if (in_columns) {
@@ -149,7 +149,7 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 					names.push_back(qname.schema);
 				}
 				names.push_back(qname.name);
-				new_list.push_back(make_unique<ColumnRefExpression>(std::move(names)));
+				new_list.push_back(make_uniq<ColumnRefExpression>(std::move(names)));
 			}
 			star_list = std::move(new_list);
 		} else {

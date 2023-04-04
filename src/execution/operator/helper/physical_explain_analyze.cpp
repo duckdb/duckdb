@@ -26,7 +26,7 @@ SinkFinalizeType PhysicalExplainAnalyze::Finalize(Pipeline &pipeline, Event &eve
 }
 
 unique_ptr<GlobalSinkState> PhysicalExplainAnalyze::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<ExplainAnalyzeStateGlobalState>();
+	return make_uniq<ExplainAnalyzeStateGlobalState>();
 }
 
 //===--------------------------------------------------------------------===//
@@ -41,7 +41,7 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalExplainAnalyze::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<ExplainAnalyzeState>();
+	return make_uniq<ExplainAnalyzeState>();
 }
 
 void PhysicalExplainAnalyze::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &source_state,

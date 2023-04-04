@@ -15,7 +15,7 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalCreateView::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<CreateViewSourceState>();
+	return make_uniq<CreateViewSourceState>();
 }
 
 void PhysicalCreateView::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,

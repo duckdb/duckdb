@@ -136,7 +136,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 	unordered_set<string> table_name_index;
 	for (auto &table : tables) {
-		auto info = make_unique<CopyInfo>();
+		auto info = make_uniq<CopyInfo>();
 		// we copy the options supplied to the EXPORT
 		info->format = stmt.info->format;
 		info->options = stmt.info->options;
@@ -188,8 +188,8 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		if (child_operator) {
 			// use UNION ALL to combine the individual copy statements into a single node
 			auto copy_union =
-			    make_unique<LogicalSetOperation>(GenerateTableIndex(), 1, std::move(child_operator),
-			                                     std::move(bound_statement.plan), LogicalOperatorType::LOGICAL_UNION);
+			    make_uniq<LogicalSetOperation>(GenerateTableIndex(), 1, std::move(child_operator),
+			                                   std::move(bound_statement.plan), LogicalOperatorType::LOGICAL_UNION);
 			child_operator = std::move(copy_union);
 		} else {
 			child_operator = std::move(bound_statement.plan);
@@ -203,7 +203,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	}
 
 	// create the export node
-	auto export_node = make_unique<LogicalExport>(copy_function->function, std::move(stmt.info), exported_tables);
+	auto export_node = make_uniq<LogicalExport>(copy_function->function, std::move(stmt.info), exported_tables);
 
 	if (child_operator) {
 		export_node->children.push_back(std::move(child_operator));

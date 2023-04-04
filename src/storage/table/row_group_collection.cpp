@@ -26,7 +26,7 @@ void RowGroupSegmentTree::Initialize(PersistentTableData &data) {
 	current_row_group = 0;
 	max_row_group = data.row_group_count;
 	finished_loading = false;
-	reader = make_unique<MetaBlockReader>(collection.GetBlockManager(), data.block_id);
+	reader = make_uniq<MetaBlockReader>(collection.GetBlockManager(), data.block_id);
 	reader->offset = data.offset;
 }
 
@@ -37,7 +37,7 @@ unique_ptr<RowGroup> RowGroupSegmentTree::LoadSegment() {
 	}
 	auto row_group_pointer = RowGroup::Deserialize(*reader, collection.GetTypes());
 	current_row_group++;
-	return make_unique<RowGroup>(collection, std::move(row_group_pointer));
+	return make_uniq<RowGroup>(collection, std::move(row_group_pointer));
 }
 
 //===--------------------------------------------------------------------===//
@@ -87,7 +87,7 @@ void RowGroupCollection::InitializeEmpty() {
 
 void RowGroupCollection::AppendRowGroup(SegmentLock &l, idx_t start_row) {
 	D_ASSERT(start_row >= row_start);
-	auto new_row_group = make_unique<RowGroup>(*this, start_row, 0);
+	auto new_row_group = make_uniq<RowGroup>(*this, start_row, 0);
 	new_row_group->InitializeEmpty(types);
 	row_groups->AppendSegment(l, std::move(new_row_group));
 }
@@ -445,7 +445,7 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data) {
 	D_ASSERT(data.types == types);
 	auto index = row_start + total_rows.load();
 	for (auto &row_group : data.row_groups->Segments()) {
-		auto new_group = make_unique<RowGroup>(row_group, *this, index);
+		auto new_group = make_uniq<RowGroup>(row_group, *this, index);
 		index += new_group->count;
 		row_groups->AppendSegment(std::move(new_group));
 	}
@@ -632,7 +632,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 	auto &new_column_stats = result->stats.GetStats(new_column_idx);
 
 	// fill the column with its DEFAULT value, or NULL if none is specified
-	auto new_stats = make_unique<SegmentStatistics>(new_column.GetType());
+	auto new_stats = make_uniq<SegmentStatistics>(new_column.GetType());
 	for (auto &current_row_group : row_groups->Segments()) {
 		auto new_row_group = current_row_group.AddColumn(*result, new_column, executor, default_value, default_vector);
 		// merge in the statistics

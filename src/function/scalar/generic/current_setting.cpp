@@ -15,7 +15,7 @@ struct CurrentSettingBindData : public FunctionData {
 
 public:
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<CurrentSettingBindData>(value);
+		return make_uniq<CurrentSettingBindData>(value);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
@@ -55,7 +55,7 @@ unique_ptr<FunctionData> CurrentSettingBind(ClientContext &context, ScalarFuncti
 	}
 
 	bound_function.return_type = val.type();
-	return make_unique<CurrentSettingBindData>(val);
+	return make_uniq<CurrentSettingBindData>(val);
 }
 
 void CurrentSettingFun::RegisterFunction(BuiltinFunctions &set) {

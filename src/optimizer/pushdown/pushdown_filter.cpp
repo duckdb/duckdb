@@ -16,7 +16,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownFilter(unique_ptr<LogicalOpe
 	for (auto &expression : filter.expressions) {
 		if (AddFilter(std::move(expression)) == FilterResult::UNSATISFIABLE) {
 			// filter statically evaluates to false, strip tree
-			return make_unique<LogicalEmptyResult>(std::move(op));
+			return make_uniq<LogicalEmptyResult>(std::move(op));
 		}
 	}
 	GenerateFilters();
