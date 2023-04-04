@@ -70,10 +70,7 @@ public:
 	static bool Equals(const BoundOrderModifier *left, const BoundOrderModifier *right);
 };
 
-enum class DistinctType : uint8_t {
-	DISTINCT = 0,
-	DISTINCT_ON = 1
-};
+enum class DistinctType : uint8_t { DISTINCT = 0, DISTINCT_ON = 1 };
 
 class BoundDistinctModifier : public BoundResultModifier {
 public:

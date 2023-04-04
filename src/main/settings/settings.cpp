@@ -763,7 +763,7 @@ void PerfectHashThresholdSetting::ResetLocal(ClientContext &context) {
 }
 
 void PerfectHashThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto bits = input.GetValue<int32_t>();
+	auto bits = input.GetValue<int64_t>();
 	if (bits < 0 || bits > 32) {
 		throw ParserException("Perfect HT threshold out of range: should be within range 0 - 32");
 	}
@@ -772,6 +772,22 @@ void PerfectHashThresholdSetting::SetLocal(ClientContext &context, const Value &
 
 Value PerfectHashThresholdSetting::GetSetting(ClientContext &context) {
 	return Value::BIGINT(ClientConfig::GetConfig(context).perfect_ht_threshold);
+}
+
+//===--------------------------------------------------------------------===//
+// Pivot Limit
+//===--------------------------------------------------------------------===//
+
+void PivotLimitSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).pivot_limit = ClientConfig().pivot_limit;
+}
+
+void PivotLimitSetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).pivot_limit = input.GetValue<uint64_t>();
+}
+
+Value PivotLimitSetting::GetSetting(ClientContext &context) {
+	return Value::BIGINT(ClientConfig::GetConfig(context).pivot_limit);
 }
 
 //===--------------------------------------------------------------------===//
