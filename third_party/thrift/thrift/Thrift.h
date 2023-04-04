@@ -38,7 +38,7 @@
 #include <map>
 #include <list>
 #include <set>
-#include "duckdb/common/vector.hpp"
+#include <vector>
 #include <exception>
 #include <typeinfo>
 #include <cstddef>
