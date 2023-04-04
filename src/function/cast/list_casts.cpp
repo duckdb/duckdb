@@ -10,7 +10,7 @@ unique_ptr<BoundCastData> ListBoundCastData::BindListToListCast(BindCastInput &i
 	auto &source_child_type = ListType::GetChildType(source);
 	auto &result_child_type = ListType::GetChildType(target);
 	auto child_cast = input.GetCastFunction(source_child_type, result_child_type);
-	return make_unique<ListBoundCastData>(std::move(child_cast));
+	return make_uniq<ListBoundCastData>(std::move(child_cast));
 }
 
 unique_ptr<FunctionLocalState> ListBoundCastData::InitListLocalState(CastLocalStateParameters &parameters) {

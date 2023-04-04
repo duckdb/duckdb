@@ -17,7 +17,7 @@ LogicalType ArrowTableFunction::GetArrowLogicalType(
     ArrowSchema &schema, std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx) {
 	auto format = string(schema.format);
 	if (arrow_convert_data.find(col_idx) == arrow_convert_data.end()) {
-		arrow_convert_data[col_idx] = make_unique<ArrowConvertData>();
+		arrow_convert_data[col_idx] = make_uniq<ArrowConvertData>();
 	}
 	if (format == "n") {
 		return LogicalType::SQLNULL;
@@ -195,7 +195,7 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 	auto stream_factory_produce = (stream_factory_produce_t)input.inputs[1].GetPointer();
 	auto stream_factory_get_schema = (stream_factory_get_schema_t)input.inputs[2].GetPointer();
 
-	auto res = make_unique<ArrowScanFunctionData>(stream_factory_produce, stream_factory_ptr);
+	auto res = make_uniq<ArrowScanFunctionData>(stream_factory_produce, stream_factory_ptr);
 
 	auto &data = *res;
 	stream_factory_get_schema(stream_factory_ptr, data.schema_root);
@@ -206,7 +206,7 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 		}
 		if (schema.dictionary) {
 			res->arrow_convert_data[col_idx] =
-			    make_unique<ArrowConvertData>(GetArrowLogicalType(schema, res->arrow_convert_data, col_idx));
+			    make_uniq<ArrowConvertData>(GetArrowLogicalType(schema, res->arrow_convert_data, col_idx));
 			return_types.emplace_back(GetArrowLogicalType(*schema.dictionary, res->arrow_convert_data, col_idx));
 		} else {
 			return_types.emplace_back(GetArrowLogicalType(schema, res->arrow_convert_data, col_idx));
@@ -269,7 +269,7 @@ bool ArrowTableFunction::ArrowScanParallelStateNext(ClientContext &context, cons
 unique_ptr<GlobalTableFunctionState> ArrowTableFunction::ArrowScanInitGlobal(ClientContext &context,
                                                                              TableFunctionInitInput &input) {
 	auto &bind_data = (const ArrowScanFunctionData &)*input.bind_data;
-	auto result = make_unique<ArrowScanGlobalState>();
+	auto result = make_uniq<ArrowScanGlobalState>();
 	result->stream = ProduceArrowScan(bind_data, input.column_ids, input.filters);
 	result->max_threads = ArrowScanMaxThreads(context, input.bind_data);
 	if (input.CanRemoveFilterColumns()) {
@@ -289,8 +289,8 @@ unique_ptr<LocalTableFunctionState> ArrowTableFunction::ArrowScanInitLocal(Execu
                                                                            TableFunctionInitInput &input,
                                                                            GlobalTableFunctionState *global_state_p) {
 	auto &global_state = (ArrowScanGlobalState &)*global_state_p;
-	auto current_chunk = make_unique<ArrowArrayWrapper>();
-	auto result = make_unique<ArrowScanLocalState>(std::move(current_chunk));
+	auto current_chunk = make_uniq<ArrowArrayWrapper>();
+	auto result = make_uniq<ArrowScanLocalState>(std::move(current_chunk));
 	result->column_ids = input.column_ids;
 	result->filters = input.filters;
 	if (input.CanRemoveFilterColumns()) {
@@ -334,7 +334,7 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, TableFunction
 }
 
 unique_ptr<NodeStatistics> ArrowTableFunction::ArrowScanCardinality(ClientContext &context, const FunctionData *data) {
-	return make_unique<NodeStatistics>();
+	return make_uniq<NodeStatistics>();
 }
 
 idx_t ArrowTableFunction::ArrowGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,

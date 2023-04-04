@@ -17,10 +17,10 @@ namespace duckdb {
 
 static unique_ptr<ParsedExpression> BindColumn(Binder &binder, ClientContext &context, const string &alias,
                                                const string &column_name) {
-	auto expr = make_unique_base<ParsedExpression, ColumnRefExpression>(column_name, alias);
+	auto expr = make_uniq_base<ParsedExpression, ColumnRefExpression>(column_name, alias);
 	ExpressionBinder expr_binder(binder, context);
 	auto result = expr_binder.Bind(expr);
-	return make_unique<BoundExpression>(std::move(result));
+	return make_uniq<BoundExpression>(std::move(result));
 }
 
 static unique_ptr<ParsedExpression> AddCondition(ClientContext &context, Binder &left_binder, Binder &right_binder,
@@ -29,7 +29,7 @@ static unique_ptr<ParsedExpression> AddCondition(ClientContext &context, Binder 
 	ExpressionBinder expr_binder(left_binder, context);
 	auto left = BindColumn(left_binder, context, left_alias, column_name);
 	auto right = BindColumn(right_binder, context, right_alias, column_name);
-	return make_unique<ComparisonExpression>(type, std::move(left), std::move(right));
+	return make_uniq<ComparisonExpression>(type, std::move(left), std::move(right));
 }
 
 bool Binder::TryFindBinding(const string &using_column, const string &join_side, string &result) {
@@ -119,7 +119,7 @@ static vector<string> RemoveDuplicateUsingColumns(const vector<string> &using_co
 }
 
 unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
-	auto result = make_unique<BoundJoinRef>(ref.ref_type);
+	auto result = make_uniq<BoundJoinRef>(ref.ref_type);
 	result->left_binder = Binder::CreateBinder(context, this);
 	result->right_binder = Binder::CreateBinder(context, this);
 	auto &left_binder = *result->left_binder;
@@ -237,7 +237,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			string left_binding;
 			string right_binding;
 
-			auto set = make_unique<UsingColumnSet>();
+			auto set = make_uniq<UsingColumnSet>();
 			auto left_using_binding = left_using_bindings[i];
 			auto right_using_binding = right_using_bindings[i];
 			left_binding = RetrieveUsingBinding(left_binder, left_using_binding, using_column, "left", set.get());
@@ -270,8 +270,8 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 	MoveCorrelatedExpressions(right_binder);
 	for (auto &condition : extra_conditions) {
 		if (ref.condition) {
-			ref.condition = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
-			                                                   std::move(ref.condition), std::move(condition));
+			ref.condition = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(ref.condition),
+			                                                 std::move(condition));
 		} else {
 			ref.condition = std::move(condition);
 		}

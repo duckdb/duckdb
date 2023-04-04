@@ -146,7 +146,7 @@ void StandardColumnData::FetchRow(TransactionData transaction, ColumnFetchState 
                                   idx_t result_idx) {
 	// find the segment the row belongs to
 	if (state.child_states.empty()) {
-		auto child_state = make_unique<ColumnFetchState>();
+		auto child_state = make_uniq<ColumnFetchState>();
 		state.child_states.push_back(std::move(child_state));
 	}
 	validity.FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
@@ -185,7 +185,7 @@ public:
 
 unique_ptr<ColumnCheckpointState>
 StandardColumnData::CreateCheckpointState(RowGroup &row_group, PartialBlockManager &partial_block_manager) {
-	return make_unique<StandardColumnCheckpointState>(row_group, *this, partial_block_manager);
+	return make_uniq<StandardColumnCheckpointState>(row_group, *this, partial_block_manager);
 }
 
 unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_group,

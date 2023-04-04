@@ -14,7 +14,7 @@
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
-
+#include "duckdb/common/enums/file_glob_options.hpp"
 #include <functional>
 
 #undef CreateDirectory
@@ -188,7 +188,8 @@ public:
 	//! Runs a glob on the file system, returning a list of matching files
 	DUCKDB_API virtual vector<string> Glob(const string &path, FileOpener *opener = nullptr);
 	DUCKDB_API virtual vector<string> Glob(const string &path, ClientContext &context);
-	DUCKDB_API vector<string> GlobFiles(const string &path, ClientContext &context);
+	DUCKDB_API vector<string> GlobFiles(const string &path, ClientContext &context,
+	                                    FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
 
 	//! registers a sub-file system to handle certain file name prefixes, e.g. http:// etc.
 	DUCKDB_API virtual void RegisterSubSystem(unique_ptr<FileSystem> sub_fs);

@@ -99,14 +99,14 @@ struct EnumBoundCastData : public BoundCastData {
 
 public:
 	unique_ptr<BoundCastData> Copy() const override {
-		return make_unique<EnumBoundCastData>(to_varchar_cast.Copy(), from_varchar_cast.Copy());
+		return make_uniq<EnumBoundCastData>(to_varchar_cast.Copy(), from_varchar_cast.Copy());
 	}
 };
 
 unique_ptr<BoundCastData> BindEnumCast(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
 	auto to_varchar_cast = input.GetCastFunction(source, LogicalType::VARCHAR);
 	auto from_varchar_cast = input.GetCastFunction(LogicalType::VARCHAR, target);
-	return make_unique<EnumBoundCastData>(std::move(to_varchar_cast), std::move(from_varchar_cast));
+	return make_uniq<EnumBoundCastData>(std::move(to_varchar_cast), std::move(from_varchar_cast));
 }
 
 struct EnumCastLocalState : public FunctionLocalState {
@@ -117,7 +117,7 @@ public:
 
 static unique_ptr<FunctionLocalState> InitEnumCastLocalState(CastLocalStateParameters &parameters) {
 	auto &cast_data = (EnumBoundCastData &)*parameters.cast_data;
-	auto result = make_unique<EnumCastLocalState>();
+	auto result = make_uniq<EnumCastLocalState>();
 
 	if (cast_data.from_varchar_cast.init_local_state) {
 		CastLocalStateParameters from_varchar_params(parameters, cast_data.from_varchar_cast.cast_data);
