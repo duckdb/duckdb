@@ -143,15 +143,15 @@ void ParquetOptions::Deserialize(FieldReader &reader) {
 
 BindInfo ParquetGetBatchInfo(const FunctionData *bind_data) {
 	auto bind_info = BindInfo(ScanType::PARQUET);
-	auto parquet_bind = (ParquetReadBindData *)bind_data;
+	auto &parquet_bind = bind_data->Cast<ParquetReadBindData>();
 	vector<Value> file_path;
-	for (auto &path : parquet_bind->files) {
+	for (auto &path : parquet_bind.files) {
 		file_path.emplace_back(path);
 	}
 	bind_info.InsertOption("file_path", Value::LIST(LogicalType::VARCHAR, file_path));
-	bind_info.InsertOption("binary_as_string", Value::BOOLEAN(parquet_bind->parquet_options.binary_as_string));
-	bind_info.InsertOption("file_row_number", Value::BOOLEAN(parquet_bind->parquet_options.file_row_number));
-	parquet_bind->parquet_options.file_options.AddBatchInfo(bind_info);
+	bind_info.InsertOption("binary_as_string", Value::BOOLEAN(parquet_bind.parquet_options.binary_as_string));
+	bind_info.InsertOption("file_row_number", Value::BOOLEAN(parquet_bind.parquet_options.file_row_number));
+	parquet_bind.parquet_options.file_options.AddBatchInfo(bind_info);
 	return bind_info;
 }
 
@@ -205,7 +205,7 @@ public:
 
 	static unique_ptr<BaseStatistics> ParquetScanStats(ClientContext &context, const FunctionData *bind_data_p,
 	                                                   column_t column_index) {
-		auto &bind_data = bind_data_p->CastNoConst<ParquetReadBindData>();
+		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
 
 		if (IsRowIdColumnId(column_index)) {
 			return nullptr;
@@ -340,7 +340,7 @@ public:
 
 	static unique_ptr<GlobalTableFunctionState> ParquetScanInitGlobal(ClientContext &context,
 	                                                                  TableFunctionInitInput &input) {
-		auto &bind_data = input.bind_data->Cast<ParquetReadBindData>();
+		auto &bind_data = (ParquetReadBindData &)*input.bind_data;
 		auto result = make_unique<ParquetReadGlobalState>();
 
 		result->file_opening = std::vector<bool>(bind_data.files.size(), false);
@@ -513,11 +513,11 @@ public:
 
 	static void ParquetComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
 	                                         vector<unique_ptr<Expression>> &filters) {
-		auto data = (ParquetReadBindData *)bind_data_p;
-		auto reset_reader = MultiFileReader::ComplexFilterPushdown(context, data->files,
-		                                                           data->parquet_options.file_options, get, filters);
+		auto &data = bind_data_p->Cast<ParquetReadBindData>();
+		auto reset_reader = MultiFileReader::ComplexFilterPushdown(context, data.files,
+		                                                           data.parquet_options.file_options, get, filters);
 		if (reset_reader) {
-			MultiFileReader::PruneReaders(*data);
+			MultiFileReader::PruneReaders(data);
 		}
 	}
 
