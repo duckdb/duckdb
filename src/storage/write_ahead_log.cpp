@@ -13,9 +13,9 @@ namespace duckdb {
 
 WriteAheadLog::WriteAheadLog(AttachedDatabase &database, const string &path) : skip_writing(false), database(database) {
 	wal_path = path;
-	writer = make_unique<BufferedFileWriter>(FileSystem::Get(database), path.c_str(),
-	                                         FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
-	                                             FileFlags::FILE_FLAGS_APPEND);
+	writer = make_uniq<BufferedFileWriter>(FileSystem::Get(database), path.c_str(),
+	                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
+	                                           FileFlags::FILE_FLAGS_APPEND);
 }
 
 WriteAheadLog::~WriteAheadLog() {

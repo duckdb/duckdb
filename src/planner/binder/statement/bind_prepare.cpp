@@ -10,7 +10,7 @@ BoundStatement Binder::Bind(PrepareStatement &stmt) {
 	auto prepared_data = prepared_planner.PrepareSQLStatement(std::move(stmt.statement));
 	this->bound_tables = prepared_planner.binder->bound_tables;
 
-	auto prepare = make_unique<LogicalPrepare>(stmt.name, std::move(prepared_data), std::move(prepared_planner.plan));
+	auto prepare = make_uniq<LogicalPrepare>(stmt.name, std::move(prepared_data), std::move(prepared_planner.plan));
 	// we can always prepare, even if the transaction has been invalidated
 	// this is required because most clients ALWAYS invoke prepared statements
 	properties.requires_valid_transaction = false;

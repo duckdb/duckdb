@@ -63,9 +63,18 @@ select id, value, date from parquet_scan('data/parquet-testing/hive-partitioning
 # If the key names don't add up, there's nothing we can do
 statement error
 select * from parquet_scan('data/parquet-testing/hive-partitioning/mismatching_names/*/*/test.parquet', HIVE_PARTITIONING=1)
+----
+Hive partition mismatch
 
 statement error
 select * from parquet_scan('data/parquet-testing/hive-partitioning/mismatching_count/*/*/test.parquet', HIVE_PARTITIONING=1) WHERE part=b
+----
+Hive partition mismatch
+
+statement error
+select * from parquet_scan('data/parquet-testing/hive-partitioning/mismatching_names/*/*/test.parquet', HIVE_PARTITIONING=1, UNION_BY_NAME=1)
+----
+Hive partition mismatch
 
 # Verify that no filters remain, both pushed-down or as operators
 query II

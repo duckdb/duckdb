@@ -50,7 +50,7 @@ AddScalarFunctionOverloadInfo::~AddScalarFunctionOverloadInfo() {
 }
 
 unique_ptr<AlterInfo> AddScalarFunctionOverloadInfo::Copy() const {
-	return make_unique_base<AlterInfo, AddScalarFunctionOverloadInfo>(GetAlterEntryData(), new_overloads);
+	return make_uniq_base<AlterInfo, AddScalarFunctionOverloadInfo>(GetAlterEntryData(), new_overloads);
 }
 
 } // namespace duckdb

@@ -32,7 +32,7 @@ bool BoundLambdaExpression::Equals(const BaseExpression *other_p) const {
 }
 
 unique_ptr<Expression> BoundLambdaExpression::Copy() {
-	auto copy = make_unique<BoundLambdaExpression>(type, return_type, lambda_expr->Copy(), parameter_count);
+	auto copy = make_uniq<BoundLambdaExpression>(type, return_type, lambda_expr->Copy(), parameter_count);
 	for (auto &capture : captures) {
 		copy->captures.push_back(capture->Copy());
 	}

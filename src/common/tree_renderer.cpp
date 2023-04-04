@@ -357,7 +357,7 @@ string TreeRenderer::ExtraInfoSeparator() {
 }
 
 unique_ptr<RenderTreeNode> TreeRenderer::CreateRenderNode(string name, string extra_info) {
-	auto result = make_unique<RenderTreeNode>();
+	auto result = make_uniq<RenderTreeNode>();
 	result->name = std::move(name);
 	result->extra_text = std::move(extra_info);
 	return result;
@@ -464,7 +464,7 @@ unique_ptr<RenderTree> TreeRenderer::CreateRenderTree(const T &op) {
 	idx_t width, height;
 	GetTreeWidthHeight<T>(op, width, height);
 
-	auto result = make_unique<RenderTree>(width, height);
+	auto result = make_uniq<RenderTree>(width, height);
 
 	// now fill in the tree
 	CreateRenderTreeRecursive<T>(*result, op, 0, 0);
@@ -544,7 +544,7 @@ unique_ptr<RenderTree> TreeRenderer::CreateTree(const Pipeline &op) {
 	D_ASSERT(!operators.empty());
 	unique_ptr<PipelineRenderNode> node;
 	for (auto &op : operators) {
-		auto new_node = make_unique<PipelineRenderNode>(*op);
+		auto new_node = make_uniq<PipelineRenderNode>(*op);
 		new_node->child = std::move(node);
 		node = std::move(new_node);
 	}

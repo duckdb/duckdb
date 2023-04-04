@@ -66,7 +66,7 @@ void PhysicalInsert::GetInsertInfo(const BoundCreateTableInfo &info, vector<Logi
 	auto &create_info = (CreateTableInfo &)*info.base;
 	for (auto &col : create_info.columns.Physical()) {
 		insert_types.push_back(col.GetType());
-		bound_defaults.push_back(make_unique<BoundConstantExpression>(Value(col.GetType())));
+		bound_defaults.push_back(make_uniq<BoundConstantExpression>(Value(col.GetType())));
 	}
 }
 
@@ -105,7 +105,7 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &context) const {
-	auto result = make_unique<InsertGlobalState>(context, GetTypes());
+	auto result = make_uniq<InsertGlobalState>(context, GetTypes());
 	if (info) {
 		// CREATE TABLE AS
 		D_ASSERT(!insert_table);
@@ -121,7 +121,7 @@ unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &co
 }
 
 unique_ptr<LocalSinkState> PhysicalInsert::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<InsertLocalState>(context.client, insert_types, bound_defaults);
+	return make_uniq<InsertLocalState>(context.client, insert_types, bound_defaults);
 }
 
 void PhysicalInsert::ResolveDefaults(TableCatalogEntry *table, DataChunk &chunk,
@@ -311,7 +311,7 @@ void PhysicalInsert::OnConflictHandling(TableCatalogEntry *table, ExecutionConte
 		// When these values are required for the conditions or the SET expressions,
 		// then we scan the existing table for the conflicting tuples, using the rowids
 		scan_chunk.Initialize(context.client, types_to_fetch);
-		auto fetch_state = make_unique<ColumnFetchState>();
+		auto fetch_state = make_uniq<ColumnFetchState>();
 		auto &transaction = DuckTransaction::Get(context.client, *table->catalog);
 		data_table.Fetch(transaction, scan_chunk, columns_to_fetch, row_ids, conflicts.Count(), *fetch_state);
 	}
@@ -382,7 +382,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 			auto &table_info = storage.info;
 			auto &block_manager = TableIOManager::Get(storage).GetBlockManagerForRowData();
 			lstate.local_collection =
-			    make_unique<RowGroupCollection>(table_info, block_manager, insert_types, MAX_ROW_ID);
+			    make_uniq<RowGroupCollection>(table_info, block_manager, insert_types, MAX_ROW_ID);
 			lstate.local_collection->InitializeEmpty();
 			lstate.local_collection->InitializeAppend(lstate.local_append_state);
 			lstate.writer = gstate.table->GetStorage().CreateOptimisticWriter(context.client);
@@ -470,7 +470,7 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalInsert::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<InsertSourceState>(*this);
+	return make_uniq<InsertSourceState>(*this);
 }
 
 void PhysicalInsert::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,

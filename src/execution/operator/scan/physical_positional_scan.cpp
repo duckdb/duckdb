@@ -130,7 +130,7 @@ public:
 		for (size_t i = 0; i < op.child_tables.size(); ++i) {
 			auto &child = *op.child_tables[i];
 			auto &global_state = *gstate.global_states[i];
-			scanners.emplace_back(make_unique<PositionalTableScanner>(context, child, global_state));
+			scanners.emplace_back(make_uniq<PositionalTableScanner>(context, child, global_state));
 		}
 	}
 
@@ -139,11 +139,11 @@ public:
 
 unique_ptr<LocalSourceState> PhysicalPositionalScan::GetLocalSourceState(ExecutionContext &context,
                                                                          GlobalSourceState &gstate) const {
-	return make_unique<PositionalScanLocalSourceState>(context, (PositionalScanGlobalSourceState &)gstate, *this);
+	return make_uniq<PositionalScanLocalSourceState>(context, (PositionalScanGlobalSourceState &)gstate, *this);
 }
 
 unique_ptr<GlobalSourceState> PhysicalPositionalScan::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<PositionalScanGlobalSourceState>(context, *this);
+	return make_uniq<PositionalScanGlobalSourceState>(context, *this);
 }
 
 void PhysicalPositionalScan::GetData(ExecutionContext &context, DataChunk &output, GlobalSourceState &gstate_p,

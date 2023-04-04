@@ -12,8 +12,8 @@ unique_ptr<PhysicalOperator> DuckCatalog::PlanDelete(ClientContext &context, Log
 	// get the index of the row_id column
 	auto &bound_ref = (BoundReferenceExpression &)*op.expressions[0];
 
-	auto del = make_unique<PhysicalDelete>(op.types, *op.table, op.table->GetStorage(), bound_ref.index,
-	                                       op.estimated_cardinality, op.return_chunk);
+	auto del = make_uniq<PhysicalDelete>(op.types, *op.table, op.table->GetStorage(), bound_ref.index,
+	                                     op.estimated_cardinality, op.return_chunk);
 	del->children.push_back(std::move(plan));
 	return std::move(del);
 }

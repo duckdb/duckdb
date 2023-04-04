@@ -139,10 +139,10 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 					expressions.reserve(entries.size());
 					for (auto &column_idx : entries) {
 						expressions.push_back(
-						    make_unique<BoundColumnRefExpression>(child->types[column_idx], bindings[column_idx]));
+						    make_uniq<BoundColumnRefExpression>(child->types[column_idx], bindings[column_idx]));
 					}
 					auto new_projection =
-					    make_unique<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
+					    make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
 					new_projection->children.push_back(std::move(child));
 					op.children[child_idx] = std::move(new_projection);
 
@@ -190,7 +190,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				// nothing references the projected expressions
 				// this happens in the case of e.g. EXISTS(SELECT * FROM ...)
 				// in this case we only need to project a single constant
-				proj.expressions.push_back(make_unique<BoundConstantExpression>(Value::INTEGER(42)));
+				proj.expressions.push_back(make_uniq<BoundConstantExpression>(Value::INTEGER(42)));
 			}
 		}
 		// then recurse into the children of this projection

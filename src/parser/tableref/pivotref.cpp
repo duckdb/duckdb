@@ -309,7 +309,7 @@ bool PivotRef::Equals(const TableRef *other_p) const {
 }
 
 unique_ptr<TableRef> PivotRef::Copy() {
-	auto copy = make_unique<PivotRef>();
+	auto copy = make_uniq<PivotRef>();
 	copy->source = source->Copy();
 	for (auto &aggr : aggregates) {
 		copy->aggregates.push_back(aggr->Copy());
@@ -347,7 +347,7 @@ void PivotRef::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<TableRef> PivotRef::Deserialize(FieldReader &reader) {
-	auto result = make_unique<PivotRef>();
+	auto result = make_uniq<PivotRef>();
 	result->source = reader.ReadRequiredSerializable<TableRef>();
 	result->aggregates = reader.ReadRequiredSerializableList<ParsedExpression>();
 	result->unpivot_names = reader.ReadRequiredList<string>();
@@ -359,7 +359,7 @@ unique_ptr<TableRef> PivotRef::Deserialize(FieldReader &reader) {
 }
 
 unique_ptr<TableRef> PivotRef::FormatDeserialize(FormatDeserializer &source) {
-	auto result = make_unique<PivotRef>();
+	auto result = make_uniq<PivotRef>();
 	source.ReadProperty("source", result->source);
 	source.ReadProperty("aggregates", result->aggregates);
 	source.ReadProperty("unpivot_names", result->unpivot_names);

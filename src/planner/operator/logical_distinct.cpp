@@ -24,7 +24,7 @@ void LogicalDistinct::Serialize(FieldWriter &writer) const {
 unique_ptr<LogicalOperator> LogicalDistinct::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto distinct_type = reader.ReadRequired<DistinctType>();
 	auto distinct_targets = reader.ReadRequiredSerializableList<Expression>(state.gstate);
-	return make_unique<LogicalDistinct>(std::move(distinct_targets), distinct_type);
+	return make_uniq<LogicalDistinct>(std::move(distinct_targets), distinct_type);
 }
 
 } // namespace duckdb

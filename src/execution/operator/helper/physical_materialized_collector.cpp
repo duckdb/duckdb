@@ -49,14 +49,14 @@ void PhysicalMaterializedCollector::Combine(ExecutionContext &context, GlobalSin
 }
 
 unique_ptr<GlobalSinkState> PhysicalMaterializedCollector::GetGlobalSinkState(ClientContext &context) const {
-	auto state = make_unique<MaterializedCollectorGlobalState>();
+	auto state = make_uniq<MaterializedCollectorGlobalState>();
 	state->context = context.shared_from_this();
 	return std::move(state);
 }
 
 unique_ptr<LocalSinkState> PhysicalMaterializedCollector::GetLocalSinkState(ExecutionContext &context) const {
-	auto state = make_unique<MaterializedCollectorLocalState>();
-	state->collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
+	auto state = make_uniq<MaterializedCollectorLocalState>();
+	state->collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
 	state->collection->InitializeAppend(state->append_state);
 	return std::move(state);
 }
@@ -64,10 +64,10 @@ unique_ptr<LocalSinkState> PhysicalMaterializedCollector::GetLocalSinkState(Exec
 unique_ptr<QueryResult> PhysicalMaterializedCollector::GetResult(GlobalSinkState &state) {
 	auto &gstate = (MaterializedCollectorGlobalState &)state;
 	if (!gstate.collection) {
-		gstate.collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
+		gstate.collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
 	}
-	auto result = make_unique<MaterializedQueryResult>(statement_type, properties, names, std::move(gstate.collection),
-	                                                   gstate.context->GetClientProperties());
+	auto result = make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(gstate.collection),
+	                                                 gstate.context->GetClientProperties());
 	return std::move(result);
 }
 

@@ -52,7 +52,7 @@ struct ListBindData : public FunctionData {
 	CopyDataFromSegment copy_data_from_segment;
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<ListBindData>(stype);
+		return make_uniq<ListBindData>(stype);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
@@ -233,7 +233,7 @@ unique_ptr<FunctionData> ListBindFunction(ClientContext &context, AggregateFunct
 	}
 
 	function.return_type = LogicalType::LIST(arguments[0]->return_type);
-	return make_unique<ListBindData>(function.return_type);
+	return make_uniq<ListBindData>(function.return_type);
 }
 
 void ListFun::RegisterFunction(BuiltinFunctions &set) {

@@ -37,7 +37,7 @@ static void CreateColumnDependencyManager(BoundCreateTableInfo &info) {
 static void BindCheckConstraint(Binder &binder, BoundCreateTableInfo &info, const unique_ptr<Constraint> &cond) {
 	auto &base = (CreateTableInfo &)*info.base;
 
-	auto bound_constraint = make_unique<BoundCheckConstraint>();
+	auto bound_constraint = make_uniq<BoundCheckConstraint>();
 	// check constraint: bind the expression
 	CheckBinder check_binder(binder, binder.context, base.table, base.columns, bound_constraint->bound_columns);
 	auto &check = (CheckConstraint &)*cond;
@@ -66,7 +66,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 		case ConstraintType::NOT_NULL: {
 			auto &not_null = (NotNullConstraint &)*cond;
 			auto &col = base.columns.GetColumn(LogicalIndex(not_null.index));
-			info.bound_constraints.push_back(make_unique<BoundNotNullConstraint>(PhysicalIndex(col.StorageOid())));
+			info.bound_constraints.push_back(make_uniq<BoundNotNullConstraint>(PhysicalIndex(col.StorageOid())));
 			not_null_columns.insert(not_null.index);
 			break;
 		}
@@ -110,7 +110,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 				primary_keys = keys;
 			}
 			info.bound_constraints.push_back(
-			    make_unique<BoundUniqueConstraint>(std::move(keys), std::move(key_set), unique.is_primary_key));
+			    make_uniq<BoundUniqueConstraint>(std::move(keys), std::move(key_set), unique.is_primary_key));
 			break;
 		}
 		case ConstraintType::FOREIGN_KEY: {
@@ -132,7 +132,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 				fk_key_set.insert(fk.info.fk_keys[i]);
 			}
 			info.bound_constraints.push_back(
-			    make_unique<BoundForeignKeyConstraint>(fk.info, std::move(pk_key_set), std::move(fk_key_set)));
+			    make_uniq<BoundForeignKeyConstraint>(fk.info, std::move(pk_key_set), std::move(fk_key_set)));
 			break;
 		}
 		default:
@@ -147,8 +147,8 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 				continue;
 			}
 			auto physical_index = base.columns.LogicalToPhysical(column_index);
-			base.constraints.push_back(make_unique<NotNullConstraint>(column_index));
-			info.bound_constraints.push_back(make_unique<BoundNotNullConstraint>(physical_index));
+			base.constraints.push_back(make_uniq<NotNullConstraint>(column_index));
+			info.bound_constraints.push_back(make_uniq<BoundNotNullConstraint>(physical_index));
 		}
 	}
 }
@@ -220,7 +220,7 @@ void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expr
 			bound_default = default_binder.Bind(default_copy);
 		} else {
 			// no default value specified: push a default value of constant null
-			bound_default = make_unique<BoundConstantExpression>(Value(column.Type()));
+			bound_default = make_uniq<BoundConstantExpression>(Value(column.Type()));
 		}
 		bound_defaults.push_back(std::move(bound_default));
 	}
@@ -252,7 +252,7 @@ static void ExtractDependencies(BoundCreateTableInfo &info) {
 }
 unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry *schema) {
 	auto &base = (CreateTableInfo &)*info;
-	auto result = make_unique<BoundCreateTableInfo>(std::move(info));
+	auto result = make_uniq<BoundCreateTableInfo>(std::move(info));
 	result->schema = schema;
 	if (base.query) {
 		// construct the result object

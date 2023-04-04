@@ -52,7 +52,7 @@ unique_ptr<SetStatement> Transformer::TransformSetVariable(duckdb_libpgquery::PG
 
 	auto value = TransformValue(((duckdb_libpgquery::PGAConst *)stmt->args->head->data.ptr_value)->val)->value;
 
-	return make_unique<SetVariableStatement>(name, value, ToSetScope(stmt->scope));
+	return make_uniq<SetVariableStatement>(name, value, ToSetScope(stmt->scope));
 }
 
 unique_ptr<SetStatement> Transformer::TransformResetVariable(duckdb_libpgquery::PGVariableSetStmt *stmt) {
@@ -65,7 +65,7 @@ unique_ptr<SetStatement> Transformer::TransformResetVariable(duckdb_libpgquery::
 	auto name = std::string(stmt->name);
 	D_ASSERT(!name.empty()); // parser protect us!
 
-	return make_unique<ResetVariableStatement>(name, ToSetScope(stmt->scope));
+	return make_uniq<ResetVariableStatement>(name, ToSetScope(stmt->scope));
 }
 
 unique_ptr<SetStatement> Transformer::TransformSet(duckdb_libpgquery::PGNode *node) {

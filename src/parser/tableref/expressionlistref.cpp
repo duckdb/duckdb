@@ -50,7 +50,7 @@ bool ExpressionListRef::Equals(const TableRef *other_p) const {
 
 unique_ptr<TableRef> ExpressionListRef::Copy() {
 	// value list
-	auto result = make_unique<ExpressionListRef>();
+	auto result = make_uniq<ExpressionListRef>();
 	for (auto &val_list : values) {
 		vector<unique_ptr<ParsedExpression>> new_val_list;
 		new_val_list.reserve(val_list.size());
@@ -83,7 +83,7 @@ void ExpressionListRef::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<TableRef> ExpressionListRef::FormatDeserialize(FormatDeserializer &source) {
-	auto result = make_unique<ExpressionListRef>();
+	auto result = make_uniq<ExpressionListRef>();
 	source.ReadProperty("expected_names", result->expected_names);
 	source.ReadProperty("expected_types", result->expected_types);
 	source.ReadProperty("values", result->values);
@@ -91,7 +91,7 @@ unique_ptr<TableRef> ExpressionListRef::FormatDeserialize(FormatDeserializer &so
 }
 
 unique_ptr<TableRef> ExpressionListRef::Deserialize(FieldReader &reader) {
-	auto result = make_unique<ExpressionListRef>();
+	auto result = make_uniq<ExpressionListRef>();
 	// value list
 	result->expected_names = reader.ReadRequiredList<string>();
 	result->expected_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();

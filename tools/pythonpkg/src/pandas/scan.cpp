@@ -79,7 +79,7 @@ unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &conte
 	auto get_fun = df.attr("__getitem__");
 
 	idx_t row_count = py::len(get_fun(df_columns[0]));
-	return make_unique<PandasScanFunctionData>(df, row_count, std::move(pandas_bind_data), return_types);
+	return make_uniq<PandasScanFunctionData>(df, row_count, std::move(pandas_bind_data), return_types);
 }
 
 unique_ptr<GlobalTableFunctionState> PandasScanFunction::PandasScanInitGlobal(ClientContext &context,
@@ -87,13 +87,13 @@ unique_ptr<GlobalTableFunctionState> PandasScanFunction::PandasScanInitGlobal(Cl
 	if (PyGILState_Check()) {
 		throw InvalidInputException("PandasScan called but GIL was already held!");
 	}
-	return make_unique<PandasScanGlobalState>(PandasScanMaxThreads(context, input.bind_data));
+	return make_uniq<PandasScanGlobalState>(PandasScanMaxThreads(context, input.bind_data));
 }
 
 unique_ptr<LocalTableFunctionState> PandasScanFunction::PandasScanInitLocal(ExecutionContext &context,
                                                                             TableFunctionInitInput &input,
                                                                             GlobalTableFunctionState *gstate) {
-	auto result = make_unique<PandasScanLocalState>(0, 0);
+	auto result = make_uniq<PandasScanLocalState>(0, 0);
 	result->column_ids = input.column_ids;
 	PandasScanParallelStateNext(context.client, input.bind_data, result.get(), gstate);
 	return std::move(result);
@@ -167,7 +167,7 @@ void PandasScanFunction::PandasScanFunc(ClientContext &context, TableFunctionInp
 unique_ptr<NodeStatistics> PandasScanFunction::PandasScanCardinality(ClientContext &context,
                                                                      const FunctionData *bind_data) {
 	auto &data = (PandasScanFunctionData &)*bind_data;
-	return make_unique<NodeStatistics>(data.row_count, data.row_count);
+	return make_uniq<NodeStatistics>(data.row_count, data.row_count);
 }
 
 py::object PandasScanFunction::PandasReplaceCopiedNames(const py::object &original_df) {
