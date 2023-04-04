@@ -52,8 +52,8 @@ void FindForeignKeyInformation(CatalogEntry &entry, AlterForeignKeyType alter_fk
 		if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
 			AlterEntryData alter_data(entry.catalog->GetName(), fk.info.schema, fk.info.table, false);
 			fk_arrays.push_back(make_uniq<AlterForeignKeyInfo>(std::move(alter_data), entry.name, fk.pk_columns,
-			                                                     fk.fk_columns, fk.info.pk_keys, fk.info.fk_keys,
-			                                                     alter_fk_type));
+			                                                   fk.fk_columns, fk.info.pk_keys, fk.info.fk_keys,
+			                                                   alter_fk_type));
 		} else if (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE &&
 		           alter_fk_type == AlterForeignKeyType::AFT_DELETE) {
 			throw CatalogException("Could not drop the table because this table is main key table of the table \"%s\"",

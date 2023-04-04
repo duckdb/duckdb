@@ -31,7 +31,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundRecursiveCTENode &node) {
 		return VisitQueryNode(node, std::move(root));
 	}
 	auto root = make_uniq<LogicalRecursiveCTE>(node.setop_index, node.types.size(), node.union_all,
-	                                             std::move(left_node), std::move(right_node));
+	                                           std::move(left_node), std::move(right_node));
 
 	return VisitQueryNode(node, std::move(root));
 }

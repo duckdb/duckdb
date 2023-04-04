@@ -347,7 +347,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			} else {
 				auto &any_join = join.Cast<LogicalAnyJoin>();
 				auto comparison = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
-				                                                         std::move(left), std::move(right));
+				                                                       std::move(left), std::move(right));
 				auto conjunction = make_uniq<BoundConjunctionExpression>(
 				    ExpressionType::CONJUNCTION_AND, std::move(comparison), std::move(any_join.condition));
 				any_join.condition = std::move(conjunction);

@@ -122,8 +122,8 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<E
 	if (PatternIsConstant(patt_str)) {
 		// Pattern is constant
 		return make_uniq<BoundComparisonExpression>(is_not_like ? ExpressionType::COMPARE_NOTEQUAL
-		                                                          : ExpressionType::COMPARE_EQUAL,
-		                                              std::move(root.children[0]), std::move(root.children[1]));
+		                                                        : ExpressionType::COMPARE_EQUAL,
+		                                            std::move(root.children[0]), std::move(root.children[1]));
 	} else if (PatternIsPrefix(patt_str)) {
 		// Prefix LIKE pattern : [^%_]*[%]+, ignoring underscore
 		return ApplyRule(root, PrefixFun::GetFunction(), patt_str, is_not_like);

@@ -64,8 +64,7 @@ unique_ptr<Expression> EnumComparisonRule::Apply(LogicalOperator &op, vector<Exp
 
 	auto cast_left_to_right =
 	    BoundCastExpression::AddDefaultCastToType(std::move(left_child.child), right_child.child->return_type, true);
-	return make_uniq<BoundComparisonExpression>(root.type, std::move(cast_left_to_right),
-	                                              std::move(right_child.child));
+	return make_uniq<BoundComparisonExpression>(root.type, std::move(cast_left_to_right), std::move(right_child.child));
 }
 
 } // namespace duckdb
