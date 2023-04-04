@@ -22,7 +22,7 @@
 namespace duckdb {
 
 static void ConstructPivots(PivotRef &ref, vector<PivotValueElement> &pivot_values, idx_t pivot_idx = 0,
-                            PivotValueElement current_value = PivotValueElement()) {
+                            const PivotValueElement &current_value = PivotValueElement()) {
 	auto &pivot = ref.pivots[pivot_idx];
 	bool last_pivot = pivot_idx + 1 == ref.pivots.size();
 	for (auto &entry : pivot.entries) {
