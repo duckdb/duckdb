@@ -14,8 +14,7 @@ unique_ptr<LogicalOperator> Binder::VisitQueryNode(BoundQueryNode &node, unique_
 		switch (mod->type) {
 		case ResultModifierType::DISTINCT_MODIFIER: {
 			auto &bound = (BoundDistinctModifier &)*mod;
-			auto distinct = make_unique<LogicalDistinct>(std::move(bound.target_distincts));
-			distinct->distinct_on = bound.distinct_on;
+			auto distinct = make_unique<LogicalDistinct>(std::move(bound.target_distincts), bound.distinct_type);
 			distinct->AddChild(std::move(root));
 			root = std::move(distinct);
 			break;
@@ -24,7 +23,7 @@ unique_ptr<LogicalOperator> Binder::VisitQueryNode(BoundQueryNode &node, unique_
 			auto &bound = (BoundOrderModifier &)*mod;
 			if (root->type == LogicalOperatorType::LOGICAL_DISTINCT) {
 				auto &distinct = (LogicalDistinct &)*root;
-				if (distinct.distinct_on) {
+				if (distinct.distinct_type == DistinctType::DISTINCT_ON) {
 					auto order_by = make_unique<BoundOrderModifier>();
 					for (auto &order_node : bound.orders) {
 						order_by->orders.push_back(order_node.Copy());

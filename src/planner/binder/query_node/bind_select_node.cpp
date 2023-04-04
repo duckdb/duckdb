@@ -115,7 +115,7 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 		case ResultModifierType::DISTINCT_MODIFIER: {
 			auto &distinct = (DistinctModifier &)*mod;
 			auto bound_distinct = make_unique<BoundDistinctModifier>();
-			bound_distinct->distinct_on = !distinct.distinct_on_targets.empty();
+			bound_distinct->distinct_type = distinct.distinct_on_targets.empty() ? DistinctType::DISTINCT : DistinctType::DISTINCT_ON;
 			if (distinct.distinct_on_targets.empty()) {
 				for (idx_t i = 0; i < result.names.size(); i++) {
 					distinct.distinct_on_targets.push_back(make_unique<ConstantExpression>(Value::INTEGER(1 + i)));
