@@ -240,7 +240,7 @@ bool VectorStringToStruct::StringToNestedTypeCastLoop(string_t *source_data, Val
 //===--------------------------------------------------------------------===//
 unique_ptr<FunctionLocalState> InitMapCastLocalState(CastLocalStateParameters &parameters) {
 	auto &cast_data = (MapBoundCastData &)*parameters.cast_data;
-	auto result = make_unique<MapCastLocalState>();
+	auto result = make_uniq<MapCastLocalState>();
 
 	if (cast_data.key_cast.init_local_state) {
 		CastLocalStateParameters child_params(parameters, cast_data.key_cast.cast_data);

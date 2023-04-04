@@ -77,8 +77,8 @@ static LogicalType StructureStringToType(yyjson_val *val, ClientContext &context
 	}
 }
 
-static unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, ScalarFunction &bound_function,
-                                                  vector<unique_ptr<Expression>> &arguments) {
+static duckdb::unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, ScalarFunction &bound_function,
+                                                          vector<duckdb::unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();
@@ -102,7 +102,7 @@ static unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, Scalar
 		}
 		bound_function.return_type = StructureStringToType(doc->root, context);
 	}
-	return make_unique<VariableReturnBindData>(bound_function.return_type);
+	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
 static inline string_t GetString(yyjson_val *val) {

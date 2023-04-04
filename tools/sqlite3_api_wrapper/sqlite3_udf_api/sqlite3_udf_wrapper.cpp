@@ -11,7 +11,7 @@ duckdb::scalar_function_t duckdb::SQLiteUDFWrapper::CreateSQLiteScalarFunction(d
 		CastSQLite::InputVectorsToVarchar(args, cast_chunk);
 
 		// ToUnifiedFormat all input colunms
-		unique_ptr<UnifiedVectorFormat[]> vec_data = cast_chunk.ToUnifiedFormat();
+		duckdb::unique_ptr<UnifiedVectorFormat[]> vec_data = cast_chunk.ToUnifiedFormat();
 
 		// Vector of sqlite3_value for all input columns
 		vector<unique_ptr<vector<sqlite3_value>>> vec_sqlite(cast_chunk.ColumnCount());
@@ -30,7 +30,7 @@ duckdb::scalar_function_t duckdb::SQLiteUDFWrapper::CreateSQLiteScalarFunction(d
 		vector<sqlite3_value> res_sqlite_values(cast_chunk.size()); // to store the results from the UDF calls
 		vector<sqlite3_value> vec_values_to_free; // sqlite_values to free because some memory allocation has happened
 
-		unique_ptr<sqlite3_value *[]> argv = unique_ptr<sqlite3_value *[]>(new sqlite3_value *[argc]);
+		duckdb::unique_ptr<sqlite3_value *[]> argv = duckdb::unique_ptr<sqlite3_value *[]>(new sqlite3_value *[argc]);
 
 		// traversing the vector of sqlite values
 		for (idx_t row_idx = 0; row_idx < res_sqlite_values.size(); ++row_idx) {

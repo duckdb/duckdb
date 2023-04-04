@@ -6,7 +6,7 @@ namespace duckdb {
 // Field Writer
 //===--------------------------------------------------------------------===//
 FieldWriter::FieldWriter(Serializer &serializer_p)
-    : serializer(serializer_p), buffer(make_unique<BufferedSerializer>()), field_count(0), finalized(false) {
+    : serializer(serializer_p), buffer(make_uniq<BufferedSerializer>()), field_count(0), finalized(false) {
 	buffer->SetVersion(serializer.GetVersion());
 	buffer->is_query_plan = serializer.is_query_plan;
 }

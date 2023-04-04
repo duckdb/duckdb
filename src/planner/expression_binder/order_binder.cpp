@@ -34,8 +34,8 @@ unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &
 			alias = expr.alias;
 		}
 	}
-	return make_unique<BoundColumnRefExpression>(std::move(alias), LogicalType::INVALID,
-	                                             ColumnBinding(projection_index, index));
+	return make_uniq<BoundColumnRefExpression>(std::move(alias), LogicalType::INVALID,
+	                                           ColumnBinding(projection_index, index));
 }
 
 unique_ptr<Expression> OrderBinder::CreateExtraReference(unique_ptr<ParsedExpression> expr) {

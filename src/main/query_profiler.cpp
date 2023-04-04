@@ -285,7 +285,7 @@ void OperatorProfiler::Flush(const PhysicalOperator *phys_op, ExpressionExecutor
 	if (int(operator_timing.executors_info.size()) <= id) {
 		operator_timing.executors_info.resize(id + 1);
 	}
-	operator_timing.executors_info[id] = make_unique<ExpressionExecutorInfo>(*expression_executor, name, id);
+	operator_timing.executors_info[id] = make_uniq<ExpressionExecutorInfo>(*expression_executor, name, id);
 	operator_timing.name = phys_op->GetName();
 }
 
@@ -614,7 +614,7 @@ unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(PhysicalOperator *
 	if (OperatorRequiresProfiling(root->type)) {
 		this->query_requires_profiling = true;
 	}
-	auto node = make_unique<QueryProfiler::TreeNode>();
+	auto node = make_uniq<QueryProfiler::TreeNode>();
 	node->type = root->type;
 	node->name = root->GetName();
 	node->extra_info = root->ParamsToString();
@@ -666,7 +666,7 @@ void ExpressionInfo::ExtractExpressionsRecursive(unique_ptr<ExpressionState> &st
 	}
 	// extract the children of this node
 	for (auto &child : state->child_states) {
-		auto expr_info = make_unique<ExpressionInfo>();
+		auto expr_info = make_uniq<ExpressionInfo>();
 		if (child->expr.expression_class == ExpressionClass::BOUND_FUNCTION) {
 			expr_info->hasfunction = true;
 			expr_info->function_name = ((BoundFunctionExpression &)child->expr).function.ToString();
@@ -683,7 +683,7 @@ void ExpressionInfo::ExtractExpressionsRecursive(unique_ptr<ExpressionState> &st
 ExpressionExecutorInfo::ExpressionExecutorInfo(ExpressionExecutor &executor, const string &name, int id) : id(id) {
 	// Extract Expression Root Information from ExpressionExecutorStats
 	for (auto &state : executor.GetStates()) {
-		roots.push_back(make_unique<ExpressionRootInfo>(*state, name));
+		roots.push_back(make_uniq<ExpressionRootInfo>(*state, name));
 	}
 }
 
@@ -693,7 +693,7 @@ ExpressionRootInfo::ExpressionRootInfo(ExpressionExecutorState &state, string na
       name(state.name), time(state.profiler.time) {
 	// Use the name of expression-tree as extra-info
 	extra_info = std::move(name);
-	auto expression_info_p = make_unique<ExpressionInfo>();
+	auto expression_info_p = make_uniq<ExpressionInfo>();
 	// Maybe root has a function
 	if (state.root_state->expr.expression_class == ExpressionClass::BOUND_FUNCTION) {
 		expression_info_p->hasfunction = true;
