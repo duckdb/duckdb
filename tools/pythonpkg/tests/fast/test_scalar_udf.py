@@ -8,13 +8,13 @@ from typing import Union
 from duckdb.typing import *
 
 class TestScalarUDF(object):
-    def test_basic_use(self, duckdb_cursor):
+    def test_basic_use(self):
         def plus_one(x):
             if x == None or x > 50:
                 return x;
             return x + 1
 
-        con = duckdb_cursor
+        con = duckdb.connect()
         con.register_scalar('plus_one', plus_one, [BIGINT], BIGINT)
         assert [(6,)] == con.sql('select plus_one(5)').fetchall()
 
@@ -27,17 +27,31 @@ class TestScalarUDF(object):
         res = con.sql('select i, plus_one(i) from test_vector_types(NULL::BIGINT, false) t(i), range(2000)')
         assert len(res) == 22000
 
-    def test_varargs(self, duckdb_cursor):
+    def test_detected_return_type(self):
+        def add_nums(*args) -> int:
+            sum = 0;
+            for arg in args:
+                sum += arg
+            return sum
+
+        con = duckdb.connect()
+        con.register_scalar('add_nums', add_nums, None)
+        res = con.sql("""
+            select add_nums(5,3,2,1);
+        """)
+        print(res)
+
+    def test_varargs(self):
         def variable_args(*args):
             amount = len(args)
             return amount
         
-        con = duckdb_cursor
+        con = duckdb.connect()
         con.register_scalar('varargs', variable_args, None, BIGINT, varargs=True)
         res = con.sql("""select varargs('5', '3', '2', 1, 0.12345)""").fetchall()
         assert res == [(5,)]
 
-    def test_overwrite_name(self, duckdb_cursor):
+    def test_overwrite_name(self):
         # TODO: test proper behavior when you register two functions with the same name
         
         # create first version of the function
@@ -51,11 +65,11 @@ class TestScalarUDF(object):
         # execute both relations
         pass
 
-    def test_nulls(self, duckdb_cursor):
+    def test_nulls(self):
         # TODO: provide 'null_handling' option?
         pass
     
-    def test_exceptions(self, duckdb_cursor):
+    def test_exceptions(self):
         # TODO: we likely want an enum to define how exceptions should be handled
         # - propagate:
         #    throw the exception as a duckdb exception
@@ -63,17 +77,17 @@ class TestScalarUDF(object):
         #    return NULL instead
         pass
 
-    def test_binding(self, duckdb_cursor):
+    def test_binding(self):
         # TODO: add a way to do extra binding for the UDF
         pass
     
-    def test_structs(self, duckdb_cursor):
+    def test_structs(self):
         def add_extra_column(original):
             original['a'] = 200
             original['bb'] = 0
             return original
 
-        con = duckdb_cursor
+        con = duckdb.connect()
         range_table = con.table_function('range', [5000])
         con.register_scalar("append_field", add_extra_column, [duckdb.struct_type({'a': BIGINT, 'b': BIGINT})], duckdb.struct_type({'a': BIGINT, 'b': BIGINT, 'c': BIGINT}))
 

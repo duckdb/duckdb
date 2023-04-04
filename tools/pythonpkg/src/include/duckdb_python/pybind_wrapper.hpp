@@ -20,7 +20,7 @@ bool gil_check();
 void gil_assert();
 
 template <class T>
-bool try_cast(const object &object, T &result) {
+bool try_cast(const handle &object, T &result) {
 	try {
 		result = cast<T>(object);
 	} catch (cast_error &e) {

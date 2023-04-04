@@ -105,7 +105,8 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 
 	m.def("register_scalar", &DuckDBPyConnection::RegisterScalarUDF,
 	      "Register a scalar UDF so it can be used in queries", py::arg("name"), py::arg("function"),
-	      py::arg("return_type"), py::arg("parameters"), py::kw_only(), py::arg("varargs") = false);
+	      py::arg("return_type") = py::none(), py::arg("parameters") = py::none(), py::kw_only(),
+	      py::arg("varargs") = false);
 
 	DefineMethod({"sqltype", "dtype", "type"}, m, &DuckDBPyConnection::Type,
 	             "Create a type object by parsing the 'type_str' string", py::arg("type_str"));
@@ -274,113 +275,6 @@ bool DuckDBPyConnection::FileSystemIsRegistered(const string &name) {
 	return std::find(subsystems.begin(), subsystems.end(), name) != subsystems.end();
 }
 
-scalar_function_t CreateScalarUDF(PyObject *function) {
-	// Through the capture of the lambda, we have access to the function pointer
-	// We just need to make sure that it doesn't get garbage collected
-	scalar_function_t func = [=](DataChunk &input, ExpressionState &state, Vector &result) -> void {
-		py::gil_scoped_acquire gil;
-
-		// owning references
-		vector<py::handle> python_objects;
-		vector<PyObject *> python_results;
-		python_results.reserve(input.size());
-		for (idx_t row = 0; row < input.size(); row++) {
-
-			auto bundled_parameters = py::tuple(input.ColumnCount());
-			for (idx_t i = 0; i < input.ColumnCount(); i++) {
-				// Fill the tuple with the arguments for this row
-				auto &column = input.data[i];
-				auto value = column.GetValue(row);
-				bundled_parameters[i] = PythonObject::FromValue(value, column.GetType());
-			}
-
-			// Call the function
-			PyObject *ret = nullptr;
-			ret = PyObject_CallObject(function, bundled_parameters.ptr());
-			if (ret == nullptr && PyErr_Occurred()) {
-				auto exception = py::error_already_set();
-				throw InvalidInputException("Python exception occurred while executing the UDF: %s", exception.what());
-			}
-			python_objects.push_back(py::handle(ret));
-			python_results.push_back(ret);
-		}
-
-		// Cast the resulting native python to DuckDB, using the return type
-		// result.Resize(input.size());
-		VectorConversion::ScanPandasObjectColumn(python_results.data(), input.size(), 0, result);
-		if (input.AllConstant()) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		}
-	};
-	return func;
-}
-
-void GetExplicitFunctionParameters(idx_t param_count, const py::object &parameters_p, vector<LogicalType> &parameters) {
-	if (py::none().is(parameters_p)) {
-		return;
-	}
-	if (!py::isinstance<py::list>(parameters_p)) {
-		throw InvalidInputException("Either leave 'parameters' empty, or provide a list of DuckDBPyType objects");
-	}
-
-	auto params = py::list(parameters_p);
-	if (params.size() != param_count) {
-		throw InvalidInputException("%d types provided, but the provided function takes %d parameters", params.size(),
-		                            param_count);
-	}
-	D_ASSERT(parameters.empty() || parameters.size() == param_count);
-	if (parameters.empty()) {
-		for (idx_t i = 0; i < param_count; i++) {
-			parameters.push_back(LogicalType::ANY);
-		}
-	}
-	idx_t i = 0;
-	for (auto &param : params) {
-		auto type = py::cast<shared_ptr<DuckDBPyType>>(param);
-		parameters[i++] = type->Type();
-	}
-}
-
-static void GetExplicitReturnType(LogicalType &return_type, shared_ptr<DuckDBPyType> &type) {
-	if (!type) {
-		return;
-	}
-	return_type = type->Type();
-}
-
-static void AnalyzeFunctionSignature(const py::object &udf, idx_t &param_count, vector<LogicalType> &parameters,
-                                     LogicalType &return_type) {
-	auto signature_func = py::module_::import("inspect").attr("signature");
-	auto signature = signature_func(udf);
-	auto sig_params = signature.attr("parameters");
-	auto return_annotation = signature.attr("return_annotation");
-	if (!py::none().is(return_annotation)) {
-		shared_ptr<DuckDBPyType> pytype;
-		if (py::try_cast<shared_ptr<DuckDBPyType>>(return_annotation, pytype)) {
-			return_type = pytype->Type();
-		}
-	}
-	param_count = py::len(sig_params);
-	parameters.reserve(param_count);
-	auto params = py::dict(sig_params);
-	// TODO: check the 'kind' of the 'inspect.Parameter' object
-	// 0 'POSITIONAL_ONLY'
-	// 1 'POSITIONAL_OR_KEYWORD'
-	// 2 'VAR_POSITIONAL
-	// 3 'KEYWORD_ONLY'
-	// 4 'VAR_KEYWORD'
-	for (auto &item : params) {
-		auto &key = item.first;
-		auto &value = item.second;
-		shared_ptr<DuckDBPyType> pytype;
-		if (py::try_cast<shared_ptr<DuckDBPyType>>(return_annotation, pytype)) {
-			parameters.push_back(pytype->Type());
-		} else {
-			parameters.push_back(LogicalType::ANY);
-		}
-	}
-}
-
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::object &udf,
                                                                      const py::object &parameters_p,
                                                                      shared_ptr<DuckDBPyType> return_type_p,
@@ -391,23 +285,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterScalarUDF(const strin
 	auto &context = *connection->context;
 	auto &catalog = Catalog::GetSystemCatalog(context);
 
-	scalar_function_t func = CreateScalarUDF(udf.ptr());
-
-	LogicalType return_type = LogicalType::INVALID;
-	vector<LogicalType> parameters;
-	idx_t param_count = DConstants::INVALID_INDEX;
-
-	AnalyzeFunctionSignature(udf, param_count, parameters, return_type);
-	GetExplicitFunctionParameters(param_count, parameters_p, parameters);
-	GetExplicitReturnType(return_type, return_type_p);
-	if (return_type == LogicalType::INVALID) {
-		throw InvalidInputException("Could not infer the return type, please set it explicitly");
-	}
-
-	ScalarFunction scalar_function(name, std::move(parameters), return_type, func);
-	if (varargs) {
-		scalar_function.varargs = LogicalType::ANY;
-	}
+	auto scalar_function = CreateScalarUDF(name, udf, parameters_p, return_type_p, varargs);
 	CreateScalarFunctionInfo info(scalar_function);
 
 	context.transaction.BeginTransaction();

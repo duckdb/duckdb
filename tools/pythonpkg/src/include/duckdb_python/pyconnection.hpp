@@ -19,6 +19,7 @@
 #include "duckdb_python/path_like.hpp"
 #include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
 #include "duckdb_python/pyfilesystem.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
 
@@ -203,6 +204,8 @@ public:
 private:
 	PathLike GetPathLike(const py::object &object);
 	unique_lock<std::mutex> AcquireConnectionLock();
+	ScalarFunction CreateScalarUDF(const string &name, const py::object &udf, const py::object &parameters,
+	                               shared_ptr<DuckDBPyType> return_type, bool varargs);
 
 	static PythonEnvironmentType environment;
 	static void DetectEnvironment();
