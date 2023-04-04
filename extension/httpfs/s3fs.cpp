@@ -855,6 +855,31 @@ void S3FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx
 	}
 }
 
+static bool Match(vector<string>::const_iterator key, vector<string>::const_iterator key_end,
+                  vector<string>::const_iterator pattern, vector<string>::const_iterator pattern_end) {
+
+	while (key != key_end && pattern != pattern_end) {
+		if (*pattern == "**") {
+			if (std::next(pattern) == pattern_end) {
+				return true;
+			}
+			while (key != key_end) {
+				if (Match(key, key_end, std::next(pattern), pattern_end)) {
+					return true;
+				}
+				key++;
+			}
+			return false;
+		}
+		if (!LikeFun::Glob(key->data(), key->length(), pattern->data(), pattern->length())) {
+			return false;
+		}
+		key++;
+		pattern++;
+	}
+	return key == key_end && pattern == pattern_end;
+}
+
 vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener) {
 	if (opener == nullptr) {
 		throw InternalException("Cannot S3 Glob without FileOpener");
@@ -922,11 +947,12 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 		pattern_trimmed = pattern_trimmed.substr(parsed_s3_url.bucket.length() + 1);
 	}
 
+	vector<string> pattern_splits = StringUtil::Split(pattern_trimmed, "/");
 	vector<string> result;
 	for (const auto &s3_key : s3_keys) {
 
-		auto is_match =
-		    LikeFun::Glob(s3_key.data(), s3_key.length(), pattern_trimmed.data(), pattern_trimmed.length(), false);
+		vector<string> key_splits = StringUtil::Split(s3_key, "/");
+		bool is_match = Match(key_splits.begin(), key_splits.end(), pattern_splits.begin(), pattern_splits.end());
 
 		if (is_match) {
 			auto result_full_url = "s3://" + parsed_s3_url.bucket + "/" + s3_key;
@@ -948,7 +974,7 @@ bool S3FileSystem::ListFiles(const string &directory, const std::function<void(c
                              FileOpener *opener) {
 	string trimmed_dir = directory;
 	StringUtil::RTrim(trimmed_dir, PathSeparator());
-	auto glob_res = Glob(JoinPath(trimmed_dir, "*"), opener);
+	auto glob_res = Glob(JoinPath(trimmed_dir, "**"), opener);
 
 	if (glob_res.empty()) {
 		return false;
