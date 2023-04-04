@@ -3,7 +3,6 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/set.hpp"
-#include "duckdb/parallel/concurrentqueue.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -178,46 +177,6 @@ bool BlockHandle::CanUnload() {
 	}
 	return true;
 }
-
-struct BufferEvictionNode {
-	BufferEvictionNode() {
-	}
-	BufferEvictionNode(weak_ptr<BlockHandle> handle_p, idx_t timestamp_p)
-	    : handle(std::move(handle_p)), timestamp(timestamp_p) {
-		D_ASSERT(!handle.expired());
-	}
-
-	weak_ptr<BlockHandle> handle;
-	idx_t timestamp;
-
-	bool CanUnload(BlockHandle &handle_p) {
-		if (timestamp != handle_p.eviction_timestamp) {
-			// handle was used in between
-			return false;
-		}
-		return handle_p.CanUnload();
-	}
-
-	shared_ptr<BlockHandle> TryGetBlockHandle() {
-		auto handle_p = handle.lock();
-		if (!handle_p) {
-			// BlockHandle has been destroyed
-			return nullptr;
-		}
-		if (!CanUnload(*handle_p)) {
-			// handle was used in between
-			return nullptr;
-		}
-		// this is the latest node in the queue with this handle
-		return handle_p;
-	}
-};
-
-typedef duckdb_moodycamel::ConcurrentQueue<BufferEvictionNode> eviction_queue_t;
-
-struct EvictionQueue {
-	eviction_queue_t q;
-};
 
 class TemporaryFileManager;
 
