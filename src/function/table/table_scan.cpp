@@ -63,7 +63,7 @@ struct TableScanGlobalState : public GlobalTableFunctionState {
 
 static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
                                                               GlobalTableFunctionState *gstate) {
-	auto result = make_unique<TableScanLocalState>();
+	auto result = make_uniq<TableScanLocalState>();
 	auto &bind_data = (TableScanBindData &)*input.bind_data;
 	vector<column_t> column_ids = input.column_ids;
 	for (auto &col : column_ids) {
@@ -83,7 +83,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 
 	D_ASSERT(input.bind_data);
 	auto &bind_data = (const TableScanBindData &)*input.bind_data;
-	auto result = make_unique<TableScanGlobalState>(context, input.bind_data);
+	auto result = make_uniq<TableScanGlobalState>(context, input.bind_data);
 	bind_data.table->GetStorage().InitializeParallelScan(context, result->state);
 	if (input.CanRemoveFilterColumns()) {
 		result->projection_ids = input.projection_ids;
@@ -193,7 +193,7 @@ unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const Fu
 	auto &local_storage = LocalStorage::Get(context, *bind_data.table->catalog);
 	auto &storage = bind_data.table->GetStorage();
 	idx_t estimated_cardinality = storage.info->cardinality + local_storage.AddedRows(bind_data.table->GetStoragePtr());
-	return make_unique<NodeStatistics>(storage.info->cardinality, estimated_cardinality);
+	return make_uniq<NodeStatistics>(storage.info->cardinality, estimated_cardinality);
 }
 
 //===--------------------------------------------------------------------===//
@@ -216,7 +216,7 @@ static unique_ptr<GlobalTableFunctionState> IndexScanInitGlobal(ClientContext &c
 	if (!bind_data.result_ids.empty()) {
 		row_id_data = (data_ptr_t)&bind_data.result_ids[0];
 	}
-	auto result = make_unique<IndexScanGlobalState>(row_id_data);
+	auto result = make_uniq<IndexScanGlobalState>(row_id_data);
 	auto &local_storage = LocalStorage::Get(context, *bind_data.table->catalog);
 	result->column_ids = input.column_ids;
 	result->local_storage_state.Initialize(input.column_ids, input.filters);
@@ -307,10 +307,10 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 			// create a matcher for a comparison with a constant
 			ComparisonExpressionMatcher matcher;
 			// match on a comparison type
-			matcher.expr_type = make_unique<ComparisonExpressionTypeMatcher>();
+			matcher.expr_type = make_uniq<ComparisonExpressionTypeMatcher>();
 			// match on a constant comparison with the indexed expression
-			matcher.matchers.push_back(make_unique<ExpressionEqualityMatcher>(index_expression.get()));
-			matcher.matchers.push_back(make_unique<ConstantExpressionMatcher>());
+			matcher.matchers.push_back(make_uniq<ExpressionEqualityMatcher>(index_expression.get()));
+			matcher.matchers.push_back(make_uniq<ConstantExpressionMatcher>());
 
 			matcher.policy = SetMatcher::Policy::UNORDERED;
 
@@ -430,7 +430,7 @@ static unique_ptr<FunctionData> TableScanDeserialize(ClientContext &context, Fie
 		throw SerializationException("Cant find table for %s.%s", schema_name, table_name);
 	}
 
-	auto result = make_unique<TableScanBindData>((DuckTableEntry *)catalog_entry);
+	auto result = make_uniq<TableScanBindData>((DuckTableEntry *)catalog_entry);
 	result->is_index_scan = is_index_scan;
 	result->is_create_index = is_create_index;
 	result->result_ids = std::move(result_ids);

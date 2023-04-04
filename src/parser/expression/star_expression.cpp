@@ -102,7 +102,7 @@ void StarExpression::Serialize(FieldWriter &writer) const {
 unique_ptr<ParsedExpression> StarExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto &source = reader.GetSource();
 
-	auto result = make_unique<StarExpression>();
+	auto result = make_uniq<StarExpression>();
 	result->relation_name = reader.ReadRequired<string>();
 	auto exclusion_count = reader.ReadRequired<uint32_t>();
 	for (idx_t i = 0; i < exclusion_count; i++) {
@@ -120,7 +120,7 @@ unique_ptr<ParsedExpression> StarExpression::Deserialize(ExpressionType type, Fi
 }
 
 unique_ptr<ParsedExpression> StarExpression::Copy() const {
-	auto copy = make_unique<StarExpression>(relation_name);
+	auto copy = make_uniq<StarExpression>(relation_name);
 	copy->exclude_list = exclude_list;
 	for (auto &entry : replace_list) {
 		copy->replace_list[entry.first] = entry.second->Copy();
@@ -140,7 +140,7 @@ void StarExpression::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<ParsedExpression> StarExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
-	auto result = make_unique<StarExpression>();
+	auto result = make_uniq<StarExpression>();
 	deserializer.ReadProperty("relation_name", result->relation_name);
 	deserializer.ReadProperty("exclude_list", result->exclude_list);
 	deserializer.ReadProperty("replace_list", result->replace_list);

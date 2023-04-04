@@ -1,0 +1,32 @@
+# name: test/sql/copy/parquet/recursive_parquet_union_by_name.test
+# description: Test read CSV function in a recursive CTE with union by name
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create view r AS from read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/*.parquet', hive_partitioning=1, union_by_name=1)
+
+query II
+WITH RECURSIVE t(it, accum) AS
+(
+	SELECT 1, 0
+	UNION ALL
+	(
+		SELECT it + 1, accum + j
+		FROM t, r
+		WHERE it <= x
+	)
+)
+SELECT * FROM t ORDER BY it, accum;
+----
+1	0
+2	84
+2	84
+2	128
+3	212
+3	212
+3	256

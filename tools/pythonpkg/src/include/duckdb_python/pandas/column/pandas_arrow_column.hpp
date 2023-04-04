@@ -15,11 +15,9 @@ public:
 		// We just need the name to create a table, but we don't care about it, the table only consists of this array
 		single_name_list.append(py::str("temp"));
 
-		table = py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_arrays")(single_column_list, py::arg("names") = single_name_list);
-		auto factory = make_unique<PythonTableArrowArrayStreamFactory>(table.ptr(), config);
-
-		auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
-		arrow_scan = make_unique<ArrowScanFunctionData>(stream_factory_produce, factory.ptr());
+		table = py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_arrays")(
+		    single_column_list, py::arg("names") = single_name_list);
+		auto factory = make_uniq<PythonTableArrowArrayStreamFactory>(table.ptr(), config);
 	}
 
 public:

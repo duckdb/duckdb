@@ -46,7 +46,7 @@ static unique_ptr<FunctionData> ListContainsOrPositionBind(ClientContext &contex
 		// list_contains and list_position only differ in their return type
 		bound_function.return_type = RETURN_TYPE;
 	}
-	return make_unique<VariableReturnBindData>(bound_function.return_type);
+	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
 static unique_ptr<FunctionData> ListContainsBind(ClientContext &context, ScalarFunction &bound_function,

@@ -35,7 +35,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownProjection(unique_ptr<Logica
 		// add the filter to the child pushdown
 		if (child_pushdown.AddFilter(std::move(f.filter)) == FilterResult::UNSATISFIABLE) {
 			// filter statically evaluates to false, strip tree
-			return make_unique<LogicalEmptyResult>(std::move(op));
+			return make_uniq<LogicalEmptyResult>(std::move(op));
 		}
 	}
 	child_pushdown.GenerateFilters();
@@ -43,7 +43,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownProjection(unique_ptr<Logica
 	op->children[0] = child_pushdown.Rewrite(std::move(op->children[0]));
 	if (op->children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
 		// child returns an empty result: generate an empty result here too
-		return make_unique<LogicalEmptyResult>(std::move(op));
+		return make_uniq<LogicalEmptyResult>(std::move(op));
 	}
 	return op;
 }

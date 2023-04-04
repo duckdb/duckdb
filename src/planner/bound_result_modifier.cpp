@@ -81,7 +81,7 @@ BoundOrderByNode BoundOrderByNode::Deserialize(Deserializer &source, PlanDeseria
 }
 
 unique_ptr<BoundOrderModifier> BoundOrderModifier::Copy() const {
-	auto result = make_unique<BoundOrderModifier>();
+	auto result = make_uniq<BoundOrderModifier>();
 	for (auto &order : orders) {
 		result->orders.push_back(order.Copy());
 	}

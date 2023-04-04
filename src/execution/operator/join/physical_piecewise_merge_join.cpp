@@ -76,7 +76,7 @@ public:
 		rhs_layout.Initialize(op.children[1]->types);
 		vector<BoundOrderByNode> rhs_order;
 		rhs_order.emplace_back(op.rhs_orders[0].Copy());
-		table = make_unique<GlobalSortedTable>(context, rhs_order, rhs_layout);
+		table = make_uniq<GlobalSortedTable>(context, rhs_order, rhs_layout);
 	}
 
 	inline idx_t Count() const {
@@ -100,12 +100,12 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalPiecewiseMergeJoin::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<MergeJoinGlobalState>(context, *this);
+	return make_uniq<MergeJoinGlobalState>(context, *this);
 }
 
 unique_ptr<LocalSinkState> PhysicalPiecewiseMergeJoin::GetLocalSinkState(ExecutionContext &context) const {
 	// We only sink the RHS
-	return make_unique<MergeJoinLocalState>(context.client, *this, 1);
+	return make_uniq<MergeJoinLocalState>(context.client, *this, 1);
 }
 
 SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, GlobalSinkState &gstate_p,
@@ -219,8 +219,8 @@ public:
 public:
 	void ResolveJoinKeys(DataChunk &input) {
 		// sort by join key
-		lhs_global_state = make_unique<GlobalSortState>(buffer_manager, lhs_order, lhs_layout);
-		lhs_local_table = make_unique<LocalSortedTable>(context, op, 0);
+		lhs_global_state = make_uniq<GlobalSortState>(buffer_manager, lhs_order, lhs_layout);
+		lhs_local_table = make_uniq<LocalSortedTable>(context, op, 0);
 		lhs_local_table->Sink(input, *lhs_global_state);
 
 		// Set external (can be forced with the PRAGMA)
@@ -236,7 +236,7 @@ public:
 		// Scan the sorted payload
 		D_ASSERT(lhs_global_state->sorted_blocks.size() == 1);
 
-		scanner = make_unique<PayloadScanner>(*lhs_global_state->sorted_blocks[0]->payload_data, *lhs_global_state);
+		scanner = make_uniq<PayloadScanner>(*lhs_global_state->sorted_blocks[0]->payload_data, *lhs_global_state);
 		lhs_payload.Reset();
 		scanner->Scan(lhs_payload);
 
@@ -254,7 +254,7 @@ public:
 
 unique_ptr<OperatorState> PhysicalPiecewiseMergeJoin::GetOperatorState(ExecutionContext &context) const {
 	auto &config = ClientConfig::GetConfig(context.client);
-	return make_unique<PiecewiseMergeJoinState>(context.client, *this, config.force_external);
+	return make_uniq<PiecewiseMergeJoinState>(context.client, *this, config.force_external);
 }
 
 static inline idx_t SortedBlockNotNull(const idx_t base, const idx_t count, const idx_t not_null) {
@@ -674,7 +674,7 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalPiecewiseMergeJoin::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<PiecewiseJoinScanState>(*this);
+	return make_uniq<PiecewiseJoinScanState>(*this);
 }
 
 void PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, DataChunk &result, GlobalSourceState &gstate,
@@ -691,7 +691,7 @@ void PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, DataChunk &r
 		if (sort_state.sorted_blocks.empty()) {
 			return;
 		}
-		state.scanner = make_unique<PayloadScanner>(*sort_state.sorted_blocks[0]->payload_data, sort_state);
+		state.scanner = make_uniq<PayloadScanner>(*sort_state.sorted_blocks[0]->payload_data, sort_state);
 	}
 
 	// if the LHS is exhausted in a FULL/RIGHT OUTER JOIN, we scan the found_match for any chunks we

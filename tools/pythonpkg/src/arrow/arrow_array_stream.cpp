@@ -42,7 +42,8 @@ PyArrowObjectType GetArrowType(const py::handle &obj) {
 }
 
 py::object PythonTableArrowArrayStreamFactory::ProduceScanner(py::object &arrow_scanner, py::handle &arrow_obj_handle,
-                                                              ArrowStreamParameters &parameters, const ClientConfig &config) {
+                                                              ArrowStreamParameters &parameters,
+                                                              const ClientConfig &config) {
 	auto filters = parameters.filters;
 	auto &column_list = parameters.projected_columns.columns;
 	bool has_filter = filters && !filters->filters.empty();
@@ -105,7 +106,7 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
 	}
 
 	auto record_batches = scanner.attr("to_reader")();
-	auto res = make_unique<ArrowArrayStreamWrapper>();
+	auto res = make_uniq<ArrowArrayStreamWrapper>();
 	auto export_to_c = record_batches.attr("_export_to_c");
 	export_to_c((uint64_t)&res->arrow_array_stream);
 	return res;

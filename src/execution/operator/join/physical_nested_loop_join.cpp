@@ -210,11 +210,11 @@ SinkFinalizeType PhysicalNestedLoopJoin::Finalize(Pipeline &pipeline, Event &eve
 }
 
 unique_ptr<GlobalSinkState> PhysicalNestedLoopJoin::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<NestedLoopJoinGlobalState>(context, *this);
+	return make_uniq<NestedLoopJoinGlobalState>(context, *this);
 }
 
 unique_ptr<LocalSinkState> PhysicalNestedLoopJoin::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<NestedLoopJoinLocalState>(context.client, conditions);
+	return make_uniq<NestedLoopJoinLocalState>(context.client, conditions);
 }
 
 //===--------------------------------------------------------------------===//
@@ -261,7 +261,7 @@ public:
 };
 
 unique_ptr<OperatorState> PhysicalNestedLoopJoin::GetOperatorState(ExecutionContext &context) const {
-	return make_unique<PhysicalNestedLoopJoinState>(context.client, *this, conditions);
+	return make_uniq<PhysicalNestedLoopJoinState>(context.client, *this, conditions);
 }
 
 OperatorResultType PhysicalNestedLoopJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input,
@@ -438,12 +438,12 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalNestedLoopJoin::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<NestedLoopJoinGlobalScanState>(*this);
+	return make_uniq<NestedLoopJoinGlobalScanState>(*this);
 }
 
 unique_ptr<LocalSourceState> PhysicalNestedLoopJoin::GetLocalSourceState(ExecutionContext &context,
                                                                          GlobalSourceState &gstate) const {
-	return make_unique<NestedLoopJoinLocalScanState>(*this, (NestedLoopJoinGlobalScanState &)gstate);
+	return make_uniq<NestedLoopJoinLocalScanState>(*this, (NestedLoopJoinGlobalScanState &)gstate);
 }
 
 void PhysicalNestedLoopJoin::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,

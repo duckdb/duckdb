@@ -39,7 +39,7 @@ static string createSortKey(icu::Collator &collator, const string &str) {
     // run getSortKey once to get the size
     int32_t size = collator.getSortKey(UnicodeString::fromUTF8(StringPiece(str)), nullptr, 0);
     // allocate a buffer to hold the sort key
-    auto buf = std::unique_ptr<uint8_t[]>(new uint8_t[size]);
+    auto buf = unique_ptr<uint8_t[]>(new uint8_t[size]);
 	// generate the sort key from the string
     UnicodeString unicode_str = UnicodeString::fromUTF8(StringPiece(str));
     collator.getSortKey(unicode_str, buf.get(), size);
@@ -50,7 +50,7 @@ vector<string> strings = {"Göbel", "Goethe", "Goldmann", "Göthe" "Götz", "Gab
 
 UErrorCode status = U_ZERO_ERROR;
 // create the collator for the german locale
-auto de_collator = std::unique_ptr<icu::Collator>(Collator::createInstance(Locale("de"), status));
+auto de_collator = unique_ptr<icu::Collator>(Collator::createInstance(Locale("de"), status));
 if (U_FAILURE(status)) {
 	// something went wrong
 	exit(1);
@@ -86,7 +86,7 @@ for(auto &str : strings) {
 #### Listing Available Timezones
 ```cpp
 UErrorCode status = U_ZERO_ERROR;
-auto timeZoneIds = std::unique_ptr<StringEnumeration>(TimeZone::createEnumeration());
+auto timeZoneIds = unique_ptr<StringEnumeration>(TimeZone::createEnumeration());
 const UnicodeString *zoneId = timeZoneIds->snext(status);
 if (U_FAILURE(status)) {
 	// something went wrong
@@ -115,7 +115,7 @@ fprintf(stdout, "]\n");
 UErrorCode success = U_ZERO_ERROR;
 auto tz_us = CreateTimezone("America/Los_Angeles");
 
-auto calendar = std::unique_ptr<Calendar>(Calendar::createInstance(success));
+auto calendar = unique_ptr<Calendar>(Calendar::createInstance(success));
 if (U_FAILURE(success)) {
 	// something went wrong
 	exit(1);
