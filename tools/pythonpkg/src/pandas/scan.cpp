@@ -5,6 +5,8 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb_python/numpy/numpy_scan.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb_python/pandas/column/pandas_numpy_column.hpp"
+#include "duckdb_python/pandas/column/pandas_arrow_column.hpp"
 
 #include "duckdb/common/atomic.hpp"
 
@@ -139,6 +141,26 @@ double PandasScanFunction::PandasProgress(ClientContext &context, const Function
 	return percentage;
 }
 
+void PandasScanFunction::PandasBackendScanSwitch(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
+                                                 Vector &out) {
+	auto backend = bind_data.numpy_col->Backend();
+	switch (backend) {
+	case PandasColumnBackend::ARROW: {
+		auto &array_column = (PandasNumpyColumn &)*bind_data.numpy_col;
+		// ??? Need to produce a Table from the chunked array
+		// then we create a scanner for it, and here we scan the table
+		break;
+	}
+	case PandasColumnBackend::NUMPY: {
+		Numpy::Scan(bind_data, count, offset, out);
+		break;
+	}
+	default: {
+		throw NotImplementedException("Type not implemented for PandasColumnBackend");
+	}
+	}
+}
+
 //! The main pandas scan function: note that this can be called in parallel without the GIL
 //! hence this needs to be GIL-safe, i.e. no methods that create Python objects are allowed
 void PandasScanFunction::PandasScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -157,8 +179,7 @@ void PandasScanFunction::PandasScanFunc(ClientContext &context, TableFunctionInp
 		if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
 			output.data[idx].Sequence(state.start, 1, this_count);
 		} else {
-			Numpy::Scan(data.pandas_bind_data[col_idx], data.pandas_bind_data[col_idx].numpy_col, this_count,
-			            state.start, output.data[idx]);
+			PandasBackendScanSwitch(data.pandas_bind_data[col_idx], this_count, state.start, output.data[idx]);
 		}
 	}
 	state.start += this_count;

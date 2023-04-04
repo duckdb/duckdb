@@ -5,6 +5,7 @@
 #include "duckdb_python/numpy/numpy_type.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb_python/pandas/pandas_column.hpp"
 
 namespace duckdb {
 
@@ -12,8 +13,7 @@ struct RegisteredArray;
 
 struct PandasColumnBindData {
 	NumpyNullableType numpy_type;
-	py::array numpy_col;
-	idx_t numpy_stride;
+	unique_ptr<PandasColumn> numpy_col;
 	unique_ptr<RegisteredArray> mask;
 	// Only for categorical types
 	string internal_categorical_type;

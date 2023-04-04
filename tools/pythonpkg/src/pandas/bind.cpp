@@ -1,14 +1,16 @@
 #include "duckdb_python/pandas/pandas_bind.hpp"
 #include "duckdb_python/numpy/array_wrapper.hpp"
 #include "duckdb_python/pandas/pandas_analyzer.hpp"
-
-namespace duckdb {
+#include "duckdb_python/pandas/column/pandas_arrow_column.hpp"
+#include "duckdb_python/pandas/column/pandas_numpy_column.hpp"
 
 namespace {
 
-struct PandasColumn {
+using namespace duckdb;
+
+struct PandasBindColumn {
 public:
-	PandasColumn(py::handle name, py::handle type, py::handle column) : name(name), type(type), handle(column) {
+	PandasBindColumn(py::handle name, py::handle type, py::handle column) : name(name), type(type), handle(column) {
 	}
 
 public:
@@ -24,12 +26,12 @@ public:
 		types = py::list(df.attr("dtypes"));
 		getter = df.attr("__getitem__");
 	}
-	PandasColumn operator[](idx_t index) const {
+	PandasBindColumn operator[](idx_t index) const {
 		D_ASSERT(index < names.size());
 		auto column = getter(names[index]);
 		auto type = types[index];
 		auto name = names[index];
-		return PandasColumn(name, type, column);
+		return PandasBindColumn(name, type, column);
 	}
 
 public:
@@ -42,7 +44,9 @@ private:
 
 }; // namespace
 
-static LogicalType BindColumn(PandasColumn column_p, PandasColumnBindData &bind_data, const DBConfig &config) {
+namespace duckdb {
+
+static LogicalType BindColumn(PandasBindColumn column_p, PandasColumnBindData &bind_data, const DBConfig &config) {
 	LogicalType column_type;
 	auto &column = column_p.handle;
 
@@ -73,32 +77,35 @@ static LogicalType BindColumn(PandasColumn column_p, PandasColumnBindData &bind_
 			}
 			D_ASSERT(py::hasattr(column.attr("cat"), "codes"));
 			column_type = LogicalType::ENUM(enum_name, enum_entries_vec, size);
-			bind_data.numpy_col = py::array(column.attr("cat").attr("codes"));
-			D_ASSERT(py::hasattr(bind_data.numpy_col, "dtype"));
-			bind_data.internal_categorical_type = string(py::str(bind_data.numpy_col.attr("dtype")));
+			auto numpy_col = py::array(column.attr("cat").attr("codes"));
+			bind_data.internal_categorical_type = string(py::str(numpy_col.attr("dtype")));
+			bind_data.numpy_col = make_unique<PandasNumpyColumn>(numpy_col);
 		} else {
-			bind_data.numpy_col = py::array(column.attr("to_numpy")());
-			auto numpy_type = bind_data.numpy_col.attr("dtype");
+			auto numpy_col = py::array(column.attr("to_numpy")());
+			auto numpy_type = numpy_col.attr("dtype");
+			bind_data.numpy_col = make_unique<PandasNumpyColumn>(numpy_col);
 			// for category types (non-strings), we use the converted numpy type
 			bind_data.numpy_type = ConvertNumpyType(numpy_type);
 			column_type = NumpyToLogicalType(bind_data.numpy_type);
 		}
 	} else if (bind_data.numpy_type == NumpyNullableType::FLOAT_16) {
 		auto pandas_array = column.attr("array");
-		bind_data.numpy_col = py::array(column.attr("to_numpy")("float32"));
+		bind_data.numpy_col = make_unique<PandasNumpyColumn>(py::array(column.attr("to_numpy")("float32")));
 		bind_data.numpy_type = NumpyNullableType::FLOAT_32;
 		column_type = NumpyToLogicalType(bind_data.numpy_type);
 	} else {
 		auto pandas_array = column.attr("array");
 		if (py::hasattr(pandas_array, "_data")) {
 			// This means we can access the numpy array directly
-			bind_data.numpy_col = column.attr("array").attr("_data");
+			bind_data.numpy_col = make_unique<PandasNumpyColumn>(column.attr("array").attr("_data"));
+		} else if (py::hasattr(pandas_array, "__arrow_array__")) {
+			bind_data.numpy_col = make_unique<PandasArrowColumn>(pandas_array.attr("__arrow_array__")());
 		} else if (py::hasattr(pandas_array, "asi8")) {
 			// This is a datetime object, has the option to get the array as int64_t's
-			bind_data.numpy_col = py::array(pandas_array.attr("asi8"));
+			bind_data.numpy_col = make_unique<PandasNumpyColumn>(py::array(pandas_array.attr("asi8")));
 		} else {
 			// Otherwise we have to get it through 'to_numpy()'
-			bind_data.numpy_col = py::array(column.attr("to_numpy")());
+			bind_data.numpy_col = make_unique<PandasNumpyColumn>(py::array(column.attr("to_numpy")()));
 		}
 		column_type = NumpyToLogicalType(bind_data.numpy_type);
 	}
@@ -132,8 +139,6 @@ void Pandas::Bind(const DBConfig &config, py::handle df_p, vector<PandasColumnBi
 		names.emplace_back(py::str(df.names[col_idx]));
 		auto column_type = BindColumn(df[col_idx], bind_data, config);
 
-		D_ASSERT(py::hasattr(bind_data.numpy_col, "strides"));
-		bind_data.numpy_stride = bind_data.numpy_col.attr("strides").attr("__getitem__")(0).cast<idx_t>();
 		return_types.push_back(column_type);
 		bind_columns.push_back(std::move(bind_data));
 	}

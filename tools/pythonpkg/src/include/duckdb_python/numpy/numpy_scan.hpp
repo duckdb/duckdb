@@ -8,7 +8,7 @@ namespace duckdb {
 struct PandasColumnBindData;
 
 struct Numpy {
-	static void Scan(PandasColumnBindData &bind_data, py::array &numpy_col, idx_t count, idx_t offset, Vector &out);
+	static void Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset, Vector &out);
 };
 
 } // namespace duckdb

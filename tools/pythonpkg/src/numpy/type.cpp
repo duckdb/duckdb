@@ -57,7 +57,7 @@ NumpyNullableType ConvertNumpyType(const py::handle &col_type) {
 		return NumpyNullableType::FLOAT_16;
 	} else if (col_type_str == "float32" || col_type_str == "Float32") {
 		return NumpyNullableType::FLOAT_32;
-	} else if (col_type_str == "float64" || col_type_str == "Float64") {
+	} else if (col_type_str == "float64" || col_type_str == "Float64" || col_type_str == "double") {
 		return NumpyNullableType::FLOAT_64;
 	} else if (col_type_str == "object" || col_type_str == "string") {
 		//! this better be castable to strings

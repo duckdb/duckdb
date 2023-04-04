@@ -118,8 +118,8 @@ py::object ArrowTableFromDataframe(const py::object &df) {
 		auto array = column.attr("array").attr("__arrow_array__")();
 		array_list.append(array);
 	}
-	return py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_arrays")(
-		array_list, py::arg("names") = names);
+	return py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_arrays")(array_list,
+	                                                                                    py::arg("names") = names);
 }
 
 static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>> &m) {
@@ -451,21 +451,21 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Append(const string &name, co
 
 void DuckDBPyConnection::RegisterArrowObject(const py::object &arrow_object, const string &name) {
 	auto stream_factory =
-		make_unique<PythonTableArrowArrayStreamFactory>(arrow_object.ptr(), connection->context->config);
+	    make_unique<PythonTableArrowArrayStreamFactory>(arrow_object.ptr(), connection->context->config);
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
 	{
 		py::gil_scoped_release release;
 		temporary_views[name] =
-			connection
-				->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)stream_factory.get()),
-												Value::POINTER((uintptr_t)stream_factory_produce),
-												Value::POINTER((uintptr_t)stream_factory_get_schema)})
-				->CreateView(name, true, true);
+		    connection
+		        ->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)stream_factory.get()),
+		                                       Value::POINTER((uintptr_t)stream_factory_produce),
+		                                       Value::POINTER((uintptr_t)stream_factory_get_schema)})
+		        ->CreateView(name, true, true);
 	}
 	vector<shared_ptr<ExternalDependency>> dependencies;
 	dependencies.push_back(
-		make_shared<PythonDependencies>(make_unique<RegisteredArrow>(std::move(stream_factory), arrow_object)));
+	    make_shared<PythonDependencies>(make_unique<RegisteredArrow>(std::move(stream_factory), arrow_object)));
 	connection->context->external_dependencies[name] = std::move(dependencies);
 }
 
@@ -483,14 +483,15 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 			auto new_df = PandasScanFunction::PandasReplaceCopiedNames(python_object);
 			{
 				py::gil_scoped_release release;
-				temporary_views[name] = connection->TableFunction("pandas_scan", {Value::POINTER((uintptr_t)new_df.ptr())})
-											->CreateView(name, true, true);
+				temporary_views[name] =
+				    connection->TableFunction("pandas_scan", {Value::POINTER((uintptr_t)new_df.ptr())})
+				        ->CreateView(name, true, true);
 			}
 
 			// keep a reference
 			vector<shared_ptr<ExternalDependency>> dependencies;
 			dependencies.push_back(make_shared<PythonDependencies>(make_unique<RegisteredObject>(python_object),
-																make_unique<RegisteredObject>(new_df)));
+			                                                       make_unique<RegisteredObject>(new_df)));
 			connection->context->external_dependencies[name] = std::move(dependencies);
 		}
 	} else if (IsAcceptedArrowObject(python_object) || IsPolarsDataframe(python_object)) {
