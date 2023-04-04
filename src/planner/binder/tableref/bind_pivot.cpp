@@ -293,7 +293,7 @@ unique_ptr<BoundTableRef> Binder::BindBoundPivot(PivotRef &ref) {
 	auto subquery_alias = ref.alias.empty() ? "__unnamed_pivot" : ref.alias;
 	bind_context.AddGenericBinding(result->bind_index, subquery_alias, names, types);
 	MoveCorrelatedExpressions(*result->child_binder);
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<ParsedExpression>> all_columns) {
