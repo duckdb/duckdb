@@ -6,7 +6,7 @@ namespace duckdb {
 
 unique_ptr<ParsedExpression> Transformer::TransformParamRef(duckdb_libpgquery::PGParamRef *node) {
 	D_ASSERT(node);
-	auto expr = make_unique<ParameterExpression>();
+	auto expr = make_uniq<ParameterExpression>();
 	if (node->number < 0) {
 		throw ParserException("Parameter numbers cannot be negative");
 	}

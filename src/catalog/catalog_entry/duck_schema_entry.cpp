@@ -51,9 +51,9 @@ void FindForeignKeyInformation(CatalogEntry *entry, AlterForeignKeyType alter_fk
 		auto &fk = (ForeignKeyConstraint &)*cond;
 		if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
 			AlterEntryData alter_data(entry->catalog->GetName(), fk.info.schema, fk.info.table, false);
-			fk_arrays.push_back(make_unique<AlterForeignKeyInfo>(std::move(alter_data), entry->name, fk.pk_columns,
-			                                                     fk.fk_columns, fk.info.pk_keys, fk.info.fk_keys,
-			                                                     alter_fk_type));
+			fk_arrays.push_back(make_uniq<AlterForeignKeyInfo>(std::move(alter_data), entry->name, fk.pk_columns,
+			                                                   fk.fk_columns, fk.info.pk_keys, fk.info.fk_keys,
+			                                                   alter_fk_type));
 		} else if (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE &&
 		           alter_fk_type == AlterForeignKeyType::AFT_DELETE) {
 			throw CatalogException("Could not drop the table because this table is main key table of the table \"%s\"",
@@ -64,10 +64,10 @@ void FindForeignKeyInformation(CatalogEntry *entry, AlterForeignKeyType alter_fk
 
 DuckSchemaEntry::DuckSchemaEntry(Catalog *catalog, string name_p, bool is_internal)
     : SchemaCatalogEntry(catalog, std::move(name_p), is_internal),
-      tables(*catalog, make_unique<DefaultViewGenerator>(*catalog, this)), indexes(*catalog), table_functions(*catalog),
+      tables(*catalog, make_uniq<DefaultViewGenerator>(*catalog, this)), indexes(*catalog), table_functions(*catalog),
       copy_functions(*catalog), pragma_functions(*catalog),
-      functions(*catalog, make_unique<DefaultFunctionGenerator>(*catalog, this)), sequences(*catalog),
-      collations(*catalog), types(*catalog, make_unique<DefaultTypeGenerator>(*catalog, this)) {
+      functions(*catalog, make_uniq<DefaultFunctionGenerator>(*catalog, this)), sequences(*catalog),
+      collations(*catalog), types(*catalog, make_uniq<DefaultTypeGenerator>(*catalog, this)) {
 }
 
 CatalogEntry *DuckSchemaEntry::AddEntryInternal(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
@@ -103,7 +103,7 @@ CatalogEntry *DuckSchemaEntry::AddEntryInternal(CatalogTransaction transaction, 
 }
 
 CatalogEntry *DuckSchemaEntry::CreateTable(CatalogTransaction transaction, BoundCreateTableInfo *info) {
-	auto table = make_unique<DuckTableEntry>(catalog, this, info);
+	auto table = make_uniq<DuckTableEntry>(catalog, this, info);
 	auto &storage = table->GetStorage();
 	storage.info->cardinality = storage.GetTotalRows();
 
@@ -142,27 +142,27 @@ CatalogEntry *DuckSchemaEntry::CreateFunction(CatalogTransaction transaction, Cr
 	unique_ptr<StandardEntry> function;
 	switch (info->type) {
 	case CatalogType::SCALAR_FUNCTION_ENTRY:
-		function = make_unique_base<StandardEntry, ScalarFunctionCatalogEntry>(catalog, this,
-		                                                                       (CreateScalarFunctionInfo *)info);
+		function =
+		    make_uniq_base<StandardEntry, ScalarFunctionCatalogEntry>(catalog, this, (CreateScalarFunctionInfo *)info);
 		break;
 	case CatalogType::TABLE_FUNCTION_ENTRY:
 		function =
-		    make_unique_base<StandardEntry, TableFunctionCatalogEntry>(catalog, this, (CreateTableFunctionInfo *)info);
+		    make_uniq_base<StandardEntry, TableFunctionCatalogEntry>(catalog, this, (CreateTableFunctionInfo *)info);
 		break;
 	case CatalogType::MACRO_ENTRY:
 		// create a macro function
-		function = make_unique_base<StandardEntry, ScalarMacroCatalogEntry>(catalog, this, (CreateMacroInfo *)info);
+		function = make_uniq_base<StandardEntry, ScalarMacroCatalogEntry>(catalog, this, (CreateMacroInfo *)info);
 		break;
 
 	case CatalogType::TABLE_MACRO_ENTRY:
 		// create a macro table function
-		function = make_unique_base<StandardEntry, TableMacroCatalogEntry>(catalog, this, (CreateMacroInfo *)info);
+		function = make_uniq_base<StandardEntry, TableMacroCatalogEntry>(catalog, this, (CreateMacroInfo *)info);
 		break;
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
 		D_ASSERT(info->type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
 		// create an aggregate function
-		function = make_unique_base<StandardEntry, AggregateFunctionCatalogEntry>(catalog, this,
-		                                                                          (CreateAggregateFunctionInfo *)info);
+		function = make_uniq_base<StandardEntry, AggregateFunctionCatalogEntry>(catalog, this,
+		                                                                        (CreateAggregateFunctionInfo *)info);
 		break;
 	default:
 		throw InternalException("Unknown function type \"%s\"", CatalogTypeToString(info->type));
@@ -178,47 +178,47 @@ CatalogEntry *DuckSchemaEntry::AddEntry(CatalogTransaction transaction, unique_p
 }
 
 CatalogEntry *DuckSchemaEntry::CreateSequence(CatalogTransaction transaction, CreateSequenceInfo *info) {
-	auto sequence = make_unique<SequenceCatalogEntry>(catalog, this, info);
+	auto sequence = make_uniq<SequenceCatalogEntry>(catalog, this, info);
 	return AddEntry(transaction, std::move(sequence), info->on_conflict);
 }
 
 CatalogEntry *DuckSchemaEntry::CreateType(CatalogTransaction transaction, CreateTypeInfo *info) {
-	auto type_entry = make_unique<TypeCatalogEntry>(catalog, this, info);
+	auto type_entry = make_uniq<TypeCatalogEntry>(catalog, this, info);
 	return AddEntry(transaction, std::move(type_entry), info->on_conflict);
 }
 
 CatalogEntry *DuckSchemaEntry::CreateView(CatalogTransaction transaction, CreateViewInfo *info) {
-	auto view = make_unique<ViewCatalogEntry>(catalog, this, info);
+	auto view = make_uniq<ViewCatalogEntry>(catalog, this, info);
 	return AddEntry(transaction, std::move(view), info->on_conflict);
 }
 
 CatalogEntry *DuckSchemaEntry::CreateIndex(ClientContext &context, CreateIndexInfo *info, TableCatalogEntry *table) {
 	DependencyList dependencies;
 	dependencies.AddDependency(table);
-	auto index = make_unique<DuckIndexEntry>(catalog, this, info);
+	auto index = make_uniq<DuckIndexEntry>(catalog, this, info);
 	return AddEntryInternal(GetCatalogTransaction(context), std::move(index), info->on_conflict, dependencies);
 }
 
 CatalogEntry *DuckSchemaEntry::CreateCollation(CatalogTransaction transaction, CreateCollationInfo *info) {
-	auto collation = make_unique<CollateCatalogEntry>(catalog, this, info);
+	auto collation = make_uniq<CollateCatalogEntry>(catalog, this, info);
 	collation->internal = info->internal;
 	return AddEntry(transaction, std::move(collation), info->on_conflict);
 }
 
 CatalogEntry *DuckSchemaEntry::CreateTableFunction(CatalogTransaction transaction, CreateTableFunctionInfo *info) {
-	auto table_function = make_unique<TableFunctionCatalogEntry>(catalog, this, info);
+	auto table_function = make_uniq<TableFunctionCatalogEntry>(catalog, this, info);
 	table_function->internal = info->internal;
 	return AddEntry(transaction, std::move(table_function), info->on_conflict);
 }
 
 CatalogEntry *DuckSchemaEntry::CreateCopyFunction(CatalogTransaction transaction, CreateCopyFunctionInfo *info) {
-	auto copy_function = make_unique<CopyFunctionCatalogEntry>(catalog, this, info);
+	auto copy_function = make_uniq<CopyFunctionCatalogEntry>(catalog, this, info);
 	copy_function->internal = info->internal;
 	return AddEntry(transaction, std::move(copy_function), info->on_conflict);
 }
 
 CatalogEntry *DuckSchemaEntry::CreatePragmaFunction(CatalogTransaction transaction, CreatePragmaFunctionInfo *info) {
-	auto pragma_function = make_unique<PragmaFunctionCatalogEntry>(catalog, this, info);
+	auto pragma_function = make_uniq<PragmaFunctionCatalogEntry>(catalog, this, info);
 	pragma_function->internal = info->internal;
 	return AddEntry(transaction, std::move(pragma_function), info->on_conflict);
 }

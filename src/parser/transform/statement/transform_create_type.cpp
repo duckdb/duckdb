@@ -37,8 +37,8 @@ Vector ReadPgListToVector(duckdb_libpgquery::PGList *column_list, idx_t &size) {
 unique_ptr<CreateStatement> Transformer::TransformCreateType(duckdb_libpgquery::PGNode *node) {
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGCreateTypeStmt *>(node);
 	D_ASSERT(stmt);
-	auto result = make_unique<CreateStatement>();
-	auto info = make_unique<CreateTypeInfo>();
+	auto result = make_uniq<CreateStatement>();
+	auto info = make_uniq<CreateTypeInfo>();
 
 	auto qualified_name = TransformQualifiedName(stmt->typeName);
 	info->catalog = qualified_name.catalog;

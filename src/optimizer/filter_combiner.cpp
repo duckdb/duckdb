@@ -111,8 +111,8 @@ void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Express
 		// for each entry generate an equality expression comparing to each other
 		for (idx_t i = 0; i < entries.size(); i++) {
 			for (idx_t k = i + 1; k < entries.size(); k++) {
-				auto comparison = make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_EQUAL,
-				                                                         entries[i]->Copy(), entries[k]->Copy());
+				auto comparison = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_EQUAL,
+				                                                       entries[i]->Copy(), entries[k]->Copy());
 				callback(std::move(comparison));
 			}
 			// for each entry also create a comparison with each constant
@@ -131,31 +131,31 @@ void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Express
 					upper_index = k;
 					upper_inclusive = info.comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO;
 				} else {
-					auto constant = make_unique<BoundConstantExpression>(info.constant);
-					auto comparison = make_unique<BoundComparisonExpression>(info.comparison_type, entries[i]->Copy(),
-					                                                         std::move(constant));
+					auto constant = make_uniq<BoundConstantExpression>(info.constant);
+					auto comparison = make_uniq<BoundComparisonExpression>(info.comparison_type, entries[i]->Copy(),
+					                                                       std::move(constant));
 					callback(std::move(comparison));
 				}
 			}
 			if (lower_index >= 0 && upper_index >= 0) {
 				// found both lower and upper index, create a BETWEEN expression
-				auto lower_constant = make_unique<BoundConstantExpression>(constant_list[lower_index].constant);
-				auto upper_constant = make_unique<BoundConstantExpression>(constant_list[upper_index].constant);
+				auto lower_constant = make_uniq<BoundConstantExpression>(constant_list[lower_index].constant);
+				auto upper_constant = make_uniq<BoundConstantExpression>(constant_list[upper_index].constant);
 				auto between =
-				    make_unique<BoundBetweenExpression>(entries[i]->Copy(), std::move(lower_constant),
-				                                        std::move(upper_constant), lower_inclusive, upper_inclusive);
+				    make_uniq<BoundBetweenExpression>(entries[i]->Copy(), std::move(lower_constant),
+				                                      std::move(upper_constant), lower_inclusive, upper_inclusive);
 				callback(std::move(between));
 			} else if (lower_index >= 0) {
 				// only lower index found, create simple comparison expression
-				auto constant = make_unique<BoundConstantExpression>(constant_list[lower_index].constant);
-				auto comparison = make_unique<BoundComparisonExpression>(constant_list[lower_index].comparison_type,
-				                                                         entries[i]->Copy(), std::move(constant));
+				auto constant = make_uniq<BoundConstantExpression>(constant_list[lower_index].constant);
+				auto comparison = make_uniq<BoundComparisonExpression>(constant_list[lower_index].comparison_type,
+				                                                       entries[i]->Copy(), std::move(constant));
 				callback(std::move(comparison));
 			} else if (upper_index >= 0) {
 				// only upper index found, create simple comparison expression
-				auto constant = make_unique<BoundConstantExpression>(constant_list[upper_index].constant);
-				auto comparison = make_unique<BoundComparisonExpression>(constant_list[upper_index].comparison_type,
-				                                                         entries[i]->Copy(), std::move(constant));
+				auto constant = make_uniq<BoundConstantExpression>(constant_list[upper_index].constant);
+				auto comparison = make_uniq<BoundComparisonExpression>(constant_list[upper_index].comparison_type,
+				                                                       entries[i]->Copy(), std::move(constant));
 				callback(std::move(comparison));
 			}
 		}
@@ -420,11 +420,11 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 					for (idx_t i = 0; i < entries.size(); i++) {
 						// for each entry also create a comparison with each constant
 						for (idx_t k = 0; k < constant_list.size(); k++) {
-							auto constant_filter = make_unique<ConstantFilter>(constant_value.second[k].comparison_type,
-							                                                   constant_value.second[k].constant);
+							auto constant_filter = make_uniq<ConstantFilter>(constant_value.second[k].comparison_type,
+							                                                 constant_value.second[k].constant);
 							table_filters.PushFilter(column_index, std::move(constant_filter));
 						}
-						table_filters.PushFilter(column_index, make_unique<IsNotNullFilter>());
+						table_filters.PushFilter(column_index, make_uniq<IsNotNullFilter>());
 					}
 					equivalence_map.erase(filter_exp);
 				}
@@ -449,12 +449,12 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 				auto column_index = column_ids[column_ref.binding.column_index];
 				//! Here the like must be transformed to a BOUND COMPARISON geq le
 				auto lower_bound =
-				    make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value(like_string));
+				    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value(like_string));
 				like_string[like_string.size() - 1]++;
-				auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, Value(like_string));
+				auto upper_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, Value(like_string));
 				table_filters.PushFilter(column_index, std::move(lower_bound));
 				table_filters.PushFilter(column_index, std::move(upper_bound));
-				table_filters.PushFilter(column_index, make_unique<IsNotNullFilter>());
+				table_filters.PushFilter(column_index, make_uniq<IsNotNullFilter>());
 			}
 			if (func.function.name == "~~" && func.children[0]->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
 			    func.children[1]->type == ExpressionType::VALUE_CONSTANT) {
@@ -478,18 +478,18 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 				auto column_index = column_ids[column_ref.binding.column_index];
 				if (equality) {
 					//! Here the like can be transformed to an equality query
-					auto equal_filter = make_unique<ConstantFilter>(ExpressionType::COMPARE_EQUAL, Value(prefix));
+					auto equal_filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, Value(prefix));
 					table_filters.PushFilter(column_index, std::move(equal_filter));
-					table_filters.PushFilter(column_index, make_unique<IsNotNullFilter>());
+					table_filters.PushFilter(column_index, make_uniq<IsNotNullFilter>());
 				} else {
 					//! Here the like must be transformed to a BOUND COMPARISON geq le
 					auto lower_bound =
-					    make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value(prefix));
+					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value(prefix));
 					prefix[prefix.size() - 1]++;
-					auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, Value(prefix));
+					auto upper_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, Value(prefix));
 					table_filters.PushFilter(column_index, std::move(lower_bound));
 					table_filters.PushFilter(column_index, std::move(upper_bound));
-					table_filters.PushFilter(column_index, make_unique<IsNotNullFilter>());
+					table_filters.PushFilter(column_index, make_uniq<IsNotNullFilter>());
 				}
 			}
 		} else if (remaining_filter->type == ExpressionType::COMPARE_IN) {
@@ -547,13 +547,13 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			if (!can_simplify_in_clause) {
 				continue;
 			}
-			auto lower_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-			                                               Value::Numeric(type, in_values.front()));
-			auto upper_bound = make_unique<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO,
-			                                               Value::Numeric(type, in_values.back()));
+			auto lower_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+			                                             Value::Numeric(type, in_values.front()));
+			auto upper_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO,
+			                                             Value::Numeric(type, in_values.back()));
 			table_filters.PushFilter(column_index, std::move(lower_bound));
 			table_filters.PushFilter(column_index, std::move(upper_bound));
-			table_filters.PushFilter(column_index, make_unique<IsNotNullFilter>());
+			table_filters.PushFilter(column_index, make_uniq<IsNotNullFilter>());
 
 			remaining_filters.erase(remaining_filters.begin() + rem_fil_idx);
 		}
@@ -728,7 +728,7 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 				                                             : ExpressionType::COMPARE_LESSTHAN;
 				auto left = comparison.lower->Copy();
 				auto right = comparison.input->Copy();
-				auto lower_comp = make_unique<BoundComparisonExpression>(type, std::move(left), std::move(right));
+				auto lower_comp = make_uniq<BoundComparisonExpression>(type, std::move(left), std::move(right));
 				result = AddBoundComparisonFilter(lower_comp.get());
 			}
 
@@ -763,7 +763,7 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 				                                             : ExpressionType::COMPARE_LESSTHAN;
 				auto left = comparison.input->Copy();
 				auto right = comparison.upper->Copy();
-				auto upper_comp = make_unique<BoundComparisonExpression>(type, std::move(left), std::move(right));
+				auto upper_comp = make_uniq<BoundComparisonExpression>(type, std::move(left), std::move(right));
 				result = AddBoundComparisonFilter(upper_comp.get());
 			}
 
@@ -841,8 +841,8 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 			info.comparison_type = right_constant.comparison_type; // create filter j [>, >=, <, <=] 10
 			if (!is_inserted) {
 				// Add the filter j >= i in the remaing filters
-				auto filter = make_unique<BoundComparisonExpression>(comparison.type, comparison.left->Copy(),
-				                                                     comparison.right->Copy());
+				auto filter = make_uniq<BoundComparisonExpression>(comparison.type, comparison.left->Copy(),
+				                                                   comparison.right->Copy());
 				remaining_filters.push_back(std::move(filter));
 				is_inserted = true;
 			}
@@ -856,8 +856,8 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 			info.comparison_type = comparison.type;
 			if (!is_inserted) {
 				// Add the filter j [>, <] i
-				auto filter = make_unique<BoundComparisonExpression>(comparison.type, comparison.left->Copy(),
-				                                                     comparison.right->Copy());
+				auto filter = make_uniq<BoundComparisonExpression>(comparison.type, comparison.left->Copy(),
+				                                                   comparison.right->Copy());
 				remaining_filters.push_back(std::move(filter));
 				is_inserted = true;
 			}
@@ -1142,10 +1142,10 @@ ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, 
 //	if (cur_colref_to_push == nullptr) {
 //		cur_colref_to_push = column_ref;
 //
-//		auto or_conjunction = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
+//		auto or_conjunction = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
 //		or_conjunction->children.emplace_back(comparison_expr->Copy());
 //
-//		unique_ptr<ConjunctionsToPush> conjs_to_push = make_unique<ConjunctionsToPush>();
+//		unique_ptr<ConjunctionsToPush> conjs_to_push = make_uniq<ConjunctionsToPush>();
 //		conjs_to_push->conjunctions.emplace_back(std::move(or_conjunction));
 //		conjs_to_push->root_or = cur_root_or;
 //
@@ -1178,7 +1178,7 @@ ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, 
 //	if (cur_conjunction->GetExpressionType() == last_conjunction->GetExpressionType()) {
 //		last_conjunction->children.emplace_back(comparison_expr->Copy());
 //	} else {
-//		auto new_conjunction = make_unique<BoundConjunctionExpression>(cur_conjunction->GetExpressionType());
+//		auto new_conjunction = make_uniq<BoundConjunctionExpression>(cur_conjunction->GetExpressionType());
 //		new_conjunction->children.emplace_back(comparison_expr->Copy());
 //		conjunctions_to_push->conjunctions.emplace_back(std::move(new_conjunction));
 //	}
@@ -1194,7 +1194,7 @@ ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, 
 //
 //		for (const auto &conjunctions_to_push : map_col_conjunctions[colref]) {
 //			// root OR filter to push into the TableFilter
-//			auto root_or_filter = make_unique<ConjunctionOrFilter>();
+//			auto root_or_filter = make_uniq<ConjunctionOrFilter>();
 //			// variable to hold the last conjuntion filter pointer
 //			// the next filter will be added into it, i.e., we create a chain of conjunction filters
 //			ConjunctionFilter *last_conj_filter = root_or_filter.get();

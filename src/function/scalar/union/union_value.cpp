@@ -63,7 +63,7 @@ struct UnionValueBindData : public FunctionData {
 
 public:
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<UnionValueBindData>();
+		return make_uniq<UnionValueBindData>();
 	}
 	bool Equals(const FunctionData &other_p) const override {
 		return true;
@@ -103,7 +103,7 @@ static unique_ptr<FunctionData> UnionValueBind(ClientContext &context, ScalarFun
 	union_members.push_back(make_pair(child->alias, child->return_type));
 
 	bound_function.return_type = LogicalType::UNION(std::move(union_members));
-	return make_unique<VariableReturnBindData>(bound_function.return_type);
+	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
 void UnionValueFun::RegisterFunction(BuiltinFunctions &set) {

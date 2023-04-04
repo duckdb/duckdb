@@ -55,7 +55,7 @@ Allocator &ExpressionExecutor::GetAllocator() {
 
 void ExpressionExecutor::AddExpression(const Expression &expr) {
 	expressions.push_back(&expr);
-	auto state = make_unique<ExpressionExecutorState>(expr.ToString());
+	auto state = make_uniq<ExpressionExecutorState>(expr.ToString());
 	Initialize(expr, *state);
 	state->Verify();
 	states.push_back(std::move(state));

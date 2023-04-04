@@ -58,7 +58,7 @@ unique_ptr<GlobalSinkState> PhysicalOrder::GetGlobalSinkState(ClientContext &con
 	// Get the payload layout from the return types
 	RowLayout payload_layout;
 	payload_layout.Initialize(types);
-	auto state = make_unique<OrderGlobalSinkState>(BufferManager::GetBufferManager(context), *this, payload_layout);
+	auto state = make_uniq<OrderGlobalSinkState>(BufferManager::GetBufferManager(context), *this, payload_layout);
 	// Set external (can be force with the PRAGMA)
 	state->global_sort_state.external = ClientConfig::GetConfig(context).force_external;
 	state->memory_per_thread = GetMaxThreadMemory(context);
@@ -66,7 +66,7 @@ unique_ptr<GlobalSinkState> PhysicalOrder::GetGlobalSinkState(ClientContext &con
 }
 
 unique_ptr<LocalSinkState> PhysicalOrder::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<OrderLocalSinkState>(context.client, *this);
+	return make_uniq<OrderLocalSinkState>(context.client, *this);
 }
 
 SinkResultType PhysicalOrder::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
@@ -147,7 +147,7 @@ public:
 
 		vector<unique_ptr<Task>> merge_tasks;
 		for (idx_t tnum = 0; tnum < num_threads; tnum++) {
-			merge_tasks.push_back(make_unique<PhysicalOrderMergeTask>(shared_from_this(), context, gstate));
+			merge_tasks.push_back(make_uniq<PhysicalOrderMergeTask>(shared_from_this(), context, gstate));
 		}
 		SetTasks(std::move(merge_tasks));
 	}
@@ -216,7 +216,7 @@ public:
 
 unique_ptr<GlobalSourceState> PhysicalOrder::GetGlobalSourceState(ClientContext &context) const {
 	auto &sink = (OrderGlobalSinkState &)*this->sink_state;
-	return make_unique<PhysicalOrderGlobalSourceState>(sink);
+	return make_uniq<PhysicalOrderGlobalSourceState>(sink);
 }
 
 class PhysicalOrderLocalSourceState : public LocalSourceState {
@@ -233,7 +233,7 @@ public:
 unique_ptr<LocalSourceState> PhysicalOrder::GetLocalSourceState(ExecutionContext &context,
                                                                 GlobalSourceState &gstate_p) const {
 	auto &gstate = (PhysicalOrderGlobalSourceState &)gstate_p;
-	return make_unique<PhysicalOrderLocalSourceState>(gstate);
+	return make_uniq<PhysicalOrderLocalSourceState>(gstate);
 }
 
 void PhysicalOrder::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
@@ -253,7 +253,7 @@ void PhysicalOrder::GetData(ExecutionContext &context, DataChunk &chunk, GlobalS
 	if (!lstate.scanner) {
 		auto &sink = (OrderGlobalSinkState &)*this->sink_state;
 		auto &global_sort_state = sink.global_sort_state;
-		lstate.scanner = make_unique<PayloadScanner>(global_sort_state, lstate.batch_index, true);
+		lstate.scanner = make_uniq<PayloadScanner>(global_sort_state, lstate.batch_index, true);
 	}
 
 	lstate.scanner->Scan(chunk);

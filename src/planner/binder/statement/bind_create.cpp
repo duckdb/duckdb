@@ -185,7 +185,7 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		dummy_types.push_back(val.value.type());
 		dummy_names.push_back(it->first);
 	}
-	auto this_macro_binding = make_unique<DummyBinding>(dummy_types, dummy_names, base.name);
+	auto this_macro_binding = make_uniq<DummyBinding>(dummy_types, dummy_names, base.name);
 	macro_binding = this_macro_binding.get();
 	ExpressionBinder::QualifyColumnNames(*this, scalar_function.expression);
 	QualifyFunctionNames(context, scalar_function.expression);
@@ -195,8 +195,8 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 
 	// bind it to verify the function was defined correctly
 	string error;
-	auto sel_node = make_unique<BoundSelectNode>();
-	auto group_info = make_unique<BoundGroupInformation>();
+	auto sel_node = make_uniq<BoundSelectNode>();
+	auto group_info = make_uniq<BoundGroupInformation>();
 	SelectBinder binder(*this, context, *sel_node, *group_info);
 	error = binder.Bind(&expression, 0, false);
 
@@ -460,8 +460,8 @@ unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateS
 	create_index_info->column_ids = get.column_ids;
 
 	// the logical CREATE INDEX also needs all fields to scan the referenced table
-	return make_unique<LogicalCreateIndex>(std::move(get.bind_data), std::move(create_index_info),
-	                                       std::move(expressions), table, std::move(get.function));
+	return make_uniq<LogicalCreateIndex>(std::move(get.bind_data), std::move(create_index_info), std::move(expressions),
+	                                     table, std::move(get.function));
 }
 
 BoundStatement Binder::Bind(CreateStatement &stmt) {
@@ -472,33 +472,30 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	auto catalog_type = stmt.info->type;
 	switch (catalog_type) {
 	case CatalogType::SCHEMA_ENTRY:
-		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SCHEMA, std::move(stmt.info));
+		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SCHEMA, std::move(stmt.info));
 		break;
 	case CatalogType::VIEW_ENTRY: {
 		auto &base = (CreateViewInfo &)*stmt.info;
 		// bind the schema
 		auto schema = BindCreateSchema(*stmt.info);
 		BindCreateViewInfo(base);
-		result.plan =
-		    make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_VIEW, std::move(stmt.info), schema);
+		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_VIEW, std::move(stmt.info), schema);
 		break;
 	}
 	case CatalogType::SEQUENCE_ENTRY: {
 		auto schema = BindCreateSchema(*stmt.info);
 		result.plan =
-		    make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SEQUENCE, std::move(stmt.info), schema);
+		    make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SEQUENCE, std::move(stmt.info), schema);
 		break;
 	}
 	case CatalogType::TABLE_MACRO_ENTRY: {
 		auto schema = BindCreateSchema(*stmt.info);
-		result.plan =
-		    make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, std::move(stmt.info), schema);
+		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, std::move(stmt.info), schema);
 		break;
 	}
 	case CatalogType::MACRO_ENTRY: {
 		auto schema = BindCreateFunctionInfo(*stmt.info);
-		result.plan =
-		    make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, std::move(stmt.info), schema);
+		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, std::move(stmt.info), schema);
 		break;
 	}
 	case CatalogType::INDEX_ENTRY: {
@@ -581,7 +578,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 
 		// create the logical operator
 		auto &schema = bound_info->schema;
-		auto create_table = make_unique<LogicalCreateTable>(schema, std::move(bound_info));
+		auto create_table = make_uniq<LogicalCreateTable>(schema, std::move(bound_info));
 		if (root) {
 			// CREATE TABLE AS
 			properties.return_type = StatementReturnType::CHANGED_ROWS;
@@ -593,8 +590,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::TYPE_ENTRY: {
 		auto schema = BindCreateSchema(*stmt.info);
 		auto &create_type_info = (CreateTypeInfo &)(*stmt.info);
-		result.plan =
-		    make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, std::move(stmt.info), schema);
+		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, std::move(stmt.info), schema);
 		if (create_type_info.query) {
 			// CREATE TYPE mood AS ENUM (SELECT 'happy')
 			auto &select_stmt = (SelectStatement &)*create_type_info.query;
@@ -609,15 +605,15 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 					// When we push into a constant expression
 					// => CREATE TYPE mood AS ENUM (SELECT DISTINCT ON(x, x) x FROM test);
 					auto &distinct_modifier = (DistinctModifier &)*query_node.modifiers[0];
-					distinct_modifier.distinct_on_targets.push_back(make_unique<ConstantExpression>(Value::INTEGER(1)));
+					distinct_modifier.distinct_on_targets.push_back(make_uniq<ConstantExpression>(Value::INTEGER(1)));
 					need_to_add = false;
 				}
 			}
 
 			// Add distinct modifier
 			if (need_to_add) {
-				auto distinct_modifier = make_unique<DistinctModifier>();
-				distinct_modifier->distinct_on_targets.push_back(make_unique<ConstantExpression>(Value::INTEGER(1)));
+				auto distinct_modifier = make_uniq<DistinctModifier>();
+				distinct_modifier->distinct_on_targets.push_back(make_uniq<ConstantExpression>(Value::INTEGER(1)));
 				query_node.modifiers.emplace(query_node.modifiers.begin(), std::move(distinct_modifier));
 			}
 

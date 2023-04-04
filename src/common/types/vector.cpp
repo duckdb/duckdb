@@ -74,21 +74,21 @@ void Vector::Reference(const Value &value) {
 	buffer = VectorBuffer::CreateConstantVector(value.type());
 	auto internal_type = value.type().InternalType();
 	if (internal_type == PhysicalType::STRUCT) {
-		auto struct_buffer = make_unique<VectorStructBuffer>();
+		auto struct_buffer = make_uniq<VectorStructBuffer>();
 		auto &child_types = StructType::GetChildTypes(value.type());
 		auto &child_vectors = struct_buffer->GetChildren();
 		for (idx_t i = 0; i < child_types.size(); i++) {
 			auto vector =
-			    make_unique<Vector>(value.IsNull() ? Value(child_types[i].second) : StructValue::GetChildren(value)[i]);
+			    make_uniq<Vector>(value.IsNull() ? Value(child_types[i].second) : StructValue::GetChildren(value)[i]);
 			child_vectors.push_back(std::move(vector));
 		}
-		auxiliary = std::move(struct_buffer);
+		auxiliary = shared_ptr<VectorBuffer>(struct_buffer.release());
 		if (value.IsNull()) {
 			SetValue(0, value);
 		}
 	} else if (internal_type == PhysicalType::LIST) {
-		auto list_buffer = make_unique<VectorListBuffer>(value.type());
-		auxiliary = std::move(list_buffer);
+		auto list_buffer = make_uniq<VectorListBuffer>(value.type());
+		auxiliary = shared_ptr<VectorBuffer>(list_buffer.release());
 		data = buffer->GetData();
 		SetValue(0, value);
 	} else {
@@ -215,11 +215,11 @@ void Vector::Initialize(bool zero_data, idx_t capacity) {
 	auto &type = GetType();
 	auto internal_type = type.InternalType();
 	if (internal_type == PhysicalType::STRUCT) {
-		auto struct_buffer = make_unique<VectorStructBuffer>(type, capacity);
-		auxiliary = std::move(struct_buffer);
+		auto struct_buffer = make_uniq<VectorStructBuffer>(type, capacity);
+		auxiliary = shared_ptr<VectorBuffer>(struct_buffer.release());
 	} else if (internal_type == PhysicalType::LIST) {
-		auto list_buffer = make_unique<VectorListBuffer>(type, capacity);
-		auxiliary = std::move(list_buffer);
+		auto list_buffer = make_uniq<VectorListBuffer>(type, capacity);
+		auxiliary = shared_ptr<VectorBuffer>(list_buffer.release());
 	}
 	auto type_size = GetTypeIdSize(internal_type);
 	if (type_size > 0) {
@@ -283,7 +283,7 @@ void FindChildren(std::vector<DataArrays> &to_resize, VectorBuffer &auxiliary) {
 void Vector::Resize(idx_t cur_size, idx_t new_size) {
 	std::vector<DataArrays> to_resize;
 	if (!buffer) {
-		buffer = make_unique<VectorBuffer>(0);
+		buffer = make_buffer<VectorBuffer>(0);
 	}
 	if (!data) {
 		//! this is a nested structure
@@ -788,18 +788,18 @@ void Vector::Flatten(idx_t count) {
 			break;
 		}
 		case PhysicalType::STRUCT: {
-			auto normalified_buffer = make_unique<VectorStructBuffer>();
+			auto normalified_buffer = make_uniq<VectorStructBuffer>();
 
 			auto &new_children = normalified_buffer->GetChildren();
 
 			auto &child_entries = StructVector::GetEntries(*this);
 			for (auto &child : child_entries) {
 				D_ASSERT(child->GetVectorType() == VectorType::CONSTANT_VECTOR);
-				auto vector = make_unique<Vector>(*child);
+				auto vector = make_uniq<Vector>(*child);
 				vector->Flatten(count);
 				new_children.push_back(std::move(vector));
 			}
-			auxiliary = std::move(normalified_buffer);
+			auxiliary = shared_ptr<VectorBuffer>(normalified_buffer.release());
 		} break;
 		default:
 			throw InternalException("Unimplemented type for VectorOperations::Flatten");

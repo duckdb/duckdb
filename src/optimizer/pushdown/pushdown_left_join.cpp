@@ -18,7 +18,7 @@ static unique_ptr<Expression> ReplaceColRefWithNull(unique_ptr<Expression> expr,
 		if (right_bindings.find(bound_colref.binding.table_index) != right_bindings.end()) {
 			// bound colref belongs to RHS
 			// replace it with a constant NULL
-			return make_unique<BoundConstantExpression>(Value(expr->return_type));
+			return make_uniq<BoundConstantExpression>(Value(expr->return_type));
 		}
 		return expr;
 	}
@@ -35,7 +35,7 @@ static bool FilterRemovesNull(ClientContext &context, ExpressionRewriter &rewrit
 	copy = ReplaceColRefWithNull(std::move(copy), right_bindings);
 
 	// attempt to flatten the expression by running the expression rewriter on it
-	auto filter = make_unique<LogicalFilter>();
+	auto filter = make_uniq<LogicalFilter>();
 	filter->expressions.push_back(std::move(copy));
 	rewriter.VisitOperator(*filter);
 
@@ -75,7 +75,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 		auto &comparison_join = (LogicalComparisonJoin &)*op;
 		for (auto &cond : comparison_join.conditions) {
 			filter_combiner.AddFilter(
-			    make_unique<BoundComparisonExpression>(cond.comparison, cond.left->Copy(), cond.right->Copy()));
+			    make_uniq<BoundComparisonExpression>(cond.comparison, cond.left->Copy(), cond.right->Copy()));
 		}
 	}
 	// now check the set of filters
