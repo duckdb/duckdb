@@ -116,7 +116,7 @@ unique_ptr<LocalSinkState> PhysicalPerfectHashAggregate::GetLocalSinkState(Execu
 
 SinkResultType PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, GlobalSinkState &state,
                                                   LocalSinkState &lstate_p, DataChunk &input) const {
-	auto &lstate = (PerfectHashAggregateLocalState &)lstate_p;
+	auto &lstate = lstate_p.Cast<PerfectHashAggregateLocalState>();
 	DataChunk &group_chunk = lstate.group_chunk;
 	DataChunk &aggregate_input_chunk = lstate.aggregate_input_chunk;
 
@@ -161,8 +161,8 @@ SinkResultType PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, Glo
 //===--------------------------------------------------------------------===//
 void PhysicalPerfectHashAggregate::Combine(ExecutionContext &context, GlobalSinkState &gstate_p,
                                            LocalSinkState &lstate_p) const {
-	auto &lstate = (PerfectHashAggregateLocalState &)lstate_p;
-	auto &gstate = (PerfectHashAggregateGlobalState &)gstate_p;
+	auto &lstate = lstate_p.Cast<PerfectHashAggregateLocalState>();
+	auto &gstate = gstate_p.Cast<PerfectHashAggregateGlobalState>();
 
 	lock_guard<mutex> l(gstate.lock);
 	gstate.ht->Combine(*lstate.ht);
@@ -187,7 +187,7 @@ unique_ptr<GlobalSourceState> PhysicalPerfectHashAggregate::GetGlobalSourceState
 void PhysicalPerfectHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                                            LocalSourceState &lstate) const {
 	auto &state = (PerfectHashAggregateState &)gstate_p;
-	auto &gstate = (PerfectHashAggregateGlobalState &)*sink_state;
+	auto &gstate = sink_state->Cast<PerfectHashAggregateGlobalState>();
 
 	gstate.ht->Scan(state.ht_scan_position, chunk);
 }

@@ -102,7 +102,7 @@ public:
 };
 
 void RadixPartitionedHashTable::SetMultiScan(GlobalSinkState &state) {
-	auto &gstate = (RadixHTGlobalState &)state;
+	auto &gstate = state.Cast<RadixHTGlobalState>();
 	gstate.multi_scan = true;
 }
 
@@ -132,8 +132,8 @@ void RadixPartitionedHashTable::PopulateGroupChunk(DataChunk &group_chunk, DataC
 void RadixPartitionedHashTable::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
                                      DataChunk &groups_input, DataChunk &payload_input,
                                      const vector<idx_t> &filter) const {
-	auto &llstate = (RadixHTLocalState &)lstate;
-	auto &gstate = (RadixHTGlobalState &)state;
+	auto &llstate = lstate.Cast<RadixHTLocalState>();
+	auto &gstate = state.Cast<RadixHTGlobalState>();
 	D_ASSERT(!gstate.is_finalized);
 
 	DataChunk &group_chunk = llstate.group_chunk;
@@ -176,8 +176,8 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, GlobalSinkState 
 
 void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkState &state,
                                         LocalSinkState &lstate) const {
-	auto &llstate = (RadixHTLocalState &)lstate;
-	auto &gstate = (RadixHTGlobalState &)state;
+	auto &llstate = lstate.Cast<RadixHTLocalState>();
+	auto &gstate = state.Cast<RadixHTGlobalState>();
 	D_ASSERT(!gstate.is_finalized);
 
 	// this actually does not do a lot but just pushes the local HTs into the global state so we can later combine them
@@ -208,7 +208,7 @@ void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkSta
 }
 
 bool RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState &gstate_p) const {
-	auto &gstate = (RadixHTGlobalState &)gstate_p;
+	auto &gstate = gstate_p.Cast<RadixHTGlobalState>();
 	D_ASSERT(!gstate.is_finalized);
 	gstate.is_finalized = true;
 
@@ -304,7 +304,7 @@ private:
 
 void RadixPartitionedHashTable::ScheduleTasks(Executor &executor, const shared_ptr<Event> &event,
                                               GlobalSinkState &state, vector<unique_ptr<Task>> &tasks) const {
-	auto &gstate = (RadixHTGlobalState &)state;
+	auto &gstate = state.Cast<RadixHTGlobalState>();
 	if (!gstate.is_partitioned) {
 		return;
 	}
@@ -316,7 +316,7 @@ void RadixPartitionedHashTable::ScheduleTasks(Executor &executor, const shared_p
 }
 
 bool RadixPartitionedHashTable::ForceSingleHT(GlobalSinkState &state) const {
-	auto &gstate = (RadixHTGlobalState &)state;
+	auto &gstate = state.Cast<RadixHTGlobalState>();
 	return gstate.partition_info.n_partitions < 2;
 }
 
@@ -365,7 +365,7 @@ unique_ptr<LocalSourceState> RadixPartitionedHashTable::GetLocalSourceState(Exec
 }
 
 idx_t RadixPartitionedHashTable::Size(GlobalSinkState &sink_state) const {
-	auto &gstate = (RadixHTGlobalState &)sink_state;
+	auto &gstate = sink_state.Cast<RadixHTGlobalState>();
 	if (gstate.is_empty && grouping_set.empty()) {
 		return 1;
 	}
@@ -379,7 +379,7 @@ idx_t RadixPartitionedHashTable::Size(GlobalSinkState &sink_state) const {
 
 void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSinkState &sink_state,
                                         GlobalSourceState &gsstate, LocalSourceState &lsstate) const {
-	auto &gstate = (RadixHTGlobalState &)sink_state;
+	auto &gstate = sink_state.Cast<RadixHTGlobalState>();
 	auto &state = (RadixHTGlobalSourceState &)gsstate;
 	auto &lstate = (RadixHTLocalSourceState &)lsstate;
 	D_ASSERT(gstate.is_finalized);

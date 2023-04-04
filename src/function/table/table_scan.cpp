@@ -73,7 +73,7 @@ static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ExecutionContext &
 	result->scan_state.Initialize(std::move(column_ids), input.filters);
 	TableScanParallelStateNext(context.client, input.bind_data, result.get(), gstate);
 	if (input.CanRemoveFilterColumns()) {
-		auto &tsgs = (TableScanGlobalState &)*gstate;
+		auto &tsgs = gstate->Cast<TableScanGlobalState>();
 		result->all_columns.Initialize(context.client, tsgs.scanned_types);
 	}
 	return std::move(result);
@@ -112,8 +112,8 @@ static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, co
 
 static void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &bind_data = (TableScanBindData &)*data_p.bind_data;
-	auto &gstate = (TableScanGlobalState &)*data_p.global_state;
-	auto &state = (TableScanLocalState &)*data_p.local_state;
+	auto &gstate = data_p.global_state->Cast<TableScanGlobalState>();
+	auto &state = data_p.local_state->Cast<TableScanLocalState>();
 	auto &transaction = DuckTransaction::Get(context, *bind_data.table->catalog);
 	auto &storage = bind_data.table->GetStorage();
 	do {
@@ -139,8 +139,8 @@ static void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, Da
 bool TableScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
                                 LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state) {
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
-	auto &parallel_state = (TableScanGlobalState &)*global_state;
-	auto &state = (TableScanLocalState &)*local_state;
+	auto &parallel_state = global_state->Cast<TableScanGlobalState>();
+	auto &state = local_state->Cast<TableScanLocalState>();
 	auto &storage = bind_data.table->GetStorage();
 
 	return storage.NextParallelScan(context, parallel_state.state, state.scan_state);
@@ -149,7 +149,7 @@ bool TableScanParallelStateNext(ClientContext &context, const FunctionData *bind
 double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p,
                          const GlobalTableFunctionState *gstate_p) {
 	auto &bind_data = (TableScanBindData &)*bind_data_p;
-	auto &gstate = (TableScanGlobalState &)*gstate_p;
+	auto &gstate = gstate_p->Cast<TableScanGlobalState>();
 	auto &storage = bind_data.table->GetStorage();
 	idx_t total_rows = storage.GetTotalRows();
 	if (total_rows == 0) {
@@ -169,7 +169,7 @@ double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p
 
 idx_t TableScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
                              LocalTableFunctionState *local_state, GlobalTableFunctionState *gstate_p) {
-	auto &state = (TableScanLocalState &)*local_state;
+	auto &state = local_state->Cast<TableScanLocalState>();
 	if (state.scan_state.table_state.row_group) {
 		return state.scan_state.table_state.batch_index;
 	}
@@ -229,7 +229,7 @@ static unique_ptr<GlobalTableFunctionState> IndexScanInitGlobal(ClientContext &c
 
 static void IndexScanFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &bind_data = (const TableScanBindData &)*data_p.bind_data;
-	auto &state = (IndexScanGlobalState &)*data_p.global_state;
+	auto &state = data_p.global_state->Cast<IndexScanGlobalState>();
 	auto &transaction = DuckTransaction::Get(context, *bind_data.table->catalog);
 	auto &local_storage = LocalStorage::Get(transaction);
 

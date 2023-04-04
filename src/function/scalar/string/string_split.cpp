@@ -163,7 +163,7 @@ static void StringSplitRegexFunction(DataChunk &args, ExpressionState &state, Ve
 	auto &info = (RegexpMatchesBindData &)*func_expr.bind_info;
 	if (info.constant_pattern) {
 		// fast path: pre-compiled regex
-		auto &lstate = (RegexLocalState &)*ExecuteFunctionState::GetFunctionState(state);
+		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
 		StringSplitExecutor<ConstantRegexpStringSplit>(args, state, result, &lstate.constant_pattern);
 	} else {
 		// slow path: have to re-compile regex for every row

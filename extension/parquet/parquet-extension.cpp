@@ -451,7 +451,7 @@ public:
 	static unique_ptr<LocalTableFunctionState>
 	ParquetScanInitLocal(ExecutionContext &context, TableFunctionInitInput &input, GlobalTableFunctionState *gstate_p) {
 		auto &bind_data = (ParquetReadBindData &)*input.bind_data;
-		auto &gstate = (ParquetReadGlobalState &)*gstate_p;
+		auto &gstate = gstate_p->Cast<ParquetReadGlobalState>();
 
 		auto result = make_unique<ParquetReadLocalState>();
 		result->column_ids = input.column_ids;
@@ -516,7 +516,7 @@ public:
 	static idx_t ParquetScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
 	                                      LocalTableFunctionState *local_state,
 	                                      GlobalTableFunctionState *global_state) {
-		auto &data = (ParquetReadLocalState &)*local_state;
+		auto &data = local_state->Cast<ParquetReadLocalState>();
 		return data.batch_index;
 	}
 
@@ -544,8 +544,8 @@ public:
 		if (!data_p.local_state) {
 			return;
 		}
-		auto &data = (ParquetReadLocalState &)*data_p.local_state;
-		auto &gstate = (ParquetReadGlobalState &)*data_p.global_state;
+		auto &data = data_p.local_state->Cast<ParquetReadLocalState>();
+		auto &gstate = data_p.global_state->Cast<ParquetReadGlobalState>();
 		auto &bind_data = (ParquetReadBindData &)*data_p.bind_data;
 
 		do {
@@ -772,8 +772,8 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_p, GlobalFunctionData &gstate,
                       LocalFunctionData &lstate, DataChunk &input) {
 	auto &bind_data = (ParquetWriteBindData &)bind_data_p;
-	auto &global_state = (ParquetWriteGlobalState &)gstate;
-	auto &local_state = (ParquetWriteLocalState &)lstate;
+	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
+	auto &local_state = lstate.Cast<ParquetWriteLocalState>();
 
 	// append data to the local (buffered) chunk collection
 	local_state.buffer.Append(input);
@@ -787,14 +787,14 @@ void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_p, Glob
 
 void ParquetWriteCombine(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
                          LocalFunctionData &lstate) {
-	auto &global_state = (ParquetWriteGlobalState &)gstate;
-	auto &local_state = (ParquetWriteLocalState &)lstate;
+	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
+	auto &local_state = lstate.Cast<ParquetWriteLocalState>();
 	// flush any data left in the local state to the file
 	global_state.writer->Flush(local_state.buffer);
 }
 
 void ParquetWriteFinalize(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate) {
-	auto &global_state = (ParquetWriteGlobalState &)gstate;
+	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
 	// finalize: write any additional metadata to the file here
 	global_state.writer->Finalize();
 }

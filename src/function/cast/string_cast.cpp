@@ -220,7 +220,7 @@ bool VectorStringToStruct::StringToNestedTypeCastLoop(string_t *source_data, Val
 	}
 
 	auto &cast_data = (StructBoundCastData &)*parameters.cast_data;
-	auto &lstate = (StructCastLocalState &)*parameters.local_state;
+	auto &lstate = parameters.local_state->Cast<StructCastLocalState>();
 	D_ASSERT(cast_data.child_cast_info.size() == result_children.size());
 
 	for (idx_t child_idx = 0; child_idx < result_children.size(); child_idx++) {
@@ -304,7 +304,7 @@ bool VectorStringToMap::StringToNestedTypeCastLoop(string_t *source_data, Validi
 	auto &result_key_child = MapVector::GetKeys(result);
 	auto &result_val_child = MapVector::GetValues(result);
 	auto &cast_data = (MapBoundCastData &)*parameters.cast_data;
-	auto &lstate = (MapCastLocalState &)*parameters.local_state;
+	auto &lstate = parameters.local_state->Cast<MapCastLocalState>();
 
 	CastParameters key_params(parameters, cast_data.key_cast.cast_data, lstate.key_state);
 	if (!cast_data.key_cast.function(varchar_key_vector, result_key_child, total_elements, key_params)) {

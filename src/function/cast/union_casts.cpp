@@ -223,7 +223,7 @@ unique_ptr<FunctionLocalState> InitUnionToUnionLocalState(CastLocalStateParamete
 
 static bool UnionToUnionCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &cast_data = (UnionToUnionBoundCastData &)*parameters.cast_data;
-	auto &lstate = (StructCastLocalState &)*parameters.local_state;
+	auto &lstate = parameters.local_state->Cast<StructCastLocalState>();
 
 	auto source_member_count = UnionType::GetMemberCount(source.GetType());
 	auto target_member_count = UnionType::GetMemberCount(result.GetType());

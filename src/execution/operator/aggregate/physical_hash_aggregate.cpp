@@ -232,7 +232,7 @@ public:
 };
 
 void PhysicalHashAggregate::SetMultiScan(GlobalSinkState &state) {
-	auto &gstate = (HashAggregateGlobalState &)state;
+	auto &gstate = state.Cast<HashAggregateGlobalState>();
 	for (auto &grouping_state : gstate.grouping_states) {
 		auto &radix_state = grouping_state.table_state;
 		RadixPartitionedHashTable::SetMultiScan(*radix_state);
@@ -252,8 +252,8 @@ unique_ptr<LocalSinkState> PhysicalHashAggregate::GetLocalSinkState(ExecutionCon
 
 void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, GlobalSinkState &state,
                                                  LocalSinkState &lstate, DataChunk &input, idx_t grouping_idx) const {
-	auto &sink = (HashAggregateLocalState &)lstate;
-	auto &global_sink = (HashAggregateGlobalState &)state;
+	auto &sink = lstate.Cast<HashAggregateLocalState>();
+	auto &global_sink = state.Cast<HashAggregateGlobalState>();
 
 	auto &grouping_gstate = global_sink.grouping_states[grouping_idx];
 	auto &grouping_lstate = sink.grouping_states[grouping_idx];
@@ -337,8 +337,8 @@ void PhysicalHashAggregate::SinkDistinct(ExecutionContext &context, GlobalSinkSt
 
 SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
                                            DataChunk &input) const {
-	auto &llstate = (HashAggregateLocalState &)lstate;
-	auto &gstate = (HashAggregateGlobalState &)state;
+	auto &llstate = lstate.Cast<HashAggregateLocalState>();
+	auto &gstate = state.Cast<HashAggregateGlobalState>();
 
 	if (distinct_collection_info) {
 		SinkDistinct(context, state, lstate, input);
@@ -393,8 +393,8 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSink
 
 void PhysicalHashAggregate::CombineDistinct(ExecutionContext &context, GlobalSinkState &state,
                                             LocalSinkState &lstate) const {
-	auto &global_sink = (HashAggregateGlobalState &)state;
-	auto &sink = (HashAggregateLocalState &)lstate;
+	auto &global_sink = state.Cast<HashAggregateGlobalState>();
+	auto &sink = lstate.Cast<HashAggregateLocalState>();
 
 	if (!distinct_collection_info) {
 		return;
@@ -421,8 +421,8 @@ void PhysicalHashAggregate::CombineDistinct(ExecutionContext &context, GlobalSin
 }
 
 void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const {
-	auto &gstate = (HashAggregateGlobalState &)state;
-	auto &llstate = (HashAggregateLocalState &)lstate;
+	auto &gstate = state.Cast<HashAggregateGlobalState>();
+	auto &llstate = lstate.Cast<HashAggregateLocalState>();
 
 	CombineDistinct(context, state, lstate);
 
@@ -743,7 +743,7 @@ public:
 
 SinkFinalizeType PhysicalHashAggregate::FinalizeDistinct(Pipeline &pipeline, Event &event, ClientContext &context,
                                                          GlobalSinkState &gstate_p) const {
-	auto &gstate = (HashAggregateGlobalState &)gstate_p;
+	auto &gstate = gstate_p.Cast<HashAggregateGlobalState>();
 	D_ASSERT(distinct_collection_info);
 
 	bool any_partitioned = false;
@@ -779,7 +779,7 @@ SinkFinalizeType PhysicalHashAggregate::FinalizeDistinct(Pipeline &pipeline, Eve
 
 SinkFinalizeType PhysicalHashAggregate::FinalizeInternal(Pipeline &pipeline, Event &event, ClientContext &context,
                                                          GlobalSinkState &gstate_p, bool check_distinct) const {
-	auto &gstate = (HashAggregateGlobalState &)gstate_p;
+	auto &gstate = gstate_p.Cast<HashAggregateGlobalState>();
 
 	if (check_distinct && distinct_collection_info) {
 		// There are distinct aggregates
@@ -836,7 +836,7 @@ public:
 			return 1;
 		}
 
-		auto &ht_state = (HashAggregateGlobalState &)*op.sink_state;
+		auto &ht_state = op.sink_state->Cast<HashAggregateGlobalState>();
 		idx_t count = 0;
 		for (size_t sidx = 0; sidx < op.groupings.size(); ++sidx) {
 			auto &grouping = op.groupings[sidx];
@@ -870,7 +870,7 @@ unique_ptr<LocalSourceState> PhysicalHashAggregate::GetLocalSourceState(Executio
 
 void PhysicalHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                                     LocalSourceState &lstate_p) const {
-	auto &sink_gstate = (HashAggregateGlobalState &)*sink_state;
+	auto &sink_gstate = sink_state->Cast<HashAggregateGlobalState>();
 	auto &gstate = gstate_p.Cast<PhysicalHashAggregateGlobalSourceState>();
 	auto &lstate = lstate_p.Cast<PhysicalHashAggregateLocalSourceState>();
 	while (true) {

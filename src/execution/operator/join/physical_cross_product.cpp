@@ -34,7 +34,7 @@ unique_ptr<GlobalSinkState> PhysicalCrossProduct::GetGlobalSinkState(ClientConte
 
 SinkResultType PhysicalCrossProduct::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
                                           DataChunk &input) const {
-	auto &sink = (CrossProductGlobalState &)state;
+	auto &sink = state.Cast<CrossProductGlobalState>();
 	lock_guard<mutex> client_guard(sink.rhs_lock);
 	sink.rhs_materialized.Append(sink.append_state, input);
 	return SinkResultType::NEED_MORE_INPUT;
@@ -123,7 +123,7 @@ public:
 };
 
 unique_ptr<OperatorState> PhysicalCrossProduct::GetOperatorState(ExecutionContext &context) const {
-	auto &sink = (CrossProductGlobalState &)*sink_state;
+	auto &sink = sink_state->Cast<CrossProductGlobalState>();
 	return make_unique<CrossProductOperatorState>(sink.rhs_materialized);
 }
 

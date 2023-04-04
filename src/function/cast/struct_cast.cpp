@@ -36,7 +36,7 @@ unique_ptr<FunctionLocalState> StructBoundCastData::InitStructCastLocalState(Cas
 
 static bool StructToStructCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &cast_data = (StructBoundCastData &)*parameters.cast_data;
-	auto &lstate = (StructCastLocalState &)*parameters.local_state;
+	auto &lstate = parameters.local_state->Cast<StructCastLocalState>();
 	auto &source_child_types = StructType::GetChildTypes(source.GetType());
 	auto &source_children = StructVector::GetEntries(source);
 	D_ASSERT(source_children.size() == StructType::GetChildTypes(result.GetType()).size());

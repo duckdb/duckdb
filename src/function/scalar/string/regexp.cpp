@@ -113,7 +113,7 @@ static void RegexpMatchesFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto &info = (RegexpMatchesBindData &)*func_expr.bind_info;
 
 	if (info.constant_pattern) {
-		auto &lstate = (RegexLocalState &)*ExecuteFunctionState::GetFunctionState(state);
+		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
 		UnaryExecutor::Execute<string_t, bool>(strings, result, args.size(), [&](string_t input) {
 			return OP::Operation(CreateStringPiece(input), lstate.constant_pattern);
 		});
@@ -171,7 +171,7 @@ static void RegexReplaceFunction(DataChunk &args, ExpressionState &state, Vector
 	auto &replaces = args.data[2];
 
 	if (info.constant_pattern) {
-		auto &lstate = (RegexLocalState &)*ExecuteFunctionState::GetFunctionState(state);
+		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
 		BinaryExecutor::Execute<string_t, string_t, string_t>(
 		    strings, replaces, result, args.size(), [&](string_t input, string_t replace) {
 			    std::string sstring = input.GetString();
@@ -260,7 +260,7 @@ static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector
 	auto &strings = args.data[0];
 	auto &patterns = args.data[1];
 	if (info.constant_pattern) {
-		auto &lstate = (RegexLocalState &)*ExecuteFunctionState::GetFunctionState(state);
+		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
 		UnaryExecutor::Execute<string_t, string_t>(strings, result, args.size(), [&](string_t input) {
 			return Extract(input, result, lstate.constant_pattern, info.rewrite);
 		});

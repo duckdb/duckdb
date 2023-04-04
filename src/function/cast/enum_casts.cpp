@@ -132,7 +132,7 @@ static unique_ptr<FunctionLocalState> InitEnumCastLocalState(CastLocalStateParam
 
 static bool EnumToAnyCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &cast_data = (EnumBoundCastData &)*parameters.cast_data;
-	auto &lstate = (EnumCastLocalState &)*parameters.local_state;
+	auto &lstate = parameters.local_state->Cast<EnumCastLocalState>();
 
 	Vector varchar_cast(LogicalType::VARCHAR, count);
 
