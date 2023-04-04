@@ -26,7 +26,7 @@ bool BoundOperatorExpression::Equals(const BaseExpression *other_p) const {
 }
 
 unique_ptr<Expression> BoundOperatorExpression::Copy() {
-	auto copy = make_unique<BoundOperatorExpression>(type, return_type);
+	auto copy = make_uniq<BoundOperatorExpression>(type, return_type);
 	copy->CopyProperties(*this);
 	for (auto &child : children) {
 		copy->children.push_back(child->Copy());
@@ -44,7 +44,7 @@ unique_ptr<Expression> BoundOperatorExpression::Deserialize(ExpressionDeserializ
 	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	auto children = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 
-	auto result = make_unique<BoundOperatorExpression>(state.type, return_type);
+	auto result = make_uniq<BoundOperatorExpression>(state.type, return_type);
 	result->children = std::move(children);
 	return std::move(result);
 }

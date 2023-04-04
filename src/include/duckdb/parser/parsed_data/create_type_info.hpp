@@ -31,7 +31,7 @@ struct CreateTypeInfo : public CreateInfo {
 
 public:
 	unique_ptr<CreateInfo> Copy() const override {
-		auto result = make_unique<CreateTypeInfo>();
+		auto result = make_uniq<CreateTypeInfo>();
 		CopyProperties(*result);
 		result->name = name;
 		result->type = type;

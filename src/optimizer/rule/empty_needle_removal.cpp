@@ -11,13 +11,13 @@ namespace duckdb {
 
 EmptyNeedleRemovalRule::EmptyNeedleRemovalRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on a FunctionExpression that has a foldable ConstantExpression
-	auto func = make_unique<FunctionExpressionMatcher>();
-	func->matchers.push_back(make_unique<ExpressionMatcher>());
-	func->matchers.push_back(make_unique<ExpressionMatcher>());
+	auto func = make_uniq<FunctionExpressionMatcher>();
+	func->matchers.push_back(make_uniq<ExpressionMatcher>());
+	func->matchers.push_back(make_uniq<ExpressionMatcher>());
 	func->policy = SetMatcher::Policy::SOME;
 
 	unordered_set<string> functions = {"prefix", "contains", "suffix"};
-	func->function = make_unique<ManyFunctionMatcher>(functions);
+	func->function = make_uniq<ManyFunctionMatcher>(functions);
 	root = std::move(func);
 }
 
@@ -37,7 +37,7 @@ unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector
 	auto prefix_value = ExpressionExecutor::EvaluateScalar(GetContext(), *prefix_expr);
 
 	if (prefix_value.IsNull()) {
-		return make_unique<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
+		return make_uniq<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
 	}
 
 	D_ASSERT(prefix_value.type() == prefix_expr->return_type);

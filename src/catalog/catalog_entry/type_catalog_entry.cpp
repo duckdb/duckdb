@@ -34,7 +34,7 @@ void TypeCatalogEntry::Serialize(Serializer &serializer) {
 }
 
 unique_ptr<CreateTypeInfo> TypeCatalogEntry::Deserialize(Deserializer &source) {
-	auto info = make_unique<CreateTypeInfo>();
+	auto info = make_uniq<CreateTypeInfo>();
 
 	FieldReader reader(source);
 	info->schema = reader.ReadRequired<string>();

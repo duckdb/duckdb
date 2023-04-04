@@ -55,6 +55,8 @@ BIGINT	BIGINT	BIGINT
 # Test timestamp type
 statement error
 SELECT * FROM read_csv_auto(['data/csv/union-by-name/ubn1.csv', 'data/csv/union-by-name/ubn2.csv', 'data/csv/union-by-name/ubn3.csv', 'data/csv/union-by-name/ubn4.csv'])
+----
+Could not convert string
 
 query IIIII
 SELECT  a, b, c, ts, k  
@@ -82,6 +84,45 @@ LIMIT 1;
 ----
 VARCHAR	BIGINT	BIGINT	VARCHAR	BIGINT
 
+# projection pushdown
+query II
+SELECT  c, k
+FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE)
+ORDER BY c NULLS LAST, k NULLS LAST
+----
+3	6
+3	NULL
+5	6
+5	NULL
+6	6
+6	NULL
+100	NULL
+200	NULL
+300	NULL
+NULL	NULL
+NULL	NULL
+NULL	NULL
+NULL	NULL
+
+# projection pushdown
+query I
+SELECT  ts
+FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE)
+ORDER BY ts NULLS LAST
+----
+2003-06-30 12:03:10
+2003-06-30 12:03:10
+2003-06-30 12:03:10
+2020-12-30 01:25:58.745232+01
+2020-12-30 02:25:58.745232+01
+2020-12-30 03:25:58.745232+01
+2020-12-30 04:25:58.745232+01
+Friday
+Monday
+Sunday
+NULL
+NULL
+NULL
 
 # Test glob pattern [12] and union_by_name with filename options
 query IIIII

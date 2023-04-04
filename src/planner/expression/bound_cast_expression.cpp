@@ -27,7 +27,7 @@ unique_ptr<Expression> AddCastExpressionInternal(unique_ptr<Expression> expr, co
 			return expr;
 		}
 	}
-	return make_unique<BoundCastExpression>(std::move(expr), target_type, std::move(bound_cast), try_cast);
+	return make_uniq<BoundCastExpression>(std::move(expr), target_type, std::move(bound_cast), try_cast);
 }
 
 static BoundCastInfo BindCastFunction(ClientContext &context, const LogicalType &source, const LogicalType &target) {
@@ -184,7 +184,7 @@ bool BoundCastExpression::Equals(const BaseExpression *other_p) const {
 }
 
 unique_ptr<Expression> BoundCastExpression::Copy() {
-	auto copy = make_unique<BoundCastExpression>(child->Copy(), return_type, bound_cast.Copy(), try_cast);
+	auto copy = make_uniq<BoundCastExpression>(child->Copy(), return_type, bound_cast.Copy(), try_cast);
 	copy->CopyProperties(*this);
 	return std::move(copy);
 }
@@ -200,8 +200,7 @@ unique_ptr<Expression> BoundCastExpression::Deserialize(ExpressionDeserializatio
 	auto target_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	auto try_cast = reader.ReadRequired<bool>();
 	auto cast_function = BindCastFunction(state.gstate.context, child->return_type, target_type);
-	return make_unique<BoundCastExpression>(std::move(child), std::move(target_type), std::move(cast_function),
-	                                        try_cast);
+	return make_uniq<BoundCastExpression>(std::move(child), std::move(target_type), std::move(cast_function), try_cast);
 }
 
 } // namespace duckdb

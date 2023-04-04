@@ -74,7 +74,7 @@ struct VariableReturnBindData : public FunctionData {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<VariableReturnBindData>(stype);
+		return make_uniq<VariableReturnBindData>(stype);
 	}
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = (const VariableReturnBindData &)other_p;
@@ -90,7 +90,7 @@ struct VariableReturnBindData : public FunctionData {
 	static unique_ptr<FunctionData> Deserialize(ClientContext &context, FieldReader &reader,
 	                                            ScalarFunction &bound_function) {
 		auto stype = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-		return make_unique<VariableReturnBindData>(std::move(stype));
+		return make_uniq<VariableReturnBindData>(std::move(stype));
 	}
 };
 

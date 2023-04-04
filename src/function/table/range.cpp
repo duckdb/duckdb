@@ -60,7 +60,7 @@ static void GenerateRangeParameters(const vector<Value> &inputs, RangeFunctionBi
 template <bool GENERATE_SERIES>
 static unique_ptr<FunctionData> RangeFunctionBind(ClientContext &context, TableFunctionBindInput &input,
                                                   vector<LogicalType> &return_types, vector<string> &names) {
-	auto result = make_unique<RangeFunctionBindData>();
+	auto result = make_uniq<RangeFunctionBindData>();
 	auto &inputs = input.inputs;
 	GenerateRangeParameters<GENERATE_SERIES>(inputs, *result);
 
@@ -87,7 +87,7 @@ struct RangeFunctionState : public GlobalTableFunctionState {
 };
 
 static unique_ptr<GlobalTableFunctionState> RangeFunctionInit(ClientContext &context, TableFunctionInitInput &input) {
-	return make_unique<RangeFunctionState>();
+	return make_uniq<RangeFunctionState>();
 }
 
 static void RangeFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -114,7 +114,7 @@ static void RangeFunction(ClientContext &context, TableFunctionInput &data_p, Da
 unique_ptr<NodeStatistics> RangeCardinality(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = (RangeFunctionBindData &)*bind_data_p;
 	idx_t cardinality = Hugeint::Cast<idx_t>((bind_data.end - bind_data.start) / bind_data.increment);
-	return make_unique<NodeStatistics>(cardinality, cardinality);
+	return make_uniq<NodeStatistics>(cardinality, cardinality);
 }
 
 //===--------------------------------------------------------------------===//
@@ -154,7 +154,7 @@ public:
 template <bool GENERATE_SERIES>
 static unique_ptr<FunctionData> RangeDateTimeBind(ClientContext &context, TableFunctionBindInput &input,
                                                   vector<LogicalType> &return_types, vector<string> &names) {
-	auto result = make_unique<RangeDateTimeBindData>();
+	auto result = make_uniq<RangeDateTimeBindData>();
 	auto &inputs = input.inputs;
 	D_ASSERT(inputs.size() == 3);
 	result->start = inputs[0].GetValue<timestamp_t>();
@@ -208,7 +208,7 @@ struct RangeDateTimeState : public GlobalTableFunctionState {
 
 static unique_ptr<GlobalTableFunctionState> RangeDateTimeInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = (RangeDateTimeBindData &)*input.bind_data;
-	return make_unique<RangeDateTimeState>(bind_data.start);
+	return make_uniq<RangeDateTimeState>(bind_data.start);
 }
 
 static void RangeDateTimeFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
