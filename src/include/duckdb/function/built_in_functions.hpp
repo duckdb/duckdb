@@ -61,6 +61,7 @@ private:
 	void RegisterRegressiveAggregates();
 
 	// scalar functions
+	void RegisterCompressedMaterializationFunctions();
 	void RegisterDateFunctions();
 	void RegisterEnumFunctions();
 	void RegisterGenericFunctions();

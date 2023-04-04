@@ -98,6 +98,7 @@ void BuiltinFunctions::Initialize() {
 	RegisterHolisticAggregates();
 	RegisterRegressiveAggregates();
 
+	RegisterCompressedMaterializationFunctions();
 	RegisterDateFunctions();
 	RegisterEnumFunctions();
 	RegisterGenericFunctions();

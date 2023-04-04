@@ -1,5 +1,6 @@
 add_subdirectory(bit)
 add_subdirectory(blob)
+add_subdirectory(compressed_materialization)
 add_subdirectory(date)
 add_subdirectory(generic)
 add_subdirectory(list)
@@ -15,6 +16,7 @@ add_subdirectory(enum)
 add_library_unity(
   duckdb_func_scalar
   OBJECT
+  compressed_materialization_functions.cpp
   date_functions.cpp
   generic_functions.cpp
   string_functions.cpp
