@@ -265,8 +265,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 
 		names.assign(union_col_names.begin(), union_col_names.end());
 		return_types.assign(union_col_types.begin(), union_col_types.end());
-		const idx_t first_file_index = 0;
-		result->initial_reader = std::move(result->union_readers[first_file_index]);
 		D_ASSERT(names.size() == return_types.size());
 
 		if (!options.sql_types_per_column.empty()) {
@@ -831,6 +829,9 @@ static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &con
 	bind_data.single_threaded = bind_data.single_threaded || !file_exists;
 	if (file_exists) {
 		bind_data.initial_reader.reset();
+		if (bind_data.options.union_by_name) {
+			bind_data.initial_reader = std::move(bind_data.union_readers[0]);
+		}
 	}
 	if (bind_data.single_threaded) {
 		return SingleThreadedCSVInit(context, input);
