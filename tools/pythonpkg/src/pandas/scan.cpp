@@ -76,7 +76,7 @@ unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &conte
 	py::handle df((PyObject *)(input.inputs[0].GetPointer()));
 
 	vector<PandasColumnBindData> pandas_bind_data;
-	Pandas::Bind(DBConfig::GetConfig(context), df, pandas_bind_data, return_types, names);
+	Pandas::Bind(context, df, pandas_bind_data, return_types, names);
 
 	auto df_columns = py::list(df.attr("columns"));
 	auto get_fun = df.attr("__getitem__");
@@ -146,7 +146,7 @@ void PandasScanFunction::PandasBackendScanSwitch(PandasColumnBindData &bind_data
 	auto backend = bind_data.numpy_col->Backend();
 	switch (backend) {
 	case PandasColumnBackend::ARROW: {
-		auto &array_column = (PandasNumpyColumn &)*bind_data.numpy_col;
+		auto &array_column = (PandasArrowColumn &)*bind_data.numpy_col;
 		// ??? Need to produce a Table from the chunked array
 		// then we create a scanner for it, and here we scan the table
 		break;

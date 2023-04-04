@@ -46,10 +46,11 @@ private:
 
 namespace duckdb {
 
-static LogicalType BindColumn(PandasBindColumn column_p, PandasColumnBindData &bind_data, const DBConfig &config) {
+static LogicalType BindColumn(PandasBindColumn column_p, PandasColumnBindData &bind_data, const ClientContext &context) {
 	LogicalType column_type;
 	auto &column = column_p.handle;
 
+	auto &config = DBConfig::GetConfig(context);
 	bind_data.numpy_type = ConvertNumpyType(column_p.type);
 	bool column_has_mask = py::hasattr(column.attr("array"), "_mask");
 
@@ -95,11 +96,11 @@ static LogicalType BindColumn(PandasBindColumn column_p, PandasColumnBindData &b
 		column_type = NumpyToLogicalType(bind_data.numpy_type);
 	} else {
 		auto pandas_array = column.attr("array");
-		if (py::hasattr(pandas_array, "_data")) {
-			// This means we can access the numpy array directly
-			bind_data.numpy_col = make_unique<PandasNumpyColumn>(column.attr("array").attr("_data"));
-		} else if (py::hasattr(pandas_array, "__arrow_array__")) {
+		if (py::hasattr(pandas_array, "__arrow_array__")) {
 			bind_data.numpy_col = make_unique<PandasArrowColumn>(pandas_array.attr("__arrow_array__")());
+		} else if (py::hasattr(pandas_array, "__array__")) {
+			// This means we can access the numpy array directly
+			bind_data.numpy_col = make_unique<PandasNumpyColumn>(column.attr("array").attr("__array__")());
 		} else if (py::hasattr(pandas_array, "asi8")) {
 			// This is a datetime object, has the option to get the array as int64_t's
 			bind_data.numpy_col = make_unique<PandasNumpyColumn>(py::array(pandas_array.attr("asi8")));
@@ -119,7 +120,7 @@ static LogicalType BindColumn(PandasBindColumn column_p, PandasColumnBindData &b
 	return column_type;
 }
 
-void Pandas::Bind(const DBConfig &config, py::handle df_p, vector<PandasColumnBindData> &bind_columns,
+void Pandas::Bind(const ClientContext &context, py::handle df_p, vector<PandasColumnBindData> &bind_columns,
                   vector<LogicalType> &return_types, vector<string> &names) {
 
 	PandasDataFrame df(df_p);
@@ -137,7 +138,7 @@ void Pandas::Bind(const DBConfig &config, py::handle df_p, vector<PandasColumnBi
 		PandasColumnBindData bind_data;
 
 		names.emplace_back(py::str(df.names[col_idx]));
-		auto column_type = BindColumn(df[col_idx], bind_data, config);
+		auto column_type = BindColumn(df[col_idx], bind_data, context);
 
 		return_types.push_back(column_type);
 		bind_columns.push_back(std::move(bind_data));

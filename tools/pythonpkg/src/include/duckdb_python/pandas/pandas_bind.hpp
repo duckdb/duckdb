@@ -4,12 +4,12 @@
 #include "duckdb_python/pybind11/python_object_container.hpp"
 #include "duckdb_python/numpy/numpy_type.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/main/config.hpp"
 #include "duckdb_python/pandas/pandas_column.hpp"
 
 namespace duckdb {
 
 struct RegisteredArray;
+class ClientContext;
 
 struct PandasColumnBindData {
 	NumpyNullableType numpy_type;
@@ -22,7 +22,7 @@ struct PandasColumnBindData {
 };
 
 struct Pandas {
-	static void Bind(const DBConfig &config, py::handle df, vector<PandasColumnBindData> &out,
+	static void Bind(const ClientContext &config, py::handle df, vector<PandasColumnBindData> &out,
 	                 vector<LogicalType> &return_types, vector<string> &names);
 };
 
