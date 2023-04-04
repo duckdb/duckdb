@@ -169,20 +169,20 @@ class TestRelation(object):
             """)
         rel = con.table("tbl")
         # select only the varchar columns
-        projection = rel.columns_by_type(["varchar"])
+        projection = rel.select_types(["varchar"])
         assert projection.columns == ["c2", "c4"]
 
         # select bigint, tinyint and a type that isn't there
-        projection = rel.columns_by_type([BIGINT, "tinyint", con.struct_type({'a': VARCHAR, 'b': TINYINT})])
+        projection = rel.select_types([BIGINT, "tinyint", con.struct_type({'a': VARCHAR, 'b': TINYINT})])
         assert projection.columns == ["c0", "c1"]
 
         ## select with empty projection list, not possible
         with pytest.raises(duckdb.Error):
-            projection = rel.columns_by_type([])
+            projection = rel.select_types([])
         
         # select with type-filter that matches nothing
         with pytest.raises(duckdb.Error):
-            projection = rel.columns_by_type([BOOLEAN])
+            projection = rel.select_types([BOOLEAN])
 
     def test_df_alias(self,duckdb_cursor):
         test_df = pd.DataFrame.from_dict({"i":[1, 2, 3, 4], "j":["one", "two", "three", "four"]})
