@@ -24,12 +24,12 @@ void BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 BufferPool::EvictionResult BufferPool::EvictBlocks(idx_t extra_memory, idx_t memory_limit,
                                                    unique_ptr<FileBuffer> *buffer) {
 	BufferEvictionNode node;
-	TempBufferPoolReservation r(current_memory, extra_memory);
+	TempBufferPoolReservation r(*this, extra_memory);
 	while (current_memory > memory_limit) {
 		// get a block to unpin from the queue
 		if (!queue->q.try_dequeue(node)) {
 			// Failed to reserve. Adjust size of temp reservation to 0.
-			r.Resize(current_memory, 0);
+			r.Resize(0);
 			return {false, std::move(r)};
 		}
 		// get a reference to the underlying block pointer
