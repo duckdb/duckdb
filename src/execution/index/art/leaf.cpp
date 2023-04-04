@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-Leaf *Leaf::New(ART &art, ARTNode &node, const Key &key, const uint32_t &depth, const row_t &row_id) {
+Leaf *Leaf::New(ART &art, ARTNode &node, const Key &key, const uint32_t depth, const row_t row_id) {
 
 	node.SetPtr(art.leaves->New(), ARTNodeType::LEAF);
 	auto leaf = art.leaves->Get<Leaf>(node.GetPtr());
@@ -25,8 +25,8 @@ Leaf *Leaf::New(ART &art, ARTNode &node, const Key &key, const uint32_t &depth, 
 	return leaf;
 }
 
-Leaf *Leaf::New(ART &art, ARTNode &node, const Key &key, const uint32_t &depth, const row_t *row_ids,
-                const idx_t &count) {
+Leaf *Leaf::New(ART &art, ARTNode &node, const Key &key, const uint32_t depth, const row_t *row_ids,
+                const idx_t count) {
 
 	// inlined leaf
 	D_ASSERT(count >= 1);
@@ -41,7 +41,7 @@ Leaf *Leaf::New(ART &art, ARTNode &node, const Key &key, const uint32_t &depth, 
 	leaf->count = 0;
 
 	// copy the row IDs
-	LeafSegment::New(art, leaf->row_ids.position);
+	leaf->row_ids.position = LeafSegment::New(art);
 	auto segment = LeafSegment::Initialize(art, leaf->row_ids.position);
 	for (idx_t i = 0; i < count; i++) {
 		segment = segment->Append(art, leaf->count, row_ids[i]);
@@ -72,7 +72,7 @@ void Leaf::Free(ART &art, ARTNode &node) {
 	}
 }
 
-void Leaf::InitializeMerge(ART &art, const idx_t &buffer_count) {
+void Leaf::InitializeMerge(const ART &art, const idx_t buffer_count) {
 
 	if (IsInlined()) {
 		return;
@@ -140,7 +140,7 @@ void Leaf::Merge(ART &art, ARTNode &other) {
 	ARTNode::Free(art, other);
 }
 
-void Leaf::Insert(ART &art, const row_t &row_id) {
+void Leaf::Insert(ART &art, const row_t row_id) {
 
 	if (count == 0) {
 		row_ids.inlined = row_id;
@@ -158,7 +158,7 @@ void Leaf::Insert(ART &art, const row_t &row_id) {
 	tail->Append(art, count, row_id);
 }
 
-void Leaf::Remove(ART &art, const row_t &row_id) {
+void Leaf::Remove(ART &art, const row_t row_id) {
 
 	if (count == 0) {
 		return;
@@ -247,7 +247,7 @@ void Leaf::Remove(ART &art, const row_t &row_id) {
 	count--;
 }
 
-row_t Leaf::GetRowId(ART &art, const idx_t &position) const {
+row_t Leaf::GetRowId(const ART &art, const idx_t position) const {
 
 	D_ASSERT(position < count);
 	if (IsInlined()) {
@@ -264,7 +264,7 @@ row_t Leaf::GetRowId(ART &art, const idx_t &position) const {
 	return segment->row_ids[position % ARTNode::LEAF_SEGMENT_SIZE];
 }
 
-uint32_t Leaf::FindRowId(ART &art, idx_t &position, const row_t &row_id) const {
+uint32_t Leaf::FindRowId(const ART &art, idx_t &position, const row_t row_id) const {
 
 	D_ASSERT(!IsInlined());
 
@@ -288,7 +288,7 @@ uint32_t Leaf::FindRowId(ART &art, idx_t &position, const row_t &row_id) const {
 	return (uint32_t)DConstants::INVALID_INDEX;
 }
 
-string Leaf::ToString(ART &art) const {
+string Leaf::ToString(const ART &art) const {
 
 	if (IsInlined()) {
 		return "Leaf (" + to_string(count) + "): [" + to_string(row_ids.inlined) + "]";
@@ -312,7 +312,7 @@ string Leaf::ToString(ART &art) const {
 	return "Leaf (" + to_string(this_count) + ", " + to_string(count) + "): [" + str + "] \n";
 }
 
-BlockPointer Leaf::Serialize(ART &art, MetaBlockWriter &writer) const {
+BlockPointer Leaf::Serialize(const ART &art, MetaBlockWriter &writer) const {
 
 	// get pointer and write fields
 	auto block_pointer = writer.GetBlockPointer();
@@ -362,7 +362,7 @@ void Leaf::Deserialize(ART &art, MetaBlockReader &reader) {
 
 	// copy into segments
 	count = 0;
-	LeafSegment::New(art, row_ids.position);
+	row_ids.position = LeafSegment::New(art);
 	auto segment = LeafSegment::Initialize(art, row_ids.position);
 	for (idx_t i = 0; i < count_p; i++) {
 		segment = segment->Append(art, count, reader.Read<row_t>());
@@ -378,14 +378,14 @@ void Leaf::Vacuum(ART &art) {
 
 	// first position has special treatment because we don't obtain it from a leaf segment
 	if (art.leaf_segments->NeedsVacuum(row_ids.position)) {
-		row_ids.position = art.leaf_segments->Vacuum(row_ids.position);
+		row_ids.position = art.leaf_segments->VacuumPosition(row_ids.position);
 	}
 
 	auto position = row_ids.position;
 	while (position != DConstants::INVALID_INDEX) {
 		auto segment = LeafSegment::Get(art, position);
 		if (segment->next != DConstants::INVALID_INDEX && art.leaf_segments->NeedsVacuum(segment->next)) {
-			segment->next = art.leaf_segments->Vacuum(segment->next);
+			segment->next = art.leaf_segments->VacuumPosition(segment->next);
 		}
 		position = segment->next;
 	}

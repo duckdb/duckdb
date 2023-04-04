@@ -133,8 +133,6 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
 	}
 
-	state.global_index.get()->UpdateMemoryUsage();
-
 	auto &schema = *table.schema;
 	auto index_entry = (DuckIndexEntry *)schema.CreateIndex(context, info.get(), &table);
 	if (!index_entry) {

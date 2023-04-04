@@ -57,23 +57,20 @@ public:
 	//! Buffer manager of the database instance
 	BufferManager &buffer_manager;
 
-	//! The size of the index in memory
-	//! This does not track the size of the index meta information, but only allocated nodes and prefixes
-	idx_t memory_size;
-
 public:
 	//! Initialize a single predicate scan on the index with the given expression and column IDs
 	virtual unique_ptr<IndexScanState> InitializeScanSinglePredicate(const Transaction &transaction, const Value &value,
-	                                                                 ExpressionType expressionType) = 0;
+	                                                                 const ExpressionType expressionType) = 0;
 	//! Initialize a two predicate scan on the index with the given expression and column IDs
-	virtual unique_ptr<IndexScanState> InitializeScanTwoPredicates(Transaction &transaction, const Value &low_value,
-	                                                               ExpressionType low_expression_type,
+	virtual unique_ptr<IndexScanState> InitializeScanTwoPredicates(const Transaction &transaction,
+	                                                               const Value &low_value,
+	                                                               const ExpressionType low_expression_type,
 	                                                               const Value &high_value,
-	                                                               ExpressionType high_expression_type) = 0;
+	                                                               const ExpressionType high_expression_type) = 0;
 	//! Performs a lookup on the index, fetching up to max_count result IDs. Returns true if all row IDs were fetched,
 	//! and false otherwise
-	virtual bool Scan(Transaction &transaction, DataTable &table, IndexScanState &state, idx_t max_count,
-	                  vector<row_t> &result_ids) = 0;
+	virtual bool Scan(const Transaction &transaction, const DataTable &table, IndexScanState &state,
+	                  const idx_t max_count, vector<row_t> &result_ids) = 0;
 
 	//! Obtain a lock on the index
 	virtual void InitializeLock(IndexLock &state);
@@ -109,9 +106,6 @@ public:
 
 	//! Returns the string representation of an index
 	virtual string ToString() = 0;
-
-	//! Increases or decreases the in-memory size
-	virtual void UpdateMemoryUsage() = 0;
 
 	//! Returns true if the index is affected by updates on the specified column IDs, and false otherwise
 	bool IndexIsUpdated(const vector<PhysicalIndex> &column_ids) const;

@@ -31,6 +31,7 @@ class MetaBlockWriter;
 
 // structs
 struct BlockPointer;
+struct ARTFlags;
 
 //! The ARTNode is the swizzleable pointer class of the ART index.
 //! If the ARTNode pointer is not swizzled, then the leftmost byte identifies the ARTNodeType.
@@ -59,12 +60,12 @@ public:
 	//! Constructs a swizzled pointer from a block ID and an offset
 	explicit ARTNode(MetaBlockReader &reader);
 	//! Get a new pointer to a node, might cause a new buffer allocation, and initialize it
-	static void New(ART &art, ARTNode &node, const ARTNodeType &type);
+	static void New(ART &art, ARTNode &node, const ARTNodeType type);
 	//! Free the node (and its subtree)
 	static void Free(ART &art, ARTNode &node);
 
 	//! Set the leftmost byte to contain the node type
-	inline void EncodeARTNodeType(const ARTNodeType &type) {
+	inline void EncodeARTNodeType(const ARTNodeType type) {
 		// left shift the type by 7 bytes
 		auto type_as_idx_t = (idx_t)type;
 		type_as_idx_t <<= ((sizeof(idx_t) - sizeof(uint8_t)) * 8);
@@ -85,36 +86,33 @@ public:
 		return pointer & FixedSizeAllocator::FIRST_BYTE_TO_ZERO;
 	}
 	//! Set the pointer and encode the node type
-	inline void SetPtr(const idx_t &ptr, const ARTNodeType &type) {
+	inline void SetPtr(const idx_t ptr, const ARTNodeType type) {
 		pointer = ptr;
 		EncodeARTNodeType(type);
 	}
 
 	//! Replace the child node at pos
-	void ReplaceChild(ART &art, const idx_t &position, ARTNode &child);
+	void ReplaceChild(const ART &art, const idx_t position, const ARTNode child);
 	//! Insert the child node at byte
-	static void InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child);
+	static void InsertChild(ART &art, ARTNode &node, const uint8_t byte, const ARTNode child);
 	//! Delete the child node at pos
-	static void DeleteChild(ART &art, ARTNode &node, idx_t position);
+	static void DeleteChild(ART &art, ARTNode &node, const idx_t position);
 
 	//! Get the child at the specified position in the node. The position must be between [0, count)
-	ARTNode *GetChild(ART &art, const idx_t &position) const;
+	ARTNode *GetChild(ART &art, const idx_t position) const;
 	//! Get the byte at the specified position
-	uint8_t GetKeyByte(ART &art, const idx_t &position) const;
+	uint8_t GetKeyByte(const ART &art, const idx_t position) const;
 	//! Get the position of a child corresponding exactly to the specific byte, returns DConstants::INVALID_INDEX if
 	//! the child does not exist
-	idx_t GetChildPosition(ART &art, const uint8_t &byte) const;
+	idx_t GetChildPosition(const ART &art, const uint8_t byte) const;
 	//! Get the position of the first child that is greater or equal to the specific byte, or DConstants::INVALID_INDEX
 	//! if there are no children matching the criteria
-	idx_t GetChildPositionGreaterEqual(ART &art, const uint8_t &byte, bool &inclusive) const;
+	idx_t GetChildPositionGreaterEqual(const ART &art, const uint8_t byte, bool &inclusive) const;
 	//! Get the position of the minimum child node in the node
-	idx_t GetMinPosition(ART &art) const;
-	//! Get the next position in the node, or DConstants::INVALID_INDEX if there is no next position. If pos ==
-	//! DConstants::INVALID_INDEX, then the first valid position in the node is returned
-	idx_t GetNextPosition(ART &art, idx_t pos) const;
-	//! Get the next position and byte in the node, or DConstants::INVALID_INDEX if there is no next position. If pos ==
-	//! DConstants::INVALID_INDEX, then the first valid position and byte in the node are returned
-	idx_t GetNextPositionAndByte(ART &art, idx_t pos, uint8_t &byte) const;
+	idx_t GetMinPosition(const ART &art) const;
+	//! Get the next position and byte in the node, or DConstants::INVALID_INDEX if there is no next position. If
+	//! position == DConstants::INVALID_INDEX, then the first valid position and byte in the node are returned
+	uint8_t GetNextPosition(const ART &art, idx_t &position) const;
 
 	//! Serialize the node
 	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);
@@ -128,10 +126,10 @@ public:
 	//! Returns a pointer to the prefix of the node
 	Prefix *GetPrefix(ART &art);
 	//! Returns the matching node type for a given count
-	static ARTNodeType GetARTNodeTypeByCount(const idx_t &count);
+	static ARTNodeType GetARTNodeTypeByCount(const idx_t count);
 
 	//! Initializes a merge by fully deserializing the subtree of the node and incrementing its buffer IDs
-	void InitializeMerge(ART &art, const vector<idx_t> &buffer_counts);
+	void InitializeMerge(ART &art, const ARTFlags &flags);
 	//! Merge another node into this node
 	bool Merge(ART &art, ARTNode &other);
 	//! Merge two nodes by first resolving their prefixes
@@ -140,7 +138,7 @@ public:
 	bool MergeInternal(ART &art, ARTNode &other);
 
 	//! Vacuum all nodes that exceed their respective vacuum thresholds
-	static void Vacuum(ART &art, ARTNode &node, const vector<bool> &vacuum_flags);
+	static void Vacuum(ART &art, ARTNode &node, const ARTFlags &flags);
 };
 
 } // namespace duckdb

@@ -72,25 +72,23 @@ Node16 *Node16::ShrinkNode48(ART &art, ARTNode &node16, ARTNode &node48) {
 	return n16;
 }
 
-void Node16::InitializeMerge(ART &art, const vector<idx_t> &buffer_counts) {
+void Node16::InitializeMerge(ART &art, const ARTFlags &flags) {
 
 	for (idx_t i = 0; i < count; i++) {
-		children[i].InitializeMerge(art, buffer_counts);
+		children[i].InitializeMerge(art, flags);
 	}
 }
 
-void Node16::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child) {
+void Node16::InsertChild(ART &art, ARTNode &node, const uint8_t byte, const ARTNode child) {
 
 	D_ASSERT(node);
 	D_ASSERT(!node.IsSwizzled());
 	auto n16 = art.n16_nodes->Get<Node16>(node.GetPtr());
 
-#ifdef DEBUG
 	// ensure that there is no other child at the same byte
 	for (idx_t i = 0; i < n16->count; i++) {
 		D_ASSERT(n16->key[i] != byte);
 	}
-#endif
 
 	// insert new child node into node
 	if (n16->count < ARTNode::NODE_16_CAPACITY) {
@@ -117,7 +115,7 @@ void Node16::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &
 	}
 }
 
-void Node16::DeleteChild(ART &art, ARTNode &node, idx_t position) {
+void Node16::DeleteChild(ART &art, ARTNode &node, const idx_t position) {
 
 	D_ASSERT(node);
 	D_ASSERT(!node.IsSwizzled());
@@ -130,9 +128,9 @@ void Node16::DeleteChild(ART &art, ARTNode &node, idx_t position) {
 	n16->count--;
 
 	// potentially move any children backwards
-	for (; position < n16->count; position++) {
-		n16->key[position] = n16->key[position + 1];
-		n16->children[position] = n16->children[position + 1];
+	for (idx_t i = position; i < n16->count; i++) {
+		n16->key[i] = n16->key[i + 1];
+		n16->children[i] = n16->children[i + 1];
 	}
 
 	// shrink node to Node4
@@ -142,7 +140,7 @@ void Node16::DeleteChild(ART &art, ARTNode &node, idx_t position) {
 	}
 }
 
-idx_t Node16::GetChildPosition(const uint8_t &byte) const {
+idx_t Node16::GetChildPosition(const uint8_t byte) const {
 	for (idx_t position = 0; position < count; position++) {
 		if (key[position] == byte) {
 			return position;
@@ -151,7 +149,7 @@ idx_t Node16::GetChildPosition(const uint8_t &byte) const {
 	return DConstants::INVALID_INDEX;
 }
 
-idx_t Node16::GetChildPositionGreaterEqual(const uint8_t &byte, bool &inclusive) const {
+idx_t Node16::GetChildPositionGreaterEqual(const uint8_t byte, bool &inclusive) const {
 	for (idx_t position = 0; position < count; position++) {
 		if (key[position] >= byte) {
 			inclusive = key[position] == byte;
@@ -161,25 +159,17 @@ idx_t Node16::GetChildPositionGreaterEqual(const uint8_t &byte, bool &inclusive)
 	return DConstants::INVALID_INDEX;
 }
 
-idx_t Node16::GetNextPosition(idx_t position) const {
+uint8_t Node16::GetNextPosition(idx_t &position) const {
 	if (position == DConstants::INVALID_INDEX) {
-		return 0;
-	}
-	position++;
-	return position < count ? position : DConstants::INVALID_INDEX;
-}
-
-idx_t Node16::GetNextPositionAndByte(idx_t position, uint8_t &byte) const {
-	if (position == DConstants::INVALID_INDEX) {
-		byte = key[0];
-		return 0;
+		position = 0;
+		return key[position];
 	}
 	position++;
 	if (position < count) {
-		byte = key[position];
-		return position;
+		return key[position];
 	}
-	return DConstants::INVALID_INDEX;
+	position = DConstants::INVALID_INDEX;
+	return 0;
 }
 
 BlockPointer Node16::Serialize(ART &art, MetaBlockWriter &writer) {
@@ -229,10 +219,10 @@ void Node16::Deserialize(ART &art, MetaBlockReader &reader) {
 	}
 }
 
-void Node16::Vacuum(ART &art, const vector<bool> &vacuum_flags) {
+void Node16::Vacuum(ART &art, const ARTFlags &flags) {
 
 	for (idx_t i = 0; i < count; i++) {
-		ARTNode::Vacuum(art, children[i], vacuum_flags);
+		ARTNode::Vacuum(art, children[i], flags);
 	}
 }
 

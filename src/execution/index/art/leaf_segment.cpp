@@ -6,20 +6,20 @@
 
 namespace duckdb {
 
-LeafSegment *LeafSegment::Initialize(ART &art, const idx_t &position) {
+LeafSegment *LeafSegment::Initialize(const ART &art, const idx_t position) {
 	auto segment = LeafSegment::Get(art, position);
 	segment->next = DConstants::INVALID_INDEX;
 	return segment;
 }
 
-LeafSegment *LeafSegment::Append(ART &art, uint32_t &count, const row_t &row_id) {
+LeafSegment *LeafSegment::Append(ART &art, uint32_t &count, const row_t row_id) {
 
 	auto *segment = this;
 	auto position = count % ARTNode::LEAF_SEGMENT_SIZE;
 
 	// we need a new segment
 	if (position == 0 && count != 0) {
-		LeafSegment::New(art, next);
+		next = LeafSegment::New(art);
 		segment = LeafSegment::Initialize(art, next);
 	}
 
@@ -28,7 +28,7 @@ LeafSegment *LeafSegment::Append(ART &art, uint32_t &count, const row_t &row_id)
 	return segment;
 }
 
-LeafSegment *LeafSegment::GetTail(ART &art) {
+LeafSegment *LeafSegment::GetTail(const ART &art) {
 
 	auto segment = this;
 	while (segment->next != DConstants::INVALID_INDEX) {

@@ -40,34 +40,34 @@ public:
 	static Node48 *ShrinkNode256(ART &art, ARTNode &node48, ARTNode &node256);
 
 	//! Initializes a merge by incrementing the buffer IDs of the node
-	void InitializeMerge(ART &art, const vector<idx_t> &buffer_counts);
+	void InitializeMerge(ART &art, const ARTFlags &flags);
 
 	//! Insert a child node at byte
-	static void InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child);
+	static void InsertChild(ART &art, ARTNode &node, const uint8_t byte, const ARTNode child);
 	//! Delete the child node at pos
-	static void DeleteChild(ART &art, ARTNode &node, idx_t position);
+	static void DeleteChild(ART &art, ARTNode &node, const idx_t position);
 
 	//! Replace a child node at pos
-	inline void ReplaceChild(const idx_t &position, ARTNode &child) {
+	inline void ReplaceChild(const idx_t position, const ARTNode child) {
 		D_ASSERT(position < ARTNode::NODE_256_CAPACITY);
 		D_ASSERT(child_index[position] < ARTNode::NODE_48_CAPACITY);
 		children[child_index[position]] = child;
 	}
 
 	//! Get the child at the specified position in the node. pos must be between [0, count)
-	inline ARTNode *GetChild(const idx_t &position) {
+	inline ARTNode *GetChild(const idx_t position) {
 		D_ASSERT(position < ARTNode::NODE_256_CAPACITY);
 		D_ASSERT(child_index[position] < ARTNode::NODE_48_CAPACITY);
 		return &children[child_index[position]];
 	}
 	//! Get the byte at the specified position
-	inline uint8_t GetKeyByte(const idx_t &position) const {
+	inline uint8_t GetKeyByte(const idx_t position) const {
 		D_ASSERT(position < ARTNode::NODE_256_CAPACITY);
 		return position;
 	}
 	//! Get the position of a child corresponding exactly to the specific byte, returns DConstants::INVALID_INDEX if
 	//! the child does not exist
-	inline idx_t GetChildPosition(const uint8_t &byte) const {
+	inline idx_t GetChildPosition(const uint8_t byte) const {
 		if (child_index[byte] == ARTNode::EMPTY_MARKER) {
 			return DConstants::INVALID_INDEX;
 		}
@@ -75,15 +75,12 @@ public:
 	}
 	//! Get the position of the first child that is greater or equal to the specific byte, or DConstants::INVALID_INDEX
 	//! if there are no children matching the criteria
-	idx_t GetChildPositionGreaterEqual(const uint8_t &byte, bool &inclusive) const;
+	idx_t GetChildPositionGreaterEqual(const uint8_t byte, bool &inclusive) const;
 	//! Get the position of the minimum child node in the node
 	idx_t GetMinPosition() const;
-	//! Get the next position in the node, or DConstants::INVALID_INDEX if there is no next position. If pos ==
-	//! DConstants::INVALID_INDEX, then the first valid position in the node is returned
-	idx_t GetNextPosition(idx_t position) const;
-	//! Get the next position and byte in the node, or DConstants::INVALID_INDEX if there is no next position. If pos ==
-	//! DConstants::INVALID_INDEX, then the first valid position and byte in the node are returned
-	idx_t GetNextPositionAndByte(idx_t position, uint8_t &byte) const;
+	//! Get the next position and byte in the node, or DConstants::INVALID_INDEX if there is no next position. If
+	//! position == DConstants::INVALID_INDEX, then the first valid position and byte in the node are returned
+	uint8_t GetNextPosition(idx_t &position) const;
 
 	//! Serialize an ART node
 	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);
@@ -91,6 +88,6 @@ public:
 	void Deserialize(ART &art, MetaBlockReader &reader);
 
 	//! Vacuum the children of the node
-	void Vacuum(ART &art, const vector<bool> &vacuum_flags);
+	void Vacuum(ART &art, const ARTFlags &flags);
 };
 } // namespace duckdb

@@ -37,14 +37,18 @@ class ConflictManager;
 
 // structs
 struct ARTIndexScanState;
+struct ARTFlags {
+	vector<bool> vacuum_flags;
+	vector<idx_t> merge_buffer_counts;
+};
 
 class ART : public Index {
 public:
 	//! Constructs an ART
 	ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
-	    const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type,
-	    AttachedDatabase &db, idx_t block_id = DConstants::INVALID_INDEX,
-	    idx_t block_offset = DConstants::INVALID_INDEX);
+	    const vector<unique_ptr<Expression>> &unbound_expressions, const IndexConstraintType constraint_type,
+	    AttachedDatabase &db, const idx_t block_id = DConstants::INVALID_INDEX,
+	    const idx_t block_offset = DConstants::INVALID_INDEX);
 	~ART() override;
 
 	//! Root of the tree
@@ -65,14 +69,15 @@ public:
 public:
 	//! Initialize a single predicate scan on the index with the given expression and column IDs
 	unique_ptr<IndexScanState> InitializeScanSinglePredicate(const Transaction &transaction, const Value &value,
-	                                                         ExpressionType expression_type) override;
+	                                                         const ExpressionType expression_type) override;
 	//! Initialize a two predicate scan on the index with the given expression and column IDs
-	unique_ptr<IndexScanState> InitializeScanTwoPredicates(Transaction &transaction, const Value &low_value,
-	                                                       ExpressionType low_expression_type, const Value &high_value,
-	                                                       ExpressionType high_expression_type) override;
+	unique_ptr<IndexScanState> InitializeScanTwoPredicates(const Transaction &transaction, const Value &low_value,
+	                                                       const ExpressionType low_expression_type,
+	                                                       const Value &high_value,
+	                                                       const ExpressionType high_expression_type) override;
 	//! Performs a lookup on the index, fetching up to max_count result IDs. Returns true if all row IDs were fetched,
 	//! and false otherwise
-	bool Scan(Transaction &transaction, DataTable &table, IndexScanState &state, idx_t max_count,
+	bool Scan(const Transaction &transaction, const DataTable &table, IndexScanState &state, const idx_t max_count,
 	          vector<row_t> &result_ids) override;
 
 	//! Called when data is appended to the index. The lock obtained from InitializeLock must be held
@@ -116,8 +121,6 @@ public:
 
 	//! Returns the string representation of the ART
 	string ToString() override;
-	//! Increases or decreases the in-memory size of the ART
-	void UpdateMemoryUsage() override;
 
 private:
 	//! Insert a row ID into a leaf
@@ -138,17 +141,17 @@ private:
 	                      bool right_inclusive, idx_t max_count, vector<row_t> &result_ids);
 
 	//! Initializes a merge operation by returning a set containing the buffer count of each fixed-size allocator
-	vector<idx_t> InitializeMerge(vector<FixedSizeAllocator *> &allocators);
+	void InitializeMerge(vector<FixedSizeAllocator *> &allocators, ARTFlags &flags);
 	//! Returns a vector containing pointers to all fixed-size allocators
 	vector<FixedSizeAllocator *> GetAllocators() const;
 
 	//! Initializes a vacuum operation by calling the initialize operation of the respective
 	//! node allocator, and returns a vector containing either true, if the allocator at
 	//! the respective position qualifies, or false, if not
-	vector<bool> InitializeVacuum(vector<FixedSizeAllocator *> &allocators);
+	void InitializeVacuum(vector<FixedSizeAllocator *> &allocators, ARTFlags &flags);
 	//! Finalizes a vacuum operation by calling the finalize operation of all qualifying
 	//! fixed size allocators
-	void FinalizeVacuum(vector<FixedSizeAllocator *> &allocators, vector<bool> &vacuum_flags);
+	void FinalizeVacuum(vector<FixedSizeAllocator *> &allocators, const ARTFlags &flags);
 };
 
 } // namespace duckdb

@@ -33,8 +33,8 @@ struct ARTIndexScanState : public IndexScanState {
 };
 
 ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
-         const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type,
-         AttachedDatabase &db, idx_t block_id, idx_t block_offset)
+         const vector<unique_ptr<Expression>> &unbound_expressions, const IndexConstraintType constraint_type,
+         AttachedDatabase &db, const idx_t block_id, const idx_t block_offset)
 
     : Index(db, IndexType::ART, table_io_manager, column_ids, unbound_expressions, constraint_type) {
 
@@ -43,20 +43,19 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	}
 
 	// initialize all allocators
-	prefix_segments = make_unique<FixedSizeAllocator>(sizeof(PrefixSegment));
-	leaf_segments = make_unique<FixedSizeAllocator>(sizeof(LeafSegment));
-	leaves = make_unique<FixedSizeAllocator>(sizeof(Leaf));
-	n4_nodes = make_unique<FixedSizeAllocator>(sizeof(Node4));
-	n16_nodes = make_unique<FixedSizeAllocator>(sizeof(Node16));
-	n48_nodes = make_unique<FixedSizeAllocator>(sizeof(Node48));
-	n256_nodes = make_unique<FixedSizeAllocator>(sizeof(Node256));
+	prefix_segments = make_unique<FixedSizeAllocator>(sizeof(PrefixSegment), buffer_manager);
+	leaf_segments = make_unique<FixedSizeAllocator>(sizeof(LeafSegment), buffer_manager);
+	leaves = make_unique<FixedSizeAllocator>(sizeof(Leaf), buffer_manager);
+	n4_nodes = make_unique<FixedSizeAllocator>(sizeof(Node4), buffer_manager);
+	n16_nodes = make_unique<FixedSizeAllocator>(sizeof(Node16), buffer_manager);
+	n48_nodes = make_unique<FixedSizeAllocator>(sizeof(Node48), buffer_manager);
+	n256_nodes = make_unique<FixedSizeAllocator>(sizeof(Node256), buffer_manager);
 
 	// set the root node of the tree
 	tree.Reset();
 	if (block_id != DConstants::INVALID_INDEX) {
 		BlockPointer block(block_id, block_offset);
 		tree.Deserialize(*this, block);
-		UpdateMemoryUsage();
 	}
 	serialized_data_pointer = BlockPointer(block_id, block_offset);
 
@@ -84,10 +83,7 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 }
 
 ART::~ART() {
-	if (tree) {
-		tree.Reset();
-		buffer_manager.FreeReservedMemory(memory_size);
-	}
+	tree.Reset();
 }
 
 //===--------------------------------------------------------------------===//
@@ -95,7 +91,7 @@ ART::~ART() {
 //===--------------------------------------------------------------------===//
 
 unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(const Transaction &transaction, const Value &value,
-                                                              ExpressionType expression_type) {
+                                                              const ExpressionType expression_type) {
 	// initialize point lookup
 	auto result = make_unique<ARTIndexScanState>();
 	result->values[0] = value;
@@ -103,9 +99,10 @@ unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(const Transaction 
 	return std::move(result);
 }
 
-unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transaction, const Value &low_value,
-                                                            ExpressionType low_expression_type, const Value &high_value,
-                                                            ExpressionType high_expression_type) {
+unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(const Transaction &transaction, const Value &low_value,
+                                                            const ExpressionType low_expression_type,
+                                                            const Value &high_value,
+                                                            const ExpressionType high_expression_type) {
 	// initialize range lookup
 	auto result = make_unique<ARTIndexScanState>();
 	result->values[0] = low_value;
@@ -390,7 +387,6 @@ PreservedError ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 		}
 	}
 
-	UpdateMemoryUsage();
 	if (failed_index != DConstants::INVALID_INDEX) {
 		return PreservedError(ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicate key \"%s\"",
 		                                          AppendRowError(input, failed_index)));
@@ -550,8 +546,6 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 		}
 #endif
 	}
-
-	UpdateMemoryUsage();
 }
 
 void ART::Erase(ARTNode &node, const Key &key, idx_t depth, const row_t &row_id) {
@@ -645,7 +639,6 @@ static Key CreateKey(ArenaAllocator &allocator, PhysicalType type, Value &value)
 bool ART::SearchEqual(Key &key, idx_t max_count, vector<row_t> &result_ids) {
 
 	auto leaf = (Leaf *)(Lookup(tree, key, 0));
-	UpdateMemoryUsage();
 
 	if (!leaf) {
 		return true;
@@ -664,7 +657,6 @@ void ART::SearchEqualJoinNoFetch(Key &key, idx_t &result_size) {
 
 	// we need to look for a leaf
 	auto leaf = Lookup(tree, key, 0);
-	UpdateMemoryUsage();
 
 	if (!leaf) {
 		result_size = 0;
@@ -733,9 +725,7 @@ bool ART::SearchGreater(ARTIndexScanState *state, Key &key, bool inclusive, idx_
 	// that satisfies our requirement
 	if (!it->art) {
 		it->art = this;
-		bool found = it->LowerBound(tree, key, inclusive);
-		if (!found) {
-			UpdateMemoryUsage();
+		if (!it->LowerBound(tree, key, inclusive)) {
 			return true;
 		}
 	}
@@ -743,9 +733,7 @@ bool ART::SearchGreater(ARTIndexScanState *state, Key &key, bool inclusive, idx_
 	// after that we continue the scan; we don't need to check the bounds as any value following this value is
 	// automatically bigger and hence satisfies our predicate
 	Key empty_key = Key();
-	auto success = it->Scan(empty_key, max_count, result_ids, false);
-	UpdateMemoryUsage();
-	return success;
+	return it->Scan(empty_key, max_count, result_ids, false);
 }
 
 //===--------------------------------------------------------------------===//
@@ -767,15 +755,12 @@ bool ART::SearchLess(ARTIndexScanState *state, Key &upper_bound, bool inclusive,
 		it->FindMinimum(tree);
 		// early out min value higher than upper bound query
 		if (it->cur_key > upper_bound) {
-			UpdateMemoryUsage();
 			return true;
 		}
 	}
 
 	// now continue the scan until we reach the upper bound
-	auto success = it->Scan(upper_bound, max_count, result_ids, inclusive);
-	UpdateMemoryUsage();
-	return success;
+	return it->Scan(upper_bound, max_count, result_ids, inclusive);
 }
 
 //===--------------------------------------------------------------------===//
@@ -790,21 +775,17 @@ bool ART::SearchCloseRange(ARTIndexScanState *state, Key &lower_bound, Key &uppe
 	// first find the first node that satisfies the left predicate
 	if (!it->art) {
 		it->art = this;
-		bool found = it->LowerBound(tree, lower_bound, left_inclusive);
-		if (!found) {
-			UpdateMemoryUsage();
+		if (!it->LowerBound(tree, lower_bound, left_inclusive)) {
 			return true;
 		}
 	}
 
 	// now continue the scan until we reach the upper bound
-	auto success = it->Scan(upper_bound, max_count, result_ids, right_inclusive);
-	UpdateMemoryUsage();
-	return success;
+	return it->Scan(upper_bound, max_count, result_ids, right_inclusive);
 }
 
-bool ART::Scan(Transaction &transaction, DataTable &table, IndexScanState &table_state, idx_t max_count,
-               vector<row_t> &result_ids) {
+bool ART::Scan(const Transaction &transaction, const DataTable &table, IndexScanState &table_state,
+               const idx_t max_count, vector<row_t> &result_ids) {
 
 	auto state = (ARTIndexScanState *)&table_state;
 	vector<row_t> row_ids;
@@ -962,7 +943,6 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 	}
 
 	conflict_manager.FinishLookup();
-	UpdateMemoryUsage();
 
 	if (found_conflict == DConstants::INVALID_INDEX) {
 		return;
@@ -986,7 +966,6 @@ BlockPointer ART::Serialize(MetaBlockWriter &writer) {
 		serialized_data_pointer = {(block_id_t)DConstants::INVALID_INDEX, (uint32_t)DConstants::INVALID_INDEX};
 	}
 
-	UpdateMemoryUsage();
 	return serialized_data_pointer;
 }
 
@@ -994,20 +973,18 @@ BlockPointer ART::Serialize(MetaBlockWriter &writer) {
 // Vacuum
 //===--------------------------------------------------------------------===//
 
-vector<bool> ART::InitializeVacuum(vector<FixedSizeAllocator *> &allocators) {
+void ART::InitializeVacuum(vector<FixedSizeAllocator *> &allocators, ARTFlags &flags) {
 
-	vector<bool> vacuum_nodes;
-	vacuum_nodes.reserve(allocators.size());
+	flags.vacuum_flags.reserve(allocators.size());
 	for (auto &allocator : allocators) {
-		vacuum_nodes.push_back(allocator->InitializeVacuum());
+		flags.vacuum_flags.push_back(allocator->InitializeVacuum());
 	}
-	return vacuum_nodes;
 }
 
-void ART::FinalizeVacuum(vector<FixedSizeAllocator *> &allocators, vector<bool> &vacuum_flags) {
+void ART::FinalizeVacuum(vector<FixedSizeAllocator *> &allocators, const ARTFlags &flags) {
 
 	for (idx_t i = 0; i < allocators.size(); i++) {
-		if (vacuum_flags[i]) {
+		if (flags.vacuum_flags[i]) {
 			allocators[i]->FinalizeVacuum();
 		}
 	}
@@ -1015,26 +992,22 @@ void ART::FinalizeVacuum(vector<FixedSizeAllocator *> &allocators, vector<bool> 
 
 void ART::Vacuum(IndexLock &state) {
 
-	if (!tree && !memory_size) {
-		return;
-	}
-
 	auto allocators = GetAllocators();
 
 	if (!tree) {
 		for (auto &allocator : allocators) {
 			allocator->Reset();
 		}
-		UpdateMemoryUsage();
 		return;
 	}
 
 	// holds true, if an allocator needs a vacuum, and false otherwise
-	auto vacuum_flags = InitializeVacuum(allocators);
+	ARTFlags flags;
+	InitializeVacuum(allocators, flags);
 
 	// skip vacuum if no allocators require it
 	auto perform_vacuum = false;
-	for (const auto &vacuum_flag : vacuum_flags) {
+	for (const auto &vacuum_flag : flags.vacuum_flags) {
 		if (vacuum_flag) {
 			perform_vacuum = true;
 			break;
@@ -1045,25 +1018,22 @@ void ART::Vacuum(IndexLock &state) {
 	}
 
 	// traverse the allocated memory of the tree to perform a vacuum
-	ARTNode::Vacuum(*this, tree, vacuum_flags);
+	ARTNode::Vacuum(*this, tree, flags);
 
 	// finalize the vacuum operation
-	FinalizeVacuum(allocators, vacuum_flags);
-	UpdateMemoryUsage();
+	FinalizeVacuum(allocators, flags);
 }
 
 //===--------------------------------------------------------------------===//
 // Merging
 //===--------------------------------------------------------------------===//
 
-vector<idx_t> ART::InitializeMerge(vector<FixedSizeAllocator *> &allocators) {
+void ART::InitializeMerge(vector<FixedSizeAllocator *> &allocators, ARTFlags &flags) {
 
-	vector<idx_t> buffer_counts;
-	buffer_counts.reserve(allocators.size());
+	flags.merge_buffer_counts.reserve(allocators.size());
 	for (auto &allocator : allocators) {
-		buffer_counts.emplace_back(allocator->buffers.size());
+		flags.merge_buffer_counts.emplace_back(allocator->buffers.size());
 	}
-	return buffer_counts;
 }
 
 bool ART::MergeIndexes(IndexLock &state, Index *other_index) {
@@ -1074,8 +1044,9 @@ bool ART::MergeIndexes(IndexLock &state, Index *other_index) {
 
 	if (tree) {
 		//  fully deserialize other_index, and traverse it to increment its buffer IDs
-		auto buffer_counts = InitializeMerge(allocators);
-		other_art->tree.InitializeMerge(*other_art, buffer_counts);
+		ARTFlags flags;
+		InitializeMerge(allocators, flags);
+		other_art->tree.InitializeMerge(*other_art, flags);
 	}
 
 	// merge the node storage
@@ -1095,12 +1066,10 @@ bool ART::MergeIndexes(IndexLock &state, Index *other_index) {
 //===--------------------------------------------------------------------===//
 
 string ART::ToString() {
-	string str = "[empty]";
 	if (tree) {
-		str = tree.ToString(*this);
+		return tree.ToString(*this);
 	}
-	UpdateMemoryUsage();
-	return str;
+	return "[empty]";
 }
 
 vector<FixedSizeAllocator *> ART::GetAllocators() const {
@@ -1116,22 +1085,6 @@ vector<FixedSizeAllocator *> ART::GetAllocators() const {
 	allocators.push_back(n256_nodes.get());
 
 	return allocators;
-}
-
-void ART::UpdateMemoryUsage() {
-
-	idx_t current_size = 0;
-	for (const auto &allocator : GetAllocators()) {
-		current_size += allocator->GetMemoryUsage();
-	}
-
-	if (current_size > memory_size) {
-		buffer_manager.ReserveMemory(current_size - memory_size);
-	} else if (memory_size > current_size) {
-		buffer_manager.FreeReservedMemory(memory_size - current_size);
-	}
-
-	memory_size = current_size;
 }
 
 } // namespace duckdb

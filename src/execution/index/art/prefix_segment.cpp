@@ -9,20 +9,20 @@ namespace duckdb {
 PrefixSegment::PrefixSegment() : next(0) {
 }
 
-PrefixSegment *PrefixSegment::Initialize(ART &art, const idx_t &position) {
+PrefixSegment *PrefixSegment::Initialize(const ART &art, const idx_t position) {
 	auto segment = PrefixSegment::Get(art, position);
 	segment->next = DConstants::INVALID_INDEX;
 	return segment;
 }
 
-PrefixSegment *PrefixSegment::Append(ART &art, uint32_t &count, const uint8_t &byte) {
+PrefixSegment *PrefixSegment::Append(ART &art, uint32_t &count, const uint8_t byte) {
 
 	auto *segment = this;
 	auto position = count % ARTNode::PREFIX_SEGMENT_SIZE;
 
 	// we need a new segment
 	if (position == 0 && count != 0) {
-		PrefixSegment::New(art, next);
+		next = PrefixSegment::New(art);
 		segment = PrefixSegment::Initialize(art, next);
 	}
 
@@ -31,7 +31,7 @@ PrefixSegment *PrefixSegment::Append(ART &art, uint32_t &count, const uint8_t &b
 	return segment;
 }
 
-PrefixSegment *PrefixSegment::GetTail(ART &art) {
+PrefixSegment *PrefixSegment::GetTail(const ART &art) {
 
 	auto segment = this;
 	while (segment->next != DConstants::INVALID_INDEX) {

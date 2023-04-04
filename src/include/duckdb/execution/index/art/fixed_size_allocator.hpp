@@ -13,6 +13,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -47,7 +48,7 @@ public:
 	static constexpr uint8_t SHIFT[] = {32, 16, 8, 4, 2, 1};
 
 public:
-	explicit FixedSizeAllocator(const idx_t &allocation_size);
+	explicit FixedSizeAllocator(const idx_t allocation_size, BufferManager &buffer_manager);
 	~FixedSizeAllocator();
 
 	//! Allocation size of one element in a buffer
@@ -67,21 +68,19 @@ public:
 	unordered_set<idx_t> buffers_with_free_space;
 
 	//! Minimum buffer ID of buffers that can be vacuumed
-	idx_t vacuum_threshold;
+	idx_t min_vacuum_buffer_ID;
+
+	//! Buffer manager of the database instance
+	BufferManager &buffer_manager;
 
 public:
 	//! Get a new position to data, might cause a new buffer allocation
-	void New(idx_t &new_position);
-	inline idx_t New() {
-		idx_t position;
-		New(position);
-		return position;
-	}
+	idx_t New();
 	//! Free the data at position
-	void Free(const idx_t &position);
+	void Free(const idx_t position);
 	//! Get the data at position
 	template <class T>
-	inline T *Get(const idx_t &position) const {
+	inline T *Get(const idx_t position) const {
 		return (T *)Get(position);
 	}
 
@@ -101,22 +100,22 @@ public:
 	//! Finalize a vacuum operation by freeing all buffers exceeding the vacuum_threshold
 	void FinalizeVacuum();
 	//! Returns true, if a position qualifies for a vacuum operation, and false otherwise
-	inline bool NeedsVacuum(const idx_t &position) const {
+	inline bool NeedsVacuum(const idx_t position) const {
 		// get the buffer ID
 		D_ASSERT((position & BUFFER_ID_AND_OFFSET_TO_ZERO) == 0);
 		auto buffer_id = position & OFFSET_AND_FIRST_BYTE_TO_ZERO;
 
-		if (buffer_id >= vacuum_threshold) {
+		if (buffer_id >= min_vacuum_buffer_ID) {
 			return true;
 		}
 		return false;
 	}
 	//! Vacuums a position
-	idx_t Vacuum(const idx_t &position);
+	idx_t VacuumPosition(const idx_t position);
 
 private:
 	//! Returns a data_ptr_t to the position
-	inline data_ptr_t Get(const idx_t &position) const {
+	inline data_ptr_t Get(const idx_t position) const {
 		D_ASSERT((position & BUFFER_ID_AND_OFFSET_TO_ZERO) == 0);
 		D_ASSERT((position & OFFSET_AND_FIRST_BYTE_TO_ZERO) < buffers.size());
 		D_ASSERT((position >> OFFSET_SHIFT) < allocations_per_buffer);
@@ -126,7 +125,7 @@ private:
 		return buffers[buffer_id].ptr + offset;
 	}
 	//! Returns the first free offset in a bitmask
-	idx_t GetOffset(ValidityMask &mask, const idx_t &allocation_count);
+	idx_t GetOffset(ValidityMask &mask, const idx_t allocation_count);
 };
 
 } // namespace duckdb

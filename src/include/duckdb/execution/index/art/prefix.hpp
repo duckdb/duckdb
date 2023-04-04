@@ -20,7 +20,7 @@ public:
 	//! Inlined empty prefix
 	Prefix();
 	//! Inlined prefix containing one byte
-	explicit Prefix(const uint8_t &byte);
+	explicit Prefix(const uint8_t byte);
 
 	//! Disable copy operators
 	Prefix(const Prefix &) = delete;
@@ -43,12 +43,12 @@ public:
 		count = 0;
 	}
 	//! Initialize a prefix from an ART key
-	void Initialize(ART &art, const Key &key, const uint32_t &depth, const uint32_t &count_p);
+	void Initialize(ART &art, const Key &key, const uint32_t depth, const uint32_t count_p);
 	//! Initialize a prefix from another prefix up to count
-	void Initialize(ART &art, const Prefix &other, const uint32_t &count_p);
+	void Initialize(ART &art, const Prefix &other, const uint32_t count_p);
 
 	//! Initializes a merge by incrementing the buffer IDs of the prefix segments
-	void InitializeMerge(ART &art, const idx_t &buffer_count);
+	void InitializeMerge(ART &art, const idx_t buffer_count);
 
 	//! Move a prefix into this prefix
 	inline void Move(Prefix &other) {
@@ -59,19 +59,19 @@ public:
 	//! Append a prefix to this prefix
 	void Append(ART &art, const Prefix &other);
 	//! Concatenate prefix with a partial key byte and another prefix: other.prefix + byte + this->prefix
-	void Concatenate(ART &art, const uint8_t &byte, const Prefix &other);
+	void Concatenate(ART &art, const uint8_t byte, const Prefix &other);
 	//! Removes the first n bytes, and returns the new first byte
-	uint8_t Reduce(ART &art, const idx_t &n);
+	uint8_t Reduce(ART &art, const idx_t reduce_count);
 
 	//! Get the byte at position
-	uint8_t GetByte(ART &art, const idx_t &position) const;
+	uint8_t GetByte(const ART &art, const idx_t position) const;
 	//! Compare the key with the prefix of the node, return the position where they mismatch
-	uint32_t KeyMismatchPosition(ART &art, const Key &key, const uint32_t &depth) const;
+	uint32_t KeyMismatchPosition(const ART &art, const Key &key, const uint32_t depth) const;
 	//! Compare this prefix to another prefix, return the position where they mismatch, or count otherwise
-	uint32_t MismatchPosition(ART &art, const Prefix &other) const;
+	uint32_t MismatchPosition(const ART &art, const Prefix &other) const;
 
 	//! Serialize this prefix
-	void Serialize(ART &art, MetaBlockWriter &writer) const;
+	void Serialize(const ART &art, MetaBlockWriter &writer) const;
 	//! Deserialize this prefix
 	void Deserialize(ART &art, MetaBlockReader &reader);
 

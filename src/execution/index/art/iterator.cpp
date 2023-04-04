@@ -147,7 +147,7 @@ bool Iterator::Next() {
 			return true;
 		}
 		// find next node
-		top.position = node.GetNextPosition(*art, top.position);
+		node.GetNextPosition(*art, top.position);
 		if (top.position != DConstants::INVALID_INDEX) {
 			// add key-byte of the new node
 			PushKey(node, top.position);

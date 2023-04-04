@@ -103,16 +103,16 @@ Node48 *Node48::ShrinkNode256(ART &art, ARTNode &node48, ARTNode &node256) {
 	return n48;
 }
 
-void Node48::InitializeMerge(ART &art, const vector<idx_t> &buffer_counts) {
+void Node48::InitializeMerge(ART &art, const ARTFlags &flags) {
 
 	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
 		if (child_index[i] != ARTNode::EMPTY_MARKER) {
-			children[child_index[i]].InitializeMerge(art, buffer_counts);
+			children[child_index[i]].InitializeMerge(art, flags);
 		}
 	}
 }
 
-void Node48::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child) {
+void Node48::InsertChild(ART &art, ARTNode &node, const uint8_t byte, const ARTNode child) {
 
 	D_ASSERT(node);
 	D_ASSERT(!node.IsSwizzled());
@@ -144,7 +144,7 @@ void Node48::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &
 	}
 }
 
-void Node48::DeleteChild(ART &art, ARTNode &node, idx_t position) {
+void Node48::DeleteChild(ART &art, ARTNode &node, const idx_t position) {
 
 	D_ASSERT(node);
 	D_ASSERT(!node.IsSwizzled());
@@ -162,7 +162,7 @@ void Node48::DeleteChild(ART &art, ARTNode &node, idx_t position) {
 	}
 }
 
-idx_t Node48::GetChildPositionGreaterEqual(const uint8_t &byte, bool &inclusive) const {
+idx_t Node48::GetChildPositionGreaterEqual(const uint8_t byte, bool &inclusive) const {
 	for (idx_t position = byte; position < ARTNode::NODE_256_CAPACITY; position++) {
 		if (child_index[position] != ARTNode::EMPTY_MARKER) {
 			inclusive = position == byte;
@@ -181,25 +181,15 @@ idx_t Node48::GetMinPosition() const {
 	return DConstants::INVALID_INDEX;
 }
 
-idx_t Node48::GetNextPosition(idx_t position) const {
+uint8_t Node48::GetNextPosition(idx_t &position) const {
 	position == DConstants::INVALID_INDEX ? position = 0 : position++;
 	for (; position < ARTNode::NODE_256_CAPACITY; position++) {
 		if (child_index[position] != ARTNode::EMPTY_MARKER) {
-			return position;
+			return uint8_t(position);
 		}
 	}
-	return DConstants::INVALID_INDEX;
-}
-
-idx_t Node48::GetNextPositionAndByte(idx_t position, uint8_t &byte) const {
-	position == DConstants::INVALID_INDEX ? position = 0 : position++;
-	for (; position < ARTNode::NODE_256_CAPACITY; position++) {
-		if (child_index[position] != ARTNode::EMPTY_MARKER) {
-			byte = uint8_t(position);
-			return position;
-		}
-	}
-	return DConstants::INVALID_INDEX;
+	position = DConstants::INVALID_INDEX;
+	return 0;
 }
 
 BlockPointer Node48::Serialize(ART &art, MetaBlockWriter &writer) {
@@ -246,11 +236,11 @@ void Node48::Deserialize(ART &art, MetaBlockReader &reader) {
 	}
 }
 
-void Node48::Vacuum(ART &art, const vector<bool> &vacuum_flags) {
+void Node48::Vacuum(ART &art, const ARTFlags &flags) {
 
 	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
 		if (child_index[i] != ARTNode::EMPTY_MARKER) {
-			ARTNode::Vacuum(art, children[child_index[i]], vacuum_flags);
+			ARTNode::Vacuum(art, children[child_index[i]], flags);
 		}
 	}
 }

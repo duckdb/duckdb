@@ -26,28 +26,24 @@ public:
 
 public:
 	//! Get a new pointer to a prefix segment, might cause a new buffer allocation
-	static inline void New(ART &art, idx_t &new_position) {
-		art.prefix_segments->New(new_position);
-	}
-	//! Return a new pointer to a prefix segment, might cause a new buffer allocation
 	static inline idx_t New(ART &art) {
 		return art.prefix_segments->New();
 	}
 	//! Free a prefix segment
-	static inline void Free(ART &art, const idx_t &position) {
+	static inline void Free(ART &art, const idx_t position) {
 		art.prefix_segments->Free(position);
 	}
 	//! Initialize all the fields of the segment
-	static PrefixSegment *Initialize(ART &art, const idx_t &position);
+	static PrefixSegment *Initialize(const ART &art, const idx_t position);
 	//! Get a prefix segment
-	static inline PrefixSegment *Get(ART &art, const idx_t &position) {
+	static inline PrefixSegment *Get(const ART &art, const idx_t position) {
 		return art.prefix_segments->Get<PrefixSegment>(position);
 	}
 
 	//! Append a byte to the current segment, or create a new segment containing that byte
-	PrefixSegment *Append(ART &art, uint32_t &count, const uint8_t &byte);
+	PrefixSegment *Append(ART &art, uint32_t &count, const uint8_t byte);
 	//! Get the tail of a list of segments
-	PrefixSegment *GetTail(ART &art);
+	PrefixSegment *GetTail(const ART &art);
 };
 
 } // namespace duckdb

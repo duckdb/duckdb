@@ -63,16 +63,16 @@ Node256 *Node256::GrowNode48(ART &art, ARTNode &node256, ARTNode &node48) {
 	return n256;
 }
 
-void Node256::InitializeMerge(ART &art, const vector<idx_t> &buffer_counts) {
+void Node256::InitializeMerge(ART &art, const ARTFlags &flags) {
 
 	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
 		if (children[i]) {
-			children[i].InitializeMerge(art, buffer_counts);
+			children[i].InitializeMerge(art, flags);
 		}
 	}
 }
 
-void Node256::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child) {
+void Node256::InsertChild(ART &art, ARTNode &node, const uint8_t byte, const ARTNode child) {
 
 	D_ASSERT(node);
 	D_ASSERT(!node.IsSwizzled());
@@ -85,7 +85,7 @@ void Node256::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode 
 	n256->children[byte] = child;
 }
 
-void Node256::DeleteChild(ART &art, ARTNode &node, idx_t position) {
+void Node256::DeleteChild(ART &art, ARTNode &node, const idx_t position) {
 
 	D_ASSERT(node);
 	D_ASSERT(!node.IsSwizzled());
@@ -102,7 +102,7 @@ void Node256::DeleteChild(ART &art, ARTNode &node, idx_t position) {
 	}
 }
 
-idx_t Node256::GetChildPositionGreaterEqual(const uint8_t &byte, bool &inclusive) const {
+idx_t Node256::GetChildPositionGreaterEqual(const uint8_t byte, bool &inclusive) const {
 	for (idx_t position = byte; position < ARTNode::NODE_256_CAPACITY; position++) {
 		if (children[position]) {
 			inclusive = position == byte;
@@ -121,25 +121,15 @@ idx_t Node256::GetMinPosition() const {
 	return DConstants::INVALID_INDEX;
 }
 
-idx_t Node256::GetNextPosition(idx_t position) const {
+uint8_t Node256::GetNextPosition(idx_t &position) const {
 	position == DConstants::INVALID_INDEX ? position = 0 : position++;
 	for (; position < ARTNode::NODE_256_CAPACITY; position++) {
 		if (children[position]) {
-			return position;
+			return uint8_t(position);
 		}
 	}
-	return DConstants::INVALID_INDEX;
-}
-
-idx_t Node256::GetNextPositionAndByte(idx_t position, uint8_t &byte) const {
-	position == DConstants::INVALID_INDEX ? position = 0 : position++;
-	for (; position < ARTNode::NODE_256_CAPACITY; position++) {
-		if (children[position]) {
-			byte = uint8_t(position);
-			return position;
-		}
-	}
-	return DConstants::INVALID_INDEX;
+	position = DConstants::INVALID_INDEX;
+	return 0;
 }
 
 BlockPointer Node256::Serialize(ART &art, MetaBlockWriter &writer) {
@@ -176,11 +166,11 @@ void Node256::Deserialize(ART &art, MetaBlockReader &reader) {
 	}
 }
 
-void Node256::Vacuum(ART &art, const vector<bool> &vacuum_flags) {
+void Node256::Vacuum(ART &art, const ARTFlags &flags) {
 
 	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
 		if (children[i]) {
-			ARTNode::Vacuum(art, children[i], vacuum_flags);
+			ARTNode::Vacuum(art, children[i], flags);
 		}
 	}
 }

@@ -22,28 +22,24 @@ public:
 
 public:
 	//! Get a new pointer to a leaf segment, might cause a new buffer allocation
-	static inline void New(ART &art, idx_t &new_position) {
-		art.leaf_segments->New(new_position);
-	}
-	//! Return a new pointer to a leaf segment, might cause a new buffer allocation
 	static inline idx_t New(ART &art) {
 		return art.leaf_segments->New();
 	}
 	//! Free a leaf segment
-	static inline void Free(ART &art, const idx_t &position) {
+	static inline void Free(ART &art, const idx_t position) {
 		art.leaf_segments->Free(position);
 	}
 	//! Initialize all the fields of the segment
-	static LeafSegment *Initialize(ART &art, const idx_t &position);
+	static LeafSegment *Initialize(const ART &art, const idx_t position);
 	//! Get a leaf segment
-	static inline LeafSegment *Get(ART &art, const idx_t &position) {
+	static inline LeafSegment *Get(const ART &art, const idx_t position) {
 		return art.leaf_segments->Get<LeafSegment>(position);
 	}
 
 	//! Append a row ID to the current segment, or create a new segment containing that row ID
-	LeafSegment *Append(ART &art, uint32_t &count, const row_t &row_id);
+	LeafSegment *Append(ART &art, uint32_t &count, const row_t row_id);
 	//! Get the tail of a list of segments
-	LeafSegment *GetTail(ART &art);
+	LeafSegment *GetTail(const ART &art);
 };
 
 } // namespace duckdb

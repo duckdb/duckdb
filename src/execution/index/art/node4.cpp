@@ -50,25 +50,23 @@ Node4 *Node4::ShrinkNode16(ART &art, ARTNode &node4, ARTNode &node16) {
 	return n4;
 }
 
-void Node4::InitializeMerge(ART &art, const vector<idx_t> &buffer_counts) {
+void Node4::InitializeMerge(ART &art, const ARTFlags &flags) {
 
 	for (idx_t i = 0; i < count; i++) {
-		children[i].InitializeMerge(art, buffer_counts);
+		children[i].InitializeMerge(art, flags);
 	}
 }
 
-void Node4::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &child) {
+void Node4::InsertChild(ART &art, ARTNode &node, const uint8_t byte, const ARTNode child) {
 
 	D_ASSERT(node);
 	D_ASSERT(!node.IsSwizzled());
 	auto n4 = art.n4_nodes->Get<Node4>(node.GetPtr());
 
-#ifdef DEBUG
 	// ensure that there is no other child at the same byte
 	for (idx_t i = 0; i < n4->count; i++) {
 		D_ASSERT(n4->key[i] != byte);
 	}
-#endif
 
 	// insert new child node into node
 	if (n4->count < ARTNode::NODE_4_CAPACITY) {
@@ -95,7 +93,7 @@ void Node4::InsertChild(ART &art, ARTNode &node, const uint8_t &byte, ARTNode &c
 	}
 }
 
-void Node4::DeleteChild(ART &art, ARTNode &node, idx_t position) {
+void Node4::DeleteChild(ART &art, ARTNode &node, const idx_t position) {
 
 	D_ASSERT(node);
 	D_ASSERT(!node.IsSwizzled());
@@ -109,9 +107,9 @@ void Node4::DeleteChild(ART &art, ARTNode &node, idx_t position) {
 	n4->count--;
 
 	// potentially move any children backwards
-	for (; position < n4->count; position++) {
-		n4->key[position] = n4->key[position + 1];
-		n4->children[position] = n4->children[position + 1];
+	for (idx_t i = position; i < n4->count; i++) {
+		n4->key[i] = n4->key[i + 1];
+		n4->children[i] = n4->children[i + 1];
 	}
 
 	// this is a one way node, compress
@@ -127,7 +125,7 @@ void Node4::DeleteChild(ART &art, ARTNode &node, idx_t position) {
 	}
 }
 
-idx_t Node4::GetChildPosition(const uint8_t &byte) const {
+idx_t Node4::GetChildPosition(const uint8_t byte) const {
 	for (idx_t position = 0; position < count; position++) {
 		if (key[position] == byte) {
 			return position;
@@ -136,7 +134,7 @@ idx_t Node4::GetChildPosition(const uint8_t &byte) const {
 	return DConstants::INVALID_INDEX;
 }
 
-idx_t Node4::GetChildPositionGreaterEqual(const uint8_t &byte, bool &inclusive) const {
+idx_t Node4::GetChildPositionGreaterEqual(const uint8_t byte, bool &inclusive) const {
 	for (idx_t position = 0; position < count; position++) {
 		if (key[position] >= byte) {
 			inclusive = key[position] == byte;
@@ -146,25 +144,17 @@ idx_t Node4::GetChildPositionGreaterEqual(const uint8_t &byte, bool &inclusive) 
 	return DConstants::INVALID_INDEX;
 }
 
-idx_t Node4::GetNextPosition(idx_t position) const {
+uint8_t Node4::GetNextPosition(idx_t &position) const {
 	if (position == DConstants::INVALID_INDEX) {
-		return 0;
-	}
-	position++;
-	return position < count ? position : DConstants::INVALID_INDEX;
-}
-
-idx_t Node4::GetNextPositionAndByte(idx_t position, uint8_t &byte) const {
-	if (position == DConstants::INVALID_INDEX) {
-		byte = key[0];
-		return 0;
+		position = 0;
+		return key[position];
 	}
 	position++;
 	if (position < count) {
-		byte = key[position];
-		return position;
+		return key[position];
 	}
-	return DConstants::INVALID_INDEX;
+	position = DConstants::INVALID_INDEX;
+	return 0;
 }
 
 BlockPointer Node4::Serialize(ART &art, MetaBlockWriter &writer) {
@@ -214,10 +204,10 @@ void Node4::Deserialize(ART &art, MetaBlockReader &reader) {
 	}
 }
 
-void Node4::Vacuum(ART &art, const vector<bool> &vacuum_flags) {
+void Node4::Vacuum(ART &art, const ARTFlags &flags) {
 
 	for (idx_t i = 0; i < count; i++) {
-		ARTNode::Vacuum(art, children[i], vacuum_flags);
+		ARTNode::Vacuum(art, children[i], flags);
 	}
 }
 

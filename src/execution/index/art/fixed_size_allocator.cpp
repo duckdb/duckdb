@@ -9,8 +9,8 @@ namespace duckdb {
 constexpr idx_t FixedSizeAllocator::BASE[];
 constexpr uint8_t FixedSizeAllocator::SHIFT[];
 
-FixedSizeAllocator::FixedSizeAllocator(const idx_t &allocation_size)
-    : allocation_size(allocation_size), total_allocations(0) {
+FixedSizeAllocator::FixedSizeAllocator(const idx_t allocation_size, BufferManager &buffer_manager)
+    : allocation_size(allocation_size), total_allocations(0), buffer_manager(buffer_manager) {
 
 	// calculate how many allocations fit into one buffer
 
@@ -42,11 +42,11 @@ FixedSizeAllocator::FixedSizeAllocator(const idx_t &allocation_size)
 
 FixedSizeAllocator::~FixedSizeAllocator() {
 	for (auto &buffer : buffers) {
-		Allocator::DefaultAllocator().FreeData(buffer.ptr, BUFFER_ALLOCATION_SIZE);
+		buffer_manager.GetBufferAllocator().FreeData(buffer.ptr, BUFFER_ALLOCATION_SIZE);
 	}
 }
 
-void FixedSizeAllocator::New(idx_t &new_position) {
+idx_t FixedSizeAllocator::New() {
 
 	// no more positions in the free list
 	if (buffers_with_free_space.empty()) {
@@ -54,7 +54,7 @@ void FixedSizeAllocator::New(idx_t &new_position) {
 		// add the new buffer
 		idx_t buffer_id = buffers.size();
 		D_ASSERT((buffer_id & BUFFER_ID_TO_ZERO) == 0);
-		auto buffer = Allocator::DefaultAllocator().AllocateData(BUFFER_ALLOCATION_SIZE);
+		auto buffer = buffer_manager.GetBufferAllocator().AllocateData(BUFFER_ALLOCATION_SIZE);
 		buffers.emplace_back(buffer, 0);
 		buffers_with_free_space.insert(buffer_id);
 
@@ -69,16 +69,18 @@ void FixedSizeAllocator::New(idx_t &new_position) {
 
 	auto ptr = (validity_t *)buffers[buffer_id].ptr;
 	ValidityMask mask(ptr);
-	new_position = buffer_id + GetOffset(mask, buffers[buffer_id].allocation_count);
+	auto new_position = buffer_id + GetOffset(mask, buffers[buffer_id].allocation_count);
 
 	buffers[buffer_id].allocation_count++;
 	total_allocations++;
 	if (buffers[buffer_id].allocation_count == allocations_per_buffer) {
 		buffers_with_free_space.erase(buffer_id);
 	}
+
+	return new_position;
 }
 
-void FixedSizeAllocator::Free(const idx_t &position) {
+void FixedSizeAllocator::Free(const idx_t position) {
 
 	auto buffer_id = position & OFFSET_AND_FIRST_BYTE_TO_ZERO;
 	auto offset = (position & BUFFER_ID_TO_ZERO) >> OFFSET_SHIFT;
@@ -98,7 +100,7 @@ void FixedSizeAllocator::Free(const idx_t &position) {
 void FixedSizeAllocator::Reset() {
 
 	for (auto &buffer : buffers) {
-		Allocator::DefaultAllocator().FreeData(buffer.ptr, BUFFER_ALLOCATION_SIZE);
+		buffer_manager.GetBufferAllocator().FreeData(buffer.ptr, BUFFER_ALLOCATION_SIZE);
 	}
 	buffers.clear();
 	buffers_with_free_space.clear();
@@ -107,9 +109,7 @@ void FixedSizeAllocator::Reset() {
 
 void FixedSizeAllocator::Merge(FixedSizeAllocator &other) {
 
-	if (allocation_size != other.allocation_size) {
-		throw InternalException("Invalid FixedSizeAllocator for Merge.");
-	}
+	D_ASSERT(allocation_size == other.allocation_size);
 
 	// remember the buffer count and merge the buffers
 	idx_t buffer_count = buffers.size();
@@ -145,12 +145,12 @@ bool FixedSizeAllocator::InitializeVacuum() {
 		return false;
 	}
 
-	vacuum_threshold = buffers.size() - vacuum_count;
+	min_vacuum_buffer_ID = buffers.size() - vacuum_count;
 
 	// remove all invalid buffers from the available buffer list to ensure that we do not reuse them
 	auto it = buffers_with_free_space.begin();
 	while (it != buffers_with_free_space.end()) {
-		if (*it >= vacuum_threshold) {
+		if (*it >= min_vacuum_buffer_ID) {
 			it = buffers_with_free_space.erase(it);
 		} else {
 			it++;
@@ -163,13 +163,13 @@ bool FixedSizeAllocator::InitializeVacuum() {
 void FixedSizeAllocator::FinalizeVacuum() {
 
 	// free all (now unused) buffers
-	while (vacuum_threshold < buffers.size()) {
-		Allocator::DefaultAllocator().FreeData(buffers.back().ptr, BUFFER_ALLOCATION_SIZE);
+	while (min_vacuum_buffer_ID < buffers.size()) {
+		buffer_manager.GetBufferAllocator().FreeData(buffers.back().ptr, BUFFER_ALLOCATION_SIZE);
 		buffers.pop_back();
 	}
 }
 
-idx_t FixedSizeAllocator::Vacuum(const idx_t &position) {
+idx_t FixedSizeAllocator::VacuumPosition(const idx_t position) {
 
 	// we do not need to adjust the bitmask of the old buffer, because we will free the entire
 	// buffer after vacuum
@@ -179,7 +179,7 @@ idx_t FixedSizeAllocator::Vacuum(const idx_t &position) {
 	return new_position;
 }
 
-idx_t FixedSizeAllocator::GetOffset(ValidityMask &mask, const idx_t &allocation_count) {
+idx_t FixedSizeAllocator::GetOffset(ValidityMask &mask, const idx_t allocation_count) {
 
 	auto data = mask.GetData();
 
@@ -197,11 +197,17 @@ idx_t FixedSizeAllocator::GetOffset(ValidityMask &mask, const idx_t &allocation_
 			auto entry = data[entry_idx];
 			idx_t first_valid_bit = 0;
 
+			// this loop finds the position of the rightmost set bit in entry and stores it
+			// in first_valid_bit
 			for (idx_t i = 0; i < 6; i++) {
+				// set the left half of the bits of this level to zero and test if the entry is still not zero
 				if (entry & BASE[i]) {
 					// first valid bit is in the rightmost s[i] bits
+					// permanently set the left half of the bits to zero
 					entry &= BASE[i];
 				} else {
+					// first valid bit is in the leftmost s[i] bits
+					// shift by s[i] for the next iteration and add s[i] to the position of the rightmost set bit
 					entry >>= SHIFT[i];
 					first_valid_bit += SHIFT[i];
 				}
