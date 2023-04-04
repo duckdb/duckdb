@@ -871,8 +871,8 @@ unique_ptr<LocalSourceState> PhysicalHashAggregate::GetLocalSourceState(Executio
 void PhysicalHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                                     LocalSourceState &lstate_p) const {
 	auto &sink_gstate = (HashAggregateGlobalState &)*sink_state;
-	auto &gstate = (PhysicalHashAggregateGlobalSourceState &)gstate_p;
-	auto &lstate = (PhysicalHashAggregateLocalSourceState &)lstate_p;
+	auto &gstate = gstate_p.Cast<PhysicalHashAggregateGlobalSourceState>();
+	auto &lstate = lstate_p.Cast<PhysicalHashAggregateLocalSourceState>();
 	while (true) {
 		idx_t radix_idx = gstate.state_index;
 		if (radix_idx >= groupings.size()) {

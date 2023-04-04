@@ -1870,7 +1870,7 @@ void WindowLocalSourceState::MaterializeSortedData() {
 }
 
 void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, const idx_t hash_bin_p) {
-	auto &op = (PhysicalWindow &)gstate.op;
+	auto &op = gstate.op.Cast<PhysicalWindow>();
 
 	//	Get rid of any stale data
 	hash_bin = hash_bin_p;

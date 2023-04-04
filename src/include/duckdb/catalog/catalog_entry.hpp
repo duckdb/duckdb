@@ -12,7 +12,6 @@
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/atomic.hpp"
-
 #include <memory>
 
 namespace duckdb {
@@ -71,7 +70,6 @@ public:
 		D_ASSERT(dynamic_cast<TARGET *>(this));
 		return (TARGET &)*this;
 	}
-
 	template <class TARGET>
 	const TARGET &Cast() const {
 		D_ASSERT(dynamic_cast<const TARGET *>(this));

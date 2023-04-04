@@ -298,7 +298,7 @@ OperatorResultType PhysicalNestedLoopJoin::ExecuteInternal(ExecutionContext &con
 
 void PhysicalNestedLoopJoin::ResolveSimpleJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                OperatorState &state_p) const {
-	auto &state = (PhysicalNestedLoopJoinState &)state_p;
+	auto &state = state_p.Cast<PhysicalNestedLoopJoinState>();
 	auto &gstate = (NestedLoopJoinGlobalState &)*sink_state;
 
 	// resolve the left join condition for the current chunk
@@ -327,7 +327,7 @@ void PhysicalNestedLoopJoin::ResolveSimpleJoin(ExecutionContext &context, DataCh
 
 OperatorResultType PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &input,
                                                               DataChunk &chunk, OperatorState &state_p) const {
-	auto &state = (PhysicalNestedLoopJoinState &)state_p;
+	auto &state = state_p.Cast<PhysicalNestedLoopJoinState>();
 	auto &gstate = (NestedLoopJoinGlobalState &)*sink_state;
 
 	idx_t match_count;

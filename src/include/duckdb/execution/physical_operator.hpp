@@ -15,6 +15,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
+#include "duckdb/execution/physical_operator_states.hpp"
 
 namespace duckdb {
 class Event;
@@ -23,63 +24,6 @@ class PhysicalOperator;
 class Pipeline;
 class PipelineBuildState;
 class MetaPipeline;
-
-// LCOV_EXCL_START
-class OperatorState {
-public:
-	virtual ~OperatorState() {
-	}
-
-	virtual void Finalize(PhysicalOperator *op, ExecutionContext &context) {
-	}
-};
-
-class GlobalOperatorState {
-public:
-	virtual ~GlobalOperatorState() {
-	}
-};
-
-class GlobalSinkState {
-public:
-	GlobalSinkState() : state(SinkFinalizeType::READY) {
-	}
-	virtual ~GlobalSinkState() {
-	}
-
-	SinkFinalizeType state;
-};
-
-class LocalSinkState {
-public:
-	virtual ~LocalSinkState() {
-	}
-
-	//! The current batch index
-	//! This is only set in case RequiresBatchIndex() is true, and the source has support for it (SupportsBatchIndex())
-	//! Otherwise this is left on INVALID_INDEX
-	//! The batch index is a globally unique, increasing index that should be used to maintain insertion order
-	//! //! in conjunction with parallelism
-	idx_t batch_index = DConstants::INVALID_INDEX;
-};
-
-class GlobalSourceState {
-public:
-	virtual ~GlobalSourceState() {
-	}
-
-	virtual idx_t MaxThreads() {
-		return 1;
-	}
-};
-
-class LocalSourceState {
-public:
-	virtual ~LocalSourceState() {
-	}
-};
-
-// LCOV_EXCL_STOP
 
 //! PhysicalOperator is the base class of the physical operators present in the
 //! execution plan
@@ -224,6 +168,23 @@ public:
 	virtual bool AllOperatorsPreserveOrder() const;
 
 	virtual void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline);
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (TARGET::TYPE != PhysicalOperatorType::INVALID && type != TARGET::TYPE) {
+			throw InternalException("Failed to cast physical operator to type - physical operator type mismatch");
+		}
+		return (TARGET &)*this;
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (TARGET::TYPE != PhysicalOperatorType::INVALID && type != TARGET::TYPE) {
+			throw InternalException("Failed to cast physical operator to type - physical operator type mismatch");
+		}
+		return (const TARGET &)*this;
+	}
 };
 
 //! Contains state for the CachingPhysicalOperator

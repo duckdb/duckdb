@@ -15,6 +15,9 @@ namespace duckdb {
 
 class PhysicalDetach : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::DETACH;
+
+public:
 	explicit PhysicalDetach(unique_ptr<DetachInfo> info, idx_t estimated_cardinality)
 	    : PhysicalOperator(PhysicalOperatorType::DETACH, {LogicalType::BOOLEAN}, estimated_cardinality),
 	      info(std::move(info)) {

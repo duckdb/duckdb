@@ -186,7 +186,7 @@ bool PhysicalPositionalScan::Equals(const PhysicalOperator &other_p) const {
 		return false;
 	}
 
-	auto &other = (PhysicalPositionalScan &)other_p;
+	auto &other = other_p.Cast<PhysicalPositionalScan>();
 	if (child_tables.size() != other.child_tables.size()) {
 		return false;
 	}

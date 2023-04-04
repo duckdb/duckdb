@@ -232,14 +232,14 @@ public:
 
 unique_ptr<LocalSourceState> PhysicalOrder::GetLocalSourceState(ExecutionContext &context,
                                                                 GlobalSourceState &gstate_p) const {
-	auto &gstate = (PhysicalOrderGlobalSourceState &)gstate_p;
+	auto &gstate = gstate_p.Cast<PhysicalOrderGlobalSourceState>();
 	return make_unique<PhysicalOrderLocalSourceState>(gstate);
 }
 
 void PhysicalOrder::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                             LocalSourceState &lstate_p) const {
-	auto &gstate = (PhysicalOrderGlobalSourceState &)gstate_p;
-	auto &lstate = (PhysicalOrderLocalSourceState &)lstate_p;
+	auto &gstate = gstate_p.Cast<PhysicalOrderGlobalSourceState>();
+	auto &lstate = lstate_p.Cast<PhysicalOrderLocalSourceState>();
 
 	if (lstate.scanner && lstate.scanner->Remaining() == 0) {
 		lstate.batch_index = gstate.next_batch_index++;
@@ -261,7 +261,7 @@ void PhysicalOrder::GetData(ExecutionContext &context, DataChunk &chunk, GlobalS
 
 idx_t PhysicalOrder::GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                                    LocalSourceState &lstate_p) const {
-	auto &lstate = (PhysicalOrderLocalSourceState &)lstate_p;
+	auto &lstate = lstate_p.Cast<PhysicalOrderLocalSourceState>();
 	return lstate.batch_index;
 }
 

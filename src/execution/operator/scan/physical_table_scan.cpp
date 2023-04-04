@@ -144,7 +144,7 @@ bool PhysicalTableScan::Equals(const PhysicalOperator &other_p) const {
 	if (type != other_p.type) {
 		return false;
 	}
-	auto &other = (PhysicalTableScan &)other_p;
+	auto &other = other_p.Cast<PhysicalTableScan>();
 	if (function.function != other.function.function) {
 		return false;
 	}

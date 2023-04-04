@@ -22,7 +22,7 @@ unique_ptr<GlobalSourceState> PhysicalColumnDataScan::GetGlobalSourceState(Clien
 
 void PhysicalColumnDataScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                                      LocalSourceState &lstate) const {
-	auto &state = (PhysicalColumnDataScanState &)gstate;
+	auto &state = gstate.Cast<PhysicalColumnDataScanState>();
 	D_ASSERT(collection);
 	if (collection->Count() == 0) {
 		return;
