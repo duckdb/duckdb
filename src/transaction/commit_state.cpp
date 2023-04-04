@@ -5,7 +5,6 @@
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
-#include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/column_data.hpp"
@@ -16,6 +15,7 @@
 #include "duckdb/transaction/delete_info.hpp"
 #include "duckdb/transaction/update_info.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 
 namespace duckdb {
 

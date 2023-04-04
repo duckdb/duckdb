@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/parser/expression/window_expression.hpp"
 
 namespace duckdb {
 
