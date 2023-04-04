@@ -56,6 +56,7 @@ class BlockHandle {
 	friend struct BufferEvictionNode;
 	friend class BufferHandle;
 	friend class BufferManager;
+	friend class StandardBufferManager;
 	friend class BufferPool;
 
 public:
@@ -69,6 +70,14 @@ public:
 public:
 	block_id_t BlockId() {
 		return block_id;
+	}
+
+	void ResizeBuffer(idx_t block_size, int64_t memory_delta) {
+		D_ASSERT(buffer);
+		// resize and adjust current memory
+		buffer->Resize(block_size);
+		memory_usage += memory_delta;
+		D_ASSERT(memory_usage == buffer->AllocSize());
 	}
 
 	int32_t Readers() const {

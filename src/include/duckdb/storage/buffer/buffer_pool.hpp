@@ -54,6 +54,7 @@ class BufferPool {
 	friend class BlockHandle;
 	friend class BlockManager;
 	friend class BufferManager;
+	friend class StandardBufferManager;
 
 public:
 	explicit BufferPool(idx_t maximum_memory);

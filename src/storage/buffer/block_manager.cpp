@@ -1,4 +1,6 @@
 #include "duckdb/storage/block_manager.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/buffer/buffer_pool.hpp"
 
 namespace duckdb {
 
@@ -61,7 +63,7 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, s
 	// persist the new block to disk
 	Write(*new_block->buffer, block_id);
 
-	buffer_manager.buffer_pool.AddToEvictionQueue(new_block);
+	buffer_manager.GetBufferPool().AddToEvictionQueue(new_block);
 
 	return new_block;
 }
