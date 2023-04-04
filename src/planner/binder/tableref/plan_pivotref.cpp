@@ -6,7 +6,7 @@ namespace duckdb {
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundPivotRef &ref) {
 	auto subquery = ref.child_binder->CreatePlan(*ref.child);
 
-	auto result = make_unique<LogicalPivot>(ref.bind_index, std::move(subquery), std::move(ref.bound_pivot));
+	auto result = make_uniq<LogicalPivot>(ref.bind_index, std::move(subquery), std::move(ref.bound_pivot));
 	return result;
 }
 

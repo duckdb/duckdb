@@ -89,7 +89,7 @@ static unique_ptr<SelectNode> PivotInitialAggregate(PivotBindState &bind_state, 
 				// not handled - add to grouping set
 				subquery_stage1->groups.group_expressions.push_back(
 				    make_uniq<ConstantExpression>(Value::INTEGER(subquery_stage1->select_list.size() + 1)));
-				subquery_stage1->select_list.push_back(make_unique<ColumnRefExpression>(columnref.GetColumnName()));
+				subquery_stage1->select_list.push_back(make_uniq<ColumnRefExpression>(columnref.GetColumnName()));
 			}
 		}
 	} else {
@@ -97,7 +97,7 @@ static unique_ptr<SelectNode> PivotInitialAggregate(PivotBindState &bind_state, 
 		for (auto &row : ref.groups) {
 			subquery_stage1->groups.group_expressions.push_back(
 			    make_uniq<ConstantExpression>(Value::INTEGER(subquery_stage1->select_list.size() + 1)));
-			subquery_stage1->select_list.push_back(make_unique<ColumnRefExpression>(row));
+			subquery_stage1->select_list.push_back(make_uniq<ColumnRefExpression>(row));
 		}
 	}
 	idx_t group_count = 0;
@@ -146,14 +146,14 @@ static unique_ptr<SelectNode> PivotListAggregate(PivotBindState &bind_state, Piv
 	for (idx_t gr = 0; gr < bind_state.internal_group_names.size(); gr++) {
 		subquery_stage2->groups.group_expressions.push_back(
 		    make_uniq<ConstantExpression>(Value::INTEGER(subquery_stage2->select_list.size() + 1)));
-		auto group_reference = make_unique<ColumnRefExpression>(bind_state.internal_group_names[gr]);
+		auto group_reference = make_uniq<ColumnRefExpression>(bind_state.internal_group_names[gr]);
 		group_reference->alias = bind_state.internal_group_names[gr];
 		subquery_stage2->select_list.push_back(std::move(group_reference));
 	}
 
 	// construct the list aggregates
 	for (idx_t aggr = 0; aggr < bind_state.internal_aggregate_names.size(); aggr++) {
-		auto colref = make_unique<ColumnRefExpression>(bind_state.internal_aggregate_names[aggr]);
+		auto colref = make_uniq<ColumnRefExpression>(bind_state.internal_aggregate_names[aggr]);
 		vector<unique_ptr<ParsedExpression>> list_children;
 		list_children.push_back(std::move(colref));
 		auto aggregate = make_uniq<FunctionExpression>("list", std::move(list_children));
