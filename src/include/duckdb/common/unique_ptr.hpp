@@ -6,17 +6,15 @@
 #include <memory>
 #include <type_traits>
 
-namespace duckdb {
-
-namespace {
-struct __unique_ptr_utils {
-	static inline void AssertNotNull(void *ptr) {
-		if (DUCKDB_UNLIKELY(!ptr)) {
-			throw InternalException("Attempted to dereference unique_ptr that is NULL!");
-		}
+static void AssertNotNull(const bool null) {
+#ifdef DEBUG
+	if (DUCKDB_UNLIKELY(null)) {
+		throw duckdb::InternalException("Attempted to dereference unique_ptr that is NULL!");
 	}
-};
-} // namespace
+#endif
+}
+
+namespace duckdb {
 
 template <class _Tp, class _Dp = std::default_delete<_Tp>>
 class unique_ptr : public std::unique_ptr<_Tp, _Dp> {
@@ -25,13 +23,15 @@ public:
 	using original::original;
 
 	typename std::add_lvalue_reference<_Tp>::type operator*() const {
-		__unique_ptr_utils::AssertNotNull((void *)original::get());
-		return *(original::get());
+		const auto ptr = original::get();
+		AssertNotNull(!ptr);
+		return *ptr;
 	}
 
 	typename original::pointer operator->() const {
-		__unique_ptr_utils::AssertNotNull((void *)original::get());
-		return original::get();
+		const auto ptr = original::get();
+		AssertNotNull(!ptr);
+		return ptr;
 	}
 
 #ifdef DUCKDB_CLANG_TIDY
@@ -51,8 +51,9 @@ public:
 	using original::original;
 
 	typename std::add_lvalue_reference<_Tp>::type operator[](size_t __i) const {
-		__unique_ptr_utils::AssertNotNull((void *)original::get());
-		return (original::get())[__i];
+		const auto ptr = original::get();
+		AssertNotNull(!ptr);
+		return ptr[__i];
 	}
 };
 
