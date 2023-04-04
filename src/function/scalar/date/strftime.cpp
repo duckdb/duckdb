@@ -604,7 +604,7 @@ struct StrfTimeBindData : public FunctionData {
 	bool is_null;
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<StrfTimeBindData>(format, format_string, is_null);
+		return make_uniq<StrfTimeBindData>(format, format_string, is_null);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
@@ -634,7 +634,7 @@ static unique_ptr<FunctionData> StrfTimeBindFunction(ClientContext &context, Sca
 			throw InvalidInputException("Failed to parse format specifier %s: %s", format_string, error);
 		}
 	}
-	return make_unique<StrfTimeBindData>(format, format_string, is_null);
+	return make_uniq<StrfTimeBindData>(format, format_string, is_null);
 }
 
 void StrfTimeFormat::ConvertDateVector(Vector &input, Vector &result, idx_t count) {
@@ -1200,7 +1200,7 @@ struct StrpTimeBindData : public FunctionData {
 	vector<string> format_strings;
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<StrpTimeBindData>(formats, format_strings);
+		return make_uniq<StrpTimeBindData>(formats, format_strings);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
@@ -1221,7 +1221,7 @@ static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, Sca
 	string format_string;
 	StrpTimeFormat format;
 	if (format_value.IsNull()) {
-		return make_unique<StrpTimeBindData>(format, format_string);
+		return make_uniq<StrpTimeBindData>(format, format_string);
 	} else if (format_value.type().id() == LogicalTypeId::VARCHAR) {
 		format_string = format_value.ToString();
 		format.format_specifier = format_string;
@@ -1232,7 +1232,7 @@ static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, Sca
 		if (format.HasFormatSpecifier(StrTimeSpecifier::UTC_OFFSET)) {
 			bound_function.return_type = LogicalType::TIMESTAMP_TZ;
 		}
-		return make_unique<StrpTimeBindData>(format, format_string);
+		return make_uniq<StrpTimeBindData>(format, format_string);
 	} else if (format_value.type() == LogicalType::LIST(LogicalType::VARCHAR)) {
 		const auto &children = ListValue::GetChildren(format_value);
 		if (children.empty()) {
@@ -1254,7 +1254,7 @@ static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, Sca
 			format_strings.emplace_back(format_string);
 			formats.emplace_back(format);
 		}
-		return make_unique<StrpTimeBindData>(formats, format_strings);
+		return make_uniq<StrpTimeBindData>(formats, format_strings);
 	} else {
 		throw InvalidInputException("strptime format must be a string");
 	}

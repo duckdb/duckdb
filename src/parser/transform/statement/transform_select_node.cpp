@@ -16,7 +16,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 
 	switch (stmt->op) {
 	case duckdb_libpgquery::PG_SETOP_NONE: {
-		node = make_unique<SelectNode>();
+		node = make_uniq<SelectNode>();
 		auto result = (SelectNode *)node.get();
 		if (stmt->withClause) {
 			TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), node->cte_map);
@@ -37,7 +37,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 
 		// checks distinct clause
 		if (stmt->distinctClause != nullptr) {
-			auto modifier = make_unique<DistinctModifier>();
+			auto modifier = make_uniq<DistinctModifier>();
 			// checks distinct on clause
 			auto target = reinterpret_cast<duckdb_libpgquery::PGNode *>(stmt->distinctClause->head->data.ptr_value);
 			if (target) {
@@ -52,7 +52,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 			// VALUES list, create an ExpressionList
 			D_ASSERT(!stmt->fromClause);
 			result->from_table = TransformValuesList(stmt->valuesLists);
-			result->select_list.push_back(make_unique<StarExpression>());
+			result->select_list.push_back(make_uniq<StarExpression>());
 		} else {
 			if (!stmt->targetList) {
 				throw ParserException("SELECT clause without selection list");
@@ -78,7 +78,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 	case duckdb_libpgquery::PG_SETOP_EXCEPT:
 	case duckdb_libpgquery::PG_SETOP_INTERSECT:
 	case duckdb_libpgquery::PG_SETOP_UNION_BY_NAME: {
-		node = make_unique<SetOperationNode>();
+		node = make_uniq<SetOperationNode>();
 		auto result = (SetOperationNode *)node.get();
 		if (stmt->withClause) {
 			TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), node->cte_map);
@@ -109,7 +109,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 			throw Exception("Unexpected setop type");
 		}
 		if (select_distinct) {
-			result->modifiers.push_back(make_unique<DistinctModifier>());
+			result->modifiers.push_back(make_uniq<DistinctModifier>());
 		}
 		if (stmt->sampleOptions) {
 			throw ParserException("SAMPLE clause is only allowed in regular SELECT statements");
@@ -124,13 +124,13 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 	vector<OrderByNode> orders;
 	TransformOrderBy(stmt->sortClause, orders);
 	if (!orders.empty()) {
-		auto order_modifier = make_unique<OrderModifier>();
+		auto order_modifier = make_uniq<OrderModifier>();
 		order_modifier->orders = std::move(orders);
 		node->modifiers.push_back(std::move(order_modifier));
 	}
 	if (stmt->limitCount || stmt->limitOffset) {
 		if (stmt->limitCount && stmt->limitCount->type == duckdb_libpgquery::T_PGLimitPercent) {
-			auto limit_percent_modifier = make_unique<LimitPercentModifier>();
+			auto limit_percent_modifier = make_uniq<LimitPercentModifier>();
 			auto expr_node = reinterpret_cast<duckdb_libpgquery::PGLimitPercent *>(stmt->limitCount)->limit_percent;
 			limit_percent_modifier->limit = TransformExpression(expr_node);
 			if (stmt->limitOffset) {
@@ -138,7 +138,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 			}
 			node->modifiers.push_back(std::move(limit_percent_modifier));
 		} else {
-			auto limit_modifier = make_unique<LimitModifier>();
+			auto limit_modifier = make_uniq<LimitModifier>();
 			if (stmt->limitCount) {
 				limit_modifier->limit = TransformExpression(stmt->limitCount);
 			}

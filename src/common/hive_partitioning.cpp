@@ -49,7 +49,7 @@ static void ConvertKnownColRefToConstants(unique_ptr<Expression> &expr,
 
 		auto lookup = known_column_values.find(bound_colref.binding.column_index);
 		if (lookup != known_column_values.end()) {
-			expr = make_unique<BoundConstantExpression>(Value(lookup->second).DefaultCastAs(bound_colref.return_type));
+			expr = make_uniq<BoundConstantExpression>(Value(lookup->second).DefaultCastAs(bound_colref.return_type));
 		}
 	} else {
 		ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
@@ -199,7 +199,7 @@ void HivePartitionedColumnData::GrowAppendState(PartitionedColumnDataAppendState
 	idx_t required_append_state_size = local_partition_map.size();
 
 	for (idx_t i = current_append_state_size; i < required_append_state_size; i++) {
-		state.partition_append_states.emplace_back(make_unique<ColumnDataAppendState>());
+		state.partition_append_states.emplace_back(make_uniq<ColumnDataAppendState>());
 		state.partition_buffers.emplace_back(CreatePartitionBuffer());
 	}
 }

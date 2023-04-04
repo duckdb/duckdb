@@ -17,7 +17,7 @@ BoundColumnRefExpression::BoundColumnRefExpression(LogicalType type, ColumnBindi
 }
 
 unique_ptr<Expression> BoundColumnRefExpression::Copy() {
-	return make_unique<BoundColumnRefExpression>(alias, return_type, binding, depth);
+	return make_uniq<BoundColumnRefExpression>(alias, return_type, binding, depth);
 }
 
 hash_t BoundColumnRefExpression::Hash() const {
@@ -58,7 +58,7 @@ unique_ptr<Expression> BoundColumnRefExpression::Deserialize(ExpressionDeseriali
 	auto column_index = reader.ReadRequired<idx_t>();
 	auto depth = reader.ReadRequired<idx_t>();
 
-	return make_unique<BoundColumnRefExpression>(alias, return_type, ColumnBinding(table_index, column_index), depth);
+	return make_uniq<BoundColumnRefExpression>(alias, return_type, ColumnBinding(table_index, column_index), depth);
 }
 
 } // namespace duckdb

@@ -30,7 +30,7 @@ bool BoundComparisonExpression::Equals(const BaseExpression *other_p) const {
 }
 
 unique_ptr<Expression> BoundComparisonExpression::Copy() {
-	auto copy = make_unique<BoundComparisonExpression>(type, left->Copy(), right->Copy());
+	auto copy = make_uniq<BoundComparisonExpression>(type, left->Copy(), right->Copy());
 	copy->CopyProperties(*this);
 	return std::move(copy);
 }
@@ -44,7 +44,7 @@ unique_ptr<Expression> BoundComparisonExpression::Deserialize(ExpressionDeserial
                                                               FieldReader &reader) {
 	auto left = reader.ReadOptional<Expression>(nullptr, state.gstate);
 	auto right = reader.ReadOptional<Expression>(nullptr, state.gstate);
-	return make_unique<BoundComparisonExpression>(state.type, std::move(left), std::move(right));
+	return make_uniq<BoundComparisonExpression>(state.type, std::move(left), std::move(right));
 }
 
 } // namespace duckdb

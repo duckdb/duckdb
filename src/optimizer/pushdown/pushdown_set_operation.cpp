@@ -43,7 +43,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
 	for (idx_t i = 0; i < filters.size(); i++) {
 		// first create a copy of the filter
-		auto right_filter = make_unique<Filter>();
+		auto right_filter = make_uniq<Filter>();
 		right_filter->filter = filters[i]->filter->Copy();
 
 		// in the original filter, rewrite references to the result of the union into references to the left_index
@@ -67,7 +67,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 	bool right_empty = op->children[1]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT;
 	if (left_empty && right_empty) {
 		// both empty: return empty result
-		return make_unique<LogicalEmptyResult>(std::move(op));
+		return make_uniq<LogicalEmptyResult>(std::move(op));
 	}
 	if (left_empty) {
 		// left child is empty result
@@ -84,7 +84,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 			// except: if left child is empty, return empty result
 		case LogicalOperatorType::LOGICAL_INTERSECT:
 			// intersect: if any child is empty, return empty result itself
-			return make_unique<LogicalEmptyResult>(std::move(op));
+			return make_uniq<LogicalEmptyResult>(std::move(op));
 		default:
 			throw InternalException("Unsupported set operation");
 		}
@@ -102,7 +102,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 			break;
 		case LogicalOperatorType::LOGICAL_INTERSECT:
 			// intersect: if any child is empty, return empty result itself
-			return make_unique<LogicalEmptyResult>(std::move(op));
+			return make_uniq<LogicalEmptyResult>(std::move(op));
 		default:
 			throw InternalException("Unsupported set operation");
 		}

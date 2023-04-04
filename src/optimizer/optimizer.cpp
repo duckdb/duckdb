@@ -28,21 +28,21 @@
 namespace duckdb {
 
 Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context), binder(binder), rewriter(context) {
-	rewriter.rules.push_back(make_unique<ConstantFoldingRule>(rewriter));
-	rewriter.rules.push_back(make_unique<DistributivityRule>(rewriter));
-	rewriter.rules.push_back(make_unique<ArithmeticSimplificationRule>(rewriter));
-	rewriter.rules.push_back(make_unique<CaseSimplificationRule>(rewriter));
-	rewriter.rules.push_back(make_unique<ConjunctionSimplificationRule>(rewriter));
-	rewriter.rules.push_back(make_unique<DatePartSimplificationRule>(rewriter));
-	rewriter.rules.push_back(make_unique<ComparisonSimplificationRule>(rewriter));
-	rewriter.rules.push_back(make_unique<InClauseSimplificationRule>(rewriter));
-	rewriter.rules.push_back(make_unique<EqualOrNullSimplification>(rewriter));
-	rewriter.rules.push_back(make_unique<MoveConstantsRule>(rewriter));
-	rewriter.rules.push_back(make_unique<LikeOptimizationRule>(rewriter));
-	rewriter.rules.push_back(make_unique<OrderedAggregateOptimizer>(rewriter));
-	rewriter.rules.push_back(make_unique<RegexOptimizationRule>(rewriter));
-	rewriter.rules.push_back(make_unique<EmptyNeedleRemovalRule>(rewriter));
-	rewriter.rules.push_back(make_unique<EnumComparisonRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<ConstantFoldingRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<DistributivityRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<ArithmeticSimplificationRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<CaseSimplificationRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<ConjunctionSimplificationRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<DatePartSimplificationRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<ComparisonSimplificationRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<InClauseSimplificationRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<EqualOrNullSimplification>(rewriter));
+	rewriter.rules.push_back(make_uniq<MoveConstantsRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<LikeOptimizationRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<OrderedAggregateOptimizer>(rewriter));
+	rewriter.rules.push_back(make_uniq<RegexOptimizationRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<EmptyNeedleRemovalRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<EnumComparisonRule>(rewriter));
 
 #ifdef DEBUG
 	for (auto &rule : rewriter.rules) {

@@ -219,7 +219,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 	node_stats = PropagateStatistics(filter.children[0]);
 	if (filter.children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
 		ReplaceWithEmptyResult(*node_ptr);
-		return make_unique<NodeStatistics>(0, 0);
+		return make_uniq<NodeStatistics>(0, 0);
 	}
 
 	// then propagate to each of the expressions
@@ -241,7 +241,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 		           ExpressionIsConstantOrNull(*condition, Value::BOOLEAN(false))) {
 			// filter is always false or null; this entire filter should be replaced by an empty result block
 			ReplaceWithEmptyResult(*node_ptr);
-			return make_unique<NodeStatistics>(0, 0);
+			return make_uniq<NodeStatistics>(0, 0);
 		} else {
 			// cannot prune this filter: propagate statistics from the filter
 			UpdateFilterStatistics(*condition);

@@ -21,7 +21,7 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalAttach::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<AttachSourceState>();
+	return make_uniq<AttachSourceState>();
 }
 
 void PhysicalAttach::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,

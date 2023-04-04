@@ -15,7 +15,7 @@ unique_ptr<LogicalOperator> LogicalCTERef::Deserialize(LogicalDeserializationSta
 	auto cte_index = reader.ReadRequired<idx_t>();
 	auto chunk_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 	auto bound_columns = reader.ReadRequiredList<string>();
-	return make_unique<LogicalCTERef>(table_index, cte_index, chunk_types, bound_columns);
+	return make_uniq<LogicalCTERef>(table_index, cte_index, chunk_types, bound_columns);
 }
 
 vector<idx_t> LogicalCTERef::GetTableIndex() const {

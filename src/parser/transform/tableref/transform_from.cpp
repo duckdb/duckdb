@@ -6,12 +6,12 @@ namespace duckdb {
 
 unique_ptr<TableRef> Transformer::TransformFrom(duckdb_libpgquery::PGList *root) {
 	if (!root) {
-		return make_unique<EmptyTableRef>();
+		return make_uniq<EmptyTableRef>();
 	}
 
 	if (root->length > 1) {
 		// Cross Product
-		auto result = make_unique<JoinRef>(JoinRefType::CROSS);
+		auto result = make_uniq<JoinRef>(JoinRefType::CROSS);
 		JoinRef *cur_root = result.get();
 		idx_t list_size = 0;
 		for (auto node = root->head; node != nullptr; node = node->next) {
@@ -23,7 +23,7 @@ unique_ptr<TableRef> Transformer::TransformFrom(duckdb_libpgquery::PGList *root)
 				cur_root->right = std::move(next);
 			} else {
 				auto old_res = std::move(result);
-				result = make_unique<JoinRef>(JoinRefType::CROSS);
+				result = make_uniq<JoinRef>(JoinRefType::CROSS);
 				result->left = std::move(old_res);
 				result->right = std::move(next);
 				cur_root = result.get();

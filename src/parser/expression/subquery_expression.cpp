@@ -40,7 +40,7 @@ bool SubqueryExpression::Equal(const SubqueryExpression *a, const SubqueryExpres
 }
 
 unique_ptr<ParsedExpression> SubqueryExpression::Copy() const {
-	auto copy = make_unique<SubqueryExpression>();
+	auto copy = make_uniq<SubqueryExpression>();
 	copy->CopyProperties(*this);
 	copy->subquery = unique_ptr_cast<SQLStatement, SelectStatement>(subquery->Copy());
 	copy->subquery_type = subquery_type;
@@ -66,7 +66,7 @@ unique_ptr<ParsedExpression> SubqueryExpression::Deserialize(ExpressionType type
 	auto subquery_type = reader.ReadRequired<SubqueryType>();
 	auto subquery = SelectStatement::Deserialize(source);
 
-	auto expression = make_unique<SubqueryExpression>();
+	auto expression = make_uniq<SubqueryExpression>();
 	expression->subquery_type = subquery_type;
 	expression->subquery = std::move(subquery);
 	expression->child = reader.ReadOptional<ParsedExpression>(nullptr);
@@ -84,7 +84,7 @@ void SubqueryExpression::FormatSerialize(FormatSerializer &serializer) const {
 
 unique_ptr<ParsedExpression> SubqueryExpression::FormatDeserialize(ExpressionType type,
                                                                    FormatDeserializer &deserializer) {
-	auto expression = make_unique<SubqueryExpression>();
+	auto expression = make_uniq<SubqueryExpression>();
 	deserializer.ReadProperty("subquery_type", expression->subquery_type);
 	deserializer.ReadProperty("subquery", expression->subquery);
 	deserializer.ReadOptionalProperty("child", expression->child);

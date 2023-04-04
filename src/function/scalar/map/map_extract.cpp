@@ -121,7 +121,7 @@ static unique_ptr<FunctionData> MapExtractBind(ClientContext &context, ScalarFun
 	if (key_type.id() != LogicalTypeId::SQLNULL && arguments[1]->return_type.id() != LogicalTypeId::SQLNULL) {
 		bound_function.arguments[1] = MapType::KeyType(arguments[0]->return_type);
 	}
-	return make_unique<VariableReturnBindData>(value_type);
+	return make_uniq<VariableReturnBindData>(value_type);
 }
 
 void MapExtractFun::RegisterFunction(BuiltinFunctions &set) {

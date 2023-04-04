@@ -38,12 +38,12 @@ void ScalarMacroCatalogEntry::Serialize(Serializer &main_serializer) {
 }
 
 unique_ptr<CreateMacroInfo> ScalarMacroCatalogEntry::Deserialize(Deserializer &main_source, ClientContext &context) {
-	auto info = make_unique<CreateMacroInfo>(CatalogType::MACRO_ENTRY);
+	auto info = make_uniq<CreateMacroInfo>(CatalogType::MACRO_ENTRY);
 	FieldReader reader(main_source);
 	info->schema = reader.ReadRequired<string>();
 	info->name = reader.ReadRequired<string>();
 	auto expression = reader.ReadRequiredSerializable<ParsedExpression>();
-	auto func = make_unique<ScalarMacroFunction>(std::move(expression));
+	auto func = make_uniq<ScalarMacroFunction>(std::move(expression));
 	info->function = std::move(func);
 	info->function->parameters = reader.ReadRequiredSerializableList<ParsedExpression>();
 	auto default_param_count = reader.ReadRequired<uint32_t>();
@@ -81,12 +81,12 @@ void TableMacroCatalogEntry::Serialize(Serializer &main_serializer) {
 }
 
 unique_ptr<CreateMacroInfo> TableMacroCatalogEntry::Deserialize(Deserializer &main_source, ClientContext &context) {
-	auto info = make_unique<CreateMacroInfo>(CatalogType::TABLE_MACRO_ENTRY);
+	auto info = make_uniq<CreateMacroInfo>(CatalogType::TABLE_MACRO_ENTRY);
 	FieldReader reader(main_source);
 	info->schema = reader.ReadRequired<string>();
 	info->name = reader.ReadRequired<string>();
 	auto query_node = reader.ReadRequiredSerializable<QueryNode>();
-	auto table_function = make_unique<TableMacroFunction>(std::move(query_node));
+	auto table_function = make_uniq<TableMacroFunction>(std::move(query_node));
 	info->function = std::move(table_function);
 	info->function->parameters = reader.ReadRequiredSerializableList<ParsedExpression>();
 	auto default_param_count = reader.ReadRequired<uint32_t>();

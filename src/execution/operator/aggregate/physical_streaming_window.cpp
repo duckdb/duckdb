@@ -64,16 +64,16 @@ public:
 				result.Initialize(Allocator::Get(context), {wexpr.children[0]->return_type});
 				executor.Execute(input, result);
 
-				const_vectors[expr_idx] = make_unique<Vector>(result.GetValue(0, 0));
+				const_vectors[expr_idx] = make_uniq<Vector>(result.GetValue(0, 0));
 				break;
 			}
 			case ExpressionType::WINDOW_PERCENT_RANK: {
-				const_vectors[expr_idx] = make_unique<Vector>(Value((double)0));
+				const_vectors[expr_idx] = make_uniq<Vector>(Value((double)0));
 				break;
 			}
 			case ExpressionType::WINDOW_RANK:
 			case ExpressionType::WINDOW_RANK_DENSE: {
-				const_vectors[expr_idx] = make_unique<Vector>(Value((int64_t)1));
+				const_vectors[expr_idx] = make_uniq<Vector>(Value((int64_t)1));
 				break;
 			}
 			default:
@@ -95,11 +95,11 @@ public:
 };
 
 unique_ptr<GlobalOperatorState> PhysicalStreamingWindow::GetGlobalOperatorState(ClientContext &context) const {
-	return make_unique<StreamingWindowGlobalState>();
+	return make_uniq<StreamingWindowGlobalState>();
 }
 
 unique_ptr<OperatorState> PhysicalStreamingWindow::GetOperatorState(ExecutionContext &context) const {
-	return make_unique<StreamingWindowState>();
+	return make_uniq<StreamingWindowState>();
 }
 
 OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,

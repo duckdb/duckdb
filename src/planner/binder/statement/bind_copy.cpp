@@ -130,7 +130,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	auto function_data =
 	    copy_function->function.copy_to_bind(context, *stmt.info, unique_column_names, select_node.types);
 	// now create the copy information
-	auto copy = make_unique<LogicalCopyToFile>(copy_function->function, std::move(function_data));
+	auto copy = make_uniq<LogicalCopyToFile>(copy_function->function, std::move(function_data));
 	copy->file_path = stmt.info->file_path;
 	copy->use_tmp_file = use_tmp_file;
 	copy->allow_overwrite = allow_overwrite;
@@ -202,8 +202,8 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 
 	auto function_data =
 	    copy_function->function.copy_from_bind(context, *stmt.info, expected_names, bound_insert.expected_types);
-	auto get = make_unique<LogicalGet>(GenerateTableIndex(), copy_function->function.copy_from_function,
-	                                   std::move(function_data), bound_insert.expected_types, expected_names);
+	auto get = make_uniq<LogicalGet>(GenerateTableIndex(), copy_function->function.copy_from_function,
+	                                 std::move(function_data), bound_insert.expected_types, expected_names);
 	for (idx_t i = 0; i < bound_insert.expected_types.size(); i++) {
 		get->column_ids.push_back(i);
 	}
@@ -216,19 +216,19 @@ BoundStatement Binder::Bind(CopyStatement &stmt) {
 	if (!stmt.info->is_from && !stmt.select_statement) {
 		// copy table into file without a query
 		// generate SELECT * FROM table;
-		auto ref = make_unique<BaseTableRef>();
+		auto ref = make_uniq<BaseTableRef>();
 		ref->catalog_name = stmt.info->catalog;
 		ref->schema_name = stmt.info->schema;
 		ref->table_name = stmt.info->table;
 
-		auto statement = make_unique<SelectNode>();
+		auto statement = make_uniq<SelectNode>();
 		statement->from_table = std::move(ref);
 		if (!stmt.info->select_list.empty()) {
 			for (auto &name : stmt.info->select_list) {
-				statement->select_list.push_back(make_unique<ColumnRefExpression>(name));
+				statement->select_list.push_back(make_uniq<ColumnRefExpression>(name));
 			}
 		} else {
-			statement->select_list.push_back(make_unique<StarExpression>());
+			statement->select_list.push_back(make_uniq<StarExpression>());
 		}
 		stmt.select_statement = std::move(statement);
 	}

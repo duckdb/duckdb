@@ -78,7 +78,7 @@ struct TestVectorFlat {
 	static void Generate(TestVectorInfo &info) {
 		vector<Value> result_values = GenerateValues(info, info.type);
 		for (idx_t cur_row = 0; cur_row < result_values.size(); cur_row += STANDARD_VECTOR_SIZE) {
-			auto result = make_unique<DataChunk>();
+			auto result = make_uniq<DataChunk>();
 			result->Initialize(Allocator::DefaultAllocator(), {info.type});
 			auto cardinality = MinValue<idx_t>(STANDARD_VECTOR_SIZE, result_values.size() - cur_row);
 			for (idx_t i = 0; i < cardinality; i++) {
@@ -94,7 +94,7 @@ struct TestVectorConstant {
 	static void Generate(TestVectorInfo &info) {
 		auto values = TestVectorFlat::GenerateValues(info, info.type);
 		for (idx_t cur_row = 0; cur_row < TestVectorFlat::TEST_VECTOR_CARDINALITY; cur_row += STANDARD_VECTOR_SIZE) {
-			auto result = make_unique<DataChunk>();
+			auto result = make_uniq<DataChunk>();
 			result->Initialize(Allocator::DefaultAllocator(), {info.type});
 			auto cardinality = MinValue<idx_t>(STANDARD_VECTOR_SIZE, TestVectorFlat::TEST_VECTOR_CARDINALITY - cur_row);
 			result->data[0].SetValue(0, values[0]);
@@ -159,7 +159,7 @@ struct TestVectorSequence {
 
 	static void Generate(TestVectorInfo &info) {
 #if STANDARD_VECTOR_SIZE > 2
-		auto result = make_unique<DataChunk>();
+		auto result = make_uniq<DataChunk>();
 		result->Initialize(Allocator::DefaultAllocator(), {info.type});
 
 		GenerateVector(info, info.type, result->data[0]);
@@ -194,7 +194,7 @@ struct TestVectorDictionary {
 
 static unique_ptr<FunctionData> TestVectorTypesBind(ClientContext &context, TableFunctionBindInput &input,
                                                     vector<LogicalType> &return_types, vector<string> &names) {
-	auto result = make_unique<TestVectorBindData>();
+	auto result = make_uniq<TestVectorBindData>();
 	result->type = input.inputs[0].type();
 	result->all_flat = BooleanValue::Get(input.inputs[1]);
 
@@ -206,7 +206,7 @@ static unique_ptr<FunctionData> TestVectorTypesBind(ClientContext &context, Tabl
 unique_ptr<GlobalTableFunctionState> TestVectorTypesInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = (TestVectorBindData &)*input.bind_data;
 
-	auto result = make_unique<TestVectorTypesData>();
+	auto result = make_uniq<TestVectorTypesData>();
 
 	auto test_types = TestAllTypesFun::GetTestTypes();
 

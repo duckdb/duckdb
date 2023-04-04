@@ -42,7 +42,7 @@ JoinRelationSet *JoinRelationSetManager::GetJoinRelation(unique_ptr<idx_t[]> rel
 		auto entry = info->children.find(relations[i]);
 		if (entry == info->children.end()) {
 			// node not found, create it
-			auto insert_it = info->children.insert(make_pair(relations[i], make_unique<JoinRelationTreeNode>()));
+			auto insert_it = info->children.insert(make_pair(relations[i], make_uniq<JoinRelationTreeNode>()));
 			entry = insert_it.first;
 		}
 		// move to the next node
@@ -51,7 +51,7 @@ JoinRelationSet *JoinRelationSetManager::GetJoinRelation(unique_ptr<idx_t[]> rel
 	// now check if the JoinRelationSet has already been created
 	if (!info->relation) {
 		// if it hasn't we need to create it
-		info->relation = make_unique<JoinRelationSet>(std::move(relations), count);
+		info->relation = make_uniq<JoinRelationSet>(std::move(relations), count);
 	}
 	return info->relation.get();
 }

@@ -249,7 +249,7 @@ unique_ptr<OperatorState> PhysicalUnnest::GetOperatorState(ExecutionContext &con
 
 unique_ptr<OperatorState> PhysicalUnnest::GetState(ExecutionContext &context,
                                                    const vector<unique_ptr<Expression>> &select_list) {
-	return make_unique<UnnestOperatorState>(context.client, select_list);
+	return make_uniq<UnnestOperatorState>(context.client, select_list);
 }
 
 OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
