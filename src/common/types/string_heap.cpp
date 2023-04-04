@@ -12,6 +12,10 @@ namespace duckdb {
 StringHeap::StringHeap(Allocator &allocator) : allocator(allocator) {
 }
 
+void StringHeap::Reset() {
+	allocator.Reset();
+}
+
 void StringHeap::Destroy() {
 	allocator.Destroy();
 }

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/bswap.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types.hpp"
@@ -19,18 +20,6 @@
 #include <limits.h>
 
 namespace duckdb {
-
-#define BSWAP16(x) ((uint16_t)((((uint16_t)(x)&0xff00) >> 8) | (((uint16_t)(x)&0x00ff) << 8)))
-
-#define BSWAP32(x)                                                                                                     \
-	((uint32_t)((((uint32_t)(x)&0xff000000) >> 24) | (((uint32_t)(x)&0x00ff0000) >> 8) |                               \
-	            (((uint32_t)(x)&0x0000ff00) << 8) | (((uint32_t)(x)&0x000000ff) << 24)))
-
-#define BSWAP64(x)                                                                                                     \
-	((uint64_t)((((uint64_t)(x)&0xff00000000000000ull) >> 56) | (((uint64_t)(x)&0x00ff000000000000ull) >> 40) |        \
-	            (((uint64_t)(x)&0x0000ff0000000000ull) >> 24) | (((uint64_t)(x)&0x000000ff00000000ull) >> 8) |         \
-	            (((uint64_t)(x)&0x00000000ff000000ull) << 8) | (((uint64_t)(x)&0x0000000000ff0000ull) << 24) |         \
-	            (((uint64_t)(x)&0x000000000000ff00ull) << 40) | (((uint64_t)(x)&0x00000000000000ffull) << 56)))
 
 struct Radix {
 public:
@@ -84,8 +73,8 @@ public:
 		buff = Load<uint32_t>((const_data_ptr_t)&x);
 		if ((buff & (1u << 31)) == 0) { //! +0 and positive numbers
 			buff |= (1u << 31);
-		} else {          //! negative numbers
-			buff = ~buff; //! complement 1
+		} else {                        //! negative numbers
+			buff = ~buff;               //! complement 1
 		}
 
 		return buff;
@@ -114,8 +103,8 @@ public:
 		buff = Load<uint64_t>((const_data_ptr_t)&x);
 		if (buff < (1ull << 63)) { //! +0 and positive numbers
 			buff += (1ull << 63);
-		} else {          //! negative numbers
-			buff = ~buff; //! complement 1
+		} else {                   //! negative numbers
+			buff = ~buff;          //! complement 1
 		}
 		return buff;
 	}

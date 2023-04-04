@@ -1,0 +1,112 @@
+# name: test/sql/function/compressed_materialization/compressed_materialization_string.test
+# description: Test compressed materialization string
+# group: [compressed_materialization]
+
+# strings that fit in a hugeint
+loop len 0 15
+
+query I
+with cte as (
+    select 'abcdefghijklmnopqrstuvwxyz'[:${len}] as input
+)
+select cm_decompress_string(cm_compress_string_hugeint(input)) = input from cte
+----
+1
+
+endloop
+
+# strings that fit in a ubigint
+loop len 0 7
+
+query I
+with cte as (
+    select 'abcdefghijklmnopqrstuvwxyz'[:${len}] as input
+)
+select cm_decompress_string(cm_compress_string_ubigint(input)) = input from cte
+----
+1
+
+endloop
+
+# strings that fit in a uinteger
+loop len 0 3
+
+query I
+with cte as (
+    select 'abcdefghijklmnopqrstuvwxyz'[:${len}] as input
+)
+select cm_decompress_string(cm_compress_string_uinteger(input)) = input from cte
+----
+1
+
+endloop
+
+# strings that fit in a usmallint
+loop len 0 1
+
+query I
+with cte as (
+    select 'abcdefghijklmnopqrstuvwxyz'[:${len}] as input
+)
+select cm_decompress_string(cm_compress_string_usmallint(input)) = input from cte
+----
+1
+
+endloop
+
+# verify that sorting works properly
+statement ok
+create table test as select 'abcdefghijklmnopqrstuvwxyz'[:range] as input from range(16) order by random();
+
+query I nosort q0
+select * from test where length(input) < 16 order by input
+----
+
+query I nosort q0
+select * from test where length(input) < 16 order by cm_compress_string_hugeint(input)
+----
+
+query I nosort q1
+select * from test where length(input) < 8 order by input
+----
+
+query I nosort q1
+select * from test where length(input) < 8 order by cm_compress_string_ubigint(input)
+----
+
+query I nosort q2
+select * from test where length(input) < 4 order by input
+----
+
+query I nosort q2
+select * from test where length(input) < 4 order by cm_compress_string_uinteger(input)
+----
+
+query I nosort q3
+select * from test where length(input) < 2 order by input
+----
+
+query I nosort q3
+select * from test where length(input) < 2 order by cm_compress_string_usmallint(input)
+----
+
+# all these should error out (need 1 byte to store length of the string)
+statement error
+select cm_compress_string_hugeint(repeat('a', 16))
+----
+Invalid Input Error: String of size 16 too large to be compressed to integer of size 16
+
+statement error
+select cm_compress_string_ubigint(repeat('a', 8))
+----
+Invalid Input Error: String of size 8 too large to be compressed to integer of size 8
+
+statement error
+select cm_compress_string_uinteger(repeat('a', 4))
+----
+Invalid Input Error: String of size 4 too large to be compressed to integer of size 4
+
+statement error
+select cm_compress_string_usmallint(repeat('a', 2))
+----
+Invalid Input Error: String of size 2 too large to be compressed to integer of size 2

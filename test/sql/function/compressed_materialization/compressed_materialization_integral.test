@@ -1,0 +1,67 @@
+# name: test/sql/function/compressed_materialization/compressed_materialization_integral.test
+# description: Test compressed materialization integral
+# group: [compressed_materialization]
+
+# 16bytes to all smaller types and back
+statement ok
+create table test as select range::hugeint i from range(10, 20)
+
+query I nosort q0
+select i from test
+----
+
+foreach result_type utinyint usmallint uinteger ubigint
+
+query I nosort q0
+select cm_decompress_integral_hugeint(cm_compress_integral_${result_type}(i, 10::hugeint), 10::hugeint) from test
+----
+
+endloop
+
+# 8 bytes to all smaller types and back
+foreach input_type bigint ubigint
+
+statement ok
+create or replace table test as select range::${input_type} i from range(10, 20)
+
+foreach result_type utinyint usmallint uinteger
+
+query I nosort q0
+select cm_decompress_integral_${input_type}(cm_compress_integral_${result_type}(i, 10::${input_type}), 10::${input_type}) from test
+----
+
+endloop
+
+endloop
+
+# 4 bytes to all smaller types and back
+foreach input_type integer uinteger
+
+statement ok
+create or replace table test as select range::${input_type} i from range(10, 20)
+
+foreach result_type utinyint usmallint
+
+query I nosort q0
+select cm_decompress_integral_${input_type}(cm_compress_integral_${result_type}(i, 10::${input_type}), 10::${input_type}) from test
+----
+
+endloop
+
+endloop
+
+# 2 bytes to all smaller types and back
+foreach input_type smallint usmallint
+
+statement ok
+create or replace table test as select range::${input_type} i from range(10, 20)
+
+foreach result_type utinyint
+
+query I nosort q0
+select cm_decompress_integral_${input_type}(cm_compress_integral_${result_type}(i, 10::${input_type}), 10::${input_type}) from test
+----
+
+endloop
+
+endloop

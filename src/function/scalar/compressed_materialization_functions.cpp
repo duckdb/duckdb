@@ -5,7 +5,8 @@ namespace duckdb {
 void BuiltinFunctions::RegisterCompressedMaterializationFunctions() {
 	Register<CompressedMaterializationIntegralCompressFun>();
 	Register<CompressedMaterializationIntegralDecompressFun>();
-	Register<CompressedMaterializationStringFun>();
+	Register<CompressedMaterializationStringCompressFun>();
+	Register<CompressedMaterializationStringDecompressFun>();
 }
 
 } // namespace duckdb
