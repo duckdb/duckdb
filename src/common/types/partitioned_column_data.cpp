@@ -18,9 +18,9 @@ PartitionedColumnData::PartitionedColumnData(const PartitionedColumnData &other)
 unique_ptr<PartitionedColumnData> PartitionedColumnData::CreateShared() {
 	switch (type) {
 	case PartitionedColumnDataType::RADIX:
-		return make_unique<RadixPartitionedColumnData>((RadixPartitionedColumnData &)*this);
+		return make_uniq<RadixPartitionedColumnData>((RadixPartitionedColumnData &)*this);
 	case PartitionedColumnDataType::HIVE:
-		return make_unique<HivePartitionedColumnData>((HivePartitionedColumnData &)*this);
+		return make_uniq<HivePartitionedColumnData>((HivePartitionedColumnData &)*this);
 	default:
 		throw NotImplementedException("CreateShared for this type of PartitionedColumnData");
 	}
@@ -36,7 +36,7 @@ void PartitionedColumnData::InitializeAppendState(PartitionedColumnDataAppendSta
 }
 
 unique_ptr<DataChunk> PartitionedColumnData::CreatePartitionBuffer() const {
-	auto result = make_unique<DataChunk>();
+	auto result = make_uniq<DataChunk>();
 	result->Initialize(BufferManager::GetBufferManager(context).GetBufferAllocator(), types, BufferSize());
 	return result;
 }

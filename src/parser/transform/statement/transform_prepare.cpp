@@ -13,7 +13,7 @@ unique_ptr<PrepareStatement> Transformer::TransformPrepare(duckdb_libpgquery::PG
 		throw NotImplementedException("Prepared statement argument types are not supported, use CAST");
 	}
 
-	auto result = make_unique<PrepareStatement>();
+	auto result = make_uniq<PrepareStatement>();
 	result->name = string(stmt->name);
 	result->statement = TransformStatement(stmt->query);
 	if (!result->statement->named_param_map.empty()) {
@@ -28,7 +28,7 @@ unique_ptr<ExecuteStatement> Transformer::TransformExecute(duckdb_libpgquery::PG
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGExecuteStmt *>(node);
 	D_ASSERT(stmt);
 
-	auto result = make_unique<ExecuteStatement>();
+	auto result = make_uniq<ExecuteStatement>();
 	result->name = string(stmt->name);
 
 	if (stmt->params) {
@@ -49,7 +49,7 @@ unique_ptr<DropStatement> Transformer::TransformDeallocate(duckdb_libpgquery::PG
 		throw ParserException("DEALLOCATE requires a name");
 	}
 
-	auto result = make_unique<DropStatement>();
+	auto result = make_uniq<DropStatement>();
 	result->info->type = CatalogType::PREPARED_STATEMENT;
 	result->info->name = string(stmt->name);
 	return result;

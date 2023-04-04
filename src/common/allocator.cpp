@@ -108,9 +108,9 @@ Allocator::Allocator(allocate_function_ptr_t allocate_function_p, free_function_
 	D_ASSERT(reallocate_function);
 #ifdef DEBUG
 	if (!private_data) {
-		private_data = make_unique<PrivateAllocatorData>();
+		private_data = make_uniq<PrivateAllocatorData>();
 	}
-	private_data->debug_info = make_unique<AllocatorDebugInfo>();
+	private_data->debug_info = make_uniq<AllocatorDebugInfo>();
 #endif
 }
 

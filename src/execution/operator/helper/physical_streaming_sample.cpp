@@ -49,7 +49,7 @@ void PhysicalStreamingSample::BernoulliSample(DataChunk &input, DataChunk &resul
 }
 
 unique_ptr<OperatorState> PhysicalStreamingSample::GetOperatorState(ExecutionContext &context) const {
-	return make_unique<StreamingSampleOperatorState>(seed);
+	return make_uniq<StreamingSampleOperatorState>(seed);
 }
 
 OperatorResultType PhysicalStreamingSample::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,

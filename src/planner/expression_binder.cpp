@@ -242,7 +242,7 @@ string ExpressionBinder::Bind(unique_ptr<ParsedExpression> *expr, idx_t depth, b
 		return result.error;
 	}
 	// successfully bound: replace the node with a BoundExpression
-	*expr = make_unique<BoundExpression>(std::move(result.expression));
+	*expr = make_uniq<BoundExpression>(std::move(result.expression));
 	auto be = (BoundExpression *)expr->get();
 	D_ASSERT(be);
 	be->alias = alias;

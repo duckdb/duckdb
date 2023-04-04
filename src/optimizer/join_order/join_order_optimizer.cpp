@@ -82,7 +82,7 @@ static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, 
 	// first check if we have any filter to push it into
 	if (node->type != LogicalOperatorType::LOGICAL_FILTER) {
 		// we don't, we need to create one
-		auto filter = make_unique<LogicalFilter>();
+		auto filter = make_uniq<LogicalFilter>();
 		filter->children.push_back(std::move(node));
 		node = std::move(filter);
 	}
@@ -173,7 +173,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		unordered_set<idx_t> bindings;
 		LogicalJoin::GetTableReferences(*op, bindings);
 		// now create the relation that refers to all these bindings
-		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
+		auto relation = make_uniq<SingleJoinRelation>(&input_op, parent);
 		auto relation_id = relations.size();
 		// Add binding information from the nonreorderable join to this relation.
 		for (idx_t it : bindings) {
@@ -196,7 +196,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 	case LogicalOperatorType::LOGICAL_GET: {
 		// base table scan, add to set of relations
 		auto get = (LogicalGet *)op;
-		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
+		auto relation = make_uniq<SingleJoinRelation>(&input_op, parent);
 		idx_t relation_id = relations.size();
 		//! make sure the optimizer has knowledge of the exact column bindings as well.
 		auto table_index = get->table_index;
@@ -208,7 +208,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
 		// base table scan, add to set of relations
 		auto get = (LogicalExpressionGet *)op;
-		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
+		auto relation = make_uniq<SingleJoinRelation>(&input_op, parent);
 		//! make sure the optimizer has knowledge of the exact column bindings as well.
 		relation_mapping[get->table_index] = relations.size();
 		relations.push_back(std::move(relation));
@@ -217,7 +217,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN: {
 		// table function call, add to set of relations
 		auto dummy_scan = (LogicalDummyScan *)op;
-		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
+		auto relation = make_uniq<SingleJoinRelation>(&input_op, parent);
 		relation_mapping[dummy_scan->table_index] = relations.size();
 		relations.push_back(std::move(relation));
 		return true;
@@ -228,7 +228,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		JoinOrderOptimizer optimizer(context);
 		op->children[0] = optimizer.Optimize(std::move(op->children[0]));
 		// projection, add to the set of relations
-		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
+		auto relation = make_uniq<SingleJoinRelation>(&input_op, parent);
 		auto relation_id = relations.size();
 		// push one child column binding map back.
 		vector<column_binding_map_t<ColumnBinding>> child_binding_maps;
@@ -290,7 +290,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set,
 	}
 
 	auto cost = CardinalityEstimator::ComputeCost(left, right, expected_cardinality);
-	auto result = make_unique<JoinNode>(set, best_connection, left, right, expected_cardinality, cost);
+	auto result = make_uniq<JoinNode>(set, best_connection, left, right, expected_cardinality, cost);
 	D_ASSERT(cost >= expected_cardinality);
 	return result;
 }
@@ -747,7 +747,7 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 			result_operator = LogicalCrossProduct::Create(std::move(left.second), std::move(right.second));
 		} else {
 			// we have filters, create a join node
-			auto join = make_unique<LogicalComparisonJoin>(JoinType::INNER);
+			auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
 			join->children.push_back(std::move(left.second));
 			join->children.push_back(std::move(right.second));
 			// set the join conditions from the join node
@@ -797,7 +797,7 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 		// FILTER on top of GET, add estimated properties to both
 		auto &filter_props = *result_operator->estimated_props;
 		auto &child_operator = *result_operator->children[0];
-		child_operator.estimated_props = make_unique<EstimatedProperties>(
+		child_operator.estimated_props = make_uniq<EstimatedProperties>(
 		    filter_props.GetCardinality<double>() / CardinalityEstimator::DEFAULT_SELECTIVITY, filter_props.GetCost());
 		child_operator.estimated_cardinality = child_operator.estimated_props->GetCardinality<idx_t>();
 		child_operator.has_estimated_cardinality = true;
@@ -857,7 +857,7 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 				}
 				if (node->type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
 					// turn into comparison join
-					auto comp_join = make_unique<LogicalComparisonJoin>(JoinType::INNER);
+					auto comp_join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
 					comp_join->children.push_back(std::move(node->children[0]));
 					comp_join->children.push_back(std::move(node->children[1]));
 					comp_join->conditions.push_back(std::move(cond));
@@ -953,8 +953,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 			D_ASSERT(join.join_type == JoinType::INNER);
 			D_ASSERT(join.expressions.empty());
 			for (auto &cond : join.conditions) {
-				auto comparison = make_unique<BoundComparisonExpression>(cond.comparison, std::move(cond.left),
-				                                                         std::move(cond.right));
+				auto comparison =
+				    make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left), std::move(cond.right));
 				if (filter_set.find(comparison.get()) == filter_set.end()) {
 					filter_set.insert(comparison.get());
 					filters.push_back(std::move(comparison));
@@ -974,7 +974,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	// create potential edges from the comparisons
 	for (idx_t i = 0; i < filters.size(); i++) {
 		auto &filter = filters[i];
-		auto info = make_unique<FilterInfo>();
+		auto info = make_uniq<FilterInfo>();
 		auto filter_info = info.get();
 		filter_infos.push_back(std::move(info));
 		// first extract the relation set for the entire filter
@@ -1019,7 +1019,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	for (idx_t i = 0; i < relations.size(); i++) {
 		auto &rel = *relations[i];
 		auto node = set_manager.GetJoinRelation(i);
-		nodes_ops.emplace_back(make_unique<JoinNode>(node, 0), rel.op);
+		nodes_ops.emplace_back(make_uniq<JoinNode>(node, 0), rel.op);
 	}
 
 	cardinality_estimator.InitCardinalityEstimatorProps(&nodes_ops, &filter_infos);

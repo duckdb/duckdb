@@ -9,9 +9,10 @@
 #pragma once
 
 #include <memory>
-#include <cstdint>
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/winapi.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/typedefs.hpp"
 
 namespace duckdb {
 
@@ -19,11 +20,11 @@ namespace duckdb {
 #ifndef DUCKDB_DEBUG_MOVE
 using std::move;
 #endif
-using std::shared_ptr;
-using std::unique_ptr;
-using std::weak_ptr;
-using data_ptr = unique_ptr<char[]>;
-using std::make_shared;
+
+// template <class _Tp, class _Dp = std::default_delete<_Tp>>
+// class unique_ptr;
+
+// using data_ptr = unique_ptr<char[]>;
 
 // NOTE: there is a copy of this in the Postgres' parser grammar (gram.y)
 #define DEFAULT_SCHEMA  "main"
@@ -35,29 +36,6 @@ using std::make_shared;
 DUCKDB_API bool IsInvalidSchema(const string &str);
 DUCKDB_API bool IsInvalidCatalog(const string &str);
 
-//! a saner size_t for loop indices etc
-typedef uint64_t idx_t;
-
-//! The type used for row identifiers
-typedef int64_t row_t;
-
-//! The type used for hashes
-typedef uint64_t hash_t;
-
-//! data pointers
-typedef uint8_t data_t;
-typedef data_t *data_ptr_t;
-typedef const data_t *const_data_ptr_t;
-
-//! Type used for the selection vector
-typedef uint32_t sel_t;
-//! Type used for transaction timestamps
-typedef idx_t transaction_t;
-
-//! Type used for column identifiers
-typedef idx_t column_t;
-//! Type used for storage (column) identifiers
-typedef idx_t storage_t;
 //! Special value used to signify the ROW ID of a table
 DUCKDB_API extern const column_t COLUMN_IDENTIFIER_ROW_ID;
 DUCKDB_API bool IsRowIdColumnId(column_t column_id);

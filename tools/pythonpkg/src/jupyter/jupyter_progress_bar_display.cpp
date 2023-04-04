@@ -5,7 +5,7 @@
 namespace duckdb {
 
 unique_ptr<ProgressBarDisplay> JupyterProgressBarDisplay::Create() {
-	return make_unique<JupyterProgressBarDisplay>();
+	return make_uniq<JupyterProgressBarDisplay>();
 }
 
 void JupyterProgressBarDisplay::Initialize() {

@@ -63,7 +63,7 @@ unique_ptr<Expression> ExpressionBinder::PushCollation(ClientContext &context, u
 }
 
 void ExpressionBinder::TestCollation(ClientContext &context, const string &collation) {
-	PushCollation(context, make_unique<BoundConstantExpression>(Value("")), collation);
+	PushCollation(context, make_uniq<BoundConstantExpression>(Value("")), collation);
 }
 
 LogicalType BoundComparisonExpression::BindComparison(LogicalType left_type, LogicalType right_type) {
@@ -140,7 +140,7 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 		    PushCollation(context, std::move(right.expr), collation, expr.type == ExpressionType::COMPARE_EQUAL);
 	}
 	// now create the bound comparison expression
-	return BindResult(make_unique<BoundComparisonExpression>(expr.type, std::move(left.expr), std::move(right.expr)));
+	return BindResult(make_uniq<BoundComparisonExpression>(expr.type, std::move(left.expr), std::move(right.expr)));
 }
 
 } // namespace duckdb

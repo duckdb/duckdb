@@ -21,7 +21,7 @@ TableMacroFunction::TableMacroFunction(void) : MacroFunction(MacroType::TABLE_MA
 }
 
 unique_ptr<MacroFunction> TableMacroFunction::Copy() {
-	auto result = make_unique<TableMacroFunction>();
+	auto result = make_uniq<TableMacroFunction>();
 	result->query_node = query_node->Copy();
 	this->CopyProperties(*result);
 	return std::move(result);

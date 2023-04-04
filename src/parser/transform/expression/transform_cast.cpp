@@ -17,7 +17,7 @@ unique_ptr<ParsedExpression> Transformer::TransformTypeCast(duckdb_libpgquery::P
 	if (!root->tryCast && target_type == LogicalType::BLOB && root->arg->type == duckdb_libpgquery::T_PGAConst) {
 		auto c = reinterpret_cast<duckdb_libpgquery::PGAConst *>(root->arg);
 		if (c->val.type == duckdb_libpgquery::T_PGString) {
-			return make_unique<ConstantExpression>(Value::BLOB(string(c->val.val.str)));
+			return make_uniq<ConstantExpression>(Value::BLOB(string(c->val.val.str)));
 		}
 	}
 	// transform the expression node
@@ -25,7 +25,7 @@ unique_ptr<ParsedExpression> Transformer::TransformTypeCast(duckdb_libpgquery::P
 	bool try_cast = root->tryCast;
 
 	// now create a cast operation
-	return make_unique<CastExpression>(target_type, std::move(expression), try_cast);
+	return make_uniq<CastExpression>(target_type, std::move(expression), try_cast);
 }
 
 } // namespace duckdb

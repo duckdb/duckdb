@@ -103,7 +103,7 @@ PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOpe
 }
 
 unique_ptr<OperatorState> PhysicalIndexJoin::GetOperatorState(ExecutionContext &context) const {
-	return make_unique<IndexJoinOperatorState>(context.client, *this);
+	return make_uniq<IndexJoinOperatorState>(context.client, *this);
 }
 
 void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
@@ -137,7 +137,7 @@ void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &input, Data
 			return;
 		}
 		state.rhs_chunk.Reset();
-		state.fetch_state = make_unique<ColumnFetchState>();
+		state.fetch_state = make_uniq<ColumnFetchState>();
 		Vector row_ids(LogicalType::ROW_TYPE, (data_ptr_t)&fetch_rows[0]);
 		tbl.Fetch(transaction, state.rhs_chunk, fetch_ids, row_ids, output_sel_idx, *state.fetch_state);
 	}

@@ -8,8 +8,8 @@ namespace duckdb {
 
 ConjunctionSimplificationRule::ConjunctionSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on a ComparisonExpression that has a ConstantExpression as a check
-	auto op = make_unique<ConjunctionExpressionMatcher>();
-	op->matchers.push_back(make_unique<FoldableConstantMatcher>());
+	auto op = make_uniq<ConjunctionExpressionMatcher>();
+	op->matchers.push_back(make_uniq<FoldableConstantMatcher>());
 	op->policy = SetMatcher::Policy::SOME;
 	root = std::move(op);
 }
@@ -49,7 +49,7 @@ unique_ptr<Expression> ConjunctionSimplificationRule::Apply(LogicalOperator &op,
 	if (conjunction->type == ExpressionType::CONJUNCTION_AND) {
 		if (!BooleanValue::Get(constant_value)) {
 			// FALSE in AND, result of expression is false
-			return make_unique<BoundConstantExpression>(Value::BOOLEAN(false));
+			return make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
 		} else {
 			// TRUE in AND, remove the expression from the set
 			return RemoveExpression(*conjunction, constant_expr);
@@ -61,7 +61,7 @@ unique_ptr<Expression> ConjunctionSimplificationRule::Apply(LogicalOperator &op,
 			return RemoveExpression(*conjunction, constant_expr);
 		} else {
 			// TRUE in OR, result of expression is true
-			return make_unique<BoundConstantExpression>(Value::BOOLEAN(true));
+			return make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
 		}
 	}
 }

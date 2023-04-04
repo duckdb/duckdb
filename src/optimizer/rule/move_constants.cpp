@@ -10,19 +10,19 @@
 namespace duckdb {
 
 MoveConstantsRule::MoveConstantsRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
-	auto op = make_unique<ComparisonExpressionMatcher>();
-	op->matchers.push_back(make_unique<ConstantExpressionMatcher>());
+	auto op = make_uniq<ComparisonExpressionMatcher>();
+	op->matchers.push_back(make_uniq<ConstantExpressionMatcher>());
 	op->policy = SetMatcher::Policy::UNORDERED;
 
-	auto arithmetic = make_unique<FunctionExpressionMatcher>();
+	auto arithmetic = make_uniq<FunctionExpressionMatcher>();
 	// we handle multiplication, addition and subtraction because those are "easy"
 	// integer division makes the division case difficult
 	// e.g. [x / 2 = 3] means [x = 6 OR x = 7] because of truncation -> no clean rewrite rules
-	arithmetic->function = make_unique<ManyFunctionMatcher>(unordered_set<string> {"+", "-", "*"});
+	arithmetic->function = make_uniq<ManyFunctionMatcher>(unordered_set<string> {"+", "-", "*"});
 	// we match only on integral numeric types
-	arithmetic->type = make_unique<IntegerTypeMatcher>();
-	arithmetic->matchers.push_back(make_unique<ConstantExpressionMatcher>());
-	arithmetic->matchers.push_back(make_unique<ExpressionMatcher>());
+	arithmetic->type = make_uniq<IntegerTypeMatcher>();
+	arithmetic->matchers.push_back(make_uniq<ConstantExpressionMatcher>());
+	arithmetic->matchers.push_back(make_uniq<ExpressionMatcher>());
 	arithmetic->policy = SetMatcher::Policy::SOME;
 	op->matchers.push_back(std::move(arithmetic));
 	root = std::move(op);
@@ -38,7 +38,7 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expr
 		return nullptr;
 	}
 	if (inner_constant->value.IsNull() || outer_constant->value.IsNull()) {
-		return make_unique<BoundConstantExpression>(Value(comparison->return_type));
+		return make_uniq<BoundConstantExpression>(Value(comparison->return_type));
 	}
 	auto &constant_type = outer_constant->return_type;
 	hugeint_t outer_value = IntegralValue::Get(outer_constant->value);

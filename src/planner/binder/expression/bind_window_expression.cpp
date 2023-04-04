@@ -207,7 +207,7 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		auto bound_function = func->functions.GetFunctionByOffset(best_function);
 		auto bound_aggregate = function_binder.BindAggregateFunction(bound_function, std::move(children));
 		// create the aggregate
-		aggregate = make_unique<AggregateFunction>(bound_aggregate->function);
+		aggregate = make_uniq<AggregateFunction>(bound_aggregate->function);
 		bind_info = std::move(bound_aggregate->bind_info);
 		children = std::move(bound_aggregate->children);
 		sql_type = bound_aggregate->return_type;
@@ -215,7 +215,7 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		// fetch the child of the non-aggregate window function (if any)
 		sql_type = ResolveWindowExpressionType(window.type, types);
 	}
-	auto result = make_unique<BoundWindowExpression>(window.type, sql_type, std::move(aggregate), std::move(bind_info));
+	auto result = make_uniq<BoundWindowExpression>(window.type, sql_type, std::move(aggregate), std::move(bind_info));
 	result->children = std::move(children);
 	for (auto &child : window.partitions) {
 		result->partitions.push_back(GetExpression(child));
@@ -292,8 +292,8 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	result->end = window.end;
 
 	// create a BoundColumnRef that references this entry
-	auto colref = make_unique<BoundColumnRefExpression>(std::move(name), result->return_type,
-	                                                    ColumnBinding(node.window_index, node.windows.size()), depth);
+	auto colref = make_uniq<BoundColumnRefExpression>(std::move(name), result->return_type,
+	                                                  ColumnBinding(node.window_index, node.windows.size()), depth);
 	// move the WINDOW expression into the set of bound windows
 	node.windows.push_back(std::move(result));
 	return BindResult(std::move(colref));

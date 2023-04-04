@@ -16,13 +16,13 @@ namespace duckdb {
 //! A column reader that represents a cast over a child reader
 class CastColumnReader : public ColumnReader {
 public:
-	CastColumnReader(unique_ptr<ColumnReader> child_reader, LogicalType target_type);
+	CastColumnReader(duckdb::unique_ptr<ColumnReader> child_reader, LogicalType target_type);
 
-	unique_ptr<ColumnReader> child_reader;
+	duckdb::unique_ptr<ColumnReader> child_reader;
 	DataChunk intermediate_chunk;
 
 public:
-	unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns) override;
+	duckdb::unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns) override;
 	void InitializeRead(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) override;
 
 	idx_t Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
