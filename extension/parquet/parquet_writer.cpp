@@ -229,7 +229,7 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, FileOpener *fil
                              vector<string> names_p, CompressionCodec::type codec)
     : file_name(std::move(file_name_p)), sql_types(std::move(types_p)), column_names(std::move(names_p)), codec(codec) {
 	// initialize the file writer
-	writer = make_unique<BufferedFileWriter>(
+	writer = make_uniq<BufferedFileWriter>(
 	    fs, file_name.c_str(), FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW, file_opener_p);
 	// parquet files start with the string "PAR1"
 	writer->WriteData((const_data_ptr_t) "PAR1", 4);
@@ -271,7 +271,7 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 	row_group.num_rows = buffer.Count();
 	row_group.__isset.file_offset = true;
 
-	vector<unique_ptr<ColumnWriterState>> states;
+	vector<duckdb::unique_ptr<ColumnWriterState>> states;
 	// iterate over each of the columns of the chunk collection and write them
 	D_ASSERT(buffer.ColumnCount() == column_writers.size());
 	for (idx_t col_idx = 0; col_idx < buffer.ColumnCount(); col_idx++) {

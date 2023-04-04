@@ -15,7 +15,7 @@ InsertRelation::InsertRelation(shared_ptr<Relation> child_p, string schema_name,
 
 BoundStatement InsertRelation::Bind(Binder &binder) {
 	InsertStatement stmt;
-	auto select = make_unique<SelectStatement>();
+	auto select = make_uniq<SelectStatement>();
 	select->node = child->GetQueryNode();
 
 	stmt.schema = schema_name;

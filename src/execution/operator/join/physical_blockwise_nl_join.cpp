@@ -42,11 +42,11 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalBlockwiseNLJoin::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<BlockwiseNLJoinGlobalState>(context, *this);
+	return make_uniq<BlockwiseNLJoinGlobalState>(context, *this);
 }
 
 unique_ptr<LocalSinkState> PhysicalBlockwiseNLJoin::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<BlockwiseNLJoinLocalState>();
+	return make_uniq<BlockwiseNLJoinLocalState>();
 }
 
 SinkResultType PhysicalBlockwiseNLJoin::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
@@ -92,7 +92,7 @@ public:
 
 unique_ptr<OperatorState> PhysicalBlockwiseNLJoin::GetOperatorState(ExecutionContext &context) const {
 	auto &gstate = (BlockwiseNLJoinGlobalState &)*sink_state;
-	auto result = make_unique<BlockwiseNLJoinState>(context, gstate.right_chunks, *this);
+	auto result = make_uniq<BlockwiseNLJoinState>(context, gstate.right_chunks, *this);
 	if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
 		vector<LogicalType> intermediate_types;
 		for (auto &type : children[0]->types) {
@@ -238,12 +238,12 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalBlockwiseNLJoin::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<BlockwiseNLJoinGlobalScanState>(*this);
+	return make_uniq<BlockwiseNLJoinGlobalScanState>(*this);
 }
 
 unique_ptr<LocalSourceState> PhysicalBlockwiseNLJoin::GetLocalSourceState(ExecutionContext &context,
                                                                           GlobalSourceState &gstate) const {
-	return make_unique<BlockwiseNLJoinLocalScanState>(*this, (BlockwiseNLJoinGlobalScanState &)gstate);
+	return make_uniq<BlockwiseNLJoinLocalScanState>(*this, (BlockwiseNLJoinGlobalScanState &)gstate);
 }
 
 void PhysicalBlockwiseNLJoin::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,

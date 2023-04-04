@@ -23,7 +23,7 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalCreateType::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<CreateTypeGlobalState>(context);
+	return make_uniq<CreateTypeGlobalState>(context);
 }
 
 SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
@@ -69,7 +69,7 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalCreateType::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<CreateTypeSourceState>();
+	return make_uniq<CreateTypeSourceState>();
 }
 
 void PhysicalCreateType::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,

@@ -8,8 +8,8 @@ namespace duckdb {
 
 ComparisonSimplificationRule::ComparisonSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on a ComparisonExpression that has a ConstantExpression as a check
-	auto op = make_unique<ComparisonExpressionMatcher>();
-	op->matchers.push_back(make_unique<FoldableConstantMatcher>());
+	auto op = make_uniq<ComparisonExpressionMatcher>();
+	op->matchers.push_back(make_uniq<FoldableConstantMatcher>());
 	op->policy = SetMatcher::Policy::SOME;
 	root = std::move(op);
 }
@@ -31,7 +31,7 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 	if (constant_value.IsNull() && !(expr->type == ExpressionType::COMPARE_NOT_DISTINCT_FROM ||
 	                                 expr->type == ExpressionType::COMPARE_DISTINCT_FROM)) {
 		// comparison with constant NULL, return NULL
-		return make_unique<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
+		return make_uniq<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
 	}
 	if (column_ref_expr->expression_class == ExpressionClass::BOUND_CAST) {
 		//! Here we check if we can apply the expression on the constant side
@@ -64,7 +64,7 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 
 		//! We can cast, now we change our column_ref_expression from an operator cast to a column reference
 		auto child_expression = std::move(cast_expression->child);
-		auto new_constant_expr = make_unique<BoundConstantExpression>(cast_constant);
+		auto new_constant_expr = make_uniq<BoundConstantExpression>(cast_constant);
 		if (column_ref_left) {
 			expr->left = std::move(child_expression);
 			expr->right = std::move(new_constant_expr);

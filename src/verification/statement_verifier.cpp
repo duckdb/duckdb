@@ -113,10 +113,10 @@ bool StatementVerifier::Run(
 		materialized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
 	} catch (const Exception &ex) {
 		failed = true;
-		materialized_result = make_unique<MaterializedQueryResult>(PreservedError(ex));
+		materialized_result = make_uniq<MaterializedQueryResult>(PreservedError(ex));
 	} catch (std::exception &ex) {
 		failed = true;
-		materialized_result = make_unique<MaterializedQueryResult>(PreservedError(ex));
+		materialized_result = make_uniq<MaterializedQueryResult>(PreservedError(ex));
 	}
 	context.interrupted = false;
 

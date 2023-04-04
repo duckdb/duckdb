@@ -6,10 +6,6 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/list.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
-#include "duckdb/common/types/column/column_data_allocator.hpp"
-#include "duckdb/common/types/column/column_data_collection.hpp"
-#include "duckdb/common/types/row/tuple_data_allocator.hpp"
-#include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/execution/join_hashtable.hpp"
@@ -21,8 +17,8 @@
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/optimizer/rule.hpp"
-#include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
+#include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/expression/list.hpp"
@@ -40,6 +36,8 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_allocator.hpp"
 
 using namespace duckdb;
 
@@ -95,9 +93,6 @@ template class std::unique_ptr<RowDataCollection>;
 template class std::unique_ptr<ColumnDataCollection>;
 template class std::shared_ptr<ColumnDataAllocator>;
 template class std::unique_ptr<PartitionedColumnData>;
-template class std::unique_ptr<TupleDataCollection>;
-template class std::shared_ptr<TupleDataAllocator>;
-template class std::unique_ptr<PartitionedTupleData>;
 template class std::shared_ptr<PreparedStatementData>;
 template class std::unique_ptr<VacuumInfo>;
 

@@ -54,7 +54,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
 
 	// HT layout
 	hash_offset = layout.GetOffsets()[layout.ColumnCount() - 1];
-	data_collection = make_unique<TupleDataCollection>(buffer_manager, layout);
+	data_collection = make_uniq<TupleDataCollection>(buffer_manager, layout);
 	data_collection->InitializeAppend(td_append_state, TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
 
 	hashes_hdl = buffer_manager.Allocate(Storage::BLOCK_SIZE);
@@ -584,7 +584,7 @@ void GroupedAggregateHashTable::Partition(vector<GroupedAggregateHashTable *> &p
 
 	// Partition the data
 	auto partitioned_data =
-	    make_unique<RadixPartitionedTupleData>(buffer_manager, layout, radix_bits, layout.ColumnCount() - 1);
+	    make_uniq<RadixPartitionedTupleData>(buffer_manager, layout, radix_bits, layout.ColumnCount() - 1);
 	partitioned_data->Partition(*data_collection, TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
 	D_ASSERT(partitioned_data->GetPartitions().size() == num_partitions);
 

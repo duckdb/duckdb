@@ -57,9 +57,9 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager_p, const vector<JoinC
 	pointer_offset = offsets.back();
 	entry_size = layout.GetRowWidth();
 
-	data_collection = make_unique<TupleDataCollection>(buffer_manager, layout);
+	data_collection = make_uniq<TupleDataCollection>(buffer_manager, layout);
 	sink_collection =
-	    make_unique<RadixPartitionedTupleData>(buffer_manager, layout, radix_bits, layout.ColumnCount() - 1);
+	    make_uniq<RadixPartitionedTupleData>(buffer_manager, layout, radix_bits, layout.ColumnCount() - 1);
 }
 
 JoinHashTable::~JoinHashTable() {
@@ -329,7 +329,7 @@ unique_ptr<ScanStructure> JoinHashTable::InitializeScanStructure(DataChunk &keys
 	D_ASSERT(finalized);
 
 	// set up the scan structure
-	auto ss = make_unique<ScanStructure>(*this);
+	auto ss = make_uniq<ScanStructure>(*this);
 
 	if (join_type != JoinType::INNER) {
 		ss->found_match = unique_ptr<bool[]>(new bool[STANDARD_VECTOR_SIZE]);
@@ -916,7 +916,7 @@ bool JoinHashTable::RequiresPartitioning(ClientConfig &config, vector<unique_ptr
 		}
 		radix_bits += added_bits;
 		sink_collection =
-		    make_unique<RadixPartitionedTupleData>(buffer_manager, layout, radix_bits, layout.ColumnCount() - 1);
+		    make_uniq<RadixPartitionedTupleData>(buffer_manager, layout, radix_bits, layout.ColumnCount() - 1);
 		return true;
 	} else {
 		return false;
@@ -925,7 +925,7 @@ bool JoinHashTable::RequiresPartitioning(ClientConfig &config, vector<unique_ptr
 
 void JoinHashTable::Partition(JoinHashTable &global_ht) {
 	auto new_sink_collection =
-	    make_unique<RadixPartitionedTupleData>(buffer_manager, layout, global_ht.radix_bits, layout.ColumnCount() - 1);
+	    make_uniq<RadixPartitionedTupleData>(buffer_manager, layout, global_ht.radix_bits, layout.ColumnCount() - 1);
 	sink_collection->Repartition(*new_sink_collection);
 	sink_collection = std::move(new_sink_collection);
 	global_ht.Merge(*this);
@@ -1044,7 +1044,7 @@ ProbeSpill::ProbeSpill(JoinHashTable &ht, ClientContext &context, const vector<L
 		// More than one probe round to go, so we need to partition
 		partitioned = true;
 		global_partitions =
-		    make_unique<RadixPartitionedColumnData>(context, probe_types, ht.radix_bits, probe_types.size() - 1);
+		    make_uniq<RadixPartitionedColumnData>(context, probe_types, ht.radix_bits, probe_types.size() - 1);
 	}
 	column_ids.reserve(probe_types.size());
 	for (column_t column_id = 0; column_id < probe_types.size(); column_id++) {
@@ -1057,15 +1057,15 @@ ProbeSpillLocalState ProbeSpill::RegisterThread() {
 	lock_guard<mutex> guard(lock);
 	if (partitioned) {
 		local_partitions.emplace_back(global_partitions->CreateShared());
-		local_partition_append_states.emplace_back(make_unique<PartitionedColumnDataAppendState>());
+		local_partition_append_states.emplace_back(make_uniq<PartitionedColumnDataAppendState>());
 		local_partitions.back()->InitializeAppendState(*local_partition_append_states.back());
 
 		result.local_partition = local_partitions.back().get();
 		result.local_partition_append_state = local_partition_append_states.back().get();
 	} else {
 		local_spill_collections.emplace_back(
-		    make_unique<ColumnDataCollection>(BufferManager::GetBufferManager(context), probe_types));
-		local_spill_append_states.emplace_back(make_unique<ColumnDataAppendState>());
+		    make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(context), probe_types));
+		local_spill_append_states.emplace_back(make_uniq<ColumnDataAppendState>());
 		local_spill_collections.back()->InitializeAppend(*local_spill_append_states.back());
 
 		result.local_spill_collection = local_spill_collections.back().get();
@@ -1096,7 +1096,7 @@ void ProbeSpill::Finalize() {
 	} else {
 		if (local_spill_collections.empty()) {
 			global_spill_collection =
-			    make_unique<ColumnDataCollection>(BufferManager::GetBufferManager(context), probe_types);
+			    make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(context), probe_types);
 		} else {
 			global_spill_collection = std::move(local_spill_collections[0]);
 			for (idx_t i = 1; i < local_spill_collections.size(); i++) {
@@ -1114,7 +1114,7 @@ void ProbeSpill::PrepareNextProbe() {
 		if (partitions.empty() || ht.partition_start == partitions.size()) {
 			// Can't probe, just make an empty one
 			global_spill_collection =
-			    make_unique<ColumnDataCollection>(BufferManager::GetBufferManager(context), probe_types);
+			    make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(context), probe_types);
 		} else {
 			// Move specific partitions to the global spill collection
 			global_spill_collection = std::move(partitions[ht.partition_start]);
@@ -1128,7 +1128,7 @@ void ProbeSpill::PrepareNextProbe() {
 			}
 		}
 	}
-	consumer = make_unique<ColumnDataConsumer>(*global_spill_collection, column_ids);
+	consumer = make_uniq<ColumnDataConsumer>(*global_spill_collection, column_ids);
 	consumer->InitializeScan();
 }
 

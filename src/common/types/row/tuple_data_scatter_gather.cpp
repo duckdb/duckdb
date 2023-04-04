@@ -292,7 +292,7 @@ static void ApplySliceRecursive(Vector &source_v, TupleDataVectorFormat &source_
 		for (idx_t struct_col_idx = 0; struct_col_idx < struct_sources.size(); struct_col_idx++) {
 			auto &struct_source = *struct_sources[struct_col_idx];
 			auto &struct_format = source_format.child_formats[struct_col_idx];
-			struct_format.combined_list_data = make_unique<CombinedListData>();
+			struct_format.combined_list_data = make_uniq<CombinedListData>();
 			ApplySliceRecursive(struct_source, struct_format, *source_format.data.sel, count);
 		}
 	}
@@ -318,7 +318,7 @@ void TupleDataCollection::ListWithinListComputeHeapSizes(Vector &heap_sizes_v, V
 
 	// Construct combined list entries and a selection vector for the child list child
 	auto &child_format = source_format.child_formats[0];
-	child_format.combined_list_data = make_unique<CombinedListData>();
+	child_format.combined_list_data = make_uniq<CombinedListData>();
 	auto &combined_list_data = *child_format.combined_list_data;
 	auto &combined_list_entries = combined_list_data.combined_list_entries;
 	const auto child_list_child_count = ListVector::GetListSize(source_v);

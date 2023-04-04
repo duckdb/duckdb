@@ -126,7 +126,7 @@ public:
 
 		vector<unique_ptr<Task>> iejoin_tasks;
 		for (idx_t tnum = 0; tnum < num_threads; tnum++) {
-			iejoin_tasks.push_back(make_unique<RangeJoinMergeTask>(shared_from_this(), context, table));
+			iejoin_tasks.push_back(make_uniq<RangeJoinMergeTask>(shared_from_this(), context, table));
 		}
 		SetTasks(std::move(iejoin_tasks));
 	}

@@ -11,6 +11,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 
@@ -29,7 +30,7 @@ public:
 		case_insensitive_map_t<idx_t> union_names_map;
 		for (idx_t file_idx = 0; file_idx < files.size(); ++file_idx) {
 			const auto file_name = files[file_idx];
-			auto reader = make_unique<READER_TYPE>(context, file_name, options);
+			auto reader = make_uniq<READER_TYPE>(context, file_name, options);
 
 			auto &col_names = reader->GetNames();
 			auto &sql_types = reader->GetTypes();

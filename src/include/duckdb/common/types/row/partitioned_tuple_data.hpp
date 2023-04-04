@@ -124,7 +124,7 @@ protected:
 	void BuildBufferSpace(PartitionedTupleDataAppendState &state);
 	//! Create a collection for a specific a partition
 	unique_ptr<TupleDataCollection> CreatePartitionCollection(idx_t partition_index) const {
-		return make_unique<TupleDataCollection>(allocators->allocators[partition_index]);
+		return make_uniq<TupleDataCollection>(allocators->allocators[partition_index]);
 	}
 
 protected:

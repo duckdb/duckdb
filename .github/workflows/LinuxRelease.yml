@@ -598,7 +598,7 @@ jobs:
       run: |
         git clone --recurse-submodules https://github.com/duckdb/duckdb-wasm
         cd duckdb-wasm
-        git checkout 53e4aad8ac21808a19e834df9ef559a9889f2671
+        git checkout e401029fb3020c7a7be2c03896717c615418277e
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -641,7 +641,7 @@ jobs:
       run: |
         git clone --recurse-submodules https://github.com/duckdb/duckdb-wasm
         cd duckdb-wasm
-        git checkout 53e4aad8ac21808a19e834df9ef559a9889f2671
+        git checkout e401029fb3020c7a7be2c03896717c615418277e
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main

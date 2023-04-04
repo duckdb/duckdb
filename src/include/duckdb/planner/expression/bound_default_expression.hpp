@@ -31,7 +31,7 @@ public:
 	}
 
 	unique_ptr<Expression> Copy() override {
-		return make_unique<BoundDefaultExpression>(return_type);
+		return make_uniq<BoundDefaultExpression>(return_type);
 	}
 
 	void Serialize(FieldWriter &writer) const override;

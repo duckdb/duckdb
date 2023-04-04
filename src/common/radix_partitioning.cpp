@@ -9,7 +9,7 @@
 namespace duckdb {
 
 template <class OP, class RETURN_TYPE, typename... ARGS>
-RETURN_TYPE RadixBitsSwitch(idx_t radix_bits, ARGS &&... args) {
+RETURN_TYPE RadixBitsSwitch(idx_t radix_bits, ARGS &&...args) {
 	D_ASSERT(radix_bits <= sizeof(hash_t) * 8);
 	switch (radix_bits) {
 	case 1:
@@ -101,7 +101,7 @@ void RadixPartitionedColumnData::InitializeAppendStateInternal(PartitionedColumn
 	state.partition_append_states.reserve(num_partitions);
 	state.partition_buffers.reserve(num_partitions);
 	for (idx_t i = 0; i < num_partitions; i++) {
-		state.partition_append_states.emplace_back(make_unique<ColumnDataAppendState>());
+		state.partition_append_states.emplace_back(make_uniq<ColumnDataAppendState>());
 		partitions[i]->InitializeAppend(*state.partition_append_states[i]);
 		state.partition_buffers.emplace_back(CreatePartitionBuffer());
 	}
@@ -151,7 +151,7 @@ void RadixPartitionedTupleData::InitializeAppendStateInternal(PartitionedTupleDa
 	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
 	state.partition_pin_states.reserve(num_partitions);
 	for (idx_t i = 0; i < num_partitions; i++) {
-		state.partition_pin_states.emplace_back(make_unique<TupleDataPinState>());
+		state.partition_pin_states.emplace_back(make_uniq<TupleDataPinState>());
 		partitions[i]->InitializeAppend(*state.partition_pin_states[i], properties);
 	}
 

@@ -396,8 +396,8 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	if (HasRepeats()) {
 		uint32_t rep_length = is_v1 ? block->read<uint32_t>() : v2_header.repetition_levels_byte_length;
 		block->available(rep_length);
-		repeated_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, rep_length,
-		                                             RleBpDecoder::ComputeBitWidth(max_repeat));
+		repeated_decoder =
+		    make_uniq<RleBpDecoder>((const uint8_t *)block->ptr, rep_length, RleBpDecoder::ComputeBitWidth(max_repeat));
 		block->inc(rep_length);
 	} else if (is_v2 && v2_header.repetition_levels_byte_length > 0) {
 		block->inc(v2_header.repetition_levels_byte_length);
@@ -406,8 +406,8 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	if (HasDefines()) {
 		uint32_t def_length = is_v1 ? block->read<uint32_t>() : v2_header.definition_levels_byte_length;
 		block->available(def_length);
-		defined_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, def_length,
-		                                            RleBpDecoder::ComputeBitWidth(max_define));
+		defined_decoder =
+		    make_uniq<RleBpDecoder>((const uint8_t *)block->ptr, def_length, RleBpDecoder::ComputeBitWidth(max_define));
 		block->inc(def_length);
 	} else if (is_v2 && v2_header.definition_levels_byte_length > 0) {
 		block->inc(v2_header.definition_levels_byte_length);
@@ -419,7 +419,7 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		// where is it otherwise??
 		auto dict_width = block->read<uint8_t>();
 		// TODO somehow dict_width can be 0 ?
-		dict_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, block->len, dict_width);
+		dict_decoder = make_uniq<RleBpDecoder>((const uint8_t *)block->ptr, block->len, dict_width);
 		block->inc(block->len);
 		break;
 	}
@@ -428,11 +428,11 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 			throw std::runtime_error("RLE encoding is only supported for boolean data");
 		}
 		block->inc(sizeof(uint32_t));
-		rle_decoder = make_unique<RleBpDecoder>((const uint8_t *)block->ptr, block->len, 1);
+		rle_decoder = make_uniq<RleBpDecoder>((const uint8_t *)block->ptr, block->len, 1);
 		break;
 	}
 	case Encoding::DELTA_BINARY_PACKED: {
-		dbp_decoder = make_unique<DbpDecoder>((const uint8_t *)block->ptr, block->len);
+		dbp_decoder = make_uniq<DbpDecoder>((const uint8_t *)block->ptr, block->len);
 		block->inc(block->len);
 		break;
 	}
@@ -608,7 +608,7 @@ uint32_t StringColumnReader::VerifyString(const char *str_data, uint32_t str_len
 
 void StringColumnReader::Dictionary(shared_ptr<ResizeableBuffer> data, idx_t num_entries) {
 	dict = std::move(data);
-	dict_strings = unique_ptr<string_t[]>(new string_t[num_entries]);
+	dict_strings = duckdb::unique_ptr<string_t[]>(new string_t[num_entries]);
 	for (idx_t dict_idx = 0; dict_idx < num_entries; dict_idx++) {
 		uint32_t str_len;
 		if (fixed_width_string_length == 0) {
@@ -627,7 +627,7 @@ void StringColumnReader::Dictionary(shared_ptr<ResizeableBuffer> data, idx_t num
 }
 
 static shared_ptr<ResizeableBuffer> ReadDbpData(Allocator &allocator, ResizeableBuffer &buffer, idx_t &value_count) {
-	auto decoder = make_unique<DbpDecoder>((const uint8_t *)buffer.ptr, buffer.len);
+	auto decoder = make_uniq<DbpDecoder>((const uint8_t *)buffer.ptr, buffer.len);
 	value_count = decoder->TotalValues();
 	auto result = make_shared<ResizeableBuffer>();
 	result->resize(allocator, sizeof(uint32_t) * value_count);
@@ -642,11 +642,11 @@ void StringColumnReader::PrepareDeltaLengthByteArray(ResizeableBuffer &buffer) {
 	auto length_buffer = ReadDbpData(reader.allocator, buffer, value_count);
 	if (value_count == 0) {
 		// no values
-		byte_array_data = make_unique<Vector>(LogicalType::VARCHAR, nullptr);
+		byte_array_data = make_uniq<Vector>(LogicalType::VARCHAR, nullptr);
 		return;
 	}
 	auto length_data = (uint32_t *)length_buffer->ptr;
-	byte_array_data = make_unique<Vector>(LogicalType::VARCHAR, value_count);
+	byte_array_data = make_uniq<Vector>(LogicalType::VARCHAR, value_count);
 	byte_array_count = value_count;
 	auto string_data = FlatVector::GetData<string_t>(*byte_array_data);
 	for (idx_t i = 0; i < value_count; i++) {
@@ -668,12 +668,12 @@ void StringColumnReader::PrepareDeltaByteArray(ResizeableBuffer &buffer) {
 	}
 	if (prefix_count == 0) {
 		// no values
-		byte_array_data = make_unique<Vector>(LogicalType::VARCHAR, nullptr);
+		byte_array_data = make_uniq<Vector>(LogicalType::VARCHAR, nullptr);
 		return;
 	}
 	auto prefix_data = (uint32_t *)prefix_buffer->ptr;
 	auto suffix_data = (uint32_t *)suffix_buffer->ptr;
-	byte_array_data = make_unique<Vector>(LogicalType::VARCHAR, prefix_count);
+	byte_array_data = make_uniq<Vector>(LogicalType::VARCHAR, prefix_count);
 	byte_array_count = prefix_count;
 	auto string_data = FlatVector::GetData<string_t>(*byte_array_data);
 	for (idx_t i = 0; i < prefix_count; i++) {
@@ -862,7 +862,7 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 
 ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p,
                                    idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p,
-                                   unique_ptr<ColumnReader> child_column_reader_p)
+                                   duckdb::unique_ptr<ColumnReader> child_column_reader_p)
     : ColumnReader(reader, std::move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p),
       child_column_reader(std::move(child_column_reader_p)),
       read_cache(reader.allocator, ListType::GetChildType(Type())), read_vector(read_cache), overflow_child_count(0) {
@@ -878,8 +878,8 @@ ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, co
 void ListColumnReader::ApplyPendingSkips(idx_t num_values) {
 	pending_skips -= num_values;
 
-	auto define_out = unique_ptr<uint8_t[]>(new uint8_t[num_values]);
-	auto repeat_out = unique_ptr<uint8_t[]>(new uint8_t[num_values]);
+	auto define_out = duckdb::unique_ptr<uint8_t[]>(new uint8_t[num_values]);
+	auto repeat_out = duckdb::unique_ptr<uint8_t[]>(new uint8_t[num_values]);
 
 	idx_t remaining = num_values;
 	idx_t read = 0;
@@ -943,7 +943,7 @@ idx_t RowNumberColumnReader::Read(uint64_t num_values, parquet_filter_t &filter,
 //===--------------------------------------------------------------------===//
 // Cast Column Reader
 //===--------------------------------------------------------------------===//
-CastColumnReader::CastColumnReader(unique_ptr<ColumnReader> child_reader_p, LogicalType target_type_p)
+CastColumnReader::CastColumnReader(duckdb::unique_ptr<ColumnReader> child_reader_p, LogicalType target_type_p)
     : ColumnReader(child_reader_p->Reader(), std::move(target_type_p), child_reader_p->Schema(),
                    child_reader_p->FileIdx(), child_reader_p->MaxDefine(), child_reader_p->MaxRepeat()),
       child_reader(std::move(child_reader_p)) {
@@ -995,7 +995,7 @@ idx_t CastColumnReader::GroupRowsAvailable() {
 //===--------------------------------------------------------------------===//
 StructColumnReader::StructColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p,
                                        idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p,
-                                       vector<unique_ptr<ColumnReader>> child_readers_p)
+                                       vector<duckdb::unique_ptr<ColumnReader>> child_readers_p)
     : ColumnReader(reader, std::move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p),
       child_readers(std::move(child_readers_p)) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
@@ -1145,22 +1145,22 @@ protected:
 };
 
 template <bool FIXED_LENGTH>
-static unique_ptr<ColumnReader> CreateDecimalReaderInternal(ParquetReader &reader, const LogicalType &type_p,
-                                                            const SchemaElement &schema_p, idx_t file_idx_p,
-                                                            idx_t max_define, idx_t max_repeat) {
+static duckdb::unique_ptr<ColumnReader> CreateDecimalReaderInternal(ParquetReader &reader, const LogicalType &type_p,
+                                                                    const SchemaElement &schema_p, idx_t file_idx_p,
+                                                                    idx_t max_define, idx_t max_repeat) {
 	switch (type_p.InternalType()) {
 	case PhysicalType::INT16:
-		return make_unique<DecimalColumnReader<int16_t, FIXED_LENGTH>>(reader, type_p, schema_p, file_idx_p, max_define,
-		                                                               max_repeat);
+		return make_uniq<DecimalColumnReader<int16_t, FIXED_LENGTH>>(reader, type_p, schema_p, file_idx_p, max_define,
+		                                                             max_repeat);
 	case PhysicalType::INT32:
-		return make_unique<DecimalColumnReader<int32_t, FIXED_LENGTH>>(reader, type_p, schema_p, file_idx_p, max_define,
-		                                                               max_repeat);
+		return make_uniq<DecimalColumnReader<int32_t, FIXED_LENGTH>>(reader, type_p, schema_p, file_idx_p, max_define,
+		                                                             max_repeat);
 	case PhysicalType::INT64:
-		return make_unique<DecimalColumnReader<int64_t, FIXED_LENGTH>>(reader, type_p, schema_p, file_idx_p, max_define,
-		                                                               max_repeat);
+		return make_uniq<DecimalColumnReader<int64_t, FIXED_LENGTH>>(reader, type_p, schema_p, file_idx_p, max_define,
+		                                                             max_repeat);
 	case PhysicalType::INT128:
-		return make_unique<DecimalColumnReader<hugeint_t, FIXED_LENGTH>>(reader, type_p, schema_p, file_idx_p,
-		                                                                 max_define, max_repeat);
+		return make_uniq<DecimalColumnReader<hugeint_t, FIXED_LENGTH>>(reader, type_p, schema_p, file_idx_p, max_define,
+		                                                               max_repeat);
 	default:
 		throw InternalException("Unrecognized type for Decimal");
 	}
@@ -1294,13 +1294,13 @@ unique_ptr<ColumnReader> CreateDecimalReader(ParquetReader &reader, const Logica
                                              idx_t max_repeat) {
 	switch (type_p.InternalType()) {
 	case PhysicalType::INT16:
-		return make_unique<TemplatedColumnReader<int16_t, TemplatedParquetValueConversion<T>>>(
+		return make_uniq<TemplatedColumnReader<int16_t, TemplatedParquetValueConversion<T>>>(
 		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case PhysicalType::INT32:
-		return make_unique<TemplatedColumnReader<int32_t, TemplatedParquetValueConversion<T>>>(
+		return make_uniq<TemplatedColumnReader<int32_t, TemplatedParquetValueConversion<T>>>(
 		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case PhysicalType::INT64:
-		return make_unique<TemplatedColumnReader<int64_t, TemplatedParquetValueConversion<T>>>(
+		return make_uniq<TemplatedColumnReader<int64_t, TemplatedParquetValueConversion<T>>>(
 		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	default:
 		throw NotImplementedException("Unimplemented internal type for CreateDecimalReader");
@@ -1312,62 +1312,62 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
                                                     idx_t max_repeat) {
 	switch (type_p.id()) {
 	case LogicalTypeId::BOOLEAN:
-		return make_unique<BooleanColumnReader>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		return make_uniq<BooleanColumnReader>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::UTINYINT:
-		return make_unique<TemplatedColumnReader<uint8_t, TemplatedParquetValueConversion<uint32_t>>>(
+		return make_uniq<TemplatedColumnReader<uint8_t, TemplatedParquetValueConversion<uint32_t>>>(
 		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::USMALLINT:
-		return make_unique<TemplatedColumnReader<uint16_t, TemplatedParquetValueConversion<uint32_t>>>(
+		return make_uniq<TemplatedColumnReader<uint16_t, TemplatedParquetValueConversion<uint32_t>>>(
 		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::UINTEGER:
-		return make_unique<TemplatedColumnReader<uint32_t, TemplatedParquetValueConversion<uint32_t>>>(
+		return make_uniq<TemplatedColumnReader<uint32_t, TemplatedParquetValueConversion<uint32_t>>>(
 		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::UBIGINT:
-		return make_unique<TemplatedColumnReader<uint64_t, TemplatedParquetValueConversion<uint64_t>>>(
+		return make_uniq<TemplatedColumnReader<uint64_t, TemplatedParquetValueConversion<uint64_t>>>(
 		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::TINYINT:
-		return make_unique<TemplatedColumnReader<int8_t, TemplatedParquetValueConversion<int32_t>>>(
+		return make_uniq<TemplatedColumnReader<int8_t, TemplatedParquetValueConversion<int32_t>>>(
 		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::SMALLINT:
-		return make_unique<TemplatedColumnReader<int16_t, TemplatedParquetValueConversion<int32_t>>>(
+		return make_uniq<TemplatedColumnReader<int16_t, TemplatedParquetValueConversion<int32_t>>>(
 		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::INTEGER:
-		return make_unique<TemplatedColumnReader<int32_t, TemplatedParquetValueConversion<int32_t>>>(
+		return make_uniq<TemplatedColumnReader<int32_t, TemplatedParquetValueConversion<int32_t>>>(
 		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::BIGINT:
-		return make_unique<TemplatedColumnReader<int64_t, TemplatedParquetValueConversion<int64_t>>>(
+		return make_uniq<TemplatedColumnReader<int64_t, TemplatedParquetValueConversion<int64_t>>>(
 		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::FLOAT:
-		return make_unique<TemplatedColumnReader<float, TemplatedParquetValueConversion<float>>>(
+		return make_uniq<TemplatedColumnReader<float, TemplatedParquetValueConversion<float>>>(
 		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::DOUBLE:
-		return make_unique<TemplatedColumnReader<double, TemplatedParquetValueConversion<double>>>(
+		return make_uniq<TemplatedColumnReader<double, TemplatedParquetValueConversion<double>>>(
 		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
 		switch (schema_p.type) {
 		case Type::INT96:
-			return make_unique<CallbackColumnReader<Int96, timestamp_t, ImpalaTimestampToTimestamp>>(
+			return make_uniq<CallbackColumnReader<Int96, timestamp_t, ImpalaTimestampToTimestamp>>(
 			    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 		case Type::INT64:
 			if (schema_p.__isset.logicalType && schema_p.logicalType.__isset.TIMESTAMP) {
 				if (schema_p.logicalType.TIMESTAMP.unit.__isset.MILLIS) {
-					return make_unique<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMsToTimestamp>>(
+					return make_uniq<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMsToTimestamp>>(
 					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 				} else if (schema_p.logicalType.TIMESTAMP.unit.__isset.MICROS) {
-					return make_unique<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMicrosToTimestamp>>(
+					return make_uniq<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMicrosToTimestamp>>(
 					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 				} else if (schema_p.logicalType.TIMESTAMP.unit.__isset.NANOS) {
-					return make_unique<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampNsToTimestamp>>(
+					return make_uniq<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampNsToTimestamp>>(
 					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 				}
 			} else if (schema_p.__isset.converted_type) {
 				switch (schema_p.converted_type) {
 				case ConvertedType::TIMESTAMP_MICROS:
-					return make_unique<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMicrosToTimestamp>>(
+					return make_uniq<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMicrosToTimestamp>>(
 					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 				case ConvertedType::TIMESTAMP_MILLIS:
-					return make_unique<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMsToTimestamp>>(
+					return make_uniq<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMsToTimestamp>>(
 					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 				default:
 					break;
@@ -1378,28 +1378,28 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 		}
 		break;
 	case LogicalTypeId::DATE:
-		return make_unique<CallbackColumnReader<int32_t, date_t, ParquetIntToDate>>(reader, type_p, schema_p,
-		                                                                            file_idx_p, max_define, max_repeat);
+		return make_uniq<CallbackColumnReader<int32_t, date_t, ParquetIntToDate>>(reader, type_p, schema_p, file_idx_p,
+		                                                                          max_define, max_repeat);
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:
 		if (schema_p.__isset.logicalType && schema_p.logicalType.__isset.TIME) {
 			if (schema_p.logicalType.TIME.unit.__isset.MILLIS) {
-				return make_unique<CallbackColumnReader<int32_t, dtime_t, ParquetIntToTimeMs>>(
+				return make_uniq<CallbackColumnReader<int32_t, dtime_t, ParquetIntToTimeMs>>(
 				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 			} else if (schema_p.logicalType.TIME.unit.__isset.MICROS) {
-				return make_unique<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTime>>(
+				return make_uniq<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTime>>(
 				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 			} else if (schema_p.logicalType.TIME.unit.__isset.NANOS) {
-				return make_unique<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTimeNs>>(
+				return make_uniq<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTimeNs>>(
 				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 			}
 		} else if (schema_p.__isset.converted_type) {
 			switch (schema_p.converted_type) {
 			case ConvertedType::TIME_MICROS:
-				return make_unique<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTime>>(
+				return make_uniq<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTime>>(
 				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 			case ConvertedType::TIME_MILLIS:
-				return make_unique<CallbackColumnReader<int32_t, dtime_t, ParquetIntToTimeMs>>(
+				return make_uniq<CallbackColumnReader<int32_t, dtime_t, ParquetIntToTimeMs>>(
 				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 			default:
 				break;
@@ -1407,7 +1407,7 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 		}
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
-		return make_unique<StringColumnReader>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		return make_uniq<StringColumnReader>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::DECIMAL:
 		// we have to figure out what kind of int we need
 		switch (schema_p.type) {
@@ -1423,9 +1423,9 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 		}
 		break;
 	case LogicalTypeId::UUID:
-		return make_unique<UUIDColumnReader>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		return make_uniq<UUIDColumnReader>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::INTERVAL:
-		return make_unique<IntervalColumnReader>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		return make_uniq<IntervalColumnReader>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	default:
 		break;
 	}

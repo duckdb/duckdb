@@ -13,7 +13,7 @@ unique_ptr<BoundCastData> MapBoundCastData::BindMapToMapCast(BindCastInput &inpu
 	auto target_val = MapType::ValueType(target);
 	auto key_cast = input.GetCastFunction(source_key, target_key);
 	auto value_cast = input.GetCastFunction(source_val, target_val);
-	return make_unique<MapBoundCastData>(std::move(key_cast), std::move(value_cast));
+	return make_uniq<MapBoundCastData>(std::move(key_cast), std::move(value_cast));
 }
 
 static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {

@@ -13,7 +13,7 @@ TupleDataLayout TupleDataLayout::Copy() const {
 	result.types = this->types;
 	result.aggregates = this->aggregates;
 	if (this->struct_layouts) {
-		result.struct_layouts = make_unique<unordered_map<idx_t, TupleDataLayout>>();
+		result.struct_layouts = make_uniq<unordered_map<idx_t, TupleDataLayout>>();
 		for (const auto &entry : *this->struct_layouts) {
 			result.struct_layouts->emplace(entry.first, entry.second.Copy());
 		}
@@ -48,7 +48,7 @@ void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggrega
 				child_type_vector.emplace_back(ct.second);
 			}
 			if (!struct_layouts) {
-				struct_layouts = make_unique<unordered_map<idx_t, TupleDataLayout>>();
+				struct_layouts = make_uniq<unordered_map<idx_t, TupleDataLayout>>();
 			}
 			auto struct_entry = struct_layouts->emplace(col_idx, TupleDataLayout());
 			struct_entry.first->second.Initialize(std::move(child_type_vector), false, false);

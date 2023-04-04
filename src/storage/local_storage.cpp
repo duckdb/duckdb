@@ -41,7 +41,7 @@ bool OptimisticDataWriter::PrepareWrite() {
 	// allocate the partial block-manager if none is allocated yet
 	if (!partial_manager) {
 		auto &block_manager = table->info->table_io_manager->GetBlockManagerForRowData();
-		partial_manager = make_unique<PartialBlockManager>(block_manager);
+		partial_manager = make_uniq<PartialBlockManager>(block_manager);
 	}
 	return true;
 }
@@ -127,8 +127,8 @@ LocalTableStorage::LocalTableStorage(DataTable &table)
 			for (auto &expr : art.unbound_expressions) {
 				unbound_expressions.push_back(expr->Copy());
 			}
-			indexes.AddIndex(make_unique<ART>(art.column_ids, art.table_io_manager, std::move(unbound_expressions),
-			                                  art.constraint_type, art.db, true));
+			indexes.AddIndex(make_uniq<ART>(art.column_ids, art.table_io_manager, std::move(unbound_expressions),
+			                                art.constraint_type, art.db, true));
 		}
 		return false;
 	});
@@ -278,7 +278,7 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 }
 
 OptimisticDataWriter *LocalTableStorage::CreateOptimisticWriter() {
-	auto writer = make_unique<OptimisticDataWriter>(table);
+	auto writer = make_uniq<OptimisticDataWriter>(table);
 	optimistic_writers.push_back(std::move(writer));
 	return optimistic_writers.back().get();
 }
@@ -574,7 +574,7 @@ void LocalStorage::AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinit
 	if (!storage) {
 		return;
 	}
-	auto new_storage = make_unique<LocalTableStorage>(context, *new_dt, *storage, new_column, default_value);
+	auto new_storage = make_shared<LocalTableStorage>(context, *new_dt, *storage, new_column, default_value);
 	table_manager.InsertEntry(new_dt, std::move(new_storage));
 }
 
@@ -584,7 +584,7 @@ void LocalStorage::DropColumn(DataTable *old_dt, DataTable *new_dt, idx_t remove
 	if (!storage) {
 		return;
 	}
-	auto new_storage = make_unique<LocalTableStorage>(*new_dt, *storage, removed_column);
+	auto new_storage = make_shared<LocalTableStorage>(*new_dt, *storage, removed_column);
 	table_manager.InsertEntry(new_dt, std::move(new_storage));
 }
 
@@ -596,7 +596,7 @@ void LocalStorage::ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t change
 		return;
 	}
 	auto new_storage =
-	    make_unique<LocalTableStorage>(context, *new_dt, *storage, changed_idx, target_type, bound_columns, cast_expr);
+	    make_shared<LocalTableStorage>(context, *new_dt, *storage, changed_idx, target_type, bound_columns, cast_expr);
 	table_manager.InsertEntry(new_dt, std::move(new_storage));
 }
 

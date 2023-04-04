@@ -33,7 +33,7 @@ bool CastExpression::Equal(const CastExpression *a, const CastExpression *b) {
 }
 
 unique_ptr<ParsedExpression> CastExpression::Copy() const {
-	auto copy = make_unique<CastExpression>(cast_type, child->Copy(), try_cast);
+	auto copy = make_uniq<CastExpression>(cast_type, child->Copy(), try_cast);
 	copy->CopyProperties(*this);
 	return std::move(copy);
 }
@@ -48,7 +48,7 @@ unique_ptr<ParsedExpression> CastExpression::Deserialize(ExpressionType type, Fi
 	auto child = reader.ReadRequiredSerializable<ParsedExpression>();
 	auto cast_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	auto try_cast = reader.ReadRequired<bool>();
-	return make_unique_base<ParsedExpression, CastExpression>(cast_type, std::move(child), try_cast);
+	return make_uniq_base<ParsedExpression, CastExpression>(cast_type, std::move(child), try_cast);
 }
 
 void CastExpression::FormatSerialize(FormatSerializer &serializer) const {
@@ -62,7 +62,7 @@ unique_ptr<ParsedExpression> CastExpression::FormatDeserialize(ExpressionType ty
 	auto child = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("child");
 	auto cast_type = deserializer.ReadProperty<LogicalType>("cast_type");
 	auto try_cast = deserializer.ReadProperty<bool>("try_cast");
-	return make_unique_base<ParsedExpression, CastExpression>(cast_type, std::move(child), try_cast);
+	return make_uniq_base<ParsedExpression, CastExpression>(cast_type, std::move(child), try_cast);
 }
 
 } // namespace duckdb

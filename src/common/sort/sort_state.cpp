@@ -159,20 +159,20 @@ void LocalSortState::Initialize(GlobalSortState &global_sort_state, BufferManage
 	payload_layout = &global_sort_state.payload_layout;
 	buffer_manager = &buffer_manager_p;
 	// Radix sorting data
-	radix_sorting_data = make_unique<RowDataCollection>(
+	radix_sorting_data = make_uniq<RowDataCollection>(
 	    *buffer_manager, RowDataCollection::EntriesPerBlock(sort_layout->entry_size), sort_layout->entry_size);
 	// Blob sorting data
 	if (!sort_layout->all_constant) {
 		auto blob_row_width = sort_layout->blob_layout.GetRowWidth();
-		blob_sorting_data = make_unique<RowDataCollection>(
+		blob_sorting_data = make_uniq<RowDataCollection>(
 		    *buffer_manager, RowDataCollection::EntriesPerBlock(blob_row_width), blob_row_width);
-		blob_sorting_heap = make_unique<RowDataCollection>(*buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
+		blob_sorting_heap = make_uniq<RowDataCollection>(*buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 	}
 	// Payload data
 	auto payload_row_width = payload_layout->GetRowWidth();
-	payload_data = make_unique<RowDataCollection>(
-	    *buffer_manager, RowDataCollection::EntriesPerBlock(payload_row_width), payload_row_width);
-	payload_heap = make_unique<RowDataCollection>(*buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
+	payload_data = make_uniq<RowDataCollection>(*buffer_manager, RowDataCollection::EntriesPerBlock(payload_row_width),
+	                                            payload_row_width);
+	payload_heap = make_uniq<RowDataCollection>(*buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 	// Init done
 	initialized = true;
 }
@@ -232,7 +232,7 @@ void LocalSortState::Sort(GlobalSortState &global_sort_state, bool reorder_heap)
 		return;
 	}
 	// Move all data to a single SortedBlock
-	sorted_blocks.emplace_back(make_unique<SortedBlock>(*buffer_manager, global_sort_state));
+	sorted_blocks.emplace_back(make_uniq<SortedBlock>(*buffer_manager, global_sort_state));
 	auto &sb = *sorted_blocks.back();
 	// Fixed-size sorting data
 	auto sorting_block = ConcatenateBlocks(*radix_sorting_data);
@@ -264,7 +264,7 @@ unique_ptr<RowDataBlock> LocalSortState::ConcatenateBlocks(RowDataCollection &ro
 	auto buffer_manager = &row_data.buffer_manager;
 	const idx_t &entry_size = row_data.entry_size;
 	idx_t capacity = MaxValue(((idx_t)Storage::BLOCK_SIZE + entry_size - 1) / entry_size, row_data.count);
-	auto new_block = make_unique<RowDataBlock>(*buffer_manager, capacity, entry_size);
+	auto new_block = make_uniq<RowDataBlock>(*buffer_manager, capacity, entry_size);
 	new_block->count = row_data.count;
 	auto new_block_handle = buffer_manager->Pin(new_block->block);
 	data_ptr_t new_block_ptr = new_block_handle.Ptr();
@@ -290,7 +290,7 @@ void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataColl
 	const data_ptr_t unordered_data_ptr = unordered_data_handle.Ptr();
 	// Create new block that will hold re-ordered row data
 	auto ordered_data_block =
-	    make_unique<RowDataBlock>(*buffer_manager, unordered_data_block->capacity, unordered_data_block->entry_size);
+	    make_uniq<RowDataBlock>(*buffer_manager, unordered_data_block->capacity, unordered_data_block->entry_size);
 	ordered_data_block->count = count;
 	auto ordered_data_handle = buffer_manager->Pin(ordered_data_block->block);
 	data_ptr_t ordered_data_ptr = ordered_data_handle.Ptr();
@@ -317,7 +317,7 @@ void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataColl
 		    std::accumulate(heap.blocks.begin(), heap.blocks.end(), 0,
 		                    [](idx_t a, const unique_ptr<RowDataBlock> &b) { return a + b->byte_offset; });
 		idx_t heap_block_size = MaxValue(total_byte_offset, (idx_t)Storage::BLOCK_SIZE);
-		auto ordered_heap_block = make_unique<RowDataBlock>(*buffer_manager, heap_block_size, 1);
+		auto ordered_heap_block = make_uniq<RowDataBlock>(*buffer_manager, heap_block_size, 1);
 		ordered_heap_block->count = count;
 		ordered_heap_block->byte_offset = total_byte_offset;
 		auto ordered_heap_handle = buffer_manager->Pin(ordered_heap_block->block);
@@ -447,7 +447,7 @@ void GlobalSortState::InitializeMergeRound() {
 void GlobalSortState::CompleteMergeRound(bool keep_radix_data) {
 	sorted_blocks.clear();
 	for (auto &sorted_block_vector : sorted_blocks_temp) {
-		sorted_blocks.push_back(make_unique<SortedBlock>(buffer_manager, *this));
+		sorted_blocks.push_back(make_uniq<SortedBlock>(buffer_manager, *this));
 		sorted_blocks.back()->AppendSortedBlocks(sorted_block_vector);
 	}
 	sorted_blocks_temp.clear();

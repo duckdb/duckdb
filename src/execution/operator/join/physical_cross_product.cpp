@@ -29,7 +29,7 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalCrossProduct::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<CrossProductGlobalState>(context, *this);
+	return make_uniq<CrossProductGlobalState>(context, *this);
 }
 
 SinkResultType PhysicalCrossProduct::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
@@ -124,7 +124,7 @@ public:
 
 unique_ptr<OperatorState> PhysicalCrossProduct::GetOperatorState(ExecutionContext &context) const {
 	auto &sink = (CrossProductGlobalState &)*sink_state;
-	return make_unique<CrossProductOperatorState>(sink.rhs_materialized);
+	return make_uniq<CrossProductOperatorState>(sink.rhs_materialized);
 }
 
 OperatorResultType PhysicalCrossProduct::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,

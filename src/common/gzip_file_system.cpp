@@ -384,11 +384,11 @@ string GZipFileSystem::UncompressGZIPString(const string &in) {
 
 unique_ptr<FileHandle> GZipFileSystem::OpenCompressedFile(unique_ptr<FileHandle> handle, bool write) {
 	auto path = handle->path;
-	return make_unique<GZipFile>(std::move(handle), path, write);
+	return make_uniq<GZipFile>(std::move(handle), path, write);
 }
 
 unique_ptr<StreamWrapper> GZipFileSystem::CreateStream() {
-	return make_unique<MiniZStreamWrapper>();
+	return make_uniq<MiniZStreamWrapper>();
 }
 
 idx_t GZipFileSystem::InBufferSize() {
