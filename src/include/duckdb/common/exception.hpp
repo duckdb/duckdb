@@ -9,11 +9,12 @@
 #pragma once
 
 #include "duckdb/common/assert.hpp"
-#include "duckdb/common/common.hpp"
 #include "duckdb/common/exception_format_value.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/shared_ptr.hpp"
+#include "duckdb/common/map.hpp"
+#include "duckdb/common/typedefs.hpp"
 
-#include <map>
 #include <stdexcept>
 
 namespace duckdb {

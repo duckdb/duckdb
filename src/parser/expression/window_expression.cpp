@@ -117,7 +117,7 @@ bool WindowExpression::Equal(const WindowExpression *a, const WindowExpression *
 }
 
 unique_ptr<ParsedExpression> WindowExpression::Copy() const {
-	auto new_window = make_unique<WindowExpression>(type, catalog, schema, function_name);
+	auto new_window = make_uniq<WindowExpression>(type, catalog, schema, function_name);
 	new_window->CopyProperties(*this);
 
 	for (auto &child : children) {
@@ -192,7 +192,7 @@ unique_ptr<ParsedExpression> WindowExpression::FormatDeserialize(ExpressionType 
                                                                  FormatDeserializer &deserializer) {
 	auto function_name = deserializer.ReadProperty<string>("function_name");
 	auto schema = deserializer.ReadProperty<string>("schema");
-	auto expr = make_unique<WindowExpression>(type, INVALID_CATALOG, std::move(schema), function_name);
+	auto expr = make_uniq<WindowExpression>(type, INVALID_CATALOG, std::move(schema), function_name);
 
 	deserializer.ReadProperty("children", expr->children);
 	deserializer.ReadProperty("partitions", expr->partitions);
@@ -212,7 +212,7 @@ unique_ptr<ParsedExpression> WindowExpression::FormatDeserialize(ExpressionType 
 unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto function_name = reader.ReadRequired<string>();
 	auto schema = reader.ReadRequired<string>();
-	auto expr = make_unique<WindowExpression>(type, INVALID_CATALOG, std::move(schema), function_name);
+	auto expr = make_uniq<WindowExpression>(type, INVALID_CATALOG, std::move(schema), function_name);
 	expr->children = reader.ReadRequiredSerializableList<ParsedExpression>();
 	expr->partitions = reader.ReadRequiredSerializableList<ParsedExpression>();
 

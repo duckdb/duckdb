@@ -27,16 +27,16 @@ idx_t SortedData::Count() {
 void SortedData::CreateBlock() {
 	auto capacity =
 	    MaxValue(((idx_t)Storage::BLOCK_SIZE + layout.GetRowWidth() - 1) / layout.GetRowWidth(), state.block_capacity);
-	data_blocks.push_back(make_unique<RowDataBlock>(buffer_manager, capacity, layout.GetRowWidth()));
+	data_blocks.push_back(make_uniq<RowDataBlock>(buffer_manager, capacity, layout.GetRowWidth()));
 	if (!layout.AllConstant() && state.external) {
-		heap_blocks.push_back(make_unique<RowDataBlock>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1));
+		heap_blocks.push_back(make_uniq<RowDataBlock>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1));
 		D_ASSERT(data_blocks.size() == heap_blocks.size());
 	}
 }
 
 unique_ptr<SortedData> SortedData::CreateSlice(idx_t start_block_index, idx_t end_block_index, idx_t end_entry_index) {
 	// Add the corresponding blocks to the result
-	auto result = make_unique<SortedData>(type, layout, buffer_manager, state);
+	auto result = make_uniq<SortedData>(type, layout, buffer_manager, state);
 	for (idx_t i = start_block_index; i <= end_block_index; i++) {
 		result->data_blocks.push_back(data_blocks[i]->Copy());
 		if (!layout.AllConstant() && state.external) {
@@ -80,8 +80,8 @@ void SortedData::Unswizzle() {
 SortedBlock::SortedBlock(BufferManager &buffer_manager, GlobalSortState &state)
     : buffer_manager(buffer_manager), state(state), sort_layout(state.sort_layout),
       payload_layout(state.payload_layout) {
-	blob_sorting_data = make_unique<SortedData>(SortedDataType::BLOB, sort_layout.blob_layout, buffer_manager, state);
-	payload_data = make_unique<SortedData>(SortedDataType::PAYLOAD, payload_layout, buffer_manager, state);
+	blob_sorting_data = make_uniq<SortedData>(SortedDataType::BLOB, sort_layout.blob_layout, buffer_manager, state);
+	payload_data = make_uniq<SortedData>(SortedDataType::PAYLOAD, payload_layout, buffer_manager, state);
 }
 
 idx_t SortedBlock::Count() const {
@@ -105,7 +105,7 @@ void SortedBlock::InitializeWrite() {
 void SortedBlock::CreateBlock() {
 	auto capacity = MaxValue(((idx_t)Storage::BLOCK_SIZE + sort_layout.entry_size - 1) / sort_layout.entry_size,
 	                         state.block_capacity);
-	radix_sorting_data.push_back(make_unique<RowDataBlock>(buffer_manager, capacity, sort_layout.entry_size));
+	radix_sorting_data.push_back(make_uniq<RowDataBlock>(buffer_manager, capacity, sort_layout.entry_size));
 }
 
 void SortedBlock::AppendSortedBlocks(vector<unique_ptr<SortedBlock>> &sorted_blocks) {
@@ -161,7 +161,7 @@ unique_ptr<SortedBlock> SortedBlock::CreateSlice(const idx_t start, const idx_t 
 	idx_t end_entry_index;
 	GlobalToLocalIndex(end, end_block_index, end_entry_index);
 	// Add the corresponding blocks to the result
-	auto result = make_unique<SortedBlock>(buffer_manager, state);
+	auto result = make_uniq<SortedBlock>(buffer_manager, state);
 	for (idx_t i = start_block_index; i <= end_block_index; i++) {
 		result->radix_sorting_data.push_back(radix_sorting_data[i]->Copy());
 	}
@@ -289,10 +289,10 @@ PayloadScanner::PayloadScanner(SortedData &sorted_data, GlobalSortState &global_
 	auto &layout = sorted_data.layout;
 
 	// Create collections to put the data into so we can use RowDataCollectionScanner
-	rows = make_unique<RowDataCollection>(global_sort_state.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1);
+	rows = make_uniq<RowDataCollection>(global_sort_state.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1);
 	rows->count = count;
 
-	heap = make_unique<RowDataCollection>(global_sort_state.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1);
+	heap = make_uniq<RowDataCollection>(global_sort_state.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1);
 	if (!sorted_data.layout.AllConstant()) {
 		heap->count = count;
 	}
@@ -315,7 +315,7 @@ PayloadScanner::PayloadScanner(SortedData &sorted_data, GlobalSortState &global_
 		}
 	}
 
-	scanner = make_unique<RowDataCollectionScanner>(*rows, *heap, layout, global_sort_state.external, flush_p);
+	scanner = make_uniq<RowDataCollectionScanner>(*rows, *heap, layout, global_sort_state.external, flush_p);
 }
 
 PayloadScanner::PayloadScanner(GlobalSortState &global_sort_state, bool flush_p)
@@ -328,7 +328,7 @@ PayloadScanner::PayloadScanner(GlobalSortState &global_sort_state, idx_t block_i
 	auto &layout = sorted_data.layout;
 
 	// Create collections to put the data into so we can use RowDataCollectionScanner
-	rows = make_unique<RowDataCollection>(global_sort_state.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1);
+	rows = make_uniq<RowDataCollection>(global_sort_state.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1);
 	if (flush_p) {
 		rows->blocks.emplace_back(std::move(sorted_data.data_blocks[block_idx]));
 	} else {
@@ -336,7 +336,7 @@ PayloadScanner::PayloadScanner(GlobalSortState &global_sort_state, idx_t block_i
 	}
 	rows->count = count;
 
-	heap = make_unique<RowDataCollection>(global_sort_state.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1);
+	heap = make_uniq<RowDataCollection>(global_sort_state.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1);
 	if (!sorted_data.layout.AllConstant() && sorted_data.swizzled) {
 		if (flush_p) {
 			heap->blocks.emplace_back(std::move(sorted_data.heap_blocks[block_idx]));
@@ -346,7 +346,7 @@ PayloadScanner::PayloadScanner(GlobalSortState &global_sort_state, idx_t block_i
 		heap->count = count;
 	}
 
-	scanner = make_unique<RowDataCollectionScanner>(*rows, *heap, layout, global_sort_state.external, flush_p);
+	scanner = make_uniq<RowDataCollectionScanner>(*rows, *heap, layout, global_sort_state.external, flush_p);
 }
 
 void PayloadScanner::Scan(DataChunk &chunk) {

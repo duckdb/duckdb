@@ -14,7 +14,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(duckdb_libpgquery::PGSele
 
 unique_ptr<SelectStatement> Transformer::TransformSelect(duckdb_libpgquery::PGNode *node, bool is_select) {
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGSelectStmt *>(node);
-	auto result = make_unique<SelectStatement>();
+	auto result = make_uniq<SelectStatement>();
 
 	// Both Insert/Create Table As uses this.
 	if (is_select) {

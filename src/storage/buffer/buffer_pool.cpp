@@ -4,7 +4,7 @@
 namespace duckdb {
 
 BufferPool::BufferPool(idx_t maximum_memory)
-    : current_memory(0), maximum_memory(maximum_memory), queue(make_unique<EvictionQueue>()), queue_insertions(0) {
+    : current_memory(0), maximum_memory(maximum_memory), queue(make_uniq<EvictionQueue>()), queue_insertions(0) {
 }
 BufferPool::~BufferPool() {
 }

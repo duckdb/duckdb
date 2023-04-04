@@ -113,7 +113,7 @@ void TableStatistics::Deserialize(Deserializer &source, ColumnList &columns) {
 }
 
 unique_ptr<TableStatisticsLock> TableStatistics::GetLock() {
-	return make_unique<TableStatisticsLock>(stats_lock);
+	return make_uniq<TableStatisticsLock>(stats_lock);
 }
 
 bool TableStatistics::Empty() {

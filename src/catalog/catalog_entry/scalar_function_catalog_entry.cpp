@@ -24,7 +24,7 @@ unique_ptr<CatalogEntry> ScalarFunctionCatalogEntry::AlterEntry(ClientContext &c
 		throw BinderException("Failed to add new function overloads to function \"%s\": function already exists", name);
 	}
 	CreateScalarFunctionInfo new_info(std::move(new_set));
-	return make_unique<ScalarFunctionCatalogEntry>(catalog, schema, &new_info);
+	return make_uniq<ScalarFunctionCatalogEntry>(catalog, schema, &new_info);
 }
 
 } // namespace duckdb

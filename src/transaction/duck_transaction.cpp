@@ -29,7 +29,7 @@ TransactionData::TransactionData(transaction_t transaction_id_p, transaction_t s
 DuckTransaction::DuckTransaction(TransactionManager &manager, ClientContext &context_p, transaction_t start_time,
                                  transaction_t transaction_id)
     : Transaction(manager, context_p), start_time(start_time), transaction_id(transaction_id), commit_id(0),
-      highest_active_query(0), undo_buffer(context_p), storage(make_unique<LocalStorage>(context_p, *this)) {
+      highest_active_query(0), undo_buffer(context_p), storage(make_uniq<LocalStorage>(context_p, *this)) {
 }
 
 DuckTransaction::~DuckTransaction() {

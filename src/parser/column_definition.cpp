@@ -196,19 +196,19 @@ void ColumnDefinition::SetGeneratedExpression(unique_ptr<ParsedExpression> expre
 	}
 	// Always wrap the expression in a cast, that way we can always update the cast when we change the type
 	// Except if the type is LogicalType::ANY (no type specified)
-	generated_expression = make_unique_base<ParsedExpression, CastExpression>(type, std::move(expression));
+	generated_expression = make_uniq_base<ParsedExpression, CastExpression>(type, std::move(expression));
 }
 
 void ColumnDefinition::ChangeGeneratedExpressionType(const LogicalType &type) {
 	D_ASSERT(Generated());
 	// First time the type is set, add a cast around the expression
 	D_ASSERT(this->type.id() == LogicalTypeId::ANY);
-	generated_expression = make_unique_base<ParsedExpression, CastExpression>(type, std::move(generated_expression));
+	generated_expression = make_uniq_base<ParsedExpression, CastExpression>(type, std::move(generated_expression));
 	// Every generated expression should be wrapped in a cast on creation
 	// D_ASSERT(generated_expression->type == ExpressionType::OPERATOR_CAST);
 	// auto &cast_expr = (CastExpression &)*generated_expression;
 	// auto base_expr = std::move(cast_expr.child);
-	// generated_expression = make_unique_base<ParsedExpression, CastExpression>(type, std::move(base_expr));
+	// generated_expression = make_uniq_base<ParsedExpression, CastExpression>(type, std::move(base_expr));
 }
 
 const ParsedExpression &ColumnDefinition::GeneratedExpression() const {
