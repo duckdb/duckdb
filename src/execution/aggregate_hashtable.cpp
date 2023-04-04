@@ -74,7 +74,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
 	}
 
 	predicates.resize(layout.ColumnCount() - 1, ExpressionType::COMPARE_EQUAL);
-	string_heap = make_unique<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
+	string_heap = make_uniq<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 }
 
 GroupedAggregateHashTable::~GroupedAggregateHashTable() {

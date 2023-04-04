@@ -678,8 +678,8 @@ void LogQueryPathSetting::SetLocal(ClientContext &context, const Value &input) {
 		client_data.log_query_writer = nullptr;
 	} else {
 		client_data.log_query_writer =
-		    make_unique<BufferedFileWriter>(FileSystem::GetFileSystem(context), path,
-		                                    BufferedFileWriter::DEFAULT_OPEN_FLAGS, client_data.file_opener.get());
+		    make_uniq<BufferedFileWriter>(FileSystem::GetFileSystem(context), path,
+		                                  BufferedFileWriter::DEFAULT_OPEN_FLAGS, client_data.file_opener.get());
 	}
 }
 

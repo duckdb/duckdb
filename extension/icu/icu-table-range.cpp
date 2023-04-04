@@ -62,7 +62,7 @@ struct ICUTableRange {
 		}
 
 		unique_ptr<FunctionData> Copy() const override {
-			return make_unique<BindData>(*this);
+			return make_uniq<BindData>(*this);
 		}
 
 		bool Finished(timestamp_t current_value) {
@@ -85,7 +85,7 @@ struct ICUTableRange {
 	template <bool GENERATE_SERIES>
 	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
 	                                     vector<LogicalType> &return_types, vector<string> &names) {
-		auto result = make_unique<BindData>(context);
+		auto result = make_uniq<BindData>(context);
 
 		auto &inputs = input.inputs;
 		D_ASSERT(inputs.size() == 3);
@@ -140,7 +140,7 @@ struct ICUTableRange {
 
 	static unique_ptr<GlobalTableFunctionState> Init(ClientContext &context, TableFunctionInitInput &input) {
 		auto &bind_data = (BindData &)*input.bind_data;
-		return make_unique<State>(bind_data.start);
+		return make_uniq<State>(bind_data.start);
 	}
 
 	static void ICUTableRangeFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {

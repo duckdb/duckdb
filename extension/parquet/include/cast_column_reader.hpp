@@ -16,9 +16,9 @@ namespace duckdb {
 //! A column reader that represents a cast over a child reader
 class CastColumnReader : public ColumnReader {
 public:
-	CastColumnReader(unique_ptr<ColumnReader> child_reader, LogicalType target_type);
+	CastColumnReader(duckdb::unique_ptr<ColumnReader> child_reader, LogicalType target_type);
 
-	unique_ptr<ColumnReader> child_reader;
+	duckdb::unique_ptr<ColumnReader> child_reader;
 	DataChunk intermediate_chunk;
 
 public:

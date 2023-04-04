@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/common/helper.hpp"
 
 #include <algorithm>
 #include <cctype>

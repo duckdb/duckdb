@@ -25,7 +25,7 @@ public:
 	}
 
 	static unique_ptr<BoundConstraint> Deserialize(Deserializer &source) {
-		return make_unique<BoundConstraint>(source.Read<ConstraintType>());
+		return make_uniq<BoundConstraint>(source.Read<ConstraintType>());
 	}
 
 	ConstraintType type;

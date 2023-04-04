@@ -29,7 +29,7 @@ unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(LogicalDeserializationSta
 		throw InternalException("Cant find catalog entry for table %s", info->table);
 	}
 
-	auto result = make_unique<LogicalUpdate>(table_catalog_entry);
+	auto result = make_uniq<LogicalUpdate>(table_catalog_entry);
 	result->table_index = reader.ReadRequired<idx_t>();
 	result->return_chunk = reader.ReadRequired<bool>();
 	result->columns = reader.ReadRequiredIndexList<PhysicalIndex>();

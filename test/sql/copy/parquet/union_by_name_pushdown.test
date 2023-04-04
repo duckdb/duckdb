@@ -1,0 +1,46 @@
+# name: test/sql/copy/parquet/union_by_name_pushdown.test
+# description: Test union by name with filter pushdown
+# group: [parquet]
+
+require parquet
+
+statement ok
+COPY (SELECT 42 AS i, 84 AS j) TO '__TEST_DIR__/union_by_name_pushdown1.parquet'
+
+statement ok
+COPY (SELECT 128 AS j, 33 AS k) TO '__TEST_DIR__/union_by_name_pushdown2.parquet'
+
+
+query III
+SELECT * FROM read_parquet(['__TEST_DIR__/union_by_name_pushdown1.parquet', '__TEST_DIR__/union_by_name_pushdown2.parquet'], union_by_name=True)
+----
+42	84	NULL
+NULL	128	33
+
+query I
+SELECT k FROM read_parquet(['__TEST_DIR__/union_by_name_pushdown1.parquet', '__TEST_DIR__/union_by_name_pushdown2.parquet'], union_by_name=True)
+----
+NULL
+33
+
+query I
+SELECT i FROM read_parquet(['__TEST_DIR__/union_by_name_pushdown1.parquet', '__TEST_DIR__/union_by_name_pushdown2.parquet'], union_by_name=True)
+----
+42
+NULL
+
+query III
+SELECT * FROM read_parquet(['__TEST_DIR__/union_by_name_pushdown1.parquet', '__TEST_DIR__/union_by_name_pushdown2.parquet'], union_by_name=True) WHERE k>0
+----
+NULL	128	33
+
+query III
+SELECT * FROM read_parquet(['__TEST_DIR__/union_by_name_pushdown1.parquet', '__TEST_DIR__/union_by_name_pushdown2.parquet'], union_by_name=True) WHERE k>0 OR k IS NULL
+----
+42	84	NULL
+NULL	128	33
+
+query III
+SELECT * FROM read_parquet(['__TEST_DIR__/union_by_name_pushdown1.parquet', '__TEST_DIR__/union_by_name_pushdown2.parquet'], union_by_name=True) WHERE i>0
+----
+42	84	NULL

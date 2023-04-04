@@ -42,7 +42,7 @@ unique_ptr<ParsedExpression> ExpandDefaultExpression(const ColumnDefinition &col
 	if (column.DefaultValue()) {
 		return column.DefaultValue()->Copy();
 	} else {
-		return make_unique<ConstantExpression>(Value(column.Type()));
+		return make_uniq<ConstantExpression>(Value(column.Type()));
 	}
 }
 
@@ -59,7 +59,7 @@ void QualifyColumnReferences(unique_ptr<ParsedExpression> &expr, const string &t
 			return;
 		}
 		auto column_name = column_ref.GetColumnName();
-		expr = make_unique<ColumnRefExpression>(column_name, table_name);
+		expr = make_uniq<ColumnRefExpression>(column_name, table_name);
 	}
 	ParsedExpressionIterator::EnumerateChildren(
 	    *expr, [&](unique_ptr<ParsedExpression> &child) { QualifyColumnReferences(child, table_name); });
@@ -142,7 +142,7 @@ void Binder::BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert
 }
 
 unique_ptr<UpdateSetInfo> CreateSetInfoForReplace(TableCatalogEntry &table, InsertStatement &insert) {
-	auto set_info = make_unique<UpdateSetInfo>();
+	auto set_info = make_uniq<UpdateSetInfo>();
 
 	auto &columns = set_info->columns;
 	// Figure out which columns are indexed on
@@ -178,7 +178,7 @@ unique_ptr<UpdateSetInfo> CreateSetInfoForReplace(TableCatalogEntry &table, Inse
 
 	// Create 'excluded' qualified column references of these columns
 	for (auto &column : columns) {
-		set_info->expressions.push_back(make_unique<ColumnRefExpression>(column, "excluded"));
+		set_info->expressions.push_back(make_uniq<ColumnRefExpression>(column, "excluded"));
 	}
 
 	return set_info;
@@ -405,7 +405,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		properties.modified_databases.insert(table->catalog->GetName());
 	}
 
-	auto insert = make_unique<LogicalInsert>(table, GenerateTableIndex());
+	auto insert = make_uniq<LogicalInsert>(table, GenerateTableIndex());
 	// Add CTEs as bindable
 	AddCTEMap(stmt.cte_map);
 

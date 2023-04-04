@@ -36,6 +36,7 @@ add_library_unity(
   hive_partitioning.cpp
   pipe_file_system.cpp
   local_file_system.cpp
+  multi_file_reader.cpp
   preserved_error.cpp
   printer.cpp
   radix_partitioning.cpp

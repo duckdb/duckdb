@@ -9,7 +9,7 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test repeated load and checkpoint of storage", "[storage][.]") {
-	unique_ptr<MaterializedQueryResult> result;
+	duckdb::unique_ptr<MaterializedQueryResult> result;
 	auto storage_database = TestCreatePath("repeated_load");
 	auto csv_file = TestCreatePath("rload.csv");
 	auto config = GetTestConfig();

@@ -11,9 +11,11 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
-#include <vector>
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/helper.hpp"
+
+PYBIND11_DECLARE_HOLDER_TYPE(T, duckdb::unique_ptr<T>)
 
 namespace pybind11 {
 namespace detail {

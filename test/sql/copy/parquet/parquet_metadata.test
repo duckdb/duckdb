@@ -32,3 +32,7 @@ select * from parquet_metadata('data/parquet-testing/glob/*.parquet');
 
 statement ok
 select * from parquet_schema('data/parquet-testing/glob/*.parquet');
+
+# list parameters
+statement ok
+select * from parquet_schema(['data/parquet-testing/decimal/int64_decimal.parquet', 'data/parquet-testing/decimal/int64_decimal.parquet']);

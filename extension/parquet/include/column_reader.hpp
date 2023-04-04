@@ -129,7 +129,7 @@ protected:
 
 	ParquetReader &reader;
 	LogicalType type;
-	unique_ptr<Vector> byte_array_data;
+	duckdb::unique_ptr<Vector> byte_array_data;
 	idx_t byte_array_count = 0;
 
 	idx_t pending_skips = 0;
@@ -157,11 +157,11 @@ private:
 	ResizeableBuffer compressed_buffer;
 	ResizeableBuffer offset_buffer;
 
-	unique_ptr<RleBpDecoder> dict_decoder;
-	unique_ptr<RleBpDecoder> defined_decoder;
-	unique_ptr<RleBpDecoder> repeated_decoder;
-	unique_ptr<DbpDecoder> dbp_decoder;
-	unique_ptr<RleBpDecoder> rle_decoder;
+	duckdb::unique_ptr<RleBpDecoder> dict_decoder;
+	duckdb::unique_ptr<RleBpDecoder> defined_decoder;
+	duckdb::unique_ptr<RleBpDecoder> repeated_decoder;
+	duckdb::unique_ptr<DbpDecoder> dbp_decoder;
+	duckdb::unique_ptr<RleBpDecoder> rle_decoder;
 
 	// dummies for Skip()
 	parquet_filter_t none_filter;

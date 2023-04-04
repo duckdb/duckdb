@@ -251,9 +251,9 @@ static jobject decode_charbuffer_to_jstring(JNIEnv *env, const char *d_str, idx_
  */
 struct ConnectionHolder {
 	const shared_ptr<duckdb::DuckDB> db;
-	const unique_ptr<duckdb::Connection> connection;
+	const duckdb::unique_ptr<duckdb::Connection> connection;
 
-	ConnectionHolder(shared_ptr<duckdb::DuckDB> _db) : db(_db), connection(make_unique<duckdb::Connection>(*_db)) {
+	ConnectionHolder(shared_ptr<duckdb::DuckDB> _db) : db(_db), connection(make_uniq<duckdb::Connection>(*_db)) {
 	}
 };
 
@@ -393,7 +393,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1disconnect(JNI
 }
 
 struct StatementHolder {
-	unique_ptr<PreparedStatement> stmt;
+	duckdb::unique_ptr<PreparedStatement> stmt;
 };
 
 #include "utf8proc_wrapper.hpp"
@@ -409,7 +409,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNI
 
 	// invalid sql raises a parse exception
 	// need to be caught and thrown via JNI
-	duckdb::vector<unique_ptr<SQLStatement>> statements;
+	duckdb::vector<duckdb::unique_ptr<SQLStatement>> statements;
 	try {
 		statements = conn_ref->ExtractStatements(query.c_str());
 	} catch (const std::exception &e) {
@@ -454,8 +454,8 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNI
 }
 
 struct ResultHolder {
-	unique_ptr<QueryResult> res;
-	unique_ptr<DataChunk> chunk;
+	duckdb::unique_ptr<QueryResult> res;
+	duckdb::unique_ptr<DataChunk> chunk;
 };
 
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNIEnv *env, jclass, jobject stmt_ref_buf,
@@ -465,7 +465,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 		env->ThrowNew(J_SQLException, "Invalid statement");
 		return nullptr;
 	}
-	auto res_ref = make_unique<ResultHolder>();
+	auto res_ref = make_uniq<ResultHolder>();
 	duckdb::vector<Value> duckdb_params;
 
 	idx_t param_len = env->GetArrayLength(params);
@@ -664,7 +664,7 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 
 	res_ref->chunk = res_ref->res->Fetch();
 	if (!res_ref->chunk) {
-		res_ref->chunk = make_unique<DataChunk>();
+		res_ref->chunk = make_uniq<DataChunk>();
 	}
 	auto row_count = res_ref->chunk->size();
 	auto vec_array = (jobjectArray)env->NewObjectArray(res_ref->chunk->ColumnCount(), J_DuckVector, nullptr);
@@ -1007,13 +1007,13 @@ class JavaArrowTabularStreamFactory {
 public:
 	JavaArrowTabularStreamFactory(ArrowArrayStream *stream_ptr_p) : stream_ptr(stream_ptr_p) {};
 
-	static unique_ptr<ArrowArrayStreamWrapper> Produce(uintptr_t factory_p, ArrowStreamParameters &parameters) {
+	static duckdb::unique_ptr<ArrowArrayStreamWrapper> Produce(uintptr_t factory_p, ArrowStreamParameters &parameters) {
 
 		auto factory = (JavaArrowTabularStreamFactory *)factory_p;
 		if (!factory->stream_ptr->release) {
 			throw InvalidInputException("This stream has been released");
 		}
-		auto res = make_unique<ArrowArrayStreamWrapper>();
+		auto res = make_uniq<ArrowArrayStreamWrapper>();
 		res->arrow_array_stream = *factory->stream_ptr;
 		factory->stream_ptr->release = nullptr;
 		return res;

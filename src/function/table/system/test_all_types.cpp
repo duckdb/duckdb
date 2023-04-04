@@ -210,7 +210,7 @@ static unique_ptr<FunctionData> TestAllTypesBind(ClientContext &context, TableFu
 }
 
 unique_ptr<GlobalTableFunctionState> TestAllTypesInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_unique<TestAllTypesData>();
+	auto result = make_uniq<TestAllTypesData>();
 	auto test_types = TestAllTypesFun::GetTestTypes();
 	// 3 rows: min, max and NULL
 	result->entries.resize(3);

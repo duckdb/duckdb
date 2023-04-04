@@ -57,11 +57,11 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, GlobalSinkState &
 }
 
 unique_ptr<GlobalSinkState> PhysicalDelete::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<DeleteGlobalState>(context, GetTypes());
+	return make_uniq<DeleteGlobalState>(context, GetTypes());
 }
 
 unique_ptr<LocalSinkState> PhysicalDelete::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<DeleteLocalState>(Allocator::Get(context.client), table.GetTypes());
+	return make_uniq<DeleteLocalState>(Allocator::Get(context.client), table.GetTypes());
 }
 
 //===--------------------------------------------------------------------===//
@@ -82,7 +82,7 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalDelete::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<DeleteSourceState>(*this);
+	return make_uniq<DeleteSourceState>(*this);
 }
 
 void PhysicalDelete::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,

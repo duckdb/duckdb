@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/assert.hpp"
-#include "duckdb/common/constants.hpp"
+#include "duckdb/common/typedefs.hpp"
 #include <vector>
 
 namespace duckdb {

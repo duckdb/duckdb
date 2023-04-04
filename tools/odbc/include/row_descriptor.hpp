@@ -18,8 +18,8 @@ public:
 
 public:
 	// implicitly allocated descriptors
-	unique_ptr<OdbcHandleDesc> ard;
-	unique_ptr<OdbcHandleDesc> ird;
+	duckdb::unique_ptr<OdbcHandleDesc> ard;
+	duckdb::unique_ptr<OdbcHandleDesc> ird;
 
 private:
 	OdbcHandleStmt *stmt;
