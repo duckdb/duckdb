@@ -53,7 +53,7 @@ struct CMStringDecompressLocalState : public FunctionLocalState {
 public:
 	static unique_ptr<FunctionLocalState> Init(ExpressionState &state, const BoundFunctionExpression &expr,
 	                                           FunctionData *bind_data) {
-		return make_unique<CMStringDecompressLocalState>();
+		return make_uniq<CMStringDecompressLocalState>();
 	}
 
 public:
