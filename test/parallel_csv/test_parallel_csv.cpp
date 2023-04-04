@@ -25,16 +25,19 @@ const string tbl_zst = "tbl.zst";
 
 const string csv_extensions[5] = {csv, tsv, csv_gz, csv_zst, tbl_zst};
 
-bool debug = false;
-bool RunFull(std::string &path, std::set<std::string> &skip, duckdb::Connection &conn,
+bool debug = true;
+bool RunFull(std::string &path, duckdb::Connection &conn, std::set<std::string> *skip,
              const string &add_parameters = "") {
 	bool single_threaded_passed;
 	// Here we run the csv file first with the single thread reader.
 	// Then the parallel csv reader with a combination of multiple threads and buffer sizes.
-	if (skip.find(path) != skip.end()) {
-		// Gotta skip this
-		return true;
+	if (skip) {
+		if (skip->find(path) != skip->end()) {
+			// Gotta skip this
+			return true;
+		}
 	}
+
 	// Set max line length to 0 when starting a ST CSV Read
 	conn.context->client_data->max_line_length = 0;
 	unique_ptr<MaterializedQueryResult> single_threaded_res;
@@ -106,7 +109,7 @@ bool RunFull(std::string &path, std::set<std::string> &skip, duckdb::Connection 
 }
 
 // Collects All CSV-Like files from folder and execute Parallel Scans on it
-void RunTestOnFolder(const string &path, std::set<std::string> &skip, const string &add_parameters = "") {
+void RunTestOnFolder(const string &path, std::set<std::string> *skip = nullptr, const string &add_parameters = "") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
@@ -114,7 +117,7 @@ void RunTestOnFolder(const string &path, std::set<std::string> &skip, const stri
 	for (auto &ext : csv_extensions) {
 		auto csv_files = fs.Glob(path + "*" + ext);
 		for (auto &csv_file : csv_files) {
-			REQUIRE(RunFull(csv_file, skip, con, add_parameters));
+			REQUIRE(RunFull(csv_file, con, skip, add_parameters));
 		}
 	}
 }
@@ -140,94 +143,76 @@ void RunTestOnFolder(const string &path, std::set<std::string> &skip, const stri
 //}
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data", "[parallel-csv][.]") {
-	std::set<std::string> skip;
-	RunTestOnFolder("test/sql/copy/csv/data/", skip);
+	RunTestOnFolder("test/sql/copy/csv/data/");
 }
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/auto", "[parallel-csv][.]") {
 	std::set<std::string> skip;
 	// This file is from a 'mode skip' test
 	skip.insert("test/sql/copy/csv/data/auto/titlebasicsdebug.tsv");
-	RunTestOnFolder("test/sql/copy/csv/data/auto/", skip);
+	RunTestOnFolder("test/sql/copy/csv/data/auto/", &skip);
 }
 //! Test case with specific parameters that allow us to run the titlebasicsdebug.tsv we were skipping
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/auto/titlebasicsdebug.tsv", "[parallel-csv][.]") {
-	std::set<std::string> skip;
 	DuckDB db(nullptr);
 	Connection con(db);
 	string add_parameters = ", nullstr=\'\\N\', sample_size = -1";
 	string file = "test/sql/copy/csv/data/auto/titlebasicsdebug.tsv";
-	REQUIRE(RunFull(file, skip, con, add_parameters));
+	REQUIRE(RunFull(file, con, nullptr, add_parameters));
 }
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/auto/glob", "[parallel-csv][.]") {
-	std::set<std::string> skip;
-	RunTestOnFolder("test/sql/copy/csv/data/auto/glob/", skip);
+	RunTestOnFolder("test/sql/copy/csv/data/auto/glob/");
 }
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/error/date_multiple_file", "[parallel-csv][.]") {
-	std::set<std::string> skip;
-	RunTestOnFolder("test/sql/copy/csv/data/error/date_multiple_file/", skip);
+	RunTestOnFolder("test/sql/copy/csv/data/error/date_multiple_file/");
 }
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/glob/a1", "[parallel-csv][.]") {
-	std::set<std::string> skip;
-	RunTestOnFolder("test/sql/copy/csv/data/glob/a1/", skip);
+	RunTestOnFolder("test/sql/copy/csv/data/glob/a1/");
 }
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/glob/a2", "[parallel-csv][.]") {
-	std::set<std::string> skip;
-	RunTestOnFolder("test/sql/copy/csv/data/glob/a2/", skip);
+	RunTestOnFolder("test/sql/copy/csv/data/glob/a2/");
 }
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/glob/a3", "[parallel-csv][.]") {
-	std::set<std::string> skip;
-	RunTestOnFolder("test/sql/copy/csv/data/glob/a3/", skip);
+	RunTestOnFolder("test/sql/copy/csv/data/glob/a3/");
 }
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/glob/empty", "[parallel-csv][.]") {
-	std::set<std::string> skip;
-	RunTestOnFolder("test/sql/copy/csv/data/glob/empty/", skip);
+	RunTestOnFolder("test/sql/copy/csv/data/glob/empty/");
 }
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/glob/i1", "[parallel-csv][.]") {
-	std::set<std::string> skip;
-	RunTestOnFolder("test/sql/copy/csv/data/glob/i1/", skip);
+	RunTestOnFolder("test/sql/copy/csv/data/glob/i1/");
 }
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/real", "[parallel-csv][.]") {
-	std::set<std::string> skip;
-	RunTestOnFolder("test/sql/copy/csv/data/real/", skip);
+	RunTestOnFolder("test/sql/copy/csv/data/real/");
 }
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/test", "[parallel-csv][.]") {
-	std::set<std::string> skip;
-	RunTestOnFolder("test/sql/copy/csv/data/test/", skip);
+	RunTestOnFolder("test/sql/copy/csv/data/test/");
 }
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/zstd", "[parallel-csv][.]") {
-	std::set<std::string> skip;
-	RunTestOnFolder("test/sql/copy/csv/data/zstd/", skip);
+	RunTestOnFolder("test/sql/copy/csv/data/zstd/");
 }
 
 TEST_CASE("Test Parallel CSV All Files - data/csv", "[parallel-csv][.]") {
-	std::set<std::string> skip;
-	//! This file is way too big
-	skip.insert("data/csv/sequences.csv.gz");
-	RunTestOnFolder("data/csv/", skip);
+	RunTestOnFolder("data/csv/");
 }
 
 TEST_CASE("Test Parallel CSV All Files - data/csv/decimal_separators", "[parallel-csv][.]") {
-	std::set<std::string> skip;
-	RunTestOnFolder("data/csv/decimal_separators/", skip);
+	RunTestOnFolder("data/csv/decimal_separators/");
 }
 
 TEST_CASE("Test Parallel CSV All Files - data/csv/中文", "[parallel-csv][.]") {
-	std::set<std::string> skip;
-	RunTestOnFolder("data/csv/中文/", skip);
+	RunTestOnFolder("data/csv/中文/");
 }
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/abac", "[parallel-csv][.]") {
-	std::set<std::string> skip;
-	RunTestOnFolder("test/sql/copy/csv/data/abac/", skip);
+	RunTestOnFolder("test/sql/copy/csv/data/abac/");
 }
