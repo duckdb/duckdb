@@ -15,6 +15,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
+#include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
 class Event;
@@ -23,6 +24,17 @@ class PhysicalOperator;
 class Pipeline;
 class PipelineBuildState;
 class MetaPipeline;
+
+struct SourcePartitionInfo {
+	//! The current batch index
+	//! This is only set in case RequiresBatchIndex() is true, and the source has support for it (SupportsBatchIndex())
+	//! Otherwise this is left on INVALID_INDEX
+	//! The batch index is a globally unique, increasing index that should be used to maintain insertion order
+	//! //! in conjunction with parallelism
+	optional_idx batch_index;
+	//! The minimum batch index that any thread is currently actively reading
+	optional_idx min_batch_index;
+};
 
 // LCOV_EXCL_START
 class OperatorState {
@@ -55,12 +67,8 @@ public:
 	virtual ~LocalSinkState() {
 	}
 
-	//! The current batch index
-	//! This is only set in case RequiresBatchIndex() is true, and the source has support for it (SupportsBatchIndex())
-	//! Otherwise this is left on INVALID_INDEX
-	//! The batch index is a globally unique, increasing index that should be used to maintain insertion order
-	//! //! in conjunction with parallelism
-	idx_t batch_index = DConstants::INVALID_INDEX;
+	//! Source partition info
+	SourcePartitionInfo partition_info;
 };
 
 class GlobalSourceState {

@@ -32,7 +32,7 @@ public:
 SinkResultType PhysicalBatchCollector::Sink(ExecutionContext &context, GlobalSinkState &gstate,
                                             LocalSinkState &lstate_p, DataChunk &input) const {
 	auto &state = (BatchCollectorLocalState &)lstate_p;
-	state.data.Append(input, state.batch_index);
+	state.data.Append(input, state.partition_info.batch_index.GetIndex());
 	return SinkResultType::NEED_MORE_INPUT;
 }
 

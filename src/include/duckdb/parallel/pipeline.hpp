@@ -10,6 +10,7 @@
 
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/set.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
@@ -64,9 +65,7 @@ public:
 	void Reset();
 	void ResetSink();
 	void ResetSource(bool force);
-	void ClearSource() {
-		source_state.reset();
-	}
+	void ClearSource();
 	void Schedule(shared_ptr<Event> &event);
 
 	//! Finalize this pipeline
@@ -93,6 +92,12 @@ public:
 	//! Returns whether any of the operators in the pipeline care about preserving insertion order
 	bool IsOrderDependent() const;
 
+	//! Registers a new batch index for a pipeline executor - returns the current minimum batch index
+	idx_t RegisterNewBatchIndex();
+
+	//! Updates the batch index of a pipeline (and returns the new minimum batch index)
+	idx_t UpdateBatchIndex(idx_t old_index, idx_t new_index);
+
 private:
 	//! Whether or not the pipeline has been readied
 	bool ready;
@@ -115,6 +120,10 @@ private:
 
 	//! The base batch index of this pipeline
 	idx_t base_batch_index = 0;
+	//! Lock for accessing the set of batch indexes
+	mutex batch_lock;
+	//! The set of batch indexes that are currently being processed
+	multiset<idx_t> batch_indexes;
 
 private:
 	void ScheduleSequentialTask(shared_ptr<Event> &event);

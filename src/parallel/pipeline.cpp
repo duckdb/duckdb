@@ -12,7 +12,6 @@
 #include "duckdb/parallel/pipeline_event.hpp"
 #include "duckdb/parallel/pipeline_executor.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
-#include "duckdb/parallel/thread_context.hpp"
 
 namespace duckdb {
 
@@ -234,6 +233,26 @@ vector<PhysicalOperator *> Pipeline::GetOperators() const {
 	return result;
 }
 
+void Pipeline::ClearSource() {
+	source_state.reset();
+	batch_indexes.clear();
+}
+
+idx_t Pipeline::RegisterNewBatchIndex() {
+	lock_guard<mutex> l(batch_lock);
+	idx_t minimum = batch_indexes.empty() ? 0 : *batch_indexes.begin();
+	batch_indexes.insert(minimum);
+	return minimum;
+}
+
+idx_t Pipeline::UpdateBatchIndex(idx_t old_index, idx_t new_index) {
+	lock_guard<mutex> l(batch_lock);
+	auto entry = batch_indexes.find(old_index);
+	D_ASSERT(entry != batch_indexes.end());
+	batch_indexes.erase(entry);
+	batch_indexes.insert(new_index);
+	return *batch_indexes.begin();
+}
 //===--------------------------------------------------------------------===//
 // Pipeline Build State
 //===--------------------------------------------------------------------===//

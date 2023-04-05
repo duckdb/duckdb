@@ -155,8 +155,9 @@ public:
 		}
 	}
 
-	void AddCollection(ClientContext &context, idx_t batch_index, unique_ptr<RowGroupCollection> current_collection,
-	                   OptimisticDataWriter *writer = nullptr, bool *written_to_disk = nullptr) {
+	void AddCollection(ClientContext &context, idx_t batch_index, idx_t min_batch_index,
+	                   unique_ptr<RowGroupCollection> current_collection, OptimisticDataWriter *writer = nullptr,
+	                   bool *written_to_disk = nullptr) {
 		vector<unique_ptr<RowGroupCollection>> merge_collections;
 		idx_t merge_count;
 		{
@@ -291,21 +292,22 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkSt
 	auto table = gstate.table;
 	PhysicalInsert::ResolveDefaults(table, chunk, column_index_map, lstate.default_executor, lstate.insert_chunk);
 
+	auto batch_index = lstate.partition_info.batch_index.GetIndex();
 	if (!lstate.current_collection) {
 		lock_guard<mutex> l(gstate.lock);
 		// no collection yet: create a new one
 		lstate.CreateNewCollection(table, insert_types);
 		lstate.writer = gstate.table->GetStorage().CreateOptimisticWriter(context.client);
-	} else if (lstate.current_index != lstate.batch_index) {
+	} else if (lstate.current_index != batch_index) {
 		// batch index has changed: move the old collection to the global state and create a new collection
 		TransactionData tdata(0, 0);
 		lstate.current_collection->FinalizeAppend(tdata, lstate.current_append_state);
 		lstate.FlushToDisk();
-		gstate.AddCollection(context.client, lstate.current_index, std::move(lstate.current_collection), lstate.writer,
-		                     &lstate.written_to_disk);
+		gstate.AddCollection(context.client, lstate.current_index, lstate.partition_info.min_batch_index.GetIndex(),
+		                     std::move(lstate.current_collection), lstate.writer, &lstate.written_to_disk);
 		lstate.CreateNewCollection(table, insert_types);
 	}
-	lstate.current_index = lstate.batch_index;
+	lstate.current_index = batch_index;
 
 	table->GetStorage().VerifyAppendConstraints(*table, context.client, lstate.insert_chunk);
 
@@ -333,7 +335,8 @@ void PhysicalBatchInsert::Combine(ExecutionContext &context, GlobalSinkState &gs
 
 	TransactionData tdata(0, 0);
 	lstate.current_collection->FinalizeAppend(tdata, lstate.current_append_state);
-	gstate.AddCollection(context.client, lstate.current_index, std::move(lstate.current_collection));
+	gstate.AddCollection(context.client, lstate.current_index, lstate.partition_info.min_batch_index.GetIndex(),
+	                     std::move(lstate.current_collection));
 }
 
 SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
