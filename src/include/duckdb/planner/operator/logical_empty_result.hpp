@@ -18,6 +18,9 @@ class LogicalEmptyResult : public LogicalOperator {
 	LogicalEmptyResult();
 
 public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_EMPTY_RESULT;
+
+public:
 	explicit LogicalEmptyResult(unique_ptr<LogicalOperator> op);
 
 	//! The set of return types of the empty result

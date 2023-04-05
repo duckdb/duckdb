@@ -438,7 +438,7 @@ unique_ptr<GlobalSinkState> PhysicalTopN::GetGlobalSinkState(ClientContext &cont
 SinkResultType PhysicalTopN::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
                                   DataChunk &input) const {
 	// append to the local sink state
-	auto &sink = (TopNLocalState &)lstate;
+	auto &sink = lstate.Cast<TopNLocalState>();
 	sink.heap.Sink(input);
 	sink.heap.Reduce();
 	return SinkResultType::NEED_MORE_INPUT;
@@ -448,8 +448,8 @@ SinkResultType PhysicalTopN::Sink(ExecutionContext &context, GlobalSinkState &st
 // Combine
 //===--------------------------------------------------------------------===//
 void PhysicalTopN::Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p) const {
-	auto &gstate = (TopNGlobalState &)state;
-	auto &lstate = (TopNLocalState &)lstate_p;
+	auto &gstate = state.Cast<TopNGlobalState>();
+	auto &lstate = lstate_p.Cast<TopNLocalState>();
 
 	// scan the local top N and append it to the global heap
 	lock_guard<mutex> glock(gstate.lock);
@@ -461,7 +461,7 @@ void PhysicalTopN::Combine(ExecutionContext &context, GlobalSinkState &state, Lo
 //===--------------------------------------------------------------------===//
 SinkFinalizeType PhysicalTopN::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                         GlobalSinkState &gstate_p) const {
-	auto &gstate = (TopNGlobalState &)gstate_p;
+	auto &gstate = gstate_p.Cast<TopNGlobalState>();
 	// global finalize: compute the final top N
 	gstate.heap.Finalize();
 	return SinkFinalizeType::READY;
@@ -485,8 +485,8 @@ void PhysicalTopN::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSo
 	if (limit == 0) {
 		return;
 	}
-	auto &state = (TopNOperatorState &)gstate_p;
-	auto &gstate = (TopNGlobalState &)*sink_state;
+	auto &state = gstate_p.Cast<TopNOperatorState>();
+	auto &gstate = sink_state->Cast<TopNGlobalState>();
 
 	if (!state.initialized) {
 		gstate.heap.InitializeScan(state.state, true);

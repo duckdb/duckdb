@@ -139,8 +139,8 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 			D_ASSERT(!order.orders.empty());
 			auto &order_binders = order_binder.GetBinders();
 			if (order.orders.size() == 1 && order.orders[0].expression->type == ExpressionType::STAR) {
-				auto star = (StarExpression *)order.orders[0].expression.get();
-				if (star->exclude_list.empty() && star->replace_list.empty() && !star->expr) {
+				auto &star = order.orders[0].expression->Cast<StarExpression>();
+				if (star.exclude_list.empty() && star.replace_list.empty() && !star.expr) {
 					// ORDER BY ALL
 					// replace the order list with the all elements in the SELECT list
 					auto order_type = order.orders[0].type;
@@ -191,15 +191,14 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 	}
 }
 
-static void AssignReturnType(unique_ptr<Expression> &expr, const vector<LogicalType> &sql_types,
-                             idx_t projection_index) {
+static void AssignReturnType(unique_ptr<Expression> &expr, const vector<LogicalType> &sql_types) {
 	if (!expr) {
 		return;
 	}
 	if (expr->type != ExpressionType::BOUND_COLUMN_REF) {
 		return;
 	}
-	auto &bound_colref = (BoundColumnRefExpression &)*expr;
+	auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
 	bound_colref.return_type = sql_types[bound_colref.binding.column_index];
 }
 
@@ -212,7 +211,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 			// set types of distinct targets
 			for (auto &expr : distinct.target_distincts) {
 				D_ASSERT(expr->type == ExpressionType::BOUND_COLUMN_REF);
-				auto &bound_colref = (BoundColumnRefExpression &)*expr;
+				auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
 				if (bound_colref.binding.column_index == DConstants::INVALID_INDEX) {
 					throw BinderException("Ambiguous name in DISTINCT ON!");
 				}
@@ -220,7 +219,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 				bound_colref.return_type = sql_types[bound_colref.binding.column_index];
 			}
 			for (auto &target_distinct : distinct.target_distincts) {
-				auto &bound_colref = (BoundColumnRefExpression &)*target_distinct;
+				auto &bound_colref = target_distinct->Cast<BoundColumnRefExpression>();
 				const auto &sql_type = sql_types[bound_colref.binding.column_index];
 				if (sql_type.id() == LogicalTypeId::VARCHAR) {
 					target_distinct = ExpressionBinder::PushCollation(context, std::move(target_distinct),
@@ -231,14 +230,14 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 		}
 		case ResultModifierType::LIMIT_MODIFIER: {
 			auto &limit = (BoundLimitModifier &)*bound_mod;
-			AssignReturnType(limit.limit, sql_types, projection_index);
-			AssignReturnType(limit.offset, sql_types, projection_index);
+			AssignReturnType(limit.limit, sql_types);
+			AssignReturnType(limit.offset, sql_types);
 			break;
 		}
 		case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
 			auto &limit = (BoundLimitPercentModifier &)*bound_mod;
-			AssignReturnType(limit.limit, sql_types, projection_index);
-			AssignReturnType(limit.offset, sql_types, projection_index);
+			AssignReturnType(limit.limit, sql_types);
+			AssignReturnType(limit.offset, sql_types);
 			break;
 		}
 		case ResultModifierType::ORDER_MODIFIER: {
@@ -246,7 +245,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 			for (auto &order_node : order.orders) {
 				auto &expr = order_node.expression;
 				D_ASSERT(expr->type == ExpressionType::BOUND_COLUMN_REF);
-				auto &bound_colref = (BoundColumnRefExpression &)*expr;
+				auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
 				if (bound_colref.binding.column_index == DConstants::INVALID_INDEX) {
 					throw BinderException("Ambiguous name in ORDER BY!");
 				}
@@ -277,14 +276,14 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 	// expand any expressions in the upper AND recursively
 	if (expr->type == ExpressionType::CONJUNCTION_AND) {
-		auto &conj = (ConjunctionExpression &)*expr;
+		auto &conj = expr->Cast<ConjunctionExpression>();
 		for (auto &child : conj.children) {
 			BindWhereStarExpression(child);
 		}
 		return;
 	}
 	if (expr->type == ExpressionType::STAR) {
-		auto &star = (StarExpression &)*expr;
+		auto &star = expr->Cast<StarExpression>();
 		if (!star.columns) {
 			throw ParserException("STAR expression is not allowed in the WHERE clause. Use COLUMNS(*) instead.");
 		}

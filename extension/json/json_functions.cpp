@@ -115,7 +115,7 @@ unique_ptr<FunctionLocalState> JSONFunctionLocalState::Init(ExpressionState &sta
 }
 
 JSONFunctionLocalState &JSONFunctionLocalState::ResetAndGet(ExpressionState &state) {
-	auto &lstate = (JSONFunctionLocalState &)*ExecuteFunctionState::GetFunctionState(state);
+	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<JSONFunctionLocalState>();
 	lstate.json_allocator.Reset();
 	return lstate;
 }
@@ -197,7 +197,7 @@ static duckdb::unique_ptr<FunctionLocalState> InitJSONCastLocalState(CastLocalSt
 }
 
 static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	auto &lstate = (JSONFunctionLocalState &)*parameters.local_state;
+	auto &lstate = parameters.local_state->Cast<JSONFunctionLocalState>();
 	lstate.json_allocator.Reset();
 	auto alc = lstate.json_allocator.GetYYJSONAllocator();
 
