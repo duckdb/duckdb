@@ -306,6 +306,10 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		everything_referenced = true;
 		break;
 	}
+	case LogicalOperatorType::LOGICAL_PIVOT: {
+		everything_referenced = true;
+		break;
+	}
 	default:
 		break;
 	}

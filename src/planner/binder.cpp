@@ -208,6 +208,9 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 	case TableReferenceType::CTE:
 		root = CreatePlan(ref.Cast<BoundCTERef>());
 		break;
+	case TableReferenceType::PIVOT:
+		root = CreatePlan((BoundPivotRef &)ref);
+		break;
 	case TableReferenceType::INVALID:
 	default:
 		throw InternalException("Unsupported bound table ref type");

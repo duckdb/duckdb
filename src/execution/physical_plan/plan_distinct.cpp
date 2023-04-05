@@ -49,6 +49,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDistinct &
 				requires_projection = true;
 			}
 		} else {
+			if (op.distinct_type == DistinctType::DISTINCT && op.order_by) {
+				throw InternalException("Entry that is not a group, but not a DISTINCT ON aggregate");
+			}
 			// entry is not one of the groups: need to push a FIRST aggregate
 			auto bound = make_uniq<BoundReferenceExpression>(logical_type, i);
 			vector<unique_ptr<Expression>> first_children;

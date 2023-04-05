@@ -19,12 +19,17 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_DISTINCT;
 
 public:
-	LogicalDistinct() : LogicalOperator(LogicalOperatorType::LOGICAL_DISTINCT) {
+	explicit LogicalDistinct(DistinctType distinct_type)
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_DISTINCT), distinct_type(distinct_type) {
 	}
-	explicit LogicalDistinct(vector<unique_ptr<Expression>> targets)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_DISTINCT), distinct_targets(std::move(targets)) {
+	explicit LogicalDistinct(vector<unique_ptr<Expression>> targets, DistinctType distinct_type)
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_DISTINCT), distinct_type(distinct_type),
+	      distinct_targets(std::move(targets)) {
 	}
-	//! The set of distinct targets (optional).
+
+	//! Whether or not this is a DISTINCT or DISTINCT ON
+	DistinctType distinct_type;
+	//! The set of distinct targets
 	vector<unique_ptr<Expression>> distinct_targets;
 	//! The order by modifier (optional, only for distinct on)
 	unique_ptr<BoundOrderModifier> order_by;
