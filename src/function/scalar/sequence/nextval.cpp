@@ -26,7 +26,7 @@ struct NextvalBindData : public FunctionData {
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (NextvalBindData &)other_p;
+		auto &other = other_p.Cast<NextvalBindData>();
 		return sequence == other.sequence;
 	}
 };
@@ -85,8 +85,8 @@ SequenceCatalogEntry *BindSequence(ClientContext &context, const string &name) {
 
 template <class OP>
 static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	auto &info = (NextvalBindData &)*func_expr.bind_info;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &info = func_expr.bind_info->Cast<NextvalBindData>();
 	auto &input = args.data[0];
 
 	auto &context = state.GetContext();
@@ -127,7 +127,7 @@ static unique_ptr<FunctionData> NextValBind(ClientContext &context, ScalarFuncti
 }
 
 static void NextValDependency(BoundFunctionExpression &expr, DependencyList &dependencies) {
-	auto &info = (NextvalBindData &)*expr.bind_info;
+	auto &info = expr.bind_info->Cast<NextvalBindData>();
 	if (info.sequence) {
 		dependencies.AddDependency(info.sequence);
 	}

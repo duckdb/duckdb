@@ -658,8 +658,8 @@ void StrfTimeFormat::ConvertDateVector(Vector &input, Vector &result, idx_t coun
 
 template <bool REVERSED>
 static void StrfTimeFunctionDate(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	auto &info = (StrfTimeBindData &)*func_expr.bind_info;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &info = func_expr.bind_info->Cast<StrfTimeBindData>();
 
 	if (info.is_null) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -692,8 +692,8 @@ void StrfTimeFormat::ConvertTimestampVector(Vector &input, Vector &result, idx_t
 
 template <bool REVERSED>
 static void StrfTimeFunctionTimestamp(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	auto &info = (StrfTimeBindData &)*func_expr.bind_info;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &info = func_expr.bind_info->Cast<StrfTimeBindData>();
 
 	if (info.is_null) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -1351,8 +1351,8 @@ timestamp_t StrpTimeFormat::ParseTimestamp(string_t input) {
 struct StrpTimeFunction {
 
 	static void Parse(DataChunk &args, ExpressionState &state, Vector &result) {
-		auto &func_expr = (BoundFunctionExpression &)state.expr;
-		auto &info = (StrpTimeBindData &)*func_expr.bind_info;
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+		auto &info = func_expr.bind_info->Cast<StrpTimeBindData>();
 
 		if (ConstantVector::IsNull(args.data[1])) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -1371,8 +1371,8 @@ struct StrpTimeFunction {
 	}
 
 	static void TryParse(DataChunk &args, ExpressionState &state, Vector &result) {
-		auto &func_expr = (BoundFunctionExpression &)state.expr;
-		auto &info = (StrpTimeBindData &)*func_expr.bind_info;
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+		auto &info = func_expr.bind_info->Cast<StrpTimeBindData>();
 
 		if (ConstantVector::IsNull(args.data[1])) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);

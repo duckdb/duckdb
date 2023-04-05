@@ -26,8 +26,8 @@ struct SetseedBindData : public FunctionData {
 };
 
 static void SetSeedFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	auto &info = (SetseedBindData &)*func_expr.bind_info;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &info = func_expr.bind_info->Cast<SetseedBindData>();
 	auto &input = args.data[0];
 	input.Flatten(args.size());
 

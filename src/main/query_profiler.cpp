@@ -669,7 +669,7 @@ void ExpressionInfo::ExtractExpressionsRecursive(unique_ptr<ExpressionState> &st
 		auto expr_info = make_uniq<ExpressionInfo>();
 		if (child->expr.expression_class == ExpressionClass::BOUND_FUNCTION) {
 			expr_info->hasfunction = true;
-			expr_info->function_name = ((BoundFunctionExpression &)child->expr).function.ToString();
+			expr_info->function_name = child->expr.Cast<BoundFunctionExpression>().function.ToString();
 			expr_info->function_time = child->profiler.time;
 			expr_info->sample_tuples_count = child->profiler.sample_tuples_count;
 			expr_info->tuples_count = child->profiler.tuples_count;
@@ -697,7 +697,7 @@ ExpressionRootInfo::ExpressionRootInfo(ExpressionExecutorState &state, string na
 	// Maybe root has a function
 	if (state.root_state->expr.expression_class == ExpressionClass::BOUND_FUNCTION) {
 		expression_info_p->hasfunction = true;
-		expression_info_p->function_name = ((BoundFunctionExpression &)state.root_state->expr).function.name;
+		expression_info_p->function_name = (state.root_state->expr.Cast<BoundFunctionExpression>()).function.name;
 		expression_info_p->function_time = state.root_state->profiler.time;
 		expression_info_p->sample_tuples_count = state.root_state->profiler.sample_tuples_count;
 		expression_info_p->tuples_count = state.root_state->profiler.tuples_count;

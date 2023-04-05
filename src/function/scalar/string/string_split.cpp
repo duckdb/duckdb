@@ -159,11 +159,11 @@ static void StringSplitFunction(DataChunk &args, ExpressionState &state, Vector 
 }
 
 static void StringSplitRegexFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	auto &info = (RegexpMatchesBindData &)*func_expr.bind_info;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &info = func_expr.bind_info->Cast<RegexpMatchesBindData>();
 	if (info.constant_pattern) {
 		// fast path: pre-compiled regex
-		auto &lstate = (RegexLocalState &)*ExecuteFunctionState::GetFunctionState(state);
+		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
 		StringSplitExecutor<ConstantRegexpStringSplit>(args, state, result, &lstate.constant_pattern);
 	} else {
 		// slow path: have to re-compile regex for every row

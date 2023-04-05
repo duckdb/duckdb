@@ -78,7 +78,7 @@ void DuckDBViewsFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		if (entry->type != CatalogType::VIEW_ENTRY) {
 			continue;
 		}
-		auto &view = (ViewCatalogEntry &)*entry;
+		auto &view = entry->Cast<ViewCatalogEntry>();
 
 		// return values:
 		idx_t col = 0;

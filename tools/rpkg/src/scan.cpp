@@ -211,7 +211,7 @@ static duckdb::unique_ptr<GlobalTableFunctionState> DataFrameScanInitGlobal(Clie
 
 static bool DataFrameScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
                                            DataFrameLocalState &local_state, DataFrameGlobalState &global_state) {
-	auto &bind_data = (const DataFrameScanBindData &)*bind_data_p;
+	auto &bind_data = bind_data_p->Cast<DataFrameScanBindData>();
 
 	lock_guard<mutex> parallel_lock(global_state.lock);
 	if (global_state.position >= bind_data.row_count) {
@@ -230,10 +230,10 @@ static bool DataFrameScanParallelStateNext(ClientContext &context, const Functio
 	return true;
 }
 
-static duckdb::unique_ptr<LocalTableFunctionState> DataFrameScanInitLocal(ExecutionContext &context,
-                                                                          TableFunctionInitInput &input,
-                                                                          GlobalTableFunctionState *global_state) {
-	auto &gstate = (DataFrameGlobalState &)*global_state;
+static unique_ptr<LocalTableFunctionState> DataFrameScanInitLocal(ExecutionContext &context,
+                                                                  TableFunctionInitInput &input,
+                                                                  GlobalTableFunctionState *global_state) {
+	auto &gstate = global_state->Cast<DataFrameGlobalState>();
 	auto result = make_uniq<DataFrameLocalState>();
 
 	result->column_ids = input.column_ids;
@@ -251,9 +251,9 @@ struct DedupPointerEnumType {
 };
 
 static void DataFrameScanFunc(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
-	auto &bind_data = (DataFrameScanBindData &)*data.bind_data;
-	auto &operator_data = (DataFrameLocalState &)*data.local_state;
-	auto &gstate = (DataFrameGlobalState &)*data.global_state;
+	auto &bind_data = data.bind_data->Cast<DataFrameScanBindData>();
+	auto &operator_data = data.local_state->Cast<DataFrameLocalState>();
+	auto &gstate = data.global_state->Cast<DataFrameGlobalState>();
 	if (operator_data.position >= operator_data.count) {
 		if (!DataFrameScanParallelStateNext(context, data.bind_data, operator_data, gstate)) {
 			return;
@@ -409,9 +409,8 @@ static void DataFrameScanFunc(ClientContext &context, TableFunctionInput &data, 
 	operator_data.position += this_count;
 }
 
-static duckdb::unique_ptr<NodeStatistics> DataFrameScanCardinality(ClientContext &context,
-                                                                   const FunctionData *bind_data_p) {
-	auto &bind_data = (DataFrameScanBindData &)*bind_data_p;
+static unique_ptr<NodeStatistics> DataFrameScanCardinality(ClientContext &context, const FunctionData *bind_data_p) {
+	auto &bind_data = bind_data_p->Cast<DataFrameScanBindData>();
 	return make_uniq<NodeStatistics>(bind_data.row_count, bind_data.row_count);
 }
 

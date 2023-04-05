@@ -4,7 +4,7 @@
 namespace duckdb {
 
 static void AliasFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	Value v(state.expr.alias.empty() ? func_expr.children[0]->GetName() : state.expr.alias);
 	result.Reference(v);
 }

@@ -159,7 +159,7 @@ ExpressionListRef *InsertStatement::GetValuesList() const {
 	if (select_statement->node->type != QueryNodeType::SELECT_NODE) {
 		return nullptr;
 	}
-	auto &node = (SelectNode &)*select_statement->node;
+	auto &node = select_statement->node->Cast<SelectNode>();
 	if (node.where_clause || node.qualify || node.having) {
 		return nullptr;
 	}
