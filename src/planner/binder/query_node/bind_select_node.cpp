@@ -115,6 +115,8 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 		case ResultModifierType::DISTINCT_MODIFIER: {
 			auto &distinct = (DistinctModifier &)*mod;
 			auto bound_distinct = make_uniq<BoundDistinctModifier>();
+			bound_distinct->distinct_type =
+			    distinct.distinct_on_targets.empty() ? DistinctType::DISTINCT : DistinctType::DISTINCT_ON;
 			if (distinct.distinct_on_targets.empty()) {
 				for (idx_t i = 0; i < result.names.size(); i++) {
 					distinct.distinct_on_targets.push_back(make_uniq<ConstantExpression>(Value::INTEGER(1 + i)));
@@ -206,23 +208,16 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 		switch (bound_mod->type) {
 		case ResultModifierType::DISTINCT_MODIFIER: {
 			auto &distinct = (BoundDistinctModifier &)*bound_mod;
-			if (distinct.target_distincts.empty()) {
-				// DISTINCT without a target: push references to the standard select list
-				for (idx_t i = 0; i < sql_types.size(); i++) {
-					distinct.target_distincts.push_back(
-					    make_uniq<BoundColumnRefExpression>(sql_types[i], ColumnBinding(projection_index, i)));
+			D_ASSERT(!distinct.target_distincts.empty());
+			// set types of distinct targets
+			for (auto &expr : distinct.target_distincts) {
+				D_ASSERT(expr->type == ExpressionType::BOUND_COLUMN_REF);
+				auto &bound_colref = (BoundColumnRefExpression &)*expr;
+				if (bound_colref.binding.column_index == DConstants::INVALID_INDEX) {
+					throw BinderException("Ambiguous name in DISTINCT ON!");
 				}
-			} else {
-				// DISTINCT with target list: set types
-				for (auto &expr : distinct.target_distincts) {
-					D_ASSERT(expr->type == ExpressionType::BOUND_COLUMN_REF);
-					auto &bound_colref = (BoundColumnRefExpression &)*expr;
-					if (bound_colref.binding.column_index == DConstants::INVALID_INDEX) {
-						throw BinderException("Ambiguous name in DISTINCT ON!");
-					}
-					D_ASSERT(bound_colref.binding.column_index < sql_types.size());
-					bound_colref.return_type = sql_types[bound_colref.binding.column_index];
-				}
+				D_ASSERT(bound_colref.binding.column_index < sql_types.size());
+				bound_colref.return_type = sql_types[bound_colref.binding.column_index];
 			}
 			for (auto &target_distinct : distinct.target_distincts) {
 				auto &bound_colref = (BoundColumnRefExpression &)*target_distinct;

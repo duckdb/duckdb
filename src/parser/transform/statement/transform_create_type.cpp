@@ -64,7 +64,6 @@ unique_ptr<CreateStatement> Transformer::TransformCreateType(duckdb_libpgquery::
 
 	case duckdb_libpgquery::PG_NEWTYPE_ALIAS: {
 		LogicalType target_type = TransformTypeName(stmt->ofType);
-		target_type.SetAlias(info->name);
 		info->type = target_type;
 	} break;
 

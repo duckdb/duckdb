@@ -14,6 +14,7 @@ string LogicalDistinct::ParamsToString() const {
 	return result;
 }
 void LogicalDistinct::Serialize(FieldWriter &writer) const {
+	writer.WriteField<DistinctType>(distinct_type);
 	writer.WriteSerializableList(distinct_targets);
 	if (order_by) {
 		throw NotImplementedException("Serializing ORDER BY not yet supported");
@@ -21,8 +22,9 @@ void LogicalDistinct::Serialize(FieldWriter &writer) const {
 }
 
 unique_ptr<LogicalOperator> LogicalDistinct::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
+	auto distinct_type = reader.ReadRequired<DistinctType>();
 	auto distinct_targets = reader.ReadRequiredSerializableList<Expression>(state.gstate);
-	return make_uniq<LogicalDistinct>(std::move(distinct_targets));
+	return make_uniq<LogicalDistinct>(std::move(distinct_targets), distinct_type);
 }
 
 } // namespace duckdb

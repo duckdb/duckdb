@@ -81,6 +81,8 @@ public:
 		return bindings_list;
 	}
 
+	void GetTypesAndNames(vector<string> &result_names, vector<LogicalType> &result_types);
+
 	//! Adds a base table with the given alias to the BindContext.
 	void AddBaseTable(idx_t index, const string &alias, const vector<string> &names, const vector<LogicalType> &types,
 	                  vector<column_t> &bound_column_ids, StandardEntry *entry, bool add_row_id = true);
