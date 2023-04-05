@@ -23,7 +23,7 @@ BindResult IndexBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, i
 			// WAL replay
 			// we assume that the parsed expressions have qualified column names
 			// and that the columns exist in the table
-			auto &col_ref = (ColumnRefExpression &)expr;
+			auto &col_ref = expr.Cast<ColumnRefExpression>();
 			auto col_idx = table->GetColumnIndex(col_ref.column_names.back());
 			auto col_type = table->GetColumn(col_idx).GetType();
 

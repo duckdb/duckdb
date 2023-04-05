@@ -60,7 +60,7 @@ struct ReservoirQuantileBindData : public FunctionData {
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (ReservoirQuantileBindData &)other_p;
+		auto &other = other_p.Cast<ReservoirQuantileBindData>();
 		return quantiles == other.quantiles && sample_size == other.sample_size;
 	}
 

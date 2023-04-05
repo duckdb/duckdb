@@ -56,7 +56,7 @@ static void ConstructPivots(PivotRef &ref, vector<PivotValueElement> &pivot_valu
 
 static void ExtractPivotExpressions(ParsedExpression &expr, case_insensitive_set_t &handled_columns) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto &child_colref = (ColumnRefExpression &)expr;
+		auto &child_colref = expr.Cast<ColumnRefExpression>();
 		if (child_colref.IsQualified()) {
 			throw BinderException("PIVOT expression cannot contain qualified columns");
 		}
@@ -222,19 +222,19 @@ void ExtractPivotAggregates(BoundTableRef &node, vector<unique_ptr<Expression>> 
 	if (node.type != TableReferenceType::SUBQUERY) {
 		throw InternalException("Pivot - Expected a subquery");
 	}
-	auto &subq = (BoundSubqueryRef &)node;
+	auto &subq = node.Cast<BoundSubqueryRef>();
 	if (subq.subquery->type != QueryNodeType::SELECT_NODE) {
 		throw InternalException("Pivot - Expected a select node");
 	}
-	auto &select = (BoundSelectNode &)*subq.subquery;
+	auto &select = subq.subquery->Cast<BoundSelectNode>();
 	if (select.from_table->type != TableReferenceType::SUBQUERY) {
 		throw InternalException("Pivot - Expected another subquery");
 	}
-	auto &subq2 = (BoundSubqueryRef &)*select.from_table;
+	auto &subq2 = select.from_table->Cast<BoundSubqueryRef>();
 	if (subq2.subquery->type != QueryNodeType::SELECT_NODE) {
 		throw InternalException("Pivot - Expected another select node");
 	}
-	auto &select2 = (BoundSelectNode &)*subq2.subquery;
+	auto &select2 = subq2.subquery->Cast<BoundSelectNode>();
 	for (auto &aggr : select2.aggregates) {
 		aggregates.push_back(aggr->Copy());
 	}
@@ -422,7 +422,7 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 				if (col->type != ExpressionType::COLUMN_REF) {
 					throw InternalException("Unexpected child of unpivot star - not a ColumnRef");
 				}
-				auto &columnref = (ColumnRefExpression &)*col;
+				auto &columnref = col->Cast<ColumnRefExpression>();
 				PivotColumnEntry new_entry;
 				new_entry.values.emplace_back(columnref.GetColumnName());
 				new_entry.alias = columnref.GetColumnName();
@@ -446,7 +446,7 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 		if (col_expr->type != ExpressionType::COLUMN_REF) {
 			throw InternalException("Unexpected child of pivot source - not a ColumnRef");
 		}
-		auto &columnref = (ColumnRefExpression &)*col_expr;
+		auto &columnref = col_expr->Cast<ColumnRefExpression>();
 		auto &column_name = columnref.GetColumnName();
 		auto entry = handled_columns.find(column_name);
 		if (entry == handled_columns.end()) {

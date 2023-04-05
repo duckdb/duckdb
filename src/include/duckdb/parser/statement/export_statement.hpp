@@ -16,6 +16,9 @@ namespace duckdb {
 
 class ExportStatement : public SQLStatement {
 public:
+	static constexpr const StatementType TYPE = StatementType::EXPORT_STATEMENT;
+
+public:
 	explicit ExportStatement(unique_ptr<CopyInfo> info);
 
 	unique_ptr<CopyInfo> info;
