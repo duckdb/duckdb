@@ -15,7 +15,7 @@ PartitionGlobalHashGroup::PartitionGlobalHashGroup(BufferManager &buffer_manager
 
 	RowLayout payload_layout;
 	payload_layout.Initialize(payload_types);
-	global_sort = make_unique<GlobalSortState>(buffer_manager, orders, payload_layout);
+	global_sort = make_uniq<GlobalSortState>(buffer_manager, orders, payload_layout);
 	global_sort->external = external;
 
 	partition_layout = global_sort->sort_layout.GetPrefixComparisonLayout(partitions.size());
@@ -103,7 +103,7 @@ void PartitionGlobalSinkState::ResizeGroupingData(idx_t cardinality) {
 	// Repartition the grouping data
 	if (new_bits != bits) {
 		const auto hash_col_idx = payload_types.size();
-		grouping_data = make_unique<RadixPartitionedColumnData>(context, grouping_types, new_bits, hash_col_idx);
+		grouping_data = make_uniq<RadixPartitionedColumnData>(context, grouping_types, new_bits, hash_col_idx);
 	}
 }
 
@@ -116,7 +116,7 @@ void PartitionGlobalSinkState::SyncLocalPartition(GroupingPartition &local_parti
 
 	// If the local partition is now too small, flush it and reallocate
 	auto new_partition = grouping_data->CreateShared();
-	auto new_append = make_unique<PartitionedColumnDataAppendState>();
+	auto new_append = make_uniq<PartitionedColumnDataAppendState>();
 	new_partition->InitializeAppendState(*new_append);
 
 	local_partition->FlushAppendState(*local_append);
@@ -136,7 +136,7 @@ void PartitionGlobalSinkState::SyncLocalPartition(GroupingPartition &local_parti
 	new_partition->FlushAppendState(*new_append);
 
 	local_partition = std::move(new_partition);
-	local_append = make_unique<PartitionedColumnDataAppendState>();
+	local_append = make_uniq<PartitionedColumnDataAppendState>();
 	local_partition->InitializeAppendState(*local_append);
 }
 
@@ -146,7 +146,7 @@ void PartitionGlobalSinkState::UpdateLocalPartition(GroupingPartition &local_par
 
 	if (!local_partition) {
 		local_partition = grouping_data->CreateShared();
-		local_append = make_unique<PartitionedColumnDataAppendState>();
+		local_append = make_uniq<PartitionedColumnDataAppendState>();
 		local_partition->InitializeAppendState(*local_append);
 		return;
 	}
@@ -278,8 +278,8 @@ void PartitionLocalSinkState::Sink(DataChunk &input_chunk) {
 		if (!rows) {
 			const auto entry_size = payload_layout.GetRowWidth();
 			const auto capacity = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_SIZE / entry_size) + 1);
-			rows = make_unique<RowDataCollection>(gstate.buffer_manager, capacity, entry_size);
-			strings = make_unique<RowDataCollection>(gstate.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
+			rows = make_uniq<RowDataCollection>(gstate.buffer_manager, capacity, entry_size);
+			strings = make_uniq<RowDataCollection>(gstate.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 		}
 		const auto row_count = input_chunk.size();
 		const auto row_sel = FlatVector::IncrementalSelectionVector();
@@ -340,7 +340,7 @@ PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &s
 	  tasks_assigned(0), tasks_completed(0) {
 
 	const auto group_idx = sink.hash_groups.size();
-	auto new_group = make_unique<PartitionGlobalHashGroup>(sink.buffer_manager, sink.partitions, sink.orders,
+	auto new_group = make_uniq<PartitionGlobalHashGroup>(sink.buffer_manager, sink.partitions, sink.orders,
 														sink.payload_types, sink.external);
 	sink.hash_groups.emplace_back(std::move(new_group));
 
@@ -446,7 +446,7 @@ PartitionGlobalMergeStates::PartitionGlobalMergeStates(PartitionGlobalSinkState 
 	for (auto &group_data : sink.grouping_data->GetPartitions()) {
 		// Prepare for merge sort phase
 		if (group_data->Count()) {
-			auto state = make_unique<PartitionGlobalMergeState>(sink, std::move(group_data));
+			auto state = make_uniq<PartitionGlobalMergeState>(sink, std::move(group_data));
 			states.emplace_back(std::move(state));
 		}
 	}
@@ -535,7 +535,7 @@ void PartitionMergeEvent::Schedule() {
 
 	vector<unique_ptr<Task>> merge_tasks;
 	for (idx_t tnum = 0; tnum < num_threads; tnum++) {
-		merge_tasks.push_back(make_unique<PartitionMergeTask>(shared_from_this(), context, merge_states));
+		merge_tasks.emplace_back(make_uniq<PartitionMergeTask>(shared_from_this(), context, merge_states));
 	}
 	SetTasks(std::move(merge_tasks));
 }
@@ -568,7 +568,7 @@ void PartitionLocalSourceState::MaterializeSortedData() {
 	// Data blocks are required
 	D_ASSERT(!sd.data_blocks.empty());
 	auto &block = sd.data_blocks[0];
-	rows = make_unique<RowDataCollection>(buffer_manager, block->capacity, block->entry_size);
+	rows = make_uniq<RowDataCollection>(buffer_manager, block->capacity, block->entry_size);
 	rows->blocks = std::move(sd.data_blocks);
 	rows->count = std::accumulate(rows->blocks.begin(), rows->blocks.end(), idx_t(0),
 	                              [&](idx_t c, const unique_ptr<RowDataBlock> &b) { return c + b->count; });
@@ -576,11 +576,11 @@ void PartitionLocalSourceState::MaterializeSortedData() {
 	// Heap blocks are optional, but we want both for iteration.
 	if (!sd.heap_blocks.empty()) {
 		auto &block = sd.heap_blocks[0];
-		heap = make_unique<RowDataCollection>(buffer_manager, block->capacity, block->entry_size);
+		heap = make_uniq<RowDataCollection>(buffer_manager, block->capacity, block->entry_size);
 		heap->blocks = std::move(sd.heap_blocks);
 		hash_group.reset();
 	} else {
-		heap = make_unique<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
+		heap = make_uniq<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 	}
 	heap->count = std::accumulate(heap->blocks.begin(), heap->blocks.end(), idx_t(0),
 	                              [&](idx_t c, const unique_ptr<RowDataBlock> &b) { return c + b->count; });
@@ -635,7 +635,7 @@ idx_t PartitionLocalSourceState::GeneratePartition(const idx_t hash_bin_p) {
 		return count;
 	}
 
-	scanner = make_unique<RowDataCollectionScanner>(*rows, *heap, layout, external, false);
+	scanner = make_uniq<RowDataCollectionScanner>(*rows, *heap, layout, external, false);
 
 	return count;
 }

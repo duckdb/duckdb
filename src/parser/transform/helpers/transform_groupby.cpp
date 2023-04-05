@@ -41,7 +41,7 @@ static void MergeGroupingSet(GroupingSet &result, GroupingSet &other) {
 void Transformer::AddGroupByExpression(unique_ptr<ParsedExpression> expression, GroupingExpressionMap &map,
                                        GroupByNode &result, vector<idx_t> &result_set) {
 	if (expression->type == ExpressionType::FUNCTION) {
-		auto &func = (FunctionExpression &)*expression;
+		auto &func = expression->Cast<FunctionExpression>();
 		if (func.function_name == "row") {
 			for (auto &child : func.children) {
 				AddGroupByExpression(std::move(child), map, result, result_set);

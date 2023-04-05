@@ -106,7 +106,7 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 		// first create a dummy deleted entry for this entry
 		// so transactions started before the commit of this transaction don't
 		// see it yet
-		auto dummy_node = make_unique<CatalogEntry>(CatalogType::INVALID, value->catalog, name);
+		auto dummy_node = make_uniq<CatalogEntry>(CatalogType::INVALID, value->catalog, name);
 		dummy_node->timestamp = 0;
 		dummy_node->deleted = true;
 		dummy_node->set = this;
@@ -301,7 +301,7 @@ void CatalogSet::DropEntryInternal(CatalogTransaction transaction, EntryIndex en
 	// create a new entry and replace the currently stored one
 	// set the timestamp to the timestamp of the current transaction
 	// and point it at the dummy node
-	auto value = make_unique<CatalogEntry>(CatalogType::DELETED_ENTRY, entry.catalog, entry.name);
+	auto value = make_uniq<CatalogEntry>(CatalogType::DELETED_ENTRY, entry.catalog, entry.name);
 	value->timestamp = transaction.transaction_id;
 	value->set = this;
 	value->deleted = true;
@@ -395,7 +395,7 @@ MappingValue *CatalogSet::GetMapping(CatalogTransaction transaction, const strin
 
 void CatalogSet::PutMapping(CatalogTransaction transaction, const string &name, EntryIndex entry_index) {
 	auto entry = mapping.find(name);
-	auto new_value = make_unique<MappingValue>(std::move(entry_index));
+	auto new_value = make_uniq<MappingValue>(std::move(entry_index));
 	new_value->timestamp = transaction.transaction_id;
 	if (entry != mapping.end()) {
 		if (HasConflict(transaction, entry->second->timestamp)) {
@@ -410,7 +410,7 @@ void CatalogSet::PutMapping(CatalogTransaction transaction, const string &name, 
 void CatalogSet::DeleteMapping(CatalogTransaction transaction, const string &name) {
 	auto entry = mapping.find(name);
 	D_ASSERT(entry != mapping.end());
-	auto delete_marker = make_unique<MappingValue>(entry->second->index.Copy());
+	auto delete_marker = make_uniq<MappingValue>(entry->second->index.Copy());
 	delete_marker->deleted = true;
 	delete_marker->timestamp = transaction.transaction_id;
 	delete_marker->child = std::move(entry->second);
@@ -541,30 +541,30 @@ CatalogEntry *CatalogSet::GetEntry(ClientContext &context, const string &name) {
 	return GetEntry(catalog.GetCatalogTransaction(context), name);
 }
 
-void CatalogSet::UpdateTimestamp(CatalogEntry *entry, transaction_t timestamp) {
-	entry->timestamp = timestamp;
-	mapping[entry->name]->timestamp = timestamp;
+void CatalogSet::UpdateTimestamp(CatalogEntry &entry, transaction_t timestamp) {
+	entry.timestamp = timestamp;
+	mapping[entry.name]->timestamp = timestamp;
 }
 
-void CatalogSet::AdjustUserDependency(CatalogEntry *entry, ColumnDefinition &column, bool remove) {
+void CatalogSet::AdjustUserDependency(CatalogEntry &entry, ColumnDefinition &column, bool remove) {
 	CatalogEntry *user_type_catalog = (CatalogEntry *)LogicalType::GetCatalog(column.Type());
 	if (user_type_catalog) {
 		auto &dependency_manager = catalog.GetDependencyManager();
 		if (remove) {
-			dependency_manager.dependents_map[user_type_catalog].erase(entry->parent);
-			dependency_manager.dependencies_map[entry->parent].erase(user_type_catalog);
+			dependency_manager.dependents_map[user_type_catalog].erase(entry.parent);
+			dependency_manager.dependencies_map[entry.parent].erase(user_type_catalog);
 		} else {
-			dependency_manager.dependents_map[user_type_catalog].insert(entry);
-			dependency_manager.dependencies_map[entry].insert(user_type_catalog);
+			dependency_manager.dependents_map[user_type_catalog].insert(&entry);
+			dependency_manager.dependencies_map[&entry].insert(user_type_catalog);
 		}
 	}
 }
 
-void CatalogSet::AdjustDependency(CatalogEntry *entry, TableCatalogEntry *table, ColumnDefinition &column,
+void CatalogSet::AdjustDependency(CatalogEntry &entry, TableCatalogEntry &table, ColumnDefinition &column,
                                   bool remove) {
 	bool found = false;
 	if (column.Type().id() == LogicalTypeId::ENUM) {
-		for (auto &old_column : table->GetColumns().Logical()) {
+		for (auto &old_column : table.GetColumns().Logical()) {
 			if (old_column.Name() == column.Name() && old_column.Type().id() != LogicalTypeId::ENUM) {
 				AdjustUserDependency(entry, column, remove);
 				found = true;
@@ -575,7 +575,7 @@ void CatalogSet::AdjustDependency(CatalogEntry *entry, TableCatalogEntry *table,
 		}
 	} else if (!(column.Type().GetAlias().empty())) {
 		auto alias = column.Type().GetAlias();
-		for (auto &old_column : table->GetColumns().Logical()) {
+		for (auto &old_column : table.GetColumns().Logical()) {
 			auto old_alias = old_column.Type().GetAlias();
 			if (old_column.Name() == column.Name() && old_alias != alias) {
 				AdjustUserDependency(entry, column, remove);
@@ -588,24 +588,24 @@ void CatalogSet::AdjustDependency(CatalogEntry *entry, TableCatalogEntry *table,
 	}
 }
 
-void CatalogSet::AdjustTableDependencies(CatalogEntry *entry) {
-	if (entry->type == CatalogType::TABLE_ENTRY && entry->parent->type == CatalogType::TABLE_ENTRY) {
+void CatalogSet::AdjustTableDependencies(CatalogEntry &entry) {
+	if (entry.type == CatalogType::TABLE_ENTRY && entry.parent->type == CatalogType::TABLE_ENTRY) {
 		// If it's a table entry we have to check for possibly removing or adding user type dependencies
-		auto old_table = (TableCatalogEntry *)entry->parent;
-		auto new_table = (TableCatalogEntry *)entry;
+		auto &old_table = entry.parent->Cast<TableCatalogEntry>();
+		auto &new_table = entry.Cast<TableCatalogEntry>();
 
-		for (idx_t i = 0; i < new_table->GetColumns().LogicalColumnCount(); i++) {
-			auto &new_column = new_table->GetColumnsMutable().GetColumnMutable(LogicalIndex(i));
+		for (idx_t i = 0; i < new_table.GetColumns().LogicalColumnCount(); i++) {
+			auto &new_column = new_table.GetColumnsMutable().GetColumnMutable(LogicalIndex(i));
 			AdjustDependency(entry, old_table, new_column, false);
 		}
-		for (idx_t i = 0; i < old_table->GetColumns().LogicalColumnCount(); i++) {
-			auto &old_column = old_table->GetColumnsMutable().GetColumnMutable(LogicalIndex(i));
+		for (idx_t i = 0; i < old_table.GetColumns().LogicalColumnCount(); i++) {
+			auto &old_column = old_table.GetColumnsMutable().GetColumnMutable(LogicalIndex(i));
 			AdjustDependency(entry, new_table, old_column, true);
 		}
 	}
 }
 
-void CatalogSet::Undo(CatalogEntry *entry) {
+void CatalogSet::Undo(CatalogEntry &entry) {
 	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 	lock_guard<mutex> lock(catalog_lock);
 
@@ -613,7 +613,7 @@ void CatalogSet::Undo(CatalogEntry *entry) {
 	// and entry->parent has to be removed ("rolled back")
 
 	// i.e. we have to place (entry) as (entry->parent) again
-	auto &to_be_removed_node = entry->parent;
+	auto &to_be_removed_node = entry.parent;
 
 	AdjustTableDependencies(entry);
 
@@ -622,7 +622,7 @@ void CatalogSet::Undo(CatalogEntry *entry) {
 		auto &dependency_manager = catalog.GetDependencyManager();
 		dependency_manager.EraseObject(to_be_removed_node);
 	}
-	if (entry->name != to_be_removed_node->name) {
+	if (entry.name != to_be_removed_node->name) {
 		// rename: clean up the new name when the rename is rolled back
 		auto removed_entry = mapping.find(to_be_removed_node->name);
 		if (removed_entry->second->child) {
@@ -636,21 +636,21 @@ void CatalogSet::Undo(CatalogEntry *entry) {
 		// if the to be removed node has a parent, set the child pointer to the
 		// to be restored node
 		to_be_removed_node->parent->child = std::move(to_be_removed_node->child);
-		entry->parent = to_be_removed_node->parent;
+		entry.parent = to_be_removed_node->parent;
 	} else {
 		// otherwise we need to update the base entry tables
-		auto &name = entry->name;
+		auto &name = entry.name;
 		to_be_removed_node->child->SetAsRoot();
 		mapping[name]->index.GetEntry() = std::move(to_be_removed_node->child);
-		entry->parent = nullptr;
+		entry.parent = nullptr;
 	}
 
 	// restore the name if it was deleted
-	auto restored_entry = mapping.find(entry->name);
-	if (restored_entry->second->deleted || entry->type == CatalogType::INVALID) {
+	auto restored_entry = mapping.find(entry.name);
+	if (restored_entry->second->deleted || entry.type == CatalogType::INVALID) {
 		if (restored_entry->second->child) {
 			restored_entry->second->child->parent = nullptr;
-			mapping[entry->name] = std::move(restored_entry->second->child);
+			mapping[entry.name] = std::move(restored_entry->second->child);
 		} else {
 			mapping.erase(restored_entry);
 		}

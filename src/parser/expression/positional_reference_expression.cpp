@@ -24,7 +24,7 @@ bool PositionalReferenceExpression::Equal(const PositionalReferenceExpression *a
 }
 
 unique_ptr<ParsedExpression> PositionalReferenceExpression::Copy() const {
-	auto copy = make_unique<PositionalReferenceExpression>(index);
+	auto copy = make_uniq<PositionalReferenceExpression>(index);
 	copy->CopyProperties(*this);
 	return std::move(copy);
 }
@@ -39,7 +39,7 @@ void PositionalReferenceExpression::Serialize(FieldWriter &writer) const {
 }
 
 unique_ptr<ParsedExpression> PositionalReferenceExpression::Deserialize(ExpressionType type, FieldReader &reader) {
-	auto expression = make_unique<PositionalReferenceExpression>(reader.ReadRequired<idx_t>());
+	auto expression = make_uniq<PositionalReferenceExpression>(reader.ReadRequired<idx_t>());
 	return std::move(expression);
 }
 
@@ -50,7 +50,7 @@ void PositionalReferenceExpression::FormatSerialize(FormatSerializer &serializer
 
 unique_ptr<ParsedExpression> PositionalReferenceExpression::FormatDeserialize(ExpressionType type,
                                                                               FormatDeserializer &deserializer) {
-	auto expression = make_unique<PositionalReferenceExpression>(deserializer.ReadProperty<idx_t>("index"));
+	auto expression = make_uniq<PositionalReferenceExpression>(deserializer.ReadProperty<idx_t>("index"));
 	return std::move(expression);
 }
 

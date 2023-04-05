@@ -175,7 +175,7 @@ enum ConfigurationError { None, BenchmarkNotFound, InfoWithoutBenchmarkName };
 
 void LoadInterpretedBenchmarks() {
 	// load interpreted benchmarks
-	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	listFiles(*fs, "benchmark", [](const string &path) {
 		if (endsWith(path, ".benchmark")) {
 			new InterpretedBenchmark(path);

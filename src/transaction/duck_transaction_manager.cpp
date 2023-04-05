@@ -81,7 +81,7 @@ Transaction *DuckTransactionManager::StartTransaction(ClientContext &context) {
 	}
 
 	// create the actual transaction
-	auto transaction = make_unique<DuckTransaction>(*this, context, start_time, transaction_id);
+	auto transaction = make_uniq<DuckTransaction>(*this, context, start_time, transaction_id);
 	auto transaction_ptr = transaction.get();
 
 	// store it in the set of active transactions
@@ -91,7 +91,7 @@ Transaction *DuckTransactionManager::StartTransaction(ClientContext &context) {
 
 struct ClientLockWrapper {
 	ClientLockWrapper(mutex &client_lock, shared_ptr<ClientContext> connection)
-	    : connection(std::move(connection)), connection_lock(make_unique<lock_guard<mutex>>(client_lock)) {
+	    : connection(std::move(connection)), connection_lock(make_uniq<lock_guard<mutex>>(client_lock)) {
 	}
 
 	shared_ptr<ClientContext> connection;
@@ -186,7 +186,7 @@ bool DuckTransactionManager::CanCheckpoint(DuckTransaction *current) {
 string DuckTransactionManager::CommitTransaction(ClientContext &context, Transaction *transaction_p) {
 	auto transaction = (DuckTransaction *)transaction_p;
 	vector<ClientLockWrapper> client_locks;
-	auto lock = make_unique<lock_guard<mutex>>(transaction_lock);
+	auto lock = make_uniq<lock_guard<mutex>>(transaction_lock);
 	CheckpointLock checkpoint_lock(*this);
 	// check if we can checkpoint
 	bool checkpoint = thread_is_checkpointing ? false : CanCheckpoint(transaction);
@@ -199,7 +199,7 @@ string DuckTransactionManager::CommitTransaction(ClientContext &context, Transac
 
 			LockClients(client_locks, context);
 
-			lock = make_unique<lock_guard<mutex>>(transaction_lock);
+			lock = make_uniq<lock_guard<mutex>>(transaction_lock);
 			checkpoint = CanCheckpoint(transaction);
 			if (!checkpoint) {
 				checkpoint_lock.Unlock();

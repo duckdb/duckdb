@@ -18,7 +18,7 @@ SequenceCatalogEntry::SequenceCatalogEntry(Catalog *catalog, SchemaCatalogEntry 
 	this->temporary = info->temporary;
 }
 
-void SequenceCatalogEntry::Serialize(Serializer &serializer) {
+void SequenceCatalogEntry::Serialize(Serializer &serializer) const {
 	FieldWriter writer(serializer);
 	writer.WriteString(schema->name);
 	writer.WriteString(name);
@@ -32,7 +32,7 @@ void SequenceCatalogEntry::Serialize(Serializer &serializer) {
 }
 
 unique_ptr<CreateSequenceInfo> SequenceCatalogEntry::Deserialize(Deserializer &source) {
-	auto info = make_unique<CreateSequenceInfo>();
+	auto info = make_uniq<CreateSequenceInfo>();
 
 	FieldReader reader(source);
 	info->schema = reader.ReadRequired<string>();
@@ -48,7 +48,7 @@ unique_ptr<CreateSequenceInfo> SequenceCatalogEntry::Deserialize(Deserializer &s
 	return info;
 }
 
-string SequenceCatalogEntry::ToSQL() {
+string SequenceCatalogEntry::ToSQL() const {
 	std::stringstream ss;
 	ss << "CREATE SEQUENCE ";
 	ss << name;

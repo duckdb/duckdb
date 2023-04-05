@@ -28,7 +28,7 @@ struct AttachInfo : public ParseInfo {
 
 public:
 	unique_ptr<AttachInfo> Copy() const {
-		auto result = make_unique<AttachInfo>();
+		auto result = make_uniq<AttachInfo>();
 		result->name = name;
 		result->path = path;
 		result->options = options;

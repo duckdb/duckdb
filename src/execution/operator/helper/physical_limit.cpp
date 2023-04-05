@@ -47,11 +47,11 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalLimit::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<LimitGlobalState>(context, *this);
+	return make_uniq<LimitGlobalState>(context, *this);
 }
 
 unique_ptr<LocalSinkState> PhysicalLimit::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<LimitLocalState>(context.client, *this);
+	return make_uniq<LimitLocalState>(context.client, *this);
 }
 
 bool PhysicalLimit::ComputeOffset(ExecutionContext &context, DataChunk &input, idx_t &limit, idx_t &offset,
@@ -96,7 +96,7 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
                                    DataChunk &input) const {
 
 	D_ASSERT(input.size() > 0);
-	auto &state = (LimitLocalState &)lstate;
+	auto &state = lstate.Cast<LimitLocalState>();
 	auto &limit = state.limit;
 	auto &offset = state.offset;
 
@@ -118,8 +118,8 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
 }
 
 void PhysicalLimit::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {
-	auto &gstate = (LimitGlobalState &)gstate_p;
-	auto &state = (LimitLocalState &)lstate_p;
+	auto &gstate = gstate_p.Cast<LimitGlobalState>();
+	auto &state = lstate_p.Cast<LimitLocalState>();
 
 	lock_guard<mutex> lock(gstate.glock);
 	gstate.limit = state.limit;
@@ -143,13 +143,13 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalLimit::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<LimitSourceState>();
+	return make_uniq<LimitSourceState>();
 }
 
 void PhysicalLimit::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                             LocalSourceState &lstate) const {
-	auto &gstate = (LimitGlobalState &)*sink_state;
-	auto &state = (LimitSourceState &)gstate_p;
+	auto &gstate = sink_state->Cast<LimitGlobalState>();
+	auto &state = gstate_p.Cast<LimitSourceState>();
 	while (state.current_offset < gstate.limit + gstate.offset) {
 		if (!state.initialized) {
 			gstate.data.InitializeScan(state.scan_state);

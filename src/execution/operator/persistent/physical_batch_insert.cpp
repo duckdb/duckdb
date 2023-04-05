@@ -192,6 +192,7 @@ public:
 					for (idx_t i = start_batch_index; i <= end_batch_index; i++) {
 						if (i == batch_index) {
 							merge_collections.push_back(std::move(current_collection));
+							current_collection.reset();
 							continue;
 						}
 						auto can_merge = CheckMerge(i, merge_collections);
@@ -204,6 +205,7 @@ public:
 			if (merge_collections.empty()) {
 				// no collections to merge together - add the collection to the batch index
 				collections[batch_index] = std::move(current_collection);
+				current_collection.reset();
 			}
 		}
 		if (!merge_collections.empty()) {
@@ -254,7 +256,7 @@ public:
 	void CreateNewCollection(DuckTableEntry *table, const vector<LogicalType> &insert_types) {
 		auto &table_info = table->GetStorage().info;
 		auto &block_manager = TableIOManager::Get(table->GetStorage()).GetBlockManagerForRowData();
-		current_collection = make_unique<RowGroupCollection>(table_info, block_manager, insert_types, MAX_ROW_ID);
+		current_collection = make_uniq<RowGroupCollection>(table_info, block_manager, insert_types, MAX_ROW_ID);
 		current_collection->InitializeEmpty();
 		current_collection->InitializeAppend(current_append_state);
 		written_to_disk = false;
@@ -262,7 +264,7 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContext &context) const {
-	auto result = make_unique<BatchInsertGlobalState>();
+	auto result = make_uniq<BatchInsertGlobalState>();
 	if (info) {
 		// CREATE TABLE AS
 		D_ASSERT(!insert_table);
@@ -278,13 +280,13 @@ unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContex
 }
 
 unique_ptr<LocalSinkState> PhysicalBatchInsert::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<BatchInsertLocalState>(context.client, insert_types, bound_defaults);
+	return make_uniq<BatchInsertLocalState>(context.client, insert_types, bound_defaults);
 }
 
 SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
                                          DataChunk &chunk) const {
-	auto &gstate = (BatchInsertGlobalState &)state;
-	auto &lstate = (BatchInsertLocalState &)lstate_p;
+	auto &gstate = state.Cast<BatchInsertGlobalState>();
+	auto &lstate = lstate_p.Cast<BatchInsertLocalState>();
 
 	auto table = gstate.table;
 	PhysicalInsert::ResolveDefaults(table, chunk, column_index_map, lstate.default_executor, lstate.insert_chunk);
@@ -317,8 +319,8 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkSt
 
 void PhysicalBatchInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_p,
                                   LocalSinkState &lstate_p) const {
-	auto &gstate = (BatchInsertGlobalState &)gstate_p;
-	auto &lstate = (BatchInsertLocalState &)lstate_p;
+	auto &gstate = gstate_p.Cast<BatchInsertGlobalState>();
+	auto &lstate = lstate_p.Cast<BatchInsertLocalState>();
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(this, &lstate.default_executor, "default_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
@@ -336,7 +338,7 @@ void PhysicalBatchInsert::Combine(ExecutionContext &context, GlobalSinkState &gs
 
 SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                GlobalSinkState &gstate_p) const {
-	auto &gstate = (BatchInsertGlobalState &)gstate_p;
+	auto &gstate = gstate_p.Cast<BatchInsertGlobalState>();
 
 	// in the finalize, do a final pass over all of the collections we created and try to merge smaller collections
 	// together
@@ -348,7 +350,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 		if (collection.second->GetTotalRows() < LocalStorage::MERGE_THRESHOLD) {
 			// this collection has very few rows: add it to the merge set
 			if (!current_merger) {
-				current_merger = make_unique<CollectionMerger>(context);
+				current_merger = make_uniq<CollectionMerger>(context);
 			}
 			current_merger->AddCollection(std::move(collection.second));
 		} else {
@@ -359,7 +361,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 				mergers.push_back(std::move(current_merger));
 				current_merger.reset();
 			}
-			auto larger_merger = make_unique<CollectionMerger>(context);
+			auto larger_merger = make_uniq<CollectionMerger>(context);
 			larger_merger->AddCollection(std::move(collection.second));
 			mergers.push_back(std::move(larger_merger));
 		}
@@ -396,13 +398,13 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalBatchInsert::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<BatchInsertSourceState>();
+	return make_uniq<BatchInsertSourceState>();
 }
 
 void PhysicalBatchInsert::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                                   LocalSourceState &lstate) const {
-	auto &state = (BatchInsertSourceState &)gstate;
-	auto &insert_gstate = (BatchInsertGlobalState &)*sink_state;
+	auto &state = gstate.Cast<BatchInsertSourceState>();
+	auto &insert_gstate = sink_state->Cast<BatchInsertGlobalState>();
 	if (state.finished) {
 		return;
 	}

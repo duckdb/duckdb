@@ -35,6 +35,9 @@ INSERT INTO Cities VALUES ('US', 'New York City', 2010, 8175);
 statement ok
 INSERT INTO Cities VALUES ('US', 'New York City', 2020, 8772);
 
+statement ok
+PIVOT Cities ON Country, Name IN ('xx') USING SUM(Population);
+
 query IIIII
 PIVOT Cities ON Year USING SUM(Population);
 ----
@@ -121,9 +124,12 @@ USING (Country)
 NL	1005	1065	1158	3228	NULL	NULL
 US	8579	8783	9510	NULL	24962	1910
 
-statement error
+query II
 PIVOT Cities ON (Country, Name) IN ('xx') USING SUM(Population);
 ----
+2000	NULL
+2010	NULL
+2020	NULL
 
 query IIIIIII
 PIVOT (SELECT Country, Population, Year FROM Cities) ON Year USING SUM(Population) as sum_pop, count(population) as count_pop,;

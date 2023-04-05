@@ -188,6 +188,13 @@ extern "C" SEXP _duckdb_rapi_rel_tostring(SEXP rel) {
   END_CPP11
 }
 // relational.cpp
+std::string rapi_rel_to_sql(duckdb::rel_extptr_t rel);
+extern "C" SEXP _duckdb_rapi_rel_to_sql(SEXP rel) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rapi_rel_to_sql(cpp11::as_cpp<cpp11::decay_t<duckdb::rel_extptr_t>>(rel)));
+  END_CPP11
+}
+// relational.cpp
 SEXP rapi_rel_explain(duckdb::rel_extptr_t rel);
 extern "C" SEXP _duckdb_rapi_rel_explain(SEXP rel) {
   BEGIN_CPP11
@@ -393,6 +400,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_duckdb_rapi_rel_sql",                (DL_FUNC) &_duckdb_rapi_rel_sql,                2},
     {"_duckdb_rapi_rel_to_altrep",          (DL_FUNC) &_duckdb_rapi_rel_to_altrep,          1},
     {"_duckdb_rapi_rel_to_df",              (DL_FUNC) &_duckdb_rapi_rel_to_df,              1},
+    {"_duckdb_rapi_rel_to_sql",             (DL_FUNC) &_duckdb_rapi_rel_to_sql,             1},
     {"_duckdb_rapi_rel_tostring",           (DL_FUNC) &_duckdb_rapi_rel_tostring,           1},
     {"_duckdb_rapi_rel_union_all",          (DL_FUNC) &_duckdb_rapi_rel_union_all,          2},
     {"_duckdb_rapi_release",                (DL_FUNC) &_duckdb_rapi_release,                1},

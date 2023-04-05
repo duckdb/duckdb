@@ -16,7 +16,12 @@ namespace duckdb {
 //! This inequality matches the greatest value on the right that satisfies the condition.
 class LogicalAsOfJoin : public LogicalComparisonJoin {
 public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_ASOF_JOIN;
+
+public:
 	explicit LogicalAsOfJoin(JoinType type);
+
+	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 };
 
 } // namespace duckdb

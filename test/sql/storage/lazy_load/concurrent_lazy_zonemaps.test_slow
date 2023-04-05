@@ -1,4 +1,4 @@
-# name: test/sql/storage/lazy_load/concurrent_lazy_zonemaps.test
+# name: test/sql/storage/lazy_load/concurrent_lazy_zonemaps.test_slow
 # description: Test concurrent lazy load + zonemap lookups
 # group: [lazy_load]
 

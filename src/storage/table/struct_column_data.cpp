@@ -203,7 +203,7 @@ void StructColumnData::FetchRow(TransactionData transaction, ColumnFetchState &s
 	auto &child_entries = StructVector::GetEntries(result);
 	// insert any child states that are required
 	for (idx_t i = state.child_states.size(); i < child_entries.size() + 1; i++) {
-		auto child_state = make_unique<ColumnFetchState>();
+		auto child_state = make_uniq<ColumnFetchState>();
 		state.child_states.push_back(std::move(child_state));
 	}
 	// fetch the validity state
@@ -256,13 +256,13 @@ public:
 
 unique_ptr<ColumnCheckpointState> StructColumnData::CreateCheckpointState(RowGroup &row_group,
                                                                           PartialBlockManager &partial_block_manager) {
-	return make_unique<StructColumnCheckpointState>(row_group, *this, partial_block_manager);
+	return make_uniq<StructColumnCheckpointState>(row_group, *this, partial_block_manager);
 }
 
 unique_ptr<ColumnCheckpointState> StructColumnData::Checkpoint(RowGroup &row_group,
                                                                PartialBlockManager &partial_block_manager,
                                                                ColumnCheckpointInfo &checkpoint_info) {
-	auto checkpoint_state = make_unique<StructColumnCheckpointState>(row_group, *this, partial_block_manager);
+	auto checkpoint_state = make_uniq<StructColumnCheckpointState>(row_group, *this, partial_block_manager);
 	checkpoint_state->validity_state = validity.Checkpoint(row_group, partial_block_manager, checkpoint_info);
 	for (auto &sub_column : sub_columns) {
 		checkpoint_state->child_states.push_back(

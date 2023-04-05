@@ -30,8 +30,8 @@ class RecursiveCTEState : public GlobalSinkState {
 public:
 	explicit RecursiveCTEState(ClientContext &context, const PhysicalRecursiveCTE &op)
 	    : intermediate_table(context, op.GetTypes()), new_groups(STANDARD_VECTOR_SIZE) {
-		ht = make_unique<GroupedAggregateHashTable>(context, Allocator::Get(context), op.types, vector<LogicalType>(),
-		                                            vector<BoundAggregateExpression *>());
+		ht = make_uniq<GroupedAggregateHashTable>(context, Allocator::Get(context), op.types, vector<LogicalType>(),
+		                                          vector<BoundAggregateExpression *>());
 	}
 
 	unique_ptr<GroupedAggregateHashTable> ht;
@@ -46,7 +46,7 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalRecursiveCTE::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<RecursiveCTEState>(context, *this);
+	return make_uniq<RecursiveCTEState>(context, *this);
 }
 
 idx_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, RecursiveCTEState &state) const {
@@ -63,7 +63,7 @@ idx_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, RecursiveCTEState &state) 
 
 SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
                                           DataChunk &input) const {
-	auto &gstate = (RecursiveCTEState &)state;
+	auto &gstate = state.Cast<RecursiveCTEState>();
 	if (!union_all) {
 		idx_t match_count = ProbeHT(input, gstate);
 		if (match_count > 0) {
@@ -80,7 +80,7 @@ SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, GlobalSinkS
 //===--------------------------------------------------------------------===//
 void PhysicalRecursiveCTE::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                                    LocalSourceState &lstate) const {
-	auto &gstate = (RecursiveCTEState &)*sink_state;
+	auto &gstate = sink_state->Cast<RecursiveCTEState>();
 	if (!gstate.initialized) {
 		gstate.intermediate_table.InitializeScan(gstate.scan_state);
 		gstate.finished_scan = false;

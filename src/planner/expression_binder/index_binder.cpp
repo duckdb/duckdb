@@ -23,7 +23,7 @@ BindResult IndexBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, i
 			// WAL replay
 			// we assume that the parsed expressions have qualified column names
 			// and that the columns exist in the table
-			auto &col_ref = (ColumnRefExpression &)expr;
+			auto &col_ref = expr.Cast<ColumnRefExpression>();
 			auto col_idx = table->GetColumnIndex(col_ref.column_names.back());
 			auto col_type = table->GetColumn(col_idx).GetType();
 
@@ -39,7 +39,7 @@ BindResult IndexBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, i
 				throw InternalException("failed to replay CREATE INDEX statement - column id not found");
 			}
 			return BindResult(
-			    make_unique<BoundColumnRefExpression>(col_ref.alias, col_type, ColumnBinding(0, col_id_idx)));
+			    make_uniq<BoundColumnRefExpression>(col_ref.alias, col_type, ColumnBinding(0, col_id_idx)));
 		}
 		return ExpressionBinder::BindExpression(expr_ptr, depth);
 	}

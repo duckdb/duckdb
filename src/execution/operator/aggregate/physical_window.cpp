@@ -35,7 +35,7 @@ public:
 		D_ASSERT(op.select_list[0]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 		auto wexpr = reinterpret_cast<BoundWindowExpression *>(op.select_list[0].get());
 
-		global_partition = make_unique<PartitionGlobalSinkState>(context, wexpr->partitions, wexpr->orders, op.children[0]->types, wexpr->partitions_stats, op.estimated_cardinality);
+		global_partition = make_uniq<PartitionGlobalSinkState>(context, wexpr->partitions, wexpr->orders, op.children[0]->types, wexpr->partitions_stats, op.estimated_cardinality);
 	}
 
 	const PhysicalWindow &op;
@@ -48,7 +48,7 @@ public:
 class WindowLocalSinkState : public LocalSinkState {
 public:
 	WindowLocalSinkState(ClientContext &context, const WindowGlobalSinkState &gstate) {
-		local_partition = make_unique<PartitionLocalSinkState>(context, *gstate.global_partition);
+		local_partition = make_uniq<PartitionLocalSinkState>(context, *gstate.global_partition);
 	}
 
 	void Sink(DataChunk &input_chunk) {
@@ -69,7 +69,7 @@ PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expr
 	is_order_dependent = false;
 	for (auto &expr : select_list) {
 		D_ASSERT(expr->expression_class == ExpressionClass::BOUND_WINDOW);
-		auto &bound_window = (BoundWindowExpression &)*expr;
+		auto &bound_window = expr->Cast<BoundWindowExpression>();
 		if (bound_window.partitions.empty() && bound_window.orders.empty()) {
 			is_order_dependent = true;
 		}
@@ -214,7 +214,7 @@ struct WindowInputColumn {
 	WindowInputColumn(Expression *expr_p, ClientContext &context, idx_t capacity_p)
 	    : input_expr(expr_p, context), count(0), capacity(capacity_p) {
 		if (input_expr.expr) {
-			target = make_unique<Vector>(input_expr.chunk.data[0].GetType(), capacity);
+			target = make_uniq<Vector>(input_expr.chunk.data[0].GetType(), capacity);
 		}
 	}
 
@@ -728,8 +728,8 @@ WindowExecutor::WindowExecutor(BoundWindowExpression *wexpr, ClientContext &cont
 
 	//	Check for constant aggregate
 	if (IsConstantAggregate(*wexpr)) {
-		constant_aggregate = make_unique<WindowConstantAggregate>(*(wexpr->aggregate), wexpr->bind_info.get(),
-		                                                          wexpr->return_type, partition_mask, count);
+		constant_aggregate = make_uniq<WindowConstantAggregate>(*(wexpr->aggregate), wexpr->bind_info.get(),
+		                                                        wexpr->return_type, partition_mask, count);
 	}
 
 	// evaluate the FILTER clause and stuff it into a large mask for compactness and reuse
@@ -835,8 +835,8 @@ void WindowExecutor::Finalize(WindowAggregationMode mode) {
 	if (constant_aggregate) {
 		constant_aggregate->Finalize();
 	} else if (wexpr->aggregate) {
-		segment_tree = make_unique<WindowSegmentTree>(*(wexpr->aggregate), wexpr->bind_info.get(), wexpr->return_type,
-		                                              &payload_collection, filter_mask, mode);
+		segment_tree = make_uniq<WindowSegmentTree>(*(wexpr->aggregate), wexpr->bind_info.get(), wexpr->return_type,
+		                                            &payload_collection, filter_mask, mode);
 	}
 }
 
@@ -1038,7 +1038,7 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 //===--------------------------------------------------------------------===//
 SinkResultType PhysicalWindow::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
                                     DataChunk &input) const {
-	auto &lstate = (WindowLocalSinkState &)lstate_p;
+	auto &lstate = lstate_p.Cast<WindowLocalSinkState>();
 
 	lstate.Sink(input);
 
@@ -1046,22 +1046,22 @@ SinkResultType PhysicalWindow::Sink(ExecutionContext &context, GlobalSinkState &
 }
 
 void PhysicalWindow::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {
-	auto &lstate = (WindowLocalSinkState &)lstate_p;
+	auto &lstate = lstate_p.Cast<WindowLocalSinkState>();
 	lstate.Combine();
 }
 
 unique_ptr<LocalSinkState> PhysicalWindow::GetLocalSinkState(ExecutionContext &context) const {
-	auto &gstate = (WindowGlobalSinkState&)*sink_state;
-	return make_unique<WindowLocalSinkState>(context.client, gstate);
+	auto &gstate = sink_state->Cast<WindowGlobalSinkState>();
+	return make_uniq<WindowLocalSinkState>(context.client, gstate);
 }
 
 unique_ptr<GlobalSinkState> PhysicalWindow::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<WindowGlobalSinkState>(*this, context);
+	return make_uniq<WindowGlobalSinkState>(*this, context);
 }
 
 SinkFinalizeType PhysicalWindow::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                           GlobalSinkState &gstate_p) const {
-	auto &state = (WindowGlobalSinkState &)gstate_p;
+	auto &state = gstate_p.Cast<WindowGlobalSinkState>();
 
 	//	Did we get any data?
 	if (!state.global_partition->count) {
@@ -1149,13 +1149,12 @@ void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, co
 	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
 		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 		auto wexpr = reinterpret_cast<BoundWindowExpression *>(op.select_list[expr_idx].get());
-		auto wexec = make_unique<WindowExecutor>(wexpr, context, partition_mask, count);
+		auto wexec = make_uniq<WindowExecutor>(wexpr, context, partition_mask, count);
 		window_execs.emplace_back(std::move(wexec));
 	}
 
 	//	First pass over the input without flushing
 	//	TODO: Factor out the constructor data as global state
-
 	idx_t input_idx = 0;
 	while (true) {
 		partition_source.input_chunk.Reset();
@@ -1217,22 +1216,22 @@ void WindowLocalSourceState::Scan(DataChunk &result) {
 
 unique_ptr<LocalSourceState> PhysicalWindow::GetLocalSourceState(ExecutionContext &context,
                                                                  GlobalSourceState &gstate_p) const {
-	auto &gstate = (WindowGlobalSourceState &)gstate_p;
-	return make_unique<WindowLocalSourceState>(*this, context, gstate);
+	auto &gstate = gstate_p.Cast<WindowGlobalSourceState>();
+	return make_uniq<WindowLocalSourceState>(*this, context, gstate);
 }
 
 unique_ptr<GlobalSourceState> PhysicalWindow::GetGlobalSourceState(ClientContext &context) const {
-	auto &gsink = (WindowGlobalSinkState&) *sink_state;
-	return make_unique<WindowGlobalSourceState>(gsink);
+	auto &gsink = sink_state->Cast<WindowGlobalSinkState>();
+	return make_uniq<WindowGlobalSourceState>(gsink);
 }
 
 void PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                              LocalSourceState &lstate_p) const {
-	auto &lsource = (WindowLocalSourceState &)lstate_p;
+	auto &lsource = lstate_p.Cast<WindowLocalSourceState>();
 	auto &lpsource = lsource.partition_source;
-	auto &gsource = (WindowGlobalSourceState &)gstate_p;
+	auto &gsource = gstate_p.Cast<WindowGlobalSourceState>();
 	auto &gpsource = gsource.partition_source;
-	auto &gsink = (WindowGlobalSinkState &)*sink_state;
+	auto &gsink = sink_state->Cast<WindowGlobalSinkState>();
 
 	auto &hash_groups = gsink.global_partition->hash_groups;
 	const auto bin_count = hash_groups.empty() ? 1 : hash_groups.size();
