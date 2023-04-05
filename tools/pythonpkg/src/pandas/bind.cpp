@@ -98,8 +98,8 @@ static LogicalType BindColumn(PandasBindColumn column_p, PandasColumnBindData &b
 	} else {
 		auto pandas_array = column.attr("array");
 		if (py::hasattr(pandas_array, "__arrow_array__")) {
-			bind_data.numpy_col = make_uniq<PandasArrowColumn>(pandas_array.attr("__arrow_array__")(),
-			                                                     ClientConfig::GetConfig(context));
+			bind_data.numpy_col =
+			    make_uniq<PandasArrowColumn>(pandas_array.attr("__arrow_array__")(), ClientConfig::GetConfig(context));
 		} else if (py::hasattr(pandas_array, "__array__")) {
 			// This means we can access the numpy array directly
 			bind_data.numpy_col = make_uniq<PandasNumpyColumn>(column.attr("array").attr("__array__")());
