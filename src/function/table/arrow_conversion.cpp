@@ -348,9 +348,10 @@ static void IntervalConversionMonthDayNanos(Vector &vector, ArrowArray &array, A
 	}
 }
 
-void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
-                         std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx,
-                         ArrowConvertDataIndices &arrow_convert_idx, int64_t nested_offset, ValidityMask *parent_mask) {
+static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
+                                std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
+                                idx_t col_idx, ArrowConvertDataIndices &arrow_convert_idx, int64_t nested_offset,
+                                ValidityMask *parent_mask) {
 	switch (vector.GetType().id()) {
 	case LogicalTypeId::SQLNULL:
 		vector.Reference(Value());
@@ -771,7 +772,7 @@ static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, Arr
                                           idx_t col_idx, ArrowConvertDataIndices &arrow_convert_idx) {
 	SelectionVector sel;
 	auto &dict_vectors = scan_state.arrow_dictionary_vectors;
-	if (dict_vectors.find(col_idx) == dict_vectors.end()) {
+	if (!dict_vectors.count(col_idx)) {
 		//! We need to set the dictionary data for this column
 		auto base_vector = make_uniq<Vector>(vector.GetType(), array.dictionary->length);
 		SetValidityMask(*base_vector, *array.dictionary, scan_state, array.dictionary->length, 0, array.null_count > 0);
@@ -804,6 +805,7 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state,
 		auto arrow_array_idx = arrow_scan_is_projected ? idx : col_idx;
 
 		if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
+			// This column is skipped by the projection pushdown
 			continue;
 		}
 
@@ -815,6 +817,7 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state,
 		if (array.length != scan_state.chunk->arrow_array.length) {
 			throw InvalidInputException("arrow_scan: array length mismatch");
 		}
+		// Make sure this Vector keeps the Arrow chunk alive in case we can zero-copy the data
 		output.data[idx].GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(scan_state.chunk));
 		if (array.dictionary) {
 			ColumnArrowToDuckDBDictionary(output.data[idx], array, scan_state, output.size(), arrow_convert_data,
