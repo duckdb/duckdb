@@ -169,7 +169,7 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalTableMacroIn
 	D_ASSERT(parser.statements.size() == 1);
 	D_ASSERT(parser.statements[0]->type == StatementType::SELECT_STATEMENT);
 
-	auto &select = (SelectStatement &) *parser.statements[0];
+	auto &select = parser.statements[0]->Cast<SelectStatement>();
 	auto result = make_uniq<TableMacroFunction>(std::move(select.node));
 	return CreateInternalTableMacroInfo(default_macro, std::move(result));
 }

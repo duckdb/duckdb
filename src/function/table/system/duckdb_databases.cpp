@@ -53,7 +53,7 @@ void DuckDBDatabasesFunction(ClientContext &context, TableFunctionInput &data_p,
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset++];
 
-		auto &attached = (AttachedDatabase &)*entry;
+		auto &attached = entry->Cast<AttachedDatabase>();
 		// return values:
 
 		idx_t col = 0;

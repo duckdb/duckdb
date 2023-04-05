@@ -110,8 +110,8 @@ unique_ptr<LocalSinkState> PhysicalPiecewiseMergeJoin::GetLocalSinkState(Executi
 
 SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, GlobalSinkState &gstate_p,
                                                 LocalSinkState &lstate_p, DataChunk &input) const {
-	auto &gstate = (MergeJoinGlobalState &)gstate_p;
-	auto &lstate = (MergeJoinLocalState &)lstate_p;
+	auto &gstate = gstate_p.Cast<MergeJoinGlobalState>();
+	auto &lstate = lstate_p.Cast<MergeJoinLocalState>();
 
 	gstate.Sink(input, lstate);
 
@@ -120,8 +120,8 @@ SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, Globa
 
 void PhysicalPiecewiseMergeJoin::Combine(ExecutionContext &context, GlobalSinkState &gstate_p,
                                          LocalSinkState &lstate_p) const {
-	auto &gstate = (MergeJoinGlobalState &)gstate_p;
-	auto &lstate = (MergeJoinLocalState &)lstate_p;
+	auto &gstate = gstate_p.Cast<MergeJoinGlobalState>();
+	auto &lstate = lstate_p.Cast<MergeJoinLocalState>();
 	gstate.table->Combine(lstate.table);
 	auto &client_profiler = QueryProfiler::Get(context.client);
 
@@ -134,7 +134,7 @@ void PhysicalPiecewiseMergeJoin::Combine(ExecutionContext &context, GlobalSinkSt
 //===--------------------------------------------------------------------===//
 SinkFinalizeType PhysicalPiecewiseMergeJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                       GlobalSinkState &gstate_p) const {
-	auto &gstate = (MergeJoinGlobalState &)gstate_p;
+	auto &gstate = gstate_p.Cast<MergeJoinGlobalState>();
 	auto &global_sort_state = gstate.table->global_sort_state;
 
 	if (IsRightOuterJoin(join_type)) {
@@ -386,7 +386,7 @@ static idx_t MergeJoinSimpleBlocks(PiecewiseMergeJoinState &lstate, MergeJoinGlo
 void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                    OperatorState &state_p) const {
 	auto &state = (PiecewiseMergeJoinState &)state_p;
-	auto &gstate = (MergeJoinGlobalState &)*sink_state;
+	auto &gstate = sink_state->Cast<MergeJoinGlobalState>();
 
 	state.ResolveJoinKeys(input);
 	auto &lhs_table = *state.lhs_local_table;
@@ -508,7 +508,7 @@ static idx_t MergeJoinComplexBlocks(BlockMergeInfo &l, BlockMergeInfo &r, const 
 OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &input,
                                                                   DataChunk &chunk, OperatorState &state_p) const {
 	auto &state = (PiecewiseMergeJoinState &)state_p;
-	auto &gstate = (MergeJoinGlobalState &)*sink_state;
+	auto &gstate = sink_state->Cast<MergeJoinGlobalState>();
 	auto &rsorted = *gstate.table->global_sort_state.sorted_blocks[0];
 	const auto left_cols = input.ColumnCount();
 	const auto tail_cols = conditions.size() - 1;
@@ -623,7 +623,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 OperatorResultType PhysicalPiecewiseMergeJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input,
                                                                DataChunk &chunk, GlobalOperatorState &gstate_p,
                                                                OperatorState &state) const {
-	auto &gstate = (MergeJoinGlobalState &)*sink_state;
+	auto &gstate = sink_state->Cast<MergeJoinGlobalState>();
 
 	if (gstate.Count() == 0) {
 		// empty RHS
@@ -668,7 +668,7 @@ public:
 
 public:
 	idx_t MaxThreads() override {
-		auto &sink = (MergeJoinGlobalState &)*op.sink_state;
+		auto &sink = op.sink_state->Cast<MergeJoinGlobalState>();
 		return sink.Count() / (STANDARD_VECTOR_SIZE * idx_t(10));
 	}
 };
@@ -681,7 +681,7 @@ void PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, DataChunk &r
                                          LocalSourceState &lstate) const {
 	D_ASSERT(IsRightOuterJoin(join_type));
 	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
-	auto &sink = (MergeJoinGlobalState &)*sink_state;
+	auto &sink = sink_state->Cast<MergeJoinGlobalState>();
 	auto &state = (PiecewiseJoinScanState &)gstate;
 
 	lock_guard<mutex> l(state.lock);

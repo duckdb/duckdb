@@ -34,28 +34,28 @@ bool BoundAggregateExpression::Equals(const BaseExpression *other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundAggregateExpression *)other_p;
-	if (other->aggr_type != aggr_type) {
+	auto &other = other_p->Cast<BoundAggregateExpression>();
+	if (other.aggr_type != aggr_type) {
 		return false;
 	}
-	if (other->function != function) {
+	if (other.function != function) {
 		return false;
 	}
-	if (children.size() != other->children.size()) {
+	if (children.size() != other.children.size()) {
 		return false;
 	}
-	if (!Expression::Equals(other->filter.get(), filter.get())) {
+	if (!Expression::Equals(other.filter.get(), filter.get())) {
 		return false;
 	}
 	for (idx_t i = 0; i < children.size(); i++) {
-		if (!Expression::Equals(children[i].get(), other->children[i].get())) {
+		if (!Expression::Equals(children[i].get(), other.children[i].get())) {
 			return false;
 		}
 	}
-	if (!FunctionData::Equals(bind_info.get(), other->bind_info.get())) {
+	if (!FunctionData::Equals(bind_info.get(), other.bind_info.get())) {
 		return false;
 	}
-	if (!BoundOrderModifier::Equals(order_bys.get(), other->order_bys.get())) {
+	if (!BoundOrderModifier::Equals(order_bys.get(), other.order_bys.get())) {
 		return false;
 	}
 	return true;

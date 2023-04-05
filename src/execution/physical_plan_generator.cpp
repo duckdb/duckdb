@@ -8,6 +8,7 @@
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
+#include "duckdb/planner/operator/list.hpp"
 
 namespace duckdb {
 
@@ -68,118 +69,118 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_GET:
-		plan = CreatePlan((LogicalGet &)op);
+		plan = CreatePlan(op.Cast<LogicalGet>());
 		break;
 	case LogicalOperatorType::LOGICAL_PROJECTION:
-		plan = CreatePlan((LogicalProjection &)op);
+		plan = CreatePlan(op.Cast<LogicalProjection>());
 		break;
 	case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
-		plan = CreatePlan((LogicalEmptyResult &)op);
+		plan = CreatePlan(op.Cast<LogicalEmptyResult>());
 		break;
 	case LogicalOperatorType::LOGICAL_FILTER:
-		plan = CreatePlan((LogicalFilter &)op);
+		plan = CreatePlan(op.Cast<LogicalFilter>());
 		break;
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-		plan = CreatePlan((LogicalAggregate &)op);
+		plan = CreatePlan(op.Cast<LogicalAggregate>());
 		break;
 	case LogicalOperatorType::LOGICAL_WINDOW:
-		plan = CreatePlan((LogicalWindow &)op);
+		plan = CreatePlan(op.Cast<LogicalWindow>());
 		break;
 	case LogicalOperatorType::LOGICAL_UNNEST:
-		plan = CreatePlan((LogicalUnnest &)op);
+		plan = CreatePlan(op.Cast<LogicalUnnest>());
 		break;
 	case LogicalOperatorType::LOGICAL_LIMIT:
-		plan = CreatePlan((LogicalLimit &)op);
+		plan = CreatePlan(op.Cast<LogicalLimit>());
 		break;
 	case LogicalOperatorType::LOGICAL_LIMIT_PERCENT:
-		plan = CreatePlan((LogicalLimitPercent &)op);
+		plan = CreatePlan(op.Cast<LogicalLimitPercent>());
 		break;
 	case LogicalOperatorType::LOGICAL_SAMPLE:
-		plan = CreatePlan((LogicalSample &)op);
+		plan = CreatePlan(op.Cast<LogicalSample>());
 		break;
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
-		plan = CreatePlan((LogicalOrder &)op);
+		plan = CreatePlan(op.Cast<LogicalOrder>());
 		break;
 	case LogicalOperatorType::LOGICAL_TOP_N:
-		plan = CreatePlan((LogicalTopN &)op);
+		plan = CreatePlan(op.Cast<LogicalTopN>());
 		break;
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
-		plan = CreatePlan((LogicalCopyToFile &)op);
+		plan = CreatePlan(op.Cast<LogicalCopyToFile>());
 		break;
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
-		plan = CreatePlan((LogicalDummyScan &)op);
+		plan = CreatePlan(op.Cast<LogicalDummyScan>());
 		break;
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
-		plan = CreatePlan((LogicalAnyJoin &)op);
+		plan = CreatePlan(op.Cast<LogicalAnyJoin>());
 		break;
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
-		plan = CreatePlan((LogicalDelimJoin &)op);
+		plan = CreatePlan(op.Cast<LogicalDelimJoin>());
 		break;
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
-		plan = CreatePlan((LogicalAsOfJoin &)op);
+		plan = CreatePlan(op.Cast<LogicalAsOfJoin>());
 		break;
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-		plan = CreatePlan((LogicalComparisonJoin &)op);
+		plan = CreatePlan(op.Cast<LogicalComparisonJoin>());
 		break;
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
-		plan = CreatePlan((LogicalCrossProduct &)op);
+		plan = CreatePlan(op.Cast<LogicalCrossProduct>());
 		break;
 	case LogicalOperatorType::LOGICAL_POSITIONAL_JOIN:
-		plan = CreatePlan((LogicalPositionalJoin &)op);
+		plan = CreatePlan(op.Cast<LogicalPositionalJoin>());
 		break;
 	case LogicalOperatorType::LOGICAL_UNION:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
-		plan = CreatePlan((LogicalSetOperation &)op);
+		plan = CreatePlan(op.Cast<LogicalSetOperation>());
 		break;
 	case LogicalOperatorType::LOGICAL_INSERT:
-		plan = CreatePlan((LogicalInsert &)op);
+		plan = CreatePlan(op.Cast<LogicalInsert>());
 		break;
 	case LogicalOperatorType::LOGICAL_DELETE:
-		plan = CreatePlan((LogicalDelete &)op);
+		plan = CreatePlan(op.Cast<LogicalDelete>());
 		break;
 	case LogicalOperatorType::LOGICAL_CHUNK_GET:
-		plan = CreatePlan((LogicalColumnDataGet &)op);
+		plan = CreatePlan(op.Cast<LogicalColumnDataGet>());
 		break;
 	case LogicalOperatorType::LOGICAL_DELIM_GET:
-		plan = CreatePlan((LogicalDelimGet &)op);
+		plan = CreatePlan(op.Cast<LogicalDelimGet>());
 		break;
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
-		plan = CreatePlan((LogicalExpressionGet &)op);
+		plan = CreatePlan(op.Cast<LogicalExpressionGet>());
 		break;
 	case LogicalOperatorType::LOGICAL_UPDATE:
-		plan = CreatePlan((LogicalUpdate &)op);
+		plan = CreatePlan(op.Cast<LogicalUpdate>());
 		break;
 	case LogicalOperatorType::LOGICAL_CREATE_TABLE:
-		plan = CreatePlan((LogicalCreateTable &)op);
+		plan = CreatePlan(op.Cast<LogicalCreateTable>());
 		break;
 	case LogicalOperatorType::LOGICAL_CREATE_INDEX:
-		plan = CreatePlan((LogicalCreateIndex &)op);
+		plan = CreatePlan(op.Cast<LogicalCreateIndex>());
 		break;
 	case LogicalOperatorType::LOGICAL_EXPLAIN:
-		plan = CreatePlan((LogicalExplain &)op);
+		plan = CreatePlan(op.Cast<LogicalExplain>());
 		break;
 	case LogicalOperatorType::LOGICAL_SHOW:
-		plan = CreatePlan((LogicalShow &)op);
+		plan = CreatePlan(op.Cast<LogicalShow>());
 		break;
 	case LogicalOperatorType::LOGICAL_DISTINCT:
-		plan = CreatePlan((LogicalDistinct &)op);
+		plan = CreatePlan(op.Cast<LogicalDistinct>());
 		break;
 	case LogicalOperatorType::LOGICAL_PREPARE:
-		plan = CreatePlan((LogicalPrepare &)op);
+		plan = CreatePlan(op.Cast<LogicalPrepare>());
 		break;
 	case LogicalOperatorType::LOGICAL_EXECUTE:
-		plan = CreatePlan((LogicalExecute &)op);
+		plan = CreatePlan(op.Cast<LogicalExecute>());
 		break;
 	case LogicalOperatorType::LOGICAL_CREATE_VIEW:
 	case LogicalOperatorType::LOGICAL_CREATE_SEQUENCE:
 	case LogicalOperatorType::LOGICAL_CREATE_SCHEMA:
 	case LogicalOperatorType::LOGICAL_CREATE_MACRO:
 	case LogicalOperatorType::LOGICAL_CREATE_TYPE:
-		plan = CreatePlan((LogicalCreate &)op);
+		plan = CreatePlan(op.Cast<LogicalCreate>());
 		break;
 	case LogicalOperatorType::LOGICAL_PRAGMA:
-		plan = CreatePlan((LogicalPragma &)op);
+		plan = CreatePlan(op.Cast<LogicalPragma>());
 		break;
 	case LogicalOperatorType::LOGICAL_TRANSACTION:
 	case LogicalOperatorType::LOGICAL_ALTER:
@@ -188,22 +189,22 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 	case LogicalOperatorType::LOGICAL_LOAD:
 	case LogicalOperatorType::LOGICAL_ATTACH:
 	case LogicalOperatorType::LOGICAL_DETACH:
-		plan = CreatePlan((LogicalSimple &)op);
+		plan = CreatePlan(op.Cast<LogicalSimple>());
 		break;
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
-		plan = CreatePlan((LogicalRecursiveCTE &)op);
+		plan = CreatePlan(op.Cast<LogicalRecursiveCTE>());
 		break;
 	case LogicalOperatorType::LOGICAL_CTE_REF:
-		plan = CreatePlan((LogicalCTERef &)op);
+		plan = CreatePlan(op.Cast<LogicalCTERef>());
 		break;
 	case LogicalOperatorType::LOGICAL_EXPORT:
-		plan = CreatePlan((LogicalExport &)op);
+		plan = CreatePlan(op.Cast<LogicalExport>());
 		break;
 	case LogicalOperatorType::LOGICAL_SET:
-		plan = CreatePlan((LogicalSet &)op);
+		plan = CreatePlan(op.Cast<LogicalSet>());
 		break;
 	case LogicalOperatorType::LOGICAL_RESET:
-		plan = CreatePlan((LogicalReset &)op);
+		plan = CreatePlan(op.Cast<LogicalReset>());
 		break;
 	case LogicalOperatorType::LOGICAL_PIVOT:
 		plan = CreatePlan((LogicalPivot &)op);

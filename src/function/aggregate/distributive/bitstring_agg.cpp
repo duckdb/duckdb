@@ -33,7 +33,7 @@ struct BitstringAggBindData : public FunctionData {
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (BitstringAggBindData &)other_p;
+		auto &other = other_p.Cast<BitstringAggBindData>();
 		if (min.IsNull() && other.min.IsNull() && max.IsNull() && other.max.IsNull()) {
 			return true;
 		}

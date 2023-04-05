@@ -27,15 +27,15 @@ public:
 
 SinkResultType PhysicalMaterializedCollector::Sink(ExecutionContext &context, GlobalSinkState &gstate_p,
                                                    LocalSinkState &lstate_p, DataChunk &input) const {
-	auto &lstate = (MaterializedCollectorLocalState &)lstate_p;
+	auto &lstate = lstate_p.Cast<MaterializedCollectorLocalState>();
 	lstate.collection->Append(lstate.append_state, input);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
 void PhysicalMaterializedCollector::Combine(ExecutionContext &context, GlobalSinkState &gstate_p,
                                             LocalSinkState &lstate_p) const {
-	auto &gstate = (MaterializedCollectorGlobalState &)gstate_p;
-	auto &lstate = (MaterializedCollectorLocalState &)lstate_p;
+	auto &gstate = gstate_p.Cast<MaterializedCollectorGlobalState>();
+	auto &lstate = lstate_p.Cast<MaterializedCollectorLocalState>();
 	if (lstate.collection->Count() == 0) {
 		return;
 	}
@@ -62,7 +62,7 @@ unique_ptr<LocalSinkState> PhysicalMaterializedCollector::GetLocalSinkState(Exec
 }
 
 unique_ptr<QueryResult> PhysicalMaterializedCollector::GetResult(GlobalSinkState &state) {
-	auto &gstate = (MaterializedCollectorGlobalState &)state;
+	auto &gstate = state.Cast<MaterializedCollectorGlobalState>();
 	if (!gstate.collection) {
 		gstate.collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
 	}

@@ -277,7 +277,7 @@ public:
 public:
 	idx_t MaxThreads() const override;
 	//! Updates the CSV reader with the next buffer to read. Returns false if no more buffers are available.
-	bool Next(ClientContext &context, ReadCSVData &bind_data, unique_ptr<ParallelCSVReader> &reader);
+	bool Next(ClientContext &context, const ReadCSVData &bind_data, unique_ptr<ParallelCSVReader> &reader);
 	//! Verify if the CSV File was read correctly
 	void Verify();
 
@@ -402,7 +402,7 @@ void ParallelCSVGlobalState::Verify() {
 	}
 }
 
-bool ParallelCSVGlobalState::Next(ClientContext &context, ReadCSVData &bind_data,
+bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bind_data,
                                   unique_ptr<ParallelCSVReader> &reader) {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	if (!current_buffer) {
@@ -506,8 +506,8 @@ public:
 
 unique_ptr<LocalTableFunctionState> ParallelReadCSVInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
                                                              GlobalTableFunctionState *global_state_p) {
-	auto &csv_data = (ReadCSVData &)*input.bind_data;
-	auto &global_state = (ParallelCSVGlobalState &)*global_state_p;
+	auto &csv_data = input.bind_data->Cast<ReadCSVData>();
+	auto &global_state = global_state_p->Cast<ParallelCSVGlobalState>();
 	unique_ptr<ParallelCSVReader> csv_reader;
 	auto has_next = global_state.Next(context.client, csv_data, csv_reader);
 	if (!has_next) {
@@ -518,9 +518,9 @@ unique_ptr<LocalTableFunctionState> ParallelReadCSVInitLocal(ExecutionContext &c
 }
 
 static void ParallelReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &bind_data = (ReadCSVData &)*data_p.bind_data;
-	auto &csv_global_state = (ParallelCSVGlobalState &)*data_p.global_state;
-	auto &csv_local_state = (ParallelCSVLocalState &)*data_p.local_state;
+	auto &bind_data = data_p.bind_data->Cast<ReadCSVData>();
+	auto &csv_global_state = data_p.global_state->Cast<ParallelCSVGlobalState>();
+	auto &csv_local_state = data_p.local_state->Cast<ParallelCSVLocalState>();
 
 	if (!csv_local_state.csv_reader) {
 		// no csv_reader was set, this can happen when a filename-based filter has filtered out all possible files
@@ -694,7 +694,7 @@ unique_ptr<LocalTableFunctionState> SingleThreadedReadCSVInitLocal(ExecutionCont
 static void SingleThreadedCSVFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &bind_data = (ReadCSVData &)*data_p.bind_data;
 	auto &data = (SingleThreadedCSVState &)*data_p.global_state;
-	auto &lstate = (SingleThreadedCSVLocalState &)*data_p.local_state;
+	auto &lstate = data_p.local_state->Cast<SingleThreadedCSVLocalState>();
 	if (!lstate.csv_reader) {
 		// no csv_reader was set, this can happen when a filename-based filter has filtered out all possible files
 		return;
@@ -771,10 +771,10 @@ static idx_t CSVReaderGetBatchIndex(ClientContext &context, const FunctionData *
                                     LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state) {
 	auto &bind_data = (ReadCSVData &)*bind_data_p;
 	if (bind_data.single_threaded) {
-		auto &data = (SingleThreadedCSVLocalState &)*local_state;
+		auto &data = local_state->Cast<SingleThreadedCSVLocalState>();
 		return data.file_index;
 	}
-	auto &data = (ParallelCSVLocalState &)*local_state;
+	auto &data = local_state->Cast<ParallelCSVLocalState>();
 	return data.csv_reader->buffer->batch_index;
 }
 

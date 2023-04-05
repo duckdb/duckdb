@@ -25,7 +25,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDistinct &
 	for (idx_t i = 0; i < distinct_targets.size(); i++) {
 		auto &target = distinct_targets[i];
 		if (target->type == ExpressionType::BOUND_REF) {
-			auto &bound_ref = (BoundReferenceExpression &)*target;
+			auto &bound_ref = target->Cast<BoundReferenceExpression>();
 			group_by_references[bound_ref.index] = i;
 		}
 		aggregate_types.push_back(target->return_type);

@@ -71,14 +71,14 @@ static void CheckConstraints(TableCatalogEntry *table, const ColumnDefinition &c
 	for (auto &constraint : table->GetConstraints()) {
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
-			auto &not_null = (NotNullConstraint &)*constraint;
+			auto &not_null = constraint->Cast<NotNullConstraint>();
 			if (not_null.index == column.Logical()) {
 				out_not_null = true;
 			}
 			break;
 		}
 		case ConstraintType::UNIQUE: {
-			auto &unique = (UniqueConstraint &)*constraint;
+			auto &unique = constraint->Cast<UniqueConstraint>();
 
 			if (unique.is_primary_key) {
 				if (unique.index == column.Logical()) {
@@ -165,7 +165,7 @@ static void PragmaTableInfoView(PragmaTableOperatorData &data, ViewCatalogEntry 
 
 static void PragmaTableInfoFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &bind_data = (PragmaTableFunctionData &)*data_p.bind_data;
-	auto &state = (PragmaTableOperatorData &)*data_p.global_state;
+	auto &state = data_p.global_state->Cast<PragmaTableOperatorData>();
 	switch (bind_data.entry->type) {
 	case CatalogType::TABLE_ENTRY:
 		PragmaTableInfoTable(state, (TableCatalogEntry *)bind_data.entry, output);

@@ -72,7 +72,7 @@ bool Transformer::ExpressionIsEmptyStar(ParsedExpression &expr) {
 	if (expr.expression_class != ExpressionClass::STAR) {
 		return false;
 	}
-	auto &star = (StarExpression &)expr;
+	auto &star = expr.Cast<StarExpression>();
 	if (!star.columns && star.exclude_list.empty() && star.replace_list.empty()) {
 		return true;
 	}

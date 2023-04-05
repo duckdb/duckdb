@@ -135,7 +135,7 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 static void QualifyFunctionNames(ClientContext &context, unique_ptr<ParsedExpression> &expr) {
 	switch (expr->GetExpressionClass()) {
 	case ExpressionClass::FUNCTION: {
-		auto &func = (FunctionExpression &)*expr;
+		auto &func = expr->Cast<FunctionExpression>();
 		auto function = (StandardEntry *)Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, func.catalog,
 		                                                   func.schema, func.function_name, true);
 		if (function) {
@@ -146,7 +146,7 @@ static void QualifyFunctionNames(ClientContext &context, unique_ptr<ParsedExpres
 	}
 	case ExpressionClass::SUBQUERY: {
 		// replacing parameters within a subquery is slightly different
-		auto &sq = ((SubqueryExpression &)*expr).subquery;
+		auto &sq = (expr->Cast<SubqueryExpression>()).subquery;
 		ParsedExpressionIterator::EnumerateQueryNodeChildren(
 		    *sq->node, [&](unique_ptr<ParsedExpression> &child) { QualifyFunctionNames(context, child); });
 		break;
@@ -172,7 +172,7 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	vector<string> dummy_names;
 	// positional parameters
 	for (idx_t i = 0; i < base.function->parameters.size(); i++) {
-		auto param = (ColumnRefExpression &)*base.function->parameters[i];
+		auto param = base.function->parameters[i]->Cast<ColumnRefExpression>();
 		if (param.IsQualified()) {
 			throw BinderException("Invalid parameter name '%s': must be unqualified", param.ToString());
 		}
@@ -181,7 +181,7 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	}
 	// default parameters
 	for (auto it = base.function->default_parameters.begin(); it != base.function->default_parameters.end(); it++) {
-		auto &val = (ConstantExpression &)*it->second;
+		auto &val = it->second->Cast<ConstantExpression>();
 		dummy_types.push_back(val.value.type());
 		dummy_names.push_back(it->first);
 	}
@@ -278,7 +278,7 @@ static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vecto
 		if (constr->type != ConstraintType::UNIQUE) {
 			continue;
 		}
-		auto &unique = (UniqueConstraint &)*constr;
+		auto &unique = constr->Cast<UniqueConstraint>();
 		if (find_primary_key && !unique.is_primary_key) {
 			continue;
 		}
@@ -364,7 +364,7 @@ void ExpressionContainsGeneratedColumn(const ParsedExpression &expr, const unord
 		return;
 	}
 	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto &column_ref = (ColumnRefExpression &)expr;
+		auto &column_ref = expr.Cast<ColumnRefExpression>();
 		auto &name = column_ref.GetColumnName();
 		if (gcols.count(name)) {
 			contains_gcol = true;
@@ -390,7 +390,7 @@ static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) 
 	for (auto &constr : table_info.constraints) {
 		switch (constr->type) {
 		case ConstraintType::CHECK: {
-			auto &constraint = (CheckConstraint &)*constr;
+			auto &constraint = constr->Cast<CheckConstraint>();
 			auto &expr = constraint.expression;
 			bool contains_generated_column = false;
 			ExpressionContainsGeneratedColumn(*expr, generated_columns, contains_generated_column);
@@ -400,14 +400,14 @@ static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) 
 			break;
 		}
 		case ConstraintType::NOT_NULL: {
-			auto &constraint = (NotNullConstraint &)*constr;
+			auto &constraint = constr->Cast<NotNullConstraint>();
 			if (table_info.columns.GetColumn(constraint.index).Generated()) {
 				return true;
 			}
 			break;
 		}
 		case ConstraintType::UNIQUE: {
-			auto &constraint = (UniqueConstraint &)*constr;
+			auto &constraint = constr->Cast<UniqueConstraint>();
 			auto index = constraint.index;
 			if (index.index == DConstants::INVALID_INDEX) {
 				for (auto &col : constraint.columns) {
@@ -439,7 +439,7 @@ unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateS
 	D_ASSERT(plan->type == LogicalOperatorType::LOGICAL_GET);
 	auto &base = (CreateIndexInfo &)*stmt.info;
 
-	auto &get = (LogicalGet &)*plan;
+	auto &get = plan->Cast<LogicalGet>();
 	// bind the index expressions
 	IndexBinder index_binder(binder, binder.context);
 	vector<unique_ptr<Expression>> expressions;
@@ -506,7 +506,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		if (bound_table->type != TableReferenceType::BASE_TABLE) {
 			throw BinderException("Can only create an index over a base table!");
 		}
-		auto &table_binding = (BoundBaseTableRef &)*bound_table;
+		auto &table_binding = bound_table->Cast<BoundBaseTableRef>();
+		;
 		auto table = table_binding.table;
 		if (table->temporary) {
 			stmt.info->temporary = true;
@@ -529,7 +530,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			if (cond->type != ConstraintType::FOREIGN_KEY) {
 				continue;
 			}
-			auto &fk = (ForeignKeyConstraint &)*cond;
+			auto &fk = cond->Cast<ForeignKeyConstraint>();
 			if (fk.info.type != ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
 				continue;
 			}
@@ -593,7 +594,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, std::move(stmt.info), schema);
 		if (create_type_info.query) {
 			// CREATE TYPE mood AS ENUM (SELECT 'happy')
-			auto &select_stmt = (SelectStatement &)*create_type_info.query;
+			auto &select_stmt = create_type_info.query->Cast<SelectStatement>();
 			auto &query_node = *select_stmt.node;
 
 			// We always add distinct modifier implicitly

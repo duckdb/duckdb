@@ -16,6 +16,9 @@ namespace duckdb {
 //! PhysicalStreamingSample represents a streaming sample using either system or bernoulli sampling
 class PhysicalStreamingSample : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::STREAMING_SAMPLE;
+
+public:
 	PhysicalStreamingSample(vector<LogicalType> types, SampleMethod method, double percentage, int64_t seed,
 	                        idx_t estimated_cardinality);
 

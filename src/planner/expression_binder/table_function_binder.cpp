@@ -13,7 +13,7 @@ BindResult TableFunctionBinder::BindColumnReference(ColumnRefExpression &expr, i
 	// if this is a lambda parameters, then we temporarily add a BoundLambdaRef,
 	// which we capture and remove later
 	if (lambda_bindings) {
-		auto &colref = (ColumnRefExpression &)expr;
+		auto &colref = expr.Cast<ColumnRefExpression>();
 		for (idx_t i = 0; i < lambda_bindings->size(); i++) {
 			if (colref.GetColumnName() == (*lambda_bindings)[i].dummy_name) {
 				return (*lambda_bindings)[i].Bind(colref, i, depth);
@@ -30,7 +30,7 @@ BindResult TableFunctionBinder::BindExpression(unique_ptr<ParsedExpression> *exp
 	auto &expr = **expr_ptr;
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::COLUMN_REF:
-		return BindColumnReference((ColumnRefExpression &)expr, depth);
+		return BindColumnReference(expr.Cast<ColumnRefExpression>(), depth);
 	case ExpressionClass::SUBQUERY:
 		throw BinderException("Table function cannot contain subqueries");
 	case ExpressionClass::DEFAULT:
