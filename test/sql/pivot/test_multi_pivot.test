@@ -53,6 +53,9 @@ SELECT *
 1	12020	7020	NULL	22040	2421	5021	15042	NULL
 2	37020	92520	NULL	6520	6521	2221	16042	2821
 
+statement ok
+SET pivot_limit=10000
+
 # too many pivots
 statement error
 SELECT *
