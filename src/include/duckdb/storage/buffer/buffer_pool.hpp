@@ -1,10 +1,9 @@
 #pragma once
 
 #include "duckdb/common/mutex.hpp"
-#include "duckdb/storage/block_manager.hpp"
-#include "duckdb/storage/buffer/block_handle.hpp"
-#include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/parallel/concurrentqueue.hpp"
+#include "duckdb/common/file_buffer.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
 
 namespace duckdb {
 
@@ -19,27 +18,9 @@ struct BufferEvictionNode {
 	weak_ptr<BlockHandle> handle;
 	idx_t timestamp;
 
-	bool CanUnload(BlockHandle &handle_p) {
-		if (timestamp != handle_p.eviction_timestamp) {
-			// handle was used in between
-			return false;
-		}
-		return handle_p.CanUnload();
-	}
+	bool CanUnload(BlockHandle &handle_p);
 
-	shared_ptr<BlockHandle> TryGetBlockHandle() {
-		auto handle_p = handle.lock();
-		if (!handle_p) {
-			// BlockHandle has been destroyed
-			return nullptr;
-		}
-		if (!CanUnload(*handle_p)) {
-			// handle was used in between
-			return nullptr;
-		}
-		// this is the latest node in the queue with this handle
-		return handle_p;
-	}
+	shared_ptr<BlockHandle> TryGetBlockHandle();
 };
 
 typedef duckdb_moodycamel::ConcurrentQueue<BufferEvictionNode> eviction_queue_t;
@@ -63,16 +44,11 @@ public:
 	//! blocks can be evicted
 	void SetLimit(idx_t limit, const char *exception_postscript);
 
-	void IncreaseUsedMemory(idx_t size) {
-		current_memory += size;
-	}
+	void IncreaseUsedMemory(idx_t size);
 
-	idx_t GetUsedMemory() {
-		return current_memory;
-	}
-	idx_t GetMaxMemory() {
-		return maximum_memory;
-	}
+	idx_t GetUsedMemory();
+
+	idx_t GetMaxMemory();
 
 protected:
 	//! Evict blocks until the currently used memory + extra_memory fit, returns false if this was not possible
