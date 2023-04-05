@@ -242,7 +242,7 @@ static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector
 // Regexp Extract Struct
 //===--------------------------------------------------------------------===//
 static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &lstate = (RegexLocalState &)*ExecuteFunctionState::GetFunctionState(state);
+	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
 
 	const auto count = args.size();
 	auto &input = args.data[0];
