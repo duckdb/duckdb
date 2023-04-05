@@ -495,8 +495,8 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 				continue;
 			}
 			string col_name = to_string(col_idx);
-			if (col_idx < options.names.size()) {
-				col_name = "\"" + options.names[col_idx] + "\"";
+			if (col_idx < names.size()) {
+				col_name = "\"" + names[col_idx] + "\"";
 			}
 
 			// figure out the exact line number

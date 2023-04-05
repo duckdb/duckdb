@@ -40,7 +40,7 @@ bool RunFull(std::string &path, duckdb::Connection &conn, std::set<std::string> 
 
 	// Set max line length to 0 when starting a ST CSV Read
 	conn.context->client_data->max_line_length = 0;
-	unique_ptr<MaterializedQueryResult> single_threaded_res;
+	duckdb::unique_ptr<MaterializedQueryResult> single_threaded_res;
 	ColumnDataCollection *ground_truth = nullptr;
 	single_threaded_res =
 	    conn.Query("SELECT * FROM read_csv_auto('" + path + add_parameters + "', parallel = 0) ORDER BY ALL");
@@ -69,7 +69,7 @@ bool RunFull(std::string &path, duckdb::Connection &conn, std::set<std::string> 
 			}
 			multi_conn.Query("SET preserve_insertion_order=false;");
 			multi_conn.Query("PRAGMA threads=" + to_string(thread_count));
-			unique_ptr<MaterializedQueryResult> multi_threaded_result =
+			duckdb::unique_ptr<MaterializedQueryResult> multi_threaded_result =
 			    multi_conn.Query("SELECT * FROM read_csv_auto('" + path + add_parameters +
 			                     "', buffer_size = " + to_string(buffer_size) + ") ORDER BY ALL");
 			bool multi_threaded_passed;
