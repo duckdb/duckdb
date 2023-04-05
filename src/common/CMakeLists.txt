@@ -1,3 +1,4 @@
+add_subdirectory(adbc)
 add_subdirectory(arrow)
 add_subdirectory(crypto)
 add_subdirectory(enums)

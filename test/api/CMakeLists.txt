@@ -1,3 +1,4 @@
+add_subdirectory(adbc)
 add_subdirectory(capi)
 add_subdirectory(udf_function)
 
