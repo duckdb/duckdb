@@ -50,7 +50,7 @@ struct StateVector {
 	    : count(count_p), aggr_expr(std::move(aggr_expr_p)), state_vector(Vector(LogicalType::POINTER, count_p)) {
 	}
 
-	~StateVector() {
+	~StateVector() { // NOLINT
 		// destroy objects within the aggregate states
 		auto &aggr = aggr_expr->Cast<BoundAggregateExpression>();
 		if (aggr.function.destructor) {
