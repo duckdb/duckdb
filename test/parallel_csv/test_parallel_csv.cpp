@@ -87,12 +87,12 @@ bool RunFull(std::string &path, duckdb::Connection &conn, std::set<std::string> 
 			if (!single_threaded_passed && multi_threaded_passed) {
 				//! oh oh, this should not pass
 				std::cout << path << " Failed on single threaded but succeeded on parallel reading" << std::endl;
-				return true;
+				return false;
 			}
 			if (!multi_threaded_passed) {
 				std::cout << path << " Multithreaded failed" << std::endl;
 				std::cout << multi_threaded_result->GetError() << std::endl;
-				return true;
+				return false;
 			}
 			// Results do not match
 			string error_message;
@@ -100,7 +100,7 @@ bool RunFull(std::string &path, duckdb::Connection &conn, std::set<std::string> 
 				std::cout << path << " Thread count: " << to_string(thread_count)
 				          << " Buffer Size: " << to_string(buffer_size) << std::endl;
 				std::cout << error_message << std::endl;
-				return true;
+				return false;
 			}
 		}
 	}
@@ -121,26 +121,6 @@ void RunTestOnFolder(const string &path, std::set<std::string> *skip = nullptr, 
 		}
 	}
 }
-
-// TEST_CASE("Test One File", "[parallel-csv]") {
-//	DuckDB db(nullptr);
-//	Connection con(db);
-//	std::set<std::string> skip;
-//	con.Query("SET preserve_insertion_order=false;");
-//
-//	string file = "test/sql/copy/csv/data/auto/int_bol.csv";
-//
-//	auto thread_count = 1;
-//	auto buffer_size = 11;
-//
-//
-//	con.Query("PRAGMA threads=" + to_string(thread_count));
-//	unique_ptr<MaterializedQueryResult> multi_threaded_result = con.Query(
-//	    "SELECT * FROM read_csv_auto('" + file + "', buffer_size = " + to_string(buffer_size) + ")");
-//	auto &result = multi_threaded_result->Collection();
-////	auto rows = result.GetRows();
-////	REQUIRE(RunFull(file, skip, con));
-//}
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data", "[parallel-csv][.]") {
 	RunTestOnFolder("test/sql/copy/csv/data/");
