@@ -206,7 +206,7 @@ static void ArrowToDuckDBBlob(Vector &vector, ArrowArray &array, ArrowScanLocalS
 	} else {
 		//! Check if last offset is higher than max uint32
 		if (((uint64_t *)array.buffers[1])[array.length] > NumericLimits<uint32_t>::Maximum()) { // LCOV_EXCL_START
-			throw std::runtime_error("DuckDB does not support Blobs over 4GB");
+			throw ConversionException("DuckDB does not support Blobs over 4GB");
 		} // LCOV_EXCL_STOP
 		auto offsets = (uint64_t *)array.buffers[1] + array.offset + scan_state.chunk_offset;
 		if (nested_offset != -1) {
@@ -406,7 +406,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState 
 		auto cdata = (char *)array.buffers[2];
 		if (original_type.first == ArrowVariableSizeType::SUPER_SIZE) {
 			if (((uint64_t *)array.buffers[1])[array.length] > NumericLimits<uint32_t>::Maximum()) { // LCOV_EXCL_START
-				throw std::runtime_error("DuckDB does not support Strings over 4GB");
+				throw ConversionException("DuckDB does not support Strings over 4GB");
 			} // LCOV_EXCL_STOP
 			auto offsets = (uint64_t *)array.buffers[1] + array.offset + scan_state.chunk_offset;
 			if (nested_offset != -1) {
@@ -442,7 +442,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState 
 			break;
 		}
 		default:
-			throw std::runtime_error("Unsupported precision for Date Type ");
+			throw NotImplementedException("Unsupported precision for Date Type ");
 		}
 		break;
 	}
@@ -473,7 +473,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState 
 			break;
 		}
 		default:
-			throw std::runtime_error("Unsupported precision for Time Type ");
+			throw NotImplementedException("Unsupported precision for Time Type ");
 		}
 		break;
 	}
@@ -504,7 +504,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState 
 			break;
 		}
 		default:
-			throw std::runtime_error("Unsupported precision for TimestampTZ Type ");
+			throw NotImplementedException("Unsupported precision for TimestampTZ Type ");
 		}
 		break;
 	}
@@ -546,7 +546,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState 
 			break;
 		}
 		default:
-			throw std::runtime_error("Unsupported precision for Interval/Duration Type ");
+			throw NotImplementedException("Unsupported precision for Interval/Duration Type ");
 		}
 		break;
 	}
@@ -597,8 +597,8 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState 
 			break;
 		}
 		default:
-			throw std::runtime_error("Unsupported physical type for Decimal: " +
-			                         TypeIdToString(vector.GetType().InternalType()));
+			throw NotImplementedException("Unsupported physical type for Decimal: %s",
+			                              TypeIdToString(vector.GetType().InternalType()));
 		}
 		break;
 	}
@@ -638,7 +638,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState 
 		break;
 	}
 	default:
-		throw std::runtime_error("Unsupported type " + vector.GetType().ToString());
+		throw NotImplementedException("Unsupported type %s", vector.GetType().ToString());
 	}
 }
 
@@ -656,7 +656,7 @@ static void SetSelectionVectorLoopWithChecks(SelectionVector &sel, data_ptr_t in
 	auto indices = (T *)indices_p;
 	for (idx_t row = 0; row < size; row++) {
 		if (indices[row] > NumericLimits<uint32_t>::Maximum()) {
-			throw std::runtime_error("DuckDB only supports indices that fit on an uint32");
+			throw ConversionException("DuckDB only supports indices that fit on an uint32");
 		}
 		sel.set_index(row, indices[row]);
 	}
@@ -697,7 +697,7 @@ static void SetSelectionVector(SelectionVector &sel, data_ptr_t indices_p, Logic
 		case LogicalTypeId::UINTEGER:
 			if (last_element_pos > NumericLimits<uint32_t>::Maximum()) {
 				//! Its guaranteed that our indices will point to the last element, so just throw an error
-				throw std::runtime_error("DuckDB only supports indices that fit on an uint32");
+				throw ConversionException("DuckDB only supports indices that fit on an uint32");
 			}
 			SetMaskedSelectionVectorLoop<uint32_t>(sel, indices_p, size, *mask, last_element_pos);
 			break;
@@ -707,20 +707,20 @@ static void SetSelectionVector(SelectionVector &sel, data_ptr_t indices_p, Logic
 		case LogicalTypeId::UBIGINT:
 			if (last_element_pos > NumericLimits<uint32_t>::Maximum()) {
 				//! Its guaranteed that our indices will point to the last element, so just throw an error
-				throw std::runtime_error("DuckDB only supports indices that fit on an uint32");
+				throw ConversionException("DuckDB only supports indices that fit on an uint32");
 			}
 			SetMaskedSelectionVectorLoop<uint64_t>(sel, indices_p, size, *mask, last_element_pos);
 			break;
 		case LogicalTypeId::BIGINT:
 			if (last_element_pos > NumericLimits<uint32_t>::Maximum()) {
 				//! Its guaranteed that our indices will point to the last element, so just throw an error
-				throw std::runtime_error("DuckDB only supports indices that fit on an uint32");
+				throw ConversionException("DuckDB only supports indices that fit on an uint32");
 			}
 			SetMaskedSelectionVectorLoop<int64_t>(sel, indices_p, size, *mask, last_element_pos);
 			break;
 
 		default:
-			throw std::runtime_error("(Arrow) Unsupported type for selection vectors " + logical_type.ToString());
+			throw NotImplementedException("(Arrow) Unsupported type for selection vectors %s", logical_type.ToString());
 		}
 
 	} else {
@@ -760,7 +760,7 @@ static void SetSelectionVector(SelectionVector &sel, data_ptr_t indices_p, Logic
 			}
 			break;
 		default:
-			throw std::runtime_error("(Arrow) Unsupported type for selection vectors " + logical_type.ToString());
+			throw ConversionException("(Arrow) Unsupported type for selection vectors %s", logical_type.ToString());
 		}
 	}
 }
