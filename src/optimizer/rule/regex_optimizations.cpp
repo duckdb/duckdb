@@ -3,6 +3,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 #include "re2/re2.h"
 #include "re2/regexp.h"
@@ -58,18 +59,29 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 
 		return std::move(contains);
 	} else {
-		string prefix("temporary prefix");
-		bool foldcase = true;
-		//	duckdb_re2::Regexp idk_bro = duckdb_re2::Regexp(duckdb_re2::kRegexpAlternate, duckdb_re2::Regexp::NoParseFlags);
-		auto dunno = pattern.Regexp();
-		pattern.Regexp()->RequiredPrefix(&prefix, &foldcase, &dunno);
-		pattern.suffix_regexp
+		string prefix("tmp_prefix");
+		bool fold_case = true;
+		auto regexp = pattern.Regexp();
+
+		pattern.Regexp()->RequiredPrefix(&prefix, &fold_case, &regexp);
 		// prefix now has the prefic I need.
 		// foldcase is now false
 		// dunno is the regexp that comes after the thing
-		if (!prefix.empty() && dunno->op() == duckdb_re2::kRegexpEmptyMatch) {
-			// use prefix operator instead
+		if (!prefix.empty()) {
+			auto prefix_expression = make_unique<BoundFunctionExpression>(root->return_type, PrefixFun::GetFunction(), std::move(root->children), nullptr);
+			prefix_expression->children[1] = make_unique<BoundConstantExpression>(Value(std::move(prefix)));
+//			if (regexp->op() == duckdb_re2::kRegexpEmptyMatch) {
+//				auto next = make_unique<BoundFunctionExpression>(root->return_type, RegexpFun::));
+//				next->children[1] = Value(std::move(regexp->ToString())));
+//				prefix_expression->children[2] = std::move(next);
+//			}
+			return std::move(prefix_expression);
 		}
+
+		string min;
+		string max;
+		pattern.PossibleMatchRange(&min, &max, patt_str.size());
+
 		auto a = "wait here";
 	}
 

@@ -44,11 +44,24 @@ query I nosort correct_result
 SELECT contains(s, 'aaa') FROM test
 ----
 
-mode unskip
 
 query I nosort correct_result
 SELECT regexp_matches(s, '^a') FROM TEST;
 ----
+aaa
+
+query I nosort correct_result
+SELECT regexp_matches(s, '^aa') FROM TEST;
+----
+aaa
+
+
+mode unskip
+
+query I nosort correct_result
+SELECT regexp_matches(s, '^a.*b$') FROM TEST;
+----
+aaa
 
 query I nosort correct_result
 SELECT regexp_matches(s, 'a$') FROM TEST;
