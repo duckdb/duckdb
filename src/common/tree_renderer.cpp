@@ -3,11 +3,9 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/pair.hpp"
-#include "duckdb/common/to_string.hpp"
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/execution/operator/scan/physical_positional_scan.hpp"
-#include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "utf8proc_wrapper.hpp"
 
