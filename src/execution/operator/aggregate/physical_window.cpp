@@ -28,38 +28,37 @@ namespace duckdb {
 //	Global sink state
 class WindowGlobalSinkState : public GlobalSinkState {
 public:
-
-	WindowGlobalSinkState(const PhysicalWindow &op_p, ClientContext &context)
-	    : op(op_p), mode(DBConfig::GetConfig(context).options.window_mode) {
+	WindowGlobalSinkState(const PhysicalWindow &op, ClientContext &context)
+	    : mode(DBConfig::GetConfig(context).options.window_mode) {
 
 		D_ASSERT(op.select_list[0]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
-		auto wexpr = reinterpret_cast<BoundWindowExpression *>(op.select_list[0].get());
+		auto &wexpr = op.select_list[0]->Cast<BoundWindowExpression>();
 
-		global_partition = make_uniq<PartitionGlobalSinkState>(context, wexpr->partitions, wexpr->orders, op.children[0]->types, wexpr->partitions_stats, op.estimated_cardinality);
+		global_partition =
+		    make_uniq<PartitionGlobalSinkState>(context, wexpr.partitions, wexpr.orders, op.children[0]->types,
+		                                        wexpr.partitions_stats, op.estimated_cardinality);
 	}
 
-	const PhysicalWindow &op;
-	WindowAggregationMode mode;
-
 	unique_ptr<PartitionGlobalSinkState> global_partition;
+	WindowAggregationMode mode;
 };
 
 //	Per-thread sink state
 class WindowLocalSinkState : public LocalSinkState {
 public:
-	WindowLocalSinkState(ClientContext &context, const WindowGlobalSinkState &gstate) {
-		local_partition = make_uniq<PartitionLocalSinkState>(context, *gstate.global_partition);
+	WindowLocalSinkState(ClientContext &context, const WindowGlobalSinkState &gstate)
+	    : local_partition(context, *gstate.global_partition) {
 	}
 
 	void Sink(DataChunk &input_chunk) {
-		local_partition->Sink(input_chunk);
+		local_partition.Sink(input_chunk);
 	}
 
 	void Combine() {
-		local_partition->Combine();
+		local_partition.Combine();
 	}
 
-	unique_ptr<PartitionLocalSinkState> local_partition;
+	PartitionLocalSinkState local_partition;
 };
 
 // this implements a sorted window functions variant
@@ -1111,14 +1110,14 @@ public:
 	using WindowExecutorPtr = unique_ptr<WindowExecutor>;
 	using WindowExecutors = vector<WindowExecutorPtr>;
 
-	WindowLocalSourceState(const PhysicalWindow &op, ExecutionContext &context, WindowGlobalSourceState &gsource)
-	    : partition_source(gsource.partition_source.gsink), context(context.client)  {
+	WindowLocalSourceState(const PhysicalWindow &op_p, ExecutionContext &context, WindowGlobalSourceState &gsource)
+	    : partition_source(gsource.partition_source.gsink), context(context.client), op(op_p) {
 
 		vector<LogicalType> output_types;
 		for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
 			D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
-			auto wexpr = reinterpret_cast<BoundWindowExpression *>(op.select_list[expr_idx].get());
-			output_types.emplace_back(wexpr->return_type);
+			auto &wexpr = op.select_list[expr_idx]->Cast<BoundWindowExpression>();
+			output_types.emplace_back(wexpr.return_type);
 		}
 		output_chunk.Initialize(Allocator::Get(context.client), output_types);
 	}
@@ -1128,6 +1127,7 @@ public:
 
 	PartitionLocalSourceState partition_source;
 	ClientContext &context;
+	const PhysicalWindow &op;
 
 	//! The current execution functions
 	WindowExecutors window_execs;
@@ -1136,8 +1136,6 @@ public:
 };
 
 void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, const idx_t hash_bin_p) {
-	auto &op = gstate.op;
-
 	const auto count = partition_source.GeneratePartition(hash_bin_p);
 	if (!count) {
 		return;
@@ -1148,8 +1146,8 @@ void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, co
 	window_execs.clear();
 	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
 		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
-		auto wexpr = reinterpret_cast<BoundWindowExpression *>(op.select_list[expr_idx].get());
-		auto wexec = make_uniq<WindowExecutor>(wexpr, context, partition_mask, count);
+		auto &wexpr = op.select_list[expr_idx]->Cast<BoundWindowExpression>();
+		auto wexec = make_uniq<WindowExecutor>(&wexpr, context, partition_mask, count);
 		window_execs.emplace_back(std::move(wexec));
 	}
 
