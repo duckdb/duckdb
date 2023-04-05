@@ -205,6 +205,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 	case LogicalOperatorType::LOGICAL_RESET:
 		plan = CreatePlan((LogicalReset &)op);
 		break;
+	case LogicalOperatorType::LOGICAL_PIVOT:
+		plan = CreatePlan((LogicalPivot &)op);
+		break;
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
 		plan = ((LogicalExtensionOperator &)op).CreatePlan(context, *this);
 
@@ -217,12 +220,15 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		throw NotImplementedException("Unimplemented logical operator type!");
 	}
 	}
+	if (!plan) {
+		throw InternalException("Physical plan generator - no plan generated");
+	}
 
 	if (op.estimated_props) {
 		plan->estimated_cardinality = op.estimated_props->GetCardinality<idx_t>();
 		plan->estimated_props = op.estimated_props->Copy();
 	} else {
-		plan->estimated_props = make_unique<EstimatedProperties>();
+		plan->estimated_props = make_uniq<EstimatedProperties>();
 	}
 
 	return plan;

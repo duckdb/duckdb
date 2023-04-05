@@ -155,7 +155,7 @@ void ZstdStreamWrapper::Close() {
 
 class ZStdFile : public CompressedFile {
 public:
-	ZStdFile(unique_ptr<FileHandle> child_handle_p, const string &path, bool write)
+	ZStdFile(duckdb::unique_ptr<FileHandle> child_handle_p, const string &path, bool write)
 	    : CompressedFile(zstd_fs, std::move(child_handle_p), path) {
 		Initialize(write);
 	}
@@ -163,13 +163,13 @@ public:
 	ZStdFileSystem zstd_fs;
 };
 
-unique_ptr<FileHandle> ZStdFileSystem::OpenCompressedFile(unique_ptr<FileHandle> handle, bool write) {
+unique_ptr<FileHandle> ZStdFileSystem::OpenCompressedFile(duckdb::unique_ptr<FileHandle> handle, bool write) {
 	auto path = handle->path;
-	return make_unique<ZStdFile>(std::move(handle), path, write);
+	return make_uniq<ZStdFile>(std::move(handle), path, write);
 }
 
 unique_ptr<StreamWrapper> ZStdFileSystem::CreateStream() {
-	return make_unique<ZstdStreamWrapper>();
+	return make_uniq<ZstdStreamWrapper>();
 }
 
 idx_t ZStdFileSystem::InBufferSize() {

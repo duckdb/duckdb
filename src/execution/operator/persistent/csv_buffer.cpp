@@ -34,7 +34,7 @@ unique_ptr<CSVBuffer> CSVBuffer::Next(CSVFileHandle &file_handle, idx_t buffer_s
 	}
 
 	auto next_csv_buffer =
-	    make_unique<CSVBuffer>(context, std::move(next_buffer), buffer_size, next_buffer_actual_size,
+	    make_uniq<CSVBuffer>(context, std::move(next_buffer), buffer_size, next_buffer_actual_size,
 	                           file_handle.FinishedReading(), global_csv_current_position, file_number_p);
 	global_csv_current_position += next_buffer_actual_size;
 	return next_csv_buffer;

@@ -41,12 +41,12 @@ unique_ptr<TableRef> duckdb_capi_replacement_callback(ClientContext &context, co
 		// no function provided: bail-out
 		return nullptr;
 	}
-	auto table_function = make_unique<TableFunctionRef>();
+	auto table_function = make_uniq<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
 	for (auto &param : info.parameters) {
-		children.push_back(make_unique<ConstantExpression>(std::move(param)));
+		children.push_back(make_uniq<ConstantExpression>(std::move(param)));
 	}
-	table_function->function = make_unique<FunctionExpression>(info.function_name, std::move(children));
+	table_function->function = make_uniq<FunctionExpression>(info.function_name, std::move(children));
 	return std::move(table_function);
 }
 
@@ -58,7 +58,7 @@ void duckdb_add_replacement_scan(duckdb_database db, duckdb_replacement_callback
 		return;
 	}
 	auto wrapper = (duckdb::DatabaseData *)db;
-	auto scan_info = duckdb::make_unique<duckdb::CAPIReplacementScanData>();
+	auto scan_info = duckdb::make_uniq<duckdb::CAPIReplacementScanData>();
 	scan_info->callback = replacement;
 	scan_info->extra_data = extra_data;
 	scan_info->delete_callback = delete_callback;

@@ -11,14 +11,14 @@ namespace duckdb {
 
 EnumComparisonRule::EnumComparisonRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on a ComparisonExpression that is an Equality and has a VARCHAR and ENUM as its children
-	auto op = make_unique<ComparisonExpressionMatcher>();
+	auto op = make_uniq<ComparisonExpressionMatcher>();
 	// Enum requires expression to be root
-	op->expr_type = make_unique<SpecificExpressionTypeMatcher>(ExpressionType::COMPARE_EQUAL);
+	op->expr_type = make_uniq<SpecificExpressionTypeMatcher>(ExpressionType::COMPARE_EQUAL);
 	for (idx_t i = 0; i < 2; i++) {
-		auto child = make_unique<CastExpressionMatcher>();
-		child->type = make_unique<TypeMatcherId>(LogicalTypeId::VARCHAR);
-		child->matcher = make_unique<ExpressionMatcher>();
-		child->matcher->type = make_unique<TypeMatcherId>(LogicalTypeId::ENUM);
+		auto child = make_uniq<CastExpressionMatcher>();
+		child->type = make_uniq<TypeMatcherId>(LogicalTypeId::VARCHAR);
+		child->matcher = make_uniq<ExpressionMatcher>();
+		child->matcher->type = make_uniq<TypeMatcherId>(LogicalTypeId::ENUM);
 		op->matchers.push_back(std::move(child));
 	}
 	root = std::move(op);
@@ -64,8 +64,8 @@ unique_ptr<Expression> EnumComparisonRule::Apply(LogicalOperator &op, vector<Exp
 
 	auto cast_left_to_right =
 	    BoundCastExpression::AddDefaultCastToType(std::move(left_child->child), right_child->child->return_type, true);
-	return make_unique<BoundComparisonExpression>(root->type, std::move(cast_left_to_right),
-	                                              std::move(right_child->child));
+	return make_uniq<BoundComparisonExpression>(root->type, std::move(cast_left_to_right),
+	                                            std::move(right_child->child));
 }
 
 } // namespace duckdb

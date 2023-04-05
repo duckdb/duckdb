@@ -45,14 +45,14 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalTyp
 		// now generate the expression list
 		vector<unique_ptr<Expression>> select_list;
 		for (idx_t i = 0; i < target_types.size(); i++) {
-			unique_ptr<Expression> result = make_unique<BoundColumnRefExpression>(source_types[i], setop_columns[i]);
+			unique_ptr<Expression> result = make_uniq<BoundColumnRefExpression>(source_types[i], setop_columns[i]);
 			if (source_types[i] != target_types[i]) {
 				// add a cast only if the source and target types are not equivalent
 				result = BoundCastExpression::AddCastToType(context, std::move(result), target_types[i]);
 			}
 			select_list.push_back(std::move(result));
 		}
-		auto projection = make_unique<LogicalProjection>(GenerateTableIndex(), std::move(select_list));
+		auto projection = make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(select_list));
 		projection->children.push_back(std::move(op));
 		return std::move(projection);
 	}
@@ -79,12 +79,11 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 			right_types.push_back(node.right_reorder_exprs[i]->return_type);
 		}
 
-		auto left_projection = make_unique<LogicalProjection>(GenerateTableIndex(), std::move(node.left_reorder_exprs));
+		auto left_projection = make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(node.left_reorder_exprs));
 		left_projection->children.push_back(std::move(left_node));
 		left_node = std::move(left_projection);
 
-		auto right_projection =
-		    make_unique<LogicalProjection>(GenerateTableIndex(), std::move(node.right_reorder_exprs));
+		auto right_projection = make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(node.right_reorder_exprs));
 		right_projection->children.push_back(std::move(right_node));
 		right_node = std::move(right_projection);
 
@@ -115,8 +114,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 		break;
 	}
 
-	auto root = make_unique<LogicalSetOperation>(node.setop_index, node.types.size(), std::move(left_node),
-	                                             std::move(right_node), logical_type);
+	auto root = make_uniq<LogicalSetOperation>(node.setop_index, node.types.size(), std::move(left_node),
+	                                           std::move(right_node), logical_type);
 
 	return VisitQueryNode(node, std::move(root));
 }

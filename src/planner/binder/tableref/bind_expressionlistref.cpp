@@ -8,7 +8,7 @@
 namespace duckdb {
 
 unique_ptr<BoundTableRef> Binder::Bind(ExpressionListRef &expr) {
-	auto result = make_unique<BoundExpressionListRef>();
+	auto result = make_uniq<BoundExpressionListRef>();
 	result->types = expr.expected_types;
 	result->names = expr.expected_names;
 	// bind value list

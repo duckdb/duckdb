@@ -27,14 +27,14 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 		for (auto kc = constraint->keys->head; kc; kc = kc->next) {
 			columns.emplace_back(reinterpret_cast<duckdb_libpgquery::PGValue *>(kc->data.ptr_value)->val.str);
 		}
-		return make_unique<UniqueConstraint>(columns, is_primary_key);
+		return make_uniq<UniqueConstraint>(columns, is_primary_key);
 	}
 	case duckdb_libpgquery::PG_CONSTR_CHECK: {
 		auto expression = TransformExpression(constraint->raw_expr);
 		if (expression->HasSubquery()) {
 			throw ParserException("subqueries prohibited in CHECK constraints");
 		}
-		return make_unique<CheckConstraint>(TransformExpression(constraint->raw_expr));
+		return make_uniq<CheckConstraint>(TransformExpression(constraint->raw_expr));
 	}
 	case duckdb_libpgquery::PG_CONSTR_FOREIGN: {
 		ForeignKeyInfo fk_info;
@@ -55,7 +55,7 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 		if (fk_columns.empty()) {
 			throw ParserException("The set of referencing and referenced columns for foreign keys must be not empty");
 		}
-		return make_unique<ForeignKeyConstraint>(pk_columns, fk_columns, std::move(fk_info));
+		return make_uniq<ForeignKeyConstraint>(pk_columns, fk_columns, std::move(fk_info));
 	}
 	default:
 		throw NotImplementedException("Constraint type not handled yet!");
@@ -68,13 +68,13 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 	D_ASSERT(constraint);
 	switch (constraint->contype) {
 	case duckdb_libpgquery::PG_CONSTR_NOTNULL:
-		return make_unique<NotNullConstraint>(LogicalIndex(index));
+		return make_uniq<NotNullConstraint>(LogicalIndex(index));
 	case duckdb_libpgquery::PG_CONSTR_CHECK:
 		return TransformConstraint(cell);
 	case duckdb_libpgquery::PG_CONSTR_PRIMARY:
-		return make_unique<UniqueConstraint>(LogicalIndex(index), true);
+		return make_uniq<UniqueConstraint>(LogicalIndex(index), true);
 	case duckdb_libpgquery::PG_CONSTR_UNIQUE:
-		return make_unique<UniqueConstraint>(LogicalIndex(index), false);
+		return make_uniq<UniqueConstraint>(LogicalIndex(index), false);
 	case duckdb_libpgquery::PG_CONSTR_NULL:
 		return nullptr;
 	case duckdb_libpgquery::PG_CONSTR_GENERATED_VIRTUAL: {
@@ -111,7 +111,7 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 		if (pk_columns.size() != fk_columns.size()) {
 			throw ParserException("The number of referencing and referenced columns for foreign keys must be the same");
 		}
-		return make_unique<ForeignKeyConstraint>(pk_columns, fk_columns, std::move(fk_info));
+		return make_uniq<ForeignKeyConstraint>(pk_columns, fk_columns, std::move(fk_info));
 	}
 	default:
 		throw NotImplementedException("Constraint not implemented!");

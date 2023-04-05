@@ -47,11 +47,11 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalLimit::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<LimitGlobalState>(context, *this);
+	return make_uniq<LimitGlobalState>(context, *this);
 }
 
 unique_ptr<LocalSinkState> PhysicalLimit::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<LimitLocalState>(context.client, *this);
+	return make_uniq<LimitLocalState>(context.client, *this);
 }
 
 bool PhysicalLimit::ComputeOffset(ExecutionContext &context, DataChunk &input, idx_t &limit, idx_t &offset,
@@ -143,7 +143,7 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalLimit::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<LimitSourceState>();
+	return make_uniq<LimitSourceState>();
 }
 
 void PhysicalLimit::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,

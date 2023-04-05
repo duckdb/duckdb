@@ -24,7 +24,7 @@ struct FixedSizeAnalyzeState : public AnalyzeState {
 };
 
 unique_ptr<AnalyzeState> FixedSizeInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return make_unique<FixedSizeAnalyzeState>();
+	return make_uniq<FixedSizeAnalyzeState>();
 }
 
 bool FixedSizeAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
@@ -65,7 +65,7 @@ void UncompressedCompressState::CreateEmptySegment(idx_t row_start) {
 	auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
 	if (type.InternalType() == PhysicalType::VARCHAR) {
 		auto &state = (UncompressedStringSegmentState &)*compressed_segment->GetSegmentState();
-		state.overflow_writer = make_unique<WriteOverflowStringsToDisk>(checkpointer.GetColumnData().GetBlockManager());
+		state.overflow_writer = make_uniq<WriteOverflowStringsToDisk>(checkpointer.GetColumnData().GetBlockManager());
 	}
 	current_segment = std::move(compressed_segment);
 	current_segment->InitializeAppend(append_state);
@@ -83,7 +83,7 @@ void UncompressedCompressState::Finalize(idx_t segment_size) {
 
 unique_ptr<CompressionState> UncompressedFunctions::InitCompression(ColumnDataCheckpointer &checkpointer,
                                                                     unique_ptr<AnalyzeState> state) {
-	return make_unique<UncompressedCompressState>(checkpointer);
+	return make_uniq<UncompressedCompressState>(checkpointer);
 }
 
 void UncompressedFunctions::Compress(CompressionState &state_p, Vector &data, idx_t count) {
@@ -122,7 +122,7 @@ struct FixedSizeScanState : public SegmentScanState {
 };
 
 unique_ptr<SegmentScanState> FixedSizeInitScan(ColumnSegment &segment) {
-	auto result = make_unique<FixedSizeScanState>();
+	auto result = make_uniq<FixedSizeScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	result->handle = buffer_manager.Pin(segment.block);
 	return std::move(result);
@@ -178,7 +178,7 @@ void FixedSizeFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t ro
 static unique_ptr<CompressionAppendState> FixedSizeInitAppend(ColumnSegment &segment) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
-	return make_unique<CompressionAppendState>(std::move(handle));
+	return make_uniq<CompressionAppendState>(std::move(handle));
 }
 
 struct StandardFixedSizeAppend {

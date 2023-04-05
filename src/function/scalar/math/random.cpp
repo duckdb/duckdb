@@ -31,7 +31,7 @@ static unique_ptr<FunctionLocalState> RandomInitLocalState(ExpressionState &stat
                                                            FunctionData *bind_data) {
 	auto &random_engine = RandomEngine::Get(state.GetContext());
 	lock_guard<mutex> guard(random_engine.lock);
-	return make_unique<RandomLocalState>(random_engine.NextRandomInteger());
+	return make_uniq<RandomLocalState>(random_engine.NextRandomInteger());
 }
 
 void RandomFun::RegisterFunction(BuiltinFunctions &set) {

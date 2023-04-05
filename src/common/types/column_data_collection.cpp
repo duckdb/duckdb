@@ -93,7 +93,7 @@ void ColumnDataCollection::Initialize(vector<LogicalType> types_p) {
 }
 
 void ColumnDataCollection::CreateSegment() {
-	segments.emplace_back(make_unique<ColumnDataCollectionSegment>(allocator, types));
+	segments.emplace_back(make_uniq<ColumnDataCollectionSegment>(allocator, types));
 }
 
 Allocator &ColumnDataCollection::GetAllocator() const {
@@ -128,7 +128,7 @@ ColumnDataRowCollection::ColumnDataRowCollection(const ColumnDataCollection &col
 	ColumnDataScanState temp_scan_state;
 	collection.InitializeScan(temp_scan_state, ColumnDataScanProperties::DISALLOW_ZERO_COPY);
 	while (true) {
-		auto chunk = make_unique<DataChunk>();
+		auto chunk = make_uniq<DataChunk>();
 		collection.InitializeScanChunk(*chunk);
 		if (!collection.Scan(temp_scan_state, *chunk)) {
 			break;

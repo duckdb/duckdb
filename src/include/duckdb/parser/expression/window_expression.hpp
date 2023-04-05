@@ -76,6 +76,8 @@ public:
 	void FormatSerialize(FormatSerializer &serializer) const override;
 	static unique_ptr<ParsedExpression> FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer);
 
+	static ExpressionType WindowToExpressionType(string &fun_name);
+
 public:
 	template <class T, class BASE, class ORDER_NODE>
 	static string ToString(const T &entry, const string &schema, const string &function_name) {
