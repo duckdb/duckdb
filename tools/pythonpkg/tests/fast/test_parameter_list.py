@@ -10,13 +10,13 @@ class TestParameterList(object):
         res = conn.execute("select count(*) from bool_table where a =?",[True])
         assert res.fetchone()[0] == 1
 
-    def test_exception(self, duckdb_cursor):
+    def test_conversion_to_string(self, duckdb_cursor):
         conn = duckdb.connect()
         df_in = pd.DataFrame({'numbers': [1,2,3,4,5],})
         conn.execute("create table bool_table (a bool)")
         conn.execute("insert into bool_table values (TRUE)")
-        with pytest.raises(duckdb.NotImplementedException, match='Unable to transform'):
-            res = conn.execute("select count(*) from bool_table where a =?",[df_in])
+        res = conn.execute("select count(*) from bool_table where a =?",[df_in]).fetchall()
+        assert res == [(0,)]
 
     def test_explicit_nan_param(self):
         con = duckdb.default_connection

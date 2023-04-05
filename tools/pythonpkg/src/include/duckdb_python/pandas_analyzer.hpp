@@ -28,6 +28,9 @@ public:
 	}
 
 public:
+	bool ContainsOnlyStrings() const {
+		return all_strings;
+	}
 	LogicalType GetListType(py::handle &ele, bool &can_convert);
 	LogicalType DictToMap(const PyDictionary &dict, bool &can_convert);
 	LogicalType DictToStruct(const PyDictionary &dict, bool &can_convert);
@@ -47,6 +50,8 @@ private:
 	PythonGILWrapper gil;
 	//! The resulting analyzed type
 	LogicalType analyzed_type;
+	//! Whether all objects are builtin.str
+	bool all_strings = true;
 };
 
 } // namespace duckdb

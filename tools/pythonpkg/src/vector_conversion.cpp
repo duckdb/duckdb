@@ -294,7 +294,7 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 		//! We have determined the underlying logical type of this object column
 		// Get the source pointer of the numpy array
 		auto src_ptr = (PyObject **)numpy_col.data();
-		if (out.GetType().id() != LogicalTypeId::VARCHAR) {
+		if (!bind_data.all_strings) {
 			return ScanPandasObjectColumn(bind_data, src_ptr, count, offset, out);
 		}
 
@@ -490,6 +490,7 @@ void VectorConversion::BindPandas(const DBConfig &config, py::handle df, vector<
 			if (analyzer.Analyze(get_fun(df_columns[col_idx]))) {
 				duckdb_col_type = analyzer.AnalyzedType();
 			}
+			bind_data.all_strings = analyzer.ContainsOnlyStrings();
 		}
 
 		D_ASSERT(py::hasattr(bind_data.numpy_col, "strides"));

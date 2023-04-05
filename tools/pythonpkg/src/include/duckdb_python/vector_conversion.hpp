@@ -33,6 +33,8 @@ struct PandasColumnBindData {
 	string internal_categorical_type;
 	// When object types are cast we must hold their data somewhere
 	PythonObjectContainer<py::str> object_str_val;
+	//! Whether all objects are builtin.str objects
+	bool all_strings = true;
 };
 
 class VectorConversion {

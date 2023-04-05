@@ -64,9 +64,13 @@ public:
 	IpywidgetsCacheItem &ipywidgets() {
 		return LazyLoadModule(ipywidgets_module);
 	}
+	BuiltinsCacheItem &builtins() {
+		return LazyLoadModule(builtins_module);
+	}
 
 private:
 	NumpyCacheItem numpy_module;
+	BuiltinsCacheItem builtins_module;
 	PathLibCacheItem pathlib_module;
 	PyDuckDBCacheItem pyduckdb_module;
 	DatetimeCacheItem datetime_module;

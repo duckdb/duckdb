@@ -246,6 +246,13 @@ LogicalType PandasAnalyzer::DictToStruct(const PyDictionary &dict, bool &can_con
 LogicalType PandasAnalyzer::GetItemType(py::handle ele, bool &can_convert) {
 	auto object_type = GetPythonObjectType(ele);
 
+	if (all_strings && object_type == PythonObjectType::String) {
+		// Fast path for strings
+		return LogicalType::VARCHAR;
+	} else {
+		all_strings = false;
+	}
+
 	switch (object_type) {
 	case PythonObjectType::None:
 		return LogicalType::SQLNULL;
@@ -319,7 +326,6 @@ LogicalType PandasAnalyzer::GetItemType(py::handle ele, bool &can_convert) {
 	}
 	case PythonObjectType::Other:
 		// Fall back to string for unknown types
-		can_convert = false;
 		return LogicalType::VARCHAR;
 	}
 }

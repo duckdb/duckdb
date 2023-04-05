@@ -371,13 +371,21 @@ class TestResolveObjectColumns(object):
         double_dtype = np.dtype('float64')
         assert isinstance(converted_col['0'].dtype, double_dtype.__class__) == True
 
+    def test_numpy_stringliterals(self):
+        con = duckdb.connect()
+        df = pd.DataFrame({"x": list(map(np.str_, range(3)))})
+
+        res = con.execute("select * from df").fetchall()
+        assert res == [('0',), ('1',), ('2',)]
+
     def test_integer_conversion_fail(self):
         data = [2**10000, 0]
         x = pd.DataFrame({'0': pd.Series(data=data, dtype='object')})
         converted_col = duckdb.query_df(x, "x", "select * from x").df()
         print(converted_col['0'])
-        double_dtype = np.dtype('object')
-        assert isinstance(converted_col['0'].dtype, double_dtype.__class__) == True
+        object_dtype = np.dtype('object')
+        # The int is too big to convert to float
+        assert isinstance(converted_col['0'].dtype, object_dtype.__class__) == True
 
     # Most of the time numpy.datetime64 is just a wrapper around a datetime.datetime object
     # But to support arbitrary precision, it can fall back to using an `int` internally

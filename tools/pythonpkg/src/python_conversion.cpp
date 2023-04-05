@@ -250,6 +250,11 @@ bool TryTransformPythonNumeric(Value &res, py::handle ele) {
 PythonObjectType GetPythonObjectType(py::handle &ele) {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 
+	if (py::type::of(ele) == import_cache.builtins().str()) {
+		// fast path for builtins.str objects
+		return PythonObjectType::String;
+	}
+
 	if (ele.is_none()) {
 		return PythonObjectType::None;
 	} else if (import_cache.pandas().libs.NAType.IsInstance(ele)) {
@@ -272,8 +277,6 @@ PythonObjectType GetPythonObjectType(py::handle &ele) {
 		return PythonObjectType::Date;
 	} else if (py::isinstance(ele, import_cache.datetime().timedelta())) {
 		return PythonObjectType::Timedelta;
-	} else if (py::isinstance<py::str>(ele)) {
-		return PythonObjectType::String;
 	} else if (py::isinstance<py::bytearray>(ele)) {
 		return PythonObjectType::ByteArray;
 	} else if (py::isinstance<py::memoryview>(ele)) {
@@ -293,6 +296,11 @@ PythonObjectType GetPythonObjectType(py::handle &ele) {
 	}
 }
 
+void CantConvert(const py::handle &ele) {
+	throw NotImplementedException("Unable to transform python value of type '%s' to DuckDB LogicalType",
+	                              py::str(ele.get_type()).cast<string>());
+}
+
 Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool nan_as_null) {
 	auto object_type = GetPythonObjectType(ele);
 
@@ -304,7 +312,8 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 	case PythonObjectType::Integer: {
 		Value integer;
 		if (!TryTransformPythonNumeric(integer, ele)) {
-			throw InvalidInputException("An error occurred attempting to convert a python integer");
+			// fall back to casting to string
+			return std::string(py::str(ele));
 		}
 		return integer;
 	}
@@ -346,6 +355,11 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 		auto timedelta = PyTimeDelta(ele);
 		return Value::INTERVAL(timedelta.ToInterval());
 	}
+	case PythonObjectType::Other:
+		if (!py::hasattr(ele, "__str__")) {
+			CantConvert(ele);
+		}
+		return std::string(py::str(ele));
 	case PythonObjectType::String:
 		return ele.cast<string>();
 	case PythonObjectType::ByteArray: {
@@ -380,9 +394,8 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 	case PythonObjectType::NdArray:
 	case PythonObjectType::NdDatetime:
 		return TransformPythonValue(ele.attr("tolist")(), target_type, nan_as_null);
-	case PythonObjectType::Other:
-		throw NotImplementedException("Unable to transform python value of type '%s' to DuckDB LogicalType",
-		                              py::str(ele.get_type()).cast<string>());
+	default:
+		CantConvert(ele);
 	}
 }
 
