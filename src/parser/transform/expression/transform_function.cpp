@@ -299,8 +299,6 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			                                               std::move(filter_expr), std::move(order_bys),
 			                                               root->agg_distinct, false, root->export_state);
 			lowercase_name = "list_sort";
-			order_bys.reset();
-			filter_expr.reset();
 			children.clear();
 			children.emplace_back(std::move(unordered));
 			children.emplace_back(std::move(sense));
