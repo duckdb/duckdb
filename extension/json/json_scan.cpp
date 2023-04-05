@@ -12,7 +12,7 @@ JSONScanData::JSONScanData() {
 }
 
 unique_ptr<FunctionData> JSONScanData::Bind(ClientContext &context, TableFunctionBindInput &input) {
-	auto result = make_unique<JSONScanData>();
+	auto result = make_uniq<JSONScanData>();
 	auto &options = result->options;
 
 	auto &info = (JSONScanInfo &)*input.info;
@@ -149,8 +149,7 @@ JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, JSONScanData &b
 	if (bind_data.stored_readers.empty()) {
 		json_readers.reserve(bind_data.file_paths.size());
 		for (idx_t i = 0; i < bind_data.file_paths.size(); i++) {
-			json_readers.push_back(
-			    make_unique<BufferedJSONReader>(context, bind_data.options, bind_data.file_paths[i]));
+			json_readers.push_back(make_uniq<BufferedJSONReader>(context, bind_data.options, bind_data.file_paths[i]));
 		}
 	} else {
 		json_readers = std::move(bind_data.stored_readers);
@@ -177,7 +176,7 @@ JSONGlobalTableFunctionState::JSONGlobalTableFunctionState(ClientContext &contex
 unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientContext &context,
                                                                         TableFunctionInitInput &input) {
 	auto &bind_data = (JSONScanData &)*input.bind_data;
-	auto result = make_unique<JSONGlobalTableFunctionState>(context, input);
+	auto result = make_uniq<JSONGlobalTableFunctionState>(context, input);
 
 	// Perform projection pushdown
 	if (bind_data.type == JSONScanType::READ_JSON) {
@@ -233,7 +232,7 @@ unique_ptr<LocalTableFunctionState> JSONLocalTableFunctionState::Init(ExecutionC
                                                                       TableFunctionInitInput &input,
                                                                       GlobalTableFunctionState *global_state) {
 	auto &gstate = (JSONGlobalTableFunctionState &)*global_state;
-	auto result = make_unique<JSONLocalTableFunctionState>(context.client, gstate.state);
+	auto result = make_uniq<JSONLocalTableFunctionState>(context.client, gstate.state);
 
 	// Copy the transform options / date format map because we need to do thread-local stuff
 	result->state.date_format_map = gstate.state.bind_data.date_format_map;
@@ -528,7 +527,7 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 	}
 
 	// Create an entry and insert it into the map
-	auto json_buffer_handle = make_unique<JSONBufferHandle>(buffer_index, readers, std::move(buffer), buffer_size);
+	auto json_buffer_handle = make_uniq<JSONBufferHandle>(buffer_index, readers, std::move(buffer), buffer_size);
 	current_buffer_handle = json_buffer_handle.get();
 	current_reader->InsertBuffer(buffer_index, std::move(json_buffer_handle));
 

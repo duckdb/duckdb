@@ -26,7 +26,7 @@ void CreateTableInfo::SerializeInternal(Serializer &serializer) const {
 }
 
 unique_ptr<CreateTableInfo> CreateTableInfo::Deserialize(Deserializer &deserializer) {
-	auto result = make_unique<CreateTableInfo>();
+	auto result = make_uniq<CreateTableInfo>();
 	result->DeserializeBase(deserializer);
 
 	FieldReader reader(deserializer);
@@ -40,7 +40,7 @@ unique_ptr<CreateTableInfo> CreateTableInfo::Deserialize(Deserializer &deseriali
 }
 
 unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
-	auto result = make_unique<CreateTableInfo>(catalog, schema, table);
+	auto result = make_uniq<CreateTableInfo>(catalog, schema, table);
 	CopyProperties(*result);
 	result->columns = columns.Copy();
 	for (auto &constraint : constraints) {

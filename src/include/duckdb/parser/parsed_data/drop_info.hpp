@@ -36,7 +36,7 @@ struct DropInfo : public ParseInfo {
 
 public:
 	unique_ptr<DropInfo> Copy() const {
-		auto result = make_unique<DropInfo>();
+		auto result = make_uniq<DropInfo>();
 		result->type = type;
 		result->catalog = catalog;
 		result->schema = schema;
@@ -61,7 +61,7 @@ public:
 
 	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer) {
 		FieldReader reader(deserializer);
-		auto drop_info = make_unique<DropInfo>();
+		auto drop_info = make_uniq<DropInfo>();
 		drop_info->type = reader.ReadRequired<CatalogType>();
 		drop_info->catalog = reader.ReadRequired<string>();
 		drop_info->schema = reader.ReadRequired<string>();

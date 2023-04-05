@@ -310,7 +310,7 @@ struct CeilOperator {
 
 template <class T, class POWERS_OF_TEN, class OP>
 static void GenericRoundFunctionDecimal(DataChunk &input, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	OP::template Operation<T, POWERS_OF_TEN>(input, DecimalType::GetScale(func_expr.children[0]->return_type), result);
 }
 
@@ -508,7 +508,7 @@ struct RoundPrecisionFunctionData : public FunctionData {
 	int32_t target_scale;
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<RoundPrecisionFunctionData>(target_scale);
+		return make_uniq<RoundPrecisionFunctionData>(target_scale);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
@@ -519,7 +519,7 @@ struct RoundPrecisionFunctionData : public FunctionData {
 
 template <class T, class POWERS_OF_TEN_CLASS>
 static void DecimalRoundNegativePrecisionFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = (RoundPrecisionFunctionData &)*func_expr.bind_info;
 	auto source_scale = DecimalType::GetScale(func_expr.children[0]->return_type);
 	auto width = DecimalType::GetWidth(func_expr.children[0]->return_type);
@@ -545,7 +545,7 @@ static void DecimalRoundNegativePrecisionFunction(DataChunk &input, ExpressionSt
 
 template <class T, class POWERS_OF_TEN_CLASS>
 static void DecimalRoundPositivePrecisionFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = (RoundPrecisionFunctionData &)*func_expr.bind_info;
 	auto source_scale = DecimalType::GetScale(func_expr.children[0]->return_type);
 	T power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[source_scale - info.target_scale];
@@ -623,7 +623,7 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(ClientContext &context, Scala
 	}
 	bound_function.arguments[0] = decimal_type;
 	bound_function.return_type = LogicalType::DECIMAL(width, target_scale);
-	return make_unique<RoundPrecisionFunctionData>(round_value);
+	return make_uniq<RoundPrecisionFunctionData>(round_value);
 }
 
 void RoundFun::RegisterFunction(BuiltinFunctions &set) {

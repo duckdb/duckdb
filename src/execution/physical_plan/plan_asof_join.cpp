@@ -44,10 +44,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAsOfJoin &
 	auto &asof_comp = op.conditions[asof_idx];
 	auto &asof_column = asof_comp.right;
 	auto asof_type = asof_column->return_type;
-	auto asof_temp = make_unique<BoundWindowExpression>(ExpressionType::WINDOW_LEAD, asof_type, nullptr, nullptr);
+	auto asof_temp = make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_LEAD, asof_type, nullptr, nullptr);
 	asof_temp->children.emplace_back(asof_column->Copy());
-	asof_temp->offset_expr = make_unique<BoundConstantExpression>(Value::BIGINT(1));
-	asof_temp->default_expr = make_unique<BoundConstantExpression>(Value::Infinity(asof_type));
+	asof_temp->offset_expr = make_uniq<BoundConstantExpression>(Value::BIGINT(1));
+	asof_temp->default_expr = make_uniq<BoundConstantExpression>(Value::Infinity(asof_type));
 	for (auto equi_idx : equi_indexes) {
 		asof_temp->partitions.emplace_back(op.conditions[equi_idx].right->Copy());
 	}
@@ -61,13 +61,13 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAsOfJoin &
 	auto window_types = right->types;
 	window_types.emplace_back(asof_type);
 
-	auto window = make_unique<PhysicalWindow>(window_types, std::move(window_select), rhs_cardinality);
+	auto window = make_uniq<PhysicalWindow>(window_types, std::move(window_select), rhs_cardinality);
 	window->children.emplace_back(std::move(right));
 
 	// IEJoin(left, window, conditions || asof_column < asof_temp)
 	JoinCondition asof_upper;
 	asof_upper.left = asof_comp.left->Copy();
-	asof_upper.right = make_unique<BoundReferenceExpression>(asof_type, window_types.size() - 1);
+	asof_upper.right = make_uniq<BoundReferenceExpression>(asof_type, window_types.size() - 1);
 	asof_upper.comparison = ExpressionType::COMPARE_LESSTHAN;
 
 	// We have an equality condition, so we may have to deal with projection maps.
@@ -83,8 +83,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAsOfJoin &
 
 	op.types.emplace_back(asof_type);
 	op.conditions.emplace_back(std::move(asof_upper));
-	auto iejoin = make_unique<PhysicalIEJoin>(op, std::move(left), std::move(window), std::move(op.conditions),
-	                                          op.join_type, op.estimated_cardinality);
+	auto iejoin = make_uniq<PhysicalIEJoin>(op, std::move(left), std::move(window), std::move(op.conditions),
+	                                        op.join_type, op.estimated_cardinality);
 
 	//	Project away asof_temp and anything from the projection maps
 	auto proj = PhysicalProjection::CreateJoinProjection(proj_types, lhs_types, rhs_types, op.left_projection_map,

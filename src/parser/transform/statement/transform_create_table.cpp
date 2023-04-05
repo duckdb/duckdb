@@ -44,7 +44,7 @@ OnCreateConflict Transformer::TransformOnConflict(duckdb_libpgquery::PGOnCreateC
 unique_ptr<ParsedExpression> Transformer::TransformCollateExpr(duckdb_libpgquery::PGCollateClause *collate) {
 	auto child = TransformExpression(collate->arg);
 	auto collation = TransformCollation(collate);
-	return make_unique<CollateExpression>(collation, std::move(child));
+	return make_uniq<CollateExpression>(collation, std::move(child));
 }
 
 ColumnDefinition Transformer::TransformColumnDefinition(duckdb_libpgquery::PGColumnDef *cdef) {
@@ -70,8 +70,8 @@ ColumnDefinition Transformer::TransformColumnDefinition(duckdb_libpgquery::PGCol
 unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery::PGNode *node) {
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGCreateStmt *>(node);
 	D_ASSERT(stmt);
-	auto result = make_unique<CreateStatement>();
-	auto info = make_unique<CreateTableInfo>();
+	auto result = make_uniq<CreateStatement>();
+	auto info = make_uniq<CreateTableInfo>();
 
 	if (stmt->inhRelations) {
 		throw NotImplementedException("inherited relations not implemented");

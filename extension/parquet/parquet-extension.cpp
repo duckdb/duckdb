@@ -143,15 +143,15 @@ void ParquetOptions::Deserialize(FieldReader &reader) {
 
 BindInfo ParquetGetBatchInfo(const FunctionData *bind_data) {
 	auto bind_info = BindInfo(ScanType::PARQUET);
-	auto parquet_bind = (ParquetReadBindData *)bind_data;
+	auto &parquet_bind = bind_data->Cast<ParquetReadBindData>();
 	vector<Value> file_path;
-	for (auto &path : parquet_bind->files) {
+	for (auto &path : parquet_bind.files) {
 		file_path.emplace_back(path);
 	}
 	bind_info.InsertOption("file_path", Value::LIST(LogicalType::VARCHAR, file_path));
-	bind_info.InsertOption("binary_as_string", Value::BOOLEAN(parquet_bind->parquet_options.binary_as_string));
-	bind_info.InsertOption("file_row_number", Value::BOOLEAN(parquet_bind->parquet_options.file_row_number));
-	parquet_bind->parquet_options.file_options.AddBatchInfo(bind_info);
+	bind_info.InsertOption("binary_as_string", Value::BOOLEAN(parquet_bind.parquet_options.binary_as_string));
+	bind_info.InsertOption("file_row_number", Value::BOOLEAN(parquet_bind.parquet_options.file_row_number));
+	parquet_bind.parquet_options.file_options.AddBatchInfo(bind_info);
 	return bind_info;
 }
 
@@ -205,7 +205,7 @@ public:
 
 	static unique_ptr<BaseStatistics> ParquetScanStats(ClientContext &context, const FunctionData *bind_data_p,
 	                                                   column_t column_index) {
-		auto &bind_data = (ParquetReadBindData &)*bind_data_p;
+		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
 
 		if (IsRowIdColumnId(column_index)) {
 			return nullptr;
@@ -268,7 +268,7 @@ public:
 	static unique_ptr<FunctionData> ParquetScanBindInternal(ClientContext &context, vector<string> files,
 	                                                        vector<LogicalType> &return_types, vector<string> &names,
 	                                                        ParquetOptions parquet_options) {
-		auto result = make_unique<ParquetReadBindData>();
+		auto result = make_uniq<ParquetReadBindData>();
 		result->files = std::move(files);
 		result->reader_bind =
 		    MultiFileReader::BindReader<ParquetReader>(context, result->types, result->names, *result, parquet_options);
@@ -308,7 +308,7 @@ public:
 
 	static double ParquetProgress(ClientContext &context, const FunctionData *bind_data_p,
 	                              const GlobalTableFunctionState *global_state) {
-		auto &bind_data = (ParquetReadBindData &)*bind_data_p;
+		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
 		if (bind_data.files.empty()) {
 			return 100.0;
 		}
@@ -323,10 +323,10 @@ public:
 
 	static unique_ptr<LocalTableFunctionState>
 	ParquetScanInitLocal(ExecutionContext &context, TableFunctionInitInput &input, GlobalTableFunctionState *gstate_p) {
-		auto &bind_data = (ParquetReadBindData &)*input.bind_data;
-		auto &gstate = (ParquetReadGlobalState &)*gstate_p;
+		auto &bind_data = input.bind_data->Cast<ParquetReadBindData>();
+		auto &gstate = gstate_p->Cast<ParquetReadGlobalState>();
 
-		auto result = make_unique<ParquetReadLocalState>();
+		auto result = make_uniq<ParquetReadLocalState>();
 		result->is_parallel = true;
 		result->batch_index = 0;
 		if (input.CanRemoveFilterColumns()) {
@@ -341,10 +341,10 @@ public:
 	static unique_ptr<GlobalTableFunctionState> ParquetScanInitGlobal(ClientContext &context,
 	                                                                  TableFunctionInitInput &input) {
 		auto &bind_data = (ParquetReadBindData &)*input.bind_data;
-		auto result = make_unique<ParquetReadGlobalState>();
+		auto result = make_uniq<ParquetReadGlobalState>();
 
 		result->file_opening = std::vector<bool>(bind_data.files.size(), false);
-		result->file_mutexes = std::unique_ptr<mutex[]>(new mutex[bind_data.files.size()]);
+		result->file_mutexes = unique_ptr<mutex[]>(new mutex[bind_data.files.size()]);
 		if (bind_data.files.empty()) {
 			result->initial_reader = nullptr;
 		} else {
@@ -394,13 +394,13 @@ public:
 	static idx_t ParquetScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
 	                                      LocalTableFunctionState *local_state,
 	                                      GlobalTableFunctionState *global_state) {
-		auto &data = (ParquetReadLocalState &)*local_state;
+		auto &data = local_state->Cast<ParquetReadLocalState>();
 		return data.batch_index;
 	}
 
 	static void ParquetScanSerialize(FieldWriter &writer, const FunctionData *bind_data_p,
 	                                 const TableFunction &function) {
-		auto &bind_data = (ParquetReadBindData &)*bind_data_p;
+		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
 		writer.WriteList<string>(bind_data.files);
 		writer.WriteRegularSerializableList(bind_data.types);
 		writer.WriteList<string>(bind_data.names);
@@ -422,9 +422,9 @@ public:
 		if (!data_p.local_state) {
 			return;
 		}
-		auto &data = (ParquetReadLocalState &)*data_p.local_state;
-		auto &gstate = (ParquetReadGlobalState &)*data_p.global_state;
-		auto &bind_data = (ParquetReadBindData &)*data_p.bind_data;
+		auto &data = data_p.local_state->Cast<ParquetReadLocalState>();
+		auto &gstate = data_p.global_state->Cast<ParquetReadGlobalState>();
+		auto &bind_data = data_p.bind_data->CastNoConst<ParquetReadBindData>();
 
 		do {
 			if (gstate.CanRemoveFilterColumns()) {
@@ -448,12 +448,12 @@ public:
 	}
 
 	static unique_ptr<NodeStatistics> ParquetCardinality(ClientContext &context, const FunctionData *bind_data) {
-		auto &data = (ParquetReadBindData &)*bind_data;
-		return make_unique<NodeStatistics>(data.initial_file_cardinality * data.files.size());
+		auto &data = bind_data->Cast<ParquetReadBindData>();
+		return make_uniq<NodeStatistics>(data.initial_file_cardinality * data.files.size());
 	}
 
 	static idx_t ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data) {
-		auto &data = (ParquetReadBindData &)*bind_data;
+		auto &data = bind_data->Cast<ParquetReadBindData>();
 		return data.initial_file_row_groups * data.files.size();
 	}
 
@@ -513,11 +513,11 @@ public:
 
 	static void ParquetComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
 	                                         vector<unique_ptr<Expression>> &filters) {
-		auto data = (ParquetReadBindData *)bind_data_p;
-		auto reset_reader = MultiFileReader::ComplexFilterPushdown(context, data->files,
-		                                                           data->parquet_options.file_options, get, filters);
+		auto &data = bind_data_p->Cast<ParquetReadBindData>();
+		auto reset_reader = MultiFileReader::ComplexFilterPushdown(context, data.files,
+		                                                           data.parquet_options.file_options, get, filters);
 		if (reset_reader) {
-			MultiFileReader::PruneReaders(*data);
+			MultiFileReader::PruneReaders(data);
 		}
 	}
 
@@ -583,7 +583,7 @@ public:
 
 unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info, vector<string> &names,
                                           vector<LogicalType> &sql_types) {
-	auto bind_data = make_unique<ParquetWriteBindData>();
+	auto bind_data = make_uniq<ParquetWriteBindData>();
 	for (auto &option : info.options) {
 		auto loption = StringUtil::Lower(option.first);
 		if (loption == "row_group_size" || loption == "chunk_size") {
@@ -617,21 +617,21 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info
 
 unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &context, FunctionData &bind_data,
                                                             const string &file_path) {
-	auto global_state = make_unique<ParquetWriteGlobalState>();
-	auto &parquet_bind = (ParquetWriteBindData &)bind_data;
+	auto global_state = make_uniq<ParquetWriteGlobalState>();
+	auto &parquet_bind = bind_data.Cast<ParquetWriteBindData>();
 
 	auto &fs = FileSystem::GetFileSystem(context);
 	global_state->writer =
-	    make_unique<ParquetWriter>(fs, file_path, FileSystem::GetFileOpener(context), parquet_bind.sql_types,
-	                               parquet_bind.column_names, parquet_bind.codec);
+	    make_uniq<ParquetWriter>(fs, file_path, FileSystem::GetFileOpener(context), parquet_bind.sql_types,
+	                             parquet_bind.column_names, parquet_bind.codec);
 	return std::move(global_state);
 }
 
 void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_p, GlobalFunctionData &gstate,
                       LocalFunctionData &lstate, DataChunk &input) {
-	auto &bind_data = (ParquetWriteBindData &)bind_data_p;
-	auto &global_state = (ParquetWriteGlobalState &)gstate;
-	auto &local_state = (ParquetWriteLocalState &)lstate;
+	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
+	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
+	auto &local_state = lstate.Cast<ParquetWriteLocalState>();
 
 	// append data to the local (buffered) chunk collection
 	local_state.buffer.Append(input);
@@ -645,21 +645,21 @@ void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_p, Glob
 
 void ParquetWriteCombine(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
                          LocalFunctionData &lstate) {
-	auto &global_state = (ParquetWriteGlobalState &)gstate;
-	auto &local_state = (ParquetWriteLocalState &)lstate;
+	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
+	auto &local_state = lstate.Cast<ParquetWriteLocalState>();
 	// flush any data left in the local state to the file
 	global_state.writer->Flush(local_state.buffer);
 }
 
 void ParquetWriteFinalize(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate) {
-	auto &global_state = (ParquetWriteGlobalState &)gstate;
+	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
 	// finalize: write any additional metadata to the file here
 	global_state.writer->Finalize();
 }
 
 unique_ptr<LocalFunctionData> ParquetWriteInitializeLocal(ExecutionContext &context, FunctionData &bind_data_p) {
-	auto &bind_data = (ParquetWriteBindData &)bind_data_p;
-	return make_unique<ParquetWriteLocalState>(context.client, bind_data.sql_types);
+	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
+	return make_uniq<ParquetWriteLocalState>(context.client, bind_data.sql_types);
 }
 
 //===--------------------------------------------------------------------===//
@@ -679,16 +679,16 @@ unique_ptr<TableRef> ParquetScanReplacement(ClientContext &context, const string
 	if (!StringUtil::EndsWith(lower_name, ".parquet") && !StringUtil::Contains(lower_name, ".parquet?")) {
 		return nullptr;
 	}
-	auto table_function = make_unique<TableFunctionRef>();
+	auto table_function = make_uniq<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(make_unique<ConstantExpression>(Value(table_name)));
-	table_function->function = make_unique<FunctionExpression>("parquet_scan", std::move(children));
+	children.push_back(make_uniq<ConstantExpression>(Value(table_name)));
+	table_function->function = make_uniq<FunctionExpression>("parquet_scan", std::move(children));
 	return std::move(table_function);
 }
 
 void ParquetExtension::Load(DuckDB &db) {
 	auto &fs = db.GetFileSystem();
-	fs.RegisterSubSystem(FileCompressionType::ZSTD, make_unique<ZStdFileSystem>());
+	fs.RegisterSubSystem(FileCompressionType::ZSTD, make_uniq<ZStdFileSystem>());
 
 	auto scan_fun = ParquetScanFunction::GetFunctionSet();
 	CreateTableFunctionInfo cinfo(scan_fun);

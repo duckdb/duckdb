@@ -43,7 +43,7 @@ unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, Al
 	}
 }
 
-void ViewCatalogEntry::Serialize(Serializer &serializer) {
+void ViewCatalogEntry::Serialize(Serializer &serializer) const {
 	D_ASSERT(!internal);
 	FieldWriter writer(serializer);
 	writer.WriteString(schema->name);
@@ -56,7 +56,7 @@ void ViewCatalogEntry::Serialize(Serializer &serializer) {
 }
 
 unique_ptr<CreateViewInfo> ViewCatalogEntry::Deserialize(Deserializer &source, ClientContext &context) {
-	auto info = make_unique<CreateViewInfo>();
+	auto info = make_uniq<CreateViewInfo>();
 
 	FieldReader reader(source);
 	info->schema = reader.ReadRequired<string>();
@@ -70,7 +70,7 @@ unique_ptr<CreateViewInfo> ViewCatalogEntry::Deserialize(Deserializer &source, C
 	return info;
 }
 
-string ViewCatalogEntry::ToSQL() {
+string ViewCatalogEntry::ToSQL() const {
 	if (sql.empty()) {
 		//! Return empty sql with view name so pragma view_tables don't complain
 		return sql;
@@ -78,9 +78,9 @@ string ViewCatalogEntry::ToSQL() {
 	return sql + "\n;";
 }
 
-unique_ptr<CatalogEntry> ViewCatalogEntry::Copy(ClientContext &context) {
+unique_ptr<CatalogEntry> ViewCatalogEntry::Copy(ClientContext &context) const {
 	D_ASSERT(!internal);
-	auto create_info = make_unique<CreateViewInfo>(schema, name);
+	auto create_info = make_uniq<CreateViewInfo>(schema, name);
 	create_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
 	for (idx_t i = 0; i < aliases.size(); i++) {
 		create_info->aliases.push_back(aliases[i]);
@@ -91,7 +91,7 @@ unique_ptr<CatalogEntry> ViewCatalogEntry::Copy(ClientContext &context) {
 	create_info->temporary = temporary;
 	create_info->sql = sql;
 
-	return make_unique<ViewCatalogEntry>(catalog, schema, create_info.get());
+	return make_uniq<ViewCatalogEntry>(catalog, schema, create_info.get());
 }
 
 } // namespace duckdb

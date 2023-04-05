@@ -24,8 +24,8 @@ bool BoundConjunctionExpression::Equals(const BaseExpression *other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundConjunctionExpression *)other_p;
-	return ExpressionUtil::SetEquals(children, other->children);
+	auto &other = other_p->Cast<BoundConjunctionExpression>();
+	return ExpressionUtil::SetEquals(children, other.children);
 }
 
 bool BoundConjunctionExpression::PropagatesNullValues() const {
@@ -33,7 +33,7 @@ bool BoundConjunctionExpression::PropagatesNullValues() const {
 }
 
 unique_ptr<Expression> BoundConjunctionExpression::Copy() {
-	auto copy = make_unique<BoundConjunctionExpression>(type);
+	auto copy = make_uniq<BoundConjunctionExpression>(type);
 	for (auto &expr : children) {
 		copy->children.push_back(expr->Copy());
 	}
@@ -48,7 +48,7 @@ void BoundConjunctionExpression::Serialize(FieldWriter &writer) const {
 unique_ptr<Expression> BoundConjunctionExpression::Deserialize(ExpressionDeserializationState &state,
                                                                FieldReader &reader) {
 	auto children = reader.ReadRequiredSerializableList<Expression>(state.gstate);
-	auto res = make_unique<BoundConjunctionExpression>(state.type);
+	auto res = make_uniq<BoundConjunctionExpression>(state.type);
 	res->children = std::move(children);
 	return std::move(res);
 }

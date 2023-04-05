@@ -47,7 +47,7 @@ private:
 	                               vector<StrpTimeFormat> &formats);
 
 public:
-	unique_ptr<string> key;
+	duckdb::unique_ptr<string> key;
 	bool initialized = false;
 	vector<JSONStructureDescription> descriptions;
 };

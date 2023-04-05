@@ -36,7 +36,7 @@ BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> *expr_p
 	case ExpressionClass::DEFAULT:
 		return BindResult("SELECT clause cannot contain DEFAULT clause");
 	case ExpressionClass::WINDOW:
-		return BindWindow((WindowExpression &)expr, depth);
+		return BindWindow(expr.Cast<WindowExpression>(), depth);
 	default:
 		return ExpressionBinder::BindExpression(expr_ptr, depth, root_expression);
 	}
@@ -45,7 +45,7 @@ BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> *expr_p
 idx_t BaseSelectBinder::TryBindGroup(ParsedExpression &expr, idx_t depth) {
 	// first check the group alias map, if expr is a ColumnRefExpression
 	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto &colref = (ColumnRefExpression &)expr;
+		auto &colref = expr.Cast<ColumnRefExpression>();
 		if (!colref.IsQualified()) {
 			auto alias_entry = info.alias_map.find(colref.column_names[0]);
 			if (alias_entry != info.alias_map.end()) {
@@ -100,7 +100,7 @@ BindResult BaseSelectBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_pt
 			}
 			auto result = BindResult(node.select_list[index]->Copy());
 			if (result.expression->type == ExpressionType::BOUND_COLUMN_REF) {
-				auto &result_expr = (BoundColumnRefExpression &)*result.expression;
+				auto &result_expr = result.expression->Cast<BoundColumnRefExpression>();
 				result_expr.depth = depth;
 			}
 			return result;
@@ -133,14 +133,14 @@ BindResult BaseSelectBinder::BindGroupingFunction(OperatorExpression &op, idx_t 
 	}
 	auto col_idx = node.grouping_functions.size();
 	node.grouping_functions.push_back(std::move(group_indexes));
-	return BindResult(make_unique<BoundColumnRefExpression>(op.GetName(), LogicalType::BIGINT,
-	                                                        ColumnBinding(node.groupings_index, col_idx), depth));
+	return BindResult(make_uniq<BoundColumnRefExpression>(op.GetName(), LogicalType::BIGINT,
+	                                                      ColumnBinding(node.groupings_index, col_idx), depth));
 }
 
 BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, idx_t group_index) {
 	auto &group = node.groups.group_expressions[group_index];
-	return BindResult(make_unique<BoundColumnRefExpression>(expr.GetName(), group->return_type,
-	                                                        ColumnBinding(node.group_index, group_index), depth));
+	return BindResult(make_uniq<BoundColumnRefExpression>(expr.GetName(), group->return_type,
+	                                                      ColumnBinding(node.group_index, group_index), depth));
 }
 
 } // namespace duckdb

@@ -7,7 +7,7 @@ UnoptimizedStatementVerifier::UnoptimizedStatementVerifier(unique_ptr<SQLStateme
 }
 
 unique_ptr<StatementVerifier> UnoptimizedStatementVerifier::Create(const SQLStatement &statement_p) {
-	return make_unique<UnoptimizedStatementVerifier>(statement_p.Copy());
+	return make_uniq<UnoptimizedStatementVerifier>(statement_p.Copy());
 }
 
 } // namespace duckdb

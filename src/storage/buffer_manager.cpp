@@ -108,10 +108,10 @@ unique_ptr<FileBuffer> BufferManager::ConstructManagedBuffer(idx_t size, unique_
 	if (source) {
 		auto tmp = std::move(source);
 		D_ASSERT(tmp->AllocSize() == BufferManager::GetAllocSize(size));
-		return make_unique<FileBuffer>(*tmp, type);
+		return make_uniq<FileBuffer>(*tmp, type);
 	} else {
 		// no re-usable buffer: allocate a new buffer
-		return make_unique<FileBuffer>(Allocator::Get(db), type, size);
+		return make_uniq<FileBuffer>(Allocator::Get(db), type, size);
 	}
 }
 
@@ -243,7 +243,7 @@ void BufferManager::SetTemporaryDirectory(string new_dir) {
 }
 
 BufferPool::BufferPool(idx_t maximum_memory)
-    : current_memory(0), maximum_memory(maximum_memory), queue(make_unique<EvictionQueue>()), queue_insertions(0) {
+    : current_memory(0), maximum_memory(maximum_memory), queue(make_uniq<EvictionQueue>()), queue_insertions(0) {
 }
 BufferPool::~BufferPool() {
 }
@@ -251,8 +251,8 @@ BufferPool::~BufferPool() {
 BufferManager::BufferManager(DatabaseInstance &db, string tmp)
     : db(db), buffer_pool(db.GetBufferPool()), temp_directory(std::move(tmp)), temporary_id(MAXIMUM_BLOCK),
       buffer_allocator(BufferAllocatorAllocate, BufferAllocatorFree, BufferAllocatorRealloc,
-                       make_unique<BufferAllocatorData>(*this)) {
-	temp_block_manager = make_unique<InMemoryBlockManager>(*this);
+                       make_uniq<BufferAllocatorData>(*this)) {
+	temp_block_manager = make_uniq<InMemoryBlockManager>(*this);
 }
 
 BufferManager::~BufferManager() {
@@ -452,8 +452,8 @@ void BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 
 void BufferManager::VerifyZeroReaders(shared_ptr<BlockHandle> &handle) {
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
-	auto replacement_buffer = make_unique<FileBuffer>(Allocator::Get(db), handle->buffer->type,
-	                                                  handle->memory_usage - Storage::BLOCK_HEADER_SIZE);
+	auto replacement_buffer = make_uniq<FileBuffer>(Allocator::Get(db), handle->buffer->type,
+	                                                handle->memory_usage - Storage::BLOCK_HEADER_SIZE);
 	memcpy(replacement_buffer->buffer, handle->buffer->buffer, handle->buffer->size);
 	memset(handle->buffer->buffer, 165, handle->buffer->size); // 165 is default memory in debug mode
 	handle->buffer = std::move(replacement_buffer);
@@ -795,7 +795,7 @@ public:
 			if (!handle) {
 				// no existing handle to write to; we need to create & open a new file
 				auto new_file_index = index_manager.GetNewBlockIndex();
-				auto new_file = make_unique<TemporaryFileHandle>(db, temp_directory, new_file_index);
+				auto new_file = make_uniq<TemporaryFileHandle>(db, temp_directory, new_file_index);
 				handle = new_file.get();
 				files[new_file_index] = std::move(new_file);
 
@@ -889,7 +889,7 @@ private:
 };
 
 TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string path_p)
-    : db(db), temp_directory(std::move(path_p)), temp_file(make_unique<TemporaryFileManager>(db, temp_directory)) {
+    : db(db), temp_directory(std::move(path_p)), temp_file(make_uniq<TemporaryFileManager>(db, temp_directory)) {
 	auto &fs = FileSystem::GetFileSystem(db);
 	if (!temp_directory.empty()) {
 		if (!fs.DirectoryExists(temp_directory)) {
@@ -949,7 +949,7 @@ void BufferManager::RequireTemporaryDirectory() {
 	lock_guard<mutex> temp_handle_guard(temp_handle_lock);
 	if (!temp_directory_handle) {
 		// temp directory has not been created yet: initialize it
-		temp_directory_handle = make_unique<TemporaryDirectoryHandle>(db, temp_directory);
+		temp_directory_handle = make_uniq<TemporaryDirectoryHandle>(db, temp_directory);
 	}
 }
 

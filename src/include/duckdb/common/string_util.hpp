@@ -12,6 +12,8 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector.hpp"
 
+#include <cstring>
+
 namespace duckdb {
 /**
  * String Utility Functions
@@ -135,6 +137,9 @@ public:
 
 	//! Convert a string to lowercase
 	DUCKDB_API static string Lower(const string &str);
+
+	//! Case insensitive hash
+	DUCKDB_API static uint64_t CIHash(const string &str);
 
 	//! Case insensitive equals
 	DUCKDB_API static bool CIEquals(const string &l1, const string &l2);

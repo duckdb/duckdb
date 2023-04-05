@@ -10,6 +10,13 @@ using namespace duckdb;
 using namespace std;
 
 struct OptionValuePair {
+	OptionValuePair() {
+	}
+	OptionValuePair(Value val) : input(val), output(val) {
+	}
+	OptionValuePair(Value input, Value output) : input(std::move(input)), output(std::move(output)) {
+	}
+
 	Value input;
 	Value output;
 };
@@ -24,43 +31,44 @@ OptionValuePair &GetValueForOption(const string &name) {
 	static unordered_map<string, OptionValuePair> value_map = {
 	    {"access_mode", {Value("READ_ONLY"), Value("read_only")}},
 	    {"threads", {Value::BIGINT(42), Value::BIGINT(42)}},
-	    {"checkpoint_threshold", {"4.2GB", "4.2GB"}},
-	    {"debug_checkpoint_abort", {"before_header", "before_header"}},
-	    {"default_collation", {"nocase", "nocase"}},
-	    {"default_order", {"desc", "desc"}},
-	    {"default_null_order", {"nulls_last", "nulls_last"}},
-	    {"disabled_optimizers", {"extension", "extension"}},
+	    {"checkpoint_threshold", {"4.2GB"}},
+	    {"debug_checkpoint_abort", {"before_header"}},
+	    {"default_collation", {"nocase"}},
+	    {"default_order", {"desc"}},
+	    {"default_null_order", {"nulls_last"}},
+	    {"disabled_optimizers", {"extension"}},
 	    {"custom_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
-	    {"enable_fsst_vectors", {true, true}},
-	    {"enable_object_cache", {true, true}},
-	    {"enable_profiling", {"json", "json"}},
-	    {"enable_progress_bar", {true, true}},
-	    {"experimental_parallel_csv", {true, true}},
-	    {"explain_output", {true, true}},
-	    {"external_threads", {8, 8}},
-	    {"file_search_path", {"test", "test"}},
+	    {"enable_fsst_vectors", {true}},
+	    {"enable_object_cache", {true}},
+	    {"enable_profiling", {"json"}},
+	    {"enable_progress_bar", {true}},
+	    {"experimental_parallel_csv", {true}},
+	    {"explain_output", {true}},
+	    {"external_threads", {8}},
+	    {"file_search_path", {"test"}},
 	    {"force_compression", {"uncompressed", "Uncompressed"}},
-	    {"home_directory", {"test", "test"}},
-	    {"extension_directory", {"test", "test"}},
-	    {"immediate_transaction_mode", {true, true}},
-	    {"log_query_path", {"test", "test"}},
-	    {"max_expression_depth", {50, 50}},
-	    {"max_memory", {"4.2GB", "4.2GB"}},
-	    {"memory_limit", {"4.2GB", "4.2GB"}},
-	    {"null_order", {"nulls_last", "nulls_last"}},
-	    {"perfect_ht_threshold", {0, 0}},
-	    {"preserve_identifier_case", {false, false}},
-	    {"preserve_insertion_order", {false, false}},
-	    {"profiler_history_size", {0, 0}},
-	    {"profile_output", {"test", "test"}},
-	    {"profiling_mode", {"detailed", "detailed"}},
-	    {"enable_progress_bar_print", {false, false}},
-	    {"progress_bar_time", {0, 0}},
-	    {"temp_directory", {"tmp", "tmp"}},
-	    {"wal_autocheckpoint", {"4.2GB", "4.2GB"}},
-	    {"worker_threads", {42, 42}},
-	    {"enable_http_metadata_cache", {true, true}},
-	    {"force_bitpacking_mode", {"constant", "constant"}},
+	    {"home_directory", {"test"}},
+	    {"extension_directory", {"test"}},
+	    {"immediate_transaction_mode", {true}},
+	    {"log_query_path", {"test"}},
+	    {"max_expression_depth", {50}},
+	    {"max_memory", {"4.2GB"}},
+	    {"memory_limit", {"4.2GB"}},
+	    {"null_order", {"nulls_last"}},
+	    {"perfect_ht_threshold", {0}},
+	    {"pivot_limit", {999}},
+	    {"preserve_identifier_case", {false}},
+	    {"preserve_insertion_order", {false}},
+	    {"profiler_history_size", {0}},
+	    {"profile_output", {"test"}},
+	    {"profiling_mode", {"detailed"}},
+	    {"enable_progress_bar_print", {false}},
+	    {"progress_bar_time", {0}},
+	    {"temp_directory", {"tmp"}},
+	    {"wal_autocheckpoint", {"4.2GB"}},
+	    {"worker_threads", {42}},
+	    {"enable_http_metadata_cache", {true}},
+	    {"force_bitpacking_mode", {"constant"}},
 	};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {

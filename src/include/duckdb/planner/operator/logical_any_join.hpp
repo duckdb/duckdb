@@ -16,6 +16,9 @@ namespace duckdb {
 //! LogicalAnyJoin represents a join with an arbitrary expression as JoinCondition
 class LogicalAnyJoin : public LogicalJoin {
 public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_ANY_JOIN;
+
+public:
 	explicit LogicalAnyJoin(JoinType type);
 
 	//! The JoinCondition on which this join is performed
