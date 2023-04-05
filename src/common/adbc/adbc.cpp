@@ -130,13 +130,13 @@ AdbcStatusCode ConnectionInit(struct ::AdbcConnection *connection, struct ::Adbc
 	auto database_wrapper = (DuckDBAdbcDatabaseWrapper *)database->private_data;
 
 	connection->private_data = nullptr;
-	auto res = duckdb_connect(database_wrapper->database, (duckdb_connection*)&connection->private_data);
+	auto res = duckdb_connect(database_wrapper->database, (duckdb_connection *)&connection->private_data);
 	CHECK_RES(res, error, "Failed to connect to Database");
 }
 
 AdbcStatusCode ConnectionRelease(struct ::AdbcConnection *connection, struct ::AdbcError *error) {
 	if (connection && connection->private_data) {
-		duckdb_disconnect((duckdb_connection*)&connection->private_data);
+		duckdb_disconnect((duckdb_connection *)&connection->private_data);
 		connection->private_data = nullptr;
 	}
 	return ADBC_STATUS_OK;
@@ -211,10 +211,11 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, stru
 		// TODO evil cast, do we need a way to do this from the C api?
 		auto cconn = (duckdb::Connection *)connection;
 		cconn
-		    ->TableFunction("arrow_scan", {duckdb::Value::POINTER((uintptr_t)input),
-		                                   duckdb::Value::POINTER((uintptr_t)stream_produce),
-		                                   duckdb::Value::POINTER((uintptr_t)get_schema)}) // TODO make this a parameter somewhere
-		    ->Create(table_name);                                           // TODO this should probably be a temp table
+		    ->TableFunction("arrow_scan",
+		                    {duckdb::Value::POINTER((uintptr_t)input),
+		                     duckdb::Value::POINTER((uintptr_t)stream_produce),
+		                     duckdb::Value::POINTER((uintptr_t)get_schema)}) // TODO make this a parameter somewhere
+		    ->Create(table_name); // TODO this should probably be a temp table
 	} catch (std::exception &ex) {
 		if (error) {
 			error->message = strdup(ex.what());
@@ -281,8 +282,8 @@ AdbcStatusCode StatementRelease(struct ::AdbcStatement *statement, struct ::Adbc
 	return ADBC_STATUS_OK;
 }
 
-AdbcStatusCode StatementExecuteQuery(struct ::AdbcStatement *statement, struct ArrowArrayStream* out,
-                                         int64_t* rows_affected, struct ::AdbcError *error) {
+AdbcStatusCode StatementExecuteQuery(struct ::AdbcStatement *statement, struct ArrowArrayStream *out,
+                                     int64_t *rows_affected, struct ::AdbcError *error) {
 	CHECK_TRUE(statement, error, "Missing statement object");
 	CHECK_TRUE(statement->private_data, error, "Invalid statement object");
 	auto wrapper = (DuckDBAdbcStatementWrapper *)statement->private_data;
@@ -308,8 +309,8 @@ AdbcStatusCode StatementExecuteQuery(struct ::AdbcStatement *statement, struct A
 		out->release = release;
 		out->get_last_error = get_last_error;
 
-		// because we handed out the stream pointer its no longer our responsibility to destroy it in AdbcStatementRelease,
-		// this is now done in release()
+		// because we handed out the stream pointer its no longer our responsibility to destroy it in
+		// AdbcStatementRelease, this is now done in release()
 		wrapper->result = nullptr;
 	}
 
