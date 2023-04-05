@@ -36,22 +36,22 @@
 
 namespace duckdb {
 
-void FindForeignKeyInformation(CatalogEntry *entry, AlterForeignKeyType alter_fk_type,
+void FindForeignKeyInformation(CatalogEntry &entry, AlterForeignKeyType alter_fk_type,
                                vector<unique_ptr<AlterForeignKeyInfo>> &fk_arrays) {
-	if (entry->type != CatalogType::TABLE_ENTRY) {
+	if (entry.type != CatalogType::TABLE_ENTRY) {
 		return;
 	}
-	auto *table_entry = (TableCatalogEntry *)entry;
-	auto &constraints = table_entry->GetConstraints();
+	auto &table_entry = entry.Cast<TableCatalogEntry>();
+	auto &constraints = table_entry.GetConstraints();
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto &cond = constraints[i];
 		if (cond->type != ConstraintType::FOREIGN_KEY) {
 			continue;
 		}
-		auto &fk = (ForeignKeyConstraint &)*cond;
+		auto &fk = cond->Cast<ForeignKeyConstraint>();
 		if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
-			AlterEntryData alter_data(entry->catalog->GetName(), fk.info.schema, fk.info.table, false);
-			fk_arrays.push_back(make_uniq<AlterForeignKeyInfo>(std::move(alter_data), entry->name, fk.pk_columns,
+			AlterEntryData alter_data(entry.catalog->GetName(), fk.info.schema, fk.info.table, false);
+			fk_arrays.push_back(make_uniq<AlterForeignKeyInfo>(std::move(alter_data), entry.name, fk.pk_columns,
 			                                                   fk.fk_columns, fk.info.pk_keys, fk.info.fk_keys,
 			                                                   alter_fk_type));
 		} else if (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE &&
@@ -114,7 +114,7 @@ CatalogEntry *DuckSchemaEntry::CreateTable(CatalogTransaction transaction, Bound
 
 	// add a foreign key constraint in main key table if there is a foreign key constraint
 	vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;
-	FindForeignKeyInformation(entry, AlterForeignKeyType::AFT_ADD, fk_arrays);
+	FindForeignKeyInformation(*entry, AlterForeignKeyType::AFT_ADD, fk_arrays);
 	for (idx_t i = 0; i < fk_arrays.size(); i++) {
 		// alter primary key table
 		AlterForeignKeyInfo *fk_info = fk_arrays[i].get();
@@ -266,7 +266,7 @@ void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo *info) {
 
 	// if there is a foreign key constraint, get that information
 	vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;
-	FindForeignKeyInformation(existing_entry, AlterForeignKeyType::AFT_DELETE, fk_arrays);
+	FindForeignKeyInformation(*existing_entry, AlterForeignKeyType::AFT_DELETE, fk_arrays);
 
 	if (!set.DropEntry(transaction, info->name, info->cascade, info->allow_drop_internal)) {
 		throw InternalException("Could not drop element because of an internal error");
