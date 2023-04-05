@@ -56,7 +56,6 @@ void UnnestOperatorState::Reset() {
 }
 
 void UnnestOperatorState::SetLongestListLength() {
-
 	longest_list_length = 0;
 	for (idx_t col_idx = 0; col_idx < list_data.ColumnCount(); col_idx++) {
 

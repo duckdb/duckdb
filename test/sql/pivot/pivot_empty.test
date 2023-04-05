@@ -1,0 +1,29 @@
+# name: test/sql/pivot/pivot_empty.test
+# description: Test SQL pivot on an empty table
+# group: [pivot]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE Cities(Country VARCHAR, Name VARCHAR, Year INT, Population INT);
+
+query II
+PIVOT Cities ON Country USING SUM(Population);
+----
+
+query I
+PIVOT Cities ON Country, Name USING SUM(Population);
+----
+
+query III
+PIVOT Cities ON Country IN ('xx') USING SUM(Population);
+----
+
+query II
+PIVOT Cities ON (Country, Name) IN ('xx') USING SUM(Population);
+----
+
+query IIII
+PIVOT Cities ON Country IN ('xx', 'yy') USING SUM(Population);
+----

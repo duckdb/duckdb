@@ -421,6 +421,17 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 	}
 }
 
+void BindContext::GetTypesAndNames(vector<string> &result_names, vector<LogicalType> &result_types) {
+	for (auto &binding_entry : bindings_list) {
+		auto &binding = *binding_entry.second;
+		D_ASSERT(binding.names.size() == binding.types.size());
+		for (idx_t i = 0; i < binding.names.size(); i++) {
+			result_names.push_back(binding.names[i]);
+			result_types.push_back(binding.types[i]);
+		}
+	}
+}
+
 void BindContext::AddBinding(const string &alias, unique_ptr<Binding> binding) {
 	if (bindings.find(alias) != bindings.end()) {
 		throw BinderException("Duplicate alias \"%s\" in query!", alias);

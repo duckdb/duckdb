@@ -605,15 +605,15 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 					// When we push into a constant expression
 					// => CREATE TYPE mood AS ENUM (SELECT DISTINCT ON(x, x) x FROM test);
 					auto &distinct_modifier = (DistinctModifier &)*query_node.modifiers[0];
-					distinct_modifier.distinct_on_targets.push_back(make_uniq<ConstantExpression>(Value::INTEGER(1)));
-					need_to_add = false;
+					if (distinct_modifier.distinct_on_targets.empty()) {
+						need_to_add = false;
+					}
 				}
 			}
 
 			// Add distinct modifier
 			if (need_to_add) {
 				auto distinct_modifier = make_uniq<DistinctModifier>();
-				distinct_modifier->distinct_on_targets.push_back(make_uniq<ConstantExpression>(Value::INTEGER(1)));
 				query_node.modifiers.emplace(query_node.modifiers.begin(), std::move(distinct_modifier));
 			}
 
