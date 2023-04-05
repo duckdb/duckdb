@@ -66,7 +66,7 @@ static unique_ptr<FunctionData> MapKeyValueBind(ClientContext &context, ScalarFu
 	auto &type = type_func(map);
 
 	bound_function.return_type = LogicalType::LIST(type);
-	return make_unique<VariableReturnBindData>(bound_function.return_type);
+	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
 static unique_ptr<FunctionData> MapKeysBind(ClientContext &context, ScalarFunction &bound_function,

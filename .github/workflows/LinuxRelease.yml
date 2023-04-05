@@ -591,14 +591,14 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: mymindstorm/setup-emsdk@v11
+    - uses: mymindstorm/setup-emsdk@v12
 
     - name: Setup
       shell: bash
       run: |
         git clone --recurse-submodules https://github.com/duckdb/duckdb-wasm
         cd duckdb-wasm
-        git checkout 2cee83b1
+        git checkout e401029fb3020c7a7be2c03896717c615418277e
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -613,6 +613,49 @@ jobs:
         bash scripts/wasm_build_lib.sh relsize mvp $(pwd)/..
         bash scripts/wasm_build_lib.sh relsize eh $(pwd)/..
         bash scripts/wasm_build_lib.sh relsize coi $(pwd)/..
+
+    - name: Package
+      shell: bash
+      run: |
+        zip -r duckdb-wasm32.zip duckdb-wasm/packages/duckdb-wasm/src/bindings
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: duckdb-wasm32
+        path: |
+          duckdb-wasm32.zip
+
+ linux-wasm-experimental-loadable:
+    name: WebAssembly duckdb-wasm loadable builds
+    runs-on: ubuntu-22.04
+    needs: linux-release-64
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - uses: mymindstorm/setup-emsdk@v12
+
+    - name: Setup
+      shell: bash
+      run: |
+        git clone --recurse-submodules https://github.com/duckdb/duckdb-wasm
+        cd duckdb-wasm
+        git checkout e401029fb3020c7a7be2c03896717c615418277e
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+
+    - name: Build WebAssembly
+      shell: bash
+      run: |
+        cd duckdb-wasm
+        WASM_LOADABLE_EXTENSIONS=1 bash scripts/wasm_build_lib.sh relsize mvp $(pwd)/..
+        WASM_LOADABLE_EXTENSIONS=1 bash scripts/wasm_build_lib.sh relsize eh $(pwd)/..
+        WASM_LOADABLE_EXTENSIONS=1 bash scripts/wasm_build_lib.sh relsize coi $(pwd)/..
 
  symbol-leakage:
     name: Symbol Leakage
@@ -686,6 +729,8 @@ jobs:
       BUILD_HTTPFS: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
+      BUILD_PARQUET: 1
+      BUILD_JSON: 1
       S3_TEST_SERVER_AVAILABLE: 1
       AWS_DEFAULT_REGION: eu-west-1
       AWS_ACCESS_KEY_ID: minio_duckdb_user

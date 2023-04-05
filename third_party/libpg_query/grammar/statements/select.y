@@ -336,12 +336,12 @@ simple_select:
 					res->pivot = n;
 					$$ = (PGNode *)res;
 				}
-			| unpivot_keyword table_ref ON target_list_opt_comma INTO NAME_P name VALUE_P name
+			| unpivot_keyword table_ref ON target_list_opt_comma INTO NAME_P name value_or_values name_list_opt_comma_opt_bracket
 				{
 					PGSelectStmt *res = makeNode(PGSelectStmt);
 					PGPivotStmt *n = makeNode(PGPivotStmt);
 					n->source = $2;
-					n->unpivots = list_make1(makeString($9));
+					n->unpivots = $9;
 					PGPivot *piv = makeNode(PGPivot);
 					piv->unpivot_columns = list_make1(makeString($7));
 					piv->pivot_value = $4;
@@ -365,6 +365,10 @@ simple_select:
 					$$ = (PGNode *)res;
 				}
 		;
+
+value_or_values:
+		VALUE_P | VALUES
+	;
 
 pivot_keyword:
 		PIVOT | PIVOT_WIDER

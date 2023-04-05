@@ -23,11 +23,11 @@ static unique_ptr<FunctionData> RepeatBind(ClientContext &context, TableFunction
 	auto &inputs = input.inputs;
 	return_types.push_back(inputs[0].type());
 	names.push_back(inputs[0].ToString());
-	return make_unique<RepeatFunctionData>(inputs[0], inputs[1].GetValue<int64_t>());
+	return make_uniq<RepeatFunctionData>(inputs[0], inputs[1].GetValue<int64_t>());
 }
 
 static unique_ptr<GlobalTableFunctionState> RepeatInit(ClientContext &context, TableFunctionInitInput &input) {
-	return make_unique<RepeatOperatorData>();
+	return make_uniq<RepeatOperatorData>();
 }
 
 static void RepeatFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -42,7 +42,7 @@ static void RepeatFunction(ClientContext &context, TableFunctionInput &data_p, D
 
 static unique_ptr<NodeStatistics> RepeatCardinality(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = (const RepeatFunctionData &)*bind_data_p;
-	return make_unique<NodeStatistics>(bind_data.target_count, bind_data.target_count);
+	return make_uniq<NodeStatistics>(bind_data.target_count, bind_data.target_count);
 }
 
 void RepeatTableFunction::RegisterFunction(BuiltinFunctions &set) {

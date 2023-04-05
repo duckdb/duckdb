@@ -189,6 +189,14 @@ class TestReadCSV(object):
 		# The filename is included in the returned columns
 		assert 'filename' in column_names
 
+	def test_read_pathlib_path(self, duckdb_cursor):
+		pathlib = pytest.importorskip("pathlib")
+		path = pathlib.Path(TestFile('category.csv'))
+		rel = duckdb_cursor.read_csv(path)
+		res = rel.fetchone()
+		print(res)
+		assert res == (1, 'Action', datetime.datetime(2006, 2, 15, 4, 46, 27))
+
 	def test_read_filelike(self, duckdb_cursor):
 		string = StringIO("c1,c2,c3\na,b,c")
 		res = duckdb_cursor.read_csv(string, header=True).fetchall()

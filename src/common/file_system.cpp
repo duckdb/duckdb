@@ -336,7 +336,7 @@ bool FileSystem::CanHandleFile(const string &fpath) {
 	throw NotImplementedException("%s: CanHandleFile is not implemented!", GetName());
 }
 
-vector<string> FileSystem::GlobFiles(const string &pattern, ClientContext &context) {
+vector<string> FileSystem::GlobFiles(const string &pattern, ClientContext &context, FileGlobOptions options) {
 	auto result = Glob(pattern, context);
 	if (result.empty()) {
 		string required_extension;
@@ -356,9 +356,11 @@ vector<string> FileSystem::GlobFiles(const string &pattern, ClientContext &conte
 				throw InternalException("Extension load \"%s\" did not throw but somehow the extension was not loaded",
 				                        required_extension);
 			}
-			return GlobFiles(pattern, context);
+			return GlobFiles(pattern, context, options);
 		}
-		throw IOException("No files found that match the pattern \"%s\"", pattern);
+		if (options == FileGlobOptions::DISALLOW_EMPTY) {
+			throw IOException("No files found that match the pattern \"%s\"", pattern);
+		}
 	}
 	return result;
 }

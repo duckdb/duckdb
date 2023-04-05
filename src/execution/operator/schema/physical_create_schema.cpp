@@ -15,7 +15,7 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalCreateSchema::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<CreateSchemaSourceState>();
+	return make_uniq<CreateSchemaSourceState>();
 }
 
 void PhysicalCreateSchema::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,

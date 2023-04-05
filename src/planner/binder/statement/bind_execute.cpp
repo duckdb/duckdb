@@ -56,11 +56,11 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 
 	prepared->Bind(std::move(bind_values));
 	if (rebound_plan) {
-		auto execute_plan = make_unique<LogicalExecute>(std::move(prepared));
+		auto execute_plan = make_uniq<LogicalExecute>(std::move(prepared));
 		execute_plan->children.push_back(std::move(rebound_plan));
 		result.plan = std::move(execute_plan);
 	} else {
-		result.plan = make_unique<LogicalExecute>(std::move(prepared));
+		result.plan = make_uniq<LogicalExecute>(std::move(prepared));
 	}
 	return result;
 }

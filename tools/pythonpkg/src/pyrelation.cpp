@@ -36,168 +36,40 @@ DuckDBPyRelation::DuckDBPyRelation(unique_ptr<DuckDBPyResult> result_p) : rel(nu
 	this->names = result->GetNames();
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromDf(const DataFrame &df, shared_ptr<DuckDBPyConnection> conn) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
-	return conn->FromDF(df);
-}
-
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Values(py::object values, shared_ptr<DuckDBPyConnection> conn) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
-	return conn->Values(std::move(values));
-}
-
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromQuery(const string &query, const string &alias,
-                                                         shared_ptr<DuckDBPyConnection> conn) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
-	return conn->FromQuery(query, alias);
-}
-
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::RunQuery(const string &query, const string &alias,
-                                                        shared_ptr<DuckDBPyConnection> conn) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
-	return conn->RunQuery(query, alias);
-}
-
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquet(const string &file_glob, bool binary_as_string,
-                                                           bool file_row_number, bool filename, bool hive_partitioning,
-                                                           bool union_by_name, shared_ptr<DuckDBPyConnection> conn) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
-	return conn->FromParquet(file_glob, binary_as_string, file_row_number, filename, hive_partitioning, union_by_name);
-}
-
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquets(const vector<string> &file_globs, bool binary_as_string,
-                                                            bool file_row_number, bool filename, bool hive_partitioning,
-                                                            bool union_by_name, shared_ptr<DuckDBPyConnection> conn) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
-	return conn->FromParquets(file_globs, binary_as_string, file_row_number, filename, hive_partitioning,
-	                          union_by_name);
-}
-
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GetSubstrait(const string &query, shared_ptr<DuckDBPyConnection> conn,
-                                                            bool enable_optimizer) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
-	return conn->GetSubstrait(query, enable_optimizer);
-}
-
-unique_ptr<DuckDBPyRelation>
-DuckDBPyRelation::GetSubstraitJSON(const string &query, shared_ptr<DuckDBPyConnection> conn, bool enable_optimizer) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
-	return conn->GetSubstraitJSON(query, enable_optimizer);
-}
-
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromSubstraitJSON(const string &json,
-                                                                 shared_ptr<DuckDBPyConnection> conn) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
-	return conn->FromSubstraitJSON(json);
-}
-
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromSubstrait(py::bytes &proto, shared_ptr<DuckDBPyConnection> conn) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
-	return conn->FromSubstrait(proto);
-}
-
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromArrow(py::object &arrow_object,
-                                                         shared_ptr<DuckDBPyConnection> conn) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
-	return conn->FromArrow(arrow_object);
-}
-
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const string &expr) {
 	if (!rel) {
 		return nullptr;
 	}
-	auto projected_relation = make_unique<DuckDBPyRelation>(rel->Project(expr));
+	auto projected_relation = make_uniq<DuckDBPyRelation>(rel->Project(expr));
 	projected_relation->rel->extra_dependencies = this->rel->extra_dependencies;
 	return projected_relation;
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectDf(const DataFrame &df, const string &expr,
-                                                         shared_ptr<DuckDBPyConnection> conn) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
-	return conn->FromDF(df)->Project(expr);
-}
-
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::SetAlias(const string &expr) {
-	return make_unique<DuckDBPyRelation>(rel->Alias(expr));
+	return make_uniq<DuckDBPyRelation>(rel->Alias(expr));
 }
 
 py::str DuckDBPyRelation::GetAlias() {
 	return py::str(string(rel->GetAlias()));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::AliasDF(const DataFrame &df, const string &expr,
-                                                       shared_ptr<DuckDBPyConnection> conn) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
-	return conn->FromDF(df)->SetAlias(expr);
-}
-
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Filter(const string &expr) {
-	return make_unique<DuckDBPyRelation>(rel->Filter(expr));
-}
-
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FilterDf(const DataFrame &df, const string &expr,
-                                                        shared_ptr<DuckDBPyConnection> conn) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
-	return conn->FromDF(df)->Filter(expr);
+	return make_uniq<DuckDBPyRelation>(rel->Filter(expr));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Limit(int64_t n, int64_t offset) {
-	return make_unique<DuckDBPyRelation>(rel->Limit(n, offset));
-}
-
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::LimitDF(const DataFrame &df, int64_t n,
-                                                       shared_ptr<DuckDBPyConnection> conn) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
-	return conn->FromDF(df)->Limit(n);
+	return make_uniq<DuckDBPyRelation>(rel->Limit(n, offset));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Order(const string &expr) {
-	return make_unique<DuckDBPyRelation>(rel->Order(expr));
-}
-
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::OrderDf(const DataFrame &df, const string &expr,
-                                                       shared_ptr<DuckDBPyConnection> conn) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
-	return conn->FromDF(df)->Order(expr);
+	return make_uniq<DuckDBPyRelation>(rel->Order(expr));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Aggregate(const string &expr, const string &groups) {
 	if (!groups.empty()) {
-		return make_unique<DuckDBPyRelation>(rel->Aggregate(expr, groups));
+		return make_uniq<DuckDBPyRelation>(rel->Aggregate(expr, groups));
 	}
-	return make_unique<DuckDBPyRelation>(rel->Aggregate(expr));
+	return make_uniq<DuckDBPyRelation>(rel->Aggregate(expr));
 }
 
 void DuckDBPyRelation::AssertResult() const {
@@ -290,7 +162,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Describe() {
 	              DescribeAggregateInfo("stddev", true), DescribeAggregateInfo("min"),
 	              DescribeAggregateInfo("max"),          DescribeAggregateInfo("median", true)};
 	auto expressions = CreateExpressionList(columns, aggregates);
-	return make_unique<DuckDBPyRelation>(rel->Aggregate(expressions));
+	return make_uniq<DuckDBPyRelation>(rel->Aggregate(expressions));
 }
 
 string DuckDBPyRelation::ToSQL() {
@@ -430,14 +302,14 @@ py::tuple DuckDBPyRelation::Shape() {
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Unique(const string &std_columns) {
-	return make_unique<DuckDBPyRelation>(rel->Project(std_columns)->Distinct());
+	return make_uniq<DuckDBPyRelation>(rel->Project(std_columns)->Distinct());
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GenericWindowFunction(const string &function_name,
                                                                      const string &aggr_columns) {
 	auto expr = GenerateExpressionList(function_name, aggr_columns, "", "", "",
 	                                   "over (rows between unbounded preceding and current row) ");
-	return make_unique<DuckDBPyRelation>(rel->Project(expr));
+	return make_uniq<DuckDBPyRelation>(rel->Project(expr));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumSum(const string &aggr_columns) {
@@ -456,24 +328,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumMin(const string &aggr_columns
 	return GenericWindowFunction("min", aggr_columns);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::AggregateDF(const DataFrame &df, const string &expr,
-                                                           const string &groups, shared_ptr<DuckDBPyConnection> conn) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
-	return conn->FromDF(df)->Aggregate(expr, groups);
-}
-
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Distinct() {
-	return make_unique<DuckDBPyRelation>(rel->Distinct());
+	return make_uniq<DuckDBPyRelation>(rel->Distinct());
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::DistinctDF(const DataFrame &df, shared_ptr<DuckDBPyConnection> conn) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
-	return conn->FromDF(df)->Distinct();
-}
 duckdb::pyarrow::RecordBatchReader DuckDBPyRelation::FetchRecordBatchReader(idx_t rows_per_batch) {
 	AssertResult();
 	return result->FetchRecordBatchReader(rows_per_batch);
@@ -501,7 +359,7 @@ void DuckDBPyRelation::ExecuteOrThrow(bool stream_result) {
 	if (query_result->HasError()) {
 		query_result->ThrowError();
 	}
-	result = make_unique<DuckDBPyResult>(std::move(query_result));
+	result = make_uniq<DuckDBPyResult>(std::move(query_result));
 }
 
 DataFrame DuckDBPyRelation::FetchDF(bool date_as_object) {
@@ -680,19 +538,19 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GetAttribute(const string &name) 
 	if (!rel || !ContainsColumnByName(name)) {
 		throw InvalidInputException("This relation does not contain a column by the name of '%s'", name);
 	}
-	return make_unique<DuckDBPyRelation>(rel->Project({name}));
+	return make_uniq<DuckDBPyRelation>(rel->Project({name}));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Union(DuckDBPyRelation *other) {
-	return make_unique<DuckDBPyRelation>(rel->Union(other->rel));
+	return make_uniq<DuckDBPyRelation>(rel->Union(other->rel));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Except(DuckDBPyRelation *other) {
-	return make_unique<DuckDBPyRelation>(rel->Except(other->rel));
+	return make_uniq<DuckDBPyRelation>(rel->Except(other->rel));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Intersect(DuckDBPyRelation *other) {
-	return make_unique<DuckDBPyRelation>(rel->Intersect(other->rel));
+	return make_uniq<DuckDBPyRelation>(rel->Intersect(other->rel));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, const string &condition,
@@ -707,7 +565,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, con
 	} else {
 		throw InvalidInputException("Unsupported join type %s	 try 'inner' or 'left'", type_string);
 	}
-	return make_unique<DuckDBPyRelation>(rel->Join(other->rel, condition, dtype));
+	return make_uniq<DuckDBPyRelation>(rel->Join(other->rel, condition, dtype));
 }
 
 void DuckDBPyRelation::ToParquet(const string &filename, const py::object &compression) {
@@ -822,20 +680,13 @@ void DuckDBPyRelation::ToCSV(const string &filename, const py::object &sep, cons
 	PyExecuteRelation(write_csv);
 }
 
-void DuckDBPyRelation::WriteCsvDF(const DataFrame &df, const string &file, shared_ptr<DuckDBPyConnection> conn) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
-	return conn->FromDF(df)->ToCSV(file);
-}
-
 // should this return a rel with the new view?
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CreateView(const string &view_name, bool replace) {
 	rel->CreateView(view_name, replace);
 	// We need to pass ownership of any Python Object Dependencies to the connection
 	auto all_dependencies = rel->GetAllDependencies();
 	rel->context.GetContext()->external_dependencies[view_name] = std::move(all_dependencies);
-	return make_unique<DuckDBPyRelation>(rel);
+	return make_uniq<DuckDBPyRelation>(rel);
 }
 
 static bool IsDescribeStatement(SQLStatement &statement) {
@@ -864,7 +715,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, co
 		auto select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
 		auto query_relation =
 		    make_shared<QueryRelation>(rel->context.GetContext(), std::move(select_statement), "query_relation");
-		return make_unique<DuckDBPyRelation>(std::move(query_relation));
+		return make_uniq<DuckDBPyRelation>(std::move(query_relation));
 	} else if (IsDescribeStatement(statement)) {
 		FunctionParameters parameters;
 		parameters.values.emplace_back(view_name);
@@ -888,14 +739,6 @@ DuckDBPyRelation &DuckDBPyRelation::Execute() {
 	AssertRelation();
 	ExecuteOrThrow();
 	return *this;
-}
-
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::QueryDF(const DataFrame &df, const string &view_name,
-                                                       const string &sql_query, shared_ptr<DuckDBPyConnection> conn) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
-	return conn->FromDF(df)->Query(view_name, sql_query);
 }
 
 void DuckDBPyRelation::InsertInto(const string &table) {
@@ -931,8 +774,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Map(py::function fun) {
 	AssertRelation();
 	vector<Value> params;
 	params.emplace_back(Value::POINTER((uintptr_t)fun.ptr()));
-	auto relation = make_unique<DuckDBPyRelation>(rel->TableFunction("python_map_function", params));
-	relation->rel->extra_dependencies = make_unique<PythonDependencies>(fun);
+	auto relation = make_uniq<DuckDBPyRelation>(rel->TableFunction("python_map_function", params));
+	relation->rel->extra_dependencies = make_uniq<PythonDependencies>(fun);
 	return relation;
 }
 
@@ -957,14 +800,12 @@ void DuckDBPyRelation::Print() {
 }
 
 string DuckDBPyRelation::Explain(ExplainType type) {
-
 	AssertRelation();
 	auto res = rel->Explain(type);
 	D_ASSERT(res->type == duckdb::QueryResultType::MATERIALIZED_RESULT);
 	auto &materialized = (duckdb::MaterializedQueryResult &)*res;
 	auto &coll = materialized.Collection();
 	string result;
-	bool skipped_first = false;
 	for (auto &row : coll.Rows()) {
 		// Skip the first column because it just contains 'physical plan'
 		for (idx_t col_idx = 1; col_idx < coll.ColumnCount(); col_idx++) {

@@ -169,11 +169,8 @@ idx_t ColumnDataCollectionSegment::ReadVectorInternal(ChunkManagementState &stat
 		if (type_size > 0) {
 			memcpy(target_data + current_offset * type_size, base_ptr, current_vdata.count * type_size);
 		}
-		// FIXME: use bitwise operations here
 		ValidityMask current_validity(validity_data);
-		for (idx_t k = 0; k < current_vdata.count; k++) {
-			target_validity.Set(current_offset + k, current_validity.RowIsValid(k));
-		}
+		target_validity.SliceInPlace(current_validity, current_offset, 0, current_vdata.count);
 		current_offset += current_vdata.count;
 		next_index = current_vdata.next_data;
 	}

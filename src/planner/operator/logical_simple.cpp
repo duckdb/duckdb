@@ -38,7 +38,7 @@ unique_ptr<LogicalOperator> LogicalSimple::Deserialize(LogicalDeserializationSta
 	default:
 		throw NotImplementedException(LogicalOperatorToString(state.type));
 	}
-	return make_unique<LogicalSimple>(type, std::move(parse_info));
+	return make_uniq<LogicalSimple>(type, std::move(parse_info));
 }
 
 idx_t LogicalSimple::EstimateCardinality(ClientContext &context) {

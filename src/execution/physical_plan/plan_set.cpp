@@ -5,7 +5,7 @@
 namespace duckdb {
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSet &op) {
-	return make_unique<PhysicalSet>(op.name, op.value, op.scope, op.estimated_cardinality);
+	return make_uniq<PhysicalSet>(op.name, op.value, op.scope, op.estimated_cardinality);
 }
 
 } // namespace duckdb

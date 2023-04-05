@@ -38,7 +38,7 @@ bool RecursiveCTENode::Equals(const QueryNode *other_p) const {
 }
 
 unique_ptr<QueryNode> RecursiveCTENode::Copy() const {
-	auto result = make_unique<RecursiveCTENode>();
+	auto result = make_uniq<RecursiveCTENode>();
 	result->ctename = ctename;
 	result->union_all = union_all;
 	result->left = left->Copy();
@@ -57,7 +57,7 @@ void RecursiveCTENode::Serialize(FieldWriter &writer) const {
 }
 
 unique_ptr<QueryNode> RecursiveCTENode::Deserialize(FieldReader &reader) {
-	auto result = make_unique<RecursiveCTENode>();
+	auto result = make_uniq<RecursiveCTENode>();
 	result->ctename = reader.ReadRequired<string>();
 	result->union_all = reader.ReadRequired<bool>();
 	result->left = reader.ReadRequiredSerializable<QueryNode>();
@@ -76,7 +76,7 @@ void RecursiveCTENode::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<QueryNode> RecursiveCTENode::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto result = make_unique<RecursiveCTENode>();
+	auto result = make_uniq<RecursiveCTENode>();
 	deserializer.ReadProperty("cte_name", result->ctename);
 	deserializer.ReadProperty("union_all", result->union_all);
 	deserializer.ReadProperty("left", result->left);

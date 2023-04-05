@@ -22,7 +22,7 @@ struct StringAggBindData : public FunctionData {
 	string sep;
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<StringAggBindData>(sep);
+		return make_uniq<StringAggBindData>(sep);
 	}
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = (StringAggBindData &)other_p;
@@ -121,7 +121,7 @@ unique_ptr<FunctionData> StringAggBind(ClientContext &context, AggregateFunction
                                        vector<unique_ptr<Expression>> &arguments) {
 	if (arguments.size() == 1) {
 		// single argument: default to comma
-		return make_unique<StringAggBindData>(",");
+		return make_uniq<StringAggBindData>(",");
 	}
 	D_ASSERT(arguments.size() == 2);
 	if (arguments[1]->HasParameter()) {
@@ -132,10 +132,10 @@ unique_ptr<FunctionData> StringAggBind(ClientContext &context, AggregateFunction
 	}
 	auto separator_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 	if (separator_val.IsNull()) {
-		arguments[0] = make_unique<BoundConstantExpression>(Value(LogicalType::VARCHAR));
+		arguments[0] = make_uniq<BoundConstantExpression>(Value(LogicalType::VARCHAR));
 	}
 	Function::EraseArgument(function, arguments, arguments.size() - 1);
-	return make_unique<StringAggBindData>(separator_val.ToString());
+	return make_uniq<StringAggBindData>(separator_val.ToString());
 }
 
 static void StringAggSerialize(FieldWriter &writer, const FunctionData *bind_data_p,
@@ -148,7 +148,7 @@ static void StringAggSerialize(FieldWriter &writer, const FunctionData *bind_dat
 unique_ptr<FunctionData> StringAggDeserialize(ClientContext &context, FieldReader &reader,
                                               AggregateFunction &bound_function) {
 	auto sep = reader.ReadRequired<string>();
-	return make_unique<StringAggBindData>(std::move(sep));
+	return make_uniq<StringAggBindData>(std::move(sep));
 }
 
 void StringAggFun::RegisterFunction(BuiltinFunctions &set) {

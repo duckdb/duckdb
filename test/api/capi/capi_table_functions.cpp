@@ -88,7 +88,7 @@ static void capi_register_table_function(duckdb_connection connection, const cha
 
 TEST_CASE("Test Table Functions C API", "[capi]") {
 	CAPITester tester;
-	unique_ptr<CAPIResult> result;
+	duckdb::unique_ptr<CAPIResult> result;
 
 	REQUIRE(tester.OpenDatabase(nullptr));
 	capi_register_table_function(tester.connection, "my_function", my_bind, my_init, my_function);
@@ -138,7 +138,7 @@ void my_error_function(duckdb_function_info info, duckdb_data_chunk output) {
 
 TEST_CASE("Test Table Function errors in C API", "[capi]") {
 	CAPITester tester;
-	unique_ptr<CAPIResult> result;
+	duckdb::unique_ptr<CAPIResult> result;
 
 	REQUIRE(tester.OpenDatabase(nullptr));
 	capi_register_table_function(tester.connection, "my_error_bind", my_error_bind, my_init, my_function);
@@ -208,7 +208,7 @@ void my_named_function(duckdb_function_info info, duckdb_data_chunk output) {
 
 TEST_CASE("Test Table Function named parameters in C API", "[capi]") {
 	CAPITester tester;
-	unique_ptr<CAPIResult> result;
+	duckdb::unique_ptr<CAPIResult> result;
 
 	REQUIRE(tester.OpenDatabase(nullptr));
 	capi_register_table_function(tester.connection, "my_multiplier_function", my_named_bind, my_named_init,

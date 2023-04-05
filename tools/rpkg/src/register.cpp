@@ -52,7 +52,7 @@ public:
 	    : arrow_scannable(arrow_scannable_p), export_fun(export_fun_p), config(config) {};
 
 	static unique_ptr<ArrowArrayStreamWrapper> Produce(uintptr_t factory_p, ArrowStreamParameters &parameters) {
-		auto res = make_unique<ArrowArrayStreamWrapper>();
+		auto res = make_uniq<ArrowArrayStreamWrapper>();
 		auto factory = (RArrowTabularStreamFactory *)factory_p;
 		cpp11::sexp stream_ptr_sexp =
 		    Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&res->arrow_array_stream)));
@@ -78,7 +78,7 @@ public:
 
 	static void GetSchema(uintptr_t factory_p, ArrowSchemaWrapper &schema) {
 
-		auto res = make_unique<ArrowArrayStreamWrapper>();
+		auto res = make_uniq<ArrowArrayStreamWrapper>();
 		auto factory = (RArrowTabularStreamFactory *)factory_p;
 		cpp11::sexp schema_ptr_sexp =
 		    Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&schema.arrow_schema)));
@@ -152,7 +152,7 @@ private:
 	}
 
 	static SEXP TransformChildFilters(SEXP functions, const string &column_name, const string op,
-	                                  vector<unique_ptr<TableFilter>> &filters, string &timezone_config) {
+	                                  vector<duckdb::unique_ptr<TableFilter>> &filters, string &timezone_config) {
 		auto fit = filters.begin();
 		cpp11::sexp conjunction_sexp = TransformFilterExpression(**fit, column_name, functions, timezone_config);
 		fit++;
@@ -207,14 +207,14 @@ unique_ptr<TableRef> duckdb::ArrowScanReplacement(ClientContext &context, const 
 	lock_guard<mutex> arrow_scans_lock(db_wrapper->lock);
 	for (auto &e : db_wrapper->arrow_scans) {
 		if (e.first == table_name) {
-			auto table_function = make_unique<TableFunctionRef>();
-			vector<unique_ptr<ParsedExpression>> children;
-			children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)R_ExternalPtrAddr(e.second))));
+			auto table_function = make_uniq<TableFunctionRef>();
+			vector<duckdb::unique_ptr<ParsedExpression>> children;
+			children.push_back(make_uniq<ConstantExpression>(Value::POINTER((uintptr_t)R_ExternalPtrAddr(e.second))));
 			children.push_back(
-			    make_unique<ConstantExpression>(Value::POINTER((uintptr_t)RArrowTabularStreamFactory::Produce)));
+			    make_uniq<ConstantExpression>(Value::POINTER((uintptr_t)RArrowTabularStreamFactory::Produce)));
 			children.push_back(
-			    make_unique<ConstantExpression>(Value::POINTER((uintptr_t)RArrowTabularStreamFactory::GetSchema)));
-			table_function->function = make_unique<FunctionExpression>("arrow_scan", std::move(children));
+			    make_uniq<ConstantExpression>(Value::POINTER((uintptr_t)RArrowTabularStreamFactory::GetSchema)));
+			table_function->function = make_uniq<FunctionExpression>("arrow_scan", std::move(children));
 			return std::move(table_function);
 		}
 	}
