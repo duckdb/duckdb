@@ -25,7 +25,7 @@ const string tbl_zst = "tbl.zst";
 
 const string csv_extensions[5] = {csv, tsv, csv_gz, csv_zst, tbl_zst};
 
-bool debug = false;
+bool debug = true;
 bool RunFull(std::string &path, duckdb::Connection &conn, std::set<std::string> *skip = nullptr,
              const string &add_parameters = "") {
 	bool single_threaded_passed;
@@ -36,6 +36,9 @@ bool RunFull(std::string &path, duckdb::Connection &conn, std::set<std::string> 
 			// Gotta skip this
 			return true;
 		}
+	}
+	if (debug) {
+		std::cout << path << std::endl;
 	}
 
 	// Set max line length to 0 when starting a ST CSV Read
@@ -56,9 +59,6 @@ bool RunFull(std::string &path, duckdb::Connection &conn, std::set<std::string> 
 	// So our tests don't take infinite time, we will go till a max buffer size of 5 positions higher than the minimum.
 	idx_t max_buffer_size = min_buffer_size + 5;
 	// Let's go from 1 to 8 threads.
-	if (debug) {
-		std::cout << path << std::endl;
-	}
 	for (auto thread_count = 1; thread_count <= 8; thread_count++) {
 		DuckDB db(nullptr);
 		Connection multi_conn(db);
