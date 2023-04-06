@@ -848,7 +848,6 @@ public:
 			count += grouping.table_data.Size(*grouping_gstate.table_state);
 		}
 		return MaxValue<idx_t>(1, count / STANDARD_VECTOR_SIZE);
-		//		return MaxValue<idx_t>(1, count / RowGroup::ROW_GROUP_SIZE);
 	}
 };
 
