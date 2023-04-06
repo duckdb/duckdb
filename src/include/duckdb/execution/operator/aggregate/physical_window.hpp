@@ -23,6 +23,7 @@ public:
 public:
 	PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality,
 	               PhysicalOperatorType type = PhysicalOperatorType::WINDOW);
+	~PhysicalWindow() override;
 
 	//! The projection list of the WINDOW statement (may contain aggregates)
 	vector<unique_ptr<Expression>> select_list;

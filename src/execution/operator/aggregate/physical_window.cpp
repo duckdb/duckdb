@@ -461,6 +461,10 @@ PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expr
 	}
 }
 
+PhysicalWindow::~PhysicalWindow() {
+	sink_state.reset();
+}
+
 static idx_t FindNextStart(const ValidityMask &mask, idx_t l, const idx_t r, idx_t &n) {
 	if (mask.AllValid()) {
 		auto start = MinValue(l + n - 1, r);

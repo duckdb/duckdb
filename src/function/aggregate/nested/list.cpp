@@ -51,7 +51,6 @@ ListBindData::~ListBindData() {
 
 struct ListAggState {
 	LinkedList linked_list;
-	vector<AllocatedData> *owning_vector;
 };
 
 struct ListFunction {
@@ -60,17 +59,13 @@ struct ListFunction {
 		state->linked_list.total_capacity = 0;
 		state->linked_list.first_segment = nullptr;
 		state->linked_list.last_segment = nullptr;
-		state->owning_vector = nullptr;
 	}
 
 	template <class STATE>
 	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
 		D_ASSERT(state);
-		if (state->owning_vector) {
-			state->owning_vector->clear();
-			delete state->owning_vector;
-			state->owning_vector = nullptr;
-		}
+		auto &list_bind_data = aggr_input_data.bind_data->Cast<ListBindData>();
+		list_bind_data.functions.Destroy(aggr_input_data.allocator, state->linked_list);
 	}
 	static bool IgnoreNull() {
 		return false;
@@ -92,11 +87,7 @@ static void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_d
 
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
-		if (!state->owning_vector) {
-			state->owning_vector = new vector<AllocatedData>;
-		}
-		list_bind_data.functions.AppendRow(aggr_input_data.allocator, *state->owning_vector,
-		                                               state->linked_list, input, i, count);
+		list_bind_data.functions.AppendRow(aggr_input_data.allocator, state->linked_list, input, i, count);
 	}
 }
 
@@ -114,17 +105,10 @@ static void ListCombineFunction(Vector &state, Vector &combined, AggregateInputD
 			// NULL, no need to append.
 			continue;
 		}
-		D_ASSERT(state->owning_vector);
-
-		if (!combined_ptr[i]->owning_vector) {
-			combined_ptr[i]->owning_vector = new vector<AllocatedData>;
-		}
-		auto owning_vector = combined_ptr[i]->owning_vector;
 
 		// copy the linked list of the state
 		auto copied_linked_list = LinkedList(state->linked_list.total_capacity, nullptr, nullptr);
-		list_bind_data.functions.CopyLinkedList(state->linked_list, copied_linked_list,
-		                                                     aggr_input_data.allocator, *owning_vector);
+		list_bind_data.functions.CopyLinkedList(state->linked_list, copied_linked_list, aggr_input_data.allocator);
 
 		// append the copied linked list to the combined state
 		if (combined_ptr[i]->linked_list.last_segment) {
@@ -134,6 +118,7 @@ static void ListCombineFunction(Vector &state, Vector &combined, AggregateInputD
 		}
 		combined_ptr[i]->linked_list.last_segment = copied_linked_list.last_segment;
 		combined_ptr[i]->linked_list.total_capacity += copied_linked_list.total_capacity;
+		list_bind_data.functions.Destroy(aggr_input_data.allocator, state->linked_list);
 	}
 }
 

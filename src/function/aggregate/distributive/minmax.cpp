@@ -66,7 +66,8 @@ struct MinMaxBase {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &input_data, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &input_data, INPUT_TYPE *input, ValidityMask &mask,
+	                      idx_t idx) {
 		if (!state->isset) {
 			OP::template Assign<INPUT_TYPE, STATE>(state, input_data, input[idx]);
 			state->isset = true;

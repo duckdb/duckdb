@@ -94,7 +94,8 @@ struct FirstFunctionString : public FirstFunctionBase {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &input_data, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &input_data, INPUT_TYPE *input, ValidityMask &mask,
+	                      idx_t idx) {
 		if (LAST || !state->is_set) {
 			SetValue(state, input_data, input[idx], !mask.RowIsValid(idx));
 		}

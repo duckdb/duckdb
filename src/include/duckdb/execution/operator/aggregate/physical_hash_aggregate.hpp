@@ -68,6 +68,7 @@ public:
 	PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
 	                      vector<unique_ptr<Expression>> groups, vector<GroupingSet> grouping_sets,
 	                      vector<vector<idx_t>> grouping_functions, idx_t estimated_cardinality);
+	~PhysicalHashAggregate() override;
 
 	//! The grouping sets
 	GroupedAggregateData grouped_aggregate_data;
