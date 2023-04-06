@@ -91,7 +91,6 @@ static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, F
 
 LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool binary_as_string) {
 	// inner node
-	D_ASSERT(s_ele.__isset.type && s_ele.num_children == 0);
 	if (s_ele.type == Type::FIXED_LEN_BYTE_ARRAY && !s_ele.__isset.type_length) {
 		throw IOException("FIXED_LEN_BYTE_ARRAY requires length to be set");
 	}
@@ -337,7 +336,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(idx_t depth, idx_t
 	} else { // leaf node
 		if (!s_ele.__isset.type) {
 			throw InvalidInputException(
-				"Node has neither num_children nor type set - this violates the Parquet spec (corrupted file)");
+			    "Node has neither num_children nor type set - this violates the Parquet spec (corrupted file)");
 		}
 		if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
 			const auto derived_type = DeriveLogicalType(s_ele);
@@ -368,10 +367,13 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader() {
 		throw IOException("Parquet reader: root schema element has no children");
 	}
 	auto ret = CreateReaderRecursive(0, 0, 0, next_schema_idx, next_file_idx);
+	if (ret->Type().id() != LogicalTypeId::STRUCT) {
+		throw InvalidInputException("Root element of Parquet file must be a struct");
+	}
 	D_ASSERT(next_schema_idx == file_meta_data->schema.size() - 1);
 	D_ASSERT(file_meta_data->row_groups.empty() || next_file_idx == file_meta_data->row_groups[0].columns.size());
 
-	auto &root_struct_reader = (StructColumnReader &)*ret;
+	auto &root_struct_reader = ret->Cast<StructColumnReader>();
 	// add casts if required
 	for (auto &entry : reader_data.cast_map) {
 		auto column_idx = entry.first;

@@ -15,6 +15,9 @@ namespace duckdb {
 
 class StructColumnReader : public ColumnReader {
 public:
+	static constexpr const PhysicalType TYPE = PhysicalType::STRUCT;
+
+public:
 	StructColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p,
 	                   idx_t max_define_p, idx_t max_repeat_p,
 	                   vector<duckdb::unique_ptr<ColumnReader>> child_readers_p);
