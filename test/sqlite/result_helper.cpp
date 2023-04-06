@@ -1,6 +1,6 @@
 #include "result_helper.hpp"
 #include "re2/re2.h"
-#include "catch.hpp"
+#include "duckdb/common/catch_stacktrace.hpp"
 #include "termcolor.hpp"
 #include "sqllogic_test_runner.hpp"
 #include "duckdb/common/crypto/md5.hpp"

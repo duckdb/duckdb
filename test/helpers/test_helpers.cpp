@@ -1,5 +1,5 @@
 // #define CATCH_CONFIG_RUNNER
-#include "catch.hpp"
+#include "duckdb/common/catch_stacktrace.hpp"
 
 #include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
 #include "duckdb/common/file_system.hpp"

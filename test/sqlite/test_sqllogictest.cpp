@@ -1,4 +1,4 @@
-#include "catch.hpp"
+#include "duckdb/common/catch_stacktrace.hpp"
 
 #include "duckdb.hpp"
 #include "duckdb/common/string_util.hpp"

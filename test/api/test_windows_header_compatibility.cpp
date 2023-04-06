@@ -1,7 +1,7 @@
 #ifdef _WIN32
 #include <windows.h>
 #endif
-#include "catch.hpp"
+#include "duckdb/common/catch_stacktrace.hpp"
 #include "test_helpers.hpp"
 #include "duckdb.hpp"
 

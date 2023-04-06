@@ -10816,7 +10816,10 @@ namespace Catch {
 
 namespace {
     //! Signals fatal error message to the run context
-    void reportFatal( char const * const message ) {
+    void reportFatal( char const * message ) {
+#ifdef CATCH_STACKTRACE
+        message = (const char*) CATCH_STACKTRACE(message); //enrich error message with a stacktrace
+#endif
         Catch::getCurrentContext().getResultCapture()->handleFatalErrorCondition( message );
     }
 
@@ -10938,7 +10941,9 @@ namespace Catch {
             sigaction(signalDefs[i].id, &oldSigActions[i], nullptr);
         }
         // Return the old stack
-        sigaltstack(&oldSigStack, nullptr);
+#ifndef CATCH_STACKTRACE
+        sigaltstack(&oldSigStack, nullptr); // sigaltstack prevents catch-stacktrace to work (on MacOS)
+#endif
     }
 
     static void handleSignal( int sig ) {
@@ -10977,7 +10982,9 @@ namespace Catch {
         sigStack.ss_sp = altStackMem;
         sigStack.ss_size = altStackSize;
         sigStack.ss_flags = 0;
-        sigaltstack(&sigStack, &oldSigStack);
+#ifndef CATCH_STACKTRACE
+        sigaltstack(&sigStack, &oldSigStack); // sigaltstack prevents catch-stacktrace to work (on MacOS)
+#endif
         struct sigaction sa = { };
 
         sa.sa_handler = handleSignal;
