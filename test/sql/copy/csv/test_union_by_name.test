@@ -55,8 +55,6 @@ BIGINT	BIGINT	BIGINT
 # Test timestamp type
 statement error
 SELECT * FROM read_csv_auto(['data/csv/union-by-name/ubn1.csv', 'data/csv/union-by-name/ubn2.csv', 'data/csv/union-by-name/ubn3.csv', 'data/csv/union-by-name/ubn4.csv'])
-----
-Could not convert string
 
 query IIIII
 SELECT  a, b, c, ts, k  
