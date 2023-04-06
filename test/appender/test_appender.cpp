@@ -1,4 +1,4 @@
-#include "catch.hpp"
+#include "duckdb/common/catch_stacktrace.hpp"
 #include "duckdb/main/appender.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/common/types/date.hpp"

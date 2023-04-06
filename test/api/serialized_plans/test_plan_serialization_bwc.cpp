@@ -1,4 +1,4 @@
-#include "catch.hpp"
+#include "duckdb/common/catch_stacktrace.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"

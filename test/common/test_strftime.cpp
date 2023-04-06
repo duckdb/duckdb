@@ -1,4 +1,4 @@
-#include "catch.hpp"
+#include "duckdb/common/catch_stacktrace.hpp"
 #include "duckdb/function/scalar/strftime.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/date.hpp"

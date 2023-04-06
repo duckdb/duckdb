@@ -1,5 +1,5 @@
 
-#include "catch.hpp"
+#include "duckdb/common/catch_stacktrace.hpp"
 
 #include "sqllogic_test_runner.hpp"
 #include "test_helpers.hpp"

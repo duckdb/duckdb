@@ -1,4 +1,4 @@
-#include "catch.hpp"
+#include "duckdb/common/catch_stacktrace.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "test_helpers.hpp"
 

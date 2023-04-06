@@ -1,5 +1,5 @@
 #define CATCH_CONFIG_MAIN
-#include "catch.hpp"
+#include "catch_stacktrace.hpp"
 
 #include <stdio.h>
 #include <stdlib.h>

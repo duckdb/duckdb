@@ -8,7 +8,7 @@
 #include "interpreted_benchmark.hpp"
 
 #define CATCH_CONFIG_RUNNER
-#include "catch.hpp"
+#include "duckdb/common/catch_stacktrace.hpp"
 #include "re2/re2.h"
 
 #include <fstream>

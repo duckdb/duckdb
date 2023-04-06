@@ -7,7 +7,7 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "test_helpers.hpp"
 #include "sqllogic_test_logger.hpp"
-#include "catch.hpp"
+#include "duckdb/common/catch_stacktrace.hpp"
 #include <list>
 #include <thread>
 
