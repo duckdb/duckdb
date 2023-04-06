@@ -35,4 +35,3 @@ TEST_CASE("Test functioning of checksum", "[storage]") {
 
 	DeleteDatabase(storage_database);
 }
-
