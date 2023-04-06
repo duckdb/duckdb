@@ -1,0 +1,129 @@
+# name: test/sql/function/string/test_damerau_levenshtein.test
+# description: Test damerau_levenshtein function
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+
+# normal queries
+query I
+SELECT damerau_levenshtein('out', 'out')
+----
+0
+
+query I
+SELECT damerau_levenshtein('three', 'there')
+----
+1
+
+query I
+SELECT damerau_levenshtein('potion', 'option')
+----
+1
+
+query I
+SELECT damerau_levenshtein('letter', 'lettre')
+----
+1
+
+query I
+SELECT damerau_levenshtein('three', 'there')
+----
+1
+
+query I
+SELECT damerau_levenshtein('out', 'to')
+----
+2
+
+query I
+SELECT damerau_levenshtein('to', 'out')
+----
+2
+
+query I
+SELECT damerau_levenshtein('laos', 'also')
+----
+2
+
+query I
+SELECT damerau_levenshtein('tomato', 'otamot')
+----
+3
+
+query I
+SELECT damerau_levenshtein('abcdefg', 'bacedgf')
+----
+3
+
+query I
+SELECT damerau_levenshtein('abcdefg', 'bacedgf')
+----
+3
+
+query I
+SELECT damerau_levenshtein('abcdefghi', 'bzacdefig')
+----
+4
+
+query I
+SELECT damerau_levenshtein('bzacdefig', 'abcdefghi')
+----
+4
+
+query I
+SELECT damerau_levenshtein('at', 'tarokk')
+----
+5
+
+query I
+SELECT damerau_levenshtein('organ', 'no')
+----
+4
+
+query I
+SELECT damerau_levenshtein('trips', 'strip')
+----
+2
+
+query I
+SELECT damerau_levenshtein('', 'great')
+----
+5
+
+query I
+SELECT damerau_levenshtein('great', '')
+----
+5
+
+query I
+SELECT damerau_levenshtein('', '')
+----
+0
+
+query I
+SELECT damerau_levenshtein(NULL, 'drive')
+----
+NULL
+
+query I
+SELECT damerau_levenshtein('drive', NULL)
+----
+NULL
+
+query I
+SELECT damerau_levenshtein(NULL, NULL)
+----
+NULL
+
+query I
+SELECT damerau_levenshtein('', NULL)
+----
+NULL
+
+query I
+SELECT damerau_levenshtein(NULL, '')
+----
+NULL
+
