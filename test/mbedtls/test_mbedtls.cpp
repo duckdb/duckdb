@@ -1,4 +1,4 @@
-#include "duckdb/common/catch_stacktrace.hpp"
+#include "catch.hpp"
 #include "mbedtls_wrapper.hpp"
 
 #include <chrono>

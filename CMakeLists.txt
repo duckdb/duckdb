@@ -311,7 +311,6 @@ option(DISABLE_THREADS "Disable support for multi-threading" FALSE)
 option(DISABLE_STR_INLINE "Debug setting: disable inlining of strings" FALSE)
 option(ALTERNATIVE_VERIFY "Debug setting: use alternative verify mode" FALSE)
 option(DESTROY_UNPINNED_BLOCKS "Debug setting: destroy unpinned buffer-managed blocks" FALSE)
-option(DEBUG_STACKTRACE "Debug setting: print a stracktrace on asserts and when testing crashes" FALSE)
 option(DEBUG_MOVE "Debug setting: Ensure std::move is being used" FALSE)
 option(CLANG_TIDY "Enable build for clang-tidy, this disables all source files excluding the core database. This does not produce a working build." FALSE)
 option(BUILD_UNITTESTS "Build the C++ Unit Tests." TRUE)
@@ -381,10 +380,6 @@ endif()
 
 if(ALTERNATIVE_VERIFY)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_ALTERNATIVE_VERIFY")
-endif()
-
-if(DEBUG_STACKTRACE)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_STACKTRACE")
 endif()
 
 if(DEBUG_MOVE)

@@ -1,4 +1,4 @@
-#include "duckdb/common/catch_stacktrace.hpp"
+#include "catch.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "test_helpers.hpp"
 
@@ -27,8 +27,7 @@ TEST_CASE("Test functioning of checksum", "[storage]") {
 	// now write random values into the file
 	auto handle = fs->OpenFile(storage_database, FileFlags::FILE_FLAGS_WRITE);
 	int8_t value = 0x22;
-	int *ptr = (int*) -1;
-	fs->Write(*handle, &value, sizeof(int8_t), ptr[0]*100);
+	fs->Write(*handle, &value, sizeof(int8_t), 100);
 	handle->Sync();
 	handle.reset();
 	// reloading the database no longer works

@@ -1,4 +1,4 @@
-#include "duckdb/common/catch_stacktrace.hpp"
+#include "catch.hpp"
 #include "duckdb/common/radix.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
