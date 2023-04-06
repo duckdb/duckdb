@@ -1,0 +1,54 @@
+
+
+
+
+
+
+
+
+# name: test/sql/copy/partitioned/auto_detect_hive_partitioning.test
+# description: basic tests for the hive partition auto detection
+# group: [partitioned]
+
+require parquet
+
+# make a table
+# statement ok
+# CREATE TABLE myt AS SELECT i AS idx_col, i%2 AS parity_col, i*2 AS dbl_col, i*3 AS tri_col, power(i,i) AS power_col FROM RANGE(0,10) tbl(i);
+
+# copy into partition
+
+# read with the hive detection on
+# read with the hive detection off
+# read with the hive detection auto
+
+# test a wrong schema to throw ? 
+# test a wrong schema to throw after auto detect ? 
+#   test the auto detect error msg, after an incorrect autodetect, how tho
+#   test the extra columns
+
+
+statement ok
+CREATE TABLE tbl AS FROM '../data1.csv';
+
+statement ok
+COPY tbl TO '__TEST_DIR__/partition' (partition_by(column1));
+
+query IIII
+from read_csv_auto('__TEST_DIR__/partition/**', HIVE_PARTITIONING=0) where column0=2015 and column2<100;
+----
+2015	apr	12	red
+2015	nov	12	grey
+
+query IIII
+from read_csv_auto('__TEST_DIR__/partition/**', HIVE_PARTITIONING=1) where column0=2015 and column2<100;
+----
+2015	apr	12	red
+2015	nov	12	grey
+
+query IIII
+from read_csv_auto('__TEST_DIR__/partition/**', HIVE_PARTITIONING=1) where column0=2015 and column2<100;
+----
+2015	apr	12	red
+2015	nov	12	grey
+

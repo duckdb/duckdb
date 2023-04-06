@@ -9,6 +9,43 @@
 
 namespace duckdb {
 
+struct	AutoDetectHivePartitioning{
+
+	static bool BasicChecks(const string& file) {
+		const auto vec = StringUtil::Split(file, "/");
+		if (vec.size() < 2) {
+			return false;
+		}
+		const string& last_dir = vec.at(vec.size() - 2);
+		if (last_dir.find('=') == string::npos) {
+			return false;
+		}
+		return true;
+	}
+
+	static bool AutoDetect(const vector<string>& files) {
+		if (files.empty()) {
+			return false;
+		}
+		if (!BasicChecks(files.front())) {
+			return false;
+		}
+		const auto partitions = HivePartitioning::Parse(files.front());
+		for (auto& f : files) {
+			auto scheme = HivePartitioning::Parse(f);
+			if (scheme.size() != partitions.size()) {
+				return false;
+			}
+			for (auto& i : scheme) {
+				if (partitions.find(i.first) == partitions.end()) {
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+};
+
 void MultiFileReader::AddParameters(TableFunction &table_function) {
 	table_function.named_parameters["filename"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
@@ -52,6 +89,7 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 		options.filename = BooleanValue::Get(val);
 	} else if (loption == "hive_partitioning") {
 		options.hive_partitioning = BooleanValue::Get(val);
+		options.auto_detect_hive_partitioning = false;
 	} else if (loption == "union_by_name") {
 		options.union_by_name = BooleanValue::Get(val);
 	} else {
@@ -66,7 +104,8 @@ bool MultiFileReader::ComplexFilterPushdown(ClientContext &context, vector<strin
 	if (files.empty()) {
 		return false;
 	}
-	if (!options.hive_partitioning && !options.filename) {
+	bool hive_partitioning = options.auto_detect_hive_partitioning ? AutoDetectHivePartitioning::AutoDetect(files) : options.hive_partitioning;
+	if (!hive_partitioning && !options.filename) {
 		return false;
 	}
 
@@ -77,7 +116,7 @@ bool MultiFileReader::ComplexFilterPushdown(ClientContext &context, vector<strin
 
 	auto start_files = files.size();
 	HivePartitioning::ApplyFiltersToFileList(context, files, filters, column_map, get.table_index,
-	                                         options.hive_partitioning, options.filename);
+	                                         hive_partitioning, options.filename);
 	if (files.size() != start_files) {
 		// we have pruned files
 		return true;
@@ -99,7 +138,8 @@ MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &opt
 	}
 
 	// Add generated constant columns from hive partitioning scheme
-	if (options.hive_partitioning) {
+	bool hive_partitioning = options.auto_detect_hive_partitioning ? AutoDetectHivePartitioning::AutoDetect(files) : options.hive_partitioning;
+	if (hive_partitioning) {
 		D_ASSERT(!files.empty());
 		auto partitions = HivePartitioning::Parse(files[0]);
 		// verify that all files have the same hive partitioning scheme
@@ -107,12 +147,18 @@ MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &opt
 			auto file_partitions = HivePartitioning::Parse(f);
 			for (auto &part_info : partitions) {
 				if (file_partitions.find(part_info.first) == file_partitions.end()) {
+					if (options.auto_detect_hive_partitioning == true) {
+						throw BinderException("Hive partitioning was enabled automatically, but an error was encountered: Hive partition mismatch between file \"%s\" and \"%s\": key \"%s\" not found\n\nTo switch off hive partition, set: HIVE_PARTITIONING=0", files[0], f, part_info.first);
+					}
 					throw BinderException(
 					    "Hive partition mismatch between file \"%s\" and \"%s\": key \"%s\" not found", files[0], f,
 					    part_info.first);
 				}
 			}
 			if (partitions.size() != file_partitions.size()) {
+				if (options.auto_detect_hive_partitioning == true) {
+					throw BinderException("Hive partitioning was enabled automatically, but an error was encountered: Hive partition mismatch between file \"%s\" and \"%s\"\n\nTo switch off hive partition, set: HIVE_PARTITIONING=0", files[0], f);
+				}
 				throw BinderException("Hive partition mismatch between file \"%s\" and \"%s\"", files[0], f);
 			}
 		}
