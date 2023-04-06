@@ -28,9 +28,7 @@ struct ListBindData : public FunctionData {
 	~ListBindData() override;
 
 	LogicalType stype;
-	WriteDataToSegment write_data_to_segment;
-	ReadDataFromSegment read_data_from_segment;
-	CopyDataFromSegment copy_data_from_segment;
+	ListSegmentFunctions functions;
 
 	unique_ptr<FunctionData> Copy() const override {
 		return make_uniq<ListBindData>(stype);
@@ -45,7 +43,7 @@ struct ListBindData : public FunctionData {
 ListBindData::ListBindData(const LogicalType &stype_p) : stype(stype_p) {
 	// always unnest once because the result vector is of type LIST
 	auto type = ListType::GetChildType(stype_p);
-	GetSegmentDataFunctions(write_data_to_segment, read_data_from_segment, copy_data_from_segment, type);
+	GetSegmentDataFunctions(functions, type);
 }
 
 ListBindData::~ListBindData() {
@@ -97,7 +95,7 @@ static void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_d
 		if (!state->owning_vector) {
 			state->owning_vector = new vector<AllocatedData>;
 		}
-		list_bind_data.write_data_to_segment.AppendRow(aggr_input_data.allocator, *state->owning_vector,
+		list_bind_data.functions.AppendRow(aggr_input_data.allocator, *state->owning_vector,
 		                                               state->linked_list, input, i, count);
 	}
 }
@@ -125,7 +123,7 @@ static void ListCombineFunction(Vector &state, Vector &combined, AggregateInputD
 
 		// copy the linked list of the state
 		auto copied_linked_list = LinkedList(state->linked_list.total_capacity, nullptr, nullptr);
-		list_bind_data.copy_data_from_segment.CopyLinkedList(state->linked_list, copied_linked_list,
+		list_bind_data.functions.CopyLinkedList(state->linked_list, copied_linked_list,
 		                                                     aggr_input_data.allocator, *owning_vector);
 
 		// append the copied linked list to the combined state
@@ -178,7 +176,7 @@ static void ListFinalize(Vector &state_vector, AggregateInputData &aggr_input_da
 		}
 
 		idx_t current_offset = result_data[rid].offset;
-		list_bind_data.read_data_from_segment.BuildListVector(state->linked_list, result_child, current_offset);
+		list_bind_data.functions.BuildListVector(state->linked_list, result_child, current_offset);
 
 		// now destroy the state (for parallel destruction)
 		ListFunction::Destroy<ListAggState>(state);
