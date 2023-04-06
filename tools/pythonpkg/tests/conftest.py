@@ -1,33 +1,34 @@
 import os
 import pytest
 import shutil
-from os.path import abspath
+from os.path import abspath, join, dirname, normpath
 import glob
 import duckdb
+
 
 @pytest.fixture(scope="function")
 def duckdb_empty_cursor(request):
     connection = duckdb.connect('')
     cursor = connection.cursor()
     return cursor
- 
+
 
 @pytest.fixture(scope="function")
 def require():
     def _require(extension_name, db_name=''):
         # Paths to search for extensions
+
+        build = normpath(join(dirname(__file__), "../../../build/"))
+        extension = "extension/*/*.duckdb_extension"
+
         extension_search_patterns = [
-            "../../../../build/release/extension/*/*.duckdb_extension",
-            "../../../../build/debug/extension/*/*.duckdb_extension",
-            "../../*.duckdb_extension",
-             "../../../../../build/release/extension/*/*.duckdb_extension",
-            "../../../../../build/debug/extension/*/*.duckdb_extension",
-            "../../../*.duckdb_extension"
+            join(build, "release", extension),
+            join(build, "debug", extension),
         ]
 
         # DUCKDB_PYTHON_TEST_EXTENSION_PATH can be used to add a path for the extension test to search for extensions
         if 'DUCKDB_PYTHON_TEST_EXTENSION_PATH' in os.environ:
-            env_extension_path = os.getenv('DUCKDB_PYTHON_TEST_EXTENSION_PATH');
+            env_extension_path = os.getenv('DUCKDB_PYTHON_TEST_EXTENSION_PATH')
             env_extension_path = env_extension_path.rstrip('/')
             extension_search_patterns.append(env_extension_path + '/*/*.duckdb_extension')
             extension_search_patterns.append(env_extension_path + '/*.duckdb_extension')
@@ -41,17 +42,17 @@ def require():
 
         for path in extension_paths_found:
             print(path)
-            if (path.endswith(extension_name+".duckdb_extension")):
-                conn = duckdb.connect(db_name, config={'allow_unsigned_extensions' : 'true'})
+            if (path.endswith(extension_name + ".duckdb_extension")):
+                conn = duckdb.connect(db_name, config={'allow_unsigned_extensions': 'true'})
                 conn.execute(f"LOAD '{path}'")
                 return conn
         pytest.skip(f'could not load {extension_name}')
 
     return _require
 
+
 @pytest.fixture(scope='session', autouse=True)
 def duckdb_cursor(request):
-
     connection = duckdb.connect('')
     cursor = connection.cursor()
     cursor.execute('CREATE TABLE integers (i integer)')

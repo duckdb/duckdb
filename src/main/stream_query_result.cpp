@@ -66,9 +66,9 @@ unique_ptr<DataChunk> StreamQueryResult::FetchRaw() {
 
 unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 	if (HasError() || !context) {
-		return make_unique<MaterializedQueryResult>(GetErrorObject());
+		return make_uniq<MaterializedQueryResult>(GetErrorObject());
 	}
-	auto collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
+	auto collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
 
 	ColumnDataAppendState append_state;
 	collection->InitializeAppend(append_state);
@@ -79,10 +79,10 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 		}
 		collection->Append(append_state, *chunk);
 	}
-	auto result = make_unique<MaterializedQueryResult>(statement_type, properties, names, std::move(collection),
-	                                                   client_properties);
+	auto result =
+	    make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(collection), client_properties);
 	if (HasError()) {
-		return make_unique<MaterializedQueryResult>(GetErrorObject());
+		return make_uniq<MaterializedQueryResult>(GetErrorObject());
 	}
 	return result;
 }

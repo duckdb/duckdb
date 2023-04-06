@@ -140,12 +140,12 @@ static vector<AutoCompleteCandidate> SuggestColumnName(ClientContext &context) {
 	auto all_entries = GetAllTables(context, false);
 	for (auto &entry : all_entries) {
 		if (entry->type == CatalogType::TABLE_ENTRY) {
-			auto &table = (TableCatalogEntry &)*entry;
+			auto &table = entry->Cast<TableCatalogEntry>();
 			for (auto &col : table.GetColumns().Logical()) {
 				suggestions.emplace_back(col.GetName(), 1);
 			}
 		} else if (entry->type == CatalogType::VIEW_ENTRY) {
-			auto &view = (ViewCatalogEntry &)*entry;
+			auto &view = entry->Cast<ViewCatalogEntry>();
 			for (auto &col : view.aliases) {
 				suggestions.emplace_back(col, 1);
 			}
@@ -208,7 +208,7 @@ static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, str
 
 enum class SuggestionState : uint8_t { SUGGEST_KEYWORD, SUGGEST_TABLE_NAME, SUGGEST_COLUMN_NAME, SUGGEST_FILE_NAME };
 
-static unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(ClientContext &context, const string &sql) {
+static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(ClientContext &context, const string &sql) {
 	// for auto-completion, we consider 4 scenarios
 	// * there is nothing in the buffer, or only one word -> suggest a keyword
 	// * the previous keyword is SELECT, WHERE, BY, HAVING, ... -> suggest a column name
@@ -274,7 +274,7 @@ in_comment:
 		}
 	}
 	// no suggestions inside comments
-	return make_unique<SQLAutoCompleteFunctionData>(vector<string>(), 0);
+	return make_uniq<SQLAutoCompleteFunctionData>(vector<string>(), 0);
 in_quotes:
 	for (; pos < sql.size(); pos++) {
 		if (sql[pos] == '"') {
@@ -350,11 +350,11 @@ standard_suggestion:
 		D_ASSERT(false);
 		throw NotImplementedException("last_pos out of range");
 	}
-	return make_unique<SQLAutoCompleteFunctionData>(std::move(suggestions), last_pos);
+	return make_uniq<SQLAutoCompleteFunctionData>(std::move(suggestions), last_pos);
 }
 
-static unique_ptr<FunctionData> SQLAutoCompleteBind(ClientContext &context, TableFunctionBindInput &input,
-                                                    vector<LogicalType> &return_types, vector<string> &names) {
+static duckdb::unique_ptr<FunctionData> SQLAutoCompleteBind(ClientContext &context, TableFunctionBindInput &input,
+                                                            vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("suggestion");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -365,7 +365,7 @@ static unique_ptr<FunctionData> SQLAutoCompleteBind(ClientContext &context, Tabl
 }
 
 unique_ptr<GlobalTableFunctionState> SQLAutoCompleteInit(ClientContext &context, TableFunctionInitInput &input) {
-	return make_unique<SQLAutoCompleteData>();
+	return make_uniq<SQLAutoCompleteData>();
 }
 
 void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {

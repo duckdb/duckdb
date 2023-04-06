@@ -1,14 +1,9 @@
 #include "duckdb/planner/expression_binder.hpp"
 
-#include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/parser/expression/positional_reference_expression.hpp"
-#include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/expression/list.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/expression/bound_cast_expression.hpp"
-#include "duckdb/planner/expression/bound_default_expression.hpp"
-#include "duckdb/planner/expression/bound_parameter_expression.hpp"
-#include "duckdb/planner/expression/bound_subquery_expression.hpp"
+#include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
@@ -37,34 +32,40 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> *expr, 
 	auto &expr_ref = **expr;
 	switch (expr_ref.expression_class) {
 	case ExpressionClass::BETWEEN:
-		return BindExpression((BetweenExpression &)expr_ref, depth);
+		return BindExpression(expr_ref.Cast<BetweenExpression>(), depth);
 	case ExpressionClass::CASE:
-		return BindExpression((CaseExpression &)expr_ref, depth);
+		return BindExpression(expr_ref.Cast<CaseExpression>(), depth);
 	case ExpressionClass::CAST:
-		return BindExpression((CastExpression &)expr_ref, depth);
+		return BindExpression(expr_ref.Cast<CastExpression>(), depth);
 	case ExpressionClass::COLLATE:
-		return BindExpression((CollateExpression &)expr_ref, depth);
+		return BindExpression(expr_ref.Cast<CollateExpression>(), depth);
 	case ExpressionClass::COLUMN_REF:
-		return BindExpression((ColumnRefExpression &)expr_ref, depth);
+		return BindExpression(expr_ref.Cast<ColumnRefExpression>(), depth);
 	case ExpressionClass::COMPARISON:
-		return BindExpression((ComparisonExpression &)expr_ref, depth);
+		return BindExpression(expr_ref.Cast<ComparisonExpression>(), depth);
 	case ExpressionClass::CONJUNCTION:
-		return BindExpression((ConjunctionExpression &)expr_ref, depth);
+		return BindExpression(expr_ref.Cast<ConjunctionExpression>(), depth);
 	case ExpressionClass::CONSTANT:
-		return BindExpression((ConstantExpression &)expr_ref, depth);
-	case ExpressionClass::FUNCTION:
+		return BindExpression(expr_ref.Cast<ConstantExpression>(), depth);
+	case ExpressionClass::FUNCTION: {
+		auto &function = expr_ref.Cast<FunctionExpression>();
+		if (function.function_name == "unnest" || function.function_name == "unlist") {
+			// special case, not in catalog
+			return BindUnnest(function, depth, root_expression);
+		}
 		// binding function expression has extra parameter needed for macro's
-		return BindExpression((FunctionExpression &)expr_ref, depth, expr);
+		return BindExpression(function, depth, expr);
+	}
 	case ExpressionClass::LAMBDA:
-		return BindExpression((LambdaExpression &)expr_ref, depth, false, LogicalTypeId::INVALID);
+		return BindExpression(expr_ref.Cast<LambdaExpression>(), depth, false, LogicalTypeId::INVALID);
 	case ExpressionClass::OPERATOR:
-		return BindExpression((OperatorExpression &)expr_ref, depth);
+		return BindExpression(expr_ref.Cast<OperatorExpression>(), depth);
 	case ExpressionClass::SUBQUERY:
-		return BindExpression((SubqueryExpression &)expr_ref, depth);
+		return BindExpression(expr_ref.Cast<SubqueryExpression>(), depth);
 	case ExpressionClass::PARAMETER:
-		return BindExpression((ParameterExpression &)expr_ref, depth);
+		return BindExpression(expr_ref.Cast<ParameterExpression>(), depth);
 	case ExpressionClass::POSITIONAL_REFERENCE:
-		return BindExpression((PositionalReferenceExpression &)expr_ref, depth);
+		return BindExpression(expr_ref.Cast<PositionalReferenceExpression>(), depth);
 	case ExpressionClass::STAR:
 		return BindResult(binder.FormatError(expr_ref, "STAR expression is not supported here"));
 	default:
@@ -106,7 +107,7 @@ void ExpressionBinder::BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth
 
 void ExpressionBinder::ExtractCorrelatedExpressions(Binder &binder, Expression &expr) {
 	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &bound_colref = (BoundColumnRefExpression &)expr;
+		auto &bound_colref = expr.Cast<BoundColumnRefExpression>();
 		if (bound_colref.depth > 0) {
 			binder.AddCorrelatedColumn(CorrelatedColumnInfo(bound_colref));
 		}
@@ -157,7 +158,7 @@ LogicalType ExpressionBinder::ExchangeType(const LogicalType &type, LogicalTypeI
 		for (auto &child_type : child_types) {
 			child_type.second = ExchangeType(child_type.second, target, new_type);
 		}
-		return LogicalType::STRUCT(std::move(child_types));
+		return LogicalType::STRUCT(child_types);
 	}
 	case LogicalTypeId::UNION: {
 		auto member_types = UnionType::CopyMemberTypes(type);
@@ -193,12 +194,11 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 		if (!success) {
 			throw BinderException(error_msg);
 		}
-		auto bound_expr = (BoundExpression *)expr.get();
-		ExtractCorrelatedExpressions(binder, *bound_expr->expr);
+		auto &bound_expr = expr->Cast<BoundExpression>();
+		ExtractCorrelatedExpressions(binder, *bound_expr.expr);
 	}
-	D_ASSERT(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
-	auto bound_expr = (BoundExpression *)expr.get();
-	unique_ptr<Expression> result = std::move(bound_expr->expr);
+	auto &bound_expr = expr->Cast<BoundExpression>();
+	unique_ptr<Expression> result = std::move(bound_expr.expr);
 	if (target_type.id() != LogicalTypeId::INVALID) {
 		// the binder has a specific target type: add a cast to that type
 		result = BoundCastExpression::AddCastToType(context, std::move(result), target_type);
@@ -235,12 +235,11 @@ string ExpressionBinder::Bind(unique_ptr<ParsedExpression> *expr, idx_t depth, b
 		return result.error;
 	}
 	// successfully bound: replace the node with a BoundExpression
-	*expr = make_unique<BoundExpression>(std::move(result.expression));
-	auto be = (BoundExpression *)expr->get();
-	D_ASSERT(be);
-	be->alias = alias;
+	*expr = make_uniq<BoundExpression>(std::move(result.expression));
+	auto &be = (*expr)->Cast<BoundExpression>();
+	be.alias = alias;
 	if (!alias.empty()) {
-		be->expr->alias = alias;
+		be.expr->alias = alias;
 	}
 	return string();
 }

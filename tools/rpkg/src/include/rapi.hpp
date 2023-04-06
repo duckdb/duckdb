@@ -16,7 +16,7 @@ namespace duckdb {
 typedef unordered_map<std::string, SEXP> arrow_scans_t;
 
 struct DBWrapper {
-	unique_ptr<DuckDB> db;
+	duckdb::unique_ptr<DuckDB> db;
 	arrow_scans_t arrow_scans;
 	mutex lock;
 };
@@ -25,7 +25,7 @@ void DBDeleter(DBWrapper *);
 typedef cpp11::external_pointer<DBWrapper, DBDeleter> db_eptr_t;
 
 struct ConnWrapper {
-	unique_ptr<Connection> conn;
+	duckdb::unique_ptr<Connection> conn;
 	db_eptr_t db_eptr;
 };
 
@@ -33,7 +33,7 @@ void ConnDeleter(ConnWrapper *);
 typedef cpp11::external_pointer<ConnWrapper, ConnDeleter> conn_eptr_t;
 
 struct RStatement {
-	unique_ptr<PreparedStatement> stmt;
+	duckdb::unique_ptr<PreparedStatement> stmt;
 	vector<Value> parameters;
 };
 
@@ -49,7 +49,7 @@ typedef cpp11::external_pointer<RelationWrapper> rel_extptr_t;
 typedef cpp11::external_pointer<RStatement> stmt_eptr_t;
 
 struct RQueryResult {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 };
 
 typedef cpp11::external_pointer<RQueryResult> rqry_eptr_t;
@@ -70,24 +70,6 @@ static constexpr char R_STRING_TYPE_NAME[] = "r_string";
 
 struct RStringsType {
 	static LogicalType Get();
-};
-
-struct RProtector {
-	RProtector() : protect_count(0) {
-	}
-	~RProtector() {
-		if (protect_count > 0) {
-			UNPROTECT(protect_count);
-		}
-	}
-
-	SEXP Protect(SEXP sexp) {
-		protect_count++;
-		return PROTECT(sexp);
-	}
-
-private:
-	int protect_count;
 };
 
 struct DataFrameScanFunction : public TableFunction {
@@ -167,7 +149,6 @@ SEXP rapi_record_batch(duckdb::rqry_eptr_t, int);
 
 cpp11::r_string rapi_ptr_to_str(SEXP extptr);
 
-void duckdb_r_transform(duckdb::Vector &src_vec, SEXP &dest, duckdb::idx_t dest_offset, duckdb::idx_t n,
-                        bool integer64);
-SEXP duckdb_r_allocate(const duckdb::LogicalType &type, duckdb::RProtector &r_varvalue, duckdb::idx_t nrows);
-void duckdb_r_decorate(const duckdb::LogicalType &type, SEXP &dest, bool integer64);
+void duckdb_r_transform(duckdb::Vector &src_vec, SEXP dest, duckdb::idx_t dest_offset, duckdb::idx_t n, bool integer64);
+SEXP duckdb_r_allocate(const duckdb::LogicalType &type, duckdb::idx_t nrows);
+void duckdb_r_decorate(const duckdb::LogicalType &type, SEXP dest, bool integer64);

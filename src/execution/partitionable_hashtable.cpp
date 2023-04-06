@@ -62,21 +62,35 @@ PartitionableHashTable::PartitionableHashTable(ClientContext &context, Allocator
 	for (hash_t r = 0; r < partition_info.n_partitions; r++) {
 		sel_vectors[r].Initialize();
 	}
+
+	RowLayout layout;
+	layout.Initialize(group_types, AggregateObject::CreateAggregateObjects(bindings));
+	tuple_size = layout.GetRowWidth();
+}
+
+HtEntryType PartitionableHashTable::GetHTEntrySize() {
+	// we need at least STANDARD_VECTOR_SIZE entries to fit in the hash table
+	if (GroupedAggregateHashTable::GetMaxCapacity(HtEntryType::HT_WIDTH_32, tuple_size) < STANDARD_VECTOR_SIZE) {
+		return HtEntryType::HT_WIDTH_64;
+	}
+	return HtEntryType::HT_WIDTH_32;
 }
 
 idx_t PartitionableHashTable::ListAddChunk(HashTableList &list, DataChunk &groups, Vector &group_hashes,
                                            DataChunk &payload, const vector<idx_t> &filter) {
 	// If this is false, a single AddChunk would overflow the max capacity
 	D_ASSERT(list.empty() || groups.size() <= list.back()->MaxCapacity());
-	if (list.empty() || list.back()->Size() + groups.size() > list.back()->MaxCapacity()) {
+	if (list.empty() || list.back()->Size() + groups.size() >= list.back()->MaxCapacity()) {
+		idx_t new_capacity = GroupedAggregateHashTable::InitialCapacity();
 		if (!list.empty()) {
+			new_capacity = list.back()->Capacity();
 			// early release first part of ht and prevent adding of more data
 			list.back()->Finalize();
 		}
-		list.push_back(make_unique<GroupedAggregateHashTable>(context, allocator, group_types, payload_types, bindings,
-		                                                      HtEntryType::HT_WIDTH_32));
+		list.push_back(make_uniq<GroupedAggregateHashTable>(context, allocator, group_types, payload_types, bindings,
+		                                                    GetHTEntrySize(), new_capacity));
 	}
-	return list.back()->AddChunk(groups, group_hashes, payload, filter);
+	return list.back()->AddChunk(append_state, groups, group_hashes, payload, filter);
 }
 
 idx_t PartitionableHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bool do_partition,
@@ -138,10 +152,11 @@ void PartitionableHashTable::Partition() {
 	D_ASSERT(partition_info.n_partitions > 1);
 
 	vector<GroupedAggregateHashTable *> partition_hts(partition_info.n_partitions);
+	radix_partitioned_hts.resize(partition_info.n_partitions);
 	for (auto &unpartitioned_ht : unpartitioned_hts) {
 		for (idx_t r = 0; r < partition_info.n_partitions; r++) {
-			radix_partitioned_hts[r].push_back(make_unique<GroupedAggregateHashTable>(
-			    context, allocator, group_types, payload_types, bindings, HtEntryType::HT_WIDTH_32));
+			radix_partitioned_hts[r].push_back(make_uniq<GroupedAggregateHashTable>(
+			    context, allocator, group_types, payload_types, bindings, GetHTEntrySize()));
 			partition_hts[r] = radix_partitioned_hts[r].back().get();
 		}
 		unpartitioned_ht->Partition(partition_hts, partition_info.radix_mask, partition_info.RADIX_SHIFT);
@@ -169,7 +184,7 @@ HashTableList PartitionableHashTable::GetUnpartitioned() {
 void PartitionableHashTable::Finalize() {
 	if (IsPartitioned()) {
 		for (auto &ht_list : radix_partitioned_hts) {
-			for (auto &ht : ht_list.second) {
+			for (auto &ht : ht_list) {
 				D_ASSERT(ht);
 				ht->Finalize();
 			}

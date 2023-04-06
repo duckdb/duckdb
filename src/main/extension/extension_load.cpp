@@ -59,7 +59,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileOpener *opener, const
 	if (!config.options.allow_unsigned_extensions) {
 		auto handle = fs.OpenFile(filename, FileFlags::FILE_FLAGS_READ);
 
-		// signature is the last 265 bytes of the file
+		// signature is the last 256 bytes of the file
 
 		string signature;
 		signature.resize(256);

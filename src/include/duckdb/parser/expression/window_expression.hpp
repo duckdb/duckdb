@@ -25,9 +25,14 @@ enum class WindowBoundary : uint8_t {
 	EXPR_FOLLOWING_RANGE = 8
 };
 
+const char *ToString(WindowBoundary value);
+
 //! The WindowExpression represents a window function in the query. They are a special case of aggregates which is why
 //! they inherit from them.
 class WindowExpression : public ParsedExpression {
+public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::WINDOW;
+
 public:
 	WindowExpression(ExpressionType type, string catalog_name, string schema_name, const string &function_name);
 
@@ -71,6 +76,10 @@ public:
 
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<ParsedExpression> FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer);
+
+	static ExpressionType WindowToExpressionType(string &fun_name);
 
 public:
 	template <class T, class BASE, class ORDER_NODE>
@@ -200,4 +209,5 @@ public:
 		return result;
 	}
 };
+
 } // namespace duckdb

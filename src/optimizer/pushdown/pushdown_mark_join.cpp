@@ -9,11 +9,11 @@ using Filter = FilterPushdown::Filter;
 unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalOperator> op,
                                                              unordered_set<idx_t> &left_bindings,
                                                              unordered_set<idx_t> &right_bindings) {
-	auto &join = (LogicalJoin &)*op;
-	auto &comp_join = (LogicalComparisonJoin &)*op;
+	auto &join = op->Cast<LogicalJoin>();
+	auto &comp_join = op->Cast<LogicalComparisonJoin>();
 	D_ASSERT(join.join_type == JoinType::MARK);
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
-	         op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
+	         op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN || op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN);
 
 	right_bindings.insert(comp_join.mark_index);
 	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
@@ -50,7 +50,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 			// the MARK join is always TRUE or FALSE, and never NULL this happens in the case of a correlated EXISTS
 			// clause
 			if (filters[i]->filter->type == ExpressionType::OPERATOR_NOT) {
-				auto &op_expr = (BoundOperatorExpression &)*filters[i]->filter;
+				auto &op_expr = filters[i]->filter->Cast<BoundOperatorExpression>();
 				if (op_expr.children[0]->type == ExpressionType::BOUND_COLUMN_REF) {
 					// the filter is NOT(marker), check the join conditions
 					bool all_null_values_are_equal = true;
@@ -77,7 +77,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 	}
 	op->children[0] = left_pushdown.Rewrite(std::move(op->children[0]));
 	op->children[1] = right_pushdown.Rewrite(std::move(op->children[1]));
-	return FinishPushdown(std::move(op));
+	return PushFinalFilters(std::move(op));
 }
 
 } // namespace duckdb

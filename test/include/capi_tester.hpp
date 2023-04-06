@@ -68,12 +68,24 @@ public:
 		return duckdb_result_chunk_count(result);
 	}
 
+	unique_ptr<CAPIDataChunk> StreamChunk() {
+		auto chunk = duckdb_stream_fetch_chunk(result);
+		if (!chunk) {
+			return nullptr;
+		}
+		return make_uniq<CAPIDataChunk>(chunk);
+	}
+
+	bool IsStreaming() {
+		return duckdb_result_is_streaming(result);
+	}
+
 	unique_ptr<CAPIDataChunk> FetchChunk(idx_t chunk_idx) {
 		auto chunk = duckdb_result_get_chunk(result, chunk_idx);
 		if (!chunk) {
 			return nullptr;
 		}
-		return make_unique<CAPIDataChunk>(chunk);
+		return make_uniq<CAPIDataChunk>(chunk);
 	}
 
 	template <class T>
@@ -120,7 +132,7 @@ public:
 public:
 	bool success = false;
 
-private:
+protected:
 	duckdb_result result;
 };
 
@@ -199,15 +211,67 @@ public:
 		return true;
 	}
 
-	unique_ptr<CAPIResult> Query(string query) {
+	duckdb::unique_ptr<CAPIResult> Query(string query) {
 		D_ASSERT(connection);
-		auto result = make_unique<CAPIResult>();
+		auto result = make_uniq<CAPIResult>();
 		result->Query(connection, query);
 		return result;
 	}
 
 	duckdb_database database = nullptr;
 	duckdb_connection connection = nullptr;
+};
+
+struct CAPIPrepared {
+	CAPIPrepared() {
+	}
+	~CAPIPrepared() {
+		if (!prepared) {
+			return;
+		}
+		duckdb_destroy_prepare(&prepared);
+	}
+
+	bool Prepare(CAPITester &tester, const string &query) {
+		auto state = duckdb_prepare(tester.connection, query.c_str(), &prepared);
+		return state == DuckDBSuccess;
+	}
+
+	duckdb_prepared_statement prepared = nullptr;
+};
+
+struct CAPIPending {
+	CAPIPending() {
+	}
+	~CAPIPending() {
+		if (!pending) {
+			return;
+		}
+		duckdb_destroy_pending(&pending);
+	}
+
+	bool Pending(CAPIPrepared &prepared) {
+		auto state = duckdb_pending_prepared(prepared.prepared, &pending);
+		return state == DuckDBSuccess;
+	}
+
+	bool PendingStreaming(CAPIPrepared &prepared) {
+		auto state = duckdb_pending_prepared_streaming(prepared.prepared, &pending);
+		return state == DuckDBSuccess;
+	}
+
+	duckdb_pending_state ExecuteTask() {
+		REQUIRE(pending);
+		return duckdb_pending_execute_task(pending);
+	}
+
+	unique_ptr<CAPIResult> Execute() {
+		duckdb_result result;
+		auto success = duckdb_execute_pending(pending, &result) == DuckDBSuccess;
+		return make_uniq<CAPIResult>(result, success);
+	}
+
+	duckdb_pending_result pending = nullptr;
 };
 
 } // namespace duckdb

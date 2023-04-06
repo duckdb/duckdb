@@ -1,4 +1,5 @@
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/parser/parsed_data/alter_table_function_info.hpp"
 
 namespace duckdb {
 
@@ -20,9 +21,14 @@ CreateTableFunctionInfo::CreateTableFunctionInfo(TableFunctionSet set)
 unique_ptr<CreateInfo> CreateTableFunctionInfo::Copy() const {
 	TableFunctionSet set(name);
 	set.functions = functions.functions;
-	auto result = make_unique<CreateTableFunctionInfo>(std::move(set));
+	auto result = make_uniq<CreateTableFunctionInfo>(std::move(set));
 	CopyProperties(*result);
 	return std::move(result);
+}
+
+unique_ptr<AlterInfo> CreateTableFunctionInfo::GetAlterInfo() const {
+	return make_uniq_base<AlterInfo, AddTableFunctionOverloadInfo>(AlterEntryData(catalog, schema, name, true),
+	                                                               functions);
 }
 
 } // namespace duckdb

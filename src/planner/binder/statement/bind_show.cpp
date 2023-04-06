@@ -14,7 +14,7 @@ BoundStatement Binder::Bind(ShowStatement &stmt) {
 	stmt.info->types = plan.types;
 	stmt.info->aliases = plan.names;
 
-	auto show = make_unique<LogicalShow>(std::move(plan.plan));
+	auto show = make_uniq<LogicalShow>(std::move(plan.plan));
 	show->types_select = plan.types;
 	show->aliases = plan.names;
 

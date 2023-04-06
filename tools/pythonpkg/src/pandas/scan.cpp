@@ -63,7 +63,7 @@ PandasScanFunction::PandasScanFunction()
 idx_t PandasScanFunction::PandasScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
                                                   LocalTableFunctionState *local_state,
                                                   GlobalTableFunctionState *global_state) {
-	auto &data = (PandasScanLocalState &)*local_state;
+	auto &data = local_state->Cast<PandasScanLocalState>();
 	return data.batch_index;
 }
 
@@ -82,7 +82,7 @@ unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &conte
 	auto df_columns = py::list(df.attr("keys")());
 	auto get_fun = df.attr("__getitem__");
 	idx_t row_count = py::len(get_fun(df_columns[0]));
-	return make_unique<PandasScanFunctionData>(df, row_count, std::move(pandas_bind_data), return_types);
+	return make_uniq<PandasScanFunctionData>(df, row_count, std::move(pandas_bind_data), return_types);
 }
 
 unique_ptr<GlobalTableFunctionState> PandasScanFunction::PandasScanInitGlobal(ClientContext &context,
@@ -90,13 +90,13 @@ unique_ptr<GlobalTableFunctionState> PandasScanFunction::PandasScanInitGlobal(Cl
 	if (PyGILState_Check()) {
 		throw InvalidInputException("PandasScan called but GIL was already held!");
 	}
-	return make_unique<PandasScanGlobalState>(PandasScanMaxThreads(context, input.bind_data));
+	return make_uniq<PandasScanGlobalState>(PandasScanMaxThreads(context, input.bind_data));
 }
 
 unique_ptr<LocalTableFunctionState> PandasScanFunction::PandasScanInitLocal(ExecutionContext &context,
                                                                             TableFunctionInitInput &input,
                                                                             GlobalTableFunctionState *gstate) {
-	auto result = make_unique<PandasScanLocalState>(0, 0);
+	auto result = make_uniq<PandasScanLocalState>(0, 0);
 	result->column_ids = input.column_ids;
 	PandasScanParallelStateNext(context.client, input.bind_data, result.get(), gstate);
 	return std::move(result);
@@ -114,8 +114,8 @@ bool PandasScanFunction::PandasScanParallelStateNext(ClientContext &context, con
                                                      LocalTableFunctionState *lstate,
                                                      GlobalTableFunctionState *gstate) {
 	auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
-	auto &parallel_state = (PandasScanGlobalState &)*gstate;
-	auto &state = (PandasScanLocalState &)*lstate;
+	auto &parallel_state = gstate->Cast<PandasScanGlobalState>();
+	auto &state = lstate->Cast<PandasScanLocalState>();
 
 	lock_guard<mutex> parallel_lock(parallel_state.lock);
 	if (parallel_state.position >= bind_data.row_count) {
@@ -145,7 +145,7 @@ double PandasScanFunction::PandasProgress(ClientContext &context, const Function
 //! hence this needs to be GIL-safe, i.e. no methods that create Python objects are allowed
 void PandasScanFunction::PandasScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = (PandasScanFunctionData &)*data_p.bind_data;
-	auto &state = (PandasScanLocalState &)*data_p.local_state;
+	auto &state = data_p.local_state->Cast<PandasScanLocalState>();
 
 	if (state.start >= state.end) {
 		if (!PandasScanParallelStateNext(context, data_p.bind_data, data_p.local_state, data_p.global_state)) {
@@ -170,7 +170,7 @@ void PandasScanFunction::PandasScanFunc(ClientContext &context, TableFunctionInp
 unique_ptr<NodeStatistics> PandasScanFunction::PandasScanCardinality(ClientContext &context,
                                                                      const FunctionData *bind_data) {
 	auto &data = (PandasScanFunctionData &)*bind_data;
-	return make_unique<NodeStatistics>(data.row_count, data.row_count);
+	return make_uniq<NodeStatistics>(data.row_count, data.row_count);
 }
 
 py::object PandasScanFunction::PandasReplaceCopiedNames(const py::object &original_df) {

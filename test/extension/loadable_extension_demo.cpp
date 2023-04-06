@@ -124,19 +124,20 @@ public:
 		idx_t offset;
 	};
 
-	static unique_ptr<FunctionData> QuackBind(ClientContext &context, TableFunctionBindInput &input,
-	                                          vector<LogicalType> &return_types, vector<string> &names) {
+	static duckdb::unique_ptr<FunctionData> QuackBind(ClientContext &context, TableFunctionBindInput &input,
+	                                                  vector<LogicalType> &return_types, vector<string> &names) {
 		names.emplace_back("quack");
 		return_types.emplace_back(LogicalType::VARCHAR);
-		return make_unique<QuackBindData>(BigIntValue::Get(input.inputs[0]));
+		return make_uniq<QuackBindData>(BigIntValue::Get(input.inputs[0]));
 	}
 
-	static unique_ptr<GlobalTableFunctionState> QuackInit(ClientContext &context, TableFunctionInitInput &input) {
-		return make_unique<QuackGlobalData>();
+	static duckdb::unique_ptr<GlobalTableFunctionState> QuackInit(ClientContext &context,
+	                                                              TableFunctionInitInput &input) {
+		return make_uniq<QuackGlobalData>();
 	}
 
 	static void QuackFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-		auto &bind_data = (QuackBindData &)*data_p.bind_data;
+		auto &bind_data = data_p.bind_data->Cast<QuackBindData>();
 		auto &data = (QuackGlobalData &)*data_p.global_state;
 		if (data.offset >= bind_data.number_of_quacks) {
 			// finished returning values
@@ -163,8 +164,8 @@ struct QuackExtensionData : public ParserExtensionParseData {
 
 	idx_t number_of_quacks;
 
-	unique_ptr<ParserExtensionParseData> Copy() const override {
-		return make_unique<QuackExtensionData>(number_of_quacks);
+	duckdb::unique_ptr<ParserExtensionParseData> Copy() const override {
+		return make_uniq<QuackExtensionData>(number_of_quacks);
 	}
 };
 
@@ -195,11 +196,11 @@ public:
 			}
 		}
 		// QUACK
-		return ParserExtensionParseResult(make_unique<QuackExtensionData>(splits.size() + 1));
+		return ParserExtensionParseResult(make_uniq<QuackExtensionData>(splits.size() + 1));
 	}
 
 	static ParserExtensionPlanResult QuackPlanFunction(ParserExtensionInfo *info, ClientContext &context,
-	                                                   unique_ptr<ParserExtensionParseData> parse_data) {
+	                                                   duckdb::unique_ptr<ParserExtensionParseData> parse_data) {
 		auto &quack_data = (QuackExtensionData &)*parse_data;
 
 		ParserExtensionPlanResult result;
@@ -234,7 +235,7 @@ DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::DatabaseInstance 
 	child_list_t<LogicalType> child_types;
 	child_types.push_back(make_pair("x", LogicalType::INTEGER));
 	child_types.push_back(make_pair("y", LogicalType::INTEGER));
-	auto alias_info = make_unique<CreateTypeInfo>();
+	auto alias_info = make_uniq<CreateTypeInfo>();
 	alias_info->internal = true;
 	alias_info->name = alias_name;
 	LogicalType target_type = LogicalType::STRUCT(child_types);

@@ -38,7 +38,7 @@ public:
 
 		RowLayout payload_layout;
 		payload_layout.Initialize(payload_types);
-		global_sort = make_unique<GlobalSortState>(buffer_manager, orders, payload_layout);
+		global_sort = make_uniq<GlobalSortState>(buffer_manager, orders, payload_layout);
 		global_sort->external = external;
 
 		partition_layout = global_sort->sort_layout.GetPrefixComparisonLayout(partitions.size());
@@ -111,7 +111,7 @@ public:
 				orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, pexpr->Copy(), nullptr);
 			} else {
 				orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, pexpr->Copy(),
-				                    wexpr->partitions_stats[prt_idx]->Copy());
+				                    wexpr->partitions_stats[prt_idx]->ToUnique());
 			}
 			partitions.emplace_back(orders.back().Copy());
 		}
@@ -184,7 +184,7 @@ void WindowGlobalSinkState::ResizeGroupingData(idx_t cardinality) {
 	// Repartition the grouping data
 	if (new_bits != bits) {
 		const auto hash_col_idx = payload_types.size();
-		grouping_data = make_unique<RadixPartitionedColumnData>(context, grouping_types, new_bits, hash_col_idx);
+		grouping_data = make_uniq<RadixPartitionedColumnData>(context, grouping_types, new_bits, hash_col_idx);
 	}
 }
 
@@ -197,7 +197,7 @@ void WindowGlobalSinkState::SyncLocalPartition(GroupingPartition &local_partitio
 
 	// If the local partition is now too small, flush it and reallocate
 	auto new_partition = grouping_data->CreateShared();
-	auto new_append = make_unique<PartitionedColumnDataAppendState>();
+	auto new_append = make_uniq<PartitionedColumnDataAppendState>();
 	new_partition->InitializeAppendState(*new_append);
 
 	local_partition->FlushAppendState(*local_append);
@@ -217,7 +217,7 @@ void WindowGlobalSinkState::SyncLocalPartition(GroupingPartition &local_partitio
 	new_partition->FlushAppendState(*new_append);
 
 	local_partition = std::move(new_partition);
-	local_append = make_unique<PartitionedColumnDataAppendState>();
+	local_append = make_uniq<PartitionedColumnDataAppendState>();
 	local_partition->InitializeAppendState(*local_append);
 }
 
@@ -227,7 +227,7 @@ void WindowGlobalSinkState::UpdateLocalPartition(GroupingPartition &local_partit
 
 	if (!local_partition) {
 		local_partition = grouping_data->CreateShared();
-		local_append = make_unique<PartitionedColumnDataAppendState>();
+		local_append = make_uniq<PartitionedColumnDataAppendState>();
 		local_partition->InitializeAppendState(*local_append);
 		return;
 	}
@@ -390,8 +390,8 @@ void WindowLocalSinkState::Sink(DataChunk &input_chunk, WindowGlobalSinkState &g
 		if (!rows) {
 			const auto entry_size = payload_layout.GetRowWidth();
 			const auto capacity = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_SIZE / entry_size) + 1);
-			rows = make_unique<RowDataCollection>(gstate.buffer_manager, capacity, entry_size);
-			strings = make_unique<RowDataCollection>(gstate.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
+			rows = make_uniq<RowDataCollection>(gstate.buffer_manager, capacity, entry_size);
+			strings = make_uniq<RowDataCollection>(gstate.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 		}
 		const auto row_count = input_chunk.size();
 		const auto row_sel = FlatVector::IncrementalSelectionVector();
@@ -454,7 +454,7 @@ PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expr
 	is_order_dependent = false;
 	for (auto &expr : select_list) {
 		D_ASSERT(expr->expression_class == ExpressionClass::BOUND_WINDOW);
-		auto &bound_window = (BoundWindowExpression &)*expr;
+		auto &bound_window = expr->Cast<BoundWindowExpression>();
 		if (bound_window.partitions.empty() && bound_window.orders.empty()) {
 			is_order_dependent = true;
 		}
@@ -599,7 +599,7 @@ struct WindowInputColumn {
 	WindowInputColumn(Expression *expr_p, ClientContext &context, idx_t capacity_p)
 	    : input_expr(expr_p, context), count(0), capacity(capacity_p) {
 		if (input_expr.expr) {
-			target = make_unique<Vector>(input_expr.chunk.data[0].GetType(), capacity);
+			target = make_uniq<Vector>(input_expr.chunk.data[0].GetType(), capacity);
 		}
 	}
 
@@ -994,7 +994,10 @@ void WindowBoundariesState::Update(const idx_t row_idx, WindowInputColumn &range
 }
 
 struct WindowExecutor {
-	WindowExecutor(BoundWindowExpression *wexpr, ClientContext &context, const idx_t count);
+	static bool IsConstantAggregate(const BoundWindowExpression &wexpr);
+
+	WindowExecutor(BoundWindowExpression *wexpr, ClientContext &context, const ValidityMask &partition_mask,
+	               const idx_t count);
 
 	void Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count);
 	void Finalize(WindowAggregationMode mode);
@@ -1038,9 +1041,67 @@ struct WindowExecutor {
 	// build a segment tree for frame-adhering aggregates
 	// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
 	unique_ptr<WindowSegmentTree> segment_tree = nullptr;
+
+	// all aggregate values are the same for each partition
+	unique_ptr<WindowConstantAggregate> constant_aggregate = nullptr;
 };
 
-WindowExecutor::WindowExecutor(BoundWindowExpression *wexpr, ClientContext &context, const idx_t count)
+bool WindowExecutor::IsConstantAggregate(const BoundWindowExpression &wexpr) {
+	if (!wexpr.aggregate) {
+		return false;
+	}
+
+	//	COUNT(*) is already handled efficiently by segment trees.
+	if (wexpr.children.empty()) {
+		return false;
+	}
+
+	/*
+	    The default framing option is RANGE UNBOUNDED PRECEDING, which
+	    is the same as RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT
+	    ROW; it sets the frame to be all rows from the partition start
+	    up through the current row's last peer (a row that the window's
+	    ORDER BY clause considers equivalent to the current row; all
+	    rows are peers if there is no ORDER BY). In general, UNBOUNDED
+	    PRECEDING means that the frame starts with the first row of the
+	    partition, and similarly UNBOUNDED FOLLOWING means that the
+	    frame ends with the last row of the partition, regardless of
+	    RANGE, ROWS or GROUPS mode. In ROWS mode, CURRENT ROW means that
+	    the frame starts or ends with the current row; but in RANGE or
+	    GROUPS mode it means that the frame starts or ends with the
+	    current row's first or last peer in the ORDER BY ordering. The
+	    offset PRECEDING and offset FOLLOWING options vary in meaning
+	    depending on the frame mode.
+	*/
+	switch (wexpr.start) {
+	case WindowBoundary::UNBOUNDED_PRECEDING:
+		break;
+	case WindowBoundary::CURRENT_ROW_RANGE:
+		if (!wexpr.orders.empty()) {
+			return false;
+		}
+		break;
+	default:
+		return false;
+	}
+
+	switch (wexpr.end) {
+	case WindowBoundary::UNBOUNDED_FOLLOWING:
+		break;
+	case WindowBoundary::CURRENT_ROW_RANGE:
+		if (!wexpr.orders.empty()) {
+			return false;
+		}
+		break;
+	default:
+		return false;
+	}
+
+	return true;
+}
+
+WindowExecutor::WindowExecutor(BoundWindowExpression *wexpr, ClientContext &context, const ValidityMask &partition_mask,
+                               const idx_t count)
     : wexpr(wexpr), bounds(wexpr, count), payload_collection(), payload_executor(context), filter_executor(context),
       leadlag_offset(wexpr->offset_expr.get(), context), leadlag_default(wexpr->default_expr.get(), context),
       boundary_start(wexpr->start_expr.get(), context), boundary_end(wexpr->end_expr.get(), context),
@@ -1049,6 +1110,12 @@ WindowExecutor::WindowExecutor(BoundWindowExpression *wexpr, ClientContext &cont
 
 {
 	// TODO we could evaluate those expressions in parallel
+
+	//	Check for constant aggregate
+	if (IsConstantAggregate(*wexpr)) {
+		constant_aggregate = make_uniq<WindowConstantAggregate>(*(wexpr->aggregate), wexpr->bind_info.get(),
+		                                                        wexpr->return_type, partition_mask, count);
+	}
 
 	// evaluate the FILTER clause and stuff it into a large mask for compactness and reuse
 	if (wexpr->filter_expr) {
@@ -1097,11 +1164,25 @@ void WindowExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const i
 
 	const auto count = input_chunk.size();
 
+	idx_t filtered = 0;
+	SelectionVector *filtering = nullptr;
+	if (wexpr->filter_expr) {
+		filtering = &filter_sel;
+		filtered = filter_executor.SelectExpression(input_chunk, filter_sel);
+		for (idx_t f = 0; f < filtered; ++f) {
+			filter_mask.SetValid(input_idx + filter_sel[f]);
+		}
+	}
+
 	if (!wexpr->children.empty()) {
 		payload_chunk.Reset();
 		payload_executor.Execute(input_chunk, payload_chunk);
 		payload_chunk.Verify();
-		payload_collection.Append(payload_chunk, true);
+		if (constant_aggregate) {
+			constant_aggregate->Sink(payload_chunk, filtering, filtered);
+		} else {
+			payload_collection.Append(payload_chunk, true);
+		}
 
 		// process payload chunks while they are still piping hot
 		if (check_nulls) {
@@ -1130,23 +1211,17 @@ void WindowExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const i
 		}
 	}
 
-	if (wexpr->filter_expr) {
-		const auto filtered = filter_executor.SelectExpression(input_chunk, filter_sel);
-		for (idx_t f = 0; f < filtered; ++f) {
-			filter_mask.SetValid(input_idx + filter_sel[f]);
-		}
-	}
-
 	range.Append(input_chunk);
 }
 
 void WindowExecutor::Finalize(WindowAggregationMode mode) {
 	// build a segment tree for frame-adhering aggregates
 	// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
-
-	if (wexpr->aggregate) {
-		segment_tree = make_unique<WindowSegmentTree>(*(wexpr->aggregate), wexpr->bind_info.get(), wexpr->return_type,
-		                                              &payload_collection, filter_mask, mode);
+	if (constant_aggregate) {
+		constant_aggregate->Finalize();
+	} else if (wexpr->aggregate) {
+		segment_tree = make_uniq<WindowSegmentTree>(*(wexpr->aggregate), wexpr->bind_info.get(), wexpr->return_type,
+		                                            &payload_collection, filter_mask, mode);
 	}
 }
 
@@ -1184,7 +1259,11 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 
 		switch (wexpr->type) {
 		case ExpressionType::WINDOW_AGGREGATE: {
-			segment_tree->Compute(result, output_offset, bounds.window_start, bounds.window_end);
+			if (constant_aggregate) {
+				constant_aggregate->Compute(result, output_offset, bounds.window_start, bounds.window_end);
+			} else {
+				segment_tree->Compute(result, output_offset, bounds.window_start, bounds.window_end);
+			}
 			break;
 		}
 		case ExpressionType::WINDOW_ROW_NUMBER: {
@@ -1289,15 +1368,24 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 			break;
 		}
 		case ExpressionType::WINDOW_FIRST_VALUE: {
+			//	Same as NTH_VALUE(..., 1)
 			idx_t n = 1;
 			const auto first_idx = FindNextStart(ignore_nulls, bounds.window_start, bounds.window_end, n);
-			CopyCell(payload_collection, 0, first_idx, result, output_offset);
+			if (!n) {
+				CopyCell(payload_collection, 0, first_idx, result, output_offset);
+			} else {
+				FlatVector::SetNull(result, output_offset, true);
+			}
 			break;
 		}
 		case ExpressionType::WINDOW_LAST_VALUE: {
 			idx_t n = 1;
-			CopyCell(payload_collection, 0, FindPrevStart(ignore_nulls, bounds.window_start, bounds.window_end, n),
-			         result, output_offset);
+			const auto last_idx = FindPrevStart(ignore_nulls, bounds.window_start, bounds.window_end, n);
+			if (!n) {
+				CopyCell(payload_collection, 0, last_idx, result, output_offset);
+			} else {
+				FlatVector::SetNull(result, output_offset, true);
+			}
 			break;
 		}
 		case ExpressionType::WINDOW_NTH_VALUE: {
@@ -1335,8 +1423,8 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 //===--------------------------------------------------------------------===//
 SinkResultType PhysicalWindow::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
                                     DataChunk &input) const {
-	auto &gstate = (WindowGlobalSinkState &)gstate_p;
-	auto &lstate = (WindowLocalSinkState &)lstate_p;
+	auto &gstate = gstate_p.Cast<WindowGlobalSinkState>();
+	auto &lstate = lstate_p.Cast<WindowLocalSinkState>();
 
 	lstate.Sink(input, gstate);
 
@@ -1344,17 +1432,17 @@ SinkResultType PhysicalWindow::Sink(ExecutionContext &context, GlobalSinkState &
 }
 
 void PhysicalWindow::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {
-	auto &gstate = (WindowGlobalSinkState &)gstate_p;
-	auto &lstate = (WindowLocalSinkState &)lstate_p;
+	auto &gstate = gstate_p.Cast<WindowGlobalSinkState>();
+	auto &lstate = lstate_p.Cast<WindowLocalSinkState>();
 	lstate.Combine(gstate);
 }
 
 unique_ptr<LocalSinkState> PhysicalWindow::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<WindowLocalSinkState>(context.client, *this);
+	return make_uniq<WindowLocalSinkState>(context.client, *this);
 }
 
 unique_ptr<GlobalSinkState> PhysicalWindow::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<WindowGlobalSinkState>(*this, context);
+	return make_uniq<WindowGlobalSinkState>(*this, context);
 }
 
 enum class WindowSortStage : uint8_t { INIT, PREPARE, MERGE, SORTED };
@@ -1390,8 +1478,8 @@ public:
 	      tasks_assigned(0), tasks_completed(0) {
 
 		const auto group_idx = sink.hash_groups.size();
-		auto new_group = make_unique<WindowGlobalHashGroup>(sink.buffer_manager, sink.partitions, sink.orders,
-		                                                    sink.payload_types, sink.external);
+		auto new_group = make_uniq<WindowGlobalHashGroup>(sink.buffer_manager, sink.partitions, sink.orders,
+		                                                  sink.payload_types, sink.external);
 		sink.hash_groups.emplace_back(std::move(new_group));
 
 		hash_group = sink.hash_groups[group_idx].get();
@@ -1522,7 +1610,7 @@ public:
 		for (auto &group_data : sink.grouping_data->GetPartitions()) {
 			// Prepare for merge sort phase
 			if (group_data->Count()) {
-				auto state = make_unique<WindowGlobalMergeState>(sink, std::move(group_data));
+				auto state = make_uniq<WindowGlobalMergeState>(sink, std::move(group_data));
 				states.emplace_back(std::move(state));
 			}
 		}
@@ -1550,6 +1638,9 @@ TaskExecutionResult WindowMergeTask::ExecuteTask(TaskExecutionMode mode) {
 	size_t sorted = 0;
 	while (sorted < hash_groups.states.size()) {
 		// First check if there is an unfinished task for this thread
+		if (executor.HasError()) {
+			return TaskExecutionResult::TASK_ERROR;
+		}
 		if (!local_state.TaskFinished()) {
 			local_state.ExecuteTask();
 			continue;
@@ -1621,7 +1712,7 @@ public:
 
 		vector<unique_ptr<Task>> merge_tasks;
 		for (idx_t tnum = 0; tnum < num_threads; tnum++) {
-			merge_tasks.push_back(make_unique<WindowMergeTask>(shared_from_this(), context, merge_states));
+			merge_tasks.push_back(make_uniq<WindowMergeTask>(shared_from_this(), context, merge_states));
 		}
 		SetTasks(std::move(merge_tasks));
 	}
@@ -1629,7 +1720,7 @@ public:
 
 SinkFinalizeType PhysicalWindow::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                           GlobalSinkState &gstate_p) const {
-	auto &state = (WindowGlobalSinkState &)gstate_p;
+	auto &state = gstate_p.Cast<WindowGlobalSinkState>();
 
 	//	Did we get any data?
 	if (!state.count) {
@@ -1670,7 +1761,7 @@ public:
 
 public:
 	idx_t MaxThreads() override {
-		auto &state = (WindowGlobalSinkState &)*op.sink_state;
+		auto &state = op.sink_state->Cast<WindowGlobalSinkState>();
 
 		// If there is only one partition, we have to process it on one thread.
 		if (!state.grouping_data) {
@@ -1760,7 +1851,7 @@ void WindowLocalSourceState::MaterializeSortedData() {
 	// Data blocks are required
 	D_ASSERT(!sd.data_blocks.empty());
 	auto &block = sd.data_blocks[0];
-	rows = make_unique<RowDataCollection>(buffer_manager, block->capacity, block->entry_size);
+	rows = make_uniq<RowDataCollection>(buffer_manager, block->capacity, block->entry_size);
 	rows->blocks = std::move(sd.data_blocks);
 	rows->count = std::accumulate(rows->blocks.begin(), rows->blocks.end(), idx_t(0),
 	                              [&](idx_t c, const unique_ptr<RowDataBlock> &b) { return c + b->count; });
@@ -1768,18 +1859,18 @@ void WindowLocalSourceState::MaterializeSortedData() {
 	// Heap blocks are optional, but we want both for iteration.
 	if (!sd.heap_blocks.empty()) {
 		auto &block = sd.heap_blocks[0];
-		heap = make_unique<RowDataCollection>(buffer_manager, block->capacity, block->entry_size);
+		heap = make_uniq<RowDataCollection>(buffer_manager, block->capacity, block->entry_size);
 		heap->blocks = std::move(sd.heap_blocks);
 		hash_group.reset();
 	} else {
-		heap = make_unique<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
+		heap = make_uniq<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 	}
 	heap->count = std::accumulate(heap->blocks.begin(), heap->blocks.end(), idx_t(0),
 	                              [&](idx_t c, const unique_ptr<RowDataBlock> &b) { return c + b->count; });
 }
 
 void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, const idx_t hash_bin_p) {
-	auto &op = (PhysicalWindow &)gstate.op;
+	auto &op = gstate.op.Cast<PhysicalWindow>();
 
 	//	Get rid of any stale data
 	hash_bin = hash_bin_p;
@@ -1797,15 +1888,6 @@ void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, co
 		count = gstate.count;
 	} else {
 		return;
-	}
-
-	// Create the executors for each function
-	window_execs.clear();
-	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
-		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
-		auto wexpr = reinterpret_cast<BoundWindowExpression *>(op.select_list[expr_idx].get());
-		auto wexec = make_unique<WindowExecutor>(wexpr, context, count);
-		window_execs.emplace_back(std::move(wexec));
 	}
 
 	//	Initialise masks to false
@@ -1838,9 +1920,18 @@ void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, co
 		return;
 	}
 
+	// Create the executors for each function
+	window_execs.clear();
+	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
+		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
+		auto wexpr = reinterpret_cast<BoundWindowExpression *>(op.select_list[expr_idx].get());
+		auto wexec = make_uniq<WindowExecutor>(wexpr, context, partition_mask, count);
+		window_execs.emplace_back(std::move(wexec));
+	}
+
 	//	First pass over the input without flushing
 	//	TODO: Factor out the constructor data as global state
-	scanner = make_unique<RowDataCollectionScanner>(*rows, *heap, layout, external, false);
+	scanner = make_uniq<RowDataCollectionScanner>(*rows, *heap, layout, external, false);
 	idx_t input_idx = 0;
 	while (true) {
 		input_chunk.Reset();
@@ -1899,19 +1990,19 @@ void WindowLocalSourceState::Scan(DataChunk &result) {
 
 unique_ptr<LocalSourceState> PhysicalWindow::GetLocalSourceState(ExecutionContext &context,
                                                                  GlobalSourceState &gstate_p) const {
-	auto &gstate = (WindowGlobalSourceState &)gstate_p;
-	return make_unique<WindowLocalSourceState>(*this, context, gstate);
+	auto &gstate = gstate_p.Cast<WindowGlobalSourceState>();
+	return make_uniq<WindowLocalSourceState>(*this, context, gstate);
 }
 
 unique_ptr<GlobalSourceState> PhysicalWindow::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<WindowGlobalSourceState>(*this);
+	return make_uniq<WindowGlobalSourceState>(*this);
 }
 
 void PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                              LocalSourceState &lstate_p) const {
-	auto &state = (WindowLocalSourceState &)lstate_p;
-	auto &global_source = (WindowGlobalSourceState &)gstate_p;
-	auto &gstate = (WindowGlobalSinkState &)*sink_state;
+	auto &state = lstate_p.Cast<WindowLocalSourceState>();
+	auto &global_source = gstate_p.Cast<WindowGlobalSourceState>();
+	auto &gstate = sink_state->Cast<WindowGlobalSinkState>();
 
 	const auto bin_count = gstate.hash_groups.empty() ? 1 : gstate.hash_groups.size();
 

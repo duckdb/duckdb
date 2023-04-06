@@ -62,6 +62,8 @@ static void InitializeConsumers(py::class_<DuckDBPyRelation> &m) {
 	         py::arg("batch_size") = 1000000)
 	    .def("pl", &DuckDBPyRelation::ToPolars, "Execute and fetch all rows as a Polars DataFrame",
 	         py::arg("batch_size") = 1000000)
+	    .def("torch", &DuckDBPyRelation::FetchPyTorch, "Fetch a result as dict of PyTorch Tensors")
+	    .def("tf", &DuckDBPyRelation::FetchTF, "Fetch a result as dict of TensorFlow Tensors")
 	    .def("record_batch", &DuckDBPyRelation::ToRecordBatch,
 	         "Execute and return an Arrow Record Batch Reader that yields all rows", py::arg("batch_size") = 1000000)
 	    .def("fetch_arrow_reader", &DuckDBPyRelation::ToRecordBatch,
@@ -144,7 +146,7 @@ static void InitializeSetOperators(py::class_<DuckDBPyRelation> &m) {
 static void InitializeMetaQueries(py::class_<DuckDBPyRelation> &m) {
 	m.def("describe", &DuckDBPyRelation::Describe,
 	      "Gives basic statistics (e.g., min,max) and if null exists for each column of the relation.")
-	    .def("explain", &DuckDBPyRelation::Explain);
+	    .def("explain", &DuckDBPyRelation::Explain, py::arg("type") = "standard");
 }
 
 void DuckDBPyRelation::Initialize(py::handle &m) {
@@ -154,6 +156,13 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	InitializeSetOperators(relation_module);
 	InitializeMetaQueries(relation_module);
 	InitializeConsumers(relation_module);
+
+	relation_module.def("__getattr__", &DuckDBPyRelation::GetAttribute,
+	                    "Get a projection relation created from this relation, on the provided column name",
+	                    py::arg("name"));
+	relation_module.def("__getitem__", &DuckDBPyRelation::GetAttribute,
+	                    "Get a projection relation created from this relation, on the provided column name",
+	                    py::arg("name"));
 
 	relation_module
 	    .def("filter", &DuckDBPyRelation::Filter, "Filter the relation object by the filter in filter_expr",

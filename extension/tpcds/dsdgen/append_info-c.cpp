@@ -11,11 +11,12 @@
 
 #include <cstring>
 #include <memory>
+#include "duckdb/common/unique_ptr.hpp"
 
 using namespace tpcds;
 
 append_info *append_info_get(void *info_list, int table_id) {
-	auto &append_vector = *((std::vector<std::unique_ptr<tpcds_append_information>> *)info_list);
+	auto &append_vector = *((std::vector<duckdb::unique_ptr<tpcds_append_information>> *)info_list);
 	return (append_info *)append_vector[table_id].get();
 }
 
@@ -62,11 +63,15 @@ void append_boolean(append_info info, int32_t value) {
 // value is a Julian date
 // FIXME: direct int conversion, offsets should be constant
 void append_date(append_info info, int64_t value) {
-	date_t dTemp;
-	jtodt(&dTemp, (int)value);
-	auto ddate = duckdb::Date::FromDate(dTemp.year, dTemp.month, dTemp.day);
 	auto append_info = (tpcds_append_information *)info;
-	append_info->appender.Append<duckdb::date_t>(ddate);
+	if (value < 0) {
+		append_info->appender.Append(nullptr);
+	} else {
+		date_t dTemp;
+		jtodt(&dTemp, (int)value);
+		auto ddate = duckdb::Date::FromDate(dTemp.year, dTemp.month, dTemp.day);
+		append_info->appender.Append<duckdb::date_t>(ddate);
+	}
 }
 
 void append_decimal(append_info info, decimal_t *val) {

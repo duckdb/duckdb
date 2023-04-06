@@ -43,7 +43,7 @@ static unique_ptr<FunctionData> PragmaLastProfilingOutputBind(ClientContext &con
 	names.emplace_back("DESCRIPTION");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	return make_unique<PragmaLastProfilingOutputData>(return_types);
+	return make_uniq<PragmaLastProfilingOutputData>(return_types);
 }
 
 static void SetValue(DataChunk &output, int index, int op_id, string name, double time, int64_t car,
@@ -57,15 +57,15 @@ static void SetValue(DataChunk &output, int index, int op_id, string name, doubl
 
 unique_ptr<GlobalTableFunctionState> PragmaLastProfilingOutputInit(ClientContext &context,
                                                                    TableFunctionInitInput &input) {
-	return make_unique<PragmaLastProfilingOutputOperatorData>();
+	return make_uniq<PragmaLastProfilingOutputOperatorData>();
 }
 
 static void PragmaLastProfilingOutputFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &state = (PragmaLastProfilingOutputOperatorData &)*data_p.global_state;
+	auto &state = data_p.global_state->Cast<PragmaLastProfilingOutputOperatorData>();
 	auto &data = (PragmaLastProfilingOutputData &)*data_p.bind_data;
 	if (!state.initialized) {
 		// create a ColumnDataCollection
-		auto collection = make_unique<ColumnDataCollection>(context, data.types);
+		auto collection = make_uniq<ColumnDataCollection>(context, data.types);
 
 		DataChunk chunk;
 		chunk.Initialize(context, data.types);

@@ -34,11 +34,11 @@ ListLambdaBindData::ListLambdaBindData(const LogicalType &stype_p, unique_ptr<Ex
 }
 
 unique_ptr<FunctionData> ListLambdaBindData::Copy() const {
-	return make_unique<ListLambdaBindData>(stype, lambda_expr->Copy());
+	return make_uniq<ListLambdaBindData>(stype, lambda_expr->Copy());
 }
 
 bool ListLambdaBindData::Equals(const FunctionData &other_p) const {
-	auto &other = (ListLambdaBindData &)other_p;
+	auto &other = other_p.Cast<ListLambdaBindData>();
 	return lambda_expr->Equals(other.lambda_expr.get()) && stype == other.stype;
 }
 
@@ -124,7 +124,7 @@ static void ExecuteExpression(vector<LogicalType> &types, vector<LogicalType> &r
 	// set the other vectors
 	vector<Vector> slices;
 	for (idx_t col_idx = 0; col_idx < args.ColumnCount() - 1; col_idx++) {
-		slices.emplace_back(Vector(args.data[col_idx + 1], sel_vectors[col_idx], elem_cnt));
+		slices.emplace_back(args.data[col_idx + 1], sel_vectors[col_idx], elem_cnt);
 		slices[col_idx].Flatten(elem_cnt);
 		input_chunk.data[col_idx + 2].Reference(slices[col_idx]);
 	}
@@ -166,8 +166,8 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 	auto list_entries = (list_entry_t *)lists_data.data;
 
 	// get the lambda expression
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	auto &info = (ListLambdaBindData &)*func_expr.bind_info;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &info = func_expr.bind_info->Cast<ListLambdaBindData>();
 	auto &lambda_expr = info.lambda_expr;
 
 	// get the child vector and child data
@@ -195,10 +195,10 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 
 	// skip the list column
 	for (idx_t i = 1; i < args.ColumnCount(); i++) {
-		columns.emplace_back(UnifiedVectorFormat());
+		columns.emplace_back();
 		args.data[i].ToUnifiedFormat(count, columns[i - 1]);
 		indexes.push_back(0);
-		sel_vectors.emplace_back(SelectionVector(STANDARD_VECTOR_SIZE));
+		sel_vectors.emplace_back(STANDARD_VECTOR_SIZE);
 		types.push_back(args.data[i].GetType());
 	}
 
@@ -328,7 +328,7 @@ static unique_ptr<FunctionData> ListLambdaBind(ClientContext &context, ScalarFun
 		bound_function.arguments.pop_back();
 		bound_function.arguments[0] = LogicalType::SQLNULL;
 		bound_function.return_type = LogicalType::SQLNULL;
-		return make_unique<VariableReturnBindData>(bound_function.return_type);
+		return make_uniq<VariableReturnBindData>(bound_function.return_type);
 	}
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
@@ -339,7 +339,7 @@ static unique_ptr<FunctionData> ListLambdaBind(ClientContext &context, ScalarFun
 
 	// get the lambda expression and put it in the bind info
 	auto lambda_expr = std::move(bound_lambda_expr.lambda_expr);
-	return make_unique<ListLambdaBindData>(bound_function.return_type, std::move(lambda_expr));
+	return make_uniq<ListLambdaBindData>(bound_function.return_type, std::move(lambda_expr));
 }
 
 static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, ScalarFunction &bound_function,
@@ -392,6 +392,8 @@ void ListTransformFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(fun);
 	fun.name = "array_apply";
 	set.AddFunction(fun);
+	fun.name = "apply";
+	set.AddFunction(fun);
 }
 
 void ListFilterFun::RegisterFunction(BuiltinFunctions &set) {
@@ -404,6 +406,8 @@ void ListFilterFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(fun);
 
 	fun.name = "array_filter";
+	set.AddFunction(fun);
+	fun.name = "filter";
 	set.AddFunction(fun);
 }
 

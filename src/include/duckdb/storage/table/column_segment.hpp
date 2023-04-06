@@ -9,14 +9,13 @@
 #pragma once
 
 #include "duckdb/storage/block.hpp"
-#include "duckdb/storage/table/segment_tree.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
 #include "duckdb/storage/storage_lock.hpp"
-#include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/table/segment_base.hpp"
 
 namespace duckdb {
 class ColumnSegment;
@@ -35,9 +34,9 @@ struct ColumnAppendState;
 enum class ColumnSegmentType : uint8_t { TRANSIENT, PERSISTENT };
 //! TableFilter represents a filter pushed down into the table scan.
 
-class ColumnSegment : public SegmentBase {
+class ColumnSegment : public SegmentBase<ColumnSegment> {
 public:
-	~ColumnSegment() override;
+	~ColumnSegment();
 
 	//! The database instance
 	DatabaseInstance &db;
@@ -57,7 +56,7 @@ public:
 	static unique_ptr<ColumnSegment> CreatePersistentSegment(DatabaseInstance &db, BlockManager &block_manager,
 	                                                         block_id_t id, idx_t offset, const LogicalType &type_p,
 	                                                         idx_t start, idx_t count, CompressionType compression_type,
-	                                                         unique_ptr<BaseStatistics> statistics);
+	                                                         BaseStatistics statistics);
 	static unique_ptr<ColumnSegment> CreateTransientSegment(DatabaseInstance &db, const LogicalType &type, idx_t start,
 	                                                        idx_t segment_size = Storage::BLOCK_SIZE);
 	static unique_ptr<ColumnSegment> CreateSegment(ColumnSegment &other, idx_t start);
@@ -124,7 +123,7 @@ public:
 
 public:
 	ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, LogicalType type, ColumnSegmentType segment_type,
-	              idx_t start, idx_t count, CompressionFunction *function, unique_ptr<BaseStatistics> statistics,
+	              idx_t start, idx_t count, CompressionFunction *function, BaseStatistics statistics,
 	              block_id_t block_id, idx_t offset, idx_t segment_size);
 	ColumnSegment(ColumnSegment &other, idx_t start);
 
