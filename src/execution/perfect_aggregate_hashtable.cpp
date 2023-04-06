@@ -119,14 +119,15 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 	// after finding the group location we update the aggregates
 	idx_t payload_idx = 0;
 	auto &aggregates = layout.GetAggregates();
+	RowOperationsState row_state(Allocator::DefaultAllocator());
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggregate = aggregates[aggr_idx];
 		auto input_count = (idx_t)aggregate.child_count;
 		if (aggregate.filter) {
-			RowOperations::UpdateFilteredStates(filter_set.GetFilterData(aggr_idx), aggregate, addresses, payload,
+			RowOperations::UpdateFilteredStates(row_state, filter_set.GetFilterData(aggr_idx), aggregate, addresses, payload,
 			                                    payload_idx);
 		} else {
-			RowOperations::UpdateStates(aggregate, addresses, payload, payload_idx, payload.size());
+			RowOperations::UpdateStates(row_state, aggregate, addresses, payload, payload_idx, payload.size());
 		}
 		// move to the next aggregate
 		payload_idx += input_count;
@@ -149,6 +150,7 @@ void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {
 	idx_t combine_count = 0;
 	idx_t reinit_count = 0;
 	const auto &reinit_sel = *FlatVector::IncrementalSelectionVector();
+	RowOperationsState row_state(Allocator::DefaultAllocator());
 	for (idx_t i = 0; i < total_groups; i++) {
 		auto has_entry_source = other.group_is_set[i];
 		// we only have any work to do if the source has an entry for this group
@@ -160,7 +162,7 @@ void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {
 				target_addresses_ptr[combine_count] = target_ptr;
 				combine_count++;
 				if (combine_count == STANDARD_VECTOR_SIZE) {
-					RowOperations::CombineStates(layout, source_addresses, target_addresses, combine_count);
+					RowOperations::CombineStates(row_state, layout, source_addresses, target_addresses, combine_count);
 					combine_count = 0;
 				}
 			} else {
@@ -174,7 +176,7 @@ void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {
 		source_ptr += tuple_size;
 		target_ptr += tuple_size;
 	}
-	RowOperations::CombineStates(layout, source_addresses, target_addresses, combine_count);
+	RowOperations::CombineStates(row_state, layout, source_addresses, target_addresses, combine_count);
 	RowOperations::InitializeStates(layout, addresses, reinit_sel, reinit_count);
 }
 
@@ -249,7 +251,8 @@ void PerfectAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 	}
 	// then construct the payloads
 	result.SetCardinality(entry_count);
-	RowOperations::FinalizeStates(layout, addresses, result, grouping_columns);
+	RowOperationsState row_state(Allocator::DefaultAllocator());
+	RowOperations::FinalizeStates(row_state, layout, addresses, result, grouping_columns);
 }
 
 void PerfectAggregateHashTable::Destroy() {
@@ -269,18 +272,19 @@ void PerfectAggregateHashTable::Destroy() {
 	idx_t count = 0;
 
 	// iterate over all initialised slots of the hash table
+	RowOperationsState row_state(Allocator::DefaultAllocator());
 	data_ptr_t payload_ptr = data;
 	for (idx_t i = 0; i < total_groups; i++) {
 		if (group_is_set[i]) {
 			data_pointers[count++] = payload_ptr;
 			if (count == STANDARD_VECTOR_SIZE) {
-				RowOperations::DestroyStates(layout, addresses, count);
+				RowOperations::DestroyStates(row_state, layout, addresses, count);
 				count = 0;
 			}
 		}
 		payload_ptr += tuple_size;
 	}
-	RowOperations::DestroyStates(layout, addresses, count);
+	RowOperations::DestroyStates(row_state, layout, addresses, count);
 }
 
 } // namespace duckdb

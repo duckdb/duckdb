@@ -127,14 +127,15 @@ void GroupedAggregateHashTable::Destroy() {
 	Vector state_vector(LogicalType::POINTER, (data_ptr_t)data_pointers);
 	idx_t count = 0;
 
+	RowOperationsState state(Allocator::DefaultAllocator());
 	PayloadApply([&](idx_t page_nr, idx_t page_offset, data_ptr_t ptr) {
 		data_pointers[count++] = ptr;
 		if (count == STANDARD_VECTOR_SIZE) {
-			RowOperations::DestroyStates(layout, state_vector, count);
+			RowOperations::DestroyStates(state, layout, state_vector, count);
 			count = 0;
 		}
 	});
-	RowOperations::DestroyStates(layout, state_vector, count);
+	RowOperations::DestroyStates(state, layout, state_vector, count);
 }
 
 template <class ENTRY>
@@ -289,6 +290,7 @@ idx_t GroupedAggregateHashTable::AddChunk(AggregateHTAppendState &state, DataChu
 
 	auto &aggregates = layout.GetAggregates();
 	idx_t filter_idx = 0;
+	RowOperationsState row_state(Allocator::DefaultAllocator());
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggr = aggregates[i];
 		if (filter_idx >= filter.size() || i < filter[filter_idx]) {
@@ -300,10 +302,10 @@ idx_t GroupedAggregateHashTable::AddChunk(AggregateHTAppendState &state, DataChu
 		D_ASSERT(i == filter[filter_idx]);
 
 		if (aggr.aggr_type != AggregateType::DISTINCT && aggr.filter) {
-			RowOperations::UpdateFilteredStates(filter_set.GetFilterData(i), aggr, state.addresses, payload,
+			RowOperations::UpdateFilteredStates(row_state, filter_set.GetFilterData(i), aggr, state.addresses, payload,
 			                                    payload_idx);
 		} else {
-			RowOperations::UpdateStates(aggr, state.addresses, payload, payload_idx, payload.size());
+			RowOperations::UpdateStates(row_state, aggr, state.addresses, payload, payload_idx, payload.size());
 		}
 
 		// move to the next aggregate
@@ -333,7 +335,8 @@ void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &re
 	Vector addresses(LogicalType::POINTER);
 	FindOrCreateGroups(append_state, groups, addresses);
 	// now fetch the aggregates
-	RowOperations::FinalizeStates(layout, addresses, result, 0);
+	RowOperationsState row_state(Allocator::DefaultAllocator());
+	RowOperations::FinalizeStates(row_state, layout, addresses, result, 0);
 }
 
 idx_t GroupedAggregateHashTable::ResizeThreshold() {
@@ -542,7 +545,8 @@ void GroupedAggregateHashTable::FlushMove(FlushMoveState &state, Vector &source_
 	AggregateHTAppendState append_state;
 	FindOrCreateGroups(append_state, state.groups, source_hashes, state.group_addresses, state.new_groups_sel);
 
-	RowOperations::CombineStates(layout, source_addresses, state.group_addresses, count);
+	RowOperationsState row_state(Allocator::DefaultAllocator());
+	RowOperations::CombineStates(row_state, layout, source_addresses, state.group_addresses, count);
 }
 
 void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
@@ -669,7 +673,8 @@ idx_t GroupedAggregateHashTable::Scan(AggregateHTScanState &scan_state, DataChun
 		                      *FlatVector::IncrementalSelectionVector(), result.size(), layout, col_no);
 	}
 
-	RowOperations::FinalizeStates(layout, addresses, result, group_cols);
+	RowOperationsState row_state(Allocator::DefaultAllocator());
+	RowOperations::FinalizeStates(row_state, layout, addresses, result, group_cols);
 	return this_n;
 }
 
