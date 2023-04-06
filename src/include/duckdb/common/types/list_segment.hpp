@@ -15,6 +15,8 @@
 namespace duckdb {
 
 struct ListSegment {
+	constexpr const static idx_t INITIAL_CAPACITY = 4;
+
 	uint16_t count;
 	uint16_t capacity;
 	ListSegment *next;

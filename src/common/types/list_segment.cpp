@@ -60,14 +60,13 @@ static bool *GetNullMask(const ListSegment *segment) {
 	return (bool *)(((char *)segment) + sizeof(ListSegment));
 }
 
-static uint16_t GetCapacityForNewSegment(const LinkedList &linked_list) {
-	// consecutive segments grow by the power of two
-	uint16_t capacity = 4;
-	if (linked_list.last_segment) {
-		auto next_power_of_two = linked_list.last_segment->capacity * 2;
-		capacity = next_power_of_two < 65536 ? next_power_of_two : linked_list.last_segment->capacity;
+static uint16_t GetCapacityForNewSegment(uint16_t capacity) {
+	D_ASSERT(capacity > 0);
+	D_ASSERT(NextPowerOfTwo(capacity - 1) == capacity);
+	if (capacity >= uint16_t(16384)) {
+		return uint16_t(32768);
 	}
-	return capacity;
+	return capacity * 2;
 }
 
 //===--------------------------------------------------------------------===//
@@ -164,18 +163,17 @@ static ListSegment *GetSegment(const ListSegmentFunctions &functions, Allocator 
 	// determine segment
 	if (!linked_list.last_segment) {
 		// empty linked list, create the first (and last) segment
-		auto capacity = GetCapacityForNewSegment(linked_list);
+		auto capacity = ListSegment::INITIAL_CAPACITY;
 		segment = functions.create_segment(functions, allocator, capacity);
 		linked_list.first_segment = segment;
 		linked_list.last_segment = segment;
 
 	} else if (linked_list.last_segment->capacity == linked_list.last_segment->count) {
 		// the last segment of the linked list is full, create a new one and append it
-		auto capacity = GetCapacityForNewSegment(linked_list);
+		auto capacity = GetCapacityForNewSegment(linked_list.last_segment->capacity);
 		segment = functions.create_segment(functions, allocator, capacity);
 		linked_list.last_segment->next = segment;
 		linked_list.last_segment = segment;
-
 	} else {
 		// the last segment of the linked list is not full, append the data to it
 		segment = linked_list.last_segment;
