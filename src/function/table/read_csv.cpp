@@ -216,6 +216,13 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	if (options.file_options.union_by_name) {
 		result->reader_bind =
 		    MultiFileReader::BindUnionReader<BufferedCSVReader>(context, return_types, names, *result, options);
+		if (result->union_readers.size() > 1) {
+			result->column_info.emplace_back(result->csv_names, result->csv_types);
+			for (idx_t i = 1; i < result->union_readers.size(); i++) {
+				result->column_info.emplace_back(result->union_readers[i]->names,
+				                                 result->union_readers[i]->return_types);
+			}
+		}
 		if (!options.sql_types_per_column.empty()) {
 			auto exception = BufferedCSVReader::ColumnTypesError(options.sql_types_per_column, names);
 			if (!exception.empty()) {
@@ -466,10 +473,14 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, ReadCSVData &bind_data
 			reader =
 			    make_uniq<ParallelCSVReader>(context, union_reader.options, std::move(result), union_reader.GetTypes());
 			reader->names = union_reader.GetNames();
+		} else if (file_index <= bind_data.column_info.size()) {
+			// Serialized Union By name
+			reader = make_uniq<ParallelCSVReader>(context, bind_data.options, std::move(result),
+			                                      bind_data.column_info[file_index - 1].types);
+			reader->names = bind_data.column_info[file_index - 1].names;
 		} else {
 			// regular file - use the standard options
 			reader = make_uniq<ParallelCSVReader>(context, bind_data.options, std::move(result), bind_data.csv_types);
-			reader->options.file_path = current_file_path;
 			reader->names = bind_data.csv_names;
 		}
 		reader->options.file_path = current_file_path;
@@ -498,7 +509,6 @@ void ParallelCSVGlobalState::UpdateVerification(VerificationPositions positions,
 	}
 }
 
-// here
 static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext &context,
                                                                   TableFunctionInitInput &input) {
 	auto &bind_data = (ReadCSVData &)*input.bind_data;
@@ -772,12 +782,7 @@ static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &con
 		}
 	}
 	bind_data.single_threaded = bind_data.single_threaded || !file_exists;
-	if (file_exists) {
-		bind_data.initial_reader.reset();
-		//		if (bind_data.options.union_by_name) {
-		//			bind_data.initial_reader = std::move(bind_data.union_readers[0]);
-		//		}
-	}
+
 	if (bind_data.single_threaded) {
 		return SingleThreadedCSVInit(context, input);
 	} else {
@@ -963,6 +968,10 @@ static void CSVReaderSerialize(FieldWriter &writer, const FunctionData *bind_dat
 	bind_data.options.Serialize(writer);
 	writer.WriteField<bool>(bind_data.single_threaded);
 	writer.WriteSerializable(bind_data.reader_bind);
+	writer.WriteField<uint32_t>(bind_data.column_info.size());
+	for (auto &col : bind_data.column_info) {
+		col.Serialize(writer);
+	}
 }
 
 static unique_ptr<FunctionData> CSVReaderDeserialize(ClientContext &context, FieldReader &reader,
@@ -978,6 +987,10 @@ static unique_ptr<FunctionData> CSVReaderDeserialize(ClientContext &context, Fie
 	result_data->options.Deserialize(reader);
 	result_data->single_threaded = reader.ReadField<bool>(true);
 	result_data->reader_bind = reader.ReadRequiredSerializable<MultiFileReaderBindData, MultiFileReaderBindData>();
+	uint32_t file_number = reader.ReadRequired<uint32_t>();
+	for (idx_t i = 0; i < file_number; i++) {
+		result_data->column_info.emplace_back(ColumnInfo::Deserialize(reader));
+	}
 	return std::move(result_data);
 }
 
