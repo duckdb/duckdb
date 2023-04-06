@@ -60,9 +60,9 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 			    expr, StringUtil::Format("Subquery returns %zu columns - expected 1", bound_node->types.size())));
 		}
 		auto prior_subquery = std::move(expr.subquery);
-		expr.subquery = make_unique<SelectStatement>();
-		expr.subquery->node = make_unique<BoundSubqueryNode>(std::move(subquery_binder), std::move(bound_node),
-		                                                     std::move(prior_subquery));
+		expr.subquery = make_uniq<SelectStatement>();
+		expr.subquery->node =
+		    make_uniq<BoundSubqueryNode>(std::move(subquery_binder), std::move(bound_node), std::move(prior_subquery));
 	}
 	// now bind the child node of the subquery
 	if (expr.child) {
@@ -84,7 +84,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		return_type = LogicalType::SQLNULL;
 	}
 
-	auto result = make_unique<BoundSubqueryExpression>(return_type);
+	auto result = make_uniq<BoundSubqueryExpression>(return_type);
 	if (expr.subquery_type == SubqueryType::ANY) {
 		// ANY comparison
 		// cast child and subquery child to equivalent types

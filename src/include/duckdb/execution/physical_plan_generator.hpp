@@ -88,6 +88,7 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalUnnest &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalRecursiveCTE &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCTERef &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalPivot &op);
 
 	unique_ptr<PhysicalOperator> ExtractAggregateExpressions(unique_ptr<PhysicalOperator> child,
 	                                                         vector<unique_ptr<Expression>> &expressions,

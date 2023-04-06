@@ -14,7 +14,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExplain &o
 	auto logical_plan_opt = op.children[0]->ToString();
 	auto plan = CreatePlan(*op.children[0]);
 	if (op.explain_type == ExplainType::EXPLAIN_ANALYZE) {
-		auto result = make_unique<PhysicalExplainAnalyze>(op.types);
+		auto result = make_uniq<PhysicalExplainAnalyze>(op.types);
 		result->children.push_back(std::move(plan));
 		return std::move(result);
 	}
@@ -40,7 +40,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExplain &o
 	auto &allocator = Allocator::Get(context);
 	vector<LogicalType> plan_types {LogicalType::VARCHAR, LogicalType::VARCHAR};
 	auto collection =
-	    make_unique<ColumnDataCollection>(context, plan_types, ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR);
+	    make_uniq<ColumnDataCollection>(context, plan_types, ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR);
 
 	DataChunk chunk;
 	chunk.Initialize(allocator, op.types);
@@ -57,7 +57,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExplain &o
 
 	// create a chunk scan to output the result
 	auto chunk_scan =
-	    make_unique<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::COLUMN_DATA_SCAN, op.estimated_cardinality);
+	    make_uniq<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::COLUMN_DATA_SCAN, op.estimated_cardinality);
 	chunk_scan->owned_collection = std::move(collection);
 	chunk_scan->collection = chunk_scan->owned_collection.get();
 	return std::move(chunk_scan);

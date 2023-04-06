@@ -323,6 +323,10 @@ BinderException::BinderException(const string &msg) : StandardException(Exceptio
 IOException::IOException(const string &msg) : Exception(ExceptionType::IO, msg) {
 }
 
+MissingExtensionException::MissingExtensionException(const string &msg)
+    : Exception(ExceptionType::MISSING_EXTENSION, msg) {
+}
+
 SerializationException::SerializationException(const string &msg) : Exception(ExceptionType::SERIALIZATION, msg) {
 }
 

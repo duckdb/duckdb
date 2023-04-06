@@ -22,7 +22,7 @@ timestamp_t ParquetTimestampMicrosToTimestamp(const int64_t &raw_ts);
 timestamp_t ParquetTimestampMsToTimestamp(const int64_t &raw_ts);
 timestamp_t ParquetTimestampNsToTimestamp(const int64_t &raw_ts);
 date_t ParquetIntToDate(const int32_t &raw_date);
-dtime_t ParquetIntToTimeMs(const int64_t &raw_time);
+dtime_t ParquetIntToTimeMs(const int32_t &raw_time);
 dtime_t ParquetIntToTime(const int64_t &raw_time);
 dtime_t ParquetIntToTimeNs(const int64_t &raw_time);
 

@@ -25,7 +25,7 @@ namespace duckdb {
 
 bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 	Connection con(database.GetDatabase());
-	auto initial_reader = make_unique<BufferedFileReader>(FileSystem::Get(database), path.c_str(), con.context.get());
+	auto initial_reader = make_uniq<BufferedFileReader>(FileSystem::Get(database), path.c_str(), con.context.get());
 	if (initial_reader->Finished()) {
 		// WAL is empty
 		return false;
@@ -417,8 +417,8 @@ void ReplayState::ReplayCreateIndex() {
 	unique_ptr<Index> index;
 	switch (info->index_type) {
 	case IndexType::ART: {
-		index = make_unique<ART>(info->column_ids, TableIOManager::Get(data_table), expressions, info->constraint_type,
-		                         data_table.db, true);
+		index = make_uniq<ART>(info->column_ids, TableIOManager::Get(data_table), expressions, info->constraint_type,
+		                       data_table.db, true);
 		break;
 	}
 	default:

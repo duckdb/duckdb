@@ -40,8 +40,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	bind_data.is_create_index = true;
 
 	auto table_scan =
-	    make_unique<PhysicalTableScan>(op.info->scan_types, op.function, std::move(op.bind_data), op.info->column_ids,
-	                                   op.info->names, std::move(table_filters), op.estimated_cardinality);
+	    make_uniq<PhysicalTableScan>(op.info->scan_types, op.function, std::move(op.bind_data), op.info->column_ids,
+	                                 op.info->names, std::move(table_filters), op.estimated_cardinality);
 
 	dependencies.AddDependency(&op.table);
 	op.info->column_ids.pop_back();
@@ -58,10 +58,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 		select_list.push_back(std::move(op.expressions[i]));
 	}
 	new_column_types.emplace_back(LogicalType::ROW_TYPE);
-	select_list.push_back(make_unique<BoundReferenceExpression>(LogicalType::ROW_TYPE, op.info->scan_types.size() - 1));
+	select_list.push_back(make_uniq<BoundReferenceExpression>(LogicalType::ROW_TYPE, op.info->scan_types.size() - 1));
 
-	auto projection =
-	    make_unique<PhysicalProjection>(new_column_types, std::move(select_list), op.estimated_cardinality);
+	auto projection = make_uniq<PhysicalProjection>(new_column_types, std::move(select_list), op.estimated_cardinality);
 	projection->children.push_back(std::move(table_scan));
 
 	// filter operator for IS_NOT_NULL on each key column
@@ -72,14 +71,14 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	for (idx_t i = 0; i < new_column_types.size() - 1; i++) {
 		filter_types.push_back(new_column_types[i]);
 		auto is_not_null_expr =
-		    make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
-		auto bound_ref = make_unique<BoundReferenceExpression>(new_column_types[i], i);
+		    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
+		auto bound_ref = make_uniq<BoundReferenceExpression>(new_column_types[i], i);
 		is_not_null_expr->children.push_back(std::move(bound_ref));
 		filter_select_list.push_back(std::move(is_not_null_expr));
 	}
 
 	auto null_filter =
-	    make_unique<PhysicalFilter>(std::move(filter_types), std::move(filter_select_list), op.estimated_cardinality);
+	    make_uniq<PhysicalFilter>(std::move(filter_types), std::move(filter_select_list), op.estimated_cardinality);
 	null_filter->types.emplace_back(LogicalType::ROW_TYPE);
 	null_filter->children.push_back(std::move(projection));
 
@@ -88,21 +87,21 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	vector<BoundOrderByNode> orders;
 	vector<idx_t> projections;
 	for (idx_t i = 0; i < new_column_types.size() - 1; i++) {
-		auto col_expr = make_unique_base<Expression, BoundReferenceExpression>(new_column_types[i], i);
+		auto col_expr = make_uniq_base<Expression, BoundReferenceExpression>(new_column_types[i], i);
 		orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, std::move(col_expr));
 		projections.emplace_back(i);
 	}
 	projections.emplace_back(new_column_types.size() - 1);
 
-	auto physical_order = make_unique<PhysicalOrder>(new_column_types, std::move(orders), std::move(projections),
-	                                                 op.estimated_cardinality);
+	auto physical_order =
+	    make_uniq<PhysicalOrder>(new_column_types, std::move(orders), std::move(projections), op.estimated_cardinality);
 	physical_order->children.push_back(std::move(null_filter));
 
 	// actual physical create index operator
 
 	auto physical_create_index =
-	    make_unique<PhysicalCreateIndex>(op, op.table, op.info->column_ids, std::move(op.info),
-	                                     std::move(op.unbound_expressions), op.estimated_cardinality);
+	    make_uniq<PhysicalCreateIndex>(op, op.table, op.info->column_ids, std::move(op.info),
+	                                   std::move(op.unbound_expressions), op.estimated_cardinality);
 	physical_create_index->children.push_back(std::move(physical_order));
 	return std::move(physical_create_index);
 }

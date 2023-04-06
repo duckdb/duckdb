@@ -323,9 +323,12 @@ public:
 public:
 	DUCKDB_API void Resize(idx_t old_size, idx_t new_size);
 
-	DUCKDB_API void Slice(const ValidityMask &other, idx_t offset, idx_t end);
+	DUCKDB_API void SliceInPlace(const ValidityMask &other, idx_t target_offset, idx_t source_offset, idx_t count);
+	DUCKDB_API void Slice(const ValidityMask &other, idx_t source_offset, idx_t count);
 	DUCKDB_API void Combine(const ValidityMask &other, idx_t count);
 	DUCKDB_API string ToString(idx_t count) const;
+
+	DUCKDB_API static bool IsAligned(idx_t count);
 };
 
 } // namespace duckdb

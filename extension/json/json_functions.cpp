@@ -40,7 +40,7 @@ JSONReadFunctionData::JSONReadFunctionData(bool constant, string path_p, idx_t l
 }
 
 unique_ptr<FunctionData> JSONReadFunctionData::Copy() const {
-	return make_unique<JSONReadFunctionData>(constant, path, len);
+	return make_uniq<JSONReadFunctionData>(constant, path, len);
 }
 
 bool JSONReadFunctionData::Equals(const FunctionData &other_p) const {
@@ -49,7 +49,7 @@ bool JSONReadFunctionData::Equals(const FunctionData &other_p) const {
 }
 
 unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, ScalarFunction &bound_function,
-                                                    vector<unique_ptr<Expression>> &arguments) {
+                                                    vector<duckdb::unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
 	bool constant = false;
 	string path = "";
@@ -59,7 +59,7 @@ unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, Scal
 		const auto path_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 		CheckPath(path_val, path, len);
 	}
-	return make_unique<JSONReadFunctionData>(constant, std::move(path), len);
+	return make_uniq<JSONReadFunctionData>(constant, std::move(path), len);
 }
 
 JSONReadManyFunctionData::JSONReadManyFunctionData(vector<string> paths_p, vector<size_t> lens_p)
@@ -70,7 +70,7 @@ JSONReadManyFunctionData::JSONReadManyFunctionData(vector<string> paths_p, vecto
 }
 
 unique_ptr<FunctionData> JSONReadManyFunctionData::Copy() const {
-	return make_unique<JSONReadManyFunctionData>(paths, lens);
+	return make_uniq<JSONReadManyFunctionData>(paths, lens);
 }
 
 bool JSONReadManyFunctionData::Equals(const FunctionData &other_p) const {
@@ -79,7 +79,7 @@ bool JSONReadManyFunctionData::Equals(const FunctionData &other_p) const {
 }
 
 unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, ScalarFunction &bound_function,
-                                                        vector<unique_ptr<Expression>> &arguments) {
+                                                        vector<duckdb::unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();
@@ -88,7 +88,7 @@ unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, 
 		throw InvalidInputException("List of paths must be constant");
 	}
 	if (arguments[1]->return_type.id() == LogicalTypeId::SQLNULL) {
-		return make_unique<JSONReadManyFunctionData>(vector<string>(), vector<size_t>());
+		return make_uniq<JSONReadManyFunctionData>(vector<string>(), vector<size_t>());
 	}
 
 	vector<string> paths;
@@ -100,7 +100,7 @@ unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, 
 		CheckPath(path_val, paths.back(), lens.back());
 	}
 
-	return make_unique<JSONReadManyFunctionData>(std::move(paths), std::move(lens));
+	return make_uniq<JSONReadManyFunctionData>(std::move(paths), std::move(lens));
 }
 
 JSONFunctionLocalState::JSONFunctionLocalState(Allocator &allocator) : json_allocator(allocator) {
@@ -111,7 +111,7 @@ JSONFunctionLocalState::JSONFunctionLocalState(ClientContext &context)
 
 unique_ptr<FunctionLocalState> JSONFunctionLocalState::Init(ExpressionState &state, const BoundFunctionExpression &expr,
                                                             FunctionData *bind_data) {
-	return make_unique<JSONFunctionLocalState>(state.GetContext());
+	return make_uniq<JSONFunctionLocalState>(state.GetContext());
 }
 
 JSONFunctionLocalState &JSONFunctionLocalState::ResetAndGet(ExpressionState &state) {
@@ -181,18 +181,18 @@ unique_ptr<TableRef> JSONFunctions::ReadJSONReplacement(ClientContext &context, 
 	    !StringUtil::EndsWith(lower_name, ".ndjson") && !StringUtil::Contains(lower_name, ".ndjson?")) {
 		return nullptr;
 	}
-	auto table_function = make_unique<TableFunctionRef>();
-	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(make_unique<ConstantExpression>(Value(table_name)));
-	table_function->function = make_unique<FunctionExpression>("read_json_auto", std::move(children));
+	auto table_function = make_uniq<TableFunctionRef>();
+	vector<duckdb::unique_ptr<ParsedExpression>> children;
+	children.push_back(make_uniq<ConstantExpression>(Value(table_name)));
+	table_function->function = make_uniq<FunctionExpression>("read_json_auto", std::move(children));
 	return std::move(table_function);
 }
 
-static unique_ptr<FunctionLocalState> InitJSONCastLocalState(CastLocalStateParameters &parameters) {
+static duckdb::unique_ptr<FunctionLocalState> InitJSONCastLocalState(CastLocalStateParameters &parameters) {
 	if (parameters.context) {
-		return make_unique<JSONFunctionLocalState>(*parameters.context);
+		return make_uniq<JSONFunctionLocalState>(*parameters.context);
 	} else {
-		return make_unique<JSONFunctionLocalState>(Allocator::DefaultAllocator());
+		return make_uniq<JSONFunctionLocalState>(Allocator::DefaultAllocator());
 	}
 }
 

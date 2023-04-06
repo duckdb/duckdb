@@ -44,14 +44,14 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalCreateIndex::GetGlobalSinkState(ClientContext &context) const {
-	auto state = make_unique<CreateIndexGlobalSinkState>();
+	auto state = make_uniq<CreateIndexGlobalSinkState>();
 
 	// create the global index
 	switch (info->index_type) {
 	case IndexType::ART: {
 		auto &storage = table.GetStorage();
-		state->global_index = make_unique<ART>(storage_ids, TableIOManager::Get(storage), unbound_expressions,
-		                                       info->constraint_type, storage.db, true);
+		state->global_index = make_uniq<ART>(storage_ids, TableIOManager::Get(storage), unbound_expressions,
+		                                     info->constraint_type, storage.db, true);
 		break;
 	}
 	default:
@@ -61,14 +61,14 @@ unique_ptr<GlobalSinkState> PhysicalCreateIndex::GetGlobalSinkState(ClientContex
 }
 
 unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionContext &context) const {
-	auto state = make_unique<CreateIndexLocalSinkState>(context.client);
+	auto state = make_uniq<CreateIndexLocalSinkState>(context.client);
 
 	// create the local index
 	switch (info->index_type) {
 	case IndexType::ART: {
 		auto &storage = table.GetStorage();
-		state->local_index = make_unique<ART>(storage_ids, TableIOManager::Get(storage), unbound_expressions,
-		                                      info->constraint_type, storage.db, false);
+		state->local_index = make_uniq<ART>(storage_ids, TableIOManager::Get(storage), unbound_expressions,
+		                                    info->constraint_type, storage.db, false);
 		break;
 	}
 	default:
@@ -96,9 +96,9 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, GlobalSinkSt
 	ART::GenerateKeys(lstate.arena_allocator, lstate.key_chunk, lstate.keys);
 
 	auto &storage = table.GetStorage();
-	auto art = make_unique<ART>(lstate.local_index->column_ids, lstate.local_index->table_io_manager,
-	                            lstate.local_index->unbound_expressions, lstate.local_index->constraint_type,
-	                            storage.db, false);
+	auto art =
+	    make_uniq<ART>(lstate.local_index->column_ids, lstate.local_index->table_io_manager,
+	                   lstate.local_index->unbound_expressions, lstate.local_index->constraint_type, storage.db, false);
 	if (!art->ConstructFromSorted(lstate.key_chunk.size(), lstate.keys, row_identifiers)) {
 		throw ConstraintException("Data contains duplicates on indexed column(s)");
 	}

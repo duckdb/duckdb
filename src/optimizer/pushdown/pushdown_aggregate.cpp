@@ -84,7 +84,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<Logical
 		// add the filter to the child node
 		if (child_pushdown.AddFilter(std::move(f.filter)) == FilterResult::UNSATISFIABLE) {
 			// filter statically evaluates to false, strip tree
-			return make_unique<LogicalEmptyResult>(std::move(op));
+			return make_uniq<LogicalEmptyResult>(std::move(op));
 		}
 		// erase the filter from here
 		filters.erase(filters.begin() + i);

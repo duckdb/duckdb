@@ -508,7 +508,7 @@ struct RoundPrecisionFunctionData : public FunctionData {
 	int32_t target_scale;
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<RoundPrecisionFunctionData>(target_scale);
+		return make_uniq<RoundPrecisionFunctionData>(target_scale);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
@@ -623,7 +623,7 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(ClientContext &context, Scala
 	}
 	bound_function.arguments[0] = decimal_type;
 	bound_function.return_type = LogicalType::DECIMAL(width, target_scale);
-	return make_unique<RoundPrecisionFunctionData>(round_value);
+	return make_uniq<RoundPrecisionFunctionData>(round_value);
 }
 
 void RoundFun::RegisterFunction(BuiltinFunctions &set) {

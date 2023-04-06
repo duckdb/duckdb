@@ -22,7 +22,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownInnerJoin(unique_ptr<Logical
 		// any join: only one filter to add
 		if (AddFilter(std::move(any_join.condition)) == FilterResult::UNSATISFIABLE) {
 			// filter statically evaluates to false, strip tree
-			return make_unique<LogicalEmptyResult>(std::move(op));
+			return make_uniq<LogicalEmptyResult>(std::move(op));
 		}
 	} else if (op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
 		// Don't mess with non-standard condition interpretations
@@ -36,14 +36,14 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownInnerJoin(unique_ptr<Logical
 			auto condition = JoinCondition::CreateExpression(std::move(i));
 			if (AddFilter(std::move(condition)) == FilterResult::UNSATISFIABLE) {
 				// filter statically evaluates to false, strip tree
-				return make_unique<LogicalEmptyResult>(std::move(op));
+				return make_uniq<LogicalEmptyResult>(std::move(op));
 			}
 		}
 	}
 	GenerateFilters();
 
 	// turn the inner join into a cross product
-	auto cross_product = make_unique<LogicalCrossProduct>(std::move(op->children[0]), std::move(op->children[1]));
+	auto cross_product = make_uniq<LogicalCrossProduct>(std::move(op->children[0]), std::move(op->children[1]));
 	// then push down cross product
 	return PushdownCrossProduct(std::move(cross_product));
 }

@@ -312,7 +312,7 @@ template <class T>
 unique_ptr<AnalyzeState> BitpackingInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	auto &config = DBConfig::GetConfig(col_data.GetDatabase());
 
-	auto state = make_unique<BitpackingAnalyzeState<T>>();
+	auto state = make_uniq<BitpackingAnalyzeState<T>>();
 	state->state.mode = config.options.force_bitpacking_mode;
 
 	return std::move(state);
@@ -533,7 +533,7 @@ public:
 template <class T, bool WRITE_STATISTICS>
 unique_ptr<CompressionState> BitpackingInitCompression(ColumnDataCheckpointer &checkpointer,
                                                        unique_ptr<AnalyzeState> state) {
-	return make_unique<BitpackingCompressState<T, WRITE_STATISTICS>>(checkpointer);
+	return make_uniq<BitpackingCompressState<T, WRITE_STATISTICS>>(checkpointer);
 }
 
 template <class T, bool WRITE_STATISTICS>
@@ -728,7 +728,7 @@ public:
 
 template <class T>
 unique_ptr<SegmentScanState> BitpackingInitScan(ColumnSegment &segment) {
-	auto result = make_unique<BitpackingScanState<T>>(segment);
+	auto result = make_uniq<BitpackingScanState<T>>(segment);
 	return std::move(result);
 }
 

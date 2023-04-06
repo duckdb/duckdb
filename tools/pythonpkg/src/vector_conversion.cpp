@@ -305,8 +305,9 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 		auto &import_cache = *DuckDBPyConnection::ImportCache();
 
 		// Loop over every row of the arrays contents
+		auto stride = bind_data.numpy_stride;
 		for (idx_t row = 0; row < count; row++) {
-			auto source_idx = offset + row;
+			auto source_idx = stride / sizeof(PyObject *) * (row + offset);
 
 			// Get the pointer to the object
 			PyObject *val = src_ptr[source_idx];
@@ -434,7 +435,7 @@ void VectorConversion::BindPandas(const DBConfig &config, py::handle df, vector<
 
 		if (column_has_mask) {
 			// masked object, fetch the internal data and mask array
-			bind_data.mask = make_unique<NumPyArrayWrapper>(get_fun(df_columns[col_idx]).attr("array").attr("_mask"));
+			bind_data.mask = make_uniq<NumPyArrayWrapper>(get_fun(df_columns[col_idx]).attr("array").attr("_mask"));
 		}
 
 		auto column = get_fun(df_columns[col_idx]);

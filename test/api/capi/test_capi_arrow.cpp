@@ -5,7 +5,7 @@ using namespace std;
 
 TEST_CASE("Test arrow in C API", "[capi]") {
 	CAPITester tester;
-	unique_ptr<CAPIResult> result;
+	duckdb::unique_ptr<CAPIResult> result;
 	duckdb_prepared_statement stmt = nullptr;
 	duckdb_arrow arrow_result;
 
