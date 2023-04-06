@@ -24,6 +24,7 @@ unique_ptr<CSVFileHandle> ReadCSV::OpenCSV(const string &file_path, FileCompress
 	auto opener = FileSystem::GetFileOpener(context);
 	auto file_handle =
 	    fs.OpenFile(file_path.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK, compression, opener);
+	file_handle->Reset();
 	return make_uniq<CSVFileHandle>(std::move(file_handle));
 }
 
@@ -254,7 +255,7 @@ public:
 		file_size = file_handle->FileSize();
 		first_file_size = file_size;
 		bytes_read = 0;
-		if (buffer_size < file_size) {
+		if (buffer_size < file_size || file_size == 0) {
 			bytes_per_local_state = buffer_size / ParallelCSVGlobalState::MaxThreads();
 		} else {
 			bytes_per_local_state = file_size / MaxThreads();
@@ -262,9 +263,9 @@ public:
 		for (idx_t i = 0; i < rows_to_skip; i++) {
 			file_handle->ReadLine();
 		}
-		current_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position,file_number);
-		next_buffer =
-		    shared_ptr<CSVBuffer>(current_buffer->Next(*file_handle, buffer_size, current_csv_position,file_number).release());
+		current_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position, file_number);
+		next_buffer = shared_ptr<CSVBuffer>(
+		    current_buffer->Next(*file_handle, buffer_size, current_csv_position, file_number).release());
 		running_threads = MaxThreads();
 	}
 	ParallelCSVGlobalState() {
@@ -429,9 +430,10 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, ReadCSVData &bind_data
 			file_handle = ReadCSV::OpenCSV(current_file_path, bind_data.options.compression, context);
 			current_csv_position = 0;
 			file_number++;
-			current_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position,file_number);
-			next_buffer =
-			    shared_ptr<CSVBuffer>(current_buffer->Next(*file_handle, buffer_size, current_csv_position,file_number).release());
+			current_buffer =
+			    make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position, file_number);
+			next_buffer = shared_ptr<CSVBuffer>(
+			    current_buffer->Next(*file_handle, buffer_size, current_csv_position, file_number).release());
 		} else {
 			// We are done scanning.
 			reader.reset();
@@ -451,8 +453,8 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, ReadCSVData &bind_data
 		current_buffer = next_buffer;
 		if (next_buffer) {
 			// Next buffer gets the next-next buffer
-			next_buffer =
-			    shared_ptr<CSVBuffer>(next_buffer->Next(*file_handle, buffer_size, current_csv_position,file_number).release());
+			next_buffer = shared_ptr<CSVBuffer>(
+			    next_buffer->Next(*file_handle, buffer_size, current_csv_position, file_number).release());
 		}
 	}
 	if (!reader || reader->options.file_path != current_file_path) {
@@ -496,6 +498,7 @@ void ParallelCSVGlobalState::UpdateVerification(VerificationPositions positions,
 	}
 }
 
+// here
 static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext &context,
                                                                   TableFunctionInitInput &input) {
 	auto &bind_data = (ReadCSVData &)*input.bind_data;
@@ -663,9 +666,7 @@ static unique_ptr<GlobalTableFunctionState> SingleThreadedCSVInit(ClientContext 
                                                                   TableFunctionInitInput &input) {
 	auto &bind_data = (ReadCSVData &)*input.bind_data;
 	auto result = make_uniq<SingleThreadedCSVState>(bind_data.files.size());
-	if (bind_data.initial_reader) {
-		result->initial_reader = std::move(bind_data.initial_reader);
-	} else if (bind_data.files.empty()) {
+	if (bind_data.files.empty()) {
 		// This can happen when a filename based filter pushdown has eliminated all possible files for this scan.
 		return std::move(result);
 	} else {
@@ -773,9 +774,9 @@ static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &con
 	bind_data.single_threaded = bind_data.single_threaded || !file_exists;
 	if (file_exists) {
 		bind_data.initial_reader.reset();
-//		if (bind_data.options.union_by_name) {
-//			bind_data.initial_reader = std::move(bind_data.union_readers[0]);
-//		}
+		//		if (bind_data.options.union_by_name) {
+		//			bind_data.initial_reader = std::move(bind_data.union_readers[0]);
+		//		}
 	}
 	if (bind_data.single_threaded) {
 		return SingleThreadedCSVInit(context, input);
