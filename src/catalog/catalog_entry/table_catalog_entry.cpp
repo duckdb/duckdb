@@ -51,7 +51,7 @@ vector<LogicalType> TableCatalogEntry::GetTypes() {
 	return types;
 }
 
-void TableCatalogEntry::Serialize(Serializer &serializer) {
+void TableCatalogEntry::Serialize(Serializer &serializer) const {
 	D_ASSERT(!internal);
 
 	FieldWriter writer(serializer);
@@ -88,10 +88,10 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 	vector<string> extra_constraints;
 	for (auto &constraint : constraints) {
 		if (constraint->type == ConstraintType::NOT_NULL) {
-			auto &not_null = (NotNullConstraint &)*constraint;
+			auto &not_null = constraint->Cast<NotNullConstraint>();
 			not_null_columns.insert(not_null.index);
 		} else if (constraint->type == ConstraintType::UNIQUE) {
-			auto &pk = (UniqueConstraint &)*constraint;
+			auto &pk = constraint->Cast<UniqueConstraint>();
 			vector<string> constraint_columns = pk.columns;
 			if (pk.index.index != DConstants::INVALID_INDEX) {
 				// no columns specified: single column constraint
@@ -111,7 +111,7 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 				extra_constraints.push_back(constraint->ToString());
 			}
 		} else if (constraint->type == ConstraintType::FOREIGN_KEY) {
-			auto &fk = (ForeignKeyConstraint &)*constraint;
+			auto &fk = constraint->Cast<ForeignKeyConstraint>();
 			if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE ||
 			    fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
 				extra_constraints.push_back(constraint->ToString());
@@ -160,7 +160,7 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 	return ss.str();
 }
 
-string TableCatalogEntry::ToSQL() {
+string TableCatalogEntry::ToSQL() const {
 	std::stringstream ss;
 
 	ss << "CREATE TABLE ";

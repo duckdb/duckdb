@@ -17,7 +17,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 	switch (stmt->op) {
 	case duckdb_libpgquery::PG_SETOP_NONE: {
 		node = make_uniq<SelectNode>();
-		auto result = (SelectNode *)node.get();
+		auto &result = node->Cast<SelectNode>();
 		if (stmt->withClause) {
 			TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), node->cte_map);
 		}
@@ -44,34 +44,34 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 				//  add the columns defined in the ON clause to the select list
 				TransformExpressionList(*stmt->distinctClause, modifier->distinct_on_targets);
 			}
-			result->modifiers.push_back(std::move(modifier));
+			result.modifiers.push_back(std::move(modifier));
 		}
 
 		// do this early so the value lists also have a `FROM`
 		if (stmt->valuesLists) {
 			// VALUES list, create an ExpressionList
 			D_ASSERT(!stmt->fromClause);
-			result->from_table = TransformValuesList(stmt->valuesLists);
-			result->select_list.push_back(make_uniq<StarExpression>());
+			result.from_table = TransformValuesList(stmt->valuesLists);
+			result.select_list.push_back(make_uniq<StarExpression>());
 		} else {
 			if (!stmt->targetList) {
 				throw ParserException("SELECT clause without selection list");
 			}
 			// select list
-			TransformExpressionList(*stmt->targetList, result->select_list);
-			result->from_table = TransformFrom(stmt->fromClause);
+			TransformExpressionList(*stmt->targetList, result.select_list);
+			result.from_table = TransformFrom(stmt->fromClause);
 		}
 
 		// where
-		result->where_clause = TransformExpression(stmt->whereClause);
+		result.where_clause = TransformExpression(stmt->whereClause);
 		// group by
-		TransformGroupBy(stmt->groupClause, *result);
+		TransformGroupBy(stmt->groupClause, result);
 		// having
-		result->having = TransformExpression(stmt->havingClause);
+		result.having = TransformExpression(stmt->havingClause);
 		// qualify
-		result->qualify = TransformExpression(stmt->qualifyClause);
+		result.qualify = TransformExpression(stmt->qualifyClause);
 		// sample
-		result->sample = TransformSampleOptions(stmt->sampleOptions);
+		result.sample = TransformSampleOptions(stmt->sampleOptions);
 		break;
 	}
 	case duckdb_libpgquery::PG_SETOP_UNION:
@@ -79,13 +79,13 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 	case duckdb_libpgquery::PG_SETOP_INTERSECT:
 	case duckdb_libpgquery::PG_SETOP_UNION_BY_NAME: {
 		node = make_uniq<SetOperationNode>();
-		auto result = (SetOperationNode *)node.get();
+		auto &result = node->Cast<SetOperationNode>();
 		if (stmt->withClause) {
 			TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), node->cte_map);
 		}
-		result->left = TransformSelectNode(stmt->larg);
-		result->right = TransformSelectNode(stmt->rarg);
-		if (!result->left || !result->right) {
+		result.left = TransformSelectNode(stmt->larg);
+		result.right = TransformSelectNode(stmt->rarg);
+		if (!result.left || !result.right) {
 			throw Exception("Failed to transform setop children.");
 		}
 
@@ -93,23 +93,23 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 		switch (stmt->op) {
 		case duckdb_libpgquery::PG_SETOP_UNION:
 			select_distinct = !stmt->all;
-			result->setop_type = SetOperationType::UNION;
+			result.setop_type = SetOperationType::UNION;
 			break;
 		case duckdb_libpgquery::PG_SETOP_EXCEPT:
-			result->setop_type = SetOperationType::EXCEPT;
+			result.setop_type = SetOperationType::EXCEPT;
 			break;
 		case duckdb_libpgquery::PG_SETOP_INTERSECT:
-			result->setop_type = SetOperationType::INTERSECT;
+			result.setop_type = SetOperationType::INTERSECT;
 			break;
 		case duckdb_libpgquery::PG_SETOP_UNION_BY_NAME:
 			select_distinct = !stmt->all;
-			result->setop_type = SetOperationType::UNION_BY_NAME;
+			result.setop_type = SetOperationType::UNION_BY_NAME;
 			break;
 		default:
 			throw Exception("Unexpected setop type");
 		}
 		if (select_distinct) {
-			result->modifiers.push_back(make_uniq<DistinctModifier>());
+			result.modifiers.push_back(make_uniq<DistinctModifier>());
 		}
 		if (stmt->sampleOptions) {
 			throw ParserException("SAMPLE clause is only allowed in regular SELECT statements");

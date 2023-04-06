@@ -27,7 +27,7 @@ BoundStatement Binder::Bind(VacuumStatement &stmt) {
 		vector<unique_ptr<Expression>> select_list;
 		if (columns.empty()) {
 			// Empty means ALL columns should be vacuumed/analyzed
-			auto &get = (LogicalGet &)*ref->get;
+			auto &get = ref->get->Cast<LogicalGet>();
 			columns.insert(columns.end(), get.names.begin(), get.names.end());
 		}
 
@@ -59,7 +59,7 @@ BoundStatement Binder::Bind(VacuumStatement &stmt) {
 			auto table_scan = CreatePlan(*ref);
 			D_ASSERT(table_scan->type == LogicalOperatorType::LOGICAL_GET);
 
-			auto &get = (LogicalGet &)*table_scan;
+			auto &get = table_scan->Cast<LogicalGet>();
 
 			D_ASSERT(select_list.size() == get.column_ids.size());
 			D_ASSERT(stmt.info->columns.size() == get.column_ids.size());

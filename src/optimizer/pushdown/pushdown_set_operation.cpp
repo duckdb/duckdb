@@ -14,7 +14,7 @@ using Filter = FilterPushdown::Filter;
 static void ReplaceSetOpBindings(vector<ColumnBinding> &bindings, Filter &filter, Expression &expr,
                                  LogicalSetOperation &setop) {
 	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &colref = (BoundColumnRefExpression &)expr;
+		auto &colref = expr.Cast<BoundColumnRefExpression>();
 		D_ASSERT(colref.binding.table_index == setop.table_index);
 		D_ASSERT(colref.depth == 0);
 
@@ -30,7 +30,7 @@ static void ReplaceSetOpBindings(vector<ColumnBinding> &bindings, Filter &filter
 unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_UNION || op->type == LogicalOperatorType::LOGICAL_EXCEPT ||
 	         op->type == LogicalOperatorType::LOGICAL_INTERSECT);
-	auto &setop = (LogicalSetOperation &)*op;
+	auto &setop = op->Cast<LogicalSetOperation>();
 
 	D_ASSERT(op->children.size() == 2);
 	auto left_bindings = op->children[0]->GetColumnBindings();
@@ -75,7 +75,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 		case LogicalOperatorType::LOGICAL_UNION:
 			if (op->children[1]->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 				// union with empty left side: return right child
-				auto &projection = (LogicalProjection &)*op->children[1];
+				auto &projection = op->children[1]->Cast<LogicalProjection>();
 				projection.table_index = setop.table_index;
 				return std::move(op->children[1]);
 			}
@@ -95,7 +95,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 		case LogicalOperatorType::LOGICAL_EXCEPT:
 			if (op->children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 				// union or except with empty right child: return left child
-				auto &projection = (LogicalProjection &)*op->children[0];
+				auto &projection = op->children[0]->Cast<LogicalProjection>();
 				projection.table_index = setop.table_index;
 				return std::move(op->children[0]);
 			}

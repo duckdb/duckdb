@@ -54,7 +54,7 @@ void ReplaceDefaultExpression(unique_ptr<ParsedExpression> &expr, const ColumnDe
 void QualifyColumnReferences(unique_ptr<ParsedExpression> &expr, const string &table_name) {
 	// To avoid ambiguity with 'excluded', we explicitly qualify all column references
 	if (expr->type == ExpressionType::COLUMN_REF) {
-		auto &column_ref = (ColumnRefExpression &)*expr;
+		auto &column_ref = expr->Cast<ColumnRefExpression>();
 		if (column_ref.IsQualified()) {
 			return;
 		}
@@ -68,7 +68,7 @@ void QualifyColumnReferences(unique_ptr<ParsedExpression> &expr, const string &t
 // Replace binding.table_index with 'dest' if it's 'source'
 void ReplaceColumnBindings(Expression &expr, idx_t source, idx_t dest) {
 	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &bound_columnref = (BoundColumnRefExpression &)expr;
+		auto &bound_columnref = expr.Cast<BoundColumnRefExpression>();
 		if (bound_columnref.binding.table_index == source) {
 			bound_columnref.binding.table_index = dest;
 		}
@@ -200,7 +200,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 		throw BinderException("Can only update base table!");
 	}
 
-	auto &table_ref = (BaseTableRef &)*stmt.table_ref;
+	auto &table_ref = stmt.table_ref->Cast<BaseTableRef>();
 	const string &table_alias = !table_ref.alias.empty() ? table_ref.alias : table_ref.table_name;
 
 	auto &on_conflict = *stmt.on_conflict_info;
@@ -460,7 +460,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	// special case: check if we are inserting from a VALUES statement
 	auto values_list = stmt.GetValuesList();
 	if (values_list) {
-		auto &expr_list = (ExpressionListRef &)*values_list;
+		auto &expr_list = values_list->Cast<ExpressionListRef>();
 		expr_list.expected_types.resize(expected_columns);
 		expr_list.expected_names.resize(expected_columns);
 

@@ -16,6 +16,9 @@ namespace duckdb {
 //! PhysicalStreamingWindow implements streaming window functions (i.e. with an empty OVER clause)
 class PhysicalStreamingWindow : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::STREAMING_WINDOW;
+
+public:
 	PhysicalStreamingWindow(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
 	                        idx_t estimated_cardinality,
 	                        PhysicalOperatorType type = PhysicalOperatorType::STREAMING_WINDOW);

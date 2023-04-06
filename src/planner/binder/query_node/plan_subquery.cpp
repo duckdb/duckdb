@@ -389,7 +389,7 @@ void Binder::PlanSubqueries(unique_ptr<Expression> *expr_ptr, unique_ptr<Logical
 
 	// check if this is a subquery node
 	if (expr.expression_class == ExpressionClass::BOUND_SUBQUERY) {
-		auto &subquery = (BoundSubqueryExpression &)expr;
+		auto &subquery = expr.Cast<BoundSubqueryExpression>();
 		// subquery node! plan it
 		if (subquery.IsCorrelated() && !plan_subquery) {
 			// detected a nested correlated subquery
