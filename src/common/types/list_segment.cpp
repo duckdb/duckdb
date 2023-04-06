@@ -4,27 +4,38 @@ namespace duckdb {
 
 // forward declarations
 
+template<class T>
+static idx_t GetAllocationSize(uint16_t capacity) {
+	return sizeof(ListSegment) + capacity * (sizeof(bool) + sizeof(T));
+}
+
+static idx_t GetAllocationSizeList(uint16_t capacity) {
+	return sizeof(ListSegment) + capacity * (sizeof(bool) + sizeof(uint64_t)) + sizeof(LinkedList);
+}
+
+static idx_t GetAllocationSizeStruct(uint16_t capacity, idx_t child_count) {
+	return sizeof(ListSegment) + capacity * sizeof(bool) + child_count * sizeof(ListSegment *);
+}
+
 template <class T>
 static data_ptr_t AllocatePrimitiveData(Allocator &allocator, vector<AllocatedData> &owning_vector,
-                                        const uint16_t &capacity) {
+                                        uint16_t capacity) {
 
-	owning_vector.emplace_back(allocator.Allocate(sizeof(ListSegment) + capacity * (sizeof(bool) + sizeof(T))));
+	owning_vector.emplace_back(allocator.Allocate(GetAllocationSize<T>(capacity)));
 	return owning_vector.back().get();
 }
 
 static data_ptr_t AllocateListData(Allocator &allocator, vector<AllocatedData> &owning_vector,
-                                   const uint16_t &capacity) {
+                                   uint16_t capacity) {
 
-	owning_vector.emplace_back(
-	    allocator.Allocate(sizeof(ListSegment) + capacity * (sizeof(bool) + sizeof(uint64_t)) + sizeof(LinkedList)));
+	owning_vector.emplace_back(allocator.Allocate(GetAllocationSizeList(capacity)));
 	return owning_vector.back().get();
 }
 
 static data_ptr_t AllocateStructData(Allocator &allocator, vector<AllocatedData> &owning_vector,
-                                     const uint16_t &capacity, const idx_t &child_count) {
+                                     uint16_t capacity, idx_t child_count) {
 
-	owning_vector.emplace_back(
-	    allocator.Allocate(sizeof(ListSegment) + capacity * sizeof(bool) + child_count * sizeof(ListSegment *)));
+	owning_vector.emplace_back(allocator.Allocate(GetAllocationSizeStruct(capacity, child_count)));
 	return owning_vector.back().get();
 }
 
