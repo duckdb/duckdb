@@ -1,12 +1,12 @@
 #include "parquet_metadata.hpp"
 #include "parquet_statistics.hpp"
-
 #include <sstream>
 
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/common/multi_file_reader.hpp"
 #endif
 
 namespace duckdb {
@@ -136,7 +136,7 @@ void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const
                                                    const string &file_path) {
 	collection.Reset();
 	ParquetOptions parquet_options(context);
-	auto reader = make_unique<ParquetReader>(context, file_path, parquet_options);
+	auto reader = make_uniq<ParquetReader>(context, file_path, parquet_options);
 	idx_t count = 0;
 	DataChunk current_chunk;
 	current_chunk.Initialize(context, return_types);
@@ -345,7 +345,7 @@ void ParquetMetaDataOperatorData::LoadSchemaData(ClientContext &context, const v
                                                  const string &file_path) {
 	collection.Reset();
 	ParquetOptions parquet_options(context);
-	auto reader = make_unique<ParquetReader>(context, file_path, parquet_options);
+	auto reader = make_uniq<ParquetReader>(context, file_path, parquet_options);
 	idx_t count = 0;
 	DataChunk current_chunk;
 	current_chunk.Initialize(context, return_types);
@@ -404,34 +404,24 @@ void ParquetMetaDataOperatorData::LoadSchemaData(ClientContext &context, const v
 template <bool SCHEMA>
 unique_ptr<FunctionData> ParquetMetaDataBind(ClientContext &context, TableFunctionBindInput &input,
                                              vector<LogicalType> &return_types, vector<string> &names) {
-	auto &config = DBConfig::GetConfig(context);
-	if (!config.options.enable_external_access) {
-		throw PermissionException("Scanning Parquet files is disabled through configuration");
-	}
 	if (SCHEMA) {
 		ParquetMetaDataOperatorData::BindSchema(return_types, names);
 	} else {
 		ParquetMetaDataOperatorData::BindMetaData(return_types, names);
 	}
 
-	auto file_name = input.inputs[0].GetValue<string>();
-	auto result = make_unique<ParquetMetaDataBindData>();
-
-	FileSystem &fs = FileSystem::GetFileSystem(context);
+	auto result = make_uniq<ParquetMetaDataBindData>();
 	result->return_types = return_types;
-	result->files = fs.Glob(file_name, context);
-	if (result->files.empty()) {
-		throw IOException("No files found that match the pattern \"%s\"", file_name);
-	}
+	result->files = MultiFileReader::GetFileList(context, input.inputs[0], "Parquet");
 	return std::move(result);
 }
 
 template <bool SCHEMA>
 unique_ptr<GlobalTableFunctionState> ParquetMetaDataInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto &bind_data = (ParquetMetaDataBindData &)*input.bind_data;
+	auto &bind_data = input.bind_data->Cast<ParquetMetaDataBindData>();
 	D_ASSERT(!bind_data.files.empty());
 
-	auto result = make_unique<ParquetMetaDataOperatorData>(context, bind_data.return_types);
+	auto result = make_uniq<ParquetMetaDataOperatorData>(context, bind_data.return_types);
 	if (SCHEMA) {
 		result->LoadSchemaData(context, bind_data.return_types, bind_data.files[0]);
 	} else {
@@ -443,8 +433,8 @@ unique_ptr<GlobalTableFunctionState> ParquetMetaDataInit(ClientContext &context,
 
 template <bool SCHEMA>
 void ParquetMetaDataImplementation(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (ParquetMetaDataOperatorData &)*data_p.global_state;
-	auto &bind_data = (ParquetMetaDataBindData &)*data_p.bind_data;
+	auto &data = data_p.global_state->Cast<ParquetMetaDataOperatorData>();
+	auto &bind_data = data_p.bind_data->Cast<ParquetMetaDataBindData>();
 
 	while (true) {
 		if (!data.collection.Scan(data.scan_state, output)) {

@@ -146,7 +146,7 @@ unique_ptr<ParsedExpression> ParsedExpression::FormatDeserialize(FormatDeseriali
 		result = ConstantExpression::FormatDeserialize(type, deserializer);
 		break;
 	case ExpressionClass::DEFAULT:
-		result = make_unique<DefaultExpression>();
+		result = make_uniq<DefaultExpression>();
 		break;
 	case ExpressionClass::FUNCTION:
 		result = FunctionExpression::FormatDeserialize(type, deserializer);

@@ -89,7 +89,7 @@ ART::~ART() {
 unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(const Transaction &transaction, const Value &value,
                                                               ExpressionType expression_type) {
 	// initialize point lookup
-	auto result = make_unique<ARTIndexScanState>();
+	auto result = make_uniq<ARTIndexScanState>();
 	result->values[0] = value;
 	result->expressions[0] = expression_type;
 	return std::move(result);
@@ -99,7 +99,7 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transac
                                                             ExpressionType low_expression_type, const Value &high_value,
                                                             ExpressionType high_expression_type) {
 	// initialize range lookup
-	auto result = make_unique<ARTIndexScanState>();
+	auto result = make_uniq<ARTIndexScanState>();
 	result->values[0] = low_value;
 	result->expressions[0] = low_expression_type;
 	result->values[1] = high_value;
@@ -1002,19 +1002,17 @@ BlockPointer ART::Serialize(MetaBlockWriter &writer) {
 //===--------------------------------------------------------------------===//
 // Merging
 //===--------------------------------------------------------------------===//
-
-bool ART::MergeIndexes(IndexLock &state, Index *other_index) {
-
-	auto other_art = (ART *)other_index;
+bool ART::MergeIndexes(IndexLock &state, Index &other_index) {
+	auto &other_art = other_index.Cast<ART>();
 
 	if (!this->tree) {
-		IncreaseMemorySize(other_art->memory_size);
-		tree = other_art->tree;
-		other_art->tree = nullptr;
+		IncreaseMemorySize(other_art.memory_size);
+		tree = other_art.tree;
+		other_art.tree = nullptr;
 		return true;
 	}
 
-	return Node::MergeARTs(this, other_art);
+	return Node::MergeARTs(this, &other_art);
 }
 
 //===--------------------------------------------------------------------===//

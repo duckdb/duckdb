@@ -19,14 +19,14 @@ SinkResultType PhysicalExplainAnalyze::Sink(ExecutionContext &context, GlobalSin
 
 SinkFinalizeType PhysicalExplainAnalyze::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                   GlobalSinkState &gstate_p) const {
-	auto &gstate = (ExplainAnalyzeStateGlobalState &)gstate_p;
+	auto &gstate = gstate_p.Cast<ExplainAnalyzeStateGlobalState>();
 	auto &profiler = QueryProfiler::Get(context);
 	gstate.analyzed_plan = profiler.ToString();
 	return SinkFinalizeType::READY;
 }
 
 unique_ptr<GlobalSinkState> PhysicalExplainAnalyze::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<ExplainAnalyzeStateGlobalState>();
+	return make_uniq<ExplainAnalyzeStateGlobalState>();
 }
 
 //===--------------------------------------------------------------------===//
@@ -41,13 +41,13 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalExplainAnalyze::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<ExplainAnalyzeState>();
+	return make_uniq<ExplainAnalyzeState>();
 }
 
 void PhysicalExplainAnalyze::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &source_state,
                                      LocalSourceState &lstate) const {
 	auto &state = (ExplainAnalyzeState &)source_state;
-	auto &gstate = (ExplainAnalyzeStateGlobalState &)*sink_state;
+	auto &gstate = sink_state->Cast<ExplainAnalyzeStateGlobalState>();
 	if (state.finished) {
 		return;
 	}

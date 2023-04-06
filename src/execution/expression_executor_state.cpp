@@ -26,7 +26,7 @@ bool ExpressionState::HasContext() {
 
 ClientContext &ExpressionState::GetContext() {
 	if (!HasContext()) {
-		throw BinderException("Cannot use %s in this context", ((BoundFunctionExpression &)expr).function.name);
+		throw BinderException("Cannot use %s in this context", (expr.Cast<BoundFunctionExpression>()).function.name);
 	}
 	return root.executor->GetContext();
 }

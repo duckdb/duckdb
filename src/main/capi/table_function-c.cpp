@@ -83,12 +83,12 @@ struct CTableLocalInitData : public LocalTableFunctionState {
 };
 
 struct CTableInternalInitInfo {
-	CTableInternalInitInfo(CTableBindData &bind_data, CTableInitData &init_data, const vector<column_t> &column_ids,
-	                       TableFilterSet *filters)
+	CTableInternalInitInfo(const CTableBindData &bind_data, CTableInitData &init_data,
+	                       const vector<column_t> &column_ids, TableFilterSet *filters)
 	    : bind_data(bind_data), init_data(init_data), column_ids(column_ids), filters(filters), success(true) {
 	}
 
-	CTableBindData &bind_data;
+	const CTableBindData &bind_data;
 	CTableInitData &init_data;
 	const vector<column_t> &column_ids;
 	TableFilterSet *filters;
@@ -97,11 +97,11 @@ struct CTableInternalInitInfo {
 };
 
 struct CTableInternalFunctionInfo {
-	CTableInternalFunctionInfo(CTableBindData &bind_data, CTableInitData &init_data, CTableInitData &local_data)
+	CTableInternalFunctionInfo(const CTableBindData &bind_data, CTableInitData &init_data, CTableInitData &local_data)
 	    : bind_data(bind_data), init_data(init_data), local_data(local_data), success(true) {
 	}
 
-	CTableBindData &bind_data;
+	const CTableBindData &bind_data;
 	CTableInitData &init_data;
 	CTableInitData &local_data;
 	bool success;
@@ -112,7 +112,7 @@ unique_ptr<FunctionData> CTableFunctionBind(ClientContext &context, TableFunctio
                                             vector<LogicalType> &return_types, vector<string> &names) {
 	auto info = (CTableFunctionInfo *)input.info;
 	D_ASSERT(info->bind && info->function && info->init);
-	auto result = make_unique<CTableBindData>();
+	auto result = make_uniq<CTableBindData>();
 	CTableInternalBindInfo bind_info(context, input, return_types, names, *result, *info);
 	info->bind(&bind_info);
 	if (!bind_info.success) {
@@ -124,8 +124,8 @@ unique_ptr<FunctionData> CTableFunctionBind(ClientContext &context, TableFunctio
 }
 
 unique_ptr<GlobalTableFunctionState> CTableFunctionInit(ClientContext &context, TableFunctionInitInput &data_p) {
-	auto &bind_data = (CTableBindData &)*data_p.bind_data;
-	auto result = make_unique<CTableGlobalInitData>();
+	auto &bind_data = data_p.bind_data->Cast<CTableBindData>();
+	auto result = make_uniq<CTableGlobalInitData>();
 
 	CTableInternalInitInfo init_info(bind_data, result->init_data, data_p.column_ids, data_p.filters);
 	bind_data.info->init(&init_info);
@@ -137,8 +137,8 @@ unique_ptr<GlobalTableFunctionState> CTableFunctionInit(ClientContext &context, 
 
 unique_ptr<LocalTableFunctionState> CTableFunctionLocalInit(ExecutionContext &context, TableFunctionInitInput &data_p,
                                                             GlobalTableFunctionState *gstate) {
-	auto &bind_data = (CTableBindData &)*data_p.bind_data;
-	auto result = make_unique<CTableLocalInitData>();
+	auto &bind_data = data_p.bind_data->Cast<CTableBindData>();
+	auto result = make_uniq<CTableLocalInitData>();
 	if (!bind_data.info->local_init) {
 		return std::move(result);
 	}
@@ -152,15 +152,15 @@ unique_ptr<LocalTableFunctionState> CTableFunctionLocalInit(ExecutionContext &co
 }
 
 unique_ptr<NodeStatistics> CTableFunctionCardinality(ClientContext &context, const FunctionData *bind_data_p) {
-	auto &bind_data = (const CTableBindData &)*bind_data_p;
+	auto &bind_data = bind_data_p->Cast<CTableBindData>();
 	if (!bind_data.stats) {
 		return nullptr;
 	}
-	return make_unique<NodeStatistics>(*bind_data.stats);
+	return make_uniq<NodeStatistics>(*bind_data.stats);
 }
 
 void CTableFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &bind_data = (CTableBindData &)*data_p.bind_data;
+	auto &bind_data = data_p.bind_data->Cast<CTableBindData>();
 	auto &global_data = (CTableGlobalInitData &)*data_p.global_state;
 	auto &local_data = (CTableLocalInitData &)*data_p.local_state;
 	CTableInternalFunctionInfo function_info(bind_data, global_data.init_data, local_data.init_data);
@@ -357,9 +357,9 @@ void duckdb_bind_set_cardinality(duckdb_bind_info info, idx_t cardinality, bool 
 	}
 	auto bind_info = (duckdb::CTableInternalBindInfo *)info;
 	if (is_exact) {
-		bind_info->bind_data.stats = duckdb::make_unique<duckdb::NodeStatistics>(cardinality);
+		bind_info->bind_data.stats = duckdb::make_uniq<duckdb::NodeStatistics>(cardinality);
 	} else {
-		bind_info->bind_data.stats = duckdb::make_unique<duckdb::NodeStatistics>(cardinality, cardinality);
+		bind_info->bind_data.stats = duckdb::make_uniq<duckdb::NodeStatistics>(cardinality, cardinality);
 	}
 }
 

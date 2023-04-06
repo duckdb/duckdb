@@ -17,6 +17,9 @@ namespace duckdb {
 //! two tables
 class PhysicalIEJoin : public PhysicalRangeJoin {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::IE_JOIN;
+
+public:
 	PhysicalIEJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
 	               vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality);
 

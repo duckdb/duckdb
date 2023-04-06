@@ -50,13 +50,13 @@ unique_ptr<OnConflictInfo> Transformer::DummyOnConflictClause(duckdb_libpgquery:
 	switch (type) {
 	case duckdb_libpgquery::PGOnConflictActionAlias::PG_ONCONFLICT_ALIAS_REPLACE: {
 		// This can not be fully resolved yet until the bind stage
-		auto result = make_unique<OnConflictInfo>();
+		auto result = make_uniq<OnConflictInfo>();
 		result->action_type = OnConflictAction::REPLACE;
 		return result;
 	}
 	case duckdb_libpgquery::PGOnConflictActionAlias::PG_ONCONFLICT_ALIAS_IGNORE: {
 		// We can just fully replace this with DO NOTHING, and be done with it
-		auto result = make_unique<OnConflictInfo>();
+		auto result = make_uniq<OnConflictInfo>();
 		result->action_type = OnConflictAction::NOTHING;
 		return result;
 	}
@@ -71,7 +71,7 @@ unique_ptr<OnConflictInfo> Transformer::TransformOnConflictClause(duckdb_libpgqu
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGOnConflictClause *>(node);
 	D_ASSERT(stmt);
 
-	auto result = make_unique<OnConflictInfo>();
+	auto result = make_uniq<OnConflictInfo>();
 	result->action_type = TransformOnConflictAction(stmt);
 	if (stmt->infer) {
 		// A filter for the ON CONFLICT ... is specified

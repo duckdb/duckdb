@@ -79,7 +79,7 @@ WindowConstantAggregate::WindowConstantAggregate(AggregateFunction &aggregate, F
 	}
 
 	//	Initialise the vector for caching the results
-	results = make_unique<Vector>(result_type, partition_offsets.size());
+	results = make_uniq<Vector>(result_type, partition_offsets.size());
 	partition_offsets.emplace_back(count);
 
 	//	Start the first aggregate

@@ -20,6 +20,9 @@ class OrderGlobalSinkState;
 //! Physically re-orders the input data
 class PhysicalOrder : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::ORDER_BY;
+
+public:
 	PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders, vector<idx_t> projections,
 	              idx_t estimated_cardinality);
 

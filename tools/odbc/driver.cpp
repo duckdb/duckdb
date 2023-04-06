@@ -215,7 +215,7 @@ static SQLRETURN SetConnection(SQLHDBC connection_handle, SQLCHAR *conn_str) {
 	}
 
 	if (!dbc->conn) {
-		dbc->conn = duckdb::make_unique<duckdb::Connection>(*dbc->env->db);
+		dbc->conn = duckdb::make_uniq<duckdb::Connection>(*dbc->env->db);
 		dbc->conn->SetAutoCommit(dbc->autocommit);
 	}
 	return SQL_SUCCESS;

@@ -15,7 +15,7 @@ struct CheckpointBindData : public FunctionData {
 
 public:
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<CheckpointBindData>(db);
+		return make_uniq<CheckpointBindData>(db);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
@@ -40,12 +40,12 @@ static unique_ptr<FunctionData> CheckpointBind(ClientContext &context, TableFunc
 	} else {
 		db = db_manager.GetDatabase(context, DatabaseManager::GetDefaultDatabase(context));
 	}
-	return make_unique<CheckpointBindData>(db);
+	return make_uniq<CheckpointBindData>(db);
 }
 
 template <bool FORCE>
 static void TemplatedCheckpointFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &bind_data = (CheckpointBindData &)*data_p.bind_data;
+	auto &bind_data = data_p.bind_data->Cast<CheckpointBindData>();
 	auto &transaction_manager = TransactionManager::Get(*bind_data.db);
 	transaction_manager.Checkpoint(context, FORCE);
 }

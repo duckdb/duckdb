@@ -16,12 +16,12 @@ unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastIn
 		auto child_cast = input.GetCastFunction(source_child_types[i].second, result_child_types[i].second);
 		child_cast_info.push_back(std::move(child_cast));
 	}
-	return make_unique<StructBoundCastData>(std::move(child_cast_info), target);
+	return make_uniq<StructBoundCastData>(std::move(child_cast_info), target);
 }
 
 unique_ptr<FunctionLocalState> StructBoundCastData::InitStructCastLocalState(CastLocalStateParameters &parameters) {
-	auto &cast_data = (StructBoundCastData &)*parameters.cast_data;
-	auto result = make_unique<StructCastLocalState>();
+	auto &cast_data = parameters.cast_data->Cast<StructBoundCastData>();
+	auto result = make_uniq<StructCastLocalState>();
 
 	for (auto &entry : cast_data.child_cast_info) {
 		unique_ptr<FunctionLocalState> child_state;
@@ -35,8 +35,8 @@ unique_ptr<FunctionLocalState> StructBoundCastData::InitStructCastLocalState(Cas
 }
 
 static bool StructToStructCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	auto &cast_data = (StructBoundCastData &)*parameters.cast_data;
-	auto &lstate = (StructCastLocalState &)*parameters.local_state;
+	auto &cast_data = parameters.cast_data->Cast<StructBoundCastData>();
+	auto &lstate = parameters.local_state->Cast<StructCastLocalState>();
 	auto &source_child_types = StructType::GetChildTypes(source.GetType());
 	auto &source_children = StructVector::GetEntries(source);
 	D_ASSERT(source_children.size() == StructType::GetChildTypes(result.GetType()).size());
@@ -66,7 +66,7 @@ static bool StructToStructCast(Vector &source, Vector &result, idx_t count, Cast
 static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	// first cast all child elements to varchar
-	auto &cast_data = (StructBoundCastData &)*parameters.cast_data;
+	auto &cast_data = parameters.cast_data->Cast<StructBoundCastData>();
 	Vector varchar_struct(cast_data.target, count);
 	StructToStructCast(source, varchar_struct, count, parameters);
 

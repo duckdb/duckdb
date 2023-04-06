@@ -217,7 +217,7 @@ public:
 template <class T>
 unique_ptr<CompressionState> PatasInitCompression(ColumnDataCheckpointer &checkpointer,
                                                   unique_ptr<AnalyzeState> state) {
-	return make_unique<PatasCompressionState<T>>(checkpointer, (PatasAnalyzeState<T> *)state.get());
+	return make_uniq<PatasCompressionState<T>>(checkpointer, (PatasAnalyzeState<T> *)state.get());
 }
 
 template <class T>

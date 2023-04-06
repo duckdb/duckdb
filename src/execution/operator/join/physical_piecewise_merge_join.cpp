@@ -76,7 +76,7 @@ public:
 		rhs_layout.Initialize(op.children[1]->types);
 		vector<BoundOrderByNode> rhs_order;
 		rhs_order.emplace_back(op.rhs_orders[0].Copy());
-		table = make_unique<GlobalSortedTable>(context, rhs_order, rhs_layout);
+		table = make_uniq<GlobalSortedTable>(context, rhs_order, rhs_layout);
 	}
 
 	inline idx_t Count() const {
@@ -100,18 +100,18 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalPiecewiseMergeJoin::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<MergeJoinGlobalState>(context, *this);
+	return make_uniq<MergeJoinGlobalState>(context, *this);
 }
 
 unique_ptr<LocalSinkState> PhysicalPiecewiseMergeJoin::GetLocalSinkState(ExecutionContext &context) const {
 	// We only sink the RHS
-	return make_unique<MergeJoinLocalState>(context.client, *this, 1);
+	return make_uniq<MergeJoinLocalState>(context.client, *this, 1);
 }
 
 SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, GlobalSinkState &gstate_p,
                                                 LocalSinkState &lstate_p, DataChunk &input) const {
-	auto &gstate = (MergeJoinGlobalState &)gstate_p;
-	auto &lstate = (MergeJoinLocalState &)lstate_p;
+	auto &gstate = gstate_p.Cast<MergeJoinGlobalState>();
+	auto &lstate = lstate_p.Cast<MergeJoinLocalState>();
 
 	gstate.Sink(input, lstate);
 
@@ -120,8 +120,8 @@ SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, Globa
 
 void PhysicalPiecewiseMergeJoin::Combine(ExecutionContext &context, GlobalSinkState &gstate_p,
                                          LocalSinkState &lstate_p) const {
-	auto &gstate = (MergeJoinGlobalState &)gstate_p;
-	auto &lstate = (MergeJoinLocalState &)lstate_p;
+	auto &gstate = gstate_p.Cast<MergeJoinGlobalState>();
+	auto &lstate = lstate_p.Cast<MergeJoinLocalState>();
 	gstate.table->Combine(lstate.table);
 	auto &client_profiler = QueryProfiler::Get(context.client);
 
@@ -134,7 +134,7 @@ void PhysicalPiecewiseMergeJoin::Combine(ExecutionContext &context, GlobalSinkSt
 //===--------------------------------------------------------------------===//
 SinkFinalizeType PhysicalPiecewiseMergeJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                       GlobalSinkState &gstate_p) const {
-	auto &gstate = (MergeJoinGlobalState &)gstate_p;
+	auto &gstate = gstate_p.Cast<MergeJoinGlobalState>();
 	auto &global_sort_state = gstate.table->global_sort_state;
 
 	if (IsRightOuterJoin(join_type)) {
@@ -219,8 +219,8 @@ public:
 public:
 	void ResolveJoinKeys(DataChunk &input) {
 		// sort by join key
-		lhs_global_state = make_unique<GlobalSortState>(buffer_manager, lhs_order, lhs_layout);
-		lhs_local_table = make_unique<LocalSortedTable>(context, op, 0);
+		lhs_global_state = make_uniq<GlobalSortState>(buffer_manager, lhs_order, lhs_layout);
+		lhs_local_table = make_uniq<LocalSortedTable>(context, op, 0);
 		lhs_local_table->Sink(input, *lhs_global_state);
 
 		// Set external (can be forced with the PRAGMA)
@@ -236,7 +236,7 @@ public:
 		// Scan the sorted payload
 		D_ASSERT(lhs_global_state->sorted_blocks.size() == 1);
 
-		scanner = make_unique<PayloadScanner>(*lhs_global_state->sorted_blocks[0]->payload_data, *lhs_global_state);
+		scanner = make_uniq<PayloadScanner>(*lhs_global_state->sorted_blocks[0]->payload_data, *lhs_global_state);
 		lhs_payload.Reset();
 		scanner->Scan(lhs_payload);
 
@@ -254,7 +254,7 @@ public:
 
 unique_ptr<OperatorState> PhysicalPiecewiseMergeJoin::GetOperatorState(ExecutionContext &context) const {
 	auto &config = ClientConfig::GetConfig(context.client);
-	return make_unique<PiecewiseMergeJoinState>(context.client, *this, config.force_external);
+	return make_uniq<PiecewiseMergeJoinState>(context.client, *this, config.force_external);
 }
 
 static inline idx_t SortedBlockNotNull(const idx_t base, const idx_t count, const idx_t not_null) {
@@ -386,7 +386,7 @@ static idx_t MergeJoinSimpleBlocks(PiecewiseMergeJoinState &lstate, MergeJoinGlo
 void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                    OperatorState &state_p) const {
 	auto &state = (PiecewiseMergeJoinState &)state_p;
-	auto &gstate = (MergeJoinGlobalState &)*sink_state;
+	auto &gstate = sink_state->Cast<MergeJoinGlobalState>();
 
 	state.ResolveJoinKeys(input);
 	auto &lhs_table = *state.lhs_local_table;
@@ -508,7 +508,7 @@ static idx_t MergeJoinComplexBlocks(BlockMergeInfo &l, BlockMergeInfo &r, const 
 OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &input,
                                                                   DataChunk &chunk, OperatorState &state_p) const {
 	auto &state = (PiecewiseMergeJoinState &)state_p;
-	auto &gstate = (MergeJoinGlobalState &)*sink_state;
+	auto &gstate = sink_state->Cast<MergeJoinGlobalState>();
 	auto &rsorted = *gstate.table->global_sort_state.sorted_blocks[0];
 	const auto left_cols = input.ColumnCount();
 	const auto tail_cols = conditions.size() - 1;
@@ -623,7 +623,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 OperatorResultType PhysicalPiecewiseMergeJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input,
                                                                DataChunk &chunk, GlobalOperatorState &gstate_p,
                                                                OperatorState &state) const {
-	auto &gstate = (MergeJoinGlobalState &)*sink_state;
+	auto &gstate = sink_state->Cast<MergeJoinGlobalState>();
 
 	if (gstate.Count() == 0) {
 		// empty RHS
@@ -668,20 +668,20 @@ public:
 
 public:
 	idx_t MaxThreads() override {
-		auto &sink = (MergeJoinGlobalState &)*op.sink_state;
+		auto &sink = op.sink_state->Cast<MergeJoinGlobalState>();
 		return sink.Count() / (STANDARD_VECTOR_SIZE * idx_t(10));
 	}
 };
 
 unique_ptr<GlobalSourceState> PhysicalPiecewiseMergeJoin::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<PiecewiseJoinScanState>(*this);
+	return make_uniq<PiecewiseJoinScanState>(*this);
 }
 
 void PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, DataChunk &result, GlobalSourceState &gstate,
                                          LocalSourceState &lstate) const {
 	D_ASSERT(IsRightOuterJoin(join_type));
 	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
-	auto &sink = (MergeJoinGlobalState &)*sink_state;
+	auto &sink = sink_state->Cast<MergeJoinGlobalState>();
 	auto &state = (PiecewiseJoinScanState &)gstate;
 
 	lock_guard<mutex> l(state.lock);
@@ -691,7 +691,7 @@ void PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, DataChunk &r
 		if (sort_state.sorted_blocks.empty()) {
 			return;
 		}
-		state.scanner = make_unique<PayloadScanner>(*sort_state.sorted_blocks[0]->payload_data, sort_state);
+		state.scanner = make_uniq<PayloadScanner>(*sort_state.sorted_blocks[0]->payload_data, sort_state);
 	}
 
 	// if the LHS is exhausted in a FULL/RIGHT OUTER JOIN, we scan the found_match for any chunks we

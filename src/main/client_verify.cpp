@@ -33,7 +33,7 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::EXTERNAL, stmt));
 	}
 
-	auto original = make_unique<StatementVerifier>(std::move(statement));
+	auto original = make_uniq<StatementVerifier>(std::move(statement));
 	for (auto &verifier : statement_verifiers) {
 		original->CheckExpressions(*verifier);
 	}
@@ -90,7 +90,7 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 	// Check explain, only if q does not already contain EXPLAIN
 	if (original->materialized_result->success) {
 		auto explain_q = "EXPLAIN " + query;
-		auto explain_stmt = make_unique<ExplainStatement>(std::move(statement_copy_for_explain));
+		auto explain_stmt = make_uniq<ExplainStatement>(std::move(statement_copy_for_explain));
 		try {
 			RunStatementInternal(lock, explain_q, std::move(explain_stmt), false, false);
 		} catch (std::exception &ex) { // LCOV_EXCL_START
