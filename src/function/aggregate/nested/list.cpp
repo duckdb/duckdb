@@ -118,7 +118,6 @@ static void ListCombineFunction(Vector &state, Vector &combined, AggregateInputD
 		}
 		combined_ptr[i]->linked_list.last_segment = copied_linked_list.last_segment;
 		combined_ptr[i]->linked_list.total_capacity += copied_linked_list.total_capacity;
-		list_bind_data.functions.Destroy(aggr_input_data.allocator, state->linked_list);
 	}
 }
 
@@ -162,9 +161,6 @@ static void ListFinalize(Vector &state_vector, AggregateInputData &aggr_input_da
 
 		idx_t current_offset = result_data[rid].offset;
 		list_bind_data.functions.BuildListVector(state->linked_list, result_child, current_offset);
-
-		// now destroy the state (for parallel destruction)
-		ListFunction::Destroy<ListAggState>(aggr_input_data, state);
 	}
 	ListVector::SetListSize(result, total_len);
 }

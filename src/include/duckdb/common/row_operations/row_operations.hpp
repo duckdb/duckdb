@@ -25,7 +25,8 @@ class Vector;
 struct UnifiedVectorFormat;
 
 struct RowOperationsState {
-	RowOperationsState(Allocator &allocator) : allocator(allocator) {}
+	RowOperationsState(Allocator &allocator) : allocator(allocator) {
+	}
 
 	Allocator &allocator;
 };
@@ -40,14 +41,17 @@ struct RowOperations {
 	//! destructor - unaligned addresses, updated
 	static void DestroyStates(RowOperationsState &state, RowLayout &layout, Vector &addresses, idx_t count);
 	//! update - aligned addresses
-	static void UpdateStates(RowOperationsState &state, AggregateObject &aggr, Vector &addresses, DataChunk &payload, idx_t arg_idx, idx_t count);
+	static void UpdateStates(RowOperationsState &state, AggregateObject &aggr, Vector &addresses, DataChunk &payload,
+	                         idx_t arg_idx, idx_t count);
 	//! filtered update - aligned addresses
-	static void UpdateFilteredStates(RowOperationsState &state, AggregateFilterData &filter_data, AggregateObject &aggr, Vector &addresses,
-	                                 DataChunk &payload, idx_t arg_idx);
+	static void UpdateFilteredStates(RowOperationsState &state, AggregateFilterData &filter_data, AggregateObject &aggr,
+	                                 Vector &addresses, DataChunk &payload, idx_t arg_idx);
 	//! combine - unaligned addresses, updated
-	static void CombineStates(RowOperationsState &state, RowLayout &layout, Vector &sources, Vector &targets, idx_t count);
+	static void CombineStates(RowOperationsState &state, RowLayout &layout, Vector &sources, Vector &targets,
+	                          idx_t count);
 	//! finalize - unaligned addresses, updated
-	static void FinalizeStates(RowOperationsState &state, RowLayout &layout, Vector &addresses, DataChunk &result, idx_t aggr_idx);
+	static void FinalizeStates(RowOperationsState &state, RowLayout &layout, Vector &addresses, DataChunk &result,
+	                           idx_t aggr_idx);
 
 	//===--------------------------------------------------------------------===//
 	// Read/Write Operators

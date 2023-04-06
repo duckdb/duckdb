@@ -8,7 +8,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 template <class T>
 static idx_t GetAllocationSize(uint16_t capacity) {
-	return sizeof(ListSegment) + capacity * (sizeof(bool) + sizeof(T));
+	return AlignValue(sizeof(ListSegment) + capacity * (sizeof(bool) + sizeof(T)));
 }
 
 template <class T>
@@ -25,7 +25,7 @@ static T *GetPrimitiveData(const ListSegment *segment) {
 // Lists
 //===--------------------------------------------------------------------===//
 static idx_t GetAllocationSizeList(uint16_t capacity) {
-	return sizeof(ListSegment) + capacity * (sizeof(bool) + sizeof(uint64_t)) + sizeof(LinkedList);
+	return AlignValue(sizeof(ListSegment) + capacity * (sizeof(bool) + sizeof(uint64_t)) + sizeof(LinkedList));
 }
 
 static data_ptr_t AllocateListData(Allocator &allocator, uint16_t capacity) {
@@ -45,7 +45,7 @@ static LinkedList *GetListChildData(const ListSegment *segment) {
 // Structs
 //===--------------------------------------------------------------------===//
 static idx_t GetAllocationSizeStruct(uint16_t capacity, idx_t child_count) {
-	return sizeof(ListSegment) + capacity * sizeof(bool) + child_count * sizeof(ListSegment *);
+	return AlignValue(sizeof(ListSegment) + capacity * sizeof(bool) + child_count * sizeof(ListSegment *));
 }
 
 static data_ptr_t AllocateStructData(Allocator &allocator, uint16_t capacity, idx_t child_count) {
