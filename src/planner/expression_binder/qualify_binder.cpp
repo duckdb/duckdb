@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/parser/expression/window_expression.hpp"
 
 namespace duckdb {
 
@@ -39,7 +40,7 @@ BindResult QualifyBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr,
 	}
 	switch (expr.expression_class) {
 	case ExpressionClass::WINDOW:
-		return BindWindow((WindowExpression &)expr, depth);
+		return BindWindow(expr.Cast<WindowExpression>(), depth);
 	case ExpressionClass::COLUMN_REF:
 		return BindColumnRef(expr_ptr, depth, root_expression);
 	default:

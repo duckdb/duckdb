@@ -36,7 +36,7 @@ static bool Disjoint(unordered_set<T> &a, unordered_set<T> &b) {
 //! Extract the set of relations referred to inside an expression
 bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings) {
 	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &colref = (BoundColumnRefExpression &)expression;
+		auto &colref = expression.Cast<BoundColumnRefExpression>();
 		D_ASSERT(colref.depth == 0);
 		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
 		// map the base table index to the relation index used by the JoinOrderOptimizer
@@ -66,7 +66,7 @@ void JoinOrderOptimizer::GetColumnBinding(Expression &expression, ColumnBinding 
 	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
 		// Here you have a filter on a single column in a table. Return a binding for the column
 		// being filtered on so the filter estimator knows what HLL count to pull
-		auto &colref = (BoundColumnRefExpression &)expression;
+		auto &colref = expression.Cast<BoundColumnRefExpression>();
 		D_ASSERT(colref.depth == 0);
 		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
 		// map the base table index to the relation index used by the JoinOrderOptimizer
@@ -88,8 +88,8 @@ static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, 
 	}
 	// push the filter into the LogicalFilter
 	D_ASSERT(node->type == LogicalOperatorType::LOGICAL_FILTER);
-	auto filter = (LogicalFilter *)node.get();
-	filter->expressions.push_back(std::move(expr));
+	auto &filter = node->Cast<LogicalFilter>();
+	filter.expressions.push_back(std::move(expr));
 	return node;
 }
 
@@ -120,7 +120,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 	}
 
 	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-		auto &join = (LogicalComparisonJoin &)*op;
+		auto &join = op->Cast<LogicalComparisonJoin>();
 		if (join.join_type == JoinType::INNER) {
 			// extract join conditions from inner join
 			filter_operators.push_back(op);
@@ -195,35 +195,35 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 	}
 	case LogicalOperatorType::LOGICAL_GET: {
 		// base table scan, add to set of relations
-		auto get = (LogicalGet *)op;
+		auto &get = op->Cast<LogicalGet>();
 		auto relation = make_uniq<SingleJoinRelation>(&input_op, parent);
 		idx_t relation_id = relations.size();
 		//! make sure the optimizer has knowledge of the exact column bindings as well.
-		auto table_index = get->table_index;
+		auto table_index = get.table_index;
 		relation_mapping[table_index] = relation_id;
-		cardinality_estimator.AddRelationColumnMapping(get, relation_id);
+		cardinality_estimator.AddRelationColumnMapping(&get, relation_id);
 		relations.push_back(std::move(relation));
 		return true;
 	}
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
 		// base table scan, add to set of relations
-		auto get = (LogicalExpressionGet *)op;
+		auto &get = op->Cast<LogicalExpressionGet>();
 		auto relation = make_uniq<SingleJoinRelation>(&input_op, parent);
 		//! make sure the optimizer has knowledge of the exact column bindings as well.
-		relation_mapping[get->table_index] = relations.size();
+		relation_mapping[get.table_index] = relations.size();
 		relations.push_back(std::move(relation));
 		return true;
 	}
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN: {
 		// table function call, add to set of relations
-		auto dummy_scan = (LogicalDummyScan *)op;
+		auto &dummy_scan = op->Cast<LogicalDummyScan>();
 		auto relation = make_uniq<SingleJoinRelation>(&input_op, parent);
-		relation_mapping[dummy_scan->table_index] = relations.size();
+		relation_mapping[dummy_scan.table_index] = relations.size();
 		relations.push_back(std::move(relation));
 		return true;
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
-		auto proj = (LogicalProjection *)op;
+		auto &proj = op->Cast<LogicalProjection>();
 		// we run the join order optimizer within the subquery as well
 		JoinOrderOptimizer optimizer(context);
 		op->children[0] = optimizer.Optimize(std::move(op->children[0]));
@@ -236,10 +236,10 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		optimizer.cardinality_estimator.CopyRelationMap(child_binding_maps.at(0));
 		// This logical projection may sit on top of a logical comparison join that has been pushed down
 		// we want to copy the binding info of both tables
-		relation_mapping[proj->table_index] = relation_id;
+		relation_mapping[proj.table_index] = relation_id;
 		for (auto &binding_info : child_binding_maps.at(0)) {
 			cardinality_estimator.AddRelationToColumnMapping(
-			    ColumnBinding(proj->table_index, binding_info.first.column_index), binding_info.second);
+			    ColumnBinding(proj.table_index, binding_info.first.column_index), binding_info.second);
 			cardinality_estimator.AddColumnToRelationMap(binding_info.second.table_index,
 			                                             binding_info.second.column_index);
 		}
@@ -762,7 +762,7 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 				          JoinRelationSet::IsSubset(right.first, f->left_set)));
 				JoinCondition cond;
 				D_ASSERT(condition->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
-				auto &comparison = (BoundComparisonExpression &)*condition;
+				auto &comparison = condition->Cast<BoundComparisonExpression>();
 				// we need to figure out which side is which by looking at the relations available to us
 				bool invert = !JoinRelationSet::IsSubset(left.first, f->left_set);
 				cond.left = !invert ? std::move(comparison.left) : std::move(comparison.right);
@@ -841,7 +841,7 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 				// create the join condition
 				JoinCondition cond;
 				D_ASSERT(filter->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
-				auto &comparison = (BoundComparisonExpression &)*filter;
+				auto &comparison = filter->Cast<BoundComparisonExpression>();
 				// we need to figure out which side is which by looking at the relations available to us
 				cond.left = !invert ? std::move(comparison.left) : std::move(comparison.right);
 				cond.right = !invert ? std::move(comparison.right) : std::move(comparison.left);
@@ -870,7 +870,7 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 				} else {
 					D_ASSERT(node->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
 					         node->type == LogicalOperatorType::LOGICAL_ASOF_JOIN);
-					auto &comp_join = (LogicalComparisonJoin &)*node;
+					auto &comp_join = node->Cast<LogicalComparisonJoin>();
 					comp_join.conditions.push_back(std::move(cond));
 				}
 			}
@@ -949,7 +949,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	for (auto &f_op : filter_operators) {
 		if (f_op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
 		    f_op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
-			auto &join = (LogicalComparisonJoin &)*f_op;
+			auto &join = f_op->Cast<LogicalComparisonJoin>();
 			D_ASSERT(join.join_type == JoinType::INNER);
 			D_ASSERT(join.expressions.empty());
 			for (auto &cond : join.conditions) {
@@ -984,13 +984,13 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		filter_info->filter_index = i;
 		// now check if it can be used as a join predicate
 		if (filter->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
-			auto comparison = (BoundComparisonExpression *)filter.get();
+			auto &comparison = filter->Cast<BoundComparisonExpression>();
 			// extract the bindings that are required for the left and right side of the comparison
 			unordered_set<idx_t> left_bindings, right_bindings;
-			ExtractBindings(*comparison->left, left_bindings);
-			ExtractBindings(*comparison->right, right_bindings);
-			GetColumnBinding(*comparison->left, filter_info->left_binding);
-			GetColumnBinding(*comparison->right, filter_info->right_binding);
+			ExtractBindings(*comparison.left, left_bindings);
+			ExtractBindings(*comparison.right, right_bindings);
+			GetColumnBinding(*comparison.left, filter_info->left_binding);
+			GetColumnBinding(*comparison.right, filter_info->right_binding);
 			if (!left_bindings.empty() && !right_bindings.empty()) {
 				// both the left and the right side have bindings
 				// first create the relation sets, if they do not exist

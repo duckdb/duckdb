@@ -28,7 +28,7 @@ struct ApproximateQuantileBindData : public FunctionData {
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (ApproximateQuantileBindData &)other_p;
+		auto &other = other_p.Cast<ApproximateQuantileBindData>();
 		//		return quantiles == other.quantiles;
 		if (quantiles != other.quantiles) {
 			return false;

@@ -283,6 +283,7 @@ private:
 	unique_ptr<SelectNode> BindUnpivot(Binder &child_binder, PivotRef &expr,
 	                                   vector<unique_ptr<ParsedExpression>> all_columns,
 	                                   unique_ptr<ParsedExpression> &where_clause);
+	unique_ptr<BoundTableRef> BindBoundPivot(PivotRef &expr);
 
 	bool BindTableFunctionParameters(TableFunctionCatalogEntry &table_function,
 	                                 vector<unique_ptr<ParsedExpression>> &expressions, vector<LogicalType> &arguments,
@@ -304,6 +305,7 @@ private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundEmptyTableRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundExpressionListRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundCTERef &ref);
+	unique_ptr<LogicalOperator> CreatePlan(BoundPivotRef &ref);
 
 	BoundStatement BindCopyTo(CopyStatement &stmt);
 	BoundStatement BindCopyFrom(CopyStatement &stmt);

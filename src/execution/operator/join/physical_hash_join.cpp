@@ -183,7 +183,7 @@ unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ExecutionContext 
 
 SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
                                       DataChunk &input) const {
-	auto &lstate = (HashJoinLocalSinkState &)lstate_p;
+	auto &lstate = lstate_p.Cast<HashJoinLocalSinkState>();
 
 	// resolve the join keys for the right chunk
 	lstate.join_keys.Reset();
@@ -212,8 +212,8 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState
 }
 
 void PhysicalHashJoin::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {
-	auto &gstate = (HashJoinGlobalSinkState &)gstate_p;
-	auto &lstate = (HashJoinLocalSinkState &)lstate_p;
+	auto &gstate = gstate_p.Cast<HashJoinGlobalSinkState>();
+	auto &lstate = lstate_p.Cast<HashJoinLocalSinkState>();
 	if (lstate.hash_table) {
 		lstate.hash_table->GetSinkCollection().FlushAppendState(lstate.append_state);
 		lock_guard<mutex> local_ht_lock(gstate.lock);
@@ -364,7 +364,7 @@ public:
 
 SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                             GlobalSinkState &gstate) const {
-	auto &sink = (HashJoinGlobalSinkState &)gstate;
+	auto &sink = gstate.Cast<HashJoinGlobalSinkState>();
 	auto &ht = *sink.hash_table;
 
 	sink.external = ht.RequiresExternalJoin(context.config, sink.local_hash_tables);
@@ -436,7 +436,7 @@ public:
 
 unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &context) const {
 	auto &allocator = Allocator::Get(context.client);
-	auto &sink = (HashJoinGlobalSinkState &)*sink_state;
+	auto &sink = sink_state->Cast<HashJoinGlobalSinkState>();
 	auto state = make_uniq<HashJoinOperatorState>(context.client);
 	if (sink.perfect_join_executor) {
 		state->perfect_hash_join_state = sink.perfect_join_executor->GetOperatorState(context);
@@ -456,8 +456,8 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &c
 
 OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                      GlobalOperatorState &gstate, OperatorState &state_p) const {
-	auto &state = (HashJoinOperatorState &)state_p;
-	auto &sink = (HashJoinGlobalSinkState &)*sink_state;
+	auto &state = state_p.Cast<HashJoinOperatorState>();
+	auto &sink = sink_state->Cast<HashJoinGlobalSinkState>();
 	D_ASSERT(sink.finalized);
 	D_ASSERT(!sink.scanned_data);
 
@@ -766,7 +766,7 @@ HashJoinLocalSourceState::HashJoinLocalSourceState(const PhysicalHashJoin &op, A
 	auto &chunk_state = probe_local_scan.current_chunk_state;
 	chunk_state.properties = ColumnDataScanProperties::ALLOW_ZERO_COPY;
 
-	auto &sink = (HashJoinGlobalSinkState &)*op.sink_state;
+	auto &sink = op.sink_state->Cast<HashJoinGlobalSinkState>();
 	probe_chunk.Initialize(allocator, sink.probe_types);
 	join_keys.Initialize(allocator, op.condition_types);
 	payload.Initialize(allocator, op.children[0]->types);
@@ -882,9 +882,9 @@ void HashJoinLocalSourceState::ExternalScanHT(HashJoinGlobalSinkState &sink, Has
 
 void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                                LocalSourceState &lstate_p) const {
-	auto &sink = (HashJoinGlobalSinkState &)*sink_state;
-	auto &gstate = (HashJoinGlobalSourceState &)gstate_p;
-	auto &lstate = (HashJoinLocalSourceState &)lstate_p;
+	auto &sink = sink_state->Cast<HashJoinGlobalSinkState>();
+	auto &gstate = gstate_p.Cast<HashJoinGlobalSourceState>();
+	auto &lstate = lstate_p.Cast<HashJoinLocalSourceState>();
 	sink.scanned_data = true;
 
 	if (!sink.external && !IsRightOuterJoin(join_type)) {

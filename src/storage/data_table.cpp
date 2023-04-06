@@ -366,7 +366,8 @@ idx_t LocateErrorIndex(bool is_append, const ManagedSelection &matches) {
 
 	D_ASSERT(failed_index != DConstants::INVALID_INDEX);
 	D_ASSERT(index->type == IndexType::ART);
-	auto &art_index = (ART &)*index;
+	auto &art_index = index->Cast<ART>();
+	;
 	auto key_name = art_index.GenerateErrorKeyName(input, failed_index);
 	auto exception_msg = art_index.GenerateConstraintErrorMessage(verify_type, key_name);
 	throw ConstraintException(exception_msg);

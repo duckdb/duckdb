@@ -28,7 +28,7 @@ unique_ptr<GlobalSinkState> PhysicalCreateType::GetGlobalSinkState(ClientContext
 
 SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
                                         DataChunk &input) const {
-	auto &gstate = (CreateTypeGlobalState &)gstate_p;
+	auto &gstate = gstate_p.Cast<CreateTypeGlobalState>();
 	idx_t total_row_count = gstate.size + input.size();
 	if (total_row_count > NumericLimits<uint32_t>::Maximum()) {
 		throw InvalidInputException("Attempted to create ENUM of size %llu, which exceeds the maximum size of %llu",
@@ -74,14 +74,14 @@ unique_ptr<GlobalSourceState> PhysicalCreateType::GetGlobalSourceState(ClientCon
 
 void PhysicalCreateType::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                                  LocalSourceState &lstate) const {
-	auto &state = (CreateTypeSourceState &)gstate;
+	auto &state = gstate.Cast<CreateTypeSourceState>();
 	if (state.finished) {
 		return;
 	}
 
 	if (IsSink()) {
 		D_ASSERT(info->type == LogicalType::INVALID);
-		auto &g_sink_state = (CreateTypeGlobalState &)*sink_state;
+		auto &g_sink_state = sink_state->Cast<CreateTypeGlobalState>();
 		info->type = LogicalType::ENUM(info->name, g_sink_state.result, g_sink_state.size);
 	}
 
