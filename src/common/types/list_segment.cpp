@@ -61,12 +61,11 @@ static bool *GetNullMask(const ListSegment *segment) {
 }
 
 static uint16_t GetCapacityForNewSegment(uint16_t capacity) {
-	D_ASSERT(capacity > 0);
-	D_ASSERT(NextPowerOfTwo(capacity - 1) == capacity);
-	if (capacity >= uint16_t(16384)) {
-		return uint16_t(32768);
+	auto next_power_of_two = idx_t(capacity) * 2;
+	if (next_power_of_two >= NumericLimits<uint16_t>::Maximum()) {
+		return capacity;
 	}
-	return capacity * 2;
+	return uint16_t(next_power_of_two);
 }
 
 //===--------------------------------------------------------------------===//
