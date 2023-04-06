@@ -50,13 +50,12 @@ static bool *GetNullMask(const ListSegment *segment) {
 	return (bool *)(((char *)segment) + sizeof(ListSegment));
 }
 
-static uint16_t GetCapacityForNewSegment(const LinkedList *linked_list) {
-
+static uint16_t GetCapacityForNewSegment(const LinkedList &linked_list) {
 	// consecutive segments grow by the power of two
 	uint16_t capacity = 4;
-	if (linked_list->last_segment) {
-		auto next_power_of_two = linked_list->last_segment->capacity * 2;
-		capacity = next_power_of_two < 65536 ? next_power_of_two : linked_list->last_segment->capacity;
+	if (linked_list.last_segment) {
+		auto next_power_of_two = linked_list.last_segment->capacity * 2;
+		capacity = next_power_of_two < 65536 ? next_power_of_two : linked_list.last_segment->capacity;
 	}
 	return capacity;
 }
@@ -112,28 +111,28 @@ static ListSegment *CreateStructSegment(WriteDataToSegment &write_data_to_segmen
 }
 
 static ListSegment *GetSegment(WriteDataToSegment &write_data_to_segment, Allocator &allocator,
-                               vector<AllocatedData> &owning_vector, LinkedList *linked_list) {
+                               vector<AllocatedData> &owning_vector, LinkedList &linked_list) {
 
 	ListSegment *segment = nullptr;
 
 	// determine segment
-	if (!linked_list->last_segment) {
+	if (!linked_list.last_segment) {
 		// empty linked list, create the first (and last) segment
 		auto capacity = GetCapacityForNewSegment(linked_list);
 		segment = write_data_to_segment.create_segment(write_data_to_segment, allocator, owning_vector, capacity);
-		linked_list->first_segment = segment;
-		linked_list->last_segment = segment;
+		linked_list.first_segment = segment;
+		linked_list.last_segment = segment;
 
-	} else if (linked_list->last_segment->capacity == linked_list->last_segment->count) {
+	} else if (linked_list.last_segment->capacity == linked_list.last_segment->count) {
 		// the last segment of the linked list is full, create a new one and append it
 		auto capacity = GetCapacityForNewSegment(linked_list);
 		segment = write_data_to_segment.create_segment(write_data_to_segment, allocator, owning_vector, capacity);
-		linked_list->last_segment->next = segment;
-		linked_list->last_segment = segment;
+		linked_list.last_segment->next = segment;
+		linked_list.last_segment = segment;
 
 	} else {
 		// the last segment of the linked list is not full, append the data to it
-		segment = linked_list->last_segment;
+		segment = linked_list.last_segment;
 	}
 
 	D_ASSERT(segment);
@@ -194,7 +193,7 @@ static void WriteDataToVarcharSegment(WriteDataToSegment &write_data_to_segment,
 	auto child_segments = Load<LinkedList>((data_ptr_t)GetListChildData(segment));
 	for (char &c : str_t.GetString()) {
 		auto child_segment =
-		    GetSegment(write_data_to_segment.child_functions.back(), allocator, owning_vector, &child_segments);
+		    GetSegment(write_data_to_segment.child_functions.back(), allocator, owning_vector, child_segments);
 		auto data = GetPrimitiveData<char>(child_segment);
 		data[child_segment->count] = c;
 		child_segment->count++;
@@ -236,7 +235,7 @@ static void WriteDataToListSegment(WriteDataToSegment &write_data_to_segment, Al
 		D_ASSERT(write_data_to_segment.child_functions.size() == 1);
 		for (idx_t child_idx = 0; child_idx < list_entry.length; child_idx++) {
 			auto source_idx_child = list_entry.offset + child_idx;
-			write_data_to_segment.child_functions[0].AppendRow(allocator, owning_vector, &child_segments, child_vector,
+			write_data_to_segment.child_functions[0].AppendRow(allocator, owning_vector, child_segments, child_vector,
 			                                                   source_idx_child, lists_size);
 		}
 		// store the updated linked list
@@ -270,7 +269,7 @@ static void WriteDataToStructSegment(WriteDataToSegment &write_data_to_segment, 
 	}
 }
 
-void WriteDataToSegment::AppendRow(Allocator &allocator, vector<AllocatedData> &owning_vector, LinkedList *linked_list,
+void WriteDataToSegment::AppendRow(Allocator &allocator, vector<AllocatedData> &owning_vector, LinkedList &linked_list,
                                    Vector &input, idx_t &entry_idx, idx_t &count) {
 
 	D_ASSERT(input.GetVectorType() == VectorType::FLAT_VECTOR);
@@ -279,7 +278,7 @@ void WriteDataToSegment::AppendRow(Allocator &allocator, vector<AllocatedData> &
 	write_data_to_segment.segment_function(write_data_to_segment, allocator, owning_vector, segment, input, entry_idx,
 	                                       count);
 
-	linked_list->total_capacity++;
+	linked_list.total_capacity++;
 	segment->count++;
 }
 
@@ -386,7 +385,7 @@ static void ReadDataFromListSegment(ReadDataFromSegment &read_data_from_segment,
 
 	// recurse into the linked list of child values
 	D_ASSERT(read_data_from_segment.child_functions.size() == 1);
-	read_data_from_segment.child_functions[0].BuildListVector(&linked_child_list, child_vector, starting_offset);
+	read_data_from_segment.child_functions[0].BuildListVector(linked_child_list, child_vector, starting_offset);
 	ListVector::SetListSize(result, offset);
 }
 
@@ -415,18 +414,18 @@ static void ReadDataFromStructSegment(ReadDataFromSegment &read_data_from_segmen
 	}
 }
 
-void ReadDataFromSegment::BuildListVector(LinkedList *linked_list, Vector &result, idx_t &initial_total_count) {
+void ReadDataFromSegment::BuildListVector(LinkedList &linked_list, Vector &result, idx_t &initial_total_count) {
 	auto &read_data_from_segment = *this;
 	idx_t total_count = initial_total_count;
-	while (linked_list->first_segment) {
-		auto segment = linked_list->first_segment;
+	while (linked_list.first_segment) {
+		auto segment = linked_list.first_segment;
 		read_data_from_segment.segment_function(read_data_from_segment, segment, result, total_count);
 
 		total_count += segment->count;
-		linked_list->first_segment = segment->next;
+		linked_list.first_segment = segment->next;
 	}
 
-	linked_list->last_segment = nullptr;
+	linked_list.last_segment = nullptr;
 }
 
 template <class T>
@@ -458,7 +457,7 @@ static ListSegment *CopyDataFromListSegment(CopyDataFromSegment &copy_data_from_
 	// recurse to copy the linked child list
 	auto target_linked_child_list = Load<LinkedList>((data_ptr_t)GetListChildData(target));
 	D_ASSERT(copy_data_from_segment.child_functions.size() == 1);
-	copy_data_from_segment.child_functions[0].CopyLinkedList(&source_linked_child_list, target_linked_child_list,
+	copy_data_from_segment.child_functions[0].CopyLinkedList(source_linked_child_list, target_linked_child_list,
 	                                                         allocator, owning_vector);
 
 	// store the updated linked list
@@ -489,10 +488,10 @@ static ListSegment *CopyDataFromStructSegment(CopyDataFromSegment &copy_data_fro
 	return target;
 }
 
-void CopyDataFromSegment::CopyLinkedList(const LinkedList *source_list, LinkedList &target_list, Allocator &allocator,
+void CopyDataFromSegment::CopyLinkedList(const LinkedList &source_list, LinkedList &target_list, Allocator &allocator,
                                          vector<AllocatedData> &owning_vector) {
 	auto &copy_data_from_segment = *this;
-	auto source_segment = source_list->first_segment;
+	auto source_segment = source_list.first_segment;
 
 	while (source_segment) {
 		auto target_segment =

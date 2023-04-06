@@ -43,7 +43,6 @@ struct ListBindData : public FunctionData {
 };
 
 ListBindData::ListBindData(const LogicalType &stype_p) : stype(stype_p) {
-
 	// always unnest once because the result vector is of type LIST
 	auto type = ListType::GetChildType(stype_p);
 	GetSegmentDataFunctions(write_data_to_segment, read_data_from_segment, copy_data_from_segment, type);
@@ -53,24 +52,22 @@ ListBindData::~ListBindData() {
 }
 
 struct ListAggState {
-	LinkedList *linked_list;
+	LinkedList linked_list;
 	vector<AllocatedData> *owning_vector;
 };
 
 struct ListFunction {
 	template <class STATE>
 	static void Initialize(STATE *state) {
-		state->linked_list = nullptr;
+		state->linked_list.total_capacity = 0;
+		state->linked_list.first_segment = nullptr;
+		state->linked_list.last_segment = nullptr;
 		state->owning_vector = nullptr;
 	}
 
 	template <class STATE>
 	static void Destroy(STATE *state) {
 		D_ASSERT(state);
-		if (state->linked_list) {
-			delete state->linked_list;
-			state->linked_list = nullptr;
-		}
 		if (state->owning_vector) {
 			state->owning_vector->clear();
 			delete state->owning_vector;
@@ -97,8 +94,7 @@ static void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_d
 
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
-		if (!state->linked_list) {
-			state->linked_list = new LinkedList(0, nullptr, nullptr);
+		if (!state->owning_vector) {
 			state->owning_vector = new vector<AllocatedData>;
 		}
 		list_bind_data.write_data_to_segment.AppendRow(aggr_input_data.allocator, *state->owning_vector,
@@ -116,31 +112,30 @@ static void ListCombineFunction(Vector &state, Vector &combined, AggregateInputD
 	auto combined_ptr = FlatVector::GetData<ListAggState *>(combined);
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states_ptr[sdata.sel->get_index(i)];
-		if (!state->linked_list) {
+		if (state->linked_list.total_capacity == 0) {
 			// NULL, no need to append.
 			continue;
 		}
 		D_ASSERT(state->owning_vector);
 
-		if (!combined_ptr[i]->linked_list) {
-			combined_ptr[i]->linked_list = new LinkedList(0, nullptr, nullptr);
+		if (!combined_ptr[i]->owning_vector) {
 			combined_ptr[i]->owning_vector = new vector<AllocatedData>;
 		}
 		auto owning_vector = combined_ptr[i]->owning_vector;
 
 		// copy the linked list of the state
-		auto copied_linked_list = LinkedList(state->linked_list->total_capacity, nullptr, nullptr);
+		auto copied_linked_list = LinkedList(state->linked_list.total_capacity, nullptr, nullptr);
 		list_bind_data.copy_data_from_segment.CopyLinkedList(state->linked_list, copied_linked_list,
 		                                                     aggr_input_data.allocator, *owning_vector);
 
 		// append the copied linked list to the combined state
-		if (combined_ptr[i]->linked_list->last_segment) {
-			combined_ptr[i]->linked_list->last_segment->next = copied_linked_list.first_segment;
+		if (combined_ptr[i]->linked_list.last_segment) {
+			combined_ptr[i]->linked_list.last_segment->next = copied_linked_list.first_segment;
 		} else {
-			combined_ptr[i]->linked_list->first_segment = copied_linked_list.first_segment;
+			combined_ptr[i]->linked_list.first_segment = copied_linked_list.first_segment;
 		}
-		combined_ptr[i]->linked_list->last_segment = copied_linked_list.last_segment;
-		combined_ptr[i]->linked_list->total_capacity += copied_linked_list.total_capacity;
+		combined_ptr[i]->linked_list.last_segment = copied_linked_list.last_segment;
+		combined_ptr[i]->linked_list.total_capacity += copied_linked_list.total_capacity;
 	}
 }
 
@@ -162,13 +157,13 @@ static void ListFinalize(Vector &state_vector, AggregateInputData &aggr_input_da
 		auto state = states[sdata.sel->get_index(i)];
 		const auto rid = i + offset;
 		result_data[rid].offset = total_len;
-		if (!state->linked_list) {
+		if (state->linked_list.total_capacity == 0) {
 			mask.SetInvalid(rid);
 			result_data[rid].length = 0;
 			continue;
 		}
 		// set the length and offset of this list in the result vector
-		auto total_capacity = state->linked_list->total_capacity;
+		auto total_capacity = state->linked_list.total_capacity;
 		result_data[rid].length = total_capacity;
 		total_len += total_capacity;
 	}
@@ -178,7 +173,7 @@ static void ListFinalize(Vector &state_vector, AggregateInputData &aggr_input_da
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
 		const auto rid = i + offset;
-		if (!state->linked_list) {
+		if (state->linked_list.total_capacity == 0) {
 			continue;
 		}
 

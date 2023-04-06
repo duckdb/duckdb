@@ -48,20 +48,20 @@ struct WriteDataToSegment {
 	create_segment_t create_segment;
 	write_data_to_segment_t segment_function;
 	vector<WriteDataToSegment> child_functions;
-	void AppendRow(Allocator &allocator, vector<AllocatedData> &owning_vector, LinkedList *linked_list, Vector &input,
+	void AppendRow(Allocator &allocator, vector<AllocatedData> &owning_vector, LinkedList &linked_list, Vector &input,
 	               idx_t &entry_idx, idx_t &count);
 };
 
 struct ReadDataFromSegment {
 	read_data_from_segment_t segment_function;
 	vector<ReadDataFromSegment> child_functions;
-	void BuildListVector(LinkedList *linked_list, Vector &result, idx_t &initial_total_count);
+	void BuildListVector(LinkedList &linked_list, Vector &result, idx_t &initial_total_count);
 };
 
 struct CopyDataFromSegment {
 	copy_data_from_segment_t segment_function;
 	vector<CopyDataFromSegment> child_functions;
-	void CopyLinkedList(const LinkedList *source_list, LinkedList &target_list, Allocator &allocator,
+	void CopyLinkedList(const LinkedList &source_list, LinkedList &target_list, Allocator &allocator,
 	                    vector<AllocatedData> &owning_vector);
 };
 
