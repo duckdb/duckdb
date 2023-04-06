@@ -1207,8 +1207,6 @@ static void doNegateFloat(PGValue *v);
 static PGNode *makeAndExpr(PGNode *lexpr, PGNode *rexpr, int location);
 static PGNode *makeOrExpr(PGNode *lexpr, PGNode *rexpr, int location);
 static PGNode *makeNotExpr(PGNode *expr, int location);
-static PGNode *makeSQLValueFunction(PGSQLValueFunctionOp op, int32_t typmod,
-								  int location);
 static void SplitColQualList(PGList *qualList,
 							 PGList **constraintList, PGCollateClause **collClause,
 							 core_yyscan_t yyscanner);
@@ -1287,7 +1285,7 @@ typedef union YYSTYPE
 	PGViewCheckOption viewcheckoption;
 }
 /* Line 193 of yacc.c.  */
-#line 1291 "third_party/libpg_query/grammar/grammar_out.cpp"
+#line 1289 "third_party/libpg_query/grammar/grammar_out.cpp"
 	YYSTYPE;
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
 # define YYSTYPE_IS_DECLARED 1
@@ -1312,7 +1310,7 @@ typedef struct YYLTYPE
 
 
 /* Line 216 of yacc.c.  */
-#line 1316 "third_party/libpg_query/grammar/grammar_out.cpp"
+#line 1314 "third_party/libpg_query/grammar/grammar_out.cpp"
 
 #ifdef short
 # undef short
@@ -28814,7 +28812,7 @@ yyreduce:
 
 
 /* Line 1267 of yacc.c.  */
-#line 28818 "third_party/libpg_query/grammar/grammar_out.cpp"
+#line 28816 "third_party/libpg_query/grammar/grammar_out.cpp"
       default: break;
     }
   YY_SYMBOL_PRINT ("-> $$ =", yyr1[yyn], &yyval, &yyloc);
@@ -29592,18 +29590,6 @@ static PGNode *
 makeNotExpr(PGNode *expr, int location)
 {
 	return (PGNode *) makeBoolExpr(PG_NOT_EXPR, list_make1(expr), location);
-}
-
-static PGNode *
-makeSQLValueFunction(PGSQLValueFunctionOp op, int32_t typmod, int location)
-{
-	PGSQLValueFunction *svf = makeNode(PGSQLValueFunction);
-
-	svf->op = op;
-	/* svf->type will be filled during parse analysis */
-	svf->typmod = typmod;
-	svf->location = location;
-	return (PGNode *) svf;
 }
 
 /* Separate PGConstraint nodes from COLLATE clauses in a */
