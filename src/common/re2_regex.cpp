@@ -1,4 +1,4 @@
-#include <vector>
+#include "duckdb/common/vector.hpp"
 #include <memory>
 
 #include "duckdb/common/re2_regex.hpp"
