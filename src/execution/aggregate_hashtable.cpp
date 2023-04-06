@@ -630,6 +630,7 @@ void GroupedAggregateHashTable::Finalize() {
 
 	// Early release hashes (not needed for partition/scan) and data collection (will be pinned again when scanning)
 	hashes_hdl.Destroy();
+	data_collection->FinalizePinState(td_append_state.pin_state);
 	data_collection->Unpin();
 
 	is_finalized = true;
