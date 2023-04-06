@@ -271,7 +271,14 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(idx_t depth, idx_t
 	if (repetition_type == FieldRepetitionType::REPEATED) {
 		max_repeat++;
 	}
-
+	if (s_ele.__isset.type && s_ele.__isset.num_children) {
+		throw InvalidInputException(
+		    "Node has both num_children and type set - this violates the Parquet spec (corrupted file)");
+	}
+	if (!s_ele.__isset.type && !s_ele.__isset.num_children) {
+		throw InvalidInputException(
+		    "Node has neither num_children nor type set - this violates the Parquet spec (corrupted file)");
+	}
 	if (!s_ele.__isset.type) { // inner node
 		if (s_ele.num_children == 0) {
 			throw InvalidInputException("Node has no children but should");
