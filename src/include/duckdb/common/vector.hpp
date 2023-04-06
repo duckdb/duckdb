@@ -35,6 +35,9 @@ public:
 		original::clear();
 	}
 
+	// Because we create the other constructor, the implicitly created constructor
+	// gets deleted, so we have to be explicit
+	vector() = default;
 	vector(original &&other) : original(std::move(other)) {
 	}
 
