@@ -25,7 +25,6 @@ public:
 	                             vector<unique_ptr<Expression>> aggregates, vector<unique_ptr<Expression>> groups,
 	                             const vector<unique_ptr<BaseStatistics>> &group_stats, vector<idx_t> required_bits,
 	                             idx_t estimated_cardinality);
-	~PhysicalPerfectHashAggregate() override;
 
 	//! The groups
 	vector<unique_ptr<Expression>> groups;

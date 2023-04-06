@@ -171,10 +171,6 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 	}
 }
 
-PhysicalHashAggregate::~PhysicalHashAggregate() {
-	sink_state.reset();
-}
-
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//

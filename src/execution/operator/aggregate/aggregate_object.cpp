@@ -6,8 +6,10 @@ namespace duckdb {
 AggregateObject::AggregateObject(AggregateFunction function, FunctionData *bind_data, idx_t child_count,
                                  idx_t payload_size, AggregateType aggr_type, PhysicalType return_type,
                                  Expression *filter)
-    : function(std::move(function)), bind_data(bind_data), child_count(child_count), payload_size(payload_size),
-      aggr_type(aggr_type), return_type(return_type), filter(filter) {
+    : function(std::move(function)),
+      bind_data_wrapper(bind_data ? make_shared<FunctionDataWrapper>(bind_data->Copy()) : nullptr),
+      child_count(child_count), payload_size(payload_size), aggr_type(aggr_type), return_type(return_type),
+      filter(filter) {
 }
 
 AggregateObject::AggregateObject(BoundAggregateExpression *aggr)

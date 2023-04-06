@@ -15,13 +15,24 @@ namespace duckdb {
 
 class BoundAggregateExpression;
 
+struct FunctionDataWrapper {
+	FunctionDataWrapper(unique_ptr<FunctionData> function_data_p) : function_data(std::move(function_data_p)) {
+	}
+
+	unique_ptr<FunctionData> function_data;
+};
+
 struct AggregateObject {
 	AggregateObject(AggregateFunction function, FunctionData *bind_data, idx_t child_count, idx_t payload_size,
 	                AggregateType aggr_type, PhysicalType return_type, Expression *filter = nullptr);
 	AggregateObject(BoundAggregateExpression *aggr);
 
+	FunctionData *GetFunctionData() const {
+		return bind_data_wrapper ? bind_data_wrapper->function_data.get() : nullptr;
+	}
+
 	AggregateFunction function;
-	FunctionData *bind_data;
+	shared_ptr<FunctionDataWrapper> bind_data_wrapper;
 	idx_t child_count;
 	idx_t payload_size;
 	AggregateType aggr_type;

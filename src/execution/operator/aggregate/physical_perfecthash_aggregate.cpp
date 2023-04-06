@@ -69,10 +69,6 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
 	}
 }
 
-PhysicalPerfectHashAggregate::~PhysicalPerfectHashAggregate() {
-	sink_state.reset();
-}
-
 unique_ptr<PerfectAggregateHashTable> PhysicalPerfectHashAggregate::CreateHT(Allocator &allocator,
                                                                              ClientContext &context) const {
 	return make_uniq<PerfectAggregateHashTable>(context, allocator, group_types, payload_types, aggregate_objects,

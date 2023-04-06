@@ -40,7 +40,7 @@ void RowOperations::DestroyStates(RowOperationsState &state, RowLayout &layout, 
 	VectorOperations::AddInPlace(addresses, layout.GetAggrOffset(), count);
 	for (const auto &aggr : layout.GetAggregates()) {
 		if (aggr.function.destructor) {
-			AggregateInputData aggr_input_data(aggr.bind_data, state.allocator);
+			AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.allocator);
 			aggr.function.destructor(addresses, aggr_input_data, count);
 		}
 		// Move to the next aggregate state
@@ -50,7 +50,7 @@ void RowOperations::DestroyStates(RowOperationsState &state, RowLayout &layout, 
 
 void RowOperations::UpdateStates(RowOperationsState &state, AggregateObject &aggr, Vector &addresses,
                                  DataChunk &payload, idx_t arg_idx, idx_t count) {
-	AggregateInputData aggr_input_data(aggr.bind_data, state.allocator);
+	AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.allocator);
 	aggr.function.update(aggr.child_count == 0 ? nullptr : &payload.data[arg_idx], aggr_input_data, aggr.child_count,
 	                     addresses, count);
 }
@@ -79,7 +79,7 @@ void RowOperations::CombineStates(RowOperationsState &state, RowLayout &layout, 
 	VectorOperations::AddInPlace(targets, layout.GetAggrOffset(), count);
 	for (auto &aggr : layout.GetAggregates()) {
 		D_ASSERT(aggr.function.combine);
-		AggregateInputData aggr_input_data(aggr.bind_data, state.allocator);
+		AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.allocator);
 		aggr.function.combine(sources, targets, aggr_input_data, count);
 
 		// Move to the next aggregate states
@@ -97,7 +97,7 @@ void RowOperations::FinalizeStates(RowOperationsState &state, RowLayout &layout,
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &target = result.data[aggr_idx + i];
 		auto &aggr = aggregates[i];
-		AggregateInputData aggr_input_data(aggr.bind_data, state.allocator);
+		AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.allocator);
 		aggr.function.finalize(addresses, aggr_input_data, target, result.size(), 0);
 
 		// Move to the next aggregate state
