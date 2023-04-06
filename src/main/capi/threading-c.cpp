@@ -5,7 +5,7 @@ using duckdb::DatabaseData;
 
 struct CAPITaskState {
 	CAPITaskState(duckdb::DatabaseInstance &db)
-	    : db(db), marker(duckdb::make_unique<duckdb::atomic<bool>>(true)), execute_count(0) {
+	    : db(db), marker(duckdb::make_uniq<duckdb::atomic<bool>>(true)), execute_count(0) {
 	}
 
 	duckdb::DatabaseInstance &db;

@@ -346,9 +346,9 @@ idx_t SingleFileBlockManager::FreeBlocks() {
 unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileBuffer *source_buffer) {
 	if (source_buffer) {
 		D_ASSERT(source_buffer->AllocSize() == Storage::BLOCK_ALLOC_SIZE);
-		return make_unique<Block>(*source_buffer, block_id);
+		return make_uniq<Block>(*source_buffer, block_id);
 	} else {
-		return make_unique<Block>(Allocator::Get(db), block_id);
+		return make_uniq<Block>(Allocator::Get(db), block_id);
 	}
 }
 

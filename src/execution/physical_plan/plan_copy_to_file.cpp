@@ -13,8 +13,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile
 		op.file_path += ".tmp";
 	}
 	// COPY from select statement to file
-	auto copy =
-	    make_unique<PhysicalCopyToFile>(op.types, op.function, std::move(op.bind_data), op.estimated_cardinality);
+	auto copy = make_uniq<PhysicalCopyToFile>(op.types, op.function, std::move(op.bind_data), op.estimated_cardinality);
 	copy->file_path = op.file_path;
 	copy->use_tmp_file = op.use_tmp_file;
 	copy->allow_overwrite = op.allow_overwrite;

@@ -21,11 +21,11 @@ CreateViewRelation::CreateViewRelation(shared_ptr<Relation> child_p, string sche
 }
 
 BoundStatement CreateViewRelation::Bind(Binder &binder) {
-	auto select = make_unique<SelectStatement>();
+	auto select = make_uniq<SelectStatement>();
 	select->node = child->GetQueryNode();
 
 	CreateStatement stmt;
-	auto info = make_unique<CreateViewInfo>();
+	auto info = make_uniq<CreateViewInfo>();
 	info->query = std::move(select);
 	info->view_name = view_name;
 	info->temporary = temporary;

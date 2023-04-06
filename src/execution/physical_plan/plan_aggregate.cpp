@@ -107,7 +107,7 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 		}
 	}
 	for (auto &expression : op.expressions) {
-		auto &aggregate = (BoundAggregateExpression &)*expression;
+		auto &aggregate = expression->Cast<BoundAggregateExpression>();
 		if (aggregate.IsDistinct() || !aggregate.function.combine) {
 			// distinct aggregates are not supported in perfect hash aggregates
 			return false;
@@ -129,7 +129,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 		// special case: aggregate entire columns together
 		bool use_simple_aggregation = true;
 		for (auto &expression : op.expressions) {
-			auto &aggregate = (BoundAggregateExpression &)*expression;
+			auto &aggregate = expression->Cast<BoundAggregateExpression>();
 			if (!aggregate.function.simple_update) {
 				// unsupported aggregate for simple aggregation: use hash aggregation
 				use_simple_aggregation = false;
@@ -137,10 +137,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 			}
 		}
 		if (use_simple_aggregation) {
-			groupby = make_unique_base<PhysicalOperator, PhysicalUngroupedAggregate>(
-			    op.types, std::move(op.expressions), op.estimated_cardinality);
+			groupby = make_uniq_base<PhysicalOperator, PhysicalUngroupedAggregate>(op.types, std::move(op.expressions),
+			                                                                       op.estimated_cardinality);
 		} else {
-			groupby = make_unique_base<PhysicalOperator, PhysicalHashAggregate>(
+			groupby = make_uniq_base<PhysicalOperator, PhysicalHashAggregate>(
 			    context, op.types, std::move(op.expressions), op.estimated_cardinality);
 		}
 	} else {
@@ -148,11 +148,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 		// use a perfect hash aggregate if possible
 		vector<idx_t> required_bits;
 		if (CanUsePerfectHashAggregate(context, op, required_bits)) {
-			groupby = make_unique_base<PhysicalOperator, PhysicalPerfectHashAggregate>(
+			groupby = make_uniq_base<PhysicalOperator, PhysicalPerfectHashAggregate>(
 			    context, op.types, std::move(op.expressions), std::move(op.groups), std::move(op.group_stats),
 			    std::move(required_bits), op.estimated_cardinality);
 		} else {
-			groupby = make_unique_base<PhysicalOperator, PhysicalHashAggregate>(
+			groupby = make_uniq_base<PhysicalOperator, PhysicalHashAggregate>(
 			    context, op.types, std::move(op.expressions), std::move(op.groups), std::move(op.grouping_sets),
 			    std::move(op.grouping_functions), op.estimated_cardinality);
 		}
@@ -170,29 +170,29 @@ PhysicalPlanGenerator::ExtractAggregateExpressions(unique_ptr<PhysicalOperator> 
 
 	// bind sorted aggregates
 	for (auto &aggr : aggregates) {
-		auto &bound_aggr = (BoundAggregateExpression &)*aggr;
+		auto &bound_aggr = aggr->Cast<BoundAggregateExpression>();
 		if (bound_aggr.order_bys) {
 			// sorted aggregate!
 			FunctionBinder::BindSortedAggregate(context, bound_aggr, groups);
 		}
 	}
 	for (auto &group : groups) {
-		auto ref = make_unique<BoundReferenceExpression>(group->return_type, expressions.size());
+		auto ref = make_uniq<BoundReferenceExpression>(group->return_type, expressions.size());
 		types.push_back(group->return_type);
 		expressions.push_back(std::move(group));
 		group = std::move(ref);
 	}
 	for (auto &aggr : aggregates) {
-		auto &bound_aggr = (BoundAggregateExpression &)*aggr;
+		auto &bound_aggr = aggr->Cast<BoundAggregateExpression>();
 		for (auto &child : bound_aggr.children) {
-			auto ref = make_unique<BoundReferenceExpression>(child->return_type, expressions.size());
+			auto ref = make_uniq<BoundReferenceExpression>(child->return_type, expressions.size());
 			types.push_back(child->return_type);
 			expressions.push_back(std::move(child));
 			child = std::move(ref);
 		}
 		if (bound_aggr.filter) {
 			auto &filter = bound_aggr.filter;
-			auto ref = make_unique<BoundReferenceExpression>(filter->return_type, expressions.size());
+			auto ref = make_uniq<BoundReferenceExpression>(filter->return_type, expressions.size());
 			types.push_back(filter->return_type);
 			expressions.push_back(std::move(filter));
 			bound_aggr.filter = std::move(ref);
@@ -202,7 +202,7 @@ PhysicalPlanGenerator::ExtractAggregateExpressions(unique_ptr<PhysicalOperator> 
 		return child;
 	}
 	auto projection =
-	    make_unique<PhysicalProjection>(std::move(types), std::move(expressions), child->estimated_cardinality);
+	    make_uniq<PhysicalProjection>(std::move(types), std::move(expressions), child->estimated_cardinality);
 	projection->children.push_back(std::move(child));
 	return std::move(projection);
 }

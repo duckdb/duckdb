@@ -55,11 +55,11 @@ static unique_ptr<FunctionData> PragmaTableInfoBind(ClientContext &context, Tabl
 	// look up the table name in the catalog
 	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
 	auto entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, qname.catalog, qname.schema, qname.name);
-	return make_unique<PragmaTableFunctionData>(entry);
+	return make_uniq<PragmaTableFunctionData>(entry);
 }
 
 unique_ptr<GlobalTableFunctionState> PragmaTableInfoInit(ClientContext &context, TableFunctionInitInput &input) {
-	return make_unique<PragmaTableOperatorData>();
+	return make_uniq<PragmaTableOperatorData>();
 }
 
 static void CheckConstraints(TableCatalogEntry *table, const ColumnDefinition &column, bool &out_not_null,
@@ -71,14 +71,14 @@ static void CheckConstraints(TableCatalogEntry *table, const ColumnDefinition &c
 	for (auto &constraint : table->GetConstraints()) {
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
-			auto &not_null = (NotNullConstraint &)*constraint;
+			auto &not_null = constraint->Cast<NotNullConstraint>();
 			if (not_null.index == column.Logical()) {
 				out_not_null = true;
 			}
 			break;
 		}
 		case ConstraintType::UNIQUE: {
-			auto &unique = (UniqueConstraint &)*constraint;
+			auto &unique = constraint->Cast<UniqueConstraint>();
 
 			if (unique.is_primary_key) {
 				if (unique.index == column.Logical()) {
@@ -165,7 +165,7 @@ static void PragmaTableInfoView(PragmaTableOperatorData &data, ViewCatalogEntry 
 
 static void PragmaTableInfoFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &bind_data = (PragmaTableFunctionData &)*data_p.bind_data;
-	auto &state = (PragmaTableOperatorData &)*data_p.global_state;
+	auto &state = data_p.global_state->Cast<PragmaTableOperatorData>();
 	switch (bind_data.entry->type) {
 	case CatalogType::TABLE_ENTRY:
 		PragmaTableInfoTable(state, (TableCatalogEntry *)bind_data.entry, output);

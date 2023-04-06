@@ -32,7 +32,7 @@ BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, i
 		if (expr.HasError()) {
 			return expr;
 		}
-		auto group_ref = make_unique<BoundColumnRefExpression>(
+		auto group_ref = make_uniq<BoundColumnRefExpression>(
 		    expr.expression->return_type, ColumnBinding(node.group_index, node.groups.group_expressions.size()));
 		node.groups.group_expressions.push_back(std::move(expr.expression));
 		return BindResult(std::move(group_ref));

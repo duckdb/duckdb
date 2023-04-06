@@ -311,7 +311,7 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 
 			// Get the pointer to the object
 			PyObject *val = src_ptr[source_idx];
-			if (bind_data.pandas_type == PandasType::OBJECT && !PyUnicode_CheckExact(val)) {
+			if (bind_data.pandas_type == PandasType::OBJECT && !py::isinstance<py::str>(val)) {
 				if (val == Py_None) {
 					out_mask.SetInvalid(row);
 					continue;
@@ -344,7 +344,7 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 			}
 			// Python 3 string representation:
 			// https://github.com/python/cpython/blob/3a8fdb28794b2f19f6c8464378fb8b46bce1f5f4/Include/cpython/unicodeobject.h#L79
-			if (!PyUnicode_CheckExact(val)) {
+			if (!py::isinstance<py::str>(val)) {
 				out_mask.SetInvalid(row);
 				continue;
 			}
@@ -435,7 +435,7 @@ void VectorConversion::BindPandas(const DBConfig &config, py::handle df, vector<
 
 		if (column_has_mask) {
 			// masked object, fetch the internal data and mask array
-			bind_data.mask = make_unique<NumPyArrayWrapper>(get_fun(df_columns[col_idx]).attr("array").attr("_mask"));
+			bind_data.mask = make_uniq<NumPyArrayWrapper>(get_fun(df_columns[col_idx]).attr("array").attr("_mask"));
 		}
 
 		auto column = get_fun(df_columns[col_idx]);

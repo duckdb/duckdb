@@ -13,34 +13,6 @@
 
 namespace duckdb {
 
-static ExpressionType WindowToExpressionType(string &fun_name) {
-	if (fun_name == "rank") {
-		return ExpressionType::WINDOW_RANK;
-	} else if (fun_name == "rank_dense" || fun_name == "dense_rank") {
-		return ExpressionType::WINDOW_RANK_DENSE;
-	} else if (fun_name == "percent_rank") {
-		return ExpressionType::WINDOW_PERCENT_RANK;
-	} else if (fun_name == "row_number") {
-		return ExpressionType::WINDOW_ROW_NUMBER;
-	} else if (fun_name == "first_value" || fun_name == "first") {
-		return ExpressionType::WINDOW_FIRST_VALUE;
-	} else if (fun_name == "last_value" || fun_name == "last") {
-		return ExpressionType::WINDOW_LAST_VALUE;
-	} else if (fun_name == "nth_value") {
-		return ExpressionType::WINDOW_NTH_VALUE;
-	} else if (fun_name == "cume_dist") {
-		return ExpressionType::WINDOW_CUME_DIST;
-	} else if (fun_name == "lead") {
-		return ExpressionType::WINDOW_LEAD;
-	} else if (fun_name == "lag") {
-		return ExpressionType::WINDOW_LAG;
-	} else if (fun_name == "ntile") {
-		return ExpressionType::WINDOW_NTILE;
-	}
-
-	return ExpressionType::WINDOW_AGGREGATE;
-}
-
 void Transformer::TransformWindowDef(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr) {
 	D_ASSERT(window_spec);
 	D_ASSERT(expr);
@@ -100,7 +72,7 @@ bool Transformer::ExpressionIsEmptyStar(ParsedExpression &expr) {
 	if (expr.expression_class != ExpressionClass::STAR) {
 		return false;
 	}
-	auto &star = (StarExpression &)expr;
+	auto &star = expr.Cast<StarExpression>();
 	if (!star.columns && star.exclude_list.empty() && star.replace_list.empty()) {
 		return true;
 	}
@@ -155,7 +127,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			throw ParserException("window functions are not allowed in window definitions");
 		}
 
-		const auto win_fun_type = WindowToExpressionType(lowercase_name);
+		const auto win_fun_type = WindowExpression::WindowToExpressionType(lowercase_name);
 		if (win_fun_type == ExpressionType::INVALID) {
 			throw InternalException("Unknown/unsupported window function");
 		}
@@ -179,7 +151,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			throw ParserException("IGNORE NULLS is not supported for windowed aggregates");
 		}
 
-		auto expr = make_unique<WindowExpression>(win_fun_type, std::move(catalog), std::move(schema), lowercase_name);
+		auto expr = make_uniq<WindowExpression>(win_fun_type, std::move(catalog), std::move(schema), lowercase_name);
 		expr->ignore_nulls = root->agg_ignore_nulls;
 
 		if (root->agg_filter) {
@@ -251,7 +223,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		filter_expr = TransformExpression(root->agg_filter);
 	}
 
-	auto order_bys = make_unique<OrderModifier>();
+	auto order_bys = make_uniq<OrderModifier>();
 	TransformOrderBy(root->agg_order, order_bys->orders);
 
 	// Ordered aggregates can be either WITHIN GROUP or after the function arguments
@@ -291,7 +263,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		if (children.size() != 3) {
 			throw ParserException("Wrong number of arguments to IF.");
 		}
-		auto expr = make_unique<CaseExpression>();
+		auto expr = make_uniq<CaseExpression>();
 		CaseCheck check;
 		check.when_expr = std::move(children[0]);
 		check.then_expr = std::move(children[1]);
@@ -299,7 +271,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		expr->else_expr = std::move(children[2]);
 		return std::move(expr);
 	} else if (lowercase_name == "construct_array") {
-		auto construct_array = make_unique<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR);
+		auto construct_array = make_uniq<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR);
 		construct_array->children = std::move(children);
 		return std::move(construct_array);
 	} else if (lowercase_name == "ifnull") {
@@ -308,7 +280,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		}
 
 		//  Two-argument COALESCE
-		auto coalesce_op = make_unique<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
+		auto coalesce_op = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
 		coalesce_op->children.push_back(std::move(children[0]));
 		coalesce_op->children.push_back(std::move(children[1]));
 		return std::move(coalesce_op);
@@ -320,13 +292,15 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		auto arg_expr = children[0].get();
 		auto &order_by = order_bys->orders[0];
 		if (arg_expr->Equals(order_by.expression.get())) {
-			auto sense = make_unique<ConstantExpression>(EnumSerializer::EnumToString(order_by.type));
-			auto nulls = make_unique<ConstantExpression>(EnumSerializer::EnumToString(order_by.null_order));
+			auto sense = make_uniq<ConstantExpression>(EnumSerializer::EnumToString(order_by.type));
+			auto nulls = make_uniq<ConstantExpression>(EnumSerializer::EnumToString(order_by.null_order));
 			order_bys = nullptr;
-			auto unordered = make_unique<FunctionExpression>(
-			    catalog, schema, lowercase_name.c_str(), std::move(children), std::move(filter_expr),
-			    std::move(order_bys), root->agg_distinct, false, root->export_state);
+			auto unordered = make_uniq<FunctionExpression>(catalog, schema, lowercase_name.c_str(), std::move(children),
+			                                               std::move(filter_expr), std::move(order_bys),
+			                                               root->agg_distinct, false, root->export_state);
 			lowercase_name = "list_sort";
+			order_bys.reset();
+			filter_expr.reset();
 			children.clear();
 			children.emplace_back(std::move(unordered));
 			children.emplace_back(std::move(sense));
@@ -334,56 +308,16 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		}
 	}
 
-	auto function = make_unique<FunctionExpression>(std::move(catalog), std::move(schema), lowercase_name.c_str(),
-	                                                std::move(children), std::move(filter_expr), std::move(order_bys),
-	                                                root->agg_distinct, false, root->export_state);
+	auto function = make_uniq<FunctionExpression>(std::move(catalog), std::move(schema), lowercase_name.c_str(),
+	                                              std::move(children), std::move(filter_expr), std::move(order_bys),
+	                                              root->agg_distinct, false, root->export_state);
 	function->query_location = root->location;
 
 	return std::move(function);
 }
 
-static string SQLValueOpToString(duckdb_libpgquery::PGSQLValueFunctionOp op) {
-	switch (op) {
-	case duckdb_libpgquery::PG_SVFOP_CURRENT_DATE:
-		return "current_date";
-	case duckdb_libpgquery::PG_SVFOP_CURRENT_TIME:
-		return "get_current_time";
-	case duckdb_libpgquery::PG_SVFOP_CURRENT_TIME_N:
-		return "current_time_n";
-	case duckdb_libpgquery::PG_SVFOP_CURRENT_TIMESTAMP:
-		return "get_current_timestamp";
-	case duckdb_libpgquery::PG_SVFOP_CURRENT_TIMESTAMP_N:
-		return "current_timestamp_n";
-	case duckdb_libpgquery::PG_SVFOP_LOCALTIME:
-		return "current_localtime";
-	case duckdb_libpgquery::PG_SVFOP_LOCALTIME_N:
-		return "current_localtime_n";
-	case duckdb_libpgquery::PG_SVFOP_LOCALTIMESTAMP:
-		return "current_localtimestamp";
-	case duckdb_libpgquery::PG_SVFOP_LOCALTIMESTAMP_N:
-		return "current_localtimestamp_n";
-	case duckdb_libpgquery::PG_SVFOP_CURRENT_ROLE:
-		return "current_role";
-	case duckdb_libpgquery::PG_SVFOP_CURRENT_USER:
-		return "current_user";
-	case duckdb_libpgquery::PG_SVFOP_USER:
-		return "user";
-	case duckdb_libpgquery::PG_SVFOP_SESSION_USER:
-		return "session_user";
-	case duckdb_libpgquery::PG_SVFOP_CURRENT_CATALOG:
-		return "current_catalog";
-	case duckdb_libpgquery::PG_SVFOP_CURRENT_SCHEMA:
-		return "current_schema";
-	default:
-		throw InternalException("Could not find named SQL value function specification " + to_string((int)op));
-	}
-}
-
 unique_ptr<ParsedExpression> Transformer::TransformSQLValueFunction(duckdb_libpgquery::PGSQLValueFunction *node) {
-	D_ASSERT(node);
-	vector<unique_ptr<ParsedExpression>> children;
-	auto fname = SQLValueOpToString(node->op);
-	return make_unique<FunctionExpression>(fname, std::move(children));
+	throw InternalException("SQL value functions should not be emitted by the parser");
 }
 
 } // namespace duckdb

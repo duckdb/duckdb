@@ -25,12 +25,12 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalCreateTable::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<CreateTableSourceState>();
+	return make_uniq<CreateTableSourceState>();
 }
 
 void PhysicalCreateTable::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                                   LocalSourceState &lstate) const {
-	auto &state = (CreateTableSourceState &)gstate;
+	auto &state = gstate.Cast<CreateTableSourceState>();
 	if (state.finished) {
 		return;
 	}

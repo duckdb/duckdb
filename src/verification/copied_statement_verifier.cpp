@@ -7,7 +7,7 @@ CopiedStatementVerifier::CopiedStatementVerifier(unique_ptr<SQLStatement> statem
 }
 
 unique_ptr<StatementVerifier> CopiedStatementVerifier::Create(const SQLStatement &statement) {
-	return make_unique<CopiedStatementVerifier>(statement.Copy());
+	return make_uniq<CopiedStatementVerifier>(statement.Copy());
 }
 
 } // namespace duckdb

@@ -37,9 +37,9 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 			string error;
 			unique_ptr<ColumnRefExpression> colref;
 			if (function.catalog.empty()) {
-				colref = make_unique<ColumnRefExpression>(function.schema);
+				colref = make_uniq<ColumnRefExpression>(function.schema);
 			} else {
-				colref = make_unique<ColumnRefExpression>(function.schema, function.catalog);
+				colref = make_uniq<ColumnRefExpression>(function.schema, function.catalog);
 			}
 			auto new_colref = QualifyColumnName(*colref, error);
 			if (error.empty()) {
@@ -101,7 +101,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		return BindResult(error);
 	}
 	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
-		return BindResult(make_unique<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
+		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
 	}
 
 	// all children bound successfully
@@ -155,7 +155,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	}
 
 	// bind the lambda parameter
-	auto &lambda_expr = (LambdaExpression &)*function.children[1];
+	auto &lambda_expr = function.children[1]->Cast<LambdaExpression>();
 	BindResult bind_lambda_result = BindExpression(lambda_expr, depth, true, list_child_type);
 
 	if (bind_lambda_result.HasError()) {
@@ -163,12 +163,11 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	} else {
 		// successfully bound: replace the node with a BoundExpression
 		auto alias = function.children[1]->alias;
-		function.children[1] = make_unique<BoundExpression>(std::move(bind_lambda_result.expression));
-		auto be = (BoundExpression *)function.children[1].get();
-		D_ASSERT(be);
-		be->alias = alias;
+		function.children[1] = make_uniq<BoundExpression>(std::move(bind_lambda_result.expression));
+		auto &be = function.children[1]->Cast<BoundExpression>();
+		be.alias = alias;
 		if (!alias.empty()) {
-			be->expr->alias = alias;
+			be.expr->alias = alias;
 		}
 	}
 
@@ -176,7 +175,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 		return BindResult(error);
 	}
 	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
-		return BindResult(make_unique<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
+		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
 	}
 
 	// all children bound successfully
@@ -199,7 +198,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 		throw BinderException(binder.FormatError(function, error));
 	}
 
-	auto &bound_function_expr = (BoundFunctionExpression &)*result;
+	auto &bound_function_expr = result->Cast<BoundFunctionExpression>();
 	D_ASSERT(bound_function_expr.children.size() == 2);
 
 	// remove the lambda expression from the children
@@ -220,7 +219,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 			bound_function_expr.function.arguments.push_back(binding.types[0]);
 			auto bound_lambda_param =
-			    make_unique<BoundReferenceExpression>(binding.names[0], binding.types[0], lambda_index);
+			    make_uniq<BoundReferenceExpression>(binding.names[0], binding.types[0], lambda_index);
 			bound_function_expr.children.push_back(std::move(bound_lambda_param));
 		}
 	}
