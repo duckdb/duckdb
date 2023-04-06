@@ -29,6 +29,10 @@ public:
 
 	unique_ptr<NodeStatistics> PropagateStatistics(unique_ptr<LogicalOperator> &node_ptr);
 
+	column_binding_map_t<unique_ptr<BaseStatistics>> GetStatisticsMap() {
+		return std::move(statistics_map);
+	}
+
 private:
 	//! Propagate statistics through an operator
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalOperator &node, unique_ptr<LogicalOperator> *node_ptr);

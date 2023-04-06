@@ -1,7 +1,8 @@
-add_subdirectory(matcher)
+add_subdirectory(compressed_materialization)
 add_subdirectory(join_order)
-add_subdirectory(pushdown)
+add_subdirectory(matcher)
 add_subdirectory(pullup)
+add_subdirectory(pushdown)
 add_subdirectory(rule)
 add_subdirectory(statistics)
 
@@ -9,6 +10,7 @@ add_library_unity(
   duckdb_optimizer
   OBJECT
   common_aggregate_optimizer.cpp
+  compressed_materialization_optimizer.cpp
   cse_optimizer.cpp
   deliminator.cpp
   unnest_rewriter.cpp

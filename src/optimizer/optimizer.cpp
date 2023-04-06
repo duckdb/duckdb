@@ -7,9 +7,9 @@
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/optimizer/column_lifetime_optimizer.hpp"
 #include "duckdb/optimizer/common_aggregate_optimizer.hpp"
+#include "duckdb/optimizer/compressed_materialization_optimizer.hpp"
 #include "duckdb/optimizer/cse_optimizer.hpp"
 #include "duckdb/optimizer/deliminator.hpp"
-#include "duckdb/optimizer/unnest_rewriter.hpp"
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/optimizer/filter_pullup.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
@@ -22,6 +22,7 @@
 #include "duckdb/optimizer/rule/list.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
+#include "duckdb/optimizer/unnest_rewriter.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
 
@@ -126,9 +127,17 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	});
 
 	// perform statistics propagation
+	column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map;
 	RunOptimizer(OptimizerType::STATISTICS_PROPAGATION, [&]() {
 		StatisticsPropagator propagator(context);
 		propagator.PropagateStatistics(plan);
+		statistics_map = propagator.GetStatisticsMap();
+	});
+
+	// Compress data based on statistics for materializing operators
+	RunOptimizer(OptimizerType::COMPRESSED_MATERIALIZATION, [&]() {
+		CompressedMaterializationOptimizer optimizer(context, std::move(statistics_map));
+		plan = optimizer.Optimize(std::move(plan));
 	});
 
 	// then we extract common subexpressions inside the different operators
