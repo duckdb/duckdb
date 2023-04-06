@@ -416,7 +416,7 @@ void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 
 	auto append_count = lstate.local_collection->GetTotalRows();
 
-	if (append_count < LocalStorage::MERGE_THRESHOLD) {
+	if (append_count < RowGroup::ROW_GROUP_SIZE) {
 		// we have few rows - append to the local storage directly
 		lock_guard<mutex> lock(gstate.lock);
 		gstate.insert_count += append_count;

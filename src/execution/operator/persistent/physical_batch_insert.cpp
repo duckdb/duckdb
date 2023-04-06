@@ -94,6 +94,16 @@ public:
 	}
 };
 
+enum class RowGroupBatchType : uint8_t { FLUSHED, NOT_FLUSHED };
+struct RowGroupBatchEntry {
+	RowGroupBatchEntry(unique_ptr<RowGroupCollection> collection_p, RowGroupBatchType type)
+	    : collection(std::move(collection_p)), type(type) {
+	}
+
+	unique_ptr<RowGroupCollection> collection;
+	RowGroupBatchType type;
+};
+
 class BatchInsertGlobalState : public GlobalSinkState {
 public:
 	explicit BatchInsertGlobalState() : insert_count(0) {
@@ -102,38 +112,80 @@ public:
 	mutex lock;
 	DuckTableEntry *table;
 	idx_t insert_count;
-	map<idx_t, unique_ptr<RowGroupCollection>> collections;
+	map<idx_t, RowGroupBatchEntry> collections;
 
-	bool CheckMergeInternal(idx_t batch_index, vector<unique_ptr<RowGroupCollection>> *result, idx_t *merge_count) {
-		auto entry = collections.find(batch_index);
-		if (entry == collections.end()) {
-			// no collection at this index
-			return false;
+	void GetMergeCount(idx_t min_batch_index, idx_t &merge_count) {
+		idx_t extra_count = 0;
+		for (auto &entry : collections) {
+			if (entry.first >= min_batch_index) {
+				break;
+			}
+			if (entry.second.type == RowGroupBatchType::FLUSHED) {
+				// already flushed: cannot flush anything here
+				extra_count = 0;
+				continue;
+			}
+			extra_count += entry.second.collection->GetTotalRows();
 		}
-		auto row_count = entry->second->GetTotalRows();
-		if (row_count >= LocalStorage::MERGE_THRESHOLD) {
-			// the collection at this batch index is large and has already been written
-			return false;
+		merge_count += extra_count;
+	}
+	void GetMergeCollections(idx_t min_batch_index, vector<unique_ptr<RowGroupCollection>> &result, idx_t batch_index,
+	                         unique_ptr<RowGroupCollection> current_collection) {
+		while (!collections.empty()) {
+			auto minimum_entry = collections.begin();
+			if (minimum_entry->first >= min_batch_index) {
+				break;
+			}
+			if (current_collection && minimum_entry->first > batch_index) {
+				result.push_back(std::move(current_collection));
+			}
+			if (!minimum_entry->second.collection) {
+				throw InternalException("GetMergeCollections - empty entry in collection set");
+			}
+			result.push_back(std::move(minimum_entry->second.collection));
+			collections.erase(minimum_entry);
 		}
-		// we can merge this collection!
-		if (merge_count) {
-			// add the count
-			D_ASSERT(!result);
-			*merge_count += row_count;
-		} else {
-			// add the
-			D_ASSERT(result);
-			result->push_back(std::move(entry->second));
-			collections.erase(batch_index);
+		if (current_collection) {
+			result.push_back(std::move(current_collection));
 		}
-		return true;
 	}
 
-	bool CheckMerge(idx_t batch_index, idx_t &merge_count) {
-		return CheckMergeInternal(batch_index, nullptr, &merge_count);
-	}
-	bool CheckMerge(idx_t batch_index, vector<unique_ptr<RowGroupCollection>> &result) {
-		return CheckMergeInternal(batch_index, &result, nullptr);
+	void FindMergeCollections(idx_t min_batch_index, optional_idx &merged_batch_index,
+	                          vector<unique_ptr<RowGroupCollection>> &result) {
+		bool merge = false;
+		vector<idx_t> batch_indexes;
+		idx_t total_count = 0;
+		for (auto &entry : collections) {
+			if (entry.first >= min_batch_index) {
+				// we have an entry AFTER the min_batch_index
+				merge = true;
+				break;
+			}
+			if (entry.second.type == RowGroupBatchType::FLUSHED) {
+				// already flushed: cannot flush anything here
+				if (!batch_indexes.empty()) {
+					merge = true;
+					break;
+				}
+				total_count = 0;
+				continue;
+			}
+			// not flushed - add to set of indexes to flush
+			total_count += entry.second.collection->GetTotalRows();
+			batch_indexes.push_back(entry.first);
+		}
+		if (total_count >= LocalStorage::MERGE_THRESHOLD) {
+			merge = true;
+		}
+		if (merge && !batch_indexes.empty()) {
+			merged_batch_index = batch_indexes[0];
+			for (auto index : batch_indexes) {
+				auto entry = collections.find(index);
+				D_ASSERT(entry->second.collection);
+				result.push_back(std::move(entry->second.collection));
+				collections.erase(entry);
+			}
+		}
 	}
 
 	unique_ptr<RowGroupCollection> MergeCollections(ClientContext &context,
@@ -158,71 +210,36 @@ public:
 	void AddCollection(ClientContext &context, idx_t batch_index, idx_t min_batch_index,
 	                   unique_ptr<RowGroupCollection> current_collection, OptimisticDataWriter *writer = nullptr,
 	                   bool *written_to_disk = nullptr) {
+		optional_idx merged_batch_index;
 		vector<unique_ptr<RowGroupCollection>> merge_collections;
-		idx_t merge_count;
 		{
 			lock_guard<mutex> l(lock);
 			auto new_count = current_collection->GetTotalRows();
 			insert_count += new_count;
 			VerifyUniqueBatch(batch_index);
-			if (writer && new_count < LocalStorage::MERGE_THRESHOLD) {
-				// we are inserting a small collection that has not yet been written to disk
-				// check if there are any collections with adjacent batch indexes that we can merge together
 
-				// first check how many rows we will end up with by performing such a merge
-				// check backwards
-				merge_count = new_count;
-				idx_t start_batch_index;
-				idx_t end_batch_index;
-				for (start_batch_index = batch_index; start_batch_index > 0; start_batch_index--) {
-					if (!CheckMerge(start_batch_index - 1, merge_count)) {
-						break;
-					}
-				}
-				// check forwards
-				for (end_batch_index = batch_index;; end_batch_index++) {
-					if (!CheckMerge(end_batch_index + 1, merge_count)) {
-						break;
-					}
-				}
-				// merging together creates a big enough row group
-				// merge!
-				if (merge_count >= RowGroup::ROW_GROUP_SIZE) {
-					// gather the row groups to merge
-					// note that we need to gather them in order of batch index
-					for (idx_t i = start_batch_index; i <= end_batch_index; i++) {
-						if (i == batch_index) {
-							merge_collections.push_back(std::move(current_collection));
-							current_collection.reset();
-							continue;
-						}
-						auto can_merge = CheckMerge(i, merge_collections);
-						if (!can_merge) {
-							throw InternalException("Could not merge row group in batch insert?!");
-						}
-					}
-				}
-			}
-			if (merge_collections.empty()) {
-				// no collections to merge together - add the collection to the batch index
-				collections[batch_index] = std::move(current_collection);
-				current_collection.reset();
+			// add the collection to the batch index
+			auto batch_type =
+			    new_count < LocalStorage::MERGE_THRESHOLD ? RowGroupBatchType::NOT_FLUSHED : RowGroupBatchType::FLUSHED;
+			collections.insert(make_pair(batch_index, RowGroupBatchEntry(std::move(current_collection), batch_type)));
+			if (writer) {
+				FindMergeCollections(min_batch_index, merged_batch_index, merge_collections);
 			}
 		}
 		if (!merge_collections.empty()) {
 			// merge together the collections
 			D_ASSERT(writer);
 			auto final_collection = MergeCollections(context, std::move(merge_collections), *writer);
-			D_ASSERT(final_collection->GetTotalRows() == merge_count);
-			D_ASSERT(final_collection->GetTotalRows() >= RowGroup::ROW_GROUP_SIZE);
 			if (written_to_disk) {
 				*written_to_disk = true;
 			}
-			// add the merged-together collection to the
+			// add the merged-together collection to the set of batch indexes
 			{
 				lock_guard<mutex> l(lock);
-				VerifyUniqueBatch(batch_index);
-				collections[batch_index] = std::move(final_collection);
+				VerifyUniqueBatch(merged_batch_index.GetIndex());
+				collections.insert(
+				    make_pair(merged_batch_index.GetIndex(),
+				              RowGroupBatchEntry(std::move(final_collection), RowGroupBatchType::FLUSHED)));
 			}
 		}
 	}
@@ -350,14 +367,14 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 
 	auto &storage = gstate.table->GetStorage();
 	for (auto &collection : gstate.collections) {
-		if (collection.second->GetTotalRows() < LocalStorage::MERGE_THRESHOLD) {
-			// this collection has very few rows: add it to the merge set
+		if (collection.second.type == RowGroupBatchType::NOT_FLUSHED) {
+			// this collection has not been flushed: add it to the merge set
 			if (!current_merger) {
 				current_merger = make_uniq<CollectionMerger>(context);
 			}
-			current_merger->AddCollection(std::move(collection.second));
+			current_merger->AddCollection(std::move(collection.second.collection));
 		} else {
-			// this collection has a lot of rows: it does not need to be merged
+			// this collection has been flushed: it does not need to be merged
 			// create a separate collection merger only for this entry
 			if (current_merger) {
 				// we have small collections remaining: flush them
@@ -365,7 +382,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 				current_merger.reset();
 			}
 			auto larger_merger = make_uniq<CollectionMerger>(context);
-			larger_merger->AddCollection(std::move(collection.second));
+			larger_merger->AddCollection(std::move(collection.second.collection));
 			mergers.push_back(std::move(larger_merger));
 		}
 	}
