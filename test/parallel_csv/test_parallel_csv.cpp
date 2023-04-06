@@ -25,7 +25,7 @@ const string tbl_zst = "tbl.zst";
 
 const string csv_extensions[5] = {csv, tsv, csv_gz, csv_zst, tbl_zst};
 
-bool debug = true;
+bool debug = false;
 bool RunFull(std::string &path, duckdb::Connection &conn, std::set<std::string> *skip = nullptr,
              const string &add_parameters = "") {
 	bool single_threaded_passed;
@@ -182,7 +182,10 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/zstd", "[paralle
 }
 
 TEST_CASE("Test Parallel CSV All Files - data/csv", "[parallel-csv][.]") {
-	RunTestOnFolder("data/csv/");
+	std::set<std::string> skip;
+	// This file is too big, executing on it is slow and unreliable
+	skip.insert("data/csv/sequences.csv.gz");
+	RunTestOnFolder("data/csv/", &skip);
 }
 
 TEST_CASE("Test Parallel CSV All Files - data/csv/decimal_separators", "[parallel-csv][.]") {

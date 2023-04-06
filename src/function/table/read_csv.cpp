@@ -276,6 +276,7 @@ public:
 		running_threads = MaxThreads();
 	}
 	ParallelCSVGlobalState() {
+		running_threads = MaxThreads();
 	}
 
 	~ParallelCSVGlobalState() override {
@@ -344,7 +345,7 @@ private:
 	//! Current batch index
 	idx_t batch_index = 0;
 	//! Forces parallelism for small CSV Files, should only be used for testing.
-	bool force_parallelism;
+	bool force_parallelism = false;
 	//! Current (Global) position of CSV
 	idx_t current_csv_position = 0;
 	//! Current File Number
@@ -363,7 +364,6 @@ idx_t ParallelCSVGlobalState::MaxThreads() const {
 	if (force_parallelism) {
 		return system_threads;
 	}
-
 	idx_t one_mb = 1000000; // We initialize max one thread per Mb
 	idx_t threads_per_mb = first_file_size / one_mb + 1;
 	if (threads_per_mb < system_threads) {
@@ -782,7 +782,6 @@ static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &con
 		}
 	}
 	bind_data.single_threaded = bind_data.single_threaded || !file_exists;
-
 	if (bind_data.single_threaded) {
 		return SingleThreadedCSVInit(context, input);
 	} else {
