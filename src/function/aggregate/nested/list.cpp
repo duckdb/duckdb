@@ -73,7 +73,6 @@ ListBindData::~ListBindData() {
 
 struct ListAggState {
 	LinkedList *linked_list;
-	LogicalType *type;
 	vector<AllocatedData> *owning_vector;
 };
 
@@ -81,7 +80,6 @@ struct ListFunction {
 	template <class STATE>
 	static void Initialize(STATE *state) {
 		state->linked_list = nullptr;
-		state->type = nullptr;
 		state->owning_vector = nullptr;
 	}
 
@@ -91,10 +89,6 @@ struct ListFunction {
 		if (state->linked_list) {
 			delete state->linked_list;
 			state->linked_list = nullptr;
-		}
-		if (state->type) {
-			delete state->type;
-			state->type = nullptr;
 		}
 		if (state->owning_vector) {
 			state->owning_vector->clear();
@@ -124,10 +118,8 @@ static void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_d
 		auto state = states[sdata.sel->get_index(i)];
 		if (!state->linked_list) {
 			state->linked_list = new LinkedList(0, nullptr, nullptr);
-			state->type = new LogicalType(input.GetType());
 			state->owning_vector = new vector<AllocatedData>;
 		}
-		D_ASSERT(state->type);
 		list_bind_data.write_data_to_segment.AppendRow(aggr_input_data.allocator, *state->owning_vector,
 		                                               state->linked_list, input, i, count);
 	}
@@ -147,13 +139,11 @@ static void ListCombineFunction(Vector &state, Vector &combined, AggregateInputD
 			// NULL, no need to append.
 			continue;
 		}
-		D_ASSERT(state->type);
 		D_ASSERT(state->owning_vector);
 
 		if (!combined_ptr[i]->linked_list) {
 			combined_ptr[i]->linked_list = new LinkedList(0, nullptr, nullptr);
 			combined_ptr[i]->owning_vector = new vector<AllocatedData>;
-			combined_ptr[i]->type = new LogicalType(*state->type);
 		}
 		auto owning_vector = combined_ptr[i]->owning_vector;
 
@@ -202,9 +192,7 @@ static void ListFinalize(Vector &state_vector, AggregateInputData &aggr_input_da
 		result_data[rid].offset = total_len;
 		total_len += total_capacity;
 
-		D_ASSERT(state->type);
-
-		Vector aggr_vector(*state->type, total_capacity);
+		Vector aggr_vector(ListType::GetChildType(list_bind_data.stype), total_capacity);
 		// FIXME: this is a workaround because the constructor of a vector does not set the size
 		// of the validity mask, and by default it is set to STANDARD_VECTOR_SIZE
 		// ListVector::Reserve only increases the validity mask, if (to_reserve > capacity),
