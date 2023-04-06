@@ -29,7 +29,7 @@ void WindowAggregateState::AggegateFinal(Vector &result, idx_t rid) {
 	aggregate.finalize(statev, aggr_input_data, result, 1, rid);
 
 	if (aggregate.destructor) {
-		aggregate.destructor(statev, 1);
+		aggregate.destructor(statev, aggr_input_data, 1);
 	}
 }
 
@@ -208,6 +208,7 @@ WindowSegmentTree::~WindowSegmentTree() {
 		// nothing to destroy
 		return;
 	}
+	AggregateInputData aggr_input_data(bind_info, Allocator::DefaultAllocator());
 	// call the destructor for all the intermediate states
 	data_ptr_t address_data[STANDARD_VECTOR_SIZE];
 	Vector addresses(LogicalType::POINTER, (data_ptr_t)address_data);
@@ -215,16 +216,16 @@ WindowSegmentTree::~WindowSegmentTree() {
 	for (idx_t i = 0; i < internal_nodes; i++) {
 		address_data[count++] = data_ptr_t(levels_flat_native.get() + i * state.size());
 		if (count == STANDARD_VECTOR_SIZE) {
-			aggregate.destructor(addresses, count);
+			aggregate.destructor(addresses, aggr_input_data, count);
 			count = 0;
 		}
 	}
 	if (count > 0) {
-		aggregate.destructor(addresses, count);
+		aggregate.destructor(addresses, aggr_input_data, count);
 	}
 
 	if (aggregate.window && UseWindowAPI()) {
-		aggregate.destructor(statev, 1);
+		aggregate.destructor(statev, aggr_input_data, 1);
 	}
 }
 
@@ -237,7 +238,7 @@ void WindowSegmentTree::AggegateFinal(Vector &result, idx_t rid) {
 	aggregate.finalize(statev, aggr_input_data, result, 1, rid);
 
 	if (aggregate.destructor) {
-		aggregate.destructor(statev, 1);
+		aggregate.destructor(statev, aggr_input_data, 1);
 	}
 }
 

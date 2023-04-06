@@ -41,6 +41,7 @@ struct AggregateState {
 			auto state = unique_ptr<data_t[]>(new data_t[aggr.function.state_size()]);
 			aggr.function.initialize(state.get());
 			aggregates.push_back(std::move(state));
+			bind_data.push_back(aggr.bind_info.get());
 			destructors.push_back(aggr.function.destructor);
 #ifdef DEBUG
 			counts.push_back(0);
@@ -56,7 +57,8 @@ struct AggregateState {
 			Vector state_vector(Value::POINTER((uintptr_t)aggregates[i].get()));
 			state_vector.SetVectorType(VectorType::FLAT_VECTOR);
 
-			destructors[i](state_vector, 1);
+			AggregateInputData aggr_input_data(bind_data[i], Allocator::DefaultAllocator());
+			destructors[i](state_vector, aggr_input_data, 1);
 		}
 	}
 
@@ -67,6 +69,8 @@ struct AggregateState {
 
 	//! The aggregate values
 	vector<unique_ptr<data_t[]>> aggregates;
+	//! The bind data
+	vector<FunctionData *> bind_data;
 	//! The destructors
 	vector<aggregate_destructor_t> destructors;
 	//! Counts (used for verification)

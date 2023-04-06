@@ -40,7 +40,8 @@ void RowOperations::DestroyStates(RowLayout &layout, Vector &addresses, idx_t co
 	VectorOperations::AddInPlace(addresses, layout.GetAggrOffset(), count);
 	for (const auto &aggr : layout.GetAggregates()) {
 		if (aggr.function.destructor) {
-			aggr.function.destructor(addresses, count);
+			AggregateInputData aggr_input_data(aggr.bind_data, Allocator::DefaultAllocator());
+			aggr.function.destructor(addresses, aggr_input_data, count);
 		}
 		// Move to the next aggregate state
 		VectorOperations::AddInPlace(addresses, aggr.payload_size, count);

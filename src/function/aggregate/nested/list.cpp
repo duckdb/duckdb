@@ -64,7 +64,7 @@ struct ListFunction {
 	}
 
 	template <class STATE>
-	static void Destroy(STATE *state) {
+	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
 		D_ASSERT(state);
 		if (state->owning_vector) {
 			state->owning_vector->clear();
@@ -179,7 +179,7 @@ static void ListFinalize(Vector &state_vector, AggregateInputData &aggr_input_da
 		list_bind_data.functions.BuildListVector(state->linked_list, result_child, current_offset);
 
 		// now destroy the state (for parallel destruction)
-		ListFunction::Destroy<ListAggState>(state);
+		ListFunction::Destroy<ListAggState>(aggr_input_data, state);
 	}
 	ListVector::SetListSize(result, total_len);
 }
