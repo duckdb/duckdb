@@ -1179,7 +1179,7 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 		auto arrow_dataset = materialized.attr("to_arrow")();
 		CreateArrowScan(arrow_dataset, *table_function, children, config);
 	} else if ((numpytype = DuckDBPyConnection::IsAcceptedNumpyObject(entry)) != NumpyObjectType::INVALID) {
-		string name = "np_" + GenerateRandomName();
+		string name = "np_" + StringUtil::GenerateRandomName();
 		py::dict data; // we will convert all the supported format to dict{"key": np.array(value)}.
 		size_t idx = 0;
 		switch (numpytype) {
@@ -1207,10 +1207,10 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 			throw NotImplementedException("Unsupported Numpy object");
 			break;
 		}
-		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)data.ptr())));
-		table_function->function = make_unique<FunctionExpression>("pandas_scan", std::move(children));
+		children.push_back(make_uniq<ConstantExpression>(Value::POINTER((uintptr_t)data.ptr())));
+		table_function->function = make_uniq<FunctionExpression>("pandas_scan", std::move(children));
 		table_function->external_dependency =
-		    make_unique<PythonDependencies>(make_unique<RegisteredObject>(entry), make_unique<RegisteredObject>(data));
+		    make_uniq<PythonDependencies>(make_uniq<RegisteredObject>(entry), make_uniq<RegisteredObject>(data));
 	} else {
 		std::string location = py::cast<py::str>(current_frame.attr("f_code").attr("co_filename"));
 		location += ":";
