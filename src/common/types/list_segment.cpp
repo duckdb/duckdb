@@ -387,6 +387,7 @@ static void ReadDataFromListSegment(ReadDataFromSegment &read_data_from_segment,
 	// recurse into the linked list of child values
 	D_ASSERT(read_data_from_segment.child_functions.size() == 1);
 	read_data_from_segment.child_functions[0].BuildListVector(&linked_child_list, child_vector, starting_offset);
+	ListVector::SetListSize(result, offset);
 }
 
 static void ReadDataFromStructSegment(ReadDataFromSegment &read_data_from_segment, const ListSegment *segment,

@@ -1,30 +1,11 @@
 #include "duckdb/common/pair.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/list_segment.hpp"
 #include "duckdb/function/aggregate/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 namespace duckdb {
 
-static void InitializeValidities(Vector &vector, idx_t &capacity) {
-
-	auto &validity_mask = FlatVector::Validity(vector);
-	validity_mask.Initialize(capacity);
-
-	auto internal_type = vector.GetType().InternalType();
-	if (internal_type == PhysicalType::LIST) {
-		auto &child_vector = ListVector::GetEntry(vector);
-		InitializeValidities(child_vector, capacity);
-	} else if (internal_type == PhysicalType::STRUCT) {
-		auto &children = StructVector::GetEntries(vector);
-		for (auto &child : children) {
-			InitializeValidities(*child, capacity);
-		}
-	}
-}
-
 static void RecursiveFlatten(Vector &vector, idx_t &count) {
-
 	if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
 		vector.Flatten(count);
 	}
@@ -176,37 +157,38 @@ static void ListFinalize(Vector &state_vector, AggregateInputData &aggr_input_da
 	size_t total_len = ListVector::GetListSize(result);
 
 	auto &list_bind_data = aggr_input_data.bind_data->Cast<ListBindData>();
-
+	// first iterate over all of the entries and set up the list entries, plus get the newly required total length
 	for (idx_t i = 0; i < count; i++) {
-
 		auto state = states[sdata.sel->get_index(i)];
 		const auto rid = i + offset;
+		result_data[rid].offset = total_len;
 		if (!state->linked_list) {
 			mask.SetInvalid(rid);
+			result_data[rid].length = 0;
 			continue;
 		}
-
 		// set the length and offset of this list in the result vector
 		auto total_capacity = state->linked_list->total_capacity;
 		result_data[rid].length = total_capacity;
-		result_data[rid].offset = total_len;
 		total_len += total_capacity;
+	}
+	// reserve capacity, then iterate over all of the entries again and copy over the data tot he child vector
+	ListVector::Reserve(result, total_len);
+	auto &result_child = ListVector::GetEntry(result);
+	for (idx_t i = 0; i < count; i++) {
+		auto state = states[sdata.sel->get_index(i)];
+		const auto rid = i + offset;
+		if (!state->linked_list) {
+			continue;
+		}
 
-		Vector aggr_vector(ListType::GetChildType(list_bind_data.stype), total_capacity);
-		// FIXME: this is a workaround because the constructor of a vector does not set the size
-		// of the validity mask, and by default it is set to STANDARD_VECTOR_SIZE
-		// ListVector::Reserve only increases the validity mask, if (to_reserve > capacity),
-		// which will not be the case if the value passed to the constructor of aggr_vector
-		// is greater than to_reserve
-		InitializeValidities(aggr_vector, total_capacity);
-
-		idx_t total_count = 0;
-		list_bind_data.read_data_from_segment.BuildListVector(state->linked_list, aggr_vector, total_count);
-		ListVector::Append(result, aggr_vector, total_capacity);
+		idx_t current_offset = result_data[rid].offset;
+		list_bind_data.read_data_from_segment.BuildListVector(state->linked_list, result_child, current_offset);
 
 		// now destroy the state (for parallel destruction)
 		ListFunction::Destroy<ListAggState>(state);
 	}
+	ListVector::SetListSize(result, total_len);
 }
 
 unique_ptr<FunctionData> ListBindFunction(ClientContext &context, AggregateFunction &function,
