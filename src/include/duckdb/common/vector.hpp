@@ -35,6 +35,9 @@ public:
 		original::clear();
 	}
 
+	vector(original &&other) : original(std::move(other)) {
+	}
+
 	typename original::reference operator[](typename original::size_type __n) {
 #ifdef DEBUG
 		AssertIndexInBounds(__n, original::size());
