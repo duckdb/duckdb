@@ -114,6 +114,7 @@ public:
 	DUCKDB_API static string FormatStackTrace(string message = "") {
 		return (message + "\n" + GetStackTrace());
 	}
+
 private:
 	string exception_message_;
 	string raw_message_;
