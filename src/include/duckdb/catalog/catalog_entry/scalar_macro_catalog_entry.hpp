@@ -26,7 +26,7 @@ public:
 
 public:
 	//! Serialize the meta information of the ScalarMacroCatalogEntry
-	void Serialize(Serializer &serializer) override;
+	void Serialize(Serializer &serializer) const override;
 	//! Deserializes to a CreateMacroInfo
 	static unique_ptr<CreateMacroInfo> Deserialize(Deserializer &source, ClientContext &context);
 };

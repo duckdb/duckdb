@@ -38,7 +38,7 @@ unique_ptr<FunctionData> ListLambdaBindData::Copy() const {
 }
 
 bool ListLambdaBindData::Equals(const FunctionData &other_p) const {
-	auto &other = (ListLambdaBindData &)other_p;
+	auto &other = other_p.Cast<ListLambdaBindData>();
 	return lambda_expr->Equals(other.lambda_expr.get()) && stype == other.stype;
 }
 
@@ -166,8 +166,8 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 	auto list_entries = (list_entry_t *)lists_data.data;
 
 	// get the lambda expression
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	auto &info = (ListLambdaBindData &)*func_expr.bind_info;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &info = func_expr.bind_info->Cast<ListLambdaBindData>();
 	auto &lambda_expr = info.lambda_expr;
 
 	// get the child vector and child data

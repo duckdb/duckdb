@@ -17,6 +17,9 @@ namespace duckdb {
 //! LogicalGet represents a scan operation from a data source
 class LogicalGet : public LogicalOperator {
 public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_GET;
+
+public:
 	LogicalGet(idx_t table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
 	           vector<LogicalType> returned_types, vector<string> returned_names);
 

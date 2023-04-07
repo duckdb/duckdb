@@ -285,8 +285,8 @@ unique_ptr<LocalSinkState> PhysicalBatchInsert::GetLocalSinkState(ExecutionConte
 
 SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
                                          DataChunk &chunk) const {
-	auto &gstate = (BatchInsertGlobalState &)state;
-	auto &lstate = (BatchInsertLocalState &)lstate_p;
+	auto &gstate = state.Cast<BatchInsertGlobalState>();
+	auto &lstate = lstate_p.Cast<BatchInsertLocalState>();
 
 	auto table = gstate.table;
 	PhysicalInsert::ResolveDefaults(table, chunk, column_index_map, lstate.default_executor, lstate.insert_chunk);
@@ -319,8 +319,8 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkSt
 
 void PhysicalBatchInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_p,
                                   LocalSinkState &lstate_p) const {
-	auto &gstate = (BatchInsertGlobalState &)gstate_p;
-	auto &lstate = (BatchInsertLocalState &)lstate_p;
+	auto &gstate = gstate_p.Cast<BatchInsertGlobalState>();
+	auto &lstate = lstate_p.Cast<BatchInsertLocalState>();
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(this, &lstate.default_executor, "default_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
@@ -338,7 +338,7 @@ void PhysicalBatchInsert::Combine(ExecutionContext &context, GlobalSinkState &gs
 
 SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                GlobalSinkState &gstate_p) const {
-	auto &gstate = (BatchInsertGlobalState &)gstate_p;
+	auto &gstate = gstate_p.Cast<BatchInsertGlobalState>();
 
 	// in the finalize, do a final pass over all of the collections we created and try to merge smaller collections
 	// together
@@ -403,8 +403,8 @@ unique_ptr<GlobalSourceState> PhysicalBatchInsert::GetGlobalSourceState(ClientCo
 
 void PhysicalBatchInsert::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                                   LocalSourceState &lstate) const {
-	auto &state = (BatchInsertSourceState &)gstate;
-	auto &insert_gstate = (BatchInsertGlobalState &)*sink_state;
+	auto &state = gstate.Cast<BatchInsertSourceState>();
+	auto &insert_gstate = sink_state->Cast<BatchInsertGlobalState>();
 	if (state.finished) {
 		return;
 	}

@@ -63,7 +63,7 @@ PandasScanFunction::PandasScanFunction()
 idx_t PandasScanFunction::PandasScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
                                                   LocalTableFunctionState *local_state,
                                                   GlobalTableFunctionState *global_state) {
-	auto &data = (PandasScanLocalState &)*local_state;
+	auto &data = local_state->Cast<PandasScanLocalState>();
 	return data.batch_index;
 }
 
@@ -111,8 +111,8 @@ bool PandasScanFunction::PandasScanParallelStateNext(ClientContext &context, con
                                                      LocalTableFunctionState *lstate,
                                                      GlobalTableFunctionState *gstate) {
 	auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
-	auto &parallel_state = (PandasScanGlobalState &)*gstate;
-	auto &state = (PandasScanLocalState &)*lstate;
+	auto &parallel_state = gstate->Cast<PandasScanGlobalState>();
+	auto &state = lstate->Cast<PandasScanLocalState>();
 
 	lock_guard<mutex> parallel_lock(parallel_state.lock);
 	if (parallel_state.position >= bind_data.row_count) {
@@ -142,7 +142,7 @@ double PandasScanFunction::PandasProgress(ClientContext &context, const Function
 //! hence this needs to be GIL-safe, i.e. no methods that create Python objects are allowed
 void PandasScanFunction::PandasScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = (PandasScanFunctionData &)*data_p.bind_data;
-	auto &state = (PandasScanLocalState &)*data_p.local_state;
+	auto &state = data_p.local_state->Cast<PandasScanLocalState>();
 
 	if (state.start >= state.end) {
 		if (!PandasScanParallelStateNext(context, data_p.bind_data, data_p.local_state, data_p.global_state)) {

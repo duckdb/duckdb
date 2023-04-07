@@ -16,6 +16,9 @@ namespace duckdb {
 //! flattening, and involves performing duplicate elimination on the LEFT side which is then pushed into the RIGHT side.
 class LogicalDelimJoin : public LogicalComparisonJoin {
 public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_DELIM_JOIN;
+
+public:
 	explicit LogicalDelimJoin(JoinType type);
 
 	//! The set of columns that will be duplicate eliminated from the LHS and pushed into the RHS

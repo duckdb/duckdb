@@ -1043,17 +1043,17 @@ void ART::InitializeMerge(vector<FixedSizeAllocator *> &allocators, ARTFlags &fl
 	}
 }
 
-bool ART::MergeIndexes(IndexLock &state, Index *other_index) {
+bool ART::MergeIndexes(IndexLock &state, Index &other_index) {
 
-	auto other_art = (ART *)other_index;
+	auto &other_art = other_index.Cast<ART>();
 	auto allocators = GetAllocators();
-	auto other_allocators = other_art->GetAllocators();
+	auto other_allocators = other_art.GetAllocators();
 
 	if (tree->IsSet()) {
 		//  fully deserialize other_index, and traverse it to increment its buffer IDs
 		ARTFlags flags;
 		InitializeMerge(allocators, flags);
-		other_art->tree->InitializeMerge(*other_art, flags);
+		other_art.tree->InitializeMerge(other_art, flags);
 	}
 
 	// merge the node storage
@@ -1062,7 +1062,7 @@ bool ART::MergeIndexes(IndexLock &state, Index *other_index) {
 	}
 
 	// merge the ARTs
-	if (!tree->Merge(*this, *other_art->tree)) {
+	if (!tree->Merge(*this, *other_art.tree)) {
 		return false;
 	}
 	return true;

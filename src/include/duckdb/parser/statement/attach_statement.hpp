@@ -15,6 +15,9 @@ namespace duckdb {
 
 class AttachStatement : public SQLStatement {
 public:
+	static constexpr const StatementType TYPE = StatementType::ATTACH_STATEMENT;
+
+public:
 	AttachStatement();
 
 	unique_ptr<AttachInfo> info;
