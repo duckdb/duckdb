@@ -8,7 +8,11 @@
 #include <string>
 #include <regex>
 
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/vector.hpp"
+
 using duckdb::unique_ptr;
+using duckdb::vector;
 
 namespace node_duckdb {
 
@@ -32,7 +36,7 @@ Napi::Object Statement::Init(Napi::Env env, Napi::Object exports) {
 
 static unique_ptr<duckdb::PreparedStatement> PrepareManyInternal(Statement &statement) {
 	auto &connection = statement.connection_ref->connection;
-	std::vector<unique_ptr<duckdb::SQLStatement>> statements;
+	vector<unique_ptr<duckdb::SQLStatement>> statements;
 	try {
 		if (connection == nullptr) {
 			throw duckdb::ConnectionException("Connection was never established or has been closed already");
@@ -223,9 +227,9 @@ static Napi::Value convert_col_val(Napi::Env &env, duckdb::Value dval, duckdb::L
 	return value;
 }
 
-static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names, duckdb::DataChunk &chunk) {
+static Napi::Value convert_chunk(Napi::Env &env, vector<std::string> names, duckdb::DataChunk &chunk) {
 	Napi::EscapableHandleScope scope(env);
-	std::vector<Napi::String> node_names;
+	vector<Napi::String> node_names;
 	assert(names.size() == chunk.ColumnCount());
 	node_names.reserve(names.size());
 	for (auto &name : names) {
@@ -249,7 +253,7 @@ static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names,
 enum RunType { RUN, EACH, ALL, ARROW_ALL };
 
 struct StatementParam {
-	std::vector<duckdb::Value> params;
+	vector<duckdb::Value> params;
 	Napi::Function callback;
 	Napi::Function complete;
 };

@@ -2,10 +2,9 @@
 
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/vector.hpp"
 #include "duckdb_python/pybind_wrapper.hpp"
 #include "duckdb_python/python_object_container.hpp"
-
-#include <vector>
 
 namespace duckdb {
 

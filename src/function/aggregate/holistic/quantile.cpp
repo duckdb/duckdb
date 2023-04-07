@@ -42,14 +42,14 @@ struct QuantileState {
 	using SaveType = SAVE_TYPE;
 
 	// Regular aggregation
-	std::vector<SaveType> v;
+	vector<SaveType> v;
 
 	// Windowed Quantile indirection
-	std::vector<idx_t> w;
+	vector<idx_t> w;
 	idx_t pos;
 
 	// Windowed MAD indirection
-	std::vector<idx_t> m;
+	vector<idx_t> m;
 
 	QuantileState() : pos(0) {
 	}

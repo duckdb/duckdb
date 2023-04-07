@@ -80,7 +80,7 @@ struct FSSTAnalyzeState : public AnalyzeState {
 	idx_t count;
 
 	StringHeap fsst_string_heap;
-	std::vector<string_t> fsst_strings;
+	vector<string_t> fsst_strings;
 	size_t fsst_string_total_size;
 
 	RandomEngine random_engine;
@@ -151,8 +151,8 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 
 	size_t output_buffer_size = 7 + 2 * state.fsst_string_total_size; // size as specified in fsst.h
 
-	std::vector<size_t> fsst_string_sizes;
-	std::vector<unsigned char *> fsst_string_ptrs;
+	vector<size_t> fsst_string_sizes;
+	vector<unsigned char *> fsst_string_ptrs;
 	for (auto &str : state.fsst_strings) {
 		fsst_string_sizes.push_back(str.GetSize());
 		fsst_string_ptrs.push_back((unsigned char *)str.GetDataUnsafe());
@@ -161,8 +161,8 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	state.fsst_encoder = duckdb_fsst_create(string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0], 0);
 
 	// TODO: do we really need to encode to get a size estimate?
-	auto compressed_ptrs = std::vector<unsigned char *>(string_count, nullptr);
-	auto compressed_sizes = std::vector<size_t>(string_count, 0);
+	auto compressed_ptrs = vector<unsigned char *>(string_count, nullptr);
+	auto compressed_sizes = vector<size_t>(string_count, 0);
 	unique_ptr<unsigned char[]> compressed_buffer(new unsigned char[output_buffer_size]);
 
 	auto res =
@@ -381,7 +381,7 @@ public:
 	data_ptr_t current_end_ptr;
 
 	// Buffers and map for current segment
-	std::vector<uint32_t> index_buffer;
+	vector<uint32_t> index_buffer;
 
 	size_t max_compressed_string_length;
 	bitpacking_width_t current_width;
