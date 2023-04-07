@@ -167,6 +167,23 @@ private:
 	parquet_filter_t none_filter;
 	ResizeableBuffer dummy_define;
 	ResizeableBuffer dummy_repeat;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (TARGET::TYPE != PhysicalType::INVALID && type.InternalType() != TARGET::TYPE) {
+			throw InternalException("Failed to cast column reader to type - type mismatch");
+		}
+		return (TARGET &)*this;
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (TARGET::TYPE != PhysicalType::INVALID && type.InternalType() != TARGET::TYPE) {
+			throw InternalException("Failed to cast column reader to type - type mismatch");
+		}
+		return (const TARGET &)*this;
+	}
 };
 
 } // namespace duckdb
