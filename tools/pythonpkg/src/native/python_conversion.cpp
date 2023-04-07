@@ -252,7 +252,7 @@ PythonObjectType GetPythonObjectType(py::handle &ele) {
 
 	if (ele.is_none()) {
 		return PythonObjectType::None;
-	} else if (import_cache.pandas().libs.NAType.IsInstance(ele)) {
+	} else if (py::isinstance(ele, import_cache.pandas().libs.NAType())) {
 		return PythonObjectType::None;
 	} else if (py::isinstance<py::bool_>(ele)) {
 		return PythonObjectType::Bool;

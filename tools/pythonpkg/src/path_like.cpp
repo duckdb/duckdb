@@ -14,7 +14,7 @@ PathLike PathLike::Create(const py::object &object, DuckDBPyConnection &connecti
 		result.str = py::str(object);
 		return result;
 	}
-	if (import_cache.pathlib().Path.IsInstance(object)) {
+	if (py::isinstance(object, import_cache.pathlib().Path())) {
 		result.str = py::str(object);
 		return result;
 	}

@@ -4,6 +4,7 @@ import shutil
 from os.path import abspath, join, dirname, normpath
 import glob
 import duckdb
+from semver import Version
 
 try:
 	import pandas
@@ -68,9 +69,14 @@ class ArrowMockTesting:
 # this is done because we don't produce pyarrow backed dataframes yet
 class ArrowPandas:
 	def __init__(self):
-		self.backend = 'pyarrow'
-		self.DataFrame = arrow_pandas_df
 		self.pandas = pytest.importorskip("pandas")
+		if Version.parse(self.pandas.__version__) >= (2,0,0):
+			self.backend = 'pyarrow'
+			self.DataFrame = arrow_pandas_df
+		else:
+			# For backwards compatible reasons, just mock regular pandas
+			self.backend = 'numpy_nullable'
+			self.DataFrame = self.pandas.DataFrame
 		self.testing = ArrowMockTesting()
 	def __getattr__(self, __name: str):
 		item = eval(f'self.pandas.{__name}')

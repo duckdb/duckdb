@@ -28,7 +28,6 @@ public:
 public:
 	bool LoadAttempted() const;
 	bool IsLoaded() const;
-	bool IsInstance(py::handle object) const;
 	py::handle operator()(void) const;
 	void LoadModule(const string &name, PythonImportCache &cache);
 	void LoadAttribute(const string &name, PythonImportCache &cache, PythonImportCacheItem &source);

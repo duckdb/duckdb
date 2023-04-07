@@ -7,7 +7,7 @@ bool PolarsDataFrame::IsDataFrame(const py::handle &object) {
 		return false;
 	}
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return import_cache.polars().DataFrame.IsInstance(object);
+	return py::isinstance(object, import_cache.polars().DataFrame());
 }
 
 bool PolarsDataFrame::IsLazyFrame(const py::handle &object) {
@@ -15,17 +15,17 @@ bool PolarsDataFrame::IsLazyFrame(const py::handle &object) {
 		return false;
 	}
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return import_cache.polars().LazyFrame.IsInstance(object);
+	return py::isinstance(object, import_cache.polars().LazyFrame());
 }
 
 bool DataFrame::check_(const py::handle &object) { // NOLINT
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return import_cache.pandas().DataFrame.IsInstance(object);
+	return py::isinstance(object, import_cache.pandas().DataFrame());
 }
 
 bool PolarsDataFrame::check_(const py::handle &object) { // NOLINT
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return import_cache.polars().DataFrame.IsInstance(object);
+	return py::isinstance(object, import_cache.polars().DataFrame());
 }
 
 } // namespace duckdb

@@ -30,7 +30,42 @@ namespace duckdb {
 #else
 #define PYBIND11_NAMESPACE pybind11
 #endif
-namespace py = pybind11;
+namespace py {
+
+// We include everything from pybind11
+using namespace pybind11;
+
+// But we have the option to override certain functions
+template <typename T, detail::enable_if_t<std::is_base_of<object, T>::value, int> = 0>
+bool isinstance(handle obj) {
+	return T::check_(obj);
+}
+
+template <typename T, detail::enable_if_t<!std::is_base_of<object, T>::value, int> = 0>
+bool isinstance(handle obj) {
+	return detail::isinstance_generic(obj, typeid(T));
+}
+
+template <>
+inline bool isinstance<handle>(handle) = delete;
+template <>
+inline bool isinstance<object>(handle obj) {
+	return obj.ptr() != nullptr;
+}
+
+inline bool isinstance(handle obj, handle type) {
+	if (type.ptr() == nullptr) {
+		// The type was not imported, just return false
+		return false;
+	}
+	const auto result = PyObject_IsInstance(obj.ptr(), type.ptr());
+	if (result == -1) {
+		throw error_already_set();
+	}
+	return result != 0;
+}
+
+} // namespace py
 
 template <class T, typename... ARGS>
 void DefineMethod(std::vector<const char *> aliases, T &mod, ARGS &&... args) {

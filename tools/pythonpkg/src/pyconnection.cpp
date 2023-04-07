@@ -96,10 +96,8 @@ static bool IsArrowBackedDataFrame(const py::object &df) {
 	if (dtypes.empty()) {
 		return false;
 	}
-	// TODO: make this optional, will throw on pandas < 2.0.0
 	auto arrow_dtype =
 	    py::module_::import("pandas").attr("core").attr("arrays").attr("arrow").attr("dtype").attr("ArrowDtype");
-	// Frankenstein dataframes are a thing, so we might have to deal with mixed pyarrow and numpy somewhere else
 	for (auto &dtype : dtypes) {
 		if (!py::isinstance(dtype, arrow_dtype)) {
 			return false;
@@ -1419,7 +1417,7 @@ bool DuckDBPyConnection::IsPandasDataframe(const py::object &object) {
 		return false;
 	}
 	auto &import_cache_py = *DuckDBPyConnection::ImportCache();
-	return import_cache_py.pandas().DataFrame.IsInstance(object);
+	return py::isinstance(object, import_cache_py.pandas().DataFrame());
 }
 
 bool DuckDBPyConnection::IsPolarsDataframe(const py::object &object) {
@@ -1427,8 +1425,8 @@ bool DuckDBPyConnection::IsPolarsDataframe(const py::object &object) {
 		return false;
 	}
 	auto &import_cache_py = *DuckDBPyConnection::ImportCache();
-	return import_cache_py.polars().DataFrame.IsInstance(object) ||
-	       import_cache_py.polars().LazyFrame.IsInstance(object);
+	return py::isinstance(object, import_cache_py.polars().DataFrame()) ||
+	       py::isinstance(object, import_cache_py.polars().LazyFrame());
 }
 
 bool DuckDBPyConnection::IsAcceptedArrowObject(const py::object &object) {
@@ -1436,10 +1434,10 @@ bool DuckDBPyConnection::IsAcceptedArrowObject(const py::object &object) {
 		return false;
 	}
 	auto &import_cache_py = *DuckDBPyConnection::ImportCache();
-	return import_cache_py.arrow().lib.Table.IsInstance(object) ||
-	       import_cache_py.arrow().lib.RecordBatchReader.IsInstance(object) ||
-	       import_cache_py.arrow().dataset.Dataset.IsInstance(object) ||
-	       import_cache_py.arrow().dataset.Scanner.IsInstance(object);
+	return py::isinstance(object, import_cache_py.arrow().lib.Table()) ||
+	       py::isinstance(object, import_cache_py.arrow().lib.RecordBatchReader()) ||
+	       py::isinstance(object, import_cache_py.arrow().dataset.Dataset()) ||
+	       py::isinstance(object, import_cache_py.arrow().dataset.Scanner());
 }
 
 } // namespace duckdb
