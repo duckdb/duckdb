@@ -1,46 +1,29 @@
 #include "duckdb/optimizer/unnest_rewriter.hpp"
 
 #include "duckdb/common/pair.hpp"
+#include "duckdb/optimizer/column_binding_replacer.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_unnest_expression.hpp"
 #include "duckdb/planner/operator/logical_delim_get.hpp"
 #include "duckdb/planner/operator/logical_delim_join.hpp"
-#include "duckdb/planner/operator/logical_unnest.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
-#include "duckdb/planner/operator/logical_window.hpp"
-#include "duckdb/planner/expression/bound_unnest_expression.hpp"
-#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/operator/logical_unnest.hpp"
 
 namespace duckdb {
 
-void UnnestRewriterPlanUpdater::VisitOperator(LogicalOperator &op) {
-	VisitOperatorChildren(op);
-	VisitOperatorExpressions(op);
-}
-
-void UnnestRewriterPlanUpdater::VisitExpression(unique_ptr<Expression> *expression) {
-
-	auto &expr = *expression;
-
-	if (expr->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
-
-		auto &bound_column_ref = expr->Cast<BoundColumnRefExpression>();
-		for (idx_t i = 0; i < replace_bindings.size(); i++) {
-			if (bound_column_ref.binding == replace_bindings[i].old_binding) {
-				bound_column_ref.binding = replace_bindings[i].new_binding;
-			}
-			// previously pointing to the LOGICAL_DELIM_GET
-			if (bound_column_ref.binding.table_index == replace_bindings[i].old_binding.table_index &&
-			    replace_bindings[i].old_binding.column_index == DConstants::INVALID_INDEX) {
-				bound_column_ref.binding = replace_bindings[i].new_binding;
-			}
-		}
+static void ReplaceDelimGetBinding(BoundColumnRefExpression &bound_column_ref, const ReplaceBinding &replace_binding) {
+	// previously pointing to the LOGICAL_DELIM_GET
+	if (bound_column_ref.binding.table_index == replace_binding.old_binding.table_index &&
+	    replace_binding.old_binding.column_index == DConstants::INVALID_INDEX) {
+		bound_column_ref.binding = replace_binding.new_binding;
 	}
-
-	VisitExpressionChildren(**expression);
 }
 
 unique_ptr<LogicalOperator> UnnestRewriter::Optimize(unique_ptr<LogicalOperator> op) {
 
-	UnnestRewriterPlanUpdater updater;
+	ColumnBindingReplacer updater;
+	updater.callback = ReplaceDelimGetBinding;
+
 	vector<unique_ptr<LogicalOperator> *> candidates;
 	FindCandidates(&op, candidates);
 
@@ -155,7 +138,7 @@ bool UnnestRewriter::RewriteCandidate(unique_ptr<LogicalOperator> *candidate) {
 }
 
 void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> *plan_ptr, unique_ptr<LogicalOperator> *candidate,
-                                       UnnestRewriterPlanUpdater &updater) {
+                                       ColumnBindingReplacer &updater) {
 
 	auto &topmost_op = (LogicalOperator &)**candidate;
 	idx_t shift = lhs_bindings.size();
@@ -241,8 +224,7 @@ void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> *plan_ptr, un
 	}
 }
 
-void UnnestRewriter::UpdateBoundUnnestBindings(UnnestRewriterPlanUpdater &updater,
-                                               unique_ptr<LogicalOperator> *candidate) {
+void UnnestRewriter::UpdateBoundUnnestBindings(ColumnBindingReplacer &updater, unique_ptr<LogicalOperator> *candidate) {
 
 	auto &topmost_op = (LogicalOperator &)**candidate;
 

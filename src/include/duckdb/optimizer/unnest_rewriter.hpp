@@ -8,21 +8,13 @@
 
 #pragma once
 
-#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 
 class Optimizer;
-
-struct ReplaceBinding {
-	ReplaceBinding() {};
-	ReplaceBinding(ColumnBinding old_binding, ColumnBinding new_binding)
-	    : old_binding(old_binding), new_binding(new_binding) {
-	}
-	ColumnBinding old_binding;
-	ColumnBinding new_binding;
-};
+class ColumnBindingReplacer;
 
 struct LHSBinding {
 	LHSBinding() {};
@@ -31,20 +23,6 @@ struct LHSBinding {
 	ColumnBinding binding;
 	LogicalType type;
 	string alias;
-};
-
-//! The UnnestRewriterPlanUpdater updates column bindings after changing the operator plan
-class UnnestRewriterPlanUpdater : LogicalOperatorVisitor {
-public:
-	UnnestRewriterPlanUpdater() {
-	}
-	//! Update each operator of the plan after moving an UNNEST into a projection
-	void VisitOperator(LogicalOperator &op) override;
-	//! Visit an expression and update its column bindings after moving and UNNEST into a projection
-	void VisitExpression(unique_ptr<Expression> *expression) override;
-
-	//! Contains all bindings that need to be updated
-	vector<ReplaceBinding> replace_bindings;
 };
 
 //! The UnnestRewriter optimizer traverses the logical operator tree and rewrites duplicate
@@ -64,9 +42,9 @@ private:
 	bool RewriteCandidate(unique_ptr<LogicalOperator> *candidate);
 	//! Update the bindings of the RHS sequence of LOGICAL_PROJECTION(s)
 	void UpdateRHSBindings(unique_ptr<LogicalOperator> *plan_ptr, unique_ptr<LogicalOperator> *candidate,
-	                       UnnestRewriterPlanUpdater &updater);
+	                       ColumnBindingReplacer &updater);
 	//! Update the bindings of the BOUND_UNNEST expression of the LOGICAL_UNNEST
-	void UpdateBoundUnnestBindings(UnnestRewriterPlanUpdater &updater, unique_ptr<LogicalOperator> *candidate);
+	void UpdateBoundUnnestBindings(ColumnBindingReplacer &updater, unique_ptr<LogicalOperator> *candidate);
 
 	//! Store all delim columns of the delim join
 	void GetDelimColumns(LogicalOperator &op);

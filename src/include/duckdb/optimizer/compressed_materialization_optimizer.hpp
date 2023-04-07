@@ -16,9 +16,9 @@ namespace duckdb {
 
 class LogicalOperator;
 
-struct CompressedMaterializationChildInfo {
+struct CMChildInfo {
 public:
-	CompressedMaterializationChildInfo(LogicalOperator &op, const vector<ColumnBinding> &referenced_bindings);
+	CMChildInfo(LogicalOperator &op, const vector<ColumnBinding> &referenced_bindings);
 
 public:
 	const vector<ColumnBinding> bindings;
@@ -28,7 +28,7 @@ public:
 
 struct CompressedMaterializationInfo {
 public:
-	CompressedMaterializationInfo(LogicalOperator &op, const vector<idx_t> &child_idxs, const bool changes_bindings,
+	CompressedMaterializationInfo(LogicalOperator &op, vector<idx_t> &&child_idxs, bool changes_bindings,
 	                              const vector<ColumnBinding> &referenced_bindings);
 
 public:
@@ -37,13 +37,14 @@ public:
 	const bool changes_bindings;
 
 	const vector<idx_t> child_idxs;
-	vector<CompressedMaterializationChildInfo> child_info;
+	vector<CMChildInfo> child_info;
 };
 
-class CompressedMaterializationOptimizer {
+typedef column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map_t;
+
+class CompressedMaterialization {
 public:
-	explicit CompressedMaterializationOptimizer(ClientContext &context,
-	                                            column_binding_map_t<unique_ptr<BaseStatistics>> &&statistics_map);
+	explicit CompressedMaterialization(ClientContext &context, statistics_map_t &&statistics_map);
 
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
 
@@ -54,21 +55,21 @@ private:
 	void CompressOrder(unique_ptr<LogicalOperator> *op_ptr);
 
 	void CreateProjections(unique_ptr<LogicalOperator> *op_ptr, const CompressedMaterializationInfo &info);
-	bool GetExpressions(const ColumnBinding &binding, const LogicalType &type, const BaseStatistics &stats,
-	                    vector<unique_ptr<Expression>> &compress_expressions,
-	                    vector<unique_ptr<Expression>> &decompress_expressions);
-	bool GetIntegralExpressions(const ColumnBinding &binding, const LogicalType &type, const BaseStatistics &stats,
-	                            vector<unique_ptr<Expression>> &compress_expressions,
-	                            vector<unique_ptr<Expression>> &decompress_expressions);
-	bool GetStringExpressions(const ColumnBinding &binding, const LogicalType &type, const BaseStatistics &stats,
-	                          vector<unique_ptr<Expression>> &compress_expressions,
-	                          vector<unique_ptr<Expression>> &decompress_expressions);
+	void CreateCompressProjection(unique_ptr<LogicalOperator> *child_op, vector<unique_ptr<Expression>> &&compressions,
+	                              const CMChildInfo &child_info);
+
+	unique_ptr<Expression> GetCompressExpression(const ColumnBinding &binding, const LogicalType &type,
+	                                             const bool &is_compress_candidate);
+	unique_ptr<Expression> GetIntegralCompress(const ColumnBinding &binding, const LogicalType &type,
+	                                           const BaseStatistics &stats);
+	unique_ptr<Expression> GetStringCompress(const ColumnBinding &binding, const LogicalType &type,
+	                                         const BaseStatistics &stats);
 
 private:
 	ClientContext &context;
-	column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map;
+	statistics_map_t statistics_map;
 	LogicalOperator *root;
-	idx_t table_index;
+	idx_t projection_index;
 };
 
 } // namespace duckdb

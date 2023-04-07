@@ -14,7 +14,7 @@ static void GetReferencedBindings(const Expression &expression, vector<ColumnBin
 	});
 }
 
-void CompressedMaterializationOptimizer::CompressOrder(unique_ptr<LogicalOperator> *op_ptr) {
+void CompressedMaterialization::CompressOrder(unique_ptr<LogicalOperator> *op_ptr) {
 	auto &order = (LogicalOrder &)**op_ptr;
 
 	// Find all bindings referenced by non-colref expressions in the order nodes
@@ -25,7 +25,7 @@ void CompressedMaterializationOptimizer::CompressOrder(unique_ptr<LogicalOperato
 		const auto &order_expression = *order.orders[order_node_idx].expression;
 		if (order_expression.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			GetReferencedBindings(order_expression, referenced_bindings);
-			// TODO try to compress this order_expression right now
+			// TODO try to compress this order_expression right now, we will throw it away anyway
 		}
 	}
 

@@ -136,7 +136,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 
 	// Compress data based on statistics for materializing operators
 	RunOptimizer(OptimizerType::COMPRESSED_MATERIALIZATION, [&]() {
-		CompressedMaterializationOptimizer optimizer(context, std::move(statistics_map));
+		CompressedMaterialization optimizer(context, std::move(statistics_map));
 		plan = optimizer.Optimize(std::move(plan));
 	});
 

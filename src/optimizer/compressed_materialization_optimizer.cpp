@@ -2,13 +2,14 @@
 
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/operators.hpp"
+#include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
 
-CompressedMaterializationChildInfo::CompressedMaterializationChildInfo(LogicalOperator &op,
-                                                                       const vector<ColumnBinding> &referenced_bindings)
+CMChildInfo::CMChildInfo(LogicalOperator &op, const vector<ColumnBinding> &referenced_bindings)
     : bindings(op.GetColumnBindings()), types(op.types), is_compress_candidate(bindings.size(), true) {
 	for (const auto &binding : referenced_bindings) {
 		for (idx_t binding_idx = 0; binding_idx < bindings.size(); binding_idx++) {
@@ -19,22 +20,22 @@ CompressedMaterializationChildInfo::CompressedMaterializationChildInfo(LogicalOp
 	}
 }
 
-CompressedMaterializationInfo::CompressedMaterializationInfo(LogicalOperator &op, const vector<idx_t> &child_idxs,
-                                                             const bool changes_bdingins_p,
+CompressedMaterializationInfo::CompressedMaterializationInfo(LogicalOperator &op, vector<idx_t> &&child_idxs_p,
+                                                             bool changes_bindings_p,
                                                              const vector<ColumnBinding> &referenced_bindings)
-    : bindings(op.GetColumnBindings()), types(op.types), changes_bindings(changes_bdingins_p), child_idxs(child_idxs) {
+    : bindings(op.GetColumnBindings()), types(op.types), changes_bindings(changes_bindings_p),
+      child_idxs(child_idxs_p) {
 	child_info.reserve(child_idxs.size());
 	for (const auto &child_idx : child_idxs) {
 		child_info.emplace_back(*op.children[child_idx], referenced_bindings);
 	}
 }
 
-CompressedMaterializationOptimizer::CompressedMaterializationOptimizer(
-    ClientContext &context_p, column_binding_map_t<unique_ptr<BaseStatistics>> &&statistics_map_p)
+CompressedMaterialization::CompressedMaterialization(ClientContext &context_p, statistics_map_t &&statistics_map_p)
     : context(context_p), statistics_map(std::move(statistics_map_p)) {
 }
 
-idx_t FindMaxTableIndex(LogicalOperator &op) {
+static idx_t FindMaxTableIndex(LogicalOperator &op) {
 	idx_t max = 0;
 	for (const auto &child : op.children) {
 		max = MaxValue<idx_t>(max, FindMaxTableIndex(*child));
@@ -45,16 +46,16 @@ idx_t FindMaxTableIndex(LogicalOperator &op) {
 	return max;
 }
 
-unique_ptr<LogicalOperator> CompressedMaterializationOptimizer::Optimize(unique_ptr<LogicalOperator> op) {
+unique_ptr<LogicalOperator> CompressedMaterialization::Optimize(unique_ptr<LogicalOperator> op) {
 	root = op.get();
 	root->ResolveOperatorTypes();
-	table_index = FindMaxTableIndex(*root);
+	projection_index = FindMaxTableIndex(*root) + 1;
 	Compress(op);
 	// TODO remove redundant (de)compressions
 	return op;
 }
 
-void CompressedMaterializationOptimizer::Compress(unique_ptr<LogicalOperator> &op) {
+void CompressedMaterialization::Compress(unique_ptr<LogicalOperator> &op) {
 	for (auto &child : op->children) {
 		Compress(child);
 	}
@@ -71,61 +72,115 @@ void CompressedMaterializationOptimizer::Compress(unique_ptr<LogicalOperator> &o
 	}
 }
 
-void CompressedMaterializationOptimizer::CreateProjections(unique_ptr<LogicalOperator> *op_ptr,
-                                                           const CompressedMaterializationInfo &info) {
-	// TODO potentially wrap op_ptr with
-	auto &op = **op_ptr;
-	for (idx_t i = 0; i < info.child_idxs.size(); i++) {
-		auto &child_op = op.children[info.child_idxs[i]];
-		const auto &child_info = info.child_info[i];
-
-		vector<unique_ptr<Expression>> compress_expressions;
-		for (idx_t child_i = 0; child_i < child_info.bindings.size(); child_i++) {
-			const auto &child_binding = child_info.bindings[child_i];
-			auto it = statistics_map.find(child_binding);
-			if (child_info.is_compress_candidate[child_i] && it != statistics_map.end() && it->second) {
-
-			} else {
-				// TODO just a boundcolrefexpr
-			}
+void SetNeedsDecompression(const vector<ColumnBinding> &haystack, vector<bool> &needs_decompression,
+                           const ColumnBinding &needle) {
+	for (idx_t i = 0; i < haystack.size(); i++) {
+		const auto &binding = haystack[i];
+		if (binding == needle) {
+			needs_decompression[i] = true;
+			break;
 		}
 	}
 }
 
-bool CompressedMaterializationOptimizer::GetExpressions(const ColumnBinding &binding, const LogicalType &type,
-                                                        const BaseStatistics &stats,
-                                                        vector<unique_ptr<Expression>> &compress_expressions,
-                                                        vector<unique_ptr<Expression>> &decompress_expressions) {
-	if (TypeIsIntegral(type.InternalType()) &&
-	    GetIntegralExpressions(binding, type, stats, compress_expressions, decompress_expressions)) {
-		return true;
-	} else if (type.id() == LogicalTypeId::VARCHAR) {
+void CompressedMaterialization::CreateProjections(unique_ptr<LogicalOperator> *op_ptr,
+                                                  const CompressedMaterializationInfo &info) {
+	// TODO: if info.changes_bindings we need to do something more clever for the decompress projection
+	auto &materializing_op = **op_ptr;
+	vector<bool> needs_decompression(info.bindings.size(), false);
+	for (idx_t i = 0; i < info.child_idxs.size(); i++) {
+		const auto &child_info = info.child_info[i];
 
-	} else {
+		// Try to compress each of the column bindings of the child
+		bool compressed_anything = false;
+		vector<unique_ptr<Expression>> compressions;
+		for (idx_t child_i = 0; child_i < child_info.bindings.size(); child_i++) {
+			const auto child_binding = child_info.bindings[child_i];
+			const auto &child_type = child_info.types[child_i];
+			const auto &is_compress_candidate = child_info.is_compress_candidate[child_i];
+			auto compression = GetCompressExpression(child_binding, child_type, is_compress_candidate);
+			if (compression) { // We compressed, mark the outgoing binding in need of decompression
+				compressions.emplace_back(std::move(compression));
+				SetNeedsDecompression(info.bindings, needs_decompression, child_binding);
+				compressed_anything = true;
+			} else { // We did not compress, just push a colref
+				compressions.emplace_back(make_uniq<BoundColumnRefExpression>(child_type, child_binding));
+			}
+		}
 
-		return false;
+		if (compressed_anything) {
+			// We can compress: Create a projection on top of the child operator
+			auto child_op = &materializing_op.children[info.child_idxs[i]];
+			CreateCompressProjection(child_op, std::move(compressions), child_info);
+		}
 	}
 }
 
-bool CompressedMaterializationOptimizer::GetIntegralExpressions(
-    const ColumnBinding &binding, const LogicalType &type, const BaseStatistics &stats,
-    vector<unique_ptr<Expression>> &compress_expressions, vector<unique_ptr<Expression>> &decompress_expressions) {
-	if (GetTypeIdSize(type.InternalType()) == 1 || !NumericStats::HasMinMax(stats)) {
-		return false;
+void CompressedMaterialization::CreateCompressProjection(unique_ptr<LogicalOperator> *child_op,
+                                                         vector<unique_ptr<Expression>> &&compressions,
+                                                         const CMChildInfo &child_info) {
+	auto compress_projection = make_uniq<LogicalProjection>(projection_index++, std::move(compressions));
+	compress_projection->children.emplace_back(std::move(*child_op));
+
+	// Get the new bindings and types
+	const auto new_bindings = compress_projection->GetColumnBindings();
+	compress_projection->ResolveOperatorTypes();
+	const auto &new_types = compress_projection->types;
+
+	// Move the projection under the parent operator
+	*child_op = std::move(compress_projection);
+
+	// Initialize a ColumnBindingReplacer with the new bindings and types
+	ColumnBindingReplacer replacer;
+	auto &replace_bindings = replacer.replace_bindings;
+	for (idx_t col_idx = 0; col_idx < child_info.bindings.size(); col_idx++) {
+		const auto &old_binding = child_info.bindings[col_idx];
+		const auto &new_binding = new_bindings[col_idx];
+		const auto &new_type = new_types[col_idx];
+		replace_bindings.emplace_back(old_binding, new_binding, new_type);
+
+		// Remove the old binding from the statistics map
+		statistics_map.erase(old_binding);
 	}
 
-	auto min = make_uniq<BoundConstantExpression>(NumericStats::Min(stats));
+	// Make the plan consistent again
+	replacer.VisitOperator(*root);
+}
 
-	// Create expression for max - min to get the range of values
+unique_ptr<Expression> CompressedMaterialization::GetCompressExpression(const ColumnBinding &binding,
+                                                                        const LogicalType &type,
+                                                                        const bool &is_compress_candidate) {
+	auto it = statistics_map.find(binding);
+	if (!is_compress_candidate || it == statistics_map.end() || !it->second) {
+		const auto &stats = *it->second;
+		if (TypeIsIntegral(type.InternalType())) {
+			return GetIntegralCompress(binding, type, stats);
+		} else if (type.id() == LogicalTypeId::VARCHAR) {
+			return GetStringCompress(binding, type, stats);
+		}
+	}
+	return nullptr;
+}
+
+static Value GetIntegralRangeValue(ClientContext &context, const LogicalType &type, const BaseStatistics &stats) {
 	vector<unique_ptr<Expression>> arguments;
 	arguments.emplace_back(make_uniq<BoundConstantExpression>(NumericStats::Max(stats)));
-	arguments.emplace_back(min->Copy());
+	arguments.emplace_back(make_uniq<BoundConstantExpression>(NumericStats::Min(stats)));
 	BoundFunctionExpression sub(type, SubtractFun::GetFunction(type), std::move(arguments), nullptr);
+	return ExpressionExecutor::EvaluateScalar(context, sub);
+}
 
-	// Evaluate and cast to UBIGINT (might fail for HUGEINT, in which case we just return false)
-	Value range_value = ExpressionExecutor::EvaluateScalar(context, sub);
+unique_ptr<Expression> CompressedMaterialization::GetIntegralCompress(const ColumnBinding &binding,
+                                                                      const LogicalType &type,
+                                                                      const BaseStatistics &stats) {
+	if (GetTypeIdSize(type.InternalType()) == 1 || !NumericStats::HasMinMax(stats)) {
+		return nullptr;
+	}
+
+	// Get range and cast to UBIGINT (might fail for HUGEINT, in which case we just return)
+	Value range_value = GetIntegralRangeValue(context, type, stats);
 	if (!range_value.DefaultTryCastAs(LogicalType::UBIGINT)) {
-		return false;
+		return nullptr;
 	}
 
 	// Get the smallest type that the range can fit into
@@ -143,11 +198,43 @@ bool CompressedMaterializationOptimizer::GetIntegralExpressions(
 	}
 
 	if (GetTypeIdSize(cast_type.InternalType()) == GetTypeIdSize(type.InternalType())) {
-		return false;
+		return nullptr;
 	}
 	D_ASSERT(GetTypeIdSize(cast_type.InternalType()) < GetTypeIdSize(type.InternalType()));
 
 	// Type that the range fits into is smaller than the input type
+	auto compress_function = CMIntegralCompressFun::GetFunction(type, cast_type);
+	vector<unique_ptr<Expression>> arguments;
+	arguments.emplace_back(make_uniq<BoundColumnRefExpression>(type, binding));
+	arguments.emplace_back(make_uniq<BoundConstantExpression>(NumericStats::Min(stats)));
+	return make_uniq<BoundFunctionExpression>(cast_type, compress_function, std::move(arguments), nullptr);
+}
+
+unique_ptr<Expression> CompressedMaterialization::GetStringCompress(const ColumnBinding &binding,
+                                                                    const LogicalType &type,
+                                                                    const BaseStatistics &stats) {
+	if (!StringStats::HasMaxStringLength(stats)) {
+		return nullptr;
+	}
+
+	const auto max_string_length = StringStats::MaxStringLength(stats);
+	LogicalType cast_type;
+	if (max_string_length < 2) {
+		cast_type = LogicalType::USMALLINT;
+	} else if (max_string_length < 4) {
+		cast_type = LogicalType::UINTEGER;
+	} else if (max_string_length < 8) {
+		cast_type = LogicalType::UBIGINT;
+	} else if (max_string_length < 16) {
+		cast_type = LogicalType::HUGEINT;
+	} else {
+		return nullptr;
+	}
+
+	auto compress_function = CMStringCompressFun::GetFunction(cast_type);
+	vector<unique_ptr<Expression>> arguments;
+	arguments.emplace_back(make_uniq<BoundColumnRefExpression>(type, binding));
+	return make_uniq<BoundFunctionExpression>(cast_type, compress_function, std::move(arguments), nullptr);
 }
 
 } // namespace duckdb

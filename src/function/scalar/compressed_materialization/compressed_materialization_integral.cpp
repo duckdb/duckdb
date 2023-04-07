@@ -15,7 +15,7 @@ unique_ptr<FunctionData> IntegralCompressBind(ClientContext &context, ScalarFunc
 	if (result_type_size >= input_type_size) {
 		throw InvalidInputException("Cannot compress to larger type!");
 	}
-	// TODO: make sure there's no implicit cast going on before entering this function
+	// TODO: make sure there's no implicit cast going on before entering this function?
 	if (!arguments[1]->IsFoldable()) {
 		throw InvalidInputException("Argument \"min_val\" must be constant!");
 	}
@@ -96,20 +96,19 @@ static ScalarFunctionSet GetIntegralCompressFunctionSet(const LogicalType &resul
 	ScalarFunctionSet set(StringUtil::Format("cm_compress_integral_%s", LogicalTypeIdToString(result_type.id())));
 	for (const auto &input_type : LogicalType::Integral()) {
 		if (GetTypeIdSize(result_type.InternalType()) < GetTypeIdSize(input_type.InternalType())) {
-			set.AddFunction(CompressedMaterializationIntegralCompressFun::GetFunction(input_type, result_type));
+			set.AddFunction(CMIntegralCompressFun::GetFunction(input_type, result_type));
 		}
 	}
 	return set;
 }
 
-void CompressedMaterializationIntegralCompressFun::RegisterFunction(BuiltinFunctions &set) {
+void CMIntegralCompressFun::RegisterFunction(BuiltinFunctions &set) {
 	for (const auto &result_type : IntegralCompressedTypes()) {
 		set.AddFunction(GetIntegralCompressFunctionSet(result_type));
 	}
 }
 
-ScalarFunction CompressedMaterializationIntegralCompressFun::GetFunction(const LogicalType &input_type,
-                                                                         const LogicalType &result_type) {
+ScalarFunction CMIntegralCompressFun::GetFunction(const LogicalType &input_type, const LogicalType &result_type) {
 	return GetIntegralCompressFunctionInputSwitch(input_type, result_type);
 }
 
@@ -195,7 +194,7 @@ static ScalarFunctionSet GetIntegralDecompressFunctionSet(const LogicalType &res
 	return set;
 }
 
-void CompressedMaterializationIntegralDecompressFun::RegisterFunction(BuiltinFunctions &set) {
+void CMIntegralDecompressFun::RegisterFunction(BuiltinFunctions &set) {
 	for (const auto &result_type : LogicalType::Integral()) {
 		if (GetTypeIdSize(result_type.InternalType()) > 1) {
 			set.AddFunction(GetIntegralDecompressFunctionSet(result_type));
@@ -203,8 +202,7 @@ void CompressedMaterializationIntegralDecompressFun::RegisterFunction(BuiltinFun
 	}
 }
 
-ScalarFunction CompressedMaterializationIntegralDecompressFun::GetFunction(const LogicalType &input_type,
-                                                                           const LogicalType &result_type) {
+ScalarFunction CMIntegralDecompressFun::GetFunction(const LogicalType &input_type, const LogicalType &result_type) {
 	return GetIntegralDecompressFunctionInputSwitch(input_type, result_type);
 }
 

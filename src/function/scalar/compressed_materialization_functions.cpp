@@ -3,10 +3,10 @@
 namespace duckdb {
 
 void BuiltinFunctions::RegisterCompressedMaterializationFunctions() {
-	Register<CompressedMaterializationIntegralCompressFun>();
-	Register<CompressedMaterializationIntegralDecompressFun>();
-	Register<CompressedMaterializationStringCompressFun>();
-	Register<CompressedMaterializationStringDecompressFun>();
+	Register<CMIntegralCompressFun>();
+	Register<CMIntegralDecompressFun>();
+	Register<CMStringCompressFun>();
+	Register<CMStringDecompressFun>();
 }
 
 } // namespace duckdb

@@ -13,38 +13,24 @@
 
 namespace duckdb {
 
-struct CompressedMaterialization {
-	//! The types we compress strings to
-	static const vector<LogicalType> StringCompressedTypes() {
-		return {LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT, LogicalTypeId::HUGEINT};
-	}
-
-	//! String compress function name
-	static const string StringCompressFunctionName(const LogicalType &result_type) {
-		return StringUtil::Format("cm_compress_string_%s", LogicalTypeIdToString(result_type.id()));
-	}
-	//! String decompress function name
-	static const string StringDecompressFunctionName() {
-		return "cm_decompress_string";
-	}
-};
-
-struct CompressedMaterializationIntegralCompressFun {
+struct CMIntegralCompressFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 	static ScalarFunction GetFunction(const LogicalType &input_type, const LogicalType &result_type);
 };
 
-struct CompressedMaterializationIntegralDecompressFun {
+struct CMIntegralDecompressFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 	static ScalarFunction GetFunction(const LogicalType &input_type, const LogicalType &result_type);
 };
 
-struct CompressedMaterializationStringCompressFun {
+struct CMStringCompressFun {
 	static void RegisterFunction(BuiltinFunctions &set);
+	static ScalarFunction GetFunction(const LogicalType &result_type);
 };
 
-struct CompressedMaterializationStringDecompressFun {
+struct CMStringDecompressFun {
 	static void RegisterFunction(BuiltinFunctions &set);
+	static ScalarFunction GetFunction(const LogicalType &input_type);
 };
 
 } // namespace duckdb

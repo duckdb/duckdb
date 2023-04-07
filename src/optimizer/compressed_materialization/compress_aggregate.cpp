@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-void CompressedMaterializationOptimizer::CompressAggregate(unique_ptr<LogicalOperator> *op_ptr) {
+void CompressedMaterialization::CompressAggregate(unique_ptr<LogicalOperator> *op_ptr) {
 	auto &aggregate = (LogicalAggregate &)**op_ptr;
 
 	// No need to compress if there are no groups

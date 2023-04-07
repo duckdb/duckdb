@@ -9,6 +9,7 @@ add_subdirectory(statistics)
 add_library_unity(
   duckdb_optimizer
   OBJECT
+  column_binding_replacer.cpp
   common_aggregate_optimizer.cpp
   compressed_materialization_optimizer.cpp
   cse_optimizer.cpp
