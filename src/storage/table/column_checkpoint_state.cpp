@@ -1,12 +1,7 @@
-
 #include "duckdb/storage/table/column_data.hpp"
-
+#include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
-#include "duckdb/storage/table/validity_column_data.hpp"
-#include "duckdb/storage/table/standard_column_data.hpp"
-#include "duckdb/storage/table/list_column_data.hpp"
-#include "duckdb/transaction/transaction.hpp"
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 
@@ -130,7 +125,7 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 				segment->Resize(Storage::BLOCK_SIZE);
 			}
 			D_ASSERT(offset_in_block == 0);
-			allocation.partial_block = make_unique<PartialBlockForCheckpoint>(
+			allocation.partial_block = make_uniq<PartialBlockForCheckpoint>(
 			    &column_data, segment.get(), *allocation.block_manager, allocation.state);
 		}
 		// Writer will decide whether to reuse this block.

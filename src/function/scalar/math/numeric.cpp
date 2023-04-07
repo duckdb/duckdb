@@ -2,6 +2,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/trigonometric_functions.hpp"
 #include "duckdb/common/operator/abs.hpp"
+#include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -309,7 +310,7 @@ struct CeilOperator {
 
 template <class T, class POWERS_OF_TEN, class OP>
 static void GenericRoundFunctionDecimal(DataChunk &input, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	OP::template Operation<T, POWERS_OF_TEN>(input, DecimalType::GetScale(func_expr.children[0]->return_type), result);
 }
 
@@ -507,7 +508,7 @@ struct RoundPrecisionFunctionData : public FunctionData {
 	int32_t target_scale;
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<RoundPrecisionFunctionData>(target_scale);
+		return make_uniq<RoundPrecisionFunctionData>(target_scale);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
@@ -518,7 +519,7 @@ struct RoundPrecisionFunctionData : public FunctionData {
 
 template <class T, class POWERS_OF_TEN_CLASS>
 static void DecimalRoundNegativePrecisionFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = (RoundPrecisionFunctionData &)*func_expr.bind_info;
 	auto source_scale = DecimalType::GetScale(func_expr.children[0]->return_type);
 	auto width = DecimalType::GetWidth(func_expr.children[0]->return_type);
@@ -544,7 +545,7 @@ static void DecimalRoundNegativePrecisionFunction(DataChunk &input, ExpressionSt
 
 template <class T, class POWERS_OF_TEN_CLASS>
 static void DecimalRoundPositivePrecisionFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = (RoundPrecisionFunctionData &)*func_expr.bind_info;
 	auto source_scale = DecimalType::GetScale(func_expr.children[0]->return_type);
 	T power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[source_scale - info.target_scale];
@@ -622,7 +623,7 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(ClientContext &context, Scala
 	}
 	bound_function.arguments[0] = decimal_type;
 	bound_function.return_type = LogicalType::DECIMAL(width, target_scale);
-	return make_unique<RoundPrecisionFunctionData>(round_value);
+	return make_uniq<RoundPrecisionFunctionData>(round_value);
 }
 
 void RoundFun::RegisterFunction(BuiltinFunctions &set) {
@@ -1159,6 +1160,92 @@ struct EvenOperator {
 void EvenFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("even", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                               ScalarFunction::UnaryFunction<double, double, EvenOperator>));
+}
+
+//===--------------------------------------------------------------------===//
+// gcd
+//===--------------------------------------------------------------------===//
+
+// should be replaced with std::gcd in a newer C++ standard
+template <class TA>
+TA GreatestCommonDivisor(TA left, TA right) {
+	TA a = left;
+	TA b = right;
+
+	// This protects the following modulo operations from a corner case,
+	// where we would get a runtime error due to an integer overflow.
+	if ((left == NumericLimits<TA>::Minimum() && right == -1) ||
+	    (left == -1 && right == NumericLimits<TA>::Minimum())) {
+		return 1;
+	}
+
+	while (true) {
+		if (a == 0) {
+			return TryAbsOperator::Operation<TA, TA>(b);
+		}
+		b %= a;
+
+		if (b == 0) {
+			return TryAbsOperator::Operation<TA, TA>(a);
+		}
+		a %= b;
+	}
+}
+
+struct GreatestCommonDivisorOperator {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA left, TB right) {
+		return GreatestCommonDivisor(left, right);
+	}
+};
+
+void GreatestCommonDivisorFun::RegisterFunction(BuiltinFunctions &set) {
+	ScalarFunctionSet funcs("gcd");
+
+	funcs.AddFunction(
+	    ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT}, LogicalType::BIGINT,
+	                   ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, GreatestCommonDivisorOperator>));
+	funcs.AddFunction(
+	    ScalarFunction({LogicalType::HUGEINT, LogicalType::HUGEINT}, LogicalType::HUGEINT,
+	                   ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, GreatestCommonDivisorOperator>));
+
+	set.AddFunction(funcs);
+	funcs.name = "greatest_common_divisor";
+	set.AddFunction(funcs);
+}
+
+//===--------------------------------------------------------------------===//
+// lcm
+//===--------------------------------------------------------------------===//
+
+// should be replaced with std::lcm in a newer C++ standard
+struct LeastCommonMultipleOperator {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA left, TB right) {
+		if (left == 0 || right == 0) {
+			return 0;
+		}
+		TR result;
+		if (!TryMultiplyOperator::Operation<TA, TB, TR>(left, right / GreatestCommonDivisor(left, right), result)) {
+			throw OutOfRangeException("lcm value is out of range");
+		}
+		return TryAbsOperator::Operation<TR, TR>(result);
+	}
+};
+
+void LeastCommonMultipleFun::RegisterFunction(BuiltinFunctions &set) {
+	ScalarFunctionSet funcs("lcm");
+
+	funcs.AddFunction(
+	    ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT}, LogicalType::BIGINT,
+	                   ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, LeastCommonMultipleOperator>));
+	funcs.AddFunction(
+	    ScalarFunction({LogicalType::HUGEINT, LogicalType::HUGEINT}, LogicalType::HUGEINT,
+	                   ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, LeastCommonMultipleOperator>));
+
+	set.AddFunction(funcs);
+	funcs.name = "least_common_multiple";
+	set.AddFunction(funcs);
 }
 
 } // namespace duckdb

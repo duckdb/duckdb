@@ -6,6 +6,7 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 #include <functional>
 
 namespace duckdb {
@@ -88,7 +89,7 @@ struct RLEAnalyzeState : public AnalyzeState {
 
 template <class T>
 unique_ptr<AnalyzeState> RLEInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return make_unique<RLEAnalyzeState<T>>();
+	return make_uniq<RLEAnalyzeState<T>>();
 }
 
 template <class T>
@@ -224,7 +225,7 @@ struct RLECompressState : public CompressionState {
 
 template <class T, bool WRITE_STATISTICS>
 unique_ptr<CompressionState> RLEInitCompression(ColumnDataCheckpointer &checkpointer, unique_ptr<AnalyzeState> state) {
-	return make_unique<RLECompressState<T, WRITE_STATISTICS>>(checkpointer);
+	return make_uniq<RLECompressState<T, WRITE_STATISTICS>>(checkpointer);
 }
 
 template <class T, bool WRITE_STATISTICS>
@@ -281,7 +282,7 @@ struct RLEScanState : public SegmentScanState {
 
 template <class T>
 unique_ptr<SegmentScanState> RLEInitScan(ColumnSegment &segment) {
-	auto result = make_unique<RLEScanState<T>>(segment);
+	auto result = make_uniq<RLEScanState<T>>(segment);
 	return std::move(result);
 }
 

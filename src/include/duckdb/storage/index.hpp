@@ -14,7 +14,6 @@
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/types/constraint_conflict_info.hpp"
@@ -27,6 +26,7 @@ class Transaction;
 class ConflictManager;
 
 struct IndexLock;
+struct IndexScanState;
 
 //! The index is an abstract base class that serves as the basis for indexes
 class Index {
@@ -100,9 +100,9 @@ public:
 
 	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
 	//! index must also be locked during the merge
-	virtual bool MergeIndexes(IndexLock &state, Index *other_index) = 0;
+	virtual bool MergeIndexes(IndexLock &state, Index &other_index) = 0;
 	//! Obtains a lock and calls MergeIndexes while holding that lock
-	bool MergeIndexes(Index *other_index);
+	bool MergeIndexes(Index &other_index);
 
 	//! Returns the string representation of an index
 	virtual string ToString() = 0;
@@ -163,6 +163,19 @@ private:
 
 	//! Bind the unbound expressions of the index
 	unique_ptr<Expression> BindExpression(unique_ptr<Expression> expr);
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return (TARGET &)*this;
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return (const TARGET &)*this;
+	}
 };
 
 } // namespace duckdb

@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/unique_ptr.hpp"
+
 class RefCounter {
 public:
 	uint32_t pn;

@@ -15,6 +15,9 @@ namespace duckdb {
 //! LogicalDelimGet represents a duplicate eliminated scan belonging to a DelimJoin
 class LogicalDelimGet : public LogicalOperator {
 public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_DELIM_GET;
+
+public:
 	LogicalDelimGet(idx_t table_index, vector<LogicalType> types)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_DELIM_GET), table_index(table_index) {
 		D_ASSERT(types.size() > 0);

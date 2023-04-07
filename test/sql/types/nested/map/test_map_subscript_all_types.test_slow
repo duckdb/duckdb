@@ -1,0 +1,20 @@
+# name: test/sql/types/nested/map/test_map_subscript_all_types.test_slow
+# description: Test cardinality function for maps
+# group: [map]
+
+# Note: this is **incredibly** slow on debug
+
+statement ok
+PRAGMA enable_verification;
+
+query I nosort all_types
+SELECT [columns(*)]
+FROM test_all_types()
+WHERE bool IS NOT NULL;
+----
+
+query I nosort all_types
+SELECT map([columns(*)], [columns(*)])[columns(*)]
+FROM test_all_types()
+WHERE bool IS NOT NULL;
+----

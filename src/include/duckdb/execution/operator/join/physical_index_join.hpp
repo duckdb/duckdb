@@ -19,6 +19,9 @@ namespace duckdb {
 //! PhysicalIndexJoin represents an index join between two tables
 class PhysicalIndexJoin : public CachingPhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::INDEX_JOIN;
+
+public:
 	PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
 	                  vector<JoinCondition> cond, JoinType join_type, const vector<idx_t> &left_projection_map,
 	                  vector<idx_t> right_projection_map, vector<column_t> column_ids, Index *index, bool lhs_first,

@@ -842,3 +842,29 @@ query I
 SELECT '2023-05-01 12:00:00+00'::TIMESTAMPTZ;
 ----
 2023-05-01 06:00:00-06
+
+# 2023a
+# Egypt now uses DST again, from April through October
+statement ok
+SET TimeZone = 'Egypt';
+
+query I
+SELECT '2023-05-15 12:00:00+00'::TIMESTAMPTZ;
+----
+2023-05-15 15:00:00+03
+
+# 2023b
+# This year Lebanon springs forward April 20/21 not March 25/26.
+# 2023c
+# This release's code and data are identical to 2023a.  
+# In other words, this release reverts all changes made in 2023b other than commentary, 
+# as that appears to be the best of a bad set of short-notice choices for modeling 
+# this week's daylight saving chaos in Lebanon.
+
+statement ok
+SET TimeZone = 'Asia/Beirut';
+
+query II
+SELECT '2023-03-26 12:00:00+00'::TIMESTAMPTZ, '2023-04-21 12:00:00+00'::TIMESTAMPTZ;
+----
+2023-03-26 15:00:00+03	2023-04-21 15:00:00+03

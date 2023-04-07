@@ -14,6 +14,7 @@ unique_ptr<LogicalOperator> FilterPullup::Rewrite(unique_ptr<LogicalOperator> op
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 		return PullupJoin(std::move(op));
 	case LogicalOperatorType::LOGICAL_INTERSECT:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
@@ -31,8 +32,9 @@ unique_ptr<LogicalOperator> FilterPullup::Rewrite(unique_ptr<LogicalOperator> op
 
 unique_ptr<LogicalOperator> FilterPullup::PullupJoin(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
-	         op->type == LogicalOperatorType::LOGICAL_ANY_JOIN || op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
-	auto &join = (LogicalJoin &)*op;
+	         op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN || op->type == LogicalOperatorType::LOGICAL_ANY_JOIN ||
+	         op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
+	auto &join = op->Cast<LogicalJoin>();
 
 	switch (join.join_type) {
 	case JoinType::INNER:
@@ -49,7 +51,7 @@ unique_ptr<LogicalOperator> FilterPullup::PullupJoin(unique_ptr<LogicalOperator>
 }
 
 unique_ptr<LogicalOperator> FilterPullup::PullupInnerJoin(unique_ptr<LogicalOperator> op) {
-	D_ASSERT(((LogicalJoin &)*op).join_type == JoinType::INNER);
+	D_ASSERT(op->Cast<LogicalJoin>().join_type == JoinType::INNER);
 	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		return op;
 	}
@@ -63,7 +65,7 @@ unique_ptr<LogicalOperator> FilterPullup::PullupCrossProduct(unique_ptr<LogicalO
 
 unique_ptr<LogicalOperator> FilterPullup::GeneratePullupFilter(unique_ptr<LogicalOperator> child,
                                                                vector<unique_ptr<Expression>> &expressions) {
-	unique_ptr<LogicalFilter> filter = make_unique<LogicalFilter>();
+	unique_ptr<LogicalFilter> filter = make_uniq<LogicalFilter>();
 	for (idx_t i = 0; i < expressions.size(); ++i) {
 		filter->expressions.push_back(std::move(expressions[i]));
 	}

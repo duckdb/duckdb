@@ -20,14 +20,14 @@ unique_ptr<PhysicalResultCollector> PhysicalResultCollector::GetResultCollector(
                                                                                 PreparedStatementData &data) {
 	if (!PhysicalPlanGenerator::PreserveInsertionOrder(context, *data.plan)) {
 		// the plan is not order preserving, so we just use the parallel materialized collector
-		return make_unique_base<PhysicalResultCollector, PhysicalMaterializedCollector>(data, true);
+		return make_uniq_base<PhysicalResultCollector, PhysicalMaterializedCollector>(data, true);
 	} else if (!PhysicalPlanGenerator::UseBatchIndex(context, *data.plan)) {
 		// the plan is order preserving, but we cannot use the batch index: use a single-threaded result collector
-		return make_unique_base<PhysicalResultCollector, PhysicalMaterializedCollector>(data, false);
+		return make_uniq_base<PhysicalResultCollector, PhysicalMaterializedCollector>(data, false);
 	} else {
 		// we care about maintaining insertion order and the sources all support batch indexes
 		// use a batch collector
-		return make_unique_base<PhysicalResultCollector, PhysicalBatchCollector>(data);
+		return make_uniq_base<PhysicalResultCollector, PhysicalBatchCollector>(data);
 	}
 }
 

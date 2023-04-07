@@ -16,7 +16,7 @@ public:
 public:
 	DataChunk &GetIntermediateChunk(DataChunk &output, idx_t base_column_count) {
 		if (!intermediate_chunk) {
-			intermediate_chunk = make_unique<DataChunk>();
+			intermediate_chunk = make_uniq<DataChunk>();
 			// Create an empty DataChunk that has room for the input + the mapping vector
 			auto chunk_types = output.GetTypes();
 			vector<LogicalType> intermediate_types;
@@ -56,8 +56,8 @@ PhysicalTableInOutFunction::PhysicalTableInOutFunction(vector<LogicalType> types
 }
 
 unique_ptr<OperatorState> PhysicalTableInOutFunction::GetOperatorState(ExecutionContext &context) const {
-	auto &gstate = (TableInOutGlobalState &)*op_state;
-	auto result = make_unique<TableInOutLocalState>();
+	auto &gstate = op_state->Cast<TableInOutGlobalState>();
+	auto result = make_uniq<TableInOutLocalState>();
 	if (function.init_local) {
 		TableFunctionInitInput input(bind_data.get(), column_ids, vector<idx_t>(), nullptr);
 		result->local_state = function.init_local(context, input, gstate.global_state.get());
@@ -73,7 +73,7 @@ unique_ptr<OperatorState> PhysicalTableInOutFunction::GetOperatorState(Execution
 }
 
 unique_ptr<GlobalOperatorState> PhysicalTableInOutFunction::GetGlobalOperatorState(ClientContext &context) const {
-	auto result = make_unique<TableInOutGlobalState>();
+	auto result = make_uniq<TableInOutGlobalState>();
 	if (function.init_global) {
 		TableFunctionInitInput input(bind_data.get(), column_ids, vector<idx_t>(), nullptr);
 		result->global_state = function.init_global(context, input);
@@ -214,8 +214,8 @@ OperatorResultType PhysicalTableInOutFunction::ExecuteWithoutMapping(ExecutionCo
 
 OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                        GlobalOperatorState &gstate_p, OperatorState &state_p) const {
-	auto &gstate = (TableInOutGlobalState &)gstate_p;
-	auto &state = (TableInOutLocalState &)state_p;
+	auto &gstate = gstate_p.Cast<TableInOutGlobalState>();
+	auto &state = state_p.Cast<TableInOutLocalState>();
 	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
 	if (projected_input.empty()) {
 		return function.in_out_function(context, data, input, chunk);
@@ -229,8 +229,8 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 OperatorFinalizeResultType PhysicalTableInOutFunction::FinalExecute(ExecutionContext &context, DataChunk &chunk,
                                                                     GlobalOperatorState &gstate_p,
                                                                     OperatorState &state_p) const {
-	auto &gstate = (TableInOutGlobalState &)gstate_p;
-	auto &state = (TableInOutLocalState &)state_p;
+	auto &gstate = gstate_p.Cast<TableInOutGlobalState>();
+	auto &state = state_p.Cast<TableInOutLocalState>();
 	if (!projected_input.empty()) {
 		throw InternalException("FinalExecute not supported for project_input");
 	}

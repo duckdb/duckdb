@@ -83,7 +83,7 @@ void MergeSorter::MergePartition() {
 
 void MergeSorter::GetNextPartition() {
 	// Create result block
-	state.sorted_blocks_temp[state.pair_idx].push_back(make_unique<SortedBlock>(buffer_manager, state));
+	state.sorted_blocks_temp[state.pair_idx].push_back(make_uniq<SortedBlock>(buffer_manager, state));
 	result = state.sorted_blocks_temp[state.pair_idx].back().get();
 	// Determine which blocks must be merged
 	auto &left_block = *state.sorted_blocks[state.pair_idx * 2];
@@ -91,8 +91,8 @@ void MergeSorter::GetNextPartition() {
 	const idx_t l_count = left_block.Count();
 	const idx_t r_count = right_block.Count();
 	// Initialize left and right reader
-	left = make_unique<SBScanState>(buffer_manager, state);
-	right = make_unique<SBScanState>(buffer_manager, state);
+	left = make_uniq<SBScanState>(buffer_manager, state);
+	right = make_uniq<SBScanState>(buffer_manager, state);
 	// Compute the work that this thread must do using Merge Path
 	idx_t l_end;
 	idx_t r_end;

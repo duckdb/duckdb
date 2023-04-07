@@ -1,0 +1,21 @@
+# name: test/sql/types/struct/unnest_struct_subquery.test
+# description: Test UNNEST of struct in subquery
+# group: [struct]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+SELECT (SELECT UNNEST(a).a) FROM (VALUES ({'a': 42, 'b': 88})) t(a);
+----
+can only be applied as the root element
+
+query II
+SELECT UNNEST(a) FROM (VALUES ({'a': 42, 'b': 88})) t(a);
+----
+42	88
+
+query I
+SELECT (SELECT t.x FROM (SELECT UNNEST(a)) t(x)) FROM (VALUES ({'a': 42, 'b': 88})) t(a);
+----
+42

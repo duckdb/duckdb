@@ -93,7 +93,7 @@ TEST_CASE("Test Logical Types C API", "[capi]") {
 
 TEST_CASE("Test DataChunk C API", "[capi]") {
 	CAPITester tester;
-	unique_ptr<CAPIResult> result;
+	duckdb::unique_ptr<CAPIResult> result;
 	duckdb_state status;
 
 	REQUIRE(tester.OpenDatabase(nullptr));
@@ -195,7 +195,7 @@ TEST_CASE("Test DataChunk C API", "[capi]") {
 
 TEST_CASE("Test DataChunk result fetch in C API", "[capi]") {
 	CAPITester tester;
-	unique_ptr<CAPIResult> result;
+	duckdb::unique_ptr<CAPIResult> result;
 
 	if (duckdb_vector_size() < 64) {
 		return;

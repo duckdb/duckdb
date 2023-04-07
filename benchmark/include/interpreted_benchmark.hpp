@@ -24,7 +24,7 @@ public:
 
 	void LoadBenchmark();
 	//! Initialize the benchmark state
-	unique_ptr<BenchmarkState> Initialize(BenchmarkConfiguration &config) override;
+	duckdb::unique_ptr<BenchmarkState> Initialize(BenchmarkConfiguration &config) override;
 	//! Run the benchmark
 	void Run(BenchmarkState *state) override;
 	//! Cleanup the benchmark, called after each Run

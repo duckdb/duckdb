@@ -17,7 +17,7 @@ static void require_hugeint_eq(duckdb_hugeint left, uint64_t lower, int64_t uppe
 
 TEST_CASE("Basic test of C API", "[capi]") {
 	CAPITester tester;
-	unique_ptr<CAPIResult> result;
+	duckdb::unique_ptr<CAPIResult> result;
 
 	// open the database in in-memory mode
 	REQUIRE(tester.OpenDatabase(nullptr));
@@ -116,7 +116,7 @@ TEST_CASE("Basic test of C API", "[capi]") {
 
 TEST_CASE("Test different types of C API", "[capi]") {
 	CAPITester tester;
-	unique_ptr<CAPIResult> result;
+	duckdb::unique_ptr<CAPIResult> result;
 
 	// open the database in in-memory mode
 	REQUIRE(tester.OpenDatabase(nullptr));
@@ -390,7 +390,7 @@ TEST_CASE("Test different types of C API", "[capi]") {
 
 TEST_CASE("Test errors in C API", "[capi]") {
 	CAPITester tester;
-	unique_ptr<CAPIResult> result;
+	duckdb::unique_ptr<CAPIResult> result;
 
 	// cannot open database in random directory
 	REQUIRE(!tester.OpenDatabase("/bla/this/directory/should/not/exist/hopefully/awerar333"));
@@ -550,7 +550,7 @@ TEST_CASE("Issue #2058: Cleanup after execution of invalid SQL statement causes 
 TEST_CASE("Decimal -> Double casting issue", "[capi]") {
 
 	CAPITester tester;
-	unique_ptr<CAPIResult> result;
+	duckdb::unique_ptr<CAPIResult> result;
 
 	// open the database in in-memory mode
 	REQUIRE(tester.OpenDatabase(nullptr));

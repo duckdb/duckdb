@@ -257,6 +257,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 		result = LogicalDelimJoin::Deserialize(state, reader);
 		break;
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+		result = LogicalAsOfJoin::Deserialize(state, reader);
+		break;
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 		result = LogicalComparisonJoin::Deserialize(state, reader);
 		break;
@@ -347,6 +350,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 		throw SerializationException("Logical Detach does not support serialization");
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
 		result = LogicalExtensionOperator::Deserialize(state, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_PIVOT:
+		result = LogicalPivot::Deserialize(state, reader);
 		break;
 	case LogicalOperatorType::LOGICAL_INVALID:
 		/* no default here to trigger a warning if we forget to implement deserialize for a new operator */

@@ -56,11 +56,11 @@ public:
 	virtual void Scan(CatalogType type, const std::function<void(CatalogEntry *)> &callback) = 0;
 
 	//! Serialize the meta information of the SchemaCatalogEntry a serializer
-	virtual void Serialize(Serializer &serializer);
+	virtual void Serialize(Serializer &serializer) const;
 	//! Deserializes to a CreateSchemaInfo
 	static unique_ptr<CreateSchemaInfo> Deserialize(Deserializer &source);
 
-	string ToSQL() override;
+	string ToSQL() const override;
 
 	//! Creates an index with the given name in the schema
 	virtual CatalogEntry *CreateIndex(ClientContext &context, CreateIndexInfo *info, TableCatalogEntry *table) = 0;

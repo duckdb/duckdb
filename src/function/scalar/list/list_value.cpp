@@ -43,7 +43,7 @@ static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunc
 	// this is more for completeness reasons
 	bound_function.varargs = child_type;
 	bound_function.return_type = LogicalType::LIST(child_type);
-	return make_unique<VariableReturnBindData>(bound_function.return_type);
+	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
 unique_ptr<BaseStatistics> ListValueStats(ClientContext &context, FunctionStatisticsInput &input) {

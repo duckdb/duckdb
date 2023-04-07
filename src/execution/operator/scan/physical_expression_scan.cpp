@@ -17,7 +17,7 @@ public:
 };
 
 unique_ptr<OperatorState> PhysicalExpressionScan::GetOperatorState(ExecutionContext &context) const {
-	return make_unique<ExpressionScanState>(Allocator::Get(context.client), *this);
+	return make_uniq<ExpressionScanState>(Allocator::Get(context.client), *this);
 }
 
 OperatorResultType PhysicalExpressionScan::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,

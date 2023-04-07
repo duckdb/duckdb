@@ -13,18 +13,18 @@ bool EmptyTableRef::Equals(const TableRef *other) const {
 }
 
 unique_ptr<TableRef> EmptyTableRef::Copy() {
-	return make_unique<EmptyTableRef>();
+	return make_uniq<EmptyTableRef>();
 }
 
 void EmptyTableRef::Serialize(FieldWriter &writer) const {
 }
 
 unique_ptr<TableRef> EmptyTableRef::Deserialize(FieldReader &reader) {
-	return make_unique<EmptyTableRef>();
+	return make_uniq<EmptyTableRef>();
 }
 
 unique_ptr<TableRef> EmptyTableRef::FormatDeserialize(FormatDeserializer &source) {
-	return make_unique<EmptyTableRef>();
+	return make_uniq<EmptyTableRef>();
 }
 
 } // namespace duckdb

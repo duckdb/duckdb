@@ -22,6 +22,7 @@
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
 class BoundForeignKeyConstraint;
@@ -39,6 +40,7 @@ class Transaction;
 class WriteAheadLog;
 class TableDataWriter;
 class ConflictManager;
+class TableScanState;
 enum class VerifyExistenceType : uint8_t;
 
 //! DataTable represents a physical table on disk
@@ -56,7 +58,7 @@ public:
 	DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
 	          const vector<column_t> &bound_columns, Expression &cast_expr);
 	//! Constructs a DataTable as a delta on an existing data table but with one column added new constraint
-	DataTable(ClientContext &context, DataTable &parent, unique_ptr<BoundConstraint> constraint);
+	explicit DataTable(ClientContext &context, DataTable &parent, unique_ptr<BoundConstraint> constraint);
 
 	//! The table info
 	shared_ptr<DataTableInfo> info;

@@ -10,11 +10,11 @@ unique_ptr<BoundCastData> ListBoundCastData::BindListToListCast(BindCastInput &i
 	auto &source_child_type = ListType::GetChildType(source);
 	auto &result_child_type = ListType::GetChildType(target);
 	auto child_cast = input.GetCastFunction(source_child_type, result_child_type);
-	return make_unique<ListBoundCastData>(std::move(child_cast));
+	return make_uniq<ListBoundCastData>(std::move(child_cast));
 }
 
 unique_ptr<FunctionLocalState> ListBoundCastData::InitListLocalState(CastLocalStateParameters &parameters) {
-	auto &cast_data = (ListBoundCastData &)*parameters.cast_data;
+	auto &cast_data = parameters.cast_data->Cast<ListBoundCastData>();
 	if (!cast_data.child_cast_info.init_local_state) {
 		return nullptr;
 	}
@@ -23,7 +23,7 @@ unique_ptr<FunctionLocalState> ListBoundCastData::InitListLocalState(CastLocalSt
 }
 
 bool ListCast::ListToListCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	auto &cast_data = (ListBoundCastData &)*parameters.cast_data;
+	auto &cast_data = parameters.cast_data->Cast<ListBoundCastData>();
 
 	// only handle constant and flat vectors here for now
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {

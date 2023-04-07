@@ -10,10 +10,10 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 	switch (val.type) {
 	case duckdb_libpgquery::T_PGInteger:
 		D_ASSERT(val.val.ival <= NumericLimits<int32_t>::Maximum());
-		return make_unique<ConstantExpression>(Value::INTEGER((int32_t)val.val.ival));
+		return make_uniq<ConstantExpression>(Value::INTEGER((int32_t)val.val.ival));
 	case duckdb_libpgquery::T_PGBitString: // FIXME: this should actually convert to BLOB
 	case duckdb_libpgquery::T_PGString:
-		return make_unique<ConstantExpression>(Value(string(val.val.str)));
+		return make_uniq<ConstantExpression>(Value(string(val.val.str)));
 	case duckdb_libpgquery::T_PGFloat: {
 		string_t str_val(val.val.str);
 		bool try_cast_as_integer = true;
@@ -36,13 +36,13 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 			// try to cast as bigint first
 			if (TryCast::Operation<string_t, int64_t>(str_val, bigint_value)) {
 				// successfully cast to bigint: bigint value
-				return make_unique<ConstantExpression>(Value::BIGINT(bigint_value));
+				return make_uniq<ConstantExpression>(Value::BIGINT(bigint_value));
 			}
 			hugeint_t hugeint_value;
 			// if that is not successful; try to cast as hugeint
 			if (TryCast::Operation<string_t, hugeint_t>(str_val, hugeint_value)) {
 				// successfully cast to bigint: bigint value
-				return make_unique<ConstantExpression>(Value::HUGEINT(hugeint_value));
+				return make_uniq<ConstantExpression>(Value::HUGEINT(hugeint_value));
 			}
 		}
 		idx_t decimal_offset = val.val.str[0] == '-' ? 3 : 2;
@@ -58,15 +58,15 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 				// we can cast the value as a decimal
 				Value val = Value(str_val);
 				val = val.DefaultCastAs(LogicalType::DECIMAL(width, scale));
-				return make_unique<ConstantExpression>(std::move(val));
+				return make_uniq<ConstantExpression>(std::move(val));
 			}
 		}
 		// if there is a decimal or the value is too big to cast as either hugeint or bigint
 		double dbl_value = Cast::Operation<string_t, double>(str_val);
-		return make_unique<ConstantExpression>(Value::DOUBLE(dbl_value));
+		return make_uniq<ConstantExpression>(Value::DOUBLE(dbl_value));
 	}
 	case duckdb_libpgquery::T_PGNull:
-		return make_unique<ConstantExpression>(Value(LogicalType::SQLNULL));
+		return make_uniq<ConstantExpression>(Value(LogicalType::SQLNULL));
 	default:
 		throw NotImplementedException("Value not implemented!");
 	}

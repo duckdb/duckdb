@@ -106,11 +106,11 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 	vector<CatalogEntry *> to_delete;
 	for (auto &dependency : old_dependencies) {
 		if (dependency->type == CatalogType::TYPE_ENTRY) {
-			auto user_type = (TypeCatalogEntry *)dependency;
-			auto table = (TableCatalogEntry *)new_obj;
+			auto &user_type = dependency->Cast<TypeCatalogEntry>();
+			auto &table = new_obj->Cast<TableCatalogEntry>();
 			bool deleted_dependency = true;
-			for (auto &column : table->GetColumns().Logical()) {
-				if (column.Type() == user_type->user_type) {
+			for (auto &column : table.GetColumns().Logical()) {
+				if (column.Type() == user_type.user_type) {
 					deleted_dependency = false;
 					break;
 				}

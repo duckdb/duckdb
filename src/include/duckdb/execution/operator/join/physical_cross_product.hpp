@@ -16,6 +16,9 @@ namespace duckdb {
 //! PhysicalCrossProduct represents a cross product between two tables
 class PhysicalCrossProduct : public CachingPhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::CROSS_PRODUCT;
+
+public:
 	PhysicalCrossProduct(vector<LogicalType> types, unique_ptr<PhysicalOperator> left,
 	                     unique_ptr<PhysicalOperator> right, idx_t estimated_cardinality);
 
@@ -60,10 +63,12 @@ public:
 
 	OperatorResultType Execute(DataChunk &input, DataChunk &output);
 
+	// returns if the left side is scanned as a constant vector
 	bool ScanLHS() {
 		return scan_input_chunk;
 	}
 
+	// returns the position in the chunk of chunk scanned as a constant input vector
 	idx_t PositionInChunk() {
 		return position_in_chunk;
 	}

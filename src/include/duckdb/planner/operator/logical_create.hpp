@@ -16,6 +16,9 @@ namespace duckdb {
 //! LogicalCreate represents a CREATE operator
 class LogicalCreate : public LogicalOperator {
 public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_INVALID;
+
+public:
 	LogicalCreate(LogicalOperatorType type, unique_ptr<CreateInfo> info, SchemaCatalogEntry *schema = nullptr)
 	    : LogicalOperator(type), schema(schema), info(std::move(info)) {
 	}

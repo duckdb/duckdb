@@ -9,16 +9,16 @@ namespace duckdb {
 
 static void TransformPivotInList(unique_ptr<ParsedExpression> &expr, PivotColumnEntry &entry, bool root_entry = true) {
 	if (expr->type == ExpressionType::COLUMN_REF) {
-		auto &colref = (ColumnRefExpression &)*expr;
+		auto &colref = expr->Cast<ColumnRefExpression>();
 		if (colref.IsQualified()) {
 			throw ParserException("PIVOT IN list cannot contain qualified column references");
 		}
 		entry.values.emplace_back(colref.GetColumnName());
 	} else if (expr->type == ExpressionType::VALUE_CONSTANT) {
-		auto &constant_expr = (ConstantExpression &)*expr;
+		auto &constant_expr = expr->Cast<ConstantExpression>();
 		entry.values.push_back(std::move(constant_expr.value));
 	} else if (root_entry && expr->type == ExpressionType::FUNCTION) {
-		auto &function = (FunctionExpression &)*expr;
+		auto &function = expr->Cast<FunctionExpression>();
 		if (function.function_name != "row") {
 			throw ParserException("PIVOT IN list must contain columns or lists of columns");
 		}
@@ -34,7 +34,21 @@ static void TransformPivotInList(unique_ptr<ParsedExpression> &expr, PivotColumn
 
 PivotColumn Transformer::TransformPivotColumn(duckdb_libpgquery::PGPivot *pivot) {
 	PivotColumn col;
-	col.names = TransformStringList(pivot->pivot_columns);
+	if (pivot->pivot_columns) {
+		TransformExpressionList(*pivot->pivot_columns, col.pivot_expressions);
+		for (auto &expr : col.pivot_expressions) {
+			if (expr->IsScalar()) {
+				throw ParserException("Cannot pivot on constant value \"%s\"", expr->ToString());
+			}
+			if (expr->HasSubquery()) {
+				throw ParserException("Cannot pivot on subquery \"%s\"", expr->ToString());
+			}
+		}
+	} else if (pivot->unpivot_columns) {
+		col.unpivot_names = TransformStringList(pivot->unpivot_columns);
+	} else {
+		throw InternalException("Either pivot_columns or unpivot_columns must be defined");
+	}
 	if (pivot->pivot_value) {
 		for (auto node = pivot->pivot_value->head; node != nullptr; node = node->next) {
 			auto n = (duckdb_libpgquery::PGNode *)node->data.ptr_value;
@@ -61,7 +75,7 @@ vector<PivotColumn> Transformer::TransformPivotList(duckdb_libpgquery::PGList *l
 }
 
 unique_ptr<TableRef> Transformer::TransformPivot(duckdb_libpgquery::PGPivotExpr *root) {
-	auto result = make_unique<PivotRef>();
+	auto result = make_uniq<PivotRef>();
 	result->source = TransformTableRefNode(root->source);
 	if (root->aggrs) {
 		TransformExpressionList(*root->aggrs, result->aggregates);
@@ -78,13 +92,15 @@ unique_ptr<TableRef> Transformer::TransformPivot(duckdb_libpgquery::PGPivotExpr 
 		bool is_pivot = result->unpivot_names.empty();
 		if (!result->unpivot_names.empty()) {
 			// unpivot
-			if (pivot.names.size() != 1) {
+			if (pivot.unpivot_names.size() != 1) {
 				throw ParserException("UNPIVOT requires a single column name for the PIVOT IN clause");
 			}
+			D_ASSERT(pivot.pivot_expressions.empty());
 			expected_size = pivot.entries[0].values.size();
 		} else {
 			// pivot
-			expected_size = pivot.names.size();
+			expected_size = pivot.pivot_expressions.size();
+			D_ASSERT(pivot.unpivot_names.empty());
 		}
 		for (auto &entry : pivot.entries) {
 			if (entry.star_expr && is_pivot) {

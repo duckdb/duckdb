@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/projection/physical_unnest.hpp
+// duckdb/execution/operator/projection/physical_tableinout_function.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -19,6 +19,9 @@ class TableInOutGlobalState;
 
 //! PhysicalWindow implements window functions
 class PhysicalTableInOutFunction : public PhysicalOperator {
+public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::INOUT_FUNCTION;
+
 public:
 	PhysicalTableInOutFunction(vector<LogicalType> types, TableFunction function_p,
 	                           unique_ptr<FunctionData> bind_data_p, vector<column_t> column_ids_p,

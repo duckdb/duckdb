@@ -3,7 +3,7 @@ pybind11>=2.6.0
 setuptools_scm>=6.3
 setuptools>=58
 pytest
-pandas
+pandas<=1.5.3
 pyarrow
 mypy
 psutil>=5.9.0

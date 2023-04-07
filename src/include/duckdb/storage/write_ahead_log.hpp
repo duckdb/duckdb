@@ -110,30 +110,30 @@ public:
 	//! Gets the total bytes written to the WAL since startup
 	idx_t GetTotalWritten();
 
-	virtual void WriteCreateTable(TableCatalogEntry *entry);
-	void WriteDropTable(TableCatalogEntry *entry);
+	virtual void WriteCreateTable(const TableCatalogEntry &entry);
+	void WriteDropTable(const TableCatalogEntry &entry);
 
-	void WriteCreateSchema(SchemaCatalogEntry *entry);
-	void WriteDropSchema(SchemaCatalogEntry *entry);
+	void WriteCreateSchema(const SchemaCatalogEntry &entry);
+	void WriteDropSchema(const SchemaCatalogEntry &entry);
 
-	void WriteCreateView(ViewCatalogEntry *entry);
-	void WriteDropView(ViewCatalogEntry *entry);
+	void WriteCreateView(const ViewCatalogEntry &entry);
+	void WriteDropView(const ViewCatalogEntry &entry);
 
-	void WriteCreateSequence(SequenceCatalogEntry *entry);
-	void WriteDropSequence(SequenceCatalogEntry *entry);
-	void WriteSequenceValue(SequenceCatalogEntry *entry, SequenceValue val);
+	void WriteCreateSequence(const SequenceCatalogEntry &entry);
+	void WriteDropSequence(const SequenceCatalogEntry &entry);
+	void WriteSequenceValue(const SequenceCatalogEntry &entry, SequenceValue val);
 
-	void WriteCreateMacro(ScalarMacroCatalogEntry *entry);
-	void WriteDropMacro(ScalarMacroCatalogEntry *entry);
+	void WriteCreateMacro(const ScalarMacroCatalogEntry &entry);
+	void WriteDropMacro(const ScalarMacroCatalogEntry &entry);
 
-	void WriteCreateTableMacro(TableMacroCatalogEntry *entry);
-	void WriteDropTableMacro(TableMacroCatalogEntry *entry);
+	void WriteCreateTableMacro(const TableMacroCatalogEntry &entry);
+	void WriteDropTableMacro(const TableMacroCatalogEntry &entry);
 
-	void WriteCreateIndex(IndexCatalogEntry *entry);
-	void WriteDropIndex(IndexCatalogEntry *entry);
+	void WriteCreateIndex(const IndexCatalogEntry &entry);
+	void WriteDropIndex(const IndexCatalogEntry &entry);
 
-	void WriteCreateType(TypeCatalogEntry *entry);
-	void WriteDropType(TypeCatalogEntry *entry);
+	void WriteCreateType(const TypeCatalogEntry &entry);
+	void WriteDropType(const TypeCatalogEntry &entry);
 	//! Sets the table used for subsequent insert/delete/update commands
 	void WriteSetTable(string &schema, string &table);
 

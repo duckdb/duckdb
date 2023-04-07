@@ -170,12 +170,12 @@ struct LikeMatcher : public FunctionData {
 		if (segments.empty()) {
 			return nullptr;
 		}
-		return make_unique<LikeMatcher>(std::move(like_pattern), std::move(segments), has_start_percentage,
-		                                has_end_percentage);
+		return make_uniq<LikeMatcher>(std::move(like_pattern), std::move(segments), has_start_percentage,
+		                              has_end_percentage);
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<LikeMatcher>(like_pattern, segments, has_start_percentage, has_end_percentage);
+		return make_uniq<LikeMatcher>(like_pattern, segments, has_start_percentage, has_end_percentage);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
@@ -490,7 +490,7 @@ static unique_ptr<BaseStatistics> ILikePropagateStats(ClientContext &context, Fu
 
 template <class OP, bool INVERT>
 static void RegularLikeFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	if (func_expr.bind_info) {
 		auto &matcher = (LikeMatcher &)*func_expr.bind_info;
 		// use fast like matcher
