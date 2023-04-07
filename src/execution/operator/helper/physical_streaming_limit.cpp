@@ -60,12 +60,12 @@ OperatorResultType PhysicalStreamingLimit::Execute(ExecutionContext &context, Da
 	return OperatorResultType::NEED_MORE_INPUT;
 }
 
-bool PhysicalStreamingLimit::ParallelOperator() const {
-	return parallel;
+OrderPreservationType PhysicalStreamingLimit::OperatorOrder() const {
+	return OrderPreservationType::FIXED_ORDER;
 }
 
-bool PhysicalStreamingLimit::SinkOrderDependent() const {
-	return true;
+bool PhysicalStreamingLimit::ParallelOperator() const {
+	return parallel;
 }
 
 } // namespace duckdb

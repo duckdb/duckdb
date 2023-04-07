@@ -92,6 +92,11 @@ public:
 		return false;
 	}
 
+	//! The influence the operator has on order (insertion order means no influence)
+	virtual OrderPreservationType OperatorOrder() const {
+		return OrderPreservationType::INSERTION_ORDER;
+	}
+
 public:
 	// Source interface
 	virtual unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,

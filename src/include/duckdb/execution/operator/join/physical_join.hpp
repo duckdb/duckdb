@@ -40,6 +40,9 @@ public:
 	OrderPreservationType SourceOrder() const override {
 		return OrderPreservationType::NO_ORDER;
 	}
+	OrderPreservationType OperatorOrder() const override {
+		return OrderPreservationType::NO_ORDER;
+	}
 	bool SinkOrderDependent() const override {
 		return false;
 	}

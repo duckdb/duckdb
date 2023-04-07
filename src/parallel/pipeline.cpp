@@ -107,6 +107,14 @@ bool Pipeline::IsOrderDependent() const {
 			return false;
 		}
 	}
+	for (auto &op : operators) {
+		if (op->OperatorOrder() == OrderPreservationType::NO_ORDER) {
+			return false;
+		}
+		if (op->OperatorOrder() == OrderPreservationType::FIXED_ORDER) {
+			return true;
+		}
+	}
 	if (!config.options.preserve_insertion_order) {
 		return false;
 	}
