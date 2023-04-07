@@ -1,14 +1,17 @@
-import pandas as pd
 import duckdb
+import pytest
 try:
     import pyarrow as pa
     can_run = True
 except:
     can_run = False
+from conftest import NumpyPandas, ArrowPandas
 
 class Test3654(object):
-    def test_3654_pandas(self, duckdb_cursor):
-        df1 = pd.DataFrame({
+    
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_3654_pandas(self, duckdb_cursor, pandas):
+        df1 = pandas.DataFrame({
             'id': [1, 1, 2],
         })
         con = duckdb.connect()
@@ -17,11 +20,12 @@ class Test3654(object):
         print(rel.execute().fetchall())
         assert rel.execute().fetchall() == [(1,), (1,), (2,)]
 
-    def test_3654_arrow(self, duckdb_cursor):
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_3654_arrow(self, duckdb_cursor, pandas):
         if not can_run:
             return
 
-        df1 = pd.DataFrame({
+        df1 = pandas.DataFrame({
             'id': [1, 1, 2],
         })
         table = pa.Table.from_pandas(df1)
