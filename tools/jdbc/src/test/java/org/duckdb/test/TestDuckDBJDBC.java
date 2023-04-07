@@ -192,15 +192,11 @@ public class TestDuckDBJDBC {
 		Statement stmt = conn.createStatement();
 
 		stmt = conn.createStatement();
-		stmt.execute("CREATE TABLE t (id INT, b INTEGER[])");
-		stmt.execute("INSERT INTO t VALUES (1, [2, 3])");
 
-		try {
-			ResultSet rs = stmt.executeQuery("SELECT * FROM t");
+		assertThrows(() -> {
+			ResultSet rs = stmt.executeQuery("SELECT");
 			rs.next();
-			fail();
-		} catch (SQLException e) {
-		}
+		}, SQLException.class);
 	}
 
 	public static void test_autocommit_off() throws Exception {
