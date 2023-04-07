@@ -23,7 +23,7 @@ void PragmaHandler::HandlePragmaStatementsInternal(vector<unique_ptr<SQLStatemen
 	vector<unique_ptr<SQLStatement>> new_statements;
 	for (idx_t i = 0; i < statements.size(); i++) {
 		if (statements[i]->type == StatementType::MULTI_STATEMENT) {
-			auto &multi_statement = (MultiStatement &)*statements[i];
+			auto &multi_statement = statements[i]->Cast<MultiStatement>();
 			for (auto &stmt : multi_statement.statements) {
 				statements.push_back(std::move(stmt));
 			}
@@ -68,7 +68,7 @@ void PragmaHandler::HandlePragmaStatements(ClientContextLock &lock, vector<uniqu
 }
 
 string PragmaHandler::HandlePragma(SQLStatement *statement) { // PragmaInfo &info
-	auto info = *((PragmaStatement &)*statement).info;
+	auto info = *(statement->Cast<PragmaStatement>()).info;
 	auto entry =
 	    Catalog::GetEntry<PragmaFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, info.name, false);
 	string error;

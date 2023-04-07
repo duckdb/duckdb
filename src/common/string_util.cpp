@@ -184,12 +184,34 @@ string StringUtil::Upper(const string &str) {
 
 string StringUtil::Lower(const string &str) {
 	string copy(str);
-	transform(copy.begin(), copy.end(), copy.begin(), [](unsigned char c) { return std::tolower(c); });
+	transform(copy.begin(), copy.end(), copy.begin(), [](unsigned char c) { return StringUtil::CharacterToLower(c); });
 	return (copy);
 }
 
+// Jenkins hash function: https://en.wikipedia.org/wiki/Jenkins_hash_function
+uint64_t StringUtil::CIHash(const string &str) {
+	uint32_t hash = 0;
+	for (auto c : str) {
+		hash += StringUtil::CharacterToLower(c);
+		hash += hash << 10;
+		hash ^= hash >> 6;
+	}
+	hash += hash << 3;
+	hash ^= hash >> 11;
+	hash += hash << 15;
+	return hash;
+}
+
 bool StringUtil::CIEquals(const string &l1, const string &l2) {
-	return StringUtil::Lower(l1) == StringUtil::Lower(l2);
+	if (l1.size() != l2.size()) {
+		return false;
+	}
+	for (idx_t c = 0; c < l1.size(); c++) {
+		if (StringUtil::CharacterToLower(l1[c]) != StringUtil::CharacterToLower(l2[c])) {
+			return false;
+		}
+	}
+	return true;
 }
 
 vector<string> StringUtil::Split(const string &input, const string &split) {

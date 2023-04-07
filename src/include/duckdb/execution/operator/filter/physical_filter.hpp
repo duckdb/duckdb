@@ -18,6 +18,9 @@ namespace duckdb {
 //! adds a selection vector to the chunk.
 class PhysicalFilter : public CachingPhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::FILTER;
+
+public:
 	PhysicalFilter(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality);
 
 	//! The filter expression

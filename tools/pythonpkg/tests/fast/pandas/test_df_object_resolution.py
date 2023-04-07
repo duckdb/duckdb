@@ -371,6 +371,13 @@ class TestResolveObjectColumns(object):
         double_dtype = np.dtype('float64')
         assert isinstance(converted_col['0'].dtype, double_dtype.__class__) == True
 
+    def test_numpy_stringliterals(self):
+        con = duckdb.connect()
+        df = pd.DataFrame({"x": list(map(np.str_, range(3)))})
+
+        res = con.execute("select * from df").fetchall()
+        assert res == [('0',), ('1',), ('2',)]
+
     def test_integer_conversion_fail(self):
         data = [2**10000, 0]
         x = pd.DataFrame({'0': pd.Series(data=data, dtype='object')})

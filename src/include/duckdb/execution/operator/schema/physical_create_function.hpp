@@ -16,6 +16,9 @@ namespace duckdb {
 //! PhysicalCreateFunction represents a CREATE FUNCTION command
 class PhysicalCreateFunction : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::CREATE_MACRO;
+
+public:
 	explicit PhysicalCreateFunction(unique_ptr<CreateMacroInfo> info, idx_t estimated_cardinality)
 	    : PhysicalOperator(PhysicalOperatorType::CREATE_MACRO, {LogicalType::BIGINT}, estimated_cardinality),
 	      info(std::move(info)) {

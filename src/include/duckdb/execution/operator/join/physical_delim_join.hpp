@@ -18,6 +18,9 @@ class PhysicalHashAggregate;
 //! PhysicalColumnDataScan in the RHS.
 class PhysicalDelimJoin : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::DELIM_JOIN;
+
+public:
 	PhysicalDelimJoin(vector<LogicalType> types, unique_ptr<PhysicalOperator> original_join,
 	                  vector<PhysicalOperator *> delim_scans, idx_t estimated_cardinality);
 

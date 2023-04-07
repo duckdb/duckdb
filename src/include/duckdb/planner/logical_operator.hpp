@@ -89,5 +89,22 @@ public:
 protected:
 	//! Resolve types for this specific operator
 	virtual void ResolveTypes() = 0;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (TARGET::TYPE != LogicalOperatorType::LOGICAL_INVALID && type != TARGET::TYPE) {
+			throw InternalException("Failed to cast logical operator to type - logical operator type mismatch");
+		}
+		return (TARGET &)*this;
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (TARGET::TYPE != LogicalOperatorType::LOGICAL_INVALID && type != TARGET::TYPE) {
+			throw InternalException("Failed to cast logical operator to type - logical operator type mismatch");
+		}
+		return (const TARGET &)*this;
+	}
 };
 } // namespace duckdb

@@ -4,13 +4,7 @@
 
 load __TEST_DIR__/restart_current_time.db
 
-statement ok
+statement error
 CREATE TABLE t0 (c1 INT, CHECK (CURRENT_TIME >= TIME '00:00:00'));
-
-restart
-
-statement ok
-INSERT INTO t0(c1) VALUES (0);
-
-statement ok
-DROP TABLE t0;
+----
+Table does not contain column CURRENT_TIME

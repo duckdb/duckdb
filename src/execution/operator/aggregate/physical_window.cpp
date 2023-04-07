@@ -454,7 +454,7 @@ PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expr
 	is_order_dependent = false;
 	for (auto &expr : select_list) {
 		D_ASSERT(expr->expression_class == ExpressionClass::BOUND_WINDOW);
-		auto &bound_window = (BoundWindowExpression &)*expr;
+		auto &bound_window = expr->Cast<BoundWindowExpression>();
 		if (bound_window.partitions.empty() && bound_window.orders.empty()) {
 			is_order_dependent = true;
 		}
@@ -1423,8 +1423,8 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 //===--------------------------------------------------------------------===//
 SinkResultType PhysicalWindow::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
                                     DataChunk &input) const {
-	auto &gstate = (WindowGlobalSinkState &)gstate_p;
-	auto &lstate = (WindowLocalSinkState &)lstate_p;
+	auto &gstate = gstate_p.Cast<WindowGlobalSinkState>();
+	auto &lstate = lstate_p.Cast<WindowLocalSinkState>();
 
 	lstate.Sink(input, gstate);
 
@@ -1432,8 +1432,8 @@ SinkResultType PhysicalWindow::Sink(ExecutionContext &context, GlobalSinkState &
 }
 
 void PhysicalWindow::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {
-	auto &gstate = (WindowGlobalSinkState &)gstate_p;
-	auto &lstate = (WindowLocalSinkState &)lstate_p;
+	auto &gstate = gstate_p.Cast<WindowGlobalSinkState>();
+	auto &lstate = lstate_p.Cast<WindowLocalSinkState>();
 	lstate.Combine(gstate);
 }
 
@@ -1720,7 +1720,7 @@ public:
 
 SinkFinalizeType PhysicalWindow::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                           GlobalSinkState &gstate_p) const {
-	auto &state = (WindowGlobalSinkState &)gstate_p;
+	auto &state = gstate_p.Cast<WindowGlobalSinkState>();
 
 	//	Did we get any data?
 	if (!state.count) {
@@ -1761,7 +1761,7 @@ public:
 
 public:
 	idx_t MaxThreads() override {
-		auto &state = (WindowGlobalSinkState &)*op.sink_state;
+		auto &state = op.sink_state->Cast<WindowGlobalSinkState>();
 
 		// If there is only one partition, we have to process it on one thread.
 		if (!state.grouping_data) {
@@ -1870,7 +1870,7 @@ void WindowLocalSourceState::MaterializeSortedData() {
 }
 
 void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, const idx_t hash_bin_p) {
-	auto &op = (PhysicalWindow &)gstate.op;
+	auto &op = gstate.op.Cast<PhysicalWindow>();
 
 	//	Get rid of any stale data
 	hash_bin = hash_bin_p;
@@ -1990,7 +1990,7 @@ void WindowLocalSourceState::Scan(DataChunk &result) {
 
 unique_ptr<LocalSourceState> PhysicalWindow::GetLocalSourceState(ExecutionContext &context,
                                                                  GlobalSourceState &gstate_p) const {
-	auto &gstate = (WindowGlobalSourceState &)gstate_p;
+	auto &gstate = gstate_p.Cast<WindowGlobalSourceState>();
 	return make_uniq<WindowLocalSourceState>(*this, context, gstate);
 }
 
@@ -2000,9 +2000,9 @@ unique_ptr<GlobalSourceState> PhysicalWindow::GetGlobalSourceState(ClientContext
 
 void PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                              LocalSourceState &lstate_p) const {
-	auto &state = (WindowLocalSourceState &)lstate_p;
-	auto &global_source = (WindowGlobalSourceState &)gstate_p;
-	auto &gstate = (WindowGlobalSinkState &)*sink_state;
+	auto &state = lstate_p.Cast<WindowLocalSourceState>();
+	auto &global_source = gstate_p.Cast<WindowGlobalSourceState>();
+	auto &gstate = sink_state->Cast<WindowGlobalSinkState>();
 
 	const auto bin_count = gstate.hash_groups.empty() ? 1 : gstate.hash_groups.size();
 
