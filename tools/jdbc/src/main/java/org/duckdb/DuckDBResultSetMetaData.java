@@ -54,6 +54,8 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 			return DuckDBColumnType.STRUCT;
 		} else if (type_name.startsWith("MAP")) {
 			return DuckDBColumnType.MAP;
+		} else if (type_name.startsWith("UNION")) {
+			return DuckDBColumnType.UNION;
 		} else {
 			return DuckDBColumnType.valueOf(type_name);
 		}

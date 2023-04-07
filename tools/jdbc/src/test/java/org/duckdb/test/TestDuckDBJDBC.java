@@ -3120,7 +3120,50 @@ public class TestDuckDBJDBC {
 			}
 			
 			assertTrue(supportsCatalogsInIndexDefinitions, "supportsCatalogsInIndexDefinitions should return true.");
-		} 
+		}
+	}
+
+	public static void test_structs() throws Exception {
+		try (Connection connection = DriverManager.getConnection("jdbc:duckdb:");
+			 PreparedStatement statement = connection.prepareStatement("select {\"a\": 1}")) {
+			ResultSet resultSet = statement.executeQuery();
+			assertTrue(resultSet.next());
+			assertEquals(resultSet.getObject(1), "{'a': 1}");
+		}
+	}
+
+	public static void test_union() throws Exception {
+		try (Connection connection = DriverManager.getConnection("jdbc:duckdb:");
+			 Statement statement = connection.createStatement()) {
+			statement.execute("CREATE TABLE tbl1(u UNION(num INT, str VARCHAR));");
+			statement.execute("INSERT INTO tbl1 values (1) , ('two') , (union_value(str := 'three'));");
+
+			ResultSet rs = statement.executeQuery("select * from tbl1");
+			assertTrue(rs.next());
+			assertEquals(rs.getObject(1), "1");
+			assertTrue(rs.next());
+			assertEquals(rs.getObject(1), "two");
+			assertTrue(rs.next());
+			assertEquals(rs.getObject(1), "three");
+		}
+	}
+
+	public static void test_list() throws Exception {
+		try (Connection connection = DriverManager.getConnection("jdbc:duckdb:");
+			 PreparedStatement statement = connection.prepareStatement("select [1]")) {
+			ResultSet rs = statement.executeQuery();
+			assertTrue(rs.next());
+			assertEquals(rs.getObject(1), "[1]");
+		}
+	}
+
+	public static void test_map() throws Exception {
+		try (Connection connection = DriverManager.getConnection("jdbc:duckdb:");
+			 PreparedStatement statement = connection.prepareStatement("select map([100, 5], ['a', 'b'])")) {
+			ResultSet rs = statement.executeQuery();
+			assertTrue(rs.next());
+			assertEquals(rs.getObject(1), "{100=a, 5=b}");
+		}
 	}
 
 	public static void main(String[] args) throws Exception {

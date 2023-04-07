@@ -28,6 +28,7 @@ import java.sql.Time;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Map;
 import java.util.Objects;
@@ -187,7 +188,10 @@ public class DuckDBResultSet implements ResultSet {
 		case DECIMAL:
 			return getBigDecimal(columnIndex);
 		case VARCHAR:
-			return getString(columnIndex);
+		case STRUCT:
+		case LIST:
+		case MAP:
+		case UNION:
 		case ENUM:
 			return getString(columnIndex);
 		case TIME:
@@ -240,8 +244,9 @@ public class DuckDBResultSet implements ResultSet {
 		return (String) current_chunk[columnIndex - 1].varlen_data[chunk_idx - 1];
 	}
 
-	private boolean isType(int columnIndex, DuckDBColumnType type) {
-		return meta.column_types[columnIndex - 1] == type;
+	private boolean isType(int columnIndex, DuckDBColumnType... types) {
+		return Arrays.asList(
+				types).stream().anyMatch(type -> meta.column_types[columnIndex - 1] == type);
 	}
 
 	public String getString(int columnIndex) throws SQLException {
@@ -249,7 +254,13 @@ public class DuckDBResultSet implements ResultSet {
 			return null;
 		}
 
-		if (isType(columnIndex, DuckDBColumnType.VARCHAR) || isType(columnIndex, DuckDBColumnType.ENUM)) {
+		if (isType(columnIndex,
+				DuckDBColumnType.VARCHAR,
+				DuckDBColumnType.ENUM,
+				DuckDBColumnType.STRUCT,
+				DuckDBColumnType.LIST,
+				DuckDBColumnType.MAP,
+				DuckDBColumnType.UNION)) {
 			return (String) current_chunk[columnIndex - 1].varlen_data[chunk_idx - 1];
 		}
 		Object res = getObject(columnIndex);

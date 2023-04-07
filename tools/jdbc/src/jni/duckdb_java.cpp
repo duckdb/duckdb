@@ -752,6 +752,10 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 			break;
 		case LogicalTypeId::TIME:
 		case LogicalTypeId::DATE:
+		case LogicalTypeId::STRUCT:
+		case LogicalTypeId::UNION:
+		case LogicalTypeId::LIST:
+		case LogicalTypeId::MAP:
 		case LogicalTypeId::INTERVAL: {
 			Vector string_vec(LogicalType::VARCHAR);
 			VectorOperations::DefaultCast(vec, string_vec, row_count);
