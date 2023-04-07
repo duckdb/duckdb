@@ -130,7 +130,7 @@ string DuckTransaction::Commit(AttachedDatabase &db, transaction_t commit_id, bo
 		if (log) {
 			// commit any sequences that were used to the WAL
 			for (auto &entry : sequence_usage) {
-				log->WriteSequenceValue(entry.first, entry.second);
+				log->WriteSequenceValue(*entry.first, entry.second);
 			}
 		}
 		if (storage_commit_state) {

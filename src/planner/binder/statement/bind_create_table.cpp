@@ -40,7 +40,8 @@ static void BindCheckConstraint(Binder &binder, BoundCreateTableInfo &info, cons
 	auto bound_constraint = make_uniq<BoundCheckConstraint>();
 	// check constraint: bind the expression
 	CheckBinder check_binder(binder, binder.context, base.table, base.columns, bound_constraint->bound_columns);
-	auto &check = (CheckConstraint &)*cond;
+	auto &check = cond->Cast<CheckConstraint>();
+	;
 	// create a copy of the unbound expression because the binding destroys the constraint
 	auto unbound_expression = check.expression->Copy();
 	// now bind the constraint and create a new BoundCheckConstraint
@@ -64,14 +65,14 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 			break;
 		}
 		case ConstraintType::NOT_NULL: {
-			auto &not_null = (NotNullConstraint &)*cond;
+			auto &not_null = cond->Cast<NotNullConstraint>();
 			auto &col = base.columns.GetColumn(LogicalIndex(not_null.index));
 			info.bound_constraints.push_back(make_uniq<BoundNotNullConstraint>(PhysicalIndex(col.StorageOid())));
 			not_null_columns.insert(not_null.index);
 			break;
 		}
 		case ConstraintType::UNIQUE: {
-			auto &unique = (UniqueConstraint &)*cond;
+			auto &unique = cond->Cast<UniqueConstraint>();
 			// have to resolve columns of the unique constraint
 			vector<LogicalIndex> keys;
 			logical_index_set_t key_set;
@@ -114,7 +115,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 			break;
 		}
 		case ConstraintType::FOREIGN_KEY: {
-			auto &fk = (ForeignKeyConstraint &)*cond;
+			auto &fk = cond->Cast<ForeignKeyConstraint>();
 			D_ASSERT((fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE && !fk.info.pk_keys.empty()) ||
 			         (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE && !fk.info.pk_keys.empty()) ||
 			         fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE);
@@ -228,7 +229,7 @@ void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expr
 
 static void ExtractExpressionDependencies(Expression &expr, DependencyList &dependencies) {
 	if (expr.type == ExpressionType::BOUND_FUNCTION) {
-		auto &function = (BoundFunctionExpression &)expr;
+		auto &function = expr.Cast<BoundFunctionExpression>();
 		if (function.function.dependency) {
 			function.function.dependency(function, dependencies);
 		}
@@ -245,7 +246,7 @@ static void ExtractDependencies(BoundCreateTableInfo &info) {
 	}
 	for (auto &constraint : info.bound_constraints) {
 		if (constraint->type == ConstraintType::CHECK) {
-			auto &bound_check = (BoundCheckConstraint &)*constraint;
+			auto &bound_check = constraint->Cast<BoundCheckConstraint>();
 			ExtractExpressionDependencies(*bound_check.expression, info.dependencies);
 		}
 	}

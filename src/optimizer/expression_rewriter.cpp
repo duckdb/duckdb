@@ -74,7 +74,7 @@ void ExpressionRewriter::VisitOperator(LogicalOperator &op) {
 
 	// if it is a LogicalFilter, we split up filter conjunctions again
 	if (op.type == LogicalOperatorType::LOGICAL_FILTER) {
-		auto &filter = (LogicalFilter &)op;
+		auto &filter = op.Cast<LogicalFilter>();
 		filter.SplitPredicates();
 	}
 }

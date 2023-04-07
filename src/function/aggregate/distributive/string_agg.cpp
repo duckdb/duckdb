@@ -25,7 +25,7 @@ struct StringAggBindData : public FunctionData {
 		return make_uniq<StringAggBindData>(sep);
 	}
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (StringAggBindData &)other_p;
+		auto &other = other_p.Cast<StringAggBindData>();
 		return sep == other.sep;
 	}
 };
@@ -89,7 +89,7 @@ struct StringAggFunction {
 	}
 
 	static inline void PerformOperation(StringAggState *state, string_t str, FunctionData *data_p) {
-		auto &data = (StringAggBindData &)*data_p;
+		auto &data = data_p->Cast<StringAggBindData>();
 		PerformOperation(state, str.GetDataUnsafe(), data.sep.c_str(), str.GetSize(), data.sep.size());
 	}
 

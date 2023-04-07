@@ -1,0 +1,42 @@
+# name: test/sql/parser/test_value_functions.test
+# description: Test SQL value functions
+# group: [parser]
+
+statement ok
+PRAGMA enable_verification
+
+# by default these columns can be used as per usual
+query I
+SELECT user FROM (VALUES ('hello world')) t(user)
+----
+hello world
+
+# if the column is not found they are turned into the SQL value function
+query I
+SELECT user
+----
+duckdb
+
+query I
+SELECT UsEr
+----
+duckdb
+
+# run all SQL value functions
+# need to run without verification since CURRENT_TIME etc break verification
+statement ok
+PRAGMA disable_verification
+
+require icu
+
+foreach value_function current_catalog current_date current_schema current_role current_time current_timestamp current_user localtime localtimestamp session_user user
+
+statement ok
+SELECT ${value_function}
+
+endloop
+
+statement error
+SELECT useRrr
+----
+useRrr

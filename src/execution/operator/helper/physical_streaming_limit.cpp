@@ -44,8 +44,8 @@ unique_ptr<GlobalOperatorState> PhysicalStreamingLimit::GetGlobalOperatorState(C
 
 OperatorResultType PhysicalStreamingLimit::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                    GlobalOperatorState &gstate_p, OperatorState &state_p) const {
-	auto &gstate = (StreamingLimitGlobalState &)gstate_p;
-	auto &state = (StreamingLimitOperatorState &)state_p;
+	auto &gstate = gstate_p.Cast<StreamingLimitGlobalState>();
+	auto &state = state_p.Cast<StreamingLimitOperatorState>();
 	auto &limit = state.limit;
 	auto &offset = state.offset;
 	idx_t current_offset = gstate.current_offset.fetch_add(input.size());

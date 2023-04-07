@@ -19,9 +19,9 @@ public:
 		vector<LogicalType> list_data_types;
 		for (auto &exp : select_list) {
 			D_ASSERT(exp->type == ExpressionType::BOUND_UNNEST);
-			auto bue = (BoundUnnestExpression *)exp.get();
-			list_data_types.push_back(bue->child->return_type);
-			executor.AddExpression(*bue->child.get());
+			auto &bue = exp->Cast<BoundUnnestExpression>();
+			list_data_types.push_back(bue.child->return_type);
+			executor.AddExpression(*bue.child.get());
 		}
 
 		auto &allocator = Allocator::Get(context);
@@ -256,7 +256,7 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
                                                    const vector<unique_ptr<Expression>> &select_list,
                                                    bool include_input) {
 
-	auto &state = (UnnestOperatorState &)state_p;
+	auto &state = state_p.Cast<UnnestOperatorState>();
 
 	do {
 		// prepare the input data by executing any expressions and getting the

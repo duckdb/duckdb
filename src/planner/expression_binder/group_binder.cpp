@@ -19,9 +19,9 @@ BindResult GroupBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, i
 	if (root_expression && depth == 0) {
 		switch (expr.expression_class) {
 		case ExpressionClass::COLUMN_REF:
-			return BindColumnRef((ColumnRefExpression &)expr);
+			return BindColumnRef(expr.Cast<ColumnRefExpression>());
 		case ExpressionClass::CONSTANT:
-			return BindConstant((ConstantExpression &)expr);
+			return BindConstant(expr.Cast<ConstantExpression>());
 		case ExpressionClass::PARAMETER:
 			throw ParameterNotAllowedException("Parameter not supported in GROUP BY clause");
 		default:

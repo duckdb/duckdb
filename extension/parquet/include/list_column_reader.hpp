@@ -15,6 +15,9 @@ namespace duckdb {
 
 class ListColumnReader : public ColumnReader {
 public:
+	static constexpr const PhysicalType TYPE = PhysicalType::LIST;
+
+public:
 	ListColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p,
 	                 idx_t max_define_p, idx_t max_repeat_p, duckdb::unique_ptr<ColumnReader> child_column_reader_p);
 
