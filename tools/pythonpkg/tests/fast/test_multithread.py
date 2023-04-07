@@ -2,8 +2,8 @@ import duckdb
 import pytest
 import threading
 import queue as Queue
-import pandas as pd
 import numpy as np
+from conftest import NumpyPandas, ArrowPandas
 import os
 try:
     import pyarrow as pa
@@ -16,10 +16,11 @@ def connect_duck(duckdb_conn):
     assert out == [(42,), (84,), (None,), (128,)]
 
 class DuckDBThreaded:
-    def __init__(self,duckdb_insert_thread_count,thread_function):
+    def __init__(self,duckdb_insert_thread_count,thread_function, pandas):
         self.duckdb_insert_thread_count = duckdb_insert_thread_count
         self.threads = []
         self.thread_function = thread_function
+        self.pandas = pandas
         
     def multithread_test(self,if_all_true=True):
         duckdb_conn = duckdb.connect()
@@ -27,7 +28,7 @@ class DuckDBThreaded:
         return_value = False
 
         for i in range(0,self.duckdb_insert_thread_count):
-            self.threads.append(threading.Thread(target=self.thread_function, args=(duckdb_conn,queue),name='duckdb_thread_'+str(i)))
+            self.threads.append(threading.Thread(target=self.thread_function, args=(duckdb_conn,queue, self.pandas),name='duckdb_thread_'+str(i)))
 
         for i in range(0,len(self.threads)):
             self.threads[i].start()
@@ -46,7 +47,7 @@ class DuckDBThreaded:
         assert (return_value)
 
 
-def execute_query_same_connection(duckdb_conn, queue):
+def execute_query_same_connection(duckdb_conn, queue, pandas):
 
     try:
         out = duckdb_conn.execute('select i from (values (42), (84), (NULL), (128)) tbl(i)')
@@ -54,7 +55,7 @@ def execute_query_same_connection(duckdb_conn, queue):
     except:
         queue.put(True)
 
-def execute_query(duckdb_conn, queue):
+def execute_query(duckdb_conn, queue, pandas):
     # Get a new connection
     duckdb_conn = duckdb.connect()
     try:
@@ -63,7 +64,7 @@ def execute_query(duckdb_conn, queue):
     except:
         queue.put(False)
 
-def insert_runtime_error(duckdb_conn, queue):
+def insert_runtime_error(duckdb_conn, queue, pandas):
     # Get a new connection
     duckdb_conn = duckdb.connect()
     try:
@@ -72,7 +73,7 @@ def insert_runtime_error(duckdb_conn, queue):
     except:
         queue.put(True)  
 
-def execute_many_query(duckdb_conn, queue):
+def execute_many_query(duckdb_conn, queue, pandas):
     # Get a new connection
     duckdb_conn = duckdb.connect()
     try:
@@ -89,7 +90,7 @@ def execute_many_query(duckdb_conn, queue):
     except:
         queue.put(False)  
 
-def fetchone_query(duckdb_conn, queue):
+def fetchone_query(duckdb_conn, queue, pandas):
     # Get a new connection
     duckdb_conn = duckdb.connect()
     try:
@@ -98,7 +99,7 @@ def fetchone_query(duckdb_conn, queue):
     except:
         queue.put(False)  
 
-def fetchall_query(duckdb_conn, queue):
+def fetchall_query(duckdb_conn, queue, pandas):
     # Get a new connection
     duckdb_conn = duckdb.connect()
     try:
@@ -107,7 +108,7 @@ def fetchall_query(duckdb_conn, queue):
     except:
         queue.put(False)  
 
-def conn_close(duckdb_conn, queue):
+def conn_close(duckdb_conn, queue, pandas):
     # Get a new connection
     duckdb_conn = duckdb.connect()
     try:
@@ -116,7 +117,7 @@ def conn_close(duckdb_conn, queue):
     except:
         queue.put(False)  
 
-def fetchnp_query(duckdb_conn, queue):
+def fetchnp_query(duckdb_conn, queue, pandas):
     # Get a new connection
     duckdb_conn = duckdb.connect()
     try:
@@ -125,7 +126,7 @@ def fetchnp_query(duckdb_conn, queue):
     except:
         queue.put(False) 
 
-def fetchdf_query(duckdb_conn, queue):
+def fetchdf_query(duckdb_conn, queue, pandas):
     # Get a new connection
     duckdb_conn = duckdb.connect()
     try:
@@ -134,7 +135,7 @@ def fetchdf_query(duckdb_conn, queue):
     except:
         queue.put(False)
 
-def fetchdf_chunk_query(duckdb_conn, queue):
+def fetchdf_chunk_query(duckdb_conn, queue, pandas):
     # Get a new connection
     duckdb_conn = duckdb.connect()
     try:
@@ -143,7 +144,7 @@ def fetchdf_chunk_query(duckdb_conn, queue):
     except:
         queue.put(False) 
 
-def fetch_arrow_query(duckdb_conn, queue):
+def fetch_arrow_query(duckdb_conn, queue, pandas):
     # Get a new connection
     duckdb_conn = duckdb.connect()
     try:
@@ -153,7 +154,7 @@ def fetch_arrow_query(duckdb_conn, queue):
         queue.put(False) 
 
 
-def fetch_record_batch_query(duckdb_conn, queue):
+def fetch_record_batch_query(duckdb_conn, queue, pandas):
     # Get a new connection
     duckdb_conn = duckdb.connect()
     try:
@@ -162,7 +163,7 @@ def fetch_record_batch_query(duckdb_conn, queue):
     except:
         queue.put(False) 
 
-def transaction_query(duckdb_conn, queue):
+def transaction_query(duckdb_conn, queue, pandas):
     # Get a new connection
     duckdb_conn = duckdb.connect()
     duckdb_conn.execute("CREATE TABLE T ( i INTEGER)")
@@ -176,31 +177,31 @@ def transaction_query(duckdb_conn, queue):
     except:
         queue.put(False) 
 
-def df_append(duckdb_conn, queue):
+def df_append(duckdb_conn, queue, pandas):
     # Get a new connection
     duckdb_conn = duckdb.connect()
     duckdb_conn.execute("CREATE TABLE T ( i INTEGER)")
-    df = pd.DataFrame(np.random.randint(0,100,size=15), columns=['A'])
+    df = pandas.DataFrame(np.random.randint(0,100,size=15), columns=['A'])
     try:
         duckdb_conn.append('T',df)
         queue.put(True)
     except:
         queue.put(False) 
 
-def df_register(duckdb_conn, queue):
+def df_register(duckdb_conn, queue, pandas):
     # Get a new connection
     duckdb_conn = duckdb.connect()
-    df = pd.DataFrame(np.random.randint(0,100,size=15), columns=['A'])
+    df = pandas.DataFrame(np.random.randint(0,100,size=15), columns=['A'])
     try:
         duckdb_conn.register('T',df)
         queue.put(True)
     except:
         queue.put(False) 
 
-def df_unregister(duckdb_conn, queue):
+def df_unregister(duckdb_conn, queue, pandas):
     # Get a new connection
     duckdb_conn = duckdb.connect()
-    df = pd.DataFrame(np.random.randint(0,100,size=15), columns=['A'])
+    df = pandas.DataFrame(np.random.randint(0,100,size=15), columns=['A'])
     try:
         duckdb_conn.register('T',df)
         duckdb_conn.unregister('T')
@@ -208,7 +209,7 @@ def df_unregister(duckdb_conn, queue):
     except:
         queue.put(False) 
 
-def arrow_register_unregister(duckdb_conn, queue):
+def arrow_register_unregister(duckdb_conn, queue, pandas):
     # Get a new connection
     duckdb_conn = duckdb.connect()
     arrow_tbl = pa.Table.from_pydict({'my_column':pa.array([1,2,3,4,5],type=pa.int64())})
@@ -219,7 +220,7 @@ def arrow_register_unregister(duckdb_conn, queue):
     except:
         queue.put(False) 
 
-def table(duckdb_conn, queue):
+def table(duckdb_conn, queue, pandas):
     # Get a new connection
     duckdb_conn = duckdb.connect()
     duckdb_conn.execute("CREATE TABLE T ( i INTEGER)")
@@ -229,7 +230,7 @@ def table(duckdb_conn, queue):
     except:
         queue.put(False) 
 
-def view(duckdb_conn, queue):
+def view(duckdb_conn, queue, pandas):
     # Get a new connection
     duckdb_conn = duckdb.connect()
     duckdb_conn.execute("CREATE TABLE T ( i INTEGER)")
@@ -239,7 +240,7 @@ def view(duckdb_conn, queue):
         queue.put(True)
     except:
         queue.put(False) 
-def values(duckdb_conn, queue):
+def values(duckdb_conn, queue, pandas):
     # Get a new connection
     duckdb_conn = duckdb.connect()
     try:
@@ -249,7 +250,7 @@ def values(duckdb_conn, queue):
         queue.put(False) 
 
 
-def from_query(duckdb_conn, queue):
+def from_query(duckdb_conn, queue, pandas):
     # Get a new connection
     duckdb_conn = duckdb.connect()
     try:
@@ -258,17 +259,17 @@ def from_query(duckdb_conn, queue):
     except:
         queue.put(False) 
 
-def from_df(duckdb_conn, queue):
+def from_df(duckdb_conn, queue, pandas):
     # Get a new connection
     duckdb_conn = duckdb.connect()
-    df = pd.DataFrame(['bla', 'blabla']*10, columns=['A'])
+    df = pandas.DataFrame(['bla', 'blabla']*10, columns=['A'])
     try:
         out = duckdb_conn.execute("select * from df").fetchall()
         queue.put(True)
     except:
         queue.put(False)
 
-def from_arrow(duckdb_conn, queue):
+def from_arrow(duckdb_conn, queue, pandas):
     # Get a new connection
     duckdb_conn = duckdb.connect()
     arrow_tbl = pa.Table.from_pydict({'my_column':pa.array([1,2,3,4,5],type=pa.int64())})
@@ -278,7 +279,7 @@ def from_arrow(duckdb_conn, queue):
     except:
         queue.put(False)
 
-def from_csv_auto(duckdb_conn, queue):
+def from_csv_auto(duckdb_conn, queue, pandas):
     # Get a new connection
     duckdb_conn = duckdb.connect()
     filename = os.path.join(os.path.dirname(os.path.realpath(__file__)),'data','integers.csv')
@@ -288,7 +289,7 @@ def from_csv_auto(duckdb_conn, queue):
     except:
         queue.put(False)     
 
-def from_parquet(duckdb_conn, queue):
+def from_parquet(duckdb_conn, queue, pandas):
     # Get a new connection
     duckdb_conn = duckdb.connect()
     filename = os.path.join(os.path.dirname(os.path.realpath(__file__)),'data','binary_string.parquet')
@@ -298,7 +299,7 @@ def from_parquet(duckdb_conn, queue):
     except:
         queue.put(False)
 
-def description(duckdb_conn, queue):
+def description(duckdb_conn, queue, pandas):
     # Get a new connection
     duckdb_conn = duckdb.connect()
     duckdb_conn.execute('CREATE TABLE test (i bool, j TIME, k VARCHAR)')
@@ -311,7 +312,7 @@ def description(duckdb_conn, queue):
     except:
         queue.put(False)          
 
-def cursor(duckdb_conn, queue):
+def cursor(duckdb_conn, queue, pandas):
     # Get a new connection
     cx = duckdb_conn.cursor()  
     try:
@@ -322,112 +323,137 @@ def cursor(duckdb_conn, queue):
 
 class TestDuckMultithread(object):
 
-    def test_execute(self, duckdb_cursor):
-        duck_threads = DuckDBThreaded(10,execute_query)
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_execute(self, duckdb_cursor, pandas):
+        duck_threads = DuckDBThreaded(10,execute_query, pandas)
         duck_threads.multithread_test()
 
-    def test_execute_many(self, duckdb_cursor):
-        duck_threads = DuckDBThreaded(10,execute_many_query)
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_execute_many(self, duckdb_cursor, pandas):
+        duck_threads = DuckDBThreaded(10,execute_many_query, pandas)
         duck_threads.multithread_test()
 
-    def test_fetchone(self, duckdb_cursor):
-        duck_threads = DuckDBThreaded(10,fetchone_query)
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_fetchone(self, duckdb_cursor, pandas):
+        duck_threads = DuckDBThreaded(10,fetchone_query, pandas)
         duck_threads.multithread_test()
 
-    def test_fetchall(self, duckdb_cursor):
-        duck_threads = DuckDBThreaded(10,fetchall_query)
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_fetchall(self, duckdb_cursor, pandas):
+        duck_threads = DuckDBThreaded(10,fetchall_query, pandas)
         duck_threads.multithread_test()
 
-    def test_close(self, duckdb_cursor):
-        duck_threads = DuckDBThreaded(10,conn_close)
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_close(self, duckdb_cursor, pandas):
+        duck_threads = DuckDBThreaded(10,conn_close, pandas)
         duck_threads.multithread_test()
 
-    def test_fetchnp(self, duckdb_cursor):
-        duck_threads = DuckDBThreaded(10,fetchnp_query)
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_fetchnp(self, duckdb_cursor, pandas):
+        duck_threads = DuckDBThreaded(10,fetchnp_query, pandas)
         duck_threads.multithread_test()
 
-    def test_fetchdf(self, duckdb_cursor):
-        duck_threads = DuckDBThreaded(10,fetchdf_query)
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_fetchdf(self, duckdb_cursor, pandas):
+        duck_threads = DuckDBThreaded(10,fetchdf_query, pandas)
         duck_threads.multithread_test()
 
-    def test_fetchdfchunk(self, duckdb_cursor):
-        duck_threads = DuckDBThreaded(10,fetchdf_chunk_query)
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_fetchdfchunk(self, duckdb_cursor, pandas):
+        duck_threads = DuckDBThreaded(10,fetchdf_chunk_query, pandas)
         duck_threads.multithread_test()
 
-    def test_fetcharrow(self, duckdb_cursor):
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_fetcharrow(self, duckdb_cursor, pandas):
         if not can_run:
             return
-        duck_threads = DuckDBThreaded(10,fetch_arrow_query)
+        duck_threads = DuckDBThreaded(10,fetch_arrow_query, pandas)
         duck_threads.multithread_test()
 
-    def test_fetch_record_batch(self, duckdb_cursor):
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_fetch_record_batch(self, duckdb_cursor, pandas):
         if not can_run:
             return
-        duck_threads = DuckDBThreaded(10,fetch_record_batch_query)
+        duck_threads = DuckDBThreaded(10,fetch_record_batch_query, pandas)
         duck_threads.multithread_test()
 
-    def test_transaction(self, duckdb_cursor):
-        duck_threads = DuckDBThreaded(10,transaction_query)
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_transaction(self, duckdb_cursor, pandas):
+        duck_threads = DuckDBThreaded(10,transaction_query, pandas)
         duck_threads.multithread_test()
 
-    def test_df_append(self, duckdb_cursor):
-        duck_threads = DuckDBThreaded(10,df_append)
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_df_append(self, duckdb_cursor, pandas):
+        duck_threads = DuckDBThreaded(10,df_append, pandas)
         duck_threads.multithread_test()
 
-    def test_df_register(self, duckdb_cursor):
-        duck_threads = DuckDBThreaded(10,df_register)
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_df_register(self, duckdb_cursor, pandas):
+        duck_threads = DuckDBThreaded(10,df_register, pandas)
         duck_threads.multithread_test()
 
-    def test_df_unregister(self, duckdb_cursor):
-        duck_threads = DuckDBThreaded(10,df_unregister)
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_df_unregister(self, duckdb_cursor, pandas):
+        duck_threads = DuckDBThreaded(10,df_unregister, pandas)
         duck_threads.multithread_test()
 
-    def test_arrow_register_unregister(self, duckdb_cursor):
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_arrow_register_unregister(self, duckdb_cursor, pandas):
         if not can_run:
             return
-        duck_threads = DuckDBThreaded(10,arrow_register_unregister)
+        duck_threads = DuckDBThreaded(10,arrow_register_unregister, pandas)
         duck_threads.multithread_test()
 
-    def test_table(self, duckdb_cursor):
-        duck_threads = DuckDBThreaded(10,table)
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_table(self, duckdb_cursor, pandas):
+        duck_threads = DuckDBThreaded(10,table, pandas)
         duck_threads.multithread_test()
 
-    def test_view(self, duckdb_cursor):
-        duck_threads = DuckDBThreaded(10,view)
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_view(self, duckdb_cursor, pandas):
+        duck_threads = DuckDBThreaded(10,view, pandas)
         duck_threads.multithread_test()
 
-    def test_values(self, duckdb_cursor):
-        duck_threads = DuckDBThreaded(10,values)
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_values(self, duckdb_cursor, pandas):
+        duck_threads = DuckDBThreaded(10,values, pandas)
         duck_threads.multithread_test()
     
-    def test_from_query(self, duckdb_cursor):
-        duck_threads = DuckDBThreaded(10,from_query)
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_from_query(self, duckdb_cursor, pandas):
+        duck_threads = DuckDBThreaded(10,from_query, pandas)
         duck_threads.multithread_test()
 
-    def test_from_DF(self, duckdb_cursor):
-        duck_threads = DuckDBThreaded(10,from_df)
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_from_DF(self, duckdb_cursor, pandas):
+        duck_threads = DuckDBThreaded(10,from_df, pandas)
         duck_threads.multithread_test() 
 
-    def test_from_arrow(self, duckdb_cursor):
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_from_arrow(self, duckdb_cursor, pandas):
         if not can_run:
             return
-        duck_threads = DuckDBThreaded(10,from_arrow)
+        duck_threads = DuckDBThreaded(10,from_arrow, pandas)
         duck_threads.multithread_test()
  
-    def test_from_csv_auto(self, duckdb_cursor):
-        duck_threads = DuckDBThreaded(10,from_csv_auto)
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_from_csv_auto(self, duckdb_cursor, pandas):
+        duck_threads = DuckDBThreaded(10,from_csv_auto, pandas)
         duck_threads.multithread_test()
 
-    def test_from_parquet(self, duckdb_cursor):
-        duck_threads = DuckDBThreaded(10,from_parquet)
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_from_parquet(self, duckdb_cursor, pandas):
+        duck_threads = DuckDBThreaded(10,from_parquet, pandas)
         duck_threads.multithread_test()
 
-    def test_description(self, duckdb_cursor):
-        duck_threads = DuckDBThreaded(10,description)
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_description(self, duckdb_cursor, pandas):
+        duck_threads = DuckDBThreaded(10,description, pandas)
         duck_threads.multithread_test()
 
-    def test_cursor(self, duckdb_cursor):
-        duck_threads = DuckDBThreaded(10,cursor)
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_cursor(self, duckdb_cursor, pandas):
+        duck_threads = DuckDBThreaded(10,cursor, pandas)
         duck_threads.multithread_test(False)
 
 
