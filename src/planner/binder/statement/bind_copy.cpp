@@ -103,7 +103,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 			if (option.second.empty()) {
 				throw IOException("FILENAME_PATTERN cannot be empty");
 			}
-			filename_pattern.SetFilenamePattern(option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>());
+			filename_pattern.SetFilenamePattern(
+			    option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>());
 			continue;
 		}
 
