@@ -28,6 +28,9 @@ public:
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
 
+	bool IsSource() const override {
+		return true;
+	}
 public:
 	// Sink Interface
 	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,

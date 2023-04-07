@@ -35,8 +35,9 @@ protected:
 	OperatorResultType ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                                   GlobalOperatorState &gstate, OperatorState &state) const override;
 
-	bool IsOrderPreserving() const override {
-		return false;
+
+	OrderPreservationType SourceOrder() const override {
+		return OrderPreservationType::NO_ORDER;
 	}
 
 public:
@@ -50,6 +51,9 @@ public:
 	}
 	bool ParallelSink() const override {
 		return true;
+	}
+	bool SinkOrderDependent() const override {
+		return false;
 	}
 
 public:

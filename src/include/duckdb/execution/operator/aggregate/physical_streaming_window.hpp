@@ -33,7 +33,7 @@ public:
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                           GlobalOperatorState &gstate, OperatorState &state) const override;
 
-	bool IsOrderDependent() const override {
+	bool SinkOrderDependent() const override {
 		return true;
 	}
 

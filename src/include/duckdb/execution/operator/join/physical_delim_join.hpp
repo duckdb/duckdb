@@ -46,7 +46,10 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
-	bool IsOrderPreserving() const override {
+	OrderPreservationType SourceOrder() const override {
+		return OrderPreservationType::NO_ORDER;
+	}
+	bool SinkOrderDependent() const override {
 		return false;
 	}
 	string ParamsToString() const override;

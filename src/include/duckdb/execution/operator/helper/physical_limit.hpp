@@ -28,7 +28,7 @@ public:
 	unique_ptr<Expression> offset_expression;
 
 public:
-	bool IsOrderDependent() const override {
+	bool SinkOrderDependent() const override {
 		return true;
 	}
 
@@ -38,6 +38,9 @@ public:
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
 
+	bool IsSource() const override {
+		return true;
+	}
 public:
 	// Sink Interface
 	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
