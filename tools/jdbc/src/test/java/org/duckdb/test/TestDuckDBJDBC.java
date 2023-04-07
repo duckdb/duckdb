@@ -191,8 +191,6 @@ public class TestDuckDBJDBC {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
 
-		stmt = conn.createStatement();
-
 		assertThrows(() -> {
 			ResultSet rs = stmt.executeQuery("SELECT");
 			rs.next();
