@@ -113,7 +113,6 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 		    "extensions are disabled by configuration.\nStart the shell with the -unsigned parameter to allow this "
 		    "(e.g. duckdb -unsigned).");
 		pDb->db = make_uniq<DuckDB>(filename, &config);
-		pDb->db->LoadExtension<SQLAutoCompleteExtension>();
 		pDb->con = make_uniq<Connection>(*pDb->db);
 	} catch (const Exception &ex) {
 		if (pDb) {
