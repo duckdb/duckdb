@@ -12,6 +12,7 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/common/enums/window_aggregation_mode.hpp"
+#include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
 
 namespace duckdb {
 
