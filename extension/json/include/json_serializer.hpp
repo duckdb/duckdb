@@ -51,6 +51,10 @@ public:
 	void OnMapEnd(idx_t count) final;
 	void OnObjectBegin() final;
 	void OnObjectEnd() final;
+	void OnPairBegin() final;
+	void OnPairKeyBegin() final;
+	void OnPairValueBegin() final;
+	void OnPairEnd() final;
 
 	//===--------------------------------------------------------------------===//
 	// Primitive Types
@@ -68,10 +72,11 @@ public:
 	void WriteValue(float value) final;
 	void WriteValue(double value) final;
 	void WriteValue(interval_t value) final;
-	void WriteValue(const string &value) final;
 	void WriteValue(const string_t value) final;
+	void WriteValue(const string &value) final;
 	void WriteValue(const char *value) final;
 	void WriteValue(bool value) final;
+	void WriteDataPtr(const_data_ptr_t ptr, idx_t count) final;
 };
 
 } // namespace duckdb

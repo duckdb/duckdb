@@ -8,6 +8,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
+#include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "json_common.hpp"
 #include "json_functions.hpp"
@@ -45,6 +46,11 @@ void JSONExtension::Load(DuckDB &db) {
 	// JSON table functions
 	for (auto &fun : JSONFunctions::GetTableFunctions()) {
 		catalog.CreateTableFunction(context, &fun);
+	}
+
+	// JSON pragma functions
+	for (auto &fun : JSONFunctions::GetPragmaFunctions()) {
+		catalog.CreatePragmaFunction(context, &fun);
 	}
 
 	// JSON replacement scan

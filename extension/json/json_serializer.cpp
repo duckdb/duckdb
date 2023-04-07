@@ -1,4 +1,5 @@
 #include "json_serializer.hpp"
+#include "duckdb/common/types/blob.hpp"
 
 namespace duckdb {
 
@@ -57,6 +58,7 @@ void JsonSerializer::OnMapBegin(idx_t count) {
 
 void JsonSerializer::OnMapEntryBegin() {
 	auto new_value = yyjson_mut_obj(doc);
+	PushValue(new_value);
 	stack.push_back(new_value);
 }
 
@@ -118,6 +120,24 @@ void JsonSerializer::OnObjectEnd() {
 	}
 }
 
+void JsonSerializer::OnPairBegin() {
+	auto new_value = yyjson_mut_obj(doc);
+	PushValue(new_value);
+	stack.push_back(new_value);
+}
+
+void JsonSerializer::OnPairKeyBegin() {
+	SetTag("key");
+}
+
+void JsonSerializer::OnPairValueBegin() {
+	SetTag("value");
+}
+
+void JsonSerializer::OnPairEnd() {
+	stack.pop_back();
+}
+
 //===--------------------------------------------------------------------===//
 // Primitive types
 //===--------------------------------------------------------------------===//
@@ -167,7 +187,12 @@ void JsonSerializer::WriteValue(int64_t value) {
 }
 
 void JsonSerializer::WriteValue(hugeint_t value) {
-	throw NotImplementedException("Cannot serialize hugeint_t to json yet!");
+	auto val = yyjson_mut_obj(doc);
+	PushValue(val);
+	stack.push_back(val);
+	WriteProperty("upper", value.upper);
+	WriteProperty("lower", value.lower);
+	stack.pop_back();
 }
 
 void JsonSerializer::WriteValue(float value) {
@@ -181,14 +206,20 @@ void JsonSerializer::WriteValue(double value) {
 }
 
 void JsonSerializer::WriteValue(interval_t value) {
-	throw NotImplementedException("Cannot serialize interval_t to json yet!");
+	auto val = yyjson_mut_obj(doc);
+	PushValue(val);
+	stack.push_back(val);
+	WriteProperty("months", value.months);
+	WriteProperty("days", value.days);
+	WriteProperty("micros", value.micros);
+	stack.pop_back();
 }
 
 void JsonSerializer::WriteValue(const string &value) {
 	if (skip_if_empty && value.empty()) {
 		return;
 	}
-	auto val = yyjson_mut_strcpy(doc, value.c_str());
+	auto val = yyjson_mut_strncpy(doc, value.c_str(), value.size());
 	PushValue(val);
 }
 
@@ -196,13 +227,12 @@ void JsonSerializer::WriteValue(const string_t value) {
 	if (skip_if_empty && value.GetSize() == 0) {
 		return;
 	}
-	auto str = value.GetString();
-	auto val = yyjson_mut_strcpy(doc, str.c_str());
+	auto val = yyjson_mut_strncpy(doc, value.GetDataUnsafe(), value.GetSize());
 	PushValue(val);
 }
 
 void JsonSerializer::WriteValue(const char *value) {
-	if (skip_if_empty && (value == nullptr || value[0] == '\0')) {
+	if (skip_if_empty && strlen(value) == 0) {
 		return;
 	}
 	auto val = yyjson_mut_strcpy(doc, value);
@@ -211,6 +241,12 @@ void JsonSerializer::WriteValue(const char *value) {
 
 void JsonSerializer::WriteValue(bool value) {
 	auto val = yyjson_mut_bool(doc, value);
+	PushValue(val);
+}
+
+void JsonSerializer::WriteDataPtr(const_data_ptr_t ptr, idx_t count) {
+	auto blob = Blob::ToBlob(string_t((const char *)ptr, count));
+	auto val = yyjson_mut_strcpy(doc, blob.c_str());
 	PushValue(val);
 }
 
