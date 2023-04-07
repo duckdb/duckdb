@@ -1,7 +1,13 @@
-#pragma once
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/adbc/adbc.hpp
+//
+//
+//===----------------------------------------------------------------------===//
 
-// #define ADBC_NAMESPACE namespace adbc {
-// #define ADBC_NAMESPACE_END };
+
+#pragma once
 
 #include "adbc.h"
 
@@ -81,6 +87,6 @@ AdbcStatusCode StatementExecutePartitions(struct ::AdbcStatement *statement, str
                                           struct ::AdbcPartitions *partitions, int64_t *rows_affected,
                                           struct ::AdbcError *error);
 
-}; // namespace adbc
+} // namespace adbc
 
-}; // namespace duckdb
+} // namespace duckdb
