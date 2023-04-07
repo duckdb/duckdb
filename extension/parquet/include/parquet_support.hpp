@@ -270,9 +270,9 @@ protected:
 	RowSet inputRows_;
 	// Rows passing the filter in readWithVisitor. Must stay
 	// constant between consecutive calls to read().
-	std::vector<vector_size_t> outputRows_;
+	vector<vector_size_t> outputRows_;
 	// The row number corresponding to each element in 'values_'
-	std::vector<vector_size_t> valueRows_;
+	vector<vector_size_t> valueRows_;
 	// The set of all nulls in the range of read(). Created when first
 	// needed and then reused. Not returned to callers.
 	BufferPtr nullsInReadRange_;
@@ -290,7 +290,7 @@ protected:
 	// different width.
 	int8_t valueSize_ = kNoValueSize;
 	// Buffers backing the StringViews in 'values' when reading strings.
-	std::vector<BufferPtr> stringBuffers_;
+	vector<BufferPtr> stringBuffers_;
 	// Writable contents of 'stringBuffers_.back()'.
 	char *rawStringBuffer_ = nullptr;
 	// Total writable bytes in 'rawStringBuffer_'.

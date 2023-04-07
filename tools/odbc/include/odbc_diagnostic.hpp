@@ -8,11 +8,11 @@
 #include "sqlext.h"
 #include "sqltypes.h"
 
-#include <set>
-#include <stack>
-#include <string>
-#include <vector>
-#include <unordered_map>
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/stack.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/set.hpp"
+#include "duckdb/common/unordered_map.hpp"
 
 namespace duckdb {
 enum class SQLStateType : uint8_t {
@@ -196,9 +196,9 @@ public:
 class OdbcDiagnostic {
 public:
 	DiagHeader header;
-	std::vector<DiagRecord> diag_records;
+	vector<DiagRecord> diag_records;
 	// vector that mantains the indexes of DiagRecord
-	std::vector<SQLSMALLINT> vec_record_idx;
+	vector<SQLSMALLINT> vec_record_idx;
 	static const std::unordered_map<SQLINTEGER, std::string> MAP_DYNAMIC_FUNCTION;
 	static const std::set<std::string> SET_ODBC3_SUBCLASS_ORIGIN;
 	static const std::unordered_map<SQLStateType, SQLState, duckdb::EnumClassHash> MAP_ODBC_SQL_STATES;

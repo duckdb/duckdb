@@ -34,7 +34,7 @@ struct ExportedTableInfo {
 };
 
 struct BoundExportData : public ParseInfo {
-	std::vector<ExportedTableInfo> data;
+	vector<ExportedTableInfo> data;
 };
 
 } // namespace duckdb

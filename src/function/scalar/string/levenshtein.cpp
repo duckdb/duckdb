@@ -27,8 +27,8 @@ static idx_t LevenshteinDistance(const string_t &txt, const string_t &tgt) {
 	auto tgt_str = tgt.GetDataUnsafe();
 
 	// Create two working vectors
-	std::vector<idx_t> distances0(tgt_len + 1, 0);
-	std::vector<idx_t> distances1(tgt_len + 1, 0);
+	vector<idx_t> distances0(tgt_len + 1, 0);
+	vector<idx_t> distances1(tgt_len + 1, 0);
 
 	idx_t cost_substitution = 0;
 	idx_t cost_insertion = 0;
