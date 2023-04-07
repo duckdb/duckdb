@@ -540,6 +540,20 @@ public class TestDuckDBJDBC {
 		}
 	}
 
+	public static void test_union_metadata() throws Exception {
+		try (
+				Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+				Statement stmt = conn.createStatement();
+				ResultSet rs = stmt.executeQuery("SELECT union_value(str := 'three') as union")
+		) {
+			ResultSetMetaData meta = rs.getMetaData();
+			assertEquals(meta.getColumnCount(), 1);
+			assertEquals(meta.getColumnName(1), "union");
+			assertEquals(meta.getColumnTypeName(1), "UNION(str VARCHAR)");
+			assertEquals(meta.getColumnType(1), Types.JAVA_OBJECT);
+		}
+	}
+
 	public static void test_result() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();

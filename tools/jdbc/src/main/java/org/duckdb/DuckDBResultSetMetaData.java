@@ -114,6 +114,7 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 		case UBIGINT:
 		case INTERVAL:
 		case MAP:
+		case UNION:
 			return Types.JAVA_OBJECT;
 		case FLOAT:
 			return Types.FLOAT;
