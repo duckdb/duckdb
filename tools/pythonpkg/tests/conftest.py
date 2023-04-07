@@ -46,7 +46,7 @@ def convert_arrow_to_numpy_backend(df):
 	return pandas.DataFrame(df_content)
 
 def convert_to_numpy(df):
-	if any([True for x in df.dtypes if isinstance(x, pyarrow_dtype)]):
+	if pyarrow_dtype != None and any([True for x in df.dtypes if isinstance(x, pyarrow_dtype)]):
 		return convert_arrow_to_numpy_backend(df)
 	return df
 

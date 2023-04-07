@@ -96,8 +96,8 @@ static bool IsArrowBackedDataFrame(const py::object &df) {
 	if (dtypes.empty()) {
 		return false;
 	}
-	auto arrow_dtype =
-	    py::module_::import("pandas").attr("core").attr("arrays").attr("arrow").attr("dtype").attr("ArrowDtype");
+
+	auto arrow_dtype = import_cache.pandas().core.arrays.arrow.dtype.ArrowDtype();
 	for (auto &dtype : dtypes) {
 		if (!py::isinstance(dtype, arrow_dtype)) {
 			return false;
