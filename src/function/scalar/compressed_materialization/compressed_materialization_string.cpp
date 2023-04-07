@@ -13,8 +13,14 @@ static inline RESULT_TYPE StringCompress(const string_t &input) {
 		throw InvalidInputException("String of size %u too large to be compressed to integer of size %u",
 		                            input.GetSize(), sizeof(RESULT_TYPE));
 	}
-	RESULT_TYPE result = 0;
-	memcpy(&result, input.GetDataUnsafe(), input.GetSize());
+
+	RESULT_TYPE result;
+	if (sizeof(RESULT_TYPE) <= string_t::INLINE_LENGTH) {
+		memcpy(&result, data_ptr_t(&input) + sizeof(uint32_t), sizeof(RESULT_TYPE));
+	} else {
+		result = 0;
+		memcpy(&result, input.GetDataUnsafe(), input.GetSize());
+	}
 	((uint8_t *)&result)[sizeof(RESULT_TYPE) - 1] = input.GetSize();
 	return BSwap<RESULT_TYPE>(result);
 }
@@ -58,16 +64,24 @@ ScalarFunction CMStringCompressFun::GetFunction(const LogicalType &result_type) 
 }
 
 template <class INPUT_TYPE>
-static inline string_t StringDecompress(const INPUT_TYPE &input, Vector &result) {
+static inline string_t StringDecompress(const INPUT_TYPE &input, Vector &result_v) {
 	const auto input_swapped = BSwap<INPUT_TYPE>(input);
 	const auto string_size = ((uint8_t *)&input_swapped)[sizeof(INPUT_TYPE) - 1];
-	return StringVector::AddString(result, (const char *)&input_swapped, string_size);
+	if (sizeof(INPUT_TYPE) <= string_t::INLINE_LENGTH) {
+		string_t result(string_size);
+		memcpy(data_ptr_t(&result) + sizeof(uint32_t), &input_swapped, sizeof(INPUT_TYPE));
+		memset(data_ptr_t(&result) + sizeof(uint32_t) + sizeof(INPUT_TYPE) - 1, '\0',
+		       sizeof(string_t) - sizeof(uint32_t) - sizeof(INPUT_TYPE));
+		return result;
+	} else {
+		return StringVector::AddString(result_v, (const char *)&input_swapped, string_size);
+	}
 }
 
 template <class INPUT_TYPE>
 static void StringDecompressFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	UnaryExecutor::Execute<INPUT_TYPE, string_t>(args.data[0], result, args.size(), [&](const INPUT_TYPE &input) {
-		return StringDecompress<INPUT_TYPE>(input, args.data[0]);
+		return StringDecompress<INPUT_TYPE>(input, result);
 	});
 }
 
