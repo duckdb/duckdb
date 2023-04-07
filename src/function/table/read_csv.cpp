@@ -368,7 +368,7 @@ idx_t ParallelCSVGlobalState::MaxThreads() const {
 	}
 	idx_t one_mb = 1000000; // We initialize max one thread per Mb
 	idx_t threads_per_mb = first_file_size / one_mb + 1;
-	if (threads_per_mb < system_threads) {
+	if (threads_per_mb < system_threads || threads_per_mb == 1) {
 		return threads_per_mb;
 	}
 
