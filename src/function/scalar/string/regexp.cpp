@@ -290,10 +290,6 @@ static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, 
 
 		// Start with a valid flat vector
 		result.SetVectorType(VectorType::FLAT_VECTOR);
-		auto &res_valid = FlatVector::Validity(result);
-		if (res_valid.GetData()) {
-			res_valid.SetAllValid(count);
-		}
 
 		// Start with valid children
 		for (size_t col = 0; col < child_entries.size(); ++col) {
@@ -355,7 +351,7 @@ static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarF
 			if (list_children.empty()) {
 				throw BinderException("%s requires non-empty lists of capture names", bound_function.name);
 			}
-			unordered_set<string> name_collision_set;
+			case_insensitive_set_t name_collision_set;
 			child_list_t<LogicalType> struct_children;
 			for (const auto &child : list_children) {
 				if (child.IsNull()) {

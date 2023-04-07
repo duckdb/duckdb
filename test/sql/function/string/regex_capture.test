@@ -60,6 +60,40 @@ GROUP BY ALL
 2023-01-10	2	499500
 2023-02-14	1	499500
 
+# Optional capture success
+query IIII
+WITH files AS (
+	SELECT f.*, payload FROM filenames f, range(3) t(payload)
+), extracted AS (
+	SELECT regexp_extract(filename, 'rundate_(\d+-\d+-\d+)_([a-z]+?)_(\d+)', ['rundate', 'opt', 'pass']) AS groups, payload 
+	FROM files
+)
+SELECT groups.rundate::DATE AS rundate, groups.opt AS opt, groups.pass::SMALLINT AS pass, SUM(payload)
+FROM extracted
+WHERE LENGTH(groups.rundate) > 0
+GROUP BY ALL
+----
+2023-01-01	pass	1	3
+2023-01-01	pass	2	3
+2023-01-01	pass	3	3
+2023-01-10	pass	1	3
+2023-01-10	pass	2	3
+2023-02-14	pass	1	3
+
+# Optional capture failure
+query IIII
+WITH files AS (
+	SELECT f.*, payload FROM filenames f, range(3) t(payload)
+), extracted AS (
+	SELECT regexp_extract(filename, 'rundate_(\d+-\d+-\d+)_([0-9]+?)_(\d+)', ['rundate', 'opt', 'pass']) AS groups, payload 
+	FROM files
+)
+SELECT groups.rundate::DATE AS rundate, groups.opt AS opt, groups.pass::SMALLINT AS pass, SUM(payload)
+FROM extracted
+WHERE LENGTH(groups.rundate) > 0
+GROUP BY ALL
+----
+
 #
 # Errors
 #
@@ -86,6 +120,12 @@ NULL group name
 
 statement error
 SELECT regexp_extract(filename, 'rundate_(\d+-\d+-\d+)_pass_(\d+)', ['rundate', 'rundate']) AS groups
+FROM filenames
+----
+Duplicate group name
+
+statement error
+SELECT regexp_extract(filename, 'rundate_(\d+-\d+-\d+)_pass_(\d+)', ['rundate', 'RUNDATE']) AS groups
 FROM filenames
 ----
 Duplicate group name
