@@ -4,10 +4,10 @@ import duckdb
 import pandas
 import pytest
 from conftest import NumpyPandas, ArrowPandas
-from semver import Version
+from packaging.version import Version
 
 numpy_nullable_df = pandas.DataFrame([{"COL1": "val1", "CoL2": 1.05},{"COL1": "val4", "CoL2": 17}])
-if Version.parse(pandas.__version__) >= (2,0,0):
+if Version(pandas.__version__) >= Version('2.0.0'):
 	pyarrow_df = numpy_nullable_df.convert_dtypes(dtype_backend="pyarrow")
 else:
 	# dtype_backend is not supported in pandas < 2.0.0

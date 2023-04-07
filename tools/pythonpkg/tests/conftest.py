@@ -4,7 +4,7 @@ import shutil
 from os.path import abspath, join, dirname, normpath
 import glob
 import duckdb
-from semver import Version
+from packaging.version import Version
 
 try:
 	import pandas
@@ -51,7 +51,6 @@ def convert_to_numpy(df):
 	return df
 
 def convert_and_equal(df1, df2, **kwargs):
-	print('assert_frame_equal')
 	df1 = convert_to_numpy(df1)
 	df2 = convert_to_numpy(df2)
 	pytest.importorskip("pandas").testing.assert_frame_equal(df1, df2, **kwargs)
@@ -70,7 +69,7 @@ class ArrowMockTesting:
 class ArrowPandas:
 	def __init__(self):
 		self.pandas = pytest.importorskip("pandas")
-		if Version.parse(self.pandas.__version__) >= (2,0,0):
+		if Version(self.pandas.__version__) >= Version('2.0.0'):
 			self.backend = 'pyarrow'
 			self.DataFrame = arrow_pandas_df
 		else:
