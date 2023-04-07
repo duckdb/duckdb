@@ -295,10 +295,6 @@ static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, 
 		for (size_t col = 0; col < child_entries.size(); ++col) {
 			auto &child_entry = child_entries[col];
 			child_entry->SetVectorType(VectorType::FLAT_VECTOR);
-			auto &child_validity = FlatVector::Validity(*child_entry);
-			if (child_validity.GetData()) {
-				child_validity.SetAllValid(count);
-			}
 		}
 
 		for (idx_t i = 0; i < count; ++i) {
