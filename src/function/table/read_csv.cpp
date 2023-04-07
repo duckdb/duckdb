@@ -683,7 +683,12 @@ static unique_ptr<GlobalTableFunctionState> SingleThreadedCSVInit(ClientContext 
 		return std::move(result);
 	} else {
 		bind_data.options.file_path = bind_data.files[0];
-		result->initial_reader = make_uniq<BufferedCSVReader>(context, bind_data.options, bind_data.csv_types);
+		if (bind_data.initial_reader && !bind_data.file_exists) {
+			// If this is not an on disk file we gotta reuse the reader.
+			result->initial_reader = std::move(bind_data.initial_reader);
+		} else {
+			result->initial_reader = make_uniq<BufferedCSVReader>(context, bind_data.options, bind_data.csv_types);
+		}
 		if (!bind_data.options.file_options.union_by_name) {
 			result->initial_reader->names = bind_data.csv_names;
 		}
@@ -776,14 +781,13 @@ static void SingleThreadedCSVFunction(ClientContext &context, TableFunctionInput
 static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = (ReadCSVData &)*input.bind_data;
 	auto &fs = FileSystem::GetFileSystem(context);
-	bool file_exists = true;
 	for (auto &file : bind_data.files) {
 		if (!fs.FileExists(file)) {
-			file_exists = false;
+			bind_data.file_exists = false;
 			break;
 		}
 	}
-	bind_data.single_threaded = bind_data.single_threaded || !file_exists;
+	bind_data.single_threaded = bind_data.single_threaded || !bind_data.file_exists;
 	if (bind_data.single_threaded) {
 		return SingleThreadedCSVInit(context, input);
 	} else {

@@ -97,6 +97,8 @@ struct ReadCSVData : public BaseCSVData {
 	bool single_threaded = false;
 	//! Reader bind data
 	MultiFileReaderBindData reader_bind;
+	//! If all files are On-Disk file (e.g., not a pipe)
+	bool file_exists = true;
 	vector<ColumnInfo> column_info;
 
 	void Initialize(unique_ptr<BufferedCSVReader> &reader) {
