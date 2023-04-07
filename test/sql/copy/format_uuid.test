@@ -5,6 +5,9 @@
 require parquet
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 PRAGMA verify_parallelism;
 
 statement ok
@@ -34,27 +37,27 @@ SELECT * FROM test2;
 
 # Test with the FILENAME_PATTERN option. "{uuid}" will be replaced with a unique string.
 statement ok
-COPY test2 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PATTERN "leadingpart_{uuid}");
+COPY test2 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PATTERN "leading_{uuid}");
 
 # the filename contains a uuid
 query III
-SELECT * FROM '__TEST_DIR__/part/a=9/leadingpart_????????-????-4???-????-????????????.parquet';
+SELECT * FROM '__TEST_DIR__/part/a=9/leading_????????-????-4???-????-????????????.parquet';
 ----
 9	18	81
 
 # create a second file in the same partition dirs. This is the append workflow
 statement ok
-COPY test3 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), overwrite_or_ignore TRUE, FILENAME_PATTERN "leadingpart_{uuid}_trailingpart");
+COPY test3 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), overwrite_or_ignore TRUE, FILENAME_PATTERN "leading_{uuid}_trailing");
 
 # the filename contains a uuid
 query III sort
-SELECT * FROM '__TEST_DIR__/part/a=9/leadingpart_????????-????-4???-????-????????????_trailingpart.parquet';
+SELECT * FROM '__TEST_DIR__/part/a=9/leading_????????-????-4???-????-????????????_trailing.parquet';
 ----
 9	27	729
 
-# the partition dir contains the files from test[2-3]
+# the partition dir contains the files from previous 2 queries
 query III sort
-SELECT * FROM '__TEST_DIR__/part/a=9/leadingpart_????????-????-4???-????-????????????*.parquet';
+SELECT * FROM '__TEST_DIR__/part/a=9/leading_????????-????-4???-????-????????????*.parquet';
 ----
 9	18	81
 9	27	729
@@ -104,49 +107,67 @@ IO Error: Directory
 
 
 
-# Test where the FILENAME_PATTERN param has no value (for a directory that does not yet exist)
-statement ok
+# Test where the FILENAME_PATTERN param has no value
+statement error
 COPY test4 TO '__TEST_DIR__/to_be_overwritten' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PATTERN);
+----
+IO Error: FILENAME_PATTERN
+
+statement ok
+COPY test4 TO '__TEST_DIR__/to_be_overwritten' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PATTERN a_file_name);
 
 query I
-SELECT COUNT(*) FROM GLOB('__TEST_DIR__/to_be_overwritten/a=9/*');
+SELECT COUNT(*) FROM GLOB('__TEST_DIR__/to_be_overwritten/a=9/a_file_name*');
 ----
 1
 
 query III sort
-SELECT * FROM '__TEST_DIR__/to_be_overwritten/a=9/data_0.parquet';
+SELECT * FROM '__TEST_DIR__/to_be_overwritten/a=9/a_file_name*.parquet';
 ----
 9	36	6561
 
+
+# Test with a combination of {i} and {uuid}
+statement ok
+COPY test5 TO '__TEST_DIR__/incorrect_pos' (FORMAT PARQUET, PARTITION_BY (a), filename_pattern "a_name{i}_with_{uuid}_numbers");
+
+query III sort
+SELECT * FROM '__TEST_DIR__/incorrect_pos/a=5/a_name_with_????????-????-4???-????-????????????_numbers.parquet';
+----
+5	25	3125
+
+# Test "{uuid}" with per_thread_output TRUE
+statement ok
+COPY testpto TO '__TEST_DIR__/pto' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE, OVERWRITE_OR_IGNORE TRUE, FILENAME_PATTERN "basename_{uuid}");
+
+query I sort
+SELECT COUNT(*) FROM '__TEST_DIR__/pto/basename_????????-????-4???-????-????????????.parquet';
+----
+10000
+
+query I
+SELECT COUNT(*) FROM GLOB('__TEST_DIR__/pto/basename_????????-????-4???-????-????????????.parquet');
+----
+4
+
+
+
+statement ok
+PRAGMA threads=1;
+
 # Test where overwrite_or_ignore param has no value -> will be true -> overwrite previous test
 statement ok
-COPY test5 TO '__TEST_DIR__/to_be_overwritten' (FORMAT PARQUET, PARTITION_BY (a), overwrite_or_ignore);
+COPY test5 TO '__TEST_DIR__/to_be_overwritten2' (FORMAT PARQUET, PARTITION_BY (a), OVERWRITE_OR_IGNORE);
 
 query I
-SELECT COUNT(*) FROM GLOB('__TEST_DIR__/to_be_overwritten/a=9/*');
+SELECT COUNT(*) FROM GLOB('__TEST_DIR__/to_be_overwritten2/a=9/*');
 ----
 1
 
 query III sort
-SELECT * FROM '__TEST_DIR__/to_be_overwritten/a=9/data_0*.parquet';
+SELECT * FROM '__TEST_DIR__/to_be_overwritten2/a=9/data_0*.parquet';
 ----
 9	45	59049
-
-
-
-# Test where the FILENAME_PATTERN param has a value (for a directory that does not yet exist)
-statement ok
-COPY test4 TO '__TEST_DIR__/directory0/' (FORMAT PARQUET, PARTITION_BY (a), filename_pattern "my_filename");
-
-query I
-SELECT COUNT(*) FROM GLOB('__TEST_DIR__/directory0/a=7/*');
-----
-1
-
-query III sort
-SELECT * FROM '__TEST_DIR__/directory0/a=7/my_filename0.parquet';
-----
-7	28	2401
 
 # Test where overwrite_or_ignore param == true, and filename_pattern is set to an existing file
 statement ok
@@ -161,28 +182,3 @@ query III sort
 SELECT * FROM '__TEST_DIR__/directory0/a=7/my_filename0.parquet';
 ----
 7	35	16807
-
-
-
-# Test with a combination of {i} and {uuid}
-statement ok
-COPY test5 TO '__TEST_DIR__/incorrect_pos' (FORMAT PARQUET, PARTITION_BY (a), filename_pattern "a_name_{i}oh_{uuid}_really");
-
-query III sort
-SELECT * FROM '__TEST_DIR__/incorrect_pos/a=5/a_name_oh_????????-????-4???-????-????????????_really.parquet';
-----
-5	25	3125
-
-# Test "{uuid}" with per_thread_output TRUE
-statement ok
-COPY testpto TO '__TEST_DIR__/pto' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE, overwrite_or_ignore true, FILENAME_PATTERN "basename_{uuid}");
-
-query I sort
-SELECT COUNT(*) FROM '__TEST_DIR__/pto/basename_????????-????-4???-????-????????????.parquet';
-----
-10000
-
-query I
-SELECT COUNT(*) FROM GLOB('__TEST_DIR__/pto/basename_????????-????-4???-????-????????????.parquet');
-----
-4

@@ -100,10 +100,10 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 			continue;
 		}
 		if (loption == "filename_pattern") {
-			if (!option.second.empty()) {
-				filename_pattern.SetFilenamePattern(
-				    option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>());
+			if (option.second.empty()) {
+				throw IOException("FILENAME_PATTERN cannot be empty");
 			}
+			filename_pattern.SetFilenamePattern(option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>());
 			continue;
 		}
 
