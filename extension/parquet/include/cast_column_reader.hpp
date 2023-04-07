@@ -16,6 +16,9 @@ namespace duckdb {
 //! A column reader that represents a cast over a child reader
 class CastColumnReader : public ColumnReader {
 public:
+	static constexpr const PhysicalType TYPE = PhysicalType::INVALID;
+
+public:
 	CastColumnReader(duckdb::unique_ptr<ColumnReader> child_reader, LogicalType target_type);
 
 	duckdb::unique_ptr<ColumnReader> child_reader;

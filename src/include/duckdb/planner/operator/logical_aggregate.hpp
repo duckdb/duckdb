@@ -19,6 +19,9 @@ namespace duckdb {
 //! operator.
 class LogicalAggregate : public LogicalOperator {
 public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY;
+
+public:
 	LogicalAggregate(idx_t group_index, idx_t aggregate_index, vector<unique_ptr<Expression>> select_list);
 
 	//! The table index for the groups of the LogicalAggregate

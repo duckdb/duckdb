@@ -101,29 +101,29 @@ static bool PatternIsContains(const string &pattern) {
 
 unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
                                                    bool &changes_made, bool is_root) {
-	auto root = (BoundFunctionExpression *)bindings[0];
-	auto constant_expr = (BoundConstantExpression *)bindings[2];
-	D_ASSERT(root->children.size() == 2);
+	auto &root = bindings[0]->Cast<BoundFunctionExpression>();
+	auto &constant_expr = bindings[2]->Cast<BoundConstantExpression>();
+	D_ASSERT(root.children.size() == 2);
 
-	if (constant_expr->value.IsNull()) {
-		return make_uniq<BoundConstantExpression>(Value(root->return_type));
+	if (constant_expr.value.IsNull()) {
+		return make_uniq<BoundConstantExpression>(Value(root.return_type));
 	}
 
 	// the constant_expr is a scalar expression that we have to fold
-	if (!constant_expr->IsFoldable()) {
+	if (!constant_expr.IsFoldable()) {
 		return nullptr;
 	}
 
-	auto constant_value = ExpressionExecutor::EvaluateScalar(GetContext(), *constant_expr);
-	D_ASSERT(constant_value.type() == constant_expr->return_type);
+	auto constant_value = ExpressionExecutor::EvaluateScalar(GetContext(), constant_expr);
+	D_ASSERT(constant_value.type() == constant_expr.return_type);
 	auto &patt_str = StringValue::Get(constant_value);
 
-	bool is_not_like = root->function.name == "!~~";
+	bool is_not_like = root.function.name == "!~~";
 	if (PatternIsConstant(patt_str)) {
 		// Pattern is constant
 		return make_uniq<BoundComparisonExpression>(is_not_like ? ExpressionType::COMPARE_NOTEQUAL
 		                                                        : ExpressionType::COMPARE_EQUAL,
-		                                            std::move(root->children[0]), std::move(root->children[1]));
+		                                            std::move(root.children[0]), std::move(root.children[1]));
 	} else if (PatternIsPrefix(patt_str)) {
 		// Prefix LIKE pattern : [^%_]*[%]+, ignoring underscore
 		return ApplyRule(root, PrefixFun::GetFunction(), patt_str, is_not_like);
@@ -137,12 +137,12 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<E
 	return nullptr;
 }
 
-unique_ptr<Expression> LikeOptimizationRule::ApplyRule(BoundFunctionExpression *expr, ScalarFunction function,
+unique_ptr<Expression> LikeOptimizationRule::ApplyRule(BoundFunctionExpression &expr, ScalarFunction function,
                                                        string pattern, bool is_not_like) {
 	// replace LIKE by an optimized function
 	unique_ptr<Expression> result;
 	auto new_function =
-	    make_uniq<BoundFunctionExpression>(expr->return_type, std::move(function), std::move(expr->children), nullptr);
+	    make_uniq<BoundFunctionExpression>(expr.return_type, std::move(function), std::move(expr.children), nullptr);
 
 	// removing "%" from the pattern
 	pattern.erase(std::remove(pattern.begin(), pattern.end(), '%'), pattern.end());

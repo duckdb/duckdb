@@ -16,6 +16,9 @@
 namespace duckdb {
 
 class SetStatement : public SQLStatement {
+public:
+	static constexpr const StatementType TYPE = StatementType::SET_STATEMENT;
+
 protected:
 	SetStatement(std::string name_p, SetScope scope_p, SetType type_p);
 	SetStatement(const SetStatement &other) = default;

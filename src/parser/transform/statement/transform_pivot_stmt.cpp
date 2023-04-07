@@ -10,6 +10,7 @@
 #include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/result_modifier.hpp"
@@ -58,15 +59,17 @@ unique_ptr<SQLStatement> Transformer::GenerateCreateEnumStmt(unique_ptr<CreatePi
 	// generate the query that will result in the enum creation
 	auto select_node = std::move(entry->base);
 	auto columnref = entry->column->Copy();
-	auto cast = make_uniq<CastExpression>(LogicalType::VARCHAR, columnref->Copy());
+	auto cast = make_uniq<CastExpression>(LogicalType::VARCHAR, std::move(columnref));
 	select_node->select_list.push_back(std::move(cast));
 
 	auto is_not_null = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, std::move(entry->column));
 	select_node->where_clause = std::move(is_not_null);
 
 	// order by the column
+	select_node->modifiers.push_back(make_uniq<DistinctModifier>());
 	auto modifier = make_uniq<OrderModifier>();
-	modifier->orders.emplace_back(OrderType::ASCENDING, OrderByNullType::ORDER_DEFAULT, std::move(columnref));
+	modifier->orders.emplace_back(OrderType::ASCENDING, OrderByNullType::ORDER_DEFAULT,
+	                              make_uniq<ConstantExpression>(Value::INTEGER(1)));
 	select_node->modifiers.push_back(std::move(modifier));
 
 	auto select = make_uniq<SelectStatement>();

@@ -15,7 +15,8 @@ add_library_unity(
   plan_joinref.cpp
   plan_subqueryref.cpp
   plan_table_function.cpp
-  plan_cteref.cpp)
+  plan_cteref.cpp
+  plan_pivotref.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_bind_tableref>
     PARENT_SCOPE)

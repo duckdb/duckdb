@@ -25,7 +25,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDistinct &
 	for (idx_t i = 0; i < distinct_targets.size(); i++) {
 		auto &target = distinct_targets[i];
 		if (target->type == ExpressionType::BOUND_REF) {
-			auto &bound_ref = (BoundReferenceExpression &)*target;
+			auto &bound_ref = target->Cast<BoundReferenceExpression>();
 			group_by_references[bound_ref.index] = i;
 		}
 		aggregate_types.push_back(target->return_type);
@@ -49,6 +49,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDistinct &
 				requires_projection = true;
 			}
 		} else {
+			if (op.distinct_type == DistinctType::DISTINCT && op.order_by) {
+				throw InternalException("Entry that is not a group, but not a DISTINCT ON aggregate");
+			}
 			// entry is not one of the groups: need to push a FIRST aggregate
 			auto bound = make_uniq<BoundReferenceExpression>(logical_type, i);
 			vector<unique_ptr<Expression>> first_children;

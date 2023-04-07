@@ -46,7 +46,7 @@ unique_ptr<GlobalSinkState> PhysicalPositionalJoin::GetGlobalSinkState(ClientCon
 
 SinkResultType PhysicalPositionalJoin::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
                                             DataChunk &input) const {
-	auto &sink = (PositionalJoinGlobalState &)state;
+	auto &sink = state.Cast<PositionalJoinGlobalState>();
 	lock_guard<mutex> client_guard(sink.rhs_lock);
 	sink.rhs.Append(sink.append_state, input);
 	return SinkResultType::NEED_MORE_INPUT;
@@ -136,7 +136,7 @@ void PositionalJoinGlobalState::Execute(DataChunk &input, DataChunk &output) {
 
 OperatorResultType PhysicalPositionalJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                    GlobalOperatorState &gstate, OperatorState &state_p) const {
-	auto &sink = (PositionalJoinGlobalState &)*sink_state;
+	auto &sink = sink_state->Cast<PositionalJoinGlobalState>();
 	sink.Execute(input, chunk);
 	return OperatorResultType::NEED_MORE_INPUT;
 }
@@ -173,7 +173,7 @@ void PositionalJoinGlobalState::GetData(DataChunk &output) {
 
 void PhysicalPositionalJoin::GetData(ExecutionContext &context, DataChunk &result, GlobalSourceState &gstate,
                                      LocalSourceState &lstate) const {
-	auto &sink = (PositionalJoinGlobalState &)*sink_state;
+	auto &sink = sink_state->Cast<PositionalJoinGlobalState>();
 	sink.GetData(result);
 }
 

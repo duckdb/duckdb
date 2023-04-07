@@ -14,6 +14,9 @@ namespace duckdb {
 
 class PhysicalDummyScan : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::DUMMY_SCAN;
+
+public:
 	explicit PhysicalDummyScan(vector<LogicalType> types, idx_t estimated_cardinality)
 	    : PhysicalOperator(PhysicalOperatorType::DUMMY_SCAN, std::move(types), estimated_cardinality) {
 	}

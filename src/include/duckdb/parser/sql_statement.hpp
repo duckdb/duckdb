@@ -47,5 +47,23 @@ public:
 	}
 	//! Create a copy of this SelectStatement
 	DUCKDB_API virtual unique_ptr<SQLStatement> Copy() const = 0;
+
+public:
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast statement to type - statement type mismatch");
+		}
+		return (TARGET &)*this;
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast statement to type - statement type mismatch");
+		}
+		return (const TARGET &)*this;
+	}
 };
 } // namespace duckdb

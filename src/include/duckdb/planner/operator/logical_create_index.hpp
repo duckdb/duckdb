@@ -16,6 +16,9 @@ namespace duckdb {
 
 class LogicalCreateIndex : public LogicalOperator {
 public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_CREATE_INDEX;
+
+public:
 	LogicalCreateIndex(unique_ptr<FunctionData> bind_data_p, unique_ptr<CreateIndexInfo> info_p,
 	                   vector<unique_ptr<Expression>> expressions_p, TableCatalogEntry &table_p,
 	                   TableFunction function_p)

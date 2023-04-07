@@ -74,8 +74,8 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto alc = local_state.json_allocator.GetYYJSONAllocator();
 	auto &inputs = args.data[0];
 
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	const auto &info = (JsonSerializeBindData &)*func_expr.bind_info;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	const auto &info = func_expr.bind_info->Cast<JsonSerializeBindData>();
 
 	UnaryExecutor::Execute<string_t, string_t>(inputs, result, args.size(), [&](string_t input) {
 		auto doc = JSONCommon::CreateDocument(alc);
@@ -92,7 +92,7 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 				if (statement->type != StatementType::SELECT_STATEMENT) {
 					throw NotImplementedException("Only SELECT statements can be serialized to json!");
 				}
-				auto &select = (SelectStatement &)*statement;
+				auto &select = statement->Cast<SelectStatement>();
 				auto serializer = JsonSerializer(doc, info.skip_if_null, info.skip_if_empty);
 				select.FormatSerialize(serializer);
 				auto json = serializer.GetRootObject();

@@ -243,7 +243,7 @@ CachingPhysicalOperator::CachingPhysicalOperator(PhysicalOperatorType type, vect
 
 OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                     GlobalOperatorState &gstate, OperatorState &state_p) const {
-	auto &state = (CachingOperatorState &)state_p;
+	auto &state = state_p.Cast<CachingOperatorState>();
 
 	// Execute child operator
 	auto child_result = ExecuteInternal(context, input, chunk, gstate, state);
@@ -297,7 +297,7 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 OperatorFinalizeResultType CachingPhysicalOperator::FinalExecute(ExecutionContext &context, DataChunk &chunk,
                                                                  GlobalOperatorState &gstate,
                                                                  OperatorState &state_p) const {
-	auto &state = (CachingOperatorState &)state_p;
+	auto &state = state_p.Cast<CachingOperatorState>();
 	if (state.cached_chunk) {
 		chunk.Move(*state.cached_chunk);
 		state.cached_chunk.reset();
