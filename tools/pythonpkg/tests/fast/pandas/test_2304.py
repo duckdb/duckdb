@@ -1,17 +1,19 @@
 import duckdb
-import pandas as pd
 import numpy as np
+import pytest
+from conftest import NumpyPandas, ArrowPandas
 
 class TestPandasMergeSameName(object):
-    def test_2304(self, duckdb_cursor):
-        df1 = pd.DataFrame({
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_2304(self, duckdb_cursor, pandas):
+        df1 = pandas.DataFrame({
             'id_1': [1, 1, 1, 2, 2],
             'agedate': np.array(['2010-01-01','2010-02-01','2010-03-01','2020-02-01', '2020-03-01']).astype('datetime64[D]'),
             'age': [1, 2, 3, 1, 2],
             'v': [1.1, 1.2, 1.3, 2.1, 2.2]
         })
 
-        df2 = pd.DataFrame({
+        df2 = pandas.DataFrame({
             'id_1': [1, 1, 2],
             'agedate': np.array(['2010-01-01','2010-02-01', '2020-03-01']).astype('datetime64[D]'),
             'v2': [11.1, 11.2, 21.2]
@@ -31,20 +33,21 @@ class TestPandasMergeSameName(object):
 
         assert result == expected_result
 
-    def test_pd_names(self, duckdb_cursor):
-        df1 = pd.DataFrame({
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_pd_names(self, duckdb_cursor, pandas):
+        df1 = pandas.DataFrame({
             'id': [1, 1, 2],
             'id_1': [1, 1, 2],
             'id_3': [1, 1, 2],
         })
 
-        df2 = pd.DataFrame({
+        df2 = pandas.DataFrame({
             'id': [1, 1, 2],
             'id_1': [1, 1, 2],
             'id_2': [1, 1, 1]
         })
 
-        exp_result = pd.DataFrame({
+        exp_result = pandas.DataFrame({
             'id': [1, 1, 2, 1, 1],
             'id_1': [1, 1, 2, 1, 1],
             'id_3': [1, 1, 2, 1, 1],
@@ -61,20 +64,21 @@ class TestPandasMergeSameName(object):
         ON (df1.id_1=df2.id_1)"""
 
         result_df = con.execute(query).fetchdf()
-        assert(exp_result.equals(result_df))
+        pandas.testing.assert_frame_equal(exp_result, result_df)
 
-    def test_repeat_name(self, duckdb_cursor):
-        df1 = pd.DataFrame({
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_repeat_name(self, duckdb_cursor, pandas):
+        df1 = pandas.DataFrame({
             'id': [1],
             'id_1': [1],
             'id_2': [1],
         })
 
-        df2 = pd.DataFrame({
+        df2 = pandas.DataFrame({
             'id': [1]
         })
 
-        exp_result = pd.DataFrame({
+        exp_result = pandas.DataFrame({
             'id': [1],
             'id_1': [1],
             'id_2': [1],
@@ -84,10 +88,12 @@ class TestPandasMergeSameName(object):
         con = duckdb.connect()
         con.register('df1', df1)
         con.register('df2', df2)
-        query = """SELECT * from df1
-        LEFT OUTER JOIN df2
-        ON (df1.id=df2.id)"""
 
-        result_df = con.execute(query).fetchdf()
-        print(result_df)
-        assert(exp_result.equals(result_df))
+        result_df = con.execute(
+            """
+                SELECT * from df1
+                LEFT OUTER JOIN df2
+                ON (df1.id=df2.id)
+            """
+        ).fetchdf()
+        pandas.testing.assert_frame_equal(exp_result, result_df)

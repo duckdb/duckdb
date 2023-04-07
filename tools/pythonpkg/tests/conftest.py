@@ -49,11 +49,11 @@ def convert_to_numpy(df):
 		return convert_arrow_to_numpy_backend(df)
 	return df
 
-def convert_and_equal(df1, df2):
+def convert_and_equal(df1, df2, **kwargs):
 	print('assert_frame_equal')
 	df1 = convert_to_numpy(df1)
 	df2 = convert_to_numpy(df2)
-	pytest.importorskip("pandas").testing.assert_frame_equal(df1, df2)
+	pytest.importorskip("pandas").testing.assert_frame_equal(df1, df2, **kwargs)
 
 class ArrowMockTesting:
 	def __init__(self):
