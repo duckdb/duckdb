@@ -39,7 +39,7 @@ struct TypeOfFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct AssertFun {
+struct ErrorFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
