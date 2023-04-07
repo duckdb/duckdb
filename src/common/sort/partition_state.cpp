@@ -10,8 +10,8 @@
 namespace duckdb {
 
 PartitionGlobalHashGroup::PartitionGlobalHashGroup(BufferManager &buffer_manager, const Orders &partitions,
-	const Orders &orders, const Types &payload_types, bool external)
-	: count(0) {
+                                                   const Orders &orders, const Types &payload_types, bool external)
+    : count(0) {
 
 	RowLayout payload_layout;
 	payload_layout.Initialize(payload_types);
@@ -52,11 +52,13 @@ void PartitionGlobalHashGroup::ComputeMasks(ValidityMask &partition_mask, Validi
 	}
 }
 
-PartitionGlobalSinkState::PartitionGlobalSinkState(ClientContext &context, const vector<unique_ptr<Expression>> &partitions_p,
-		const vector<BoundOrderByNode> &orders_p, const Types &payload_types,
-		const vector<unique_ptr<BaseStatistics>> &partitions_stats, idx_t estimated_cardinality)
-	    : context(context), buffer_manager(BufferManager::GetBufferManager(context)),
-	  allocator(Allocator::Get(context)), payload_types(payload_types), memory_per_thread(0), count(0) {
+PartitionGlobalSinkState::PartitionGlobalSinkState(ClientContext &context,
+                                                   const vector<unique_ptr<Expression>> &partitions_p,
+                                                   const vector<BoundOrderByNode> &orders_p, const Types &payload_types,
+                                                   const vector<unique_ptr<BaseStatistics>> &partitions_stats,
+                                                   idx_t estimated_cardinality)
+    : context(context), buffer_manager(BufferManager::GetBufferManager(context)), allocator(Allocator::Get(context)),
+      payload_types(payload_types), memory_per_thread(0), count(0) {
 
 	// we sort by both 1) partition by expression list and 2) order by expressions
 	const auto partition_cols = partitions_p.size();
@@ -67,7 +69,7 @@ PartitionGlobalSinkState::PartitionGlobalSinkState(ClientContext &context, const
 			orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, pexpr->Copy(), nullptr);
 		} else {
 			orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, pexpr->Copy(),
-								partitions_stats[prt_idx]->ToUnique());
+			                    partitions_stats[prt_idx]->ToUnique());
 		}
 		partitions.emplace_back(orders.back().Copy());
 	}
@@ -224,8 +226,8 @@ void PartitionGlobalSinkState::BuildSortState(ColumnDataCollection &group_data, 
 }
 
 //	Per-thread sink state
-PartitionLocalSinkState::PartitionLocalSinkState(ClientContext &context, PartitionGlobalSinkState& gstate_p)
-	: gstate(gstate_p), allocator(Allocator::Get(context)), executor(context) {
+PartitionLocalSinkState::PartitionLocalSinkState(ClientContext &context, PartitionGlobalSinkState &gstate_p)
+    : gstate(gstate_p), allocator(Allocator::Get(context)), executor(context) {
 
 	vector<LogicalType> group_types;
 	for (idx_t prt_idx = 0; prt_idx < gstate.partitions.size(); prt_idx++) {
@@ -336,12 +338,12 @@ void PartitionLocalSinkState::Combine() {
 }
 
 PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &sink, GroupDataPtr group_data)
-	    : sink(sink), group_data(std::move(group_data)), stage(PartitionSortStage::INIT), total_tasks(0),
-	  tasks_assigned(0), tasks_completed(0) {
+    : sink(sink), group_data(std::move(group_data)), stage(PartitionSortStage::INIT), total_tasks(0), tasks_assigned(0),
+      tasks_completed(0) {
 
 	const auto group_idx = sink.hash_groups.size();
 	auto new_group = make_uniq<PartitionGlobalHashGroup>(sink.buffer_manager, sink.partitions, sink.orders,
-														sink.payload_types, sink.external);
+	                                                     sink.payload_types, sink.external);
 	sink.hash_groups.emplace_back(std::move(new_group));
 
 	hash_group = sink.hash_groups[group_idx].get();
@@ -540,8 +542,7 @@ void PartitionMergeEvent::Schedule() {
 	SetTasks(std::move(merge_tasks));
 }
 
-PartitionLocalSourceState::PartitionLocalSourceState(PartitionGlobalSinkState &gstate_p)
-	: gstate(gstate_p) {
+PartitionLocalSourceState::PartitionLocalSourceState(PartitionGlobalSinkState &gstate_p) : gstate(gstate_p) {
 	const auto &input_types = gstate.payload_types;
 	layout.Initialize(input_types);
 	input_chunk.Initialize(gstate.allocator, input_types);

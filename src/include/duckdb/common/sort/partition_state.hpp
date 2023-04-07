@@ -23,7 +23,7 @@ public:
 	using Types = vector<LogicalType>;
 
 	PartitionGlobalHashGroup(BufferManager &buffer_manager, const Orders &partitions, const Orders &orders,
-	                      const Types &payload_types, bool external);
+	                         const Types &payload_types, bool external);
 
 	void ComputeMasks(ValidityMask &partition_mask, ValidityMask &order_mask);
 
@@ -44,8 +44,8 @@ public:
 	using GroupingAppend = unique_ptr<PartitionedColumnDataAppendState>;
 
 	PartitionGlobalSinkState(ClientContext &context, const vector<unique_ptr<Expression>> &partitions_p,
-		const vector<BoundOrderByNode> &orders_p, const Types &payload_types,
-		const vector<unique_ptr<BaseStatistics>> &partitions_stats, idx_t estimated_cardinality);
+	                         const vector<BoundOrderByNode> &orders_p, const Types &payload_types,
+	                         const vector<unique_ptr<BaseStatistics>> &partitions_stats, idx_t estimated_cardinality);
 
 	void UpdateLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append);
 	void CombineLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append);
@@ -84,10 +84,10 @@ private:
 
 class PartitionLocalSinkState {
 public:
-	PartitionLocalSinkState(ClientContext &context, PartitionGlobalSinkState& gstate_p);
+	PartitionLocalSinkState(ClientContext &context, PartitionGlobalSinkState &gstate_p);
 
 	// Global state
-	PartitionGlobalSinkState& gstate;
+	PartitionGlobalSinkState &gstate;
 	Allocator &allocator;
 
 	// OVER(PARTITION BY...) (hash grouping)
