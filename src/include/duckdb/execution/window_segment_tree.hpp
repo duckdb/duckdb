@@ -12,12 +12,13 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/common/enums/window_aggregation_mode.hpp"
+#include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
 
 namespace duckdb {
 
 class WindowAggregateState {
 public:
-	WindowAggregateState(AggregateFunction &aggregate, FunctionData *bind_info, const LogicalType &result_type_p);
+	WindowAggregateState(AggregateObject aggr, const LogicalType &result_type_p);
 	virtual ~WindowAggregateState();
 
 	virtual void Sink(DataChunk &payload_chunk, SelectionVector *filter_sel, idx_t filtered);
@@ -28,10 +29,7 @@ protected:
 	void AggregateInit();
 	void AggegateFinal(Vector &result, idx_t rid);
 
-	//! The aggregate that the window function is computed over
-	AggregateFunction aggregate;
-	//! The bind info of the aggregate
-	FunctionData *bind_info;
+	AggregateObject aggr;
 	//! The result type of the window function
 	LogicalType result_type;
 
@@ -49,8 +47,8 @@ class WindowConstantAggregate : public WindowAggregateState {
 public:
 	static bool IsConstantAggregate(const BoundWindowExpression &wexpr);
 
-	WindowConstantAggregate(AggregateFunction &aggregate, FunctionData *bind_info, const LogicalType &result_type_p,
-	                        const ValidityMask &partition_mask, const idx_t count);
+	WindowConstantAggregate(AggregateObject aggr, const LogicalType &result_type_p, const ValidityMask &partition_mask,
+	                        const idx_t count);
 	~WindowConstantAggregate() override {
 	}
 
@@ -73,8 +71,8 @@ class WindowSegmentTree {
 public:
 	using FrameBounds = std::pair<idx_t, idx_t>;
 
-	WindowSegmentTree(AggregateFunction &aggregate, FunctionData *bind_info, const LogicalType &result_type,
-	                  DataChunk *input, const ValidityMask &filter_mask, WindowAggregationMode mode);
+	WindowSegmentTree(AggregateObject aggr, const LogicalType &result_type, DataChunk *input,
+	                  const ValidityMask &filter_mask, WindowAggregationMode mode);
 	~WindowSegmentTree();
 
 	//! First row contains the result.
@@ -97,9 +95,7 @@ private:
 	}
 
 	//! The aggregate that the window function is computed over
-	AggregateFunction aggregate;
-	//! The bind info of the aggregate
-	FunctionData *bind_info;
+	AggregateObject aggr;
 	//! The result type of the window function
 	LogicalType result_type;
 
