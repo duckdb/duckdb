@@ -97,12 +97,9 @@ static LogicalType BindColumn(PandasBindColumn column_p, PandasColumnBindData &b
 		column_type = NumpyToLogicalType(bind_data.numpy_type);
 	} else {
 		auto pandas_array = column.attr("array");
-		if (py::hasattr(pandas_array, "__arrow_array__")) {
-			bind_data.numpy_col =
-			    make_uniq<PandasArrowColumn>(pandas_array.attr("__arrow_array__")(), ClientConfig::GetConfig(context));
-		} else if (py::hasattr(pandas_array, "__array__")) {
+		if (py::hasattr(pandas_array, "_data")) {
 			// This means we can access the numpy array directly
-			bind_data.numpy_col = make_uniq<PandasNumpyColumn>(column.attr("array").attr("__array__")());
+			bind_data.numpy_col = make_uniq<PandasNumpyColumn>(column.attr("array").attr("_data"));
 		} else if (py::hasattr(pandas_array, "asi8")) {
 			// This is a datetime object, has the option to get the array as int64_t's
 			bind_data.numpy_col = make_uniq<PandasNumpyColumn>(py::array(pandas_array.attr("asi8")));
