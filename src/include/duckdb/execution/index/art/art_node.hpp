@@ -39,18 +39,19 @@ struct ARTFlags;
 class ARTNode : public SwizzleablePointer {
 public:
 	// constants (this allows testing performance with different ART node sizes)
-	// node prefixes (NOTE: this should always hold: PREFIX_SEGMENT_SIZE >= PREFIX_INLINE_BYTES)
+
+	//! Node prefixes (NOTE: this should always hold: PREFIX_SEGMENT_SIZE >= PREFIX_INLINE_BYTES)
 	static constexpr uint32_t PREFIX_INLINE_BYTES = 8;
 	static constexpr uint32_t PREFIX_SEGMENT_SIZE = 32;
-	// node thresholds
+	//! Node thresholds
 	static constexpr uint8_t NODE_48_SHRINK_THRESHOLD = 12;
 	static constexpr uint8_t NODE_256_SHRINK_THRESHOLD = 36;
-	// node sizes
+	//! Node sizes
 	static constexpr uint8_t NODE_4_CAPACITY = 4;
 	static constexpr uint8_t NODE_16_CAPACITY = 16;
 	static constexpr uint8_t NODE_48_CAPACITY = 48;
 	static constexpr uint16_t NODE_256_CAPACITY = 256;
-	// others
+	//! Other constants
 	static constexpr uint8_t EMPTY_MARKER = 48;
 	static constexpr uint32_t LEAF_SEGMENT_SIZE = 8;
 
@@ -64,31 +65,15 @@ public:
 	//! Free the node (and its subtree)
 	static void Free(ART &art, ARTNode &node);
 
-	//! Set the leftmost byte to contain the node type
-	inline void EncodeARTNodeType(const ARTNodeType type) {
-		// left shift the type by 7 bytes
-		auto type_as_idx_t = (idx_t)type;
-		type_as_idx_t <<= ((sizeof(idx_t) - sizeof(uint8_t)) * 8);
-
-		// ensure that we do not overwrite any bits
-		D_ASSERT((pointer & FixedSizeAllocator::BUFFER_ID_AND_OFFSET_TO_ZERO) == 0);
-		pointer |= type_as_idx_t;
-		D_ASSERT(DecodeARTNodeType() == type);
-	}
 	//! Retrieve the node type from the leftmost byte
 	inline ARTNodeType DecodeARTNodeType() const {
-		// right shift by 7 bytes
-		auto type = pointer >> ((sizeof(idx_t) - sizeof(uint8_t)) * 8);
 		return ARTNodeType(type);
 	}
-	//! Get the pointer without the node type encoded
-	inline idx_t GetPtr() const {
-		return pointer & FixedSizeAllocator::FIRST_BYTE_TO_ZERO;
-	}
-	//! Set the pointer and encode the node type
-	inline void SetPtr(const idx_t ptr, const ARTNodeType type) {
-		pointer = ptr;
-		EncodeARTNodeType(type);
+
+	//! Set the pointer
+	inline void SetPtr(const SwizzleablePointer ptr) {
+		offset = ptr.offset;
+		buffer_id = ptr.buffer_id;
 	}
 
 	//! Replace the child node at pos
@@ -117,7 +102,7 @@ public:
 	//! Serialize the node
 	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);
 	//! Deserialize the node
-	void Deserialize(ART &art, const BlockPointer &block);
+	void Deserialize(ART &art);
 
 	//! Returns the string representation of the node
 	string ToString(ART &art) const;

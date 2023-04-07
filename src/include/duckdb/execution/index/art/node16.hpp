@@ -8,13 +8,10 @@
 
 #pragma once
 
+#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_node.hpp"
-#include "duckdb/execution/index/art/prefix.hpp"
 
 namespace duckdb {
-
-// classes
-class ART;
 
 //! Node16 holds up to 16 ARTNode children sorted by their key byte
 class Node16 {
@@ -33,6 +30,10 @@ public:
 	static Node16 *New(ART &art, ARTNode &node);
 	//! Free the node (and its subtree)
 	static void Free(ART &art, ARTNode &node);
+	//! Get a pointer to the node
+	static inline Node16 *Get(const ART &art, const ARTNode ptr) {
+		return art.n16_nodes->Get<Node16>(ptr);
+	}
 	//! Initializes all the fields of the node while growing a Node4 to a Node16
 	static Node16 *GrowNode4(ART &art, ARTNode &node16, ARTNode &node4);
 	//! Initializes all fields of the node while shrinking a Node48 to a Node16

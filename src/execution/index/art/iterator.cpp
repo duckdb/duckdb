@@ -27,7 +27,7 @@ void IteratorCurrentKey::Pop(const idx_t &n) {
 	D_ASSERT(cur_key_pos <= key.size());
 }
 
-bool IteratorCurrentKey::operator>(const Key &k) const {
+bool IteratorCurrentKey::operator>(const ARTKey &k) const {
 	for (idx_t i = 0; i < MinValue<idx_t>(cur_key_pos, k.len); i++) {
 		if (key[i] > k.data[i]) {
 			return true;
@@ -38,7 +38,7 @@ bool IteratorCurrentKey::operator>(const Key &k) const {
 	return cur_key_pos > k.len;
 }
 
-bool IteratorCurrentKey::operator>=(const Key &k) const {
+bool IteratorCurrentKey::operator>=(const ARTKey &k) const {
 	for (idx_t i = 0; i < MinValue<idx_t>(cur_key_pos, k.len); i++) {
 		if (key[i] > k.data[i]) {
 			return true;
@@ -49,7 +49,7 @@ bool IteratorCurrentKey::operator>=(const Key &k) const {
 	return cur_key_pos >= k.len;
 }
 
-bool IteratorCurrentKey::operator==(const Key &k) const {
+bool IteratorCurrentKey::operator==(const ARTKey &k) const {
 	if (cur_key_pos != k.len) {
 		return false;
 	}
@@ -71,7 +71,7 @@ void Iterator::FindMinimum(ARTNode &node) {
 
 	// found the minimum
 	if (node.DecodeARTNodeType() == ARTNodeType::LEAF) {
-		last_leaf = art->leaves->Get<Leaf>(node.GetPtr());
+		last_leaf = art->leaves->Get<Leaf>(node);
 		return;
 	}
 
@@ -92,7 +92,7 @@ void Iterator::PushKey(const ARTNode &node, const uint16_t &position) {
 	}
 }
 
-bool Iterator::Scan(const Key &bound, const idx_t &max_count, vector<row_t> &result_ids, const bool &is_inclusive) {
+bool Iterator::Scan(const ARTKey &bound, const idx_t &max_count, vector<row_t> &result_ids, const bool &is_inclusive) {
 
 	bool has_next;
 	do {
@@ -143,7 +143,7 @@ bool Iterator::Next() {
 		ARTNode node = top.node;
 		if (node.DecodeARTNodeType() == ARTNodeType::LEAF) {
 			// found a leaf: move to next node
-			last_leaf = art->leaves->Get<Leaf>(node.GetPtr());
+			last_leaf = art->leaves->Get<Leaf>(node);
 			return true;
 		}
 		// find next node
@@ -167,9 +167,9 @@ bool Iterator::Next() {
 	return false;
 }
 
-bool Iterator::LowerBound(ARTNode node, const Key &key, const bool &is_inclusive) {
+bool Iterator::LowerBound(ARTNode node, const ARTKey &key, const bool &is_inclusive) {
 	bool equal = true;
-	if (!node) {
+	if (!node.IsSet()) {
 		return false;
 	}
 	idx_t depth = 0;
@@ -204,7 +204,7 @@ bool Iterator::LowerBound(ARTNode node, const Key &key, const bool &is_inclusive
 
 		if (node.DecodeARTNodeType() == ARTNodeType::LEAF) {
 			// found a leaf node: check if it is bigger or equal than the current key
-			last_leaf = art->leaves->Get<Leaf>(node.GetPtr());
+			last_leaf = art->leaves->Get<Leaf>(node);
 
 			// if the search is not inclusive the leaf node could still be equal to the current value
 			// check if leaf is equal to the current key

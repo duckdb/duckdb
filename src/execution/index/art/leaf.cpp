@@ -9,10 +9,11 @@
 
 namespace duckdb {
 
-Leaf *Leaf::New(ART &art, ARTNode &node, const Key &key, const uint32_t depth, const row_t row_id) {
+Leaf *Leaf::New(ART &art, ARTNode &node, const ARTKey &key, const uint32_t depth, const row_t row_id) {
 
-	node.SetPtr(art.leaves->New(), ARTNodeType::LEAF);
-	auto leaf = art.leaves->Get<Leaf>(node.GetPtr());
+	node.SetPtr(art.leaves->New());
+	node.type = (uint8_t)ARTNodeType::LEAF;
+	auto leaf = Leaf::Get(art, node);
 
 	// set the fields of the leaf
 	leaf->count = 1;
@@ -25,7 +26,7 @@ Leaf *Leaf::New(ART &art, ARTNode &node, const Key &key, const uint32_t depth, c
 	return leaf;
 }
 
-Leaf *Leaf::New(ART &art, ARTNode &node, const Key &key, const uint32_t depth, const row_t *row_ids,
+Leaf *Leaf::New(ART &art, ARTNode &node, const ARTKey &key, const uint32_t depth, const row_t *row_ids,
                 const idx_t count) {
 
 	// inlined leaf
@@ -34,15 +35,15 @@ Leaf *Leaf::New(ART &art, ARTNode &node, const Key &key, const uint32_t depth, c
 		return Leaf::New(art, node, key, depth, row_ids[0]);
 	}
 
-	node.SetPtr(art.leaves->New(), ARTNodeType::LEAF);
-	auto leaf = art.leaves->Get<Leaf>(node.GetPtr());
+	node.SetPtr(art.leaves->New());
+	node.type = (uint8_t)ARTNodeType::LEAF;
+	auto leaf = Leaf::Get(art, node);
 
 	// set the fields of the leaf
 	leaf->count = 0;
 
 	// copy the row IDs
-	leaf->row_ids.position = LeafSegment::New(art);
-	auto segment = LeafSegment::Initialize(art, leaf->row_ids.position);
+	auto segment = LeafSegment::New(art, leaf->row_ids.ptr);
 	for (idx_t i = 0; i < count; i++) {
 		segment = segment->Append(art, leaf->count, row_ids[i]);
 	}
@@ -56,18 +57,18 @@ Leaf *Leaf::New(ART &art, ARTNode &node, const Key &key, const uint32_t depth, c
 
 void Leaf::Free(ART &art, ARTNode &node) {
 
-	D_ASSERT(node);
+	D_ASSERT(node.IsSet());
 	D_ASSERT(!node.IsSwizzled());
 
-	auto leaf = art.leaves->Get<Leaf>(node.GetPtr());
+	auto leaf = Leaf::Get(art, node);
 
 	// delete all leaf segments
 	if (!leaf->IsInlined()) {
-		auto position = leaf->row_ids.position;
-		while (position != DConstants::INVALID_INDEX) {
-			auto next_position = LeafSegment::Get(art, position)->next;
-			LeafSegment::Free(art, position);
-			position = next_position;
+		auto ptr = leaf->row_ids.ptr;
+		while (ptr.IsSet()) {
+			auto next_ptr = LeafSegment::Get(art, ptr)->next;
+			ARTNode::Free(art, ptr);
+			ptr = next_ptr;
 		}
 	}
 }
@@ -78,24 +79,20 @@ void Leaf::InitializeMerge(const ART &art, const idx_t buffer_count) {
 		return;
 	}
 
-	auto segment = LeafSegment::Get(art, row_ids.position);
-	D_ASSERT((row_ids.position & FixedSizeAllocator::BUFFER_ID_TO_ZERO) ==
-	         ((row_ids.position + buffer_count) & FixedSizeAllocator::BUFFER_ID_TO_ZERO));
-	row_ids.position += buffer_count;
+	auto segment = LeafSegment::Get(art, row_ids.ptr);
+	row_ids.ptr.buffer_id += buffer_count;
 
-	auto position = segment->next;
-	while (position != DConstants::INVALID_INDEX) {
-		D_ASSERT((segment->next & FixedSizeAllocator::BUFFER_ID_TO_ZERO) ==
-		         ((segment->next + buffer_count) & FixedSizeAllocator::BUFFER_ID_TO_ZERO));
-		segment->next += buffer_count;
-		segment = LeafSegment::Get(art, position);
-		position = segment->next;
+	auto ptr = segment->next;
+	while (ptr.IsSet()) {
+		segment->next.buffer_id += buffer_count;
+		segment = LeafSegment::Get(art, ptr);
+		ptr = segment->next;
 	}
 }
 
 void Leaf::Merge(ART &art, ARTNode &other) {
 
-	auto other_leaf = art.leaves->Get<Leaf>(other.GetPtr());
+	auto other_leaf = Leaf::Get(art, other);
 
 	// copy inlined row ID
 	if (other_leaf->IsInlined()) {
@@ -108,22 +105,21 @@ void Leaf::Merge(ART &art, ARTNode &other) {
 	LeafSegment *segment;
 	if (IsInlined()) {
 		// row ID was inlined, move to a new segment
-		auto position = LeafSegment::New(art);
-		segment = LeafSegment::Initialize(art, position);
-		segment->row_ids[0] = row_ids.inlined;
-		row_ids.position = position;
+		auto row_id = row_ids.inlined;
+		segment = LeafSegment::New(art, row_ids.ptr);
+		segment->row_ids[0] = row_id;
 	} else {
 		// get the tail of the segments of this leaf
-		segment = LeafSegment::Get(art, row_ids.position)->GetTail(art);
+		segment = LeafSegment::Get(art, row_ids.ptr)->GetTail(art);
 	}
 
 	// initialize loop variables
-	auto other_position = other_leaf->row_ids.position;
+	auto other_ptr = other_leaf->row_ids.ptr;
 	auto remaining = other_leaf->count;
 
 	// copy row IDs
-	while (other_position != DConstants::INVALID_INDEX) {
-		auto other_segment = LeafSegment::Get(art, other_position);
+	while (other_ptr.IsSet()) {
+		auto other_segment = LeafSegment::Get(art, other_ptr);
 		auto copy_count = MinValue(ARTNode::LEAF_SEGMENT_SIZE, remaining);
 
 		// copy the data
@@ -132,7 +128,7 @@ void Leaf::Merge(ART &art, ARTNode &other) {
 		}
 
 		// adjust the loop variables
-		other_position = other_segment->next;
+		other_ptr = other_segment->next;
 		remaining -= copy_count;
 	}
 	D_ASSERT(remaining == 0);
@@ -153,7 +149,7 @@ void Leaf::Insert(ART &art, const row_t row_id) {
 	}
 
 	// append to the tail
-	auto first_segment = LeafSegment::Get(art, row_ids.position);
+	auto first_segment = LeafSegment::Get(art, row_ids.ptr);
 	auto tail = first_segment->GetTail(art);
 	tail->Append(art, count, row_id);
 }
@@ -173,21 +169,21 @@ void Leaf::Remove(ART &art, const row_t row_id) {
 
 	// possibly inline the row ID
 	if (count == 2) {
-		auto segment = LeafSegment::Get(art, row_ids.position);
+		auto segment = LeafSegment::Get(art, row_ids.ptr);
 		if (segment->row_ids[0] != row_id && segment->row_ids[1] != row_id) {
 			return;
 		}
 
 		auto remaining_row_id = segment->row_ids[0] == row_id ? segment->row_ids[1] : segment->row_ids[0];
-		LeafSegment::Free(art, row_ids.position);
+		ARTNode::Free(art, row_ids.ptr);
 		row_ids.inlined = remaining_row_id;
 		count--;
 		return;
 	}
 
-	// find the row ID, and the segment containing that row ID (stored in position)
-	auto position = row_ids.position;
-	auto copy_idx = FindRowId(art, position, row_id);
+	// find the row ID, and the segment containing that row ID (stored in ptr)
+	auto ptr = row_ids.ptr;
+	auto copy_idx = FindRowId(art, ptr, row_id);
 	if (copy_idx == (uint32_t)DConstants::INVALID_INDEX) {
 		return;
 	}
@@ -197,8 +193,8 @@ void Leaf::Remove(ART &art, const row_t row_id) {
 	LeafSegment *prev_segment = nullptr;
 	while (copy_idx < count) {
 
-		D_ASSERT(position != DConstants::INVALID_INDEX);
-		auto segment = LeafSegment::Get(art, position);
+		D_ASSERT(ptr.IsSet());
+		auto segment = LeafSegment::Get(art, ptr);
 
 		// this segment has at least one element, and we need to copy it into the previous segment
 		if (prev_segment) {
@@ -221,27 +217,26 @@ void Leaf::Remove(ART &art, const row_t row_id) {
 
 		// adjust loop variables
 		prev_segment = segment;
-		position = segment->next;
+		ptr = segment->next;
 	}
 
 	// this evaluates to true, if we need to delete the last segment
 	if (count % ARTNode::LEAF_SEGMENT_SIZE == 1) {
-		position = row_ids.position;
-		while (position != DConstants::INVALID_INDEX) {
+		ptr = row_ids.ptr;
+		while (ptr.IsSet()) {
 
 			// get the segment succeeding the current segment
-			auto segment = LeafSegment::Get(art, position);
-			D_ASSERT(segment->next != DConstants::INVALID_INDEX);
+			auto segment = LeafSegment::Get(art, ptr);
+			D_ASSERT(segment->next.IsSet());
 			auto next_segment = LeafSegment::Get(art, segment->next);
 
 			// next_segment is the tail of the segment list
-			if (next_segment->next == DConstants::INVALID_INDEX) {
-				LeafSegment::Free(art, segment->next);
-				segment->next = DConstants::INVALID_INDEX;
+			if (!next_segment->next.IsSet()) {
+				ARTNode::Free(art, segment->next);
 			}
 
 			// adjust loop variables
-			position = segment->next;
+			ptr = segment->next;
 		}
 	}
 	count--;
@@ -255,23 +250,23 @@ row_t Leaf::GetRowId(const ART &art, const idx_t position) const {
 	}
 
 	// get the correct segment
-	auto segment = LeafSegment::Get(art, row_ids.position);
+	auto segment = LeafSegment::Get(art, row_ids.ptr);
 	for (idx_t i = 0; i < position / ARTNode::LEAF_SEGMENT_SIZE; i++) {
-		D_ASSERT(segment->next != DConstants::INVALID_INDEX);
+		D_ASSERT(segment->next.IsSet());
 		segment = LeafSegment::Get(art, segment->next);
 	}
 
 	return segment->row_ids[position % ARTNode::LEAF_SEGMENT_SIZE];
 }
 
-uint32_t Leaf::FindRowId(const ART &art, idx_t &position, const row_t row_id) const {
+uint32_t Leaf::FindRowId(const ART &art, ARTNode &ptr, const row_t row_id) const {
 
 	D_ASSERT(!IsInlined());
 
 	auto remaining = count;
-	while (position != DConstants::INVALID_INDEX) {
+	while (ptr.IsSet()) {
 
-		auto segment = LeafSegment::Get(art, position);
+		auto segment = LeafSegment::Get(art, ptr);
 		auto search_count = MinValue(ARTNode::LEAF_SEGMENT_SIZE, remaining);
 
 		// search in this segment
@@ -283,7 +278,7 @@ uint32_t Leaf::FindRowId(const ART &art, idx_t &position, const row_t row_id) co
 
 		// adjust loop variables
 		remaining -= search_count;
-		position = segment->next;
+		ptr = segment->next;
 	}
 	return (uint32_t)DConstants::INVALID_INDEX;
 }
@@ -294,12 +289,12 @@ string Leaf::ToString(const ART &art) const {
 		return "Leaf (" + to_string(count) + "): [" + to_string(row_ids.inlined) + "]";
 	}
 
-	auto position = row_ids.position;
+	auto ptr = row_ids.ptr;
 	auto remaining = count;
 	string str = "";
 	uint32_t this_count = 0;
-	while (position != DConstants::INVALID_INDEX) {
-		auto segment = LeafSegment::Get(art, position);
+	while (ptr.IsSet()) {
+		auto segment = LeafSegment::Get(art, ptr);
 		auto to_string_count = ARTNode::LEAF_SEGMENT_SIZE < remaining ? ARTNode::LEAF_SEGMENT_SIZE : remaining;
 
 		for (idx_t i = 0; i < to_string_count; i++) {
@@ -307,7 +302,7 @@ string Leaf::ToString(const ART &art) const {
 			this_count++;
 		}
 		remaining -= to_string_count;
-		position = segment->next;
+		ptr = segment->next;
 	}
 	return "Leaf (" + to_string(this_count) + ", " + to_string(count) + "): [" + str + "] \n";
 }
@@ -325,13 +320,13 @@ BlockPointer Leaf::Serialize(const ART &art, MetaBlockWriter &writer) const {
 		return block_pointer;
 	}
 
-	D_ASSERT(row_ids.position != DConstants::INVALID_INDEX);
-	auto position = row_ids.position;
+	D_ASSERT(row_ids.ptr.IsSet());
+	auto ptr = row_ids.ptr;
 	auto remaining = count;
 
 	// iterate all leaf segments and write their row IDs
-	while (position != DConstants::INVALID_INDEX) {
-		auto segment = LeafSegment::Get(art, position);
+	while (ptr.IsSet()) {
+		auto segment = LeafSegment::Get(art, ptr);
 		auto write_count = MinValue(ARTNode::LEAF_SEGMENT_SIZE, remaining);
 
 		// write the row IDs
@@ -341,7 +336,7 @@ BlockPointer Leaf::Serialize(const ART &art, MetaBlockWriter &writer) const {
 
 		// adjust loop variables
 		remaining -= write_count;
-		position = segment->next;
+		ptr = segment->next;
 	}
 	D_ASSERT(remaining == 0);
 
@@ -362,8 +357,7 @@ void Leaf::Deserialize(ART &art, MetaBlockReader &reader) {
 
 	// copy into segments
 	count = 0;
-	row_ids.position = LeafSegment::New(art);
-	auto segment = LeafSegment::Initialize(art, row_ids.position);
+	auto segment = LeafSegment::New(art, row_ids.ptr);
 	for (idx_t i = 0; i < count_p; i++) {
 		segment = segment->Append(art, count, reader.Read<row_t>());
 	}
@@ -376,18 +370,18 @@ void Leaf::Vacuum(ART &art) {
 		return;
 	}
 
-	// first position has special treatment because we don't obtain it from a leaf segment
-	if (art.leaf_segments->NeedsVacuum(row_ids.position)) {
-		row_ids.position = art.leaf_segments->VacuumPosition(row_ids.position);
+	// first pointer has special treatment because we don't obtain it from a leaf segment
+	if (art.leaf_segments->NeedsVacuum(row_ids.ptr)) {
+		row_ids.ptr.SetPtr(art.leaf_segments->VacuumPointer(row_ids.ptr));
 	}
 
-	auto position = row_ids.position;
-	while (position != DConstants::INVALID_INDEX) {
-		auto segment = LeafSegment::Get(art, position);
-		if (segment->next != DConstants::INVALID_INDEX && art.leaf_segments->NeedsVacuum(segment->next)) {
-			segment->next = art.leaf_segments->VacuumPosition(segment->next);
+	auto ptr = row_ids.ptr;
+	while (ptr.IsSet()) {
+		auto segment = LeafSegment::Get(art, ptr);
+		if (segment->next.IsSet() && art.leaf_segments->NeedsVacuum(segment->next)) {
+			segment->next.SetPtr(art.leaf_segments->VacuumPointer(segment->next));
 		}
-		position = segment->next;
+		ptr = segment->next;
 	}
 }
 
@@ -395,12 +389,9 @@ void Leaf::MoveInlinedToSegment(ART &art) {
 
 	D_ASSERT(IsInlined());
 
-	auto position = LeafSegment::New(art);
-	auto segment = LeafSegment::Initialize(art, position);
-
-	// move row ID
-	segment->row_ids[0] = row_ids.inlined;
-	row_ids.position = position;
+	auto row_id = row_ids.inlined;
+	auto segment = LeafSegment::New(art, row_ids.ptr);
+	segment->row_ids[0] = row_id;
 }
 
 } // namespace duckdb

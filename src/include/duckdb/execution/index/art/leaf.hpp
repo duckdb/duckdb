@@ -8,14 +8,13 @@
 
 #pragma once
 
-#include "duckdb/execution/index/art/prefix.hpp"
+#include "duckdb/execution/index/art/art.hpp"
 
 namespace duckdb {
 
 // classes
-class ART;
 class ARTNode;
-class Key;
+class ARTKey;
 class MetaBlockWriter;
 class MetaBlockReader;
 
@@ -29,8 +28,8 @@ public:
 	//! Compressed path (prefix)
 	Prefix prefix;
 	union {
-		//! The position to the head of the list of leaf segments
-		idx_t position;
+		//! The pointer to the head of the list of leaf segments
+		ARTNode ptr;
 		//! Inlined row ID
 		row_t inlined;
 	} row_ids;
@@ -38,13 +37,17 @@ public:
 public:
 	//! Get a new pointer to a node, might cause a new buffer allocation, and initializes a leaf holding one
 	//! row ID and a prefix starting at depth
-	static Leaf *New(ART &art, ARTNode &node, const Key &key, const uint32_t depth, const row_t row_id);
+	static Leaf *New(ART &art, ARTNode &node, const ARTKey &key, const uint32_t depth, const row_t row_id);
 	//! Get a new pointer to a node, might cause a new buffer allocation, and initializes a leaf holding
 	//! n_row_ids row IDs and a prefix starting at depth
-	static Leaf *New(ART &art, ARTNode &node, const Key &key, const uint32_t depth, const row_t *row_ids,
+	static Leaf *New(ART &art, ARTNode &node, const ARTKey &key, const uint32_t depth, const row_t *row_ids,
 	                 const idx_t count);
 	//! Free the leaf
 	static void Free(ART &art, ARTNode &node);
+	//! Get a pointer to the leaf
+	static inline Leaf *Get(const ART &art, const ARTNode ptr) {
+		return art.leaves->Get<Leaf>(ptr);
+	}
 
 	//! Initializes a merge by incrementing the buffer IDs of the leaf segments
 	void InitializeMerge(const ART &art, const idx_t buffer_count);
@@ -62,8 +65,9 @@ public:
 	}
 	//! Get the row ID at the position
 	row_t GetRowId(const ART &art, const idx_t position) const;
-	//! Returns the position of a row ID, and an invalid index, if the leaf does not contain the row ID
-	uint32_t FindRowId(const ART &art, idx_t &position, const row_t row_id) const;
+	//! Returns the position of a row ID, and an invalid index, if the leaf does not contain the row ID,
+	//! and sets the ptr to point to the segment containing the row ID
+	uint32_t FindRowId(const ART &art, ARTNode &ptr, const row_t row_id) const;
 
 	//! Returns the string representation of a leaf
 	string ToString(const ART &art) const;

@@ -35,11 +35,11 @@ public:
 	//! Subscript operator
 	uint8_t &operator[](idx_t idx);
 	//! Greater than operator
-	bool operator>(const Key &k) const;
+	bool operator>(const ARTKey &k) const;
 	//! Greater than or equal to operator
-	bool operator>=(const Key &k) const;
+	bool operator>=(const ARTKey &k) const;
 	//! Equal to operator
-	bool operator==(const Key &k) const;
+	bool operator==(const ARTKey &k) const;
 
 private:
 	//! The current key position
@@ -56,11 +56,11 @@ public:
 	ART *art = nullptr;
 
 	//! Scan the tree
-	bool Scan(const Key &bound, const idx_t &max_count, vector<row_t> &result_ids, const bool &is_inclusive);
+	bool Scan(const ARTKey &bound, const idx_t &max_count, vector<row_t> &result_ids, const bool &is_inclusive);
 	//! Finds the minimum value of the tree
 	void FindMinimum(ARTNode &node);
 	//! Goes to the lower bound of the tree
-	bool LowerBound(ARTNode node, const Key &key, const bool &is_inclusive);
+	bool LowerBound(ARTNode node, const ARTKey &key, const bool &is_inclusive);
 
 private:
 	//! Stack of iterator entries

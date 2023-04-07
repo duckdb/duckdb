@@ -11,8 +11,9 @@ namespace duckdb {
 
 Node16 *Node16::New(ART &art, ARTNode &node) {
 
-	node.SetPtr(art.n16_nodes->New(), ARTNodeType::NODE_16);
-	auto n16 = art.n16_nodes->Get<Node16>(node.GetPtr());
+	node.SetPtr(art.n16_nodes->New());
+	node.type = (uint8_t)ARTNodeType::NODE_16;
+	auto n16 = Node16::Get(art, node);
 
 	n16->count = 0;
 	n16->prefix.Initialize();
@@ -22,10 +23,10 @@ Node16 *Node16::New(ART &art, ARTNode &node) {
 
 void Node16::Free(ART &art, ARTNode &node) {
 
-	D_ASSERT(node);
+	D_ASSERT(node.IsSet());
 	D_ASSERT(!node.IsSwizzled());
 
-	auto n16 = art.n16_nodes->Get<Node16>(node.GetPtr());
+	auto n16 = Node16::Get(art, node);
 
 	// free all children
 	for (idx_t i = 0; i < n16->count; i++) {
@@ -35,7 +36,7 @@ void Node16::Free(ART &art, ARTNode &node) {
 
 Node16 *Node16::GrowNode4(ART &art, ARTNode &node16, ARTNode &node4) {
 
-	auto n4 = art.n4_nodes->Get<Node4>(node4.GetPtr());
+	auto n4 = Node4::Get(art, node4);
 	auto n16 = Node16::New(art, node16);
 
 	n16->count = n4->count;
@@ -54,7 +55,7 @@ Node16 *Node16::GrowNode4(ART &art, ARTNode &node16, ARTNode &node4) {
 Node16 *Node16::ShrinkNode48(ART &art, ARTNode &node16, ARTNode &node48) {
 
 	auto n16 = Node16::New(art, node16);
-	auto n48 = art.n48_nodes->Get<Node48>(node48.GetPtr());
+	auto n48 = Node48::Get(art, node48);
 
 	n16->count = 0;
 	n16->prefix.Move(n48->prefix);
@@ -81,9 +82,9 @@ void Node16::InitializeMerge(ART &art, const ARTFlags &flags) {
 
 void Node16::InsertChild(ART &art, ARTNode &node, const uint8_t byte, const ARTNode child) {
 
-	D_ASSERT(node);
+	D_ASSERT(node.IsSet());
 	D_ASSERT(!node.IsSwizzled());
-	auto n16 = art.n16_nodes->Get<Node16>(node.GetPtr());
+	auto n16 = Node16::Get(art, node);
 
 	// ensure that there is no other child at the same byte
 	for (idx_t i = 0; i < n16->count; i++) {
@@ -117,9 +118,9 @@ void Node16::InsertChild(ART &art, ARTNode &node, const uint8_t byte, const ARTN
 
 void Node16::DeleteChild(ART &art, ARTNode &node, const idx_t position) {
 
-	D_ASSERT(node);
+	D_ASSERT(node.IsSet());
 	D_ASSERT(!node.IsSwizzled());
-	auto n16 = art.n16_nodes->Get<Node16>(node.GetPtr());
+	auto n16 = Node16::Get(art, node);
 
 	D_ASSERT(position < n16->count);
 
@@ -180,7 +181,7 @@ BlockPointer Node16::Serialize(ART &art, MetaBlockWriter &writer) {
 		child_block_pointers.push_back(children[i].Serialize(art, writer));
 	}
 	for (idx_t i = count; i < ARTNode::NODE_16_CAPACITY; i++) {
-		child_block_pointers.emplace_back();
+		child_block_pointers.emplace_back((block_id_t)DConstants::INVALID_INDEX, 0);
 	}
 
 	// get pointer and write fields

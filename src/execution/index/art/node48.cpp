@@ -11,8 +11,9 @@ namespace duckdb {
 
 Node48 *Node48::New(ART &art, ARTNode &node) {
 
-	node.SetPtr(art.n48_nodes->New(), ARTNodeType::NODE_48);
-	auto n48 = art.n48_nodes->Get<Node48>(node.GetPtr());
+	node.SetPtr(art.n48_nodes->New());
+	node.type = (uint8_t)ARTNodeType::NODE_48;
+	auto n48 = Node48::Get(art, node);
 
 	n48->count = 0;
 	n48->prefix.Initialize();
@@ -31,10 +32,10 @@ Node48 *Node48::New(ART &art, ARTNode &node) {
 
 void Node48::Free(ART &art, ARTNode &node) {
 
-	D_ASSERT(node);
+	D_ASSERT(node.IsSet());
 	D_ASSERT(!node.IsSwizzled());
 
-	auto n48 = art.n48_nodes->Get<Node48>(node.GetPtr());
+	auto n48 = Node48::Get(art, node);
 
 	if (!n48->count) {
 		return;
@@ -50,7 +51,7 @@ void Node48::Free(ART &art, ARTNode &node) {
 
 Node48 *Node48::GrowNode16(ART &art, ARTNode &node48, ARTNode &node16) {
 
-	auto n16 = art.n16_nodes->Get<Node16>(node16.GetPtr());
+	auto n16 = Node16::Get(art, node16);
 	auto n48 = Node48::New(art, node48);
 
 	n48->count = n16->count;
@@ -78,13 +79,13 @@ Node48 *Node48::GrowNode16(ART &art, ARTNode &node48, ARTNode &node16) {
 Node48 *Node48::ShrinkNode256(ART &art, ARTNode &node48, ARTNode &node256) {
 
 	auto n48 = Node48::New(art, node48);
-	auto n256 = art.n256_nodes->Get<Node256>(node256.GetPtr());
+	auto n256 = Node256::Get(art, node256);
 
 	n48->count = 0;
 	n48->prefix.Move(n256->prefix);
 
 	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
-		if (n256->children[i]) {
+		if (n256->children[i].IsSet()) {
 			n48->child_index[i] = n48->count;
 			n48->children[n48->count] = n256->children[i];
 			n48->count++;
@@ -114,9 +115,9 @@ void Node48::InitializeMerge(ART &art, const ARTFlags &flags) {
 
 void Node48::InsertChild(ART &art, ARTNode &node, const uint8_t byte, const ARTNode child) {
 
-	D_ASSERT(node);
+	D_ASSERT(node.IsSet());
 	D_ASSERT(!node.IsSwizzled());
-	auto n48 = art.n48_nodes->Get<Node48>(node.GetPtr());
+	auto n48 = Node48::Get(art, node);
 
 	// ensure that there is no other child at the same byte
 	D_ASSERT(n48->child_index[byte] == ARTNode::EMPTY_MARKER);
@@ -125,10 +126,10 @@ void Node48::InsertChild(ART &art, ARTNode &node, const uint8_t byte, const ARTN
 	if (n48->count < ARTNode::NODE_48_CAPACITY) {
 		// still space, just insert the child
 		idx_t position = n48->count;
-		if (n48->children[position]) {
+		if (n48->children[position].IsSet()) {
 			// find an empty position in the node list if the current position is occupied
 			position = 0;
-			while (n48->children[position]) {
+			while (n48->children[position].IsSet()) {
 				position++;
 			}
 		}
@@ -146,9 +147,9 @@ void Node48::InsertChild(ART &art, ARTNode &node, const uint8_t byte, const ARTN
 
 void Node48::DeleteChild(ART &art, ARTNode &node, const idx_t position) {
 
-	D_ASSERT(node);
+	D_ASSERT(node.IsSet());
 	D_ASSERT(!node.IsSwizzled());
-	auto n48 = art.n48_nodes->Get<Node48>(node.GetPtr());
+	auto n48 = Node48::Get(art, node);
 
 	// free the child and decrease the count
 	ARTNode::Free(art, n48->children[n48->child_index[position]]);

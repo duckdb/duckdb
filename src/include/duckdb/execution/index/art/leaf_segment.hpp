@@ -9,7 +9,6 @@
 
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_node.hpp"
-#include "duckdb/execution/index/art/fixed_size_allocator.hpp"
 
 namespace duckdb {
 
@@ -17,23 +16,15 @@ class LeafSegment {
 public:
 	//! The row IDs stored in this segment
 	row_t row_ids[ARTNode::LEAF_SEGMENT_SIZE];
-	//! The position of the next segment, if the row IDs exceeds this segment
-	idx_t next;
+	//! The pointer of the next segment, if the row IDs exceeds this segment
+	ARTNode next;
 
 public:
-	//! Get a new pointer to a leaf segment, might cause a new buffer allocation
-	static inline idx_t New(ART &art) {
-		return art.leaf_segments->New();
-	}
-	//! Free a leaf segment
-	static inline void Free(ART &art, const idx_t position) {
-		art.leaf_segments->Free(position);
-	}
-	//! Initialize all the fields of the segment
-	static LeafSegment *Initialize(const ART &art, const idx_t position);
-	//! Get a leaf segment
-	static inline LeafSegment *Get(const ART &art, const idx_t position) {
-		return art.leaf_segments->Get<LeafSegment>(position);
+	//! Get a new pointer to a node, might cause a new buffer allocation, and initialize it
+	static LeafSegment *New(ART &art, ARTNode &node);
+	//! Get a pointer to a leaf segment
+	static inline LeafSegment *Get(const ART &art, const ARTNode ptr) {
+		return art.leaf_segments->Get<LeafSegment>(ptr);
 	}
 
 	//! Append a row ID to the current segment, or create a new segment containing that row ID

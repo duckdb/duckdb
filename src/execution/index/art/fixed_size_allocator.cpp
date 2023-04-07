@@ -20,13 +20,13 @@ FixedSizeAllocator::FixedSizeAllocator(const idx_t allocation_size, BufferManage
 	bitmask_count = 0;
 	allocations_per_buffer = 0;
 
-	while (curr_alloc_size < BUFFER_ALLOCATION_SIZE) {
+	while (curr_alloc_size < BUFFER_ALLOC_SIZE) {
 		if (!bitmask_count || (bitmask_count * bits_per_value) % allocations_per_buffer == 0) {
 			bitmask_count++;
 			curr_alloc_size += sizeof(validity_t);
 		}
 
-		auto remaining_alloc_size = BUFFER_ALLOCATION_SIZE - curr_alloc_size;
+		auto remaining_alloc_size = BUFFER_ALLOC_SIZE - curr_alloc_size;
 		auto remaining_allocations = MinValue(remaining_alloc_size / allocation_size, bits_per_value);
 
 		if (remaining_allocations == 0) {
@@ -42,19 +42,19 @@ FixedSizeAllocator::FixedSizeAllocator(const idx_t allocation_size, BufferManage
 
 FixedSizeAllocator::~FixedSizeAllocator() {
 	for (auto &buffer : buffers) {
-		buffer_manager.GetBufferAllocator().FreeData(buffer.ptr, BUFFER_ALLOCATION_SIZE);
+		buffer_manager.GetBufferAllocator().FreeData(buffer.ptr, BUFFER_ALLOC_SIZE);
 	}
 }
 
-idx_t FixedSizeAllocator::New() {
+SwizzleablePointer FixedSizeAllocator::New() {
 
-	// no more positions in the free list
+	// no more free pointers
 	if (buffers_with_free_space.empty()) {
 
-		// add the new buffer
+		// add a new buffer
 		idx_t buffer_id = buffers.size();
-		D_ASSERT((buffer_id & BUFFER_ID_TO_ZERO) == 0);
-		auto buffer = buffer_manager.GetBufferAllocator().AllocateData(BUFFER_ALLOCATION_SIZE);
+		D_ASSERT(buffer_id <= (uint32_t)DConstants::INVALID_INDEX);
+		auto buffer = buffer_manager.GetBufferAllocator().AllocateData(BUFFER_ALLOC_SIZE);
 		buffers.emplace_back(buffer, 0);
 		buffers_with_free_space.insert(buffer_id);
 
@@ -63,13 +63,13 @@ idx_t FixedSizeAllocator::New() {
 		mask.SetAllValid(allocations_per_buffer);
 	}
 
-	// return a free position
+	// return a pointer
 	D_ASSERT(!buffers_with_free_space.empty());
-	auto buffer_id = *buffers_with_free_space.begin();
+	auto buffer_id = (uint32_t)*buffers_with_free_space.begin();
 
-	auto ptr = (validity_t *)buffers[buffer_id].ptr;
-	ValidityMask mask(ptr);
-	auto new_position = buffer_id + GetOffset(mask, buffers[buffer_id].allocation_count);
+	auto bitmask_ptr = (validity_t *)buffers[buffer_id].ptr;
+	ValidityMask mask(bitmask_ptr);
+	auto offset = GetOffset(mask, buffers[buffer_id].allocation_count);
 
 	buffers[buffer_id].allocation_count++;
 	total_allocations++;
@@ -77,30 +77,27 @@ idx_t FixedSizeAllocator::New() {
 		buffers_with_free_space.erase(buffer_id);
 	}
 
-	return new_position;
+	return SwizzleablePointer(offset, buffer_id);
 }
 
-void FixedSizeAllocator::Free(const idx_t position) {
+void FixedSizeAllocator::Free(const SwizzleablePointer ptr) {
 
-	auto buffer_id = position & OFFSET_AND_FIRST_BYTE_TO_ZERO;
-	auto offset = (position & BUFFER_ID_TO_ZERO) >> OFFSET_SHIFT;
-
-	auto ptr = (validity_t *)buffers[buffer_id].ptr;
-	ValidityMask mask(ptr);
-	D_ASSERT(!mask.RowIsValid(offset));
-	mask.SetValid(offset);
-	buffers_with_free_space.insert(buffer_id);
+	auto bitmask_ptr = (validity_t *)buffers[ptr.buffer_id].ptr;
+	ValidityMask mask(bitmask_ptr);
+	D_ASSERT(!mask.RowIsValid(ptr.offset));
+	mask.SetValid(ptr.offset);
+	buffers_with_free_space.insert(ptr.buffer_id);
 
 	D_ASSERT(total_allocations > 0);
-	D_ASSERT(buffers[buffer_id].allocation_count > 0);
-	buffers[buffer_id].allocation_count--;
+	D_ASSERT(buffers[ptr.buffer_id].allocation_count > 0);
+	buffers[ptr.buffer_id].allocation_count--;
 	total_allocations--;
 }
 
 void FixedSizeAllocator::Reset() {
 
 	for (auto &buffer : buffers) {
-		buffer_manager.GetBufferAllocator().FreeData(buffer.ptr, BUFFER_ALLOCATION_SIZE);
+		buffer_manager.GetBufferAllocator().FreeData(buffer.ptr, BUFFER_ALLOC_SIZE);
 	}
 	buffers.clear();
 	buffers_with_free_space.clear();
@@ -138,19 +135,19 @@ bool FixedSizeAllocator::InitializeVacuum() {
 
 	// calculate the vacuum threshold adaptively
 	idx_t memory_usage = GetMemoryUsage();
-	idx_t excess_memory_usage = vacuum_count * BUFFER_ALLOCATION_SIZE;
+	idx_t excess_memory_usage = vacuum_count * BUFFER_ALLOC_SIZE;
 	auto excess_percentage = (double)excess_memory_usage / (double)memory_usage;
 	auto threshold = (double)VACUUM_THRESHOLD / 100.0;
 	if (excess_percentage < threshold) {
 		return false;
 	}
 
-	min_vacuum_buffer_ID = buffers.size() - vacuum_count;
+	min_vacuum_buffer_id = buffers.size() - vacuum_count;
 
 	// remove all invalid buffers from the available buffer list to ensure that we do not reuse them
 	auto it = buffers_with_free_space.begin();
 	while (it != buffers_with_free_space.end()) {
-		if (*it >= min_vacuum_buffer_ID) {
+		if (*it >= min_vacuum_buffer_id) {
 			it = buffers_with_free_space.erase(it);
 		} else {
 			it++;
@@ -163,30 +160,30 @@ bool FixedSizeAllocator::InitializeVacuum() {
 void FixedSizeAllocator::FinalizeVacuum() {
 
 	// free all (now unused) buffers
-	while (min_vacuum_buffer_ID < buffers.size()) {
-		buffer_manager.GetBufferAllocator().FreeData(buffers.back().ptr, BUFFER_ALLOCATION_SIZE);
+	while (min_vacuum_buffer_id < buffers.size()) {
+		buffer_manager.GetBufferAllocator().FreeData(buffers.back().ptr, BUFFER_ALLOC_SIZE);
 		buffers.pop_back();
 	}
 }
 
-idx_t FixedSizeAllocator::VacuumPosition(const idx_t position) {
+SwizzleablePointer FixedSizeAllocator::VacuumPointer(const SwizzleablePointer ptr) {
 
 	// we do not need to adjust the bitmask of the old buffer, because we will free the entire
-	// buffer after vacuum
+	// buffer after the vacuum operation
 
-	auto new_position = New();
-	memcpy(Get(new_position), Get(position), allocation_size);
-	return new_position;
+	auto new_ptr = New();
+	memcpy(Get(new_ptr), Get(ptr), allocation_size);
+	return new_ptr;
 }
 
-idx_t FixedSizeAllocator::GetOffset(ValidityMask &mask, const idx_t allocation_count) {
+uint32_t FixedSizeAllocator::GetOffset(ValidityMask &mask, const idx_t allocation_count) {
 
 	auto data = mask.GetData();
 
 	// fills up a buffer sequentially before searching for free bits
 	if (mask.RowIsValid(allocation_count)) {
 		mask.SetInvalid(allocation_count);
-		return allocation_count << OFFSET_SHIFT;
+		return allocation_count;
 	}
 
 	// get an entry with free bits
@@ -217,7 +214,7 @@ idx_t FixedSizeAllocator::GetOffset(ValidityMask &mask, const idx_t allocation_c
 			auto prev_bits = entry_idx * sizeof(validity_t) * 8;
 			D_ASSERT(mask.RowIsValid(prev_bits + first_valid_bit));
 			mask.SetInvalid(prev_bits + first_valid_bit);
-			return (prev_bits + first_valid_bit) << OFFSET_SHIFT;
+			return (prev_bits + first_valid_bit);
 		}
 	}
 

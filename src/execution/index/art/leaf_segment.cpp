@@ -2,13 +2,17 @@
 
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_node.hpp"
-#include "duckdb/execution/index/art/fixed_size_allocator.hpp"
 
 namespace duckdb {
 
-LeafSegment *LeafSegment::Initialize(const ART &art, const idx_t position) {
-	auto segment = LeafSegment::Get(art, position);
-	segment->next = DConstants::INVALID_INDEX;
+LeafSegment *LeafSegment::New(ART &art, ARTNode &node) {
+
+	node.SetPtr(art.leaf_segments->New());
+	node.type = (uint8_t)ARTNodeType::LEAF_SEGMENT;
+
+	auto segment = LeafSegment::Get(art, node);
+	segment->next.Reset();
+
 	return segment;
 }
 
@@ -19,8 +23,7 @@ LeafSegment *LeafSegment::Append(ART &art, uint32_t &count, const row_t row_id) 
 
 	// we need a new segment
 	if (position == 0 && count != 0) {
-		next = LeafSegment::New(art);
-		segment = LeafSegment::Initialize(art, next);
+		segment = LeafSegment::New(art, next);
 	}
 
 	segment->row_ids[position] = row_id;
@@ -31,7 +34,7 @@ LeafSegment *LeafSegment::Append(ART &art, uint32_t &count, const row_t row_id) 
 LeafSegment *LeafSegment::GetTail(const ART &art) {
 
 	auto segment = this;
-	while (segment->next != DConstants::INVALID_INDEX) {
+	while (segment->next.IsSet()) {
 		segment = LeafSegment::Get(art, segment->next);
 	}
 	return segment;

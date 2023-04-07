@@ -13,6 +13,7 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/execution/index/art/art_key.hpp"
 
 namespace duckdb {
 
@@ -48,7 +49,7 @@ public:
 	ExpressionExecutor probe_executor;
 
 	ArenaAllocator arena_allocator;
-	vector<Key> keys;
+	vector<ARTKey> keys;
 	unique_ptr<ColumnFetchState> fetch_state;
 
 public:

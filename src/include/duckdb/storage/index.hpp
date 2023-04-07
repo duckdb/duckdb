@@ -60,7 +60,7 @@ public:
 public:
 	//! Initialize a single predicate scan on the index with the given expression and column IDs
 	virtual unique_ptr<IndexScanState> InitializeScanSinglePredicate(const Transaction &transaction, const Value &value,
-	                                                                 const ExpressionType expressionType) = 0;
+	                                                                 const ExpressionType expression_type) = 0;
 	//! Initialize a two predicate scan on the index with the given expression and column IDs
 	virtual unique_ptr<IndexScanState> InitializeScanTwoPredicates(const Transaction &transaction,
 	                                                               const Value &low_value,

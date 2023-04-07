@@ -6,6 +6,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/execution/index/art/art_key.hpp"
 
 namespace duckdb {
 
@@ -38,7 +39,7 @@ public:
 
 	unique_ptr<Index> local_index;
 	ArenaAllocator arena_allocator;
-	vector<Key> keys;
+	vector<ARTKey> keys;
 	DataChunk key_chunk;
 	vector<column_t> key_column_ids;
 };
@@ -74,7 +75,7 @@ unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionConte
 	default:
 		throw InternalException("Unimplemented index type");
 	}
-	state->keys = vector<Key>(STANDARD_VECTOR_SIZE);
+	state->keys = vector<ARTKey>(STANDARD_VECTOR_SIZE);
 	state->key_chunk.Initialize(Allocator::Get(context.client), state->local_index->logical_types);
 
 	for (idx_t i = 0; i < state->key_chunk.ColumnCount(); i++) {

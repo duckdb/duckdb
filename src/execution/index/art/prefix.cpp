@@ -9,13 +9,6 @@
 
 namespace duckdb {
 
-Prefix::Prefix() : count(0) {
-}
-
-Prefix::Prefix(const uint8_t byte) : count(1) {
-	data.inlined[0] = byte;
-}
-
 void Prefix::Free(ART &art) {
 
 	if (IsInlined()) {
@@ -23,17 +16,17 @@ void Prefix::Free(ART &art) {
 	}
 
 	// delete all prefix segments
-	auto position = data.position;
-	while (position != DConstants::INVALID_INDEX) {
-		auto next_position = PrefixSegment::Get(art, position)->next;
-		PrefixSegment::Free(art, position);
-		position = next_position;
+	auto ptr = data.ptr;
+	while (ptr.IsSet()) {
+		auto next_ptr = PrefixSegment::Get(art, ptr)->next;
+		ARTNode::Free(art, ptr);
+		ptr = next_ptr;
 	}
 
 	Initialize();
 }
 
-void Prefix::Initialize(ART &art, const Key &key, const uint32_t depth, const uint32_t count_p) {
+void Prefix::Initialize(ART &art, const ARTKey &key, const uint32_t depth, const uint32_t count_p) {
 
 	// prefix can be inlined
 	if (count_p <= ARTNode::PREFIX_INLINE_BYTES) {
@@ -44,8 +37,7 @@ void Prefix::Initialize(ART &art, const Key &key, const uint32_t depth, const ui
 
 	// prefix cannot be inlined, copy to segment(s)
 	count = 0;
-	data.position = PrefixSegment::New(art);
-	auto segment = PrefixSegment::Initialize(art, data.position);
+	auto segment = PrefixSegment::New(art, data.ptr);
 	for (idx_t i = 0; i < count_p; i++) {
 		segment = segment->Append(art, count, key.data[depth + i]);
 	}
@@ -65,16 +57,15 @@ void Prefix::Initialize(ART &art, const Prefix &other, const uint32_t count_p) {
 
 	// initialize the count and get the first segment
 	count = 0;
-	data.position = PrefixSegment::New(art);
-	auto segment = PrefixSegment::Initialize(art, data.position);
+	auto segment = PrefixSegment::New(art, data.ptr);
 
 	// iterate the segments of the other prefix and copy their data
-	auto other_position = other.data.position;
+	auto other_ptr = other.data.ptr;
 	auto remaining = count_p;
 
 	while (remaining != 0) {
-		D_ASSERT(other_position != DConstants::INVALID_INDEX);
-		auto other_segment = PrefixSegment::Get(art, other_position);
+		D_ASSERT(other_ptr.IsSet());
+		auto other_segment = PrefixSegment::Get(art, other_ptr);
 		auto copy_count = MinValue(ARTNode::PREFIX_SEGMENT_SIZE, remaining);
 
 		// copy the data
@@ -83,7 +74,7 @@ void Prefix::Initialize(ART &art, const Prefix &other, const uint32_t count_p) {
 		}
 
 		// adjust the loop variables
-		other_position = other_segment->next;
+		other_ptr = other_segment->next;
 		remaining -= copy_count;
 	}
 	D_ASSERT(count == count_p);
@@ -95,18 +86,14 @@ void Prefix::InitializeMerge(ART &art, const idx_t buffer_count) {
 		return;
 	}
 
-	auto segment = PrefixSegment::Get(art, data.position);
-	D_ASSERT((data.position & FixedSizeAllocator::BUFFER_ID_TO_ZERO) ==
-	         ((data.position + buffer_count) & FixedSizeAllocator::BUFFER_ID_TO_ZERO));
-	data.position += buffer_count;
+	auto segment = PrefixSegment::Get(art, data.ptr);
+	data.ptr.buffer_id += buffer_count;
 
-	auto position = segment->next;
-	while (position != DConstants::INVALID_INDEX) {
-		D_ASSERT((segment->next & FixedSizeAllocator::BUFFER_ID_TO_ZERO) ==
-		         ((segment->next + buffer_count) & FixedSizeAllocator::BUFFER_ID_TO_ZERO));
-		segment->next += buffer_count;
-		segment = PrefixSegment::Get(art, position);
-		position = segment->next;
+	auto ptr = segment->next;
+	while (ptr.IsSet()) {
+		segment->next.buffer_id += buffer_count;
+		segment = PrefixSegment::Get(art, ptr);
+		ptr = segment->next;
 	}
 }
 
@@ -126,7 +113,7 @@ void Prefix::Append(ART &art, const Prefix &other) {
 	}
 
 	// get the tail of the segments of this prefix
-	auto segment = PrefixSegment::Get(art, data.position)->GetTail(art);
+	auto segment = PrefixSegment::Get(art, data.ptr)->GetTail(art);
 
 	// the other prefix is inlined
 	if (other.IsInlined()) {
@@ -137,11 +124,11 @@ void Prefix::Append(ART &art, const Prefix &other) {
 	}
 
 	// iterate all segments of the other prefix and copy their data
-	auto other_position = other.data.position;
+	auto other_ptr = other.data.ptr;
 	auto remaining = other.count;
 
-	while (other_position != DConstants::INVALID_INDEX) {
-		auto other_segment = PrefixSegment::Get(art, other_position);
+	while (other_ptr.IsSet()) {
+		auto other_segment = PrefixSegment::Get(art, other_ptr);
 		auto copy_count = MinValue(ARTNode::PREFIX_SEGMENT_SIZE, remaining);
 
 		// copy the data
@@ -150,7 +137,7 @@ void Prefix::Append(ART &art, const Prefix &other) {
 		}
 
 		// adjust the loop variables
-		other_position = other_segment->next;
+		other_ptr = other_segment->next;
 		remaining -= copy_count;
 	}
 	D_ASSERT(remaining == 0);
@@ -172,19 +159,53 @@ void Prefix::Concatenate(ART &art, const uint8_t byte, const Prefix &other) {
 		return;
 	}
 
-	// else, create a new prefix and then move it into the existing prefix
-	Prefix new_prefix;
+	auto this_count = count;
+	auto this_is_inlined = IsInlined();
+	auto this_data = data;
+
+	Initialize();
+
 	// append the other prefix
-	new_prefix.Append(art, other);
+	Append(art, other);
+	PrefixSegment *segment;
+
+	// get the tail
+	if (IsInlined()) {
+		segment = MoveInlinedToSegment(art);
+	} else {
+		segment = PrefixSegment::Get(art, data.ptr)->GetTail(art);
+	}
+
 	// append the byte
-	// FIXME: this is a bit hacky, a SetByte function would probably be cleaner
-	Prefix byte_prefix(byte);
-	new_prefix.Append(art, byte_prefix);
+	segment = segment->Append(art, count, byte);
+
 	// append this prefix
-	new_prefix.Append(art, *this);
-	// move the new_prefix into this prefix
-	Move(new_prefix);
-	return;
+	if (this_is_inlined) {
+		for (idx_t i = 0; i < this_count; i++) {
+			segment = segment->Append(art, count, this_data.inlined[i]);
+		}
+	} else {
+
+		// iterate all segments of this prefix, copy their data, and free them
+		auto this_ptr = this_data.ptr;
+		auto remaining = this_count;
+
+		while (this_ptr.IsSet()) {
+			auto this_segment = PrefixSegment::Get(art, this_ptr);
+			auto copy_count = MinValue(ARTNode::PREFIX_SEGMENT_SIZE, remaining);
+
+			// copy the data
+			for (idx_t i = 0; i < copy_count; i++) {
+				segment = segment->Append(art, count, this_segment->bytes[i]);
+			}
+
+			// adjust the loop variables
+			ARTNode::Free(art, this_ptr);
+			this_ptr = this_segment->next;
+			remaining -= copy_count;
+		}
+		D_ASSERT(remaining == 0);
+	}
 }
 
 uint8_t Prefix::Reduce(ART &art, const idx_t reduce_count) {
@@ -211,14 +232,14 @@ uint8_t Prefix::Reduce(ART &art, const idx_t reduce_count) {
 	auto remaining = new_count;
 
 	// get the source segment, i.e., the segment that contains the byte at start
-	auto src_segment = PrefixSegment::Get(art, data.position);
+	auto src_segment = PrefixSegment::Get(art, data.ptr);
 	for (idx_t i = 0; i < start / ARTNode::PREFIX_SEGMENT_SIZE; i++) {
-		D_ASSERT(src_segment->next != DConstants::INVALID_INDEX);
+		D_ASSERT(src_segment->next.IsSet());
 		src_segment = PrefixSegment::Get(art, src_segment->next);
 	}
 
 	// iterate all segments starting at the source segment and shift their data
-	auto dst_segment = PrefixSegment::Get(art, data.position);
+	auto dst_segment = PrefixSegment::Get(art, data.ptr);
 	while (true) {
 		auto copy_count = MinValue(ARTNode::PREFIX_SEGMENT_SIZE - offset, remaining);
 
@@ -233,7 +254,7 @@ uint8_t Prefix::Reduce(ART &art, const idx_t reduce_count) {
 		if (remaining == 0) {
 			break;
 		}
-		D_ASSERT(src_segment->next != DConstants::INVALID_INDEX);
+		D_ASSERT(src_segment->next.IsSet());
 		src_segment = PrefixSegment::Get(art, src_segment->next);
 	}
 
@@ -253,16 +274,16 @@ uint8_t Prefix::GetByte(const ART &art, const idx_t position) const {
 	}
 
 	// get the correct segment
-	auto segment = PrefixSegment::Get(art, data.position);
+	auto segment = PrefixSegment::Get(art, data.ptr);
 	for (idx_t i = 0; i < position / ARTNode::PREFIX_SEGMENT_SIZE; i++) {
-		D_ASSERT(segment->next != DConstants::INVALID_INDEX);
+		D_ASSERT(segment->next.IsSet());
 		segment = PrefixSegment::Get(art, segment->next);
 	}
 
 	return segment->bytes[position % ARTNode::PREFIX_SEGMENT_SIZE];
 }
 
-uint32_t Prefix::KeyMismatchPosition(const ART &art, const Key &key, const uint32_t depth) const {
+uint32_t Prefix::KeyMismatchPosition(const ART &art, const ARTKey &key, const uint32_t depth) const {
 
 	if (IsInlined()) {
 		for (idx_t mismatch_position = 0; mismatch_position < count; mismatch_position++) {
@@ -275,13 +296,13 @@ uint32_t Prefix::KeyMismatchPosition(const ART &art, const Key &key, const uint3
 	}
 
 	uint32_t mismatch_position = 0;
-	auto position = data.position;
+	auto ptr = data.ptr;
 
 	while (mismatch_position != count) {
 		D_ASSERT(depth + mismatch_position < key.len);
-		D_ASSERT(position != DConstants::INVALID_INDEX);
+		D_ASSERT(ptr.IsSet());
 
-		auto segment = PrefixSegment::Get(art, position);
+		auto segment = PrefixSegment::Get(art, ptr);
 		auto compare_count = MinValue(ARTNode::PREFIX_SEGMENT_SIZE, count - mismatch_position);
 
 		// compare bytes
@@ -293,7 +314,7 @@ uint32_t Prefix::KeyMismatchPosition(const ART &art, const Key &key, const uint3
 		}
 
 		// adjust loop variables
-		position = segment->next;
+		ptr = segment->next;
 	}
 	return count;
 }
@@ -315,7 +336,7 @@ uint32_t Prefix::MismatchPosition(const ART &art, const Prefix &other) const {
 	// case 2: only this prefix is inlined
 	if (IsInlined()) {
 		// we only need the first segment of the other prefix
-		auto segment = PrefixSegment::Get(art, other.data.position);
+		auto segment = PrefixSegment::Get(art, other.data.ptr);
 		for (uint32_t i = 0; i < count; i++) {
 			if (data.inlined[i] != segment->bytes[i]) {
 				return i;
@@ -325,15 +346,15 @@ uint32_t Prefix::MismatchPosition(const ART &art, const Prefix &other) const {
 	}
 
 	// case 3: both prefixes are not inlined
-	auto position = data.position;
-	auto other_position = other.data.position;
+	auto ptr = data.ptr;
+	auto other_ptr = other.data.ptr;
 
 	// iterate segments and compare bytes
 	uint32_t mismatch_position = 0;
-	while (position != DConstants::INVALID_INDEX) {
-		D_ASSERT(other_position != DConstants::INVALID_INDEX);
-		auto segment = PrefixSegment::Get(art, position);
-		auto other_segment = PrefixSegment::Get(art, other_position);
+	while (ptr.IsSet()) {
+		D_ASSERT(other_ptr.IsSet());
+		auto segment = PrefixSegment::Get(art, ptr);
+		auto other_segment = PrefixSegment::Get(art, other_ptr);
 
 		// compare bytes
 		auto compare_count = MinValue(ARTNode::PREFIX_SEGMENT_SIZE, count - mismatch_position);
@@ -345,8 +366,8 @@ uint32_t Prefix::MismatchPosition(const ART &art, const Prefix &other) const {
 		}
 
 		// adjust loop variables
-		position = segment->next;
-		other_position = other_segment->next;
+		ptr = segment->next;
+		other_ptr = other_segment->next;
 	}
 	return count;
 }
@@ -361,13 +382,13 @@ void Prefix::Serialize(const ART &art, MetaBlockWriter &writer) const {
 		return;
 	}
 
-	D_ASSERT(data.position != DConstants::INVALID_INDEX);
-	auto position = data.position;
+	D_ASSERT(data.ptr.IsSet());
+	auto ptr = data.ptr;
 	auto remaining = count;
 
 	// iterate all prefix segments and write their bytes
-	while (position != DConstants::INVALID_INDEX) {
-		auto segment = PrefixSegment::Get(art, position);
+	while (ptr.IsSet()) {
+		auto segment = PrefixSegment::Get(art, ptr);
 		auto copy_count = MinValue(ARTNode::PREFIX_SEGMENT_SIZE, remaining);
 
 		// write the bytes
@@ -375,7 +396,7 @@ void Prefix::Serialize(const ART &art, MetaBlockWriter &writer) const {
 
 		// adjust loop variables
 		remaining -= copy_count;
-		position = segment->next;
+		ptr = segment->next;
 	}
 	D_ASSERT(remaining == 0);
 }
@@ -393,8 +414,7 @@ void Prefix::Deserialize(ART &art, MetaBlockReader &reader) {
 
 	// copy into segments
 	count = 0;
-	data.position = PrefixSegment::New(art);
-	auto segment = PrefixSegment::Initialize(art, data.position);
+	auto segment = PrefixSegment::New(art, data.ptr);
 	for (idx_t i = 0; i < count_p; i++) {
 		segment = segment->Append(art, count, reader.Read<uint8_t>());
 	}
@@ -407,47 +427,45 @@ void Prefix::Vacuum(ART &art) {
 		return;
 	}
 
-	// first position has special treatment because we don't obtain it from a prefix segment
-	if (art.prefix_segments->NeedsVacuum(data.position)) {
-		data.position = art.prefix_segments->VacuumPosition(data.position);
+	// first pointer has special treatment because we don't obtain it from a prefix segment
+	if (art.prefix_segments->NeedsVacuum(data.ptr)) {
+		data.ptr.SetPtr(art.prefix_segments->VacuumPointer(data.ptr));
 	}
 
-	auto position = data.position;
-	while (position != DConstants::INVALID_INDEX) {
-		auto segment = PrefixSegment::Get(art, position);
-		if (segment->next != DConstants::INVALID_INDEX && art.prefix_segments->NeedsVacuum(segment->next)) {
-			segment->next = art.prefix_segments->VacuumPosition(segment->next);
+	auto ptr = data.ptr;
+	while (ptr.IsSet()) {
+		auto segment = PrefixSegment::Get(art, ptr);
+		if (segment->next.IsSet() && art.prefix_segments->NeedsVacuum(segment->next)) {
+			segment->next.SetPtr(art.prefix_segments->VacuumPointer(segment->next));
 		}
-		position = segment->next;
+		ptr = segment->next;
 	}
 }
 
-void Prefix::MoveInlinedToSegment(ART &art) {
+PrefixSegment *Prefix::MoveInlinedToSegment(ART &art) {
 
 	D_ASSERT(IsInlined());
 
-	auto position = PrefixSegment::New(art);
-	auto segment = PrefixSegment::Initialize(art, position);
+	ARTNode ptr;
+	auto segment = PrefixSegment::New(art, ptr);
 
 	// move data
 	D_ASSERT(ARTNode::PREFIX_SEGMENT_SIZE >= ARTNode::PREFIX_INLINE_BYTES);
 	memcpy(segment->bytes, data.inlined, count);
-	data.position = position;
+	data.ptr = ptr;
+	return segment;
 }
 
 void Prefix::MoveSegmentToInlined(ART &art) {
 
 	D_ASSERT(IsInlined());
-	D_ASSERT(data.position != DConstants::INVALID_INDEX);
+	D_ASSERT(data.ptr.IsSet());
 
-	auto position = data.position;
-	auto segment = PrefixSegment::Get(art, data.position);
+	auto ptr = data.ptr;
+	auto segment = PrefixSegment::Get(art, data.ptr);
 
-	// move data
 	memcpy(data.inlined, segment->bytes, count);
-
-	// free segment
-	PrefixSegment::Free(art, position);
+	ARTNode::Free(art, ptr);
 }
 
 } // namespace duckdb

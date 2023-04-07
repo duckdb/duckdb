@@ -9,7 +9,6 @@
 
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_node.hpp"
-#include "duckdb/execution/index/art/fixed_size_allocator.hpp"
 
 namespace duckdb {
 
@@ -17,27 +16,19 @@ class PrefixSegment {
 public:
 	//! Constructor of an empty prefix segment containing bytes.
 	//! NOTE: only use this constructor for temporary prefix segments
-	PrefixSegment();
+	PrefixSegment() {};
 
 	//! The prefix bytes stored in this segment
 	uint8_t bytes[ARTNode::PREFIX_SEGMENT_SIZE];
 	//! The position of the next segment, if the prefix exceeds this segment
-	idx_t next;
+	ARTNode next;
 
 public:
-	//! Get a new pointer to a prefix segment, might cause a new buffer allocation
-	static inline idx_t New(ART &art) {
-		return art.prefix_segments->New();
-	}
-	//! Free a prefix segment
-	static inline void Free(ART &art, const idx_t position) {
-		art.prefix_segments->Free(position);
-	}
-	//! Initialize all the fields of the segment
-	static PrefixSegment *Initialize(const ART &art, const idx_t position);
-	//! Get a prefix segment
-	static inline PrefixSegment *Get(const ART &art, const idx_t position) {
-		return art.prefix_segments->Get<PrefixSegment>(position);
+	//! Get a new pointer to a node, might cause a new buffer allocation, and initialize it
+	static PrefixSegment *New(ART &art, ARTNode &node);
+	//! Get a pointer to a prefix segment
+	static inline PrefixSegment *Get(const ART &art, const ARTNode ptr) {
+		return art.prefix_segments->Get<PrefixSegment>(ptr);
 	}
 
 	//! Append a byte to the current segment, or create a new segment containing that byte

@@ -8,13 +8,10 @@
 
 #pragma once
 
+#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_node.hpp"
-#include "duckdb/execution/index/art/prefix.hpp"
 
 namespace duckdb {
-
-// classes
-class ART;
 
 //! Node256 holds up to 256 ARTNode children which can be directly indexed by the key byte
 class Node256 {
@@ -31,6 +28,10 @@ public:
 	static Node256 *New(ART &art, ARTNode &node);
 	//! Free the node (and its subtree)
 	static void Free(ART &art, ARTNode &node);
+	//! Get a pointer to the node
+	static inline Node256 *Get(const ART &art, const ARTNode ptr) {
+		return art.n256_nodes->Get<Node256>(ptr);
+	}
 	//! Initializes all the fields of the node while growing a Node48 to a Node256
 	static Node256 *GrowNode48(ART &art, ARTNode &node256, ARTNode &node48);
 
@@ -61,7 +62,7 @@ public:
 	//! Get the position of a child corresponding exactly to the specific byte, returns DConstants::INVALID_INDEX if
 	//! the child does not exist
 	inline idx_t GetChildPosition(const uint8_t byte) const {
-		if (children[byte]) {
+		if (children[byte].IsSet()) {
 			return byte;
 		}
 		return DConstants::INVALID_INDEX;

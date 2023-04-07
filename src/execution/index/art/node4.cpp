@@ -10,8 +10,9 @@ namespace duckdb {
 
 Node4 *Node4::New(ART &art, ARTNode &node) {
 
-	node.SetPtr(art.n4_nodes->New(), ARTNodeType::NODE_4);
-	auto n4 = art.n4_nodes->Get<Node4>(node.GetPtr());
+	node.SetPtr(art.n4_nodes->New());
+	node.type = (uint8_t)ARTNodeType::NODE_4;
+	auto n4 = Node4::Get(art, node);
 
 	n4->count = 0;
 	n4->prefix.Initialize();
@@ -21,10 +22,10 @@ Node4 *Node4::New(ART &art, ARTNode &node) {
 
 void Node4::Free(ART &art, ARTNode &node) {
 
-	D_ASSERT(node);
+	D_ASSERT(node.IsSet());
 	D_ASSERT(!node.IsSwizzled());
 
-	auto n4 = art.n4_nodes->Get<Node4>(node.GetPtr());
+	auto n4 = Node4::Get(art, node);
 
 	// free all children
 	for (idx_t i = 0; i < n4->count; i++) {
@@ -35,7 +36,7 @@ void Node4::Free(ART &art, ARTNode &node) {
 Node4 *Node4::ShrinkNode16(ART &art, ARTNode &node4, ARTNode &node16) {
 
 	auto n4 = Node4::New(art, node4);
-	auto n16 = art.n16_nodes->Get<Node16>(node16.GetPtr());
+	auto n16 = Node16::Get(art, node16);
 
 	n4->count = n16->count;
 	n4->prefix.Move(n16->prefix);
@@ -59,9 +60,9 @@ void Node4::InitializeMerge(ART &art, const ARTFlags &flags) {
 
 void Node4::InsertChild(ART &art, ARTNode &node, const uint8_t byte, const ARTNode child) {
 
-	D_ASSERT(node);
+	D_ASSERT(node.IsSet());
 	D_ASSERT(!node.IsSwizzled());
-	auto n4 = art.n4_nodes->Get<Node4>(node.GetPtr());
+	auto n4 = Node4::Get(art, node);
 
 	// ensure that there is no other child at the same byte
 	for (idx_t i = 0; i < n4->count; i++) {
@@ -95,9 +96,9 @@ void Node4::InsertChild(ART &art, ARTNode &node, const uint8_t byte, const ARTNo
 
 void Node4::DeleteChild(ART &art, ARTNode &node, const idx_t position) {
 
-	D_ASSERT(node);
+	D_ASSERT(node.IsSet());
 	D_ASSERT(!node.IsSwizzled());
-	auto n4 = art.n4_nodes->Get<Node4>(node.GetPtr());
+	auto n4 = Node4::Get(art, node);
 
 	D_ASSERT(position < n4->count);
 	D_ASSERT(n4->count > 1);
@@ -165,7 +166,7 @@ BlockPointer Node4::Serialize(ART &art, MetaBlockWriter &writer) {
 		child_block_pointers.push_back(children[i].Serialize(art, writer));
 	}
 	for (idx_t i = count; i < ARTNode::NODE_4_CAPACITY; i++) {
-		child_block_pointers.emplace_back();
+		child_block_pointers.emplace_back((block_id_t)DConstants::INVALID_INDEX, 0);
 	}
 
 	// get pointer and write fields

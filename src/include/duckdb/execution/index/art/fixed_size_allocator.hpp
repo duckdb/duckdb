@@ -14,6 +14,7 @@
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/execution/index/art/swizzleable_pointer.hpp"
 
 namespace duckdb {
 
@@ -24,22 +25,12 @@ struct BufferEntry {
 	idx_t allocation_count;
 };
 
-//! The FixedSizeAllocator provides pointers to fixed-size sections of pre-allocated memory.
-//! The pointers are of type idx_t, and the leftmost byte must always be zero.
-//! The second to fourth byte store the offset into a buffer, and the last four bytes store the buffer ID,
-//! i.e., a position looks like this [0: empty, 1  - 3: offset, 4 - 7: buffer ID].
+//! The FixedSizeAllocator provides pointers to fixed-size sections of pre-allocated memory buffers.
+//! The pointers are SwizzleablePointers, and the leftmost byte (swizzle flag and type) must always be zero.
 class FixedSizeAllocator {
 public:
-	//! Bitwise AND hex values
-	static constexpr idx_t BUFFER_ID_TO_ZERO = 0xFFFFFFFF00000000;
-	static constexpr idx_t OFFSET_TO_ZERO = 0xFF000000FFFFFFFF;
-	static constexpr idx_t OFFSET_AND_FIRST_BYTE_TO_ZERO = 0x00000000FFFFFFFF;
-	static constexpr idx_t BUFFER_ID_AND_OFFSET_TO_ZERO = 0xFF00000000000000;
-	static constexpr idx_t FIRST_BYTE_TO_ZERO = 0x00FFFFFFFFFFFFFF;
-
-	//! Other constants
-	static constexpr idx_t BUFFER_ALLOCATION_SIZE = Storage::BLOCK_ALLOC_SIZE;
-	static constexpr uint8_t OFFSET_SHIFT = sizeof(uint8_t) * 8 * 4;
+	//! Fixed size of the buffers
+	static constexpr idx_t BUFFER_ALLOC_SIZE = Storage::BLOCK_ALLOC_SIZE;
 	//! We can vacuum 10% or more of the total memory usage of the allocator
 	static constexpr uint8_t VACUUM_THRESHOLD = 10;
 
@@ -68,20 +59,20 @@ public:
 	unordered_set<idx_t> buffers_with_free_space;
 
 	//! Minimum buffer ID of buffers that can be vacuumed
-	idx_t min_vacuum_buffer_ID;
+	idx_t min_vacuum_buffer_id;
 
 	//! Buffer manager of the database instance
 	BufferManager &buffer_manager;
 
 public:
-	//! Get a new position to data, might cause a new buffer allocation
-	idx_t New();
-	//! Free the data at position
-	void Free(const idx_t position);
-	//! Get the data at position
+	//! Get a new pointer to data, might cause a new buffer allocation
+	SwizzleablePointer New();
+	//! Free the data of the pointer
+	void Free(const SwizzleablePointer ptr);
+	//! Get the data of the pointer
 	template <class T>
-	inline T *Get(const idx_t position) const {
-		return (T *)Get(position);
+	inline T *Get(const SwizzleablePointer ptr) const {
+		return (T *)Get(ptr);
 	}
 
 	//! Resets the allocator, which e.g. becomes necessary during DELETE FROM table
@@ -89,7 +80,7 @@ public:
 
 	//! Returns the allocated memory size in bytes
 	inline idx_t GetMemoryUsage() const {
-		return buffers.size() * BUFFER_ALLOCATION_SIZE;
+		return buffers.size() * BUFFER_ALLOC_SIZE;
 	}
 
 	//! Merge another FixedSizeAllocator with this allocator. Both must have the same allocation size
@@ -97,35 +88,27 @@ public:
 
 	//! Initialize a vacuum operation, and return true, if the allocator needs a vacuum
 	bool InitializeVacuum();
-	//! Finalize a vacuum operation by freeing all buffers exceeding the vacuum_threshold
+	//! Finalize a vacuum operation by freeing all buffers exceeding the min_vacuum_buffer_id
 	void FinalizeVacuum();
-	//! Returns true, if a position qualifies for a vacuum operation, and false otherwise
-	inline bool NeedsVacuum(const idx_t position) const {
-		// get the buffer ID
-		D_ASSERT((position & BUFFER_ID_AND_OFFSET_TO_ZERO) == 0);
-		auto buffer_id = position & OFFSET_AND_FIRST_BYTE_TO_ZERO;
-
-		if (buffer_id >= min_vacuum_buffer_ID) {
+	//! Returns true, if a pointer qualifies for a vacuum operation, and false otherwise
+	inline bool NeedsVacuum(const SwizzleablePointer ptr) const {
+		if (ptr.buffer_id >= min_vacuum_buffer_id) {
 			return true;
 		}
 		return false;
 	}
-	//! Vacuums a position
-	idx_t VacuumPosition(const idx_t position);
+	//! Vacuums a pointer
+	SwizzleablePointer VacuumPointer(const SwizzleablePointer ptr);
 
 private:
-	//! Returns a data_ptr_t to the position
-	inline data_ptr_t Get(const idx_t position) const {
-		D_ASSERT((position & BUFFER_ID_AND_OFFSET_TO_ZERO) == 0);
-		D_ASSERT((position & OFFSET_AND_FIRST_BYTE_TO_ZERO) < buffers.size());
-		D_ASSERT((position >> OFFSET_SHIFT) < allocations_per_buffer);
-
-		auto buffer_id = (position & OFFSET_AND_FIRST_BYTE_TO_ZERO);
-		auto offset = (position >> OFFSET_SHIFT) * allocation_size + allocation_offset;
-		return buffers[buffer_id].ptr + offset;
+	//! Returns the data_ptr_t of a pointer
+	inline data_ptr_t Get(const SwizzleablePointer ptr) const {
+		D_ASSERT(ptr.buffer_id < buffers.size());
+		D_ASSERT(ptr.offset < allocations_per_buffer);
+		return buffers[ptr.buffer_id].ptr + ptr.offset * allocation_size + allocation_offset;
 	}
 	//! Returns the first free offset in a bitmask
-	idx_t GetOffset(ValidityMask &mask, const idx_t allocation_count);
+	uint32_t GetOffset(ValidityMask &mask, const idx_t allocation_count);
 };
 
 } // namespace duckdb

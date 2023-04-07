@@ -2,16 +2,17 @@
 
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_node.hpp"
-#include "duckdb/execution/index/art/fixed_size_allocator.hpp"
 
 namespace duckdb {
 
-PrefixSegment::PrefixSegment() : next(0) {
-}
+PrefixSegment *PrefixSegment::New(ART &art, ARTNode &node) {
 
-PrefixSegment *PrefixSegment::Initialize(const ART &art, const idx_t position) {
-	auto segment = PrefixSegment::Get(art, position);
-	segment->next = DConstants::INVALID_INDEX;
+	node.SetPtr(art.prefix_segments->New());
+	node.type = (uint8_t)ARTNodeType::PREFIX_SEGMENT;
+
+	auto segment = PrefixSegment::Get(art, node);
+	segment->next.Reset();
+
 	return segment;
 }
 
@@ -22,8 +23,7 @@ PrefixSegment *PrefixSegment::Append(ART &art, uint32_t &count, const uint8_t by
 
 	// we need a new segment
 	if (position == 0 && count != 0) {
-		next = PrefixSegment::New(art);
-		segment = PrefixSegment::Initialize(art, next);
+		segment = PrefixSegment::New(art, next);
 	}
 
 	segment->bytes[position] = byte;
@@ -34,7 +34,7 @@ PrefixSegment *PrefixSegment::Append(ART &art, uint32_t &count, const uint8_t by
 PrefixSegment *PrefixSegment::GetTail(const ART &art) {
 
 	auto segment = this;
-	while (segment->next != DConstants::INVALID_INDEX) {
+	while (segment->next.IsSet()) {
 		segment = PrefixSegment::Get(art, segment->next);
 	}
 	return segment;
