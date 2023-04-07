@@ -109,17 +109,7 @@ static bool IsArrowBackedDataFrame(const py::object &df) {
 }
 
 py::object ArrowTableFromDataframe(const py::object &df) {
-	// Construct a pyarrow.lib.Table from the internal arrays
-	py::list names = df.attr("columns");
-	auto getter = df.attr("__getitem__");
-	py::list array_list;
-	for (auto &name : names) {
-		py::object column = getter(name);
-		auto array = column.attr("array").attr("__arrow_array__")();
-		array_list.append(array);
-	}
-	return py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_arrays")(array_list,
-	                                                                                    py::arg("names") = names);
+	return py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_pandas")(df);
 }
 
 static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>> &m) {
