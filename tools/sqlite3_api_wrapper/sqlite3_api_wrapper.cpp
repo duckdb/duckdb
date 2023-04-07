@@ -2,7 +2,6 @@
 #include "duckdb_shell_wrapper.h"
 #endif
 #include "sqlite3.h"
-#include "sql_auto_complete_extension.hpp"
 #include "udf_struct_sqlite3.h"
 #include "sqlite3_udf_wrapper.hpp"
 #include "cast_sqlite.hpp"

@@ -1,3 +1,5 @@
+#define DUCKDB_EXTENSION_MAIN
+
 #include "sql_auto_complete_extension.hpp"
 
 #include "duckdb/function/table_function.hpp"
@@ -392,7 +394,7 @@ void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p,
 	output.SetCardinality(count);
 }
 
-void SQLAutoCompleteExtension::Load(DuckDB &db) {
+static void LoadInternal(DatabaseInstance &db) {
 	Connection con(db);
 	con.BeginTransaction();
 
@@ -406,9 +408,26 @@ void SQLAutoCompleteExtension::Load(DuckDB &db) {
 
 	con.Commit();
 }
+void SQLAutoCompleteExtension::Load(DuckDB &db) {
+	LoadInternal(*db.instance);
+}
 
 std::string SQLAutoCompleteExtension::Name() {
 	return "sql_auto_complete";
 }
 
 } // namespace duckdb
+extern "C" {
+
+DUCKDB_EXTENSION_API void autocomplete_init(duckdb::DatabaseInstance &db) {
+	LoadInternal(db);
+}
+
+DUCKDB_EXTENSION_API const char *autocomplete_version() {
+	return duckdb::DuckDB::LibraryVersion();
+}
+}
+
+#ifndef DUCKDB_EXTENSION_MAIN
+#error DUCKDB_EXTENSION_MAIN not defined
+#endif
