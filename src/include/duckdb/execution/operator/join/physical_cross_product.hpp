@@ -35,7 +35,6 @@ protected:
 	OperatorResultType ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                                   GlobalOperatorState &gstate, OperatorState &state) const override;
 
-
 	OrderPreservationType SourceOrder() const override {
 		return OrderPreservationType::NO_ORDER;
 	}

@@ -36,6 +36,7 @@ public:
 	bool IsSource() const override {
 		return true;
 	}
+
 public:
 	const std::string name;
 	const SetScope scope;

@@ -36,6 +36,7 @@ public:
 	bool IsSource() const override {
 		return true;
 	}
+
 public:
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
 };

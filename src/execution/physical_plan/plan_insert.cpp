@@ -10,7 +10,6 @@
 
 namespace duckdb {
 
-
 static OrderPreservationType OrderPreservationRecursive(PhysicalOperator &op) {
 	if (op.IsSource()) {
 		return op.SourceOrder();

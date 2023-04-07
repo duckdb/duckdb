@@ -41,6 +41,7 @@ public:
 	bool IsSource() const override {
 		return true;
 	}
+
 public:
 	// Sink Interface
 	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,

@@ -32,7 +32,6 @@ public:
 
 	bool ParallelSink() const override;
 	bool SinkOrderDependent() const override;
-
 };
 
 } // namespace duckdb

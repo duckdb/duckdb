@@ -46,6 +46,7 @@ public:
 	bool IsSource() const override {
 		return true;
 	}
+
 public:
 	//! Sink interface, thread-local sink states
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;

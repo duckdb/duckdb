@@ -49,6 +49,7 @@ public:
 	bool IsSource() const override {
 		return true;
 	}
+
 public:
 	// Sink interface
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
