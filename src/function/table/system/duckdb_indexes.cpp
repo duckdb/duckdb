@@ -83,7 +83,7 @@ void DuckDBIndexesFunction(ClientContext &context, TableFunctionInput &data_p, D
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset++];
 
-		auto &index = (IndexCatalogEntry &)*entry;
+		auto &index = entry->Cast<IndexCatalogEntry>();
 		// return values:
 
 		idx_t col = 0;

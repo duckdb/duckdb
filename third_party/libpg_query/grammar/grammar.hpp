@@ -150,8 +150,6 @@ static void doNegateFloat(PGValue *v);
 static PGNode *makeAndExpr(PGNode *lexpr, PGNode *rexpr, int location);
 static PGNode *makeOrExpr(PGNode *lexpr, PGNode *rexpr, int location);
 static PGNode *makeNotExpr(PGNode *expr, int location);
-static PGNode *makeSQLValueFunction(PGSQLValueFunctionOp op, int32_t typmod,
-								  int location);
 static void SplitColQualList(PGList *qualList,
 							 PGList **constraintList, PGCollateClause **collClause,
 							 core_yyscan_t yyscanner);

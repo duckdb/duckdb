@@ -1,4 +1,4 @@
-# name: test/sql/storage/lazy_load/concurrent_lazy_index.test
+# name: test/sql/storage/lazy_load/concurrent_lazy_index.test_slow
 # description: Test concurrent lazy load + index lookups
 # group: [lazy_load]
 

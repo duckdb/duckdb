@@ -3,12 +3,10 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/pair.hpp"
-#include "duckdb/common/to_string.hpp"
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/execution/operator/scan/physical_positional_scan.hpp"
 #include "duckdb/parallel/pipeline.hpp"
-
 #include "utf8proc_wrapper.hpp"
 
 #include <sstream>
@@ -394,10 +392,10 @@ void TreeChildrenIterator::Iterate(const PhysicalOperator &op,
 		callback(*child);
 	}
 	if (op.type == PhysicalOperatorType::DELIM_JOIN) {
-		auto &delim = (PhysicalDelimJoin &)op;
+		auto &delim = op.Cast<PhysicalDelimJoin>();
 		callback(*delim.join);
 	} else if ((op.type == PhysicalOperatorType::POSITIONAL_SCAN)) {
-		auto &pscan = (PhysicalPositionalScan &)op;
+		auto &pscan = op.Cast<PhysicalPositionalScan>();
 		for (auto &table : pscan.child_tables) {
 			callback(*table);
 		}

@@ -10,7 +10,7 @@ namespace duckdb {
 unique_ptr<PhysicalOperator> DuckCatalog::PlanDelete(ClientContext &context, LogicalDelete &op,
                                                      unique_ptr<PhysicalOperator> plan) {
 	// get the index of the row_id column
-	auto &bound_ref = (BoundReferenceExpression &)*op.expressions[0];
+	auto &bound_ref = op.expressions[0]->Cast<BoundReferenceExpression>();
 
 	auto del = make_uniq<PhysicalDelete>(op.types, *op.table, op.table->GetStorage(), bound_ref.index,
 	                                     op.estimated_cardinality, op.return_chunk);

@@ -736,22 +736,22 @@ void StringColumnReader::PlainReference(shared_ptr<ByteBuffer> plain_data, Vecto
 }
 
 string_t StringParquetValueConversion::DictRead(ByteBuffer &dict, uint32_t &offset, ColumnReader &reader) {
-	auto &dict_strings = ((StringColumnReader &)reader).dict_strings;
+	auto &dict_strings = reader.Cast<StringColumnReader>().dict_strings;
 	return dict_strings[offset];
 }
 
 string_t StringParquetValueConversion::PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
-	auto &scr = ((StringColumnReader &)reader);
+	auto &scr = reader.Cast<StringColumnReader>();
 	uint32_t str_len = scr.fixed_width_string_length == 0 ? plain_data.read<uint32_t>() : scr.fixed_width_string_length;
 	plain_data.available(str_len);
-	auto actual_str_len = ((StringColumnReader &)reader).VerifyString(plain_data.ptr, str_len);
+	auto actual_str_len = reader.Cast<StringColumnReader>().VerifyString(plain_data.ptr, str_len);
 	auto ret_str = string_t(plain_data.ptr, actual_str_len);
 	plain_data.inc(str_len);
 	return ret_str;
 }
 
 void StringParquetValueConversion::PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
-	auto &scr = ((StringColumnReader &)reader);
+	auto &scr = reader.Cast<StringColumnReader>();
 	uint32_t str_len = scr.fixed_width_string_length == 0 ? plain_data.read<uint32_t>() : scr.fixed_width_string_length;
 	plain_data.inc(str_len);
 }

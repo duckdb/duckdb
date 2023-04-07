@@ -692,7 +692,7 @@ static bool IsDescribeStatement(SQLStatement &statement) {
 	if (statement.type != StatementType::PRAGMA_STATEMENT) {
 		return false;
 	}
-	auto &pragma_statement = (PragmaStatement &)statement;
+	auto &pragma_statement = statement.Cast<PragmaStatement>();
 	if (pragma_statement.info->name != "show") {
 		return false;
 	}

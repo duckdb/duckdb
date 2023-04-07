@@ -67,6 +67,8 @@ static void ScatterStringVector(UnifiedVectorFormat &col, Vector &rows, data_ptr
 	auto string_data = (string_t *)col.data;
 	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
 
+	// Write out zero length to avoid swizzling problems.
+	const string_t null(nullptr, 0);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
 		auto col_idx = col.sel->get_index(idx);
@@ -74,7 +76,7 @@ static void ScatterStringVector(UnifiedVectorFormat &col, Vector &rows, data_ptr
 		if (!col.validity.RowIsValid(col_idx)) {
 			ValidityBytes col_mask(row);
 			col_mask.SetInvalidUnsafe(col_no);
-			Store<string_t>(NullValue<string_t>(), row + col_offset);
+			Store<string_t>(null, row + col_offset);
 		} else if (string_data[col_idx].IsInlined()) {
 			Store<string_t>(string_data[col_idx], row + col_offset);
 		} else {
@@ -152,7 +154,7 @@ void RowOperations::Scatter(DataChunk &columns, UnifiedVectorFormat col_data[], 
 		}
 
 		// Build out the buffer space
-		string_heap.Build(count, data_locations, entry_sizes);
+		handles = string_heap.Build(count, data_locations, entry_sizes);
 
 		// Serialize information that is needed for swizzling if the computation goes out-of-core
 		const idx_t heap_pointer_offset = layout.GetHeapOffset();

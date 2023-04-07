@@ -10,6 +10,7 @@
 namespace duckdb {
 
 static DefaultMacro internal_macros[] = {
+	{DEFAULT_SCHEMA, "current_role", {nullptr}, "'duckdb'"},                       // user name of current execution context
 	{DEFAULT_SCHEMA, "current_user", {nullptr}, "'duckdb'"},                       // user name of current execution context
 	{DEFAULT_SCHEMA, "current_catalog", {nullptr}, "current_database()"},          // name of current database (called "catalog" in the SQL standard)
 	{DEFAULT_SCHEMA, "user", {nullptr}, "current_user"},                           // equivalent to current_user
@@ -169,7 +170,7 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalTableMacroIn
 	D_ASSERT(parser.statements.size() == 1);
 	D_ASSERT(parser.statements[0]->type == StatementType::SELECT_STATEMENT);
 
-	auto &select = (SelectStatement &) *parser.statements[0];
+	auto &select = parser.statements[0]->Cast<SelectStatement>();
 	auto result = make_uniq<TableMacroFunction>(std::move(select.node));
 	return CreateInternalTableMacroInfo(default_macro, std::move(result));
 }
