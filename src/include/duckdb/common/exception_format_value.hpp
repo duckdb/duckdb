@@ -8,10 +8,14 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
-#include "duckdb/common/types.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
+
+enum class PhysicalType : uint8_t;
+struct LogicalType;
 
 enum class ExceptionFormatValueType : uint8_t {
 	FORMAT_VALUE_TYPE_DOUBLE,

@@ -29,7 +29,7 @@ struct StringAnalyzeState : public AnalyzeState {
 };
 
 unique_ptr<AnalyzeState> UncompressedStringStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return make_unique<StringAnalyzeState>();
+	return make_uniq<StringAnalyzeState>();
 }
 
 bool UncompressedStringStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
@@ -61,7 +61,7 @@ idx_t UncompressedStringStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 // Scan
 //===--------------------------------------------------------------------===//
 unique_ptr<SegmentScanState> UncompressedStringStorage::StringInitScan(ColumnSegment &segment) {
-	auto result = make_unique<StringScanState>();
+	auto result = make_uniq<StringScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	result->handle = buffer_manager.Pin(segment.block);
 	return std::move(result);
@@ -152,7 +152,7 @@ unique_ptr<CompressedSegmentState> UncompressedStringStorage::StringInitSegment(
 		dictionary.end = segment.SegmentSize();
 		SetDictionary(segment, handle, dictionary);
 	}
-	return make_unique<UncompressedStringSegmentState>();
+	return make_uniq<UncompressedStringSegmentState>();
 }
 
 idx_t UncompressedStringStorage::FinalizeAppend(ColumnSegment &segment, SegmentStatistics &stats) {
@@ -246,7 +246,7 @@ void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string
 		// string does not fit, allocate space for it
 		// create a new string block
 		idx_t alloc_size = MaxValue<idx_t>(total_length, Storage::BLOCK_SIZE);
-		auto new_block = make_unique<StringBlock>();
+		auto new_block = make_uniq<StringBlock>();
 		new_block->offset = 0;
 		new_block->size = alloc_size;
 		// allocate an in-memory buffer for it
@@ -292,13 +292,13 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 		offset += 2 * sizeof(uint32_t);
 
 		data_ptr_t decompression_ptr;
-		std::unique_ptr<data_t[]> decompression_buffer;
+		unique_ptr<data_t[]> decompression_buffer;
 
 		// If string is in single block we decompress straight from it, else we copy first
 		if (remaining <= Storage::BLOCK_SIZE - sizeof(block_id_t) - offset) {
 			decompression_ptr = handle.Ptr() + offset;
 		} else {
-			decompression_buffer = std::unique_ptr<data_t[]>(new data_t[compressed_size]);
+			decompression_buffer = unique_ptr<data_t[]>(new data_t[compressed_size]);
 			auto target_ptr = decompression_buffer.get();
 
 			// now append the string to the single buffer

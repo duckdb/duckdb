@@ -50,7 +50,7 @@ MetaBlockWriter &SingleFileCheckpointWriter::GetMetaBlockWriter() {
 }
 
 unique_ptr<TableDataWriter> SingleFileCheckpointWriter::GetTableDataWriter(TableCatalogEntry &table) {
-	return make_unique<SingleFileTableDataWriter>(*this, table, *table_metadata_writer, GetMetaBlockWriter());
+	return make_uniq<SingleFileTableDataWriter>(*this, table, *table_metadata_writer, GetMetaBlockWriter());
 }
 
 void SingleFileCheckpointWriter::CreateCheckpoint() {
@@ -65,8 +65,8 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	auto &block_manager = GetBlockManager();
 
 	//! Set up the writers for the checkpoints
-	metadata_writer = make_unique<MetaBlockWriter>(block_manager);
-	table_metadata_writer = make_unique<MetaBlockWriter>(block_manager);
+	metadata_writer = make_uniq<MetaBlockWriter>(block_manager);
+	table_metadata_writer = make_uniq<MetaBlockWriter>(block_manager);
 
 	// get the id of the first meta block
 	block_id_t meta_block = metadata_writer->GetBlockPointer().block_id;
@@ -376,15 +376,15 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetaBlockReader &reader
 		for (idx_t key_nr = 0; key_nr < info->column_ids.size(); key_nr++) {
 			auto &col = table_catalog->GetColumn(LogicalIndex(info->column_ids[key_nr]));
 			unbound_expressions.push_back(
-			    make_unique<BoundColumnRefExpression>(col.GetName(), col.GetType(), ColumnBinding(0, key_nr)));
+			    make_uniq<BoundColumnRefExpression>(col.GetName(), col.GetType(), ColumnBinding(0, key_nr)));
 		}
 	}
 
 	switch (info->index_type) {
 	case IndexType::ART: {
 		auto &storage = table_catalog->GetStorage();
-		auto art = make_unique<ART>(info->column_ids, TableIOManager::Get(storage), std::move(unbound_expressions),
-		                            info->constraint_type, storage.db, true, root_block_id, root_offset);
+		auto art = make_uniq<ART>(info->column_ids, TableIOManager::Get(storage), std::move(unbound_expressions),
+		                          info->constraint_type, storage.db, true, root_block_id, root_offset);
 		index_catalog->index = art.get();
 		storage.info->indexes.AddIndex(std::move(art));
 		break;

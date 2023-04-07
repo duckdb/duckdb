@@ -16,7 +16,7 @@ void BoundParameterExpression::Invalidate(Expression &expr) {
 	if (expr.type != ExpressionType::VALUE_PARAMETER) {
 		throw InternalException("BoundParameterExpression::Invalidate requires a parameter as input");
 	}
-	auto &bound_parameter = (BoundParameterExpression &)expr;
+	auto &bound_parameter = expr.Cast<BoundParameterExpression>();
 	bound_parameter.return_type = LogicalTypeId::SQLNULL;
 	bound_parameter.parameter_data->return_type = LogicalTypeId::INVALID;
 }
@@ -47,8 +47,8 @@ bool BoundParameterExpression::Equals(const BaseExpression *other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundParameterExpression *)other_p;
-	return parameter_nr == other->parameter_nr;
+	auto &other = other_p->Cast<BoundParameterExpression>();
+	return parameter_nr == other.parameter_nr;
 }
 
 hash_t BoundParameterExpression::Hash() const {
@@ -58,7 +58,7 @@ hash_t BoundParameterExpression::Hash() const {
 }
 
 unique_ptr<Expression> BoundParameterExpression::Copy() {
-	auto result = make_unique<BoundParameterExpression>(parameter_nr);
+	auto result = make_uniq<BoundParameterExpression>(parameter_nr);
 	result->parameter_data = parameter_data;
 	result->return_type = return_type;
 	result->CopyProperties(*this);
@@ -75,7 +75,7 @@ unique_ptr<Expression> BoundParameterExpression::Deserialize(ExpressionDeseriali
                                                              FieldReader &reader) {
 	auto &global_parameter_set = state.gstate.parameter_data;
 	auto parameter_nr = reader.ReadRequired<idx_t>();
-	auto result = make_unique<BoundParameterExpression>(parameter_nr);
+	auto result = make_uniq<BoundParameterExpression>(parameter_nr);
 	result->return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	auto parameter_data = reader.ReadRequiredSerializable<BoundParameterData, shared_ptr<BoundParameterData>>();
 	// check if we have already deserialized a parameter with this number

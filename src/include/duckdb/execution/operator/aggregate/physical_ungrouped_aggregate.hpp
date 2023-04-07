@@ -22,6 +22,9 @@ namespace duckdb {
 //! without any DISTINCT aggregates, and (3) when all aggregates are combineable
 class PhysicalUngroupedAggregate : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::UNGROUPED_AGGREGATE;
+
+public:
 	PhysicalUngroupedAggregate(vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
 	                           idx_t estimated_cardinality);
 

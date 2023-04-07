@@ -18,6 +18,9 @@ namespace duckdb {
 //! Represents a scan of a base table
 class PhysicalPositionalScan : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::POSITIONAL_SCAN;
+
+public:
 	//! Regular Table Scan
 	PhysicalPositionalScan(vector<LogicalType> types, unique_ptr<PhysicalOperator> left,
 	                       unique_ptr<PhysicalOperator> right);

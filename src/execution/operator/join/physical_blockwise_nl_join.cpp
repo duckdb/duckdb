@@ -42,16 +42,16 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalBlockwiseNLJoin::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<BlockwiseNLJoinGlobalState>(context, *this);
+	return make_uniq<BlockwiseNLJoinGlobalState>(context, *this);
 }
 
 unique_ptr<LocalSinkState> PhysicalBlockwiseNLJoin::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<BlockwiseNLJoinLocalState>();
+	return make_uniq<BlockwiseNLJoinLocalState>();
 }
 
 SinkResultType PhysicalBlockwiseNLJoin::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
                                              DataChunk &input) const {
-	auto &gstate = (BlockwiseNLJoinGlobalState &)state;
+	auto &gstate = state.Cast<BlockwiseNLJoinGlobalState>();
 	lock_guard<mutex> nl_lock(gstate.lock);
 	gstate.right_chunks.Append(input);
 	return SinkResultType::NEED_MORE_INPUT;
@@ -62,7 +62,7 @@ SinkResultType PhysicalBlockwiseNLJoin::Sink(ExecutionContext &context, GlobalSi
 //===--------------------------------------------------------------------===//
 SinkFinalizeType PhysicalBlockwiseNLJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                    GlobalSinkState &gstate_p) const {
-	auto &gstate = (BlockwiseNLJoinGlobalState &)gstate_p;
+	auto &gstate = gstate_p.Cast<BlockwiseNLJoinGlobalState>();
 	gstate.right_outer.Initialize(gstate.right_chunks.Count());
 
 	if (gstate.right_chunks.Count() == 0 && EmptyResultIfRHSIsEmpty()) {
@@ -91,8 +91,8 @@ public:
 };
 
 unique_ptr<OperatorState> PhysicalBlockwiseNLJoin::GetOperatorState(ExecutionContext &context) const {
-	auto &gstate = (BlockwiseNLJoinGlobalState &)*sink_state;
-	auto result = make_unique<BlockwiseNLJoinState>(context, gstate.right_chunks, *this);
+	auto &gstate = sink_state->Cast<BlockwiseNLJoinGlobalState>();
+	auto result = make_uniq<BlockwiseNLJoinState>(context, gstate.right_chunks, *this);
 	if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
 		vector<LogicalType> intermediate_types;
 		for (auto &type : children[0]->types) {
@@ -111,7 +111,7 @@ OperatorResultType PhysicalBlockwiseNLJoin::ExecuteInternal(ExecutionContext &co
                                                             OperatorState &state_p) const {
 	D_ASSERT(input.size() > 0);
 	auto &state = (BlockwiseNLJoinState &)state_p;
-	auto &gstate = (BlockwiseNLJoinGlobalState &)*sink_state;
+	auto &gstate = sink_state->Cast<BlockwiseNLJoinGlobalState>();
 
 	if (gstate.right_chunks.Count() == 0) {
 		// empty RHS
@@ -212,7 +212,7 @@ class BlockwiseNLJoinGlobalScanState : public GlobalSourceState {
 public:
 	explicit BlockwiseNLJoinGlobalScanState(const PhysicalBlockwiseNLJoin &op) : op(op) {
 		D_ASSERT(op.sink_state);
-		auto &sink = (BlockwiseNLJoinGlobalState &)*op.sink_state;
+		auto &sink = op.sink_state->Cast<BlockwiseNLJoinGlobalState>();
 		sink.right_outer.InitializeScan(sink.right_chunks, scan_state);
 	}
 
@@ -221,7 +221,7 @@ public:
 
 public:
 	idx_t MaxThreads() override {
-		auto &sink = (BlockwiseNLJoinGlobalState &)*op.sink_state;
+		auto &sink = op.sink_state->Cast<BlockwiseNLJoinGlobalState>();
 		return sink.right_outer.MaxThreads();
 	}
 };
@@ -230,7 +230,7 @@ class BlockwiseNLJoinLocalScanState : public LocalSourceState {
 public:
 	explicit BlockwiseNLJoinLocalScanState(const PhysicalBlockwiseNLJoin &op, BlockwiseNLJoinGlobalScanState &gstate) {
 		D_ASSERT(op.sink_state);
-		auto &sink = (BlockwiseNLJoinGlobalState &)*op.sink_state;
+		auto &sink = op.sink_state->Cast<BlockwiseNLJoinGlobalState>();
 		sink.right_outer.InitializeScan(gstate.scan_state, scan_state);
 	}
 
@@ -238,19 +238,19 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalBlockwiseNLJoin::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<BlockwiseNLJoinGlobalScanState>(*this);
+	return make_uniq<BlockwiseNLJoinGlobalScanState>(*this);
 }
 
 unique_ptr<LocalSourceState> PhysicalBlockwiseNLJoin::GetLocalSourceState(ExecutionContext &context,
                                                                           GlobalSourceState &gstate) const {
-	return make_unique<BlockwiseNLJoinLocalScanState>(*this, (BlockwiseNLJoinGlobalScanState &)gstate);
+	return make_uniq<BlockwiseNLJoinLocalScanState>(*this, (BlockwiseNLJoinGlobalScanState &)gstate);
 }
 
 void PhysicalBlockwiseNLJoin::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                                       LocalSourceState &lstate_p) const {
 	D_ASSERT(IsRightOuterJoin(join_type));
 	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
-	auto &sink = (BlockwiseNLJoinGlobalState &)*sink_state;
+	auto &sink = sink_state->Cast<BlockwiseNLJoinGlobalState>();
 	auto &gstate = (BlockwiseNLJoinGlobalScanState &)gstate_p;
 	auto &lstate = (BlockwiseNLJoinLocalScanState &)lstate_p;
 

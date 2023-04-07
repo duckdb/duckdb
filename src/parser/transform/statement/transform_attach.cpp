@@ -7,8 +7,8 @@ namespace duckdb {
 
 unique_ptr<AttachStatement> Transformer::TransformAttach(duckdb_libpgquery::PGNode *node) {
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGAttachStmt *>(node);
-	auto result = make_unique<AttachStatement>();
-	auto info = make_unique<AttachInfo>();
+	auto result = make_uniq<AttachStatement>();
+	auto info = make_uniq<AttachInfo>();
 	info->name = stmt->name ? stmt->name : string();
 	info->path = stmt->path;
 

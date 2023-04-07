@@ -48,7 +48,7 @@ void CastSQLite::InputVectorsToVarchar(DataChunk &data_chunk, DataChunk &new_chu
 
 VectorType CastSQLite::ToVectorsSQLiteValue(DataChunk &data_chunk, Vector &result,
                                             vector<unique_ptr<vector<sqlite3_value>>> &vec_sqlite_values,
-                                            unique_ptr<UnifiedVectorFormat[]> vec_data) {
+                                            duckdb::unique_ptr<UnifiedVectorFormat[]> vec_data) {
 	VectorType result_vec_type = VectorType::CONSTANT_VECTOR;
 
 	// Casting input data to sqlite_value

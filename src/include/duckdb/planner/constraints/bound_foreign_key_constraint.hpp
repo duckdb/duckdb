@@ -16,6 +16,9 @@ namespace duckdb {
 
 class BoundForeignKeyConstraint : public BoundConstraint {
 public:
+	static constexpr const ConstraintType TYPE = ConstraintType::FOREIGN_KEY;
+
+public:
 	BoundForeignKeyConstraint(ForeignKeyInfo info_p, physical_index_set_t pk_key_set_p,
 	                          physical_index_set_t fk_key_set_p)
 	    : BoundConstraint(ConstraintType::FOREIGN_KEY), info(std::move(info_p)), pk_key_set(std::move(pk_key_set_p)),

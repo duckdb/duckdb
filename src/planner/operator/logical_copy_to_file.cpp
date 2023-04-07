@@ -53,7 +53,7 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(LogicalDeserializatio
 		bind_data = copy_func.deserialize(context, reader, copy_func);
 	}
 
-	auto result = make_unique<LogicalCopyToFile>(copy_func, std::move(bind_data));
+	auto result = make_uniq<LogicalCopyToFile>(copy_func, std::move(bind_data));
 	result->file_path = file_path;
 	result->use_tmp_file = use_tmp_file;
 	result->overwrite_or_ignore = overwrite_or_ignore;

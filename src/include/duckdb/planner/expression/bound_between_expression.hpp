@@ -14,6 +14,9 @@ namespace duckdb {
 
 class BoundBetweenExpression : public Expression {
 public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_BETWEEN;
+
+public:
 	BoundBetweenExpression(unique_ptr<Expression> input, unique_ptr<Expression> lower, unique_ptr<Expression> upper,
 	                       bool lower_inclusive, bool upper_inclusive);
 

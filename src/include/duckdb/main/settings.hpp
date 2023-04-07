@@ -328,6 +328,16 @@ struct PerfectHashThresholdSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct PivotLimitSetting {
+	static constexpr const char *Name = "pivot_limit";
+	static constexpr const char *Description =
+	    "The maximum numer of pivot columns in a pivot statement (default: 100000)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct PreserveIdentifierCase {
 	static constexpr const char *Name = "preserve_identifier_case";
 	static constexpr const char *Description =
