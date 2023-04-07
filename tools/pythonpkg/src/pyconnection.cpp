@@ -115,19 +115,8 @@ py::object ArrowTableFromDataframe(const py::object &df) {
 	py::list array_list;
 	for (auto &name : names) {
 		py::object column = getter(name);
-		auto pandas_array = column.attr("array");
-		py::object arrow_array;
-		if (pandas_array.attr("__arrow_array__")) {
-			// This is a pyarrow backed dataframe column
-			arrow_array = pandas_array.attr("__arrow_array__")();
-		}
-		//} else {
-		//	// This is numpy or otherwise
-		//	auto inner_array = pandas_array.attr("__array__");
-		//	py::print(py::str(inner_array.attr("__class__")));
-		//	arrow_array = py::module_::import("pyarrow").attr("lib").attr("ChunkedArray")(inner_array);
-		//}
-		array_list.append(arrow_array);
+		auto array = column.attr("array").attr("__arrow_array__")();
+		array_list.append(array);
 	}
 	return py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_arrays")(array_list,
 	                                                                                    py::arg("names") = names);
