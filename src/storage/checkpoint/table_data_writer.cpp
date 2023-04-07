@@ -65,7 +65,7 @@ void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, Da
 	meta_data_writer.Write<idx_t>(total_rows);
 
 	// Now we serialize indexes in the table_metadata_writer
-	std::vector<BlockPointer> index_pointers = info->indexes.SerializeIndexes(table_data_writer);
+	vector<BlockPointer> index_pointers = info->indexes.SerializeIndexes(table_data_writer);
 
 	// Write-off to metadata block ids and offsets of indexes
 	meta_data_writer.Write<idx_t>(index_pointers.size());
