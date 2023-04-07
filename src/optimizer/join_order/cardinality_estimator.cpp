@@ -17,8 +17,8 @@ static TableCatalogEntry *GetCatalogTableEntry(LogicalOperator *op) {
 		return nullptr;
 	}
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_GET);
-	auto get = (LogicalGet *)op;
-	TableCatalogEntry *entry = get->GetTable();
+	auto &get = op->Cast<LogicalGet>();
+	TableCatalogEntry *entry = get.GetTable();
 	return entry;
 }
 
@@ -313,19 +313,19 @@ static LogicalGet *GetLogicalGet(LogicalOperator *op, idx_t table_index = DConst
 		break;
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-		LogicalComparisonJoin *join = (LogicalComparisonJoin *)op;
+		LogicalComparisonJoin &join = op->Cast<LogicalComparisonJoin>();
 		// We should never be calling GetLogicalGet without a valid table_index.
 		// We are attempting to get the catalog table for a relation (for statistics/cardinality estimation)
 		// A logical join means there is a non-reorderable relation in the join plan. This means we need
 		// to know the exact table index to return.
 		D_ASSERT(table_index != DConstants::INVALID_INDEX);
-		if (join->join_type == JoinType::MARK || join->join_type == JoinType::LEFT) {
-			auto child = join->children.at(0).get();
+		if (join.join_type == JoinType::MARK || join.join_type == JoinType::LEFT) {
+			auto child = join.children.at(0).get();
 			get = GetLogicalGet(child, table_index);
 			if (get && get->table_index == table_index) {
 				return get;
 			}
-			child = join->children.at(1).get();
+			child = join.children.at(1).get();
 			get = GetLogicalGet(child, table_index);
 			if (get && get->table_index == table_index) {
 				return get;
@@ -377,7 +377,7 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(vector<NodeOp> *node_op
 		auto op = (*node_ops)[i].op;
 		join_node->SetBaseTableCardinality(op->EstimateCardinality(context));
 		if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-			auto &join = (LogicalComparisonJoin &)*op;
+			auto &join = op->Cast<LogicalComparisonJoin>();
 			if (join.join_type == JoinType::LEFT) {
 				// If a base op is a Logical Comparison join it is probably a left join,
 				// so the cost of the larger table is a fine estimate.
@@ -559,7 +559,7 @@ idx_t CardinalityEstimator::InspectTableFilters(idx_t cardinality, LogicalOperat
 	for (auto &it : table_filters->filters) {
 		column_statistics = nullptr;
 		if (get->bind_data && get->function.name.compare("seq_scan") == 0) {
-			auto &table_scan_bind_data = (TableScanBindData &)*get->bind_data;
+			auto &table_scan_bind_data = get->bind_data->Cast<TableScanBindData>();
 			column_statistics = get->function.statistics(context, &table_scan_bind_data, it.first);
 		}
 		if (it.second->filter_type == TableFilterType::CONJUNCTION_AND) {

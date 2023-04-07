@@ -87,6 +87,9 @@ struct ClientConfig {
 	//! The explain output type used when none is specified (default: PHYSICAL_ONLY)
 	ExplainOutputType explain_output_type = ExplainOutputType::PHYSICAL_ONLY;
 
+	//! The maximum amount of pivot columns
+	idx_t pivot_limit = 100000;
+
 	//! Generic options
 	case_insensitive_map_t<Value> set_variables;
 
@@ -97,8 +100,6 @@ struct ClientConfig {
 public:
 	static ClientConfig &GetConfig(ClientContext &context);
 	static const ClientConfig &GetConfig(const ClientContext &context);
-
-	static string ExtractTimezoneFromConfig(ClientConfig &config);
 
 	string ExtractTimezone() const;
 

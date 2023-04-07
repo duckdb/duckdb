@@ -31,15 +31,15 @@ public:
 
 SinkResultType PhysicalBatchCollector::Sink(ExecutionContext &context, GlobalSinkState &gstate,
                                             LocalSinkState &lstate_p, DataChunk &input) const {
-	auto &state = (BatchCollectorLocalState &)lstate_p;
+	auto &state = lstate_p.Cast<BatchCollectorLocalState>();
 	state.data.Append(input, state.batch_index);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
 void PhysicalBatchCollector::Combine(ExecutionContext &context, GlobalSinkState &gstate_p,
                                      LocalSinkState &lstate_p) const {
-	auto &gstate = (BatchCollectorGlobalState &)gstate_p;
-	auto &state = (BatchCollectorLocalState &)lstate_p;
+	auto &gstate = gstate_p.Cast<BatchCollectorGlobalState>();
+	auto &state = lstate_p.Cast<BatchCollectorLocalState>();
 
 	lock_guard<mutex> lock(gstate.glock);
 	gstate.data.Merge(state.data);
@@ -47,7 +47,7 @@ void PhysicalBatchCollector::Combine(ExecutionContext &context, GlobalSinkState 
 
 SinkFinalizeType PhysicalBatchCollector::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                   GlobalSinkState &gstate_p) const {
-	auto &gstate = (BatchCollectorGlobalState &)gstate_p;
+	auto &gstate = gstate_p.Cast<BatchCollectorGlobalState>();
 	auto collection = gstate.data.FetchCollection();
 	D_ASSERT(collection);
 	auto result = make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(collection),
@@ -65,7 +65,7 @@ unique_ptr<GlobalSinkState> PhysicalBatchCollector::GetGlobalSinkState(ClientCon
 }
 
 unique_ptr<QueryResult> PhysicalBatchCollector::GetResult(GlobalSinkState &state) {
-	auto &gstate = (BatchCollectorGlobalState &)state;
+	auto &gstate = state.Cast<BatchCollectorGlobalState>();
 	D_ASSERT(gstate.result);
 	return std::move(gstate.result);
 }

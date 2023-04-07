@@ -20,21 +20,21 @@ RegexOptimizationRule::RegexOptimizationRule(ExpressionRewriter &rewriter) : Rul
 
 unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
                                                     bool &changes_made, bool is_root) {
-	auto root = (BoundFunctionExpression *)bindings[0];
-	auto constant_expr = (BoundConstantExpression *)bindings[2];
-	D_ASSERT(root->children.size() == 2);
+	auto &root = bindings[0]->Cast<BoundFunctionExpression>();
+	auto &constant_expr = bindings[2]->Cast<BoundConstantExpression>();
+	D_ASSERT(root.children.size() == 2);
 
-	if (constant_expr->value.IsNull()) {
-		return make_uniq<BoundConstantExpression>(Value(root->return_type));
+	if (constant_expr.value.IsNull()) {
+		return make_uniq<BoundConstantExpression>(Value(root.return_type));
 	}
 
 	// the constant_expr is a scalar expression that we have to fold
-	if (!constant_expr->IsFoldable()) {
+	if (!constant_expr.IsFoldable()) {
 		return nullptr;
 	}
 
-	auto constant_value = ExpressionExecutor::EvaluateScalar(GetContext(), *constant_expr);
-	D_ASSERT(constant_value.type() == constant_expr->return_type);
+	auto constant_value = ExpressionExecutor::EvaluateScalar(GetContext(), constant_expr);
+	D_ASSERT(constant_value.type() == constant_expr.return_type);
 	auto patt_str = StringValue::Get(constant_value);
 
 	duckdb_re2::RE2 pattern(patt_str);
@@ -44,8 +44,8 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 
 	if (pattern.Regexp()->op() == duckdb_re2::kRegexpLiteralString ||
 	    pattern.Regexp()->op() == duckdb_re2::kRegexpLiteral) {
-		auto contains = make_uniq<BoundFunctionExpression>(root->return_type, ContainsFun::GetFunction(),
-		                                                   std::move(root->children), nullptr);
+		auto contains = make_uniq<BoundFunctionExpression>(root.return_type, ContainsFun::GetFunction(),
+		                                                   std::move(root.children), nullptr);
 
 		string min;
 		string max;

@@ -84,7 +84,7 @@ public:
 
 	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
 	//! index must also be locked during the merge
-	bool MergeIndexes(IndexLock &state, Index *other_index) override;
+	bool MergeIndexes(IndexLock &state, Index &other_index) override;
 
 	//! Generate ART keys for an input chunk
 	static void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, vector<Key> &keys);

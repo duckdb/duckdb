@@ -440,7 +440,7 @@ struct QuantileBindData : public FunctionData {
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (QuantileBindData &)other_p;
+		auto &other = other_p.Cast<QuantileBindData>();
 		return desc == other.desc && quantiles == other.quantiles && order == other.order;
 	}
 
