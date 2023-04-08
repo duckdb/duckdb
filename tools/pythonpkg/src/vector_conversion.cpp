@@ -444,6 +444,9 @@ void VectorConversion::BindNumpy(const DBConfig &config, py::handle df, vector<P
 		} else if (bind_data.pandas_type == PandasType::OBJECT && string(py::str(df_types[col_idx])) == "string") {
 			bind_data.pandas_type = PandasType::CATEGORY;
 			auto enum_name = string(py::str(df_columns[col_idx]));
+			// here we call numpy.unique
+                        // this function call will return the unique values of a given array
+                        // together with the indices to reconstruct the given array
 			auto uniq = py::cast<py::tuple>(py::module_::import("numpy").attr("unique")(column, false, true));
 			vector<string> enum_entries = py::cast<vector<string>>(uniq.attr("__getitem__")(0));
 			idx_t size = enum_entries.size();
