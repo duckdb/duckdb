@@ -23,11 +23,11 @@ struct ICUStrptime : public ICUDateFunc {
 
 	struct ICUStrptimeBindData : public BindData {
 		ICUStrptimeBindData(ClientContext &context, const StrpTimeFormat &format)
-		: BindData(context), formats(1, format) {
+		    : BindData(context), formats(1, format) {
 		}
 		ICUStrptimeBindData(ClientContext &context, vector<StrpTimeFormat> formats_p)
-	    : BindData(context), formats(std::move(formats_p)) {
-	}
+		    : BindData(context), formats(std::move(formats_p)) {
+		}
 		ICUStrptimeBindData(const ICUStrptimeBindData &other) : BindData(other), formats(other.formats) {
 		}
 
