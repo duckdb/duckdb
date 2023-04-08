@@ -55,8 +55,7 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 			return ExpressionRewriter::ConstantOrNull(std::move(root.children[1 - constant_child]),
 			                                          Value::Numeric(root.return_type, 0));
 		}
-	} else {
-		D_ASSERT(func_name == "/");
+	} else if (func_name == "//") {
 		if (constant_child == 1) {
 			if (constant.value == 1) {
 				// divide by 1, replace with non-constant child
@@ -66,6 +65,8 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 				return make_uniq<BoundConstantExpression>(Value(root.return_type));
 			}
 		}
+	} else {
+		throw InternalException("Unrecognized function name in ArithmeticSimplificationRule");
 	}
 	return nullptr;
 }
