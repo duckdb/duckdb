@@ -13,6 +13,7 @@ namespace duckdb {
 
 // classes
 class ARTKey;
+class PrefixSegment;
 
 class Prefix {
 public:

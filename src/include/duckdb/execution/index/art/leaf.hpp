@@ -9,6 +9,9 @@
 #pragma once
 
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/art/art_node.hpp"
+#include "duckdb/execution/index/art/prefix.hpp"
+#include "duckdb/execution/index/art/fixed_size_allocator.hpp"
 
 namespace duckdb {
 

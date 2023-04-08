@@ -7,11 +7,13 @@
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/prefix_segment.hpp"
 #include "duckdb/execution/index/art/leaf_segment.hpp"
+#include "duckdb/execution/index/art/prefix.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/execution/index/art/node4.hpp"
 #include "duckdb/execution/index/art/node16.hpp"
 #include "duckdb/execution/index/art/node48.hpp"
 #include "duckdb/execution/index/art/node256.hpp"
+#include "duckdb/execution/index/art/iterator.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
