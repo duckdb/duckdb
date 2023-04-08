@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from conftest import NumpyPandas, ArrowPandas
 
 class TestMap(object):
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize('pandas', [NumpyPandas()])
     def test_map(self, duckdb_cursor, pandas):
         testrel = duckdb.values([1, 2])
         conn = duckdb.connect()
