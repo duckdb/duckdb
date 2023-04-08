@@ -51,9 +51,33 @@ CREATE TABLE abbrevs AS (
 	ORDER BY utc_offset
 );
 
+statement ok
+CREATE TABLE offsets AS (
+	SELECT
+		CASE WHEN EXTRACT(MINUTE FROM utc_offset) <> 0
+		THEN
+			CASE WHEN utc_offset < INTERVAL 0 SECOND
+				THEN LEFT(utc_offset, 6)
+				ELSE '+' || LEFT(utc_offset, 5)
+			END
+		ELSE
+			CASE WHEN utc_offset < INTERVAL 0 SECOND
+				THEN LEFT(utc_offset, 3)
+				ELSE '+' || LEFT(utc_offset, 2)
+			END
+		END AS utc_offset
+	FROM (
+		SELECT DISTINCT utc_offset
+		FROM pg_timezone_names()
+		ORDER BY ALL
+	) z
+);
+
+foreach func strptime try_strptime
+
 # Full zone names
 query II
-SELECT strptime('2022-03-05 17:59:17.877 ' || tz_name, '%Y-%m-%d %H:%M:%S.%g %Z') tstz, tz_name
+SELECT ${func}('2022-03-05 17:59:17.877 ' || tz_name, '%Y-%m-%d %H:%M:%S.%g %Z') tstz, tz_name
 FROM zones
 ORDER BY ALL
 ----
@@ -98,7 +122,7 @@ ORDER BY ALL
 
 # Abbreviations
 query II
-SELECT strptime('2022-03-05 17:59:17.877 ' || tz_name, '%Y-%m-%d %H:%M:%S.%g %Z') tstz, tz_name
+SELECT ${func}('2022-03-05 17:59:17.877 ' || tz_name, '%Y-%m-%d %H:%M:%S.%g %Z') tstz, tz_name
 FROM abbrevs
 ORDER BY ALL
 ----
@@ -145,31 +169,9 @@ ORDER BY ALL
 # UTC Offsets
 #
 
-statement ok
-CREATE TABLE offsets AS (
-	SELECT
-		CASE WHEN EXTRACT(MINUTE FROM utc_offset) <> 0
-		THEN
-			CASE WHEN utc_offset < INTERVAL 0 SECOND
-				THEN LEFT(utc_offset, 6)
-				ELSE '+' || LEFT(utc_offset, 5)
-			END
-		ELSE
-			CASE WHEN utc_offset < INTERVAL 0 SECOND
-				THEN LEFT(utc_offset, 3)
-				ELSE '+' || LEFT(utc_offset, 2)
-			END
-		END AS utc_offset
-	FROM (
-		SELECT DISTINCT utc_offset
-		FROM pg_timezone_names()
-		ORDER BY ALL
-	) z
-);
-
 # These should be TSTZs because there is an offset specified.
 query II
-SELECT strptime('2022-03-05 17:59:17.877 ' || utc_offset, '%Y-%m-%d %H:%M:%S.%g %z') tstz, utc_offset
+SELECT ${func}('2022-03-05 17:59:17.877 ' || utc_offset, '%Y-%m-%d %H:%M:%S.%g %z') tstz, utc_offset
 FROM offsets
 ORDER BY tstz
 ----
@@ -218,7 +220,7 @@ ORDER BY tstz
 
 # First fails
 query II
-SELECT strptime('2022-03-05 17:59:17.877 ' || tz_name, ['%m/%d/%Y  %H:%M:%S.%g %Z', '%Y-%m-%d %H:%M:%S.%g %Z']) tstz, tz_name
+SELECT ${func}('2022-03-05 17:59:17.877 ' || tz_name, ['%m/%d/%Y  %H:%M:%S.%g %Z', '%Y-%m-%d %H:%M:%S.%g %Z']) tstz, tz_name
 FROM zones
 ORDER BY ALL
 ----
@@ -260,6 +262,19 @@ ORDER BY ALL
 2022-03-05 19:59:17.877-08	Pacific/Johnston
 2022-03-05 20:59:17.877-08	Pacific/Niue
 2022-03-05 21:59:17.877-08	Etc/GMT+12
+
+endloop
+
+#
+# Try
+#
+
+query II
+SELECT try_strptime('2022-03-05 17:59:17.877 ' || tz_name, '%m/%d/%Y  %H:%M:%S.%g %Z') tstz, tz_name
+FROM zones
+WHERE tstz IS NOT NULL
+ORDER BY ALL
+----
 
 #
 # Errors/Coverage
