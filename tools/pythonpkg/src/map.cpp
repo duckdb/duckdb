@@ -4,6 +4,7 @@
 #include "duckdb_python/numpy/array_wrapper.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb_python/pandas/column/pandas_numpy_column.hpp"
+#include "duckdb_python/pandas/pandas_scan.hpp"
 
 namespace duckdb {
 
@@ -151,11 +152,9 @@ OperatorResultType MapFunction::MapFunctionExec(ExecutionContext &context, Table
 		throw InvalidInputException("UDF returned more than %llu rows, which is not allowed.", STANDARD_VECTOR_SIZE);
 	}
 
-	// FIXME: needs to use the scan switch
 	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
 		auto &bind_data = pandas_bind_data[col_idx];
-		D_ASSERT(bind_data.numpy_col->Backend() == PandasColumnBackend::NUMPY);
-		Numpy::Scan(bind_data, row_count, 0, output.data[col_idx]);
+		PandasScanFunction::PandasBackendScanSwitch(bind_data, row_count, 0, output.data[col_idx]);
 	}
 	output.SetCardinality(row_count);
 	return OperatorResultType::NEED_MORE_INPUT;

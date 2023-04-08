@@ -6,7 +6,6 @@
 #include "duckdb_python/numpy/numpy_scan.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb_python/pandas/column/pandas_numpy_column.hpp"
-#include "duckdb_python/pandas/column/pandas_arrow_column.hpp"
 
 #include "duckdb/common/atomic.hpp"
 
@@ -145,12 +144,6 @@ void PandasScanFunction::PandasBackendScanSwitch(PandasColumnBindData &bind_data
                                                  Vector &out) {
 	auto backend = bind_data.numpy_col->Backend();
 	switch (backend) {
-	case PandasColumnBackend::ARROW: {
-		auto &array_column = (PandasArrowColumn &)*bind_data.numpy_col;
-		// ??? Need to produce a Table from the chunked array
-		// then we create a scanner for it, and here we scan the table
-		break;
-	}
 	case PandasColumnBackend::NUMPY: {
 		Numpy::Scan(bind_data, count, offset, out);
 		break;

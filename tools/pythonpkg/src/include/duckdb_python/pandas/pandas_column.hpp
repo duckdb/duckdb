@@ -2,7 +2,7 @@
 
 namespace duckdb {
 
-enum class PandasColumnBackend { NUMPY, ARROW };
+enum class PandasColumnBackend { NUMPY };
 
 class PandasColumn {
 public:

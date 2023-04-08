@@ -1,7 +1,6 @@
 #include "duckdb_python/pandas/pandas_bind.hpp"
 #include "duckdb_python/numpy/array_wrapper.hpp"
 #include "duckdb_python/pandas/pandas_analyzer.hpp"
-#include "duckdb_python/pandas/column/pandas_arrow_column.hpp"
 #include "duckdb_python/pandas/column/pandas_numpy_column.hpp"
 
 namespace duckdb {
