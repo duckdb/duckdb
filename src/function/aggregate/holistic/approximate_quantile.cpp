@@ -95,7 +95,7 @@ struct ApproxQuantileOperation {
 	}
 
 	template <class STATE>
-	static void Destroy(STATE *state) {
+	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
 		if (state->h) {
 			delete state->h;
 		}
