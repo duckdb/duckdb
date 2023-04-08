@@ -175,7 +175,7 @@ private:
 	vector<ExpressionType> predicates;
 
 	//! The arena allocator used by the aggregates for their internal state
-	ArenaAllocator aggregate_allocator;
+	shared_ptr<ArenaAllocator> aggregate_allocator;
 
 private:
 	GroupedAggregateHashTable(const GroupedAggregateHashTable &) = delete;
