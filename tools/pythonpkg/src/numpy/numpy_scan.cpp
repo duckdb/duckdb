@@ -17,7 +17,7 @@
 namespace duckdb {
 
 template <class T>
-void ScanPandasColumn(py::array &numpy_col, idx_t stride, idx_t offset, Vector &out, idx_t count) {
+void ScanNumpyColumn(py::array &numpy_col, idx_t stride, idx_t offset, Vector &out, idx_t count) {
 	auto src_ptr = (T *)numpy_col.data();
 	if (stride == sizeof(T)) {
 		FlatVector::SetData(out, (data_ptr_t)(src_ptr + offset));
@@ -30,7 +30,7 @@ void ScanPandasColumn(py::array &numpy_col, idx_t stride, idx_t offset, Vector &
 }
 
 template <class T, class V>
-void ScanPandasCategoryTemplated(py::array &column, idx_t offset, Vector &out, idx_t count) {
+void ScanNumpyCategoryTemplated(py::array &column, idx_t offset, Vector &out, idx_t count) {
 	auto src_ptr = (T *)column.data();
 	auto tgt_ptr = (V *)FlatVector::GetData(out);
 	auto &tgt_mask = FlatVector::Validity(out);
@@ -45,23 +45,23 @@ void ScanPandasCategoryTemplated(py::array &column, idx_t offset, Vector &out, i
 }
 
 template <class T>
-void ScanPandasCategory(py::array &column, idx_t count, idx_t offset, Vector &out, string &src_type) {
+void ScanNumpyCategory(py::array &column, idx_t count, idx_t offset, Vector &out, string &src_type) {
 	if (src_type == "int8") {
-		ScanPandasCategoryTemplated<int8_t, T>(column, offset, out, count);
+		ScanNumpyCategoryTemplated<int8_t, T>(column, offset, out, count);
 	} else if (src_type == "int16") {
-		ScanPandasCategoryTemplated<int16_t, T>(column, offset, out, count);
+		ScanNumpyCategoryTemplated<int16_t, T>(column, offset, out, count);
 	} else if (src_type == "int32") {
-		ScanPandasCategoryTemplated<int32_t, T>(column, offset, out, count);
+		ScanNumpyCategoryTemplated<int32_t, T>(column, offset, out, count);
 	} else {
 		throw NotImplementedException("The Pandas type " + src_type + " for categorical types is not implemented yet");
 	}
 }
 
 template <class T>
-void ScanPandasMasked(PandasColumnBindData &bind_data, idx_t count, idx_t offset, Vector &out) {
+void ScanNumpyMasked(PandasColumnBindData &bind_data, idx_t count, idx_t offset, Vector &out) {
 	D_ASSERT(bind_data.numpy_col->Backend() == PandasColumnBackend::NUMPY);
 	auto &numpy_col = (PandasNumpyColumn &)*bind_data.numpy_col;
-	ScanPandasColumn<T>(numpy_col.array, numpy_col.stride, offset, out, count);
+	ScanNumpyColumn<T>(numpy_col.array, numpy_col.stride, offset, out, count);
 	auto &result_mask = FlatVector::Validity(out);
 	if (bind_data.mask) {
 		auto mask = (bool *)bind_data.mask->numpy_array.data();
@@ -75,7 +75,7 @@ void ScanPandasMasked(PandasColumnBindData &bind_data, idx_t count, idx_t offset
 }
 
 template <class T>
-void ScanPandasFpColumn(T *src_ptr, idx_t stride, idx_t count, idx_t offset, Vector &out) {
+void ScanNumpyFpColumn(T *src_ptr, idx_t stride, idx_t count, idx_t offset, Vector &out) {
 	auto &mask = FlatVector::Validity(out);
 	if (stride == sizeof(T)) {
 		FlatVector::SetData(out, (data_ptr_t)(src_ptr + offset));
@@ -131,7 +131,7 @@ static void SetInvalidRecursive(Vector &out, idx_t index) {
 
 //! 'count' is the amount of rows in the 'out' vector
 //! 'offset' is the current row number within this vector
-void ScanPandasObject(PandasColumnBindData &bind_data, PyObject *object, idx_t offset, Vector &out) {
+void ScanNumpyObject(PandasColumnBindData &bind_data, PyObject *object, idx_t offset, Vector &out) {
 
 	// handle None
 	if (object == Py_None) {
@@ -171,14 +171,14 @@ void VerifyTypeConstraints(Vector &vec, idx_t count) {
 	}
 }
 
-void ScanPandasObjectColumn(PandasColumnBindData &bind_data, PyObject **col, idx_t count, idx_t offset, Vector &out) {
+void ScanNumpyObjectColumn(PandasColumnBindData &bind_data, PyObject **col, idx_t count, idx_t offset, Vector &out) {
 	// numpy_col is a sequential list of objects, that make up one "column" (Vector)
 	out.SetVectorType(VectorType::FLAT_VECTOR);
 	{
 		PythonGILWrapper gil; // We're creating python objects here, so we need the GIL
 		for (idx_t i = 0; i < count; i++) {
 			idx_t source_idx = offset + i;
-			ScanPandasObject(bind_data, col[source_idx], i, out);
+			ScanNumpyObject(bind_data, col[source_idx], i, out);
 		}
 	}
 	VerifyTypeConstraints(out, count);
@@ -193,37 +193,37 @@ void Numpy::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset, Vec
 
 	switch (bind_data.numpy_type) {
 	case NumpyNullableType::BOOL:
-		ScanPandasMasked<bool>(bind_data, count, offset, out);
+		ScanNumpyMasked<bool>(bind_data, count, offset, out);
 		break;
 	case NumpyNullableType::UINT_8:
-		ScanPandasMasked<uint8_t>(bind_data, count, offset, out);
+		ScanNumpyMasked<uint8_t>(bind_data, count, offset, out);
 		break;
 	case NumpyNullableType::UINT_16:
-		ScanPandasMasked<uint16_t>(bind_data, count, offset, out);
+		ScanNumpyMasked<uint16_t>(bind_data, count, offset, out);
 		break;
 	case NumpyNullableType::UINT_32:
-		ScanPandasMasked<uint32_t>(bind_data, count, offset, out);
+		ScanNumpyMasked<uint32_t>(bind_data, count, offset, out);
 		break;
 	case NumpyNullableType::UINT_64:
-		ScanPandasMasked<uint64_t>(bind_data, count, offset, out);
+		ScanNumpyMasked<uint64_t>(bind_data, count, offset, out);
 		break;
 	case NumpyNullableType::INT_8:
-		ScanPandasMasked<int8_t>(bind_data, count, offset, out);
+		ScanNumpyMasked<int8_t>(bind_data, count, offset, out);
 		break;
 	case NumpyNullableType::INT_16:
-		ScanPandasMasked<int16_t>(bind_data, count, offset, out);
+		ScanNumpyMasked<int16_t>(bind_data, count, offset, out);
 		break;
 	case NumpyNullableType::INT_32:
-		ScanPandasMasked<int32_t>(bind_data, count, offset, out);
+		ScanNumpyMasked<int32_t>(bind_data, count, offset, out);
 		break;
 	case NumpyNullableType::INT_64:
-		ScanPandasMasked<int64_t>(bind_data, count, offset, out);
+		ScanNumpyMasked<int64_t>(bind_data, count, offset, out);
 		break;
 	case NumpyNullableType::FLOAT_32:
-		ScanPandasFpColumn<float>((float *)array.data(), numpy_col.stride, count, offset, out);
+		ScanNumpyFpColumn<float>((float *)array.data(), numpy_col.stride, count, offset, out);
 		break;
 	case NumpyNullableType::FLOAT_64:
-		ScanPandasFpColumn<double>((double *)array.data(), numpy_col.stride, count, offset, out);
+		ScanNumpyFpColumn<double>((double *)array.data(), numpy_col.stride, count, offset, out);
 		break;
 	case NumpyNullableType::DATETIME:
 	case NumpyNullableType::DATETIME_TZ: {
@@ -272,7 +272,7 @@ void Numpy::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset, Vec
 		// Get the source pointer of the numpy array
 		auto src_ptr = (PyObject **)array.data();
 		if (out.GetType().id() != LogicalTypeId::VARCHAR) {
-			return ScanPandasObjectColumn(bind_data, src_ptr, count, offset, out);
+			return ScanNumpyObjectColumn(bind_data, src_ptr, count, offset, out);
 		}
 
 		// Get the data pointer and the validity mask of the result vector
@@ -369,13 +369,13 @@ void Numpy::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset, Vec
 	case NumpyNullableType::CATEGORY: {
 		switch (out.GetType().InternalType()) {
 		case PhysicalType::UINT8:
-			ScanPandasCategory<uint8_t>(array, count, offset, out, bind_data.internal_categorical_type);
+			ScanNumpyCategory<uint8_t>(array, count, offset, out, bind_data.internal_categorical_type);
 			break;
 		case PhysicalType::UINT16:
-			ScanPandasCategory<uint16_t>(array, count, offset, out, bind_data.internal_categorical_type);
+			ScanNumpyCategory<uint16_t>(array, count, offset, out, bind_data.internal_categorical_type);
 			break;
 		case PhysicalType::UINT32:
-			ScanPandasCategory<uint32_t>(array, count, offset, out, bind_data.internal_categorical_type);
+			ScanNumpyCategory<uint32_t>(array, count, offset, out, bind_data.internal_categorical_type);
 			break;
 		default:
 			throw InternalException("Invalid Physical Type for ENUMs");
