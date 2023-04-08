@@ -34,6 +34,7 @@ public:
 public:
 	const vector<ColumnBinding> bindings;
 	const vector<LogicalType> &types;
+	vector<bool> needs_decompression;
 	const bool changes_bindings;
 
 	const vector<idx_t> child_idxs;
@@ -54,16 +55,20 @@ private:
 	void CompressAggregate(unique_ptr<LogicalOperator> *op_ptr);
 	void CompressOrder(unique_ptr<LogicalOperator> *op_ptr);
 
-	void CreateProjections(unique_ptr<LogicalOperator> *op_ptr, const CompressedMaterializationInfo &info);
+	void CreateProjections(unique_ptr<LogicalOperator> *op_ptr, CompressedMaterializationInfo &info);
+	bool TryCompressChild(CompressedMaterializationInfo &info, const CMChildInfo &child_info,
+	                      vector<unique_ptr<Expression>> &compress_expressions);
 	void CreateCompressProjection(unique_ptr<LogicalOperator> *child_op, vector<unique_ptr<Expression>> &&compressions,
 	                              const CMChildInfo &child_info);
+	void CreateDecompressProjection(unique_ptr<LogicalOperator> *parent_op,
+	                                vector<unique_ptr<Expression>> &&decompressions,
+	                                unique_ptr<LogicalOperator> *child_op, const CMChildInfo &child_info);
 
 	unique_ptr<Expression> GetCompressExpression(const ColumnBinding &binding, const LogicalType &type,
 	                                             const bool &is_compress_candidate);
-	unique_ptr<Expression> GetIntegralCompress(const ColumnBinding &binding, const LogicalType &type,
-	                                           const BaseStatistics &stats);
-	unique_ptr<Expression> GetStringCompress(const ColumnBinding &binding, const LogicalType &type,
-	                                         const BaseStatistics &stats);
+	unique_ptr<Expression> GetCompressExpression(unique_ptr<Expression> input, const BaseStatistics &stats);
+	unique_ptr<Expression> GetIntegralCompress(unique_ptr<Expression> input, const BaseStatistics &stats);
+	unique_ptr<Expression> GetStringCompress(unique_ptr<Expression> input, const BaseStatistics &stats);
 
 private:
 	ClientContext &context;

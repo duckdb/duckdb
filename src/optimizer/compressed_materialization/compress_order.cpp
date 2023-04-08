@@ -22,14 +22,28 @@ void CompressedMaterialization::CompressOrder(unique_ptr<LogicalOperator> *op_pt
 	// But we can try to compress the expression directly
 	vector<ColumnBinding> referenced_bindings;
 	for (idx_t order_node_idx = 0; order_node_idx < order.orders.size(); order_node_idx++) {
-		const auto &order_expression = *order.orders[order_node_idx].expression;
-		if (order_expression.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
-			GetReferencedBindings(order_expression, referenced_bindings);
-			// TODO try to compress this order_expression right now, we will throw it away anyway
+		auto &bound_order = order.orders[order_node_idx];
+		auto &order_expression = *bound_order.expression;
+		if (order_expression.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+			continue; // Will be compressed generically
+		}
+
+		// Mark the bindings referenced by the non-colref expression so they won't be modified
+		GetReferencedBindings(order_expression, referenced_bindings);
+
+		// The non-colref expression won't be compressed generically, so try to compress it here
+		if (!bound_order.stats) {
+			continue; // Can't compress without stats
+		}
+
+		// Try to compress, if successful, replace the expression
+		auto compression = GetCompressExpression(order_expression.Copy(), *bound_order.stats);
+		if (compression) {
+			bound_order.expression = std::move(compression);
 		}
 	}
 
-	// Try to compress
+	// Compress other selected columns
 	CompressedMaterializationInfo info(**op_ptr, {0}, false, referenced_bindings);
 	CreateProjections(op_ptr, info);
 }
