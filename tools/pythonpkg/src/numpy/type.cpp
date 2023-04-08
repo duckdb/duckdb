@@ -28,13 +28,6 @@ static bool IsDateTime(const string &col_type_str) {
 NumpyNullableType ConvertNumpyType(const py::handle &col_type) {
 	auto col_type_str = string(py::str(col_type));
 
-	// pandas.core.dtypes.base.StorageExtensionDtype
-	// this object also contains a 'numpy_dtype' attribute, which might be useful
-
-	if (StringUtil::EndsWith(col_type_str, "[pyarrow]")) {
-		col_type_str = col_type_str.substr(0, col_type_str.size() - string("[pyarrow]").size());
-	}
-
 	if (col_type_str == "bool" || col_type_str == "boolean") {
 		return NumpyNullableType::BOOL;
 	} else if (col_type_str == "uint8" || col_type_str == "UInt8") {
@@ -57,7 +50,7 @@ NumpyNullableType ConvertNumpyType(const py::handle &col_type) {
 		return NumpyNullableType::FLOAT_16;
 	} else if (col_type_str == "float32" || col_type_str == "Float32") {
 		return NumpyNullableType::FLOAT_32;
-	} else if (col_type_str == "float64" || col_type_str == "Float64" || col_type_str == "double") {
+	} else if (col_type_str == "float64" || col_type_str == "Float64") {
 		return NumpyNullableType::FLOAT_64;
 	} else if (col_type_str == "object" || col_type_str == "string") {
 		//! this better be castable to strings
