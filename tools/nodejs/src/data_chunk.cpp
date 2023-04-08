@@ -18,7 +18,7 @@ Napi::Array EncodeDataChunk(Napi::Env env, duckdb::DataChunk &chunk, bool with_t
 		}
 
 		// Do a post-order DFS traversal
-		std::vector<std::tuple<bool, duckdb::Vector *, Napi::Object, size_t, size_t>> pending;
+		vector<std::tuple<bool, duckdb::Vector *, Napi::Object, size_t, size_t>> pending;
 		pending.emplace_back(false, &chunk_vec, Napi::Object::New(env), 0, 0);
 
 		while (!pending.empty()) {

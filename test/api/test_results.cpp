@@ -44,8 +44,8 @@ TEST_CASE("Test iterating over results", "[api]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE data(i INTEGER, j VARCHAR)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO data VALUES (1, 'hello'), (2, 'test')"));
 
-	vector<int> i_values = {1, 2};
-	vector<string> j_values = {"hello", "test"};
+	duckdb::vector<int> i_values = {1, 2};
+	duckdb::vector<string> j_values = {"hello", "test"};
 	idx_t row_count = 0;
 	auto result = con.Query("SELECT * FROM data;");
 	for (auto &row : *result) {
