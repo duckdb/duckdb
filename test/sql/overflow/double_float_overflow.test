@@ -44,7 +44,7 @@ SELECT 2e38::FLOAT * 2e38::FLOAT;
 inf
 
 query I
-SELECT 2e38::FLOAT / 0.1;
+SELECT 2e38::FLOAT // 0.1;
 ----
 inf
 
