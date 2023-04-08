@@ -29,7 +29,7 @@ vector<duckdb_libpgquery::PGSimplifiedToken> PostgresParser::Tokenize(const std:
 	duckdb_libpgquery::pg_parser_init();
 	auto tokens = duckdb_libpgquery::tokenize(query.c_str());
 	duckdb_libpgquery::pg_parser_cleanup();
-	return tokens;
+	return std::move(tokens);
 }
 
 PostgresParser::~PostgresParser()  {
@@ -41,7 +41,8 @@ bool PostgresParser::IsKeyword(const std::string &text) {
 }
 
 vector<duckdb_libpgquery::PGKeyword> PostgresParser::KeywordList() {
-	return duckdb_libpgquery::keyword_list();
+	// FIXME: because of this, we might need to change the libpg_query library to use duckdb::vector
+	return std::move(duckdb_libpgquery::keyword_list());
 }
 
 void PostgresParser::SetPreserveIdentifierCase(bool preserve) {

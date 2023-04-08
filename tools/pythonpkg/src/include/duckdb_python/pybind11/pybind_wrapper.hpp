@@ -19,6 +19,11 @@ PYBIND11_DECLARE_HOLDER_TYPE(T, duckdb::unique_ptr<T>)
 
 namespace pybind11 {
 
+namespace detail {
+template <typename Type, typename Alloc>
+struct type_caster<duckdb::vector<Type, Alloc>> : list_caster<duckdb::vector<Type, Alloc>, Type> {};
+} // namespace detail
+
 bool gil_check();
 void gil_assert();
 

@@ -264,7 +264,7 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 	return ExtensionLoadResult::LOADED_EXTENSION;
 }
 
-static std::vector<std::string> public_keys = {
+static vector<std::string> public_keys = {
     R"(
 -----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA6aZuHUa1cLR9YDDYaEfi
