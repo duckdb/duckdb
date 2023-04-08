@@ -1,11 +1,12 @@
 // this file is used to instantiate symbols for LLDB so e.g.
-// std::vector and unique_ptr can be accessed from the debugger
+// vector and unique_ptr can be accessed from the debugger
 
 #ifdef DEBUG
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/list.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/common/vector.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/execution/join_hashtable.hpp"
@@ -38,6 +39,7 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/types/column/column_data_allocator.hpp"
+#include "duckdb/common/vector.hpp"
 
 using namespace duckdb;
 
@@ -146,6 +148,49 @@ template class unique_ptr<PrivateAllocatorData>;
 
 } // namespace duckdb
 
+#define INSTANTIATE_VECTOR(VECTOR_DEFINITION)                                                                          \
+	template std::VECTOR_DEFINITION::size_type std::VECTOR_DEFINITION::size() const;                                   \
+	template std::VECTOR_DEFINITION::const_reference std::VECTOR_DEFINITION::operator[](                               \
+	    std::VECTOR_DEFINITION::size_type n) const;                                                                    \
+	template std::VECTOR_DEFINITION::reference std::VECTOR_DEFINITION::operator[](                                     \
+	    std::VECTOR_DEFINITION::size_type n);                                                                          \
+	template std::VECTOR_DEFINITION::const_reference std::VECTOR_DEFINITION::back() const;                             \
+	template std::VECTOR_DEFINITION::reference std::VECTOR_DEFINITION::back();                                         \
+	template std::VECTOR_DEFINITION::const_reference std::VECTOR_DEFINITION::front() const;                            \
+	template std::VECTOR_DEFINITION::reference std::VECTOR_DEFINITION::front();
+
+template class duckdb::vector<ExpressionType>;
+template class duckdb::vector<uint64_t>;
+template class duckdb::vector<string>;
+template class duckdb::vector<PhysicalType>;
+template class duckdb::vector<Value>;
+template class duckdb::vector<int>;
+template class duckdb::vector<duckdb::vector<Expression *>>;
+template class duckdb::vector<LogicalType>;
+
+INSTANTIATE_VECTOR(vector<ColumnDefinition>)
+INSTANTIATE_VECTOR(vector<JoinCondition>)
+INSTANTIATE_VECTOR(vector<OrderByNode>)
+INSTANTIATE_VECTOR(vector<Expression *>)
+INSTANTIATE_VECTOR(vector<BoundParameterExpression *>)
+INSTANTIATE_VECTOR(vector<unique_ptr<Expression>>)
+INSTANTIATE_VECTOR(vector<unique_ptr<DataChunk>>)
+INSTANTIATE_VECTOR(vector<unique_ptr<SQLStatement>>)
+INSTANTIATE_VECTOR(vector<unique_ptr<PhysicalOperator>>)
+INSTANTIATE_VECTOR(vector<unique_ptr<LogicalOperator>>)
+INSTANTIATE_VECTOR(vector<unique_ptr<Transaction>>)
+INSTANTIATE_VECTOR(vector<unique_ptr<JoinNode>>)
+INSTANTIATE_VECTOR(vector<unique_ptr<Rule>>)
+INSTANTIATE_VECTOR(vector<std::shared_ptr<Event>>)
+INSTANTIATE_VECTOR(vector<unique_ptr<Pipeline>>)
+INSTANTIATE_VECTOR(vector<std::shared_ptr<Pipeline>>)
+INSTANTIATE_VECTOR(vector<std::weak_ptr<Pipeline>>)
+INSTANTIATE_VECTOR(vector<std::shared_ptr<MetaPipeline>>)
+INSTANTIATE_VECTOR(vector<unique_ptr<JoinHashTable>>)
+INSTANTIATE_VECTOR(vector<unique_ptr<ColumnDataCollection>>)
+INSTANTIATE_VECTOR(vector<std::shared_ptr<ColumnDataAllocator>>)
+INSTANTIATE_VECTOR(vector<unique_ptr<RowDataBlock>>)
+
 template class std::shared_ptr<Relation>;
 template class std::shared_ptr<Event>;
 template class std::shared_ptr<Pipeline>;
@@ -154,46 +199,6 @@ template class std::shared_ptr<RowGroupCollection>;
 template class std::shared_ptr<ColumnDataAllocator>;
 template class std::shared_ptr<PreparedStatementData>;
 template class std::weak_ptr<Pipeline>;
-
-#define INSTANTIATE_VECTOR(VECTOR_DEFINITION)                                                                          \
-	template VECTOR_DEFINITION::size_type VECTOR_DEFINITION::size() const;                                             \
-	template VECTOR_DEFINITION::const_reference VECTOR_DEFINITION::operator[](VECTOR_DEFINITION::size_type n) const;   \
-	template VECTOR_DEFINITION::reference VECTOR_DEFINITION::operator[](VECTOR_DEFINITION::size_type n);               \
-	template VECTOR_DEFINITION::const_reference VECTOR_DEFINITION::back() const;                                       \
-	template VECTOR_DEFINITION::reference VECTOR_DEFINITION::back();                                                   \
-	template VECTOR_DEFINITION::const_reference VECTOR_DEFINITION::front() const;                                      \
-	template VECTOR_DEFINITION::reference VECTOR_DEFINITION::front();
-
-INSTANTIATE_VECTOR(std::vector<ColumnDefinition>)
-template class std::vector<ExpressionType>;
-INSTANTIATE_VECTOR(std::vector<JoinCondition>)
-INSTANTIATE_VECTOR(std::vector<OrderByNode>)
-template class std::vector<uint64_t>;
-template class std::vector<string>;
-INSTANTIATE_VECTOR(std::vector<Expression *>)
-INSTANTIATE_VECTOR(std::vector<BoundParameterExpression *>)
-INSTANTIATE_VECTOR(std::vector<unique_ptr<Expression>>)
-INSTANTIATE_VECTOR(std::vector<unique_ptr<DataChunk>>)
-INSTANTIATE_VECTOR(std::vector<unique_ptr<SQLStatement>>)
-INSTANTIATE_VECTOR(std::vector<unique_ptr<PhysicalOperator>>)
-INSTANTIATE_VECTOR(std::vector<unique_ptr<LogicalOperator>>)
-INSTANTIATE_VECTOR(std::vector<unique_ptr<Transaction>>)
-INSTANTIATE_VECTOR(std::vector<unique_ptr<JoinNode>>)
-template class std::vector<PhysicalType>;
-template class std::vector<Value>;
-template class std::vector<int>;
-INSTANTIATE_VECTOR(std::vector<unique_ptr<Rule>>)
-INSTANTIATE_VECTOR(std::vector<std::shared_ptr<Event>>)
-INSTANTIATE_VECTOR(std::vector<unique_ptr<Pipeline>>)
-INSTANTIATE_VECTOR(std::vector<std::shared_ptr<Pipeline>>)
-INSTANTIATE_VECTOR(std::vector<std::weak_ptr<Pipeline>>)
-INSTANTIATE_VECTOR(std::vector<std::shared_ptr<MetaPipeline>>)
-template class std::vector<std::vector<Expression *>>;
-template class std::vector<LogicalType>;
-INSTANTIATE_VECTOR(std::vector<unique_ptr<JoinHashTable>>)
-INSTANTIATE_VECTOR(std::vector<unique_ptr<ColumnDataCollection>>)
-INSTANTIATE_VECTOR(std::vector<std::shared_ptr<ColumnDataAllocator>>)
-INSTANTIATE_VECTOR(std::vector<unique_ptr<RowDataBlock>>)
 
 #if !defined(__clang__)
 template struct std::atomic<uint64_t>;
@@ -213,7 +218,7 @@ INSTANTIATE_UNORDERED_MAP(catalog_map)
 */
 
 template class std::unordered_map<string, uint64_t>;
-template class std::unordered_map<string, std::vector<string>>;
+template class std::unordered_map<string, vector<string>>;
 template class std::unordered_map<string, std::pair<uint64_t, Expression *>>;
 // template class std::unordered_map<string, TableBinding>;
 template class std::unordered_map<string, SelectStatement *>;

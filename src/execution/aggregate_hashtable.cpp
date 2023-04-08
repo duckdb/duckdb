@@ -44,8 +44,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
                                                      vector<AggregateObject> aggregate_objects_p,
                                                      HtEntryType entry_type, idx_t initial_capacity)
     : BaseAggregateHashTable(context, allocator, aggregate_objects_p, std::move(payload_types_p)),
-      entry_type(entry_type), capacity(0), is_finalized(false) {
-
+      entry_type(entry_type), capacity(0), is_finalized(false), aggregate_allocator(allocator) {
 	// Append hash column to the end and initialise the row layout
 	group_types_p.emplace_back(LogicalType::HASH);
 	layout.Initialize(std::move(group_types_p), std::move(aggregate_objects_p));
@@ -99,10 +98,11 @@ void GroupedAggregateHashTable::Destroy() {
 	}
 
 	// There are aggregates with destructors: Call the destructor for each of the aggregates
+	RowOperationsState state(aggregate_allocator.GetAllocator());
 	TupleDataChunkIterator iterator(*data_collection, TupleDataPinProperties::DESTROY_AFTER_DONE, false);
 	auto &row_locations = iterator.GetChunkState().row_locations;
 	do {
-		RowOperations::DestroyStates(layout, row_locations, iterator.GetCount());
+		RowOperations::DestroyStates(state, layout, row_locations, iterator.GetCount());
 	} while (iterator.Next());
 	data_collection->Reset();
 }
@@ -275,6 +275,7 @@ idx_t GroupedAggregateHashTable::AddChunk(AggregateHTAppendState &state, DataChu
 	auto &aggregates = layout.GetAggregates();
 	idx_t filter_idx = 0;
 	idx_t payload_idx = 0;
+	RowOperationsState row_state(aggregate_allocator.GetAllocator());
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggr = aggregates[i];
 		if (filter_idx >= filter.size() || i < filter[filter_idx]) {
@@ -286,10 +287,10 @@ idx_t GroupedAggregateHashTable::AddChunk(AggregateHTAppendState &state, DataChu
 		D_ASSERT(i == filter[filter_idx]);
 
 		if (aggr.aggr_type != AggregateType::DISTINCT && aggr.filter) {
-			RowOperations::UpdateFilteredStates(filter_set.GetFilterData(i), aggr, state.addresses, payload,
+			RowOperations::UpdateFilteredStates(row_state, filter_set.GetFilterData(i), aggr, state.addresses, payload,
 			                                    payload_idx);
 		} else {
-			RowOperations::UpdateStates(aggr, state.addresses, payload, payload_idx, payload.size());
+			RowOperations::UpdateStates(row_state, aggr, state.addresses, payload, payload_idx, payload.size());
 		}
 
 		// Move to the next aggregate
@@ -319,7 +320,8 @@ void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &re
 	Vector addresses(LogicalType::POINTER);
 	FindOrCreateGroups(append_state, groups, addresses);
 	// now fetch the aggregates
-	RowOperations::FinalizeStates(layout, addresses, result, 0);
+	RowOperationsState row_state(aggregate_allocator.GetAllocator());
+	RowOperations::FinalizeStates(row_state, layout, addresses, result, 0);
 }
 
 idx_t GroupedAggregateHashTable::ResizeThreshold() {
@@ -553,6 +555,7 @@ bool FlushMoveState::Scan() {
 		                  groups.size(), hash_col_idx, hashes, *FlatVector::IncrementalSelectionVector());
 		return true;
 	}
+
 	collection.FinalizePinState(scan_state.pin_state);
 	return false;
 }
@@ -569,10 +572,11 @@ void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
 	}
 
 	FlushMoveState state(*other.data_collection);
+	RowOperationsState row_state(aggregate_allocator.GetAllocator());
 	while (state.Scan()) {
 		FindOrCreateGroups(state.append_state, state.groups, state.hashes, state.group_addresses, state.new_groups_sel);
-		RowOperations::CombineStates(layout, state.scan_state.chunk_state.row_locations, state.group_addresses,
-		                             state.groups.size());
+		RowOperations::CombineStates(row_state, layout, state.scan_state.chunk_state.row_locations,
+		                             state.group_addresses, state.groups.size());
 	}
 
 	Verify();
@@ -617,8 +621,9 @@ idx_t GroupedAggregateHashTable::Scan(TupleDataParallelScanState &gstate, TupleD
                                       DataChunk &result) {
 	data_collection->Scan(gstate, lstate, result);
 
+	RowOperationsState row_state(aggregate_allocator.GetAllocator());
 	const auto group_cols = layout.ColumnCount() - 1;
-	RowOperations::FinalizeStates(layout, lstate.scan_state.chunk_state.row_locations, result, group_cols);
+	RowOperations::FinalizeStates(row_state, layout, lstate.scan_state.chunk_state.row_locations, result, group_cols);
 
 	return result.size();
 }

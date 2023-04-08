@@ -33,7 +33,7 @@ struct PerfectHashJoinStats {
 
 //! PhysicalHashJoin represents a hash loop join between two tables
 class PerfectHashJoinExecutor {
-	using PerfectHashTable = std::vector<Vector>;
+	using PerfectHashTable = vector<Vector>;
 
 public:
 	explicit PerfectHashJoinExecutor(const PhysicalHashJoin &join, JoinHashTable &ht, PerfectHashJoinStats pjoin_stats);
