@@ -9,6 +9,7 @@
 #include "duckdb/common/arrow/result_arrow_wrapper.hpp"
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/parser/parsed_data/create_type_info.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -1051,4 +1052,27 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1registe
 	parameters.push_back(Value::POINTER((uintptr_t)JavaArrowTabularStreamFactory::Produce));
 	parameters.push_back(Value::POINTER((uintptr_t)JavaArrowTabularStreamFactory::GetSchema));
 	conn->TableFunction("arrow_scan_dumb", parameters)->CreateView(name, true, true);
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1create_1extension_1type(JNIEnv *env, jclass,
+                                                                                          jobject conn_buf) {
+
+	auto connection = get_connection(env, conn_buf);
+	if (!connection) {
+		return;
+	}
+
+	connection->BeginTransaction();
+
+	child_list_t<LogicalType> children = {{"hello", LogicalType::VARCHAR}, {"world", LogicalType::VARCHAR}};
+	auto id = LogicalType::STRUCT(children);
+	auto type_name = "test_type";
+	id.SetAlias(type_name);
+	CreateTypeInfo info(type_name, id);
+
+	auto &catalog_name = DatabaseManager::GetDefaultDatabase(*connection->context);
+	auto &catalog = Catalog::GetCatalog(*connection->context, catalog_name);
+	catalog.CreateType(*connection->context, &info);
+
+	connection->Commit();
 }

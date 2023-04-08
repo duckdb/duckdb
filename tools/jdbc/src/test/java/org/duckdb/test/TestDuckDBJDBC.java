@@ -43,6 +43,7 @@ import org.duckdb.DuckDBTimestamp;
 import org.duckdb.DuckDBColumnType;
 import org.duckdb.DuckDBResultSetMetaData;
 import org.duckdb.JsonNode;
+import org.duckdb.TestType;
 
 public class TestDuckDBJDBC {
 
@@ -3171,6 +3172,39 @@ public class TestDuckDBJDBC {
 			ResultSet rs = statement.executeQuery();
 			assertTrue(rs.next());
 			assertEquals(rs.getObject(1), "{100=a, 5=b}");
+		}
+	}
+
+	public static void test_extension_type() throws Exception {
+		try (Connection connection = DriverManager.getConnection("jdbc:duckdb:");
+	    		Statement stmt = connection.createStatement()) {
+
+			TestType.register((DuckDBConnection) connection);
+
+			ResultSet rs = stmt.executeQuery("SELECT {\"hello\": 'foo', \"world\": 'bar'}::test_type");
+		}
+	}
+
+	public static void test_extension_type_metadata() throws Exception {
+		try (
+				Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+				Statement stmt = conn.createStatement();
+		) {
+			TestType.register((DuckDBConnection) conn);
+
+			stmt.execute("CREATE TABLE test (foo test_type);");
+			stmt.execute("INSERT INTO test VALUES ({\"hello\": 'foo', \"world\": 'bar'});");
+
+			try (ResultSet rs = stmt.executeQuery("SELECT * FROM test")) {
+				ResultSetMetaData meta = rs.getMetaData();
+				assertEquals(meta.getColumnCount(), 1);
+				assertEquals(meta.getColumnName(1), "foo");
+				assertEquals(meta.getColumnTypeName(1), "test_type");
+				assertEquals(meta.getColumnType(1), Types.JAVA_OBJECT);
+
+				assertTrue(rs.next());
+				assertEquals(rs.getObject(1), "{'hello': foo, 'world': bar}");
+			}
 		}
 	}
 

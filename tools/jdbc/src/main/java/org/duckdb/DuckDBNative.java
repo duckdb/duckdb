@@ -126,4 +126,6 @@ public class DuckDBNative {
 	protected static native void duckdb_jdbc_appender_append_string(ByteBuffer appender_ref, byte[] value) throws SQLException;
 
 	protected static native void duckdb_jdbc_appender_append_null(ByteBuffer appender_ref) throws SQLException;
+
+	protected static native void duckdb_jdbc_create_extension_type(ByteBuffer conn_ref) throws SQLException;
 }

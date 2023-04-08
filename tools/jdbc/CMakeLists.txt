@@ -11,7 +11,7 @@ include(UseJava)
 project(DuckDBJDummy NONE)
 
 file(GLOB JAVA_SRC_FILES src/main/java/org/duckdb/*.java)
-file(GLOB JAVA_TEST_FILES src/test/java/org/duckdb/test/*.java)
+file(GLOB_RECURSE JAVA_TEST_FILES src/test/java/org/duckdb/*.java)
 
 set(CMAKE_JAVA_COMPILE_FLAGS -source 1.8 -target 1.8 -encoding utf-8)
 
