@@ -347,7 +347,8 @@ LogicalType PandasAnalyzer::InnerAnalyze(py::handle column, bool &can_convert, b
 	auto pandas_series = pandas_module.attr("core").attr("series").attr("Series");
 
 	if (py::isinstance(column, pandas_series)) {
-		column = column.attr("_values");
+		// TODO: check if '_values' is more portable, and behaves the same as '__array__()'
+		column = column.attr("__array__")();
 	}
 	auto row = column.attr("__getitem__");
 
