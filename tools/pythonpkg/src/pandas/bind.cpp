@@ -4,9 +4,9 @@
 #include "duckdb_python/pandas/column/pandas_arrow_column.hpp"
 #include "duckdb_python/pandas/column/pandas_numpy_column.hpp"
 
-namespace {
+namespace duckdb {
 
-using namespace duckdb;
+namespace {
 
 struct PandasBindColumn {
 public:
@@ -21,7 +21,7 @@ public:
 
 struct PandasDataFrame {
 public:
-	PandasDataFrame(py::handle &df) {
+	explicit PandasDataFrame(py::handle &df) {
 		names = py::list(df.attr("columns"));
 		types = py::list(df.attr("dtypes"));
 		getter = df.attr("__getitem__");
@@ -43,8 +43,6 @@ private:
 };
 
 }; // namespace
-
-namespace duckdb {
 
 static LogicalType BindColumn(PandasBindColumn column_p, PandasColumnBindData &bind_data,
                               const ClientContext &context) {

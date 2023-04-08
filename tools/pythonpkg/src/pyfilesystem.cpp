@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-PythonFileHandle::PythonFileHandle(FileSystem &file_system, const string &path, const py::object handle)
+PythonFileHandle::PythonFileHandle(FileSystem &file_system, const string &path, const py::object &handle)
     : FileHandle(file_system, path), handle(handle) {
 }
 PythonFileHandle::~PythonFileHandle() {
@@ -104,7 +104,7 @@ bool PythonFilesystem::Exists(const string &filename, const char *func_name) con
 vector<string> PythonFilesystem::Glob(const string &path, FileOpener *opener) {
 	PythonGILWrapper gil;
 
-	if (!path.size()) {
+	if (path.empty()) {
 		return {path};
 	}
 	auto returner = py::list(filesystem.attr("glob")(path));
