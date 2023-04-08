@@ -3,10 +3,6 @@
 
 namespace duckdb {
 
-static const vector<LogicalType> StringCompressedTypes() {
-	return {LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT, LogicalTypeId::HUGEINT};
-}
-
 template <class RESULT_TYPE>
 static inline RESULT_TYPE StringCompress(const string_t &input) {
 	if (input.GetSize() >= sizeof(RESULT_TYPE)) {
@@ -54,7 +50,7 @@ static ScalarFunction GetStringCompressFunctionSwitch(const LogicalType &result_
 }
 
 void CMStringCompressFun::RegisterFunction(BuiltinFunctions &set) {
-	for (const auto &result_type : StringCompressedTypes()) {
+	for (const auto &result_type : CompressedMaterializationTypes::String()) {
 		set.AddFunction(GetStringCompressFunctionSwitch(result_type));
 	}
 }
@@ -107,7 +103,7 @@ static ScalarFunction GetStringDecompressFunctionSwitch(const LogicalType &input
 
 static ScalarFunctionSet GetStringDecompressFunctionSet() {
 	ScalarFunctionSet set("cm_decompress_string");
-	for (const auto &input_type : StringCompressedTypes()) {
+	for (const auto &input_type : CompressedMaterializationTypes::String()) {
 		set.AddFunction(GetStringDecompressFunctionSwitch(input_type));
 	}
 	return set;

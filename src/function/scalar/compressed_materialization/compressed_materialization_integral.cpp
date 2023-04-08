@@ -3,11 +3,6 @@
 
 namespace duckdb {
 
-//! The types we compress integrals to
-static const vector<LogicalType> IntegralCompressedTypes() {
-	return {LogicalType::UTINYINT, LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT};
-}
-
 unique_ptr<FunctionData> IntegralCompressBind(ClientContext &context, ScalarFunction &bound_function,
                                               vector<unique_ptr<Expression>> &arguments) {
 	const auto input_type_size = GetTypeIdSize(arguments[0]->return_type.InternalType());
@@ -103,7 +98,7 @@ static ScalarFunctionSet GetIntegralCompressFunctionSet(const LogicalType &resul
 }
 
 void CMIntegralCompressFun::RegisterFunction(BuiltinFunctions &set) {
-	for (const auto &result_type : IntegralCompressedTypes()) {
+	for (const auto &result_type : CompressedMaterializationTypes::Integral()) {
 		set.AddFunction(GetIntegralCompressFunctionSet(result_type));
 	}
 }
@@ -186,7 +181,7 @@ static ScalarFunction GetIntegralDecompressFunctionInputSwitch(const LogicalType
 
 static ScalarFunctionSet GetIntegralDecompressFunctionSet(const LogicalType &result_type) {
 	ScalarFunctionSet set(StringUtil::Format("cm_decompress_integral_%s", LogicalTypeIdToString(result_type.id())));
-	for (const auto &input_type : IntegralCompressedTypes()) {
+	for (const auto &input_type : CompressedMaterializationTypes::Integral()) {
 		if (GetTypeIdSize(result_type.InternalType()) > GetTypeIdSize(input_type.InternalType())) {
 			set.AddFunction(GetIntegralDecompressFunctionInputSwitch(input_type, result_type));
 		}

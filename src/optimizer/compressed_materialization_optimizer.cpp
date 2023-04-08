@@ -204,8 +204,8 @@ unique_ptr<Expression> CompressedMaterialization::GetIntegralCompress(unique_ptr
 	}
 
 	// Get the smallest type that the range can fit into
-	LogicalType cast_type;
 	const auto range = UBigIntValue::Get(range_value);
+	LogicalType cast_type;
 	if (range < NumericLimits<uint8_t>().Maximum()) {
 		cast_type = LogicalType::UTINYINT;
 	} else if (range < NumericLimits<uint16_t>().Maximum()) {
@@ -237,16 +237,14 @@ unique_ptr<Expression> CompressedMaterialization::GetStringCompress(unique_ptr<d
 	}
 
 	const auto max_string_length = StringStats::MaxStringLength(stats);
-	LogicalType cast_type;
-	if (max_string_length < 2) {
-		cast_type = LogicalType::USMALLINT;
-	} else if (max_string_length < 4) {
-		cast_type = LogicalType::UINTEGER;
-	} else if (max_string_length < 8) {
-		cast_type = LogicalType::UBIGINT;
-	} else if (max_string_length < 16) {
-		cast_type = LogicalType::HUGEINT;
-	} else {
+	LogicalType cast_type = LogicalType::INVALID;
+	for (const auto &compressed_type : CompressedMaterializationTypes::String()) {
+		if (max_string_length < GetTypeIdSize(compressed_type.InternalType())) {
+			cast_type = compressed_type;
+			break;
+		}
+	}
+	if (cast_type == LogicalType::INVALID) {
 		return nullptr;
 	}
 

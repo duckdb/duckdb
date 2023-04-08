@@ -13,6 +13,17 @@
 
 namespace duckdb {
 
+struct CompressedMaterializationTypes {
+	//! The types we compress integral types to
+	static const vector<LogicalType> Integral() {
+		return {LogicalType::UTINYINT, LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT};
+	}
+	//! The types we compress strings to
+	static const vector<LogicalType> String() {
+		return {LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT, LogicalTypeId::HUGEINT};
+	}
+};
+
 struct CMIntegralCompressFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 	static ScalarFunction GetFunction(const LogicalType &input_type, const LogicalType &result_type);
