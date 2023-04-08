@@ -80,7 +80,7 @@
 
 #if defined(BUILD_AUTOCOMPLETE_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #define AUTOCOMPLETE_STATICALLY_LOADED true
-#include "sql_auto_complete_extension.hpp"
+#include "sql_auto_complete-extension.hpp"
 #else
 #define AUTOCOMPLETE_STATICALLY_LOADED false
 #endif

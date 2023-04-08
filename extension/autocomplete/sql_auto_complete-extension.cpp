@@ -1,19 +1,18 @@
 #define DUCKDB_EXTENSION_MAIN
 
-#include "sql_auto_complete_extension.hpp"
-
-#include "duckdb/function/table_function.hpp"
-#include "duckdb/common/exception.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/parser/parser.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb/main/client_data.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
-#include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_opener.hpp"
+#include "duckdb/function/table_function.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "sql_auto_complete-extension.hpp"
 
 namespace duckdb {
 
