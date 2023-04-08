@@ -66,7 +66,7 @@ ScalarFunction CMStringCompressFun::GetFunction(const LogicalType &result_type) 
 template <class INPUT_TYPE>
 static inline string_t StringDecompress(const INPUT_TYPE &input, Vector &result_v) {
 	const auto input_swapped = BSwap<INPUT_TYPE>(input);
-	const auto string_size = ((uint8_t *)&input_swapped)[sizeof(INPUT_TYPE) - 1];
+	const auto &string_size = ((uint8_t *)&input_swapped)[sizeof(INPUT_TYPE) - 1];
 	if (sizeof(INPUT_TYPE) <= string_t::INLINE_LENGTH) {
 		string_t result(string_size);
 		memcpy(data_ptr_t(&result) + sizeof(uint32_t), &input_swapped, sizeof(INPUT_TYPE));
