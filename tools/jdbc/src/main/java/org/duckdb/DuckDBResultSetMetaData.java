@@ -56,8 +56,11 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 			return DuckDBColumnType.MAP;
 		} else if (type_name.startsWith("UNION")) {
 			return DuckDBColumnType.UNION;
-		} else {
+		}
+		try {
 			return DuckDBColumnType.valueOf(type_name);
+		} catch (IllegalArgumentException e) {
+			return DuckDBColumnType.UNKNOWN;
 		}
 	}
 
@@ -103,19 +106,6 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 			return Types.BIGINT;
 		case LIST:
 			return Types.ARRAY;
-		case ENUM:
-		case HUGEINT:
-		case UTINYINT:
-		case USMALLINT:
-		case STRUCT:
-		case UUID:
-		case JSON:
-		case UINTEGER:
-		case UBIGINT:
-		case INTERVAL:
-		case MAP:
-		case UNION:
-			return Types.JAVA_OBJECT;
 		case FLOAT:
 			return Types.FLOAT;
 		case DOUBLE:
@@ -138,7 +128,7 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 		case BLOB:
 			return Types.BLOB;
 		default:
-			throw new SQLException("Unsupported type " + type);
+			return Types.JAVA_OBJECT;
 		}
 	}
 

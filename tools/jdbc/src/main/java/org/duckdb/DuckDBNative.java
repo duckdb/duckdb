@@ -91,7 +91,7 @@ public class DuckDBNative {
 
 	protected static native void duckdb_jdbc_free_result(ByteBuffer res_ref);
 
-	protected static native DuckDBVector[] duckdb_jdbc_fetch(ByteBuffer res_ref) throws SQLException;
+	protected static native DuckDBVector[] duckdb_jdbc_fetch(ByteBuffer res_ref, ByteBuffer conn_ref) throws SQLException;
 	
 	protected static native int duckdb_jdbc_fetch_size();
 

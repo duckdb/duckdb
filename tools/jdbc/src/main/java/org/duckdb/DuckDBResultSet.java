@@ -50,12 +50,14 @@ public class DuckDBResultSet implements ResultSet {
 	private int chunk_idx = 0;
 	private boolean finished = false;
 	private boolean was_null;
+	private ByteBuffer conn_ref;
 
-	public DuckDBResultSet(DuckDBPreparedStatement stmt, DuckDBResultSetMetaData meta, ByteBuffer result_ref)
+	public DuckDBResultSet(DuckDBPreparedStatement stmt, DuckDBResultSetMetaData meta, ByteBuffer result_ref, ByteBuffer conn_ref)
 			throws SQLException {
 		this.stmt = Objects.requireNonNull(stmt);
 		this.result_ref = Objects.requireNonNull(result_ref);
 		this.meta = Objects.requireNonNull(meta);
+		this.conn_ref = Objects.requireNonNull(conn_ref);
 	}
 
 	public Statement getStatement() throws SQLException {
@@ -81,7 +83,7 @@ public class DuckDBResultSet implements ResultSet {
 		}
 		chunk_idx++;
 		if (current_chunk.length == 0 || chunk_idx > current_chunk[0].length) {
-			current_chunk = DuckDBNative.duckdb_jdbc_fetch(result_ref);
+			current_chunk = DuckDBNative.duckdb_jdbc_fetch(result_ref, conn_ref);
 			chunk_idx = 1;
 		}
 		if (current_chunk.length == 0) {
@@ -187,13 +189,6 @@ public class DuckDBResultSet implements ResultSet {
 			return getDouble(columnIndex);
 		case DECIMAL:
 			return getBigDecimal(columnIndex);
-		case VARCHAR:
-		case STRUCT:
-		case LIST:
-		case MAP:
-		case UNION:
-		case ENUM:
-			return getString(columnIndex);
 		case TIME:
 			return getTime(columnIndex);
 		case DATE:
@@ -207,14 +202,12 @@ public class DuckDBResultSet implements ResultSet {
 			return getOffsetDateTime(columnIndex);
 		case JSON:
 			return getJsonObject(columnIndex);
-		case INTERVAL:
-			return getLazyString(columnIndex);
 		case BLOB:
 			return getBlob(columnIndex);
 		case UUID:
 			return getUuid(columnIndex);
 		default:
-			throw new SQLException("Not implemented type: " + meta.column_types_string[columnIndex - 1]);
+			return getLazyString(columnIndex);
 		}
 
 	}
@@ -245,8 +238,7 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	private boolean isType(int columnIndex, DuckDBColumnType... types) {
-		return Arrays.asList(
-				types).stream().anyMatch(type -> meta.column_types[columnIndex - 1] == type);
+		return Arrays.stream(types).anyMatch(type -> meta.column_types[columnIndex - 1] == type);
 	}
 
 	public String getString(int columnIndex) throws SQLException {
@@ -254,15 +246,6 @@ public class DuckDBResultSet implements ResultSet {
 			return null;
 		}
 
-		if (isType(columnIndex,
-				DuckDBColumnType.VARCHAR,
-				DuckDBColumnType.ENUM,
-				DuckDBColumnType.STRUCT,
-				DuckDBColumnType.LIST,
-				DuckDBColumnType.MAP,
-				DuckDBColumnType.UNION)) {
-			return (String) current_chunk[columnIndex - 1].varlen_data[chunk_idx - 1];
-		}
 		Object res = getObject(columnIndex);
 		if (res == null) {
 			return null;
