@@ -8,7 +8,7 @@ namespace duckdb {
 
 struct FMTPrintf {
 	template <class CTX>
-	static string OP(const char *format_str, std::vector<duckdb_fmt::basic_format_arg<CTX>> &format_args) {
+	static string OP(const char *format_str, vector<duckdb_fmt::basic_format_arg<CTX>> &format_args) {
 		return duckdb_fmt::vsprintf(
 		    format_str, duckdb_fmt::basic_format_args<CTX>(format_args.data(), static_cast<int>(format_args.size())));
 	}
@@ -16,7 +16,7 @@ struct FMTPrintf {
 
 struct FMTFormat {
 	template <class CTX>
-	static string OP(const char *format_str, std::vector<duckdb_fmt::basic_format_arg<CTX>> &format_args) {
+	static string OP(const char *format_str, vector<duckdb_fmt::basic_format_arg<CTX>> &format_args) {
 		return duckdb_fmt::vformat(
 		    format_str, duckdb_fmt::basic_format_args<CTX>(format_args.data(), static_cast<int>(format_args.size())));
 	}
@@ -93,8 +93,8 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 		auto format_string = format_data[fmt_idx].GetString();
 
 		// now gather all the format arguments
-		std::vector<duckdb_fmt::basic_format_arg<CTX>> format_args;
-		std::vector<unique_ptr<data_t[]>> string_args;
+		vector<duckdb_fmt::basic_format_arg<CTX>> format_args;
+		vector<unique_ptr<data_t[]>> string_args;
 
 		for (idx_t col_idx = 1; col_idx < args.ColumnCount(); col_idx++) {
 			auto &col = args.data[col_idx];

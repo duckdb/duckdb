@@ -4,6 +4,9 @@
 
 namespace duckdb {
 
+//===--------------------------------------------------------------------===//
+// Arena Chunk
+//===--------------------------------------------------------------------===//
 ArenaChunk::ArenaChunk(Allocator &allocator, idx_t size) : current_position(0), maximum_size(size), prev(nullptr) {
 	D_ASSERT(size > 0);
 	data = allocator.Allocate(size);
@@ -17,7 +20,36 @@ ArenaChunk::~ArenaChunk() {
 	}
 }
 
-ArenaAllocator::ArenaAllocator(Allocator &allocator, idx_t initial_capacity) : allocator(allocator) {
+//===--------------------------------------------------------------------===//
+// Allocator Wrapper
+//===--------------------------------------------------------------------===//
+struct ArenaAllocatorData : public PrivateAllocatorData {
+	explicit ArenaAllocatorData(ArenaAllocator &allocator) : allocator(allocator) {
+	}
+
+	ArenaAllocator &allocator;
+};
+
+static data_ptr_t ArenaAllocatorAllocate(PrivateAllocatorData *private_data, idx_t size) {
+	auto &allocator_data = (ArenaAllocatorData &)*private_data;
+	return allocator_data.allocator.Allocate(size);
+}
+
+static void ArenaAllocatorFree(PrivateAllocatorData *, data_ptr_t, idx_t) {
+	// nop
+}
+
+static data_ptr_t ArenaAllocateReallocate(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
+                                          idx_t size) {
+	auto &allocator_data = (ArenaAllocatorData &)*private_data;
+	return allocator_data.allocator.Reallocate(pointer, old_size, size);
+}
+//===--------------------------------------------------------------------===//
+// Arena Allocator
+//===--------------------------------------------------------------------===//
+ArenaAllocator::ArenaAllocator(Allocator &allocator, idx_t initial_capacity)
+    : allocator(allocator), arena_allocator(ArenaAllocatorAllocate, ArenaAllocatorFree, ArenaAllocateReallocate,
+                                            make_uniq<ArenaAllocatorData>(*this)) {
 	head = nullptr;
 	tail = nullptr;
 	current_capacity = initial_capacity;
