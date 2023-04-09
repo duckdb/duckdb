@@ -12,6 +12,13 @@ try:
 except:
 	pyarrow_dtype = None
 
+# Check if pandas has arrow dtypes enabled
+try:
+    from pandas.compat import pa_version_under7p0
+    pyarrow_dtypes_enabled = not pa_version_under7p0
+except:
+    pyarrow_dtypes_enabled = False
+
 @pytest.fixture(scope="function")
 def duckdb_empty_cursor(request):
     connection = duckdb.connect('')
@@ -46,7 +53,7 @@ def convert_arrow_to_numpy_backend(df):
 	return pandas.DataFrame(df_content)
 
 def convert_to_numpy(df):
-	if pyarrow_dtype != None and any([True for x in df.dtypes if isinstance(x, pyarrow_dtype)]):
+	if pyarrow_dtypes_enabled and pyarrow_dtype != None and any([True for x in df.dtypes if isinstance(x, pyarrow_dtype)]):
 		return convert_arrow_to_numpy_backend(df)
 	return df
 
@@ -69,7 +76,7 @@ class ArrowMockTesting:
 class ArrowPandas:
 	def __init__(self):
 		self.pandas = pytest.importorskip("pandas")
-		if Version(self.pandas.__version__) >= Version('2.0.0'):
+		if Version(self.pandas.__version__) >= Version('2.0.0') and pyarrow_dtypes_enabled:
 			self.backend = 'pyarrow'
 			self.DataFrame = arrow_pandas_df
 		else:
