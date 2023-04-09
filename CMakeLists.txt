@@ -627,7 +627,7 @@ function(add_extension_definitions)
 
   if(${BUILD_AUTOCOMPLETE_EXTENSION})
     include_directories(${PROJECT_SOURCE_DIR}/extension/autocomplete/include)
-    add_definitions(-DBUILD_AUTOCOMPLETE_EXTENSION=${BUILD_INET_EXTENSION})
+    add_definitions(-DBUILD_AUTOCOMPLETE_EXTENSION=${BUILD_AUTOCOMPLETE_EXTENSION})
   endif()
 
   # Include paths for any registered out-of-tree extensions

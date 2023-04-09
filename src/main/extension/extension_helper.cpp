@@ -257,7 +257,7 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 #if defined(BUILD_AUTOCOMPLETE_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 		db.LoadExtension<SQLAutoCompleteExtension>();
 #else
-		// inet extension required but not build: skip this test
+		// autocomplete extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "inet") {
