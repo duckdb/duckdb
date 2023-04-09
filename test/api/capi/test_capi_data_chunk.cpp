@@ -254,6 +254,7 @@ TEST_CASE("Test DataChunk populate ListVector in C API", "[capi]") {
 	REQUIRE(duckdb_list_vector_set_size(list_vector, 123) == duckdb_state::DuckDBSuccess);
 	REQUIRE(duckdb_list_vector_get_size(list_vector) == 123);
 
+#if STANDARD_VECTOR_SIZE > 2
 	auto entries = (duckdb_list_entry *)duckdb_vector_get_data(list_vector);
 	entries[0].offset = 0;
 	entries[0].length = 20;
@@ -270,4 +271,5 @@ TEST_CASE("Test DataChunk populate ListVector in C API", "[capi]") {
 	duckdb_destroy_data_chunk(&chunk);
 	duckdb_destroy_logical_type(&list_type);
 	duckdb_destroy_logical_type(&elem_type);
+#endif
 }
