@@ -5,17 +5,11 @@ import pandas as pd
 import pytest
 from conftest import NumpyPandas, ArrowPandas
 from packaging.version import Version
+from pandas.compat import pa_version_under7p0
 
 numpy_nullable_df = pd.DataFrame([{"COL1": "val1", "CoL2": 1.05},{"COL1": "val4", "CoL2": 17}])
 
-def pandas_defined_arrow_dtype():
-    try:
-        arrow_dtype = pd.core.arrays.arrow.dtype.ArrowDtype
-        return True
-    except:
-        return False
-
-if Version(pd.__version__) >= Version('2.0.0') and pandas_defined_arrow_dtype():
+if Version(pd.__version__) >= Version('2.0.0') and not pa_version_under7p0:
     pyarrow_df = numpy_nullable_df.convert_dtypes(dtype_backend="pyarrow")
 else:
     # dtype_backend is not supported in pandas < 2.0.0
