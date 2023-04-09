@@ -2852,66 +2852,6 @@ func_expr_common_subexpr:
 											   list_make1($4),
 											   @1);
 				}
-			| CURRENT_DATE
-				{
-					$$ = makeSQLValueFunction(PG_SVFOP_CURRENT_DATE, -1, @1);
-				}
-			| CURRENT_TIME
-				{
-					$$ = makeSQLValueFunction(PG_SVFOP_CURRENT_TIME, -1, @1);
-				}
-			| CURRENT_TIME '(' Iconst ')'
-				{
-					$$ = makeSQLValueFunction(PG_SVFOP_CURRENT_TIME_N, $3, @1);
-				}
-			| CURRENT_TIMESTAMP
-				{
-					$$ = makeSQLValueFunction(PG_SVFOP_CURRENT_TIMESTAMP, -1, @1);
-				}
-			| CURRENT_TIMESTAMP '(' Iconst ')'
-				{
-					$$ = makeSQLValueFunction(PG_SVFOP_CURRENT_TIMESTAMP_N, $3, @1);
-				}
-			| LOCALTIME
-				{
-					$$ = makeSQLValueFunction(PG_SVFOP_LOCALTIME, -1, @1);
-				}
-			| LOCALTIME '(' Iconst ')'
-				{
-					$$ = makeSQLValueFunction(PG_SVFOP_LOCALTIME_N, $3, @1);
-				}
-			| LOCALTIMESTAMP
-				{
-					$$ = makeSQLValueFunction(PG_SVFOP_LOCALTIMESTAMP, -1, @1);
-				}
-			| LOCALTIMESTAMP '(' Iconst ')'
-				{
-					$$ = makeSQLValueFunction(PG_SVFOP_LOCALTIMESTAMP_N, $3, @1);
-				}
-			| CURRENT_ROLE
-				{
-					$$ = makeSQLValueFunction(PG_SVFOP_CURRENT_ROLE, -1, @1);
-				}
-			| CURRENT_USER
-				{
-					$$ = makeSQLValueFunction(PG_SVFOP_CURRENT_USER, -1, @1);
-				}
-			| SESSION_USER
-				{
-					$$ = makeSQLValueFunction(PG_SVFOP_SESSION_USER, -1, @1);
-				}
-			| USER
-				{
-					$$ = makeSQLValueFunction(PG_SVFOP_USER, -1, @1);
-				}
-			| CURRENT_CATALOG
-				{
-					$$ = makeSQLValueFunction(PG_SVFOP_CURRENT_CATALOG, -1, @1);
-				}
-			| CURRENT_SCHEMA
-				{
-					$$ = makeSQLValueFunction(PG_SVFOP_CURRENT_SCHEMA, -1, @1);
-				}
 			| CAST '(' a_expr AS Typename ')'
 				{ $$ = makeTypeCast($3, $5, 0, @1); }
 			| TRY_CAST '(' a_expr AS Typename ')'

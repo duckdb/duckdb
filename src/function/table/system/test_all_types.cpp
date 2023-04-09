@@ -180,7 +180,7 @@ vector<TestType> TestAllTypesFun::GetTestTypes() {
 
 	// map
 	auto map_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
-	auto min_map_value = Value::MAP(ListType::GetChildType(map_type), std::vector<Value>());
+	auto min_map_value = Value::MAP(ListType::GetChildType(map_type), vector<Value>());
 
 	child_list_t<Value> map_struct1;
 	map_struct1.push_back(make_pair("key", Value("key1")));
@@ -189,7 +189,7 @@ vector<TestType> TestAllTypesFun::GetTestTypes() {
 	map_struct2.push_back(make_pair("key", Value("key2")));
 	map_struct2.push_back(make_pair("key", Value("goose")));
 
-	std::vector<Value> map_values;
+	vector<Value> map_values;
 	map_values.push_back(Value::STRUCT(map_struct1));
 	map_values.push_back(Value::STRUCT(map_struct2));
 
