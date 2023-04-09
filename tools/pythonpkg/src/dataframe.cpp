@@ -18,9 +18,32 @@ bool PolarsDataFrame::IsLazyFrame(const py::handle &object) {
 	return py::isinstance(object, import_cache.polars().LazyFrame());
 }
 
-bool DataFrame::check_(const py::handle &object) { // NOLINT
+bool PandasDataFrame::check_(const py::handle &object) { // NOLINT
+	if (!ModuleIsLoaded<PandasCacheItem>()) {
+		return false;
+	}
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	return py::isinstance(object, import_cache.pandas().DataFrame());
+}
+
+bool PandasDataFrame::IsPyArrowBacked(const py::handle &df) {
+	if (!PandasDataFrame::check_(df)) {
+		return false;
+	}
+
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	py::list dtypes = df.attr("dtypes");
+	if (dtypes.empty()) {
+		return false;
+	}
+
+	auto arrow_dtype = import_cache.pandas().core.arrays.arrow.dtype.ArrowDtype();
+	for (auto &dtype : dtypes) {
+		if (py::isinstance(dtype, arrow_dtype)) {
+			return true;
+		}
+	}
+	return false;
 }
 
 bool PolarsDataFrame::check_(const py::handle &object) { // NOLINT

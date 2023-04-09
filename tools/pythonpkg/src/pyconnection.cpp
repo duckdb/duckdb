@@ -88,24 +88,6 @@ bool DuckDBPyConnection::IsJupyter() {
 	return DuckDBPyConnection::environment == PythonEnvironmentType::JUPYTER;
 }
 
-static bool IsArrowBackedDataFrame(const py::object &df) {
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	D_ASSERT(py::isinstance(df, import_cache.pandas().DataFrame()));
-
-	py::list dtypes = df.attr("dtypes");
-	if (dtypes.empty()) {
-		return false;
-	}
-
-	auto arrow_dtype = import_cache.pandas().core.arrays.arrow.dtype.ArrowDtype();
-	for (auto &dtype : dtypes) {
-		if (py::isinstance(dtype, arrow_dtype)) {
-			return true;
-		}
-	}
-	return false;
-}
-
 py::object ArrowTableFromDataframe(const py::object &df) {
 	return py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_pandas")(df);
 }
@@ -432,7 +414,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const string &query, 
 	return shared_from_this();
 }
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Append(const string &name, const DataFrame &value) {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Append(const string &name, const PandasDataFrame &value) {
 	RegisterPythonObject("__append_df", value);
 	return Execute("INSERT INTO \"" + name + "\" SELECT * FROM __append_df");
 }
@@ -464,7 +446,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 	}
 
 	if (DuckDBPyConnection::IsPandasDataframe(python_object)) {
-		if (IsArrowBackedDataFrame(python_object)) {
+		if (PandasDataFrame::IsPyArrowBacked(python_object)) {
 			auto arrow_table = ArrowTableFromDataframe(python_object);
 			RegisterArrowObject(arrow_table, name);
 		} else {
@@ -872,12 +854,12 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::TableFunction(const string &fna
 	    connection->TableFunction(fname, DuckDBPyConnection::TransformPythonParamList(params)));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const DataFrame &value) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const PandasDataFrame &value) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
 	string name = "df_" + StringUtil::GenerateRandomName();
-	if (IsArrowBackedDataFrame(value)) {
+	if (PandasDataFrame::IsPyArrowBacked(value)) {
 		auto table = ArrowTableFromDataframe(value);
 		return DuckDBPyConnection::FromArrow(table);
 	}
@@ -1116,14 +1098,14 @@ py::dict DuckDBPyConnection::FetchNumpy() {
 	return result->FetchNumpyInternal();
 }
 
-DataFrame DuckDBPyConnection::FetchDF(bool date_as_object) {
+PandasDataFrame DuckDBPyConnection::FetchDF(bool date_as_object) {
 	if (!result) {
 		throw InvalidInputException("No open result set");
 	}
 	return result->FetchDF(date_as_object);
 }
 
-DataFrame DuckDBPyConnection::FetchDFChunk(const idx_t vectors_per_chunk, bool date_as_object) const {
+PandasDataFrame DuckDBPyConnection::FetchDFChunk(const idx_t vectors_per_chunk, bool date_as_object) const {
 	if (!result) {
 		throw InvalidInputException("No open result set");
 	}
@@ -1189,7 +1171,7 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 	auto table_function = make_uniq<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
 	if (DuckDBPyConnection::IsPandasDataframe(entry)) {
-		if (IsArrowBackedDataFrame(entry)) {
+		if (PandasDataFrame::IsPyArrowBacked(entry)) {
 			auto table = ArrowTableFromDataframe(entry);
 			CreateArrowScan(table, *table_function, children, config);
 		} else {

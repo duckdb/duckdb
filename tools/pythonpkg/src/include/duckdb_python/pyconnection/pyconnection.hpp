@@ -84,7 +84,7 @@ public:
 
 	shared_ptr<DuckDBPyConnection> Execute(const string &query, py::object params = py::list(), bool many = false);
 
-	shared_ptr<DuckDBPyConnection> Append(const string &name, const DataFrame &value);
+	shared_ptr<DuckDBPyConnection> Append(const string &name, const PandasDataFrame &value);
 
 	shared_ptr<DuckDBPyConnection> RegisterPythonObject(const string &name, const py::object &python_object);
 
@@ -103,7 +103,7 @@ public:
 
 	unique_ptr<DuckDBPyRelation> TableFunction(const string &fname, py::object params = py::list());
 
-	unique_ptr<DuckDBPyRelation> FromDF(const DataFrame &value);
+	unique_ptr<DuckDBPyRelation> FromDF(const PandasDataFrame &value);
 
 	unique_ptr<DuckDBPyRelation> FromParquet(const string &file_glob, bool binary_as_string, bool file_row_number,
 	                                         bool filename, bool hive_partitioning, bool union_by_name,
@@ -150,8 +150,8 @@ public:
 	py::list FetchAll();
 
 	py::dict FetchNumpy();
-	DataFrame FetchDF(bool date_as_object);
-	DataFrame FetchDFChunk(const idx_t vectors_per_chunk = 1, bool date_as_object = false) const;
+	PandasDataFrame FetchDF(bool date_as_object);
+	PandasDataFrame FetchDFChunk(const idx_t vectors_per_chunk = 1, bool date_as_object = false) const;
 
 	duckdb::pyarrow::Table FetchArrow(idx_t chunk_size);
 	PolarsDataFrame FetchPolars(idx_t chunk_size);

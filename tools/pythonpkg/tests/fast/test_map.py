@@ -122,3 +122,17 @@ class TestMap(object):
         rel = process(rel)
         x = rel.fetchdf()
         assert x['days_to_add'].to_numpy()[0] == 1
+
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_pyarrow_df(self, pandas):
+        # PyArrow backed dataframes only exist on pandas >= 2.0.0
+        _ = pytest.importorskip("pandas", "2.0.0")
+        
+        def basic_function(df):
+            # Create a pyarrow backed dataframe
+            df = pandas.DataFrame({'a': [5,3,2,1,2]}).convert_dtypes(dtype_backend='pyarrow')
+            return df
+        
+        con = duckdb.connect()
+        with pytest.raises(duckdb.InvalidInputException):
+            rel = con.sql('select 42').map(basic_function)

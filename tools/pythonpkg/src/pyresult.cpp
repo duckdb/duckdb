@@ -224,7 +224,7 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 }
 
 // TODO: unify these with an enum/flag to indicate which conversions to do
-void DuckDBPyResult::ChangeToTZType(DataFrame &df) {
+void DuckDBPyResult::ChangeToTZType(PandasDataFrame &df) {
 	for (idx_t i = 0; i < result->ColumnCount(); i++) {
 		if (result->types[i] == LogicalType::TIMESTAMP_TZ) {
 			// first localize to UTC then convert to timezone_config
@@ -235,7 +235,7 @@ void DuckDBPyResult::ChangeToTZType(DataFrame &df) {
 }
 
 // TODO: unify these with an enum/flag to indicate which conversions to perform
-void DuckDBPyResult::ChangeDateToDatetime(DataFrame &df) {
+void DuckDBPyResult::ChangeDateToDatetime(PandasDataFrame &df) {
 	for (idx_t i = 0; i < result->ColumnCount(); i++) {
 		if (result->types[i] == LogicalType::DATE) {
 			df[result->names[i].c_str()] = df[result->names[i].c_str()].attr("dt").attr("date");
@@ -243,8 +243,8 @@ void DuckDBPyResult::ChangeDateToDatetime(DataFrame &df) {
 	}
 }
 
-DataFrame DuckDBPyResult::FrameFromNumpy(bool date_as_object, const py::handle &o) {
-	auto df = py::cast<DataFrame>(py::module::import("pandas").attr("DataFrame").attr("from_dict")(o));
+PandasDataFrame DuckDBPyResult::FrameFromNumpy(bool date_as_object, const py::handle &o) {
+	auto df = py::cast<PandasDataFrame>(py::module::import("pandas").attr("DataFrame").attr("from_dict")(o));
 	// Unfortunately we have to do a type change here for timezones since these types are not supported by numpy
 	ChangeToTZType(df);
 	if (date_as_object) {
@@ -253,12 +253,12 @@ DataFrame DuckDBPyResult::FrameFromNumpy(bool date_as_object, const py::handle &
 	return df;
 }
 
-DataFrame DuckDBPyResult::FetchDF(bool date_as_object) {
+PandasDataFrame DuckDBPyResult::FetchDF(bool date_as_object) {
 	timezone_config = QueryResult::GetConfigTimezone(*result);
 	return FrameFromNumpy(date_as_object, FetchNumpyInternal());
 }
 
-DataFrame DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors, bool date_as_object) {
+PandasDataFrame DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors, bool date_as_object) {
 	if (timezone_config.empty()) {
 		timezone_config = QueryResult::GetConfigTimezone(*result);
 	}

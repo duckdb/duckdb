@@ -5,6 +5,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb_python/pandas/column/pandas_numpy_column.hpp"
 #include "duckdb_python/pandas/pandas_scan.hpp"
+#include "duckdb_python/pybind11/dataframe.hpp"
 
 namespace duckdb {
 
@@ -39,6 +40,11 @@ static py::handle FunctionCall(NumpyResultConversion &conversion, vector<string>
 	py::handle df(df_obj);
 	if (df.is_none()) { // no return, probably modified in place
 		throw InvalidInputException("No return value from Python function");
+	}
+
+	if (PandasDataFrame::IsPyArrowBacked(df)) {
+		throw InvalidInputException(
+		    "Produced DataFrame has columns that are backed by PyArrow, which is not supported yet in 'map'");
 	}
 
 	return df;

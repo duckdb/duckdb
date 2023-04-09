@@ -13,14 +13,15 @@
 
 namespace duckdb {
 
-class DataFrame : public py::object {
+class PandasDataFrame : public py::object {
 public:
-	DataFrame(const py::object &o) : py::object(o, borrowed_t {}) {
+	PandasDataFrame(const py::object &o) : py::object(o, borrowed_t {}) {
 	}
 	using py::object::object;
 
 public:
 	static bool check_(const py::handle &object); // NOLINT
+	static bool IsPyArrowBacked(const py::handle &df);
 };
 
 class PolarsDataFrame : public py::object {
@@ -39,7 +40,7 @@ public:
 namespace pybind11 {
 namespace detail {
 template <>
-struct handle_type_name<duckdb::DataFrame> {
+struct handle_type_name<duckdb::PandasDataFrame> {
 	static constexpr auto name = _("pandas.DataFrame");
 };
 } // namespace detail

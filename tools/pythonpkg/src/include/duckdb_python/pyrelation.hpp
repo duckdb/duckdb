@@ -124,7 +124,7 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Distinct();
 
-	DataFrame FetchDF(bool date_as_object);
+	PandasDataFrame FetchDF(bool date_as_object);
 
 	Optional<py::tuple> FetchOne();
 
@@ -140,7 +140,7 @@ public:
 
 	py::dict FetchNumpyInternal(bool stream = false, idx_t vectors_per_chunk = 1);
 
-	DataFrame FetchDFChunk(idx_t vectors_per_chunk, bool date_as_object);
+	PandasDataFrame FetchDFChunk(idx_t vectors_per_chunk, bool date_as_object);
 
 	duckdb::pyarrow::Table ToArrowTable(idx_t batch_size);
 

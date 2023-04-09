@@ -18,9 +18,9 @@ public:
 	py::handle handle;
 };
 
-struct PandasDataFrame {
+struct PandasDataFrameBind {
 public:
-	explicit PandasDataFrame(py::handle &df) {
+	explicit PandasDataFrameBind(py::handle &df) {
 		names = py::list(df.attr("columns"));
 		types = py::list(df.attr("dtypes"));
 		getter = df.attr("__getitem__");
@@ -119,7 +119,7 @@ static LogicalType BindColumn(PandasBindColumn column_p, PandasColumnBindData &b
 void Pandas::Bind(const ClientContext &context, py::handle df_p, vector<PandasColumnBindData> &bind_columns,
                   vector<LogicalType> &return_types, vector<string> &names) {
 
-	PandasDataFrame df(df_p);
+	PandasDataFrameBind df(df_p);
 	// TODO support masked arrays as well
 	// TODO support dicts of numpy arrays as well
 	idx_t column_count = py::len(df.names);
