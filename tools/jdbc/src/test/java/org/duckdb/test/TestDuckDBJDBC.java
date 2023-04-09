@@ -3,6 +3,7 @@ package org.duckdb.test;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -42,8 +43,8 @@ import org.duckdb.DuckDBResultSet;
 import org.duckdb.DuckDBTimestamp;
 import org.duckdb.DuckDBColumnType;
 import org.duckdb.DuckDBResultSetMetaData;
+import org.duckdb.DuckDBNative;
 import org.duckdb.JsonNode;
-import org.duckdb.TestType;
 
 public class TestDuckDBJDBC {
 
@@ -3177,9 +3178,9 @@ public class TestDuckDBJDBC {
 
 	public static void test_extension_type() throws Exception {
 		try (Connection connection = DriverManager.getConnection("jdbc:duckdb:");
-	    		Statement stmt = connection.createStatement()) {
+				Statement stmt = connection.createStatement()) {
 
-			TestType.register((DuckDBConnection) connection);
+			DuckDBNative.duckdb_jdbc_create_extension_type((DuckDBConnection) connection);
 
 			ResultSet rs = stmt.executeQuery("SELECT {\"hello\": 'foo', \"world\": 'bar'}::test_type");
 		}
@@ -3190,7 +3191,7 @@ public class TestDuckDBJDBC {
 				Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 				Statement stmt = conn.createStatement();
 		) {
-			TestType.register((DuckDBConnection) conn);
+			DuckDBNative.duckdb_jdbc_create_extension_type((DuckDBConnection) conn);
 
 			stmt.execute("CREATE TABLE test (foo test_type);");
 			stmt.execute("INSERT INTO test VALUES ({\"hello\": 'foo', \"world\": 'bar'});");
