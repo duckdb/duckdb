@@ -4,14 +4,12 @@
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
-#include "duckdb/storage/compression/chimp/algorithm/chimp_utils.hpp"
+#include "duckdb/common/bit_utils.hpp"
 
 namespace duckdb {
 
-static void WriteHexBytes(uint64_t x, char *&output, idx_t leading_zero, idx_t type_size) {
-	D_ASSERT(type_size >= leading_zero);
-
-	idx_t offset = type_size - ((leading_zero / 4) * 4);
+static void WriteHexBytes(uint64_t x, char *&output, idx_t buffer_size) {
+	idx_t offset = buffer_size * 4;
 
 	for (; offset >= 4; offset -= 4) {
 		uint8_t byte = (x >> (offset - 4)) & 0x0F;
@@ -20,22 +18,45 @@ static void WriteHexBytes(uint64_t x, char *&output, idx_t leading_zero, idx_t t
 	}
 }
 
-static void WriteBinBytes(uint64_t x, char *&output, idx_t leading_zero, idx_t type_size) {
-	D_ASSERT(type_size >= leading_zero);
-	idx_t offset = type_size - leading_zero;
-	idx_t remainder = 8 - (leading_zero % 8);
-	for (idx_t i = 0; i < remainder; ++i) {
-		*output = ((x >> (offset - 1)) & 0x01) + '0';
+static void WriteHugeIntHexBytes(hugeint_t x, char *&output, idx_t buffer_size) {
+	idx_t offset = buffer_size * 4;
+	auto upper = x.upper;
+	auto lower = x.lower;
+
+	for (; offset >= 68; offset -= 4) {
+		uint8_t byte = (upper >> (offset - 4)) & 0x0F;
+		*output = Blob::HEX_TABLE[byte];
 		output++;
-		offset--;
 	}
 
-	for (; offset >= 8; offset -= 8) {
-		uint8_t byte = (x >> (offset - 8)) & 0xFF;
-		for (idx_t i = 8; i >= 1; --i) {
-			*output = ((byte >> (i - 1)) & 0x01) + '0';
-			output++;
-		}
+	for (; offset >= 4; offset -= 4) {
+		uint8_t byte = (lower >> (offset - 4)) & 0x0F;
+		*output = Blob::HEX_TABLE[byte];
+		output++;
+	}
+}
+
+static void WriteBinBytes(uint64_t x, char *&output, idx_t buffer_size) {
+	idx_t offset = buffer_size;
+	for (; offset >= 1; offset -= 1) {
+		*output = ((x >> (offset - 1)) & 0x01) + '0';
+		output++;
+	}
+}
+
+static void WriteHugeIntBinBytes(hugeint_t x, char *&output, idx_t buffer_size) {
+	auto upper = x.upper;
+	auto lower = x.lower;
+	idx_t offset = buffer_size;
+
+	for (; offset >= 65; offset -= 1) {
+		*output = ((upper >> (offset - 1)) & 0x01) + '0';
+		output++;
+	}
+
+	for (; offset >= 1; offset -= 1) {
+		*output = ((lower >> (offset - 1)) & 0x01) + '0';
+		output++;
 	}
 }
 
@@ -61,47 +82,18 @@ struct HexStrOperator {
 	}
 };
 
-struct FromHexOperator {
-	template <class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
-		auto data = input.GetDataUnsafe();
-		auto size = input.GetSize();
-
-		if (size > NumericLimits<uint32_t>::Maximum()) {
-			throw InvalidInputException("Hexadecimal input length larger than 2^32 are not supported");
-		}
-
-		D_ASSERT(size <= NumericLimits<uint32_t>::Maximum());
-		auto buffer_size = (size + 1) / 2;
-
-		// Allocate empty space
-		auto target = StringVector::EmptyString(result, buffer_size);
-		auto output = target.GetDataWriteable();
-
-		// Treated as a single byte
-		idx_t i = 0;
-		if (size % 2 != 0) {
-			*output = StringUtil::GetHexValue(data[i]);
-			i++;
-			output++;
-		}
-
-		for (; i < size; i += 2) {
-			uint8_t major = StringUtil::GetHexValue(data[i]);
-			uint8_t minor = StringUtil::GetHexValue(data[i + 1]);
-			*output = (major << 4) | minor;
-			output++;
-		}
-
-		target.Finalize();
-		return target;
-	}
-};
-
 struct HexIntegralOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
-		if (input == 0) {
+
+		idx_t num_leading_zero = CountZeros<uint64_t>::Leading(input);
+		idx_t num_bits_to_check = 64 - num_leading_zero;
+		D_ASSERT(num_bits_to_check <= sizeof(INPUT_TYPE) * 8);
+
+		idx_t buffer_size = (num_bits_to_check + 3) / 4;
+
+		// Special case: All bits are zero
+		if (buffer_size == 0) {
 			auto target = StringVector::EmptyString(result, 1);
 			auto output = target.GetDataWriteable();
 			*output = '0';
@@ -109,12 +101,11 @@ struct HexIntegralOperator {
 			return target;
 		}
 
-		idx_t num_leading_zero = CountZeros<uint64_t>::Leading(input);
-
-		auto target = StringVector::EmptyString(result, sizeof(INPUT_TYPE) * 2 - (num_leading_zero / 4));
+		D_ASSERT(buffer_size > 0);
+		auto target = StringVector::EmptyString(result, buffer_size);
 		auto output = target.GetDataWriteable();
 
-		WriteHexBytes(input, output, num_leading_zero, sizeof(INPUT_TYPE) * 8);
+		WriteHexBytes(input, output, buffer_size);
 
 		target.Finalize();
 		return target;
@@ -125,7 +116,11 @@ struct HexHugeIntOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
 
-		if (input == 0) {
+		idx_t num_leading_zero = CountZeros<hugeint_t>::Leading(input);
+		idx_t buffer_size = sizeof(INPUT_TYPE) * 2 - (num_leading_zero / 4);
+
+		// Special case: All bits are zero
+		if (buffer_size == 0) {
 			auto target = StringVector::EmptyString(result, 1);
 			auto output = target.GetDataWriteable();
 			*output = '0';
@@ -133,21 +128,11 @@ struct HexHugeIntOperator {
 			return target;
 		}
 
-		uint64_t lower = input.lower;
-		int64_t upper = input.upper;
-		idx_t upper_num_leading_zero = CountZeros<uint64_t>::Leading(upper);
-		idx_t lower_num_leading_zero = 0;
-		idx_t num_leading_zero = upper_num_leading_zero;
-		if (upper_num_leading_zero == 64) {
-			lower_num_leading_zero = CountZeros<uint64_t>::Leading(lower);
-			num_leading_zero += lower_num_leading_zero;
-		}
-
-		auto target = StringVector::EmptyString(result, sizeof(INPUT_TYPE) * 2 - (num_leading_zero / 4));
+		D_ASSERT(buffer_size > 0);
+		auto target = StringVector::EmptyString(result, buffer_size);
 		auto output = target.GetDataWriteable();
 
-		WriteHexBytes(upper, output, upper_num_leading_zero, 64);
-		WriteHexBytes(lower, output, lower_num_leading_zero, 64);
+		WriteHugeIntHexBytes(input, output, buffer_size);
 
 		target.Finalize();
 		return target;
@@ -189,7 +174,14 @@ struct BinaryIntegralOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
 
-		if (input == 0) {
+		idx_t num_leading_zero = CountZeros<uint64_t>::Leading(input);
+		idx_t num_bits_to_check = 64 - num_leading_zero;
+		D_ASSERT(num_bits_to_check <= sizeof(INPUT_TYPE) * 8);
+
+		idx_t buffer_size = num_bits_to_check;
+
+		// Special case: All bits are zero
+		if (buffer_size == 0) {
 			auto target = StringVector::EmptyString(result, 1);
 			auto output = target.GetDataWriteable();
 			*output = '0';
@@ -197,12 +189,11 @@ struct BinaryIntegralOperator {
 			return target;
 		}
 
-		idx_t num_leading_zero = CountZeros<uint64_t>::Leading(input);
-
-		auto target = StringVector::EmptyString(result, sizeof(INPUT_TYPE) * 8 - num_leading_zero);
+		D_ASSERT(buffer_size > 0);
+		auto target = StringVector::EmptyString(result, buffer_size);
 		auto output = target.GetDataWriteable();
 
-		WriteBinBytes(input, output, num_leading_zero, sizeof(INPUT_TYPE) * 8);
+		WriteBinBytes(input, output, buffer_size);
 
 		target.Finalize();
 		return target;
@@ -212,8 +203,11 @@ struct BinaryIntegralOperator {
 struct BinaryHugeIntOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
+		idx_t num_leading_zero = CountZeros<hugeint_t>::Leading(input);
+		idx_t buffer_size = sizeof(INPUT_TYPE) * 8 - num_leading_zero;
 
-		if (input == 0) {
+		// Special case: All bits are zero
+		if (buffer_size == 0) {
 			auto target = StringVector::EmptyString(result, 1);
 			auto output = target.GetDataWriteable();
 			*output = '0';
@@ -221,21 +215,47 @@ struct BinaryHugeIntOperator {
 			return target;
 		}
 
-		uint64_t lower = input.lower;
-		int64_t upper = input.upper;
-		idx_t upper_num_leading_zero = CountZeros<uint64_t>::Leading(upper);
-		idx_t lower_num_leading_zero = 0;
-		idx_t num_leading_zero = upper_num_leading_zero;
-		if (upper_num_leading_zero == 64) {
-			lower_num_leading_zero = CountZeros<uint64_t>::Leading(lower);
-			num_leading_zero += lower_num_leading_zero;
-		}
-
-		auto target = StringVector::EmptyString(result, sizeof(INPUT_TYPE) * 8 - num_leading_zero);
+		auto target = StringVector::EmptyString(result, buffer_size);
 		auto output = target.GetDataWriteable();
 
-		WriteBinBytes(upper, output, upper_num_leading_zero, 64);
-		WriteBinBytes(lower, output, lower_num_leading_zero, 64);
+		WriteHugeIntBinBytes(input, output, buffer_size);
+
+		target.Finalize();
+		return target;
+	}
+};
+
+struct FromHexOperator {
+	template <class INPUT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
+		auto data = input.GetDataUnsafe();
+		auto size = input.GetSize();
+
+		if (size > NumericLimits<uint32_t>::Maximum()) {
+			throw InvalidInputException("Hexadecimal input length larger than 2^32 are not supported");
+		}
+
+		D_ASSERT(size <= NumericLimits<uint32_t>::Maximum());
+		auto buffer_size = (size + 1) / 2;
+
+		// Allocate empty space
+		auto target = StringVector::EmptyString(result, buffer_size);
+		auto output = target.GetDataWriteable();
+
+		// Treated as a single byte
+		idx_t i = 0;
+		if (size % 2 != 0) {
+			*output = StringUtil::GetHexValue(data[i]);
+			i++;
+			output++;
+		}
+
+		for (; i < size; i += 2) {
+			uint8_t major = StringUtil::GetHexValue(data[i]);
+			uint8_t minor = StringUtil::GetHexValue(data[i + 1]);
+			*output = (major << 4) | minor;
+			output++;
+		}
 
 		target.Finalize();
 		return target;
