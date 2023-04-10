@@ -60,3 +60,7 @@ endif()
 if(${BUILD_INET_EXTENSION})
   add_subdirectory(inet)
 endif()
+
+if(${BUILD_AUTOCOMPLETE_EXTENSION})
+  add_subdirectory(autocomplete)
+endif()

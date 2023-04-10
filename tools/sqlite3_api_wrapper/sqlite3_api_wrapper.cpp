@@ -2,7 +2,6 @@
 #include "duckdb_shell_wrapper.h"
 #endif
 #include "sqlite3.h"
-#include "sql_auto_complete_extension.hpp"
 #include "udf_struct_sqlite3.h"
 #include "sqlite3_udf_wrapper.hpp"
 #include "cast_sqlite.hpp"
@@ -114,7 +113,6 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 		    "extensions are disabled by configuration.\nStart the shell with the -unsigned parameter to allow this "
 		    "(e.g. duckdb -unsigned).");
 		pDb->db = make_uniq<DuckDB>(filename, &config);
-		pDb->db->LoadExtension<SQLAutoCompleteExtension>();
 		pDb->con = make_uniq<Connection>(*pDb->db);
 	} catch (const Exception &ex) {
 		if (pDb) {
