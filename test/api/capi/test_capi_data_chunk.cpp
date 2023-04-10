@@ -267,9 +267,9 @@ TEST_CASE("Test DataChunk populate ListVector in C API", "[capi]") {
 	for (int i = 0; i < 123; i++) {
 		REQUIRE(ListVector::GetEntry(vector).GetValue(i) == i);
 	}
+#endif
 
 	duckdb_destroy_data_chunk(&chunk);
 	duckdb_destroy_logical_type(&list_type);
 	duckdb_destroy_logical_type(&elem_type);
-#endif
 }
