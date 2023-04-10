@@ -1,0 +1,37 @@
+# name: test/sql/function/generic/error.test
+# description: Error test
+# group: [generic]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+SELECT error('test')
+----
+Invalid Error: test
+
+statement error
+SELECT
+  CASE
+    WHEN value = 'foo' THEN 'Value is foo.'
+    ELSE ERROR(CONCAT('Found unexpected value: ', value))
+  END AS new_value
+FROM (
+  SELECT 'foo' AS value UNION ALL
+  SELECT 'baz' AS value);
+----
+Invalid Error: Found unexpected value: baz
+
+query I
+SELECT *
+FROM (SELECT 4 AS x)
+WHERE IF(x % 2 = 0, true, ERROR(FORMAT('x must be even number but is {}', x)));
+----
+4
+
+statement error
+SELECT *
+FROM (SELECT 3 AS x)
+WHERE IF(x % 2 = 0, true, ERROR(FORMAT('x must be even but is {}', x)));
+----
+Invalid Error: x must be even but is 3

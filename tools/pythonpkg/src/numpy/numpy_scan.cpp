@@ -52,6 +52,8 @@ void ScanNumpyCategory(py::array &column, idx_t count, idx_t offset, Vector &out
 		ScanNumpyCategoryTemplated<int16_t, T>(column, offset, out, count);
 	} else if (src_type == "int32") {
 		ScanNumpyCategoryTemplated<int32_t, T>(column, offset, out, count);
+	} else if (src_type == "int64") {
+		ScanNumpyCategoryTemplated<int64_t, T>(column, offset, out, count);
 	} else {
 		throw NotImplementedException("The Pandas type " + src_type + " for categorical types is not implemented yet");
 	}
@@ -186,7 +188,7 @@ void ScanNumpyObjectColumn(PandasColumnBindData &bind_data, PyObject **col, idx_
 
 //! 'offset' is the offset within the column
 //! 'count' is the amount of values we will convert in this batch
-void Numpy::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset, Vector &out) {
+void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset, Vector &out) {
 	D_ASSERT(bind_data.numpy_col->Backend() == PandasColumnBackend::NUMPY);
 	auto &numpy_col = (PandasNumpyColumn &)*bind_data.numpy_col;
 	auto &array = numpy_col.array;
