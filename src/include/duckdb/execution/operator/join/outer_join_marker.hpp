@@ -29,7 +29,7 @@ struct OuterJoinLocalScanState {
 
 class OuterJoinMarker {
 public:
-	OuterJoinMarker(bool enabled);
+	explicit OuterJoinMarker(bool enabled);
 
 	bool Enabled() {
 		return enabled;
@@ -59,6 +59,11 @@ public:
 
 	//! Perform the scan
 	void Scan(OuterJoinGlobalScanState &gstate, OuterJoinLocalScanState &lstate, DataChunk &result);
+
+	//! Read-only matches vector
+	const bool *GetMatches() const {
+		return found_match.get();
+	}
 
 private:
 	bool enabled;

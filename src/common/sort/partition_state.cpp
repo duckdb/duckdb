@@ -18,14 +18,23 @@ PartitionGlobalHashGroup::PartitionGlobalHashGroup(BufferManager &buffer_manager
 	global_sort = make_uniq<GlobalSortState>(buffer_manager, orders, payload_layout);
 	global_sort->external = external;
 
+	//	Set up a comparator for the partition subset
 	partition_layout = global_sort->sort_layout.GetPrefixComparisonLayout(partitions.size());
+}
+
+int PartitionGlobalHashGroup::ComparePartitions(const SBIterator &left, const SBIterator &right) const {
+	int part_cmp = 0;
+	if (partition_layout.all_constant) {
+		part_cmp = FastMemcmp(left.entry_ptr, right.entry_ptr, partition_layout.comparison_size);
+	} else {
+		part_cmp = Comparators::CompareTuple(left.scan, right.scan, left.entry_ptr, right.entry_ptr, partition_layout,
+		                                     left.external);
+	}
+	return part_cmp;
 }
 
 void PartitionGlobalHashGroup::ComputeMasks(ValidityMask &partition_mask, ValidityMask &order_mask) {
 	D_ASSERT(count > 0);
-
-	//	Set up a comparator for the partition subset
-	const auto partition_size = partition_layout.comparison_size;
 
 	SBIterator prev(*global_sort, ExpressionType::COMPARE_LESSTHAN);
 	SBIterator curr(*global_sort, ExpressionType::COMPARE_LESSTHAN);
@@ -34,13 +43,8 @@ void PartitionGlobalHashGroup::ComputeMasks(ValidityMask &partition_mask, Validi
 	order_mask.SetValidUnsafe(0);
 	for (++curr; curr.GetIndex() < count; ++curr) {
 		//	Compare the partition subset first because if that differs, then so does the full ordering
-		int part_cmp = 0;
-		if (partition_layout.all_constant) {
-			part_cmp = FastMemcmp(prev.entry_ptr, curr.entry_ptr, partition_size);
-		} else {
-			part_cmp = Comparators::CompareTuple(prev.scan, curr.scan, prev.entry_ptr, curr.entry_ptr, partition_layout,
-			                                     prev.external);
-		}
+		const auto part_cmp = ComparePartitions(prev, curr);
+		;
 
 		if (part_cmp) {
 			partition_mask.SetValidUnsafe(curr.GetIndex());
@@ -52,31 +56,40 @@ void PartitionGlobalHashGroup::ComputeMasks(ValidityMask &partition_mask, Validi
 	}
 }
 
-PartitionGlobalSinkState::PartitionGlobalSinkState(ClientContext &context,
-                                                   const vector<unique_ptr<Expression>> &partitions_p,
-                                                   const vector<BoundOrderByNode> &orders_p, const Types &payload_types,
-                                                   const vector<unique_ptr<BaseStatistics>> &partitions_stats,
-                                                   idx_t estimated_cardinality)
-    : context(context), buffer_manager(BufferManager::GetBufferManager(context)), allocator(Allocator::Get(context)),
-      payload_types(payload_types), memory_per_thread(0), count(0) {
+void PartitionGlobalSinkState::GenerateOrderings(Orders &partitions, Orders &orders,
+                                                 const vector<unique_ptr<Expression>> &partition_bys,
+                                                 const Orders &order_bys,
+                                                 const vector<unique_ptr<BaseStatistics>> &partition_stats) {
 
 	// we sort by both 1) partition by expression list and 2) order by expressions
-	const auto partition_cols = partitions_p.size();
+	const auto partition_cols = partition_bys.size();
 	for (idx_t prt_idx = 0; prt_idx < partition_cols; prt_idx++) {
-		auto &pexpr = partitions_p[prt_idx];
+		auto &pexpr = partition_bys[prt_idx];
 
-		if (partitions_stats.empty() || !partitions_stats[prt_idx]) {
+		if (partition_stats.empty() || !partition_stats[prt_idx]) {
 			orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, pexpr->Copy(), nullptr);
 		} else {
 			orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, pexpr->Copy(),
-			                    partitions_stats[prt_idx]->ToUnique());
+			                    partition_stats[prt_idx]->ToUnique());
 		}
 		partitions.emplace_back(orders.back().Copy());
 	}
 
-	for (const auto &order : orders_p) {
+	for (const auto &order : order_bys) {
 		orders.emplace_back(order.Copy());
 	}
+}
+
+PartitionGlobalSinkState::PartitionGlobalSinkState(ClientContext &context,
+                                                   const vector<unique_ptr<Expression>> &partition_bys,
+                                                   const vector<BoundOrderByNode> &order_bys,
+                                                   const Types &payload_types,
+                                                   const vector<unique_ptr<BaseStatistics>> &partition_stats,
+                                                   idx_t estimated_cardinality)
+    : context(context), buffer_manager(BufferManager::GetBufferManager(context)), allocator(Allocator::Get(context)),
+      payload_types(payload_types), memory_per_thread(0), count(0) {
+
+	GenerateOrderings(partitions, orders, partition_bys, order_bys, partition_stats);
 
 	memory_per_thread = PhysicalOperator::GetMaxThreadMemory(context);
 	external = ClientConfig::GetConfig(context).force_external;

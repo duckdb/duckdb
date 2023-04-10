@@ -193,7 +193,7 @@ public:
 	~CachingOperatorState() override {
 	}
 
-	virtual void Finalize(PhysicalOperator *op, ExecutionContext &context) override {
+	void Finalize(PhysicalOperator *op, ExecutionContext &context) override {
 	}
 
 	unique_ptr<DataChunk> cached_chunk;

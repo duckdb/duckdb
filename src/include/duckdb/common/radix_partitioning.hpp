@@ -55,6 +55,9 @@ public:
 	                             RowDataCollection &block_collection, RowDataCollection &string_heap,
 	                             vector<unique_ptr<RowDataCollection>> &partition_block_collections,
 	                             vector<unique_ptr<RowDataCollection>> &partition_string_heaps, idx_t radix_bits);
+
+	//! Convert hashes to bins
+	static void HashesToBins(Vector &hashes, idx_t radix_bits, Vector &bins, idx_t count);
 };
 
 //! RadixPartitionedColumnData is a PartitionedColumnData that partitions input based on the radix of a hash

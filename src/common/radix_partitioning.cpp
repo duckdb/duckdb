@@ -120,6 +120,19 @@ idx_t RadixPartitioning::Select(Vector &hashes, const SelectionVector *sel, idx_
 	return RadixBitsSwitch<SelectFunctor, idx_t>(radix_bits, hashes, sel, count, cutoff, true_sel, false_sel);
 }
 
+struct HashsToBinsFunctor {
+	template <idx_t radix_bits>
+	static void Operation(Vector &hashes, Vector &bins, idx_t count) {
+		using CONSTANTS = RadixPartitioningConstants<radix_bits>;
+		UnaryExecutor::Execute<hash_t, hash_t>(hashes, bins, count,
+		                                       [&](hash_t hash) { return CONSTANTS::ApplyMask(hash); });
+	}
+};
+
+void RadixPartitioning::HashesToBins(Vector &hashes, idx_t radix_bits, Vector &bins, idx_t count) {
+	return RadixBitsSwitch<HashsToBinsFunctor, void>(radix_bits, hashes, bins, count);
+}
+
 //===--------------------------------------------------------------------===//
 // Row Data Partitioning
 //===--------------------------------------------------------------------===//

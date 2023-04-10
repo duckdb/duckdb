@@ -25,6 +25,8 @@ public:
 	PartitionGlobalHashGroup(BufferManager &buffer_manager, const Orders &partitions, const Orders &orders,
 	                         const Types &payload_types, bool external);
 
+	int ComparePartitions(const SBIterator &left, const SBIterator &right) const;
+
 	void ComputeMasks(ValidityMask &partition_mask, ValidityMask &order_mask);
 
 	GlobalSortStatePtr global_sort;
@@ -43,8 +45,12 @@ public:
 	using GroupingPartition = unique_ptr<PartitionedColumnData>;
 	using GroupingAppend = unique_ptr<PartitionedColumnDataAppendState>;
 
-	PartitionGlobalSinkState(ClientContext &context, const vector<unique_ptr<Expression>> &partitions_p,
-	                         const vector<BoundOrderByNode> &orders_p, const Types &payload_types,
+	static void GenerateOrderings(Orders &partitions, Orders &orders,
+	                              const vector<unique_ptr<Expression>> &partition_bys, const Orders &order_bys,
+	                              const vector<unique_ptr<BaseStatistics>> &partitions_stats);
+
+	PartitionGlobalSinkState(ClientContext &context, const vector<unique_ptr<Expression>> &partition_bys,
+	                         const vector<BoundOrderByNode> &order_bys, const Types &payload_types,
 	                         const vector<unique_ptr<BaseStatistics>> &partitions_stats, idx_t estimated_cardinality);
 
 	void UpdateLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append);
