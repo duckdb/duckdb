@@ -1,11 +1,12 @@
 #pragma once
 
 #include "duckdb/common/mutex.hpp"
-#include "duckdb/parallel/concurrentqueue.hpp"
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 
 namespace duckdb {
+
+struct EvictionQueue;
 
 struct BufferEvictionNode {
 	BufferEvictionNode() {
@@ -21,12 +22,6 @@ struct BufferEvictionNode {
 	bool CanUnload(BlockHandle &handle_p);
 
 	shared_ptr<BlockHandle> TryGetBlockHandle();
-};
-
-typedef duckdb_moodycamel::ConcurrentQueue<BufferEvictionNode> eviction_queue_t;
-
-struct EvictionQueue {
-	eviction_queue_t q;
 };
 
 //! The BufferPool is in charge of handling memory management for one or more databases. It defines memory limits

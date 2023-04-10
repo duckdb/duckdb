@@ -1,7 +1,14 @@
 #include "duckdb/storage/buffer/buffer_pool.hpp"
+#include "duckdb/parallel/concurrentqueue.hpp"
 #include "duckdb/common/exception.hpp"
 
 namespace duckdb {
+
+typedef duckdb_moodycamel::ConcurrentQueue<BufferEvictionNode> eviction_queue_t;
+
+struct EvictionQueue {
+	eviction_queue_t q;
+};
 
 bool BufferEvictionNode::CanUnload(BlockHandle &handle_p) {
 	if (timestamp != handle_p.eviction_timestamp) {
