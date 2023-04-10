@@ -69,3 +69,19 @@ class TestDateTimeTime(object):
 
         with pytest.raises(duckdb.ConversionException):
             res = duckdb_con.execute("select * from test").df()
+
+    def test_timezone_datetime(self):
+        module = pytest.importorskip("datetime")
+        timezone = module.timezone
+        datetime = module.datetime
+
+        con = duckdb.connect()
+
+        dt = datetime.now(timezone.utc).replace(microsecond=0)
+
+        original = dt
+        stringified = str(dt)
+
+        original_res = con.execute('select ?::TIMESTAMPTZ', [original]).fetchone()
+        stringified_res = con.execute('select ?::TIMESTAMPTZ', [stringified]).fetchone()
+        assert original_res == stringified_res
