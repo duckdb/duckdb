@@ -142,8 +142,8 @@
 %nonassoc	IDENT GENERATED NULL_P PARTITION RANGE ROWS PRECEDING FOLLOWING CUBE ROLLUP ENUM_P
 %left		Op OPERATOR		/* multi-character ops and user-defined operators */
 %left		'+' '-'
-%left		'*' '/' '%'
-%left		INTEGER_DIVISION '^' POWER_OF
+%left		'*' '/' '%' INTEGER_DIVISION
+%left		'^' POWER_OF
 /* Unary Operators */
 %left		AT				/* sets precedence for AT TIME ZONE */
 %left		COLLATE
