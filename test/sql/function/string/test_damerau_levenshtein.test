@@ -213,3 +213,129 @@ SELECT damerau_levenshtein(s, '') FROM strings ORDER BY s
 5
 6
 
+
+statement ok
+DROP TABLE strings
+
+statement ok
+CREATE TABLE strings(s VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES (NULL)
+
+query I
+SELECT damerau_levenshtein(s, NULL) from strings
+----
+NULL
+
+query I
+SELECT damerau_levenshtein(NULL, s) from strings
+----
+NULL
+
+query I
+SELECT damerau_levenshtein('test', s) from strings
+----
+NULL
+
+query I
+SELECT damerau_levenshtein(s, 'test') from strings
+----
+NULL
+
+query I
+SELECT damerau_levenshtein('null', s) from strings
+----
+NULL
+
+query I
+SELECT damerau_levenshtein('', s)  FROM strings
+----
+NULL
+
+query I
+SELECT damerau_levenshtein(s, '')  FROM strings
+----
+NULL
+
+
+statement ok
+DROP TABLE strings
+
+statement ok
+CREATE TABLE strings(s VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES ('')
+
+query I
+SELECT damerau_levenshtein(NULL, s)  FROM strings
+----
+NULL
+
+query I
+SELECT damerau_levenshtein(s, NULL)  FROM strings
+----
+NULL
+
+query I
+SELECT damerau_levenshtein(s, '')  FROM strings
+----
+0
+
+query I
+SELECT damerau_levenshtein('', s)  FROM strings
+----
+0
+
+query I
+SELECT damerau_levenshtein(s, 'test')  FROM strings
+----
+4
+
+query I
+SELECT damerau_levenshtein('test', s)  FROM strings
+----
+4
+
+query I
+SELECT damerau_levenshtein('null', s)  FROM strings
+----
+4
+
+
+statement ok
+DROP TABLE strings
+
+statement ok
+CREATE TABLE strings(s_left VARCHAR, s_right VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES 	('identical', 'identical'), ('dientical', 'identical'),
+							('dinetcila', 'identical'), ('abcdefghijk', 'bacdfzzeghki'),
+							('abcd', 'bcda'), ('great', 'greta'),
+							('abcdefghijklmnopqrstuvwxyz', 'abdcpoxwz'),
+							(NULL, NULL), ('', ''),
+							(NULL, 'test'), ('test', NULL),
+							('four', ''), ('', 'four'),
+							(NULL, ''), ('', NULL)
+
+
+query I
+SELECT damerau_levenshtein(s_left, s_right) FROM strings
+----
+0
+1
+4
+6
+2
+1
+20
+NULL
+0
+NULL
+NULL
+4
+4
+NULL
+NULL
