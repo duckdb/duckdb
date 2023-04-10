@@ -908,6 +908,8 @@ static scalar_function_t GetBinaryFunctionIgnoreZero(const LogicalType &type) {
 
 void DivideFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet fp_divide("/");
+	fp_divide.AddFunction(ScalarFunction({LogicalType::FLOAT, LogicalType::FLOAT}, LogicalType::FLOAT,
+	                                     GetBinaryFunctionIgnoreZero<DivideOperator>(LogicalType::FLOAT)));
 	fp_divide.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                                     GetBinaryFunctionIgnoreZero<DivideOperator>(LogicalType::DOUBLE)));
 	fp_divide.AddFunction(
