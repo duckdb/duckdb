@@ -1,10 +1,10 @@
+#include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
-#include "duckdb/common/bit_utils.hpp"
 
 namespace duckdb {
 
@@ -24,7 +24,7 @@ static void WriteHugeIntHexBytes(hugeint_t x, char *&output, idx_t buffer_size) 
 	auto lower = x.lower;
 
 	for (; offset >= 68; offset -= 4) {
-		uint8_t byte = (upper >> (offset - 4)) & 0x0F;
+		uint8_t byte = (upper >> (offset - 68)) & 0x0F;
 		*output = Blob::HEX_TABLE[byte];
 		output++;
 	}
@@ -50,7 +50,7 @@ static void WriteHugeIntBinBytes(hugeint_t x, char *&output, idx_t buffer_size) 
 	idx_t offset = buffer_size;
 
 	for (; offset >= 65; offset -= 1) {
-		*output = ((upper >> (offset - 1)) & 0x01) + '0';
+		*output = ((upper >> (offset - 65)) & 0x01) + '0';
 		output++;
 	}
 
