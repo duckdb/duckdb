@@ -73,11 +73,14 @@ unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &conte
 	py::handle df((PyObject *)(input.inputs[0].GetPointer()));
 
 	vector<PandasColumnBindData> pandas_bind_data;
-	VectorConversion::BindPandas(DBConfig::GetConfig(context), df, pandas_bind_data, return_types, names);
-
-	auto df_columns = py::list(df.attr("columns"));
+	auto is_py_dict = py::isinstance<py::dict>(df);
+	if (is_py_dict) {
+		VectorConversion::BindNumpy(DBConfig::GetConfig(context), df, pandas_bind_data, return_types, names);
+	} else {
+		VectorConversion::BindPandas(DBConfig::GetConfig(context), df, pandas_bind_data, return_types, names);
+	}
+	auto df_columns = py::list(df.attr("keys")());
 	auto get_fun = df.attr("__getitem__");
-
 	idx_t row_count = py::len(get_fun(df_columns[0]));
 	return make_uniq<PandasScanFunctionData>(df, row_count, std::move(pandas_bind_data), return_types);
 }

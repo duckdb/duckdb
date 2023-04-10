@@ -118,7 +118,7 @@ struct joined_table : table_ref {
 };
 
 struct from_clause : prod {
-	std::vector<shared_ptr<table_ref>> reflist;
+	vector<shared_ptr<table_ref>> reflist;
 	virtual void out(std::ostream &out);
 	from_clause(prod *p);
 	virtual ~from_clause() {
@@ -131,7 +131,7 @@ struct from_clause : prod {
 };
 
 struct select_list : prod {
-	std::vector<shared_ptr<value_expr>> value_exprs;
+	vector<shared_ptr<value_expr>> value_exprs;
 	relation derived_table;
 	int columns = 0;
 	select_list(prod *p);

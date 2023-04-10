@@ -343,14 +343,14 @@ public:
 		auto &bind_data = (ParquetReadBindData &)*input.bind_data;
 		auto result = make_uniq<ParquetReadGlobalState>();
 
-		result->file_opening = std::vector<bool>(bind_data.files.size(), false);
+		result->file_opening = vector<bool>(bind_data.files.size(), false);
 		result->file_mutexes = unique_ptr<mutex[]>(new mutex[bind_data.files.size()]);
 		if (bind_data.files.empty()) {
 			result->initial_reader = nullptr;
 		} else {
 			result->readers = std::move(bind_data.union_readers);
 			if (result->readers.size() != bind_data.files.size()) {
-				result->readers = std::vector<shared_ptr<ParquetReader>>(bind_data.files.size(), nullptr);
+				result->readers = vector<shared_ptr<ParquetReader>>(bind_data.files.size(), nullptr);
 			}
 			if (bind_data.initial_reader) {
 				result->initial_reader = std::move(bind_data.initial_reader);

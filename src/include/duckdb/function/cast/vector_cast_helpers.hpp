@@ -207,8 +207,8 @@ struct VectorStringToList {
 };
 
 struct VectorStringToStruct {
-	static bool SplitStruct(string_t &input, std::vector<unique_ptr<Vector>> &varchar_vectors, idx_t &row_idx,
-	                        string_map_t<idx_t> &child_names, std::vector<ValidityMask *> &child_masks);
+	static bool SplitStruct(string_t &input, vector<unique_ptr<Vector>> &varchar_vectors, idx_t &row_idx,
+	                        string_map_t<idx_t> &child_names, vector<ValidityMask *> &child_masks);
 	static bool StringToNestedTypeCastLoop(string_t *source_data, ValidityMask &source_mask, Vector &result,
 	                                       ValidityMask &result_mask, idx_t count, CastParameters &parameters,
 	                                       const SelectionVector *sel);

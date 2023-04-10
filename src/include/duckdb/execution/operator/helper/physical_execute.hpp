@@ -28,7 +28,6 @@ public:
 	vector<PhysicalOperator *> GetChildren() const override;
 
 public:
-	bool AllOperatorsPreserveOrder() const override;
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
 };
 

@@ -1,30 +1,11 @@
 #include "duckdb/common/pair.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/list_segment.hpp"
 #include "duckdb/function/aggregate/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 namespace duckdb {
 
-static void InitializeValidities(Vector &vector, idx_t &capacity) {
-
-	auto &validity_mask = FlatVector::Validity(vector);
-	validity_mask.Initialize(capacity);
-
-	auto internal_type = vector.GetType().InternalType();
-	if (internal_type == PhysicalType::LIST) {
-		auto &child_vector = ListVector::GetEntry(vector);
-		InitializeValidities(child_vector, capacity);
-	} else if (internal_type == PhysicalType::STRUCT) {
-		auto &children = StructVector::GetEntries(vector);
-		for (auto &child : children) {
-			InitializeValidities(*child, capacity);
-		}
-	}
-}
-
 static void RecursiveFlatten(Vector &vector, idx_t &count) {
-
 	if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
 		vector.Flatten(count);
 	}
@@ -47,9 +28,7 @@ struct ListBindData : public FunctionData {
 	~ListBindData() override;
 
 	LogicalType stype;
-	WriteDataToSegment write_data_to_segment;
-	ReadDataFromSegment read_data_from_segment;
-	CopyDataFromSegment copy_data_from_segment;
+	ListSegmentFunctions functions;
 
 	unique_ptr<FunctionData> Copy() const override {
 		return make_uniq<ListBindData>(stype);
@@ -62,45 +41,31 @@ struct ListBindData : public FunctionData {
 };
 
 ListBindData::ListBindData(const LogicalType &stype_p) : stype(stype_p) {
-
 	// always unnest once because the result vector is of type LIST
 	auto type = ListType::GetChildType(stype_p);
-	GetSegmentDataFunctions(write_data_to_segment, read_data_from_segment, copy_data_from_segment, type);
+	GetSegmentDataFunctions(functions, type);
 }
 
 ListBindData::~ListBindData() {
 }
 
 struct ListAggState {
-	LinkedList *linked_list;
-	LogicalType *type;
-	vector<AllocatedData> *owning_vector;
+	LinkedList linked_list;
 };
 
 struct ListFunction {
 	template <class STATE>
 	static void Initialize(STATE *state) {
-		state->linked_list = nullptr;
-		state->type = nullptr;
-		state->owning_vector = nullptr;
+		state->linked_list.total_capacity = 0;
+		state->linked_list.first_segment = nullptr;
+		state->linked_list.last_segment = nullptr;
 	}
 
 	template <class STATE>
-	static void Destroy(STATE *state) {
+	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
 		D_ASSERT(state);
-		if (state->linked_list) {
-			delete state->linked_list;
-			state->linked_list = nullptr;
-		}
-		if (state->type) {
-			delete state->type;
-			state->type = nullptr;
-		}
-		if (state->owning_vector) {
-			state->owning_vector->clear();
-			delete state->owning_vector;
-			state->owning_vector = nullptr;
-		}
+		auto &list_bind_data = aggr_input_data.bind_data->Cast<ListBindData>();
+		list_bind_data.functions.Destroy(aggr_input_data.allocator, state->linked_list);
 	}
 	static bool IgnoreNull() {
 		return false;
@@ -122,14 +87,7 @@ static void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_d
 
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
-		if (!state->linked_list) {
-			state->linked_list = new LinkedList(0, nullptr, nullptr);
-			state->type = new LogicalType(input.GetType());
-			state->owning_vector = new vector<AllocatedData>;
-		}
-		D_ASSERT(state->type);
-		list_bind_data.write_data_to_segment.AppendRow(aggr_input_data.allocator, *state->owning_vector,
-		                                               state->linked_list, input, i, count);
+		list_bind_data.functions.AppendRow(aggr_input_data.allocator, state->linked_list, input, i, count);
 	}
 }
 
@@ -143,33 +101,23 @@ static void ListCombineFunction(Vector &state, Vector &combined, AggregateInputD
 	auto combined_ptr = FlatVector::GetData<ListAggState *>(combined);
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states_ptr[sdata.sel->get_index(i)];
-		if (!state->linked_list) {
+		if (state->linked_list.total_capacity == 0) {
 			// NULL, no need to append.
 			continue;
 		}
-		D_ASSERT(state->type);
-		D_ASSERT(state->owning_vector);
-
-		if (!combined_ptr[i]->linked_list) {
-			combined_ptr[i]->linked_list = new LinkedList(0, nullptr, nullptr);
-			combined_ptr[i]->owning_vector = new vector<AllocatedData>;
-			combined_ptr[i]->type = new LogicalType(*state->type);
-		}
-		auto owning_vector = combined_ptr[i]->owning_vector;
 
 		// copy the linked list of the state
-		auto copied_linked_list = LinkedList(state->linked_list->total_capacity, nullptr, nullptr);
-		list_bind_data.copy_data_from_segment.CopyLinkedList(state->linked_list, copied_linked_list,
-		                                                     aggr_input_data.allocator, *owning_vector);
+		auto copied_linked_list = LinkedList(state->linked_list.total_capacity, nullptr, nullptr);
+		list_bind_data.functions.CopyLinkedList(state->linked_list, copied_linked_list, aggr_input_data.allocator);
 
 		// append the copied linked list to the combined state
-		if (combined_ptr[i]->linked_list->last_segment) {
-			combined_ptr[i]->linked_list->last_segment->next = copied_linked_list.first_segment;
+		if (combined_ptr[i]->linked_list.last_segment) {
+			combined_ptr[i]->linked_list.last_segment->next = copied_linked_list.first_segment;
 		} else {
-			combined_ptr[i]->linked_list->first_segment = copied_linked_list.first_segment;
+			combined_ptr[i]->linked_list.first_segment = copied_linked_list.first_segment;
 		}
-		combined_ptr[i]->linked_list->last_segment = copied_linked_list.last_segment;
-		combined_ptr[i]->linked_list->total_capacity += copied_linked_list.total_capacity;
+		combined_ptr[i]->linked_list.last_segment = copied_linked_list.last_segment;
+		combined_ptr[i]->linked_list.total_capacity += copied_linked_list.total_capacity;
 	}
 }
 
@@ -186,39 +134,35 @@ static void ListFinalize(Vector &state_vector, AggregateInputData &aggr_input_da
 	size_t total_len = ListVector::GetListSize(result);
 
 	auto &list_bind_data = aggr_input_data.bind_data->Cast<ListBindData>();
-
+	// first iterate over all of the entries and set up the list entries, plus get the newly required total length
 	for (idx_t i = 0; i < count; i++) {
-
 		auto state = states[sdata.sel->get_index(i)];
 		const auto rid = i + offset;
-		if (!state->linked_list) {
+		result_data[rid].offset = total_len;
+		if (state->linked_list.total_capacity == 0) {
 			mask.SetInvalid(rid);
+			result_data[rid].length = 0;
+			continue;
+		}
+		// set the length and offset of this list in the result vector
+		auto total_capacity = state->linked_list.total_capacity;
+		result_data[rid].length = total_capacity;
+		total_len += total_capacity;
+	}
+	// reserve capacity, then iterate over all of the entries again and copy over the data tot he child vector
+	ListVector::Reserve(result, total_len);
+	auto &result_child = ListVector::GetEntry(result);
+	for (idx_t i = 0; i < count; i++) {
+		auto state = states[sdata.sel->get_index(i)];
+		const auto rid = i + offset;
+		if (state->linked_list.total_capacity == 0) {
 			continue;
 		}
 
-		// set the length and offset of this list in the result vector
-		auto total_capacity = state->linked_list->total_capacity;
-		result_data[rid].length = total_capacity;
-		result_data[rid].offset = total_len;
-		total_len += total_capacity;
-
-		D_ASSERT(state->type);
-
-		Vector aggr_vector(*state->type, total_capacity);
-		// FIXME: this is a workaround because the constructor of a vector does not set the size
-		// of the validity mask, and by default it is set to STANDARD_VECTOR_SIZE
-		// ListVector::Reserve only increases the validity mask, if (to_reserve > capacity),
-		// which will not be the case if the value passed to the constructor of aggr_vector
-		// is greater than to_reserve
-		InitializeValidities(aggr_vector, total_capacity);
-
-		idx_t total_count = 0;
-		list_bind_data.read_data_from_segment.BuildListVector(state->linked_list, aggr_vector, total_count);
-		ListVector::Append(result, aggr_vector, total_capacity);
-
-		// now destroy the state (for parallel destruction)
-		ListFunction::Destroy<ListAggState>(state);
+		idx_t current_offset = result_data[rid].offset;
+		list_bind_data.functions.BuildListVector(state->linked_list, result_child, current_offset);
 	}
+	ListVector::SetListSize(result, total_len);
 }
 
 unique_ptr<FunctionData> ListBindFunction(ClientContext &context, AggregateFunction &function,

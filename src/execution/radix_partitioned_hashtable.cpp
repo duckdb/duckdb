@@ -407,7 +407,7 @@ void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &ch
 			Vector state_vector(Value::POINTER((uintptr_t)aggr_state.get()));
 			aggr.function.finalize(state_vector, aggr_input_data, chunk.data[null_groups.size() + i], 1, 0);
 			if (aggr.function.destructor) {
-				aggr.function.destructor(state_vector, 1);
+				aggr.function.destructor(state_vector, aggr_input_data, 1);
 			}
 		}
 		// Place the grouping values (all the groups of the grouping_set condensed into a single value)

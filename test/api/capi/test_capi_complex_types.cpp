@@ -25,12 +25,12 @@ TEST_CASE("Test decimal types C API", "[capi]") {
 	auto chunk = result->FetchChunk(0);
 	REQUIRE(chunk);
 
-	vector<uint8_t> widths = {4, 9, 18, 38, 0};
-	vector<uint8_t> scales = {1, 2, 3, 4, 0};
-	vector<duckdb_type> types = {DUCKDB_TYPE_DECIMAL, DUCKDB_TYPE_DECIMAL, DUCKDB_TYPE_DECIMAL, DUCKDB_TYPE_DECIMAL,
-	                             DUCKDB_TYPE_INTEGER};
-	vector<duckdb_type> internal_types = {DUCKDB_TYPE_SMALLINT, DUCKDB_TYPE_INTEGER, DUCKDB_TYPE_BIGINT,
-	                                      DUCKDB_TYPE_HUGEINT, DUCKDB_TYPE_INVALID};
+	duckdb::vector<uint8_t> widths = {4, 9, 18, 38, 0};
+	duckdb::vector<uint8_t> scales = {1, 2, 3, 4, 0};
+	duckdb::vector<duckdb_type> types = {DUCKDB_TYPE_DECIMAL, DUCKDB_TYPE_DECIMAL, DUCKDB_TYPE_DECIMAL,
+	                                     DUCKDB_TYPE_DECIMAL, DUCKDB_TYPE_INTEGER};
+	duckdb::vector<duckdb_type> internal_types = {DUCKDB_TYPE_SMALLINT, DUCKDB_TYPE_INTEGER, DUCKDB_TYPE_BIGINT,
+	                                              DUCKDB_TYPE_HUGEINT, DUCKDB_TYPE_INVALID};
 	for (idx_t i = 0; i < result->ColumnCount(); i++) {
 		auto logical_type = duckdb_vector_get_column_type(duckdb_data_chunk_get_vector(chunk->GetChunk(), i));
 		REQUIRE(logical_type);
@@ -65,11 +65,11 @@ TEST_CASE("Test enum types C API", "[capi]") {
 	auto chunk = result->FetchChunk(0);
 	REQUIRE(chunk);
 
-	vector<duckdb_type> types = {DUCKDB_TYPE_ENUM, DUCKDB_TYPE_ENUM, DUCKDB_TYPE_ENUM, DUCKDB_TYPE_INTEGER};
-	vector<duckdb_type> internal_types = {DUCKDB_TYPE_UTINYINT, DUCKDB_TYPE_USMALLINT, DUCKDB_TYPE_UINTEGER,
-	                                      DUCKDB_TYPE_INVALID};
-	vector<uint32_t> dictionary_sizes = {2, 300, 70000, 0};
-	vector<string> dictionary_strings = {"DUCK_DUCK_ENUM", "enum_0", "enum_0", string()};
+	duckdb::vector<duckdb_type> types = {DUCKDB_TYPE_ENUM, DUCKDB_TYPE_ENUM, DUCKDB_TYPE_ENUM, DUCKDB_TYPE_INTEGER};
+	duckdb::vector<duckdb_type> internal_types = {DUCKDB_TYPE_UTINYINT, DUCKDB_TYPE_USMALLINT, DUCKDB_TYPE_UINTEGER,
+	                                              DUCKDB_TYPE_INVALID};
+	duckdb::vector<uint32_t> dictionary_sizes = {2, 300, 70000, 0};
+	duckdb::vector<string> dictionary_strings = {"DUCK_DUCK_ENUM", "enum_0", "enum_0", string()};
 	for (idx_t i = 0; i < result->ColumnCount(); i++) {
 		auto logical_type = duckdb_vector_get_column_type(duckdb_data_chunk_get_vector(chunk->GetChunk(), i));
 		REQUIRE(logical_type);
@@ -105,11 +105,11 @@ TEST_CASE("Test list types C API", "[capi]") {
 	auto chunk = result->FetchChunk(0);
 	REQUIRE(chunk);
 
-	vector<duckdb_type> types = {DUCKDB_TYPE_LIST, DUCKDB_TYPE_LIST, DUCKDB_TYPE_LIST, DUCKDB_TYPE_INTEGER};
-	vector<duckdb_type> child_types_1 = {DUCKDB_TYPE_INTEGER, DUCKDB_TYPE_VARCHAR, DUCKDB_TYPE_LIST,
-	                                     DUCKDB_TYPE_INVALID};
-	vector<duckdb_type> child_types_2 = {DUCKDB_TYPE_INVALID, DUCKDB_TYPE_INVALID, DUCKDB_TYPE_INTEGER,
-	                                     DUCKDB_TYPE_INVALID};
+	duckdb::vector<duckdb_type> types = {DUCKDB_TYPE_LIST, DUCKDB_TYPE_LIST, DUCKDB_TYPE_LIST, DUCKDB_TYPE_INTEGER};
+	duckdb::vector<duckdb_type> child_types_1 = {DUCKDB_TYPE_INTEGER, DUCKDB_TYPE_VARCHAR, DUCKDB_TYPE_LIST,
+	                                             DUCKDB_TYPE_INVALID};
+	duckdb::vector<duckdb_type> child_types_2 = {DUCKDB_TYPE_INVALID, DUCKDB_TYPE_INVALID, DUCKDB_TYPE_INTEGER,
+	                                             DUCKDB_TYPE_INVALID};
 	for (idx_t i = 0; i < result->ColumnCount(); i++) {
 		auto logical_type = duckdb_vector_get_column_type(duckdb_data_chunk_get_vector(chunk->GetChunk(), i));
 		REQUIRE(logical_type);
@@ -143,10 +143,11 @@ TEST_CASE("Test struct types C API", "[capi]") {
 	auto chunk = result->FetchChunk(0);
 	REQUIRE(chunk);
 
-	vector<duckdb_type> types = {DUCKDB_TYPE_STRUCT, DUCKDB_TYPE_STRUCT, DUCKDB_TYPE_STRUCT, DUCKDB_TYPE_INTEGER};
-	vector<idx_t> child_count = {1, 2, 1, 0};
-	vector<vector<string>> child_names = {{"a"}, {"b", "c"}, {"d"}, {}};
-	vector<vector<duckdb_type>> child_types = {
+	duckdb::vector<duckdb_type> types = {DUCKDB_TYPE_STRUCT, DUCKDB_TYPE_STRUCT, DUCKDB_TYPE_STRUCT,
+	                                     DUCKDB_TYPE_INTEGER};
+	duckdb::vector<idx_t> child_count = {1, 2, 1, 0};
+	duckdb::vector<duckdb::vector<string>> child_names = {{"a"}, {"b", "c"}, {"d"}, {}};
+	duckdb::vector<duckdb::vector<duckdb_type>> child_types = {
 	    {DUCKDB_TYPE_INTEGER}, {DUCKDB_TYPE_VARCHAR, DUCKDB_TYPE_LIST}, {DUCKDB_TYPE_STRUCT}, {}};
 	for (idx_t i = 0; i < result->ColumnCount(); i++) {
 		auto logical_type = duckdb_vector_get_column_type(duckdb_data_chunk_get_vector(chunk->GetChunk(), i));

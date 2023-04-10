@@ -16,6 +16,7 @@
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/execution/physical_operator_states.hpp"
+#include "duckdb/common/enums/order_preservation_type.hpp"
 
 namespace duckdb {
 class Event;
@@ -74,12 +75,6 @@ public:
 
 	virtual void Verify();
 
-	//! Whether or not the operator depends on the order of the input chunks
-	//! If this is set to true, we cannot do things like caching intermediate vectors
-	virtual bool IsOrderDependent() const {
-		return false;
-	}
-
 public:
 	// Operator interface
 	virtual unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const;
@@ -95,6 +90,11 @@ public:
 
 	virtual bool RequiresFinalExecute() const {
 		return false;
+	}
+
+	//! The influence the operator has on order (insertion order means no influence)
+	virtual OrderPreservationType OperatorOrder() const {
+		return OrderPreservationType::INSERTION_ORDER;
 	}
 
 public:
@@ -119,8 +119,9 @@ public:
 		return false;
 	}
 
-	virtual bool IsOrderPreserving() const {
-		return true;
+	//! The type of order emitted by the operator (as a source)
+	virtual OrderPreservationType SourceOrder() const {
+		return OrderPreservationType::INSERTION_ORDER;
 	}
 
 	//! Returns the current progress percentage, or a negative value if progress bars are not supported
@@ -161,11 +162,16 @@ public:
 		return false;
 	}
 
+	//! Whether or not the sink operator depends on the order of the input chunks
+	//! If this is set to true, we cannot do things like caching intermediate vectors
+	virtual bool SinkOrderDependent() const {
+		return false;
+	}
+
 public:
 	// Pipeline construction
 	virtual vector<const PhysicalOperator *> GetSources() const;
 	bool AllSourcesSupportBatchIndex() const;
-	virtual bool AllOperatorsPreserveOrder() const;
 
 	virtual void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline);
 

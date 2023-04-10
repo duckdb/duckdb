@@ -9,6 +9,7 @@
 #include "duckdb/common/arrow/result_arrow_wrapper.hpp"
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/parser/parsed_data/create_type_info.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -409,7 +410,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNI
 
 	// invalid sql raises a parse exception
 	// need to be caught and thrown via JNI
-	vector<duckdb::unique_ptr<SQLStatement>> statements;
+	duckdb::vector<duckdb::unique_ptr<SQLStatement>> statements;
 	try {
 		statements = conn_ref->ExtractStatements(query.c_str());
 	} catch (const std::exception &e) {
@@ -466,7 +467,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 		return nullptr;
 	}
 	auto res_ref = make_uniq<ResultHolder>();
-	vector<Value> duckdb_params;
+	duckdb::vector<Value> duckdb_params;
 
 	idx_t param_len = env->GetArrayLength(params);
 	if (param_len != stmt_ref->stmt->n_param) {
@@ -655,10 +656,16 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1meta(JNIEnv
 }
 
 JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(JNIEnv *env, jclass,
-                                                                                jobject res_ref_buf) {
+                                                                                jobject res_ref_buf,
+                                                                                jobject conn_ref_buf) {
 	auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
 	if (!res_ref || !res_ref->res || res_ref->res->HasError()) {
 		env->ThrowNew(J_SQLException, "Invalid result set");
+		return nullptr;
+	}
+
+	auto conn_ref = get_connection(env, conn_ref_buf);
+	if (conn_ref == nullptr) {
 		return nullptr;
 	}
 
@@ -750,25 +757,6 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 		case LogicalTypeId::TIMESTAMP_TZ:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(timestamp_t));
 			break;
-		case LogicalTypeId::TIME:
-		case LogicalTypeId::DATE:
-		case LogicalTypeId::INTERVAL: {
-			Vector string_vec(LogicalType::VARCHAR);
-			VectorOperations::DefaultCast(vec, string_vec, row_count);
-			vec.ReferenceAndSetType(string_vec);
-			// fall through on purpose
-		}
-		case LogicalTypeId::VARCHAR:
-			varlen_data = env->NewObjectArray(row_count, J_String, nullptr);
-			for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-				if (FlatVector::IsNull(vec, row_idx)) {
-					continue;
-				}
-				auto d_str = ((string_t *)FlatVector::GetData(vec))[row_idx];
-				auto j_str = decode_charbuffer_to_jstring(env, d_str.GetDataUnsafe(), d_str.GetSize());
-				env->SetObjectArrayElement(varlen_data, row_idx, j_str);
-			}
-			break;
 		case LogicalTypeId::ENUM:
 			varlen_data = env->NewObjectArray(row_count, J_String, nullptr);
 			for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
@@ -795,9 +783,23 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 		case LogicalTypeId::UUID:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(hugeint_t));
 			break;
-		default:
-			env->ThrowNew(J_SQLException, ("Unsupported result column type " + vec.GetType().ToString()).c_str());
-			return nullptr;
+		default: {
+			Vector string_vec(LogicalType::VARCHAR);
+			VectorOperations::Cast(*conn_ref->context, vec, string_vec, row_count);
+			vec.ReferenceAndSetType(string_vec);
+			// fall through on purpose
+		}
+		case LogicalTypeId::VARCHAR:
+			varlen_data = env->NewObjectArray(row_count, J_String, nullptr);
+			for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
+				if (FlatVector::IsNull(vec, row_idx)) {
+					continue;
+				}
+				auto d_str = ((string_t *)FlatVector::GetData(vec))[row_idx];
+				auto j_str = decode_charbuffer_to_jstring(env, d_str.GetDataUnsafe(), d_str.GetSize());
+				env->SetObjectArrayElement(varlen_data, row_idx, j_str);
+			}
+			break;
 		}
 
 		env->SetObjectField(jvec, J_DuckVector_constlen, constlen_data);
@@ -1042,9 +1044,32 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1registe
 	auto arrow_array_stream = (ArrowArrayStream *)(uintptr_t)arrow_array_stream_pointer;
 
 	auto factory = new JavaArrowTabularStreamFactory(arrow_array_stream);
-	vector<Value> parameters;
+	duckdb::vector<Value> parameters;
 	parameters.push_back(Value::POINTER((uintptr_t)factory));
 	parameters.push_back(Value::POINTER((uintptr_t)JavaArrowTabularStreamFactory::Produce));
 	parameters.push_back(Value::POINTER((uintptr_t)JavaArrowTabularStreamFactory::GetSchema));
 	conn->TableFunction("arrow_scan_dumb", parameters)->CreateView(name, true, true);
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1create_1extension_1type(JNIEnv *env, jclass,
+                                                                                          jobject conn_buf) {
+
+	auto connection = get_connection(env, conn_buf);
+	if (!connection) {
+		return;
+	}
+
+	connection->BeginTransaction();
+
+	child_list_t<LogicalType> children = {{"hello", LogicalType::VARCHAR}, {"world", LogicalType::VARCHAR}};
+	auto id = LogicalType::STRUCT(children);
+	auto type_name = "test_type";
+	id.SetAlias(type_name);
+	CreateTypeInfo info(type_name, id);
+
+	auto &catalog_name = DatabaseManager::GetDefaultDatabase(*connection->context);
+	auto &catalog = Catalog::GetCatalog(*connection->context, catalog_name);
+	catalog.CreateType(*connection->context, &info);
+
+	connection->Commit();
 }
