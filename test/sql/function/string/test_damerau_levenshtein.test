@@ -78,6 +78,11 @@ SELECT damerau_levenshtein('at', 'tarokk')
 5
 
 query I
+SELECT damerau_levenshtein('tarokk', 'at')
+----
+5
+
+query I
 SELECT damerau_levenshtein('organ', 'no')
 ----
 4
@@ -86,6 +91,16 @@ query I
 SELECT damerau_levenshtein('trips', 'strip')
 ----
 2
+
+query I
+SELECT damerau_levenshtein('cat', 'cats')
+----
+1
+
+query I
+SELECT damerau_levenshtein('rat', 'brat')
+----
+1
 
 query I
 SELECT damerau_levenshtein('', 'great')
@@ -126,4 +141,75 @@ query I
 SELECT damerau_levenshtein(NULL, '')
 ----
 NULL
+
+
+statement error
+SELECT damerau_levenshtein('one', 'two', 'three')
+
+statement error
+SELECT damerau_levenshtein('one')
+
+statement error
+SELECT damerau_levenshtein()
+
+
+statement ok
+CREATE TABLE strings(s VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES ('here'), ('heres'), ('there'), ('three'), ('threes')
+
+query I
+SELECT damerau_levenshtein(s, 'theres') FROM strings ORDER BY s
+----
+2
+1
+1
+2
+1
+
+query I
+SELECT damerau_levenshtein('herse', s) FROM strings ORDER BY s
+----
+1
+1
+2
+3
+3
+
+query I
+SELECT damerau_levenshtein(NULL, s) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
+SELECT damerau_levenshtein(NULL, s) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
+SELECT damerau_levenshtein('', s) FROM strings ORDER BY s
+----
+4
+5
+5
+5
+6
+
+query I
+SELECT damerau_levenshtein(s, '') FROM strings ORDER BY s
+----
+4
+5
+5
+5
+6
 
