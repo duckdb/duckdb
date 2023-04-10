@@ -40,7 +40,7 @@ static idx_t DamerauLevenshteinDistance(const string_t &txt, const string_t &tgt
 		// H[i, 0] = i * Wd
 		h[i + 1][1] = i;
 	}
-	for (idx_t j = 1; j <= txt_len; j++) {
+	for (idx_t j = 1; j <= tgt_len; j++) {
 		// H[0, j] = j * Wi
 		h[1][j + 1] = j;
 	}
