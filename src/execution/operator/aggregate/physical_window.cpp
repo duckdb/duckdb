@@ -529,7 +529,7 @@ static idx_t FindPrevStart(const ValidityMask &mask, const idx_t l, idx_t r, idx
 
 static void PrepareInputExpressions(vector<unique_ptr<Expression>> &exprs, ExpressionExecutor &executor,
                                     DataChunk &chunk) {
-	if (exprs.empty() == 0) {
+	if (exprs.empty()) {
 		return;
 	}
 
