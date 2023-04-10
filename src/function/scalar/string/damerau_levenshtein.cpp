@@ -1,9 +1,9 @@
-#include "duckdb/function/scalar/string_functions.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 
-#include <ctype.h>
 #include <algorithm>
+#include <ctype.h>
 #include <map>
 
 namespace duckdb {
@@ -46,7 +46,7 @@ static idx_t DamerauLevenshteinDistance(const string_t &txt, const string_t &tgt
 	}
 	for (idx_t i = 1; i <= txt_len; i++) {
 		db = 0;
-		for (idx_t j = 1; j <= tgt_len; j++) { 
+		for (idx_t j = 1; j <= tgt_len; j++) {
 			// offset as strings are 0-indexed
 			ii = da[tgt_str[j - 1]];
 			jj = db;
@@ -54,18 +54,12 @@ static idx_t DamerauLevenshteinDistance(const string_t &txt, const string_t &tgt
 				d = 0;
 				db = j;
 			} else {
-				d = 1;  // Wc
+				d = 1; // Wc
 			}
-			h[i + 1][j + 1] = MinValue(
-				h[i][j] + d,
-				MinValue(
-					h[i + 1][j] + 1,  // wi
-					MinValue(
-						h[i][j + 1] + 1,  // wd
-						h[ii][jj] + (i - ii - 1) + 1 + (j - jj - 1)
-					)
-				)
-			);
+			h[i + 1][j + 1] = MinValue(h[i][j] + d,
+			                           MinValue(h[i + 1][j] + 1,          // wi
+			                                    MinValue(h[i][j + 1] + 1, // wd
+			                                             h[ii][jj] + (i - ii - 1) + 1 + (j - jj - 1))));
 		}
 		da[txt_str[i - 1]] = i;
 	}
@@ -88,8 +82,7 @@ static void DamerauLevenshteinFunction(DataChunk &args, ExpressionState &state, 
 void DamerauLevenshteinFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet damerau_levenshtein("damerau_levenshtein");
 	damerau_levenshtein.AddFunction(ScalarFunction("damerau_levenshtein", {LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                                       LogicalType::BIGINT,
-	                                       DamerauLevenshteinFunction));
+	                                               LogicalType::BIGINT, DamerauLevenshteinFunction));
 	set.AddFunction(damerau_levenshtein);
 }
 
