@@ -21,10 +21,12 @@ static idx_t DamerauLevenshteinDistance(const string_t &source, const string_t &
 	const auto target_len = target.GetSize();
 
 	// If one string is empty, the distance equals the length of the other string
+	// either through target_len insertions
+	// or source_len deletions
 	if (source_len == 0) {
-		return target_len;
+		return target_len * cost_insertion;
 	} else if (target_len == 0) {
-		return source_len;
+		return source_len * cost_deletion;
 	}
 
 	const auto source_str = source.GetDataUnsafe();
@@ -39,41 +41,40 @@ static idx_t DamerauLevenshteinDistance(const string_t &source, const string_t &
 	// same as DA in LW paper
 	std::map<char, idx_t> largest_source_index_matching;
 
-	for (idx_t i = 0; i <= source_len; i++) {
-		distance[i + 1][1] = i * cost_deletion;
+	for (idx_t source_idx = 0; source_idx <= source_len; source_idx++) {
+		distance[source_idx + 1][1] = source_idx * cost_deletion;
 	}
-	for (idx_t j = 1; j <= target_len; j++) {
-		distance[1][j + 1] = j * cost_insertion;
+	for (idx_t target_idx = 1; target_idx <= target_len; target_idx++) {
+		distance[1][target_idx + 1] = target_idx * cost_insertion;
 	}
-	for (idx_t i = 1; i <= source_len; i++) {
+	for (idx_t source_idx = 0; source_idx < source_len; source_idx++) {
 		// keeps track of the largest string indices of target string matching current source character
 		// same as DB in LW paper
 		idx_t largest_target_index_matching;
 		largest_target_index_matching = 0;
-		for (idx_t j = 1; j <= target_len; j++) {
+		for (idx_t target_idx = 0; target_idx < target_len; target_idx++) {
 			idx_t ii, jj;
 			// cost associated to diagnoal shift in distance matrix
 			// d in LW paper
 			uint8_t cost_diagonal_shift;
-			// offset as strings are 0-indexed
-			ii = largest_source_index_matching[target_str[j - 1]];
+			ii = largest_source_index_matching[target_str[target_idx]];
 			jj = largest_target_index_matching;
 			// if characters match, diagonal move costs nothing and we update our largest target index
 			// otherwise move is substitution and costs as such
-			if (source_str[i - 1] == target_str[j - 1]) {
+			if (source_str[source_idx] == target_str[target_idx]) {
 				cost_diagonal_shift = 0;
-				largest_target_index_matching = j;
+				largest_target_index_matching = target_idx + 1;
 			} else {
 				cost_diagonal_shift = cost_substitution;
 			}
-			distance[i + 1][j + 1] =
-			    MinValue(distance[i][j] + cost_diagonal_shift,
-			             MinValue(distance[i + 1][j] + cost_insertion,
-			                      MinValue(distance[i][j + 1] + cost_deletion,
-			                               distance[ii][jj] + (i - ii - 1) * cost_deletion + cost_transposition +
-			                                   (j - jj - 1) * cost_insertion)));
+			distance[source_idx + 2][target_idx + 2] =
+			    MinValue(distance[source_idx + 1][target_idx + 1] + cost_diagonal_shift,
+			             MinValue(distance[source_idx + 2][target_idx + 1] + cost_insertion,
+			                      MinValue(distance[source_idx + 1][target_idx + 2] + cost_deletion,
+			                               distance[ii][jj] + (source_idx - ii) * cost_deletion + cost_transposition +
+			                                   (target_idx - jj) * cost_insertion)));
 		}
-		largest_source_index_matching[source_str[i - 1]] = i;
+		largest_source_index_matching[source_str[source_idx]] = source_idx + 1;
 	}
 	return distance[source_len + 1][target_len + 1];
 }
