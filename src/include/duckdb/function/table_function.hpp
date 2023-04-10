@@ -83,12 +83,12 @@ struct TableFunctionBindInput {
 };
 
 struct TableFunctionInitInput {
-	TableFunctionInitInput(const FunctionData *bind_data_p, const vector<column_t> &column_ids_p,
+	TableFunctionInitInput(FunctionData *bind_data_p, const vector<column_t> &column_ids_p,
 	                       const vector<idx_t> &projection_ids_p, TableFilterSet *filters_p)
 	    : bind_data(bind_data_p), column_ids(column_ids_p), projection_ids(projection_ids_p), filters(filters_p) {
 	}
 
-	const FunctionData *bind_data;
+	FunctionData *bind_data;
 	const vector<column_t> &column_ids;
 	const vector<idx_t> projection_ids;
 	TableFilterSet *filters;
@@ -109,13 +109,13 @@ struct TableFunctionInitInput {
 
 struct TableFunctionInput {
 public:
-	TableFunctionInput(const FunctionData *bind_data_p, LocalTableFunctionState *local_state_p,
+	TableFunctionInput(FunctionData *bind_data_p, LocalTableFunctionState *local_state_p,
 	                   GlobalTableFunctionState *global_state_p)
 	    : bind_data(bind_data_p), local_state(local_state_p), global_state(global_state_p) {
 	}
 
 public:
-	const FunctionData *bind_data;
+	FunctionData *bind_data;
 	LocalTableFunctionState *local_state;
 	GlobalTableFunctionState *global_state;
 };

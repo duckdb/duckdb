@@ -42,7 +42,7 @@ public:
 		return start_timestamp;
 	}
 
-	Transaction &GetTransaction(AttachedDatabase *db);
+	Transaction &GetTransaction(AttachedDatabase &db);
 
 	string Commit();
 	void Rollback();
@@ -50,8 +50,8 @@ public:
 	idx_t GetActiveQuery();
 	void SetActiveQuery(transaction_t query_number);
 
-	void ModifyDatabase(AttachedDatabase *db);
-	AttachedDatabase *ModifiedDatabase() {
+	void ModifyDatabase(AttachedDatabase &db);
+	optional_ptr<AttachedDatabase> ModifiedDatabase() {
 		return modified_database;
 	}
 
@@ -59,9 +59,9 @@ private:
 	//! The set of active transactions for each database
 	unordered_map<AttachedDatabase *, Transaction *> transactions;
 	//! The set of transactions in order of when they were started
-	vector<AttachedDatabase *> all_transactions;
+	vector<optional_ptr<AttachedDatabase>> all_transactions;
 	//! The database we are modifying - we can only modify one database per transaction
-	AttachedDatabase *modified_database;
+	optional_ptr<AttachedDatabase> modified_database;
 };
 
 } // namespace duckdb
