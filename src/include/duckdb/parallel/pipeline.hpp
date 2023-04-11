@@ -90,7 +90,7 @@ public:
 		return source;
 	}
 
-	//! Returns whether any of the operators in the pipeline care about preserving insertion order
+	//! Returns whether any of the operators in the pipeline care about preserving order
 	bool IsOrderDependent() const;
 
 private:

@@ -166,6 +166,16 @@ public:
 	}
 };
 
+bool PhysicalUngroupedAggregate::SinkOrderDependent() const {
+	for (auto &expr : aggregates) {
+		auto &aggr = expr->Cast<BoundAggregateExpression>();
+		if (aggr.function.order_dependent == AggregateOrderDependent::ORDER_DEPENDENT) {
+			return true;
+		}
+	}
+	return false;
+}
+
 unique_ptr<GlobalSinkState> PhysicalUngroupedAggregate::GetGlobalSinkState(ClientContext &context) const {
 	return make_uniq<UngroupedAggregateGlobalState>(*this, context);
 }
