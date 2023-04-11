@@ -2,7 +2,7 @@
 
 #include "duckdb/common/exception.hpp"
 
-#ifndef CATCH_STACKTRACE
+#ifdef DUCKDB_DEBUG_STACKTRACE
 #define CATCH_STACKTRACE(X) duckdb::Exception::FormatStackTrace(X).c_str()
 #endif
 
