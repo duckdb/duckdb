@@ -76,6 +76,7 @@ jobs:
       BUILD_JSON: 1
       BUILD_EXCEL: 1
       BUILD_ODBC: 1
+      BUILD_AUTOCOMPLETE: 1
       OSX_BUILD_UNIVERSAL: 1
       GEN: ninja
       ODBC_CONFIG: ../../build/unixodbc/build/bin/odbc_config
