@@ -247,3 +247,22 @@ class TestArrowFetchRecordBatch(object):
         record_batch_reader = query.fetch_record_batch(1024)
         with pytest.raises(OSError, match='Conversion Error'):
             record_batch_reader.read_next_batch()
+
+    def test_many_chunk_sizes(self):
+        object_size = 1000000
+        duckdb_cursor = duckdb.connect()
+        query = duckdb_cursor.execute(f"CREATE table t as select range a from range({object_size});")
+        for i in [1, 2, 4, 8, 16, 32, 33, 77, 999, 999999]:
+            query = duckdb_cursor.execute("SELECT a FROM t")
+            record_batch_reader = query.fetch_record_batch(i)     
+            num_loops = int(object_size/i)
+            for j in range(num_loops):
+                assert record_batch_reader.schema.names == ['a']
+                chunk = record_batch_reader.read_next_batch()
+                assert(len(chunk) == i)
+            remainder = object_size%i
+            if remainder > 0:
+                chunk = record_batch_reader.read_next_batch()
+                assert(len(chunk) == remainder)
+            with pytest.raises(StopIteration):
+                    chunk = record_batch_reader.read_next_batch()
