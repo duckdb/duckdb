@@ -69,7 +69,6 @@ void ParallelCSVReader::SkipEmptyLines() {
 				return;
 			}
 			position_buffer = new_pos_buffer;
-			return;
 		} else if ((*buffer)[new_pos_buffer] != ' ') {
 			return;
 		}
@@ -388,8 +387,9 @@ add_row : {
 			// newline after carriage return: skip
 			// increase position by 1 and move start to the new position
 			start_buffer = ++position_buffer;
-			verification_positions.end_of_last_line = position_buffer;
+
 			SkipEmptyLines();
+			verification_positions.end_of_last_line = position_buffer;
 			start_buffer = position_buffer;
 			if (reached_remainder_state) {
 				goto final_state;
@@ -413,6 +413,7 @@ add_row : {
 			return false;
 		}
 		SkipEmptyLines();
+		verification_positions.end_of_last_line = position_buffer;
 		start_buffer = position_buffer;
 		// \n newline, move to value start
 		if (finished_chunk) {
@@ -563,6 +564,10 @@ final_state : {
 		error_message = "Line does not fit in one buffer. Increase the buffer size.";
 		return false;
 	}
+	end_buffer = buffer_size;
+	SkipEmptyLines();
+	end_buffer = buffer->buffer_end;
+	verification_positions.end_of_last_line = position_buffer;
 	if (position_buffer >= end_buffer) {
 		if (position_buffer >= end_buffer) {
 			if (position_buffer == end_buffer && StringUtil::CharacterIsNewline((*buffer)[position_buffer - 1]) &&
