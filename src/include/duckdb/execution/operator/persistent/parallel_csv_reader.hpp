@@ -98,7 +98,7 @@ struct VerificationPositions {
 //! Buffered CSV reader is a class that reads values from a stream and parses them as a CSV file
 class ParallelCSVReader : public BaseCSVReader {
 public:
-	ParallelCSVReader(ClientContext &context, BufferedCSVReaderOptions options, unique_ptr<CSVBufferRead> buffer,
+	ParallelCSVReader(ClientContext &context, BufferedCSVReaderOptions options, unique_ptr<CSVBufferRead> buffer, idx_t first_pos_first_buffer,
 	                  const vector<LogicalType> &requested_types);
 	~ParallelCSVReader();
 
@@ -150,6 +150,8 @@ private:
 	bool TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message, bool try_add_line = false);
 	//! Position of the first read line and last read line for verification purposes
 	VerificationPositions verification_positions;
+	//! First Position of First Buffer
+	idx_t first_pos_first_buffer = 0;
 };
 
 } // namespace duckdb

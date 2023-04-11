@@ -269,9 +269,15 @@ public:
 		} else {
 			bytes_per_local_state = file_size / MaxThreads();
 		}
+		if (bytes_per_local_state == 0){
+			// In practice, I think this won't happen, it only happens because we are mocking up test scenarios
+			// this boy needs to be at least one.
+			bytes_per_local_state = 1;
+		}
 		for (idx_t i = 0; i < rows_to_skip; i++) {
 			file_handle->ReadLine();
 		}
+		first_position = current_csv_position;
 		current_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position, file_number);
 		next_buffer = shared_ptr<CSVBuffer>(
 		    current_buffer->Next(*file_handle, buffer_size, current_csv_position, file_number).release());
@@ -350,6 +356,8 @@ private:
 	bool force_parallelism = false;
 	//! Current (Global) position of CSV
 	idx_t current_csv_position = 0;
+	//! First Position of First Buffer
+	idx_t first_position = 0;
 	//! Current File Number
 	idx_t file_number = 0;
 	idx_t max_tuple_end = 0;
@@ -473,16 +481,16 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 			// we are doing UNION BY NAME - fetch the options from the union reader for this file
 			auto &union_reader = *bind_data.union_readers[file_index - 1];
 			reader =
-			    make_uniq<ParallelCSVReader>(context, union_reader.options, std::move(result), union_reader.GetTypes());
+			    make_uniq<ParallelCSVReader>(context, union_reader.options, std::move(result),first_position, union_reader.GetTypes());
 			reader->names = union_reader.GetNames();
 		} else if (file_index <= bind_data.column_info.size()) {
 			// Serialized Union By name
 			reader = make_uniq<ParallelCSVReader>(context, bind_data.options, std::move(result),
-			                                      bind_data.column_info[file_index - 1].types);
+			                                      first_position,bind_data.column_info[file_index - 1].types);
 			reader->names = bind_data.column_info[file_index - 1].names;
 		} else {
 			// regular file - use the standard options
-			reader = make_uniq<ParallelCSVReader>(context, bind_data.options, std::move(result), bind_data.csv_types);
+			reader = make_uniq<ParallelCSVReader>(context, bind_data.options, std::move(result),first_position, bind_data.csv_types);
 			reader->names = bind_data.csv_names;
 		}
 		reader->options.file_path = current_file_path;
@@ -910,6 +918,7 @@ void BufferedCSVReaderOptions::Serialize(FieldWriter &writer) const {
 	writer.WriteField<idx_t>(buffer_sample_size);
 	writer.WriteString(null_str);
 	writer.WriteField<FileCompressionType>(compression);
+	writer.WriteField<NewLineIdentifier>(new_line);
 	// read options
 	writer.WriteField<idx_t>(skip_rows);
 	writer.WriteField<bool>(skip_rows_set);
@@ -943,6 +952,7 @@ void BufferedCSVReaderOptions::Deserialize(FieldReader &reader) {
 	buffer_sample_size = reader.ReadRequired<idx_t>();
 	null_str = reader.ReadRequired<string>();
 	compression = reader.ReadRequired<FileCompressionType>();
+	new_line = reader.ReadRequired<NewLineIdentifier>();
 	// read options
 	skip_rows = reader.ReadRequired<idx_t>();
 	skip_rows_set = reader.ReadRequired<bool>();

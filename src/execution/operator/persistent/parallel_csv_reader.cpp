@@ -25,8 +25,8 @@
 namespace duckdb {
 
 ParallelCSVReader::ParallelCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
-                                     unique_ptr<CSVBufferRead> buffer_p, const vector<LogicalType> &requested_types)
-    : BaseCSVReader(context, std::move(options_p), requested_types) {
+                                     unique_ptr<CSVBufferRead> buffer_p,idx_t first_pos_first_buffer_p, const vector<LogicalType> &requested_types)
+    : BaseCSVReader(context, std::move(options_p), requested_types), first_pos_first_buffer(first_pos_first_buffer_p) {
 	Initialize(requested_types);
 	SetBufferRead(std::move(buffer_p));
 	if (options.delimiter.size() > 1 || options.escape.size() > 1 || options.quote.size() > 1) {
@@ -78,7 +78,7 @@ void ParallelCSVReader::SkipEmptyLines() {
 
 bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 	if (buffer->buffer->IsCSVFileFirstBuffer() && start_buffer == position_buffer &&
-	    start_buffer <= buffer->buffer->GetStart()) {
+	    start_buffer == first_pos_first_buffer) {
 		start_buffer = buffer->buffer->GetStart();
 		position_buffer = start_buffer;
 		verification_positions.beginning_of_first_line = position_buffer;
@@ -574,6 +574,7 @@ final_state : {
 			}
 		}
 	}
+//	insert_chunk.Print();
 	return true;
 };
 }
