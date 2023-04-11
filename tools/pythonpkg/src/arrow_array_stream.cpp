@@ -14,6 +14,13 @@
 
 namespace duckdb {
 
+void TransformDuckToArrowChunk(ArrowSchema &arrow_schema, ArrowArray &data, py::list &batches) {
+	py::gil_assert();
+	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
+	auto batch_import_func = pyarrow_lib_module.attr("RecordBatch").attr("_import_from_c");
+	batches.append(batch_import_func((uint64_t)&data, (uint64_t)&arrow_schema));
+}
+
 void VerifyArrowDatasetLoaded() {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	if (!import_cache.arrow().dataset.IsLoaded()) {

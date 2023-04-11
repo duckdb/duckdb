@@ -46,9 +46,12 @@ public:
 		return !py::none().is(object);
 	}
 };
+
 } // namespace pyarrow
 
 enum class PyArrowObjectType { Invalid, Table, RecordBatchReader, Scanner, Dataset };
+
+void TransformDuckToArrowChunk(ArrowSchema &arrow_schema, ArrowArray &data, py::list &batches);
 
 PyArrowObjectType GetArrowType(const py::handle &obj);
 

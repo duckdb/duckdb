@@ -96,6 +96,10 @@ public:
 	                                                 const py::object &arguments = py::none(),
 	                                                 shared_ptr<DuckDBPyType> return_type = nullptr,
 	                                                 bool varargs = false);
+	shared_ptr<DuckDBPyConnection> RegisterVectorizedUDF(const string &name, const py::object &udf,
+	                                                     const py::object &arguments = py::none(),
+	                                                     shared_ptr<DuckDBPyType> return_type = nullptr,
+	                                                     bool varargs = false);
 
 	shared_ptr<DuckDBPyConnection> ExecuteMany(const string &query, py::object params = py::list());
 
@@ -204,6 +208,8 @@ public:
 private:
 	PathLike GetPathLike(const py::object &object);
 	unique_lock<std::mutex> AcquireConnectionLock();
+	ScalarFunction CreatePyArrowScalarUDF(const string &name, const py::object &udf, const py::object &parameters,
+	                                      shared_ptr<DuckDBPyType> return_type, bool varargs);
 	ScalarFunction CreateScalarUDF(const string &name, const py::object &udf, const py::object &parameters,
 	                               shared_ptr<DuckDBPyType> return_type, bool varargs);
 

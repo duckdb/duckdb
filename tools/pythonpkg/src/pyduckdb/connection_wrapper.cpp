@@ -105,6 +105,16 @@ shared_ptr<DuckDBPyConnection> PyConnectionWrapper::RegisterScalarUDF(const stri
 	return conn->RegisterScalarUDF(name, udf, args, return_type);
 }
 
+shared_ptr<DuckDBPyConnection> PyConnectionWrapper::RegisterVectorizedUDF(const string &name, const py::object &udf,
+                                                                          const py::list &args,
+                                                                          shared_ptr<DuckDBPyType> return_type,
+                                                                          shared_ptr<DuckDBPyConnection> conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->RegisterVectorizedUDF(name, udf, args, return_type);
+}
+
 shared_ptr<DuckDBPyConnection> PyConnectionWrapper::Append(const string &name, DataFrame value,
                                                            shared_ptr<DuckDBPyConnection> conn) {
 	return conn->Append(name, value);

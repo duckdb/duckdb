@@ -71,6 +71,9 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	m.def("register_scalar", &PyConnectionWrapper::RegisterScalarUDF,
 	      "Register a scalar UDF so it can be used in queries", py::arg("name"), py::arg("function"),
 	      py::arg("arguments"), py::arg("return_type"), py::arg("connection") = py::none());
+	m.def("register_vectorized", &PyConnectionWrapper::RegisterVectorizedUDF,
+	      "Register a scalar UDF so it can be used in queries", py::arg("name"), py::arg("function"),
+	      py::arg("arguments"), py::arg("return_type"), py::arg("connection") = py::none());
 	DefineMethod({"sqltype", "dtype", "type"}, m, &PyConnectionWrapper::Type, "Create a type object from 'type_str'",
 	             py::arg("type_str"), py::arg("connection") = py::none());
 	DefineMethod({"struct_type", "row_type"}, m, &PyConnectionWrapper::StructType,

@@ -32,6 +32,11 @@ public:
 	                                                        shared_ptr<DuckDBPyType> return_type,
 	                                                        shared_ptr<DuckDBPyConnection> conn = nullptr);
 
+	static shared_ptr<DuckDBPyConnection> RegisterVectorizedUDF(const string &name, const py::object &udf,
+	                                                            const py::list &arguments,
+	                                                            shared_ptr<DuckDBPyType> return_type,
+	                                                            shared_ptr<DuckDBPyConnection> conn = nullptr);
+
 	static shared_ptr<DuckDBPyType> ArrayType(const shared_ptr<DuckDBPyType> &type,
 	                                          shared_ptr<DuckDBPyConnection> conn = nullptr);
 	static shared_ptr<DuckDBPyType> MapType(const shared_ptr<DuckDBPyType> &key, const shared_ptr<DuckDBPyType> &value,

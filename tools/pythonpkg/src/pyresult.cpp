@@ -3,6 +3,7 @@
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/python_objects.hpp"
 
+#include "duckdb_python/arrow_array_stream.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
@@ -281,12 +282,6 @@ py::dict DuckDBPyResult::FetchTF() {
 		result_dict[item.first] = convert_to_tensor(item.second);
 	}
 	return result_dict;
-}
-
-void TransformDuckToArrowChunk(ArrowSchema &arrow_schema, ArrowArray &data, py::list &batches) {
-	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
-	auto batch_import_func = pyarrow_lib_module.attr("RecordBatch").attr("_import_from_c");
-	batches.append(batch_import_func((uint64_t)&data, (uint64_t)&arrow_schema));
 }
 
 bool DuckDBPyResult::FetchArrowChunk(QueryResult *result, py::list &batches, idx_t chunk_size) {
