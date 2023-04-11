@@ -176,8 +176,6 @@ private:
 
 	//! The arena allocator used by the aggregates for their internal state
 	shared_ptr<ArenaAllocator> aggregate_allocator;
-	//! Stored allocators that hold some of this HTs data (if repartitioned)
-	vector<shared_ptr<ArenaAllocator>> stored_allocators;
 
 private:
 	GroupedAggregateHashTable(const GroupedAggregateHashTable &) = delete;
