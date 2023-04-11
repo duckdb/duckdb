@@ -44,7 +44,7 @@ void CompressedMaterialization::CompressOrder(unique_ptr<LogicalOperator> *op_pt
 	}
 
 	// Compress other selected columns
-	CompressedMaterializationInfo info(**op_ptr, {0}, false, referenced_bindings);
+	CompressedMaterializationInfo info(**op_ptr, {0}, referenced_bindings);
 	CreateProjections(op_ptr, info);
 }
 
