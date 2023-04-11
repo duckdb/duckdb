@@ -47,7 +47,7 @@ static unique_ptr<FunctionData> MapEntriesBind(ClientContext &context, ScalarFun
 	auto row_type = LogicalType::STRUCT(child_types);
 
 	bound_function.return_type = LogicalType::LIST(row_type);
-	return make_unique<VariableReturnBindData>(bound_function.return_type);
+	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
 void MapEntriesFun::RegisterFunction(BuiltinFunctions &set) {

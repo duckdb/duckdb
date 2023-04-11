@@ -10,6 +10,7 @@
 namespace duckdb {
 
 static DefaultMacro internal_macros[] = {
+	{DEFAULT_SCHEMA, "current_role", {nullptr}, "'duckdb'"},                       // user name of current execution context
 	{DEFAULT_SCHEMA, "current_user", {nullptr}, "'duckdb'"},                       // user name of current execution context
 	{DEFAULT_SCHEMA, "current_catalog", {nullptr}, "current_database()"},          // name of current database (called "catalog" in the SQL standard)
 	{DEFAULT_SCHEMA, "user", {nullptr}, "current_user"},                           // equivalent to current_user
@@ -140,10 +141,10 @@ static DefaultMacro internal_macros[] = {
 unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalTableMacroInfo(DefaultMacro &default_macro, unique_ptr<MacroFunction> function) {
 	for (idx_t param_idx = 0; default_macro.parameters[param_idx] != nullptr; param_idx++) {
 		function->parameters.push_back(
-		    make_unique<ColumnRefExpression>(default_macro.parameters[param_idx]));
+		    make_uniq<ColumnRefExpression>(default_macro.parameters[param_idx]));
 	}
 
-	auto bind_info = make_unique<CreateMacroInfo>();
+	auto bind_info = make_uniq<CreateMacroInfo>();
 	bind_info->schema = default_macro.schema;
 	bind_info->name = default_macro.name;
 	bind_info->temporary = true;
@@ -159,7 +160,7 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(De
 	auto expressions = Parser::ParseExpressionList(default_macro.macro);
 	D_ASSERT(expressions.size() == 1);
 
-	auto result = make_unique<ScalarMacroFunction>(std::move(expressions[0]));
+	auto result = make_uniq<ScalarMacroFunction>(std::move(expressions[0]));
 	return CreateInternalTableMacroInfo(default_macro, std::move(result));
 }
 
@@ -169,8 +170,8 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalTableMacroIn
 	D_ASSERT(parser.statements.size() == 1);
 	D_ASSERT(parser.statements[0]->type == StatementType::SELECT_STATEMENT);
 
-	auto &select = (SelectStatement &) *parser.statements[0];
-	auto result = make_unique<TableMacroFunction>(std::move(select.node));
+	auto &select = parser.statements[0]->Cast<SelectStatement>();
+	auto result = make_uniq<TableMacroFunction>(std::move(select.node));
 	return CreateInternalTableMacroInfo(default_macro, std::move(result));
 }
 
@@ -193,7 +194,7 @@ unique_ptr<CatalogEntry> DefaultFunctionGenerator::CreateDefaultEntry(ClientCont
                                                                       const string &entry_name) {
 	auto info = GetDefaultFunction(schema->name, entry_name);
 	if (info) {
-		return make_unique_base<CatalogEntry, ScalarMacroCatalogEntry>(&catalog, schema, (CreateMacroInfo *)info.get());
+		return make_uniq_base<CatalogEntry, ScalarMacroCatalogEntry>(&catalog, schema, (CreateMacroInfo *)info.get());
 	}
 	return nullptr;
 }

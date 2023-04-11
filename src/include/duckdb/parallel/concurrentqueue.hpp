@@ -6,6 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+#pragma once
+
 #ifndef DUCKDB_NO_THREADS
 #include "concurrentqueue.h"
 #else

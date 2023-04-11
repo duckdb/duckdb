@@ -16,6 +16,9 @@ class LogicalShow : public LogicalOperator {
 	LogicalShow() : LogicalOperator(LogicalOperatorType::LOGICAL_SHOW) {};
 
 public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_SHOW;
+
+public:
 	explicit LogicalShow(unique_ptr<LogicalOperator> plan) : LogicalOperator(LogicalOperatorType::LOGICAL_SHOW) {
 		children.push_back(std::move(plan));
 	}

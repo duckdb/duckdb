@@ -6,12 +6,13 @@ using duckdb::Decimal;
 using duckdb::OdbcHandleDesc;
 using duckdb::ParameterDescriptor;
 using duckdb::Value;
+using duckdb::vector;
 
 ParameterDescriptor::ParameterDescriptor(OdbcHandleStmt *stmt_ptr)
     : stmt(stmt_ptr), paramset_idx(0), cur_paramset_idx(0), cur_param_idx(0) {
 
-	apd = make_unique<OdbcHandleDesc>(stmt->dbc);
-	ipd = make_unique<OdbcHandleDesc>(stmt->dbc);
+	apd = make_uniq<OdbcHandleDesc>(stmt->dbc);
+	ipd = make_uniq<OdbcHandleDesc>(stmt->dbc);
 
 	cur_apd = apd.get();
 }
@@ -58,7 +59,7 @@ void ParameterDescriptor::ResetCurrentAPD() {
 	cur_apd = apd.get();
 }
 
-SQLRETURN ParameterDescriptor::GetParamValues(std::vector<Value> &values) {
+SQLRETURN ParameterDescriptor::GetParamValues(vector<Value> &values) {
 	values.clear();
 	if (ipd->records.empty()) {
 		return SQL_SUCCESS;
@@ -170,7 +171,7 @@ SQLRETURN ParameterDescriptor::FillParamCharDataBuffer(DescRecord &apd_record, D
 	size_t offset = 0;
 	auto sql_ind_ptr = GetSQLDescIndicatorPtr(apd_record);
 	if (*sql_ind_ptr == SQL_DATA_AT_EXEC) {
-		pool_allocated_ptr.emplace_back(unique_ptr<char[]>(new char[ipd_record.sql_desc_length]));
+		pool_allocated_ptr.emplace_back(duckdb::unique_ptr<char[]>(new char[ipd_record.sql_desc_length]));
 		SetSQLDescDataPtr(apd_record, pool_allocated_ptr.back().get());
 		*sql_ind_ptr = 0;
 	} else {
@@ -202,7 +203,7 @@ SQLRETURN ParameterDescriptor::FillCurParamCharSet(DescRecord &apd_record, DescR
 
 	if (*len_ptr == SQL_DATA_AT_EXEC && pool_allocated_ptr.empty()) {
 		auto alloc_size = col_size * cur_apd->header.sql_desc_array_size;
-		pool_allocated_ptr.emplace_back(unique_ptr<char[]>(new char[alloc_size]));
+		pool_allocated_ptr.emplace_back(duckdb::unique_ptr<char[]>(new char[alloc_size]));
 		SetSQLDescDataPtr(apd_record, pool_allocated_ptr.back().get());
 	}
 

@@ -18,6 +18,9 @@ class LogicalExplain : public LogicalOperator {
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXPLAIN), explain_type(explain_type) {};
 
 public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_EXPLAIN;
+
+public:
 	LogicalExplain(unique_ptr<LogicalOperator> plan, ExplainType explain_type)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXPLAIN), explain_type(explain_type) {
 		children.push_back(std::move(plan));

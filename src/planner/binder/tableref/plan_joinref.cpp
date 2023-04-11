@@ -22,7 +22,7 @@ namespace duckdb {
 static bool CreateJoinCondition(Expression &expr, const unordered_set<idx_t> &left_bindings,
                                 const unordered_set<idx_t> &right_bindings, vector<JoinCondition> &conditions) {
 	// comparison
-	auto &comparison = (BoundComparisonExpression &)expr;
+	auto &comparison = expr.Cast<BoundComparisonExpression>();
 	auto left_side = JoinSide::GetJoinSide(*comparison.left, left_bindings, right_bindings);
 	auto right_side = JoinSide::GetJoinSide(*comparison.right, left_bindings, right_bindings);
 	if (left_side != JoinSide::BOTH && right_side != JoinSide::BOTH) {
@@ -59,12 +59,12 @@ void LogicalComparisonJoin::ExtractJoinConditions(JoinType type, unique_ptr<Logi
 				// filter is on RHS and the join is a LEFT OUTER join, we can push it in the right child
 				if (right_child->type != LogicalOperatorType::LOGICAL_FILTER) {
 					// not a filter yet, push a new empty filter
-					auto filter = make_unique<LogicalFilter>();
+					auto filter = make_uniq<LogicalFilter>();
 					filter->AddChild(std::move(right_child));
 					right_child = std::move(filter);
 				}
 				// push the expression into the filter
-				auto &filter = (LogicalFilter &)*right_child;
+				auto &filter = right_child->Cast<LogicalFilter>();
 				filter.expressions.push_back(std::move(expr));
 				continue;
 			}
@@ -154,14 +154,14 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 	if ((need_to_consider_arbitrary_expressions && !arbitrary_expressions.empty()) || conditions.empty()) {
 		if (arbitrary_expressions.empty()) {
 			// all conditions were pushed down, add TRUE predicate
-			arbitrary_expressions.push_back(make_unique<BoundConstantExpression>(Value::BOOLEAN(true)));
+			arbitrary_expressions.push_back(make_uniq<BoundConstantExpression>(Value::BOOLEAN(true)));
 		}
 		for (auto &condition : conditions) {
 			arbitrary_expressions.push_back(JoinCondition::CreateExpression(std::move(condition)));
 		}
 		// if we get here we could not create any JoinConditions
 		// turn this into an arbitrary expression join
-		auto any_join = make_unique<LogicalAnyJoin>(type);
+		auto any_join = make_uniq<LogicalAnyJoin>(type);
 		// create the condition
 		any_join->children.push_back(std::move(left_child));
 		any_join->children.push_back(std::move(right_child));
@@ -169,7 +169,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 		// do the same with any remaining conditions
 		any_join->condition = std::move(arbitrary_expressions[0]);
 		for (idx_t i = 1; i < arbitrary_expressions.size(); i++) {
-			any_join->condition = make_unique<BoundConjunctionExpression>(
+			any_join->condition = make_uniq<BoundConjunctionExpression>(
 			    ExpressionType::CONJUNCTION_AND, std::move(any_join->condition), std::move(arbitrary_expressions[i]));
 		}
 		return std::move(any_join);
@@ -178,9 +178,9 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 		// create a LogicalComparisonJoin
 		unique_ptr<LogicalComparisonJoin> comp_join;
 		if (reftype == JoinRefType::ASOF) {
-			comp_join = make_unique<LogicalAsOfJoin>(type);
+			comp_join = make_uniq<LogicalAsOfJoin>(type);
 		} else {
-			comp_join = make_unique<LogicalComparisonJoin>(type);
+			comp_join = make_uniq<LogicalComparisonJoin>(type);
 		}
 		comp_join->conditions = std::move(conditions);
 		comp_join->children.push_back(std::move(left_child));
@@ -188,7 +188,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 		if (!arbitrary_expressions.empty()) {
 			// we have some arbitrary expressions as well
 			// add them to a filter
-			auto filter = make_unique<LogicalFilter>();
+			auto filter = make_uniq<LogicalFilter>();
 			for (auto &expr : arbitrary_expressions) {
 				filter->expressions.push_back(std::move(expr));
 			}
@@ -202,7 +202,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 
 static bool HasCorrelatedColumns(Expression &expression) {
 	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &colref = (BoundColumnRefExpression &)expression;
+		auto &colref = expression.Cast<BoundColumnRefExpression>();
 		if (colref.depth > 0) {
 			return true;
 		}
@@ -265,7 +265,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		// this will be later turned into a proper join by the join order optimizer
 		auto root = LogicalCrossProduct::Create(std::move(left), std::move(right));
 
-		auto filter = make_unique<LogicalFilter>(std::move(ref.condition));
+		auto filter = make_uniq<LogicalFilter>(std::move(ref.condition));
 		// visit the expressions in the filter
 		for (auto &expression : filter->expressions) {
 			PlanSubqueries(&expression, &root);
@@ -286,7 +286,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	}
 	for (auto &child : join->children) {
 		if (child->type == LogicalOperatorType::LOGICAL_FILTER) {
-			auto &filter = (LogicalFilter &)*child;
+			auto &filter = child->Cast<LogicalFilter>();
 			for (auto &expr : filter.expressions) {
 				PlanSubqueries(&expr, &filter.children[0]);
 			}
@@ -300,7 +300,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		// comparison join
 		// in this join we visit the expressions on the LHS with the LHS as root node
 		// and the expressions on the RHS with the RHS as root node
-		auto &comp_join = (LogicalComparisonJoin &)*join;
+		auto &comp_join = join->Cast<LogicalComparisonJoin>();
 		for (idx_t i = 0; i < comp_join.conditions.size(); i++) {
 			PlanSubqueries(&comp_join.conditions[i].left, &comp_join.children[0]);
 			PlanSubqueries(&comp_join.conditions[i].right, &comp_join.children[1]);
@@ -308,7 +308,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
-		auto &any_join = (LogicalAnyJoin &)*join;
+		auto &any_join = join->Cast<LogicalAnyJoin>();
 		// for the any join we just visit the condition
 		if (any_join.condition->HasSubquery()) {
 			throw NotImplementedException("Cannot perform non-inner join on subquery!");

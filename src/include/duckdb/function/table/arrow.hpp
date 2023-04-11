@@ -89,7 +89,7 @@ struct ArrowScanFunctionData : public PyTableFunctionData {
 };
 
 struct ArrowScanLocalState : public LocalTableFunctionState {
-	explicit ArrowScanLocalState(unique_ptr<ArrowArrayWrapper> current_chunk) : chunk(std::move(current_chunk)) {
+	explicit ArrowScanLocalState(unique_ptr<ArrowArrayWrapper> current_chunk) : chunk(current_chunk.release()) {
 	}
 
 	unique_ptr<ArrowArrayStreamWrapper> stream;

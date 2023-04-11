@@ -7,7 +7,7 @@
 namespace duckdb {
 
 unique_ptr<BufferManager> BufferManager::CreateStandardBufferManager(DatabaseInstance &db, DBConfig &config) {
-	return make_unique<StandardBufferManager>(db, config.options.temporary_directory);
+	return make_uniq<StandardBufferManager>(db, config.options.temporary_directory);
 }
 
 shared_ptr<BlockHandle> BufferManager::RegisterSmallMemory(idx_t block_size) {

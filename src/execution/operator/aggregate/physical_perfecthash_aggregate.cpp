@@ -31,7 +31,7 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
 	for (auto &expr : aggregates) {
 		D_ASSERT(expr->expression_class == ExpressionClass::BOUND_AGGREGATE);
 		D_ASSERT(expr->IsAggregate());
-		auto &aggr = (BoundAggregateExpression &)*expr;
+		auto &aggr = expr->Cast<BoundAggregateExpression>();
 		bindings.push_back(&aggr);
 
 		D_ASSERT(!aggr.IsDistinct());
@@ -51,13 +51,13 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
 	// filter_indexes must be pre-built, not lazily instantiated in parallel...
 	idx_t aggregate_input_idx = 0;
 	for (auto &aggregate : aggregates) {
-		auto &aggr = (BoundAggregateExpression &)*aggregate;
+		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
 		aggregate_input_idx += aggr.children.size();
 	}
 	for (auto &aggregate : aggregates) {
-		auto &aggr = (BoundAggregateExpression &)*aggregate;
+		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
 		if (aggr.filter) {
-			auto &bound_ref_expr = (BoundReferenceExpression &)*aggr.filter;
+			auto &bound_ref_expr = aggr.filter->Cast<BoundReferenceExpression>();
 			auto it = filter_indexes.find(aggr.filter.get());
 			if (it == filter_indexes.end()) {
 				filter_indexes[aggr.filter.get()] = bound_ref_expr.index;
@@ -71,8 +71,8 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
 
 unique_ptr<PerfectAggregateHashTable> PhysicalPerfectHashAggregate::CreateHT(Allocator &allocator,
                                                                              ClientContext &context) const {
-	return make_unique<PerfectAggregateHashTable>(context, allocator, group_types, payload_types, aggregate_objects,
-	                                              group_minima, required_bits);
+	return make_uniq<PerfectAggregateHashTable>(context, allocator, group_types, payload_types, aggregate_objects,
+	                                            group_minima, required_bits);
 }
 
 //===--------------------------------------------------------------------===//
@@ -107,36 +107,36 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalPerfectHashAggregate::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<PerfectHashAggregateGlobalState>(*this, context);
+	return make_uniq<PerfectHashAggregateGlobalState>(*this, context);
 }
 
 unique_ptr<LocalSinkState> PhysicalPerfectHashAggregate::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<PerfectHashAggregateLocalState>(*this, context);
+	return make_uniq<PerfectHashAggregateLocalState>(*this, context);
 }
 
 SinkResultType PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, GlobalSinkState &state,
                                                   LocalSinkState &lstate_p, DataChunk &input) const {
-	auto &lstate = (PerfectHashAggregateLocalState &)lstate_p;
+	auto &lstate = lstate_p.Cast<PerfectHashAggregateLocalState>();
 	DataChunk &group_chunk = lstate.group_chunk;
 	DataChunk &aggregate_input_chunk = lstate.aggregate_input_chunk;
 
 	for (idx_t group_idx = 0; group_idx < groups.size(); group_idx++) {
 		auto &group = groups[group_idx];
 		D_ASSERT(group->type == ExpressionType::BOUND_REF);
-		auto &bound_ref_expr = (BoundReferenceExpression &)*group;
+		auto &bound_ref_expr = group->Cast<BoundReferenceExpression>();
 		group_chunk.data[group_idx].Reference(input.data[bound_ref_expr.index]);
 	}
 	idx_t aggregate_input_idx = 0;
 	for (auto &aggregate : aggregates) {
-		auto &aggr = (BoundAggregateExpression &)*aggregate;
+		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
 		for (auto &child_expr : aggr.children) {
 			D_ASSERT(child_expr->type == ExpressionType::BOUND_REF);
-			auto &bound_ref_expr = (BoundReferenceExpression &)*child_expr;
+			auto &bound_ref_expr = child_expr->Cast<BoundReferenceExpression>();
 			aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[bound_ref_expr.index]);
 		}
 	}
 	for (auto &aggregate : aggregates) {
-		auto &aggr = (BoundAggregateExpression &)*aggregate;
+		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
 		if (aggr.filter) {
 			auto it = filter_indexes.find(aggr.filter.get());
 			D_ASSERT(it != filter_indexes.end());
@@ -161,8 +161,8 @@ SinkResultType PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, Glo
 //===--------------------------------------------------------------------===//
 void PhysicalPerfectHashAggregate::Combine(ExecutionContext &context, GlobalSinkState &gstate_p,
                                            LocalSinkState &lstate_p) const {
-	auto &lstate = (PerfectHashAggregateLocalState &)lstate_p;
-	auto &gstate = (PerfectHashAggregateGlobalState &)gstate_p;
+	auto &lstate = lstate_p.Cast<PerfectHashAggregateLocalState>();
+	auto &gstate = gstate_p.Cast<PerfectHashAggregateGlobalState>();
 
 	lock_guard<mutex> l(gstate.lock);
 	gstate.ht->Combine(*lstate.ht);
@@ -181,13 +181,13 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalPerfectHashAggregate::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<PerfectHashAggregateState>();
+	return make_uniq<PerfectHashAggregateState>();
 }
 
 void PhysicalPerfectHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                                            LocalSourceState &lstate) const {
 	auto &state = (PerfectHashAggregateState &)gstate_p;
-	auto &gstate = (PerfectHashAggregateGlobalState &)*sink_state;
+	auto &gstate = sink_state->Cast<PerfectHashAggregateGlobalState>();
 
 	gstate.ht->Scan(state.ht_scan_position, chunk);
 }
@@ -205,7 +205,7 @@ string PhysicalPerfectHashAggregate::ParamsToString() const {
 			result += "\n";
 		}
 		result += aggregates[i]->GetName();
-		auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
+		auto &aggregate = aggregates[i]->Cast<BoundAggregateExpression>();
 		if (aggregate.filter) {
 			result += " Filter: " + aggregate.filter->GetName();
 		}

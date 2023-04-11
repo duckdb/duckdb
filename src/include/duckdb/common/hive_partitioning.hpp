@@ -75,7 +75,7 @@ public:
 	mutex lock;
 	hive_partition_map_t partition_map;
 	//! Used for incremental updating local copies of the partition map;
-	std::vector<hive_partition_map_t::const_iterator> partitions;
+	vector<hive_partition_map_t::const_iterator> partitions;
 };
 
 class HivePartitionedColumnData : public PartitionedColumnData {

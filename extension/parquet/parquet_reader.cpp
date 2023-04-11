@@ -48,10 +48,10 @@ using duckdb_parquet::format::SchemaElement;
 using duckdb_parquet::format::Statistics;
 using duckdb_parquet::format::Type;
 
-static unique_ptr<duckdb_apache::thrift::protocol::TProtocol>
+static duckdb::unique_ptr<duckdb_apache::thrift::protocol::TProtocol>
 CreateThriftProtocol(Allocator &allocator, FileHandle &file_handle, FileOpener &opener, bool prefetch_mode) {
 	auto transport = make_shared<ThriftFileTransport>(allocator, file_handle, opener, prefetch_mode);
-	return make_unique<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
+	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 }
 
 static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, FileHandle &file_handle,
@@ -84,14 +84,13 @@ static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, F
 	transport.SetLocation(metadata_pos);
 	transport.Prefetch(metadata_pos, footer_len);
 
-	auto metadata = make_unique<FileMetaData>();
+	auto metadata = make_uniq<FileMetaData>();
 	metadata->read(proto.get());
 	return make_shared<ParquetFileMetadataCache>(std::move(metadata), current_time);
 }
 
 LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool binary_as_string) {
 	// inner node
-	D_ASSERT(s_ele.__isset.type && s_ele.num_children == 0);
 	if (s_ele.type == Type::FIXED_LEN_BYTE_ARRAY && !s_ele.__isset.type_length) {
 		throw IOException("FIXED_LEN_BYTE_ARRAY requires length to be set");
 	}
@@ -271,13 +270,9 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(idx_t depth, idx_t
 	if (repetition_type == FieldRepetitionType::REPEATED) {
 		max_repeat++;
 	}
-
-	if (!s_ele.__isset.type) { // inner node
-		if (s_ele.num_children == 0) {
-			throw InvalidInputException("Node has no children but should");
-		}
+	if (s_ele.__isset.num_children && s_ele.num_children > 0) { // inner node
 		child_list_t<LogicalType> child_types;
-		vector<unique_ptr<ColumnReader>> child_readers;
+		vector<duckdb::unique_ptr<ColumnReader>> child_readers;
 
 		idx_t c_idx = 0;
 		while (c_idx < (idx_t)s_ele.num_children) {
@@ -293,7 +288,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(idx_t depth, idx_t
 			c_idx++;
 		}
 		D_ASSERT(!child_types.empty());
-		unique_ptr<ColumnReader> result;
+		duckdb::unique_ptr<ColumnReader> result;
 		LogicalType result_type;
 
 		bool is_repeated = repetition_type == FieldRepetitionType::REPEATED;
@@ -318,15 +313,15 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(idx_t depth, idx_t
 			result_type = LogicalType::MAP(std::move(child_types[0].second), std::move(child_types[1].second));
 
 			auto struct_reader =
-			    make_unique<StructColumnReader>(*this, ListType::GetChildType(result_type), s_ele, this_idx,
-			                                    max_define - 1, max_repeat - 1, std::move(child_readers));
-			return make_unique<ListColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
-			                                     std::move(struct_reader));
+			    make_uniq<StructColumnReader>(*this, ListType::GetChildType(result_type), s_ele, this_idx,
+			                                  max_define - 1, max_repeat - 1, std::move(child_readers));
+			return make_uniq<ListColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
+			                                   std::move(struct_reader));
 		}
 		if (child_types.size() > 1 || (!is_list && !is_map && !is_repeated)) {
 			result_type = LogicalType::STRUCT(child_types);
-			result = make_unique<StructColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
-			                                         std::move(child_readers));
+			result = make_uniq<StructColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
+			                                       std::move(child_readers));
 		} else {
 			// if we have a struct with only a single type, pull up
 			result_type = child_types[0].second;
@@ -334,11 +329,15 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(idx_t depth, idx_t
 		}
 		if (is_repeated) {
 			result_type = LogicalType::LIST(result_type);
-			return make_unique<ListColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
-			                                     std::move(result));
+			return make_uniq<ListColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
+			                                   std::move(result));
 		}
 		return result;
 	} else { // leaf node
+		if (!s_ele.__isset.type) {
+			throw InvalidInputException(
+			    "Node has neither num_children nor type set - this violates the Parquet spec (corrupted file)");
+		}
 		if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
 			const auto derived_type = DeriveLogicalType(s_ele);
 			auto list_type = LogicalType::LIST(derived_type);
@@ -346,8 +345,8 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(idx_t depth, idx_t
 			auto element_reader =
 			    ColumnReader::CreateReader(*this, derived_type, s_ele, next_file_idx++, max_define, max_repeat);
 
-			return make_unique<ListColumnReader>(*this, list_type, s_ele, this_idx, max_define, max_repeat,
-			                                     std::move(element_reader));
+			return make_uniq<ListColumnReader>(*this, list_type, s_ele, this_idx, max_define, max_repeat,
+			                                   std::move(element_reader));
 		}
 		// TODO check return value of derive type or should we only do this on read()
 		return ColumnReader::CreateReader(*this, DeriveLogicalType(s_ele), s_ele, next_file_idx++, max_define,
@@ -368,21 +367,24 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader() {
 		throw IOException("Parquet reader: root schema element has no children");
 	}
 	auto ret = CreateReaderRecursive(0, 0, 0, next_schema_idx, next_file_idx);
+	if (ret->Type().id() != LogicalTypeId::STRUCT) {
+		throw InvalidInputException("Root element of Parquet file must be a struct");
+	}
 	D_ASSERT(next_schema_idx == file_meta_data->schema.size() - 1);
 	D_ASSERT(file_meta_data->row_groups.empty() || next_file_idx == file_meta_data->row_groups[0].columns.size());
 
-	auto &root_struct_reader = (StructColumnReader &)*ret;
+	auto &root_struct_reader = ret->Cast<StructColumnReader>();
 	// add casts if required
 	for (auto &entry : reader_data.cast_map) {
 		auto column_idx = entry.first;
 		auto &expected_type = entry.second;
 		auto child_reader = std::move(root_struct_reader.child_readers[column_idx]);
-		auto cast_reader = make_unique<CastColumnReader>(std::move(child_reader), expected_type);
+		auto cast_reader = make_uniq<CastColumnReader>(std::move(child_reader), expected_type);
 		root_struct_reader.child_readers[column_idx] = std::move(cast_reader);
 	}
 	if (parquet_options.file_row_number) {
 		root_struct_reader.child_readers.push_back(
-		    make_unique<RowNumberColumnReader>(*this, LogicalType::BIGINT, SchemaElement(), next_file_idx, 0, 0));
+		    make_uniq<RowNumberColumnReader>(*this, LogicalType::BIGINT, SchemaElement(), next_file_idx, 0, 0));
 	}
 
 	return ret;

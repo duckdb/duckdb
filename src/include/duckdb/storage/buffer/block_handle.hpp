@@ -12,14 +12,13 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/storage/storage_info.hpp"
+#include "duckdb/common/file_buffer.hpp"
 
 namespace duckdb {
 class BlockManager;
 class BufferHandle;
-class BufferManager;
 class BufferPool;
 class DatabaseInstance;
-class FileBuffer;
 
 enum class BlockState : uint8_t { BLOCK_UNLOADED = 0, BLOCK_LOADED = 1 };
 

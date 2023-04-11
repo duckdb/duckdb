@@ -1,17 +1,18 @@
-#include "sql_auto_complete_extension.hpp"
+#define DUCKDB_EXTENSION_MAIN
 
-#include "duckdb/function/table_function.hpp"
-#include "duckdb/common/exception.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/parser/parser.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb/main/client_data.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
-#include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_opener.hpp"
+#include "duckdb/function/table_function.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "sql_auto_complete-extension.hpp"
 
 namespace duckdb {
 
@@ -140,12 +141,12 @@ static vector<AutoCompleteCandidate> SuggestColumnName(ClientContext &context) {
 	auto all_entries = GetAllTables(context, false);
 	for (auto &entry : all_entries) {
 		if (entry->type == CatalogType::TABLE_ENTRY) {
-			auto &table = (TableCatalogEntry &)*entry;
+			auto &table = entry->Cast<TableCatalogEntry>();
 			for (auto &col : table.GetColumns().Logical()) {
 				suggestions.emplace_back(col.GetName(), 1);
 			}
 		} else if (entry->type == CatalogType::VIEW_ENTRY) {
-			auto &view = (ViewCatalogEntry &)*entry;
+			auto &view = entry->Cast<ViewCatalogEntry>();
 			for (auto &col : view.aliases) {
 				suggestions.emplace_back(col, 1);
 			}
@@ -208,7 +209,7 @@ static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, str
 
 enum class SuggestionState : uint8_t { SUGGEST_KEYWORD, SUGGEST_TABLE_NAME, SUGGEST_COLUMN_NAME, SUGGEST_FILE_NAME };
 
-static unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(ClientContext &context, const string &sql) {
+static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(ClientContext &context, const string &sql) {
 	// for auto-completion, we consider 4 scenarios
 	// * there is nothing in the buffer, or only one word -> suggest a keyword
 	// * the previous keyword is SELECT, WHERE, BY, HAVING, ... -> suggest a column name
@@ -274,7 +275,7 @@ in_comment:
 		}
 	}
 	// no suggestions inside comments
-	return make_unique<SQLAutoCompleteFunctionData>(vector<string>(), 0);
+	return make_uniq<SQLAutoCompleteFunctionData>(vector<string>(), 0);
 in_quotes:
 	for (; pos < sql.size(); pos++) {
 		if (sql[pos] == '"') {
@@ -350,11 +351,11 @@ standard_suggestion:
 		D_ASSERT(false);
 		throw NotImplementedException("last_pos out of range");
 	}
-	return make_unique<SQLAutoCompleteFunctionData>(std::move(suggestions), last_pos);
+	return make_uniq<SQLAutoCompleteFunctionData>(std::move(suggestions), last_pos);
 }
 
-static unique_ptr<FunctionData> SQLAutoCompleteBind(ClientContext &context, TableFunctionBindInput &input,
-                                                    vector<LogicalType> &return_types, vector<string> &names) {
+static duckdb::unique_ptr<FunctionData> SQLAutoCompleteBind(ClientContext &context, TableFunctionBindInput &input,
+                                                            vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("suggestion");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -365,7 +366,7 @@ static unique_ptr<FunctionData> SQLAutoCompleteBind(ClientContext &context, Tabl
 }
 
 unique_ptr<GlobalTableFunctionState> SQLAutoCompleteInit(ClientContext &context, TableFunctionInitInput &input) {
-	return make_unique<SQLAutoCompleteData>();
+	return make_uniq<SQLAutoCompleteData>();
 }
 
 void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -392,7 +393,7 @@ void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p,
 	output.SetCardinality(count);
 }
 
-void SQLAutoCompleteExtension::Load(DuckDB &db) {
+static void LoadInternal(DatabaseInstance &db) {
 	Connection con(db);
 	con.BeginTransaction();
 
@@ -406,9 +407,26 @@ void SQLAutoCompleteExtension::Load(DuckDB &db) {
 
 	con.Commit();
 }
+void SQLAutoCompleteExtension::Load(DuckDB &db) {
+	LoadInternal(*db.instance);
+}
 
 std::string SQLAutoCompleteExtension::Name() {
 	return "sql_auto_complete";
 }
 
 } // namespace duckdb
+extern "C" {
+
+DUCKDB_EXTENSION_API void autocomplete_init(duckdb::DatabaseInstance &db) {
+	LoadInternal(db);
+}
+
+DUCKDB_EXTENSION_API const char *autocomplete_version() {
+	return duckdb::DuckDB::LibraryVersion();
+}
+}
+
+#ifndef DUCKDB_EXTENSION_MAIN
+#error DUCKDB_EXTENSION_MAIN not defined
+#endif

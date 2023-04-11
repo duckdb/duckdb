@@ -61,7 +61,7 @@ struct HistogramFunction {
 	}
 
 	template <class STATE>
-	static void Destroy(STATE *state) {
+	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
 		if (state->hist) {
 			delete state->hist;
 		}
@@ -160,7 +160,7 @@ unique_ptr<FunctionData> HistogramBindFunction(ClientContext &context, Aggregate
 	auto struct_type = LogicalType::MAP(arguments[0]->return_type, LogicalType::UBIGINT);
 
 	function.return_type = struct_type;
-	return make_unique<VariableReturnBindData>(function.return_type);
+	return make_uniq<VariableReturnBindData>(function.return_type);
 }
 
 template <class OP, class T, class MAP_TYPE = map<T, idx_t>>

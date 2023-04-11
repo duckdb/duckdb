@@ -30,8 +30,8 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
 		block = block_manager.RegisterBlock(block_id);
 	}
 	auto segment_size = Storage::BLOCK_SIZE;
-	return make_unique<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::PERSISTENT, start, count, function,
-	                                  std::move(statistics), block_id, offset, segment_size);
+	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::PERSISTENT, start, count, function,
+	                                std::move(statistics), block_id, offset, segment_size);
 }
 
 unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance &db, const LogicalType &type,
@@ -46,12 +46,12 @@ unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance
 	} else {
 		buffer_manager.Allocate(segment_size, false, &block);
 	}
-	return make_unique<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::TRANSIENT, start, 0, function,
-	                                  BaseStatistics::CreateEmpty(type), INVALID_BLOCK, 0, segment_size);
+	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::TRANSIENT, start, 0, function,
+	                                BaseStatistics::CreateEmpty(type), INVALID_BLOCK, 0, segment_size);
 }
 
 unique_ptr<ColumnSegment> ColumnSegment::CreateSegment(ColumnSegment &other, idx_t start) {
-	return make_unique<ColumnSegment>(other, start);
+	return make_uniq<ColumnSegment>(other, start);
 }
 
 ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, LogicalType type_p,

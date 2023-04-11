@@ -26,8 +26,8 @@ void SampleOptions::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("seed", seed);
 }
 
-std::unique_ptr<SampleOptions> SampleOptions::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto result = make_unique<SampleOptions>();
+unique_ptr<SampleOptions> SampleOptions::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = make_uniq<SampleOptions>();
 
 	deserializer.ReadProperty("sample_size", result->sample_size);
 	deserializer.ReadProperty("is_percentage", result->is_percentage);
@@ -38,7 +38,7 @@ std::unique_ptr<SampleOptions> SampleOptions::FormatDeserialize(FormatDeserializ
 }
 
 unique_ptr<SampleOptions> SampleOptions::Deserialize(Deserializer &source) {
-	auto result = make_unique<SampleOptions>();
+	auto result = make_uniq<SampleOptions>();
 
 	FieldReader reader(source);
 	result->sample_size = reader.ReadRequiredSerializable<Value, Value>();
@@ -51,7 +51,7 @@ unique_ptr<SampleOptions> SampleOptions::Deserialize(Deserializer &source) {
 }
 
 unique_ptr<SampleOptions> SampleOptions::Copy() {
-	auto result = make_unique<SampleOptions>();
+	auto result = make_uniq<SampleOptions>();
 	result->sample_size = sample_size;
 	result->is_percentage = is_percentage;
 	result->method = method;

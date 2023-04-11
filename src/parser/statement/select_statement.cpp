@@ -18,17 +18,17 @@ void SelectStatement::Serialize(Serializer &serializer) const {
 }
 
 void SelectStatement::FormatSerialize(FormatSerializer &serializer) const {
-	node->FormatSerialize(serializer);
+	serializer.WriteProperty("node", node);
 }
 
 unique_ptr<SelectStatement> SelectStatement::Deserialize(Deserializer &source) {
-	auto result = make_unique<SelectStatement>();
+	auto result = make_uniq<SelectStatement>();
 	result->node = QueryNode::Deserialize(source);
 	return result;
 }
 
 unique_ptr<SelectStatement> SelectStatement::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto result = make_unique<SelectStatement>();
+	auto result = make_uniq<SelectStatement>();
 	deserializer.ReadProperty("node", result->node);
 	return result;
 }
@@ -37,8 +37,8 @@ bool SelectStatement::Equals(const SQLStatement *other_p) const {
 	if (type != other_p->type) {
 		return false;
 	}
-	auto other = (SelectStatement *)other_p;
-	return node->Equals(other->node.get());
+	auto &other = other_p->Cast<SelectStatement>();
+	return node->Equals(other.node.get());
 }
 
 string SelectStatement::ToString() const {
@@ -46,3 +46,47 @@ string SelectStatement::ToString() const {
 }
 
 } // namespace duckdb
+
+/*
+ json_serialize_sql('SELECT BLOB ''\x01\x10'';', format := CAST('t' AS BOOLEAN)){
+"error": false,
+"statements": [
+    {
+        "node": {
+            "type": "SELECT_NODE",
+            "modifiers": [],
+            "cte_map": {
+                "map": []
+            },
+            "select_list": [
+                {
+                    "class": "CONSTANT",
+                    "type": "CONSTANT",
+                    "alias": "",
+                    "value": {
+                        "type": {
+                            "id": "BLOB",
+                            "type_info": null
+                        },
+                        "is_null": false,
+                        "value": "\u0001\u0010"
+                    }
+                }
+            ],
+            "from_table": {
+                "type": "EMPTY",
+                "alias": "",
+                "sample": null
+            },
+            "where_clause": null,
+            "group_expressions": [],
+            "group_sets": [],
+            "aggregate_handling": "STANDARD_HANDLING",
+            "having": null,
+            "sample": null,
+            "qualify": null
+        }
+    }
+]
+}
+ */

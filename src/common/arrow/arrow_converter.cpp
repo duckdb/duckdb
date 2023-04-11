@@ -30,8 +30,8 @@ struct DuckDBArrowSchemaHolder {
 	// unused in children
 	vector<ArrowSchema *> children_ptrs;
 	//! used for nested structures
-	std::list<std::vector<ArrowSchema>> nested_children;
-	std::list<std::vector<ArrowSchema *>> nested_children_ptr;
+	std::list<vector<ArrowSchema>> nested_children;
+	std::list<vector<ArrowSchema *>> nested_children_ptr;
 	//! This holds strings created to represent decimal types
 	vector<unique_ptr<char[]>> owned_type_names;
 };
@@ -255,7 +255,7 @@ void ArrowConverter::ToArrowSchema(ArrowSchema *out_schema, vector<LogicalType> 
 	D_ASSERT(types.size() == names.size());
 	idx_t column_count = types.size();
 	// Allocate as unique_ptr first to cleanup properly on error
-	auto root_holder = make_unique<DuckDBArrowSchemaHolder>();
+	auto root_holder = make_uniq<DuckDBArrowSchemaHolder>();
 
 	// Allocate the children
 	root_holder->children.resize(column_count);

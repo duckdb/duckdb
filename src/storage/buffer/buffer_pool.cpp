@@ -1,10 +1,39 @@
 #include "duckdb/storage/buffer/buffer_pool.hpp"
+#include "duckdb/parallel/concurrentqueue.hpp"
 #include "duckdb/common/exception.hpp"
 
 namespace duckdb {
 
+typedef duckdb_moodycamel::ConcurrentQueue<BufferEvictionNode> eviction_queue_t;
+
+struct EvictionQueue {
+	eviction_queue_t q;
+};
+
+bool BufferEvictionNode::CanUnload(BlockHandle &handle_p) {
+	if (timestamp != handle_p.eviction_timestamp) {
+		// handle was used in between
+		return false;
+	}
+	return handle_p.CanUnload();
+}
+
+shared_ptr<BlockHandle> BufferEvictionNode::TryGetBlockHandle() {
+	auto handle_p = handle.lock();
+	if (!handle_p) {
+		// BlockHandle has been destroyed
+		return nullptr;
+	}
+	if (!CanUnload(*handle_p)) {
+		// handle was used in between
+		return nullptr;
+	}
+	// this is the latest node in the queue with this handle
+	return handle_p;
+}
+
 BufferPool::BufferPool(idx_t maximum_memory)
-    : current_memory(0), maximum_memory(maximum_memory), queue(make_unique<EvictionQueue>()), queue_insertions(0) {
+    : current_memory(0), maximum_memory(maximum_memory), queue(make_uniq<EvictionQueue>()), queue_insertions(0) {
 }
 BufferPool::~BufferPool() {
 }
@@ -19,6 +48,17 @@ void BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 		PurgeQueue();
 	}
 	queue->q.enqueue(BufferEvictionNode(weak_ptr<BlockHandle>(handle), handle->eviction_timestamp));
+}
+
+void BufferPool::IncreaseUsedMemory(idx_t size) {
+	current_memory += size;
+}
+
+idx_t BufferPool::GetUsedMemory() {
+	return current_memory;
+}
+idx_t BufferPool::GetMaxMemory() {
+	return maximum_memory;
 }
 
 BufferPool::EvictionResult BufferPool::EvictBlocks(idx_t extra_memory, idx_t memory_limit,

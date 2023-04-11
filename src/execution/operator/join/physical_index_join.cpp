@@ -103,15 +103,15 @@ PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOpe
 }
 
 unique_ptr<OperatorState> PhysicalIndexJoin::GetOperatorState(ExecutionContext &context) const {
-	return make_unique<IndexJoinOperatorState>(context.client, *this);
+	return make_uniq<IndexJoinOperatorState>(context.client, *this);
 }
 
 void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                OperatorState &state_p) const {
 	auto &phy_tbl_scan = (PhysicalTableScan &)*children[1];
-	auto &bind_tbl = (TableScanBindData &)*phy_tbl_scan.bind_data;
+	auto &bind_tbl = phy_tbl_scan.bind_data->Cast<TableScanBindData>();
 	auto &transaction = DuckTransaction::Get(context.client, *bind_tbl.table->catalog);
-	auto &state = (IndexJoinOperatorState &)state_p;
+	auto &state = state_p.Cast<IndexJoinOperatorState>();
 
 	auto &tbl = bind_tbl.table->GetStorage();
 	idx_t output_sel_idx = 0;
@@ -137,7 +137,7 @@ void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &input, Data
 			return;
 		}
 		state.rhs_chunk.Reset();
-		state.fetch_state = make_unique<ColumnFetchState>();
+		state.fetch_state = make_uniq<ColumnFetchState>();
 		Vector row_ids(LogicalType::ROW_TYPE, (data_ptr_t)&fetch_rows[0]);
 		tbl.Fetch(transaction, state.rhs_chunk, fetch_ids, row_ids, output_sel_idx, *state.fetch_state);
 	}
@@ -164,8 +164,9 @@ void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &input, Data
 
 void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, DataChunk &input, OperatorState &state_p) const {
 
-	auto &state = (IndexJoinOperatorState &)state_p;
-	auto &art = (ART &)*index;
+	auto &state = state_p.Cast<IndexJoinOperatorState>();
+	auto &art = index->Cast<ART>();
+	;
 
 	// generate the keys for this chunk
 	state.arena_allocator.Reset();
@@ -197,7 +198,7 @@ void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, DataChunk &inpu
 
 OperatorResultType PhysicalIndexJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                       GlobalOperatorState &gstate, OperatorState &state_p) const {
-	auto &state = (IndexJoinOperatorState &)state_p;
+	auto &state = state_p.Cast<IndexJoinOperatorState>();
 
 	state.result_size = 0;
 	if (state.first_fetch) {

@@ -150,8 +150,8 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 	// Buffers and map for current segment
 	StringHeap heap;
 	string_map_t<uint32_t> current_string_map;
-	std::vector<uint32_t> index_buffer;
-	std::vector<uint32_t> selection_buffer;
+	vector<uint32_t> index_buffer;
+	vector<uint32_t> selection_buffer;
 
 	bitpacking_width_t current_width = 0;
 	bitpacking_width_t next_width = 0;
@@ -381,14 +381,14 @@ struct DictionaryAnalyzeState : public DictionaryCompressionState {
 };
 
 struct DictionaryCompressionAnalyzeState : public AnalyzeState {
-	DictionaryCompressionAnalyzeState() : analyze_state(make_unique<DictionaryAnalyzeState>()) {
+	DictionaryCompressionAnalyzeState() : analyze_state(make_uniq<DictionaryAnalyzeState>()) {
 	}
 
 	unique_ptr<DictionaryAnalyzeState> analyze_state;
 };
 
 unique_ptr<AnalyzeState> DictionaryCompressionStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return make_unique<DictionaryCompressionAnalyzeState>();
+	return make_uniq<DictionaryCompressionAnalyzeState>();
 }
 
 bool DictionaryCompressionStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
@@ -412,7 +412,7 @@ idx_t DictionaryCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 //===--------------------------------------------------------------------===//
 unique_ptr<CompressionState> DictionaryCompressionStorage::InitCompression(ColumnDataCheckpointer &checkpointer,
                                                                            unique_ptr<AnalyzeState> state) {
-	return make_unique<DictionaryCompressionCompressState>(checkpointer);
+	return make_uniq<DictionaryCompressionCompressState>(checkpointer);
 }
 
 void DictionaryCompressionStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
@@ -437,7 +437,7 @@ struct CompressedStringScanState : public StringScanState {
 };
 
 unique_ptr<SegmentScanState> DictionaryCompressionStorage::StringInitScan(ColumnSegment &segment) {
-	auto state = make_unique<CompressedStringScanState>();
+	auto state = make_uniq<CompressedStringScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	state->handle = buffer_manager.Pin(segment.block);
 

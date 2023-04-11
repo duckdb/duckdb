@@ -57,8 +57,8 @@ PhysicalCopyToFile::PhysicalCopyToFile(vector<LogicalType> types, CopyFunction f
 
 SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
                                         DataChunk &input) const {
-	auto &g = (CopyToFunctionGlobalState &)gstate;
-	auto &l = (CopyToFunctionLocalState &)lstate;
+	auto &g = gstate.Cast<CopyToFunctionGlobalState>();
+	auto &l = lstate.Cast<CopyToFunctionLocalState>();
 
 	if (partition_output) {
 		l.part_buffer->Append(*l.part_buffer_append_state, input);
@@ -96,8 +96,8 @@ static string CreateDirRecursive(const vector<idx_t> &cols, const vector<string>
 }
 
 void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {
-	auto &g = (CopyToFunctionGlobalState &)gstate;
-	auto &l = (CopyToFunctionLocalState &)lstate;
+	auto &g = gstate.Cast<CopyToFunctionGlobalState>();
+	auto &l = lstate.Cast<CopyToFunctionLocalState>();
 
 	if (partition_output) {
 		auto &fs = FileSystem::GetFileSystem(context.client);
@@ -143,7 +143,7 @@ void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gst
 
 SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                               GlobalSinkState &gstate_p) const {
-	auto &gstate = (CopyToFunctionGlobalState &)gstate_p;
+	auto &gstate = gstate_p.Cast<CopyToFunctionGlobalState>();
 	if (per_thread_output || partition_output) {
 		// already happened in combine
 		return SinkFinalizeType::READY;
@@ -162,24 +162,24 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 
 unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContext &context) const {
 	if (partition_output) {
-		auto state = make_unique<CopyToFunctionLocalState>(nullptr);
+		auto state = make_uniq<CopyToFunctionLocalState>(nullptr);
 		{
-			auto &g = (CopyToFunctionGlobalState &)*sink_state;
+			auto &g = sink_state->Cast<CopyToFunctionGlobalState>();
 			lock_guard<mutex> glock(g.lock);
 			state->writer_offset = g.last_file_offset++;
 
-			state->part_buffer = make_unique<HivePartitionedColumnData>(context.client, expected_types,
-			                                                            partition_columns, g.partition_state);
-			state->part_buffer_append_state = make_unique<PartitionedColumnDataAppendState>();
+			state->part_buffer = make_uniq<HivePartitionedColumnData>(context.client, expected_types, partition_columns,
+			                                                          g.partition_state);
+			state->part_buffer_append_state = make_uniq<PartitionedColumnDataAppendState>();
 			state->part_buffer->InitializeAppendState(*state->part_buffer_append_state);
 		}
 		return std::move(state);
 	}
-	auto res = make_unique<CopyToFunctionLocalState>(function.copy_to_initialize_local(context, *bind_data));
+	auto res = make_uniq<CopyToFunctionLocalState>(function.copy_to_initialize_local(context, *bind_data));
 	if (per_thread_output) {
 		idx_t this_file_offset;
 		{
-			auto &g = (CopyToFunctionGlobalState &)*sink_state;
+			auto &g = sink_state->Cast<CopyToFunctionGlobalState>();
 			lock_guard<mutex> glock(g.lock);
 			this_file_offset = g.last_file_offset++;
 		}
@@ -214,7 +214,7 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 			}
 		}
 
-		auto state = make_unique<CopyToFunctionGlobalState>(nullptr);
+		auto state = make_uniq<CopyToFunctionGlobalState>(nullptr);
 
 		if (partition_output) {
 			state->partition_state = make_shared<GlobalHivePartitionState>();
@@ -223,7 +223,7 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 		return std::move(state);
 	}
 
-	return make_unique<CopyToFunctionGlobalState>(function.copy_to_initialize_global(context, *bind_data, file_path));
+	return make_uniq<CopyToFunctionGlobalState>(function.copy_to_initialize_global(context, *bind_data, file_path));
 }
 
 //===--------------------------------------------------------------------===//
@@ -238,13 +238,13 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalCopyToFile::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<CopyToFileState>();
+	return make_uniq<CopyToFileState>();
 }
 
 void PhysicalCopyToFile::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                                  LocalSourceState &lstate) const {
 	auto &state = (CopyToFileState &)gstate;
-	auto &g = (CopyToFunctionGlobalState &)*sink_state;
+	auto &g = sink_state->Cast<CopyToFunctionGlobalState>();
 	if (state.finished) {
 		return;
 	}

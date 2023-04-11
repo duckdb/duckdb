@@ -30,10 +30,10 @@ public:
 
 public:
 	//! Serialize the meta information of the TypeCatalogEntry a serializer
-	virtual void Serialize(Serializer &serializer);
+	virtual void Serialize(Serializer &serializer) const;
 	//! Deserializes to a TypeCatalogEntry
 	static unique_ptr<CreateTypeInfo> Deserialize(Deserializer &source);
 
-	string ToSQL() override;
+	string ToSQL() const override;
 };
 } // namespace duckdb

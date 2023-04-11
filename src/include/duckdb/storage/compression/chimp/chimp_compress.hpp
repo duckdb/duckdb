@@ -265,7 +265,7 @@ public:
 template <class T>
 unique_ptr<CompressionState> ChimpInitCompression(ColumnDataCheckpointer &checkpointer,
                                                   unique_ptr<AnalyzeState> state) {
-	return make_unique<ChimpCompressionState<T>>(checkpointer, (ChimpAnalyzeState<T> *)state.get());
+	return make_uniq<ChimpCompressionState<T>>(checkpointer, (ChimpAnalyzeState<T> *)state.get());
 }
 
 template <class T>

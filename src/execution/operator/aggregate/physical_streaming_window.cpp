@@ -33,8 +33,9 @@ public:
 		for (size_t i = 0; i < aggregate_dtors.size(); ++i) {
 			auto dtor = aggregate_dtors[i];
 			if (dtor) {
+				AggregateInputData aggr_input_data(aggregate_bind_data[i], Allocator::DefaultAllocator());
 				state_ptr = aggregate_states[i].data();
-				dtor(statev, 1);
+				dtor(statev, aggr_input_data, 1);
 			}
 		}
 	}
@@ -42,15 +43,17 @@ public:
 	void Initialize(ClientContext &context, DataChunk &input, const vector<unique_ptr<Expression>> &expressions) {
 		const_vectors.resize(expressions.size());
 		aggregate_states.resize(expressions.size());
+		aggregate_bind_data.resize(expressions.size(), nullptr);
 		aggregate_dtors.resize(expressions.size(), nullptr);
 
 		for (idx_t expr_idx = 0; expr_idx < expressions.size(); expr_idx++) {
 			auto &expr = *expressions[expr_idx];
-			auto &wexpr = (BoundWindowExpression &)expr;
+			auto &wexpr = expr.Cast<BoundWindowExpression>();
 			switch (expr.GetExpressionType()) {
 			case ExpressionType::WINDOW_AGGREGATE: {
 				auto &aggregate = *wexpr.aggregate;
 				auto &state = aggregate_states[expr_idx];
+				aggregate_bind_data[expr_idx] = wexpr.bind_info.get();
 				aggregate_dtors[expr_idx] = aggregate.destructor;
 				state.resize(aggregate.state_size());
 				aggregate.initialize(state.data());
@@ -64,16 +67,16 @@ public:
 				result.Initialize(Allocator::Get(context), {wexpr.children[0]->return_type});
 				executor.Execute(input, result);
 
-				const_vectors[expr_idx] = make_unique<Vector>(result.GetValue(0, 0));
+				const_vectors[expr_idx] = make_uniq<Vector>(result.GetValue(0, 0));
 				break;
 			}
 			case ExpressionType::WINDOW_PERCENT_RANK: {
-				const_vectors[expr_idx] = make_unique<Vector>(Value((double)0));
+				const_vectors[expr_idx] = make_uniq<Vector>(Value((double)0));
 				break;
 			}
 			case ExpressionType::WINDOW_RANK:
 			case ExpressionType::WINDOW_RANK_DENSE: {
-				const_vectors[expr_idx] = make_unique<Vector>(Value((int64_t)1));
+				const_vectors[expr_idx] = make_uniq<Vector>(Value((int64_t)1));
 				break;
 			}
 			default:
@@ -89,22 +92,23 @@ public:
 
 	// Aggregation
 	vector<StateBuffer> aggregate_states;
+	vector<FunctionData *> aggregate_bind_data;
 	vector<aggregate_destructor_t> aggregate_dtors;
 	data_ptr_t state_ptr;
 	Vector statev;
 };
 
 unique_ptr<GlobalOperatorState> PhysicalStreamingWindow::GetGlobalOperatorState(ClientContext &context) const {
-	return make_unique<StreamingWindowGlobalState>();
+	return make_uniq<StreamingWindowGlobalState>();
 }
 
 unique_ptr<OperatorState> PhysicalStreamingWindow::GetOperatorState(ExecutionContext &context) const {
-	return make_unique<StreamingWindowState>();
+	return make_uniq<StreamingWindowState>();
 }
 
 OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                     GlobalOperatorState &gstate_p, OperatorState &state_p) const {
-	auto &gstate = (StreamingWindowGlobalState &)gstate_p;
+	auto &gstate = gstate_p.Cast<StreamingWindowGlobalState>();
 	auto &state = (StreamingWindowState &)state_p;
 	if (!state.initialized) {
 		state.Initialize(context.client, input, select_list);
@@ -122,7 +126,7 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 		switch (expr.GetExpressionType()) {
 		case ExpressionType::WINDOW_AGGREGATE: {
 			//	Establish the aggregation environment
-			auto &wexpr = (BoundWindowExpression &)expr;
+			auto &wexpr = expr.Cast<BoundWindowExpression>();
 			auto &aggregate = *wexpr.aggregate;
 			auto &statev = state.statev;
 			state.state_ptr = state.aggregate_states[expr_idx].data();
