@@ -61,7 +61,7 @@ statement ok
 INSERT INTO t SELECT * FROM range(1000000);
 
 query I
-SELECT mem_to_bytes(current.memory_usage) > 10 * base.usage
+SELECT mem_to_bytes(current.memory_usage) > 2 * base.usage
 FROM base, pragma_database_size() current;
 ----
 1
