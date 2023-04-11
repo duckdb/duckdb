@@ -15,6 +15,9 @@ namespace duckdb {
 
 class PhysicalExplainAnalyze : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::EXPLAIN_ANALYZE;
+
+public:
 	PhysicalExplainAnalyze(vector<LogicalType> types)
 	    : PhysicalOperator(PhysicalOperatorType::EXPLAIN_ANALYZE, std::move(types), 1) {
 	}
@@ -24,6 +27,10 @@ public:
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
+
+	bool IsSource() const override {
+		return true;
+	}
 
 public:
 	// Sink Interface

@@ -122,7 +122,7 @@ struct DecimalArithmeticBindData : public FunctionData {
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto other = (DecimalArithmeticBindData &)other_p;
+		auto other = other_p.Cast<DecimalArithmeticBindData>();
 		return other.check_overflow == check_overflow;
 	}
 
@@ -456,7 +456,7 @@ struct DecimalNegateBindData : public FunctionData {
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto other = (DecimalNegateBindData &)other_p;
+		auto other = other_p.Cast<DecimalNegateBindData>();
 		return other.bound_type == bound_type;
 	}
 

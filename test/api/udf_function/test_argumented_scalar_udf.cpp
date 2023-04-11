@@ -16,7 +16,7 @@ TEST_CASE("UDF functions with arguments", "[coverage][.]") {
 
 	string func_name, table_name, col_type;
 	// The types supported by the argumented CreateScalarFunction
-	const vector<LogicalTypeId> all_sql_types = {
+	const duckdb::vector<LogicalTypeId> all_sql_types = {
 	    LogicalTypeId::BOOLEAN, LogicalTypeId::TINYINT, LogicalTypeId::SMALLINT, LogicalTypeId::DATE,
 	    LogicalTypeId::TIME,    LogicalTypeId::INTEGER, LogicalTypeId::BIGINT,   LogicalTypeId::TIMESTAMP,
 	    LogicalTypeId::FLOAT,   LogicalTypeId::DOUBLE,  LogicalTypeId::DECIMAL,  LogicalTypeId::VARCHAR};

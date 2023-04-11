@@ -155,7 +155,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	}
 
 	// bind the lambda parameter
-	auto &lambda_expr = (LambdaExpression &)*function.children[1];
+	auto &lambda_expr = function.children[1]->Cast<LambdaExpression>();
 	BindResult bind_lambda_result = BindExpression(lambda_expr, depth, true, list_child_type);
 
 	if (bind_lambda_result.HasError()) {
@@ -164,11 +164,10 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 		// successfully bound: replace the node with a BoundExpression
 		auto alias = function.children[1]->alias;
 		function.children[1] = make_uniq<BoundExpression>(std::move(bind_lambda_result.expression));
-		auto be = (BoundExpression *)function.children[1].get();
-		D_ASSERT(be);
-		be->alias = alias;
+		auto &be = function.children[1]->Cast<BoundExpression>();
+		be.alias = alias;
 		if (!alias.empty()) {
-			be->expr->alias = alias;
+			be.expr->alias = alias;
 		}
 	}
 
@@ -199,7 +198,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 		throw BinderException(binder.FormatError(function, error));
 	}
 
-	auto &bound_function_expr = (BoundFunctionExpression &)*result;
+	auto &bound_function_expr = result->Cast<BoundFunctionExpression>();
 	D_ASSERT(bound_function_expr.children.size() == 2);
 
 	// remove the lambda expression from the children

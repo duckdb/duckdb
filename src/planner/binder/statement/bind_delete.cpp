@@ -20,11 +20,12 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	if (bound_table->type != TableReferenceType::BASE_TABLE) {
 		throw BinderException("Can only delete from base table!");
 	}
-	auto &table_binding = (BoundBaseTableRef &)*bound_table;
+	auto &table_binding = bound_table->Cast<BoundBaseTableRef>();
+	;
 	auto table = table_binding.table;
 
 	auto root = CreatePlan(*bound_table);
-	auto &get = (LogicalGet &)*root;
+	auto &get = root->Cast<LogicalGet>();
 	D_ASSERT(root->type == LogicalOperatorType::LOGICAL_GET);
 
 	if (!table->temporary) {
