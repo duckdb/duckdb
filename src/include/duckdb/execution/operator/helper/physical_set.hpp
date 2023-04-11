@@ -33,6 +33,10 @@ public:
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
 
+	bool IsSource() const override {
+		return true;
+	}
+
 	static void SetExtensionVariable(ClientContext &context, ExtensionOption &extension_option, const string &name,
 	                                 SetScope scope, const Value &value);
 

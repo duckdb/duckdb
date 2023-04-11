@@ -75,4 +75,8 @@ bool PhysicalMaterializedCollector::ParallelSink() const {
 	return parallel;
 }
 
+bool PhysicalMaterializedCollector::SinkOrderDependent() const {
+	return true;
+}
+
 } // namespace duckdb
