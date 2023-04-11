@@ -1,9 +1,9 @@
 #include "duckdb/execution/radix_partitioned_hashtable.hpp"
 
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/parallel/event.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 namespace duckdb {
 
@@ -451,9 +451,11 @@ void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &ch
 			state.initialized = true;
 		}
 	}
-	while (true) {
-		idx_t ht_index;
 
+	auto &local_scan_state = lstate.scan_state;
+	while (true) {
+		D_ASSERT(state.ht_scan_states);
+		idx_t ht_index;
 		{
 			lock_guard<mutex> l(state.lock);
 			ht_index = state.ht_index;
@@ -461,21 +463,21 @@ void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &ch
 				state.finished = true;
 				return;
 			}
-			D_ASSERT(ht_index < gstate.finalized_hts.size());
-			if (lstate.ht_index != DConstants::INVALID_INDEX && ht_index != lstate.ht_index) {
-				lstate.ht->GetDataCollection().FinalizePinState(lstate.scan_state.scan_state.pin_state);
-			}
-			lstate.ht_index = ht_index;
-			lstate.ht = gstate.finalized_hts[ht_index];
-			D_ASSERT(lstate.ht);
 		}
-		D_ASSERT(state.ht_scan_states);
-		auto &scan_state = state.ht_scan_states[ht_index];
+		D_ASSERT(ht_index < gstate.finalized_hts.size());
+		if (lstate.ht_index != DConstants::INVALID_INDEX && ht_index != lstate.ht_index) {
+			lstate.ht->GetDataCollection().FinalizePinState(local_scan_state.pin_state);
+		}
+		lstate.ht_index = ht_index;
+		lstate.ht = gstate.finalized_hts[ht_index];
 		D_ASSERT(lstate.ht);
-		elements_found = lstate.ht->Scan(scan_state, lstate.scan_state, lstate.scan_chunk);
+
+		auto &global_scan_state = state.ht_scan_states[ht_index];
+		elements_found = lstate.ht->Scan(global_scan_state, local_scan_state, lstate.scan_chunk);
 		if (elements_found > 0) {
 			break;
 		}
+
 		// move to the next hash table
 		lock_guard<mutex> l(state.lock);
 		ht_index++;

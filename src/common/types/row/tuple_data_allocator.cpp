@@ -238,12 +238,12 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataPinState &pin_sta
 
 		// Check if heap block has changed - re-compute the pointers within each row if so
 		if (recompute && pin_state.properties != TupleDataPinProperties::ALREADY_PINNED) {
+			lock_guard<mutex> guard(*part->lock);
 			const auto old_base_heap_ptr = part->base_heap_ptr;
 			const auto new_base_heap_ptr = GetBaseHeapPointer(pin_state, *part);
 			if (old_base_heap_ptr != new_base_heap_ptr) {
 				Vector old_heap_ptrs(Value::POINTER((uintptr_t)old_base_heap_ptr + part->heap_block_offset));
 				Vector new_heap_ptrs(Value::POINTER((uintptr_t)new_base_heap_ptr + part->heap_block_offset));
-				// TODO: recomputation can be done for multiple parts at once using the the old/new heap ptrs vectors
 				RecomputeHeapPointers(old_heap_ptrs, *ConstantVector::ZeroSelectionVector(), row_locations,
 				                      new_heap_ptrs, offset, next, layout, 0);
 				part->base_heap_ptr = new_base_heap_ptr;

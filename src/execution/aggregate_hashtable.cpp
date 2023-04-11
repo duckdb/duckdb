@@ -625,7 +625,7 @@ idx_t GroupedAggregateHashTable::Scan(TupleDataParallelScanState &gstate, TupleD
 
 	RowOperationsState row_state(aggregate_allocator->GetAllocator());
 	const auto group_cols = layout.ColumnCount() - 1;
-	RowOperations::FinalizeStates(row_state, layout, lstate.scan_state.chunk_state.row_locations, result, group_cols);
+	RowOperations::FinalizeStates(row_state, layout, lstate.chunk_state.row_locations, result, group_cols);
 
 	return result.size();
 }

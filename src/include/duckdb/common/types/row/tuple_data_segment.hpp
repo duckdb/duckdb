@@ -28,8 +28,8 @@ public:
 	TupleDataChunkPart &operator=(const TupleDataChunkPart &) = delete;
 
 	//! Enable move constructors
-	TupleDataChunkPart(TupleDataChunkPart &&other) noexcept = default;
-	TupleDataChunkPart &operator=(TupleDataChunkPart &&) noexcept = default;
+	TupleDataChunkPart(TupleDataChunkPart &&other) noexcept;
+	TupleDataChunkPart &operator=(TupleDataChunkPart &&) noexcept;
 
 	static constexpr const uint32_t INVALID_INDEX = (uint32_t)-1;
 
@@ -45,6 +45,8 @@ public:
 	uint32_t total_heap_size;
 	//! Tuple count for this chunk part
 	uint32_t count;
+	//! Lock for recomputing heap pointers
+	unique_ptr<mutex> lock;
 };
 
 struct TupleDataChunk {
@@ -108,6 +110,7 @@ public:
 	vector<TupleDataChunk> chunks;
 	//! The tuple count of this segment
 	idx_t count;
+
 	//! Lock for modifying pinned_handles
 	mutex pinned_handles_lock;
 	//! Where handles to row blocks will be stored with TupleDataPinProperties::KEEP_EVERYTHING_PINNED

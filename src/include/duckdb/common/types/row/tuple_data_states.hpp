@@ -61,7 +61,7 @@ struct TupleDataScanState {
 	TupleDataPinState pin_state;
 	TupleDataChunkState chunk_state;
 	idx_t segment_index = DConstants::INVALID_INDEX;
-	idx_t chunk_index;
+	idx_t chunk_index = DConstants::INVALID_INDEX;
 };
 
 struct TupleDataParallelScanState {
@@ -69,8 +69,6 @@ struct TupleDataParallelScanState {
 	mutex lock;
 };
 
-struct TupleDataLocalScanState {
-	TupleDataScanState scan_state;
-};
+using TupleDataLocalScanState = TupleDataScanState;
 
 } // namespace duckdb
