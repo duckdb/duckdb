@@ -46,7 +46,7 @@ public:
 	//! Tuple count for this chunk part
 	uint32_t count;
 	//! Lock for recomputing heap pointers
-	unique_ptr<mutex> lock;
+	mutex lock;
 };
 
 struct TupleDataChunk {

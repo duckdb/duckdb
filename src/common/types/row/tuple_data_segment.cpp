@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-TupleDataChunkPart::TupleDataChunkPart() : lock(make_uniq<mutex>()) {
+TupleDataChunkPart::TupleDataChunkPart() {
 }
 
 void SwapTupleDataChunkPart(TupleDataChunkPart &a, TupleDataChunkPart &b) {
@@ -15,7 +15,7 @@ void SwapTupleDataChunkPart(TupleDataChunkPart &a, TupleDataChunkPart &b) {
 	std::swap(a.base_heap_ptr, b.base_heap_ptr);
 	std::swap(a.total_heap_size, b.total_heap_size);
 	std::swap(a.count, b.count);
-	std::swap(a.lock, b.lock);
+	// Cannot swap the lock, but not needed as move constructor only happens during append, lock only needed for scans
 }
 
 TupleDataChunkPart::TupleDataChunkPart(TupleDataChunkPart &&other) noexcept {
