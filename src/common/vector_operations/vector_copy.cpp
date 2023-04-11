@@ -24,7 +24,7 @@ static void TemplatedCopy(const Vector &source, const SelectionVector &sel, Vect
 }
 
 static const ValidityMask &CopyValidityMask(const Vector &v) {
-	switch(v.GetVectorType()) {
+	switch (v.GetVectorType()) {
 	case VectorType::FLAT_VECTOR:
 		return FlatVector::Validity(v);
 	case VectorType::FSST_VECTOR:

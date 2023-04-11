@@ -32,7 +32,7 @@ public:
 	void EraseObject(CatalogEntry &object);
 
 	//! Scans all dependencies, returning pairs of (object, dependent)
-	void Scan(const std::function<void(CatalogEntry *, CatalogEntry *, DependencyType)> &callback);
+	void Scan(const std::function<void(CatalogEntry &, CatalogEntry &, DependencyType)> &callback);
 
 	void AddOwnership(CatalogTransaction transaction, CatalogEntry &owner, CatalogEntry &entry);
 

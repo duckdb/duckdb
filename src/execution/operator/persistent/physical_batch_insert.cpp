@@ -156,7 +156,8 @@ public:
 	}
 
 	void AddCollection(ClientContext &context, idx_t batch_index, unique_ptr<RowGroupCollection> current_collection,
-	                   optional_ptr<OptimisticDataWriter> writer = nullptr, optional_ptr<bool> written_to_disk = nullptr) {
+	                   optional_ptr<OptimisticDataWriter> writer = nullptr,
+	                   optional_ptr<bool> written_to_disk = nullptr) {
 		vector<unique_ptr<RowGroupCollection>> merge_collections;
 		idx_t merge_count;
 		{
