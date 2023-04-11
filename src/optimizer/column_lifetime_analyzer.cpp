@@ -39,7 +39,7 @@ void ColumnLifetimeAnalyzer::StandardVisitOperator(LogicalOperator &op) {
 	LogicalOperatorVisitor::VisitOperatorExpressions(op);
 	if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		// visit the duplicate eliminated columns on the LHS, if any
-		auto &delim_join = (LogicalDelimJoin &)op;
+		auto &delim_join = op.Cast<LogicalDelimJoin>();
 		for (auto &expr : delim_join.duplicate_eliminated_columns) {
 			VisitExpression(&expr);
 		}
@@ -63,7 +63,7 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		if (everything_referenced) {
 			break;
 		}
-		auto &comp_join = (LogicalComparisonJoin &)op;
+		auto &comp_join = op.Cast<LogicalComparisonJoin>();
 		if (comp_join.join_type == JoinType::MARK || comp_join.join_type == JoinType::SEMI ||
 		    comp_join.join_type == JoinType::ANTI) {
 			break;
@@ -116,7 +116,7 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_FILTER: {
-		auto &filter = (LogicalFilter &)op;
+		auto &filter = op.Cast<LogicalFilter>();
 		if (everything_referenced) {
 			break;
 		}

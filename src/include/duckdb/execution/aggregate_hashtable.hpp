@@ -10,6 +10,7 @@
 
 #include "duckdb/execution/base_aggregate_hashtable.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
+#include "duckdb/storage/arena_allocator.hpp"
 
 namespace duckdb {
 class BlockHandle;
@@ -172,6 +173,9 @@ private:
 	bool is_finalized;
 
 	vector<ExpressionType> predicates;
+
+	//! The arena allocator used by the aggregates for their internal state
+	ArenaAllocator aggregate_allocator;
 
 private:
 	GroupedAggregateHashTable(const GroupedAggregateHashTable &) = delete;

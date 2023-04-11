@@ -6,15 +6,16 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/list.hpp"
-#include "duckdb/parser/tableref/joinref.hpp"
+#include "duckdb/parser/tableref/list.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
-#include "duckdb/planner/bound_tableref.hpp"
+#include "duckdb/planner/tableref/list.hpp"
+#include "duckdb/planner/query_node/list.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression_binder/returning_binder.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_sample.hpp"
+#include "duckdb/parser/query_node/list.hpp"
 
 #include <algorithm>
 
@@ -46,53 +47,53 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 	root_statement = &statement;
 	switch (statement.type) {
 	case StatementType::SELECT_STATEMENT:
-		return Bind((SelectStatement &)statement);
+		return Bind(statement.Cast<SelectStatement>());
 	case StatementType::INSERT_STATEMENT:
-		return Bind((InsertStatement &)statement);
+		return Bind(statement.Cast<InsertStatement>());
 	case StatementType::COPY_STATEMENT:
-		return Bind((CopyStatement &)statement);
+		return Bind(statement.Cast<CopyStatement>());
 	case StatementType::DELETE_STATEMENT:
-		return Bind((DeleteStatement &)statement);
+		return Bind(statement.Cast<DeleteStatement>());
 	case StatementType::UPDATE_STATEMENT:
-		return Bind((UpdateStatement &)statement);
+		return Bind(statement.Cast<UpdateStatement>());
 	case StatementType::RELATION_STATEMENT:
-		return Bind((RelationStatement &)statement);
+		return Bind(statement.Cast<RelationStatement>());
 	case StatementType::CREATE_STATEMENT:
-		return Bind((CreateStatement &)statement);
+		return Bind(statement.Cast<CreateStatement>());
 	case StatementType::DROP_STATEMENT:
-		return Bind((DropStatement &)statement);
+		return Bind(statement.Cast<DropStatement>());
 	case StatementType::ALTER_STATEMENT:
-		return Bind((AlterStatement &)statement);
+		return Bind(statement.Cast<AlterStatement>());
 	case StatementType::TRANSACTION_STATEMENT:
-		return Bind((TransactionStatement &)statement);
+		return Bind(statement.Cast<TransactionStatement>());
 	case StatementType::PRAGMA_STATEMENT:
-		return Bind((PragmaStatement &)statement);
+		return Bind(statement.Cast<PragmaStatement>());
 	case StatementType::EXPLAIN_STATEMENT:
-		return Bind((ExplainStatement &)statement);
+		return Bind(statement.Cast<ExplainStatement>());
 	case StatementType::VACUUM_STATEMENT:
-		return Bind((VacuumStatement &)statement);
+		return Bind(statement.Cast<VacuumStatement>());
 	case StatementType::SHOW_STATEMENT:
-		return Bind((ShowStatement &)statement);
+		return Bind(statement.Cast<ShowStatement>());
 	case StatementType::CALL_STATEMENT:
-		return Bind((CallStatement &)statement);
+		return Bind(statement.Cast<CallStatement>());
 	case StatementType::EXPORT_STATEMENT:
-		return Bind((ExportStatement &)statement);
+		return Bind(statement.Cast<ExportStatement>());
 	case StatementType::SET_STATEMENT:
-		return Bind((SetStatement &)statement);
+		return Bind(statement.Cast<SetStatement>());
 	case StatementType::LOAD_STATEMENT:
-		return Bind((LoadStatement &)statement);
+		return Bind(statement.Cast<LoadStatement>());
 	case StatementType::EXTENSION_STATEMENT:
-		return Bind((ExtensionStatement &)statement);
+		return Bind(statement.Cast<ExtensionStatement>());
 	case StatementType::PREPARE_STATEMENT:
-		return Bind((PrepareStatement &)statement);
+		return Bind(statement.Cast<PrepareStatement>());
 	case StatementType::EXECUTE_STATEMENT:
-		return Bind((ExecuteStatement &)statement);
+		return Bind(statement.Cast<ExecuteStatement>());
 	case StatementType::LOGICAL_PLAN_STATEMENT:
-		return Bind((LogicalPlanStatement &)statement);
+		return Bind(statement.Cast<LogicalPlanStatement>());
 	case StatementType::ATTACH_STATEMENT:
-		return Bind((AttachStatement &)statement);
+		return Bind(statement.Cast<AttachStatement>());
 	case StatementType::DETACH_STATEMENT:
-		return Bind((DetachStatement &)statement);
+		return Bind(statement.Cast<DetachStatement>());
 	default: // LCOV_EXCL_START
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));
@@ -112,14 +113,14 @@ unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
 	unique_ptr<BoundQueryNode> result;
 	switch (node.type) {
 	case QueryNodeType::SELECT_NODE:
-		result = BindNode((SelectNode &)node);
+		result = BindNode(node.Cast<SelectNode>());
 		break;
 	case QueryNodeType::RECURSIVE_CTE_NODE:
-		result = BindNode((RecursiveCTENode &)node);
+		result = BindNode(node.Cast<RecursiveCTENode>());
 		break;
 	default:
 		D_ASSERT(node.type == QueryNodeType::SET_OPERATION_NODE);
-		result = BindNode((SetOperationNode &)node);
+		result = BindNode(node.Cast<SetOperationNode>());
 		break;
 	}
 	return result;
@@ -140,11 +141,11 @@ BoundStatement Binder::Bind(QueryNode &node) {
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundQueryNode &node) {
 	switch (node.type) {
 	case QueryNodeType::SELECT_NODE:
-		return CreatePlan((BoundSelectNode &)node);
+		return CreatePlan(node.Cast<BoundSelectNode>());
 	case QueryNodeType::SET_OPERATION_NODE:
-		return CreatePlan((BoundSetOperationNode &)node);
+		return CreatePlan(node.Cast<BoundSetOperationNode>());
 	case QueryNodeType::RECURSIVE_CTE_NODE:
-		return CreatePlan((BoundRecursiveCTENode &)node);
+		return CreatePlan(node.Cast<BoundRecursiveCTENode>());
 	default:
 		throw InternalException("Unsupported bound query node type");
 	}
@@ -154,25 +155,25 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	unique_ptr<BoundTableRef> result;
 	switch (ref.type) {
 	case TableReferenceType::BASE_TABLE:
-		result = Bind((BaseTableRef &)ref);
+		result = Bind(ref.Cast<BaseTableRef>());
 		break;
 	case TableReferenceType::JOIN:
-		result = Bind((JoinRef &)ref);
+		result = Bind(ref.Cast<JoinRef>());
 		break;
 	case TableReferenceType::SUBQUERY:
-		result = Bind((SubqueryRef &)ref);
+		result = Bind(ref.Cast<SubqueryRef>());
 		break;
 	case TableReferenceType::EMPTY:
-		result = Bind((EmptyTableRef &)ref);
+		result = Bind(ref.Cast<EmptyTableRef>());
 		break;
 	case TableReferenceType::TABLE_FUNCTION:
-		result = Bind((TableFunctionRef &)ref);
+		result = Bind(ref.Cast<TableFunctionRef>());
 		break;
 	case TableReferenceType::EXPRESSION_LIST:
-		result = Bind((ExpressionListRef &)ref);
+		result = Bind(ref.Cast<ExpressionListRef>());
 		break;
 	case TableReferenceType::PIVOT:
-		result = Bind((PivotRef &)ref);
+		result = Bind(ref.Cast<PivotRef>());
 		break;
 	case TableReferenceType::CTE:
 	case TableReferenceType::INVALID:
@@ -187,25 +188,25 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 	unique_ptr<LogicalOperator> root;
 	switch (ref.type) {
 	case TableReferenceType::BASE_TABLE:
-		root = CreatePlan((BoundBaseTableRef &)ref);
+		root = CreatePlan(ref.Cast<BoundBaseTableRef>());
 		break;
 	case TableReferenceType::SUBQUERY:
-		root = CreatePlan((BoundSubqueryRef &)ref);
+		root = CreatePlan(ref.Cast<BoundSubqueryRef>());
 		break;
 	case TableReferenceType::JOIN:
-		root = CreatePlan((BoundJoinRef &)ref);
+		root = CreatePlan(ref.Cast<BoundJoinRef>());
 		break;
 	case TableReferenceType::TABLE_FUNCTION:
-		root = CreatePlan((BoundTableFunction &)ref);
+		root = CreatePlan(ref.Cast<BoundTableFunction>());
 		break;
 	case TableReferenceType::EMPTY:
-		root = CreatePlan((BoundEmptyTableRef &)ref);
+		root = CreatePlan(ref.Cast<BoundEmptyTableRef>());
 		break;
 	case TableReferenceType::EXPRESSION_LIST:
-		root = CreatePlan((BoundExpressionListRef &)ref);
+		root = CreatePlan(ref.Cast<BoundExpressionListRef>());
 		break;
 	case TableReferenceType::CTE:
-		root = CreatePlan((BoundCTERef &)ref);
+		root = CreatePlan(ref.Cast<BoundCTERef>());
 		break;
 	case TableReferenceType::PIVOT:
 		root = CreatePlan((BoundPivotRef &)ref);
@@ -426,7 +427,7 @@ string Binder::FormatErrorRecursive(idx_t query_location, const string &message,
 // FIXME: this is extremely naive
 void VerifyNotExcluded(ParsedExpression &expr) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto &column_ref = (ColumnRefExpression &)expr;
+		auto &column_ref = expr.Cast<ColumnRefExpression>();
 		if (!column_ref.IsQualified()) {
 			return;
 		}

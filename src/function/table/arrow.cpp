@@ -288,13 +288,13 @@ unique_ptr<GlobalTableFunctionState> ArrowTableFunction::ArrowScanInitGlobal(Cli
 unique_ptr<LocalTableFunctionState> ArrowTableFunction::ArrowScanInitLocal(ExecutionContext &context,
                                                                            TableFunctionInitInput &input,
                                                                            GlobalTableFunctionState *global_state_p) {
-	auto &global_state = (ArrowScanGlobalState &)*global_state_p;
+	auto &global_state = global_state_p->Cast<ArrowScanGlobalState>();
 	auto current_chunk = make_uniq<ArrowArrayWrapper>();
 	auto result = make_uniq<ArrowScanLocalState>(std::move(current_chunk));
 	result->column_ids = input.column_ids;
 	result->filters = input.filters;
 	if (input.CanRemoveFilterColumns()) {
-		auto &asgs = (ArrowScanGlobalState &)*global_state_p;
+		auto &asgs = global_state_p->Cast<ArrowScanGlobalState>();
 		result->all_columns.Initialize(context.client, asgs.scanned_types);
 	}
 	if (!ArrowScanParallelStateNext(context.client, input.bind_data, *result, global_state)) {
@@ -308,8 +308,8 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, TableFunction
 		return;
 	}
 	auto &data = (ArrowScanFunctionData &)*data_p.bind_data;
-	auto &state = (ArrowScanLocalState &)*data_p.local_state;
-	auto &global_state = (ArrowScanGlobalState &)*data_p.global_state;
+	auto &state = data_p.local_state->Cast<ArrowScanLocalState>();
+	auto &global_state = data_p.global_state->Cast<ArrowScanGlobalState>();
 
 	//! Out of tuples in this chunk
 	if (state.chunk_offset >= (idx_t)state.chunk->arrow_array.length) {
@@ -340,7 +340,7 @@ unique_ptr<NodeStatistics> ArrowTableFunction::ArrowScanCardinality(ClientContex
 idx_t ArrowTableFunction::ArrowGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
                                              LocalTableFunctionState *local_state,
                                              GlobalTableFunctionState *global_state) {
-	auto &state = (ArrowScanLocalState &)*local_state;
+	auto &state = local_state->Cast<ArrowScanLocalState>();
 	return state.batch_index;
 }
 

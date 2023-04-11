@@ -14,6 +14,9 @@ namespace duckdb {
 
 class BoundCTERef : public BoundTableRef {
 public:
+	static constexpr const TableReferenceType TYPE = TableReferenceType::CTE;
+
+public:
 	BoundCTERef(idx_t bind_index, idx_t cte_index)
 	    : BoundTableRef(TableReferenceType::CTE), bind_index(bind_index), cte_index(cte_index) {
 	}

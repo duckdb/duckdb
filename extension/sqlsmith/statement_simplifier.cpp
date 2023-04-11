@@ -72,18 +72,18 @@ void StatementSimplifier::SimplifyOptional(duckdb::unique_ptr<T> &opt) {
 void StatementSimplifier::Simplify(TableRef &ref) {
 	switch (ref.type) {
 	case TableReferenceType::SUBQUERY: {
-		auto &subquery = (SubqueryRef &)ref;
+		auto &subquery = ref.Cast<SubqueryRef>();
 		Simplify(*subquery.subquery->node);
 		break;
 	}
 	case TableReferenceType::JOIN: {
-		auto &cp = (JoinRef &)ref;
+		auto &cp = ref.Cast<JoinRef>();
 		Simplify(*cp.left);
 		Simplify(*cp.right);
 		break;
 	}
 	case TableReferenceType::EXPRESSION_LIST: {
-		auto &expr_list = (ExpressionListRef &)ref;
+		auto &expr_list = ref.Cast<ExpressionListRef>();
 		if (expr_list.values.size() == 1) {
 			SimplifyList(expr_list.values[0]);
 		} else if (expr_list.values.size() > 1) {
@@ -138,10 +138,10 @@ void StatementSimplifier::Simplify(QueryNode &node) {
 	Simplify(node.cte_map);
 	switch (node.type) {
 	case QueryNodeType::SELECT_NODE:
-		Simplify((SelectNode &)node);
+		Simplify(node.Cast<SelectNode>());
 		break;
 	case QueryNodeType::SET_OPERATION_NODE:
-		Simplify((SetOperationNode &)node);
+		Simplify(node.Cast<SetOperationNode>());
 		break;
 	case QueryNodeType::RECURSIVE_CTE_NODE:
 	default:
@@ -169,23 +169,23 @@ void StatementSimplifier::SimplifyExpression(duckdb::unique_ptr<ParsedExpression
 	SimplifyReplace(expr, constant);
 	switch (expr_class) {
 	case ExpressionClass::CONJUNCTION: {
-		auto &conj = (ConjunctionExpression &)*expr;
+		auto &conj = expr->Cast<ConjunctionExpression>();
 		SimplifyListReplace(expr, conj.children);
 		break;
 	}
 	case ExpressionClass::FUNCTION: {
-		auto &func = (FunctionExpression &)*expr;
+		auto &func = expr->Cast<FunctionExpression>();
 		SimplifyListReplace(expr, func.children);
 		SimplifyListReplaceNull(func.children);
 		break;
 	}
 	case ExpressionClass::OPERATOR: {
-		auto &op = (OperatorExpression &)*expr;
+		auto &op = expr->Cast<OperatorExpression>();
 		SimplifyListReplace(expr, op.children);
 		break;
 	}
 	case ExpressionClass::CASE: {
-		auto &op = (CaseExpression &)*expr;
+		auto &op = expr->Cast<CaseExpression>();
 		SimplifyReplace(expr, op.else_expr);
 		for (auto &case_check : op.case_checks) {
 			SimplifyReplace(expr, case_check.then_expr);
@@ -194,12 +194,12 @@ void StatementSimplifier::SimplifyExpression(duckdb::unique_ptr<ParsedExpression
 		break;
 	}
 	case ExpressionClass::CAST: {
-		auto &cast = (CastExpression &)*expr;
+		auto &cast = expr->Cast<CastExpression>();
 		SimplifyReplace(expr, cast.child);
 		break;
 	}
 	case ExpressionClass::COLLATE: {
-		auto &collate = (CollateExpression &)*expr;
+		auto &collate = expr->Cast<CollateExpression>();
 		SimplifyReplace(expr, collate.child);
 		break;
 	}
@@ -277,16 +277,16 @@ void StatementSimplifier::Simplify(UpdateStatement &stmt) {
 void StatementSimplifier::Simplify(SQLStatement &stmt) {
 	switch (stmt.type) {
 	case StatementType::SELECT_STATEMENT:
-		Simplify((SelectStatement &)stmt);
+		Simplify(stmt.Cast<SelectStatement>());
 		break;
 	case StatementType::INSERT_STATEMENT:
-		Simplify((InsertStatement &)stmt);
+		Simplify(stmt.Cast<InsertStatement>());
 		break;
 	case StatementType::UPDATE_STATEMENT:
-		Simplify((UpdateStatement &)stmt);
+		Simplify(stmt.Cast<UpdateStatement>());
 		break;
 	case StatementType::DELETE_STATEMENT:
-		Simplify((DeleteStatement &)stmt);
+		Simplify(stmt.Cast<DeleteStatement>());
 		break;
 	default:
 		throw InvalidInputException("Expected a single SELECT, INSERT or UPDATE statement");

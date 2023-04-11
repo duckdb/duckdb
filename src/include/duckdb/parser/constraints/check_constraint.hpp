@@ -18,6 +18,9 @@ namespace duckdb {
 //! every row in a table
 class CheckConstraint : public Constraint {
 public:
+	static constexpr const ConstraintType TYPE = ConstraintType::CHECK;
+
+public:
 	DUCKDB_API explicit CheckConstraint(unique_ptr<ParsedExpression> expression);
 
 	unique_ptr<ParsedExpression> expression;

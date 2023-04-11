@@ -21,11 +21,11 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	REQUIRE_NOTHROW(result = tbl->Project("i + 1")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4}));
 
-	REQUIRE_NOTHROW(result = tbl->Project(vector<string> {"i + 1", "i + 2"})->Execute());
+	REQUIRE_NOTHROW(result = tbl->Project(duckdb::vector<string> {"i + 1", "i + 2"})->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4}));
 	REQUIRE(CHECK_COLUMN(result, 1, {3, 4, 5}));
 
-	REQUIRE_NOTHROW(result = tbl->Project(vector<string> {"i + 1"}, {"i"})->Execute());
+	REQUIRE_NOTHROW(result = tbl->Project(duckdb::vector<string> {"i + 1"}, {"i"})->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4}));
 
 	// we support * expressions
@@ -58,7 +58,7 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 4}));
 
 	// multi filter
-	REQUIRE_NOTHROW(result = tbl->Filter(vector<string> {"i <> 2", "i <> 3"})->Execute());
+	REQUIRE_NOTHROW(result = tbl->Filter(duckdb::vector<string> {"i <> 2", "i <> 3"})->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 
 	// we can reuse the same filter again and perform a different projection
@@ -109,7 +109,7 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	// now test ordering
 	REQUIRE_NOTHROW(result = proj->Order("a DESC")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {4, 2}));
-	REQUIRE_NOTHROW(result = proj->Order(vector<string> {"a DESC", "a ASC"})->Execute());
+	REQUIRE_NOTHROW(result = proj->Order(duckdb::vector<string> {"a DESC", "a ASC"})->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {4, 2}));
 
 	// top n
@@ -178,16 +178,16 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	REQUIRE_NO_FAIL(multi_join->Explain());
 
 	// incorrect API usage
-	REQUIRE_THROWS(tbl->Project(vector<string> {})->Execute());
-	REQUIRE_THROWS(tbl->Project(vector<string> {"1, 2, 3"})->Execute());
-	REQUIRE_THROWS(tbl->Project(vector<string> {""})->Execute());
+	REQUIRE_THROWS(tbl->Project(duckdb::vector<string> {})->Execute());
+	REQUIRE_THROWS(tbl->Project(duckdb::vector<string> {"1, 2, 3"})->Execute());
+	REQUIRE_THROWS(tbl->Project(duckdb::vector<string> {""})->Execute());
 	REQUIRE_THROWS(tbl->Filter("i=1, i=2")->Execute());
 	REQUIRE_THROWS(tbl->Filter("")->Execute());
-	REQUIRE_THROWS(tbl->Filter(vector<string> {})->Execute());
-	REQUIRE_THROWS(tbl->Filter(vector<string> {"1, 2, 3"})->Execute());
-	REQUIRE_THROWS(tbl->Filter(vector<string> {""})->Execute());
-	REQUIRE_THROWS(tbl->Order(vector<string> {})->Execute());
-	REQUIRE_THROWS(tbl->Order(vector<string> {"1, 2, 3"})->Execute());
+	REQUIRE_THROWS(tbl->Filter(duckdb::vector<string> {})->Execute());
+	REQUIRE_THROWS(tbl->Filter(duckdb::vector<string> {"1, 2, 3"})->Execute());
+	REQUIRE_THROWS(tbl->Filter(duckdb::vector<string> {""})->Execute());
+	REQUIRE_THROWS(tbl->Order(duckdb::vector<string> {})->Execute());
+	REQUIRE_THROWS(tbl->Order(duckdb::vector<string> {"1, 2, 3"})->Execute());
 	REQUIRE_THROWS(tbl->Order("1 LIMIT 3")->Execute());
 	REQUIRE_THROWS(tbl->Order("1; SELECT 42")->Execute());
 	REQUIRE_THROWS(tbl->Join(tbl, "")->Execute());
@@ -525,7 +525,7 @@ TEST_CASE("Test aggregates in relation API", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {4}));
 	REQUIRE(CHECK_COLUMN(result, 1, {18}));
 
-	REQUIRE_NOTHROW(result = tbl->Aggregate(vector<string> {"SUM(i)", "SUM(j)"})->Execute());
+	REQUIRE_NOTHROW(result = tbl->Aggregate(duckdb::vector<string> {"SUM(i)", "SUM(j)"})->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {4}));
 	REQUIRE(CHECK_COLUMN(result, 1, {18}));
 
@@ -540,7 +540,9 @@ TEST_CASE("Test aggregates in relation API", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {12, 6}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
 	// explicitly grouped aggregate
-	REQUIRE_NOTHROW(result = tbl->Aggregate(vector<string> {"SUM(j)"}, vector<string> {"i"})->Order("1")->Execute());
+	REQUIRE_NOTHROW(
+	    result =
+	        tbl->Aggregate(duckdb::vector<string> {"SUM(j)"}, duckdb::vector<string> {"i"})->Order("1")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {6, 12}));
 
 	// grouped aggregates can be expressions
@@ -799,7 +801,7 @@ TEST_CASE("Test table function relations", "[relation_api]") {
 
 	// table function that takes a relation as input
 	auto values = con.Values("(42)", {"i"});
-	auto summary = values->TableFunction("summary", vector<Value> {});
+	auto summary = values->TableFunction("summary", duckdb::vector<Value> {});
 	result = summary->Execute();
 	REQUIRE(CHECK_COLUMN(result, 0, {"[42]"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"42"}));
