@@ -1399,8 +1399,12 @@ ModifiedMemoryFileSystem &DuckDBPyConnection::GetObjectFileSystem() {
 	if (!internal_object_filesystem) {
 		D_ASSERT(!FileSystemIsRegistered("DUCKDB_INTERNAL_OBJECTSTORE"));
 		auto &import_cache_py = *ImportCache();
-		internal_object_filesystem =
-		    make_shared<ModifiedMemoryFileSystem>(import_cache_py.pyduckdb().filesystem.modified_memory_filesystem()());
+		auto modified_memory_fs = import_cache_py.pyduckdb().filesystem.modified_memory_filesystem();
+		if (modified_memory_fs.ptr() == nullptr) {
+			throw InvalidInputException(
+			    "This operation could not be completed because required module 'fsspec' is not installed");
+		}
+		internal_object_filesystem = make_shared<ModifiedMemoryFileSystem>(modified_memory_fs());
 		auto &abstract_fs = (AbstractFileSystem &)*internal_object_filesystem;
 		RegisterFilesystem(abstract_fs);
 	}
