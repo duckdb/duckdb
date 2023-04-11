@@ -1,4 +1,4 @@
-# name: test/sql/index/art/test_art_memory_usage.test
+# name: test/sql/index/art/test_art_memory_usage.test_slow
 # description: Test ART index with many matches
 # group: [art]
 
@@ -17,6 +17,7 @@ CREATE FUNCTION mem_to_bytes(x) AS CASE
 
 # store the memory usage of 1M integers in base table
 # verify that the memory increases and drops again
+# this is the setup phase of the memory tests in this file
 
 statement ok
 CREATE TABLE temp (i integer);
@@ -60,7 +61,7 @@ statement ok
 INSERT INTO t SELECT * FROM range(1000000);
 
 query I
-SELECT mem_to_bytes(current.memory_usage) > 2 * base.usage
+SELECT mem_to_bytes(current.memory_usage) > 20 * base.usage
 FROM base, pragma_database_size() current;
 ----
 1
