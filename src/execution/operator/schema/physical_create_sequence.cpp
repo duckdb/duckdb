@@ -20,7 +20,7 @@ unique_ptr<GlobalSourceState> PhysicalCreateSequence::GetGlobalSourceState(Clien
 
 void PhysicalCreateSequence::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                                      LocalSourceState &lstate) const {
-	auto &state = (CreateSequenceSourceState &)gstate;
+	auto &state = gstate.Cast<CreateSequenceSourceState>();
 	if (state.finished) {
 		return;
 	}

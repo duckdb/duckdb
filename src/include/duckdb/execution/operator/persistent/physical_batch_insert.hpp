@@ -14,6 +14,9 @@ namespace duckdb {
 
 class PhysicalBatchInsert : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::BATCH_INSERT;
+
+public:
 	//! INSERT INTO
 	PhysicalBatchInsert(vector<LogicalType> types, TableCatalogEntry *table,
 	                    physical_index_vector_t<idx_t> column_index_map, vector<unique_ptr<Expression>> bound_defaults,
@@ -42,6 +45,10 @@ public:
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
+
+	bool IsSource() const override {
+		return true;
+	}
 
 public:
 	// Sink interface

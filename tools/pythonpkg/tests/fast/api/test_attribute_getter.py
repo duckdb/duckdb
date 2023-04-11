@@ -23,12 +23,12 @@ class TestGetAttribute(object):
     
     def test_getitem_nonexistant(self):
         rel = duckdb.sql('select i as a, (i + 5) % 10 as b, (i + 2) % 3 as c from range(100) tbl(i)')
-        with pytest.raises(duckdb.InvalidInputException):
+        with pytest.raises(AttributeError):
             rel['d']
 
     def test_getattr_nonexistant(self):
         rel = duckdb.sql('select i as a, (i + 5) % 10 as b, (i + 2) % 3 as c from range(100) tbl(i)')
-        with pytest.raises(duckdb.InvalidInputException):
+        with pytest.raises(AttributeError):
             rel.d
 
     def test_getattr_collision(self):
@@ -42,3 +42,13 @@ class TestGetAttribute(object):
         
         # this case is not an issue on __getitem__
         assert rel['df'].__class__ == duckdb.DuckDBPyRelation
+
+    def test_getitem_struct(self):
+        rel = duckdb.sql("select {'a':5, 'b':6} as a, 5 as b")
+        assert rel['a']['a'].fetchall()[0][0] == 5
+        assert rel['a']['b'].fetchall()[0][0] == 6
+
+    def test_getattr_struct(self):
+        rel = duckdb.sql("select {'a':5, 'b':6} as a, 5 as b")
+        assert rel.a.a.fetchall()[0][0] == 5
+        assert rel.a.b.fetchall()[0][0] == 6

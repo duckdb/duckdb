@@ -533,12 +533,33 @@ bool DuckDBPyRelation::ContainsColumnByName(const string &name) const {
 	return std::find(names.begin(), names.end(), name) != names.end();
 }
 
+static bool ContainsStructFieldByName(LogicalType &type, const string &name) {
+	if (type.id() != LogicalTypeId::STRUCT) {
+		return false;
+	}
+	auto count = StructType::GetChildCount(type);
+	for (idx_t i = 0; i < count; i++) {
+		auto &field_name = StructType::GetChildName(type, i);
+		if (StringUtil::CIEquals(name, field_name)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GetAttribute(const string &name) {
 	// TODO: support fetching a result containing only column 'name' from a value_relation
-	if (!rel || !ContainsColumnByName(name)) {
-		throw InvalidInputException("This relation does not contain a column by the name of '%s'", name);
+	if (!rel) {
+		throw py::attribute_error(
+		    StringUtil::Format("This relation does not contain a column by the name of '%s'", name));
 	}
-	return make_uniq<DuckDBPyRelation>(rel->Project({name}));
+	if (names.size() == 1 && ContainsStructFieldByName(types[0], name)) {
+		return make_uniq<DuckDBPyRelation>(rel->Project({StringUtil::Format("%s.%s", names[0], name)}));
+	}
+	if (ContainsColumnByName(name)) {
+		return make_uniq<DuckDBPyRelation>(rel->Project({name}));
+	}
+	throw py::attribute_error(StringUtil::Format("This relation does not contain a column by the name of '%s'", name));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Union(DuckDBPyRelation *other) {
@@ -693,7 +714,7 @@ static bool IsDescribeStatement(SQLStatement &statement) {
 	if (statement.type != StatementType::PRAGMA_STATEMENT) {
 		return false;
 	}
-	auto &pragma_statement = (PragmaStatement &)statement;
+	auto &pragma_statement = statement.Cast<PragmaStatement>();
 	if (pragma_statement.info->name != "show") {
 		return false;
 	}

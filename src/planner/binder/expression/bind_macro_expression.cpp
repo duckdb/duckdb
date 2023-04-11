@@ -13,7 +13,7 @@ void ExpressionBinder::ReplaceMacroParametersRecursive(unique_ptr<ParsedExpressi
 	switch (expr->GetExpressionClass()) {
 	case ExpressionClass::COLUMN_REF: {
 		// if expr is a parameter, replace it with its argument
-		auto &colref = (ColumnRefExpression &)*expr;
+		auto &colref = expr->Cast<ColumnRefExpression>();
 		bool bind_macro_parameter = false;
 		if (colref.IsQualified()) {
 			bind_macro_parameter = false;
@@ -31,7 +31,7 @@ void ExpressionBinder::ReplaceMacroParametersRecursive(unique_ptr<ParsedExpressi
 	}
 	case ExpressionClass::SUBQUERY: {
 		// replacing parameters within a subquery is slightly different
-		auto &sq = ((SubqueryExpression &)*expr).subquery;
+		auto &sq = (expr->Cast<SubqueryExpression>()).subquery;
 		ParsedExpressionIterator::EnumerateQueryNodeChildren(
 		    *sq->node, [&](unique_ptr<ParsedExpression> &child) { ReplaceMacroParametersRecursive(child); });
 		break;
@@ -65,7 +65,7 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacro
 	// positional parameters
 	for (idx_t i = 0; i < macro_def.parameters.size(); i++) {
 		types.emplace_back(LogicalType::SQLNULL);
-		auto &param = (ColumnRefExpression &)*macro_def.parameters[i];
+		auto &param = macro_def.parameters[i]->Cast<ColumnRefExpression>();
 		names.push_back(param.GetColumnName());
 	}
 	// default parameters

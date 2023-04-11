@@ -1,6 +1,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/common/helper.hpp"
 
 #include "tpce_generated.hpp"
 #include "tpce.hpp"
@@ -21,9 +22,9 @@ UINT iLoadUnitSize = iDefaultLoadUnitSize;          // # of customers in one loa
 UINT iDaysOfInitialTrades = 300;
 
 void dbgen(duckdb::DuckDB &db, uint32_t sf, std::string schema, std::string suffix) {
-	unique_ptr<CBaseLoaderFactory> pLoaderFactory; // class factory that creates table loaders
+	duckdb::unique_ptr<CBaseLoaderFactory> pLoaderFactory; // class factory that creates table loaders
 	CGenerateAndLoadStandardOutput Output;
-	unique_ptr<CGenerateAndLoad> pGenerateAndLoad;
+	duckdb::unique_ptr<CGenerateAndLoad> pGenerateAndLoad;
 
 	Connection con(db);
 	con.Query("BEGIN TRANSACTION");
@@ -36,7 +37,7 @@ void dbgen(duckdb::DuckDB &db, uint32_t sf, std::string schema, std::string suff
 		return;
 	}
 
-	pLoaderFactory = make_unique<DuckDBLoaderFactory>(con, schema, suffix);
+	pLoaderFactory = make_uniq<DuckDBLoaderFactory>(con, schema, suffix);
 
 	// Create log formatter and logger instance
 	CLogFormatTab fmt;
@@ -46,9 +47,8 @@ void dbgen(duckdb::DuckDB &db, uint32_t sf, std::string schema, std::string suff
 	const DataFileManager dfm(iTotalCustomerCount, iTotalCustomerCount);
 
 	// Create the main class instance
-	pGenerateAndLoad = unique_ptr<CGenerateAndLoad>(
-	    new CGenerateAndLoad(dfm, iCustomerCount, iStartFromCustomer, iTotalCustomerCount, iLoadUnitSize, sf,
-	                         iDaysOfInitialTrades, pLoaderFactory.get(), &logger, &Output, true));
+	pGenerateAndLoad = make_uniq<CGenerateAndLoad>(dfm, iCustomerCount, iStartFromCustomer, iTotalCustomerCount, iLoadUnitSize, sf,
+	                         iDaysOfInitialTrades, pLoaderFactory.get(), &logger, &Output, true);
 
 	//  The generate and load phase starts here.
 	// Generate static tables

@@ -16,11 +16,11 @@ DuckIndexEntry::~DuckIndexEntry() {
 	info->indexes.RemoveIndex(index);
 }
 
-string DuckIndexEntry::GetSchemaName() {
+string DuckIndexEntry::GetSchemaName() const {
 	return info->schema;
 }
 
-string DuckIndexEntry::GetTableName() {
+string DuckIndexEntry::GetTableName() const {
 	return info->table;
 }
 

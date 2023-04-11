@@ -60,7 +60,7 @@ typedef unique_ptr<BaseStatistics> (*aggregate_statistics_t)(ClientContext &cont
 typedef unique_ptr<FunctionData> (*bind_aggregate_function_t)(ClientContext &context, AggregateFunction &function,
                                                               vector<unique_ptr<Expression>> &arguments);
 //! The type used for the aggregate destructor method. NOTE: this method is used in destructors and MAY NOT throw.
-typedef void (*aggregate_destructor_t)(Vector &state, idx_t count);
+typedef void (*aggregate_destructor_t)(Vector &state, AggregateInputData &aggr_input_data, idx_t count);
 
 //! The type used for updating simple (non-grouped) aggregate functions
 typedef void (*aggregate_simple_update_t)(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
@@ -285,8 +285,8 @@ public:
 	}
 
 	template <class STATE, class OP>
-	static void StateDestroy(Vector &states, idx_t count) {
-		AggregateExecutor::Destroy<STATE, OP>(states, count);
+	static void StateDestroy(Vector &states, AggregateInputData &aggr_input_data, idx_t count) {
+		AggregateExecutor::Destroy<STATE, OP>(states, aggr_input_data, count);
 	}
 };
 

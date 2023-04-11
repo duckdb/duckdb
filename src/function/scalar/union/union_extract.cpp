@@ -26,8 +26,8 @@ public:
 };
 
 static void UnionExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	auto &info = (UnionExtractBindData &)*func_expr.bind_info;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &info = func_expr.bind_info->Cast<UnionExtractBindData>();
 
 	// this should be guaranteed by the binder
 	auto &vec = args.data[0];

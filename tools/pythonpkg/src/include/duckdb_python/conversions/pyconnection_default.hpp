@@ -16,7 +16,8 @@ class type_caster<shared_ptr<DuckDBPyConnection>>
     : public copyable_holder_caster<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>> {
 	using type = DuckDBPyConnection;
 	using holder_caster = copyable_holder_caster<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>>;
-	PYBIND11_TYPE_CASTER(shared_ptr<type>, const_name("default_connection_holder"));
+	// This is used to generate documentation on duckdb-web
+	PYBIND11_TYPE_CASTER(shared_ptr<type>, const_name("duckdb.DuckDBPyConnection"));
 
 	bool load(handle src, bool convert) {
 		if (py::none().is(src)) {

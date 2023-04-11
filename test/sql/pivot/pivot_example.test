@@ -35,43 +35,46 @@ INSERT INTO Cities VALUES ('US', 'New York City', 2010, 8175);
 statement ok
 INSERT INTO Cities VALUES ('US', 'New York City', 2020, 8772);
 
-query IIIII
+statement ok
+PIVOT Cities ON Country, Name IN ('xx') USING SUM(Population);
+
+query IIIII rowsort
 PIVOT Cities ON Year USING SUM(Population);
 ----
 NL	Amsterdam	1005	1065	1158
-US	Seattle	564	608	738
 US	New York City	8015	8175	8772
+US	Seattle	564	608	738
 
-query IIIII
+query IIIII rowsort
 SELECT Country, Name, "2000_total_pop", "2010_total_pop", "2020_total_pop" FROM (PIVOT Cities ON Year USING SUM(Population) as total_pop)
 ----
 NL	Amsterdam	1005	1065	1158
-US	Seattle	564	608	738
 US	New York City	8015	8175	8772
+US	Seattle	564	608	738
 
-query IIIII
+query IIIII rowsort
 PIVOT_WIDER Cities ON Year USING SUM(Population);
 ----
 NL	Amsterdam	1005	1065	1158
-US	Seattle	564	608	738
 US	New York City	8015	8175	8772
+US	Seattle	564	608	738
 
 # sql syntax
-query IIIII
+query IIIII rowsort
 FROM Cities PIVOT (SUM(Population) FOR Year IN (2000, 2010, 2020));
 ----
 NL	Amsterdam	1005	1065	1158
-US	Seattle	564	608	738
 US	New York City	8015	8175	8772
+US	Seattle	564	608	738
 
-query IIII
+query IIII rowsort
 PIVOT Cities ON Year IN (2000, 2020) USING SUM(Population);
 ----
 NL	Amsterdam	1005	1158
-US	Seattle	564	738
 US	New York City	8015	8772
+US	Seattle	564	738
 
-query IIII
+query IIII rowsort
 PIVOT Cities ON Year USING SUM(Population) GROUP BY Country;
 ----
 NL	1005	1065	1158
@@ -121,25 +124,28 @@ USING (Country)
 NL	1005	1065	1158	3228	NULL	NULL
 US	8579	8783	9510	NULL	24962	1910
 
-statement error
+query II rowsort
 PIVOT Cities ON (Country, Name) IN ('xx') USING SUM(Population);
 ----
+2000	NULL
+2010	NULL
+2020	NULL
 
-query IIIIIII
+query IIIIIII rowsort
 PIVOT (SELECT Country, Population, Year FROM Cities) ON Year USING SUM(Population) as sum_pop, count(population) as count_pop,;
 ----
 NL	1005	1	1065	1	1158	1
 US	8579	2	8783	2	9510	2
 
 # multiple pivots
-query IIIIIII
+query IIIIIII rowsort
 PIVOT Cities ON Year USING SUM(Population) as sum_pop, count(population) as count_pop, GROUP BY Country;
 ----
 NL	1005	1	1065	1	1158	1
 US	8579	2	8783	2	9510	2
 
 
-query IIIIIII
+query IIIIIII rowsort
 PIVOT Cities ON Year USING SUM(Population), count(population) GROUP BY Country;
 ----
 NL	1005	1	1065	1	1158	1

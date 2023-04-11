@@ -80,11 +80,11 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 				if (replacement_function) {
 					replacement_function->alias = ref.alias.empty() ? ref.table_name : ref.alias;
 					if (replacement_function->type == TableReferenceType::TABLE_FUNCTION) {
-						auto &table_function = (TableFunctionRef &)*replacement_function;
+						auto &table_function = replacement_function->Cast<TableFunctionRef>();
 						table_function.column_name_alias = ref.column_name_alias;
 						;
 					} else if (replacement_function->type == TableReferenceType::SUBQUERY) {
-						auto &subquery = (SubqueryRef &)*replacement_function;
+						auto &subquery = replacement_function->Cast<SubqueryRef>();
 						subquery.column_name_alias = ref.column_name_alias;
 					} else {
 						throw InternalException("Replacement scan should return either a table function or a subquery");
@@ -163,7 +163,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 
 		D_ASSERT(bound_child->type == TableReferenceType::SUBQUERY);
 		// verify that the types and names match up with the expected types and names
-		auto &bound_subquery = (BoundSubqueryRef &)*bound_child;
+		auto &bound_subquery = bound_child->Cast<BoundSubqueryRef>();
+		;
 		if (bound_subquery.subquery->types != view_catalog_entry->types) {
 			throw BinderException("Contents of view were altered: types don't match!");
 		}

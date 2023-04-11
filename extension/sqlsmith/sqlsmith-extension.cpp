@@ -97,7 +97,7 @@ static duckdb::unique_ptr<FunctionData> ReduceSQLBind(ClientContext &context, Ta
 	auto &statement = *parser.statements[0];
 	StatementSimplifier simplifier(statement, result->statements);
 	simplifier.Simplify(statement);
-	return result;
+	return std::move(result);
 }
 
 static void ReduceSQLFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
