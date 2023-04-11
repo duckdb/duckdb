@@ -10,8 +10,7 @@ add_definitions(-DUSE_DUCKDB_SHELL_WRAPPER)
 
 include_directories(../../third_party/utf8proc/include)
 
-set(SQLITE_API_WRAPPER_FILES
-    sqlite3_api_wrapper.cpp sql_auto_complete_extension.cpp ${ALL_OBJECT_FILES})
+set(SQLITE_API_WRAPPER_FILES sqlite3_api_wrapper.cpp ${ALL_OBJECT_FILES})
 
 add_library(sqlite3_api_wrapper_static STATIC ${SQLITE_API_WRAPPER_FILES})
 target_link_libraries(sqlite3_api_wrapper_static duckdb_static duckdb_utf8proc)

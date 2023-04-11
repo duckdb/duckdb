@@ -13,6 +13,7 @@
 
 namespace duckdb {
 
+class Allocator;
 struct AggregateObject;
 struct AggregateFilterData;
 class DataChunk;
@@ -23,6 +24,13 @@ class StringHeap;
 class Vector;
 struct UnifiedVectorFormat;
 
+struct RowOperationsState {
+	RowOperationsState(Allocator &allocator) : allocator(allocator) {
+	}
+
+	Allocator &allocator;
+};
+
 // RowOperations contains a set of operations that operate on data using a RowLayout
 struct RowOperations {
 	//===--------------------------------------------------------------------===//
@@ -31,16 +39,19 @@ struct RowOperations {
 	//! initialize - unaligned addresses
 	static void InitializeStates(RowLayout &layout, Vector &addresses, const SelectionVector &sel, idx_t count);
 	//! destructor - unaligned addresses, updated
-	static void DestroyStates(RowLayout &layout, Vector &addresses, idx_t count);
+	static void DestroyStates(RowOperationsState &state, RowLayout &layout, Vector &addresses, idx_t count);
 	//! update - aligned addresses
-	static void UpdateStates(AggregateObject &aggr, Vector &addresses, DataChunk &payload, idx_t arg_idx, idx_t count);
+	static void UpdateStates(RowOperationsState &state, AggregateObject &aggr, Vector &addresses, DataChunk &payload,
+	                         idx_t arg_idx, idx_t count);
 	//! filtered update - aligned addresses
-	static void UpdateFilteredStates(AggregateFilterData &filter_data, AggregateObject &aggr, Vector &addresses,
-	                                 DataChunk &payload, idx_t arg_idx);
+	static void UpdateFilteredStates(RowOperationsState &state, AggregateFilterData &filter_data, AggregateObject &aggr,
+	                                 Vector &addresses, DataChunk &payload, idx_t arg_idx);
 	//! combine - unaligned addresses, updated
-	static void CombineStates(RowLayout &layout, Vector &sources, Vector &targets, idx_t count);
+	static void CombineStates(RowOperationsState &state, RowLayout &layout, Vector &sources, Vector &targets,
+	                          idx_t count);
 	//! finalize - unaligned addresses, updated
-	static void FinalizeStates(RowLayout &layout, Vector &addresses, DataChunk &result, idx_t aggr_idx);
+	static void FinalizeStates(RowOperationsState &state, RowLayout &layout, Vector &addresses, DataChunk &result,
+	                           idx_t aggr_idx);
 
 	//===--------------------------------------------------------------------===//
 	// Read/Write Operators
