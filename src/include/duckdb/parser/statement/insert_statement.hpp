@@ -46,6 +46,9 @@ protected:
 
 class InsertStatement : public SQLStatement {
 public:
+	static constexpr const StatementType TYPE = StatementType::INSERT_STATEMENT;
+
+public:
 	InsertStatement();
 
 	//! The select statement to insert from

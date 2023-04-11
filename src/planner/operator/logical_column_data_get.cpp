@@ -29,13 +29,13 @@ unique_ptr<LogicalOperator> LogicalColumnDataGet::Deserialize(LogicalDeserializa
 	auto table_index = reader.ReadRequired<idx_t>();
 	auto chunk_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 	auto chunk_count = reader.ReadRequired<idx_t>();
-	auto collection = make_unique<ColumnDataCollection>(state.gstate.context, chunk_types);
+	auto collection = make_uniq<ColumnDataCollection>(state.gstate.context, chunk_types);
 	for (idx_t i = 0; i < chunk_count; i++) {
 		DataChunk chunk;
 		chunk.Deserialize(reader.GetSource());
 		collection->Append(chunk);
 	}
-	return make_unique<LogicalColumnDataGet>(table_index, std::move(chunk_types), std::move(collection));
+	return make_uniq<LogicalColumnDataGet>(table_index, std::move(chunk_types), std::move(collection));
 }
 
 vector<idx_t> LogicalColumnDataGet::GetTableIndex() const {

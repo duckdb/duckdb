@@ -29,7 +29,7 @@ TransactionData::TransactionData(transaction_t transaction_id_p, transaction_t s
 DuckTransaction::DuckTransaction(TransactionManager &manager, ClientContext &context_p, transaction_t start_time,
                                  transaction_t transaction_id)
     : Transaction(manager, context_p), start_time(start_time), transaction_id(transaction_id), commit_id(0),
-      highest_active_query(0), undo_buffer(context_p), storage(make_unique<LocalStorage>(context_p, *this)) {
+      highest_active_query(0), undo_buffer(context_p), storage(make_uniq<LocalStorage>(context_p, *this)) {
 }
 
 DuckTransaction::~DuckTransaction() {
@@ -130,7 +130,7 @@ string DuckTransaction::Commit(AttachedDatabase &db, transaction_t commit_id, bo
 		if (log) {
 			// commit any sequences that were used to the WAL
 			for (auto &entry : sequence_usage) {
-				log->WriteSequenceValue(entry.first, entry.second);
+				log->WriteSequenceValue(*entry.first, entry.second);
 			}
 		}
 		if (storage_commit_state) {

@@ -31,7 +31,7 @@ static void append_values_from_sequence(ConcurrentData *data) {
 }
 
 TEST_CASE("Test Concurrent Usage of Sequences", "[interquery][.]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 	thread threads[CONCURRENT_SEQUENCE_THREAD_COUNT];

@@ -16,12 +16,12 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalAlter::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<AlterSourceState>();
+	return make_uniq<AlterSourceState>();
 }
 
 void PhysicalAlter::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                             LocalSourceState &lstate) const {
-	auto &state = (AlterSourceState &)gstate;
+	auto &state = gstate.Cast<AlterSourceState>();
 	if (state.finished) {
 		return;
 	}

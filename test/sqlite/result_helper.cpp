@@ -13,7 +13,7 @@
 namespace duckdb {
 
 bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &context,
-                                        unique_ptr<MaterializedQueryResult> owned_result) {
+                                        duckdb::unique_ptr<MaterializedQueryResult> owned_result) {
 	auto &result = *owned_result;
 	auto &runner = query.runner;
 	auto expected_column_count = query.expected_column_count;
@@ -240,7 +240,7 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 }
 
 bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteContext &context,
-                                            unique_ptr<MaterializedQueryResult> owned_result) {
+                                            duckdb::unique_ptr<MaterializedQueryResult> owned_result) {
 	auto &result = *owned_result;
 	bool error = result.HasError();
 

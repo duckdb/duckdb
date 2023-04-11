@@ -40,6 +40,8 @@ struct ClientConfig {
 	//! to output anything
 	bool emit_profiler_output = true;
 
+	//! system-wide progress bar disable.
+	const char *system_progress_bar_disable_reason = nullptr;
 	//! If the progress bar is enabled or not.
 	bool enable_progress_bar = false;
 	//! If the print of the progress bar is enabled
@@ -85,6 +87,9 @@ struct ClientConfig {
 	//! The explain output type used when none is specified (default: PHYSICAL_ONLY)
 	ExplainOutputType explain_output_type = ExplainOutputType::PHYSICAL_ONLY;
 
+	//! The maximum amount of pivot columns
+	idx_t pivot_limit = 100000;
+
 	//! Generic options
 	case_insensitive_map_t<Value> set_variables;
 
@@ -95,8 +100,6 @@ struct ClientConfig {
 public:
 	static ClientConfig &GetConfig(ClientContext &context);
 	static const ClientConfig &GetConfig(const ClientContext &context);
-
-	static string ExtractTimezoneFromConfig(ClientConfig &config);
 
 	string ExtractTimezone() const;
 

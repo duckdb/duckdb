@@ -23,16 +23,6 @@
 
 namespace duckdb {
 
-static vector<idx_t> ColumnListToIndices(const vector<bool> &vec) {
-	vector<idx_t> ret;
-	for (idx_t i = 0; i < vec.size(); i++) {
-		if (vec[i]) {
-			ret.push_back(i);
-		}
-	}
-	return ret;
-}
-
 vector<string> GetUniqueNames(const vector<string> &original_names) {
 	unordered_set<string> name_set;
 	vector<string> unique_names;
@@ -115,7 +105,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 		}
 		if (loption == "partition_by") {
 			auto converted = ConvertVectorToValue(std::move(option.second));
-			partition_cols = ColumnListToIndices(ParseColumnList(converted, select_node.names, loption));
+			partition_cols = ParseColumnsOrdered(converted, select_node.names, loption);
 			continue;
 		}
 		stmt.info->options[option.first] = option.second;
@@ -140,7 +130,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	auto function_data =
 	    copy_function->function.copy_to_bind(context, *stmt.info, unique_column_names, select_node.types);
 	// now create the copy information
-	auto copy = make_unique<LogicalCopyToFile>(copy_function->function, std::move(function_data));
+	auto copy = make_uniq<LogicalCopyToFile>(copy_function->function, std::move(function_data));
 	copy->file_path = stmt.info->file_path;
 	copy->use_tmp_file = use_tmp_file;
 	copy->allow_overwrite = allow_overwrite;
@@ -168,7 +158,9 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	result.types = {LogicalType::BIGINT};
 	result.names = {"Count"};
 
-	D_ASSERT(!stmt.info->table.empty());
+	if (stmt.info->table.empty()) {
+		throw ParserException("COPY FROM requires a table name to be specified");
+	}
 	// COPY FROM a file
 	// generate an insert statement for the the to-be-inserted table
 	InsertStatement insert;
@@ -181,7 +173,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	auto insert_statement = Bind(insert);
 	D_ASSERT(insert_statement.plan->type == LogicalOperatorType::LOGICAL_INSERT);
 
-	auto &bound_insert = (LogicalInsert &)*insert_statement.plan;
+	auto &bound_insert = insert_statement.plan->Cast<LogicalInsert>();
 
 	// lookup the format in the catalog
 	auto &catalog = Catalog::GetSystemCatalog(context);
@@ -195,7 +187,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	vector<string> expected_names;
 	if (!bound_insert.column_index_map.empty()) {
 		expected_names.resize(bound_insert.expected_types.size());
-		for (auto &col : table->GetColumns().Logical()) {
+		for (auto &col : table->GetColumns().Physical()) {
 			auto i = col.Physical();
 			if (bound_insert.column_index_map[i] != DConstants::INVALID_INDEX) {
 				expected_names[bound_insert.column_index_map[i]] = col.Name();
@@ -203,15 +195,15 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 		}
 	} else {
 		expected_names.reserve(bound_insert.expected_types.size());
-		for (auto &col : table->GetColumns().Logical()) {
+		for (auto &col : table->GetColumns().Physical()) {
 			expected_names.push_back(col.Name());
 		}
 	}
 
 	auto function_data =
 	    copy_function->function.copy_from_bind(context, *stmt.info, expected_names, bound_insert.expected_types);
-	auto get = make_unique<LogicalGet>(GenerateTableIndex(), copy_function->function.copy_from_function,
-	                                   std::move(function_data), bound_insert.expected_types, expected_names);
+	auto get = make_uniq<LogicalGet>(GenerateTableIndex(), copy_function->function.copy_from_function,
+	                                 std::move(function_data), bound_insert.expected_types, expected_names);
 	for (idx_t i = 0; i < bound_insert.expected_types.size(); i++) {
 		get->column_ids.push_back(i);
 	}
@@ -224,19 +216,19 @@ BoundStatement Binder::Bind(CopyStatement &stmt) {
 	if (!stmt.info->is_from && !stmt.select_statement) {
 		// copy table into file without a query
 		// generate SELECT * FROM table;
-		auto ref = make_unique<BaseTableRef>();
+		auto ref = make_uniq<BaseTableRef>();
 		ref->catalog_name = stmt.info->catalog;
 		ref->schema_name = stmt.info->schema;
 		ref->table_name = stmt.info->table;
 
-		auto statement = make_unique<SelectNode>();
+		auto statement = make_uniq<SelectNode>();
 		statement->from_table = std::move(ref);
 		if (!stmt.info->select_list.empty()) {
 			for (auto &name : stmt.info->select_list) {
-				statement->select_list.push_back(make_unique<ColumnRefExpression>(name));
+				statement->select_list.push_back(make_uniq<ColumnRefExpression>(name));
 			}
 		} else {
-			statement->select_list.push_back(make_unique<StarExpression>());
+			statement->select_list.push_back(make_uniq<StarExpression>());
 		}
 		stmt.select_statement = std::move(statement);
 	}

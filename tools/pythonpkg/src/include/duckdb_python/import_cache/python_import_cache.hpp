@@ -34,6 +34,9 @@ public:
 	NumpyCacheItem &numpy() {
 		return LazyLoadModule(numpy_module);
 	}
+	PyDuckDBCacheItem &pyduckdb() {
+		return LazyLoadModule(pyduckdb_module);
+	}
 	DatetimeCacheItem &datetime() {
 		return LazyLoadModule(datetime_module);
 	}
@@ -42,6 +45,9 @@ public:
 	}
 	UUIDCacheItem &uuid() {
 		return LazyLoadModule(uuid_module);
+	}
+	PathLibCacheItem &pathlib() {
+		return LazyLoadModule(pathlib_module);
 	}
 	PandasCacheItem &pandas() {
 		return LazyLoadModule(pandas_module);
@@ -61,6 +67,8 @@ public:
 
 private:
 	NumpyCacheItem numpy_module;
+	PathLibCacheItem pathlib_module;
+	PyDuckDBCacheItem pyduckdb_module;
 	DatetimeCacheItem datetime_module;
 	DecimalCacheItem decimal_module;
 	UUIDCacheItem uuid_module;

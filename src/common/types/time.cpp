@@ -6,6 +6,7 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/operator/multiply.hpp"
 
 #include <cctype>
 #include <cstring>
@@ -225,6 +226,18 @@ void Time::Convert(dtime_t dtime, int32_t &hour, int32_t &min, int32_t &sec, int
 #ifdef DEBUG
 	D_ASSERT(AssertValidTime(hour, min, sec, micros));
 #endif
+}
+
+dtime_t Time::FromTimeMs(int64_t time_ms) {
+	int64_t result;
+	if (!TryMultiplyOperator::Operation(time_ms, Interval::MICROS_PER_MSEC, result)) {
+		throw ConversionException("Could not convert Time(MS) to Time(US)");
+	}
+	return dtime_t(result);
+}
+
+dtime_t Time::FromTimeNs(int64_t time_ns) {
+	return dtime_t(time_ns / Interval::NANOS_PER_MICRO);
 }
 
 } // namespace duckdb

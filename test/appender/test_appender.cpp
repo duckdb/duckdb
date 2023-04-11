@@ -11,7 +11,7 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Basic appender tests", "[appender]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 
@@ -92,7 +92,7 @@ TEST_CASE("Basic appender tests", "[appender]") {
 }
 
 TEST_CASE("Test AppendRow", "[appender]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 
@@ -170,7 +170,7 @@ TEST_CASE("Test AppendRow", "[appender]") {
 }
 
 TEST_CASE("Test incorrect usage of appender", "[appender]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 
@@ -213,7 +213,7 @@ TEST_CASE("Test incorrect usage of appender", "[appender]") {
 }
 
 TEST_CASE("Test appending NaN and INF using appender", "[appender]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 
@@ -231,7 +231,7 @@ TEST_CASE("Test appending NaN and INF using appender", "[appender]") {
 }
 
 TEST_CASE("Test appender with quotes", "[appender]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 
@@ -249,7 +249,7 @@ TEST_CASE("Test appender with quotes", "[appender]") {
 }
 
 TEST_CASE("Test appender with string lengths", "[appender]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 
@@ -266,7 +266,7 @@ TEST_CASE("Test appender with string lengths", "[appender]") {
 }
 
 TEST_CASE("Test various appender types", "[appender]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 
@@ -294,7 +294,7 @@ TEST_CASE("Test various appender types", "[appender]") {
 }
 
 TEST_CASE("Test alter table in the middle of append", "[appender]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 

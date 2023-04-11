@@ -15,6 +15,9 @@ namespace duckdb {
 //! LogicalLimit represents a LIMIT clause
 class LogicalLimit : public LogicalOperator {
 public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_LIMIT;
+
+public:
 	LogicalLimit(int64_t limit_val, int64_t offset_val, unique_ptr<Expression> limit, unique_ptr<Expression> offset);
 
 	//! Limit and offset values in case they are constants, used in optimizations.

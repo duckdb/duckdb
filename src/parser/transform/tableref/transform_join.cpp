@@ -6,7 +6,7 @@
 namespace duckdb {
 
 unique_ptr<TableRef> Transformer::TransformJoin(duckdb_libpgquery::PGJoinExpr *root) {
-	auto result = make_unique<JoinRef>(JoinRefType::REGULAR);
+	auto result = make_uniq<JoinRef>(JoinRefType::REGULAR);
 	switch (root->jointype) {
 	case duckdb_libpgquery::PG_JOIN_INNER: {
 		result->type = JoinType::INNER;
@@ -28,6 +28,10 @@ unique_ptr<TableRef> Transformer::TransformJoin(duckdb_libpgquery::PGJoinExpr *r
 		result->type = JoinType::SEMI;
 		break;
 	}
+	case duckdb_libpgquery::PG_JOIN_ANTI: {
+		result->type = JoinType::ANTI;
+		break;
+	}
 	case duckdb_libpgquery::PG_JOIN_POSITION: {
 		result->ref_type = JoinRefType::POSITIONAL;
 		break;
@@ -40,8 +44,15 @@ unique_ptr<TableRef> Transformer::TransformJoin(duckdb_libpgquery::PGJoinExpr *r
 	// Check the type of left arg and right arg before transform
 	result->left = TransformTableRefNode(root->larg);
 	result->right = TransformTableRefNode(root->rarg);
-	if (root->isNatural) {
+	switch (root->joinreftype) {
+	case duckdb_libpgquery::PG_JOIN_NATURAL:
 		result->ref_type = JoinRefType::NATURAL;
+		break;
+	case duckdb_libpgquery::PG_JOIN_ASOF:
+		result->ref_type = JoinRefType::ASOF;
+		break;
+	default:
+		break;
 	}
 	result->query_location = root->location;
 

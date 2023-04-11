@@ -10,6 +10,7 @@
 
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 
@@ -87,6 +88,7 @@ public:
 			// we have data left to read from the file
 			// read directly into the buffer
 			auto bytes_read = file_handle->Read((char *)buffer + result_offset, nr_bytes - result_offset);
+			file_size = file_handle->GetFileSize();
 			read_position += bytes_read;
 			if (reset_enabled) {
 				// if reset caching is enabled, we need to cache the bytes that we have read

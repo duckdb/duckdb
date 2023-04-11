@@ -15,6 +15,9 @@ namespace duckdb {
 //! and has two children.
 class ComparisonExpression : public ParsedExpression {
 public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::COMPARISON;
+
+public:
 	DUCKDB_API ComparisonExpression(ExpressionType type, unique_ptr<ParsedExpression> left,
 	                                unique_ptr<ParsedExpression> right);
 
@@ -30,6 +33,8 @@ public:
 
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<ParsedExpression> FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer);
 
 public:
 	template <class T, class BASE>

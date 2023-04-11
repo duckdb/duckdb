@@ -44,7 +44,7 @@ protected:
 	virtual void WriteMacro(ScalarMacroCatalogEntry &table);
 	virtual void WriteTableMacro(TableMacroCatalogEntry &table);
 	virtual void WriteIndex(IndexCatalogEntry &index_catalog);
-	virtual void WriteType(TypeCatalogEntry &table);
+	virtual void WriteType(TypeCatalogEntry &type);
 };
 
 class CheckpointReader {

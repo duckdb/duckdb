@@ -93,6 +93,7 @@ static DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "fdiv", {"x", "y", nullptr}, "floor(x/y)"},
 	{DEFAULT_SCHEMA, "fmod", {"x", "y", nullptr}, "(x-y*floor(x/y))"},
 	{DEFAULT_SCHEMA, "count_if", {"l", nullptr}, "sum(if(l, 1, 0))"},
+	{DEFAULT_SCHEMA, "split_part", {"string", "delimiter", "position", nullptr}, "coalesce(string_split(string, delimiter)[position],'')"},
 
 	// algebraic list aggregates
 	{DEFAULT_SCHEMA, "list_avg", {"l", nullptr}, "list_aggr(l, 'avg')"},
@@ -130,16 +131,19 @@ static DefaultMacro internal_macros[] = {
 	// nested list aggregates
 	{DEFAULT_SCHEMA, "list_histogram", {"l", nullptr}, "list_aggr(l, 'histogram')"},
 
+	// date functions
+	{DEFAULT_SCHEMA, "date_add", {"date", "interval", nullptr}, "date + interval"},
+
 	{nullptr, nullptr, {nullptr}, nullptr}
 	};
 
 unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalTableMacroInfo(DefaultMacro &default_macro, unique_ptr<MacroFunction> function) {
 	for (idx_t param_idx = 0; default_macro.parameters[param_idx] != nullptr; param_idx++) {
 		function->parameters.push_back(
-		    make_unique<ColumnRefExpression>(default_macro.parameters[param_idx]));
+		    make_uniq<ColumnRefExpression>(default_macro.parameters[param_idx]));
 	}
 
-	auto bind_info = make_unique<CreateMacroInfo>();
+	auto bind_info = make_uniq<CreateMacroInfo>();
 	bind_info->schema = default_macro.schema;
 	bind_info->name = default_macro.name;
 	bind_info->temporary = true;
@@ -155,7 +159,7 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(De
 	auto expressions = Parser::ParseExpressionList(default_macro.macro);
 	D_ASSERT(expressions.size() == 1);
 
-	auto result = make_unique<ScalarMacroFunction>(std::move(expressions[0]));
+	auto result = make_uniq<ScalarMacroFunction>(std::move(expressions[0]));
 	return CreateInternalTableMacroInfo(default_macro, std::move(result));
 }
 
@@ -165,8 +169,8 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalTableMacroIn
 	D_ASSERT(parser.statements.size() == 1);
 	D_ASSERT(parser.statements[0]->type == StatementType::SELECT_STATEMENT);
 
-	auto &select = (SelectStatement &) *parser.statements[0];
-	auto result = make_unique<TableMacroFunction>(std::move(select.node));
+	auto &select = parser.statements[0]->Cast<SelectStatement>();
+	auto result = make_uniq<TableMacroFunction>(std::move(select.node));
 	return CreateInternalTableMacroInfo(default_macro, std::move(result));
 }
 
@@ -189,7 +193,7 @@ unique_ptr<CatalogEntry> DefaultFunctionGenerator::CreateDefaultEntry(ClientCont
                                                                       const string &entry_name) {
 	auto info = GetDefaultFunction(schema->name, entry_name);
 	if (info) {
-		return make_unique_base<CatalogEntry, ScalarMacroCatalogEntry>(&catalog, schema, (CreateMacroInfo *)info.get());
+		return make_uniq_base<CatalogEntry, ScalarMacroCatalogEntry>(&catalog, schema, (CreateMacroInfo *)info.get());
 	}
 	return nullptr;
 }

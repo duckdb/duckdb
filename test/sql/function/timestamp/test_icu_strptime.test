@@ -39,7 +39,7 @@ statement ok
 CREATE TABLE zones AS (
 	SELECT median(name) as tz_name
 	FROM pg_timezone_names()
-	GROUP BY ALL
+	GROUP BY utc_offset
 	ORDER BY utc_offset
 );
 
@@ -47,7 +47,7 @@ statement ok
 CREATE TABLE abbrevs AS (
 	SELECT median(abbrev) as tz_name
 	FROM pg_timezone_names()
-	GROUP BY ALL
+	GROUP BY utc_offset
 	ORDER BY utc_offset
 );
 

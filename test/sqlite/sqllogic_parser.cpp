@@ -97,14 +97,12 @@ string SQLLogicParser::ExtractExpectedError(bool expect_ok) {
 	}
 	current_line++;
 	string error;
+	vector<string> error_lines;
 	while (current_line < lines.size() && !lines[current_line].empty()) {
-		if (error.empty()) {
-			error = lines[current_line];
-		} else {
-			Fail("Failed to parse statement error: expected single line error message");
-		}
+		error_lines.push_back(lines[current_line]);
 		current_line++;
 	}
+	error = StringUtil::Join(error_lines, "\n");
 	return error;
 }
 
@@ -163,6 +161,7 @@ bool SQLLogicParser::IsSingleLineStatement(SQLLogicToken &token) {
 	case SQLLogicTokenType::SQLLOGIC_REQUIRE_ENV:
 	case SQLLogicTokenType::SQLLOGIC_LOAD:
 	case SQLLogicTokenType::SQLLOGIC_RESTART:
+	case SQLLogicTokenType::SQLLOGIC_RECONNECT:
 		return true;
 
 	case SQLLogicTokenType::SQLLOGIC_SKIP_IF:
@@ -212,6 +211,8 @@ SQLLogicTokenType SQLLogicParser::CommandToToken(const string &token) {
 		return SQLLogicTokenType::SQLLOGIC_LOAD;
 	} else if (token == "restart") {
 		return SQLLogicTokenType::SQLLOGIC_RESTART;
+	} else if (token == "reconnect") {
+		return SQLLogicTokenType::SQLLOGIC_RECONNECT;
 	}
 	Fail("Unrecognized parameter %s", token);
 	return SQLLogicTokenType::SQLLOGIC_INVALID;

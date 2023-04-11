@@ -81,6 +81,8 @@ public:
 		return bindings_list;
 	}
 
+	void GetTypesAndNames(vector<string> &result_names, vector<LogicalType> &result_types);
+
 	//! Adds a base table with the given alias to the BindContext.
 	void AddBaseTable(idx_t index, const string &alias, const vector<string> &names, const vector<LogicalType> &types,
 	                  vector<column_t> &bound_column_ids, StandardEntry *entry, bool add_row_id = true);
@@ -141,6 +143,8 @@ public:
 
 	//! Add all the bindings from a BindContext to this BindContext. The other BindContext is destroyed in the process.
 	void AddContext(BindContext other);
+	//! For semi and anti joins we remove the binding context of the right table after binding the condition.
+	void RemoveContext(vector<std::pair<string, duckdb::Binding *>> &other_bindings_list);
 
 	//! Gets a binding of the specified name. Returns a nullptr and sets the out_error if the binding could not be
 	//! found.

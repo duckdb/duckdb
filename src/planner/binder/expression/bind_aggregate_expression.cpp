@@ -7,7 +7,7 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
-#include "duckdb/planner/expression_binder/select_binder.hpp"
+#include "duckdb/planner/expression_binder/base_select_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
@@ -75,13 +75,13 @@ static void NegatePercentileFractions(ClientContext &context, unique_ptr<ParsedE
 		if (values.empty()) {
 			throw BinderException("Empty list in percentile not allowed");
 		}
-		bound.expr = make_unique<BoundConstantExpression>(Value::LIST(values));
+		bound.expr = make_uniq<BoundConstantExpression>(Value::LIST(values));
 	} else {
-		bound.expr = make_unique<BoundConstantExpression>(NegatePercentileValue(value, desc));
+		bound.expr = make_uniq<BoundConstantExpression>(NegatePercentileValue(value, desc));
 	}
 }
 
-BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry *func, idx_t depth) {
+BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry *func, idx_t depth) {
 	// first bind the child of the aggregate expression (if any)
 	this->bound_aggregate = true;
 	unique_ptr<Expression> bound_filter;
@@ -208,8 +208,9 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	auto bound_function = func->functions.GetFunctionByOffset(best_function);
 
 	// Bind any sort columns, unless the aggregate is order-insensitive
-	auto order_bys = make_unique<BoundOrderModifier>();
+	unique_ptr<BoundOrderModifier> order_bys;
 	if (!aggr.order_bys->orders.empty()) {
+		order_bys = make_uniq<BoundOrderModifier>();
 		auto &config = DBConfig::GetConfig(context);
 		for (auto &order : aggr.order_bys->orders) {
 			auto &order_expr = (BoundExpression &)*order.expression;
@@ -218,16 +219,17 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 			const auto null_order = (order.null_order == OrderByNullType::ORDER_DEFAULT)
 			                            ? config.options.default_null_order
 			                            : order.null_order;
-			order_bys->orders.emplace_back(BoundOrderByNode(sense, null_order, std::move(order_expr.expr)));
+			order_bys->orders.emplace_back(sense, null_order, std::move(order_expr.expr));
 		}
 	}
 
-	auto aggregate = function_binder.BindAggregateFunction(
-	    bound_function, std::move(children), std::move(bound_filter),
-	    aggr.distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT, std::move(order_bys));
+	auto aggregate =
+	    function_binder.BindAggregateFunction(bound_function, std::move(children), std::move(bound_filter),
+	                                          aggr.distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT);
 	if (aggr.export_state) {
 		aggregate = ExportAggregateFunction::Bind(std::move(aggregate));
 	}
+	aggregate->order_bys = std::move(order_bys);
 
 	// check for all the aggregates if this aggregate already exists
 	idx_t aggr_index;
@@ -243,7 +245,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	}
 
 	// now create a column reference referring to the aggregate
-	auto colref = make_unique<BoundColumnRefExpression>(
+	auto colref = make_uniq<BoundColumnRefExpression>(
 	    aggr.alias.empty() ? node.aggregates[aggr_index]->ToString() : aggr.alias,
 	    node.aggregates[aggr_index]->return_type, ColumnBinding(node.aggregate_index, aggr_index), depth);
 	// move the aggregate expression into the set of bound aggregates

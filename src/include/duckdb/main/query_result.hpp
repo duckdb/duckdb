@@ -153,7 +153,7 @@ private:
 			current_row.row++;
 			if (current_row.row >= chunk->size()) {
 				base_row += chunk->size();
-				chunk = result->Fetch();
+				chunk = shared_ptr<DataChunk>(result->Fetch().release());
 				current_row.row = 0;
 				if (!chunk || chunk->size() == 0) {
 					// exhausted all rows

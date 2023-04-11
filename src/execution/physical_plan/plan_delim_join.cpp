@@ -22,7 +22,7 @@ static void GatherDelimScans(PhysicalOperator *op, vector<PhysicalOperator *> &d
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimJoin &op) {
 	// first create the underlying join
-	auto plan = CreatePlan((LogicalComparisonJoin &)op);
+	auto plan = CreatePlan(op.Cast<LogicalComparisonJoin>());
 	// this should create a join, not a cross product
 	D_ASSERT(plan && plan->type != PhysicalOperatorType::CROSS_PRODUCT);
 	// duplicate eliminated join
@@ -39,15 +39,15 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimJoin 
 	vector<unique_ptr<Expression>> distinct_groups, distinct_expressions;
 	for (auto &delim_expr : op.duplicate_eliminated_columns) {
 		D_ASSERT(delim_expr->type == ExpressionType::BOUND_REF);
-		auto &bound_ref = (BoundReferenceExpression &)*delim_expr;
+		auto &bound_ref = delim_expr->Cast<BoundReferenceExpression>();
 		delim_types.push_back(bound_ref.return_type);
-		distinct_groups.push_back(make_unique<BoundReferenceExpression>(bound_ref.return_type, bound_ref.index));
+		distinct_groups.push_back(make_uniq<BoundReferenceExpression>(bound_ref.return_type, bound_ref.index));
 	}
 	// now create the duplicate eliminated join
-	auto delim_join = make_unique<PhysicalDelimJoin>(op.types, std::move(plan), delim_scans, op.estimated_cardinality);
+	auto delim_join = make_uniq<PhysicalDelimJoin>(op.types, std::move(plan), delim_scans, op.estimated_cardinality);
 	// we still have to create the DISTINCT clause that is used to generate the duplicate eliminated chunk
-	delim_join->distinct = make_unique<PhysicalHashAggregate>(context, delim_types, std::move(distinct_expressions),
-	                                                          std::move(distinct_groups), op.estimated_cardinality);
+	delim_join->distinct = make_uniq<PhysicalHashAggregate>(context, delim_types, std::move(distinct_expressions),
+	                                                        std::move(distinct_groups), op.estimated_cardinality);
 	return std::move(delim_join);
 }
 

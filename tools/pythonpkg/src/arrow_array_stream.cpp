@@ -105,16 +105,16 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
 	}
 
 	auto record_batches = scanner.attr("to_reader")();
-	auto res = make_unique<ArrowArrayStreamWrapper>();
+	auto res = make_uniq<ArrowArrayStreamWrapper>();
 	auto export_to_c = record_batches.attr("_export_to_c");
 	export_to_c((uint64_t)&res->arrow_array_stream);
 	return res;
 }
 
 void PythonTableArrowArrayStreamFactory::GetSchema(uintptr_t factory_ptr, ArrowSchemaWrapper &schema) {
-	VerifyArrowDatasetLoaded();
-
 	py::gil_scoped_acquire acquire;
+
+	VerifyArrowDatasetLoaded();
 	PythonTableArrowArrayStreamFactory *factory = (PythonTableArrowArrayStreamFactory *)factory_ptr;
 	D_ASSERT(factory->arrow_object);
 	auto scanner_class = py::module::import("pyarrow.dataset").attr("Scanner");

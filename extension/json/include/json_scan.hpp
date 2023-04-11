@@ -86,7 +86,6 @@ public:
 	JSONScanData();
 
 	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input);
-	static void InitializeFilePaths(ClientContext &context, const vector<string> &patterns, vector<string> &file_paths);
 	void InitializeFormats();
 
 	void Serialize(FieldWriter &writer);
@@ -124,7 +123,7 @@ public:
 	string timestamp_format;
 
 	//! Stored readers for when we're detecting the schema
-	vector<unique_ptr<BufferedJSONReader>> stored_readers;
+	vector<duckdb::unique_ptr<BufferedJSONReader>> stored_readers;
 	//! Candidate date formats
 	DateFormatMap date_format_map;
 };
@@ -157,7 +156,7 @@ public:
 
 	mutex lock;
 	//! One JSON reader per file
-	vector<unique_ptr<BufferedJSONReader>> json_readers;
+	vector<duckdb::unique_ptr<BufferedJSONReader>> json_readers;
 	//! Current file/batch index
 	idx_t file_index;
 	atomic<idx_t> batch_index;
@@ -253,7 +252,7 @@ private:
 struct JSONGlobalTableFunctionState : public GlobalTableFunctionState {
 public:
 	JSONGlobalTableFunctionState(ClientContext &context, TableFunctionInitInput &input);
-	static unique_ptr<GlobalTableFunctionState> Init(ClientContext &context, TableFunctionInitInput &input);
+	static duckdb::unique_ptr<GlobalTableFunctionState> Init(ClientContext &context, TableFunctionInitInput &input);
 	idx_t MaxThreads() const override;
 
 public:
@@ -263,8 +262,8 @@ public:
 struct JSONLocalTableFunctionState : public LocalTableFunctionState {
 public:
 	JSONLocalTableFunctionState(ClientContext &context, JSONScanGlobalState &gstate);
-	static unique_ptr<LocalTableFunctionState> Init(ExecutionContext &context, TableFunctionInitInput &input,
-	                                                GlobalTableFunctionState *global_state);
+	static duckdb::unique_ptr<LocalTableFunctionState> Init(ExecutionContext &context, TableFunctionInitInput &input,
+	                                                        GlobalTableFunctionState *global_state);
 	idx_t GetBatchIndex() const;
 
 public:
@@ -296,14 +295,29 @@ public:
 		return lstate.GetBatchIndex();
 	}
 
+	static unique_ptr<NodeStatistics> JSONScanCardinality(ClientContext &context, const FunctionData *bind_data) {
+		auto &data = (JSONScanData &)*bind_data;
+		idx_t per_file_cardinality;
+		if (data.stored_readers.empty()) {
+			// The cardinality of an unknown JSON file is the almighty number 42 except when it's not
+			per_file_cardinality = 42;
+		} else {
+			// If we multiply the almighty number 42 by 10, we get the exact average size of a JSON
+			// Not really, but the average size of a lineitem row in JSON is around 360 bytes
+			per_file_cardinality = data.stored_readers[0]->GetFileHandle().FileSize() / 420;
+		}
+		// Obviously this can be improved but this is better than defaulting to 0
+		return make_uniq<NodeStatistics>(per_file_cardinality * data.file_paths.size());
+	}
+
 	static void JSONScanSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function) {
 		auto &bind_data = (JSONScanData &)*bind_data_p;
 		bind_data.Serialize(writer);
 	}
 
-	static unique_ptr<FunctionData> JSONScanDeserialize(ClientContext &context, FieldReader &reader,
-	                                                    TableFunction &function) {
-		auto result = make_unique<JSONScanData>();
+	static duckdb::unique_ptr<FunctionData> JSONScanDeserialize(ClientContext &context, FieldReader &reader,
+	                                                            TableFunction &function) {
+		auto result = make_uniq<JSONScanData>();
 		result->Deserialize(reader);
 		return std::move(result);
 	}
@@ -316,6 +330,7 @@ public:
 
 		table_function.table_scan_progress = JSONScanProgress;
 		table_function.get_batch_index = JSONScanGetBatchIndex;
+		table_function.cardinality = JSONScanCardinality;
 
 		table_function.serialize = JSONScanSerialize;
 		table_function.deserialize = JSONScanDeserialize;

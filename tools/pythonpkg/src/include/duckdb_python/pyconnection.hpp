@@ -15,6 +15,7 @@
 #include "duckdb_python/registered_py_object.hpp"
 #include "duckdb_python/pandas_type.hpp"
 #include "duckdb_python/pyrelation.hpp"
+#include "duckdb_python/path_like.hpp"
 #include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
 #include "duckdb_python/pyfilesystem.hpp"
 
@@ -40,6 +41,8 @@ public:
 	vector<shared_ptr<DuckDBPyConnection>> cursors;
 	unordered_map<string, shared_ptr<Relation>> temporary_views;
 	std::mutex py_connection_lock;
+	//! MemoryFileSystem used to temporarily store file-like objects for reading
+	shared_ptr<ModifiedMemoryFileSystem> internal_object_filesystem;
 
 public:
 	explicit DuckDBPyConnection() {
@@ -61,7 +64,7 @@ public:
 	static bool IsInteractive();
 
 	unique_ptr<DuckDBPyRelation>
-	ReadCSV(const string &name, const py::object &header = py::none(), const py::object &compression = py::none(),
+	ReadCSV(const py::object &name, const py::object &header = py::none(), const py::object &compression = py::none(),
 	        const py::object &sep = py::none(), const py::object &delimiter = py::none(),
 	        const py::object &dtype = py::none(), const py::object &na_values = py::none(),
 	        const py::object &skiprows = py::none(), const py::object &quotechar = py::none(),
@@ -81,9 +84,9 @@ public:
 
 	shared_ptr<DuckDBPyConnection> Execute(const string &query, py::object params = py::list(), bool many = false);
 
-	shared_ptr<DuckDBPyConnection> Append(const string &name, DataFrame value);
+	shared_ptr<DuckDBPyConnection> Append(const string &name, const DataFrame &value);
 
-	shared_ptr<DuckDBPyConnection> RegisterPythonObject(const string &name, py::object python_object);
+	shared_ptr<DuckDBPyConnection> RegisterPythonObject(const string &name, const py::object &python_object);
 
 	void InstallExtension(const string &extension, bool force_install = false);
 
@@ -132,6 +135,8 @@ public:
 
 	void Close();
 
+	ModifiedMemoryFileSystem &GetObjectFileSystem();
+
 	// cursor() is stupid
 	shared_ptr<DuckDBPyConnection> Cursor();
 
@@ -151,6 +156,10 @@ public:
 	duckdb::pyarrow::Table FetchArrow(idx_t chunk_size);
 	PolarsDataFrame FetchPolars(idx_t chunk_size);
 
+	py::dict FetchPyTorch();
+
+	py::dict FetchTF();
+
 	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(const idx_t chunk_size) const;
 
 	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, const py::dict &config);
@@ -160,6 +169,7 @@ public:
 	void RegisterFilesystem(AbstractFileSystem filesystem);
 	void UnregisterFilesystem(const py::str &name);
 	py::list ListFilesystems();
+	bool FileSystemIsRegistered(const string &name);
 
 	//! Default connection to an in-memory database
 	static shared_ptr<DuckDBPyConnection> default_connection;
@@ -167,12 +177,15 @@ public:
 	static shared_ptr<PythonImportCache> import_cache;
 
 	static bool IsPandasDataframe(const py::object &object);
+	static bool IsPolarsDataframe(const py::object &object);
 	static bool IsAcceptedArrowObject(const py::object &object);
 
 	static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_query);
 
 private:
+	PathLike GetPathLike(const py::object &object);
 	unique_lock<std::mutex> AcquireConnectionLock();
+
 	static PythonEnvironmentType environment;
 	static void DetectEnvironment();
 };

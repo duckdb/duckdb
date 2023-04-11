@@ -18,6 +18,9 @@ namespace duckdb {
 //! Represents a Table producing function
 class TableFunctionRef : public TableRef {
 public:
+	static constexpr const TableReferenceType TYPE = TableReferenceType::TABLE_FUNCTION;
+
+public:
 	DUCKDB_API TableFunctionRef();
 
 	unique_ptr<ParsedExpression> function;
@@ -40,5 +43,8 @@ public:
 	void Serialize(FieldWriter &serializer) const override;
 	//! Deserializes a blob back into a BaseTableRef
 	static unique_ptr<TableRef> Deserialize(FieldReader &source);
+
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<TableRef> FormatDeserialize(FormatDeserializer &source);
 };
 } // namespace duckdb

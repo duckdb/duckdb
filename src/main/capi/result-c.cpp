@@ -292,6 +292,10 @@ bool deprecated_materialize_result(duckdb_result *result) {
 		// already used as a new result set
 		return false;
 	}
+	if (result_data->result_set_type == CAPIResultSetType::CAPI_RESULT_TYPE_STREAMING) {
+		// already used as a streaming result
+		return false;
+	}
 	// materialize as deprecated result set
 	result_data->result_set_type = CAPIResultSetType::CAPI_RESULT_TYPE_DEPRECATED;
 	auto column_count = result_data->result->ColumnCount();
@@ -413,6 +417,10 @@ idx_t duckdb_row_count(duckdb_result *result) {
 		return 0;
 	}
 	auto &result_data = *((duckdb::DuckDBResultData *)result->internal_data);
+	if (result_data.result->type == duckdb::QueryResultType::STREAM_RESULT) {
+		// We can't know the row count beforehand
+		return 0;
+	}
 	auto &materialized = (duckdb::MaterializedQueryResult &)*result_data.result;
 	return materialized.RowCount();
 }
@@ -463,7 +471,10 @@ idx_t duckdb_result_chunk_count(duckdb_result result) {
 	if (result_data.result_set_type == duckdb::CAPIResultSetType::CAPI_RESULT_TYPE_DEPRECATED) {
 		return 0;
 	}
-	D_ASSERT(result_data.result->type == duckdb::QueryResultType::MATERIALIZED_RESULT);
+	if (result_data.result->type != duckdb::QueryResultType::MATERIALIZED_RESULT) {
+		// Can't know beforehand how many chunks are returned.
+		return 0;
+	}
 	auto &materialized = (duckdb::MaterializedQueryResult &)*result_data.result;
 	return materialized.Collection().ChunkCount();
 }
@@ -476,14 +487,29 @@ duckdb_data_chunk duckdb_result_get_chunk(duckdb_result result, idx_t chunk_idx)
 	if (result_data.result_set_type == duckdb::CAPIResultSetType::CAPI_RESULT_TYPE_DEPRECATED) {
 		return nullptr;
 	}
+	if (result_data.result->type != duckdb::QueryResultType::MATERIALIZED_RESULT) {
+		// This API is only supported for materialized query results
+		return nullptr;
+	}
 	result_data.result_set_type = duckdb::CAPIResultSetType::CAPI_RESULT_TYPE_MATERIALIZED;
 	auto &materialized = (duckdb::MaterializedQueryResult &)*result_data.result;
 	auto &collection = materialized.Collection();
 	if (chunk_idx >= collection.ChunkCount()) {
 		return nullptr;
 	}
-	auto chunk = duckdb::make_unique<duckdb::DataChunk>();
+	auto chunk = duckdb::make_uniq<duckdb::DataChunk>();
 	chunk->Initialize(duckdb::Allocator::DefaultAllocator(), collection.Types());
 	collection.FetchChunk(chunk_idx, *chunk);
 	return reinterpret_cast<duckdb_data_chunk>(chunk.release());
+}
+
+bool duckdb_result_is_streaming(duckdb_result result) {
+	if (!result.internal_data) {
+		return false;
+	}
+	if (duckdb_result_error(&result) != nullptr) {
+		return false;
+	}
+	auto &result_data = *((duckdb::DuckDBResultData *)result.internal_data);
+	return result_data.result->type == duckdb::QueryResultType::STREAM_RESULT;
 }
