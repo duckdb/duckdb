@@ -170,4 +170,12 @@ void AssignSharedPointer(shared_ptr<T> &target, const shared_ptr<T> &source) {
 	}
 }
 
+using std::reference_wrapper;
+
+//! Returns whether or not two reference wrappers refer to the same object
+template<class T>
+bool RefersToSameObject(const reference_wrapper<T> &A, const reference_wrapper<T> &B) {
+	return &A.get() == &B.get();
+}
+
 } // namespace duckdb

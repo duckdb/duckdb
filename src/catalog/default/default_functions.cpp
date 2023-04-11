@@ -186,15 +186,15 @@ static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const string &input_sch
 	return nullptr;
 }
 
-DefaultFunctionGenerator::DefaultFunctionGenerator(Catalog &catalog, SchemaCatalogEntry *schema)
+DefaultFunctionGenerator::DefaultFunctionGenerator(Catalog &catalog, SchemaCatalogEntry &schema)
     : DefaultGenerator(catalog), schema(schema) {
 }
 
 unique_ptr<CatalogEntry> DefaultFunctionGenerator::CreateDefaultEntry(ClientContext &context,
                                                                       const string &entry_name) {
-	auto info = GetDefaultFunction(schema->name, entry_name);
+	auto info = GetDefaultFunction(schema.name, entry_name);
 	if (info) {
-		return make_uniq_base<CatalogEntry, ScalarMacroCatalogEntry>(&catalog, schema, (CreateMacroInfo *)info.get());
+		return make_uniq_base<CatalogEntry, ScalarMacroCatalogEntry>(&catalog, &schema, (CreateMacroInfo *)info.get());
 	}
 	return nullptr;
 }
@@ -202,7 +202,7 @@ unique_ptr<CatalogEntry> DefaultFunctionGenerator::CreateDefaultEntry(ClientCont
 vector<string> DefaultFunctionGenerator::GetDefaultEntries() {
 	vector<string> result;
 	for (idx_t index = 0; internal_macros[index].name != nullptr; index++) {
-		if (internal_macros[index].schema == schema->name) {
+		if (internal_macros[index].schema == schema.name) {
 			result.emplace_back(internal_macros[index].name);
 		}
 	}

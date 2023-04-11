@@ -185,7 +185,7 @@ BindInfo TableScanGetBindInfo(const FunctionData *bind_data) {
 
 void TableScanDependency(DependencyList &entries, const FunctionData *bind_data_p) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
-	entries.AddDependency(bind_data.table);
+	entries.AddDependency(*bind_data.table);
 }
 
 unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const FunctionData *bind_data_p) {

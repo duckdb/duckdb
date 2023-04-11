@@ -64,10 +64,10 @@ void FindForeignKeyInformation(CatalogEntry &entry, AlterForeignKeyType alter_fk
 
 DuckSchemaEntry::DuckSchemaEntry(Catalog *catalog, string name_p, bool is_internal)
     : SchemaCatalogEntry(catalog, std::move(name_p), is_internal),
-      tables(*catalog, make_uniq<DefaultViewGenerator>(*catalog, this)), indexes(*catalog), table_functions(*catalog),
+      tables(*catalog, make_uniq<DefaultViewGenerator>(*catalog, *this)), indexes(*catalog), table_functions(*catalog),
       copy_functions(*catalog), pragma_functions(*catalog),
-      functions(*catalog, make_uniq<DefaultFunctionGenerator>(*catalog, this)), sequences(*catalog),
-      collations(*catalog), types(*catalog, make_uniq<DefaultTypeGenerator>(*catalog, this)) {
+      functions(*catalog, make_uniq<DefaultFunctionGenerator>(*catalog, *this)), sequences(*catalog),
+      collations(*catalog), types(*catalog, make_uniq<DefaultTypeGenerator>(*catalog, *this)) {
 }
 
 CatalogEntry *DuckSchemaEntry::AddEntryInternal(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
@@ -78,7 +78,7 @@ CatalogEntry *DuckSchemaEntry::AddEntryInternal(CatalogTransaction transaction, 
 
 	// first find the set for this entry
 	auto &set = GetCatalogSet(entry_type);
-	dependencies.AddDependency(this);
+	dependencies.AddDependency(*this);
 	if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 		// CREATE OR REPLACE: first try to drop the entry
 		auto old_entry = set.GetEntry(transaction, entry_name);
@@ -122,7 +122,7 @@ CatalogEntry *DuckSchemaEntry::CreateTable(CatalogTransaction transaction, Bound
 
 		// make a dependency between this table and referenced table
 		auto &set = GetCatalogSet(CatalogType::TABLE_ENTRY);
-		info->dependencies.AddDependency(set.GetEntry(transaction, fk_info->name));
+		info->dependencies.AddDependency(*set.GetEntry(transaction, fk_info->name));
 	}
 	return entry;
 }
@@ -194,7 +194,7 @@ CatalogEntry *DuckSchemaEntry::CreateView(CatalogTransaction transaction, Create
 
 CatalogEntry *DuckSchemaEntry::CreateIndex(ClientContext &context, CreateIndexInfo *info, TableCatalogEntry *table) {
 	DependencyList dependencies;
-	dependencies.AddDependency(table);
+	dependencies.AddDependency(*table);
 	auto index = make_uniq<DuckIndexEntry>(catalog, this, info);
 	return AddEntryInternal(GetCatalogTransaction(context), std::move(index), info->on_conflict, dependencies);
 }
