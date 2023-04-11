@@ -269,7 +269,7 @@ public:
 		} else {
 			bytes_per_local_state = file_size / MaxThreads();
 		}
-		if (bytes_per_local_state == 0){
+		if (bytes_per_local_state == 0) {
 			// In practice, I think this won't happen, it only happens because we are mocking up test scenarios
 			// this boy needs to be at least one.
 			bytes_per_local_state = 1;
@@ -480,17 +480,18 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 		if (file_index > 0 && file_index <= bind_data.union_readers.size() && bind_data.union_readers[file_index - 1]) {
 			// we are doing UNION BY NAME - fetch the options from the union reader for this file
 			auto &union_reader = *bind_data.union_readers[file_index - 1];
-			reader =
-			    make_uniq<ParallelCSVReader>(context, union_reader.options, std::move(result),first_position, union_reader.GetTypes());
+			reader = make_uniq<ParallelCSVReader>(context, union_reader.options, std::move(result), first_position,
+			                                      union_reader.GetTypes());
 			reader->names = union_reader.GetNames();
 		} else if (file_index <= bind_data.column_info.size()) {
 			// Serialized Union By name
-			reader = make_uniq<ParallelCSVReader>(context, bind_data.options, std::move(result),
-			                                      first_position,bind_data.column_info[file_index - 1].types);
+			reader = make_uniq<ParallelCSVReader>(context, bind_data.options, std::move(result), first_position,
+			                                      bind_data.column_info[file_index - 1].types);
 			reader->names = bind_data.column_info[file_index - 1].names;
 		} else {
 			// regular file - use the standard options
-			reader = make_uniq<ParallelCSVReader>(context, bind_data.options, std::move(result),first_position, bind_data.csv_types);
+			reader = make_uniq<ParallelCSVReader>(context, bind_data.options, std::move(result), first_position,
+			                                      bind_data.csv_types);
 			reader->names = bind_data.csv_names;
 		}
 		reader->options.file_path = current_file_path;

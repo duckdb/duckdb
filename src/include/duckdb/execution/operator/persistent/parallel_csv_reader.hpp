@@ -98,8 +98,8 @@ struct VerificationPositions {
 //! Buffered CSV reader is a class that reads values from a stream and parses them as a CSV file
 class ParallelCSVReader : public BaseCSVReader {
 public:
-	ParallelCSVReader(ClientContext &context, BufferedCSVReaderOptions options, unique_ptr<CSVBufferRead> buffer, idx_t first_pos_first_buffer,
-	                  const vector<LogicalType> &requested_types);
+	ParallelCSVReader(ClientContext &context, BufferedCSVReaderOptions options, unique_ptr<CSVBufferRead> buffer,
+	                  idx_t first_pos_first_buffer, const vector<LogicalType> &requested_types);
 	~ParallelCSVReader();
 
 	//! Current Position (Relative to the Buffer)
