@@ -39,6 +39,10 @@ public:
 	             LocalSourceState &lstate) const override;
 
 	double GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
+
+	bool IsSource() const override {
+		return true;
+	}
 };
 
 } // namespace duckdb

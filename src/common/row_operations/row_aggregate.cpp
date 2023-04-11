@@ -32,7 +32,7 @@ void RowOperations::InitializeStates(RowLayout &layout, Vector &addresses, const
 	}
 }
 
-void RowOperations::DestroyStates(RowLayout &layout, Vector &addresses, idx_t count) {
+void RowOperations::DestroyStates(RowOperationsState &state, RowLayout &layout, Vector &addresses, idx_t count) {
 	if (count == 0) {
 		return;
 	}
@@ -40,22 +40,23 @@ void RowOperations::DestroyStates(RowLayout &layout, Vector &addresses, idx_t co
 	VectorOperations::AddInPlace(addresses, layout.GetAggrOffset(), count);
 	for (const auto &aggr : layout.GetAggregates()) {
 		if (aggr.function.destructor) {
-			aggr.function.destructor(addresses, count);
+			AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.allocator);
+			aggr.function.destructor(addresses, aggr_input_data, count);
 		}
 		// Move to the next aggregate state
 		VectorOperations::AddInPlace(addresses, aggr.payload_size, count);
 	}
 }
 
-void RowOperations::UpdateStates(AggregateObject &aggr, Vector &addresses, DataChunk &payload, idx_t arg_idx,
-                                 idx_t count) {
-	AggregateInputData aggr_input_data(aggr.bind_data, Allocator::DefaultAllocator());
+void RowOperations::UpdateStates(RowOperationsState &state, AggregateObject &aggr, Vector &addresses,
+                                 DataChunk &payload, idx_t arg_idx, idx_t count) {
+	AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.allocator);
 	aggr.function.update(aggr.child_count == 0 ? nullptr : &payload.data[arg_idx], aggr_input_data, aggr.child_count,
 	                     addresses, count);
 }
 
-void RowOperations::UpdateFilteredStates(AggregateFilterData &filter_data, AggregateObject &aggr, Vector &addresses,
-                                         DataChunk &payload, idx_t arg_idx) {
+void RowOperations::UpdateFilteredStates(RowOperationsState &state, AggregateFilterData &filter_data,
+                                         AggregateObject &aggr, Vector &addresses, DataChunk &payload, idx_t arg_idx) {
 	idx_t count = filter_data.ApplyFilter(payload);
 	if (count == 0) {
 		return;
@@ -64,10 +65,11 @@ void RowOperations::UpdateFilteredStates(AggregateFilterData &filter_data, Aggre
 	Vector filtered_addresses(addresses, filter_data.true_sel, count);
 	filtered_addresses.Flatten(count);
 
-	UpdateStates(aggr, filtered_addresses, filter_data.filtered_payload, arg_idx, count);
+	UpdateStates(state, aggr, filtered_addresses, filter_data.filtered_payload, arg_idx, count);
 }
 
-void RowOperations::CombineStates(RowLayout &layout, Vector &sources, Vector &targets, idx_t count) {
+void RowOperations::CombineStates(RowOperationsState &state, RowLayout &layout, Vector &sources, Vector &targets,
+                                  idx_t count) {
 	if (count == 0) {
 		return;
 	}
@@ -77,7 +79,7 @@ void RowOperations::CombineStates(RowLayout &layout, Vector &sources, Vector &ta
 	VectorOperations::AddInPlace(targets, layout.GetAggrOffset(), count);
 	for (auto &aggr : layout.GetAggregates()) {
 		D_ASSERT(aggr.function.combine);
-		AggregateInputData aggr_input_data(aggr.bind_data, Allocator::DefaultAllocator());
+		AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.allocator);
 		aggr.function.combine(sources, targets, aggr_input_data, count);
 
 		// Move to the next aggregate states
@@ -86,7 +88,8 @@ void RowOperations::CombineStates(RowLayout &layout, Vector &sources, Vector &ta
 	}
 }
 
-void RowOperations::FinalizeStates(RowLayout &layout, Vector &addresses, DataChunk &result, idx_t aggr_idx) {
+void RowOperations::FinalizeStates(RowOperationsState &state, RowLayout &layout, Vector &addresses, DataChunk &result,
+                                   idx_t aggr_idx) {
 	//	Move to the first aggregate state
 	VectorOperations::AddInPlace(addresses, layout.GetAggrOffset(), result.size());
 
@@ -94,7 +97,7 @@ void RowOperations::FinalizeStates(RowLayout &layout, Vector &addresses, DataChu
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &target = result.data[aggr_idx + i];
 		auto &aggr = aggregates[i];
-		AggregateInputData aggr_input_data(aggr.bind_data, Allocator::DefaultAllocator());
+		AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.allocator);
 		aggr.function.finalize(addresses, aggr_input_data, target, result.size(), 0);
 
 		// Move to the next aggregate state
