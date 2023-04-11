@@ -430,7 +430,7 @@ struct SortedAggregateFunction {
 						agg_state_vec.SetVectorType(states.GetVectorType());
 						finalize(agg_state_vec, aggr_bind_info, result, 1, i + offset);
 						if (destructor) {
-							destructor(agg_state_vec, 1);
+							destructor(agg_state_vec, aggr_bind_info, 1);
 						}
 
 						initialize(agg_state.data());
@@ -458,7 +458,7 @@ struct SortedAggregateFunction {
 			agg_state_vec.SetVectorType(states.GetVectorType());
 			finalize(agg_state_vec, aggr_bind_info, result, 1, i + offset);
 			if (destructor) {
-				destructor(agg_state_vec, 1);
+				destructor(agg_state_vec, aggr_bind_info, 1);
 			}
 
 			++i;
