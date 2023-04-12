@@ -31,11 +31,10 @@ ClientContext &ExpressionState::GetContext() {
 	return root.executor->GetContext();
 }
 
-ExpressionState::ExpressionState(const Expression &expr, ExpressionExecutorState &root)
-    : expr(expr), root(root), name(expr.ToString()) {
+ExpressionState::ExpressionState(const Expression &expr, ExpressionExecutorState &root) : expr(expr), root(root) {
 }
 
-ExpressionExecutorState::ExpressionExecutorState(const string &name) : profiler(), name(name) {
+ExpressionExecutorState::ExpressionExecutorState() : profiler() {
 }
 
 void ExpressionState::Verify(ExpressionExecutorState &root_executor) {
