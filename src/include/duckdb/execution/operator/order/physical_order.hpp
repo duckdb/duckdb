@@ -41,7 +41,7 @@ public:
 	                    LocalSourceState &lstate) const override;
 
 	bool IsSource() const override {
-		return false;
+		return true;
 	}
 
 	bool ParallelSource() const override {
@@ -50,6 +50,10 @@ public:
 
 	bool SupportsBatchIndex() const override {
 		return true;
+	}
+
+	OrderPreservationType SourceOrder() const override {
+		return OrderPreservationType::FIXED_ORDER;
 	}
 
 public:
@@ -67,6 +71,9 @@ public:
 	}
 	bool ParallelSink() const override {
 		return true;
+	}
+	bool SinkOrderDependent() const override {
+		return false;
 	}
 
 public:
