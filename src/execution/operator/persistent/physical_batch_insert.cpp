@@ -19,10 +19,10 @@ PhysicalBatchInsert::PhysicalBatchInsert(vector<LogicalType> types, TableCatalog
       bound_defaults(std::move(bound_defaults)) {
 }
 
-PhysicalBatchInsert::PhysicalBatchInsert(LogicalOperator &op, SchemaCatalogEntry *schema,
+PhysicalBatchInsert::PhysicalBatchInsert(LogicalOperator &op, SchemaCatalogEntry &schema,
                                          unique_ptr<BoundCreateTableInfo> info_p, idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::BATCH_CREATE_TABLE_AS, op.types, estimated_cardinality),
-      insert_table(nullptr), schema(schema), info(std::move(info_p)) {
+      insert_table(nullptr), schema(&schema), info(std::move(info_p)) {
 	PhysicalInsert::GetInsertInfo(*info, insert_types, bound_defaults);
 }
 
@@ -271,7 +271,7 @@ unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContex
 		D_ASSERT(!insert_table);
 		auto &catalog = *schema->catalog;
 		result->table =
-		    (DuckTableEntry *)catalog.CreateTable(catalog.GetCatalogTransaction(context), schema, info.get());
+		    (DuckTableEntry *)catalog.CreateTable(catalog.GetCatalogTransaction(context), *schema.get_mutable(), info.get());
 	} else {
 		D_ASSERT(insert_table);
 		D_ASSERT(insert_table->IsDuckTable());

@@ -55,6 +55,11 @@ public:
 		//CheckValid();
 		return ptr;
 	}
+	// this looks dirty - but this is the default behavior of raw pointers
+	T *get_mutable() const {
+		//CheckValid();
+		return ptr;
+	}
 
 private:
 	T *ptr;
