@@ -59,8 +59,12 @@ namespace duckdb {
 namespace adbc {
 
 struct DuckDBAdbcDatabaseWrapper {
+	//! The DuckDB Database Configuration
 	::duckdb_config config;
+	//! The DuckDB Database
 	::duckdb_database database;
+	//! Path of Disk-Based Database or :memory: database
+	std::string path;
 };
 
 AdbcStatusCode DatabaseNew(struct ::AdbcDatabase *database, struct ::AdbcError *error) {
@@ -81,6 +85,9 @@ AdbcStatusCode DatabaseSetOption(struct ::AdbcDatabase *database, const char *ke
 	CHECK_TRUE(key, error, "Missing key");
 
 	auto wrapper = (DuckDBAdbcDatabaseWrapper *)database->private_data;
+//	if (key == "path"){
+//
+//	}
 	auto res = duckdb_set_config(wrapper->config, key, value);
 
 	CHECK_RES(res, error, "Failed to set configuration option");
@@ -90,7 +97,7 @@ AdbcStatusCode DatabaseInit(struct ::AdbcDatabase *database, struct ::AdbcError 
 	char *errormsg;
 	// TODO can we set the database path via option, too? Does not look like it...
 	auto wrapper = (DuckDBAdbcDatabaseWrapper *)database->private_data;
-	auto res = duckdb_open_ext("./duckadbc.db", &wrapper->database, wrapper->config, &errormsg);
+	auto res = duckdb_open_ext(":memory:", &wrapper->database, wrapper->config, &errormsg);
 
 	// TODO this leaks memory because errormsg is malloc-ed
 	CHECK_RES(res, error, errormsg);

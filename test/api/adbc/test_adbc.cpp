@@ -16,6 +16,8 @@ public:
 		SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error));
 		SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", DUCKDB_INSTALL_LIB, &adbc_error));
 		SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error));
+//		SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error));
+
 		SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error));
 
 		SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error));
@@ -53,12 +55,57 @@ public:
 };
 
 TEST_CASE("ADBC - Select 42", "[adbc]") {
-	std::cout << DUCKDB_INSTALL_LIB << std::endl;
 	ADBCTestDatabase db;
+
 	auto result = db.Query("SELECT 42");
+
 	ArrowArray arrow_array;
 	REQUIRE(result.get_next(&result, &arrow_array) == 0);
 	// This should be 42
 	REQUIRE(((int *)arrow_array.children[0]->buffers[1])[0] == 42);
 	arrow_array.release(&arrow_array);
+}
+
+TEST_CASE("ADBC - Test ingestion", "[adbc]") {
+
+	ADBCTestDatabase db;
+	// insert some data
+	SUCCESS(adbc::StatementNew(&db.adbc_connection, &db.adbc_statement, &db.adbc_error));
+
+//	adbc_status = adbc::StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, "my_table", &adbc_error);
+//	REQUIRE(adbc_status == ADBC_STATUS_OK);
+//
+//	adbc_status = adbc::StatementBindStream(&adbc_statement, &arrow_stream, &adbc_error);
+//	REQUIRE(adbc_status == ADBC_STATUS_OK);
+//
+//	adbc_status = adbc::StatementExecuteQuery(&adbc_statement, NULL, NULL, &adbc_error);
+//	REQUIRE(adbc_status == ADBC_STATUS_OK);
+//
+//	// see if we have anything
+//
+//	adbc_status = adbc::StatementNew(&adbc_connection, &adbc_statement, &adbc_error);
+//	REQUIRE(adbc_status == ADBC_STATUS_OK);
+//
+//	adbc_status = adbc::StatementSetSqlQuery(&adbc_statement, "SELECT * FROM my_table", &adbc_error);
+//	REQUIRE(adbc_status == ADBC_STATUS_OK);
+//
+//	adbc_status = adbc::StatementExecuteQuery(&adbc_statement, &arrow_stream, NULL, &adbc_error);
+//	REQUIRE(adbc_status == ADBC_STATUS_OK);
+//
+//	arrow_status = arrow_stream.get_next(&arrow_stream, &arrow_array);
+//	REQUIRE(arrow_status == 0);
+//	REQUIRE(((int *)arrow_array.children[0]->buffers[1])[0] == 42);
+//	arrow_array.release(&arrow_array);
+//	arrow_stream.release(&arrow_stream);
+//
+//	adbc_status = adbc::StatementRelease(&adbc_statement, &adbc_error);
+//	REQUIRE(adbc_status == ADBC_STATUS_OK);
+//
+//	// shut down the connection again
+//	adbc_status = adbc::ConnectionRelease(&adbc_connection, &adbc_error);
+//	REQUIRE(adbc_status == ADBC_STATUS_OK);
+//
+//	// shut down the database again
+//	adbc_status = adbc::DatabaseRelease(&adbc_database, &adbc_error);
+//	REQUIRE(adbc_status == ADBC_STATUS_OK);
 }
