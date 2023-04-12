@@ -106,7 +106,8 @@ unique_ptr<GlobalSinkState> PhysicalAsOfJoin::GetGlobalSinkState(ClientContext &
 
 unique_ptr<LocalSinkState> PhysicalAsOfJoin::GetLocalSinkState(ExecutionContext &context) const {
 	// We only sink the RHS
-	return make_uniq<AsOfLocalSinkState>(context.client, *this);
+	auto &gsink = sink_state->Cast<AsOfGlobalSinkState>();
+	return make_uniq<AsOfLocalSinkState>(context.client, gsink.global_partition);
 }
 
 SinkResultType PhysicalAsOfJoin::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
