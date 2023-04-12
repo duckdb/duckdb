@@ -85,9 +85,10 @@ AdbcStatusCode DatabaseSetOption(struct ::AdbcDatabase *database, const char *ke
 	CHECK_TRUE(key, error, "Missing key");
 
 	auto wrapper = (DuckDBAdbcDatabaseWrapper *)database->private_data;
-//	if (key == "path"){
-//
-//	}
+	if (strcmp(key, "path") == 0) {
+		wrapper->path = value;
+		return ADBC_STATUS_OK;
+	}
 	auto res = duckdb_set_config(wrapper->config, key, value);
 
 	CHECK_RES(res, error, "Failed to set configuration option");
@@ -97,7 +98,7 @@ AdbcStatusCode DatabaseInit(struct ::AdbcDatabase *database, struct ::AdbcError 
 	char *errormsg;
 	// TODO can we set the database path via option, too? Does not look like it...
 	auto wrapper = (DuckDBAdbcDatabaseWrapper *)database->private_data;
-	auto res = duckdb_open_ext(":memory:", &wrapper->database, wrapper->config, &errormsg);
+	auto res = duckdb_open_ext(wrapper->path.c_str(), &wrapper->database, wrapper->config, &errormsg);
 
 	// TODO this leaks memory because errormsg is malloc-ed
 	CHECK_RES(res, error, errormsg);
@@ -162,9 +163,7 @@ static int get_next(struct ArrowArrayStream *stream, struct ArrowArray *out) {
 	if (!stream || !stream->private_data || !out) {
 		return DuckDBError;
 	}
-
-	// HACK: Default case: end of stream
-	out->release = NULL;
+	out->release = nullptr;
 
 	return duckdb_query_arrow_array((duckdb_arrow)stream->private_data, (duckdb_arrow_array *)&out);
 }
@@ -223,6 +222,9 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, stru
 		                     duckdb::Value::POINTER((uintptr_t)stream_produce),
 		                     duckdb::Value::POINTER((uintptr_t)get_schema)}) // TODO make this a parameter somewhere
 		    ->Create(table_name); // TODO this should probably be a temp table
+		// After creating a table, the arrow array stream is released. Hence we must set it as released to avoid
+		// double-releasing it
+		input->release = nullptr;
 	} catch (std::exception &ex) {
 		if (error) {
 			error->message = strdup(ex.what());
@@ -277,6 +279,7 @@ AdbcStatusCode StatementRelease(struct ::AdbcStatement *statement, struct ::Adbc
 		}
 		if (wrapper->ingestion_stream) {
 			wrapper->ingestion_stream->release(wrapper->ingestion_stream);
+			wrapper->ingestion_stream->release = nullptr;
 			wrapper->ingestion_stream = nullptr;
 		}
 		if (wrapper->ingestion_table_name) {

@@ -1,9 +1,8 @@
 add_library_unity(test_sql_adbc OBJECT test_adbc.cpp)
 
-file(GLOB DUCKDB_INSTALL_LIB "${CMAKE_BINARY_DIR}/src/libduckdb*.*")
+file(GLOB DUCKDB_INSTALL_LIB "${CMAKE_BINARY_DIR}/*/libduckdb*.*")
 
-add_compile_definitions(
-  DUCKDB_INSTALL_LIB="${DUCKDB_INSTALL_LIB}")
+add_compile_definitions(DUCKDB_INSTALL_LIB="${DUCKDB_INSTALL_LIB}")
 
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_sql_adbc>
