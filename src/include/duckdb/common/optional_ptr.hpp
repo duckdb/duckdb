@@ -48,11 +48,11 @@ public:
 		return ptr;
 	}
 	T *get() {
-		CheckValid();
+		//CheckValid();
 		return ptr;
 	}
 	const T *get() const {
-		CheckValid();
+		//CheckValid();
 		return ptr;
 	}
 
