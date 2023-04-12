@@ -9,12 +9,14 @@ using namespace duckdb;
 bool SUCCESS(AdbcStatusCode status) {
 	return status == ADBC_STATUS_OK;
 }
-
+const char *DUCKDB_LIB = std::getenv("DUCKDB_INSTALL_LIB");
 class ADBCTestDatabase {
 public:
 	explicit ADBCTestDatabase(const string &path = ":memory:") {
+
+		REQUIRE(DUCKDB_LIB);
 		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
-		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", DUCKDB_INSTALL_LIB, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", DUCKDB_LIB, &adbc_error)));
 		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
 		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", path.c_str(), &adbc_error)));
 
@@ -68,6 +70,9 @@ public:
 };
 
 TEST_CASE("ADBC - Select 42", "[adbc]") {
+	if (!DUCKDB_LIB) {
+		return;
+	}
 	ADBCTestDatabase db;
 
 	auto result = db.Query("SELECT 42");
@@ -80,6 +85,10 @@ TEST_CASE("ADBC - Select 42", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Test ingestion", "[adbc]") {
+	if (!DUCKDB_LIB) {
+		return;
+	}
+
 	ADBCTestDatabase db;
 
 	// Create Arrow Result
