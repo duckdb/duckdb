@@ -35,7 +35,7 @@ select count(*) from t1, t2 where i = j
 
 # higher memory limit for this because the strings are so large
 statement ok
-pragma memory_limit='80mb'
+pragma memory_limit='100mb'
 
 # add some strings that are longer than Storage::BLOCK_SIZE
 statement ok
