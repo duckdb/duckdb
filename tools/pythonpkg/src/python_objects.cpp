@@ -401,13 +401,13 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type) {
 	}
 	case LogicalTypeId::UUID: {
 		auto uuid_value = val.GetValueUnsafe<hugeint_t>();
-		return py::reinterpret_steal<py::object>(import_cache.uuid().UUID()(UUID::ToString(uuid_value)));
+		return import_cache.uuid().UUID()(UUID::ToString(uuid_value));
 	}
 	case LogicalTypeId::INTERVAL: {
 		auto interval_value = val.GetValueUnsafe<interval_t>();
 		uint64_t days = duckdb::Interval::DAYS_PER_MONTH * interval_value.months + interval_value.days;
-		return py::reinterpret_steal<py::object>(import_cache.datetime().timedelta()(
-		    py::arg("days") = days, py::arg("microseconds") = interval_value.micros));
+		return import_cache.datetime().timedelta()(py::arg("days") = days,
+		                                           py::arg("microseconds") = interval_value.micros);
 	}
 
 	default:
