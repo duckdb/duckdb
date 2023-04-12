@@ -690,7 +690,7 @@ ExpressionExecutorInfo::ExpressionExecutorInfo(ExpressionExecutor &executor, con
 ExpressionRootInfo::ExpressionRootInfo(ExpressionExecutorState &state, string name)
     : current_count(state.profiler.current_count), sample_count(state.profiler.sample_count),
       sample_tuples_count(state.profiler.sample_tuples_count), tuples_count(state.profiler.tuples_count),
-      name(state.name), time(state.profiler.time) {
+      name("expression"), time(state.profiler.time) {
 	// Use the name of expression-tree as extra-info
 	extra_info = std::move(name);
 	auto expression_info_p = make_uniq<ExpressionInfo>();
