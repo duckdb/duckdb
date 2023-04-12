@@ -385,15 +385,13 @@ JNIEXPORT jboolean JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1auto_
 	return conn_ref->IsAutoCommit();
 }
 
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1interrupt(JNIEnv *env, jclass,
-                                                                            jobject conn_ref_buf) {
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1interrupt(JNIEnv *env, jclass, jobject conn_ref_buf) {
 	auto conn_ref = get_connection(env, conn_ref_buf);
 	if (!conn_ref) {
 		return;
 	}
 	conn_ref->Interrupt();
 }
-
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1disconnect(JNIEnv *env, jclass,
                                                                              jobject conn_ref_buf) {
