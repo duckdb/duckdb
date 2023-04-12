@@ -10,8 +10,8 @@
 
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/execution/base_aggregate_hashtable.hpp"
-#include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
+#include "duckdb/storage/buffer/buffer_handle.hpp"
 
 namespace duckdb {
 class BlockHandle;
@@ -128,7 +128,7 @@ public:
 		return *data_collection;
 	}
 
-	idx_t Count() {
+	idx_t Count() const {
 		return data_collection->Count();
 	}
 

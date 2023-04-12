@@ -41,7 +41,7 @@ public:
 	uint32_t heap_block_index;
 	uint32_t heap_block_offset;
 	data_ptr_t base_heap_ptr;
-	//! Size of the last heap row (for all but the last we can infer the size from the pointer difference)
+	//! Total heap size for this chunk part
 	uint32_t total_heap_size;
 	//! Tuple count for this chunk part
 	uint32_t count;
@@ -104,19 +104,20 @@ public:
 	void VerifyEverythingPinned() const;
 
 public:
-	//! The allocator for this segment
-	shared_ptr<TupleDataAllocator> allocator;
-	//! The chunks of this segment
-	vector<TupleDataChunk> chunks;
-	//! The tuple count of this segment
-	idx_t count;
-
 	//! Lock for modifying pinned_handles
 	mutex pinned_handles_lock;
 	//! Where handles to row blocks will be stored with TupleDataPinProperties::KEEP_EVERYTHING_PINNED
 	vector<BufferHandle> pinned_row_handles;
 	//! Where handles to heap blocks will be stored with TupleDataPinProperties::KEEP_EVERYTHING_PINNED
 	vector<BufferHandle> pinned_heap_handles;
+
+public:
+	//! The allocator for this segment
+	shared_ptr<TupleDataAllocator> allocator;
+	//! The chunks of this segment
+	vector<TupleDataChunk> chunks;
+	//! The tuple count of this segment
+	idx_t count;
 };
 
 } // namespace duckdb

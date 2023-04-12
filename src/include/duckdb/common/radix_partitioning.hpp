@@ -22,10 +22,12 @@ struct SelectionVector;
 //! Generic radix partitioning functions
 struct RadixPartitioning {
 public:
+	//! The number of partitions for a given number of radix bits
 	static inline constexpr idx_t NumberOfPartitions(const idx_t &radix_bits) {
 		return idx_t(1) << radix_bits;
 	}
 
+	//! Inverse of NumberOfPartitions, given a number of partitions, get the number of radix bits
 	static inline idx_t RadixBits(const idx_t &n_partitions) {
 		D_ASSERT(IsPowerOfTwo(n_partitions));
 		for (idx_t r = 0; r < sizeof(idx_t) * 8; r++) {

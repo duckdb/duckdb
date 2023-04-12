@@ -31,13 +31,13 @@ public:
 
 public:
 	//! Remaining capacity (in bytes)
-	idx_t RemainingCapacity() {
+	idx_t RemainingCapacity() const {
 		D_ASSERT(size <= capacity);
 		return capacity - size;
 	}
 
 	//! Remaining capacity (in rows)
-	idx_t RemainingCapacity(idx_t row_width) {
+	idx_t RemainingCapacity(idx_t row_width) const {
 		return RemainingCapacity() / row_width;
 	}
 

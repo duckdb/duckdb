@@ -16,7 +16,7 @@ class TupleDataChunkIterator {
 public:
 	//! Creates a TupleDataChunkIterator that iterates over all DataChunks in the TupleDataCollection
 	TupleDataChunkIterator(TupleDataCollection &collection, TupleDataPinProperties properties, bool init_heap);
-	//! Creates a TupleDataChunkIterator that iterates over the specified DataChunks in the TupleDataCollection
+	//! Creates a TupleDataChunkIterator that iterates over the specified DataChunk range in the TupleDataCollection
 	TupleDataChunkIterator(TupleDataCollection &collection, TupleDataPinProperties properties, idx_t chunk_idx_from,
 	                       idx_t chunk_idx_to, bool init_heap);
 
@@ -28,7 +28,7 @@ public:
 	//! Resets the scan indices to the start
 	void Reset();
 	//! Get the count of the current "DataChunk"
-	idx_t GetCount() const;
+	idx_t GetCurrentChunkCount() const;
 	//! Get the Chunk state of the scan state of this iterator
 	TupleDataChunkState &GetChunkState();
 	//! Get the array holding the row locations

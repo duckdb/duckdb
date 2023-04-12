@@ -238,7 +238,7 @@ void TupleDataCollection::ToUnifiedFormat(TupleDataChunkState &chunk_state, Data
 	}
 }
 
-unique_ptr<UnifiedVectorFormat[]> TupleDataCollection::GetVectorData(TupleDataChunkState &chunk_state) {
+unique_ptr<UnifiedVectorFormat[]> TupleDataCollection::GetVectorData(const TupleDataChunkState &chunk_state) {
 	const auto &vector_data = chunk_state.vector_data;
 	auto result = unique_ptr<UnifiedVectorFormat[]>(new UnifiedVectorFormat[vector_data.size()]);
 	auto result_data = result.get();
@@ -325,6 +325,10 @@ void TupleDataCollection::Combine(TupleDataCollection &other) {
 	}
 	other.Reset();
 	Verify();
+}
+
+void TupleDataCollection::Combine(unique_ptr<TupleDataCollection> other) {
+	Combine(*other);
 }
 
 void TupleDataCollection::Reset() {

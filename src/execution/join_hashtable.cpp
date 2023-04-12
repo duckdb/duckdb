@@ -316,7 +316,7 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 	                                chunk_idx_to, false);
 	const auto row_locations = iterator.GetRowLocations();
 	do {
-		const auto count = iterator.GetCount();
+		const auto count = iterator.GetCurrentChunkCount();
 		for (idx_t i = 0; i < count; i++) {
 			hash_data[i] = Load<hash_t>(row_locations[i] + pointer_offset);
 		}
@@ -777,7 +777,7 @@ void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, Dat
 
 	const auto row_locations = iterator.GetRowLocations();
 	do {
-		const auto count = iterator.GetCount();
+		const auto count = iterator.GetCurrentChunkCount();
 		for (idx_t i = state.offset_in_chunk; i < count; i++) {
 			auto found_match = Load<bool>(row_locations[i] + tuple_size);
 			if (!found_match) {
@@ -825,7 +825,7 @@ idx_t JoinHashTable::FillWithHTOffsets(JoinHTScanState &state, Vector &addresses
 	auto &iterator = state.iterator;
 	const auto row_locations = iterator.GetRowLocations();
 	do {
-		const auto count = iterator.GetCount();
+		const auto count = iterator.GetCurrentChunkCount();
 		for (idx_t i = 0; i < count; i++) {
 			key_locations[key_count + i] = row_locations[i];
 		}

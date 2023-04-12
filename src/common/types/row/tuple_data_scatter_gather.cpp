@@ -61,7 +61,7 @@ inline string_t TupleDataWithinListValueLoad(const data_ptr_t &location, data_pt
 	return result;
 }
 
-void TupleDataCollection::ComputeHeapSizes(TupleDataChunkState &chunk_state, DataChunk &new_chunk,
+void TupleDataCollection::ComputeHeapSizes(TupleDataChunkState &chunk_state, const DataChunk &new_chunk,
                                            const SelectionVector &append_sel, const idx_t append_count) {
 	auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
 	std::fill_n(heap_sizes, new_chunk.size(), 0);
@@ -78,8 +78,9 @@ static inline idx_t StringHeapSize(const string_t &val) {
 	return val.IsInlined() ? 0 : val.GetSize();
 }
 
-void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, Vector &source_v, TupleDataVectorFormat &source_format,
-                                           const SelectionVector &append_sel, const idx_t append_count) {
+void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
+                                           TupleDataVectorFormat &source_format, const SelectionVector &append_sel,
+                                           const idx_t append_count) {
 	const auto type = source_v.GetType().InternalType();
 	if (type != PhysicalType::VARCHAR && type != PhysicalType::STRUCT && type != PhysicalType::LIST) {
 		return;
@@ -138,7 +139,7 @@ void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, Vector &source_
 	}
 }
 
-void TupleDataCollection::WithinListHeapComputeSizes(Vector &heap_sizes_v, Vector &source_v,
+void TupleDataCollection::WithinListHeapComputeSizes(Vector &heap_sizes_v, const Vector &source_v,
                                                      TupleDataVectorFormat &source_format,
                                                      const SelectionVector &append_sel, const idx_t append_count,
                                                      const UnifiedVectorFormat &list_data) {
@@ -168,7 +169,7 @@ void TupleDataCollection::WithinListHeapComputeSizes(Vector &heap_sizes_v, Vecto
 	}
 }
 
-void TupleDataCollection::ComputeFixedWithinListHeapSizes(Vector &heap_sizes_v, Vector &source_v,
+void TupleDataCollection::ComputeFixedWithinListHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
                                                           TupleDataVectorFormat &source_format,
                                                           const SelectionVector &append_sel, const idx_t append_count,
                                                           const UnifiedVectorFormat &list_data) {
@@ -198,7 +199,7 @@ void TupleDataCollection::ComputeFixedWithinListHeapSizes(Vector &heap_sizes_v, 
 	}
 }
 
-void TupleDataCollection::StringWithinListComputeHeapSizes(Vector &heap_sizes_v, Vector &source_v,
+void TupleDataCollection::StringWithinListComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
                                                            TupleDataVectorFormat &source_format,
                                                            const SelectionVector &append_sel, const idx_t append_count,
                                                            const UnifiedVectorFormat &list_data) {
@@ -242,7 +243,7 @@ void TupleDataCollection::StringWithinListComputeHeapSizes(Vector &heap_sizes_v,
 	}
 }
 
-void TupleDataCollection::StructWithinListComputeHeapSizes(Vector &heap_sizes_v, Vector &source_v,
+void TupleDataCollection::StructWithinListComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
                                                            TupleDataVectorFormat &source_format,
                                                            const SelectionVector &append_sel, const idx_t append_count,
                                                            const UnifiedVectorFormat &list_data) {
@@ -277,7 +278,7 @@ void TupleDataCollection::StructWithinListComputeHeapSizes(Vector &heap_sizes_v,
 	}
 }
 
-static void ApplySliceRecursive(Vector &source_v, TupleDataVectorFormat &source_format,
+static void ApplySliceRecursive(const Vector &source_v, TupleDataVectorFormat &source_format,
                                 const SelectionVector &combined_sel, const idx_t count) {
 	D_ASSERT(source_format.combined_list_data);
 	auto &combined_list_data = *source_format.combined_list_data;
@@ -298,7 +299,7 @@ static void ApplySliceRecursive(Vector &source_v, TupleDataVectorFormat &source_
 	}
 }
 
-void TupleDataCollection::ListWithinListComputeHeapSizes(Vector &heap_sizes_v, Vector &source_v,
+void TupleDataCollection::ListWithinListComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
                                                          TupleDataVectorFormat &source_format,
                                                          const SelectionVector &append_sel, const idx_t append_count,
                                                          const UnifiedVectorFormat &list_data) {
@@ -384,7 +385,7 @@ void TupleDataCollection::ListWithinListComputeHeapSizes(Vector &heap_sizes_v, V
 	                                                combined_child_list_data);
 }
 
-void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, DataChunk &new_chunk,
+void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, const DataChunk &new_chunk,
                                   const SelectionVector &append_sel, const idx_t append_count) const {
 	const auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
 
@@ -409,7 +410,7 @@ void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, DataChunk &n
 	}
 }
 
-void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, Vector &source, const column_t column_id,
+void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, const Vector &source, const column_t column_id,
                                   const SelectionVector &append_sel, const idx_t append_count) const {
 	const auto &scatter_function = scatter_functions[column_id];
 	scatter_function.function(source, chunk_state.vector_data[column_id], append_sel, append_count, layout,
@@ -418,7 +419,7 @@ void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, Vector &sour
 }
 
 template <class T>
-static void TupleDataTemplatedScatter(Vector &source, const TupleDataVectorFormat &source_format,
+static void TupleDataTemplatedScatter(const Vector &source, const TupleDataVectorFormat &source_format,
                                       const SelectionVector &append_sel, const idx_t append_count,
                                       const TupleDataLayout &layout, Vector &row_locations, Vector &heap_locations,
                                       const idx_t col_idx, const UnifiedVectorFormat &dummy_arg,
@@ -457,7 +458,7 @@ static void TupleDataTemplatedScatter(Vector &source, const TupleDataVectorForma
 	}
 }
 
-static void TupleDataStructScatter(Vector &source, const TupleDataVectorFormat &source_format,
+static void TupleDataStructScatter(const Vector &source, const TupleDataVectorFormat &source_format,
                                    const SelectionVector &append_sel, const idx_t append_count,
                                    const TupleDataLayout &layout, Vector &row_locations, Vector &heap_locations,
                                    const idx_t col_idx, const UnifiedVectorFormat &dummy_arg,
@@ -514,7 +515,7 @@ static void TupleDataStructScatter(Vector &source, const TupleDataVectorFormat &
 	}
 }
 
-static void TupleDataListScatter(Vector &source, const TupleDataVectorFormat &source_format,
+static void TupleDataListScatter(const Vector &source, const TupleDataVectorFormat &source_format,
                                  const SelectionVector &append_sel, const idx_t append_count,
                                  const TupleDataLayout &layout, Vector &row_locations, Vector &heap_locations,
                                  const idx_t col_idx, const UnifiedVectorFormat &dummy_arg,
@@ -560,7 +561,7 @@ static void TupleDataListScatter(Vector &source, const TupleDataVectorFormat &so
 }
 
 template <class T>
-static void TupleDataTemplatedWithinListScatter(Vector &source, const TupleDataVectorFormat &source_format,
+static void TupleDataTemplatedWithinListScatter(const Vector &source, const TupleDataVectorFormat &source_format,
                                                 const SelectionVector &append_sel, const idx_t append_count,
                                                 const TupleDataLayout &layout, Vector &row_locations,
                                                 Vector &heap_locations, const idx_t col_idx,
@@ -615,7 +616,7 @@ static void TupleDataTemplatedWithinListScatter(Vector &source, const TupleDataV
 	}
 }
 
-static void TupleDataStructWithinListScatter(Vector &source, const TupleDataVectorFormat &source_format,
+static void TupleDataStructWithinListScatter(const Vector &source, const TupleDataVectorFormat &source_format,
                                              const SelectionVector &append_sel, const idx_t append_count,
                                              const TupleDataLayout &layout, Vector &row_locations,
                                              Vector &heap_locations, const idx_t col_idx,
@@ -673,7 +674,7 @@ static void TupleDataStructWithinListScatter(Vector &source, const TupleDataVect
 	}
 }
 
-static void TupleDataListWithinListScatter(Vector &child_list, const TupleDataVectorFormat &child_list_format,
+static void TupleDataListWithinListScatter(const Vector &child_list, const TupleDataVectorFormat &child_list_format,
                                            const SelectionVector &append_sel, const idx_t append_count,
                                            const TupleDataLayout &layout, Vector &row_locations, Vector &heap_locations,
                                            const idx_t col_idx, const UnifiedVectorFormat &list_data,

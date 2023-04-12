@@ -103,7 +103,7 @@ void GroupedAggregateHashTable::Destroy() {
 	TupleDataChunkIterator iterator(*data_collection, TupleDataPinProperties::DESTROY_AFTER_DONE, false);
 	auto &row_locations = iterator.GetChunkState().row_locations;
 	do {
-		RowOperations::DestroyStates(state, layout, row_locations, iterator.GetCount());
+		RowOperations::DestroyStates(state, layout, row_locations, iterator.GetCurrentChunkCount());
 	} while (iterator.Next());
 	data_collection->Reset();
 }
@@ -198,7 +198,7 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 		TupleDataChunkIterator iterator(*data_collection, TupleDataPinProperties::ALREADY_PINNED, false);
 		const auto row_locations = iterator.GetRowLocations();
 		do {
-			for (idx_t i = 0; i < iterator.GetCount(); i++) {
+			for (idx_t i = 0; i < iterator.GetCurrentChunkCount(); i++) {
 				const auto &row_location = row_locations[i];
 				if (row_location > block_end || row_location < block_pointer) {
 					block_id++;

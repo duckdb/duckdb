@@ -18,7 +18,7 @@ class TupleDataAllocator;
 struct TupleDataScatterFunction;
 struct TupleDataGatherFunction;
 
-typedef void (*tuple_data_scatter_function_t)(Vector &source, const TupleDataVectorFormat &source_format,
+typedef void (*tuple_data_scatter_function_t)(const Vector &source, const TupleDataVectorFormat &source_format,
                                               const SelectionVector &append_sel, const idx_t append_count,
                                               const TupleDataLayout &layout, Vector &row_locations,
                                               Vector &heap_locations, const idx_t col_idx,
@@ -67,9 +67,9 @@ public:
 	//! Unpins all held pins
 	void Unpin();
 
-	//! Gets the scatter function for the given column index
+	//! Gets the scatter function for the given type
 	static TupleDataScatterFunction GetScatterFunction(const LogicalType &type, bool within_list = false);
-	//! Gets the gather function for the given column index
+	//! Gets the gather function for the given type
 	static TupleDataGatherFunction GetGatherFunction(const LogicalType &type, bool within_list = false);
 
 	//! Initializes an Append state - useful for optimizing many appends made to the same tuple data collection
@@ -92,48 +92,50 @@ public:
 	void Append(DataChunk &new_chunk, vector<column_t> column_ids,
 	            const SelectionVector &append_sel = *FlatVector::IncrementalSelectionVector(),
 	            const idx_t append_count = DConstants::INVALID_INDEX);
-	//! Append a DataChunk to this TupleDataCollection using the specified append state
+	//! Append a DataChunk to this TupleDataCollection using the specified Append state
 	void Append(TupleDataAppendState &append_state, DataChunk &new_chunk,
 	            const SelectionVector &append_sel = *FlatVector::IncrementalSelectionVector(),
 	            const idx_t append_count = DConstants::INVALID_INDEX);
-	//! Append a DataChunk to this TupleDataCollection using the specified pin and chunk states
+	//! Append a DataChunk to this TupleDataCollection using the specified pin and Chunk states
 	void Append(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state, DataChunk &new_chunk,
 	            const SelectionVector &append_sel = *FlatVector::IncrementalSelectionVector(),
 	            const idx_t append_count = DConstants::INVALID_INDEX);
-	//! Append a DataChunk to this TupleDataCollection using the specified pin and chunk states
+	//! Append a DataChunk to this TupleDataCollection using the specified pin and Chunk states
 	//! - ToUnifiedFormat has already been called
 	void AppendUnified(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state, DataChunk &new_chunk,
 	                   const SelectionVector &append_sel = *FlatVector::IncrementalSelectionVector(),
 	                   const idx_t append_count = DConstants::INVALID_INDEX);
 
-	//! Creates a UnifiedVectorFormat in the given chunk state for the given DataChunk
+	//! Creates a UnifiedVectorFormat in the given Chunk state for the given DataChunk
 	static void ToUnifiedFormat(TupleDataChunkState &chunk_state, DataChunk &new_chunk);
-	//! Gets the UnifiedVectorFormat from the chunk state as an array
-	static unique_ptr<UnifiedVectorFormat[]> GetVectorData(TupleDataChunkState &chunk_state);
+	//! Gets the UnifiedVectorFormat from the Chunk state as an array
+	static unique_ptr<UnifiedVectorFormat[]> GetVectorData(const TupleDataChunkState &chunk_state);
 	//! Computes the heap sizes for the new DataChunk that will be appended
-	static void ComputeHeapSizes(TupleDataChunkState &chunk_state, DataChunk &new_chunk,
+	static void ComputeHeapSizes(TupleDataChunkState &chunk_state, const DataChunk &new_chunk,
 	                             const SelectionVector &append_sel, const idx_t append_count);
 
-	//! Builds out the buffer space for the specified chunk state
+	//! Builds out the buffer space for the specified Chunk state
 	void Build(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state, const idx_t append_offset,
 	           const idx_t append_count);
-	//! Scatters the given DataChunk to the rows in the specified append state
-	void Scatter(TupleDataChunkState &chunk_state, DataChunk &new_chunk, const SelectionVector &append_sel,
+	//! Scatters the given DataChunk to the rows in the specified Chunk state
+	void Scatter(TupleDataChunkState &chunk_state, const DataChunk &new_chunk, const SelectionVector &append_sel,
 	             const idx_t append_count) const;
-	//! Scatters the given Vector to the given column id to the rows in the specified append state
-	void Scatter(TupleDataChunkState &chunk_state, Vector &source, const column_t column_id,
+	//! Scatters the given Vector to the given column id to the rows in the specified Chunk state
+	void Scatter(TupleDataChunkState &chunk_state, const Vector &source, const column_t column_id,
 	             const SelectionVector &append_sel, const idx_t append_count) const;
 	//! Copy rows from input to the built Chunk state
 	void CopyRows(TupleDataChunkState &chunk_state, TupleDataChunkState &input, const SelectionVector &append_sel,
 	              const idx_t append_count) const;
 
-	//! Finalizes the pin state, releasing or storing blocks
+	//! Finalizes the Pin state, releasing or storing blocks
 	void FinalizePinState(TupleDataPinState &pin_state, TupleDataSegment &segment);
-	//! Finalizes the pin state, releasing or storing blocks
+	//! Finalizes the Pin state, releasing or storing blocks
 	void FinalizePinState(TupleDataPinState &pin_state);
 
 	//! Appends the other TupleDataCollection to this, destroying the other data collection
 	void Combine(TupleDataCollection &other);
+	//! Appends the other TupleDataCollection to this, destroying the other data collection
+	void Combine(unique_ptr<TupleDataCollection> other);
 	//! Resets the TupleDataCollection, clearing all data
 	void Reset();
 
@@ -183,28 +185,28 @@ private:
 	void Initialize();
 
 	//! Computes the heap sizes for the specific Vector that will be appended
-	static void ComputeHeapSizes(Vector &heap_sizes_v, Vector &source_v, TupleDataVectorFormat &source,
+	static void ComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v, TupleDataVectorFormat &source,
 	                             const SelectionVector &append_sel, const idx_t append_count);
 	//! Computes the heap sizes for the specific Vector that will be appended (within a list)
-	static void WithinListHeapComputeSizes(Vector &heap_sizes_v, Vector &source_v, TupleDataVectorFormat &source_format,
-	                                       const SelectionVector &append_sel, const idx_t append_count,
-	                                       const UnifiedVectorFormat &list_data);
+	static void WithinListHeapComputeSizes(Vector &heap_sizes_v, const Vector &source_v,
+	                                       TupleDataVectorFormat &source_format, const SelectionVector &append_sel,
+	                                       const idx_t append_count, const UnifiedVectorFormat &list_data);
 	//! Computes the heap sizes for the fixed-size type Vector that will be appended (within a list)
-	static void ComputeFixedWithinListHeapSizes(Vector &heap_sizes_v, Vector &source_v,
+	static void ComputeFixedWithinListHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
 	                                            TupleDataVectorFormat &source_format, const SelectionVector &append_sel,
 	                                            const idx_t append_count, const UnifiedVectorFormat &list_data);
 	//! Computes the heap sizes for the string Vector that will be appended (within a list)
-	static void StringWithinListComputeHeapSizes(Vector &heap_sizes_v, Vector &source_v,
+	static void StringWithinListComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
 	                                             TupleDataVectorFormat &source_format,
 	                                             const SelectionVector &append_sel, const idx_t append_count,
 	                                             const UnifiedVectorFormat &list_data);
 	//! Computes the heap sizes for the struct Vector that will be appended (within a list)
-	static void StructWithinListComputeHeapSizes(Vector &heap_sizes_v, Vector &source_v,
+	static void StructWithinListComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
 	                                             TupleDataVectorFormat &source_format,
 	                                             const SelectionVector &append_sel, const idx_t append_count,
 	                                             const UnifiedVectorFormat &list_data);
 	//! Computes the heap sizes for the list Vector that will be appended (within a list)
-	static void ListWithinListComputeHeapSizes(Vector &heap_sizes_v, Vector &source_v,
+	static void ListWithinListComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
 	                                           TupleDataVectorFormat &source_format, const SelectionVector &append_sel,
 	                                           const idx_t append_count, const UnifiedVectorFormat &list_data);
 

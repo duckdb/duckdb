@@ -121,7 +121,7 @@ public:
 	void Build(PartitionedTupleDataAppendState &append_state, DataChunk &keys, DataChunk &input);
 	//! Merge another HT into this one
 	void Merge(JoinHashTable &other);
-	//! TODO:
+	//! Combines the partitions in sink_collection into data_collection, as if it were not partitioned
 	void Unpartition();
 	//! Initialize the pointer table for the probe
 	void InitializePointerTable();
@@ -215,9 +215,9 @@ private:
 	idx_t PrepareKeys(DataChunk &keys, unique_ptr<UnifiedVectorFormat[]> &key_data, const SelectionVector *&current_sel,
 	                  SelectionVector &sel, bool build_side);
 
-	//! TODO
+	//! Lock for combining data_collection when merging HTs
 	mutex data_lock;
-	//! TODO
+	//! Partitioned data collection that the data is sunk into when building
 	unique_ptr<PartitionedTupleData> sink_collection;
 	//! The DataCollection holding the main data of the hash table
 	unique_ptr<TupleDataCollection> data_collection;

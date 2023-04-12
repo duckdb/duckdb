@@ -27,11 +27,11 @@ public:
 	TupleDataLayout Copy() const;
 
 public:
-	//! Initializes the RowLayout with the specified types and aggregates to an empty RowLayout
+	//! Initializes the TupleDataLayout with the specified types and aggregates to an empty TupleDataLayout
 	void Initialize(vector<LogicalType> types_p, Aggregates aggregates_p, bool align = true, bool heap_offset = true);
-	//! Initializes the RowLayout with the specified types to an empty RowLayout
+	//! Initializes the TupleDataLayout with the specified types to an empty TupleDataLayout
 	void Initialize(vector<LogicalType> types, bool align = true, bool heap_offset = true);
-	//! Initializes the RowLayout with the specified aggregates to an empty RowLayout
+	//! Initializes the TupleDataLayout with the specified aggregates to an empty TupleDataLayout
 	void Initialize(Aggregates aggregates_p, bool align = true, bool heap_offset = true);
 
 	//! Returns the number of data columns
@@ -50,7 +50,7 @@ public:
 	inline Aggregates &GetAggregates() {
 		return aggregates;
 	}
-	//! Returns a map from column id to the struct RowLayouts
+	//! Returns a map from column id to the struct TupleDataLayout
 	const inline TupleDataLayout &GetStructLayout(idx_t col_idx) const {
 		D_ASSERT(struct_layouts->find(col_idx) != struct_layouts->end());
 		return struct_layouts->find(col_idx)->second;

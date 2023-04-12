@@ -243,7 +243,7 @@ void PartitionedTupleData::Partition(TupleDataCollection &source, TupleDataPinPr
 	TupleDataChunkIterator iterator(source, TupleDataPinProperties::DESTROY_AFTER_DONE, true);
 	auto &chunk_state = iterator.GetChunkState();
 	do {
-		Append(append_state, chunk_state, iterator.GetCount());
+		Append(append_state, chunk_state, iterator.GetCurrentChunkCount());
 	} while (iterator.Next());
 
 	FlushAppendState(append_state);
@@ -278,7 +278,7 @@ void PartitionedTupleData::Repartition(PartitionedTupleData &new_partitioned_dat
 			TupleDataChunkIterator iterator(partition, TupleDataPinProperties::DESTROY_AFTER_DONE, true);
 			auto &chunk_state = iterator.GetChunkState();
 			do {
-				new_partitioned_data.Append(append_state, chunk_state, iterator.GetCount());
+				new_partitioned_data.Append(append_state, chunk_state, iterator.GetCurrentChunkCount());
 			} while (iterator.Next());
 
 			RepartitionFinalizeStates(*this, new_partitioned_data, append_state, actual_partition_idx);

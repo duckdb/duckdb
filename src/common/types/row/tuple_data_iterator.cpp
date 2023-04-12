@@ -73,7 +73,7 @@ void TupleDataChunkIterator::Reset() {
 	InitializeCurrentChunk();
 }
 
-idx_t TupleDataChunkIterator::GetCount() const {
+idx_t TupleDataChunkIterator::GetCurrentChunkCount() const {
 	return collection.segments[current_segment_idx].chunks[current_chunk_idx].count;
 }
 

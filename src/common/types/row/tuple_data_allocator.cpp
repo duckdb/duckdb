@@ -109,8 +109,6 @@ TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataPinState &pin_sta
 	// Set count (might be reduced later when checking heap space)
 	result.count = MinValue<idx_t>(row_block.RemainingCapacity(layout.GetRowWidth()), append_count);
 	if (!layout.AllConstant()) {
-		UnifiedVectorFormat heap_size_data;
-		chunk_state.heap_sizes.ToUnifiedFormat(append_offset + append_count, heap_size_data);
 		const auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
 
 		// Compute total heap size first
