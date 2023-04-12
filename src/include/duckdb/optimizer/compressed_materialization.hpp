@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/optimizer/compressed_materialization_optimizer.hpp
+// duckdb/optimizer/compressed_materialization.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -68,8 +68,9 @@ private:
 	void CreateProjections(unique_ptr<LogicalOperator> *op_ptr, CompressedMaterializationInfo &info);
 	bool TryCompressChild(CompressedMaterializationInfo &info, const CMChildInfo &child_info,
 	                      vector<unique_ptr<Expression>> &compress_expressions);
-	void CreateCompressProjection(unique_ptr<LogicalOperator> *child_op,
-	                              vector<unique_ptr<Expression>> &&compress_exprs, CMChildInfo &child_info);
+	unique_ptr<LogicalOperator> CreateCompressProjection(unique_ptr<LogicalOperator> child_op,
+	                                                     vector<unique_ptr<Expression>> &&compress_exprs,
+	                                                     CMChildInfo &child_info);
 	void CreateDecompressProjection(unique_ptr<LogicalOperator> *parent_op,
 	                                vector<unique_ptr<Expression>> &&decompress_exprs,
 	                                unique_ptr<LogicalOperator> *child_op, const CMChildInfo &child_info);

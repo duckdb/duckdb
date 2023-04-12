@@ -3,6 +3,10 @@
 
 namespace duckdb {
 
+static string IntegralCompressFunctionName(const LogicalType &result_type) {
+	return StringUtil::Format("cm_compress_integral_%s", StringUtil::Lower(LogicalTypeIdToString(result_type.id())));
+}
+
 unique_ptr<FunctionData> IntegralCompressBind(ClientContext &context, ScalarFunction &bound_function,
                                               vector<unique_ptr<Expression>> &arguments) {
 	const auto input_type_size = GetTypeIdSize(arguments[0]->return_type.InternalType());
@@ -10,9 +14,8 @@ unique_ptr<FunctionData> IntegralCompressBind(ClientContext &context, ScalarFunc
 	if (result_type_size >= input_type_size) {
 		throw InvalidInputException("Cannot compress to larger type!");
 	}
-	// TODO: make sure there's no implicit cast going on before entering this function?
 	if (!arguments[1]->IsFoldable()) {
-		throw InvalidInputException("Argument \"min_val\" must be constant!");
+		throw InvalidInputException("Second argument must be constant!");
 	}
 	return nullptr;
 }
@@ -44,8 +47,8 @@ static void IntegralCompressFunction(DataChunk &args, ExpressionState &state, Ve
 
 template <class INPUT_TYPE, class RESULT_TYPE>
 static ScalarFunction GetIntegralCompressFunction(const LogicalType &input_type, const LogicalType &result_type) {
-	return ScalarFunction({input_type, input_type}, result_type, IntegralCompressFunction<INPUT_TYPE, RESULT_TYPE>,
-	                      IntegralCompressBind);
+	return ScalarFunction(IntegralCompressFunctionName(result_type), {input_type, input_type}, result_type,
+	                      IntegralCompressFunction<INPUT_TYPE, RESULT_TYPE>, IntegralCompressBind);
 }
 
 template <class INPUT_TYPE>
@@ -88,7 +91,7 @@ static ScalarFunction GetIntegralCompressFunctionInputSwitch(const LogicalType &
 }
 
 static ScalarFunctionSet GetIntegralCompressFunctionSet(const LogicalType &result_type) {
-	ScalarFunctionSet set(StringUtil::Format("cm_compress_integral_%s", LogicalTypeIdToString(result_type.id())));
+	ScalarFunctionSet set(IntegralCompressFunctionName(result_type));
 	for (const auto &input_type : LogicalType::Integral()) {
 		if (GetTypeIdSize(result_type.InternalType()) < GetTypeIdSize(input_type.InternalType())) {
 			set.AddFunction(CMIntegralCompressFun::GetFunction(input_type, result_type));
@@ -107,6 +110,10 @@ ScalarFunction CMIntegralCompressFun::GetFunction(const LogicalType &input_type,
 	return GetIntegralCompressFunctionInputSwitch(input_type, result_type);
 }
 
+static string IntegralDecompressFunctionName(const LogicalType &result_type) {
+	return StringUtil::Format("cm_decompress_integral_%s", StringUtil::Lower(LogicalTypeIdToString(result_type.id())));
+}
+
 unique_ptr<FunctionData> IntegralDecompressBind(ClientContext &context, ScalarFunction &bound_function,
                                                 vector<unique_ptr<Expression>> &arguments) {
 	const auto input_type_size = GetTypeIdSize(arguments[0]->return_type.InternalType());
@@ -115,7 +122,7 @@ unique_ptr<FunctionData> IntegralDecompressBind(ClientContext &context, ScalarFu
 		throw InvalidInputException("Cannot decompress to smaller type!");
 	}
 	if (!arguments[1]->IsFoldable()) {
-		throw InvalidInputException("Argument \"min_val\" must be constant!");
+		throw InvalidInputException("Second argument must be constant!");
 	}
 	return nullptr;
 }
@@ -136,8 +143,8 @@ static void IntegralDecompressFunction(DataChunk &args, ExpressionState &state, 
 
 template <class INPUT_TYPE, class RESULT_TYPE>
 static ScalarFunction GetIntegralDecompressFunction(const LogicalType &input_type, const LogicalType &result_type) {
-	return ScalarFunction({input_type, result_type}, result_type, IntegralDecompressFunction<INPUT_TYPE, RESULT_TYPE>,
-	                      IntegralDecompressBind);
+	return ScalarFunction(IntegralDecompressFunctionName(result_type), {input_type, result_type}, result_type,
+	                      IntegralDecompressFunction<INPUT_TYPE, RESULT_TYPE>, IntegralDecompressBind);
 }
 
 template <class INPUT_TYPE>
@@ -180,7 +187,7 @@ static ScalarFunction GetIntegralDecompressFunctionInputSwitch(const LogicalType
 }
 
 static ScalarFunctionSet GetIntegralDecompressFunctionSet(const LogicalType &result_type) {
-	ScalarFunctionSet set(StringUtil::Format("cm_decompress_integral_%s", LogicalTypeIdToString(result_type.id())));
+	ScalarFunctionSet set(IntegralDecompressFunctionName(result_type));
 	for (const auto &input_type : CompressedMaterializationTypes::Integral()) {
 		if (GetTypeIdSize(result_type.InternalType()) > GetTypeIdSize(input_type.InternalType())) {
 			set.AddFunction(GetIntegralDecompressFunctionInputSwitch(input_type, result_type));

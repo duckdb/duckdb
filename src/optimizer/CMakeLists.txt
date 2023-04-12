@@ -11,7 +11,7 @@ add_library_unity(
   OBJECT
   column_binding_replacer.cpp
   common_aggregate_optimizer.cpp
-  compressed_materialization_optimizer.cpp
+  compressed_materialization.cpp
   cse_optimizer.cpp
   deliminator.cpp
   unnest_rewriter.cpp

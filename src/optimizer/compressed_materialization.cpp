@@ -1,4 +1,4 @@
-#include "duckdb/optimizer/compressed_materialization_optimizer.hpp"
+#include "duckdb/optimizer/compressed_materialization.hpp"
 
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/operators.hpp"
@@ -66,7 +66,7 @@ void CompressedMaterialization::Compress(unique_ptr<LogicalOperator> &op) {
 		CompressOrder(&op);
 		break;
 	default:
-		break;
+		return;
 	}
 }
 
@@ -91,8 +91,11 @@ void CompressedMaterialization::CreateProjections(unique_ptr<LogicalOperator> *o
 		vector<unique_ptr<Expression>> compress_expressions;
 		if (TryCompressChild(info, child_info, compress_expressions)) {
 			// We can compress: Create a projection on top of the child operator
-			auto child_op = &materializing_op.children[info.child_idxs[i]];
-			CreateCompressProjection(child_op, std::move(compress_expressions), child_info);
+			const auto child_idx = info.child_idxs[i];
+			auto child_op = std::move(materializing_op.children[child_idx]);
+			materializing_op.children.erase(materializing_op.children.begin() + child_idx);
+			child_op = CreateCompressProjection(std::move(child_op), std::move(compress_expressions), child_info);
+			materializing_op.children.insert(materializing_op.children.begin() + child_idx, std::move(child_op));
 		}
 	}
 
@@ -119,19 +122,15 @@ bool CompressedMaterialization::TryCompressChild(CompressedMaterializationInfo &
 	return compressed_anything;
 }
 
-void CompressedMaterialization::CreateCompressProjection(unique_ptr<LogicalOperator> *child_op,
-                                                         vector<unique_ptr<Expression>> &&compress_exprs,
-                                                         CMChildInfo &child_info) {
+unique_ptr<LogicalOperator> CompressedMaterialization::CreateCompressProjection(
+    unique_ptr<LogicalOperator> child_op, vector<unique_ptr<Expression>> &&compress_exprs, CMChildInfo &child_info) {
 	auto compress_projection = make_uniq<LogicalProjection>(projection_index++, std::move(compress_exprs));
-	compress_projection->children.emplace_back(std::move(*child_op));
+	compress_projection->children.emplace_back(std::move(child_op));
 
 	// Get the new bindings and types
 	child_info.bindings_after = compress_projection->GetColumnBindings();
 	compress_projection->ResolveOperatorTypes();
 	const auto &new_types = compress_projection->types;
-
-	// Move the projection under the parent operator
-	*child_op = std::move(compress_projection);
 
 	// Initialize a ColumnBindingReplacer with the new bindings and types
 	ColumnBindingReplacer replacer;
@@ -149,6 +148,9 @@ void CompressedMaterialization::CreateCompressProjection(unique_ptr<LogicalOpera
 
 	// Make the plan consistent again
 	replacer.VisitOperator(*root);
+
+	// Return projection
+	return compress_projection;
 }
 
 void CompressedMaterialization::CreateDecompressProjection(unique_ptr<LogicalOperator> *parent_op,
@@ -190,9 +192,9 @@ static Value GetIntegralRangeValue(ClientContext &context, const LogicalType &ty
 	}
 
 	vector<unique_ptr<Expression>> arguments;
-	arguments.emplace_back(make_uniq<BoundConstantExpression>(std::move(max)));
-	arguments.emplace_back(make_uniq<BoundConstantExpression>(std::move(min)));
-	BoundFunctionExpression sub(type, SubtractFun::GetFunction(type), std::move(arguments), nullptr);
+	arguments.emplace_back(make_uniq<BoundConstantExpression>(max));
+	arguments.emplace_back(make_uniq<BoundConstantExpression>(min));
+	BoundFunctionExpression sub(type, SubtractFun::GetFunction(type, type), std::move(arguments), nullptr);
 	return ExpressionExecutor::EvaluateScalar(context, sub);
 }
 

@@ -7,7 +7,7 @@
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/optimizer/column_lifetime_optimizer.hpp"
 #include "duckdb/optimizer/common_aggregate_optimizer.hpp"
-#include "duckdb/optimizer/compressed_materialization_optimizer.hpp"
+#include "duckdb/optimizer/compressed_materialization.hpp"
 #include "duckdb/optimizer/cse_optimizer.hpp"
 #include "duckdb/optimizer/deliminator.hpp"
 #include "duckdb/optimizer/expression_heuristics.hpp"

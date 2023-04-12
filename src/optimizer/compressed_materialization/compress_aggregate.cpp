@@ -1,4 +1,4 @@
-#include "duckdb/optimizer/compressed_materialization_optimizer.hpp"
+#include "duckdb/optimizer/compressed_materialization.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 
 namespace duckdb {

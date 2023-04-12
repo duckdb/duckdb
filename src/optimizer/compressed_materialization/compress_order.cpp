@@ -1,4 +1,4 @@
-#include "duckdb/optimizer/compressed_materialization_optimizer.hpp"
+#include "duckdb/optimizer/compressed_materialization.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
@@ -37,9 +37,9 @@ void CompressedMaterialization::CompressOrder(unique_ptr<LogicalOperator> *op_pt
 		}
 
 		// Try to compress, if successful, replace the expression
-		auto compression = GetCompressExpression(order_expression.Copy(), *bound_order.stats);
-		if (compression) {
-			bound_order.expression = std::move(compression);
+		auto compress_expr = GetCompressExpression(order_expression.Copy(), *bound_order.stats);
+		if (compress_expr) {
+			bound_order.expression = std::move(compress_expr);
 		}
 	}
 

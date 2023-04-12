@@ -3,6 +3,10 @@
 
 namespace duckdb {
 
+static string StringCompressFunctionName(const LogicalType &result_type) {
+	return StringUtil::Format("cm_compress_string_%s", StringUtil::Lower(LogicalTypeIdToString(result_type.id())));
+}
+
 template <class RESULT_TYPE>
 static inline RESULT_TYPE StringCompress(const string_t &input) {
 	if (input.GetSize() >= sizeof(RESULT_TYPE)) {
@@ -28,8 +32,8 @@ static void StringCompressFunction(DataChunk &args, ExpressionState &state, Vect
 
 template <class RESULT_TYPE>
 static ScalarFunction GetStringCompressFunction(const LogicalType &result_type) {
-	return ScalarFunction(StringUtil::Format("cm_compress_string_%s", LogicalTypeIdToString(result_type.id())),
-	                      {LogicalType::VARCHAR}, result_type, StringCompressFunction<RESULT_TYPE>);
+	return ScalarFunction(StringCompressFunctionName(result_type), {LogicalType::VARCHAR}, result_type,
+	                      StringCompressFunction<RESULT_TYPE>);
 }
 
 static ScalarFunction GetStringCompressFunctionSwitch(const LogicalType &result_type) {
@@ -59,6 +63,10 @@ ScalarFunction CMStringCompressFun::GetFunction(const LogicalType &result_type) 
 	return GetStringCompressFunctionSwitch(result_type);
 }
 
+static string StringDecompressFunctionName() {
+	return "cm_decompress_string";
+}
+
 template <class INPUT_TYPE>
 static inline string_t StringDecompress(const INPUT_TYPE &input, Vector &result_v) {
 	const auto input_swapped = BSwap<INPUT_TYPE>(input);
@@ -83,7 +91,8 @@ static void StringDecompressFunction(DataChunk &args, ExpressionState &state, Ve
 
 template <class INPUT_TYPE>
 static ScalarFunction GetStringDecompressFunction(const LogicalType &input_type) {
-	return ScalarFunction({input_type}, LogicalType::VARCHAR, StringDecompressFunction<INPUT_TYPE>);
+	return ScalarFunction(StringDecompressFunctionName(), {input_type}, LogicalType::VARCHAR,
+	                      StringDecompressFunction<INPUT_TYPE>);
 }
 
 static ScalarFunction GetStringDecompressFunctionSwitch(const LogicalType &input_type) {
@@ -102,7 +111,7 @@ static ScalarFunction GetStringDecompressFunctionSwitch(const LogicalType &input
 }
 
 static ScalarFunctionSet GetStringDecompressFunctionSet() {
-	ScalarFunctionSet set("cm_decompress_string");
+	ScalarFunctionSet set(StringDecompressFunctionName());
 	for (const auto &input_type : CompressedMaterializationTypes::String()) {
 		set.AddFunction(GetStringDecompressFunctionSwitch(input_type));
 	}
