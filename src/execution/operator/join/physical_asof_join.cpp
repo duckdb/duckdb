@@ -29,17 +29,19 @@ PhysicalAsOfJoin::PhysicalAsOfJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 		auto right = cond.right->Copy();
 		switch (cond.comparison) {
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+			null_sensitive.emplace_back(lhs_orders.size());
 			lhs_orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(left));
 			rhs_orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(right));
 			break;
-		case ExpressionType::COMPARE_NOTEQUAL:
-		case ExpressionType::COMPARE_DISTINCT_FROM:
+		case ExpressionType::COMPARE_EQUAL:
+			null_sensitive.emplace_back(lhs_orders.size());
+			// Fall through
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 			lhs_partitions.emplace_back(std::move(left));
 			rhs_partitions.emplace_back(std::move(right));
 			break;
 		default:
-			// COMPARE EQUAL not supported with merge join
-			throw NotImplementedException("Unimplemented join condition for ASOF join");
+			throw NotImplementedException("Unsupported join condition for ASOF join");
 		}
 	}
 	D_ASSERT(!lhs_orders.empty());
@@ -170,22 +172,25 @@ public:
 	Orders lhs_orders;
 
 	//	LHS sorting
-	unique_ptr<GlobalSortState> lhs_global_state;
-	RowLayout lhs_layout;
-	DataChunk lhs_keys;
-	DataChunk lhs_payload;
 	ExpressionExecutor lhs_executor;
+	DataChunk lhs_keys;
+	ValidityMask lhs_valid_mask;
+	SelectionVector lhs_sel;
+	idx_t lhs_valid;
+	RowLayout lhs_layout;
+	unique_ptr<GlobalSortState> lhs_global_state;
+	DataChunk lhs_sorted;
 
 	// LHS binning
 	Vector hash_vector;
 
 	//	Output
-	idx_t nsel;
-	SelectionVector sel;
-	DataChunk scan_payload;
-	DataChunk rhs_payload;
+	idx_t lhs_match_count;
+	SelectionVector lhs_matched;
 	OuterJoinMarker left_outer;
 	bool fetch_next_left;
+	DataChunk group_payload;
+	DataChunk rhs_payload;
 };
 
 AsOfJoinState::AsOfJoinState(ClientContext &context, const PhysicalAsOfJoin &op, bool force_external)
@@ -197,18 +202,19 @@ AsOfJoinState::AsOfJoinState(ClientContext &context, const PhysicalAsOfJoin &op,
 	PartitionGlobalSinkState::GenerateOrderings(partitions, lhs_orders, op.lhs_partitions, op.lhs_orders,
 	                                            partition_stats);
 
-	lhs_layout.Initialize(op.children[0]->types);
+	//	We sort the row numbers of the incoming block, not the rows
+	lhs_layout.Initialize({LogicalType::UINTEGER});
+	lhs_sorted.Initialize(allocator, lhs_layout.GetTypes());
 
 	lhs_keys.Initialize(allocator, op.join_key_types);
 	for (const auto &cond : op.conditions) {
 		lhs_executor.AddExpression(*cond.left);
 	}
 
-	lhs_payload.Initialize(allocator, op.children[0]->types);
+	group_payload.Initialize(allocator, op.children[1]->types);
 	rhs_payload.Initialize(allocator, op.children[1]->types);
-	scan_payload.Initialize(allocator, op.children[1]->types);
 
-	sel.Initialize();
+	lhs_matched.Initialize();
 }
 
 void AsOfJoinState::ResolveJoinKeys(DataChunk &input) {
@@ -216,13 +222,64 @@ void AsOfJoinState::ResolveJoinKeys(DataChunk &input) {
 	lhs_keys.Reset();
 	lhs_executor.Execute(input, lhs_keys);
 
-	// 	Sort on them
+	//	Extract the NULLs
+	const auto count = input.size();
+	lhs_valid_mask.Reset();
+	for (auto col_idx : op.null_sensitive) {
+		auto &col = lhs_keys.data[col_idx];
+		UnifiedVectorFormat unified;
+		col.ToUnifiedFormat(count, unified);
+		lhs_valid_mask.Combine(unified.validity, count);
+	}
+
+	//	Convert the mask to a selection vector.
+	//	We need this anyway for sorting
+	const auto entry_count = lhs_valid_mask.EntryCount(count);
+	lhs_valid = 0;
+	for (idx_t i = 0; i < count;) {
+		idx_t entry_idx;
+		idx_t entry_offset;
+		lhs_valid_mask.GetEntryIndex(i, entry_idx, entry_offset);
+		const auto entry = lhs_valid_mask.GetValidityEntry(entry_idx);
+		for (; entry_idx < entry_count && i < count; ++entry_idx, ++i) {
+			if (lhs_valid_mask.RowIsValid(entry, entry_idx)) {
+				lhs_sel.set_index(lhs_valid++, i);
+			}
+		}
+	}
+
+	//	Slice the keys to the ones we can match
+	if (lhs_valid < count) {
+		lhs_keys.Slice(lhs_sel, lhs_valid);
+	}
+
+	//	Hash to assign the partitions
+	auto &global_partition = op.sink_state->Cast<AsOfGlobalSinkState>().global_partition;
+	if (op.lhs_partitions.empty()) {
+		// Only one hash group
+		hash_vector.Reference(Value::HASH(0));
+	} else {
+		//	Hash to determine the partitions.
+		VectorOperations::Hash(lhs_keys.data[0], hash_vector, lhs_sel, lhs_valid);
+		for (size_t prt_idx = 1; prt_idx < op.lhs_partitions.size(); ++prt_idx) {
+			VectorOperations::CombineHash(hash_vector, lhs_keys.data[prt_idx], lhs_sel, lhs_valid);
+		}
+
+		// Convert hashes to hash groups
+		const auto radix_bits = global_partition.grouping_data->GetRadixBits();
+		RadixPartitioning::HashesToBins(hash_vector, radix_bits, hash_vector, count);
+	}
+
+	// 	Sort the selection vector on the valid keys
 	lhs_global_state = make_uniq<GlobalSortState>(buffer_manager, lhs_orders, lhs_layout);
 	auto &global_state = *lhs_global_state;
 	LocalSortState local_sort;
 	local_sort.Initialize(*lhs_global_state, buffer_manager);
 
-	local_sort.SinkChunk(lhs_keys, input);
+	DataChunk payload_chunk;
+	payload_chunk.InitializeEmpty({LogicalType::UINTEGER});
+	FlatVector::SetData(payload_chunk.data[0], (data_ptr_t)lhs_sel.data());
+	local_sort.SinkChunk(lhs_keys, payload_chunk);
 
 	// Set external (can be forced with the PRAGMA)
 	global_state.external = force_external;
@@ -234,37 +291,18 @@ void AsOfJoinState::ResolveJoinKeys(DataChunk &input) {
 		global_state.CompleteMergeRound();
 	}
 
-	// Scan the sorted payload
+	// Scan the sorted selection
 	D_ASSERT(global_state.sorted_blocks.size() == 1);
 
 	auto scanner = make_uniq<PayloadScanner>(*global_state.sorted_blocks[0]->payload_data, global_state, false);
-	lhs_payload.Reset();
-	scanner->Scan(lhs_payload);
-
-	//	Hash to find the partition
-	const auto count = input.size();
-	auto &global_partition = op.sink_state->Cast<AsOfGlobalSinkState>().global_partition;
-	if (op.lhs_partitions.empty()) {
-		// Only one hash group
-		hash_vector.Reference(Value::HASH(0));
-	} else {
-		//	Hash to determine the partitions.
-		VectorOperations::Hash(lhs_keys.data[0], hash_vector, count);
-		for (size_t prt_idx = 1; prt_idx < op.lhs_partitions.size(); ++prt_idx) {
-			VectorOperations::CombineHash(hash_vector, lhs_keys.data[prt_idx], count);
-		}
-
-		// Convert hashes to hash groups
-		const auto radix_bits = global_partition.grouping_data->GetRadixBits();
-		RadixPartitioning::HashesToBins(hash_vector, radix_bits, hash_vector, count);
-	}
+	lhs_sorted.Reset();
+	scanner->Scan(lhs_sorted);
 }
 
 void AsOfJoinState::ResolveJoin(DataChunk &input, bool *found_match, std::pair<hash_t, idx_t> *matches) {
 	//	Sort the input into lhs_payload, radix keys in lhs_global_state
 	ResolveJoinKeys(input);
 
-	const auto count = input.size();
 	auto &gsink = op.sink_state->Cast<AsOfGlobalSinkState>();
 	auto &global_partition = gsink.global_partition;
 
@@ -275,9 +313,12 @@ void AsOfJoinState::ResolveJoin(DataChunk &input, bool *found_match, std::pair<h
 	OuterJoinMarker *right_outer = nullptr;
 	unique_ptr<SBIterator> right;
 	SBIterator left(*lhs_global_state, ExpressionType::COMPARE_LESSTHANOREQUALTO);
-	nsel = 0;
-	for (idx_t i = 0; i < count; ++i) {
-		const auto curr_bin = bins[i];
+	lhs_match_count = 0;
+	const auto sorted_sel = FlatVector::GetData<sel_t>(lhs_sorted.data[0]);
+	for (idx_t i = 0; i < lhs_valid; ++i) {
+		//	idx is the index in the input; i is the index in the sorted keys
+		const auto idx = sorted_sel[i];
+		const auto curr_bin = bins[idx];
 		if (!hash_group || curr_bin != prev_bin) {
 			//	Grab the next group
 			hash_group = global_partition.hash_groups[curr_bin].get();
@@ -329,14 +370,14 @@ void AsOfJoinState::ResolveJoin(DataChunk &input, bool *found_match, std::pair<h
 		}
 
 		// Emit match data
-		left_outer.SetMatch(i);
+		left_outer.SetMatch(idx);
 		if (found_match) {
-			found_match[i] = true;
+			found_match[idx] = true;
 		}
 		if (matches) {
-			matches[i] = Match(curr_bin, first);
+			matches[idx] = Match(curr_bin, first);
 		}
-		sel.set_index(nsel++, i);
+		lhs_matched.set_index(lhs_match_count++, idx);
 	}
 }
 
@@ -354,20 +395,17 @@ void PhysicalAsOfJoin::ResolveSimpleJoin(ExecutionContext &context, DataChunk &i
 	bool found_match[STANDARD_VECTOR_SIZE] = {false};
 	state.ResolveJoin(input, found_match);
 
-	// use the sorted payload
-	auto &payload = state.lhs_payload;
-
 	// now construct the result based on the join result
 	switch (join_type) {
 	case JoinType::MARK: {
-		PhysicalJoin::ConstructMarkJoinResult(state.lhs_keys, payload, chunk, found_match, gstate.has_null);
+		PhysicalJoin::ConstructMarkJoinResult(state.lhs_keys, input, chunk, found_match, gstate.has_null);
 		break;
 	}
 	case JoinType::SEMI:
-		PhysicalJoin::ConstructSemiJoinResult(payload, chunk, found_match);
+		PhysicalJoin::ConstructSemiJoinResult(input, chunk, found_match);
 		break;
 	case JoinType::ANTI:
-		PhysicalJoin::ConstructAntiJoinResult(payload, chunk, found_match);
+		PhysicalJoin::ConstructAntiJoinResult(input, chunk, found_match);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented join type for AsOf join");
@@ -393,42 +431,41 @@ OperatorResultType PhysicalAsOfJoin::ResolveComplexJoin(ExecutionContext &contex
 	// perform the actual join
 	AsOfJoinState::Match matches[STANDARD_VECTOR_SIZE];
 	state.ResolveJoin(input, nullptr, matches);
+	state.group_payload.Reset();
 	state.rhs_payload.Reset();
-	state.scan_payload.Reset();
 
 	auto &global_partition = gstate.global_partition;
 	hash_t scan_bin = global_partition.hash_groups.size();
 	PartitionGlobalHashGroup *hash_group = nullptr;
 	unique_ptr<PayloadScanner> scanner;
-	for (idx_t i = 0; i < state.nsel; ++i) {
-		const auto match_bin = matches[i].first;
-		const auto match_pos = matches[i].second;
+	for (idx_t i = 0; i < state.lhs_match_count; ++i) {
+		const auto idx = state.lhs_matched[i];
+		const auto match_bin = matches[idx].first;
+		const auto match_pos = matches[idx].second;
 		if (match_bin != scan_bin) {
 			//	Grab the next group
 			hash_group = global_partition.hash_groups[match_bin].get();
 			scan_bin = match_bin;
 			scanner = make_uniq<PayloadScanner>(*hash_group->global_sort, false);
-			state.scan_payload.Reset();
+			state.group_payload.Reset();
 		}
 		// Skip to the range containing the match
-		while (match_pos >= scanner->Scanned() + state.scan_payload.size()) {
-			state.scan_payload.Reset();
-			scanner->Scan(state.scan_payload);
+		while (match_pos >= scanner->Scanned() + state.group_payload.size()) {
+			state.group_payload.Reset();
+			scanner->Scan(state.group_payload);
 		}
 		// Append the individual values
 		// TODO: Batch the copies
 		const auto source_offset = match_pos - scanner->Scanned();
-		for (column_t col_idx = 0; col_idx < state.lhs_payload.ColumnCount(); ++col_idx) {
-			auto &source = state.scan_payload.data[col_idx];
-			auto &target = state.rhs_payload.data[input.ColumnCount() + col_idx];
+		for (column_t col_idx = 0; col_idx < state.group_payload.ColumnCount(); ++col_idx) {
+			auto &source = state.group_payload.data[col_idx];
+			auto &target = chunk.data[input.ColumnCount() + col_idx];
 			VectorOperations::Copy(source, target, 1, source_offset, i);
 		}
 	}
 
-	//	Slice the sorted payload into the left side
-	chunk.Slice(state.lhs_payload, state.sel, state.nsel);
-	chunk.Slice(state.rhs_payload, state.sel, state.nsel, input.ColumnCount());
-	chunk.SetCardinality(state.nsel);
+	//	Slice the input into the left side
+	chunk.Slice(input, state.lhs_matched, state.lhs_match_count);
 
 	//	If we are doing a left join, come back for the NULLs
 	if (state.left_outer.Enabled()) {

@@ -13,8 +13,6 @@
 
 namespace duckdb {
 
-class MergeJoinGlobalState;
-
 //! PhysicalAsOfJoin represents a piecewise merge loop join between
 //! two tables
 class PhysicalAsOfJoin : public PhysicalComparisonJoin {
@@ -26,6 +24,7 @@ public:
 	                 vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality);
 
 	vector<LogicalType> join_key_types;
+	vector<column_t> null_sensitive;
 
 	// Equalities
 	vector<unique_ptr<Expression>> lhs_partitions;
