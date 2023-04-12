@@ -450,19 +450,9 @@ struct TruncOperator {
 	// Integer truncation is a NOP
 	template <class TA, class TR>
 	static inline TR Operation(TA left) {
-		return left;
+		return std::trunc(left);
 	}
 };
-
-template <>
-inline float TruncOperator::Operation(float left) {
-	return std::trunc(left);
-}
-
-template <>
-inline double TruncOperator::Operation(double left) {
-	return std::trunc(left);
-}
 
 struct TruncDecimalOperator {
 	template <class T, class POWERS_OF_TEN_CLASS>
@@ -492,31 +482,15 @@ void TruncFun::RegisterFunction(BuiltinFunctions &set) {
 			bind_func = BindGenericRoundFunctionDecimal<TruncDecimalOperator>;
 			break;
 		case LogicalTypeId::TINYINT:
-			func = ScalarFunction::UnaryFunction<int8_t, int8_t, TruncOperator>;
-			break;
 		case LogicalTypeId::SMALLINT:
-			func = ScalarFunction::UnaryFunction<int16_t, int16_t, TruncOperator>;
-			break;
 		case LogicalTypeId::INTEGER:
-			func = ScalarFunction::UnaryFunction<int32_t, int32_t, TruncOperator>;
-			break;
 		case LogicalTypeId::BIGINT:
-			func = ScalarFunction::UnaryFunction<int64_t, int64_t, TruncOperator>;
-			break;
 		case LogicalTypeId::HUGEINT:
-			func = ScalarFunction::UnaryFunction<hugeint_t, hugeint_t, TruncOperator>;
-			break;
 		case LogicalTypeId::UTINYINT:
-			func = ScalarFunction::UnaryFunction<uint8_t, uint8_t, TruncOperator>;
-			break;
 		case LogicalTypeId::USMALLINT:
-			func = ScalarFunction::UnaryFunction<uint16_t, uint16_t, TruncOperator>;
-			break;
 		case LogicalTypeId::UINTEGER:
-			func = ScalarFunction::UnaryFunction<uint32_t, uint32_t, TruncOperator>;
-			break;
 		case LogicalTypeId::UBIGINT:
-			func = ScalarFunction::UnaryFunction<uint64_t, uint64_t, TruncOperator>;
+			func = ScalarFunction::NopFunction;
 			break;
 		default:
 			throw InternalException("Unimplemented numeric type for function \"trunc\"");

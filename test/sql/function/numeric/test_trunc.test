@@ -83,3 +83,13 @@ select trunc(c::${unsigned}) from truncme
 5
 
 endloop
+
+# Test specials
+foreach special DOUBLE FLOAT
+
+query III
+select trunc('NAN'::${special}), trunc('infinity'::${special}), trunc('-infinity'::${special});
+----
+NAN	infinity	-infinity
+
+endloop
