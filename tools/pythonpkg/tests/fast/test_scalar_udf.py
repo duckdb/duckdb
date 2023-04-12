@@ -1,4 +1,3 @@
-from sqlalchemy import VARCHAR
 import duckdb
 import os
 import pandas as pd

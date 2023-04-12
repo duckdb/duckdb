@@ -167,7 +167,7 @@ static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, const string 
 	return py::cast<duckdb::pyarrow::Table>(from_batches_func(single_batch, schema_obj));
 }
 
-static void ConvertPyArrowToDataChunk(const py::handle &table, Vector &out, ClientContext &context) {
+static void ConvertPyArrowToDataChunk(const py::object &table, Vector &out, ClientContext &context) {
 	// TODO: make this not allocate anything
 	DataChunk result;
 	result.Initialize(context, {out.GetType()}, STANDARD_VECTOR_SIZE);
@@ -216,7 +216,7 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function) {
 		py::gil_scoped_acquire gil;
 
 		// owning references
-		py::handle python_object;
+		py::object python_object;
 		// Convert the input datachunk to pyarrow
 		string timezone_config = "UTC";
 		if (state.HasContext()) {
@@ -234,10 +234,9 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function) {
 			auto exception = py::error_already_set();
 			throw InvalidInputException("Python exception occurred while executing the UDF: %s", exception.what());
 		}
-		python_object = py::handle(ret);
+		python_object = py::reinterpret_steal<py::object>(ret);
 
 		// Convert the pyarrow result back to a DuckDB datachunk
-		// TODO: implement this conversion
 		ConvertPyArrowToDataChunk(python_object, result, state.GetContext());
 
 		if (input.AllConstant()) {
