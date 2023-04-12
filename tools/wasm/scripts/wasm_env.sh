@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" &> /dev/null
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)" &> /dev/null
 
 EMSCRIPTEN_VERSION="2.0.14"
 EMSDK_VERSION="2.0.14"

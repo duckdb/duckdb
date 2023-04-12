@@ -19,17 +19,31 @@
 namespace duckdb {
 
 struct ICUStrptime : public ICUDateFunc {
+	using ParseResult = StrpTimeFormat::ParseResult;
+
 	struct ICUStrptimeBindData : public BindData {
-		ICUStrptimeBindData(ClientContext &context, const StrpTimeFormat &format) : BindData(context), format(format) {
+		ICUStrptimeBindData(ClientContext &context, const StrpTimeFormat &format)
+		    : BindData(context), formats(1, format) {
 		}
-		ICUStrptimeBindData(const ICUStrptimeBindData &other) : BindData(other), format(other.format) {
+		ICUStrptimeBindData(ClientContext &context, vector<StrpTimeFormat> formats_p)
+		    : BindData(context), formats(std::move(formats_p)) {
+		}
+		ICUStrptimeBindData(const ICUStrptimeBindData &other) : BindData(other), formats(other.formats) {
 		}
 
-		StrpTimeFormat format;
+		vector<StrpTimeFormat> formats;
 
 		bool Equals(const FunctionData &other_p) const override {
 			auto &other = other_p.Cast<ICUStrptimeBindData>();
-			return format.format_specifier == other.format.format_specifier;
+			if (formats.size() != other.formats.size()) {
+				return false;
+			}
+			for (size_t i = 0; i < formats.size(); ++i) {
+				if (formats[i].format_specifier != other.formats[i].format_specifier) {
+					return false;
+				}
+			}
+			return true;
 		}
 		duckdb::unique_ptr<FunctionData> Copy() const override {
 			return make_uniq<ICUStrptimeBindData>(*this);
@@ -53,13 +67,7 @@ struct ICUStrptime : public ICUDateFunc {
 		}
 	}
 
-	static timestamp_t Operation(icu::Calendar *calendar, string_t input, StrpTimeFormat &format) {
-		StrpTimeFormat::ParseResult parsed;
-		format.Parse(input, parsed);
-		if (!parsed.error_message.empty()) {
-			throw InvalidInputException(parsed.FormatError(input, format.format_specifier));
-		}
-
+	static uint64_t ToMicros(icu::Calendar *calendar, const ParseResult &parsed, const StrpTimeFormat &format) {
 		// Set TZ first, if any.
 		// Note that empty TZ names are not allowed,
 		// but unknown names will map to GMT.
@@ -83,18 +91,19 @@ struct ICUStrptime : public ICUDateFunc {
 			calendar->set(UCAL_ZONE_OFFSET, parsed.data[7] * Interval::MSECS_PER_SEC * Interval::SECS_PER_MINUTE);
 		}
 
-		return GetTime(calendar, micros);
+		return micros;
 	}
 
-	static void ICUStrptimeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	static void Parse(DataChunk &args, ExpressionState &state, Vector &result) {
 		D_ASSERT(args.ColumnCount() == 2);
 		auto &str_arg = args.data[0];
 		auto &fmt_arg = args.data[1];
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.bind_info->Cast<ICUStrptimeBindData>();
-		CalendarPtr calendar(info.calendar->clone());
-		auto &format = info.format;
+		CalendarPtr calendar_ptr(info.calendar->clone());
+		auto calendar = calendar_ptr.get();
+		auto &formats = info.formats;
 
 		D_ASSERT(fmt_arg.GetVectorType() == VectorType::CONSTANT_VECTOR);
 
@@ -102,12 +111,55 @@ struct ICUStrptime : public ICUDateFunc {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(result, true);
 		} else {
-			UnaryExecutor::Execute<string_t, timestamp_t>(
-			    str_arg, result, args.size(), [&](string_t input) { return Operation(calendar.get(), input, format); });
+			UnaryExecutor::Execute<string_t, timestamp_t>(str_arg, result, args.size(), [&](string_t input) {
+				ParseResult parsed;
+				for (auto &format : info.formats) {
+					if (format.Parse(input, parsed)) {
+						return GetTime(calendar, ToMicros(calendar, parsed, format));
+					}
+				}
+
+				throw InvalidInputException(parsed.FormatError(input, info.formats[0].format_specifier));
+			});
 		}
 	}
 
-	static bind_scalar_function_t bind;
+	static void TryParse(DataChunk &args, ExpressionState &state, Vector &result) {
+		D_ASSERT(args.ColumnCount() == 2);
+		auto &str_arg = args.data[0];
+		auto &fmt_arg = args.data[1];
+
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+		auto &info = func_expr.bind_info->Cast<ICUStrptimeBindData>();
+		CalendarPtr calendar_ptr(info.calendar->clone());
+		auto calendar = calendar_ptr.get();
+		auto &formats = info.formats;
+
+		D_ASSERT(fmt_arg.GetVectorType() == VectorType::CONSTANT_VECTOR);
+
+		if (ConstantVector::IsNull(fmt_arg)) {
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(result, true);
+		} else {
+			UnaryExecutor::ExecuteWithNulls<string_t, timestamp_t>(
+			    str_arg, result, args.size(), [&](string_t input, ValidityMask &mask, idx_t idx) {
+				    ParseResult parsed;
+				    for (auto &format : info.formats) {
+					    if (format.Parse(input, parsed)) {
+						    timestamp_t result;
+						    if (TryGetTime(calendar, ToMicros(calendar, parsed, format), result)) {
+							    return result;
+						    }
+					    }
+				    }
+
+				    mask.SetInvalid(idx);
+				    return timestamp_t();
+			    });
+		}
+	}
+
+	static bind_scalar_function_t bind_strptime;
 
 	static duckdb::unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, ScalarFunction &bound_function,
 	                                                             vector<duckdb::unique_ptr<Expression>> &arguments) {
@@ -117,10 +169,14 @@ struct ICUStrptime : public ICUDateFunc {
 		if (!arguments[1]->IsFoldable()) {
 			throw InvalidInputException("strptime format must be a constant");
 		}
-		Value options_str = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
+		scalar_function_t function = (bound_function.name == "try_strptime") ? TryParse : Parse;
+		Value format_value = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
+		string format_string;
 		StrpTimeFormat format;
-		if (!options_str.IsNull()) {
-			auto format_string = options_str.ToString();
+		if (format_value.IsNull()) {
+			;
+		} else if (format_value.type().id() == LogicalTypeId::VARCHAR) {
+			format_string = format_value.ToString();
 			format.format_specifier = format_string;
 			string error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
 			if (!error.empty()) {
@@ -129,24 +185,46 @@ struct ICUStrptime : public ICUDateFunc {
 
 			// If we have a time zone, we should use ICU for parsing and return a TSTZ instead.
 			if (format.HasFormatSpecifier(StrTimeSpecifier::TZ_NAME)) {
-				bound_function.function = ICUStrptimeFunction;
+				bound_function.function = function;
 				bound_function.return_type = LogicalType::TIMESTAMP_TZ;
 				return make_uniq<ICUStrptimeBindData>(context, format);
+			}
+		} else if (format_value.type() == LogicalType::LIST(LogicalType::VARCHAR)) {
+			const auto &children = ListValue::GetChildren(format_value);
+			if (children.empty()) {
+				throw InvalidInputException("strptime format list must not be empty");
+			}
+			vector<StrpTimeFormat> formats;
+			bool has_tz = true;
+			for (const auto &child : children) {
+				format_string = child.ToString();
+				format.format_specifier = format_string;
+				string error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
+				if (!error.empty()) {
+					throw InvalidInputException("Failed to parse format specifier %s: %s", format_string, error);
+				}
+				// If any format has UTC offsets, then we have to produce TSTZ
+				has_tz = has_tz || format.HasFormatSpecifier(StrTimeSpecifier::TZ_NAME);
+				formats.emplace_back(format);
+			}
+			if (has_tz) {
+				bound_function.function = function;
+				bound_function.return_type = LogicalType::TIMESTAMP_TZ;
+				return make_uniq<ICUStrptimeBindData>(context, formats);
 			}
 		}
 
 		// Fall back to faster, non-TZ parsing
-		bound_function.bind = bind;
-		return bind(context, bound_function, arguments);
+		bound_function.bind = bind_strptime;
+		return bind_strptime(context, bound_function, arguments);
 	}
 
-	static void AddBinaryTimestampFunction(const string &name, ClientContext &context) {
+	static void TailPatch(const string &name, ClientContext &context, const vector<LogicalType> &types) {
 		// Find the old function
 		auto &catalog = Catalog::GetSystemCatalog(context);
 		auto entry = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, name);
 		D_ASSERT(entry && entry->type == CatalogType::SCALAR_FUNCTION_ENTRY);
 		auto &func = entry->Cast<ScalarFunctionCatalogEntry>();
-		vector<LogicalType> types {LogicalType::VARCHAR, LogicalType::VARCHAR};
 		string error;
 
 		FunctionBinder function_binder(context);
@@ -157,8 +235,16 @@ struct ICUStrptime : public ICUDateFunc {
 
 		// Tail patch the old binder
 		auto &bound_function = func.functions.GetFunctionReferenceByOffset(best_function);
-		bind = bound_function.bind;
+		bind_strptime = bound_function.bind;
 		bound_function.bind = StrpTimeBindFunction;
+	}
+
+	static void AddBinaryTimestampFunction(const string &name, ClientContext &context) {
+		vector<LogicalType> types {LogicalType::VARCHAR, LogicalType::VARCHAR};
+		TailPatch(name, context, types);
+
+		types[1] = LogicalType::LIST(LogicalType::VARCHAR);
+		TailPatch(name, context, types);
 	}
 
 	static bool CastFromVarchar(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
@@ -233,7 +319,7 @@ struct ICUStrptime : public ICUDateFunc {
 	}
 };
 
-bind_scalar_function_t ICUStrptime::bind = nullptr;
+bind_scalar_function_t ICUStrptime::bind_strptime = nullptr;
 
 struct ICUStrftime : public ICUDateFunc {
 	static void ParseFormatSpecifier(string_t &format_str, StrfTimeFormat &format) {
@@ -284,7 +370,7 @@ struct ICUStrftime : public ICUDateFunc {
 		auto &fmt_arg = args.data[1];
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = (BindData &)*func_expr.bind_info;
+		auto &info = func_expr.bind_info->Cast<BindData>();
 		CalendarPtr calendar(info.calendar->clone());
 		const auto tz_name = info.tz_setting.c_str();
 
@@ -420,6 +506,8 @@ struct ICUStrftime : public ICUDateFunc {
 
 void RegisterICUStrptimeFunctions(ClientContext &context) {
 	ICUStrptime::AddBinaryTimestampFunction("strptime", context);
+	ICUStrptime::AddBinaryTimestampFunction("try_strptime", context);
+
 	ICUStrftime::AddBinaryTimestampFunction("strftime", context);
 
 	// Add string casts
