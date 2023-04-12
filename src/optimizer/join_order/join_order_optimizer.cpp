@@ -96,9 +96,9 @@ static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, 
 bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<LogicalOperator *> &filter_operators,
                                               LogicalOperator *parent) {
 	LogicalOperator *op = &input_op;
-	while (op->children.size() == 1 && (op->type != LogicalOperatorType::LOGICAL_PROJECTION &&
-	                                    op->type != LogicalOperatorType::LOGICAL_EXPRESSION_GET &&
-	                                    op->type != LogicalOperatorType::LOGICAL_GET)) {
+	while (op->children.size() == 1 &&
+	       (op->type != LogicalOperatorType::LOGICAL_PROJECTION &&
+	        op->type != LogicalOperatorType::LOGICAL_EXPRESSION_GET && op->type != LogicalOperatorType::LOGICAL_GET)) {
 		if (op->type == LogicalOperatorType::LOGICAL_FILTER) {
 			// extract join conditions from filter
 			filter_operators.push_back(op);

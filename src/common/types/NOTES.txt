@@ -1,0 +1,180 @@
+There are a few combinations that need to be considered.
+
+1. A duckdb string function is applied to a duckdb string.
+- This requires creating a table in duckdb and inserting strings. Unlikely for now
+
+2. An R string function is applied to a duckdb string.
+- Same as above
+
+3. A duckdb string function is applied to an R string.
+
+duck <- function() {
+  paste0("mr.", "duck")
+}
+
+rel_df <- duckdb:::rel_from_df(con, data.frame(a=c(toupper(duck()), "world")), experimental)
+tmp <- duckdb:::rel_project(rel_df, list(duckdb:::expr_function("upper", list(duckdb:::expr_reference("a")))))
+
+Here "mr.duck" is defined in R land and put in the R string pool. The function "upper"
+is a duckdb function being applied to the string. I believe the function "RApiTypes::SexpToValue"
+needs to deal with this. This could be a big refactor
+
+4. An R string function is applied to an R string
+- This should be fine.
+
+ duckdb string function is being applied to an R string living in a dataframe.
+
+
+
+ We execute a comparison between an R string and a
+
+
+
+ If I have a dataframe with strings that live in R land, then
+
+ - applying a duckdb string function and projecting the result leads to no errors.
+
+ - If both strings are in the dataframe it's fine
+
+
+ - If strings in a dataframe have to be compared to a constant, then we have an issue.
+
+
+- You can project duckdb string functions on R strings
+example(s)
+duck <- function() {
+  paste0("mr.", "duck")
+}
+
+const_mrduck <- duckdb:::expr_constant(duck(), TRUE)
+const_upper_mrduck <- duckdb:::expr_constant(toupper(duck()), TRUE)
+
+rel_a <- duckdb:::rel_from_df(con, data.frame(a=c(duck())))
+
+upper_const_mrduck <- duckdb:::expr_function("upper", list(const_mrduck))
+proj_upper_mrduck <- duckdb:::rel_project(rel_a, list(duckdb:::expr_reference("a"), upper_mr_duck, const_upper_duckdb))
+strs_df <- duckdb:::rel_to_altrep(proj_upper_mrduck)
+strs_df
+filter_rel <- duckdb:::rel_filter(proj_upper_mrduck, list(duckdb:::expr_function("eq", list(
+    upper_mr_duck,
+    const_upper_duckdb
+))))
+
+filter_df <- duckdb:::rel_to_altrep(filter_rel)
+
+
+------------------------------------------------------------------------------------------------------------------------------------------------
+Ok, so it seems that in double checking if these strings are garbage collected or not, Kirill has uncovered another bug.
+
+Within the duckdb engine, we cannot perform operations on R_Strings with experimental on.
+
+We can examine the following code to see.
+```R
+pkgload::load_all()
+con <- dbConnect(duckdb::duckdb())
+dbExecute(con, "CREATE OR REPLACE MACRO neq(a, b) AS a != b")
+dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
+
+duck <- function() {
+  paste0("mr.", "duck")
+}
+
+experimental <- FALSE
+const_mrduck <- duckdb:::expr_constant(duck(), experimental)
+const_MRDUCK <- duckdb:::expr_constant(toupper(duck()), experimental)
+
+rel_a <- duckdb:::rel_from_df(con, data.frame(a=c(duck(), toupper(duck()))))
+
+upper_const_mrduck <- duckdb:::expr_function("upper", list(const_mrduck))
+upper_ref_a <- duckdb:::expr_function("upper", list(expr_reference("a")))
+proj_upper_mrduck <- duckdb:::rel_project(rel_a, list(
+					duckdb:::expr_reference("a"),
+					upper_ref_a,
+					upper_const_mrduck,
+					const_MRDUCK))
+strs_df <- duckdb:::rel_to_altrep(proj_upper_mrduck)
+strs_df
+```
+
+The output of strs_df has 4 columns.
+ a | upper(a) | upper(0x130c73aa0) | 0x130e04700 |
+ mr.duck | MR.DUCK | MR.DUCK | MR.DUCK |
+
+It seems like we can project R strings in dataframes or just as constants just fine.
+
+If we try to apply functions to them, and compare them internally, then things go wrong
+
+```R
+filter_rel <- duckdb:::rel_filter(proj_upper_mrduck, list(duckdb:::expr_function("eq", list(
+    upper_const_mrduck,
+    const_MRDUCK
+))))
+
+filter_df <- duckdb:::rel_to_altrep(filter_rel)
+filter_df
+Conversion Error: Unimplemented type for cast (VARCHAR -> r_string)
+```
+
+The above code checks equality between the constants
+
+# here we do have an error
+# upper_ref_a = expr_function("upper", list(expr_reference("a")))
+```R
+filter_rel <- duckdb:::rel_filter(proj_upper_mrduck, list(duckdb:::expr_function("eq", list(
+    upper_ref_a,
+    const_MRDUCK
+))))
+
+filter_df <- duckdb:::rel_to_altrep(filter_rel)
+filter_df
+Conversion Error: Unimplemented type for cast (VARCHAR -> r_string)
+```
+
+# also interesting, Here we have no reference, one function,
+```R
+filter_rel <- duckdb:::rel_filter(proj_upper_mrduck, list(duckdb:::expr_function("eq", list(
+    expr_function("upper", list(const_mrduck)),
+    const_MRDUCK
+))))
+
+filter_df <- duckdb:::rel_to_altrep(filter_rel)
+filter_df
+# Conversion Error: Unimplemented type for cast (VARCHAR -> r_string)
+```
+
+
+# this one is interesting, upper_const_mrduck = UPPER("mr.duck") where Upper is the duckdb function.
+# Here we have no error
+```R
+filter_rel <- duckdb:::rel_filter(proj_upper_mrduck, list(duckdb:::expr_function("eq", list(
+    expr_reference("a"),
+    upper_const_mrduck
+))))
+
+filter_df <- duckdb:::rel_to_altrep(filter_rel)
+filter_df
+# No error
+```
+
+# this is equivalent to above
+```R
+filter_rel <- duckdb:::rel_filter(proj_upper_mrduck, list(duckdb:::expr_function("eq", list(
+    expr_reference("a"),
+    duckdb:::expr_function("upper", list(const_mrduck))
+))))
+
+filter_df <- duckdb:::rel_to_altrep(filter_rel)
+filter_df
+# No error
+```
+
+```R
+filter_rel <- duckdb:::rel_filter(proj_upper_mrduck, list(duckdb:::expr_function("neq", list(
+    const_mrduck,
+    const_MRDUCK
+))))
+
+filter_df <- duckdb:::rel_to_altrep(filter_rel)
+filter_df
+# no error, df outputs normally
+```
