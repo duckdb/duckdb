@@ -48,9 +48,13 @@ jobs:
         key: ${{ github.job }}
         save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
+    - name: Install ninja
+      shell: bash
+      run: brew install ninja
+
     - name: Build
       shell: bash
-      run: make debug
+      run: GEN=ninja make debug
 
     - name: Test
       shell: bash
