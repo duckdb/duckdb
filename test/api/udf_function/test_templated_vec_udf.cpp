@@ -1,4 +1,4 @@
-#include "duckdb/common/catch_stacktrace.hpp"
+#include "catch.hpp"
 #include "test_helpers.hpp"
 #include "udf_functions_to_test.hpp"
 

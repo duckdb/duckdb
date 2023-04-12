@@ -1,5 +1,5 @@
 #include "sqllogic_parser.hpp"
-#include "duckdb/common/catch_stacktrace.hpp"
+#include "catch.hpp"
 
 #include <fstream>
 

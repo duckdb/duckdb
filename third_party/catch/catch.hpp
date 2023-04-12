@@ -12,6 +12,11 @@
 #define TWOBLUECUBES_SINGLE_INCLUDE_CATCH_HPP_INCLUDED
 // start catch.hpp
 
+// optional support for printing stacktraces on a crash -- using the backtrace support in DuckDB 
+#ifdef DUCKDB_DEBUG_STACKTRACE
+#include "duckdb/common/exception.hpp"
+#define CATCH_STACKTRACE(X) duckdb::Exception::FormatStackTrace(X).c_str()
+#endif
 
 #define CATCH_VERSION_MAJOR 2
 #define CATCH_VERSION_MINOR 13

@@ -1,5 +1,5 @@
 #define CATCH_CONFIG_MAIN
-#include "duckdb/common/catch_stacktrace.hpp"
+#include "catch.hpp"
 
 #include <stdio.h>
 #include <stdlib.h>

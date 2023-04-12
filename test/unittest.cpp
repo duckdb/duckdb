@@ -1,5 +1,5 @@
 #define CATCH_CONFIG_RUNNER
-#include "duckdb/common/catch_stacktrace.hpp"
+#include "catch.hpp"
 
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"

@@ -1,4 +1,4 @@
-#include "duckdb/common/catch_stacktrace.hpp"
+#include "catch.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "test_helpers.hpp"

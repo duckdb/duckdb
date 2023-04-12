@@ -1,10 +1,10 @@
 #pragma once
 
+#include "catch.hpp"
 #include "duckdb.h"
 #include "test_helpers.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/catch_stacktrace.hpp"
 
 namespace duckdb {
 

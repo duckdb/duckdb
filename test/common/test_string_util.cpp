@@ -2,7 +2,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/to_string.hpp"
 
-#include "duckdb/common/catch_stacktrace.hpp"
+#include "catch.hpp"
 
 #include <vector>
 #include <string>
