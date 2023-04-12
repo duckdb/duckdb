@@ -45,7 +45,7 @@ struct ConnectTask : public Task {
 		auto &connection = Get<Connection>();
 		Napi::Env env = connection.Env();
 
-		std::vector<napi_value> args;
+		vector<napi_value> args;
 		if (!success) {
 			args.push_back(Utils::CreateError(env, "Invalid database object"));
 		} else {
@@ -96,7 +96,7 @@ Connection::~Connection() {
 }
 
 Napi::Value Connection::Prepare(const Napi::CallbackInfo &info) {
-	std::vector<napi_value> args;
+	vector<napi_value> args;
 	// push the connection as first argument
 	args.push_back(Value());
 	// we need to pass all the arguments onward to statement
@@ -270,8 +270,8 @@ struct RegisterUdfTask : public Task {
 		auto &cast = (duckdb::CastExpression &)*expr[0];
 		auto return_type = cast.cast_type;
 
-		connection.connection->CreateVectorizedFunction(name, std::vector<duckdb::LogicalType> {}, return_type,
-		                                                udf_function, duckdb::LogicalType::ANY);
+		connection.connection->CreateVectorizedFunction(name, vector<duckdb::LogicalType> {}, return_type, udf_function,
+		                                                duckdb::LogicalType::ANY);
 	}
 	std::string name;
 	std::string return_type_name;

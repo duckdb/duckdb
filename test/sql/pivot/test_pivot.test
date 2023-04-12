@@ -14,7 +14,7 @@ CREATE TABLE Product(DaysToManufacture int, StandardCost int);
 statement ok
 INSERT INTO Product VALUES (0, 5.0885), (1, 223.88), (2, 359.1082), (4, 949.4105);
 
-query II
+query II rowsort
 SELECT DaysToManufacture, AVG(StandardCost) AS AverageCost
 FROM Product
 GROUP BY DaysToManufacture;
@@ -226,8 +226,6 @@ FROM monthly_sales
 PIVOT(COS(amount) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'APR'))
   AS p (EMP_ID_renamed, JAN, FEB, MAR, APR)
 ORDER BY EMP_ID_renamed;
-----
-Scalar Function
 
 # subqueries not allowed
 statement error
@@ -278,8 +276,7 @@ SELECT *
 ----
 must contain columns or lists of columns
 
-# type mismatch
-statement error
+query I
 FROM
 (
   SELECT DaysToManufacture, StandardCost
@@ -291,4 +288,4 @@ PIVOT
   FOR DaysToManufacture IN ('zz')
 ) AS PivotTable;
 ----
-Could not convert string
+NULL

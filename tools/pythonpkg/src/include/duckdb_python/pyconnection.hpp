@@ -202,6 +202,7 @@ public:
 	static bool IsPandasDataframe(const py::object &object);
 	static bool IsPolarsDataframe(const py::object &object);
 	static bool IsAcceptedArrowObject(const py::object &object);
+	static NumpyObjectType IsAcceptedNumpyObject(const py::object &object);
 
 	static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_query);
 

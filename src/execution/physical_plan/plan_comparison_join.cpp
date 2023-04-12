@@ -168,7 +168,7 @@ Index *CheckIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Physica
 	if (plan.type != PhysicalOperatorType::TABLE_SCAN) {
 		return nullptr;
 	}
-	auto &tbl_scan = (PhysicalTableScan &)plan;
+	auto &tbl_scan = plan.Cast<PhysicalTableScan>();
 	auto tbl = dynamic_cast<TableScanBindData *>(tbl_scan.bind_data.get());
 	Index *result = nullptr;
 	if (CanPlanIndexJoin(context, tbl, tbl_scan)) {
@@ -230,7 +230,7 @@ static bool PlanIndexJoin(ClientContext &context, LogicalComparisonJoin &op, uni
 
 static void RewriteJoinCondition(Expression &expr, idx_t offset) {
 	if (expr.type == ExpressionType::BOUND_REF) {
-		auto &ref = (BoundReferenceExpression &)expr;
+		auto &ref = expr.Cast<BoundReferenceExpression>();
 		ref.index += offset;
 	}
 	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { RewriteJoinCondition(child, offset); });

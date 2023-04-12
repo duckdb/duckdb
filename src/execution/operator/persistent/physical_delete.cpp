@@ -32,8 +32,8 @@ public:
 
 SinkResultType PhysicalDelete::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
                                     DataChunk &input) const {
-	auto &gstate = (DeleteGlobalState &)state;
-	auto &ustate = (DeleteLocalState &)lstate;
+	auto &gstate = state.Cast<DeleteGlobalState>();
+	auto &ustate = lstate.Cast<DeleteLocalState>();
 
 	// get rows and
 	auto &transaction = DuckTransaction::Get(context.client, table.db);
@@ -72,7 +72,7 @@ public:
 	explicit DeleteSourceState(const PhysicalDelete &op) : finished(false) {
 		if (op.return_chunk) {
 			D_ASSERT(op.sink_state);
-			auto &g = (DeleteGlobalState &)*op.sink_state;
+			auto &g = op.sink_state->Cast<DeleteGlobalState>();
 			g.return_collection.InitializeScan(scan_state);
 		}
 	}
@@ -87,8 +87,8 @@ unique_ptr<GlobalSourceState> PhysicalDelete::GetGlobalSourceState(ClientContext
 
 void PhysicalDelete::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                              LocalSourceState &lstate) const {
-	auto &state = (DeleteSourceState &)gstate;
-	auto &g = (DeleteGlobalState &)*sink_state;
+	auto &state = gstate.Cast<DeleteSourceState>();
+	auto &g = sink_state->Cast<DeleteGlobalState>();
 	if (state.finished) {
 		return;
 	}

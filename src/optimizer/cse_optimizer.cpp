@@ -76,7 +76,7 @@ void CommonSubExpressionOptimizer::CountExpressions(Expression &expr, CSEReplace
 void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> *expr_ptr, CSEReplacementState &state) {
 	Expression &expr = **expr_ptr;
 	if (expr.expression_class == ExpressionClass::BOUND_COLUMN_REF) {
-		auto &bound_column_ref = (BoundColumnRefExpression &)expr;
+		auto &bound_column_ref = expr.Cast<BoundColumnRefExpression>();
 		// bound column ref, check if this one has already been recorded in the expression list
 		auto column_entry = state.column_map.find(bound_column_ref.binding);
 		if (column_entry == state.column_map.end()) {

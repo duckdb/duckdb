@@ -173,7 +173,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	auto insert_statement = Bind(insert);
 	D_ASSERT(insert_statement.plan->type == LogicalOperatorType::LOGICAL_INSERT);
 
-	auto &bound_insert = (LogicalInsert &)*insert_statement.plan;
+	auto &bound_insert = insert_statement.plan->Cast<LogicalInsert>();
 
 	// lookup the format in the catalog
 	auto &catalog = Catalog::GetSystemCatalog(context);

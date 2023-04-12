@@ -22,7 +22,7 @@ struct MultiFileReaderOptions {
 
 	DUCKDB_API void Serialize(Serializer &serializer) const;
 	DUCKDB_API static MultiFileReaderOptions Deserialize(Deserializer &source);
-	DUCKDB_API void AddBatchInfo(BindInfo &bind_info);
+	DUCKDB_API void AddBatchInfo(BindInfo &bind_info) const;
 };
 
 } // namespace duckdb

@@ -83,7 +83,7 @@ struct VariableReturnBindData : public FunctionData {
 
 	static void Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const ScalarFunction &function) {
 		D_ASSERT(bind_data_p);
-		auto &info = (VariableReturnBindData &)*bind_data_p;
+		auto &info = bind_data_p->Cast<VariableReturnBindData>();
 		writer.WriteSerializable(info.stype);
 	}
 

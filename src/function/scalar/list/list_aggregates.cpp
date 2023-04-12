@@ -50,11 +50,12 @@ struct StateVector {
 	    : count(count_p), aggr_expr(std::move(aggr_expr_p)), state_vector(Vector(LogicalType::POINTER, count_p)) {
 	}
 
-	~StateVector() {
+	~StateVector() { // NOLINT
 		// destroy objects within the aggregate states
-		auto &aggr = (BoundAggregateExpression &)*aggr_expr;
+		auto &aggr = aggr_expr->Cast<BoundAggregateExpression>();
 		if (aggr.function.destructor) {
-			aggr.function.destructor(state_vector, count);
+			AggregateInputData aggr_input_data(aggr.bind_info.get(), Allocator::DefaultAllocator());
+			aggr.function.destructor(state_vector, aggr_input_data, count);
 		}
 	}
 
@@ -157,9 +158,9 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 	}
 
 	// get the aggregate function
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	auto &info = (ListAggregatesBindData &)*func_expr.bind_info;
-	auto &aggr = (BoundAggregateExpression &)*info.aggr_expr;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &info = func_expr.bind_info->Cast<ListAggregatesBindData>();
+	auto &aggr = info.aggr_expr->Cast<BoundAggregateExpression>();
 	AggregateInputData aggr_input_data(aggr.bind_info.get(), Allocator::DefaultAllocator());
 
 	D_ASSERT(aggr.function.update);

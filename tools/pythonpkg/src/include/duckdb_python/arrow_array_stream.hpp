@@ -17,8 +17,8 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb_python/pybind_wrapper.hpp"
 
-#include <string>
-#include <vector>
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 

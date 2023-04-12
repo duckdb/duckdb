@@ -26,7 +26,7 @@ bool BoundCaseExpression::Equals(const BaseExpression *other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto &other = (BoundCaseExpression &)*other_p;
+	auto &other = other_p->Cast<BoundCaseExpression>();
 	if (case_checks.size() != other.case_checks.size()) {
 		return false;
 	}
