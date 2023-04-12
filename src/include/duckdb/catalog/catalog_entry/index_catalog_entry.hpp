@@ -33,12 +33,12 @@ public:
 	vector<unique_ptr<ParsedExpression>> parsed_expressions;
 
 public:
-	string ToSQL() override;
-	void Serialize(Serializer &serializer);
+	string ToSQL() const override;
+	void Serialize(Serializer &serializer) const;
 	static unique_ptr<CreateIndexInfo> Deserialize(Deserializer &source, ClientContext &context);
 
-	virtual string GetSchemaName() = 0;
-	virtual string GetTableName() = 0;
+	virtual string GetSchemaName() const = 0;
+	virtual string GetTableName() const = 0;
 };
 
 } // namespace duckdb

@@ -16,7 +16,7 @@ static void GatherAliases(BoundQueryNode &node, case_insensitive_map_t<idx_t> &a
                           expression_map_t<idx_t> &expressions, const vector<idx_t> &reorder_idx) {
 	if (node.type == QueryNodeType::SET_OPERATION_NODE) {
 		// setop, recurse
-		auto &setop = (BoundSetOperationNode &)node;
+		auto &setop = node.Cast<BoundSetOperationNode>();
 
 		// create new reorder index
 		if (setop.setop_type == SetOperationType::UNION_BY_NAME) {
@@ -41,7 +41,7 @@ static void GatherAliases(BoundQueryNode &node, case_insensitive_map_t<idx_t> &a
 	} else {
 		// query node
 		D_ASSERT(node.type == QueryNodeType::SELECT_NODE);
-		auto &select = (BoundSelectNode &)node;
+		auto &select = node.Cast<BoundSelectNode>();
 		// fill the alias lists
 		for (idx_t i = 0; i < select.names.size(); i++) {
 			auto &name = select.names[i];

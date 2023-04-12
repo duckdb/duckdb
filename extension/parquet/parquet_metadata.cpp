@@ -418,7 +418,7 @@ unique_ptr<FunctionData> ParquetMetaDataBind(ClientContext &context, TableFuncti
 
 template <bool SCHEMA>
 unique_ptr<GlobalTableFunctionState> ParquetMetaDataInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto &bind_data = (ParquetMetaDataBindData &)*input.bind_data;
+	auto &bind_data = input.bind_data->Cast<ParquetMetaDataBindData>();
 	D_ASSERT(!bind_data.files.empty());
 
 	auto result = make_uniq<ParquetMetaDataOperatorData>(context, bind_data.return_types);
@@ -433,8 +433,8 @@ unique_ptr<GlobalTableFunctionState> ParquetMetaDataInit(ClientContext &context,
 
 template <bool SCHEMA>
 void ParquetMetaDataImplementation(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (ParquetMetaDataOperatorData &)*data_p.global_state;
-	auto &bind_data = (ParquetMetaDataBindData &)*data_p.bind_data;
+	auto &data = data_p.global_state->Cast<ParquetMetaDataOperatorData>();
+	auto &bind_data = data_p.bind_data->Cast<ParquetMetaDataBindData>();
 
 	while (true) {
 		if (!data.collection.Scan(data.scan_state, output)) {

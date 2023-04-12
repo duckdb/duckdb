@@ -42,14 +42,14 @@ struct QuantileState {
 	using SaveType = SAVE_TYPE;
 
 	// Regular aggregation
-	std::vector<SaveType> v;
+	vector<SaveType> v;
 
 	// Windowed Quantile indirection
-	std::vector<idx_t> w;
+	vector<idx_t> w;
 	idx_t pos;
 
 	// Windowed MAD indirection
-	std::vector<idx_t> m;
+	vector<idx_t> m;
 
 	QuantileState() : pos(0) {
 	}
@@ -440,7 +440,7 @@ struct QuantileBindData : public FunctionData {
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (QuantileBindData &)other_p;
+		auto &other = other_p.Cast<QuantileBindData>();
 		return desc == other.desc && quantiles == other.quantiles && order == other.order;
 	}
 
@@ -477,7 +477,7 @@ struct QuantileOperation {
 	}
 
 	template <class STATE>
-	static void Destroy(STATE *state) {
+	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
 		state->~STATE();
 	}
 

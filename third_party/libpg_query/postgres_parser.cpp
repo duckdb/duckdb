@@ -5,13 +5,11 @@
 #include "parser/scansup.hpp"
 #include "common/keywords.hpp"
 
-using namespace std;
-
 namespace duckdb {
 
 PostgresParser::PostgresParser() : success(false), parse_tree(nullptr), error_message(""), error_location(0) {}
 
-void PostgresParser::Parse(const string &query) {
+void PostgresParser::Parse(const std::string &query) {
 	duckdb_libpgquery::pg_parser_init();
 	duckdb_libpgquery::parse_result res;
 	pg_parser_parse(query.c_str(), &res);
@@ -20,7 +18,7 @@ void PostgresParser::Parse(const string &query) {
 	if (success) {
 		parse_tree = res.parse_tree;
 	} else {
-		error_message = string(res.error_message);
+		error_message = std::string(res.error_message);
 		error_location = res.error_location;
 	}
 }
@@ -29,7 +27,7 @@ vector<duckdb_libpgquery::PGSimplifiedToken> PostgresParser::Tokenize(const std:
 	duckdb_libpgquery::pg_parser_init();
 	auto tokens = duckdb_libpgquery::tokenize(query.c_str());
 	duckdb_libpgquery::pg_parser_cleanup();
-	return tokens;
+	return std::move(tokens);
 }
 
 PostgresParser::~PostgresParser()  {
@@ -41,7 +39,8 @@ bool PostgresParser::IsKeyword(const std::string &text) {
 }
 
 vector<duckdb_libpgquery::PGKeyword> PostgresParser::KeywordList() {
-	return duckdb_libpgquery::keyword_list();
+	// FIXME: because of this, we might need to change the libpg_query library to use duckdb::vector
+	return std::forward<vector<duckdb_libpgquery::PGKeyword> >(duckdb_libpgquery::keyword_list());
 }
 
 void PostgresParser::SetPreserveIdentifierCase(bool preserve) {

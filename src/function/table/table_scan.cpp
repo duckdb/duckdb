@@ -42,7 +42,7 @@ static storage_t GetStorageIndex(TableCatalogEntry &table, column_t column_id) {
 struct TableScanGlobalState : public GlobalTableFunctionState {
 	TableScanGlobalState(ClientContext &context, const FunctionData *bind_data_p) {
 		D_ASSERT(bind_data_p);
-		auto &bind_data = (const TableScanBindData &)*bind_data_p;
+		auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 		max_threads = bind_data.table->GetStorage().MaxThreads(context);
 	}
 
@@ -64,7 +64,7 @@ struct TableScanGlobalState : public GlobalTableFunctionState {
 static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
                                                               GlobalTableFunctionState *gstate) {
 	auto result = make_uniq<TableScanLocalState>();
-	auto &bind_data = (TableScanBindData &)*input.bind_data;
+	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
 	vector<column_t> column_ids = input.column_ids;
 	for (auto &col : column_ids) {
 		auto storage_idx = GetStorageIndex(*bind_data.table, col);
@@ -73,7 +73,7 @@ static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ExecutionContext &
 	result->scan_state.Initialize(std::move(column_ids), input.filters);
 	TableScanParallelStateNext(context.client, input.bind_data, result.get(), gstate);
 	if (input.CanRemoveFilterColumns()) {
-		auto &tsgs = (TableScanGlobalState &)*gstate;
+		auto &tsgs = gstate->Cast<TableScanGlobalState>();
 		result->all_columns.Initialize(context.client, tsgs.scanned_types);
 	}
 	return std::move(result);
@@ -82,7 +82,7 @@ static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ExecutionContext &
 unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
 
 	D_ASSERT(input.bind_data);
-	auto &bind_data = (const TableScanBindData &)*input.bind_data;
+	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
 	auto result = make_uniq<TableScanGlobalState>(context, input.bind_data);
 	bind_data.table->GetStorage().InitializeParallelScan(context, result->state);
 	if (input.CanRemoveFilterColumns()) {
@@ -101,7 +101,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 
 static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, const FunctionData *bind_data_p,
                                                       column_t column_id) {
-	auto &bind_data = (const TableScanBindData &)*bind_data_p;
+	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 	auto &local_storage = LocalStorage::Get(context, *bind_data.table->catalog);
 	if (local_storage.Find(bind_data.table->GetStoragePtr())) {
 		// we don't emit any statistics for tables that have outstanding transaction-local data
@@ -111,9 +111,9 @@ static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, co
 }
 
 static void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &bind_data = (TableScanBindData &)*data_p.bind_data;
-	auto &gstate = (TableScanGlobalState &)*data_p.global_state;
-	auto &state = (TableScanLocalState &)*data_p.local_state;
+	auto &bind_data = data_p.bind_data->Cast<TableScanBindData>();
+	auto &gstate = data_p.global_state->Cast<TableScanGlobalState>();
+	auto &state = data_p.local_state->Cast<TableScanLocalState>();
 	auto &transaction = DuckTransaction::Get(context, *bind_data.table->catalog);
 	auto &storage = bind_data.table->GetStorage();
 	do {
@@ -138,9 +138,9 @@ static void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, Da
 
 bool TableScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
                                 LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state) {
-	auto &bind_data = (const TableScanBindData &)*bind_data_p;
-	auto &parallel_state = (TableScanGlobalState &)*global_state;
-	auto &state = (TableScanLocalState &)*local_state;
+	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
+	auto &parallel_state = global_state->Cast<TableScanGlobalState>();
+	auto &state = local_state->Cast<TableScanLocalState>();
 	auto &storage = bind_data.table->GetStorage();
 
 	return storage.NextParallelScan(context, parallel_state.state, state.scan_state);
@@ -148,8 +148,8 @@ bool TableScanParallelStateNext(ClientContext &context, const FunctionData *bind
 
 double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p,
                          const GlobalTableFunctionState *gstate_p) {
-	auto &bind_data = (TableScanBindData &)*bind_data_p;
-	auto &gstate = (TableScanGlobalState &)*gstate_p;
+	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
+	auto &gstate = gstate_p->Cast<TableScanGlobalState>();
 	auto &storage = bind_data.table->GetStorage();
 	idx_t total_rows = storage.GetTotalRows();
 	if (total_rows == 0) {
@@ -169,7 +169,7 @@ double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p
 
 idx_t TableScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
                              LocalTableFunctionState *local_state, GlobalTableFunctionState *gstate_p) {
-	auto &state = (TableScanLocalState &)*local_state;
+	auto &state = local_state->Cast<TableScanLocalState>();
 	if (state.scan_state.table_state.row_group) {
 		return state.scan_state.table_state.batch_index;
 	}
@@ -184,12 +184,12 @@ BindInfo TableScanGetBindInfo(const FunctionData *bind_data) {
 }
 
 void TableScanDependency(DependencyList &entries, const FunctionData *bind_data_p) {
-	auto &bind_data = (const TableScanBindData &)*bind_data_p;
+	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 	entries.AddDependency(bind_data.table);
 }
 
 unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const FunctionData *bind_data_p) {
-	auto &bind_data = (const TableScanBindData &)*bind_data_p;
+	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 	auto &local_storage = LocalStorage::Get(context, *bind_data.table->catalog);
 	auto &storage = bind_data.table->GetStorage();
 	idx_t estimated_cardinality = storage.info->cardinality + local_storage.AddedRows(bind_data.table->GetStoragePtr());
@@ -211,7 +211,7 @@ struct IndexScanGlobalState : public GlobalTableFunctionState {
 };
 
 static unique_ptr<GlobalTableFunctionState> IndexScanInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
-	auto &bind_data = (const TableScanBindData &)*input.bind_data;
+	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
 	data_ptr_t row_id_data = nullptr;
 	if (!bind_data.result_ids.empty()) {
 		row_id_data = (data_ptr_t)&bind_data.result_ids[0];
@@ -228,8 +228,8 @@ static unique_ptr<GlobalTableFunctionState> IndexScanInitGlobal(ClientContext &c
 }
 
 static void IndexScanFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &bind_data = (const TableScanBindData &)*data_p.bind_data;
-	auto &state = (IndexScanGlobalState &)*data_p.global_state;
+	auto &bind_data = data_p.bind_data->Cast<TableScanBindData>();
+	auto &state = data_p.global_state->Cast<IndexScanGlobalState>();
 	auto &transaction = DuckTransaction::Get(context, *bind_data.table->catalog);
 	auto &local_storage = LocalStorage::Get(transaction);
 
@@ -245,7 +245,7 @@ static void IndexScanFunction(ClientContext &context, TableFunctionInput &data_p
 
 static void RewriteIndexExpression(Index &index, LogicalGet &get, Expression &expr, bool &rewrite_possible) {
 	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &bound_colref = (BoundColumnRefExpression &)expr;
+		auto &bound_colref = expr.Cast<BoundColumnRefExpression>();
 		// bound column ref: rewrite to fit in the current set of bound column ids
 		bound_colref.binding.table_index = get.table_index;
 		column_t referenced_column = index.column_ids[bound_colref.binding.column_index];
@@ -265,7 +265,7 @@ static void RewriteIndexExpression(Index &index, LogicalGet &get, Expression &ex
 
 void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
                                     vector<unique_ptr<Expression>> &filters) {
-	auto &bind_data = (TableScanBindData &)*bind_data_p;
+	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 	auto table = bind_data.table;
 	auto &storage = table->GetStorage();
 
@@ -321,13 +321,13 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 				// bindings[0] = the expression
 				// bindings[1] = the index expression
 				// bindings[2] = the constant
-				auto comparison = (BoundComparisonExpression *)bindings[0];
+				auto &comparison = bindings[0]->Cast<BoundComparisonExpression>();
 				D_ASSERT(bindings[0]->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
 				D_ASSERT(bindings[2]->type == ExpressionType::VALUE_CONSTANT);
 
-				auto constant_value = ((BoundConstantExpression *)bindings[2])->value;
-				auto comparison_type = comparison->type;
-				if (comparison->left->type == ExpressionType::VALUE_CONSTANT) {
+				auto constant_value = bindings[2]->Cast<BoundConstantExpression>().value;
+				auto comparison_type = comparison.type;
+				if (comparison.left->type == ExpressionType::VALUE_CONSTANT) {
 					// the expression is on the right side, we flip them around
 					comparison_type = FlipComparisonExpression(comparison_type);
 				}
@@ -348,7 +348,7 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 				}
 			} else if (expr->type == ExpressionType::COMPARE_BETWEEN) {
 				// BETWEEN expression
-				auto &between = (BoundBetweenExpression &)*expr;
+				auto &between = expr->Cast<BoundBetweenExpression>();
 				if (!between.input->Equals(index_expression.get())) {
 					// expression doesn't match the current index expression
 					continue;
@@ -358,10 +358,10 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 					// not a constant comparison
 					continue;
 				}
-				low_value = ((BoundConstantExpression &)*between.lower).value;
+				low_value = (between.lower->Cast<BoundConstantExpression>()).value;
 				low_comparison_type = between.lower_inclusive ? ExpressionType::COMPARE_GREATERTHANOREQUALTO
 				                                              : ExpressionType::COMPARE_GREATERTHAN;
-				high_value = ((BoundConstantExpression &)*between.upper).value;
+				high_value = (between.upper->Cast<BoundConstantExpression>()).value;
 				high_comparison_type = between.upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO
 				                                               : ExpressionType::COMPARE_LESSTHAN;
 				break;
@@ -400,13 +400,13 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 }
 
 string TableScanToString(const FunctionData *bind_data_p) {
-	auto &bind_data = (const TableScanBindData &)*bind_data_p;
+	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 	string result = bind_data.table->name;
 	return result;
 }
 
 static void TableScanSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function) {
-	auto &bind_data = (TableScanBindData &)*bind_data_p;
+	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 
 	writer.WriteString(bind_data.table->schema->name);
 	writer.WriteString(bind_data.table->name);
@@ -479,7 +479,7 @@ TableCatalogEntry *TableScanFunction::GetTableEntry(const TableFunction &functio
 	if (function.function != TableScanFunc || !bind_data_p) {
 		return nullptr;
 	}
-	auto &bind_data = (TableScanBindData &)*bind_data_p;
+	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 	return bind_data.table;
 }
 

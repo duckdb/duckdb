@@ -10,14 +10,34 @@
 
 namespace duckdb {
 
+static OrderPreservationType OrderPreservationRecursive(PhysicalOperator &op) {
+	if (op.IsSource()) {
+		return op.SourceOrder();
+	}
+	for (auto &child : op.children) {
+		auto child_preservation = OrderPreservationRecursive(*child);
+		if (child_preservation != OrderPreservationType::INSERTION_ORDER) {
+			return child_preservation;
+		}
+	}
+	return OrderPreservationType::INSERTION_ORDER;
+}
+
 bool PhysicalPlanGenerator::PreserveInsertionOrder(ClientContext &context, PhysicalOperator &plan) {
 	auto &config = DBConfig::GetConfig(context);
-	if (!config.options.preserve_insertion_order) {
-		// preserving insertion order is disabled by config
+
+	auto preservation_type = OrderPreservationRecursive(plan);
+	if (preservation_type == OrderPreservationType::FIXED_ORDER) {
+		// always need to maintain preservation order
+		return true;
+	}
+	if (preservation_type == OrderPreservationType::NO_ORDER) {
+		// never need to preserve order
 		return false;
 	}
-	if (!plan.AllOperatorsPreserveOrder()) {
-		// the plan has no order defined: no need to preserve insertion order
+	// preserve insertion order - check flags
+	if (!config.options.preserve_insertion_order) {
+		// preserving insertion order is disabled by config
 		return false;
 	}
 	return true;

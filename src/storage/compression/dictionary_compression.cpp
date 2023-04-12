@@ -150,8 +150,8 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 	// Buffers and map for current segment
 	StringHeap heap;
 	string_map_t<uint32_t> current_string_map;
-	std::vector<uint32_t> index_buffer;
-	std::vector<uint32_t> selection_buffer;
+	vector<uint32_t> index_buffer;
+	vector<uint32_t> selection_buffer;
 
 	bitpacking_width_t current_width = 0;
 	bitpacking_width_t next_width = 0;

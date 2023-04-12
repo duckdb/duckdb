@@ -847,7 +847,9 @@ bool LogicalType::HasAlias() const {
 
 void LogicalType::SetCatalog(LogicalType &type, TypeCatalogEntry *catalog_entry) {
 	auto info = type.AuxInfo();
-	D_ASSERT(info);
+	if (!info) {
+		return;
+	}
 	((ExtraTypeInfo &)*info).catalog_entry = catalog_entry;
 }
 TypeCatalogEntry *LogicalType::GetCatalog(const LogicalType &type) {

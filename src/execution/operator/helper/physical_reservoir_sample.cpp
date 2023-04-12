@@ -36,7 +36,7 @@ unique_ptr<GlobalSinkState> PhysicalReservoirSample::GetGlobalSinkState(ClientCo
 
 SinkResultType PhysicalReservoirSample::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
                                              DataChunk &input) const {
-	auto &gstate = (SampleGlobalSinkState &)state;
+	auto &gstate = state.Cast<SampleGlobalSinkState>();
 	if (!gstate.sample) {
 		return SinkResultType::FINISHED;
 	}
@@ -53,7 +53,7 @@ SinkResultType PhysicalReservoirSample::Sink(ExecutionContext &context, GlobalSi
 //===--------------------------------------------------------------------===//
 void PhysicalReservoirSample::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                                       LocalSourceState &lstate) const {
-	auto &sink = (SampleGlobalSinkState &)*this->sink_state;
+	auto &sink = this->sink_state->Cast<SampleGlobalSinkState>();
 	if (!sink.sample) {
 		return;
 	}

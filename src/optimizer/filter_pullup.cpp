@@ -34,7 +34,7 @@ unique_ptr<LogicalOperator> FilterPullup::PullupJoin(unique_ptr<LogicalOperator>
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
 	         op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN || op->type == LogicalOperatorType::LOGICAL_ANY_JOIN ||
 	         op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
-	auto &join = (LogicalJoin &)*op;
+	auto &join = op->Cast<LogicalJoin>();
 
 	switch (join.join_type) {
 	case JoinType::INNER:
@@ -51,7 +51,7 @@ unique_ptr<LogicalOperator> FilterPullup::PullupJoin(unique_ptr<LogicalOperator>
 }
 
 unique_ptr<LogicalOperator> FilterPullup::PullupInnerJoin(unique_ptr<LogicalOperator> op) {
-	D_ASSERT(((LogicalJoin &)*op).join_type == JoinType::INNER);
+	D_ASSERT(op->Cast<LogicalJoin>().join_type == JoinType::INNER);
 	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		return op;
 	}

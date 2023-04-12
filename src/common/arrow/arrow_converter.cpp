@@ -30,8 +30,8 @@ struct DuckDBArrowSchemaHolder {
 	// unused in children
 	vector<ArrowSchema *> children_ptrs;
 	//! used for nested structures
-	std::list<std::vector<ArrowSchema>> nested_children;
-	std::list<std::vector<ArrowSchema *>> nested_children_ptr;
+	std::list<vector<ArrowSchema>> nested_children;
+	std::list<vector<ArrowSchema *>> nested_children_ptr;
 	//! This holds strings created to represent decimal types
 	vector<unique_ptr<char[]>> owned_type_names;
 };

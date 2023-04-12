@@ -13,14 +13,14 @@ unique_ptr<BoundTableRef> Binder::Bind(SubqueryRef &ref, CommonTableExpressionIn
 	binder->alias = ref.alias.empty() ? "unnamed_subquery" : ref.alias;
 	auto subquery = binder->BindNode(*ref.subquery->node);
 	idx_t bind_index = subquery->GetRootIndex();
-	string alias;
+	string subquery_alias;
 	if (ref.alias.empty()) {
-		alias = "unnamed_subquery" + to_string(bind_index);
+		subquery_alias = "unnamed_subquery" + to_string(bind_index);
 	} else {
-		alias = ref.alias;
+		subquery_alias = ref.alias;
 	}
 	auto result = make_uniq<BoundSubqueryRef>(std::move(binder), std::move(subquery));
-	bind_context.AddSubquery(bind_index, alias, ref, *result->subquery);
+	bind_context.AddSubquery(bind_index, subquery_alias, ref, *result->subquery);
 	MoveCorrelatedExpressions(*result->binder);
 	return std::move(result);
 }

@@ -26,10 +26,10 @@ public:
 	}
 
 	static void QueryDefaultCatalog(DuckDB *db, bool *read_correct, int thread_id) {
-		vector<string> random_default_views {"pragma_database_list", "sqlite_master",      "sqlite_schema",
-		                                     "sqlite_temp_master",   "sqlite_temp_schema", "duckdb_constraints",
-		                                     "duckdb_columns",       "duckdb_indexes",     "duckdb_schemas",
-		                                     "duckdb_tables",        "duckdb_types",       "duckdb_views"};
+		duckdb::vector<string> random_default_views {"pragma_database_list", "sqlite_master",      "sqlite_schema",
+		                                             "sqlite_temp_master",   "sqlite_temp_schema", "duckdb_constraints",
+		                                             "duckdb_columns",       "duckdb_indexes",     "duckdb_schemas",
+		                                             "duckdb_tables",        "duckdb_types",       "duckdb_views"};
 
 		Connection con(*db);
 		*read_correct = true;
@@ -42,7 +42,7 @@ public:
 	}
 
 	static void QueryDefaultCatalogFunctions(DuckDB *db, bool *read_correct, int thread_id) {
-		vector<string> random_queries {
+		duckdb::vector<string> random_queries {
 		    "SELECT pg_collation_is_visible(0)",
 		    "SELECT pg_conversion_is_visible(0)",
 		    "SELECT pg_function_is_visible(0)",

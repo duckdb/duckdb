@@ -29,14 +29,14 @@ void ParsedExpressionIterator::EnumerateChildren(
     ParsedExpression &expr, const std::function<void(unique_ptr<ParsedExpression> &child)> &callback) {
 	switch (expr.expression_class) {
 	case ExpressionClass::BETWEEN: {
-		auto &cast_expr = (BetweenExpression &)expr;
+		auto &cast_expr = expr.Cast<BetweenExpression>();
 		callback(cast_expr.input);
 		callback(cast_expr.lower);
 		callback(cast_expr.upper);
 		break;
 	}
 	case ExpressionClass::CASE: {
-		auto &case_expr = (CaseExpression &)expr;
+		auto &case_expr = expr.Cast<CaseExpression>();
 		for (auto &check : case_expr.case_checks) {
 			callback(check.when_expr);
 			callback(check.then_expr);
@@ -45,23 +45,23 @@ void ParsedExpressionIterator::EnumerateChildren(
 		break;
 	}
 	case ExpressionClass::CAST: {
-		auto &cast_expr = (CastExpression &)expr;
+		auto &cast_expr = expr.Cast<CastExpression>();
 		callback(cast_expr.child);
 		break;
 	}
 	case ExpressionClass::COLLATE: {
-		auto &cast_expr = (CollateExpression &)expr;
+		auto &cast_expr = expr.Cast<CollateExpression>();
 		callback(cast_expr.child);
 		break;
 	}
 	case ExpressionClass::COMPARISON: {
-		auto &comp_expr = (ComparisonExpression &)expr;
+		auto &comp_expr = expr.Cast<ComparisonExpression>();
 		callback(comp_expr.left);
 		callback(comp_expr.right);
 		break;
 	}
 	case ExpressionClass::CONJUNCTION: {
-		auto &conj_expr = (ConjunctionExpression &)expr;
+		auto &conj_expr = expr.Cast<ConjunctionExpression>();
 		for (auto &child : conj_expr.children) {
 			callback(child);
 		}
@@ -69,7 +69,7 @@ void ParsedExpressionIterator::EnumerateChildren(
 	}
 
 	case ExpressionClass::FUNCTION: {
-		auto &func_expr = (FunctionExpression &)expr;
+		auto &func_expr = expr.Cast<FunctionExpression>();
 		for (auto &child : func_expr.children) {
 			callback(child);
 		}
@@ -84,34 +84,34 @@ void ParsedExpressionIterator::EnumerateChildren(
 		break;
 	}
 	case ExpressionClass::LAMBDA: {
-		auto &lambda_expr = (LambdaExpression &)expr;
+		auto &lambda_expr = expr.Cast<LambdaExpression>();
 		callback(lambda_expr.lhs);
 		callback(lambda_expr.expr);
 		break;
 	}
 	case ExpressionClass::OPERATOR: {
-		auto &op_expr = (OperatorExpression &)expr;
+		auto &op_expr = expr.Cast<OperatorExpression>();
 		for (auto &child : op_expr.children) {
 			callback(child);
 		}
 		break;
 	}
 	case ExpressionClass::STAR: {
-		auto &star_expr = (StarExpression &)expr;
+		auto &star_expr = expr.Cast<StarExpression>();
 		if (star_expr.expr) {
 			callback(star_expr.expr);
 		}
 		break;
 	}
 	case ExpressionClass::SUBQUERY: {
-		auto &subquery_expr = (SubqueryExpression &)expr;
+		auto &subquery_expr = expr.Cast<SubqueryExpression>();
 		if (subquery_expr.child) {
 			callback(subquery_expr.child);
 		}
 		break;
 	}
 	case ExpressionClass::WINDOW: {
-		auto &window_expr = (WindowExpression &)expr;
+		auto &window_expr = expr.Cast<WindowExpression>();
 		for (auto &partition : window_expr.partitions) {
 			callback(partition);
 		}
@@ -202,7 +202,7 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
     TableRef &ref, const std::function<void(unique_ptr<ParsedExpression> &child)> &callback) {
 	switch (ref.type) {
 	case TableReferenceType::EXPRESSION_LIST: {
-		auto &el_ref = (ExpressionListRef &)ref;
+		auto &el_ref = ref.Cast<ExpressionListRef>();
 		for (idx_t i = 0; i < el_ref.values.size(); i++) {
 			for (idx_t j = 0; j < el_ref.values[i].size(); j++) {
 				callback(el_ref.values[i][j]);
@@ -211,7 +211,7 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 		break;
 	}
 	case TableReferenceType::JOIN: {
-		auto &j_ref = (JoinRef &)ref;
+		auto &j_ref = ref.Cast<JoinRef>();
 		EnumerateTableRefChildren(*j_ref.left, callback);
 		EnumerateTableRefChildren(*j_ref.right, callback);
 		if (j_ref.condition) {
@@ -220,7 +220,7 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 		break;
 	}
 	case TableReferenceType::PIVOT: {
-		auto &p_ref = (PivotRef &)ref;
+		auto &p_ref = ref.Cast<PivotRef>();
 		EnumerateTableRefChildren(*p_ref.source, callback);
 		for (auto &aggr : p_ref.aggregates) {
 			callback(aggr);
@@ -228,12 +228,12 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 		break;
 	}
 	case TableReferenceType::SUBQUERY: {
-		auto &sq_ref = (SubqueryRef &)ref;
+		auto &sq_ref = ref.Cast<SubqueryRef>();
 		EnumerateQueryNodeChildren(*sq_ref.subquery->node, callback);
 		break;
 	}
 	case TableReferenceType::TABLE_FUNCTION: {
-		auto &tf_ref = (TableFunctionRef &)ref;
+		auto &tf_ref = ref.Cast<TableFunctionRef>();
 		callback(tf_ref.function);
 		break;
 	}
@@ -251,13 +251,13 @@ void ParsedExpressionIterator::EnumerateQueryNodeChildren(
     QueryNode &node, const std::function<void(unique_ptr<ParsedExpression> &child)> &callback) {
 	switch (node.type) {
 	case QueryNodeType::RECURSIVE_CTE_NODE: {
-		auto &rcte_node = (RecursiveCTENode &)node;
+		auto &rcte_node = node.Cast<RecursiveCTENode>();
 		EnumerateQueryNodeChildren(*rcte_node.left, callback);
 		EnumerateQueryNodeChildren(*rcte_node.right, callback);
 		break;
 	}
 	case QueryNodeType::SELECT_NODE: {
-		auto &sel_node = (SelectNode &)node;
+		auto &sel_node = node.Cast<SelectNode>();
 		for (idx_t i = 0; i < sel_node.select_list.size(); i++) {
 			callback(sel_node.select_list[i]);
 		}
@@ -278,7 +278,7 @@ void ParsedExpressionIterator::EnumerateQueryNodeChildren(
 		break;
 	}
 	case QueryNodeType::SET_OPERATION_NODE: {
-		auto &setop_node = (SetOperationNode &)node;
+		auto &setop_node = node.Cast<SetOperationNode>();
 		EnumerateQueryNodeChildren(*setop_node.left, callback);
 		EnumerateQueryNodeChildren(*setop_node.right, callback);
 		break;

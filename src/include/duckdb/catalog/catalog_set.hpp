@@ -102,7 +102,7 @@ public:
 
 	//! Rollback <entry> to be the currently valid entry for a certain catalog
 	//! entry
-	void Undo(CatalogEntry *entry);
+	void Undo(CatalogEntry &entry);
 
 	//! Scan the catalog set, invoking the callback method for every committed entry
 	DUCKDB_API void Scan(const std::function<void(CatalogEntry *)> &callback);
@@ -120,17 +120,17 @@ public:
 	DUCKDB_API bool HasConflict(CatalogTransaction transaction, transaction_t timestamp);
 	DUCKDB_API bool UseTimestamp(CatalogTransaction transaction, transaction_t timestamp);
 
-	void UpdateTimestamp(CatalogEntry *entry, transaction_t timestamp);
+	void UpdateTimestamp(CatalogEntry &entry, transaction_t timestamp);
 
 	void Verify(Catalog &catalog);
 
 private:
 	//! Adjusts table dependencies on the event of an UNDO
-	void AdjustTableDependencies(CatalogEntry *entry);
+	void AdjustTableDependencies(CatalogEntry &entry);
 	//! Adjust one dependency
-	void AdjustDependency(CatalogEntry *entry, TableCatalogEntry *table, ColumnDefinition &column, bool remove);
+	void AdjustDependency(CatalogEntry &entry, TableCatalogEntry &table, ColumnDefinition &column, bool remove);
 	//! Adjust User dependency
-	void AdjustUserDependency(CatalogEntry *entry, ColumnDefinition &column, bool remove);
+	void AdjustUserDependency(CatalogEntry &entry, ColumnDefinition &column, bool remove);
 	//! Given a root entry, gets the entry valid for this transaction
 	CatalogEntry *GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry *current);
 	CatalogEntry *GetCommittedEntry(CatalogEntry *current);
