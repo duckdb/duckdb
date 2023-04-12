@@ -21,7 +21,7 @@ INSERT INTO filenames VALUES
 ;
 
 # Single chunk
-query III
+query III rowsort
 WITH files AS (
 	SELECT f.*, payload FROM filenames f, range(3) t(payload)
 ), extracted AS (
@@ -41,7 +41,7 @@ GROUP BY ALL
 2023-02-14	1	3
 
 # Scaled up
-query III
+query III rowsort
 WITH files AS (
 	SELECT f.*, payload FROM filenames f, range(1000) t(payload)
 ), extracted AS (
@@ -61,7 +61,7 @@ GROUP BY ALL
 2023-02-14	1	499500
 
 # Optional capture success
-query IIII
+query IIII rowsort
 WITH files AS (
 	SELECT f.*, payload FROM filenames f, range(3) t(payload)
 ), extracted AS (
