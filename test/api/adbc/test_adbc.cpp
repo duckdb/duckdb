@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "duckdb/common/adbc/adbc.hpp"
+#include <iostream>
 
 using namespace std;
 
@@ -51,7 +52,8 @@ public:
 	ArrowArrayStream arrow_stream;
 };
 
-TEST_CASE("Select 42", "[adbc]") {
+TEST_CASE("ADBC - Select 42", "[adbc]") {
+	std::cout << DUCKDB_INSTALL_LIB << std::endl;
 	ADBCTestDatabase db;
 	auto result = db.Query("SELECT 42");
 	ArrowArray arrow_array;

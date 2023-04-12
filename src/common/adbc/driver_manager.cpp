@@ -649,11 +649,11 @@ AdbcStatusCode AdbcLoadDriver(const char *driver_name, const char *entrypoint, i
 #else
 
 #if defined(__APPLE__)
-	static const std::string kPlatformLibraryPrefix = "lib";
-	static const std::string kPlatformLibrarySuffix = ".dylib";
+	 const std::string kPlatformLibraryPrefix = "lib";
+	 const std::string kPlatformLibrarySuffix = ".dylib";
 #else
-	static const std::string kPlatformLibraryPrefix = "lib";
-	static const std::string kPlatformLibrarySuffix = ".so";
+	 const std::string kPlatformLibraryPrefix = "lib";
+	 const std::string kPlatformLibrarySuffix = ".so";
 #endif // defined(__APPLE__)
 
 	void *handle = dlopen(driver_name, RTLD_NOW | RTLD_LOCAL);
