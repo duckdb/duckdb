@@ -145,7 +145,20 @@ Napi::Array EncodeDataChunk(Napi::Env env, duckdb::DataChunk &chunk, bool with_t
 				}
 				break;
 			}
-			case duckdb::LogicalTypeId::BLOB:
+			case duckdb::LogicalTypeId::BLOB: {
+				if (with_data) {
+					auto array = Napi::Array::New(env, chunk.size());
+					auto data = duckdb::FlatVector::GetData<duckdb::string_t>(*vec);
+
+					for (size_t i = 0; i < chunk.size(); ++i) {
+						auto value = data[i].GetString();
+						auto buf = Napi::Buffer<char>::Copy(env, value.c_str(), value.length());
+						array.Set(i, buf);
+					}
+					desc.Set("data", array);
+				}
+				break;
+			}
 			case duckdb::LogicalTypeId::VARCHAR: {
 				if (with_data) {
 					auto array = Napi::Array::New(env, chunk.size());
