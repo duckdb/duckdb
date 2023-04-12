@@ -48,7 +48,6 @@ jobs:
       BUILD_PARQUET: 1
       BUILD_SUBSTRAIT_EXTENSION: 1
       BUILD_JEMALLOC: 1
-      DUCKDB_INSTALL_LIB: /build/debug/src/libduckdb.so
       GEN: ninja
 
     steps:
@@ -72,7 +71,9 @@ jobs:
 
     - name: Test
       shell: bash
-      run: make unittestci
+      run: |
+          export DUCKDB_INSTALL_LIB=pwd/find . -name "libduck*.dylib" | head -n 1
+          make unittestci
 
 
  force-storage:
