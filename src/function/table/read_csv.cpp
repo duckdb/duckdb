@@ -24,7 +24,7 @@ unique_ptr<CSVFileHandle> ReadCSV::OpenCSV(const string &file_path, FileCompress
 	auto opener = FileSystem::GetFileOpener(context);
 	auto file_handle =
 	    fs.OpenFile(file_path.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK, compression, opener);
-	if (fs.FileExists(file_path)) {
+	if (file_handle->OnDiskFile() && file_handle->CanSeek()) {
 		file_handle->Reset();
 	}
 	return make_uniq<CSVFileHandle>(std::move(file_handle));

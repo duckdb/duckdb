@@ -7,5 +7,7 @@ require vector_size 512
 statement ok
 PRAGMA enable_verification
 
-statement maybe
+statement error
 select * from 'data/csv/csv_quoted_newline_odd.csv';
+----
+csv_quoted_newline_odd.csv": CSV options could not be auto-detected

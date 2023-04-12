@@ -145,7 +145,7 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 			arrow_bind->external_dependency = std::move(external_dependency);
 		}
 		if (table_function.name == "read_csv" || table_function.name == "read_csv_auto") {
-			auto csv_bind = (ReadCSVData *)bind_data.get();
+			auto csv_bind = bind_data->Cast<ReadCSVData *>();
 			if (csv_bind->single_threaded) {
 				table_function.extra_info = "(Single-Threaded)";
 			} else {

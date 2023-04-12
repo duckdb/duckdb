@@ -25,6 +25,8 @@ SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', null_pa
 
 statement error
 SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', parallel=True)
+----
+Error in file "data/csv/nullpadding_big_mixed.csv"
 
 statement ok
 CREATE TABLE test2 (a VARCHAR, b INTEGER, c INTEGER, d INTEGER);
