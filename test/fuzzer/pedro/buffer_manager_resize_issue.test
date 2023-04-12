@@ -32,4 +32,4 @@ INSERT INTO t2(c1,c0) VALUES (235,36),(43,81),(246,187),(28,149),(206,20),(135,1
 statement error
 INSERT INTO t2(c1,c0) VALUES (86,98),(96,107),(237,190),(253,242),(229,9),(6,147);
 ----
-Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key
+Constraint Error: Duplicate key "c1: 6" violates unique constraint
