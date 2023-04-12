@@ -105,6 +105,12 @@ public final class DuckDBConnection implements java.sql.Connection {
 		}
 	}
 
+	public synchronized void interrupt() throws SQLException {
+		if (conn_ref != null) {
+			DuckDBNative.duckdb_jdbc_interrupt(conn_ref);
+		}
+	}
+
 	protected void finalize() throws Throwable {
 		close();
 	}
