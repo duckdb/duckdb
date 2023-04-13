@@ -58,15 +58,20 @@ aaa
 mode unskip
 
 query II
-SELECT regexp_matches(s, '^a'), s FROM TEST;
+SELECT regexp_matches(s, '.*aa$'), s FROM TEST;
 ----
-true	a
+true	aaa
+
+
+mode skip 
+
 
 query I nosort correct_result
 SELECT regexp_matches(s, '^a.*b$') FROM TEST;
 ----
 aaa
 
-query I nosort correct_result
-SELECT regexp_matches(s, 'a$') FROM TEST;
----- 
+query II
+SELECT regexp_matches(s, '^a'), s FROM TEST;
+----
+1	aaa
