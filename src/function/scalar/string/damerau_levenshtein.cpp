@@ -9,10 +9,10 @@ namespace duckdb {
 // as we need to potentially know about earlier in the string
 static idx_t DamerauLevenshteinDistance(const string_t &source, const string_t &target) {
 	// costs associated with each type of edit, to aid readability
-	constexpr uint8_t cost_substitution = 1;
-	constexpr uint8_t cost_insertion = 1;
-	constexpr uint8_t cost_deletion = 1;
-	constexpr uint8_t cost_transposition = 1;
+	constexpr uint8_t COST_SUBSTITUTION = 1;
+	constexpr uint8_t COST_INSERTION = 1;
+	constexpr uint8_t COST_DELETION = 1;
+	constexpr uint8_t COST_TRANSPOSITION = 1;
 	const auto source_len = source.GetSize();
 	const auto target_len = target.GetSize();
 
@@ -20,16 +20,16 @@ static idx_t DamerauLevenshteinDistance(const string_t &source, const string_t &
 	// either through target_len insertions
 	// or source_len deletions
 	if (source_len == 0) {
-		return target_len * cost_insertion;
+		return target_len * COST_INSERTION;
 	} else if (target_len == 0) {
-		return source_len * cost_deletion;
+		return source_len * COST_DELETION;
 	}
 
 	const auto source_str = source.GetDataUnsafe();
 	const auto target_str = target.GetDataUnsafe();
 
 	// larger than the largest possible value:
-	const auto inf = source_len * cost_deletion + target_len * cost_insertion + 1;
+	const auto inf = source_len * COST_DELETION + target_len * COST_INSERTION + 1;
 	// minimum edit distance from prefix of source string to prefix of target string
 	// same object as H in LW paper (with indices offset by 1)
 	vector<vector<idx_t>> distance(source_len + 2, vector<idx_t>(target_len + 2, inf));
@@ -40,11 +40,11 @@ static idx_t DamerauLevenshteinDistance(const string_t &source, const string_t &
 	// initialise row/column corresponding to zero-length strings
 	// partial string -> empty requires a deletion for each character
 	for (idx_t source_idx = 0; source_idx <= source_len; source_idx++) {
-		distance[source_idx + 1][1] = source_idx * cost_deletion;
+		distance[source_idx + 1][1] = source_idx * COST_DELETION;
 	}
 	// and empty -> partial string means simply inserting characters
 	for (idx_t target_idx = 1; target_idx <= target_len; target_idx++) {
-		distance[1][target_idx + 1] = target_idx * cost_insertion;
+		distance[1][target_idx + 1] = target_idx * COST_INSERTION;
 	}
 	// loop through string indices - these are offset by 2 from distance indices
 	for (idx_t source_idx = 0; source_idx < source_len; source_idx++) {
@@ -67,16 +67,16 @@ static idx_t DamerauLevenshteinDistance(const string_t &source, const string_t &
 				cost_diagonal_shift = 0;
 				largest_target_chr_matching = target_idx + 1;
 			} else {
-				cost_diagonal_shift = cost_substitution;
+				cost_diagonal_shift = COST_SUBSTITUTION;
 			}
 			distance[source_idx + 2][target_idx + 2] = MinValue(
 			    distance[source_idx + 1][target_idx + 1] + cost_diagonal_shift,
-			    MinValue(distance[source_idx + 2][target_idx + 1] + cost_insertion,
-			             MinValue(distance[source_idx + 1][target_idx + 2] + cost_deletion,
+			    MinValue(distance[source_idx + 2][target_idx + 1] + COST_INSERTION,
+			             MinValue(distance[source_idx + 1][target_idx + 2] + COST_DELETION,
 			                      distance[largest_source_chr_matching_target][largest_target_chr_matching_source] +
-			                          (source_idx - largest_source_chr_matching_target) * cost_deletion +
-			                          cost_transposition +
-			                          (target_idx - largest_target_chr_matching_source) * cost_insertion)));
+			                          (source_idx - largest_source_chr_matching_target) * COST_DELETION +
+			                          COST_TRANSPOSITION +
+			                          (target_idx - largest_target_chr_matching_source) * COST_INSERTION)));
 		}
 		largest_source_chr_matching[source_str[source_idx]] = source_idx + 1;
 	}
