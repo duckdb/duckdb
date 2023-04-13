@@ -4,6 +4,7 @@
 #include "duckdb/parser/statement/list.hpp"
 #include "duckdb/parser/tableref/emptytableref.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/parser_options.hpp"
 
 namespace duckdb {
 
