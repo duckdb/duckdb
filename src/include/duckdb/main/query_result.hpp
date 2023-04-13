@@ -131,7 +131,8 @@ private:
 	//! The row-based query result iterator. Invoking the
 	class QueryResultIterator {
 	public:
-		explicit QueryResultIterator(optional_ptr<QueryResult> result_p) : current_row(*this, 0), result(result_p), base_row(0) {
+		explicit QueryResultIterator(optional_ptr<QueryResult> result_p)
+		    : current_row(*this, 0), result(result_p), base_row(0) {
 			if (result) {
 				chunk = shared_ptr<DataChunk>(result->Fetch().release());
 				if (!chunk) {

@@ -12,10 +12,10 @@ InClauseSimplificationRule::InClauseSimplificationRule(ExpressionRewriter &rewri
 	root = std::move(op);
 }
 
-unique_ptr<Expression> InClauseSimplificationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
+unique_ptr<Expression> InClauseSimplificationRule::Apply(LogicalOperator &op,
+                                                         vector<reference_wrapper<Expression>> &bindings,
                                                          bool &changes_made, bool is_root) {
-	D_ASSERT(bindings[0]->expression_class == ExpressionClass::BOUND_OPERATOR);
-	auto &expr = bindings[0]->Cast<BoundOperatorExpression>();
+	auto &expr = bindings[0].get().Cast<BoundOperatorExpression>();
 	if (expr.children[0]->expression_class != ExpressionClass::BOUND_CAST) {
 		return nullptr;
 	}

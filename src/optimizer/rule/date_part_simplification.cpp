@@ -20,10 +20,11 @@ DatePartSimplificationRule::DatePartSimplificationRule(ExpressionRewriter &rewri
 	root = std::move(func);
 }
 
-unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
+unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op,
+                                                         vector<reference_wrapper<Expression>> &bindings,
                                                          bool &changes_made, bool is_root) {
-	auto &date_part = bindings[0]->Cast<BoundFunctionExpression>();
-	auto &constant_expr = bindings[1]->Cast<BoundConstantExpression>();
+	auto &date_part = bindings[0].get().Cast<BoundFunctionExpression>();
+	auto &constant_expr = bindings[1].get().Cast<BoundConstantExpression>();
 	auto &constant = constant_expr.value;
 
 	if (constant.IsNull()) {

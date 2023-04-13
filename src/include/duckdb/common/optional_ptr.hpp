@@ -48,16 +48,16 @@ public:
 		return ptr;
 	}
 	T *get() {
-		//CheckValid();
+		// CheckValid();
 		return ptr;
 	}
 	const T *get() const {
-		//CheckValid();
+		// CheckValid();
 		return ptr;
 	}
 	// this looks dirty - but this is the default behavior of raw pointers
 	T *get_mutable() const {
-		//CheckValid();
+		// CheckValid();
 		return ptr;
 	}
 

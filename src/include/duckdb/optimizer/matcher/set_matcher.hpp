@@ -29,8 +29,9 @@ public:
 
 	/* The double {{}} in the intializer for excluded_entries is intentional, workaround for bug in gcc-4.9 */
 	template <class T, class MATCHER>
-	static bool MatchRecursive(vector<unique_ptr<MATCHER>> &matchers, vector<T *> &entries, vector<T *> &bindings,
-	                           unordered_set<idx_t> excluded_entries, idx_t m_idx = 0) {
+	static bool MatchRecursive(vector<unique_ptr<MATCHER>> &matchers, vector<reference_wrapper<T>> &entries,
+	                           vector<reference_wrapper<T>> &bindings, unordered_set<idx_t> excluded_entries,
+	                           idx_t m_idx = 0) {
 		if (m_idx == matchers.size()) {
 			// matched all matchers!
 			return true;
@@ -65,8 +66,8 @@ public:
 	}
 
 	template <class T, class MATCHER>
-	static bool Match(vector<unique_ptr<MATCHER>> &matchers, vector<T *> &entries, vector<T *> &bindings,
-	                  Policy policy) {
+	static bool Match(vector<unique_ptr<MATCHER>> &matchers, vector<reference_wrapper<T>> &entries,
+	                  vector<reference_wrapper<T>> &bindings, Policy policy) {
 		if (policy == Policy::ORDERED) {
 			// ordered policy, count has to match
 			if (matchers.size() != entries.size()) {
@@ -100,12 +101,12 @@ public:
 	}
 
 	template <class T, class MATCHER>
-	static bool Match(vector<unique_ptr<MATCHER>> &matchers, vector<unique_ptr<T>> &entries, vector<T *> &bindings,
-	                  Policy policy) {
+	static bool Match(vector<unique_ptr<MATCHER>> &matchers, vector<unique_ptr<T>> &entries,
+	                  vector<reference_wrapper<T>> &bindings, Policy policy) {
 		// convert vector of unique_ptr to vector of normal pointers
-		vector<T *> ptr_entries;
+		vector<reference_wrapper<T>> ptr_entries;
 		for (auto &entry : entries) {
-			ptr_entries.push_back(entry.get());
+			ptr_entries.push_back(*entry);
 		}
 		// then just call the normal match function
 		return Match(matchers, ptr_entries, bindings, policy);

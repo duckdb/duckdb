@@ -18,10 +18,11 @@ RegexOptimizationRule::RegexOptimizationRule(ExpressionRewriter &rewriter) : Rul
 	root = std::move(func);
 }
 
-unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
-                                                    bool &changes_made, bool is_root) {
-	auto &root = bindings[0]->Cast<BoundFunctionExpression>();
-	auto &constant_expr = bindings[2]->Cast<BoundConstantExpression>();
+unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op,
+                                                    vector<reference_wrapper<Expression>> &bindings, bool &changes_made,
+                                                    bool is_root) {
+	auto &root = bindings[0].get().Cast<BoundFunctionExpression>();
+	auto &constant_expr = bindings[2].get().Cast<BoundConstantExpression>();
 	D_ASSERT(root.children.size() == 2);
 
 	if (constant_expr.value.IsNull()) {

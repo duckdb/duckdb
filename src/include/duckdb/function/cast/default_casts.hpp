@@ -97,7 +97,8 @@ public:
 };
 
 struct BindCastInput {
-	DUCKDB_API BindCastInput(CastFunctionSet &function_set, optional_ptr<BindCastInfo> info, optional_ptr<ClientContext> context);
+	DUCKDB_API BindCastInput(CastFunctionSet &function_set, optional_ptr<BindCastInfo> info,
+	                         optional_ptr<ClientContext> context);
 
 	CastFunctionSet &function_set;
 	optional_ptr<BindCastInfo> info;
