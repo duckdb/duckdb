@@ -18,6 +18,7 @@ add_library_unity(
   meta_block_reader.cpp
   meta_block_writer.cpp
   storage_manager.cpp
+  standard_buffer_manager.cpp
   table_index_list.cpp
   write_ahead_log.cpp
   partial_block_manager.cpp

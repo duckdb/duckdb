@@ -20,10 +20,9 @@ class Allocator;
 class BufferPool;
 class BlockManager;
 
-//! The BufferManager is in charge of handling memory management for a single database. It cooperatively shares a
-//! BufferPool with other BufferManagers, belonging to different databases. It hands out memory buffers that can
-//! be used by the database internally, and offers configuration options specific to a database, which need not be
-//! shared by the BufferPool, including whether to support swapping temp buffers to disk, and where to swap them to.
+class Allocator;
+class BufferPool;
+
 class BufferManager {
 	friend class BufferHandle;
 	friend class BlockHandle;

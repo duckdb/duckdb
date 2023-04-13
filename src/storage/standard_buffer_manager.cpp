@@ -1,13 +1,12 @@
 #include "duckdb/storage/standard_buffer_manager.hpp"
 
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 
 namespace duckdb {
@@ -18,10 +17,6 @@ struct BufferAllocatorData : PrivateAllocatorData {
 
 	StandardBufferManager &manager;
 };
-
-idx_t GetAllocSize(idx_t size) {
-	return AlignValue<idx_t, Storage::SECTOR_SIZE>(size + Storage::BLOCK_HEADER_SIZE);
-}
 
 unique_ptr<FileBuffer> StandardBufferManager::ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source,
                                                                      FileBufferType type) {
@@ -79,22 +74,10 @@ idx_t StandardBufferManager::GetMaxMemory() const {
 	return buffer_pool.GetMaxMemory();
 }
 
-void StandardBufferManager::IncreaseUsedMemory(idx_t size, bool unsafe) {
-	if (!unsafe && buffer_pool.GetUsedMemory() + size > buffer_pool.GetMaxMemory()) {
-		throw OutOfMemoryException("Failed to allocate data of size %lld%s", size, InMemoryWarning());
-	}
-	buffer_pool.IncreaseUsedMemory(size);
-}
-
-void StandardBufferManager::DecreaseUsedMemory(idx_t size) {
-	D_ASSERT(buffer_pool.GetUsedMemory() >= size);
-	buffer_pool.DecreaseUsedMemory(size);
-}
-
 template <typename... ARGS>
 TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(idx_t memory_delta, unique_ptr<FileBuffer> *buffer,
                                                                     ARGS... args) {
-	auto r = EvictBlocks(memory_delta, buffer_pool.GetMaxMemory(), buffer);
+	auto r = buffer_pool.EvictBlocks(memory_delta, buffer_pool.GetMaxMemory(), buffer);
 	if (!r.success) {
 		throw OutOfMemoryException(args..., InMemoryWarning());
 	}
@@ -204,6 +187,10 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	return buf;
 }
 
+void StandardBufferManager::PurgeQueue() {
+	buffer_pool.PurgeQueue();
+}
+
 void StandardBufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 	buffer_pool.AddToEvictionQueue(handle);
 }
@@ -212,8 +199,8 @@ void StandardBufferManager::VerifyZeroReaders(shared_ptr<BlockHandle> &handle) {
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 	auto replacement_buffer = make_uniq<FileBuffer>(Allocator::Get(db), handle->buffer->type,
 	                                                handle->memory_usage - Storage::BLOCK_HEADER_SIZE);
-	memcpy(replacement_buffer->Buffer(), handle->buffer->Buffer(), handle->buffer->size);
-	memset(handle->buffer->Buffer(), 165, handle->buffer->size); // 165 is default memory in debug mode
+	memcpy(replacement_buffer->buffer, handle->buffer->buffer, handle->buffer->size);
+	memset(handle->buffer->buffer, 165, handle->buffer->size); // 165 is default memory in debug mode
 	handle->buffer = std::move(replacement_buffer);
 #endif
 }
@@ -231,13 +218,13 @@ void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 	}
 }
 
-BufferPool::EvictionResult StandardBufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit,
-                                                              unique_ptr<FileBuffer> *buffer) {
-	return buffer_pool.EvictBlocks(extra_memory, memory_limit, buffer);
+// POTENTIALLY PROBLEMATIC
+void StandardBufferManager::IncreaseUsedMemory(idx_t size, bool unsafe) {
+	ReserveMemory(size);
 }
 
-void StandardBufferManager::PurgeQueue() {
-	buffer_pool.PurgeQueue();
+void StandardBufferManager::DecreaseUsedMemory(idx_t size) {
+	FreeReservedMemory(size);
 }
 
 void StandardBufferManager::SetLimit(idx_t limit) {
@@ -696,6 +683,10 @@ void StandardBufferManager::DeleteTemporaryFile(block_id_t id) {
 	}
 }
 
+bool StandardBufferManager::HasTemporaryDirectory() const {
+	return !temp_directory.empty();
+}
+
 vector<TemporaryFileInformation> StandardBufferManager::GetTemporaryFiles() {
 	vector<TemporaryFileInformation> result;
 	if (temp_directory.empty()) {
@@ -783,12 +774,12 @@ data_ptr_t StandardBufferManager::BufferAllocatorRealloc(PrivateAllocatorData *p
 }
 
 Allocator &BufferAllocator::Get(ClientContext &context) {
-	auto &manager = BufferManager::GetBufferManager(context);
+	auto &manager = StandardBufferManager::GetBufferManager(context);
 	return manager.GetBufferAllocator();
 }
 
 Allocator &BufferAllocator::Get(DatabaseInstance &db) {
-	return BufferManager::GetBufferManager(db).GetBufferAllocator();
+	return StandardBufferManager::GetBufferManager(db).GetBufferAllocator();
 }
 
 Allocator &BufferAllocator::Get(AttachedDatabase &db) {
@@ -797,10 +788,6 @@ Allocator &BufferAllocator::Get(AttachedDatabase &db) {
 
 Allocator &StandardBufferManager::GetBufferAllocator() {
 	return buffer_allocator;
-}
-
-bool StandardBufferManager::HasTemporaryDirectory() const {
-	return !temp_directory.empty();
 }
 
 } // namespace duckdb
