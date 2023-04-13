@@ -1,10 +1,10 @@
+#pragma once
+
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/parallel/concurrentqueue.hpp"
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
-
-#pragma once
 
 namespace duckdb {
 

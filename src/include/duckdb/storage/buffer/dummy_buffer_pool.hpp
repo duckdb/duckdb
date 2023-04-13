@@ -1,6 +1,6 @@
-#include "duckdb/storage/buffer/buffer_pool.hpp"
-
 #pragma once
+
+#include "duckdb/storage/buffer/buffer_pool.hpp"
 
 namespace duckdb {
 

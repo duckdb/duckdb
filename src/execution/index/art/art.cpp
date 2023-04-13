@@ -993,7 +993,7 @@ BlockPointer ART::Serialize(MetaBlockWriter &writer) {
 	if (tree) {
 		serialized_data_pointer = tree->Serialize(*this, writer);
 	} else {
-		serialized_data_pointer = BlockPointer::Invalid();
+		serialized_data_pointer = {(block_id_t)DConstants::INVALID_INDEX, (uint32_t)DConstants::INVALID_INDEX};
 	}
 	IncreaseAndVerifyMemorySize(old_memory_size);
 	return serialized_data_pointer;

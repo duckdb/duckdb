@@ -12,17 +12,18 @@ SwizzleablePointer::~SwizzleablePointer() {
 }
 
 SwizzleablePointer::SwizzleablePointer(duckdb::MetaBlockReader &reader) {
-	auto block_pointer = BlockPointer::Deserialize(reader);
-	if (block_pointer.IsInvalid()) {
+	idx_t block_id = reader.Read<block_id_t>();
+	uint32_t offset = reader.Read<uint32_t>();
+	if (block_id == DConstants::INVALID_INDEX || offset == (uint32_t)DConstants::INVALID_INDEX) {
 		pointer = 0;
 		return;
 	}
 	idx_t pointer_size = sizeof(pointer) * 8;
-	pointer = block_pointer.block_id;
+	pointer = block_id;
 	// This assumes high 32 bits of pointer are zero.
 	pointer = pointer << (pointer_size / 2);
-	D_ASSERT((pointer >> (pointer_size / 2)) == (idx_t)block_pointer.block_id);
-	pointer += block_pointer.offset;
+	D_ASSERT((pointer >> (pointer_size / 2)) == block_id);
+	pointer += offset;
 	// Set the left most bit to indicate this is a swizzled pointer and send it back to the mother-ship
 	uint64_t mask = 1;
 	mask = mask << (pointer_size - 1);
@@ -89,7 +90,7 @@ BlockPointer SwizzleablePointer::Serialize(ART &art, duckdb::MetaBlockWriter &wr
 		Unswizzle(art);
 		return ((Node *)pointer)->Serialize(art, writer);
 	} else {
-		return BlockPointer::Invalid();
+		return {(block_id_t)DConstants::INVALID_INDEX, (uint32_t)DConstants::INVALID_INDEX};
 	}
 }
 
