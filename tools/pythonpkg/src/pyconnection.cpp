@@ -98,7 +98,25 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	    .def("list_filesystems", &DuckDBPyConnection::ListFilesystems,
 	         "List registered filesystems, including builtin ones")
 	    .def("filesystem_is_registered", &DuckDBPyConnection::FileSystemIsRegistered,
-	         "Check if a filesystem with the provided name is currently registered", py::arg("name"))
+	         "Check if a filesystem with the provided name is currently registered", py::arg("name"));
+
+	DefineMethod({"sqltype", "dtype", "type"}, m, &DuckDBPyConnection::Type,
+	             "Create a type object by parsing the 'type_str' string", py::arg("type_str"));
+	DefineMethod({"array_type", "list_type"}, m, &DuckDBPyConnection::ArrayType,
+	             "Create an array type object of 'type'", py::arg("type").none(false));
+	m.def("union_type", &DuckDBPyConnection::UnionType, "Create a union type object from 'members'",
+	      py::arg("members").none(false))
+	    .def("string_type", &DuckDBPyConnection::StringType, "Create a string type with an optional collation",
+	         py::arg("collation") = string())
+	    .def("enum_type", &DuckDBPyConnection::EnumType,
+	         "Create an enum type of underlying 'type', consisting of the list of 'values'", py::arg("name"),
+	         py::arg("type"), py::arg("values"))
+	    .def("decimal_type", &DuckDBPyConnection::DecimalType, "Create a decimal type with 'width' and 'scale'",
+	         py::arg("width"), py::arg("scale"));
+	DefineMethod({"struct_type", "row_type"}, m, &DuckDBPyConnection::StructType,
+	             "Create a struct type object from 'fields'", py::arg("fields"));
+	m.def("map_type", &DuckDBPyConnection::MapType, "Create a map type object from 'key_type' and 'value_type'",
+	      py::arg("key").none(false), py::arg("value").none(false))
 	    .def("duplicate", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
 	    .def("execute", &DuckDBPyConnection::Execute,
 	         "Execute the given SQL query, optionally using prepared statements with parameters set", py::arg("query"),
@@ -1375,8 +1393,12 @@ ModifiedMemoryFileSystem &DuckDBPyConnection::GetObjectFileSystem() {
 	if (!internal_object_filesystem) {
 		D_ASSERT(!FileSystemIsRegistered("DUCKDB_INTERNAL_OBJECTSTORE"));
 		auto &import_cache_py = *ImportCache();
-		internal_object_filesystem =
-		    make_shared<ModifiedMemoryFileSystem>(import_cache_py.pyduckdb().filesystem.modified_memory_filesystem()());
+		auto modified_memory_fs = import_cache_py.pyduckdb().filesystem.modified_memory_filesystem();
+		if (modified_memory_fs.ptr() == nullptr) {
+			throw InvalidInputException(
+			    "This operation could not be completed because required module 'fsspec' is not installed");
+		}
+		internal_object_filesystem = make_shared<ModifiedMemoryFileSystem>(modified_memory_fs());
 		auto &abstract_fs = (AbstractFileSystem &)*internal_object_filesystem;
 		RegisterFilesystem(abstract_fs);
 	}

@@ -49,6 +49,8 @@ struct ICUDateFunc {
 	//! Sets the time zone for the calendar.
 	static void SetTimeZone(icu::Calendar *calendar, const string_t &tz_id);
 	//! Gets the timestamp from the calendar, throwing if it is not in range.
+	static bool TryGetTime(icu::Calendar *calendar, uint64_t micros, timestamp_t &result);
+	//! Gets the timestamp from the calendar, throwing if it is not in range.
 	static timestamp_t GetTime(icu::Calendar *calendar, uint64_t micros = 0);
 	//! Gets the timestamp from the calendar, assuming it is in range.
 	static timestamp_t GetTimeUnsafe(icu::Calendar *calendar, uint64_t micros = 0);
