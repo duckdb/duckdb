@@ -59,8 +59,6 @@ jobs:
     - name: Test
       shell: bash
       run: |
-          set DUCKDB_INSTALL_LIB=$(powershell -Command "Get-ChildItem -Path \"%cd%\" -Filter libduck*.dll | Select-Object -First 1 | Resolve-Path | Foreach-Object { $_.Path }") 
-          echo "DUCKDB_INSTALL_LIB=$DUCKDB_INSTALL_LIB" >> $GITHUB_ENV
           test/Release/unittest.exe
 
     - name: Tools Test

@@ -1,4 +1,6 @@
-add_subdirectory(adbc)
+if(NOT OS_NAME STREQUAL "windows")
+  add_subdirectory(adbc)
+endif()
 add_subdirectory(capi)
 add_subdirectory(udf_function)
 
