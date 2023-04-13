@@ -35,7 +35,8 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
 AggregateHTAppendState::AggregateHTAppendState()
     : ht_offsets(LogicalTypeId::BIGINT), hash_salts(LogicalTypeId::SMALLINT),
       group_compare_vector(STANDARD_VECTOR_SIZE), no_match_vector(STANDARD_VECTOR_SIZE),
-      empty_vector(STANDARD_VECTOR_SIZE), new_groups(STANDARD_VECTOR_SIZE), addresses(LogicalType::POINTER) {
+      empty_vector(STANDARD_VECTOR_SIZE), new_groups(STANDARD_VECTOR_SIZE), addresses(LogicalType::POINTER),
+      chunk_state_initialized(false) {
 }
 
 GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, Allocator &allocator,
@@ -55,7 +56,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
 	// HT layout
 	hash_offset = layout.GetOffsets()[layout.ColumnCount() - 1];
 	data_collection = make_uniq<TupleDataCollection>(buffer_manager, layout);
-	data_collection->InitializeAppend(td_append_state, TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
+	data_collection->InitializeAppend(td_pin_state, TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
 
 	hashes_hdl = buffer_manager.Allocate(Storage::BLOCK_SIZE);
 	hashes_hdl_ptr = hashes_hdl.Ptr();
@@ -383,11 +384,15 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(AggregateHTAppendSta
 	state.group_chunk.SetCardinality(groups);
 
 	// convert all vectors to unified format
-	TupleDataCollection::ToUnifiedFormat(td_append_state.chunk_state, state.group_chunk);
+	if (!state.chunk_state_initialized) {
+		data_collection->InitializeAppend(state.chunk_state);
+		state.chunk_state_initialized = true;
+	}
+	TupleDataCollection::ToUnifiedFormat(state.chunk_state, state.group_chunk);
 	if (!state.group_data) {
 		state.group_data = unique_ptr<UnifiedVectorFormat[]>(new UnifiedVectorFormat[state.group_chunk.ColumnCount()]);
 	}
-	TupleDataCollection::GetVectorData(td_append_state.chunk_state, state.group_data.get());
+	TupleDataCollection::GetVectorData(state.chunk_state, state.group_data.get());
 
 	idx_t new_group_count = 0;
 	idx_t remaining_entries = groups.size();
@@ -422,9 +427,9 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(AggregateHTAppendSta
 
 		if (new_entry_count != 0) {
 			// Append everything that belongs to an empty group
-			data_collection->AppendUnified(td_append_state.pin_state, td_append_state.chunk_state, state.group_chunk,
-			                               state.empty_vector, new_entry_count);
-			RowOperations::InitializeStates(layout, td_append_state.chunk_state.row_locations,
+			data_collection->AppendUnified(td_pin_state, state.chunk_state, state.group_chunk, state.empty_vector,
+			                               new_entry_count);
+			RowOperations::InitializeStates(layout, state.chunk_state.row_locations,
 			                                *FlatVector::IncrementalSelectionVector(), new_entry_count);
 
 			// Get the pointers to the (possibly) newly created blocks of the data collection
@@ -434,7 +439,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(AggregateHTAppendSta
 			auto block_end = block_pointer + tuples_per_block * tuple_size;
 
 			// Set the page nrs/offsets in the 1st part of the HT now that the data has been appended
-			const auto row_locations = FlatVector::GetData<data_ptr_t>(td_append_state.chunk_state.row_locations);
+			const auto row_locations = FlatVector::GetData<data_ptr_t>(state.chunk_state.row_locations);
 			for (idx_t new_entry_idx = 0; new_entry_idx < new_entry_count; new_entry_idx++) {
 				const auto &row_location = row_locations[new_entry_idx];
 				if (row_location > block_end || row_location < block_pointer) {
@@ -485,7 +490,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(AggregateHTAppendSta
 }
 
 void GroupedAggregateHashTable::UpdateBlockPointers() {
-	for (const auto &id_and_handle : td_append_state.pin_state.row_handles) {
+	for (const auto &id_and_handle : td_pin_state.row_handles) {
 		const auto &id = id_and_handle.first;
 		const auto &handle = id_and_handle.second;
 		if (payload_hds_ptrs.empty() || id > payload_hds_ptrs.size() - 1) {
@@ -640,7 +645,7 @@ void GroupedAggregateHashTable::Finalize() {
 
 	// Early release hashes (not needed for partition/scan) and data collection (will be pinned again when scanning)
 	hashes_hdl.Destroy();
-	data_collection->FinalizePinState(td_append_state.pin_state);
+	data_collection->FinalizePinState(td_pin_state);
 	data_collection->Unpin();
 
 	is_finalized = true;

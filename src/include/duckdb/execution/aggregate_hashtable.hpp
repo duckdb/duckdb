@@ -75,6 +75,9 @@ struct AggregateHTAppendState {
 	Vector addresses;
 	unique_ptr<UnifiedVectorFormat[]> group_data;
 	DataChunk group_chunk;
+
+	TupleDataChunkState chunk_state;
+	bool chunk_state_initialized;
 };
 
 class GroupedAggregateHashTable : public BaseAggregateHashTable {
@@ -157,7 +160,7 @@ private:
 	idx_t tuples_per_block;
 	//! The data of the HT
 	unique_ptr<TupleDataCollection> data_collection;
-	TupleDataAppendState td_append_state;
+	TupleDataPinState td_pin_state;
 	vector<data_ptr_t> payload_hds_ptrs;
 
 	//! The hashes of the HT
