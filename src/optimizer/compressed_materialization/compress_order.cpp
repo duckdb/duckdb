@@ -5,7 +5,7 @@
 namespace duckdb {
 
 void CompressedMaterialization::CompressOrder(unique_ptr<LogicalOperator> &op) {
-	auto &order = (LogicalOrder &)*op;
+	auto &order = op->Cast<LogicalOrder>();
 
 	// Find all bindings referenced by non-colref expressions in the order nodes
 	// These are excluded from compression by projection

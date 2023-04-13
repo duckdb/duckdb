@@ -74,6 +74,7 @@ private:
 
 	//! Compress call for materializing operators
 	void CompressAggregate(unique_ptr<LogicalOperator> &op);
+	void CompressComparisonJoin(unique_ptr<LogicalOperator> &op);
 	void CompressOrder(unique_ptr<LogicalOperator> &op);
 
 	//! Adds bindings referenced in expression to referenced_bindings

@@ -53,7 +53,7 @@ void CompressedMaterialization::GetReferencedBindings(const Expression &expressi
                                                       vector<ColumnBinding> &referenced_bindings) {
 	ExpressionIterator::EnumerateChildren(expression, [&](const Expression &child) {
 		if (child.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-			const auto &col_ref = (BoundColumnRefExpression &)child;
+			const auto &col_ref = child.Cast<BoundColumnRefExpression>();
 			referenced_bindings.emplace_back(col_ref.binding);
 		}
 	});
@@ -93,6 +93,9 @@ void CompressedMaterialization::Compress(unique_ptr<LogicalOperator> &op) {
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 		CompressAggregate(op);
+		break;
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+		CompressComparisonJoin(op);
 		break;
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 		CompressOrder(op);
@@ -216,7 +219,7 @@ void CompressedMaterialization::CreateDecompressProjection(unique_ptr<LogicalOpe
 	for (idx_t col_idx = 0; col_idx < bindings.size(); col_idx++) {
 		const auto &binding = bindings[col_idx];
 		auto decompress_expr = make_uniq_base<Expression, BoundColumnRefExpression>(types[col_idx], binding);
-		BaseStatistics *stats;
+		BaseStatistics *stats = nullptr;
 		for (auto &entry : binding_map) {
 			auto &binding_info = entry.second;
 			if (binding_info.binding != binding) {

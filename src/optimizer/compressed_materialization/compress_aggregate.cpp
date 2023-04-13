@@ -5,7 +5,7 @@
 namespace duckdb {
 
 void CompressedMaterialization::CompressAggregate(unique_ptr<LogicalOperator> &op) {
-	auto &aggregate = (LogicalAggregate &)*op;
+	auto &aggregate = op->Cast<LogicalAggregate>();
 	auto &groups = aggregate.groups;
 	auto &group_stats = aggregate.group_stats;
 
