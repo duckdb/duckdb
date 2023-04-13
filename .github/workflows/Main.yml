@@ -72,7 +72,7 @@ jobs:
     - name: Test
       shell: bash
       run: |
-          export DUCKDB_INSTALL_LIB=$(find `pwd` -name "libduck*.so" | head -n 1)
+          echo "DUCKDB_INSTALL_LIB=$(find `pwd` -name "libduck*.so" | head -n 1)" >> $GITHUB_ENV
           make unittestci
 
 
