@@ -42,8 +42,8 @@ static idx_t FindMaxTableIndex(LogicalOperator &op) {
 	for (const auto &child : op.children) {
 		max = MaxValue<idx_t>(max, FindMaxTableIndex(*child));
 	}
-	for (const auto &binding : op.GetColumnBindings()) {
-		max = MaxValue<idx_t>(max, binding.table_index);
+	for (const auto &table_index : op.GetTableIndex()) {
+		max = MaxValue<idx_t>(max, table_index);
 	}
 	return max;
 }
@@ -53,6 +53,7 @@ unique_ptr<LogicalOperator> CompressedMaterialization::Optimize(unique_ptr<Logic
 	root->ResolveOperatorTypes();
 	projection_index = FindMaxTableIndex(*root) + 1;
 	Compress(op);
+
 	// TODO remove redundant (de)compressions
 	return op;
 }
@@ -262,7 +263,7 @@ unique_ptr<Expression> CompressedMaterialization::GetCompressExpression(const Co
 unique_ptr<Expression> CompressedMaterialization::GetCompressExpression(unique_ptr<Expression> input,
                                                                         const BaseStatistics &stats) {
 	const auto &type = input->return_type;
-	if (TypeIsIntegral(type.InternalType())) {
+	if (type.IsIntegral()) {
 		return GetIntegralCompress(std::move(input), stats);
 	} else if (type.id() == LogicalTypeId::VARCHAR) {
 		return GetStringCompress(std::move(input), stats);

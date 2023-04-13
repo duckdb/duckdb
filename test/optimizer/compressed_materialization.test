@@ -1,0 +1,39 @@
+# name: test/optimizer/compressed_materialization.test
+# description: Compressed materialization test
+# group: [optimizer]
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY
+
+mode skip
+
+statement ok
+create table test as select cast(random() * 10 as int) i from range(10)
+
+query II
+explain select count(*) from (select i from (select i from test order by i offset 1) order by i offset 1)
+----
+logical_opt	<REGEX>:.*cm_decompress.*cm_compress.*
+
+mode unskip
+
+require tpch
+
+statement ok
+call dbgen(sf=0.01)
+
+query II
+explain select * from lineitem order by l_shipdate
+----
+logical_opt	<REGEX>:.*cm_decompress.*cm_compress.*
+
+query IIIIIIIIIIIIIII nosort q0
+select * from lineitem order by l_shipdate
+----
+
+statement ok
+set disabled_optimizers to 'compressed_materialization'
+
+query IIIIIIIIIIIIIII nosort q0
+select * from lineitem order by l_shipdate
+----
