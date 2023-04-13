@@ -91,7 +91,7 @@ static DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "array_push_back", {"arr", "e", nullptr}, "list_concat(arr, list_value(e))"},
 	{DEFAULT_SCHEMA, "array_push_front", {"arr", "e", nullptr}, "list_concat(list_value(e), arr)"},
 	{DEFAULT_SCHEMA, "generate_subscripts", {"arr", "dim", nullptr}, "unnest(generate_series(1, array_length(arr, dim)))"},
-	{DEFAULT_SCHEMA, "array_reverse", {"arr", nullptr},"(SELECT CASE WHEN arr = [] THEN [] ELSE l END FROM ( SELECT array_agg(elm) as l FROM (SELECT generate_subscripts(arr, 1) AS g, arr[g] AS elm ORDER BY g DESC)))"},
+	{DEFAULT_SCHEMA, "array_reverse", {"arr", nullptr},"(SELECT CASE WHEN l IS NOT NULL THEN l ELSE arr END FROM ( SELECT array_agg(elm) as l FROM (SELECT generate_subscripts(arr, 1) AS g, arr[g] AS elm ORDER BY g DESC)))"},
 	{DEFAULT_SCHEMA, "list_reverse", {"arr", nullptr},"array_reverse(arr)"},
 	{DEFAULT_SCHEMA, "fdiv", {"x", "y", nullptr}, "floor(x/y)"},
 	{DEFAULT_SCHEMA, "fmod", {"x", "y", nullptr}, "(x-y*floor(x/y))"},
