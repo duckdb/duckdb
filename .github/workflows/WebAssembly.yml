@@ -115,6 +115,6 @@ jobs:
 
     - uses: actions/upload-artifact@v3
       with:
-        name: duckdb-wasm32
+        name: duckdb-wasm32-loadable
         path: |
           duckdb-wasm32-loadable.zip
