@@ -120,8 +120,6 @@ void Pandas::Bind(const ClientContext &context, py::handle df_p, vector<PandasCo
                   vector<LogicalType> &return_types, vector<string> &names) {
 
 	PandasDataFrameBind df(df_p);
-	// TODO support masked arrays as well
-	// TODO support dicts of numpy arrays as well
 	idx_t column_count = py::len(df.names);
 	if (column_count == 0 || py::len(df.types) == 0 || column_count != py::len(df.types)) {
 		throw InvalidInputException("Need a DataFrame with at least one column");
