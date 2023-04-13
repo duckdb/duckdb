@@ -83,11 +83,76 @@ void ArrowTestFactory::ToArrowSchema(struct ArrowSchema *out) {
 	ArrowConverter::ToArrowSchema(out, types, names, tz);
 }
 
+duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper>
+ArrowStreamTestFactory::CreateStream(uintptr_t this_ptr, ArrowStreamParameters &parameters) {
+	auto stream_wrapper = make_uniq<ArrowArrayStreamWrapper>();
+	stream_wrapper->number_of_rows = -1;
+	stream_wrapper->arrow_array_stream = *(ArrowArrayStream *)this_ptr;
+
+	return stream_wrapper;
+}
+
+void ArrowStreamTestFactory::GetSchema(uintptr_t factory_ptr, duckdb::ArrowSchemaWrapper &schema) {
+	auto &factory = *reinterpret_cast<ArrowArrayStreamWrapper *>(factory_ptr); //! NOLINT
+	factory.arrow_array_stream.get_schema(&factory.arrow_array_stream, &schema.arrow_schema);
+}
+
+unique_ptr<QueryResult> ArrowTestHelper::ScanArrowObject(Connection &con, vector<Value> &params) {
+	auto arrow_result = con.TableFunction("arrow_scan", params)->Execute();
+	if (arrow_result->type != QueryResultType::MATERIALIZED_RESULT) {
+		printf("Arrow Result must materialized");
+		return nullptr;
+	}
+	if (arrow_result->HasError()) {
+		printf("-------------------------------------\n");
+		printf("Arrow round-trip query error: %s\n", arrow_result->GetError().c_str());
+		printf("-------------------------------------\n");
+		printf("-------------------------------------\n");
+		return nullptr;
+	}
+	return arrow_result;
+}
+
+bool ArrowTestHelper::CompareResults(unique_ptr<QueryResult> arrow, unique_ptr<MaterializedQueryResult> duck,
+                                     const string &query) {
+	auto &materialized_arrow = (MaterializedQueryResult &)*arrow;
+	// compare the results
+	string error;
+	if (!ColumnDataCollection::ResultEquals(duck->Collection(), materialized_arrow.Collection(), error)) {
+		printf("-------------------------------------\n");
+		printf("Arrow round-trip failed: %s\n", error.c_str());
+		printf("-------------------------------------\n");
+		printf("Query: %s\n", query.c_str());
+		printf("-----------------DuckDB-------------------\n");
+		duck->Print();
+		printf("-----------------Arrow--------------------\n");
+		materialized_arrow.Print();
+		printf("-------------------------------------\n");
+		return false;
+	}
+	return true;
+}
+
+vector<Value> ArrowTestHelper::ConstructArrowScan(uintptr_t arrow_object, bool from_duckdb_result) {
+	vector<Value> params;
+	params.push_back(Value::POINTER(arrow_object));
+	if (from_duckdb_result) {
+		params.push_back(Value::POINTER((uintptr_t)&ArrowTestFactory::CreateStream));
+		params.push_back(Value::POINTER((uintptr_t)&ArrowTestFactory::GetSchema));
+	} else {
+		params.push_back(Value::POINTER((uintptr_t)&ArrowStreamTestFactory::CreateStream));
+		params.push_back(Value::POINTER((uintptr_t)&ArrowStreamTestFactory::GetSchema));
+	}
+
+	return params;
+}
+
 bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, bool big_result) {
 	// run the query
 	auto initial_result = con.Query(query);
 	if (initial_result->HasError()) {
 		initial_result->Print();
+		printf("Query: %s\n", query.c_str());
 		return false;
 	}
 	// create the roundtrip factory
@@ -97,44 +162,32 @@ bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, b
 	ArrowTestFactory factory(std::move(types), std::move(names), tz, std::move(initial_result), big_result);
 
 	// construct the arrow scan
-	vector<Value> params;
-	params.push_back(Value::POINTER((uintptr_t)&factory));
-	params.push_back(Value::POINTER((uintptr_t)&ArrowTestFactory::CreateStream));
-	params.push_back(Value::POINTER((uintptr_t)&ArrowTestFactory::GetSchema));
+	auto params = ConstructArrowScan((uintptr_t)&factory, true);
 
 	// run the arrow scan over the result
-	auto arrow_result = con.TableFunction("arrow_scan", params)->Execute();
-	if (arrow_result->type != QueryResultType::MATERIALIZED_RESULT) {
-		printf("Arrow Result must materialized");
-		return false;
-	}
-	if (arrow_result->HasError()) {
-		printf("-------------------------------------\n");
-		printf("Arrow round-trip query error: %s\n", arrow_result->GetError().c_str());
-		printf("-------------------------------------\n");
+	auto arrow_result = ScanArrowObject(con, params);
+	if (!arrow_result) {
 		printf("Query: %s\n", query.c_str());
-		printf("-------------------------------------\n");
 		return false;
 	}
-	auto &materialized_arrow = (MaterializedQueryResult &)*arrow_result;
 
-	auto result = con.Query(query);
+	return CompareResults(std::move(arrow_result), con.Query(query), query);
+}
 
-	// compare the results
-	string error;
-	if (!ColumnDataCollection::ResultEquals(result->Collection(), materialized_arrow.Collection(), error)) {
-		printf("-------------------------------------\n");
-		printf("Arrow round-trip failed: %s\n", error.c_str());
-		printf("-------------------------------------\n");
+bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, ArrowArrayStream &arrow_stream) {
+	// construct the arrow scan
+	auto params = ConstructArrowScan((uintptr_t)&arrow_stream, false);
+
+	// run the arrow scan over the result
+	auto arrow_result = ScanArrowObject(con, params);
+	arrow_stream.release = nullptr;
+
+	if (!arrow_result) {
 		printf("Query: %s\n", query.c_str());
-		printf("-----------------DuckDB-------------------\n");
-		result->Print();
-		printf("-----------------Arrow--------------------\n");
-		materialized_arrow.Print();
-		printf("-------------------------------------\n");
 		return false;
 	}
-	return true;
+
+	return CompareResults(std::move(arrow_result), con.Query(query), query);
 }
 
 } // namespace duckdb

@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "duckdb/common/adbc/adbc.hpp"
+#include "arrow/arrow_test_helper.hpp"
 #include <iostream>
 
 using namespace std;
@@ -10,10 +11,11 @@ bool SUCCESS(AdbcStatusCode status) {
 	return status == ADBC_STATUS_OK;
 }
 const char *DUCKDB_LIB = std::getenv("DUCKDB_INSTALL_LIB");
+
 class ADBCTestDatabase {
 public:
-	explicit ADBCTestDatabase(const string &path = ":memory:") {
-
+	explicit ADBCTestDatabase(const string &path_parameter = "test.db") {
+		path = TestCreatePath(path_parameter);
 		REQUIRE(DUCKDB_LIB);
 		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
 		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", DUCKDB_LIB, &adbc_error)));
@@ -35,6 +37,13 @@ public:
 		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
 		REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
 		REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+	}
+
+	bool QueryAndCheck(const string &query) {
+		Query(query);
+		DuckDB db(path);
+		Connection con(db);
+		return ArrowTestHelper::RunArrowComparison(con, query, arrow_stream);
 	}
 
 	ArrowArrayStream &Query(const string &query) {
@@ -67,6 +76,7 @@ public:
 	AdbcConnection adbc_connection;
 	AdbcStatement adbc_statement;
 	ArrowArrayStream arrow_stream;
+	std::string path;
 };
 
 TEST_CASE("ADBC - Select 42", "[adbc]") {
@@ -75,20 +85,13 @@ TEST_CASE("ADBC - Select 42", "[adbc]") {
 	}
 	ADBCTestDatabase db;
 
-	auto result = db.Query("SELECT 42");
-
-	ArrowArray arrow_array;
-	REQUIRE(result.get_next(&result, &arrow_array) == 0);
-	// This should be 42
-	REQUIRE(((int *)arrow_array.children[0]->buffers[1])[0] == 42);
-	arrow_array.release(&arrow_array);
+	REQUIRE(db.QueryAndCheck("SELECT 42"));
 }
 
 TEST_CASE("ADBC - Test ingestion", "[adbc]") {
 	if (!DUCKDB_LIB) {
 		return;
 	}
-
 	ADBCTestDatabase db;
 
 	// Create Arrow Result
@@ -97,12 +100,20 @@ TEST_CASE("ADBC - Test ingestion", "[adbc]") {
 	// Create Table 'my_table' from the Arrow Result
 	db.CreateTable("my_table", input_data);
 
-	auto result = db.Query("SELECT * FROM my_table");
+	REQUIRE(db.QueryAndCheck("SELECT * FROM my_table"));
+}
 
-	ArrowArray arrow_array;
-	REQUIRE(result.get_next(&result, &arrow_array) == 0);
+TEST_CASE("ADBC - Test ingestion - Lineitem", "[adbc]") {
+	if (!DUCKDB_LIB) {
+		return;
+	}
+	ADBCTestDatabase db;
 
-	// This should be 42
-	REQUIRE(((int *)arrow_array.children[0]->buffers[1])[0] == 42);
-	arrow_array.release(&arrow_array);
+	// Create Arrow Result
+	auto input_data = db.Query("SELECT * FROM read_csv_auto(\'data/csv/lineitem-carriage.csv\')");
+
+	// Create Table 'my_table' from the Arrow Result
+	db.CreateTable("lineitem", input_data);
+
+	REQUIRE(db.QueryAndCheck("SELECT l_partkey, l_comment FROM lineitem WHERE l_orderkey=1 ORDER BY l_linenumber"));
 }
