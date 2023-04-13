@@ -26,8 +26,7 @@ struct BufferPoolReservation {
 	idx_t size {0};
 	BufferPool &pool;
 
-	BufferPoolReservation(BufferPool &pool) : pool(pool) {
-	}
+	BufferPoolReservation(BufferPool &pool);
 	BufferPoolReservation(const BufferPoolReservation &) = delete;
 	BufferPoolReservation &operator=(const BufferPoolReservation &) = delete;
 
