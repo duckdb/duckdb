@@ -55,7 +55,7 @@ jobs:
     - name: Test
       shell: bash
       run: |
-          echo "DUCKDB_INSTALL_LIB=$(find `pwd` -name "libduck*.so" | head -n 1)" >> $GITHUB_ENV
+          echo "DUCKDB_INSTALL_LIB=$(find `pwd` -name "libduck*.dylib" | head -n 1)" >> $GITHUB_ENV
           make unittestci
 
     - name: Amalgamation
