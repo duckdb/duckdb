@@ -1,6 +1,6 @@
 #include "duckdb/function/scalar/string_functions.hpp"
-
-#include <map>
+#include "duckdb/common/map.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 
@@ -32,10 +32,10 @@ static idx_t DamerauLevenshteinDistance(const string_t &source, const string_t &
 	const auto inf = source_len * cost_deletion + target_len * cost_insertion + 1;
 	// minimum edit distance from prefix of source string to prefix of target string
 	// same object as H in LW paper (with indices offset by 1)
-	std::vector<std::vector<idx_t>> distance(source_len + 2, std::vector<idx_t>(target_len + 2, inf));
+	vector<vector<idx_t>> distance(source_len + 2, vector<idx_t>(target_len + 2, inf));
 	// keeps track of the largest string indices of source string matching each character
 	// same as DA in LW paper
-	std::map<char, idx_t> largest_source_chr_matching;
+	map<char, idx_t> largest_source_chr_matching;
 
 	// initialise row/column corresponding to zero-length strings
 	// partial string -> empty requires a deletion for each character
