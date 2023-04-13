@@ -3,7 +3,6 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/set.hpp"
-#include "duckdb/parallel/concurrentqueue.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -11,93 +10,12 @@
 
 namespace duckdb {
 
-BufferPoolReservation::BufferPoolReservation(BufferPoolReservation &&src) noexcept {
-	size = src.size;
-	src.size = 0;
-}
-
-BufferPoolReservation &BufferPoolReservation::operator=(BufferPoolReservation &&src) noexcept {
-	size = src.size;
-	src.size = 0;
-	return *this;
-}
-
-BufferPoolReservation::~BufferPoolReservation() {
-	D_ASSERT(size == 0);
-}
-
-void BufferPoolReservation::Resize(atomic<idx_t> &counter, idx_t new_size) {
-	int64_t delta = (int64_t)new_size - size;
-	D_ASSERT(delta > 0 || (int64_t)counter >= -delta);
-	counter += delta;
-	size = new_size;
-}
-
-void BufferPoolReservation::Merge(BufferPoolReservation &&src) {
-	size += src.size;
-	src.size = 0;
-}
-
 struct BufferAllocatorData : PrivateAllocatorData {
 	explicit BufferAllocatorData(BufferManager &manager) : manager(manager) {
 	}
 
 	BufferManager &manager;
 };
-
-BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p)
-    : block_manager(block_manager), readers(0), block_id(block_id_p), buffer(nullptr), eviction_timestamp(0),
-      can_destroy(false), unswizzled(nullptr) {
-	eviction_timestamp = 0;
-	state = BlockState::BLOCK_UNLOADED;
-	memory_usage = Storage::BLOCK_ALLOC_SIZE;
-}
-
-BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, unique_ptr<FileBuffer> buffer_p,
-                         bool can_destroy_p, idx_t block_size, BufferPoolReservation &&reservation)
-    : block_manager(block_manager), readers(0), block_id(block_id_p), eviction_timestamp(0), can_destroy(can_destroy_p),
-      unswizzled(nullptr) {
-	buffer = std::move(buffer_p);
-	state = BlockState::BLOCK_LOADED;
-	memory_usage = block_size;
-	memory_charge = std::move(reservation);
-}
-
-BlockHandle::~BlockHandle() { // NOLINT: allow internal exceptions
-	// being destroyed, so any unswizzled pointers are just binary junk now.
-	unswizzled = nullptr;
-	auto &buffer_manager = block_manager.buffer_manager;
-	// no references remain to this block: erase
-	if (buffer && state == BlockState::BLOCK_LOADED) {
-		D_ASSERT(memory_charge.size > 0);
-		// the block is still loaded in memory: erase it
-		buffer.reset();
-		memory_charge.Resize(buffer_manager.buffer_pool.current_memory, 0);
-	} else {
-		D_ASSERT(memory_charge.size == 0);
-	}
-	buffer_manager.buffer_pool.PurgeQueue();
-	block_manager.UnregisterBlock(block_id, can_destroy);
-}
-
-unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuffer> reusable_buffer,
-                                block_id_t block_id) {
-	if (reusable_buffer) {
-		// re-usable buffer: re-use it
-		if (reusable_buffer->type == FileBufferType::BLOCK) {
-			// we can reuse the buffer entirely
-			auto &block = (Block &)*reusable_buffer;
-			block.id = block_id;
-			return unique_ptr_cast<FileBuffer, Block>(std::move(reusable_buffer));
-		}
-		auto block = block_manager.CreateBlock(block_id, reusable_buffer.get());
-		reusable_buffer.reset();
-		return block;
-	} else {
-		// no re-usable buffer: allocate a new block
-		return block_manager.CreateBlock(block_id, nullptr);
-	}
-}
 
 idx_t GetAllocSize(idx_t size) {
 	return AlignValue<idx_t, Storage::SECTOR_SIZE>(size + Storage::BLOCK_HEADER_SIZE);
@@ -114,110 +32,6 @@ unique_ptr<FileBuffer> BufferManager::ConstructManagedBuffer(idx_t size, unique_
 		return make_uniq<FileBuffer>(Allocator::Get(db), type, size);
 	}
 }
-
-BufferHandle BlockHandle::Load(shared_ptr<BlockHandle> &handle, unique_ptr<FileBuffer> reusable_buffer) {
-	if (handle->state == BlockState::BLOCK_LOADED) {
-		// already loaded
-		D_ASSERT(handle->buffer);
-		return BufferHandle(handle, handle->buffer.get());
-	}
-
-	auto &block_manager = handle->block_manager;
-	if (handle->block_id < MAXIMUM_BLOCK) {
-		auto block = AllocateBlock(block_manager, std::move(reusable_buffer), handle->block_id);
-		block_manager.Read(*block);
-		handle->buffer = std::move(block);
-	} else {
-		if (handle->can_destroy) {
-			return BufferHandle();
-		} else {
-			handle->buffer =
-			    block_manager.buffer_manager.ReadTemporaryBuffer(handle->block_id, std::move(reusable_buffer));
-		}
-	}
-	handle->state = BlockState::BLOCK_LOADED;
-	return BufferHandle(handle, handle->buffer.get());
-}
-
-unique_ptr<FileBuffer> BlockHandle::UnloadAndTakeBlock() {
-	if (state == BlockState::BLOCK_UNLOADED) {
-		// already unloaded: nothing to do
-		return nullptr;
-	}
-	D_ASSERT(!unswizzled);
-	D_ASSERT(CanUnload());
-
-	if (block_id >= MAXIMUM_BLOCK && !can_destroy) {
-		// temporary block that cannot be destroyed: write to temporary file
-		block_manager.buffer_manager.WriteTemporaryBuffer(block_id, *buffer);
-	}
-	memory_charge.Resize(block_manager.buffer_manager.buffer_pool.current_memory, 0);
-	state = BlockState::BLOCK_UNLOADED;
-	return std::move(buffer);
-}
-
-void BlockHandle::Unload() {
-	auto block = UnloadAndTakeBlock();
-	block.reset();
-}
-
-bool BlockHandle::CanUnload() {
-	if (state == BlockState::BLOCK_UNLOADED) {
-		// already unloaded
-		return false;
-	}
-	if (readers > 0) {
-		// there are active readers
-		return false;
-	}
-	if (block_id >= MAXIMUM_BLOCK && !can_destroy && block_manager.buffer_manager.temp_directory.empty()) {
-		// in order to unload this block we need to write it to a temporary buffer
-		// however, no temporary directory is specified!
-		// hence we cannot unload the block
-		return false;
-	}
-	return true;
-}
-
-struct BufferEvictionNode {
-	BufferEvictionNode() {
-	}
-	BufferEvictionNode(weak_ptr<BlockHandle> handle_p, idx_t timestamp_p)
-	    : handle(std::move(handle_p)), timestamp(timestamp_p) {
-		D_ASSERT(!handle.expired());
-	}
-
-	weak_ptr<BlockHandle> handle;
-	idx_t timestamp;
-
-	bool CanUnload(BlockHandle &handle_p) {
-		if (timestamp != handle_p.eviction_timestamp) {
-			// handle was used in between
-			return false;
-		}
-		return handle_p.CanUnload();
-	}
-
-	shared_ptr<BlockHandle> TryGetBlockHandle() {
-		auto handle_p = handle.lock();
-		if (!handle_p) {
-			// BlockHandle has been destroyed
-			return nullptr;
-		}
-		if (!CanUnload(*handle_p)) {
-			// handle was used in between
-			return nullptr;
-		}
-		// this is the latest node in the queue with this handle
-		return handle_p;
-	}
-};
-
-typedef duckdb_moodycamel::ConcurrentQueue<BufferEvictionNode> eviction_queue_t;
-
-struct EvictionQueue {
-	eviction_queue_t q;
-};
 
 class TemporaryFileManager;
 
@@ -242,12 +56,6 @@ void BufferManager::SetTemporaryDirectory(string new_dir) {
 	this->temp_directory = std::move(new_dir);
 }
 
-BufferPool::BufferPool(idx_t maximum_memory)
-    : current_memory(0), maximum_memory(maximum_memory), queue(make_uniq<EvictionQueue>()), queue_insertions(0) {
-}
-BufferPool::~BufferPool() {
-}
-
 BufferManager::BufferManager(DatabaseInstance &db, string tmp)
     : db(db), buffer_pool(db.GetBufferPool()), temp_directory(std::move(tmp)), temporary_id(MAXIMUM_BLOCK),
       buffer_allocator(BufferAllocatorAllocate, BufferAllocatorFree, BufferAllocatorRealloc,
@@ -256,70 +64,6 @@ BufferManager::BufferManager(DatabaseInstance &db, string tmp)
 }
 
 BufferManager::~BufferManager() {
-}
-
-shared_ptr<BlockHandle> BlockManager::RegisterBlock(block_id_t block_id, bool is_meta_block) {
-	lock_guard<mutex> lock(blocks_lock);
-	// check if the block already exists
-	auto entry = blocks.find(block_id);
-	if (entry != blocks.end()) {
-		// already exists: check if it hasn't expired yet
-		auto existing_ptr = entry->second.lock();
-		if (existing_ptr) {
-			//! it hasn't! return it
-			return existing_ptr;
-		}
-	}
-	// create a new block pointer for this block
-	auto result = make_shared<BlockHandle>(*this, block_id);
-	// for meta block, cache the handle in meta_blocks
-	if (is_meta_block) {
-		meta_blocks[block_id] = result;
-	}
-	// register the block pointer in the set of blocks as a weak pointer
-	blocks[block_id] = weak_ptr<BlockHandle>(result);
-	return result;
-}
-
-void BlockManager::ClearMetaBlockHandles() {
-	meta_blocks.clear();
-}
-
-shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, shared_ptr<BlockHandle> old_block) {
-
-	// pin the old block to ensure we have it loaded in memory
-	auto old_handle = buffer_manager.Pin(old_block);
-	D_ASSERT(old_block->state == BlockState::BLOCK_LOADED);
-	D_ASSERT(old_block->buffer);
-
-	// Temp buffers can be larger than the storage block size. But persistent buffers
-	// cannot.
-	D_ASSERT(old_block->buffer->AllocSize() <= Storage::BLOCK_ALLOC_SIZE);
-
-	// register a block with the new block id
-	auto new_block = RegisterBlock(block_id);
-	D_ASSERT(new_block->state == BlockState::BLOCK_UNLOADED);
-	D_ASSERT(new_block->readers == 0);
-
-	// move the data from the old block into data for the new block
-	new_block->state = BlockState::BLOCK_LOADED;
-	new_block->buffer = CreateBlock(block_id, old_block->buffer.get());
-	new_block->memory_usage = old_block->memory_usage;
-	new_block->memory_charge = std::move(old_block->memory_charge);
-
-	// clear the old buffer and unload it
-	old_block->buffer.reset();
-	old_block->state = BlockState::BLOCK_UNLOADED;
-	old_block->memory_usage = 0;
-	old_handle.Destroy();
-	old_block.reset();
-
-	// persist the new block to disk
-	Write(*new_block->buffer, block_id);
-
-	buffer_manager.buffer_pool.AddToEvictionQueue(new_block);
-
-	return new_block;
 }
 
 template <typename... ARGS>
@@ -438,18 +182,6 @@ BufferHandle BufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	return buf;
 }
 
-void BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
-	constexpr int INSERT_INTERVAL = 1024;
-
-	D_ASSERT(handle->readers == 0);
-	handle->eviction_timestamp++;
-	// After each 1024 insertions, run through the queue and purge.
-	if ((++queue_insertions % INSERT_INTERVAL) == 0) {
-		PurgeQueue();
-	}
-	queue->q.enqueue(BufferEvictionNode(weak_ptr<BlockHandle>(handle), handle->eviction_timestamp));
-}
-
 void BufferManager::VerifyZeroReaders(shared_ptr<BlockHandle> &handle) {
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 	auto replacement_buffer = make_uniq<FileBuffer>(Allocator::Get(db), handle->buffer->type,
@@ -470,89 +202,6 @@ void BufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 	if (handle->readers == 0) {
 		VerifyZeroReaders(handle);
 		buffer_pool.AddToEvictionQueue(handle);
-	}
-}
-
-BufferPool::EvictionResult BufferPool::EvictBlocks(idx_t extra_memory, idx_t memory_limit,
-                                                   unique_ptr<FileBuffer> *buffer) {
-	BufferEvictionNode node;
-	TempBufferPoolReservation r(current_memory, extra_memory);
-	while (current_memory > memory_limit) {
-		// get a block to unpin from the queue
-		if (!queue->q.try_dequeue(node)) {
-			// Failed to reserve. Adjust size of temp reservation to 0.
-			r.Resize(current_memory, 0);
-			return {false, std::move(r)};
-		}
-		// get a reference to the underlying block pointer
-		auto handle = node.TryGetBlockHandle();
-		if (!handle) {
-			continue;
-		}
-		// we might be able to free this block: grab the mutex and check if we can free it
-		lock_guard<mutex> lock(handle->lock);
-		if (!node.CanUnload(*handle)) {
-			// something changed in the mean-time, bail out
-			continue;
-		}
-		// hooray, we can unload the block
-		if (buffer && handle->buffer->AllocSize() == extra_memory) {
-			// we can actually re-use the memory directly!
-			*buffer = handle->UnloadAndTakeBlock();
-			return {true, std::move(r)};
-		} else {
-			// release the memory and mark the block as unloaded
-			handle->Unload();
-		}
-	}
-	return {true, std::move(r)};
-}
-
-void BufferPool::PurgeQueue() {
-	BufferEvictionNode node;
-	while (true) {
-		if (!queue->q.try_dequeue(node)) {
-			break;
-		}
-		auto handle = node.TryGetBlockHandle();
-		if (!handle) {
-			continue;
-		} else {
-			queue->q.enqueue(std::move(node));
-			break;
-		}
-	}
-}
-
-void BlockManager::UnregisterBlock(block_id_t block_id, bool can_destroy) {
-	if (block_id >= MAXIMUM_BLOCK) {
-		// in-memory buffer: buffer could have been offloaded to disk: remove the file
-		buffer_manager.DeleteTemporaryFile(block_id);
-	} else {
-		lock_guard<mutex> lock(blocks_lock);
-		// on-disk block: erase from list of blocks in manager
-		blocks.erase(block_id);
-	}
-}
-
-void BufferPool::SetLimit(idx_t limit, const char *exception_postscript) {
-	lock_guard<mutex> l_lock(limit_lock);
-	// try to evict until the limit is reached
-	if (!EvictBlocks(0, limit).success) {
-		throw OutOfMemoryException(
-		    "Failed to change memory limit to %lld: could not free up enough memory for the new limit%s", limit,
-		    exception_postscript);
-	}
-	idx_t old_limit = maximum_memory;
-	// set the global maximum memory to the new limit if successful
-	maximum_memory = limit;
-	// evict again
-	if (!EvictBlocks(0, limit).success) {
-		// failed: go back to old limit
-		maximum_memory = old_limit;
-		throw OutOfMemoryException(
-		    "Failed to change memory limit to %lld: could not free up enough memory for the new limit%s", limit,
-		    exception_postscript);
 	}
 }
 
