@@ -51,7 +51,9 @@ void PythonImportCacheItem::LoadModule(const string &name, PythonImportCache &ca
 
 void PythonImportCacheItem::LoadAttribute(const string &name, PythonImportCache &cache, PythonImportCacheItem &source) {
 	auto source_object = source();
-	object = AddCache(cache, std::move(source_object.attr(name.c_str())));
+	if (py::hasattr(source_object, name.c_str())) {
+		object = AddCache(cache, std::move(source_object.attr(name.c_str())));
+	}
 	LoadSubtypes(cache);
 }
 
