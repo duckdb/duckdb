@@ -99,7 +99,7 @@ static bool PatternIsContains(const string &pattern) {
 	return true;
 }
 
-unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<reference_wrapper<Expression>> &bindings,
+unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                    bool &changes_made, bool is_root) {
 	auto &root = bindings[0].get().Cast<BoundFunctionExpression>();
 	auto &constant_expr = bindings[2].get().Cast<BoundConstantExpression>();

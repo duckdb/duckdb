@@ -786,7 +786,7 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 	D_ASSERT(IsGreaterThan(comparison.type) || IsLessThan(comparison.type));
 	// get the LHS and RHS nodes
 	auto &left_node = GetNode(*comparison.left);
-	reference_wrapper<Expression> right_node = GetNode(*comparison.right);
+	reference<Expression> right_node = GetNode(*comparison.right);
 	// In case with filters like CAST(i) = j and i = 5 we replace the COLUMN_REF i with the constant 5
 	if (right_node.get().type == ExpressionType::OPERATOR_CAST) {
 		auto &bound_cast_expr = right_node.get().Cast<BoundCastExpression>();

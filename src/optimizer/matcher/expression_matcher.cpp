@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-bool ExpressionMatcher::Match(Expression &expr, vector<reference_wrapper<Expression>> &bindings) {
+bool ExpressionMatcher::Match(Expression &expr, vector<reference<Expression>> &bindings) {
 	if (type && !type->Match(expr.return_type)) {
 		return false;
 	}
@@ -18,7 +18,7 @@ bool ExpressionMatcher::Match(Expression &expr, vector<reference_wrapper<Express
 	return true;
 }
 
-bool ExpressionEqualityMatcher::Match(Expression &expr, vector<reference_wrapper<Expression>> &bindings) {
+bool ExpressionEqualityMatcher::Match(Expression &expr, vector<reference<Expression>> &bindings) {
 	if (!expr.Equals(&expression)) {
 		return false;
 	}
@@ -26,25 +26,25 @@ bool ExpressionEqualityMatcher::Match(Expression &expr, vector<reference_wrapper
 	return true;
 }
 
-bool CaseExpressionMatcher::Match(Expression &expr_p, vector<reference_wrapper<Expression>> &bindings) {
+bool CaseExpressionMatcher::Match(Expression &expr_p, vector<reference<Expression>> &bindings) {
 	if (!ExpressionMatcher::Match(expr_p, bindings)) {
 		return false;
 	}
 	return true;
 }
 
-bool ComparisonExpressionMatcher::Match(Expression &expr_p, vector<reference_wrapper<Expression>> &bindings) {
+bool ComparisonExpressionMatcher::Match(Expression &expr_p, vector<reference<Expression>> &bindings) {
 	if (!ExpressionMatcher::Match(expr_p, bindings)) {
 		return false;
 	}
 	auto &expr = expr_p.Cast<BoundComparisonExpression>();
-	vector<reference_wrapper<Expression>> expressions;
+	vector<reference<Expression>> expressions;
 	expressions.push_back(*expr.left);
 	expressions.push_back(*expr.right);
 	return SetMatcher::Match(matchers, expressions, bindings, policy);
 }
 
-bool CastExpressionMatcher::Match(Expression &expr_p, vector<reference_wrapper<Expression>> &bindings) {
+bool CastExpressionMatcher::Match(Expression &expr_p, vector<reference<Expression>> &bindings) {
 	if (!ExpressionMatcher::Match(expr_p, bindings)) {
 		return false;
 	}
@@ -55,7 +55,7 @@ bool CastExpressionMatcher::Match(Expression &expr_p, vector<reference_wrapper<E
 	return matcher->Match(*expr.child, bindings);
 }
 
-bool InClauseExpressionMatcher::Match(Expression &expr_p, vector<reference_wrapper<Expression>> &bindings) {
+bool InClauseExpressionMatcher::Match(Expression &expr_p, vector<reference<Expression>> &bindings) {
 	if (!ExpressionMatcher::Match(expr_p, bindings)) {
 		return false;
 	}
@@ -66,7 +66,7 @@ bool InClauseExpressionMatcher::Match(Expression &expr_p, vector<reference_wrapp
 	return SetMatcher::Match(matchers, expr.children, bindings, policy);
 }
 
-bool ConjunctionExpressionMatcher::Match(Expression &expr_p, vector<reference_wrapper<Expression>> &bindings) {
+bool ConjunctionExpressionMatcher::Match(Expression &expr_p, vector<reference<Expression>> &bindings) {
 	if (!ExpressionMatcher::Match(expr_p, bindings)) {
 		return false;
 	}
@@ -77,7 +77,7 @@ bool ConjunctionExpressionMatcher::Match(Expression &expr_p, vector<reference_wr
 	return true;
 }
 
-bool FunctionExpressionMatcher::Match(Expression &expr_p, vector<reference_wrapper<Expression>> &bindings) {
+bool FunctionExpressionMatcher::Match(Expression &expr_p, vector<reference<Expression>> &bindings) {
 	if (!ExpressionMatcher::Match(expr_p, bindings)) {
 		return false;
 	}
@@ -91,7 +91,7 @@ bool FunctionExpressionMatcher::Match(Expression &expr_p, vector<reference_wrapp
 	return true;
 }
 
-bool FoldableConstantMatcher::Match(Expression &expr, vector<reference_wrapper<Expression>> &bindings) {
+bool FoldableConstantMatcher::Match(Expression &expr, vector<reference<Expression>> &bindings) {
 	// we match on ANY expression that is a scalar expression
 	if (!expr.IsFoldable()) {
 		return false;

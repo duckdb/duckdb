@@ -209,7 +209,7 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *plan, unique_ptr<
 	}
 	// check if joining with the DelimGet is redundant, and collect relevant column information
 	bool all_equality_conditions = true;
-	vector<reference_wrapper<Expression>> nulls_are_not_equal_exprs;
+	vector<reference<Expression>> nulls_are_not_equal_exprs;
 	for (auto &cond : join.conditions) {
 		all_equality_conditions = all_equality_conditions && IsEqualityJoinCondition(cond);
 		auto &delim_side = delim_idx == 0 ? *cond.left : *cond.right;

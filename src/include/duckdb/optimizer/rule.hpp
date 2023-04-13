@@ -29,7 +29,7 @@ public:
 	unique_ptr<ExpressionMatcher> root;
 
 	ClientContext &GetContext() const;
-	virtual unique_ptr<Expression> Apply(LogicalOperator &op, vector<reference_wrapper<Expression>> &bindings,
+	virtual unique_ptr<Expression> Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
 	                                     bool &fixed_point, bool is_root) = 0;
 };
 

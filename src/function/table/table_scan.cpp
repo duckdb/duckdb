@@ -314,7 +314,7 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 
 			matcher.policy = SetMatcher::Policy::UNORDERED;
 
-			vector<reference_wrapper<Expression>> bindings;
+			vector<reference<Expression>> bindings;
 			if (matcher.Match(expr, bindings)) {
 				// range or equality comparison with constant value
 				// we can use our index here

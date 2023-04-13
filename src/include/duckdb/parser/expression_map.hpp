@@ -19,32 +19,30 @@ class Expression;
 
 template <class T>
 struct ExpressionHashFunction {
-	uint64_t operator()(const reference_wrapper<T> &expr) const {
+	uint64_t operator()(const reference<T> &expr) const {
 		return (uint64_t)expr.get().Hash();
 	}
 };
 
 template <class T>
 struct ExpressionEquality {
-	bool operator()(const reference_wrapper<T> &a, const reference_wrapper<T> &b) const {
+	bool operator()(const reference<T> &a, const reference<T> &b) const {
 		return a.get().Equals(&b.get());
 	}
 };
 
 template <typename T>
 using expression_map_t =
-    unordered_map<reference_wrapper<Expression>, T, ExpressionHashFunction<Expression>, ExpressionEquality<Expression>>;
+    unordered_map<reference<Expression>, T, ExpressionHashFunction<Expression>, ExpressionEquality<Expression>>;
 
 using expression_set_t =
-    unordered_set<reference_wrapper<Expression>, ExpressionHashFunction<Expression>, ExpressionEquality<Expression>>;
+    unordered_set<reference<Expression>, ExpressionHashFunction<Expression>, ExpressionEquality<Expression>>;
 
 template <typename T>
-using parsed_expression_map_t =
-    unordered_map<reference_wrapper<ParsedExpression>, T, ExpressionHashFunction<ParsedExpression>,
-                  ExpressionEquality<ParsedExpression>>;
+using parsed_expression_map_t = unordered_map<reference<ParsedExpression>, T, ExpressionHashFunction<ParsedExpression>,
+                                              ExpressionEquality<ParsedExpression>>;
 
-using parsed_expression_set_t =
-    unordered_set<reference_wrapper<ParsedExpression>, ExpressionHashFunction<ParsedExpression>,
-                  ExpressionEquality<ParsedExpression>>;
+using parsed_expression_set_t = unordered_set<reference<ParsedExpression>, ExpressionHashFunction<ParsedExpression>,
+                                              ExpressionEquality<ParsedExpression>>;
 
 } // namespace duckdb

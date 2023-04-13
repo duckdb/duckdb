@@ -11,8 +11,7 @@ OrderedAggregateOptimizer::OrderedAggregateOptimizer(ExpressionRewriter &rewrite
 	root->expr_class = ExpressionClass::BOUND_AGGREGATE;
 }
 
-unique_ptr<Expression> OrderedAggregateOptimizer::Apply(LogicalOperator &op,
-                                                        vector<reference_wrapper<Expression>> &bindings,
+unique_ptr<Expression> OrderedAggregateOptimizer::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                         bool &changes_made, bool is_root) {
 	auto &aggr = bindings[0].get().Cast<BoundAggregateExpression>();
 	if (!aggr.order_bys) {

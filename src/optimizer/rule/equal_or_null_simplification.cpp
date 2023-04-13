@@ -81,8 +81,7 @@ static unique_ptr<Expression> TryRewriteEqualOrIsNull(Expression &equal_expr, Ex
 	return nullptr;
 }
 
-unique_ptr<Expression> EqualOrNullSimplification::Apply(LogicalOperator &op,
-                                                        vector<reference_wrapper<Expression>> &bindings,
+unique_ptr<Expression> EqualOrNullSimplification::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                         bool &changes_made, bool is_root) {
 	const Expression &or_exp = bindings[0].get();
 

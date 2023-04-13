@@ -44,7 +44,7 @@ bool AreMatchesPossible(LogicalType &left, LogicalType &right) {
 	}
 	return false;
 }
-unique_ptr<Expression> EnumComparisonRule::Apply(LogicalOperator &op, vector<reference_wrapper<Expression>> &bindings,
+unique_ptr<Expression> EnumComparisonRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                  bool &changes_made, bool is_root) {
 
 	auto &root = bindings[0].get().Cast<BoundComparisonExpression>();

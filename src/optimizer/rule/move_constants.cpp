@@ -28,7 +28,7 @@ MoveConstantsRule::MoveConstantsRule(ExpressionRewriter &rewriter) : Rule(rewrit
 	root = std::move(op);
 }
 
-unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<reference_wrapper<Expression>> &bindings,
+unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                 bool &changes_made, bool is_root) {
 	auto &comparison = bindings[0].get().Cast<BoundComparisonExpression>();
 	auto &outer_constant = bindings[1].get().Cast<BoundConstantExpression>();

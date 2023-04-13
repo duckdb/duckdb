@@ -28,7 +28,7 @@ struct Dependency {
 	}
 
 	//! The catalog entry this depends on
-	reference_wrapper<CatalogEntry> entry;
+	reference<CatalogEntry> entry;
 	//! The type of dependency
 	DependencyType dependency_type;
 };

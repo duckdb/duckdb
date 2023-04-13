@@ -31,8 +31,8 @@ unique_ptr<Expression> ConjunctionSimplificationRule::RemoveExpression(BoundConj
 }
 
 unique_ptr<Expression> ConjunctionSimplificationRule::Apply(LogicalOperator &op,
-                                                            vector<reference_wrapper<Expression>> &bindings,
-                                                            bool &changes_made, bool is_root) {
+                                                            vector<reference<Expression>> &bindings, bool &changes_made,
+                                                            bool is_root) {
 	auto &conjunction = bindings[0].get().Cast<BoundConjunctionExpression>();
 	auto &constant_expr = bindings[1].get();
 	// the constant_expr is a scalar expression that we have to fold

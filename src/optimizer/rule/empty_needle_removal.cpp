@@ -21,8 +21,7 @@ EmptyNeedleRemovalRule::EmptyNeedleRemovalRule(ExpressionRewriter &rewriter) : R
 	root = std::move(func);
 }
 
-unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op,
-                                                     vector<reference_wrapper<Expression>> &bindings,
+unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                      bool &changes_made, bool is_root) {
 	auto &root = bindings[0].get().Cast<BoundFunctionExpression>();
 	D_ASSERT(root.children.size() == 2);

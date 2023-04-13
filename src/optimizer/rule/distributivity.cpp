@@ -53,7 +53,7 @@ unique_ptr<Expression> DistributivityRule::ExtractExpression(BoundConjunctionExp
 	return result;
 }
 
-unique_ptr<Expression> DistributivityRule::Apply(LogicalOperator &op, vector<reference_wrapper<Expression>> &bindings,
+unique_ptr<Expression> DistributivityRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                  bool &changes_made, bool is_root) {
 	auto &initial_or = bindings[0].get().Cast<BoundConjunctionExpression>();
 

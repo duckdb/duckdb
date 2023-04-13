@@ -14,8 +14,7 @@ ComparisonSimplificationRule::ComparisonSimplificationRule(ExpressionRewriter &r
 	root = std::move(op);
 }
 
-unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op,
-                                                           vector<reference_wrapper<Expression>> &bindings,
+unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                            bool &changes_made, bool is_root) {
 	auto &expr = bindings[0].get().Cast<BoundComparisonExpression>();
 	auto &constant_expr = bindings[1].get();

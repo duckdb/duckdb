@@ -12,7 +12,7 @@ namespace duckdb {
 unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const vector<Rule *> &rules,
                                                       unique_ptr<Expression> expr, bool &changes_made, bool is_root) {
 	for (auto &rule : rules) {
-		vector<reference_wrapper<Expression>> bindings;
+		vector<reference<Expression>> bindings;
 		if (rule->root->Match(*expr, bindings)) {
 			// the rule matches! try to apply it
 			bool rule_made_change = false;
