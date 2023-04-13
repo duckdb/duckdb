@@ -22,7 +22,7 @@ unique_ptr<SampleOptions> Transformer::TransformSampleOptions(duckdb_libpgquery:
 	if (!options) {
 		return nullptr;
 	}
-	auto result = make_unique<SampleOptions>();
+	auto result = make_uniq<SampleOptions>();
 	auto &sample_options = (duckdb_libpgquery::PGSampleOptions &)*options;
 	auto &sample_size = (duckdb_libpgquery::PGSampleSize &)*sample_options.sample_size;
 	auto sample_value = TransformValue(sample_size.sample_size)->value;

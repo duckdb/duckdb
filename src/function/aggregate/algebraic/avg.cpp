@@ -48,11 +48,11 @@ struct AverageDecimalBindData : public FunctionData {
 
 public:
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<AverageDecimalBindData>(scale);
+		return make_uniq<AverageDecimalBindData>(scale);
 	};
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (AverageDecimalBindData &)other_p;
+		auto &other = other_p.Cast<AverageDecimalBindData>();
 		return scale == other.scale;
 	}
 };
@@ -76,7 +76,7 @@ template <class T>
 static T GetAverageDivident(uint64_t count, FunctionData *bind_data) {
 	T divident = T(count);
 	if (bind_data) {
-		auto &avg_bind_data = (AverageDecimalBindData &)*bind_data;
+		auto &avg_bind_data = bind_data->Cast<AverageDecimalBindData>();
 		divident *= avg_bind_data.scale;
 	}
 	return divident;
@@ -173,7 +173,7 @@ unique_ptr<FunctionData> BindDecimalAvg(ClientContext &context, AggregateFunctio
 	function.name = "avg";
 	function.arguments[0] = decimal_type;
 	function.return_type = LogicalType::DOUBLE;
-	return make_unique<AverageDecimalBindData>(
+	return make_uniq<AverageDecimalBindData>(
 	    Hugeint::Cast<double>(Hugeint::POWERS_OF_TEN[DecimalType::GetScale(decimal_type)]));
 }
 

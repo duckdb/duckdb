@@ -29,11 +29,11 @@ struct BitstringAggBindData : public FunctionData {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<BitstringAggBindData>(*this);
+		return make_uniq<BitstringAggBindData>(*this);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (BitstringAggBindData &)other_p;
+		auto &other = other_p.Cast<BitstringAggBindData>();
 		if (min.IsNull() && other.min.IsNull() && max.IsNull() && other.max.IsNull()) {
 			return true;
 		}
@@ -149,7 +149,7 @@ struct BitStringAggOperation {
 	}
 
 	template <class STATE>
-	static void Destroy(STATE *state) {
+	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
 		if (state->is_set && !state->value.IsInlined()) {
 			delete[] state->value.GetDataUnsafe();
 		}
@@ -206,9 +206,9 @@ unique_ptr<FunctionData> BindBitstringAgg(ClientContext &context, AggregateFunct
 		auto max = ExpressionExecutor::EvaluateScalar(context, *arguments[2]);
 		Function::EraseArgument(function, arguments, 2);
 		Function::EraseArgument(function, arguments, 1);
-		return make_unique<BitstringAggBindData>(min, max);
+		return make_uniq<BitstringAggBindData>(min, max);
 	}
-	return make_unique<BitstringAggBindData>();
+	return make_uniq<BitstringAggBindData>();
 }
 
 template <class TYPE>

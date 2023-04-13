@@ -58,10 +58,10 @@ class build_ext(CompilerLauncherMixin, _build_ext):
 
 lib_name = 'duckdb'
 
-extensions = ['parquet', 'icu', 'fts', 'tpch', 'tpcds', 'visualizer', 'json', 'excel']
+extensions = ['parquet', 'icu', 'fts', 'tpch', 'tpcds', 'json']
 
 if platform.system() == 'Windows':
-    extensions = ['parquet', 'icu', 'fts', 'tpch', 'json', 'excel']
+    extensions = ['parquet', 'icu', 'fts', 'tpch', 'json']
 
 if platform.system() == 'Linux' and platform.architecture()[0] == '64bit' and not hasattr(sys, 'getandroidapilevel'):
     extensions.append('jemalloc')
@@ -287,7 +287,6 @@ setup(
     data_files = data_files,
     packages=[
 		'pyduckdb',
-        'duckdb_query_graph',
         'duckdb-stubs'
     ],
     include_package_data=True,

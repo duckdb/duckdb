@@ -60,9 +60,3 @@ install(
   EXPORT "${DUCKDB_EXPORT_SET}"
   LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
   ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
-
-if(NOT CLANG_TIDY AND BUILD_MAIN_DUCKDB_LIBRARY)
-  add_executable(parquetcli parquetcli.cpp)
-  target_link_libraries(parquetcli parquet_extension)
-  target_link_libraries(parquetcli duckdb_static)
-endif()

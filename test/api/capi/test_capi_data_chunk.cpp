@@ -93,7 +93,7 @@ TEST_CASE("Test Logical Types C API", "[capi]") {
 
 TEST_CASE("Test DataChunk C API", "[capi]") {
 	CAPITester tester;
-	unique_ptr<CAPIResult> result;
+	duckdb::unique_ptr<CAPIResult> result;
 	duckdb_state status;
 
 	REQUIRE(tester.OpenDatabase(nullptr));
@@ -195,7 +195,7 @@ TEST_CASE("Test DataChunk C API", "[capi]") {
 
 TEST_CASE("Test DataChunk result fetch in C API", "[capi]") {
 	CAPITester tester;
-	unique_ptr<CAPIResult> result;
+	duckdb::unique_ptr<CAPIResult> result;
 
 	if (duckdb_vector_size() < 64) {
 		return;
@@ -254,6 +254,7 @@ TEST_CASE("Test DataChunk populate ListVector in C API", "[capi]") {
 	REQUIRE(duckdb_list_vector_set_size(list_vector, 123) == duckdb_state::DuckDBSuccess);
 	REQUIRE(duckdb_list_vector_get_size(list_vector) == 123);
 
+#if STANDARD_VECTOR_SIZE > 2
 	auto entries = (duckdb_list_entry *)duckdb_vector_get_data(list_vector);
 	entries[0].offset = 0;
 	entries[0].length = 20;
@@ -266,6 +267,7 @@ TEST_CASE("Test DataChunk populate ListVector in C API", "[capi]") {
 	for (int i = 0; i < 123; i++) {
 		REQUIRE(ListVector::GetEntry(vector).GetValue(i) == i);
 	}
+#endif
 
 	duckdb_destroy_data_chunk(&chunk);
 	duckdb_destroy_logical_type(&list_type);

@@ -33,8 +33,8 @@ using namespace duckdb;
 	}
 
 #define NormalConfig()                                                                                                 \
-	unique_ptr<DBConfig> GetConfig() {                                                                                 \
-		return make_unique<DBConfig>();                                                                                \
+	duckdb::unique_ptr<DBConfig> GetConfig() {                                                                         \
+		return make_uniq<DBConfig>();                                                                                  \
 	}
 
 DUCKDB_BENCHMARK(TPCHEmptyStartup, "[startup]")

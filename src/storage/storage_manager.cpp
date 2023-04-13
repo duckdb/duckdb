@@ -85,11 +85,11 @@ void SingleFileStorageManager::LoadDatabase() {
 	auto &config = DBConfig::Get(db);
 	if (InMemory()) {
 		if (config.custom_buffer_manager) {
-			block_manager = make_unique<InMemoryBlockManager>(*config.custom_buffer_manager);
+			block_manager = make_uniq<InMemoryBlockManager>(*config.custom_buffer_manager);
 		} else {
-			block_manager = make_unique<InMemoryBlockManager>(BufferManager::GetBufferManager(db));
+			block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db));
 		}
-		table_io_manager = make_unique<SingleFileTableIOManager>(*block_manager);
+		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager);
 		return;
 	}
 
@@ -108,16 +108,16 @@ void SingleFileStorageManager::LoadDatabase() {
 			fs.RemoveFile(wal_path);
 		}
 		// initialize the block manager while creating a new db file
-		auto sf_block_manager = make_unique<SingleFileBlockManager>(db, path, read_only, config.options.use_direct_io);
+		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, read_only, config.options.use_direct_io);
 		sf_block_manager->CreateNewDatabase();
 		block_manager = std::move(sf_block_manager);
-		table_io_manager = make_unique<SingleFileTableIOManager>(*block_manager);
+		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager);
 	} else {
 		// initialize the block manager while loading the current db file
-		auto sf_block_manager = make_unique<SingleFileBlockManager>(db, path, read_only, config.options.use_direct_io);
+		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, read_only, config.options.use_direct_io);
 		sf_block_manager->LoadExistingDatabase();
 		block_manager = std::move(sf_block_manager);
-		table_io_manager = make_unique<SingleFileTableIOManager>(*block_manager);
+		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager);
 
 		//! Load from storage
 		auto checkpointer = SingleFileCheckpointReader(*this);
@@ -132,7 +132,7 @@ void SingleFileStorageManager::LoadDatabase() {
 	}
 	// initialize the WAL file
 	if (!read_only) {
-		wal = make_unique<WriteAheadLog>(db, wal_path);
+		wal = make_uniq<WriteAheadLog>(db, wal_path);
 		if (truncate_wal) {
 			wal->Truncate(0);
 		}
@@ -203,7 +203,7 @@ SingleFileStorageCommitState::~SingleFileStorageCommitState() {
 
 unique_ptr<StorageCommitState> SingleFileStorageManager::GenStorageCommitState(Transaction &transaction,
                                                                                bool checkpoint) {
-	return make_unique<SingleFileStorageCommitState>(*this, checkpoint);
+	return make_uniq<SingleFileStorageCommitState>(*this, checkpoint);
 }
 
 bool SingleFileStorageManager::IsCheckpointClean(block_id_t checkpoint_id) {

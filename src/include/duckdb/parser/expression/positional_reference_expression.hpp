@@ -13,6 +13,9 @@
 namespace duckdb {
 class PositionalReferenceExpression : public ParsedExpression {
 public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::POSITIONAL_REFERENCE;
+
+public:
 	DUCKDB_API PositionalReferenceExpression(idx_t index);
 
 	idx_t index;

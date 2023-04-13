@@ -111,7 +111,7 @@ unique_ptr<CatalogEntry> DefaultTypeGenerator::CreateDefaultEntry(ClientContext 
 	info.type = LogicalType(type_id);
 	info.internal = true;
 	info.temporary = true;
-	return make_unique_base<CatalogEntry, TypeCatalogEntry>(&catalog, schema, &info);
+	return make_uniq_base<CatalogEntry, TypeCatalogEntry>(&catalog, schema, &info);
 }
 
 vector<string> DefaultTypeGenerator::GetDefaultEntries() {

@@ -187,9 +187,9 @@ public:
 	//! The (custom) BufferManager (if provided)
 	unique_ptr<BufferManager> custom_buffer_manager;
 	//! Extensions made to binder
-	vector<std::unique_ptr<OperatorExtension>> operator_extensions;
+	vector<unique_ptr<OperatorExtension>> operator_extensions;
 	//! Extensions made to storage
-	case_insensitive_map_t<std::unique_ptr<StorageExtension>> storage_extensions;
+	case_insensitive_map_t<duckdb::unique_ptr<StorageExtension>> storage_extensions;
 	//! A buffer pool can be shared across multiple databases (if desired).
 	shared_ptr<BufferPool> buffer_pool;
 

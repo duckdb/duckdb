@@ -56,11 +56,11 @@ struct ReservoirQuantileBindData : public FunctionData {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<ReservoirQuantileBindData>(quantiles, sample_size);
+		return make_uniq<ReservoirQuantileBindData>(quantiles, sample_size);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (ReservoirQuantileBindData &)other_p;
+		auto &other = other_p.Cast<ReservoirQuantileBindData>();
 		return quantiles == other.quantiles && sample_size == other.sample_size;
 	}
 
@@ -75,7 +75,7 @@ struct ReservoirQuantileBindData : public FunctionData {
 	                                            AggregateFunction &bound_function) {
 		auto quantiles = reader.ReadRequiredList<double>();
 		auto sample_size = reader.ReadRequired<int32_t>();
-		return make_unique<ReservoirQuantileBindData>(std::move(quantiles), sample_size);
+		return make_uniq<ReservoirQuantileBindData>(std::move(quantiles), sample_size);
 	}
 
 	vector<double> quantiles;
@@ -131,7 +131,7 @@ struct ReservoirQuantileOperation {
 	}
 
 	template <class STATE>
-	static void Destroy(STATE *state) {
+	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
 		if (state->v) {
 			free(state->v);
 			state->v = nullptr;
@@ -362,7 +362,7 @@ unique_ptr<FunctionData> BindReservoirQuantile(ClientContext &context, Aggregate
 		} else {
 			arguments.pop_back();
 		}
-		return make_unique<ReservoirQuantileBindData>(quantiles, 8192);
+		return make_uniq<ReservoirQuantileBindData>(quantiles, 8192);
 	}
 	if (!arguments[2]->IsFoldable()) {
 		throw BinderException("RESERVOIR_QUANTILE can only take constant sample size parameters");
@@ -380,7 +380,7 @@ unique_ptr<FunctionData> BindReservoirQuantile(ClientContext &context, Aggregate
 	// remove the quantile argument so we can use the unary aggregate
 	Function::EraseArgument(function, arguments, arguments.size() - 1);
 	Function::EraseArgument(function, arguments, arguments.size() - 1);
-	return make_unique<ReservoirQuantileBindData>(quantiles, sample_size);
+	return make_uniq<ReservoirQuantileBindData>(quantiles, sample_size);
 }
 
 unique_ptr<FunctionData> BindReservoirQuantileDecimal(ClientContext &context, AggregateFunction &function,

@@ -12,6 +12,8 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector.hpp"
 
+#include <cstring>
+
 namespace duckdb {
 /**
  * String Utility Functions
@@ -34,6 +36,13 @@ public:
 			return c - 'A' + 10;
 		}
 		throw InvalidInputException("Invalid input for hex digit: %s", string(c, 1));
+	}
+
+	static uint8_t GetBinaryValue(char c) {
+		if (c >= '0' && c <= '1') {
+			return c - '0';
+		}
+		throw InvalidInputException("Invalid input for binary digit: %s", string(c, 1));
 	}
 
 	DUCKDB_API static bool CharacterIsSpace(char c) {
@@ -135,6 +144,9 @@ public:
 
 	//! Convert a string to lowercase
 	DUCKDB_API static string Lower(const string &str);
+
+	//! Case insensitive hash
+	DUCKDB_API static uint64_t CIHash(const string &str);
 
 	//! Case insensitive equals
 	DUCKDB_API static bool CIEquals(const string &l1, const string &l2);

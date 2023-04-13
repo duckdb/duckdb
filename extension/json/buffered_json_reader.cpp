@@ -22,7 +22,7 @@ JSONBufferHandle::JSONBufferHandle(idx_t buffer_index_p, idx_t readers_p, Alloca
     : buffer_index(buffer_index_p), readers(readers_p), buffer(std::move(buffer_p)), buffer_size(buffer_size_p) {
 }
 
-JSONFileHandle::JSONFileHandle(unique_ptr<FileHandle> file_handle_p, Allocator &allocator_p)
+JSONFileHandle::JSONFileHandle(duckdb::unique_ptr<FileHandle> file_handle_p, Allocator &allocator_p)
     : file_handle(std::move(file_handle_p)), allocator(allocator_p), can_seek(file_handle->CanSeek()),
       plain_file_source(file_handle->OnDiskFile() && can_seek), file_size(file_handle->GetFileSize()), read_position(0),
       requested_reads(0), actual_reads(0), cached_size(0) {
@@ -165,7 +165,7 @@ void BufferedJSONReader::OpenJSONFile() {
 	auto file_opener = FileOpener::Get(context);
 	auto regular_file_handle = file_system.OpenFile(file_path.c_str(), FileFlags::FILE_FLAGS_READ,
 	                                                FileLockType::NO_LOCK, options.compression, file_opener);
-	file_handle = make_unique<JSONFileHandle>(std::move(regular_file_handle), BufferAllocator::Get(context));
+	file_handle = make_uniq<JSONFileHandle>(std::move(regular_file_handle), BufferAllocator::Get(context));
 }
 
 void BufferedJSONReader::CloseJSONFile() {
@@ -190,7 +190,7 @@ JSONFileHandle &BufferedJSONReader::GetFileHandle() const {
 	return *file_handle;
 }
 
-void BufferedJSONReader::InsertBuffer(idx_t buffer_idx, unique_ptr<JSONBufferHandle> &&buffer) {
+void BufferedJSONReader::InsertBuffer(idx_t buffer_idx, duckdb::unique_ptr<JSONBufferHandle> &&buffer) {
 	lock_guard<mutex> guard(lock);
 	buffer_map.insert(make_pair(buffer_idx, std::move(buffer)));
 }

@@ -6,8 +6,9 @@
 
 #include <sqltypes.h>
 #include <sqlext.h>
-#include <vector>
-#include <stack>
+
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/stack.hpp"
 
 namespace duckdb {
 
@@ -31,7 +32,7 @@ public:
 private:
 	OdbcHandleStmt *stmt_ref;
 	// main structure to hold the fetched chunks
-	std::vector<unique_ptr<DataChunk>> chunks;
+	vector<duckdb::unique_ptr<DataChunk>> chunks;
 	// used by fetch prior
 	duckdb::idx_t current_chunk_idx;
 	duckdb::DataChunk *current_chunk;

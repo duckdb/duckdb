@@ -42,7 +42,7 @@ unique_ptr<ParsedExpression> ExpandDefaultExpression(const ColumnDefinition &col
 	if (column.DefaultValue()) {
 		return column.DefaultValue()->Copy();
 	} else {
-		return make_unique<ConstantExpression>(Value(column.Type()));
+		return make_uniq<ConstantExpression>(Value(column.Type()));
 	}
 }
 
@@ -54,12 +54,12 @@ void ReplaceDefaultExpression(unique_ptr<ParsedExpression> &expr, const ColumnDe
 void QualifyColumnReferences(unique_ptr<ParsedExpression> &expr, const string &table_name) {
 	// To avoid ambiguity with 'excluded', we explicitly qualify all column references
 	if (expr->type == ExpressionType::COLUMN_REF) {
-		auto &column_ref = (ColumnRefExpression &)*expr;
+		auto &column_ref = expr->Cast<ColumnRefExpression>();
 		if (column_ref.IsQualified()) {
 			return;
 		}
 		auto column_name = column_ref.GetColumnName();
-		expr = make_unique<ColumnRefExpression>(column_name, table_name);
+		expr = make_uniq<ColumnRefExpression>(column_name, table_name);
 	}
 	ParsedExpressionIterator::EnumerateChildren(
 	    *expr, [&](unique_ptr<ParsedExpression> &child) { QualifyColumnReferences(child, table_name); });
@@ -68,7 +68,7 @@ void QualifyColumnReferences(unique_ptr<ParsedExpression> &expr, const string &t
 // Replace binding.table_index with 'dest' if it's 'source'
 void ReplaceColumnBindings(Expression &expr, idx_t source, idx_t dest) {
 	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &bound_columnref = (BoundColumnRefExpression &)expr;
+		auto &bound_columnref = expr.Cast<BoundColumnRefExpression>();
 		if (bound_columnref.binding.table_index == source) {
 			bound_columnref.binding.table_index = dest;
 		}
@@ -142,7 +142,7 @@ void Binder::BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert
 }
 
 unique_ptr<UpdateSetInfo> CreateSetInfoForReplace(TableCatalogEntry &table, InsertStatement &insert) {
-	auto set_info = make_unique<UpdateSetInfo>();
+	auto set_info = make_uniq<UpdateSetInfo>();
 
 	auto &columns = set_info->columns;
 	// Figure out which columns are indexed on
@@ -178,7 +178,7 @@ unique_ptr<UpdateSetInfo> CreateSetInfoForReplace(TableCatalogEntry &table, Inse
 
 	// Create 'excluded' qualified column references of these columns
 	for (auto &column : columns) {
-		set_info->expressions.push_back(make_unique<ColumnRefExpression>(column, "excluded"));
+		set_info->expressions.push_back(make_uniq<ColumnRefExpression>(column, "excluded"));
 	}
 
 	return set_info;
@@ -200,7 +200,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 		throw BinderException("Can only update base table!");
 	}
 
-	auto &table_ref = (BaseTableRef &)*stmt.table_ref;
+	auto &table_ref = stmt.table_ref->Cast<BaseTableRef>();
 	const string &table_alias = !table_ref.alias.empty() ? table_ref.alias : table_ref.table_name;
 
 	auto &on_conflict = *stmt.on_conflict_info;
@@ -303,7 +303,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 
 	auto bindings = insert.children[0]->GetColumnBindings();
 	idx_t projection_index = DConstants::INVALID_INDEX;
-	std::vector<unique_ptr<LogicalOperator>> *insert_child_operators;
+	vector<unique_ptr<LogicalOperator>> *insert_child_operators;
 	insert_child_operators = &insert.children;
 	while (projection_index == DConstants::INVALID_INDEX) {
 		if (insert_child_operators->empty()) {
@@ -405,7 +405,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		properties.modified_databases.insert(table->catalog->GetName());
 	}
 
-	auto insert = make_unique<LogicalInsert>(table, GenerateTableIndex());
+	auto insert = make_uniq<LogicalInsert>(table, GenerateTableIndex());
 	// Add CTEs as bindable
 	AddCTEMap(stmt.cte_map);
 
@@ -460,7 +460,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	// special case: check if we are inserting from a VALUES statement
 	auto values_list = stmt.GetValuesList();
 	if (values_list) {
-		auto &expr_list = (ExpressionListRef &)*values_list;
+		auto &expr_list = values_list->Cast<ExpressionListRef>();
 		expr_list.expected_types.resize(expected_columns);
 		expr_list.expected_names.resize(expected_columns);
 

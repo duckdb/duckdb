@@ -61,8 +61,8 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, const vector<JoinCon
 
 	// compute the per-block capacity of this HT
 	idx_t block_capacity = Storage::BLOCK_SIZE / entry_size;
-	block_collection = make_unique<RowDataCollection>(buffer_manager, block_capacity, entry_size);
-	string_heap = make_unique<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
+	block_collection = make_uniq<RowDataCollection>(buffer_manager, block_capacity, entry_size);
+	string_heap = make_uniq<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 	swizzled_block_collection = block_collection->CloneEmpty();
 	swizzled_string_heap = string_heap->CloneEmpty();
 }
@@ -402,7 +402,7 @@ unique_ptr<ScanStructure> JoinHashTable::InitializeScanStructure(DataChunk &keys
 	D_ASSERT(finalized);
 
 	// set up the scan structure
-	auto ss = make_unique<ScanStructure>(*this);
+	auto ss = make_uniq<ScanStructure>(*this);
 
 	if (join_type != JoinType::INNER) {
 		ss->found_match = unique_ptr<bool[]>(new bool[STANDARD_VECTOR_SIZE]);
@@ -983,7 +983,7 @@ void JoinHashTable::SwizzleBlocks() {
 
 			// Finally, we allocate a new heap block and copy data to it
 			swizzled_string_heap->blocks.emplace_back(
-			    make_unique<RowDataBlock>(buffer_manager, MaxValue<idx_t>(total_size, (idx_t)Storage::BLOCK_SIZE), 1));
+			    make_uniq<RowDataBlock>(buffer_manager, MaxValue<idx_t>(total_size, (idx_t)Storage::BLOCK_SIZE), 1));
 			auto new_heap_handle = buffer_manager.Pin(swizzled_string_heap->blocks.back()->block);
 			auto new_heap_ptr = new_heap_handle.Ptr();
 			for (auto &ptr_and_size : ptrs_and_sizes) {
@@ -1185,7 +1185,7 @@ ProbeSpill::ProbeSpill(JoinHashTable &ht, ClientContext &context, const vector<L
 		// More than one probe round to go, so we need to partition
 		partitioned = true;
 		global_partitions =
-		    make_unique<RadixPartitionedColumnData>(context, probe_types, ht.radix_bits, probe_types.size() - 1);
+		    make_uniq<RadixPartitionedColumnData>(context, probe_types, ht.radix_bits, probe_types.size() - 1);
 	}
 	column_ids.reserve(probe_types.size());
 	for (column_t column_id = 0; column_id < probe_types.size(); column_id++) {
@@ -1198,15 +1198,15 @@ ProbeSpillLocalState ProbeSpill::RegisterThread() {
 	lock_guard<mutex> guard(lock);
 	if (partitioned) {
 		local_partitions.emplace_back(global_partitions->CreateShared());
-		local_partition_append_states.emplace_back(make_unique<PartitionedColumnDataAppendState>());
+		local_partition_append_states.emplace_back(make_uniq<PartitionedColumnDataAppendState>());
 		local_partitions.back()->InitializeAppendState(*local_partition_append_states.back());
 
 		result.local_partition = local_partitions.back().get();
 		result.local_partition_append_state = local_partition_append_states.back().get();
 	} else {
 		local_spill_collections.emplace_back(
-		    make_unique<ColumnDataCollection>(BufferManager::GetBufferManager(context), probe_types));
-		local_spill_append_states.emplace_back(make_unique<ColumnDataAppendState>());
+		    make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(context), probe_types));
+		local_spill_append_states.emplace_back(make_uniq<ColumnDataAppendState>());
 		local_spill_collections.back()->InitializeAppend(*local_spill_append_states.back());
 
 		result.local_spill_collection = local_spill_collections.back().get();
@@ -1237,7 +1237,7 @@ void ProbeSpill::Finalize() {
 	} else {
 		if (local_spill_collections.empty()) {
 			global_spill_collection =
-			    make_unique<ColumnDataCollection>(BufferManager::GetBufferManager(context), probe_types);
+			    make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(context), probe_types);
 		} else {
 			global_spill_collection = std::move(local_spill_collections[0]);
 			for (idx_t i = 1; i < local_spill_collections.size(); i++) {
@@ -1255,7 +1255,7 @@ void ProbeSpill::PrepareNextProbe() {
 		if (partitions.empty() || ht.partition_start == partitions.size()) {
 			// Can't probe, just make an empty one
 			global_spill_collection =
-			    make_unique<ColumnDataCollection>(BufferManager::GetBufferManager(context), probe_types);
+			    make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(context), probe_types);
 		} else {
 			// Move specific partitions to the global spill collection
 			global_spill_collection = std::move(partitions[ht.partition_start]);
@@ -1264,7 +1264,7 @@ void ProbeSpill::PrepareNextProbe() {
 			}
 		}
 	}
-	consumer = make_unique<ColumnDataConsumer>(*global_spill_collection, column_ids);
+	consumer = make_uniq<ColumnDataConsumer>(*global_spill_collection, column_ids);
 	consumer->InitializeScan();
 }
 

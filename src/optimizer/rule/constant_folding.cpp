@@ -20,7 +20,7 @@ public:
 };
 
 ConstantFoldingRule::ConstantFoldingRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
-	auto op = make_unique<ConstantFoldingExpressionMatcher>();
+	auto op = make_uniq<ConstantFoldingExpressionMatcher>();
 	root = std::move(op);
 }
 
@@ -37,7 +37,7 @@ unique_ptr<Expression> ConstantFoldingRule::Apply(LogicalOperator &op, vector<Ex
 	}
 	D_ASSERT(result_value.type().InternalType() == root->return_type.InternalType());
 	// now get the value from the result vector and insert it back into the plan as a constant expression
-	return make_unique<BoundConstantExpression>(result_value);
+	return make_uniq<BoundConstantExpression>(result_value);
 }
 
 } // namespace duckdb

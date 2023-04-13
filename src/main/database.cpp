@@ -28,9 +28,9 @@
 namespace duckdb {
 
 DBConfig::DBConfig() {
-	compression_functions = make_unique<CompressionFunctionSet>();
-	cast_functions = make_unique<CastFunctionSet>();
-	error_manager = make_unique<ErrorManager>();
+	compression_functions = make_uniq<CompressionFunctionSet>();
+	cast_functions = make_uniq<CastFunctionSet>();
+	error_manager = make_uniq<ErrorManager>();
 }
 
 DBConfig::DBConfig(std::unordered_map<string, string> &config_dict, bool read_only) : DBConfig::DBConfig() {
@@ -146,9 +146,9 @@ string DatabaseInstance::ExtractDatabaseType(string &path) {
 	return string();
 }
 
-unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(AttachInfo &info, const string &type,
-                                                                      AccessMode access_mode) {
-	unique_ptr<AttachedDatabase> attached_database;
+duckdb::unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(AttachInfo &info, const string &type,
+                                                                              AccessMode access_mode) {
+	duckdb::unique_ptr<AttachedDatabase> attached_database;
 	if (!type.empty()) {
 		// find the storage extensionon database
 		auto entry = config.storage_extensions.find(type);
@@ -158,16 +158,16 @@ unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(AttachInfo
 
 		if (entry->second->attach != nullptr && entry->second->create_transaction_manager != nullptr) {
 			// use storage extension to create the initial database
-			attached_database = make_unique<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), *entry->second,
-			                                                  info.name, info, access_mode);
+			attached_database = make_uniq<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), *entry->second,
+			                                                info.name, info, access_mode);
 		} else {
-			attached_database = make_unique<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), info.name,
-			                                                  info.path, access_mode);
+			attached_database =
+			    make_uniq<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), info.name, info.path, access_mode);
 		}
 	} else {
 		// check if this is an in-memory database or not
 		attached_database =
-		    make_unique<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), info.name, info.path, access_mode);
+		    make_uniq<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), info.name, info.path, access_mode);
 	}
 	return attached_database;
 }
@@ -201,15 +201,15 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		config.options.temporary_directory = string();
 	}
 
-	db_manager = make_unique<DatabaseManager>(*this);
+	db_manager = make_uniq<DatabaseManager>(*this);
 	if (!config.custom_buffer_manager) {
 		// Only when no custom buffer manager is provided do we create one
 		// otherwise we take the buffer manager from the config instead when it's requested
 		buffer_manager = BufferManager::CreateStandardBufferManager(*this, config);
 	}
-	scheduler = make_unique<TaskScheduler>(*this);
-	object_cache = make_unique<ObjectCache>();
-	connection_manager = make_unique<ConnectionManager>();
+	scheduler = make_uniq<TaskScheduler>(*this);
+	object_cache = make_uniq<ObjectCache>();
+	connection_manager = make_uniq<ConnectionManager>();
 
 	// check if we are opening a standard DuckDB database or an extension database
 	auto database_type = ExtractDatabaseType(config.options.database_path);
@@ -340,7 +340,7 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	if (new_config.file_system) {
 		config.file_system = std::move(new_config.file_system);
 	} else {
-		config.file_system = make_unique<VirtualFileSystem>();
+		config.file_system = make_uniq<VirtualFileSystem>();
 	}
 	if (config.options.maximum_memory == (idx_t)-1) {
 		config.SetDefaultMaxMemory();
@@ -350,13 +350,13 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	}
 	config.allocator = std::move(new_config.allocator);
 	if (!config.allocator) {
-		config.allocator = make_unique<Allocator>();
+		config.allocator = make_uniq<Allocator>();
 	}
 	config.replacement_scans = std::move(new_config.replacement_scans);
 	config.parser_extensions = std::move(new_config.parser_extensions);
 	config.error_manager = std::move(new_config.error_manager);
 	if (!config.error_manager) {
-		config.error_manager = make_unique<ErrorManager>();
+		config.error_manager = make_uniq<ErrorManager>();
 	}
 	if (!config.default_allocator) {
 		config.default_allocator = Allocator::DefaultAllocatorReference();

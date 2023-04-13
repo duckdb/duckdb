@@ -9,20 +9,20 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test repeated load and checkpoint of storage", "[storage][.]") {
-	unique_ptr<MaterializedQueryResult> result;
+	duckdb::unique_ptr<MaterializedQueryResult> result;
 	auto storage_database = TestCreatePath("repeated_load");
 	auto csv_file = TestCreatePath("rload.csv");
 	auto config = GetTestConfig();
 
-	vector<string> model {"M11", "F22", "U33"};
-	vector<string> shop {"www.goodshop.com", "www.badshop.com"};
-	vector<string> name {"Electronics  Something  One",   "Electronics  Something  Two",
-	                     "Electronics  Something  Three", "Electronics  Something  Four",
-	                     "Electronics  Something  Five",  "Electronics  Something  Six",
-	                     "Electronics  Something  Seven", "Electronics  Something  Eight",
-	                     "Electronics  Something  Nine",  "Electronics  Something  Ten"};
-	vector<string> brand {"AAAAA", "BBBBB", "CCCC", "DDDDDD", "PPPP"};
-	vector<string> color {"violet", "indigo", "blue", "green", "yellow", "orange", "red"};
+	duckdb::vector<string> model {"M11", "F22", "U33"};
+	duckdb::vector<string> shop {"www.goodshop.com", "www.badshop.com"};
+	duckdb::vector<string> name {"Electronics  Something  One",   "Electronics  Something  Two",
+	                             "Electronics  Something  Three", "Electronics  Something  Four",
+	                             "Electronics  Something  Five",  "Electronics  Something  Six",
+	                             "Electronics  Something  Seven", "Electronics  Something  Eight",
+	                             "Electronics  Something  Nine",  "Electronics  Something  Ten"};
+	duckdb::vector<string> brand {"AAAAA", "BBBBB", "CCCC", "DDDDDD", "PPPP"};
+	duckdb::vector<string> color {"violet", "indigo", "blue", "green", "yellow", "orange", "red"};
 	idx_t row_count = 1000;
 	const idx_t checkpoint_loop_count = 100;
 

@@ -847,7 +847,9 @@ bool LogicalType::HasAlias() const {
 
 void LogicalType::SetCatalog(LogicalType &type, TypeCatalogEntry *catalog_entry) {
 	auto info = type.AuxInfo();
-	D_ASSERT(info);
+	if (!info) {
+		return;
+	}
 	((ExtraTypeInfo &)*info).catalog_entry = catalog_entry;
 }
 TypeCatalogEntry *LogicalType::GetCatalog(const LogicalType &type) {
@@ -1185,8 +1187,8 @@ idx_t StructType::GetChildCount(const LogicalType &type) {
 	return StructType::GetChildTypes(type).size();
 }
 
-LogicalType LogicalType::STRUCT(const child_list_t<LogicalType> &children) {
-	auto info = make_shared<StructTypeInfo>(children);
+LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {
+	auto info = make_shared<StructTypeInfo>(std::move(children));
 	return LogicalType(LogicalTypeId::STRUCT, std::move(info));
 }
 

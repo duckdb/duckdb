@@ -9,11 +9,12 @@
 #pragma once
 
 #include "duckdb/common/assert.hpp"
-#include "duckdb/common/common.hpp"
 #include "duckdb/common/exception_format_value.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/shared_ptr.hpp"
+#include "duckdb/common/map.hpp"
+#include "duckdb/common/typedefs.hpp"
 
-#include <map>
 #include <stdexcept>
 
 namespace duckdb {
@@ -78,7 +79,8 @@ enum class ExceptionType {
 	PARAMETER_NOT_RESOLVED = 35, // parameter types could not be resolved
 	PARAMETER_NOT_ALLOWED = 36,  // parameter types not allowed
 	DEPENDENCY = 37,             // dependency
-	HTTP = 38
+	HTTP = 38,
+	MISSING_EXTENSION = 39 // Thrown when an extension is used but not loaded
 };
 class HTTPException;
 
@@ -272,13 +274,13 @@ public:
 	}
 };
 
-class MissingExtensionException : public IOException {
+class MissingExtensionException : public Exception {
 public:
 	DUCKDB_API explicit MissingExtensionException(const string &msg);
 
 	template <typename... Args>
 	explicit MissingExtensionException(const string &msg, Args... params)
-	    : IOException(ConstructMessage(msg, params...)) {
+	    : MissingExtensionException(ConstructMessage(msg, params...)) {
 	}
 };
 

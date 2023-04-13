@@ -13,8 +13,8 @@ Allocator &CBufferManager::GetBufferAllocator() {
 }
 
 CBufferManager::CBufferManager(CBufferManagerConfig config_p) : BufferManager(), config(config_p) {
-	block_manager = make_unique<InMemoryBlockManager>(*this);
-	buffer_pool = make_unique<DummyBufferPool>();
+	block_manager = make_uniq<InMemoryBlockManager>(*this);
+	buffer_pool = make_uniq<DummyBufferPool>();
 }
 
 BufferHandle CBufferManager::Allocate(idx_t block_size, bool can_destroy, shared_ptr<BlockHandle> *block) {
@@ -28,7 +28,7 @@ BufferHandle CBufferManager::Allocate(idx_t block_size, bool can_destroy, shared
 
 	auto custom_handle = config.allocate_func(config.data, alloc_size);
 	auto pinned_allocation = (data_ptr_t)config.pin_func(config.data, custom_handle);
-	unique_ptr<FileBuffer> buffer = make_unique<ExternalFileBuffer>(pinned_allocation, alloc_size);
+	unique_ptr<FileBuffer> buffer = make_uniq<ExternalFileBuffer>(pinned_allocation, alloc_size);
 	*handle_p = make_shared<CustomBlockHandle>(custom_handle, config, *block_manager, ++temporary_id, std::move(buffer),
 	                                           can_destroy, alloc_size, std::move(reservation));
 
@@ -49,7 +49,7 @@ shared_ptr<BlockHandle> CBufferManager::RegisterSmallMemory(idx_t block_size) {
 
 	auto custom_handle = config.allocate_func(config.data, alloc_size);
 	auto pinned_allocation = (data_ptr_t)config.pin_func(config.data, custom_handle);
-	unique_ptr<FileBuffer> buffer = make_unique<ExternalFileBuffer>(pinned_allocation, alloc_size);
+	unique_ptr<FileBuffer> buffer = make_uniq<ExternalFileBuffer>(pinned_allocation, alloc_size);
 	return make_shared<CustomBlockHandle>(custom_handle, config, *block_manager, ++temporary_id, std::move(buffer),
 	                                      false, alloc_size, std::move(reservation));
 }
@@ -95,7 +95,7 @@ BufferHandle CBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 
 	auto &custom_handle = (CustomBlockHandle &)*handle;
 	auto allocation = (data_ptr_t)config.pin_func(config.data, custom_handle.block);
-	unique_ptr<FileBuffer> new_buffer = make_unique<ExternalFileBuffer>(allocation, required_memory);
+	unique_ptr<FileBuffer> new_buffer = make_uniq<ExternalFileBuffer>(allocation, required_memory);
 	TempBufferPoolReservation reservation(*buffer_pool, required_memory);
 	handle->memory_charge = std::move(reservation);
 

@@ -36,7 +36,7 @@ static unique_ptr<FunctionData> CardinalityBind(ClientContext &context, ScalarFu
 	}
 
 	bound_function.return_type = LogicalType::UBIGINT;
-	return make_unique<VariableReturnBindData>(bound_function.return_type);
+	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
 void CardinalityFun::RegisterFunction(BuiltinFunctions &set) {

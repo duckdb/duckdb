@@ -36,6 +36,7 @@ add_library_unity(
   hive_partitioning.cpp
   pipe_file_system.cpp
   local_file_system.cpp
+  multi_file_reader.cpp
   preserved_error.cpp
   printer.cpp
   radix_partitioning.cpp
@@ -46,6 +47,7 @@ add_library_unity(
   symbols.cpp
   tree_renderer.cpp
   types.cpp
+  vector.cpp
   virtual_file_system.cpp
   windows_util.cpp)
 set(ALL_OBJECT_FILES

@@ -13,7 +13,7 @@ namespace duckdb {
 
 static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	auto stmt_copy = stmt.Copy();
-	auto &copy = (CopyStatement &)*stmt_copy;
+	auto &copy = stmt_copy->Cast<CopyStatement>();
 	auto &info = *copy.info;
 
 	// Bind the select statement of the original to resolve the types
@@ -21,45 +21,45 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	auto bound_original = dummy_binder->Bind(*stmt.select_statement);
 
 	// Create new SelectNode with the original SelectNode as a subquery in the FROM clause
-	auto select_stmt = make_unique<SelectStatement>();
+	auto select_stmt = make_uniq<SelectStatement>();
 	select_stmt->node = std::move(copy.select_statement);
-	auto subquery_ref = make_unique<SubqueryRef>(std::move(select_stmt));
-	copy.select_statement = make_unique_base<QueryNode, SelectNode>();
-	auto &new_select_node = (SelectNode &)*copy.select_statement;
+	auto subquery_ref = make_uniq<SubqueryRef>(std::move(select_stmt));
+	copy.select_statement = make_uniq_base<QueryNode, SelectNode>();
+	auto &new_select_node = copy.select_statement->Cast<SelectNode>();
 	new_select_node.from_table = std::move(subquery_ref);
 
 	// Create new select list
-	vector<unique_ptr<ParsedExpression>> select_list;
+	vector<duckdb::unique_ptr<ParsedExpression>> select_list;
 	select_list.reserve(bound_original.types.size());
 
 	// strftime if the user specified a format (loop also gives columns a name, needed for struct_pack)
 	// TODO: deal with date/timestamp within nested types
 	const auto date_it = info.options.find("dateformat");
 	const auto timestamp_it = info.options.find("timestampformat");
-	vector<unique_ptr<ParsedExpression>> strftime_children;
+	vector<duckdb::unique_ptr<ParsedExpression>> strftime_children;
 	for (idx_t col_idx = 0; col_idx < bound_original.types.size(); col_idx++) {
-		auto column = make_unique_base<ParsedExpression, PositionalReferenceExpression>(col_idx + 1);
+		auto column = make_uniq_base<ParsedExpression, PositionalReferenceExpression>(col_idx + 1);
 		strftime_children.clear();
 		const auto &type = bound_original.types[col_idx];
 		const auto &name = bound_original.names[col_idx];
 		if (date_it != info.options.end() && type == LogicalTypeId::DATE) {
 			strftime_children.emplace_back(std::move(column));
-			strftime_children.emplace_back(make_unique<ConstantExpression>(date_it->second.back()));
-			column = make_unique<FunctionExpression>("strftime", std::move(strftime_children));
+			strftime_children.emplace_back(make_uniq<ConstantExpression>(date_it->second.back()));
+			column = make_uniq<FunctionExpression>("strftime", std::move(strftime_children));
 		} else if (timestamp_it != info.options.end() && type == LogicalTypeId::TIMESTAMP) {
 			strftime_children.emplace_back(std::move(column));
-			strftime_children.emplace_back(make_unique<ConstantExpression>(timestamp_it->second.back()));
-			column = make_unique<FunctionExpression>("strftime", std::move(strftime_children));
+			strftime_children.emplace_back(make_uniq<ConstantExpression>(timestamp_it->second.back()));
+			column = make_uniq<FunctionExpression>("strftime", std::move(strftime_children));
 		}
 		column->alias = name;
 		select_list.emplace_back(std::move(column));
 	}
 
 	// Now create the struct_pack/to_json to create a JSON object per row
-	auto &select_node = (SelectNode &)*copy.select_statement;
+	auto &select_node = copy.select_statement->Cast<SelectNode>();
 	vector<unique_ptr<ParsedExpression>> struct_pack_child;
-	struct_pack_child.emplace_back(make_unique<FunctionExpression>("struct_pack", std::move(select_list)));
-	select_node.select_list.emplace_back(make_unique<FunctionExpression>("to_json", std::move(struct_pack_child)));
+	struct_pack_child.emplace_back(make_uniq<FunctionExpression>("struct_pack", std::move(select_list)));
+	select_node.select_list.emplace_back(make_uniq<FunctionExpression>("to_json", std::move(struct_pack_child)));
 
 	// Now we can just use the CSV writer
 	info.format = "csv";
@@ -71,9 +71,10 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	return binder.Bind(*stmt_copy);
 }
 
-static unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context, CopyInfo &info, vector<string> &expected_names,
-                                                 vector<LogicalType> &expected_types) {
-	auto bind_data = make_unique<JSONScanData>();
+static duckdb::unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context, CopyInfo &info,
+                                                         vector<string> &expected_names,
+                                                         vector<LogicalType> &expected_types) {
+	auto bind_data = make_uniq<JSONScanData>();
 
 	bind_data->file_paths.emplace_back(info.file_path);
 	bind_data->names = expected_names;
@@ -113,7 +114,6 @@ CreateCopyFunctionInfo JSONFunctions::GetJSONCopyFunction() {
 
 	function.copy_from_bind = CopyFromJSONBind;
 	function.copy_from_function = JSONFunctions::GetReadJSONTableFunction(
-	    false,
 	    make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT, JSONRecordType::RECORDS, false));
 
 	return CreateCopyFunctionInfo(function);

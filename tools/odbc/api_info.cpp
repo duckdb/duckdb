@@ -1,12 +1,13 @@
 #include "duckdb_odbc.hpp"
 #include "api_info.hpp"
 #include "statement_functions.hpp"
+#include "duckdb/common/vector.hpp"
 
 using duckdb::ApiInfo;
 using duckdb::idx_t;
 using duckdb::TypeInfo;
+using duckdb::vector;
 using std::string;
-using std::vector;
 
 /*** ODBC API Functions ********************************/
 SQLRETURN SQL_API SQLGetFunctions(SQLHDBC connection_handle, SQLUSMALLINT function_id, SQLUSMALLINT *supported_ptr) {
@@ -65,7 +66,7 @@ const std::unordered_set<SQLUSMALLINT> ApiInfo::ODBC3_EXTRA_SUPPORTED_FUNCTIONS 
     SQL_API_SQLGETDESCREC,    SQL_API_SQLPRIMARYKEYS,    SQL_API_SQLPROCEDURECOLUMNS, SQL_API_SQLPROCEDURES,
     SQL_API_SQLSETDESCREC,    SQL_API_SQLSETPOS,         SQL_API_SQLTABLEPRIVILEGES};
 
-const std::vector<duckdb::TypeInfo> ApiInfo::ODBC_SUPPORTED_SQL_TYPES = {
+const vector<duckdb::TypeInfo> ApiInfo::ODBC_SUPPORTED_SQL_TYPES = {
     {"'CHAR'", SQL_CHAR, 1, "''''", "''''", "'length'", SQL_NULLABLE, SQL_TRUE, SQL_SEARCHABLE, -1, SQL_FALSE,
      SQL_FALSE, "NULL", -1, -1, SQL_CHAR, -1, -1, -1},
     {"'BOOLEAN'", SQL_BIT, 1, "NULL", "NULL", "NULL", SQL_NULLABLE, SQL_FALSE, SQL_PRED_BASIC, SQL_TRUE, SQL_TRUE,
@@ -243,6 +244,10 @@ SQLSMALLINT ApiInfo::FindRelatedSQLType(duckdb::LogicalTypeId type_id) {
 		return SQL_VARBINARY;
 	case LogicalTypeId::INTERVAL:
 		return SQL_INTERVAL;
+	case LogicalTypeId::DECIMAL:
+		return SQL_DOUBLE;
+	case LogicalTypeId::LIST:
+		return SQL_VARCHAR;
 	default:
 		return SQL_UNKNOWN_TYPE;
 	}

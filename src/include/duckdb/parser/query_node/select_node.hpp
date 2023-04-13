@@ -21,6 +21,9 @@ namespace duckdb {
 //! SelectNode represents a standard SELECT statement
 class SelectNode : public QueryNode {
 public:
+	static constexpr const QueryNodeType TYPE = QueryNodeType::SELECT_NODE;
+
+public:
 	DUCKDB_API SelectNode();
 
 	//! The projection list

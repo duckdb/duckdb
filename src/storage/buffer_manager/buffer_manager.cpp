@@ -6,8 +6,17 @@
 
 namespace duckdb {
 
+BufferManager::BufferManager() {
+}
+BufferManager::~BufferManager() {
+}
+
+idx_t BufferManager::GetAllocSize(idx_t block_size) {
+	return AlignValue<idx_t, Storage::SECTOR_SIZE>(block_size + Storage::BLOCK_HEADER_SIZE);
+}
+
 unique_ptr<BufferManager> BufferManager::CreateStandardBufferManager(DatabaseInstance &db, DBConfig &config) {
-	return make_unique<StandardBufferManager>(db, config.options.temporary_directory);
+	return make_uniq<StandardBufferManager>(db, config.options.temporary_directory);
 }
 
 shared_ptr<BlockHandle> BufferManager::RegisterSmallMemory(idx_t block_size) {

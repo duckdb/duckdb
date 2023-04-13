@@ -4,6 +4,7 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/storage/buffer/dummy_buffer_pool.hpp"
+#include "duckdb/storage/block_manager.hpp"
 
 namespace duckdb {
 

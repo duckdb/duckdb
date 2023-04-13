@@ -125,7 +125,7 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 				segment->Resize(Storage::BLOCK_SIZE);
 			}
 			D_ASSERT(offset_in_block == 0);
-			allocation.partial_block = make_unique<PartialBlockForCheckpoint>(
+			allocation.partial_block = make_uniq<PartialBlockForCheckpoint>(
 			    &column_data, segment.get(), *allocation.block_manager, allocation.state);
 		}
 		// Writer will decide whether to reuse this block.

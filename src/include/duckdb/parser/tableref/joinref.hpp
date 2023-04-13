@@ -20,6 +20,9 @@ namespace duckdb {
 //! Represents a JOIN between two expressions
 class JoinRef : public TableRef {
 public:
+	static constexpr const TableReferenceType TYPE = TableReferenceType::JOIN;
+
+public:
 	explicit JoinRef(JoinRefType ref_type)
 	    : TableRef(TableReferenceType::JOIN), type(JoinType::INNER), ref_type(ref_type) {
 	}

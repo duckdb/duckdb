@@ -26,7 +26,7 @@
 #include <set>
 #include <sstream>
 #include <string>
-#include <vector>
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb_apache {
 namespace thrift {
@@ -68,7 +68,7 @@ template <typename T>
 std::string to_string(const std::set<T>& s);
 
 template <typename T>
-std::string to_string(const std::vector<T>& t);
+std::string to_string(const duckdb::vector<T>& t);
 
 template <typename K, typename V>
 std::string to_string(const typename std::pair<K, V>& v) {
@@ -89,7 +89,7 @@ std::string to_string(const T& beg, const T& end) {
 }
 
 template <typename T>
-std::string to_string(const std::vector<T>& t) {
+std::string to_string(const duckdb::vector<T>& t) {
   std::ostringstream o;
   o << "[" << to_string(t.begin(), t.end()) << "]";
   return o.str();

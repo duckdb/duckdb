@@ -4,7 +4,6 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/set.hpp"
-#include "duckdb/parallel/concurrentqueue.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/main/database.hpp"
@@ -20,15 +19,19 @@ struct BufferAllocatorData : PrivateAllocatorData {
 	StandardBufferManager &manager;
 };
 
+idx_t GetAllocSize(idx_t size) {
+	return AlignValue<idx_t, Storage::SECTOR_SIZE>(size + Storage::BLOCK_HEADER_SIZE);
+}
+
 unique_ptr<FileBuffer> StandardBufferManager::ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source,
                                                                      FileBufferType type) {
 	if (source) {
 		auto tmp = std::move(source);
 		D_ASSERT(tmp->AllocSize() == BufferManager::GetAllocSize(size));
-		return make_unique<FileBuffer>(*tmp, type);
+		return make_uniq<FileBuffer>(*tmp, type);
 	} else {
 		// no re-usable buffer: allocate a new buffer
-		return make_unique<FileBuffer>(Allocator::Get(db), type, size);
+		return make_uniq<FileBuffer>(Allocator::Get(db), type, size);
 	}
 }
 
@@ -58,8 +61,8 @@ void StandardBufferManager::SetTemporaryDirectory(const string &new_dir) {
 StandardBufferManager::StandardBufferManager(DatabaseInstance &db, string tmp)
     : BufferManager(), db(db), buffer_pool(db.GetBufferPool()), temp_directory(std::move(tmp)),
       temporary_id(MAXIMUM_BLOCK), buffer_allocator(BufferAllocatorAllocate, BufferAllocatorFree,
-                                                    BufferAllocatorRealloc, make_unique<BufferAllocatorData>(*this)) {
-	temp_block_manager = make_unique<InMemoryBlockManager>(*this);
+                                                    BufferAllocatorRealloc, make_uniq<BufferAllocatorData>(*this)) {
+	temp_block_manager = make_uniq<InMemoryBlockManager>(*this);
 }
 
 StandardBufferManager::~StandardBufferManager() {
@@ -207,8 +210,8 @@ void StandardBufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) 
 
 void StandardBufferManager::VerifyZeroReaders(shared_ptr<BlockHandle> &handle) {
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
-	auto replacement_buffer = make_unique<FileBuffer>(Allocator::Get(db), handle->buffer->type,
-	                                                  handle->memory_usage - Storage::BLOCK_HEADER_SIZE);
+	auto replacement_buffer = make_uniq<FileBuffer>(Allocator::Get(db), handle->buffer->type,
+	                                                handle->memory_usage - Storage::BLOCK_HEADER_SIZE);
 	memcpy(replacement_buffer->Buffer(), handle->buffer->Buffer(), handle->buffer->size);
 	memset(handle->buffer->Buffer(), 165, handle->buffer->size); // 165 is default memory in debug mode
 	handle->buffer = std::move(replacement_buffer);
@@ -472,7 +475,7 @@ public:
 			if (!handle) {
 				// no existing handle to write to; we need to create & open a new file
 				auto new_file_index = index_manager.GetNewBlockIndex();
-				auto new_file = make_unique<TemporaryFileHandle>(db, temp_directory, new_file_index);
+				auto new_file = make_uniq<TemporaryFileHandle>(db, temp_directory, new_file_index);
 				handle = new_file.get();
 				files[new_file_index] = std::move(new_file);
 
@@ -566,7 +569,7 @@ private:
 };
 
 TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string path_p)
-    : db(db), temp_directory(std::move(path_p)), temp_file(make_unique<TemporaryFileManager>(db, temp_directory)) {
+    : db(db), temp_directory(std::move(path_p)), temp_file(make_uniq<TemporaryFileManager>(db, temp_directory)) {
 	auto &fs = FileSystem::GetFileSystem(db);
 	if (!temp_directory.empty()) {
 		if (!fs.DirectoryExists(temp_directory)) {
@@ -626,7 +629,7 @@ void StandardBufferManager::RequireTemporaryDirectory() {
 	lock_guard<mutex> temp_handle_guard(temp_handle_lock);
 	if (!temp_directory_handle) {
 		// temp directory has not been created yet: initialize it
-		temp_directory_handle = make_unique<TemporaryDirectoryHandle>(db, temp_directory);
+		temp_directory_handle = make_uniq<TemporaryDirectoryHandle>(db, temp_directory);
 	}
 }
 

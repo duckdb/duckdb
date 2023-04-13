@@ -10,26 +10,30 @@
 
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
-#include "duckdb/storage/block_manager.hpp"
-#include "duckdb/common/file_system.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/common/file_buffer.hpp"
 
 namespace duckdb {
 
 class Allocator;
 class BufferPool;
+class BlockManager;
 
+//! The BufferManager is in charge of handling memory management for a single database. It cooperatively shares a
+//! BufferPool with other BufferManagers, belonging to different databases. It hands out memory buffers that can
+//! be used by the database internally, and offers configuration options specific to a database, which need not be
+//! shared by the BufferPool, including whether to support swapping temp buffers to disk, and where to swap them to.
 class BufferManager {
 	friend class BufferHandle;
 	friend class BlockHandle;
 	friend class BlockManager;
 
 public:
-	BufferManager() {
-	}
-	virtual ~BufferManager() {
-	}
+	BufferManager();
+	virtual ~BufferManager();
+	BufferManager(const BufferManager &other) = delete;
+	BufferManager(const BufferManager &&other) = delete;
 
 public:
 	static unique_ptr<BufferManager> CreateStandardBufferManager(DatabaseInstance &db, DBConfig &config);
@@ -71,9 +75,7 @@ public:
 	DUCKDB_API static BufferManager &GetBufferManager(ClientContext &context);
 	DUCKDB_API static BufferManager &GetBufferManager(AttachedDatabase &db);
 
-	static idx_t GetAllocSize(idx_t block_size) {
-		return AlignValue<idx_t, Storage::SECTOR_SIZE>(block_size + Storage::BLOCK_HEADER_SIZE);
-	}
+	static idx_t GetAllocSize(idx_t block_size);
 
 protected:
 	virtual void PurgeQueue() = 0;

@@ -10,15 +10,15 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<DBConfig> ConfigWithCBufferManager(MyBufferManager *manager) {
-	unique_ptr<DBConfig> config = make_unique<DBConfig>();
+duckdb::unique_ptr<DBConfig> ConfigWithCBufferManager(MyBufferManager *manager) {
+	duckdb::unique_ptr<DBConfig> config = make_uniq<DBConfig>();
 	CBufferManagerConfig cbuffer_manager_config = DefaultCBufferManagerConfig(manager);
-	config->SetCustomBufferManager(make_unique<CBufferManager>(cbuffer_manager_config));
+	config->SetCustomBufferManager(make_uniq<CBufferManager>(cbuffer_manager_config));
 	return config;
 }
 
 TEST_CASE("Test CBufferManager with TPCH", "[api]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	MyBufferManager manager;
 	auto config = ConfigWithCBufferManager(&manager);
 	DuckDB db(nullptr, config.get());

@@ -10,7 +10,7 @@ using namespace std;
 
 TEST_CASE("Test scanning a table and computing an aggregate over a table that exceeds buffer manager size",
           "[storage][.]") {
-	unique_ptr<MaterializedQueryResult> result;
+	duckdb::unique_ptr<MaterializedQueryResult> result;
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
 
@@ -53,7 +53,7 @@ TEST_CASE("Test scanning a table and computing an aggregate over a table that ex
 }
 
 TEST_CASE("Test storing a big string that exceeds buffer manager size", "[storage][.]") {
-	unique_ptr<MaterializedQueryResult> result;
+	duckdb::unique_ptr<MaterializedQueryResult> result;
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
 	config->options.maximum_threads = 1;
@@ -117,7 +117,7 @@ TEST_CASE("Test storing a big string that exceeds buffer manager size", "[storag
 }
 
 TEST_CASE("Test appending and checkpointing a table that exceeds buffer manager size", "[storage][.]") {
-	unique_ptr<MaterializedQueryResult> result;
+	duckdb::unique_ptr<MaterializedQueryResult> result;
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
 
@@ -169,7 +169,7 @@ TEST_CASE("Test appending and checkpointing a table that exceeds buffer manager 
 }
 
 TEST_CASE("Modifying the buffer manager limit at runtime for an in-memory database", "[storage][.]") {
-	unique_ptr<MaterializedQueryResult> result;
+	duckdb::unique_ptr<MaterializedQueryResult> result;
 
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -320,7 +320,7 @@ TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
 	// Create 40 blocks, but don't hold the pin
 	// They will be added to the eviction queue and the buffers will be re-used
 	idx_t block_count = 40;
-	vector<shared_ptr<BlockHandle>> blocks;
+	duckdb::vector<shared_ptr<BlockHandle>> blocks;
 	blocks.reserve(block_count);
 	for (idx_t i = 0; i < block_count; i++) {
 		blocks.emplace_back();
