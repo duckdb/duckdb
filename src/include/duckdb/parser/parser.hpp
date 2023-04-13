@@ -13,6 +13,7 @@
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/column_list.hpp"
 #include "duckdb/parser/simplified_token.hpp"
+#include "duckdb/parser/parser_options.hpp"
 
 namespace duckdb_libpgquery {
 struct PGNode;
@@ -20,13 +21,6 @@ struct PGList;
 } // namespace duckdb_libpgquery
 
 namespace duckdb {
-class ParserExtension;
-
-struct ParserOptions {
-	bool preserve_identifier_case = true;
-	idx_t max_expression_depth = 1000;
-	const vector<ParserExtension> *extensions = nullptr;
-};
 
 //! The parser is responsible for parsing the query and converting it into a set
 //! of parsed statements. The parsed statements can then be converted into a
