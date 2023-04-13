@@ -76,11 +76,15 @@ private:
 	void CompressAggregate(unique_ptr<LogicalOperator> &op);
 	void CompressOrder(unique_ptr<LogicalOperator> &op);
 
-	//! Create projections around materializing operators
+	//! Adds bindings referenced in expression to referenced_bindings
+	static void GetReferencedBindings(const Expression &expression, vector<ColumnBinding> &referenced_bindings);
+	//! Updates CMBindingInfo in the binding_map in info
+	void UpdateBindingInfo(CompressedMaterializationInfo &info, const ColumnBinding &binding, bool needs_decompression);
+
+	//! Create (de)compress projections around the operator
 	void CreateProjections(unique_ptr<LogicalOperator> &op, CompressedMaterializationInfo &info);
 	bool TryCompressChild(CompressedMaterializationInfo &info, const CMChildInfo &child_info,
 	                      vector<unique_ptr<Expression>> &compress_expressions);
-	void UpdateBindingInfo(CompressedMaterializationInfo &info, const ColumnBinding &binding);
 	void CreateCompressProjection(unique_ptr<LogicalOperator> &child_op,
 	                              vector<unique_ptr<Expression>> &&compress_exprs, CompressedMaterializationInfo &info,
 	                              CMChildInfo &child_info);

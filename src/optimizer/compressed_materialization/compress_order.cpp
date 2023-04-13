@@ -1,18 +1,8 @@
 #include "duckdb/optimizer/compressed_materialization.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 
 namespace duckdb {
-
-static void GetReferencedBindings(const Expression &expression, vector<ColumnBinding> &referenced_bindings) {
-	ExpressionIterator::EnumerateChildren(expression, [&](const Expression &child) {
-		if (child.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-			const auto &col_ref = (BoundColumnRefExpression &)child;
-			referenced_bindings.emplace_back(col_ref.binding);
-		}
-	});
-}
 
 void CompressedMaterialization::CompressOrder(unique_ptr<LogicalOperator> &op) {
 	auto &order = (LogicalOrder &)*op;
