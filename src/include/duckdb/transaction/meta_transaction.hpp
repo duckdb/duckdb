@@ -13,6 +13,7 @@
 #include "duckdb/main/valid_checker.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
