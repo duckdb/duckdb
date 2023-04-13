@@ -48,6 +48,7 @@ OptionValuePair &GetValueForOption(const string &name) {
 	    {"file_search_path", {"test"}},
 	    {"force_compression", {"uncompressed", "Uncompressed"}},
 	    {"home_directory", {"test"}},
+	    {"integer_division", {true}},
 	    {"extension_directory", {"test"}},
 	    {"immediate_transaction_mode", {true}},
 	    {"log_query_path", {"test"}},
