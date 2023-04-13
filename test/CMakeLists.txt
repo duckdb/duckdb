@@ -5,7 +5,7 @@ include_directories(include)
 
 add_subdirectory(api)
 add_subdirectory(appender)
-add_subdirectory(arrow_roundtrip)
+add_subdirectory(arrow)
 add_subdirectory(common)
 add_subdirectory(extension)
 add_subdirectory(helpers)
