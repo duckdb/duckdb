@@ -1,0 +1,11 @@
+# name: benchmark/micro/aggregate/grouped_distinct.benchmark
+# description: FIRST(i ORDER BY i) over a bunch of integers
+# group: [aggregate]
+
+name Ordered First (Grouped)
+group aggregate
+
+run
+SELECT i % 2048 AS grp, FIRST(i ORDER BY i DESC) AS agg
+FROM range(10000000) tbl(i)
+GROUP BY ALL;

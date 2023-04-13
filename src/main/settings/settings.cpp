@@ -142,6 +142,22 @@ Value DebugForceNoCrossProduct::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Debug Ordered Aggregate Threshold
+//===--------------------------------------------------------------------===//
+
+void DebugOrderedAggregateThreshold::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).ordered_aggregate_threshold = ClientConfig().ordered_aggregate_threshold;
+}
+
+void DebugOrderedAggregateThreshold::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).ordered_aggregate_threshold = input.GetValue<uint64_t>();
+}
+
+Value DebugOrderedAggregateThreshold::GetSetting(ClientContext &context) {
+	return Value::UBIGINT(ClientConfig::GetConfig(context).ordered_aggregate_threshold);
+}
+
+//===--------------------------------------------------------------------===//
 // Debug Window Mode
 //===--------------------------------------------------------------------===//
 void DebugWindowMode::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
