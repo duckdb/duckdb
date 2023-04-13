@@ -131,7 +131,7 @@ void BufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size
 		handle->memory_charge.Merge(std::move(reservation));
 	} else {
 		// no need to evict blocks, but we do need to decrement 'current_memory'.
-		handle->memory_charge.Resize(buffer_pool.current_memory, req.alloc_size);
+		handle->memory_charge.Resize(req.alloc_size);
 	}
 
 	// resize and adjust current memory
@@ -163,7 +163,7 @@ BufferHandle BufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	if (handle->state == BlockState::BLOCK_LOADED) {
 		// the block is loaded, increment the reader count and return a pointer to the handle
 		handle->readers++;
-		reservation.Resize(buffer_pool.current_memory, 0);
+		reservation.Resize(0);
 		return handle->Load(handle);
 	}
 	// now we can actually load the current block
@@ -176,7 +176,7 @@ BufferHandle BufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	if (delta) {
 		D_ASSERT(delta < 0);
 		handle->memory_usage += delta;
-		handle->memory_charge.Resize(buffer_pool.current_memory, handle->memory_usage);
+		handle->memory_charge.Resize(handle->memory_usage);
 	}
 	D_ASSERT(handle->memory_usage == handle->buffer->AllocSize());
 	return buf;
@@ -731,9 +731,9 @@ data_ptr_t BufferManager::BufferAllocatorAllocate(PrivateAllocatorData *private_
 
 void BufferManager::BufferAllocatorFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
 	auto &data = (BufferAllocatorData &)*private_data;
-	BufferPoolReservation r;
+	BufferPoolReservation r(data.manager.GetBufferPool());
 	r.size = size;
-	r.Resize(data.manager.buffer_pool.current_memory, 0);
+	r.Resize(0);
 	return Allocator::Get(data.manager.db).FreeData(pointer, size);
 }
 
@@ -743,9 +743,9 @@ data_ptr_t BufferManager::BufferAllocatorRealloc(PrivateAllocatorData *private_d
 		return pointer;
 	}
 	auto &data = (BufferAllocatorData &)*private_data;
-	BufferPoolReservation r;
+	BufferPoolReservation r(data.manager.GetBufferPool());
 	r.size = old_size;
-	r.Resize(data.manager.buffer_pool.current_memory, size);
+	r.Resize(size);
 	r.size = 0;
 	return Allocator::Get(data.manager.db).ReallocateData(pointer, old_size, size);
 }
