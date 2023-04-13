@@ -10,6 +10,8 @@ add_subdirectory(pybind11)
 add_subdirectory(numpy)
 add_subdirectory(native)
 add_subdirectory(jupyter)
+add_subdirectory(typing)
+add_subdirectory(pyconnection)
 add_subdirectory(common)
 add_subdirectory(pandas)
 

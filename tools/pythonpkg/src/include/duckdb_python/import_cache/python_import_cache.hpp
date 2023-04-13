@@ -33,6 +33,12 @@ public:
 	NumpyCacheItem &numpy() {
 		return LazyLoadModule(numpy_module);
 	}
+	TypesCacheItem &types() {
+		return LazyLoadModule(types_module);
+	}
+	TypingCacheItem &typing() {
+		return LazyLoadModule(typing_module);
+	}
 	PyDuckDBCacheItem &pyduckdb() {
 		return LazyLoadModule(pyduckdb_module);
 	}
@@ -66,6 +72,8 @@ public:
 
 private:
 	NumpyCacheItem numpy_module;
+	TypesCacheItem types_module;
+	TypingCacheItem typing_module;
 	PathLibCacheItem pathlib_module;
 	PyDuckDBCacheItem pyduckdb_module;
 	DatetimeCacheItem datetime_module;

@@ -3,6 +3,68 @@
 
 namespace duckdb {
 
+shared_ptr<DuckDBPyType> PyConnectionWrapper::UnionType(const py::object &members,
+                                                        shared_ptr<DuckDBPyConnection> conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->UnionType(members);
+}
+
+shared_ptr<DuckDBPyType> PyConnectionWrapper::EnumType(const string &name, const shared_ptr<DuckDBPyType> &type,
+                                                       const py::list &values, shared_ptr<DuckDBPyConnection> conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->EnumType(name, type, values);
+}
+
+shared_ptr<DuckDBPyType> PyConnectionWrapper::DecimalType(int width, int scale, shared_ptr<DuckDBPyConnection> conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->DecimalType(width, scale);
+}
+
+shared_ptr<DuckDBPyType> PyConnectionWrapper::StringType(const string &collation, shared_ptr<DuckDBPyConnection> conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->StringType(collation);
+}
+
+shared_ptr<DuckDBPyType> PyConnectionWrapper::ArrayType(const shared_ptr<DuckDBPyType> &type,
+                                                        shared_ptr<DuckDBPyConnection> conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->ArrayType(type);
+}
+
+shared_ptr<DuckDBPyType> PyConnectionWrapper::MapType(const shared_ptr<DuckDBPyType> &key,
+                                                      const shared_ptr<DuckDBPyType> &value,
+                                                      shared_ptr<DuckDBPyConnection> conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->MapType(key, value);
+}
+
+shared_ptr<DuckDBPyType> PyConnectionWrapper::StructType(const py::object &fields,
+                                                         shared_ptr<DuckDBPyConnection> conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->StructType(fields);
+}
+
+shared_ptr<DuckDBPyType> PyConnectionWrapper::Type(const string &type_str, shared_ptr<DuckDBPyConnection> conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	return conn->Type(type_str);
+}
+
 shared_ptr<DuckDBPyConnection> PyConnectionWrapper::ExecuteMany(const string &query, py::object params,
                                                                 shared_ptr<DuckDBPyConnection> conn) {
 	return conn->ExecuteMany(query, params);

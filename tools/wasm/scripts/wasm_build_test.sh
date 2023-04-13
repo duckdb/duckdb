@@ -4,7 +4,7 @@ set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/wasm_env.sh"
 
-HELLO_WASM_CPP="${PROJECT_ROOT}/test/wasm/hello_wasm.cpp"
+HELLO_WASM_CPP="${PROJECT_ROOT}/tools/wasm/hello_wasm.cpp"
 
 test -f "${DUCKDB_WASM}" \
     && { echo "[ OK  ] DuckDB WASM: ${DUCKDB_WASM}"; } \
