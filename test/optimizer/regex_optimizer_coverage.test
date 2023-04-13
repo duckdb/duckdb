@@ -46,3 +46,7 @@ select regexp_matches(word, '[AAAA]') from test;
 query I nosort correct_result
 select regexp_matches(word, '[A-A]') from test;
 ----
+
+query I nosort correct_result
+select regexp_matches(word, '(?i)[A-A]') from test;
+----
