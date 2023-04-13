@@ -14,7 +14,7 @@ CREATE TABLE Product(DaysToManufacture int, StandardCost int);
 statement ok
 INSERT INTO Product VALUES (0, 5.0885), (1, 223.88), (2, 359.1082), (4, 949.4105);
 
-query II
+query II rowsort
 SELECT DaysToManufacture, AVG(StandardCost) AS AverageCost
 FROM Product
 GROUP BY DaysToManufacture;

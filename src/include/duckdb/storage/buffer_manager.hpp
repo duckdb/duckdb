@@ -16,6 +16,8 @@
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
+#include "duckdb/storage/buffer/buffer_pool.hpp"
+#include "duckdb/storage/buffer/temporary_file_information.hpp"
 
 namespace duckdb {
 class BlockManager;
@@ -23,65 +25,7 @@ class DatabaseInstance;
 class TemporaryDirectoryHandle;
 struct EvictionQueue;
 
-//! The BufferPool is in charge of handling memory management for one or more databases. It defines memory limits
-//! and implements priority eviction among all users of the pool.
-class BufferPool {
-	friend class BlockHandle;
-	friend class BlockManager;
-	friend class BufferManager;
-
-public:
-	explicit BufferPool(idx_t maximum_memory);
-	virtual ~BufferPool();
-
-	//! Set a new memory limit to the buffer pool, throws an exception if the new limit is too low and not enough
-	//! blocks can be evicted
-	void SetLimit(idx_t limit, const char *exception_postscript);
-
-	idx_t GetUsedMemory() {
-		return current_memory;
-	}
-	idx_t GetMaxMemory() {
-		return maximum_memory;
-	}
-
-protected:
-	//! Evict blocks until the currently used memory + extra_memory fit, returns false if this was not possible
-	//! (i.e. not enough blocks could be evicted)
-	//! If the "buffer" argument is specified AND the system can find a buffer to re-use for the given allocation size
-	//! "buffer" will be made to point to the re-usable memory. Note that this is not guaranteed.
-	//! Returns a pair. result.first indicates if eviction was successful. result.second contains the
-	//! reservation handle, which can be moved to the BlockHandle that will own the reservation.
-	struct EvictionResult {
-		bool success;
-		TempBufferPoolReservation reservation;
-	};
-	virtual EvictionResult EvictBlocks(idx_t extra_memory, idx_t memory_limit,
-	                                   unique_ptr<FileBuffer> *buffer = nullptr);
-
-	//! Garbage collect eviction queue
-	void PurgeQueue();
-	void AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
-
-private:
-	//! The lock for changing the memory limit
-	mutex limit_lock;
-	//! The current amount of memory that is occupied by the buffer manager (in bytes)
-	atomic<idx_t> current_memory;
-	//! The maximum amount of memory that the buffer manager can keep (in bytes)
-	atomic<idx_t> maximum_memory;
-	//! Eviction queue
-	unique_ptr<EvictionQueue> queue;
-	//! Total number of insertions into the eviction queue. This guides the schedule for calling PurgeQueue.
-	atomic<uint32_t> queue_insertions;
-};
-
-struct TemporaryFileInformation {
-	string path;
-	idx_t size;
-};
-
-//! The BufferManager is in charge of handling memory management for a singke database. It cooperatively shares a
+//! The BufferManager is in charge of handling memory management for a single database. It cooperatively shares a
 //! BufferPool with other BufferManagers, belonging to different databases. It hands out memory buffers that can
 //! be used by the database internally, and offers configuration options specific to a database, which need not be
 //! shared by the BufferPool, including whether to support swapping temp buffers to disk, and where to swap them to.

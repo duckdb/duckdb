@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/common/winapi.hpp"
+#include "duckdb/common/string.hpp"
 #include <stdint.h>
 
 namespace duckdb {

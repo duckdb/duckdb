@@ -136,7 +136,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		try {
 			startTransaction();
 			result_ref = DuckDBNative.duckdb_jdbc_execute(stmt_ref, params);
-			select_result = new DuckDBResultSet(this, meta, result_ref);
+			select_result = new DuckDBResultSet(this, meta, result_ref, conn.conn_ref);
 		}
 		catch (SQLException e) {
 			// Delete stmt_ref as it cannot be used anymore and 
