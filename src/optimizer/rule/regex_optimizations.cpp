@@ -59,30 +59,25 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 
 		return std::move(contains);
 	} else {
+		// check for any prefix or suffix matches
 		string prefix("tmp_prefix");
 		bool fold_case = true;
 		auto regexp = pattern.Regexp();
 
 		pattern.Regexp()->RequiredPrefix(&prefix, &fold_case, &regexp);
-		// prefix now has the prefic I need.
-		// foldcase is now false
-		// dunno is the regexp that comes after the thing
 		if (!prefix.empty()) {
-			auto prefix_expression = make_unique<BoundFunctionExpression>(root->return_type, PrefixFun::GetFunction(), std::move(root->children), nullptr);
-			prefix_expression->children[1] = make_unique<BoundConstantExpression>(Value(std::move(prefix)));
-//			if (regexp->op() == duckdb_re2::kRegexpEmptyMatch) {
-//				auto next = make_unique<BoundFunctionExpression>(root->return_type, RegexpFun::));
-//				next->children[1] = Value(std::move(regexp->ToString())));
-//				prefix_expression->children[2] = std::move(next);
-//			}
-			return std::move(prefix_expression);
+			// means only a prefix was asked for, as the rest of the regex is an empty match.
+			if (regexp->op() == duckdb_re2::kRegexpEmptyMatch) {
+				auto prefix_expression = make_unique<BoundFunctionExpression>(root->return_type, PrefixFun::GetFunction(), std::move(root->children), nullptr);
+				prefix_expression->children[1] = make_unique<BoundConstantExpression>(Value(std::move(prefix)));
+				return std::move(prefix_expression);
+			}
 		}
-
-		string min;
-		string max;
-		pattern.PossibleMatchRange(&min, &max, patt_str.size());
-
-		auto a = "wait here";
+//		string min;
+//		string max;
+//		pattern.PossibleMatchRange(&min, &max, patt_str.size());
+//
+//		auto a = "wait here";
 	}
 
 	return nullptr;
