@@ -101,6 +101,13 @@ TupleDataSegment::TupleDataSegment(shared_ptr<TupleDataAllocator> allocator_p)
     : allocator(std::move(allocator_p)), count(0) {
 }
 
+TupleDataSegment::~TupleDataSegment() {
+	lock_guard<mutex> guard(pinned_handles_lock);
+	pinned_row_handles.clear();
+	pinned_heap_handles.clear();
+	allocator = nullptr;
+}
+
 void SwapTupleDataSegment(TupleDataSegment &a, TupleDataSegment &b) {
 	std::swap(a.allocator, b.allocator);
 	std::swap(a.chunks, b.chunks);
