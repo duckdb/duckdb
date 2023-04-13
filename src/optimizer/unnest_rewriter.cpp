@@ -22,7 +22,7 @@ static void ReplaceDelimGetBinding(BoundColumnRefExpression &bound_column_ref, c
 unique_ptr<LogicalOperator> UnnestRewriter::Optimize(unique_ptr<LogicalOperator> op) {
 
 	ColumnBindingReplacer updater;
-	updater.callback = ReplaceDelimGetBinding;
+	updater.column_binding_callback = ReplaceDelimGetBinding;
 
 	vector<unique_ptr<LogicalOperator> *> candidates;
 	FindCandidates(&op, candidates);

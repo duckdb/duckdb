@@ -31,15 +31,27 @@ public:
 	vector<ColumnBinding> bindings_after;
 };
 
+struct CMBindingInfo {
+public:
+	explicit CMBindingInfo(ColumnBinding binding, const LogicalType &type);
+
+public:
+	ColumnBinding binding;
+
+	//! Type before compressing
+	LogicalType type;
+	bool needs_decompression;
+	unique_ptr<BaseStatistics> stats;
+};
+
 struct CompressedMaterializationInfo {
 public:
 	CompressedMaterializationInfo(LogicalOperator &op, vector<idx_t> &&child_idxs,
 	                              const vector<ColumnBinding> &referenced_bindings);
 
 public:
-	//! Bindings and types before compressing
-	vector<ColumnBinding> bindings;
-	vector<LogicalType> &types;
+	//! Mapping from incoming bindings to outgoing bindings
+	column_binding_map_t<CMBindingInfo> binding_map;
 
 	//! Operator child info
 	vector<idx_t> child_idxs;
@@ -61,19 +73,18 @@ private:
 	void Compress(unique_ptr<LogicalOperator> &op);
 
 	//! Compress call for materializing operators
-	void CompressAggregate(unique_ptr<LogicalOperator> *op_ptr);
-	void CompressOrder(unique_ptr<LogicalOperator> *op_ptr);
+	void CompressAggregate(unique_ptr<LogicalOperator> &op);
+	void CompressOrder(unique_ptr<LogicalOperator> &op);
 
 	//! Create projections around materializing operators
-	void CreateProjections(unique_ptr<LogicalOperator> *op_ptr, CompressedMaterializationInfo &info);
+	void CreateProjections(unique_ptr<LogicalOperator> &op, CompressedMaterializationInfo &info);
 	bool TryCompressChild(CompressedMaterializationInfo &info, const CMChildInfo &child_info,
 	                      vector<unique_ptr<Expression>> &compress_expressions);
-	unique_ptr<LogicalOperator> CreateCompressProjection(unique_ptr<LogicalOperator> child_op,
-	                                                     vector<unique_ptr<Expression>> &&compress_exprs,
-	                                                     CMChildInfo &child_info);
-	void CreateDecompressProjection(unique_ptr<LogicalOperator> *parent_op,
-	                                vector<unique_ptr<Expression>> &&decompress_exprs,
-	                                unique_ptr<LogicalOperator> *child_op, const CMChildInfo &child_info);
+	void UpdateBindingInfo(CompressedMaterializationInfo &info, const ColumnBinding &binding);
+	void CreateCompressProjection(unique_ptr<LogicalOperator> &child_op,
+	                              vector<unique_ptr<Expression>> &&compress_exprs, CompressedMaterializationInfo &info,
+	                              CMChildInfo &child_info);
+	void CreateDecompressProjection(unique_ptr<LogicalOperator> &op, CompressedMaterializationInfo &info);
 
 	//! Create expressions that apply a scalar compression function
 	unique_ptr<Expression> GetCompressExpression(const ColumnBinding &binding, const LogicalType &type,
@@ -81,6 +92,13 @@ private:
 	unique_ptr<Expression> GetCompressExpression(unique_ptr<Expression> input, const BaseStatistics &stats);
 	unique_ptr<Expression> GetIntegralCompress(unique_ptr<Expression> input, const BaseStatistics &stats);
 	unique_ptr<Expression> GetStringCompress(unique_ptr<Expression> input, const BaseStatistics &stats);
+
+	//! Create an expression that applies a scalar decompression function
+	unique_ptr<Expression> GetDecompressExpression(unique_ptr<Expression> input, const LogicalType &result_type,
+	                                               const BaseStatistics &stats);
+	unique_ptr<Expression> GetIntegralDecompress(unique_ptr<Expression> input, const LogicalType &result_type,
+	                                             const BaseStatistics &stats);
+	unique_ptr<Expression> GetStringDecompress(unique_ptr<Expression> input, const BaseStatistics &stats);
 
 private:
 	ClientContext &context;

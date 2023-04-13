@@ -29,7 +29,7 @@ public:
 typedef void (*column_binding_callback_t)(BoundColumnRefExpression &bound_column_ref,
                                           const ReplaceBinding &replace_binding);
 
-//! The ColumnBindingReplacer updates column bindings (e.g., after changing the operator plan)
+//! The ColumnBindingReplacer updates column bindings (e.g., after changing the operator plan), utility for optimizers
 class ColumnBindingReplacer : LogicalOperatorVisitor {
 public:
 	ColumnBindingReplacer();
@@ -41,8 +41,12 @@ public:
 
 	//! Contains all bindings that need to be updated
 	vector<ReplaceBinding> replace_bindings;
+
+	//! Do not recurse further than this operator (optional)
+	LogicalOperator *stop_operator = nullptr;
+
 	//! Extra callback (optional)
-	column_binding_callback_t callback = nullptr;
+	column_binding_callback_t column_binding_callback = nullptr;
 };
 
 } // namespace duckdb

@@ -19,6 +19,9 @@ ColumnBindingReplacer::ColumnBindingReplacer() {
 }
 
 void ColumnBindingReplacer::VisitOperator(LogicalOperator &op) {
+	if (stop_operator && stop_operator == &op) {
+		return;
+	}
 	VisitOperatorChildren(op);
 	VisitOperatorExpressions(op);
 }
@@ -35,8 +38,8 @@ void ColumnBindingReplacer::VisitExpression(unique_ptr<Expression> *expression) 
 				}
 			}
 
-			if (callback) {
-				callback(bound_column_ref, replace_binding);
+			if (column_binding_callback) {
+				column_binding_callback(bound_column_ref, replace_binding);
 			}
 		}
 	}
