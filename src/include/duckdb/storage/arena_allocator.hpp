@@ -47,12 +47,19 @@ public:
 
 	DUCKDB_API bool IsEmpty();
 
+	//! Returns an "Allocator" wrapper for this arena allocator
+	Allocator &GetAllocator() {
+		return arena_allocator;
+	}
+
 private:
 	//! Internal allocator that is used by the arena allocator
 	Allocator &allocator;
 	idx_t current_capacity;
 	unique_ptr<ArenaChunk> head;
 	ArenaChunk *tail;
+	//! An allocator wrapper using this arena allocator
+	Allocator arena_allocator;
 };
 
 } // namespace duckdb

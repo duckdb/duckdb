@@ -188,7 +188,8 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	if (bound_table->type != TableReferenceType::BASE_TABLE) {
 		throw BinderException("Can only update base table!");
 	}
-	auto &table_binding = (BoundBaseTableRef &)*bound_table;
+	auto &table_binding = bound_table->Cast<BoundBaseTableRef>();
+	;
 	auto table = table_binding.table;
 
 	// Add CTEs as bindable

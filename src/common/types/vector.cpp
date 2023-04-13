@@ -245,7 +245,7 @@ struct DataArrays {
 	}
 };
 
-void FindChildren(std::vector<DataArrays> &to_resize, VectorBuffer &auxiliary) {
+void FindChildren(vector<DataArrays> &to_resize, VectorBuffer &auxiliary) {
 	if (auxiliary.GetBufferType() == VectorBufferType::LIST_BUFFER) {
 		auto &buffer = (VectorListBuffer &)auxiliary;
 		auto &child = buffer.GetChild();
@@ -281,7 +281,7 @@ void FindChildren(std::vector<DataArrays> &to_resize, VectorBuffer &auxiliary) {
 	}
 }
 void Vector::Resize(idx_t cur_size, idx_t new_size) {
-	std::vector<DataArrays> to_resize;
+	vector<DataArrays> to_resize;
 	if (!buffer) {
 		buffer = make_buffer<VectorBuffer>(0);
 	}
@@ -552,7 +552,7 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 	case LogicalTypeId::MAP: {
 		auto offlen = ((list_entry_t *)data)[index];
 		auto &child_vec = ListVector::GetEntry(*vector);
-		std::vector<Value> children;
+		duckdb::vector<Value> children;
 		for (idx_t i = offlen.offset; i < offlen.offset + offlen.length; i++) {
 			children.push_back(child_vec.GetValue(i));
 		}
@@ -577,7 +577,7 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 	case LogicalTypeId::LIST: {
 		auto offlen = ((list_entry_t *)data)[index];
 		auto &child_vec = ListVector::GetEntry(*vector);
-		std::vector<Value> children;
+		duckdb::vector<Value> children;
 		for (idx_t i = offlen.offset; i < offlen.offset + offlen.length; i++) {
 			children.push_back(child_vec.GetValue(i));
 		}
@@ -964,46 +964,56 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 }
 
 void Vector::FormatSerialize(FormatSerializer &serializer, idx_t count) {
-	auto &type = GetType();
+	auto &logical_type = GetType();
 
 	UnifiedVectorFormat vdata;
 	ToUnifiedFormat(count, vdata);
 
-	const auto write_validity = (count > 0) && !vdata.validity.AllValid();
-	serializer.WriteProperty("has_validity", write_validity);
-	if (write_validity) {
+	const auto all_valid = (count > 0) && !vdata.validity.AllValid();
+	serializer.WriteProperty("all_valid", all_valid);
+	if (all_valid) {
 		ValidityMask flat_mask(count);
 		for (idx_t i = 0; i < count; ++i) {
 			auto row_idx = vdata.sel->get_index(i);
 			flat_mask.Set(i, vdata.validity.RowIsValid(row_idx));
 		}
-		serializer.WriteProperty("validity_mask", (const_data_ptr_t)flat_mask.GetData(),
-		                         flat_mask.ValidityMaskSize(count));
+		serializer.WriteProperty("validity", (data_ptr_t)flat_mask.GetData(), flat_mask.ValidityMaskSize(count));
 	}
-	if (TypeIsConstantSize(type.InternalType())) {
+	if (TypeIsConstantSize(logical_type.InternalType())) {
 		// constant size type: simple copy
-		idx_t write_size = GetTypeIdSize(type.InternalType()) * count;
+		idx_t write_size = GetTypeIdSize(logical_type.InternalType()) * count;
 		auto ptr = unique_ptr<data_t[]>(new data_t[write_size]);
 		VectorOperations::WriteToStorage(*this, count, ptr.get());
-		serializer.WriteProperty("data", write_size);
+		serializer.WriteProperty("data", ptr.get(), write_size);
 	} else {
-		switch (type.InternalType()) {
+		switch (logical_type.InternalType()) {
 		case PhysicalType::VARCHAR: {
 			auto strings = (string_t *)vdata.data;
+
+			// Serialize data as a list
+			serializer.SetTag("data");
+			serializer.OnListBegin(count);
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = vdata.sel->get_index(i);
-				auto source = !vdata.validity.RowIsValid(idx) ? NullValue<string_t>() : strings[idx];
-				string_t str = string_t(source.GetDataUnsafe(), source.GetSize());
-				serializer.WriteProperty("data", str);
+				auto str = !vdata.validity.RowIsValid(idx) ? NullValue<string_t>() : strings[idx];
+				serializer.WriteValue(str);
 			}
+			serializer.OnListEnd(count);
 			break;
 		}
 		case PhysicalType::STRUCT: {
 			Flatten(count);
 			auto &entries = StructVector::GetEntries(*this);
+
+			// Serialize entries as a list
+			serializer.SetTag("children");
+			serializer.OnListBegin(entries.size());
 			for (auto &entry : entries) {
+				serializer.OnObjectBegin();
 				entry->FormatSerialize(serializer, count);
+				serializer.OnObjectEnd();
 			}
+			serializer.OnListEnd(entries.size());
 			break;
 		}
 		case PhysicalType::LIST: {
@@ -1011,19 +1021,28 @@ void Vector::FormatSerialize(FormatSerializer &serializer, idx_t count) {
 			auto list_size = ListVector::GetListSize(*this);
 
 			// serialize the list entries in a flat array
-			auto data = unique_ptr<list_entry_t[]>(new list_entry_t[count]);
+			auto entries = unique_ptr<list_entry_t[]>(new list_entry_t[count]);
 			auto source_array = (list_entry_t *)vdata.data;
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = vdata.sel->get_index(i);
 				auto source = source_array[idx];
-				data[i].offset = source.offset;
-				data[i].length = source.length;
+				entries[i].offset = source.offset;
+				entries[i].length = source.length;
 			}
-
-			// write the list size
 			serializer.WriteProperty("list_size", list_size);
-			serializer.WriteProperty("data", (data_ptr_t)data.get(), count * sizeof(list_entry_t));
+			serializer.SetTag("entries");
+			serializer.OnListBegin(count);
+			for (idx_t i = 0; i < count; i++) {
+				serializer.OnObjectBegin();
+				serializer.WriteProperty("offset", entries[i].offset);
+				serializer.WriteProperty("length", entries[i].length);
+				serializer.OnObjectEnd();
+			}
+			serializer.OnListEnd(count);
+			serializer.SetTag("child");
+			serializer.OnObjectBegin();
 			child.FormatSerialize(serializer, list_size);
+			serializer.OnObjectEnd();
 			break;
 		}
 		default:
@@ -1033,69 +1052,90 @@ void Vector::FormatSerialize(FormatSerializer &serializer, idx_t count) {
 }
 
 void Vector::FormatDeserialize(FormatDeserializer &deserializer, idx_t count) {
-	/*
-	auto &type = GetType();
+	auto &logical_type = GetType();
 
 	auto &validity = FlatVector::Validity(*this);
 	validity.Reset();
-	const auto has_validity = deserializer.ReadProperty<bool>("has_validity");
+	const auto has_validity = deserializer.ReadProperty<bool>("all_valid");
 	if (has_validity) {
-	    validity.Initialize(count);
-	    source.ReadData((data_ptr_t)validity.GetData(), validity.ValidityMaskSize(count));
+		validity.Initialize(count);
+		deserializer.ReadProperty("validity", (data_ptr_t)validity.GetData(), validity.ValidityMaskSize(count));
 	}
 
-	if (TypeIsConstantSize(type.InternalType())) {
-	    // constant size type: read fixed amount of data from
-	    auto column_size = GetTypeIdSize(type.InternalType()) * count;
-	    auto ptr = unique_ptr<data_t[]>(new data_t[column_size]);
-	    source.ReadData(ptr.get(), column_size);
+	if (TypeIsConstantSize(logical_type.InternalType())) {
+		// constant size type: read fixed amount of data
+		auto column_size = GetTypeIdSize(logical_type.InternalType()) * count;
+		auto ptr = unique_ptr<data_t[]>(new data_t[column_size]);
+		deserializer.ReadProperty("data", ptr.get(), column_size);
 
-	    VectorOperations::ReadFromStorage(ptr.get(), count, *this);
+		VectorOperations::ReadFromStorage(ptr.get(), count, *this);
 	} else {
-	    switch (type.InternalType()) {
-	    case PhysicalType::VARCHAR: {
-	        auto strings = FlatVector::GetData<string_t>(*this);
-	        for (idx_t i = 0; i < count; i++) {
-	            // read the strings
-	            auto str = source.Read<string>();
-	            // now add the string to the StringHeap of the vector
-	            // and write the pointer into the vector
-	            if (validity.RowIsValid(i)) {
-	                strings[i] = StringVector::AddStringOrBlob(*this, str);
-	            }
-	        }
-	        break;
-	    }
-	    case PhysicalType::STRUCT: {
-	        auto &entries = StructVector::GetEntries(*this);
-	        for (auto &entry : entries) {
-	            entry->FormatDeserialize(deserializer, count);
-	        }
-	        break;
-	    }
-	    case PhysicalType::LIST: {
-	        // read the list size
-	        auto list_size = deserializer.ReadProperty<idx_t>("list_size");
-	        ListVector::Reserve(*this, list_size);
-	        ListVector::SetListSize(*this, list_size);
+		switch (logical_type.InternalType()) {
+		case PhysicalType::VARCHAR: {
+			auto strings = FlatVector::GetData<string_t>(*this);
+			deserializer.SetTag("data");
+			auto read_count = deserializer.OnListBegin();
+			D_ASSERT(read_count == count);
+			(void)read_count; // otherwise unused variable error in release mode
+			for (idx_t i = 0; i < count; i++) {
+				// read the strings
+				auto str = deserializer.ReadString();
+				// now add the string to the StringHeap of the vector
+				// and write the pointer into the vector
+				if (validity.RowIsValid(i)) {
+					strings[i] = StringVector::AddStringOrBlob(*this, str);
+				}
+			}
+			deserializer.OnListEnd();
+			break;
+		}
+		case PhysicalType::STRUCT: {
+			auto &entries = StructVector::GetEntries(*this);
+			// Deserialize entries as a list
+			deserializer.SetTag("children");
+			auto read_size = deserializer.OnListBegin();
+			D_ASSERT(read_size == entries.size());
+			(void)read_size;
+			for (auto &entry : entries) {
+				deserializer.OnObjectBegin();
+				entry->FormatDeserialize(deserializer, count);
+				deserializer.OnObjectEnd();
+			}
+			deserializer.OnListEnd();
+			break;
+		}
+		case PhysicalType::LIST: {
+			// Read the list size
+			auto list_size = deserializer.ReadProperty<uint64_t>("list_size");
+			ListVector::Reserve(*this, list_size);
+			ListVector::SetListSize(*this, list_size);
 
-	        // read the list entry
-	        auto list_entries = FlatVector::GetData(*this);
-	        source.ReadData(list_entries, count * sizeof(list_entry_t));
+			// Read the entries
+			auto list_entries = FlatVector::GetData<list_entry_t>(*this);
+			deserializer.SetTag("entries");
+			auto entries_count = deserializer.OnListBegin();
+			D_ASSERT(entries_count == count);
+			(void)entries_count;
+			for (idx_t i = 0; i < count; i++) {
+				deserializer.OnObjectBegin();
+				deserializer.ReadProperty("offset", list_entries[i].offset);
+				deserializer.ReadProperty("length", list_entries[i].length);
+				deserializer.OnObjectEnd();
+			}
+			deserializer.OnListEnd();
 
-	        // deserialize the child vector
-	        auto &child = ListVector::GetEntry(*this);
-	        child.Deserialize(list_size, source);
-
-	        break;
-	    }
-	    default:
-	        throw InternalException("Unimplemented variable width type for Vector::Deserialize!");
-	    }
+			// Read the child vector
+			deserializer.SetTag("child");
+			auto &child = ListVector::GetEntry(*this);
+			deserializer.OnObjectBegin();
+			child.FormatDeserialize(deserializer, list_size);
+			deserializer.OnObjectEnd();
+			break;
+		}
+		default:
+			throw InternalException("Unimplemented variable width type for Vector::Deserialize!");
+		}
 	}
-	 */
-
-	throw NotImplementedException("TODO: Implement deserialization for DuckDB Vectors");
 }
 
 void Vector::Deserialize(idx_t count, Deserializer &source) {

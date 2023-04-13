@@ -62,7 +62,7 @@ unique_ptr<FunctionData> ListSortBindData::Copy() const {
 }
 
 bool ListSortBindData::Equals(const FunctionData &other_p) const {
-	auto &other = (ListSortBindData &)other_p;
+	auto &other = other_p.Cast<ListSortBindData>();
 	return order_type == other.order_type && null_order == other.null_order;
 }
 
@@ -112,8 +112,8 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 		return;
 	}
 
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	auto &info = (ListSortBindData &)*func_expr.bind_info;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &info = func_expr.bind_info->Cast<ListSortBindData>();
 
 	// initialize the global and local sorting state
 	auto &buffer_manager = BufferManager::GetBufferManager(info.context);

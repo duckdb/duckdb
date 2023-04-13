@@ -15,6 +15,9 @@ namespace duckdb {
 
 class PhysicalExecute : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::EXECUTE;
+
+public:
 	explicit PhysicalExecute(PhysicalOperator *plan);
 
 	PhysicalOperator *plan;
@@ -25,7 +28,6 @@ public:
 	vector<PhysicalOperator *> GetChildren() const override;
 
 public:
-	bool AllOperatorsPreserveOrder() const override;
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
 };
 

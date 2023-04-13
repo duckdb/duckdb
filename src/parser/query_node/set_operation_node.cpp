@@ -47,14 +47,14 @@ bool SetOperationNode::Equals(const QueryNode *other_p) const {
 	if (this == other_p) {
 		return true;
 	}
-	auto other = (SetOperationNode *)other_p;
-	if (setop_type != other->setop_type) {
+	auto &other = other_p->Cast<SetOperationNode>();
+	if (setop_type != other.setop_type) {
 		return false;
 	}
-	if (!left->Equals(other->left.get())) {
+	if (!left->Equals(other.left.get())) {
 		return false;
 	}
-	if (!right->Equals(other->right.get())) {
+	if (!right->Equals(other.right.get())) {
 		return false;
 	}
 	return true;
