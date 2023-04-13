@@ -15,9 +15,9 @@ struct PandasColumnBindData {
 	NumpyNullableType numpy_type;
 	unique_ptr<PandasColumn> numpy_col;
 	unique_ptr<RegisteredArray> mask;
-	// Only for categorical types
+	//! Only for categorical types
 	string internal_categorical_type;
-	// When object types are cast we must hold their data somewhere
+	//! When object types are cast we must hold their data somewhere
 	PythonObjectContainer<py::str> object_str_val;
 };
 
