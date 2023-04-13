@@ -1,11 +1,28 @@
-# name: benchmark/micro/aggregate/grouped_distinct.benchmark
+# name: benchmark/micro/aggregate/ordered_first.benchmark
 # description: FIRST(i ORDER BY i) over a bunch of integers
 # group: [aggregate]
 
 name Ordered First (Grouped)
 group aggregate
 
+#load
+#PRAGMA debug_ordered_aggregate_threshold=262144
+
 run
 SELECT i % 2048 AS grp, FIRST(i ORDER BY i DESC) AS agg
 FROM range(10000000) tbl(i)
-GROUP BY ALL;
+GROUP BY ALL
+ORDER BY ALL
+LIMIT 10
+
+result II
+0	9998336
+1	9998337
+2	9998338
+3	9998339
+4	9998340
+5	9998341
+6	9998342
+7	9998343
+8	9998344
+9	9998345

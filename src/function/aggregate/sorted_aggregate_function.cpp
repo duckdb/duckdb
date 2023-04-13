@@ -13,8 +13,8 @@ namespace duckdb {
 struct SortedAggregateBindData : public FunctionData {
 	SortedAggregateBindData(ClientContext &context, BoundAggregateExpression &expr)
 	    : buffer_manager(BufferManager::GetBufferManager(context)), function(expr.function),
-	      bind_info(std::move(expr.bind_info)),
-	      threshold(ClientConfig::GetConfig(context).ordered_aggregate_threshold), external(ClientConfig::GetConfig(context).force_external) {
+	      bind_info(std::move(expr.bind_info)), threshold(ClientConfig::GetConfig(context).ordered_aggregate_threshold),
+	      external(ClientConfig::GetConfig(context).force_external) {
 		auto &children = expr.children;
 		arg_types.reserve(children.size());
 		for (const auto &child : children) {
@@ -34,7 +34,8 @@ struct SortedAggregateBindData : public FunctionData {
 
 	SortedAggregateBindData(const SortedAggregateBindData &other)
 	    : buffer_manager(other.buffer_manager), function(other.function), arg_types(other.arg_types),
-	      sort_types(other.sort_types), sorted_on_args(other.sorted_on_args), threshold(other.threshold), external(other.external) {
+	      sort_types(other.sort_types), sorted_on_args(other.sorted_on_args), threshold(other.threshold),
+	      external(other.external) {
 		if (other.bind_info) {
 			bind_info = other.bind_info->Copy();
 		}
@@ -188,10 +189,12 @@ struct SortedAggregateState {
 			Flush(order_bind);
 			ordering->Combine(*other.ordering);
 			arguments->Combine(*other.arguments);
+			count += other.count;
 		} else if (other.ordering) {
 			// Force CDC if the other has it
 			Flush(order_bind);
 			ordering->Combine(*other.ordering);
+			count += other.count;
 		} else if (other.sort_buffer.size()) {
 			Update(order_bind, other.sort_buffer, other.arg_buffer);
 		}
@@ -421,19 +424,8 @@ struct SortedAggregateFunction {
 			}
 
 			//	If they were all empty (filtering) flush them
+			//	(This can only happen on the last range)
 			if (!unsorted_count) {
-				//	This can only happen on the last range, so get them all
-				for (; sorted < count; ++sorted) {
-					initialize(agg_state.data());
-
-					// Finalize a single value at the next offset
-					agg_state_vec.SetVectorType(states.GetVectorType());
-					finalize(agg_state_vec, aggr_bind_info, result, 1, sorted + offset);
-
-					if (destructor) {
-						destructor(agg_state_vec, aggr_bind_info, 1);
-					}
-				}
 				break;
 			}
 
@@ -514,6 +506,20 @@ struct SortedAggregateFunction {
 			state->Finalize(order_bind, prefixed, *local_sort);
 			unsorted_count += state_unprocessed[finalized];
 		}
+
+		for (; sorted < count; ++sorted) {
+			initialize(agg_state.data());
+
+			// Finalize a single value at the next offset
+			agg_state_vec.SetVectorType(states.GetVectorType());
+			finalize(agg_state_vec, aggr_bind_info, result, 1, sorted + offset);
+
+			if (destructor) {
+				destructor(agg_state_vec, aggr_bind_info, 1);
+			}
+		}
+
+		result.Verify(count);
 	}
 
 	static void Serialize(FieldWriter &writer, const FunctionData *bind_data, const AggregateFunction &function) {

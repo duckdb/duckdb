@@ -83,6 +83,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "search_path",
 	    "debug_force_external",
 	    "debug_force_no_cross_product",
+	    "debug_ordered_aggregate_threshold",
 	    "debug_window_mode",
 	    "enable_external_access",    // cant change this while db is running
 	    "allow_unsigned_extensions", // cant change this while db is running
