@@ -98,19 +98,28 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 
 bool Pipeline::IsOrderDependent() const {
 	auto &config = DBConfig::GetConfig(executor.context);
+	if (source) {
+		auto source_order = source->SourceOrder();
+		if (source_order == OrderPreservationType::FIXED_ORDER) {
+			return true;
+		}
+		if (source_order == OrderPreservationType::NO_ORDER) {
+			return false;
+		}
+	}
+	for (auto &op : operators) {
+		if (op->OperatorOrder() == OrderPreservationType::NO_ORDER) {
+			return false;
+		}
+		if (op->OperatorOrder() == OrderPreservationType::FIXED_ORDER) {
+			return true;
+		}
+	}
 	if (!config.options.preserve_insertion_order) {
 		return false;
 	}
-	if (sink && sink->IsOrderDependent()) {
+	if (sink && sink->SinkOrderDependent()) {
 		return true;
-	}
-	if (source && source->IsOrderDependent()) {
-		return true;
-	}
-	for (auto &op : operators) {
-		if (op->IsOrderDependent()) {
-			return true;
-		}
 	}
 	return false;
 }
@@ -148,6 +157,9 @@ bool Pipeline::LaunchScanTasks(shared_ptr<Event> &event, idx_t max_threads) {
 
 void Pipeline::ResetSink() {
 	if (sink) {
+		if (!sink->IsSink()) {
+			throw InternalException("Sink of pipeline does not have IsSink set");
+		}
 		lock_guard<mutex> guard(sink->lock);
 		if (!sink->sink_state) {
 			sink->sink_state = sink->GetGlobalSinkState(GetClientContext());
@@ -172,6 +184,9 @@ void Pipeline::Reset() {
 }
 
 void Pipeline::ResetSource(bool force) {
+	if (source && !source->IsSource()) {
+		throw InternalException("Source of pipeline does not have IsSource set");
+	}
 	if (force || !source_state) {
 		source_state = source->GetGlobalSourceState(GetClientContext());
 	}

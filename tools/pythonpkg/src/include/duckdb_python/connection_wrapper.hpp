@@ -27,6 +27,20 @@ public:
 	static shared_ptr<DuckDBPyConnection> Execute(const string &query, py::object params = py::list(),
 	                                              bool many = false, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
+	static shared_ptr<DuckDBPyType> ArrayType(const shared_ptr<DuckDBPyType> &type,
+	                                          shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static shared_ptr<DuckDBPyType> MapType(const shared_ptr<DuckDBPyType> &key, const shared_ptr<DuckDBPyType> &value,
+	                                        shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static shared_ptr<DuckDBPyType> StructType(const py::object &fields,
+	                                           const shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static shared_ptr<DuckDBPyType> UnionType(const py::object &members, shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static shared_ptr<DuckDBPyType> EnumType(const string &name, const shared_ptr<DuckDBPyType> &type,
+	                                         const py::list &values_p, shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static shared_ptr<DuckDBPyType> DecimalType(int width, int scale, shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static shared_ptr<DuckDBPyType> StringType(const string &collation = string(),
+	                                           shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static shared_ptr<DuckDBPyType> Type(const string &type_str, shared_ptr<DuckDBPyConnection> conn = nullptr);
+
 	static shared_ptr<DuckDBPyConnection> Append(const string &name, DataFrame value,
 	                                             shared_ptr<DuckDBPyConnection> conn = nullptr);
 

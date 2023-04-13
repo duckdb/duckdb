@@ -29,6 +29,7 @@
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/python_conversion.hpp"
+#include "duckdb_python/pandas_type.hpp"
 #include "duckdb/main/prepared_statement.hpp"
 #include "duckdb_python/jupyter_progress_bar_display.hpp"
 #include "duckdb_python/pyfilesystem.hpp"
@@ -97,7 +98,25 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	    .def("list_filesystems", &DuckDBPyConnection::ListFilesystems,
 	         "List registered filesystems, including builtin ones")
 	    .def("filesystem_is_registered", &DuckDBPyConnection::FileSystemIsRegistered,
-	         "Check if a filesystem with the provided name is currently registered", py::arg("name"))
+	         "Check if a filesystem with the provided name is currently registered", py::arg("name"));
+
+	DefineMethod({"sqltype", "dtype", "type"}, m, &DuckDBPyConnection::Type,
+	             "Create a type object by parsing the 'type_str' string", py::arg("type_str"));
+	DefineMethod({"array_type", "list_type"}, m, &DuckDBPyConnection::ArrayType,
+	             "Create an array type object of 'type'", py::arg("type").none(false));
+	m.def("union_type", &DuckDBPyConnection::UnionType, "Create a union type object from 'members'",
+	      py::arg("members").none(false))
+	    .def("string_type", &DuckDBPyConnection::StringType, "Create a string type with an optional collation",
+	         py::arg("collation") = string())
+	    .def("enum_type", &DuckDBPyConnection::EnumType,
+	         "Create an enum type of underlying 'type', consisting of the list of 'values'", py::arg("name"),
+	         py::arg("type"), py::arg("values"))
+	    .def("decimal_type", &DuckDBPyConnection::DecimalType, "Create a decimal type with 'width' and 'scale'",
+	         py::arg("width"), py::arg("scale"));
+	DefineMethod({"struct_type", "row_type"}, m, &DuckDBPyConnection::StructType,
+	             "Create a struct type object from 'fields'", py::arg("fields"));
+	m.def("map_type", &DuckDBPyConnection::MapType, "Create a map type object from 'key_type' and 'value_type'",
+	      py::arg("key").none(false), py::arg("value").none(false))
 	    .def("duplicate", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
 	    .def("execute", &DuckDBPyConnection::Execute,
 	         "Execute the given SQL query, optionally using prepared statements with parameters set", py::arg("query"),
@@ -1152,6 +1171,7 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 	auto entry = dict[table_name];
 	auto table_function = make_uniq<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
+	NumpyObjectType numpytype; // Identify the type of accepted numpy objects.
 	if (DuckDBPyConnection::IsPandasDataframe(entry)) {
 		string name = "df_" + StringUtil::GenerateRandomName();
 		auto new_df = PandasScanFunction::PandasReplaceCopiedNames(entry);
@@ -1176,6 +1196,39 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 		auto materialized = entry.attr("collect")();
 		auto arrow_dataset = materialized.attr("to_arrow")();
 		CreateArrowScan(arrow_dataset, *table_function, children, config);
+	} else if ((numpytype = DuckDBPyConnection::IsAcceptedNumpyObject(entry)) != NumpyObjectType::INVALID) {
+		string name = "np_" + StringUtil::GenerateRandomName();
+		py::dict data; // we will convert all the supported format to dict{"key": np.array(value)}.
+		size_t idx = 0;
+		switch (numpytype) {
+		case NumpyObjectType::NDARRAY1D:
+			data["column0"] = entry;
+			break;
+		case NumpyObjectType::NDARRAY2D:
+			idx = 0;
+			for (auto item : py::cast<py::array>(entry)) {
+				data[("column" + std::to_string(idx)).c_str()] = item;
+				idx++;
+			}
+			break;
+		case NumpyObjectType::LIST:
+			idx = 0;
+			for (auto item : py::cast<py::list>(entry)) {
+				data[("column" + std::to_string(idx)).c_str()] = item;
+				idx++;
+			}
+			break;
+		case NumpyObjectType::DICT:
+			data = py::cast<py::dict>(entry);
+			break;
+		default:
+			throw NotImplementedException("Unsupported Numpy object");
+			break;
+		}
+		children.push_back(make_uniq<ConstantExpression>(Value::POINTER((uintptr_t)data.ptr())));
+		table_function->function = make_uniq<FunctionExpression>("pandas_scan", std::move(children));
+		table_function->external_dependency =
+		    make_uniq<PythonDependencies>(make_uniq<RegisteredObject>(entry), make_uniq<RegisteredObject>(data));
 	} else {
 		std::string location = py::cast<py::str>(current_frame.attr("f_code").attr("co_filename"));
 		location += ":";
@@ -1186,7 +1239,7 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 		throw InvalidInputException(
 		    "Python Object \"%s\" of type \"%s\" found on line \"%s\" not suitable for replacement scans.\nMake sure "
 		    "that \"%s\" is either a pandas.DataFrame, duckdb.DuckDBPyRelation, pyarrow Table, Dataset, "
-		    "RecordBatchReader, or Scanner",
+		    "RecordBatchReader, Scanner, or NumPy ndarrays with supported format",
 		    cpp_table_name, py_object_type, location, cpp_table_name);
 	}
 	return std::move(table_function);
@@ -1340,8 +1393,12 @@ ModifiedMemoryFileSystem &DuckDBPyConnection::GetObjectFileSystem() {
 	if (!internal_object_filesystem) {
 		D_ASSERT(!FileSystemIsRegistered("DUCKDB_INTERNAL_OBJECTSTORE"));
 		auto &import_cache_py = *ImportCache();
-		internal_object_filesystem =
-		    make_shared<ModifiedMemoryFileSystem>(import_cache_py.pyduckdb().filesystem.modified_memory_filesystem()());
+		auto modified_memory_fs = import_cache_py.pyduckdb().filesystem.modified_memory_filesystem();
+		if (modified_memory_fs.ptr() == nullptr) {
+			throw InvalidInputException(
+			    "This operation could not be completed because required module 'fsspec' is not installed");
+		}
+		internal_object_filesystem = make_shared<ModifiedMemoryFileSystem>(modified_memory_fs());
 		auto &abstract_fs = (AbstractFileSystem &)*internal_object_filesystem;
 		RegisterFilesystem(abstract_fs);
 	}
@@ -1385,6 +1442,56 @@ bool DuckDBPyConnection::IsPolarsDataframe(const py::object &object) {
 	auto &import_cache_py = *DuckDBPyConnection::ImportCache();
 	return import_cache_py.polars().DataFrame.IsInstance(object) ||
 	       import_cache_py.polars().LazyFrame.IsInstance(object);
+}
+
+bool IsValidNumpyDimensions(const py::handle &object, int &dim) {
+	// check the dimensions of numpy arrays
+	// should only be called by IsAcceptedNumpyObject
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	if (!import_cache.numpy().ndarray.IsInstance(object)) {
+		return false;
+	}
+	auto shape = (py::cast<py::array>(object)).attr("shape");
+	if (py::len(shape) != 1) {
+		return false;
+	}
+	int cur_dim = (shape.attr("__getitem__")(0)).cast<int>();
+	dim = dim == -1 ? cur_dim : dim;
+	return dim == cur_dim;
+}
+NumpyObjectType DuckDBPyConnection::IsAcceptedNumpyObject(const py::object &object) {
+	if (!ModuleIsLoaded<NumpyCacheItem>()) {
+		return NumpyObjectType::INVALID;
+	}
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	if (import_cache.numpy().ndarray.IsInstance(object)) {
+		auto len = py::len((py::cast<py::array>(object)).attr("shape"));
+		switch (len) {
+		case 1:
+			return NumpyObjectType::NDARRAY1D;
+		case 2:
+			return NumpyObjectType::NDARRAY2D;
+		default:
+			return NumpyObjectType::INVALID;
+		}
+	} else if (py::isinstance<py::dict>(object)) {
+		int dim = -1;
+		for (auto item : py::cast<py::dict>(object)) {
+			if (!IsValidNumpyDimensions(item.second, dim)) {
+				return NumpyObjectType::INVALID;
+			}
+		}
+		return NumpyObjectType::DICT;
+	} else if (py::isinstance<py::list>(object)) {
+		int dim = -1;
+		for (auto item : py::cast<py::list>(object)) {
+			if (!IsValidNumpyDimensions(item, dim)) {
+				return NumpyObjectType::INVALID;
+			}
+		}
+		return NumpyObjectType::LIST;
+	}
+	return NumpyObjectType::INVALID;
 }
 
 bool DuckDBPyConnection::IsAcceptedArrowObject(const py::object &object) {

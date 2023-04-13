@@ -39,6 +39,10 @@ struct TypeOfFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct ErrorFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct ConstantOrNull {
 	static ScalarFunction GetFunction(const LogicalType &return_type);
 	static unique_ptr<FunctionData> Bind(Value value);

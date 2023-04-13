@@ -10,6 +10,7 @@ void BuiltinFunctions::RegisterMathFunctions() {
 	Register<CeilFun>();
 	Register<FloorFun>();
 	Register<RoundFun>();
+	Register<TruncFun>();
 
 	Register<DegreesFun>();
 	Register<RadiansFun>();
