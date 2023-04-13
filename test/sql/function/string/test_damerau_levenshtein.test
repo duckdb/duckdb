@@ -103,6 +103,11 @@ SELECT damerau_levenshtein('rat', 'brat')
 1
 
 query I
+SELECT damerau_levenshtein('amanaplanacanalpanama', 'm23aanaplancaanaalnama')
+----
+6
+
+query I
 SELECT damerau_levenshtein('', 'great')
 ----
 5
@@ -315,6 +320,12 @@ INSERT INTO strings VALUES 	('identical', 'identical'), ('dientical', 'identical
 							('dinetcila', 'identical'), ('abcdefghijk', 'bacdfzzeghki'),
 							('abcd', 'bcda'), ('great', 'greta'),
 							('abcdefghijklmnopqrstuvwxyz', 'abdcpoxwz'),
+							('a_considerably_longer_string', 'a_ocnsiderably_longre_tsrig'),
+							('another-quite-long-string', 'naothre-quit-elongstrnig'),
+							('littlehampton', 'littlerhamptoner'),
+							('an_incredibly_long_string_to_compare', 'na_incerdibl_ylong_sr56ting_ot_ocmrpe'),
+							('smaller', 'notsmaller,longer'),
+							('againalongerstring', 'string'),
 							(NULL, NULL), ('', ''),
 							(NULL, 'test'), ('test', NULL),
 							('four', ''), ('', 'four'),
@@ -331,6 +342,12 @@ SELECT damerau_levenshtein(s_left, s_right) FROM strings
 2
 1
 20
+4
+5
+3
+10
+10
+12
 NULL
 0
 NULL
