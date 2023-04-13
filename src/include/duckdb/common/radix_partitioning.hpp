@@ -23,12 +23,12 @@ struct SelectionVector;
 struct RadixPartitioning {
 public:
 	//! The number of partitions for a given number of radix bits
-	static inline constexpr idx_t NumberOfPartitions(const idx_t &radix_bits) {
+	static inline constexpr idx_t NumberOfPartitions(idx_t radix_bits) {
 		return idx_t(1) << radix_bits;
 	}
 
 	//! Inverse of NumberOfPartitions, given a number of partitions, get the number of radix bits
-	static inline idx_t RadixBits(const idx_t &n_partitions) {
+	static inline idx_t RadixBits(idx_t n_partitions) {
 		D_ASSERT(IsPowerOfTwo(n_partitions));
 		for (idx_t r = 0; r < sizeof(idx_t) * 8; r++) {
 			if (n_partitions == NumberOfPartitions(r)) {
@@ -38,11 +38,11 @@ public:
 		throw InternalException("RadixPartitioning::RadixBits unable to find partition count!");
 	}
 
-	static inline constexpr idx_t Shift(const idx_t &radix_bits) {
+	static inline constexpr idx_t Shift(idx_t radix_bits) {
 		return 48 - radix_bits;
 	}
 
-	static inline constexpr hash_t Mask(const idx_t &radix_bits) {
+	static inline constexpr hash_t Mask(idx_t radix_bits) {
 		return (hash_t(1 << radix_bits) - 1) << Shift(radix_bits);
 	}
 
@@ -62,7 +62,7 @@ public:
 
 public:
 	//! Apply bitmask and right shift to get a number between 0 and NUM_PARTITIONS
-	static inline hash_t ApplyMask(const hash_t &hash) {
+	static inline hash_t ApplyMask(hash_t hash) {
 		D_ASSERT((hash & MASK) >> SHIFT < NUM_PARTITIONS);
 		return (hash & MASK) >> SHIFT;
 	}

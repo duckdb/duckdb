@@ -238,18 +238,15 @@ void TupleDataCollection::ToUnifiedFormat(TupleDataChunkState &chunk_state, Data
 	}
 }
 
-unique_ptr<UnifiedVectorFormat[]> TupleDataCollection::GetVectorData(const TupleDataChunkState &chunk_state) {
+void TupleDataCollection::GetVectorData(const TupleDataChunkState &chunk_state, UnifiedVectorFormat result[]) {
 	const auto &vector_data = chunk_state.vector_data;
-	auto result = unique_ptr<UnifiedVectorFormat[]>(new UnifiedVectorFormat[vector_data.size()]);
-	auto result_data = result.get();
 	for (idx_t i = 0; i < vector_data.size(); i++) {
 		const auto &source = vector_data[i].data;
-		auto &target = result_data[i];
+		auto &target = result[i];
 		target.sel = source.sel;
 		target.data = source.data;
 		target.validity = source.validity;
 	}
-	return result;
 }
 
 void TupleDataCollection::Build(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state,

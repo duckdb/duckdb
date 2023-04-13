@@ -384,7 +384,10 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(AggregateHTAppendSta
 
 	// convert all vectors to unified format
 	TupleDataCollection::ToUnifiedFormat(td_append_state.chunk_state, state.group_chunk);
-	state.group_data = TupleDataCollection::GetVectorData(td_append_state.chunk_state);
+	if (!state.group_data) {
+		state.group_data = unique_ptr<UnifiedVectorFormat[]>(new UnifiedVectorFormat[state.group_chunk.ColumnCount()]);
+	}
+	TupleDataCollection::GetVectorData(td_append_state.chunk_state, state.group_data.get());
 
 	idx_t new_group_count = 0;
 	idx_t remaining_entries = groups.size();
