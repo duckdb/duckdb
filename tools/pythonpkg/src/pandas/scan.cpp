@@ -148,7 +148,7 @@ double PandasScanFunction::PandasProgress(ClientContext &context, const Function
 
 void PandasScanFunction::PandasBackendScanSwitch(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
                                                  Vector &out) {
-	auto backend = bind_data.numpy_col->Backend();
+	auto backend = bind_data.pandas_col->Backend();
 	switch (backend) {
 	case PandasColumnBackend::NUMPY: {
 		NumpyScan::Scan(bind_data, count, offset, out);

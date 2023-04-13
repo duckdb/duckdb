@@ -61,8 +61,8 @@ void ScanNumpyCategory(py::array &column, idx_t count, idx_t offset, Vector &out
 
 template <class T>
 void ScanNumpyMasked(PandasColumnBindData &bind_data, idx_t count, idx_t offset, Vector &out) {
-	D_ASSERT(bind_data.numpy_col->Backend() == PandasColumnBackend::NUMPY);
-	auto &numpy_col = (PandasNumpyColumn &)*bind_data.numpy_col;
+	D_ASSERT(bind_data.pandas_col->Backend() == PandasColumnBackend::NUMPY);
+	auto &numpy_col = (PandasNumpyColumn &)*bind_data.pandas_col;
 	ScanNumpyColumn<T>(numpy_col.array, numpy_col.stride, offset, out, count);
 	auto &result_mask = FlatVector::Validity(out);
 	if (bind_data.mask) {
@@ -189,8 +189,8 @@ void ScanNumpyObjectColumn(PandasColumnBindData &bind_data, PyObject **col, idx_
 //! 'offset' is the offset within the column
 //! 'count' is the amount of values we will convert in this batch
 void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset, Vector &out) {
-	D_ASSERT(bind_data.numpy_col->Backend() == PandasColumnBackend::NUMPY);
-	auto &numpy_col = (PandasNumpyColumn &)*bind_data.numpy_col;
+	D_ASSERT(bind_data.pandas_col->Backend() == PandasColumnBackend::NUMPY);
+	auto &numpy_col = (PandasNumpyColumn &)*bind_data.pandas_col;
 	auto &array = numpy_col.array;
 
 	switch (bind_data.numpy_type) {
