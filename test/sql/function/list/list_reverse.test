@@ -21,6 +21,21 @@ SELECT ${func_name}([])
 ----
 []
 
+query I
+WITH example AS (
+  SELECT [1, 2, 3] AS arr UNION ALL
+  SELECT [4, 5] AS arr UNION ALL
+  SELECT [] AS arr
+)
+SELECT
+  ${func_name}(arr) AS reverse_arr
+FROM example;
+----
+[3, 2, 1]
+[5, 4]
+[]
+
+
 endloop
 
 # test incorrect syntax
@@ -96,7 +111,7 @@ SELECT ${func_name}(i) FROM integers
 [9, 8, 7, 6, 5, 4, 3, 2, 1]
 [NULL]
 NULL
-NULL
+[]
 
 query I
 SELECT (i).${func_name}() FROM integers
@@ -104,7 +119,7 @@ SELECT (i).${func_name}() FROM integers
 [9, 8, 7, 6, 5, 4, 3, 2, 1]
 [NULL]
 NULL
-NULL
+[]
 
 endloop
 
