@@ -8,10 +8,10 @@
 namespace duckdb {
 
 struct CheckpointBindData : public FunctionData {
-	explicit CheckpointBindData(AttachedDatabase *db) : db(db) {
+	explicit CheckpointBindData(optional_ptr<AttachedDatabase> db) : db(db) {
 	}
 
-	AttachedDatabase *db;
+	optional_ptr<AttachedDatabase> db;
 
 public:
 	unique_ptr<FunctionData> Copy() const override {
@@ -29,7 +29,7 @@ static unique_ptr<FunctionData> CheckpointBind(ClientContext &context, TableFunc
 	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");
 
-	AttachedDatabase *db;
+	optional_ptr<AttachedDatabase> db;
 	auto &db_manager = DatabaseManager::Get(context);
 	if (!input.inputs.empty()) {
 		auto &db_name = StringValue::Get(input.inputs[0]);
@@ -46,7 +46,7 @@ static unique_ptr<FunctionData> CheckpointBind(ClientContext &context, TableFunc
 template <bool FORCE>
 static void TemplatedCheckpointFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &bind_data = data_p.bind_data->Cast<CheckpointBindData>();
-	auto &transaction_manager = TransactionManager::Get(*bind_data.db);
+	auto &transaction_manager = TransactionManager::Get(*bind_data.db.get_mutable());
 	transaction_manager.Checkpoint(context, FORCE);
 }
 

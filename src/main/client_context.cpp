@@ -390,7 +390,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 			    "Cannot execute statement of type \"%s\" on database \"%s\" which is attached in read-only mode!",
 			    StatementTypeToString(statement.statement_type), modified_database));
 		}
-		transaction.ModifyDatabase(entry);
+		transaction.ModifyDatabase(*entry);
 	}
 
 	// bind the bound values before execution

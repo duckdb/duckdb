@@ -6,7 +6,8 @@
 
 namespace duckdb {
 
-BindCastInput::BindCastInput(CastFunctionSet &function_set, BindCastInfo *info, optional_ptr<ClientContext> context)
+BindCastInput::BindCastInput(CastFunctionSet &function_set, optional_ptr<BindCastInfo> info,
+                             optional_ptr<ClientContext> context)
     : function_set(function_set), info(info), context(context) {
 }
 

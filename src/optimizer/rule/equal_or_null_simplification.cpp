@@ -37,31 +37,30 @@ EqualOrNullSimplification::EqualOrNullSimplification(ExpressionRewriter &rewrite
 }
 
 // a=b OR (a IS NULL AND b IS NULL) to a IS NOT DISTINCT FROM b
-static unique_ptr<Expression> TryRewriteEqualOrIsNull(const Expression *equal_expr, const Expression *and_expr) {
-	if (equal_expr->type != ExpressionType::COMPARE_EQUAL || and_expr->type != ExpressionType::CONJUNCTION_AND) {
+static unique_ptr<Expression> TryRewriteEqualOrIsNull(Expression &equal_expr, Expression &and_expr) {
+	if (equal_expr.type != ExpressionType::COMPARE_EQUAL || and_expr.type != ExpressionType::CONJUNCTION_AND) {
 		return nullptr;
 	}
 
-	const auto equal_cast = (BoundComparisonExpression *)equal_expr;
-	const auto and_cast = (BoundConjunctionExpression *)and_expr;
+	auto &equal_cast = equal_expr.Cast<BoundComparisonExpression>();
+	auto &and_cast = and_expr.Cast<BoundConjunctionExpression>();
 
-	if (and_cast->children.size() != 2) {
+	if (and_cast.children.size() != 2) {
 		return nullptr;
 	}
 
 	// Make sure on the AND conjuction the relevant conditions appear
-	const auto a_exp = equal_cast->left.get();
-	const auto b_exp = equal_cast->right.get();
-	bool valid = true;
+	auto &a_exp = *equal_cast.left;
+	auto &b_exp = *equal_cast.right;
 	bool a_is_null_found = false;
 	bool b_is_null_found = false;
 
-	for (const auto &item : and_cast->children) {
-		const auto next_exp = item.get();
+	for (const auto &item : and_cast.children) {
+		auto &next_exp = *item;
 
-		if (next_exp->type == ExpressionType::OPERATOR_IS_NULL) {
-			const auto next_exp_cast = (BoundOperatorExpression *)next_exp;
-			const auto child = next_exp_cast->children[0].get();
+		if (next_exp.type == ExpressionType::OPERATOR_IS_NULL) {
+			auto &next_exp_cast = next_exp.Cast<BoundOperatorExpression>();
+			auto &child = *next_exp_cast.children[0];
 
 			// Test for equality on both 'a' and 'b' expressions
 			if (Expression::Equals(child, a_exp)) {
@@ -69,37 +68,35 @@ static unique_ptr<Expression> TryRewriteEqualOrIsNull(const Expression *equal_ex
 			} else if (Expression::Equals(child, b_exp)) {
 				b_is_null_found = true;
 			} else {
-				valid = false;
-				break;
+				return nullptr;
 			}
 		} else {
-			valid = false;
-			break;
+			return nullptr;
 		}
 	}
-	if (valid && a_is_null_found && b_is_null_found) {
+	if (a_is_null_found && b_is_null_found) {
 		return make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
-		                                            std::move(equal_cast->left), std::move(equal_cast->right));
+		                                            std::move(equal_cast.left), std::move(equal_cast.right));
 	}
 	return nullptr;
 }
 
-unique_ptr<Expression> EqualOrNullSimplification::Apply(LogicalOperator &op, vector<Expression *> &bindings,
+unique_ptr<Expression> EqualOrNullSimplification::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                         bool &changes_made, bool is_root) {
-	const Expression *or_exp = bindings[0];
+	const Expression &or_exp = bindings[0].get();
 
-	if (or_exp->type != ExpressionType::CONJUNCTION_OR) {
+	if (or_exp.type != ExpressionType::CONJUNCTION_OR) {
 		return nullptr;
 	}
 
-	const auto or_exp_cast = (BoundConjunctionExpression *)or_exp;
+	const auto &or_exp_cast = or_exp.Cast<BoundConjunctionExpression>();
 
-	if (or_exp_cast->children.size() != 2) {
+	if (or_exp_cast.children.size() != 2) {
 		return nullptr;
 	}
 
-	const auto left_exp = or_exp_cast->children[0].get();
-	const auto right_exp = or_exp_cast->children[1].get();
+	auto &left_exp = *or_exp_cast.children[0];
+	auto &right_exp = *or_exp_cast.children[1];
 	// Test for: a=b OR (a IS NULL AND b IS NULL)
 	auto first_try = TryRewriteEqualOrIsNull(left_exp, right_exp);
 	if (first_try) {
