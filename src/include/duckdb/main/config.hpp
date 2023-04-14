@@ -110,6 +110,8 @@ struct DBConfigOptions {
 	OrderByNullType default_null_order = OrderByNullType::NULLS_FIRST;
 	//! enable COPY and related commands
 	bool enable_external_access = true;
+	//! Whether this client supports named parameters
+	bool prepared_parameters_can_be_named = false;
 	//! Whether or not object cache is used
 	bool object_cache_enable = false;
 	//! Whether or not the global http metadata cache is used

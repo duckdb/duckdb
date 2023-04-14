@@ -917,6 +917,12 @@ Clear the params bind to the prepared statement.
 DUCKDB_API duckdb_state duckdb_clear_bindings(duckdb_prepared_statement prepared_statement);
 
 /*!
+Retrieve the index of the parameter for the prepared statement, identified by name
+*/
+DUCKDB_API duckdb_state duckdb_bind_parameter_index(duckdb_prepared_statement prepared_statement, idx_t *param_idx_out,
+                                                    const char *name);
+
+/*!
 Binds a bool value to the prepared statement at the specified index.
 */
 DUCKDB_API duckdb_state duckdb_bind_boolean(duckdb_prepared_statement prepared_statement, idx_t param_idx, bool val);

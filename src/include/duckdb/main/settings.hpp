@@ -112,6 +112,17 @@ struct DisabledOptimizersSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct EnableNamedParametersSetting {
+	static constexpr const char *Name = "prepared_parameters_can_be_named";
+	static constexpr const char *Description =
+	    "The client promises that it can handle named parameters, and will throw the appropriate errors when named "
+	    "parameters are expected, but not provided properly";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct EnableExternalAccessSetting {
 	static constexpr const char *Name = "enable_external_access";
 	static constexpr const char *Description =

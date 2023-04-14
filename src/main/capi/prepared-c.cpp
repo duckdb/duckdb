@@ -120,6 +120,20 @@ static duckdb_state duckdb_bind_value(duckdb_prepared_statement prepared_stateme
 	return DuckDBSuccess;
 }
 
+duckdb_state duckdb_bind_parameter_index(duckdb_prepared_statement prepared_statement, idx_t *param_idx_out,
+                                         const char *name) {
+	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
+	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
+		return DuckDBError;
+	}
+	auto &statement = wrapper->statement;
+	if (!statement->named_param_map.count(name)) {
+		return DuckDBError;
+	}
+	*param_idx_out = statement->named_param_map.at(name);
+	return DuckDBSuccess;
+}
+
 duckdb_state duckdb_bind_boolean(duckdb_prepared_statement prepared_statement, idx_t param_idx, bool val) {
 	return duckdb_bind_value(prepared_statement, param_idx, Value::BOOLEAN(val));
 }

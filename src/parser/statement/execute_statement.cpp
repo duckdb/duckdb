@@ -9,6 +9,9 @@ ExecuteStatement::ExecuteStatement(const ExecuteStatement &other) : SQLStatement
 	for (const auto &value : other.values) {
 		values.push_back(value->Copy());
 	}
+	for (const auto &item : other.named_values) {
+		named_values.emplace(std::make_pair(item.first, item.second->Copy()));
+	}
 }
 
 unique_ptr<SQLStatement> ExecuteStatement::Copy() const {
