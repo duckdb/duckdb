@@ -46,6 +46,7 @@ jobs:
       BUILD_JEMALLOC: 1
       TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
+      DEBUG_STACKTRACE: 1
       STATIC_LIBCPP: 1
 
     steps:
