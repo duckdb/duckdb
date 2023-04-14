@@ -96,8 +96,9 @@ static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, 
 bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<LogicalOperator *> &filter_operators,
                                               LogicalOperator *parent) {
 	LogicalOperator *op = &input_op;
-	while (op->children.size() == 1 && (op->type != LogicalOperatorType::LOGICAL_PROJECTION &&
-	                                    op->type != LogicalOperatorType::LOGICAL_EXPRESSION_GET)) {
+	while (op->children.size() == 1 &&
+	       (op->type != LogicalOperatorType::LOGICAL_PROJECTION &&
+	        op->type != LogicalOperatorType::LOGICAL_EXPRESSION_GET && op->type != LogicalOperatorType::LOGICAL_GET)) {
 		if (op->type == LogicalOperatorType::LOGICAL_FILTER) {
 			// extract join conditions from filter
 			filter_operators.push_back(op);
@@ -193,18 +194,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		bool can_reorder_right = ExtractJoinRelations(*op->children[1], filter_operators, op);
 		return can_reorder_left && can_reorder_right;
 	}
-	case LogicalOperatorType::LOGICAL_GET: {
-		// base table scan, add to set of relations
-		auto &get = op->Cast<LogicalGet>();
-		auto relation = make_uniq<SingleJoinRelation>(&input_op, parent);
-		idx_t relation_id = relations.size();
-		//! make sure the optimizer has knowledge of the exact column bindings as well.
-		auto table_index = get.table_index;
-		relation_mapping[table_index] = relation_id;
-		cardinality_estimator.AddRelationColumnMapping(&get, relation_id);
-		relations.push_back(std::move(relation));
-		return true;
-	}
+
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
 		// base table scan, add to set of relations
 		auto &get = op->Cast<LogicalExpressionGet>();
@@ -222,24 +212,35 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		relations.push_back(std::move(relation));
 		return true;
 	}
+	case LogicalOperatorType::LOGICAL_GET:
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
-		auto &proj = op->Cast<LogicalProjection>();
+		auto table_index = op->GetTableIndex()[0];
+		auto relation = make_uniq<SingleJoinRelation>(&input_op, parent);
+		auto relation_id = relations.size();
+
+		// If the children are empty, operator can't ge a logical get.
+		if (op->children.empty() && op->type == LogicalOperatorType::LOGICAL_GET) {
+			auto &get = op->Cast<LogicalGet>();
+			cardinality_estimator.AddRelationColumnMapping(&get, relation_id);
+			relation_mapping[table_index] = relation_id;
+			relations.push_back(std::move(relation));
+			return true;
+		}
+
 		// we run the join order optimizer within the subquery as well
 		JoinOrderOptimizer optimizer(context);
 		op->children[0] = optimizer.Optimize(std::move(op->children[0]));
-		// projection, add to the set of relations
-		auto relation = make_uniq<SingleJoinRelation>(&input_op, parent);
-		auto relation_id = relations.size();
+
 		// push one child column binding map back.
 		vector<column_binding_map_t<ColumnBinding>> child_binding_maps;
 		child_binding_maps.emplace_back();
 		optimizer.cardinality_estimator.CopyRelationMap(child_binding_maps.at(0));
-		// This logical projection may sit on top of a logical comparison join that has been pushed down
+		// This logical projection/get may sit on top of a logical comparison join that has been pushed down
 		// we want to copy the binding info of both tables
-		relation_mapping[proj.table_index] = relation_id;
+		relation_mapping[table_index] = relation_id;
 		for (auto &binding_info : child_binding_maps.at(0)) {
 			cardinality_estimator.AddRelationToColumnMapping(
-			    ColumnBinding(proj.table_index, binding_info.first.column_index), binding_info.second);
+			    ColumnBinding(table_index, binding_info.first.column_index), binding_info.second);
 			cardinality_estimator.AddColumnToRelationMap(binding_info.second.table_index,
 			                                             binding_info.second.column_index);
 		}
