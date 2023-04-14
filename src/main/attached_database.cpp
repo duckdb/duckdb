@@ -1,9 +1,11 @@
 #include "duckdb/main/attached_database.hpp"
+
+#include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/parser/parsed_data/attach_info.hpp"
+#include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
-#include "duckdb/common/file_system.hpp"
-#include "duckdb/catalog/duck_catalog.hpp"
-#include "duckdb/storage/storage_extension.hpp"
 
 namespace duckdb {
 
@@ -40,6 +42,11 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 	catalog = storage_extension.attach(storage_extension.storage_info.get(), *this, name, info, access_mode);
 	if (!catalog) {
 		throw InternalException("AttachedDatabase - attach function did not return a catalog");
+	}
+	auto is_duckdb_derived = dynamic_cast<DuckCatalog *>(catalog.get()) != nullptr;
+	if (is_duckdb_derived) {
+		storage =
+		    make_unique<SingleFileStorageManager>(*this, std::move(info.path), access_mode == AccessMode::READ_ONLY);
 	}
 	transaction_manager =
 	    storage_extension.create_transaction_manager(storage_extension.storage_info.get(), *this, *catalog);
