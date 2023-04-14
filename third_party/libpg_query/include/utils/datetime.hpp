@@ -49,7 +49,7 @@
 #define DOY		15
 #define DOW		16
 #define UNITS	17
-#define ADBC	18
+//#define ADBC	18
 /* these are only for relative dates */
 #define AGO		19
 #define ABS_BEFORE		20
