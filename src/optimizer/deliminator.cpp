@@ -106,8 +106,10 @@ void DeliminatorPlanUpdater::VisitOperator(LogicalOperator &op) {
 }
 
 void DeliminatorPlanUpdater::VisitExpression(unique_ptr<Expression> *expression) {
-	if (expr_map.find(expression->get()) != expr_map.end()) {
-		*expression = expr_map[expression->get()]->Copy();
+	auto &expr = **expression;
+	auto entry = expr_map.find(expr);
+	if (entry != expr_map.end()) {
+		*expression = entry->second->Copy();
 	} else {
 		VisitExpressionChildren(**expression);
 	}
@@ -207,17 +209,17 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *plan, unique_ptr<
 	}
 	// check if joining with the DelimGet is redundant, and collect relevant column information
 	bool all_equality_conditions = true;
-	vector<Expression *> nulls_are_not_equal_exprs;
+	vector<reference<Expression>> nulls_are_not_equal_exprs;
 	for (auto &cond : join.conditions) {
 		all_equality_conditions = all_equality_conditions && IsEqualityJoinCondition(cond);
-		auto delim_side = delim_idx == 0 ? cond.left.get() : cond.right.get();
-		auto other_side = delim_idx == 0 ? cond.right.get() : cond.left.get();
-		if (delim_side->type != ExpressionType::BOUND_COLUMN_REF) {
+		auto &delim_side = delim_idx == 0 ? *cond.left : *cond.right;
+		auto &other_side = delim_idx == 0 ? *cond.right : *cond.left;
+		if (delim_side.type != ExpressionType::BOUND_COLUMN_REF) {
 			// non-colref e.g. expression -(4, 1) in 4-i=j where i is from DelimGet
 			// FIXME: might be possible to also eliminate these
 			return false;
 		}
-		updater.expr_map[delim_side] = other_side;
+		updater.expr_map[delim_side] = &other_side;
 		if (cond.comparison != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			nulls_are_not_equal_exprs.push_back(other_side);
 		}
@@ -229,7 +231,7 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *plan, unique_ptr<
 			updater.projection_map[cb] = true;
 			updater.reverse_proj_or_agg_map[cb] = proj_or_agg.expressions[cb.column_index].get();
 			for (auto &expr : nulls_are_not_equal_exprs) {
-				if (proj_or_agg.expressions[cb.column_index]->Equals(expr)) {
+				if (proj_or_agg.expressions[cb.column_index]->Equals(&expr.get())) {
 					updater.projection_map[cb] = false;
 					break;
 				}
@@ -252,8 +254,8 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *plan, unique_ptr<
 			updater.projection_map[cb] = true;
 			updater.reverse_proj_or_agg_map[cb] = all_agg_exprs[cb.column_index];
 			for (auto &expr : nulls_are_not_equal_exprs) {
-				if ((cb.table_index == agg.group_index && agg.groups[cb.column_index]->Equals(expr)) ||
-				    (cb.table_index == agg.aggregate_index && agg.expressions[cb.column_index]->Equals(expr))) {
+				if ((cb.table_index == agg.group_index && agg.groups[cb.column_index]->Equals(&expr.get())) ||
+				    (cb.table_index == agg.aggregate_index && agg.expressions[cb.column_index]->Equals(&expr.get()))) {
 					updater.projection_map[cb] = false;
 					break;
 				}
@@ -276,7 +278,7 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *plan, unique_ptr<
 			for (auto &expr : nulls_are_not_equal_exprs) {
 				auto is_not_null_expr =
 				    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
-				is_not_null_expr->children.push_back(expr->Copy());
+				is_not_null_expr->children.push_back(expr.get().Copy());
 				filter_op->expressions.push_back(std::move(is_not_null_expr));
 			}
 		}

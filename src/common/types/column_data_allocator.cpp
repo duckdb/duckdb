@@ -2,6 +2,7 @@
 
 #include "duckdb/common/types/column_data_collection_segment.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
 
 namespace duckdb {
 
