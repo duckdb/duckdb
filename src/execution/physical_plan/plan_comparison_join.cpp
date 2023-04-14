@@ -151,7 +151,7 @@ static optional_ptr<Index> CanUseIndexJoin(TableScanBindData &tbl, Expression &e
 }
 
 optional_ptr<Index> CheckIndexJoin(ClientContext &context, LogicalComparisonJoin &op, PhysicalOperator &plan,
-                      Expression &condition) {
+                                   Expression &condition) {
 	if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		return nullptr;
 	}
@@ -179,8 +179,8 @@ optional_ptr<Index> CheckIndexJoin(ClientContext &context, LogicalComparisonJoin
 }
 
 static bool PlanIndexJoin(ClientContext &context, LogicalComparisonJoin &op, unique_ptr<PhysicalOperator> &plan,
-                          unique_ptr<PhysicalOperator> &left, unique_ptr<PhysicalOperator> &right, optional_ptr<Index> index,
-                          bool swap_condition = false) {
+                          unique_ptr<PhysicalOperator> &left, unique_ptr<PhysicalOperator> &right,
+                          optional_ptr<Index> index, bool swap_condition = false) {
 	if (!index) {
 		return false;
 	}
