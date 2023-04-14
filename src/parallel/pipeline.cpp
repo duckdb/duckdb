@@ -34,13 +34,32 @@ public:
 			pipeline_executor = make_uniq<PipelineExecutor>(pipeline.GetClientContext(), pipeline);
 		}
 		if (mode == TaskExecutionMode::PROCESS_PARTIAL) {
-			bool finished = pipeline_executor->Execute(PARTIAL_CHUNK_COUNT);
-			if (!finished) {
+
+			// TODO: How to pass back the callback_uuid / sleep timeout here?
+			auto res = pipeline_executor->Execute(PARTIAL_CHUNK_COUNT);
+
+			switch(res) {
+			case PipelineExecuteResult::NOT_FINISHED:
 				return TaskExecutionResult::TASK_NOT_FINISHED;
+			case PipelineExecuteResult::INTERRUPTED:
+				interrupt_state = pipeline_executor->GetInterruptState();
+				return TaskExecutionResult::TASK_BLOCKED;
+			case PipelineExecuteResult::FINISHED:
+				break;
 			}
 		} else {
-			pipeline_executor->Execute();
+			auto res = pipeline_executor->Execute();
+			switch(res) {
+			case PipelineExecuteResult::NOT_FINISHED:
+				throw InternalException("Execute without limit should not return NOT_FINISHED");
+			case PipelineExecuteResult::INTERRUPTED:
+				interrupt_state = pipeline_executor->GetInterruptState();
+				return TaskExecutionResult::TASK_BLOCKED;
+			case PipelineExecuteResult::FINISHED:
+				break;
+			}
 		}
+
 		event->FinishTask();
 		pipeline_executor.reset();
 		return TaskExecutionResult::TASK_FINISHED;

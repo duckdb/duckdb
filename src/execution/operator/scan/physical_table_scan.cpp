@@ -4,8 +4,11 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/common/random_engine.hpp"
 
 #include <utility>
+#include <thread>
+#include <chrono>
 
 namespace duckdb {
 
@@ -71,6 +74,27 @@ unique_ptr<LocalSourceState> PhysicalTableScan::GetLocalSourceState(ExecutionCon
 
 unique_ptr<GlobalSourceState> PhysicalTableScan::GetGlobalSourceState(ClientContext &context) const {
 	return make_uniq<TableScanGlobalSourceState>(context, *this);
+}
+
+void PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
+                                LocalSourceState &lstate, InterruptState& interrupt_state) const {
+	RandomEngine re;
+	if (re.NextRandom() > 0.95) {
+
+		// Configure callback
+		auto callback_uuid = interrupt_state.SetInterruptCallback();
+		auto callback = TaskScheduler::GetScheduler(*context.client.db).RescheduleCallback;
+		auto db_ref = context.client.db;
+
+		// Launch thread that calls callback after a short sleep
+		std::thread rewake_thread([callback_uuid, callback, db_ref] {
+			std::this_thread::sleep_for(std::chrono::milliseconds(500));
+			callback(db_ref, callback_uuid);
+		});
+		rewake_thread.detach();
+	} else {
+		return GetData(context, chunk, gstate_p, lstate);
+	}
 }
 
 void PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,

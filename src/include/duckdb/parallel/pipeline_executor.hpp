@@ -20,16 +20,26 @@
 namespace duckdb {
 class Executor;
 
+//! The result of a pipeline execute call
+enum class PipelineExecuteResult {
+	//! Pipeline is fully executed: the source is completely exhausted
+	FINISHED,
+	//! Pipeline is not yet fully executed and can be called again immediately
+	NOT_FINISHED,
+	//! The pipeline was interrupted and wants to be descheduled
+	INTERRUPTED
+};
+
 //! The Pipeline class represents an execution pipeline
 class PipelineExecutor {
 public:
 	PipelineExecutor(ClientContext &context, Pipeline &pipeline);
 
 	//! Fully execute a pipeline with a source and a sink until the source is completely exhausted
-	void Execute();
+	PipelineExecuteResult Execute();
 	//! Execute a pipeline with a source and a sink until finished, or until max_chunks have been processed
 	//! Returns true if execution is finished, false if Execute should be called again
-	bool Execute(idx_t max_chunks);
+	PipelineExecuteResult Execute(idx_t max_chunks);
 
 	//! Push a single input DataChunk into the pipeline.
 	//! Returns either OperatorResultType::NEED_MORE_INPUT or OperatorResultType::FINISHED
@@ -47,6 +57,11 @@ public:
 	//! Called after depleting the source using ExecutePull
 	//! This flushes profiler states
 	void PullFinalize();
+
+	//! Allows the PipelineTask to propagate the interrupt up to the scheduler
+	InterruptState GetInterruptState() {
+		return interrupt_state;
+	}
 
 private:
 	//! The pipeline to process
@@ -78,6 +93,9 @@ private:
 	int32_t finished_processing_idx = -1;
 	//! Whether or not this pipeline requires keeping track of the batch index of the source
 	bool requires_batch_index = false;
+	//! State for the most recent operator interrupt will be stored here, this allows determining from the PipelineTask
+	//! how to deschedule it.
+	InterruptState interrupt_state;
 
 private:
 	void StartOperator(PhysicalOperator *op);

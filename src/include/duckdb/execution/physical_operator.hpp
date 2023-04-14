@@ -15,6 +15,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
+#include "duckdb/parallel/task.hpp"
 #include "duckdb/execution/physical_operator_states.hpp"
 #include "duckdb/common/enums/order_preservation_type.hpp"
 
@@ -102,8 +103,15 @@ public:
 	virtual unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
 	                                                         GlobalSourceState &gstate) const;
 	virtual unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const;
+
+	//! Regular GetData returns a single Chunk from the source.
 	virtual void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	                     LocalSourceState &lstate) const;
+	//! Interruptable variant of GetData, this is what is actually called by the pipeline executor
+	virtual void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+	                     LocalSourceState &lstate, InterruptState& istate) const {
+		GetData(context, chunk, gstate, lstate);
+	};
 	virtual idx_t GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	                            LocalSourceState &lstate) const;
 

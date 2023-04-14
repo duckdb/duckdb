@@ -399,6 +399,7 @@ PendingExecutionResult Executor::ExecuteTask() {
 				task.reset();
 			}
 		}
+		// TODO: For some reason, this is not
 		if (!HasError()) {
 			// we (partially) processed a task and no exceptions were thrown
 			// give back control to the caller

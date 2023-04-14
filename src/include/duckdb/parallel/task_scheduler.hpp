@@ -13,6 +13,11 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/printer.hpp"
+
+#include <list>
+#include <unordered_map>
+#include <chrono>
 
 namespace duckdb {
 
@@ -31,6 +36,12 @@ struct ProducerToken {
 	TaskScheduler &scheduler;
 	unique_ptr<QueueProducerToken> token;
 	mutex producer_lock;
+};
+
+struct HugeIntHash {
+	std::size_t operator()(const hugeint_t &k) const {
+		return Hash(k);
+	}
 };
 
 //! The TaskScheduler is responsible for managing tasks and threads
@@ -67,8 +78,37 @@ public:
 	//! Send signals to n threads, signalling for them to wake up and attempt to execute a task
 	void Signal(idx_t n);
 
+	//! This is the callback function that can be be called from anywhere.
+	static void RescheduleCallback(shared_ptr<DatabaseInstance> db, hugeint_t callback_uuid) {
+		Printer::Print("Callback received for uuid " + to_string(callback_uuid.lower) + to_string(callback_uuid.upper));
+		auto& scheduler = GetScheduler(*db);
+		unique_lock<mutex> lck (scheduler.blocked_task_lock);
+
+		auto res = scheduler.blocked_tasks.find(callback_uuid);
+		if (res == scheduler.blocked_tasks.end()) {
+			scheduler.buffered_callbacks.insert(callback_uuid);
+		} else {
+			// TODO: use producer token of execution task?
+			auto producer = scheduler.CreateProducer();
+			scheduler.ScheduleTask(*producer, std::move(res->second));
+			scheduler.blocked_tasks.erase(res);
+		}
+	}
+
 private:
 	void SetThreadsInternal(int32_t n);
+
+	// Deschedule task based on its interrupt state
+	void DescheduleTask(unique_ptr<Task> task);
+	//! Deschedules a task which will be re-queued when the callback with callback_uuid has been made, or immediately
+	//! if it has already occured
+	void DescheduleTaskCallback(unique_ptr<Task> task, hugeint_t callback_uuid);
+	//! Deschedules a task which will be re-queued after end_time has been reached
+	void DescheduleTaskSleeping(unique_ptr<Task> task, uint64_t end_time);
+
+	//! Should be called regularly to reschedule Task that have finished sleeping
+	// TODO: this doesn't actually work atm: I have not found a good way to poll this yet.
+	void RescheduleSleepingTasks();
 
 private:
 	DatabaseInstance &db;
@@ -80,6 +120,21 @@ private:
 	vector<unique_ptr<SchedulerThread>> threads;
 	//! Markers used by the various threads, if the markers are set to "false" the thread execution is stopped
 	vector<unique_ptr<atomic<bool>>> markers;
+
+	//! Lock for the blocked tasks
+	mutex blocked_task_lock;
+	//! Maps callback_uuid -> task, these tasks are awaiting some externally registered callback for rescheduling
+	std::unordered_map<hugeint_t, unique_ptr<Task>, HugeIntHash> blocked_tasks;
+	//! Set of callbacks that did not match any of the blocked tasks: this means they have not yet have been descheduled,
+	//! registering them here will allow immediately requeueing them from the thread that is about to deschedule it.
+	std::unordered_set<hugeint_t, HugeIntHash> buffered_callbacks;
+
+	//! Lock for the sleeping tasks
+	mutex sleeping_task_lock;
+	//! Tasks that are sleeping and need to be rescheduled by the scheduler after their sleep time is achieved
+	std::map<uint64_t, unique_ptr<Task>> sleeping_tasks;
+	//! Prevents unnecessary locking when checking for sleeping tasks in the scheduler
+	atomic<bool> have_sleeping_tasks { false };
 };
 
 } // namespace duckdb

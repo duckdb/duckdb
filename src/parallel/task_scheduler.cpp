@@ -130,10 +130,22 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 	// loop until the marker is set to false
 	while (*marker) {
 		// wait for a signal with a timeout
+		RescheduleSleepingTasks();
 		queue->semaphore.wait();
 		if (queue->q.try_dequeue(task)) {
-			task->Execute(TaskExecutionMode::PROCESS_ALL);
-			task.reset();
+			auto execute_result = task->Execute(TaskExecutionMode::PROCESS_ALL);
+
+			switch(execute_result) {
+			case TaskExecutionResult::TASK_FINISHED:
+			case TaskExecutionResult::TASK_ERROR:
+				task.reset();
+				break;
+			case TaskExecutionResult::TASK_NOT_FINISHED:
+				throw InternalException("Task should not return TASK_NOT_FINISHED in PROCESS_ALL mode");
+			case TaskExecutionResult::TASK_BLOCKED:
+				DescheduleTask(std::move(task));
+				break;
+			}
 		}
 	}
 #else
@@ -147,12 +159,24 @@ idx_t TaskScheduler::ExecuteTasks(atomic<bool> *marker, idx_t max_tasks) {
 	// loop until the marker is set to false
 	while (*marker && completed_tasks < max_tasks) {
 		unique_ptr<Task> task;
+		RescheduleSleepingTasks();
 		if (!queue->q.try_dequeue(task)) {
 			return completed_tasks;
 		}
-		task->Execute(TaskExecutionMode::PROCESS_ALL);
-		task.reset();
-		completed_tasks++;
+		auto execute_result = task->Execute(TaskExecutionMode::PROCESS_ALL);
+
+		switch(execute_result) {
+		case TaskExecutionResult::TASK_FINISHED:
+		case TaskExecutionResult::TASK_ERROR:
+			task.reset();
+			completed_tasks++;
+			break;
+		case TaskExecutionResult::TASK_NOT_FINISHED:
+			throw InternalException("Task should not return TASK_NOT_FINISHED in PROCESS_ALL mode");
+		case TaskExecutionResult::TASK_BLOCKED:
+			DescheduleTask(std::move(task));
+			break;
+		}
 	}
 	return completed_tasks;
 #else
@@ -164,13 +188,24 @@ void TaskScheduler::ExecuteTasks(idx_t max_tasks) {
 #ifndef DUCKDB_NO_THREADS
 	unique_ptr<Task> task;
 	for (idx_t i = 0; i < max_tasks; i++) {
+		RescheduleSleepingTasks();
 		queue->semaphore.wait(TASK_TIMEOUT_USECS);
 		if (!queue->q.try_dequeue(task)) {
 			return;
 		}
 		try {
-			task->Execute(TaskExecutionMode::PROCESS_ALL);
-			task.reset();
+			auto execute_result = task->Execute(TaskExecutionMode::PROCESS_ALL);
+			switch(execute_result) {
+			case TaskExecutionResult::TASK_FINISHED:
+			case TaskExecutionResult::TASK_ERROR:
+				task.reset();
+				break;
+			case TaskExecutionResult::TASK_NOT_FINISHED:
+				throw InternalException("Task should not return TASK_NOT_FINISHED in PROCESS_ALL mode");
+			case TaskExecutionResult::TASK_BLOCKED:
+				DescheduleTask(std::move(task));
+				break;
+			}
 		} catch (...) {
 			return;
 		}
@@ -246,6 +281,93 @@ void TaskScheduler::SetThreadsInternal(int32_t n) {
 		}
 	}
 #endif
+}
+
+void TaskScheduler::RescheduleSleepingTasks() {
+	if (!have_sleeping_tasks) {
+		return;
+	}
+
+	uint64_t current_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+	unique_lock<mutex> lck(sleeping_task_lock);
+
+	// Reschedule any tasks who have exceeded their sleep timer
+	for (auto it = sleeping_tasks.begin(); it != sleeping_tasks.end(); ) {
+		if (it->first < current_time) {
+			Printer::Print("Rescheduled task with sleeping time " + to_string(it->first));
+			// TODO: use producer token of execution task?
+			auto producer = CreateProducer();
+			ScheduleTask(*producer, std::move(it->second));
+			it = sleeping_tasks.erase(it);
+		} else {
+			Printer::Print("Did not reschedule: " + to_string(it->first));
+			++it;
+		}
+	}
+
+	// DEBUG
+	{
+		unique_lock<mutex> lck(sleeping_task_lock);
+		unique_lock<mutex> lck2(blocked_task_lock);
+		Printer::Print("	> currently have: " + to_string(sleeping_tasks.size()) + " sleeping");
+		Printer::Print("	> currently have: " + to_string(blocked_tasks.size()) + " Blocked");
+		Printer::Print("\n");
+	}
+
+	have_sleeping_tasks = !sleeping_tasks.empty();
+}
+
+void TaskScheduler::DescheduleTaskCallback(unique_ptr<Task> task, hugeint_t callback_uuid) {
+	unique_lock<mutex> lck(blocked_task_lock);
+
+	// First check if callback was made already
+	auto buffered_cb_lookup = buffered_callbacks.find(callback_uuid);
+	if (buffered_cb_lookup != buffered_callbacks.end()) {
+		// this callback already happened, reschedule straight away
+		// TODO: use producer token of execution task?
+		auto producer = CreateProducer();
+		ScheduleTask(*producer, std::move(task));
+		buffered_callbacks.erase(buffered_cb_lookup);
+	}
+
+	// Callback was not made yet, this task will need to block
+	D_ASSERT(blocked_tasks.find(callback_uuid) == blocked_tasks.end());
+	blocked_tasks[callback_uuid] = std::move(task);
+}
+
+void TaskScheduler::DescheduleTaskSleeping(unique_ptr<Task> task, uint64_t end_time) {
+	unique_lock<mutex> lck(sleeping_task_lock);
+	sleeping_tasks.insert({end_time, std::move(task)});
+	have_sleeping_tasks = true;
+}
+
+void TaskScheduler::DescheduleTask(unique_ptr<Task> task) {
+	hugeint_t uuid;
+	int64_t sleep;
+
+	switch(task->interrupt_state.result) {
+	case InterruptResultType::CALLBACK_UUID:
+		uuid = task->interrupt_state.callback_uuid;
+		Printer::Print("Descheduled Task with callback id " + to_string(uuid.lower) + to_string(uuid.upper));
+		DescheduleTaskCallback(std::move(task), uuid);
+		break;
+	case InterruptResultType::SLEEP:
+		sleep = task->interrupt_state.sleep_until_ns_from_epoch;
+		Printer::Print("Descheduled Task with end time " + to_string(sleep));
+		DescheduleTaskSleeping(std::move(task), sleep);
+		break;
+	default:
+		throw InternalException("Unexpected interrupt result type found: (" + to_string((int)task->interrupt_state.result)+ ")");
+	}
+
+	// DEBUG
+	{
+		unique_lock<mutex> lck(sleeping_task_lock);
+		unique_lock<mutex> lck2(blocked_task_lock);
+		Printer::Print("	> currently have: " + to_string(sleeping_tasks.size()) + " sleeping");
+		Printer::Print("	> currently have: " + to_string(blocked_tasks.size()) + " Blocked");
+		Printer::Print("\n");
+	}
 }
 
 } // namespace duckdb

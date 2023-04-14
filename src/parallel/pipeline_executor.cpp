@@ -35,7 +35,7 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 	InitializeChunk(final_chunk);
 }
 
-bool PipelineExecutor::Execute(idx_t max_chunks) {
+PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 	D_ASSERT(pipeline.sink);
 	bool exhausted_source = false;
 	auto &source_chunk = pipeline.operators.empty() ? final_chunk : *intermediate_chunks[0];
@@ -45,6 +45,11 @@ bool PipelineExecutor::Execute(idx_t max_chunks) {
 		}
 		source_chunk.Reset();
 		FetchFromSource(source_chunk);
+
+		if(interrupt_state.result != InterruptResultType::NO_INTERRUPT) {
+			return PipelineExecuteResult::INTERRUPTED;
+		}
+
 		if (source_chunk.size() == 0) {
 			exhausted_source = true;
 			break;
@@ -56,14 +61,14 @@ bool PipelineExecutor::Execute(idx_t max_chunks) {
 		}
 	}
 	if (!exhausted_source && !IsFinished()) {
-		return false;
+		return PipelineExecuteResult::NOT_FINISHED;
 	}
 	PushFinalize();
-	return true;
+	return PipelineExecuteResult::FINISHED;
 }
 
-void PipelineExecutor::Execute() {
-	Execute(NumericLimits<idx_t>::Maximum());
+PipelineExecuteResult PipelineExecutor::Execute() {
+	return Execute(NumericLimits<idx_t>::Maximum());
 }
 
 OperatorResultType PipelineExecutor::ExecutePush(DataChunk &input) { // LCOV_EXCL_START
@@ -309,7 +314,13 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 
 void PipelineExecutor::FetchFromSource(DataChunk &result) {
 	StartOperator(pipeline.source);
-	pipeline.source->GetData(context, result, *pipeline.source_state, *local_source_state);
+
+	interrupt_state.Reset(); // TODO Do we need to reset this every time? or can we actually guarantee its reset here?
+	pipeline.source->GetData(context, result, *pipeline.source_state, *local_source_state, interrupt_state);
+
+	// Safety check that we don't interrupt + return data;
+	D_ASSERT(interrupt_state.result == InterruptResultType::NO_INTERRUPT || result.size() == 0);
+
 	if (result.size() != 0 && requires_batch_index) {
 		auto next_batch_index =
 		    pipeline.source->GetBatchIndex(context, result, *pipeline.source_state, *local_source_state);
@@ -318,6 +329,8 @@ void PipelineExecutor::FetchFromSource(DataChunk &result) {
 		         local_sink_state->batch_index == DConstants::INVALID_INDEX);
 		local_sink_state->batch_index = next_batch_index;
 	}
+
+	// TODO: how to handle the profiler when a pipeline was interrupted?
 	EndOperator(pipeline.source, &result);
 }
 
