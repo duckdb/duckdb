@@ -16,6 +16,9 @@ namespace duckdb {
 //! Represents a conjunction (AND/OR)
 class ConjunctionExpression : public ParsedExpression {
 public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::CONJUNCTION;
+
+public:
 	DUCKDB_API explicit ConjunctionExpression(ExpressionType type);
 	DUCKDB_API ConjunctionExpression(ExpressionType type, vector<unique_ptr<ParsedExpression>> children);
 	DUCKDB_API ConjunctionExpression(ExpressionType type, unique_ptr<ParsedExpression> left,

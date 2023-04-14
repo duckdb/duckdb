@@ -12,7 +12,7 @@ TEST_CASE("Test DB config configuration", "[api]") {
 
 	auto options = config.GetOptions();
 
-	map<string, vector<string>> test_options;
+	map<string, duckdb::vector<string>> test_options;
 	test_options["access_mode"] = {"automatic", "read_only", "read_write"};
 	test_options["default_order"] = {"asc", "desc"};
 	test_options["default_null_order"] = {"nulls_first", "nulls_last"};

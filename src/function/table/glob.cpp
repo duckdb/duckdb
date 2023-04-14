@@ -32,7 +32,7 @@ static unique_ptr<GlobalTableFunctionState> GlobFunctionInit(ClientContext &cont
 }
 
 static void GlobFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &bind_data = (GlobFunctionBindData &)*data_p.bind_data;
+	auto &bind_data = data_p.bind_data->Cast<GlobFunctionBindData>();
 	auto &state = (GlobFunctionState &)*data_p.global_state;
 
 	idx_t count = 0;

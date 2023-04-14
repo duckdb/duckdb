@@ -45,6 +45,22 @@ struct FunctionData {
 	DUCKDB_API virtual unique_ptr<FunctionData> Copy() const = 0;
 	DUCKDB_API virtual bool Equals(const FunctionData &other) const = 0;
 	DUCKDB_API static bool Equals(const FunctionData *left, const FunctionData *right);
+
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return (TARGET &)*this;
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return (const TARGET &)*this;
+	}
+	// FIXME: this function should be removed in the future
+	template <class TARGET>
+	TARGET &CastNoConst() const {
+		return (TARGET &)*this;
+	}
 };
 
 struct TableFunctionData : public FunctionData {
@@ -109,7 +125,7 @@ public:
 	LogicalType varargs;
 
 public:
-	DUCKDB_API virtual string ToString();
+	DUCKDB_API virtual string ToString() const;
 
 	DUCKDB_API bool HasVarArgs() const;
 };
@@ -124,8 +140,8 @@ public:
 	named_parameter_type_map_t named_parameters;
 
 public:
-	DUCKDB_API string ToString() override;
-	DUCKDB_API bool HasNamedParameters();
+	DUCKDB_API string ToString() const override;
+	DUCKDB_API bool HasNamedParameters() const;
 };
 
 class BaseScalarFunction : public SimpleFunction {
@@ -147,7 +163,7 @@ public:
 public:
 	DUCKDB_API hash_t Hash() const;
 
-	DUCKDB_API string ToString() override;
+	DUCKDB_API string ToString() const override;
 };
 
 } // namespace duckdb

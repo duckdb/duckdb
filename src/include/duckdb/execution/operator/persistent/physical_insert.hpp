@@ -21,6 +21,9 @@ class InsertLocalState;
 //! Physically insert a set of data into a table
 class PhysicalInsert : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::INSERT;
+
+public:
 	//! INSERT INTO
 	PhysicalInsert(vector<LogicalType> types, TableCatalogEntry *table, physical_index_vector_t<idx_t> column_index_map,
 	               vector<unique_ptr<Expression>> bound_defaults, vector<unique_ptr<Expression>> set_expressions,
@@ -77,6 +80,10 @@ public:
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
 
+	bool IsSource() const override {
+		return true;
+	}
+
 public:
 	// Sink interface
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
@@ -93,6 +100,10 @@ public:
 
 	bool ParallelSink() const override {
 		return parallel;
+	}
+
+	bool SinkOrderDependent() const override {
+		return true;
 	}
 
 public:

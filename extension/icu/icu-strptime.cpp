@@ -28,7 +28,7 @@ struct ICUStrptime : public ICUDateFunc {
 		StrpTimeFormat format;
 
 		bool Equals(const FunctionData &other_p) const override {
-			auto &other = (ICUStrptimeBindData &)other_p;
+			auto &other = other_p.Cast<ICUStrptimeBindData>();
 			return format.format_specifier == other.format.format_specifier;
 		}
 		duckdb::unique_ptr<FunctionData> Copy() const override {
@@ -91,8 +91,8 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &str_arg = args.data[0];
 		auto &fmt_arg = args.data[1];
 
-		auto &func_expr = (BoundFunctionExpression &)state.expr;
-		auto &info = (ICUStrptimeBindData &)*func_expr.bind_info;
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+		auto &info = func_expr.bind_info->Cast<ICUStrptimeBindData>();
 		CalendarPtr calendar(info.calendar->clone());
 		auto &format = info.format;
 
@@ -145,7 +145,7 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &catalog = Catalog::GetSystemCatalog(context);
 		auto entry = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, name);
 		D_ASSERT(entry && entry->type == CatalogType::SCALAR_FUNCTION_ENTRY);
-		auto &func = (ScalarFunctionCatalogEntry &)*entry;
+		auto &func = entry->Cast<ScalarFunctionCatalogEntry>();
 		vector<LogicalType> types {LogicalType::VARCHAR, LogicalType::VARCHAR};
 		string error;
 
@@ -162,7 +162,7 @@ struct ICUStrptime : public ICUDateFunc {
 	}
 
 	static bool CastFromVarchar(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-		auto &cast_data = (CastData &)*parameters.cast_data;
+		auto &cast_data = parameters.cast_data->Cast<CastData>();
 		auto info = (BindData *)cast_data.info.get();
 		CalendarPtr cal(info->calendar->clone());
 
@@ -283,7 +283,7 @@ struct ICUStrftime : public ICUDateFunc {
 		auto &src_arg = args.data[0];
 		auto &fmt_arg = args.data[1];
 
-		auto &func_expr = (BoundFunctionExpression &)state.expr;
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = (BindData &)*func_expr.bind_info;
 		CalendarPtr calendar(info.calendar->clone());
 		const auto tz_name = info.tz_setting.c_str();
@@ -389,7 +389,7 @@ struct ICUStrftime : public ICUDateFunc {
 	}
 
 	static bool CastToVarchar(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-		auto &cast_data = (CastData &)*parameters.cast_data;
+		auto &cast_data = parameters.cast_data->Cast<CastData>();
 		auto info = (BindData *)cast_data.info.get();
 		CalendarPtr calendar(info->calendar->clone());
 

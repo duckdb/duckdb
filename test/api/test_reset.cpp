@@ -88,7 +88,8 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "password",
 	    "username",
 	    "user",
-	    "profiling_output", // just an alias
+	    "profiling_output",         // just an alias
+	    "experimental_parallel_csv" // FIXME:deprecated option, should be removed after next release
 	};
 	return excluded_options.count(name) == 1;
 }

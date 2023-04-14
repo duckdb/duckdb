@@ -6,10 +6,11 @@
 
 #include "prod.hh"
 #include <string>
+#include "duckdb/common/vector.hpp"
 
+using duckdb::vector;
 using std::shared_ptr;
 using std::string;
-using std::vector;
 
 struct value_expr : prod {
 	sqltype *type;

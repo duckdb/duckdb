@@ -25,8 +25,9 @@
 namespace duckdb {
 
 ParallelCSVReader::ParallelCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
-                                     unique_ptr<CSVBufferRead> buffer_p, const vector<LogicalType> &requested_types)
-    : BaseCSVReader(context, std::move(options_p), requested_types) {
+                                     unique_ptr<CSVBufferRead> buffer_p, idx_t first_pos_first_buffer_p,
+                                     const vector<LogicalType> &requested_types)
+    : BaseCSVReader(context, std::move(options_p), requested_types), first_pos_first_buffer(first_pos_first_buffer_p) {
 	Initialize(requested_types);
 	SetBufferRead(std::move(buffer_p));
 	if (options.delimiter.size() > 1 || options.escape.size() > 1 || options.quote.size() > 1) {
@@ -69,7 +70,6 @@ void ParallelCSVReader::SkipEmptyLines() {
 				return;
 			}
 			position_buffer = new_pos_buffer;
-			return;
 		} else if ((*buffer)[new_pos_buffer] != ' ') {
 			return;
 		}
@@ -78,7 +78,7 @@ void ParallelCSVReader::SkipEmptyLines() {
 
 bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 	if (buffer->buffer->IsCSVFileFirstBuffer() && start_buffer == position_buffer &&
-	    start_buffer <= buffer->buffer->GetStart()) {
+	    start_buffer == first_pos_first_buffer) {
 		start_buffer = buffer->buffer->GetStart();
 		position_buffer = start_buffer;
 		verification_positions.beginning_of_first_line = position_buffer;
@@ -315,6 +315,8 @@ normal : {
 		if (c == options.delimiter[0]) {
 			// delimiter: end the value and add it to the chunk
 			goto add_value;
+		} else if (c == options.quote[0] && try_add_line) {
+			return false;
 		} else if (StringUtil::CharacterIsNewline(c)) {
 			// newline: add row
 			if (column > 0 || try_add_line || parse_chunk.data.size() == 1) {
@@ -388,8 +390,9 @@ add_row : {
 			// newline after carriage return: skip
 			// increase position by 1 and move start to the new position
 			start_buffer = ++position_buffer;
-			verification_positions.end_of_last_line = position_buffer;
+
 			SkipEmptyLines();
+			verification_positions.end_of_last_line = position_buffer;
 			start_buffer = position_buffer;
 			if (reached_remainder_state) {
 				goto final_state;
@@ -413,6 +416,7 @@ add_row : {
 			return false;
 		}
 		SkipEmptyLines();
+		verification_positions.end_of_last_line = position_buffer;
 		start_buffer = position_buffer;
 		// \n newline, move to value start
 		if (finished_chunk) {
@@ -563,6 +567,10 @@ final_state : {
 		error_message = "Line does not fit in one buffer. Increase the buffer size.";
 		return false;
 	}
+	end_buffer = buffer_size;
+	SkipEmptyLines();
+	end_buffer = buffer->buffer_end;
+	verification_positions.end_of_last_line = position_buffer;
 	if (position_buffer >= end_buffer) {
 		if (position_buffer >= end_buffer) {
 			if (position_buffer == end_buffer && StringUtil::CharacterIsNewline((*buffer)[position_buffer - 1]) &&

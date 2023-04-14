@@ -16,6 +16,9 @@ namespace duckdb {
 //! CastExpression represents a type cast from one SQL type to another SQL type
 class CastExpression : public ParsedExpression {
 public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::CAST;
+
+public:
 	DUCKDB_API CastExpression(LogicalType target, unique_ptr<ParsedExpression> child, bool try_cast = false);
 
 	//! The child of the cast expression

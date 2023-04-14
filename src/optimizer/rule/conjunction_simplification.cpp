@@ -32,7 +32,7 @@ unique_ptr<Expression> ConjunctionSimplificationRule::RemoveExpression(BoundConj
 
 unique_ptr<Expression> ConjunctionSimplificationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
                                                             bool &changes_made, bool is_root) {
-	auto conjunction = (BoundConjunctionExpression *)bindings[0];
+	auto &conjunction = bindings[0]->Cast<BoundConjunctionExpression>();
 	auto constant_expr = bindings[1];
 	// the constant_expr is a scalar expression that we have to fold
 	// use an ExpressionExecutor to execute the expression
@@ -46,19 +46,19 @@ unique_ptr<Expression> ConjunctionSimplificationRule::Apply(LogicalOperator &op,
 		// we can't simplify conjunctions with a constant NULL
 		return nullptr;
 	}
-	if (conjunction->type == ExpressionType::CONJUNCTION_AND) {
+	if (conjunction.type == ExpressionType::CONJUNCTION_AND) {
 		if (!BooleanValue::Get(constant_value)) {
 			// FALSE in AND, result of expression is false
 			return make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
 		} else {
 			// TRUE in AND, remove the expression from the set
-			return RemoveExpression(*conjunction, constant_expr);
+			return RemoveExpression(conjunction, constant_expr);
 		}
 	} else {
-		D_ASSERT(conjunction->type == ExpressionType::CONJUNCTION_OR);
+		D_ASSERT(conjunction.type == ExpressionType::CONJUNCTION_OR);
 		if (!BooleanValue::Get(constant_value)) {
 			// FALSE in OR, remove the expression from the set
-			return RemoveExpression(*conjunction, constant_expr);
+			return RemoveExpression(conjunction, constant_expr);
 		} else {
 			// TRUE in OR, result of expression is true
 			return make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));

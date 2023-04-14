@@ -107,7 +107,7 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 		}
 	}
 	for (auto &expression : op.expressions) {
-		auto &aggregate = (BoundAggregateExpression &)*expression;
+		auto &aggregate = expression->Cast<BoundAggregateExpression>();
 		if (aggregate.IsDistinct() || !aggregate.function.combine) {
 			// distinct aggregates are not supported in perfect hash aggregates
 			return false;
@@ -129,7 +129,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 		// special case: aggregate entire columns together
 		bool use_simple_aggregation = true;
 		for (auto &expression : op.expressions) {
-			auto &aggregate = (BoundAggregateExpression &)*expression;
+			auto &aggregate = expression->Cast<BoundAggregateExpression>();
 			if (!aggregate.function.simple_update) {
 				// unsupported aggregate for simple aggregation: use hash aggregation
 				use_simple_aggregation = false;
@@ -170,7 +170,7 @@ PhysicalPlanGenerator::ExtractAggregateExpressions(unique_ptr<PhysicalOperator> 
 
 	// bind sorted aggregates
 	for (auto &aggr : aggregates) {
-		auto &bound_aggr = (BoundAggregateExpression &)*aggr;
+		auto &bound_aggr = aggr->Cast<BoundAggregateExpression>();
 		if (bound_aggr.order_bys) {
 			// sorted aggregate!
 			FunctionBinder::BindSortedAggregate(context, bound_aggr, groups);
@@ -183,7 +183,7 @@ PhysicalPlanGenerator::ExtractAggregateExpressions(unique_ptr<PhysicalOperator> 
 		group = std::move(ref);
 	}
 	for (auto &aggr : aggregates) {
-		auto &bound_aggr = (BoundAggregateExpression &)*aggr;
+		auto &bound_aggr = aggr->Cast<BoundAggregateExpression>();
 		for (auto &child : bound_aggr.children) {
 			auto ref = make_uniq<BoundReferenceExpression>(child->return_type, expressions.size());
 			types.push_back(child->return_type);

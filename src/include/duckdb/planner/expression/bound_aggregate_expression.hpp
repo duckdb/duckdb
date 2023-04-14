@@ -13,7 +13,11 @@
 #include <memory>
 
 namespace duckdb {
+
 class BoundAggregateExpression : public Expression {
+public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_AGGREGATE;
+
 public:
 	BoundAggregateExpression(AggregateFunction function, vector<unique_ptr<Expression>> children,
 	                         unique_ptr<Expression> filter, unique_ptr<FunctionData> bind_info,

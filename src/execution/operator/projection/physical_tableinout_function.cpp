@@ -31,7 +31,7 @@ PhysicalTableInOutFunction::PhysicalTableInOutFunction(vector<LogicalType> types
 }
 
 unique_ptr<OperatorState> PhysicalTableInOutFunction::GetOperatorState(ExecutionContext &context) const {
-	auto &gstate = (TableInOutGlobalState &)*op_state;
+	auto &gstate = op_state->Cast<TableInOutGlobalState>();
 	auto result = make_uniq<TableInOutLocalState>();
 	if (function.init_local) {
 		TableFunctionInitInput input(bind_data.get(), column_ids, vector<idx_t>(), nullptr);
@@ -54,8 +54,8 @@ unique_ptr<GlobalOperatorState> PhysicalTableInOutFunction::GetGlobalOperatorSta
 
 OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                        GlobalOperatorState &gstate_p, OperatorState &state_p) const {
-	auto &gstate = (TableInOutGlobalState &)gstate_p;
-	auto &state = (TableInOutLocalState &)state_p;
+	auto &gstate = gstate_p.Cast<TableInOutGlobalState>();
+	auto &state = state_p.Cast<TableInOutLocalState>();
 	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
 	if (projected_input.empty()) {
 		// straightforward case - no need to project input
@@ -102,8 +102,8 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 OperatorFinalizeResultType PhysicalTableInOutFunction::FinalExecute(ExecutionContext &context, DataChunk &chunk,
                                                                     GlobalOperatorState &gstate_p,
                                                                     OperatorState &state_p) const {
-	auto &gstate = (TableInOutGlobalState &)gstate_p;
-	auto &state = (TableInOutLocalState &)state_p;
+	auto &gstate = gstate_p.Cast<TableInOutGlobalState>();
+	auto &state = state_p.Cast<TableInOutLocalState>();
 	if (!projected_input.empty()) {
 		throw InternalException("FinalExecute not supported for project_input");
 	}

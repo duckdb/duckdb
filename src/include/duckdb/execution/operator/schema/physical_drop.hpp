@@ -16,6 +16,9 @@ namespace duckdb {
 //! PhysicalDrop represents a DROP [...] command
 class PhysicalDrop : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::DROP;
+
+public:
 	explicit PhysicalDrop(unique_ptr<DropInfo> info, idx_t estimated_cardinality)
 	    : PhysicalOperator(PhysicalOperatorType::DROP, {LogicalType::BOOLEAN}, estimated_cardinality),
 	      info(std::move(info)) {
@@ -28,6 +31,10 @@ public:
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
+
+	bool IsSource() const override {
+		return true;
+	}
 };
 
 } // namespace duckdb

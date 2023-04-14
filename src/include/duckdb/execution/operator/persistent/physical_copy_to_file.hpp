@@ -17,6 +17,9 @@ namespace duckdb {
 //! Copy the contents of a query into a table
 class PhysicalCopyToFile : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::COPY_TO_FILE;
+
+public:
 	PhysicalCopyToFile(vector<LogicalType> types, CopyFunction function, unique_ptr<FunctionData> bind_data,
 	                   idx_t estimated_cardinality);
 
@@ -39,6 +42,10 @@ public:
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
 
+	bool IsSource() const override {
+		return true;
+	}
+
 public:
 	// Sink interface
 	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
@@ -53,7 +60,7 @@ public:
 		return true;
 	}
 
-	bool IsOrderDependent() const override {
+	bool SinkOrderDependent() const override {
 		return true;
 	}
 

@@ -99,7 +99,7 @@ struct VerificationPositions {
 class ParallelCSVReader : public BaseCSVReader {
 public:
 	ParallelCSVReader(ClientContext &context, BufferedCSVReaderOptions options, unique_ptr<CSVBufferRead> buffer,
-	                  const vector<LogicalType> &requested_types);
+	                  idx_t first_pos_first_buffer, const vector<LogicalType> &requested_types);
 	~ParallelCSVReader();
 
 	//! Current Position (Relative to the Buffer)
@@ -150,6 +150,8 @@ private:
 	bool TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message, bool try_add_line = false);
 	//! Position of the first read line and last read line for verification purposes
 	VerificationPositions verification_positions;
+	//! First Position of First Buffer
+	idx_t first_pos_first_buffer = 0;
 };
 
 } // namespace duckdb
