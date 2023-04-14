@@ -18,6 +18,7 @@
 #include "duckdb/storage/magic_bytes.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/execution/operator/helper/physical_set.hpp"
+#include "duckdb/storage/standard_buffer_manager.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -200,7 +201,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	}
 
 	db_manager = make_uniq<DatabaseManager>(*this);
-	buffer_manager = make_uniq<BufferManager>(*this, config.options.temporary_directory);
+	buffer_manager = make_uniq<StandardBufferManager>(*this, config.options.temporary_directory);
 	scheduler = make_uniq<TaskScheduler>(*this);
 	object_cache = make_uniq<ObjectCache>();
 	connection_manager = make_uniq<ConnectionManager>();
