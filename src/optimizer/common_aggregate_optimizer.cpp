@@ -33,10 +33,10 @@ void CommonAggregateOptimizer::ExtractCommonAggregates(LogicalAggregate &aggr) {
 	idx_t total_erased = 0;
 	for (idx_t i = 0; i < aggr.expressions.size(); i++) {
 		idx_t original_index = i + total_erased;
-		auto entry = aggregate_remap.find(aggr.expressions[i].get());
+		auto entry = aggregate_remap.find(*aggr.expressions[i]);
 		if (entry == aggregate_remap.end()) {
 			// aggregate does not exist yet: add it to the map
-			aggregate_remap[aggr.expressions[i].get()] = i;
+			aggregate_remap[*aggr.expressions[i]] = i;
 			if (i != original_index) {
 				// this aggregate is not erased, however an agregate BEFORE it has been erased
 				// so we need to remap this aggregaet

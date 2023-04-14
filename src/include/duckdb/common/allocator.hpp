@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
 class Allocator;
@@ -56,7 +57,7 @@ public:
 	void Reset();
 
 private:
-	Allocator *allocator;
+	optional_ptr<Allocator> allocator;
 	data_ptr_t pointer;
 	idx_t allocated_size;
 };

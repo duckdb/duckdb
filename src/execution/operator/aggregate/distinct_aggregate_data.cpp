@@ -113,7 +113,7 @@ DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionIn
 	}
 }
 
-using aggr_ref_t = std::reference_wrapper<BoundAggregateExpression>;
+using aggr_ref_t = reference<BoundAggregateExpression>;
 
 struct FindMatchingAggregate {
 	explicit FindMatchingAggregate(const aggr_ref_t &aggr) : aggr_r(aggr) {

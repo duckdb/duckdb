@@ -297,10 +297,10 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		auto type_dependency = LogicalType::GetCatalog(column.Type());
 		if (type_dependency) {
 			// Only if the USER comes from a create type
-			result->dependencies.AddDependency(type_dependency);
+			result->dependencies.AddDependency(*type_dependency);
 		}
 	}
-	result->dependencies.VerifyDependencies(schema->catalog, result->Base().table);
+	result->dependencies.VerifyDependencies(*schema->catalog, result->Base().table);
 	properties.allow_stream_result = false;
 	return result;
 }

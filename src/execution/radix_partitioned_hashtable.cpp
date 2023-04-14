@@ -475,9 +475,9 @@ void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &ch
 		auto &global_scan_state = state.ht_scan_states[ht_index];
 		elements_found = lstate.ht->Scan(global_scan_state, local_scan_state, lstate.scan_chunk);
 		if (elements_found > 0) {
-			lstate.ht->GetDataCollection().FinalizePinState(local_scan_state.pin_state);
 			break;
 		}
+		lstate.ht->GetDataCollection().FinalizePinState(local_scan_state.pin_state);
 
 		// move to the next hash table
 		lock_guard<mutex> l(state.lock);
