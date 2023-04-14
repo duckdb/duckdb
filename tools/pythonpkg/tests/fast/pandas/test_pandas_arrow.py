@@ -36,3 +36,86 @@ class TestPandasArrow(object):
         pyarrow_df = df.convert_dtypes(dtype_backend='pyarrow')
         with pytest.raises(duckdb.InvalidInputException, match='Invalid Input Error: The dataframe could not be converted to a pyarrow.lib.Table, due to the following python exception:'):
             res = duckdb.sql('select * from pyarrow_df').fetchall()
+
+    def test_empty_df(self):
+        df = pd.DataFrame({
+            'string' : pd.Series(data=[], dtype='string'),
+            'object' : pd.Series(data=[], dtype='object'),
+            'Int64' : pd.Series(data=[], dtype='Int64'),
+            'Float64' : pd.Series(data=[], dtype='Float64'),
+            'bool' : pd.Series(data=[], dtype='bool'),
+            'datetime64[ns]' : pd.Series(data=[], dtype='datetime64[ns]'),
+            'datetime64[ms]' : pd.Series(data=[], dtype='datetime64[ms]'),
+            'datetime64[us]' : pd.Series(data=[], dtype='datetime64[us]'),
+            'datetime64[s]' : pd.Series(data=[], dtype='datetime64[s]'),
+            'category' : pd.Series(data=[], dtype='category'),
+            'timedelta64[ns]' : pd.Series(data=[], dtype='timedelta64[ns]'),
+        })
+        pyarrow_df = df.convert_dtypes(dtype_backend='pyarrow')
+
+        res = duckdb.sql('select * from pyarrow_df').fetchall()
+        assert res == []
+    
+    def test_completely_null_df(self):
+        df = pd.DataFrame({
+            'a' : pd.Series(data=[
+                None,
+                np.nan,
+                pd.NA,
+            ])
+        })
+        pyarrow_df = df.convert_dtypes(dtype_backend='pyarrow')
+
+        res = duckdb.sql('select * from pyarrow_df').fetchall()
+        assert res == [(None,), (None,), (None,)]
+
+    def test_mixed_nulls(self):
+        df = pd.DataFrame({
+            'float': pd.Series(data=[
+                4.123123,
+                None,
+                7.23456
+            ], dtype='Float64'),
+            'int64': pd.Series(data=[
+                -234234124,
+                709329413,
+                pd.NA
+            ], dtype='Int64'),
+            'bool': pd.Series(data=[
+                np.nan,
+                True,
+                False
+            ], dtype='boolean'),
+            'string': pd.Series(data=[
+                'NULL',
+                None,
+                'quack'
+            ]),
+            'list[str]': pd.Series(data=[
+                [
+                    'Huey',
+                    'Dewey',
+                    'Louie'
+                ],
+                [
+                    None,
+                    pd.NA,
+                    np.nan,
+                    'DuckDB'
+                ],
+                None
+            ]),
+            'datetime64' : pd.Series(data=[
+                datetime.datetime(2011, 8, 16, 22, 7, 8),
+                None,
+                datetime.datetime(2010, 4, 26, 18, 14, 14)
+            ]),
+            'date' : pd.Series(data=[
+                datetime.date(2008, 5, 28),
+                datetime.date(2013, 7, 14),
+                None
+            ]),
+        })
+        pyarrow_df = df.convert_dtypes(dtype_backend='pyarrow')
+        res = duckdb.sql('select * from pyarrow_df').fetchone()
+        assert res == (4.123123, -234234124, None, 'NULL', ['Huey', 'Dewey', 'Louie'], datetime.datetime(2011, 8, 16, 22, 7, 8), datetime.date(2008, 5, 28))
