@@ -25,7 +25,7 @@ extern "C" {
 
 #ifndef ADBC_DRIVER_MANAGER_H
 #define ADBC_DRIVER_MANAGER_H
-
+namespace duckdb_adbc {
 /// \brief Common entry point for drivers via the driver manager.
 ///
 /// The driver manager can fill in default implementations of some
@@ -43,7 +43,7 @@ extern "C" {
 ///   if necessary.
 ADBC_EXPORT
 AdbcStatusCode AdbcLoadDriver(const char *driver_name, const char *entrypoint, int version, void *driver,
-                              struct AdbcError *error);
+                                      struct AdbcError *error);
 
 /// \brief Common entry point for drivers via the driver manager.
 ///
@@ -59,7 +59,7 @@ AdbcStatusCode AdbcLoadDriver(const char *driver_name, const char *entrypoint, i
 ///   if necessary.
 ADBC_EXPORT
 AdbcStatusCode AdbcLoadDriverFromInitFunc(AdbcDriverInitFunc init_func, int version, void *driver,
-                                          struct AdbcError *error);
+                                                  struct AdbcError *error);
 
 /// \brief Set the AdbcDriverInitFunc to use.
 ///
@@ -69,8 +69,9 @@ AdbcStatusCode AdbcLoadDriverFromInitFunc(AdbcDriverInitFunc init_func, int vers
 /// entrypoint explicitly, for applications that can dynamically
 /// load drivers on their own.
 ADBC_EXPORT
-AdbcStatusCode AdbcDriverManagerDatabaseSetInitFunc(struct AdbcDatabase *database, AdbcDriverInitFunc init_func,
-                                                    struct AdbcError *error);
+AdbcStatusCode AdbcDriverManagerDatabaseSetInitFunc(struct AdbcDatabase *database,
+                                                            AdbcDriverInitFunc init_func,
+                                                            struct AdbcError *error);
 
 /// \brief Get a human-friendly description of a status code.
 ADBC_EXPORT
@@ -81,3 +82,4 @@ const char *AdbcStatusCodeMessage(AdbcStatusCode code);
 #ifdef __cplusplus
 }
 #endif
+} // namespace duckdb_adbc

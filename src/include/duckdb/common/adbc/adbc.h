@@ -41,6 +41,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "duckdb/common/arrow/arrow.hpp"
 
 /// \defgroup Arrow C Data Interface
 /// Definitions for the C Data Interface/C Stream Interface.
@@ -50,7 +51,7 @@
 /// @{
 
 //! @cond Doxygen_Suppress
-
+namespace duckdb_adbc {
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -1080,3 +1081,4 @@ typedef AdbcStatusCode (*AdbcDriverInitFunc)(int version, void *driver, struct A
 #ifdef __cplusplus
 }
 #endif
+} // namespace duckdb_adbc

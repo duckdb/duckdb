@@ -7,18 +7,18 @@ using namespace std;
 
 using namespace duckdb;
 
-bool SUCCESS(AdbcStatusCode status) {
+bool SUCCESS(duckdb_adbc::AdbcStatusCode status) {
 	return status == ADBC_STATUS_OK;
 }
-const char *DUCKDB_LIB = std::getenv("DUCKDB_INSTALL_LIB");
+const char *duckdb_lib = std::getenv("DUCKDB_INSTALL_LIB");
 
 class ADBCTestDatabase {
 public:
 	explicit ADBCTestDatabase(const string &path_parameter = "test.db") {
 		path = TestCreatePath(path_parameter);
-		REQUIRE(DUCKDB_LIB);
+		REQUIRE(duckdb_lib);
 		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
-		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", DUCKDB_LIB, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
 		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
 		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", path.c_str(), &adbc_error)));
 
@@ -61,26 +61,26 @@ public:
 	void CreateTable(const string &table_name, ArrowArrayStream &input_data) {
 		REQUIRE(input_data.release);
 
-		REQUIRE(SUCCESS(adbc::StatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(duckdb_adbc::StatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
-		REQUIRE(SUCCESS(adbc::StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, table_name.c_str(),
+		REQUIRE(SUCCESS(duckdb_adbc::StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, table_name.c_str(),
 		                                         &adbc_error)));
 
-		REQUIRE(SUCCESS(adbc::StatementBindStream(&adbc_statement, &arrow_stream, &adbc_error)));
+		REQUIRE(SUCCESS(duckdb_adbc::StatementBindStream(&adbc_statement, &arrow_stream, &adbc_error)));
 
-		REQUIRE(SUCCESS(adbc::StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
+		REQUIRE(SUCCESS(duckdb_adbc::StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
 	}
 
-	AdbcError adbc_error;
-	AdbcDatabase adbc_database;
-	AdbcConnection adbc_connection;
-	AdbcStatement adbc_statement;
+	duckdb_adbc::AdbcError adbc_error;
+	duckdb_adbc::AdbcDatabase adbc_database;
+	duckdb_adbc::AdbcConnection adbc_connection;
+	duckdb_adbc::AdbcStatement adbc_statement;
 	ArrowArrayStream arrow_stream;
 	std::string path;
 };
 
 TEST_CASE("ADBC - Select 42", "[adbc]") {
-	if (!DUCKDB_LIB) {
+	if (!duckdb_lib) {
 		return;
 	}
 	ADBCTestDatabase db;
@@ -89,7 +89,7 @@ TEST_CASE("ADBC - Select 42", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Test ingestion", "[adbc]") {
-	if (!DUCKDB_LIB) {
+	if (!duckdb_lib) {
 		return;
 	}
 	ADBCTestDatabase db;
@@ -104,7 +104,7 @@ TEST_CASE("ADBC - Test ingestion", "[adbc]") {
 }
 
 TEST_CASE("ADBC - Test ingestion - Lineitem", "[adbc]") {
-	if (!DUCKDB_LIB) {
+	if (!duckdb_lib) {
 		return;
 	}
 	ADBCTestDatabase db;
