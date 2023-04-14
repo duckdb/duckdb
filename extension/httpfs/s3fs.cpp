@@ -154,7 +154,7 @@ void AWSEnvironmentCredentialsProvider::SetExtensionOptionValue(string key, cons
 }
 
 void AWSEnvironmentCredentialsProvider::SetAll() {
-    const char *region_env_var = std::getenv(this->REGION_ENV_VAR) != NULL ? this->REGION_ENV_VAR : this->DEFAULT_REGION_ENV_VAR;
+    const char *region_env_var = this->REGION_ENV_VAR != NULL ? this->REGION_ENV_VAR : this->DEFAULT_REGION_ENV_VAR;
     this->SetExtensionOptionValue("s3_region", region_env_var);
     this->SetExtensionOptionValue("s3_access_key_id", this->ACCESS_KEY_ENV_VAR);
     this->SetExtensionOptionValue("s3_secret_access_key", this->SECRET_KEY_ENV_VAR);
@@ -162,7 +162,6 @@ void AWSEnvironmentCredentialsProvider::SetAll() {
     this->SetExtensionOptionValue("s3_endpoint", this->DUCKDB_ENDPOINT_ENV_VAR);
     this->SetExtensionOptionValue("s3_use_ssl", this->DUCKDB_USE_SSL_ENV_VAR);
 }
-
 
 S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener) {
 	string region;
