@@ -19,7 +19,7 @@ enum class VerifyExistenceType : uint8_t {
 	DELETE_FK = 2  // delete from a table that has a foreign key
 };
 class ConflictManager;
-class ARTNode;
+class Node;
 class ARTKey;
 class FixedSizeAllocator;
 
@@ -40,19 +40,9 @@ public:
 	~ART() override;
 
 	//! Root of the tree
-	unique_ptr<ARTNode> tree;
-
-	//! Fixed-size allocator for prefixes exceeding eight bytes
-	unique_ptr<FixedSizeAllocator> prefix_segments;
-	//! Fixed-size allocator for not-inlined leaves (more than one row ID)
-	unique_ptr<FixedSizeAllocator> leaf_segments;
-
-	//! Fixed-size allocators for the different node types
-	unique_ptr<FixedSizeAllocator> leaves;
-	unique_ptr<FixedSizeAllocator> n4_nodes;
-	unique_ptr<FixedSizeAllocator> n16_nodes;
-	unique_ptr<FixedSizeAllocator> n48_nodes;
-	unique_ptr<FixedSizeAllocator> n256_nodes;
+	unique_ptr<Node> tree;
+	//! Fixed-size allocators holding the ART nodes
+	vector<unique_ptr<FixedSizeAllocator>> allocators;
 
 public:
 	//! Initialize a single predicate scan on the index with the given expression and column IDs
@@ -112,13 +102,13 @@ public:
 
 private:
 	//! Insert a row ID into a leaf
-	bool InsertToLeaf(ARTNode &leaf_node, const row_t &row_id);
+	bool InsertToLeaf(Node &leaf_node, const row_t &row_id);
 	//! Insert a key into the tree
-	bool Insert(ARTNode &node, const ARTKey &key, idx_t depth, const row_t &row_id);
+	bool Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id);
 	//! Erase a key from the tree (if a leaf has more than one value) or erase the leaf itself
-	void Erase(ARTNode &node, const ARTKey &key, idx_t depth, const row_t &row_id);
+	void Erase(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id);
 	//! Find the node with a matching key, or return nullptr if not found
-	ARTNode Lookup(ARTNode node, const ARTKey &key, idx_t depth);
+	Node Lookup(Node node, const ARTKey &key, idx_t depth);
 	//! Returns all row IDs belonging to a key greater (or equal) than the search key
 	bool SearchGreater(ARTIndexScanState *state, ARTKey &key, bool inclusive, idx_t max_count,
 	                   vector<row_t> &result_ids);
@@ -130,17 +120,15 @@ private:
 	                      bool right_inclusive, idx_t max_count, vector<row_t> &result_ids);
 
 	//! Initializes a merge operation by returning a set containing the buffer count of each fixed-size allocator
-	void InitializeMerge(vector<FixedSizeAllocator *> &allocators, ARTFlags &flags);
-	//! Returns a vector containing pointers to all fixed-size allocators
-	vector<FixedSizeAllocator *> GetAllocators() const;
+	void InitializeMerge(ARTFlags &flags);
 
 	//! Initializes a vacuum operation by calling the initialize operation of the respective
 	//! node allocator, and returns a vector containing either true, if the allocator at
 	//! the respective position qualifies, or false, if not
-	void InitializeVacuum(vector<FixedSizeAllocator *> &allocators, ARTFlags &flags);
+	void InitializeVacuum(ARTFlags &flags);
 	//! Finalizes a vacuum operation by calling the finalize operation of all qualifying
 	//! fixed size allocators
-	void FinalizeVacuum(vector<FixedSizeAllocator *> &allocators, const ARTFlags &flags);
+	void FinalizeVacuum(const ARTFlags &flags);
 };
 
 } // namespace duckdb

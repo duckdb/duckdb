@@ -1,14 +1,14 @@
 #include "duckdb/execution/index/art/leaf_segment.hpp"
 
 #include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/execution/index/art/art_node.hpp"
+#include "duckdb/execution/index/art/node.hpp"
 
 namespace duckdb {
 
-LeafSegment *LeafSegment::New(ART &art, ARTNode &node) {
+LeafSegment *LeafSegment::New(ART &art, Node &node) {
 
-	node.SetPtr(art.leaf_segments->New());
-	node.type = (uint8_t)ARTNodeType::LEAF_SEGMENT;
+	node.SetPtr(Node::GetAllocator(art, NType::LEAF_SEGMENT).New());
+	node.type = (uint8_t)NType::LEAF_SEGMENT;
 
 	auto segment = LeafSegment::Get(art, node);
 	segment->next.Reset();
@@ -19,7 +19,7 @@ LeafSegment *LeafSegment::New(ART &art, ARTNode &node) {
 LeafSegment *LeafSegment::Append(ART &art, uint32_t &count, const row_t row_id) {
 
 	auto *segment = this;
-	auto position = count % ARTNode::LEAF_SEGMENT_SIZE;
+	auto position = count % Node::LEAF_SEGMENT_SIZE;
 
 	// we need a new segment
 	if (position == 0 && count != 0) {

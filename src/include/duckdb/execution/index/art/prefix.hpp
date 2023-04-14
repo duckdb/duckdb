@@ -7,7 +7,7 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
-#include "duckdb/execution/index/art/art_node.hpp"
+#include "duckdb/execution/index/art/node.hpp"
 
 namespace duckdb {
 
@@ -21,9 +21,9 @@ public:
 	uint32_t count;
 	union {
 		//! Pointer to the head of the list of prefix segments
-		ARTNode ptr;
+		Node ptr;
 		//! Inlined prefix bytes
-		uint8_t inlined[ARTNode::PREFIX_INLINE_BYTES];
+		uint8_t inlined[Node::PREFIX_INLINE_BYTES];
 	} data;
 
 public:
@@ -72,7 +72,7 @@ public:
 private:
 	//! Returns whether this prefix is inlined
 	inline bool IsInlined() const {
-		return count <= ARTNode::PREFIX_INLINE_BYTES;
+		return count <= Node::PREFIX_INLINE_BYTES;
 	}
 	//! Moves all inlined bytes onto a prefix segment, does not change the size
 	//! so this will be an (temporarily) invalid prefix

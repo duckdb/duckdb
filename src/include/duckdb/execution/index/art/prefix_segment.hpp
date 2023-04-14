@@ -8,7 +8,7 @@
 #pragma once
 
 #include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/execution/index/art/art_node.hpp"
+#include "duckdb/execution/index/art/node.hpp"
 
 namespace duckdb {
 
@@ -19,16 +19,16 @@ public:
 	PrefixSegment() {};
 
 	//! The prefix bytes stored in this segment
-	uint8_t bytes[ARTNode::PREFIX_SEGMENT_SIZE];
+	uint8_t bytes[Node::PREFIX_SEGMENT_SIZE];
 	//! The position of the next segment, if the prefix exceeds this segment
-	ARTNode next;
+	Node next;
 
 public:
 	//! Get a new pointer to a node, might cause a new buffer allocation, and initialize it
-	static PrefixSegment *New(ART &art, ARTNode &node);
+	static PrefixSegment *New(ART &art, Node &node);
 	//! Get a pointer to a prefix segment
-	static inline PrefixSegment *Get(const ART &art, const ARTNode ptr) {
-		return art.prefix_segments->Get<PrefixSegment>(ptr);
+	static inline PrefixSegment *Get(const ART &art, const Node ptr) {
+		return Node::GetAllocator(art, NType::PREFIX_SEGMENT).Get<PrefixSegment>(ptr);
 	}
 
 	//! Append a byte to the current segment, or create a new segment containing that byte

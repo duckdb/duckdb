@@ -2,7 +2,7 @@ add_library_unity(
   duckdb_art_index_execution
   OBJECT
   art_key.cpp
-  art_node.cpp
+  node.cpp
   fixed_size_allocator.cpp
   iterator.cpp
   leaf.cpp

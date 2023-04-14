@@ -1,14 +1,14 @@
 #include "duckdb/execution/index/art/prefix_segment.hpp"
 
 #include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/execution/index/art/art_node.hpp"
+#include "duckdb/execution/index/art/node.hpp"
 
 namespace duckdb {
 
-PrefixSegment *PrefixSegment::New(ART &art, ARTNode &node) {
+PrefixSegment *PrefixSegment::New(ART &art, Node &node) {
 
-	node.SetPtr(art.prefix_segments->New());
-	node.type = (uint8_t)ARTNodeType::PREFIX_SEGMENT;
+	node.SetPtr(Node::GetAllocator(art, NType::PREFIX_SEGMENT).New());
+	node.type = (uint8_t)NType::PREFIX_SEGMENT;
 
 	auto segment = PrefixSegment::Get(art, node);
 	segment->next.Reset();
@@ -19,7 +19,7 @@ PrefixSegment *PrefixSegment::New(ART &art, ARTNode &node) {
 PrefixSegment *PrefixSegment::Append(ART &art, uint32_t &count, const uint8_t byte) {
 
 	auto *segment = this;
-	auto position = count % ARTNode::PREFIX_SEGMENT_SIZE;
+	auto position = count % Node::PREFIX_SEGMENT_SIZE;
 
 	// we need a new segment
 	if (position == 0 && count != 0) {

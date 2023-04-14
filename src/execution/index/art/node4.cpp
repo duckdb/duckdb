@@ -1,17 +1,17 @@
 #include "duckdb/execution/index/art/node4.hpp"
 
 #include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/execution/index/art/art_node.hpp"
+#include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/art/node16.hpp"
-#include "duckdb/storage/meta_block_writer.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
+#include "duckdb/storage/meta_block_writer.hpp"
 
 namespace duckdb {
 
-Node4 *Node4::New(ART &art, ARTNode &node) {
+Node4 *Node4::New(ART &art, Node &node) {
 
-	node.SetPtr(art.n4_nodes->New());
-	node.type = (uint8_t)ARTNodeType::NODE_4;
+	node.SetPtr(Node::GetAllocator(art, NType::NODE_4).New());
+	node.type = (uint8_t)NType::NODE_4;
 	auto n4 = Node4::Get(art, node);
 
 	n4->count = 0;
@@ -20,7 +20,7 @@ Node4 *Node4::New(ART &art, ARTNode &node) {
 	return n4;
 }
 
-void Node4::Free(ART &art, ARTNode &node) {
+void Node4::Free(ART &art, Node &node) {
 
 	D_ASSERT(node.IsSet());
 	D_ASSERT(!node.IsSwizzled());
@@ -29,11 +29,11 @@ void Node4::Free(ART &art, ARTNode &node) {
 
 	// free all children
 	for (idx_t i = 0; i < n4->count; i++) {
-		ARTNode::Free(art, n4->children[i]);
+		Node::Free(art, n4->children[i]);
 	}
 }
 
-Node4 *Node4::ShrinkNode16(ART &art, ARTNode &node4, ARTNode &node16) {
+Node4 *Node4::ShrinkNode16(ART &art, Node &node4, Node &node16) {
 
 	auto n4 = Node4::New(art, node4);
 	auto n16 = Node16::Get(art, node16);
@@ -47,7 +47,7 @@ Node4 *Node4::ShrinkNode16(ART &art, ARTNode &node4, ARTNode &node16) {
 	}
 
 	n16->count = 0;
-	ARTNode::Free(art, node16);
+	Node::Free(art, node16);
 	return n4;
 }
 
@@ -58,7 +58,7 @@ void Node4::InitializeMerge(ART &art, const ARTFlags &flags) {
 	}
 }
 
-void Node4::InsertChild(ART &art, ARTNode &node, const uint8_t byte, const ARTNode child) {
+void Node4::InsertChild(ART &art, Node &node, const uint8_t byte, const Node child) {
 
 	D_ASSERT(node.IsSet());
 	D_ASSERT(!node.IsSwizzled());
@@ -70,7 +70,7 @@ void Node4::InsertChild(ART &art, ARTNode &node, const uint8_t byte, const ARTNo
 	}
 
 	// insert new child node into node
-	if (n4->count < ARTNode::NODE_4_CAPACITY) {
+	if (n4->count < Node::NODE_4_CAPACITY) {
 		// still space, just insert the child
 		idx_t child_pos = 0;
 		while (child_pos < n4->count && n4->key[child_pos] < byte) {
@@ -94,7 +94,7 @@ void Node4::InsertChild(ART &art, ARTNode &node, const uint8_t byte, const ARTNo
 	}
 }
 
-void Node4::DeleteChild(ART &art, ARTNode &node, const uint8_t byte) {
+void Node4::DeleteChild(ART &art, Node &node, const uint8_t byte) {
 
 	D_ASSERT(node.IsSet());
 	D_ASSERT(!node.IsSwizzled());
@@ -111,7 +111,7 @@ void Node4::DeleteChild(ART &art, ARTNode &node, const uint8_t byte) {
 	D_ASSERT(n4->count > 1);
 
 	// free the child and decrease the count
-	ARTNode::Free(art, n4->children[child_pos]);
+	Node::Free(art, n4->children[child_pos]);
 	n4->count--;
 
 	// potentially move any children backwards
@@ -128,12 +128,12 @@ void Node4::DeleteChild(ART &art, ARTNode &node, const uint8_t byte) {
 		child.GetPrefix(art)->Concatenate(art, n4->key[0], n4->prefix);
 		n4->count--;
 
-		ARTNode::Free(art, node);
+		Node::Free(art, node);
 		node = child;
 	}
 }
 
-void Node4::ReplaceChild(const uint8_t byte, const ARTNode child) {
+void Node4::ReplaceChild(const uint8_t byte, const Node child) {
 	for (idx_t i = 0; i < count; i++) {
 		if (key[i] == byte) {
 			children[i] = child;
@@ -142,7 +142,7 @@ void Node4::ReplaceChild(const uint8_t byte, const ARTNode child) {
 	}
 }
 
-ARTNode *Node4::GetChild(const uint8_t byte) {
+Node *Node4::GetChild(const uint8_t byte) {
 
 	for (idx_t i = 0; i < count; i++) {
 		if (key[i] == byte) {
@@ -152,7 +152,7 @@ ARTNode *Node4::GetChild(const uint8_t byte) {
 	return nullptr;
 }
 
-ARTNode *Node4::GetNextChild(uint8_t &byte) {
+Node *Node4::GetNextChild(uint8_t &byte) {
 
 	for (idx_t i = 0; i < count; i++) {
 		if (key[i] >= byte) {
@@ -170,18 +170,18 @@ BlockPointer Node4::Serialize(ART &art, MetaBlockWriter &writer) {
 	for (idx_t i = 0; i < count; i++) {
 		child_block_pointers.push_back(children[i].Serialize(art, writer));
 	}
-	for (idx_t i = count; i < ARTNode::NODE_4_CAPACITY; i++) {
+	for (idx_t i = count; i < Node::NODE_4_CAPACITY; i++) {
 		child_block_pointers.emplace_back((block_id_t)DConstants::INVALID_INDEX, 0);
 	}
 
 	// get pointer and write fields
 	auto block_pointer = writer.GetBlockPointer();
-	writer.Write(ARTNodeType::NODE_4);
+	writer.Write(NType::NODE_4);
 	writer.Write<uint8_t>(count);
 	prefix.Serialize(art, writer);
 
 	// write key values
-	for (idx_t i = 0; i < ARTNode::NODE_4_CAPACITY; i++) {
+	for (idx_t i = 0; i < Node::NODE_4_CAPACITY; i++) {
 		writer.Write(key[i]);
 	}
 
@@ -200,20 +200,20 @@ void Node4::Deserialize(ART &art, MetaBlockReader &reader) {
 	prefix.Deserialize(art, reader);
 
 	// read key values
-	for (idx_t i = 0; i < ARTNode::NODE_4_CAPACITY; i++) {
+	for (idx_t i = 0; i < Node::NODE_4_CAPACITY; i++) {
 		key[i] = reader.Read<uint8_t>();
 	}
 
 	// read child block pointers
-	for (idx_t i = 0; i < ARTNode::NODE_4_CAPACITY; i++) {
-		children[i] = ARTNode(reader);
+	for (idx_t i = 0; i < Node::NODE_4_CAPACITY; i++) {
+		children[i] = Node(reader);
 	}
 }
 
 void Node4::Vacuum(ART &art, const ARTFlags &flags) {
 
 	for (idx_t i = 0; i < count; i++) {
-		ARTNode::Vacuum(art, children[i], flags);
+		Node::Vacuum(art, children[i], flags);
 	}
 }
 

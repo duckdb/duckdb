@@ -14,7 +14,7 @@
 namespace duckdb {
 
 // classes
-enum class ARTNodeType : uint8_t {
+enum class NType : uint8_t {
 	PREFIX_SEGMENT = 1,
 	LEAF_SEGMENT = 2,
 	LEAF = 3,
@@ -24,7 +24,7 @@ enum class ARTNodeType : uint8_t {
 	NODE_256 = 7
 };
 class ART;
-class ARTNode;
+class Node;
 class Prefix;
 class MetaBlockReader;
 class MetaBlockWriter;
@@ -34,9 +34,9 @@ struct BlockPointer;
 struct ARTFlags;
 
 //! The ARTNode is the swizzleable pointer class of the ART index.
-//! If the ARTNode pointer is not swizzled, then the leftmost byte identifies the ARTNodeType.
+//! If the ARTNode pointer is not swizzled, then the leftmost byte identifies the NType.
 //! The remaining bytes are the position in the respective ART buffer.
-class ARTNode : public SwizzleablePointer {
+class Node : public SwizzleablePointer {
 public:
 	// constants (this allows testing performance with different ART node sizes)
 
@@ -57,17 +57,17 @@ public:
 
 public:
 	//! Constructs an empty ARTNode
-	ARTNode();
+	Node();
 	//! Constructs a swizzled pointer from a block ID and an offset
-	explicit ARTNode(MetaBlockReader &reader);
+	explicit Node(MetaBlockReader &reader);
 	//! Get a new pointer to a node, might cause a new buffer allocation, and initialize it
-	static void New(ART &art, ARTNode &node, const ARTNodeType type);
+	static void New(ART &art, Node &node, const NType type);
 	//! Free the node (and its subtree)
-	static void Free(ART &art, ARTNode &node);
+	static void Free(ART &art, Node &node);
 
 	//! Retrieve the node type from the leftmost byte
-	inline ARTNodeType DecodeARTNodeType() const {
-		return ARTNodeType(type);
+	inline NType DecodeARTNodeType() const {
+		return NType(type);
 	}
 
 	//! Set the pointer
@@ -77,16 +77,16 @@ public:
 	}
 
 	//! Replace the child node at the respective byte
-	void ReplaceChild(const ART &art, const uint8_t byte, const ARTNode child);
+	void ReplaceChild(const ART &art, const uint8_t byte, const Node child);
 	//! Insert the child node at byte
-	static void InsertChild(ART &art, ARTNode &node, const uint8_t byte, const ARTNode child);
+	static void InsertChild(ART &art, Node &node, const uint8_t byte, const Node child);
 	//! Delete the child node at the respective byte
-	static void DeleteChild(ART &art, ARTNode &node, const uint8_t byte);
+	static void DeleteChild(ART &art, Node &node, const uint8_t byte);
 
 	//! Get the child for the respective byte in the node
-	ARTNode *GetChild(ART &art, const uint8_t byte) const;
+	Node *GetChild(ART &art, const uint8_t byte) const;
 	//! Get the first child that is greater or equal to the specific byte
-	ARTNode *GetNextChild(ART &art, uint8_t &byte) const;
+	Node *GetNextChild(ART &art, uint8_t &byte) const;
 
 	//! Serialize the node
 	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);
@@ -100,19 +100,21 @@ public:
 	//! Returns a pointer to the prefix of the node
 	Prefix *GetPrefix(ART &art);
 	//! Returns the matching node type for a given count
-	static ARTNodeType GetARTNodeTypeByCount(const idx_t count);
+	static NType GetARTNodeTypeByCount(const idx_t count);
+	//! Get references to the different allocators
+	static FixedSizeAllocator &GetAllocator(const ART &art, NType type);
 
 	//! Initializes a merge by fully deserializing the subtree of the node and incrementing its buffer IDs
 	void InitializeMerge(ART &art, const ARTFlags &flags);
 	//! Merge another node into this node
-	bool Merge(ART &art, ARTNode &other);
+	bool Merge(ART &art, Node &other);
 	//! Merge two nodes by first resolving their prefixes
-	bool ResolvePrefixes(ART &art, ARTNode &other);
+	bool ResolvePrefixes(ART &art, Node &other);
 	//! Merge two nodes that have no prefix or the same prefix
-	bool MergeInternal(ART &art, ARTNode &other);
+	bool MergeInternal(ART &art, Node &other);
 
 	//! Vacuum all nodes that exceed their respective vacuum thresholds
-	static void Vacuum(ART &art, ARTNode &node, const ARTFlags &flags);
+	static void Vacuum(ART &art, Node &node, const ARTFlags &flags);
 };
 
 } // namespace duckdb

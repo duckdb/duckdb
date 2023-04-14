@@ -1,9 +1,9 @@
 #include "duckdb/execution/index/art/iterator.hpp"
 
-#include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/execution/index/art/art_node.hpp"
-#include "duckdb/execution/index/art/prefix.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/art/node.hpp"
+#include "duckdb/execution/index/art/prefix.hpp"
 
 namespace duckdb {
 
@@ -62,7 +62,7 @@ bool IteratorCurrentKey::operator==(const ARTKey &k) const {
 	return true;
 }
 
-void Iterator::FindMinimum(ARTNode &node) {
+void Iterator::FindMinimum(Node &node) {
 
 	// reconstruct the prefix
 	// FIXME: get all bytes at once to increase performance
@@ -72,8 +72,8 @@ void Iterator::FindMinimum(ARTNode &node) {
 	}
 
 	// found the minimum
-	if (node.DecodeARTNodeType() == ARTNodeType::LEAF) {
-		last_leaf = art->leaves->Get<Leaf>(node);
+	if (node.DecodeARTNodeType() == NType::LEAF) {
+		last_leaf = Node::GetAllocator(*art, NType::LEAF).Get<Leaf>(node);
 		return;
 	}
 
@@ -88,8 +88,8 @@ void Iterator::FindMinimum(ARTNode &node) {
 	FindMinimum(*next);
 }
 
-void Iterator::PushKey(const ARTNode &node, const uint8_t byte) {
-	if (node.DecodeARTNodeType() != ARTNodeType::LEAF) {
+void Iterator::PushKey(const Node &node, const uint8_t byte) {
+	if (node.DecodeARTNodeType() != NType::LEAF) {
 		cur_key.Push(byte);
 	}
 }
@@ -140,7 +140,7 @@ void Iterator::PopNode() {
 bool Iterator::Next() {
 	if (!nodes.empty()) {
 		auto cur_node = nodes.top().node;
-		if (cur_node.DecodeARTNodeType() == ARTNodeType::LEAF) {
+		if (cur_node.DecodeARTNodeType() == NType::LEAF) {
 			// pop leaf
 			// we must pop the prefix size + the key to the node, unless we are popping the root
 			PopNode();
@@ -152,11 +152,11 @@ bool Iterator::Next() {
 
 		// cur_node
 		auto &top = nodes.top();
-		ARTNode node = top.node;
+		Node node = top.node;
 
 		// found a leaf: move to next node
-		if (node.DecodeARTNodeType() == ARTNodeType::LEAF) {
-			last_leaf = art->leaves->Get<Leaf>(node);
+		if (node.DecodeARTNodeType() == NType::LEAF) {
+			last_leaf = Node::GetAllocator(*art, NType::LEAF).Get<Leaf>(node);
 			return true;
 		}
 
@@ -192,7 +192,7 @@ bool Iterator::Next() {
 	return false;
 }
 
-bool Iterator::LowerBound(ARTNode node, const ARTKey &key, const bool &is_inclusive) {
+bool Iterator::LowerBound(Node node, const ARTKey &key, const bool &is_inclusive) {
 
 	if (!node.IsSet()) {
 		return false;
@@ -214,7 +214,7 @@ bool Iterator::LowerBound(ARTNode node, const ARTKey &key, const bool &is_inclus
 
 		// greater case: find leftmost leaf node directly
 		if (!equal) {
-			while (node.DecodeARTNodeType() != ARTNodeType::LEAF) {
+			while (node.DecodeARTNodeType() != NType::LEAF) {
 
 				uint8_t byte = 0;
 				auto next_node = *node.GetNextChild(*art, byte);
@@ -235,9 +235,9 @@ bool Iterator::LowerBound(ARTNode node, const ARTKey &key, const bool &is_inclus
 			}
 		}
 
-		if (node.DecodeARTNodeType() == ARTNodeType::LEAF) {
+		if (node.DecodeARTNodeType() == NType::LEAF) {
 			// found a leaf node: check if it is bigger or equal than the current key
-			last_leaf = art->leaves->Get<Leaf>(node);
+			last_leaf = Node::GetAllocator(*art, NType::LEAF).Get<Leaf>(node);
 
 			// if the search is not inclusive the leaf node could still be equal to the current value
 			// check if leaf is equal to the current key

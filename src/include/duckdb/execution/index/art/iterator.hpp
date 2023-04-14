@@ -8,19 +8,19 @@
 #pragma once
 
 #include "duckdb/common/stack.hpp"
-#include "duckdb/execution/index/art/art_node.hpp"
-#include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
+#include "duckdb/execution/index/art/leaf.hpp"
+#include "duckdb/execution/index/art/node.hpp"
 
 namespace duckdb {
 
 struct IteratorEntry {
 	IteratorEntry() {
 	}
-	IteratorEntry(ARTNode node, uint8_t byte) : node(node), byte(byte) {
+	IteratorEntry(Node node, uint8_t byte) : node(node), byte(byte) {
 	}
 
-	ARTNode node;
+	Node node;
 	uint8_t byte = 0;
 };
 
@@ -58,9 +58,9 @@ public:
 	//! Scan the tree
 	bool Scan(const ARTKey &key, const idx_t &max_count, vector<row_t> &result_ids, const bool &is_inclusive);
 	//! Finds the minimum value of the tree
-	void FindMinimum(ARTNode &node);
+	void FindMinimum(Node &node);
 	//! Goes to the lower bound of the tree
-	bool LowerBound(ARTNode node, const ARTKey &key, const bool &is_inclusive);
+	bool LowerBound(Node node, const ARTKey &key, const bool &is_inclusive);
 
 private:
 	//! Stack of iterator entries
@@ -71,7 +71,7 @@ private:
 	//! Go to the next node
 	bool Next();
 	//! Push part of the key to the current key
-	void PushKey(const ARTNode &node, const uint8_t byte);
+	void PushKey(const Node &node, const uint8_t byte);
 	//! Pop node from the stack of iterator entries
 	void PopNode();
 };

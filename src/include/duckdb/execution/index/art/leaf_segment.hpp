@@ -8,23 +8,23 @@
 #pragma once
 
 #include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/execution/index/art/art_node.hpp"
+#include "duckdb/execution/index/art/node.hpp"
 
 namespace duckdb {
 
 class LeafSegment {
 public:
 	//! The row IDs stored in this segment
-	row_t row_ids[ARTNode::LEAF_SEGMENT_SIZE];
+	row_t row_ids[Node::LEAF_SEGMENT_SIZE];
 	//! The pointer of the next segment, if the row IDs exceeds this segment
-	ARTNode next;
+	Node next;
 
 public:
 	//! Get a new pointer to a node, might cause a new buffer allocation, and initialize it
-	static LeafSegment *New(ART &art, ARTNode &node);
+	static LeafSegment *New(ART &art, Node &node);
 	//! Get a pointer to a leaf segment
-	static inline LeafSegment *Get(const ART &art, const ARTNode ptr) {
-		return art.leaf_segments->Get<LeafSegment>(ptr);
+	static inline LeafSegment *Get(const ART &art, const Node ptr) {
+		return Node::GetAllocator(art, NType::LEAF_SEGMENT).Get<LeafSegment>(ptr);
 	}
 
 	//! Append a row ID to the current segment, or create a new segment containing that row ID
