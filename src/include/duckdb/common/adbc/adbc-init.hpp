@@ -27,7 +27,8 @@ extern "C" {
 #endif
 
 //! We gotta leak the symbols of the init function
-duckdb_adbc::AdbcStatusCode duckdb_adbc_init(size_t count, struct duckdb_adbc::AdbcDriver *driver, struct duckdb_adbc::AdbcError *error);
+duckdb_adbc::AdbcStatusCode duckdb_adbc_init(size_t count, struct duckdb_adbc::AdbcDriver *driver,
+                                             struct duckdb_adbc::AdbcError *error);
 
 #ifdef __cplusplus
 }

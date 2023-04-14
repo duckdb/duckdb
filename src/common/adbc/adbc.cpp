@@ -13,7 +13,8 @@
 #include <stdlib.h>
 
 // We gotta leak the symbols of the init function
-duckdb_adbc::AdbcStatusCode duckdb_adbc_init(size_t count, struct duckdb_adbc::AdbcDriver *driver, struct duckdb_adbc::AdbcError *error) {
+duckdb_adbc::AdbcStatusCode duckdb_adbc_init(size_t count, struct duckdb_adbc::AdbcDriver *driver,
+                                             struct duckdb_adbc::AdbcError *error) {
 	if (!driver) {
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
@@ -39,7 +40,6 @@ duckdb_adbc::AdbcStatusCode duckdb_adbc_init(size_t count, struct duckdb_adbc::A
 	return ADBC_STATUS_OK;
 }
 
-
 namespace duckdb_adbc {
 #define CHECK_TRUE(p, e, m)                                                                                            \
 	if (!(p)) {                                                                                                        \
@@ -58,7 +58,6 @@ namespace duckdb_adbc {
 	} else {                                                                                                           \
 		return ADBC_STATUS_OK;                                                                                         \
 	}
-
 
 struct DuckDBAdbcDatabaseWrapper {
 	//! The DuckDB Database Configuration
@@ -368,8 +367,8 @@ AdbcStatusCode StatementSetOption(struct AdbcStatement *statement, const char *k
 	return ADBC_STATUS_INVALID_ARGUMENT;
 }
 
-static AdbcStatusCode QueryInternal(struct AdbcConnection *connection, struct ArrowArrayStream *out,
-                                    const char *query, struct AdbcError *error) {
+static AdbcStatusCode QueryInternal(struct AdbcConnection *connection, struct ArrowArrayStream *out, const char *query,
+                                    struct AdbcError *error) {
 	AdbcStatusCode res;
 	AdbcStatement statement;
 
@@ -387,8 +386,7 @@ static AdbcStatusCode QueryInternal(struct AdbcConnection *connection, struct Ar
 
 AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth, const char *catalog,
                                     const char *db_schema, const char *table_name, const char **table_type,
-                                    const char *column_name, struct ArrowArrayStream *out,
-                                    struct AdbcError *error) {
+                                    const char *column_name, struct ArrowArrayStream *out, struct AdbcError *error) {
 	CHECK_TRUE(catalog == nullptr || strcmp(catalog, "duckdb") == 0, error, "catalog must be NULL or 'duckdb'");
 	CHECK_TRUE(table_type == nullptr, error, "table types parameter not yet supported");
 

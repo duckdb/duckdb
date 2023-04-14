@@ -43,7 +43,7 @@ namespace duckdb_adbc {
 ///   if necessary.
 ADBC_EXPORT
 AdbcStatusCode AdbcLoadDriver(const char *driver_name, const char *entrypoint, int version, void *driver,
-                                      struct AdbcError *error);
+                              struct AdbcError *error);
 
 /// \brief Common entry point for drivers via the driver manager.
 ///
@@ -59,7 +59,7 @@ AdbcStatusCode AdbcLoadDriver(const char *driver_name, const char *entrypoint, i
 ///   if necessary.
 ADBC_EXPORT
 AdbcStatusCode AdbcLoadDriverFromInitFunc(AdbcDriverInitFunc init_func, int version, void *driver,
-                                                  struct AdbcError *error);
+                                          struct AdbcError *error);
 
 /// \brief Set the AdbcDriverInitFunc to use.
 ///
@@ -69,9 +69,8 @@ AdbcStatusCode AdbcLoadDriverFromInitFunc(AdbcDriverInitFunc init_func, int vers
 /// entrypoint explicitly, for applications that can dynamically
 /// load drivers on their own.
 ADBC_EXPORT
-AdbcStatusCode AdbcDriverManagerDatabaseSetInitFunc(struct AdbcDatabase *database,
-                                                            AdbcDriverInitFunc init_func,
-                                                            struct AdbcError *error);
+AdbcStatusCode AdbcDriverManagerDatabaseSetInitFunc(struct AdbcDatabase *database, AdbcDriverInitFunc init_func,
+                                                    struct AdbcError *error);
 
 /// \brief Get a human-friendly description of a status code.
 ADBC_EXPORT

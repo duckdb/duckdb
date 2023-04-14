@@ -188,7 +188,6 @@ struct TempConnection {
 	std::unordered_map<std::string, std::string> options;
 };
 
-
 // Direct implementations of API methods
 
 AdbcStatusCode AdbcDatabaseNew(struct AdbcDatabase *database, struct AdbcError *error) {

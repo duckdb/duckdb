@@ -39,15 +39,13 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
                                     const char *column_name, struct ArrowArrayStream *out, struct AdbcError *error);
 
 AdbcStatusCode ConnectionGetTableSchema(struct AdbcConnection *connection, const char *catalog, const char *db_schema,
-                                        const char *table_name, struct ArrowSchema *schema,
-                                        struct AdbcError *error);
+                                        const char *table_name, struct ArrowSchema *schema, struct AdbcError *error);
 
 AdbcStatusCode ConnectionGetTableTypes(struct AdbcConnection *connection, struct ArrowArrayStream *out,
                                        struct AdbcError *error);
 
 AdbcStatusCode ConnectionReadPartition(struct AdbcConnection *connection, const uint8_t *serialized_partition,
-                                       size_t serialized_length, struct ArrowArrayStream *out,
-                                       struct AdbcError *error);
+                                       size_t serialized_length, struct ArrowArrayStream *out, struct AdbcError *error);
 
 AdbcStatusCode ConnectionCommit(struct AdbcConnection *connection, struct AdbcError *error);
 
@@ -68,8 +66,8 @@ AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *statement, const char 
 AdbcStatusCode StatementSetSubstraitPlan(struct AdbcStatement *statement, const uint8_t *plan, size_t length,
                                          struct AdbcError *error);
 
-AdbcStatusCode StatementBind(struct AdbcStatement *statement, struct ArrowArray *values,
-                             struct ArrowSchema *schema, struct AdbcError *error);
+AdbcStatusCode StatementBind(struct AdbcStatement *statement, struct ArrowArray *values, struct ArrowSchema *schema,
+                             struct AdbcError *error);
 
 AdbcStatusCode StatementBindStream(struct AdbcStatement *statement, struct ArrowArrayStream *stream,
                                    struct AdbcError *error);
@@ -83,6 +81,5 @@ AdbcStatusCode StatementSetOption(struct AdbcStatement *statement, const char *k
 AdbcStatusCode StatementExecutePartitions(struct AdbcStatement *statement, struct ArrowSchema *schema,
                                           struct AdbcPartitions *partitions, int64_t *rows_affected,
                                           struct AdbcError *error);
-
 
 } // namespace duckdb_adbc
