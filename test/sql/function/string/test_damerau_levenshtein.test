@@ -1,0 +1,358 @@
+# name: test/sql/function/string/test_damerau_levenshtein.test
+# description: Test damerau_levenshtein function
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+
+# normal queries
+query I
+SELECT damerau_levenshtein('out', 'out')
+----
+0
+
+query I
+SELECT damerau_levenshtein('three', 'there')
+----
+1
+
+query I
+SELECT damerau_levenshtein('potion', 'option')
+----
+1
+
+query I
+SELECT damerau_levenshtein('letter', 'lettre')
+----
+1
+
+query I
+SELECT damerau_levenshtein('three', 'there')
+----
+1
+
+query I
+SELECT damerau_levenshtein('out', 'to')
+----
+2
+
+query I
+SELECT damerau_levenshtein('to', 'out')
+----
+2
+
+query I
+SELECT damerau_levenshtein('laos', 'also')
+----
+2
+
+query I
+SELECT damerau_levenshtein('tomato', 'otamot')
+----
+3
+
+query I
+SELECT damerau_levenshtein('abcdefg', 'bacedgf')
+----
+3
+
+query I
+SELECT damerau_levenshtein('abcdefg', 'bacedgf')
+----
+3
+
+query I
+SELECT damerau_levenshtein('abcdefghi', 'bzacdefig')
+----
+4
+
+query I
+SELECT damerau_levenshtein('bzacdefig', 'abcdefghi')
+----
+4
+
+query I
+SELECT damerau_levenshtein('at', 'tarokk')
+----
+5
+
+query I
+SELECT damerau_levenshtein('tarokk', 'at')
+----
+5
+
+query I
+SELECT damerau_levenshtein('organ', 'no')
+----
+4
+
+query I
+SELECT damerau_levenshtein('trips', 'strip')
+----
+2
+
+query I
+SELECT damerau_levenshtein('cat', 'cats')
+----
+1
+
+query I
+SELECT damerau_levenshtein('rat', 'brat')
+----
+1
+
+query I
+SELECT damerau_levenshtein('amanaplanacanalpanama', 'm23aanaplancaanaalnama')
+----
+6
+
+query I
+SELECT damerau_levenshtein('', 'great')
+----
+5
+
+query I
+SELECT damerau_levenshtein('great', '')
+----
+5
+
+query I
+SELECT damerau_levenshtein('', '')
+----
+0
+
+query I
+SELECT damerau_levenshtein(NULL, 'drive')
+----
+NULL
+
+query I
+SELECT damerau_levenshtein('drive', NULL)
+----
+NULL
+
+query I
+SELECT damerau_levenshtein(NULL, NULL)
+----
+NULL
+
+query I
+SELECT damerau_levenshtein('', NULL)
+----
+NULL
+
+query I
+SELECT damerau_levenshtein(NULL, '')
+----
+NULL
+
+
+statement error
+SELECT damerau_levenshtein('one', 'two', 'three')
+
+statement error
+SELECT damerau_levenshtein('one')
+
+statement error
+SELECT damerau_levenshtein()
+
+
+statement ok
+CREATE TABLE strings(s VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES ('here'), ('heres'), ('there'), ('three'), ('threes')
+
+query I
+SELECT damerau_levenshtein(s, 'theres') FROM strings ORDER BY s
+----
+2
+1
+1
+2
+1
+
+query I
+SELECT damerau_levenshtein('herse', s) FROM strings ORDER BY s
+----
+1
+1
+2
+3
+3
+
+query I
+SELECT damerau_levenshtein(NULL, s) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
+SELECT damerau_levenshtein(NULL, s) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
+SELECT damerau_levenshtein('', s) FROM strings ORDER BY s
+----
+4
+5
+5
+5
+6
+
+query I
+SELECT damerau_levenshtein(s, '') FROM strings ORDER BY s
+----
+4
+5
+5
+5
+6
+
+
+statement ok
+DROP TABLE strings
+
+statement ok
+CREATE TABLE strings(s VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES (NULL)
+
+query I
+SELECT damerau_levenshtein(s, NULL) from strings
+----
+NULL
+
+query I
+SELECT damerau_levenshtein(NULL, s) from strings
+----
+NULL
+
+query I
+SELECT damerau_levenshtein('test', s) from strings
+----
+NULL
+
+query I
+SELECT damerau_levenshtein(s, 'test') from strings
+----
+NULL
+
+query I
+SELECT damerau_levenshtein('null', s) from strings
+----
+NULL
+
+query I
+SELECT damerau_levenshtein('', s)  FROM strings
+----
+NULL
+
+query I
+SELECT damerau_levenshtein(s, '')  FROM strings
+----
+NULL
+
+
+statement ok
+DROP TABLE strings
+
+statement ok
+CREATE TABLE strings(s VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES ('')
+
+query I
+SELECT damerau_levenshtein(NULL, s)  FROM strings
+----
+NULL
+
+query I
+SELECT damerau_levenshtein(s, NULL)  FROM strings
+----
+NULL
+
+query I
+SELECT damerau_levenshtein(s, '')  FROM strings
+----
+0
+
+query I
+SELECT damerau_levenshtein('', s)  FROM strings
+----
+0
+
+query I
+SELECT damerau_levenshtein(s, 'test')  FROM strings
+----
+4
+
+query I
+SELECT damerau_levenshtein('test', s)  FROM strings
+----
+4
+
+query I
+SELECT damerau_levenshtein('null', s)  FROM strings
+----
+4
+
+
+statement ok
+DROP TABLE strings
+
+statement ok
+CREATE TABLE strings(s_left VARCHAR, s_right VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES 	('identical', 'identical'), ('dientical', 'identical'),
+							('dinetcila', 'identical'), ('abcdefghijk', 'bacdfzzeghki'),
+							('abcd', 'bcda'), ('great', 'greta'),
+							('abcdefghijklmnopqrstuvwxyz', 'abdcpoxwz'),
+							('a_considerably_longer_string', 'a_ocnsiderably_longre_tsrig'),
+							('another-quite-long-string', 'naothre-quit-elongstrnig'),
+							('littlehampton', 'littlerhamptoner'),
+							('an_incredibly_long_string_to_compare', 'na_incerdibl_ylong_sr56ting_ot_ocmrpe'),
+							('smaller', 'notsmaller,longer'),
+							('againalongerstring', 'string'),
+							(NULL, NULL), ('', ''),
+							(NULL, 'test'), ('test', NULL),
+							('four', ''), ('', 'four'),
+							(NULL, ''), ('', NULL)
+
+
+query I
+SELECT damerau_levenshtein(s_left, s_right) FROM strings
+----
+0
+1
+4
+6
+2
+1
+20
+4
+5
+3
+10
+10
+12
+NULL
+0
+NULL
+NULL
+4
+4
+NULL
+NULL
