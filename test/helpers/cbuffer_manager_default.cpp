@@ -120,6 +120,7 @@ void Unpin(void *data, duckdb_block buffer) {
 	my_buffer->pinned--;
 #ifdef DEBUG
 	{
+		auto buffer_manager = my_buffer->buffer_manager;
 		lock_guard<mutex> lock(buffer_manager->lock);
 		if (my_buffer->pinned == 0) {
 			D_ASSERT(buffer_manager->pinned_buffers.size() > 0);
