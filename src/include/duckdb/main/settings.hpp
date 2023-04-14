@@ -65,10 +65,9 @@ struct DebugForceNoCrossProduct {
 	static Value GetSetting(ClientContext &context);
 };
 
-struct DebugOrderedAggregateThreshold {
-	static constexpr const char *Name = "debug_ordered_aggregate_threshold";
-	static constexpr const char *Description =
-	    "DEBUG SETTING: the number of rows to accumulate before sorting, used for tuning";
+struct OrderedAggregateThreshold {
+	static constexpr const char *Name = "ordered_aggregate_threshold";
+	static constexpr const char *Description = "the number of rows to accumulate before sorting, used for tuning";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);

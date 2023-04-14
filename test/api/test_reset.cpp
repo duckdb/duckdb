@@ -54,6 +54,7 @@ OptionValuePair &GetValueForOption(const string &name) {
 	    {"max_expression_depth", {50}},
 	    {"max_memory", {"4.2GB"}},
 	    {"memory_limit", {"4.2GB"}},
+	    {"ordered_aggregate_threshold", {Value::UBIGINT(idx_t(1) << 12)}},
 	    {"null_order", {"nulls_last"}},
 	    {"perfect_ht_threshold", {0}},
 	    {"pivot_limit", {999}},
@@ -83,7 +84,6 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "search_path",
 	    "debug_force_external",
 	    "debug_force_no_cross_product",
-	    "debug_ordered_aggregate_threshold",
 	    "debug_window_mode",
 	    "enable_external_access",    // cant change this while db is running
 	    "allow_unsigned_extensions", // cant change this while db is running

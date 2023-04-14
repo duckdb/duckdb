@@ -145,15 +145,19 @@ Value DebugForceNoCrossProduct::GetSetting(ClientContext &context) {
 // Debug Ordered Aggregate Threshold
 //===--------------------------------------------------------------------===//
 
-void DebugOrderedAggregateThreshold::ResetLocal(ClientContext &context) {
+void OrderedAggregateThreshold::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).ordered_aggregate_threshold = ClientConfig().ordered_aggregate_threshold;
 }
 
-void DebugOrderedAggregateThreshold::SetLocal(ClientContext &context, const Value &input) {
-	ClientConfig::GetConfig(context).ordered_aggregate_threshold = input.GetValue<uint64_t>();
+void OrderedAggregateThreshold::SetLocal(ClientContext &context, const Value &input) {
+	const auto param = input.GetValue<uint64_t>();
+	if (!param) {
+		throw ParserException("Invalid option for PRAGMA ordered_aggregate_threshold, value must be positive");
+	}
+	ClientConfig::GetConfig(context).ordered_aggregate_threshold = param;
 }
 
-Value DebugOrderedAggregateThreshold::GetSetting(ClientContext &context) {
+Value OrderedAggregateThreshold::GetSetting(ClientContext &context) {
 	return Value::UBIGINT(ClientConfig::GetConfig(context).ordered_aggregate_threshold);
 }
 
