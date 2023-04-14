@@ -86,14 +86,14 @@ void Node256::InsertChild(ART &art, ARTNode &node, const uint8_t byte, const ART
 	n256->children[byte] = child;
 }
 
-void Node256::DeleteChild(ART &art, ARTNode &node, const idx_t position) {
+void Node256::DeleteChild(ART &art, ARTNode &node, const uint8_t byte) {
 
 	D_ASSERT(node.IsSet());
 	D_ASSERT(!node.IsSwizzled());
 	auto n256 = Node256::Get(art, node);
 
 	// free the child and decrease the count
-	ARTNode::Free(art, n256->children[position]);
+	ARTNode::Free(art, n256->children[byte]);
 	n256->count--;
 
 	// shrink node to Node48
@@ -103,34 +103,15 @@ void Node256::DeleteChild(ART &art, ARTNode &node, const idx_t position) {
 	}
 }
 
-idx_t Node256::GetChildPositionGreaterEqual(const uint8_t byte, bool &inclusive) const {
-	for (idx_t position = byte; position < ARTNode::NODE_256_CAPACITY; position++) {
-		if (children[position].IsSet()) {
-			inclusive = position == byte;
-			return position;
-		}
-	}
-	return DConstants::INVALID_INDEX;
-}
+ARTNode *Node256::GetNextChild(uint8_t &byte) {
 
-idx_t Node256::GetMinPosition() const {
-	for (idx_t i = 0; i < ARTNode::NODE_256_CAPACITY; i++) {
+	for (idx_t i = byte; i < ARTNode::NODE_256_CAPACITY; i++) {
 		if (children[i].IsSet()) {
-			return i;
+			byte = i;
+			return &children[i];
 		}
 	}
-	return DConstants::INVALID_INDEX;
-}
-
-uint8_t Node256::GetNextPosition(idx_t &position) const {
-	position == DConstants::INVALID_INDEX ? position = 0 : position++;
-	for (; position < ARTNode::NODE_256_CAPACITY; position++) {
-		if (children[position].IsSet()) {
-			return uint8_t(position);
-		}
-	}
-	position = DConstants::INVALID_INDEX;
-	return 0;
+	return nullptr;
 }
 
 BlockPointer Node256::Serialize(ART &art, MetaBlockWriter &writer) {

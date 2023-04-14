@@ -443,34 +443,25 @@ bool ART::Insert(ARTNode &node, const ARTKey &key, idx_t depth, const row_t &row
 	}
 
 	if (node.DecodeARTNodeType() == ARTNodeType::LEAF) {
+
 		// add a row ID to a leaf, if they have the same key
 		auto leaf = Leaf::Get(*this, node);
-		uint32_t new_prefix_length = 0;
-
-		// FIXME: this code (if and while) can be optimized, less branching, see Construct
-		// leaf node is already there (its key matches the current key), update row_id vector
-		if (new_prefix_length == leaf->prefix.count && depth + leaf->prefix.count == key.len) {
+		auto mismatch_position = leaf->prefix.KeyMismatchPosition(*this, key, depth);
+		if (mismatch_position == leaf->prefix.count && depth + leaf->prefix.count == key.len) {
 			return InsertToLeaf(node, row_id);
-		}
-		while (leaf->prefix.GetByte(*this, new_prefix_length) == key[depth + new_prefix_length]) {
-			new_prefix_length++;
-			// leaf node is already there (its key matches the current key), update row_id vector
-			if (new_prefix_length == leaf->prefix.count && depth + leaf->prefix.count == key.len) {
-				return InsertToLeaf(node, row_id);
-			}
 		}
 
 		// replace leaf with Node4 and store both leaves in it
 		auto old_node = node;
 		auto new_n4 = Node4::New(*this, node);
-		new_n4->prefix.Initialize(*this, key, depth, new_prefix_length);
+		new_n4->prefix.Initialize(*this, key, depth, mismatch_position);
 
-		auto key_byte = old_node.GetPrefix(*this)->Reduce(*this, new_prefix_length);
+		auto key_byte = old_node.GetPrefix(*this)->Reduce(*this, mismatch_position);
 		Node4::InsertChild(*this, node, key_byte, old_node);
 
 		ARTNode leaf_node;
-		Leaf::New(*this, leaf_node, key, depth + new_prefix_length + 1, row_id);
-		Node4::InsertChild(*this, node, key[depth + new_prefix_length], leaf_node);
+		Leaf::New(*this, leaf_node, key, depth + mismatch_position + 1, row_id);
+		Node4::InsertChild(*this, node, key[depth + mismatch_position], leaf_node);
 
 		return true;
 	}
@@ -501,11 +492,10 @@ bool ART::Insert(ARTNode &node, const ARTKey &key, idx_t depth, const row_t &row
 
 	// recurse
 	D_ASSERT(depth < key.len);
-	idx_t position = node.GetChildPosition(*this, key[depth]);
-	if (position != DConstants::INVALID_INDEX) {
-		auto child = node.GetChild(*this, position);
+	auto child = node.GetChild(*this, key[depth]);
+	if (child) {
 		bool success = Insert(*child, key, depth + 1, row_id);
-		node.ReplaceChild(*this, position, *child);
+		node.ReplaceChild(*this, key[depth], *child);
 		return success;
 	}
 
@@ -581,9 +571,8 @@ void ART::Erase(ARTNode &node, const ARTKey &key, idx_t depth, const row_t &row_
 		depth += node_prefix->count;
 	}
 
-	idx_t position = node.GetChildPosition(*this, key[depth]);
-	if (position != DConstants::INVALID_INDEX) {
-		auto child = node.GetChild(*this, position);
+	auto child = node.GetChild(*this, key[depth]);
+	if (child) {
 		D_ASSERT(child->IsSet());
 
 		if (child->DecodeARTNodeType() == ARTNodeType::LEAF) {
@@ -593,14 +582,14 @@ void ART::Erase(ARTNode &node, const ARTKey &key, idx_t depth, const row_t &row_
 
 			if (leaf->count == 0) {
 				// leaf is empty, delete leaf, decrement node counter and maybe shrink node
-				ARTNode::DeleteChild(*this, node, position);
+				ARTNode::DeleteChild(*this, node, key[depth]);
 			}
 			return;
 		}
 
 		// recurse
 		Erase(*child, key, depth + 1, row_id);
-		node.ReplaceChild(*this, position, *child);
+		node.ReplaceChild(*this, key[depth], *child);
 	}
 }
 
@@ -704,13 +693,13 @@ ARTNode ART::Lookup(ARTNode node, const ARTKey &key, idx_t depth) {
 		}
 
 		// prefix matches key, but no child at byte, does not contain key
-		idx_t position = node.GetChildPosition(*this, key[depth]);
-		if (position == DConstants::INVALID_INDEX) {
+		auto child = node.GetChild(*this, key[depth]);
+		if (!child) {
 			return ARTNode();
 		}
 
 		// recurse into child
-		node = *node.GetChild(*this, position);
+		node = *child;
 		D_ASSERT(node.IsSet());
 		depth++;
 	}

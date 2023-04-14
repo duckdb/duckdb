@@ -94,18 +94,18 @@ void Node16::InsertChild(ART &art, ARTNode &node, const uint8_t byte, const ARTN
 	// insert new child node into node
 	if (n16->count < ARTNode::NODE_16_CAPACITY) {
 		// still space, just insert the child
-		idx_t position = 0;
-		while (position < n16->count && n16->key[position] < byte) {
-			position++;
+		idx_t child_pos = 0;
+		while (child_pos < n16->count && n16->key[child_pos] < byte) {
+			child_pos++;
 		}
 		// move children backwards to make space
-		for (idx_t i = n16->count; i > position; i--) {
+		for (idx_t i = n16->count; i > child_pos; i--) {
 			n16->key[i] = n16->key[i - 1];
 			n16->children[i] = n16->children[i - 1];
 		}
 
-		n16->key[position] = byte;
-		n16->children[position] = child;
+		n16->key[child_pos] = byte;
+		n16->children[child_pos] = child;
 		n16->count++;
 
 	} else {
@@ -116,20 +116,27 @@ void Node16::InsertChild(ART &art, ARTNode &node, const uint8_t byte, const ARTN
 	}
 }
 
-void Node16::DeleteChild(ART &art, ARTNode &node, const idx_t position) {
+void Node16::DeleteChild(ART &art, ARTNode &node, const uint8_t byte) {
 
 	D_ASSERT(node.IsSet());
 	D_ASSERT(!node.IsSwizzled());
 	auto n16 = Node16::Get(art, node);
 
-	D_ASSERT(position < n16->count);
+	idx_t child_pos = 0;
+	for (; child_pos < n16->count; child_pos++) {
+		if (n16->key[child_pos] == byte) {
+			break;
+		}
+	}
+
+	D_ASSERT(child_pos < n16->count);
 
 	// free the child and decrease the count
-	ARTNode::Free(art, n16->children[position]);
+	ARTNode::Free(art, n16->children[child_pos]);
 	n16->count--;
 
 	// potentially move any children backwards
-	for (idx_t i = position; i < n16->count; i++) {
+	for (idx_t i = child_pos; i < n16->count; i++) {
 		n16->key[i] = n16->key[i + 1];
 		n16->children[i] = n16->children[i + 1];
 	}
@@ -141,36 +148,34 @@ void Node16::DeleteChild(ART &art, ARTNode &node, const idx_t position) {
 	}
 }
 
-idx_t Node16::GetChildPosition(const uint8_t byte) const {
-	for (idx_t position = 0; position < count; position++) {
-		if (key[position] == byte) {
-			return position;
+void Node16::ReplaceChild(const uint8_t byte, const ARTNode child) {
+	for (idx_t i = 0; i < count; i++) {
+		if (key[i] == byte) {
+			children[i] = child;
+			return;
 		}
 	}
-	return DConstants::INVALID_INDEX;
 }
 
-idx_t Node16::GetChildPositionGreaterEqual(const uint8_t byte, bool &inclusive) const {
-	for (idx_t position = 0; position < count; position++) {
-		if (key[position] >= byte) {
-			inclusive = key[position] == byte;
-			return position;
+ARTNode *Node16::GetChild(const uint8_t byte) {
+
+	for (idx_t i = 0; i < count; i++) {
+		if (key[i] == byte) {
+			return &children[i];
 		}
 	}
-	return DConstants::INVALID_INDEX;
+	return nullptr;
 }
 
-uint8_t Node16::GetNextPosition(idx_t &position) const {
-	if (position == DConstants::INVALID_INDEX) {
-		position = 0;
-		return key[position];
+ARTNode *Node16::GetNextChild(uint8_t &byte) {
+
+	for (idx_t i = 0; i < count; i++) {
+		if (key[i] >= byte) {
+			byte = key[i];
+			return &children[i];
+		}
 	}
-	position++;
-	if (position < count) {
-		return key[position];
-	}
-	position = DConstants::INVALID_INDEX;
-	return 0;
+	return nullptr;
 }
 
 BlockPointer Node16::Serialize(ART &art, MetaBlockWriter &writer) {

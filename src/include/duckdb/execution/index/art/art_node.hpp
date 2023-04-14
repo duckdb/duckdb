@@ -76,28 +76,17 @@ public:
 		buffer_id = ptr.buffer_id;
 	}
 
-	//! Replace the child node at pos
-	void ReplaceChild(const ART &art, const idx_t position, const ARTNode child);
+	//! Replace the child node at the respective byte
+	void ReplaceChild(const ART &art, const uint8_t byte, const ARTNode child);
 	//! Insert the child node at byte
 	static void InsertChild(ART &art, ARTNode &node, const uint8_t byte, const ARTNode child);
-	//! Delete the child node at pos
-	static void DeleteChild(ART &art, ARTNode &node, const idx_t position);
+	//! Delete the child node at the respective byte
+	static void DeleteChild(ART &art, ARTNode &node, const uint8_t byte);
 
-	//! Get the child at the specified position in the node. The position must be between [0, count)
-	ARTNode *GetChild(ART &art, const idx_t position) const;
-	//! Get the byte at the specified position
-	uint8_t GetKeyByte(const ART &art, const idx_t position) const;
-	//! Get the position of a child corresponding exactly to the specific byte, returns DConstants::INVALID_INDEX if
-	//! the child does not exist
-	idx_t GetChildPosition(const ART &art, const uint8_t byte) const;
-	//! Get the position of the first child that is greater or equal to the specific byte, or DConstants::INVALID_INDEX
-	//! if there are no children matching the criteria
-	idx_t GetChildPositionGreaterEqual(const ART &art, const uint8_t byte, bool &inclusive) const;
-	//! Get the position of the minimum child node in the node
-	idx_t GetMinPosition(const ART &art) const;
-	//! Get the next position and byte in the node, or DConstants::INVALID_INDEX if there is no next position. If
-	//! position == DConstants::INVALID_INDEX, then the first valid position and byte in the node are returned
-	uint8_t GetNextPosition(const ART &art, idx_t &position) const;
+	//! Get the child for the respective byte in the node
+	ARTNode *GetChild(ART &art, const uint8_t byte) const;
+	//! Get the first child that is greater or equal to the specific byte
+	ARTNode *GetNextChild(ART &art, uint8_t &byte) const;
 
 	//! Serialize the node
 	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);

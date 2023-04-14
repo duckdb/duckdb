@@ -13,6 +13,7 @@
 #include "duckdb/execution/index/art/node256.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
+#include "duckdb/common/limits.hpp"
 
 namespace duckdb {
 
@@ -108,19 +109,19 @@ void ARTNode::Free(ART &art, ARTNode &node) {
 // Inserts
 //===--------------------------------------------------------------------===//
 
-void ARTNode::ReplaceChild(const ART &art, const idx_t position, const ARTNode child) {
+void ARTNode::ReplaceChild(const ART &art, const uint8_t byte, const ARTNode child) {
 
 	D_ASSERT(!IsSwizzled());
 
 	switch (DecodeARTNodeType()) {
 	case ARTNodeType::NODE_4:
-		return Node4::Get(art, *this)->ReplaceChild(position, child);
+		return Node4::Get(art, *this)->ReplaceChild(byte, child);
 	case ARTNodeType::NODE_16:
-		return Node16::Get(art, *this)->ReplaceChild(position, child);
+		return Node16::Get(art, *this)->ReplaceChild(byte, child);
 	case ARTNodeType::NODE_48:
-		return Node48::Get(art, *this)->ReplaceChild(position, child);
+		return Node48::Get(art, *this)->ReplaceChild(byte, child);
 	case ARTNodeType::NODE_256:
-		return Node256::Get(art, *this)->ReplaceChild(position, child);
+		return Node256::Get(art, *this)->ReplaceChild(byte, child);
 	default:
 		throw InternalException("Invalid node type for ReplaceChild.");
 	}
@@ -146,17 +147,17 @@ void ARTNode::InsertChild(ART &art, ARTNode &node, const uint8_t byte, const ART
 // Deletes
 //===--------------------------------------------------------------------===//
 
-void ARTNode::DeleteChild(ART &art, ARTNode &node, const idx_t position) {
+void ARTNode::DeleteChild(ART &art, ARTNode &node, const uint8_t byte) {
 
 	switch (node.DecodeARTNodeType()) {
 	case ARTNodeType::NODE_4:
-		return Node4::DeleteChild(art, node, position);
+		return Node4::DeleteChild(art, node, byte);
 	case ARTNodeType::NODE_16:
-		return Node16::DeleteChild(art, node, position);
+		return Node16::DeleteChild(art, node, byte);
 	case ARTNodeType::NODE_48:
-		return Node48::DeleteChild(art, node, position);
+		return Node48::DeleteChild(art, node, byte);
 	case ARTNodeType::NODE_256:
-		return Node256::DeleteChild(art, node, position);
+		return Node256::DeleteChild(art, node, byte);
 	default:
 		throw InternalException("Invalid node type for DeleteChild.");
 	}
@@ -166,26 +167,26 @@ void ARTNode::DeleteChild(ART &art, ARTNode &node, const idx_t position) {
 // Get functions
 //===--------------------------------------------------------------------===//
 
-ARTNode *ARTNode::GetChild(ART &art, const idx_t position) const {
+ARTNode *ARTNode::GetChild(ART &art, const uint8_t byte) const {
 
 	D_ASSERT(!IsSwizzled());
 
 	ARTNode *child;
 	switch (DecodeARTNodeType()) {
 	case ARTNodeType::NODE_4: {
-		child = Node4::Get(art, *this)->GetChild(position);
+		child = Node4::Get(art, *this)->GetChild(byte);
 		break;
 	}
 	case ARTNodeType::NODE_16: {
-		child = Node16::Get(art, *this)->GetChild(position);
+		child = Node16::Get(art, *this)->GetChild(byte);
 		break;
 	}
 	case ARTNodeType::NODE_48: {
-		child = Node48::Get(art, *this)->GetChild(position);
+		child = Node48::Get(art, *this)->GetChild(byte);
 		break;
 	}
 	case ARTNodeType::NODE_256: {
-		child = Node256::Get(art, *this)->GetChild(position);
+		child = Node256::Get(art, *this)->GetChild(byte);
 		break;
 	}
 	default:
@@ -193,100 +194,43 @@ ARTNode *ARTNode::GetChild(ART &art, const idx_t position) const {
 	}
 
 	// unswizzle the ART node before returning it
-	if (child->IsSwizzled()) {
+	if (child && child->IsSwizzled()) {
 		child->Deserialize(art);
 	}
 	return child;
 }
 
-uint8_t ARTNode::GetKeyByte(const ART &art, const idx_t position) const {
+ARTNode *ARTNode::GetNextChild(ART &art, uint8_t &byte) const {
 
 	D_ASSERT(!IsSwizzled());
 
+	ARTNode *child;
 	switch (DecodeARTNodeType()) {
-	case ARTNodeType::NODE_4:
-		return Node4::Get(art, *this)->GetKeyByte(position);
-	case ARTNodeType::NODE_16:
-		return Node16::Get(art, *this)->GetKeyByte(position);
-	case ARTNodeType::NODE_48:
-		return Node48::Get(art, *this)->GetKeyByte(position);
-	case ARTNodeType::NODE_256:
-		return Node256::Get(art, *this)->GetKeyByte(position);
-	default:
-		throw InternalException("Invalid node type for GetKeyByte.");
+	case ARTNodeType::NODE_4: {
+		child = Node4::Get(art, *this)->GetNextChild(byte);
+		break;
 	}
-}
-
-idx_t ARTNode::GetChildPosition(const ART &art, const uint8_t byte) const {
-
-	D_ASSERT(!IsSwizzled());
-
-	switch (DecodeARTNodeType()) {
-	case ARTNodeType::NODE_4:
-		return Node4::Get(art, *this)->GetChildPosition(byte);
-	case ARTNodeType::NODE_16:
-		return Node16::Get(art, *this)->GetChildPosition(byte);
-	case ARTNodeType::NODE_48:
-		return Node48::Get(art, *this)->GetChildPosition(byte);
-	case ARTNodeType::NODE_256:
-		return Node256::Get(art, *this)->GetChildPosition(byte);
-	default:
-		throw InternalException("Invalid node type for GetChildPosition.");
+	case ARTNodeType::NODE_16: {
+		child = Node16::Get(art, *this)->GetNextChild(byte);
+		break;
 	}
-}
-
-idx_t ARTNode::GetChildPositionGreaterEqual(const ART &art, const uint8_t byte, bool &inclusive) const {
-
-	D_ASSERT(!IsSwizzled());
-
-	switch (DecodeARTNodeType()) {
-	case ARTNodeType::NODE_4:
-		return Node4::Get(art, *this)->GetChildPositionGreaterEqual(byte, inclusive);
-	case ARTNodeType::NODE_16:
-		return Node16::Get(art, *this)->GetChildPositionGreaterEqual(byte, inclusive);
-	case ARTNodeType::NODE_48:
-		return Node48::Get(art, *this)->GetChildPositionGreaterEqual(byte, inclusive);
-	case ARTNodeType::NODE_256:
-		return Node256::Get(art, *this)->GetChildPositionGreaterEqual(byte, inclusive);
-	default:
-		throw InternalException("Invalid node type for GetChildPositionGreaterEqual.");
+	case ARTNodeType::NODE_48: {
+		child = Node48::Get(art, *this)->GetNextChild(byte);
+		break;
 	}
-}
-
-idx_t ARTNode::GetMinPosition(const ART &art) const {
-
-	D_ASSERT(!IsSwizzled());
-
-	switch (DecodeARTNodeType()) {
-	case ARTNodeType::NODE_4:
-		return Node4::Get(art, *this)->GetMinPosition();
-	case ARTNodeType::NODE_16:
-		return Node16::Get(art, *this)->GetMinPosition();
-	case ARTNodeType::NODE_48:
-		return Node48::Get(art, *this)->GetMinPosition();
-	case ARTNodeType::NODE_256:
-		return Node256::Get(art, *this)->GetMinPosition();
-	default:
-		throw InternalException("Invalid node type for GetMinPosition.");
+	case ARTNodeType::NODE_256: {
+		child = Node256::Get(art, *this)->GetNextChild(byte);
+		break;
 	}
-}
-
-uint8_t ARTNode::GetNextPosition(const ART &art, idx_t &position) const {
-
-	D_ASSERT(!IsSwizzled());
-
-	switch (DecodeARTNodeType()) {
-	case ARTNodeType::NODE_4:
-		return Node4::Get(art, *this)->GetNextPosition(position);
-	case ARTNodeType::NODE_16:
-		return Node16::Get(art, *this)->GetNextPosition(position);
-	case ARTNodeType::NODE_48:
-		return Node48::Get(art, *this)->GetNextPosition(position);
-	case ARTNodeType::NODE_256:
-		return Node256::Get(art, *this)->GetNextPosition(position);
 	default:
-		throw InternalException("Invalid node type for GetNextPositionAndByte.");
+		throw InternalException("Invalid node type for GetNextChild.");
 	}
+
+	// unswizzle the ART node before returning it
+	if (child && child->IsSwizzled()) {
+		child->Deserialize(art);
+	}
+	return child;
 }
 
 //===--------------------------------------------------------------------===//
@@ -361,12 +305,15 @@ string ARTNode::ToString(ART &art) const {
 
 	string str = "Node" + to_string(GetCapacity()) + ": [";
 
-	auto next_pos = DConstants::INVALID_INDEX;
-	GetNextPosition(art, next_pos);
-	while (next_pos != DConstants::INVALID_INDEX) {
-		auto child = GetChild(art, next_pos);
-		str += "(" + to_string(next_pos) + ", " + child->ToString(art) + ")";
-		GetNextPosition(art, next_pos);
+	uint8_t byte = 0;
+	auto child = GetNextChild(art, byte);
+	while (child) {
+		str += "(" + to_string(byte) + ", " + child->ToString(art) + ")";
+		if (byte == NumericLimits<uint8_t>::Maximum()) {
+			break;
+		}
+		byte++;
+		child = GetNextChild(art, byte);
 	}
 
 	return str + "]";
@@ -516,21 +463,19 @@ bool ARTNode::ResolvePrefixes(ART &art, ARTNode &other) {
 
 		// test if the next byte (mismatch_position) in r_node (longer prefix) exists in l_node
 		auto mismatch_byte = r_prefix->GetByte(art, mismatch_position);
-		auto child_position = l_node.GetChildPosition(art, mismatch_byte);
+		auto child_node = l_node.GetChild(art, mismatch_byte);
 
 		// update the prefix of r_node to only consist of the bytes after mismatch_position
 		r_prefix->Reduce(art, mismatch_position);
 
 		// insert r_node as a child of l_node at empty position
-		if (child_position == DConstants::INVALID_INDEX) {
-
+		if (!child_node) {
 			ARTNode::InsertChild(art, l_node, mismatch_byte, r_node);
 			r_node = ARTNode();
 			return true;
 		}
 
 		// recurse
-		auto child_node = l_node.GetChild(art, child_position);
 		return child_node->ResolvePrefixes(art, r_node);
 	}
 
@@ -580,29 +525,29 @@ bool ARTNode::MergeInternal(ART &art, ARTNode &other) {
 		return true;
 	}
 
-	uint8_t key_byte;
-	idx_t r_child_position = DConstants::INVALID_INDEX;
+	uint8_t byte = 0;
+	auto r_child = r_node.GetNextChild(art, byte);
 
-	while (true) {
-		key_byte = r_node.GetNextPosition(art, r_child_position);
-		if (r_child_position == DConstants::INVALID_INDEX) {
-			break;
-		}
-		auto r_child = r_node.GetChild(art, r_child_position);
-		auto l_child_position = l_node.GetChildPosition(art, key_byte);
-
-		if (l_child_position == DConstants::INVALID_INDEX) {
-			// insert child at empty position
-			ARTNode::InsertChild(art, l_node, key_byte, *r_child);
-			r_node.ReplaceChild(art, r_child_position, empty_node);
+	// while r_node still has children to merge
+	while (r_child) {
+		auto l_child = l_node.GetChild(art, byte);
+		if (!l_child) {
+			// insert child at empty byte
+			ARTNode::InsertChild(art, l_node, byte, *r_child);
+			r_node.ReplaceChild(art, byte, empty_node);
 
 		} else {
 			// recurse
-			auto l_child = l_node.GetChild(art, l_child_position);
 			if (!l_child->ResolvePrefixes(art, *r_child)) {
 				return false;
 			}
 		}
+
+		if (byte == NumericLimits<uint8_t>::Maximum()) {
+			break;
+		}
+		byte++;
+		r_child = r_node.GetNextChild(art, byte);
 	}
 
 	ARTNode::Free(art, r_node);

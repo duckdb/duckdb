@@ -3,18 +3,11 @@
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_node.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
+#include "duckdb/common/limits.hpp"
 
 namespace duckdb {
 
-uint8_t &IteratorCurrentKey::operator[](idx_t idx) {
-	if (idx >= key.size()) {
-		key.push_back(0);
-	}
-	D_ASSERT(idx < key.size());
-	return key[idx];
-}
-
-void IteratorCurrentKey::Push(const uint8_t &byte) {
+void IteratorCurrentKey::Push(const uint8_t byte) {
 	if (cur_key_pos == key.size()) {
 		key.push_back(byte);
 	}
@@ -22,9 +15,17 @@ void IteratorCurrentKey::Push(const uint8_t &byte) {
 	key[cur_key_pos++] = byte;
 }
 
-void IteratorCurrentKey::Pop(const idx_t &n) {
+void IteratorCurrentKey::Pop(const idx_t n) {
 	cur_key_pos -= n;
 	D_ASSERT(cur_key_pos <= key.size());
+}
+
+uint8_t &IteratorCurrentKey::operator[](idx_t idx) {
+	if (idx >= key.size()) {
+		key.push_back(0);
+	}
+	D_ASSERT(idx < key.size());
+	return key[idx];
 }
 
 bool IteratorCurrentKey::operator>(const ARTKey &k) const {
@@ -64,6 +65,7 @@ bool IteratorCurrentKey::operator==(const ARTKey &k) const {
 void Iterator::FindMinimum(ARTNode &node) {
 
 	// reconstruct the prefix
+	// FIXME: get all bytes at once to increase performance
 	auto node_prefix = node.GetPrefix(*art);
 	for (idx_t i = 0; i < node_prefix->count; i++) {
 		cur_key.Push(node_prefix->GetByte(*art, i));
@@ -76,47 +78,55 @@ void Iterator::FindMinimum(ARTNode &node) {
 	}
 
 	// go to the leftmost entry in the current node
-	auto position = node.GetMinPosition(*art);
-	D_ASSERT(position != DConstants::INVALID_INDEX);
-	auto next = node.GetChild(*art, position);
-	cur_key.Push(node.GetKeyByte(*art, position));
+	uint8_t byte = 0;
+	auto next = node.GetNextChild(*art, byte);
+	D_ASSERT(next);
+	cur_key.Push(byte);
 
 	// recurse
-	nodes.push(IteratorEntry(node, position));
+	nodes.emplace(node, byte);
 	FindMinimum(*next);
 }
 
-void Iterator::PushKey(const ARTNode &node, const uint16_t &position) {
+void Iterator::PushKey(const ARTNode &node, const uint8_t byte) {
 	if (node.DecodeARTNodeType() != ARTNodeType::LEAF) {
-		cur_key.Push(node.GetKeyByte(*art, position));
+		cur_key.Push(byte);
 	}
 }
 
-bool Iterator::Scan(const ARTKey &bound, const idx_t &max_count, vector<row_t> &result_ids, const bool &is_inclusive) {
+bool Iterator::Scan(const ARTKey &key, const idx_t &max_count, vector<row_t> &result_ids, const bool &is_inclusive) {
 
 	bool has_next;
 	do {
-		if (!bound.Empty()) {
+		if (!key.Empty()) {
+			// no more row IDs within the key bounds
 			if (is_inclusive) {
-				if (cur_key > bound) {
-					break;
+				if (cur_key > key) {
+					return true;
 				}
 			} else {
-				if (cur_key >= bound) {
-					break;
+				if (cur_key >= key) {
+					return true;
 				}
 			}
 		}
+
+		// adding more elements would exceed the max count
 		if (result_ids.size() + last_leaf->count > max_count) {
-			// adding these elements would exceed the max count
 			return false;
 		}
+
+		// FIXME: copy all at once to improve performance
 		for (idx_t i = 0; i < last_leaf->count; i++) {
 			row_t row_id = last_leaf->GetRowId(*art, i);
 			result_ids.push_back(row_id);
 		}
+
+		// get the next leaf
 		has_next = Next();
+
 	} while (has_next);
+
 	return true;
 }
 
@@ -131,36 +141,51 @@ bool Iterator::Next() {
 	if (!nodes.empty()) {
 		auto cur_node = nodes.top().node;
 		if (cur_node.DecodeARTNodeType() == ARTNodeType::LEAF) {
-			// Pop Leaf (We must pop the prefix size + the key to the node (unless we are popping the root)
+			// pop leaf
+			// we must pop the prefix size + the key to the node, unless we are popping the root
 			PopNode();
 		}
 	}
 
 	// look for the next leaf
 	while (!nodes.empty()) {
+
 		// cur_node
 		auto &top = nodes.top();
 		ARTNode node = top.node;
+
+		// found a leaf: move to next node
 		if (node.DecodeARTNodeType() == ARTNodeType::LEAF) {
-			// found a leaf: move to next node
 			last_leaf = art->leaves->Get<Leaf>(node);
 			return true;
 		}
+
 		// find next node
-		node.GetNextPosition(*art, top.position);
-		if (top.position != DConstants::INVALID_INDEX) {
-			// add key-byte of the new node
-			PushKey(node, top.position);
-			auto next_node = *node.GetChild(*art, top.position);
+		if (top.byte == NumericLimits<uint8_t>::Maximum()) {
+			// no node found: move up the tree, pop prefix and key of current node
+			PopNode();
+			continue;
+		}
+
+		top.byte == 0 ? top.byte : top.byte++;
+		auto next_node = node.GetNextChild(*art, top.byte);
+
+		if (next_node) {
+			// add the next node's key byte
+			PushKey(node, top.byte);
+
 			// add prefix of new node
-			auto next_node_prefix = next_node.GetPrefix(*art);
+			// FIXME: get all bytes at once to increase performance
+			auto next_node_prefix = next_node->GetPrefix(*art);
 			for (idx_t i = 0; i < next_node_prefix->count; i++) {
 				cur_key.Push(next_node_prefix->GetByte(*art, i));
 			}
+
 			// next node found: push it
-			nodes.push(IteratorEntry(next_node, DConstants::INVALID_INDEX));
+			nodes.emplace(*next_node, 0);
 		} else {
-			// no node found: move up the tree and Pop prefix and key of current node
+
+			// no node found: move up the tree, pop prefix and key of current node
 			PopNode();
 		}
 	}
@@ -168,16 +193,20 @@ bool Iterator::Next() {
 }
 
 bool Iterator::LowerBound(ARTNode node, const ARTKey &key, const bool &is_inclusive) {
-	bool equal = true;
+
 	if (!node.IsSet()) {
 		return false;
 	}
+
 	idx_t depth = 0;
+	bool equal = true;
 	while (true) {
-		nodes.push(IteratorEntry(node, 0));
+
+		nodes.emplace(node, 0);
 		auto &top = nodes.top();
 
 		// reconstruct the prefix
+		// FIXME: get all bytes at once to increase performance
 		auto node_prefix = top.node.GetPrefix(*art);
 		for (idx_t i = 0; i < node_prefix->count; i++) {
 			cur_key.Push(node_prefix->GetByte(*art, i));
@@ -186,10 +215,14 @@ bool Iterator::LowerBound(ARTNode node, const ARTKey &key, const bool &is_inclus
 		// greater case: find leftmost leaf node directly
 		if (!equal) {
 			while (node.DecodeARTNodeType() != ARTNodeType::LEAF) {
-				auto min_pos = node.GetMinPosition(*art);
-				PushKey(node, min_pos);
-				nodes.push(IteratorEntry(node, min_pos));
-				node = *node.GetChild(*art, min_pos);
+
+				uint8_t byte = 0;
+				auto next_node = *node.GetNextChild(*art, byte);
+				D_ASSERT(next_node.IsSet());
+
+				PushKey(node, byte);
+				nodes.emplace(node, byte);
+				node = next_node;
 
 				// reconstruct the prefix
 				node_prefix = node.GetPrefix(*art);
@@ -240,23 +273,27 @@ bool Iterator::LowerBound(ARTNode node, const ARTKey &key, const bool &is_inclus
 				return Next();
 			}
 			// greater
-			top.position = DConstants::INVALID_INDEX;
+			top.byte = 0;
 			return Next();
 		}
 
 		// prefix matches, search inside the child for the key
 		depth += node_prefix->count;
+		top.byte = key[depth];
+		auto child = node.GetNextChild(*art, top.byte);
+		equal = key[depth] == top.byte;
 
-		top.position = node.GetChildPositionGreaterEqual(*art, key[depth], equal);
-		// The maximum key byte of the current node is less than the key
-		// So fall back to the previous node
-		if (top.position == DConstants::INVALID_INDEX) {
+		// the maximum key byte of the current node is less than the key
+		// fall back to the previous node
+		if (!child) {
 			PopNode();
 			return Next();
 		}
-		PushKey(node, top.position);
-		node = *node.GetChild(*art, top.position);
-		// This means all children of this node qualify as geq
+
+		PushKey(node, top.byte);
+		node = *child;
+
+		// all children of this node qualify as greater or equal
 		depth++;
 	}
 }

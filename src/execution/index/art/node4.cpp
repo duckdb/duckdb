@@ -72,18 +72,18 @@ void Node4::InsertChild(ART &art, ARTNode &node, const uint8_t byte, const ARTNo
 	// insert new child node into node
 	if (n4->count < ARTNode::NODE_4_CAPACITY) {
 		// still space, just insert the child
-		idx_t position = 0;
-		while (position < n4->count && n4->key[position] < byte) {
-			position++;
+		idx_t child_pos = 0;
+		while (child_pos < n4->count && n4->key[child_pos] < byte) {
+			child_pos++;
 		}
 		// move children backwards to make space
-		for (idx_t i = n4->count; i > position; i--) {
+		for (idx_t i = n4->count; i > child_pos; i--) {
 			n4->key[i] = n4->key[i - 1];
 			n4->children[i] = n4->children[i - 1];
 		}
 
-		n4->key[position] = byte;
-		n4->children[position] = child;
+		n4->key[child_pos] = byte;
+		n4->children[child_pos] = child;
 		n4->count++;
 
 	} else {
@@ -94,21 +94,28 @@ void Node4::InsertChild(ART &art, ARTNode &node, const uint8_t byte, const ARTNo
 	}
 }
 
-void Node4::DeleteChild(ART &art, ARTNode &node, const idx_t position) {
+void Node4::DeleteChild(ART &art, ARTNode &node, const uint8_t byte) {
 
 	D_ASSERT(node.IsSet());
 	D_ASSERT(!node.IsSwizzled());
 	auto n4 = Node4::Get(art, node);
 
-	D_ASSERT(position < n4->count);
+	idx_t child_pos = 0;
+	for (; child_pos < n4->count; child_pos++) {
+		if (n4->key[child_pos] == byte) {
+			break;
+		}
+	}
+
+	D_ASSERT(child_pos < n4->count);
 	D_ASSERT(n4->count > 1);
 
 	// free the child and decrease the count
-	ARTNode::Free(art, n4->children[position]);
+	ARTNode::Free(art, n4->children[child_pos]);
 	n4->count--;
 
 	// potentially move any children backwards
-	for (idx_t i = position; i < n4->count; i++) {
+	for (idx_t i = child_pos; i < n4->count; i++) {
 		n4->key[i] = n4->key[i + 1];
 		n4->children[i] = n4->children[i + 1];
 	}
@@ -117,7 +124,7 @@ void Node4::DeleteChild(ART &art, ARTNode &node, const idx_t position) {
 	if (n4->count == 1) {
 
 		// get only child and concatenate prefixes
-		auto child = *n4->GetChild(0);
+		auto child = *n4->GetChild(n4->key[0]);
 		child.GetPrefix(art)->Concatenate(art, n4->key[0], n4->prefix);
 		n4->count--;
 
@@ -126,36 +133,34 @@ void Node4::DeleteChild(ART &art, ARTNode &node, const idx_t position) {
 	}
 }
 
-idx_t Node4::GetChildPosition(const uint8_t byte) const {
-	for (idx_t position = 0; position < count; position++) {
-		if (key[position] == byte) {
-			return position;
+void Node4::ReplaceChild(const uint8_t byte, const ARTNode child) {
+	for (idx_t i = 0; i < count; i++) {
+		if (key[i] == byte) {
+			children[i] = child;
+			return;
 		}
 	}
-	return DConstants::INVALID_INDEX;
 }
 
-idx_t Node4::GetChildPositionGreaterEqual(const uint8_t byte, bool &inclusive) const {
-	for (idx_t position = 0; position < count; position++) {
-		if (key[position] >= byte) {
-			inclusive = key[position] == byte;
-			return position;
+ARTNode *Node4::GetChild(const uint8_t byte) {
+
+	for (idx_t i = 0; i < count; i++) {
+		if (key[i] == byte) {
+			return &children[i];
 		}
 	}
-	return DConstants::INVALID_INDEX;
+	return nullptr;
 }
 
-uint8_t Node4::GetNextPosition(idx_t &position) const {
-	if (position == DConstants::INVALID_INDEX) {
-		position = 0;
-		return key[position];
+ARTNode *Node4::GetNextChild(uint8_t &byte) {
+
+	for (idx_t i = 0; i < count; i++) {
+		if (key[i] >= byte) {
+			byte = key[i];
+			return &children[i];
+		}
 	}
-	position++;
-	if (position < count) {
-		return key[position];
-	}
-	position = DConstants::INVALID_INDEX;
-	return 0;
+	return nullptr;
 }
 
 BlockPointer Node4::Serialize(ART &art, MetaBlockWriter &writer) {

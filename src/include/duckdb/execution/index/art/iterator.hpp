@@ -17,20 +17,20 @@ namespace duckdb {
 struct IteratorEntry {
 	IteratorEntry() {
 	}
-	IteratorEntry(ARTNode node, idx_t position) : node(node), position(position) {
+	IteratorEntry(ARTNode node, uint8_t byte) : node(node), byte(byte) {
 	}
 
 	ARTNode node;
-	idx_t position = 0;
+	uint8_t byte = 0;
 };
 
 //! Keeps track of the current key in the iterator
 class IteratorCurrentKey {
 public:
 	//! Push byte into current key
-	void Push(const uint8_t &key);
+	void Push(const uint8_t key);
 	//! Pops n elements from the key
-	void Pop(const idx_t &n);
+	void Pop(const idx_t n);
 
 	//! Subscript operator
 	uint8_t &operator[](idx_t idx);
@@ -56,7 +56,7 @@ public:
 	ART *art = nullptr;
 
 	//! Scan the tree
-	bool Scan(const ARTKey &bound, const idx_t &max_count, vector<row_t> &result_ids, const bool &is_inclusive);
+	bool Scan(const ARTKey &key, const idx_t &max_count, vector<row_t> &result_ids, const bool &is_inclusive);
 	//! Finds the minimum value of the tree
 	void FindMinimum(ARTNode &node);
 	//! Goes to the lower bound of the tree
@@ -71,7 +71,7 @@ private:
 	//! Go to the next node
 	bool Next();
 	//! Push part of the key to the current key
-	void PushKey(const ARTNode &node, const uint16_t &position);
+	void PushKey(const ARTNode &node, const uint8_t byte);
 	//! Pop node from the stack of iterator entries
 	void PopNode();
 };
