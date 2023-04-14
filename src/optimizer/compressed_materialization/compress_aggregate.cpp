@@ -93,6 +93,9 @@ void CompressedMaterialization::UpdateAggregateStats(unique_ptr<LogicalOperator>
 			continue;
 		}
 		auto &colref = group_expr.Cast<BoundColumnRefExpression>();
+		if (!group_stats[group_idx]) {
+			continue;
+		}
 		if (colref.return_type == group_stats[group_idx]->GetType()) {
 			continue;
 		}
