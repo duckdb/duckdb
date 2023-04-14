@@ -2,6 +2,7 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/storage/block_manager.hpp"
 
 #include <cstring>
 
