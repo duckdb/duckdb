@@ -29,7 +29,8 @@ void CompressedMaterialization::CompressOrder(unique_ptr<LogicalOperator> &op) {
 		// Try to compress, if successful, replace the expression
 		auto compress_expr = GetCompressExpression(order_expression.Copy(), *bound_order.stats);
 		if (compress_expr) {
-			bound_order.expression = std::move(compress_expr);
+			bound_order.expression = std::move(compress_expr->expression);
+			bound_order.stats = std::move(compress_expr->stats);
 		}
 	}
 
@@ -47,6 +48,32 @@ void CompressedMaterialization::CompressOrder(unique_ptr<LogicalOperator> &op) {
 
 	// Now try to compress
 	CreateProjections(op, info);
+
+	// Update order statistics
+	UpdateOrderStats(op);
+}
+
+void CompressedMaterialization::UpdateOrderStats(unique_ptr<LogicalOperator> &op) {
+	if (op->type != LogicalOperatorType::LOGICAL_PROJECTION) {
+		return;
+	}
+
+	// Update order stats if compressed
+	auto &compressed_order = op->children[0]->Cast<LogicalOrder>();
+	for (idx_t order_node_idx = 0; order_node_idx < compressed_order.orders.size(); order_node_idx++) {
+		auto &bound_order = compressed_order.orders[order_node_idx];
+		auto &order_expression = *bound_order.expression;
+		if (order_expression.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+			continue;
+		}
+		auto &colref = order_expression.Cast<BoundColumnRefExpression>();
+		if (colref.return_type == bound_order.stats->GetType()) {
+			continue;
+		}
+		auto it = statistics_map.find(colref.binding);
+		D_ASSERT(it != statistics_map.end());
+		bound_order.stats = it->second->ToUnique();
+	}
 }
 
 } // namespace duckdb

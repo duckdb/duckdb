@@ -40,7 +40,8 @@ void CompressedMaterialization::CompressAggregate(unique_ptr<LogicalOperator> &o
 		// Try to compress, if successful, replace the expression
 		auto compress_expr = GetCompressExpression(group_expr.Copy(), *group_stats[group_idx]);
 		if (compress_expr) {
-			groups[group_idx] = std::move(compress_expr);
+			groups[group_idx] = std::move(compress_expr->expression);
+			group_stats[group_idx] = std::move(compress_expr->stats);
 			needs_decompression[group_idx] = true;
 		}
 	}
@@ -71,6 +72,34 @@ void CompressedMaterialization::CompressAggregate(unique_ptr<LogicalOperator> &o
 
 	// Now try to compress
 	CreateProjections(op, info);
+
+	// Update aggregate statistics
+	UpdateAggregateStats(op);
+}
+
+void CompressedMaterialization::UpdateAggregateStats(unique_ptr<LogicalOperator> &op) {
+	if (op->type != LogicalOperatorType::LOGICAL_PROJECTION) {
+		return;
+	}
+
+	// Update aggregate group stats if compressed
+	auto &compressed_aggregate = op->children[0]->Cast<LogicalAggregate>();
+	auto &groups = compressed_aggregate.groups;
+	auto &group_stats = compressed_aggregate.group_stats;
+
+	for (idx_t group_idx = 0; group_idx < groups.size(); group_idx++) {
+		auto &group_expr = *groups[group_idx];
+		if (group_expr.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+			continue;
+		}
+		auto &colref = group_expr.Cast<BoundColumnRefExpression>();
+		if (colref.return_type == group_stats[group_idx]->GetType()) {
+			continue;
+		}
+		auto it = statistics_map.find(colref.binding);
+		D_ASSERT(it != statistics_map.end());
+		group_stats[group_idx] = it->second->ToUnique();
+	}
 }
 
 } // namespace duckdb

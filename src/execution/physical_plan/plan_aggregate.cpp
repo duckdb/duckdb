@@ -5,12 +5,12 @@
 #include "duckdb/execution/operator/aggregate/physical_ungrouped_aggregate.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/planner/operator/logical_aggregate.hpp"
-#include "duckdb/function/function_binder.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/operator/logical_aggregate.hpp"
 
 namespace duckdb {
 
@@ -40,6 +40,10 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 		case PhysicalType::INT16:
 		case PhysicalType::INT32:
 		case PhysicalType::INT64:
+		case PhysicalType::UINT8:
+		case PhysicalType::UINT16:
+		case PhysicalType::UINT32:
+		case PhysicalType::UINT64:
 			break;
 		default:
 			// we only support simple integer types for perfect hashing
@@ -53,6 +57,8 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 			switch (group_type.InternalType()) {
 			case PhysicalType::INT8:
 			case PhysicalType::INT16:
+			case PhysicalType::UINT8:
+			case PhysicalType::UINT16:
 				break;
 			default:
 				// type is too large and there are no stats: skip perfect hashing
@@ -68,13 +74,19 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 		if (!NumericStats::HasMinMax(nstats)) {
 			return false;
 		}
+
+		if (NumericStats::Max(*stats) < NumericStats::Min(*stats)) {
+			// May result in underflow
+			return false;
+		}
+
 		// we have a min and a max value for the stats: use that to figure out how many bits we have
 		// we add two here, one for the NULL value, and one to make the computation one-indexed
 		// (e.g. if min and max are the same, we still need one entry in total)
-		int64_t range;
+		uint64_t range;
 		switch (group_type.InternalType()) {
 		case PhysicalType::INT8:
-			range = int64_t(NumericStats::GetMax<int8_t>(nstats)) - int64_t(NumericStats::GetMin<int8_t>(nstats));
+			range = uint64_t(NumericStats::GetMax<int8_t>(nstats)) - int64_t(NumericStats::GetMin<int8_t>(nstats));
 			break;
 		case PhysicalType::INT16:
 			range = int64_t(NumericStats::GetMax<int16_t>(nstats)) - int64_t(NumericStats::GetMin<int16_t>(nstats));
@@ -83,10 +95,19 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 			range = int64_t(NumericStats::GetMax<int32_t>(nstats)) - int64_t(NumericStats::GetMin<int32_t>(nstats));
 			break;
 		case PhysicalType::INT64:
-			if (!TrySubtractOperator::Operation(NumericStats::GetMax<int64_t>(nstats),
-			                                    NumericStats::GetMin<int64_t>(nstats), range)) {
-				return false;
-			}
+			range = int64_t(NumericStats::GetMax<int64_t>(nstats)) - int64_t(NumericStats::GetMin<int64_t>(nstats));
+			break;
+		case PhysicalType::UINT8:
+			range = int64_t(NumericStats::GetMax<uint8_t>(nstats)) - int64_t(NumericStats::GetMin<uint8_t>(nstats));
+			break;
+		case PhysicalType::UINT16:
+			range = int64_t(NumericStats::GetMax<uint16_t>(nstats)) - int64_t(NumericStats::GetMin<uint16_t>(nstats));
+			break;
+		case PhysicalType::UINT32:
+			range = int64_t(NumericStats::GetMax<uint32_t>(nstats)) - int64_t(NumericStats::GetMin<uint32_t>(nstats));
+			break;
+		case PhysicalType::UINT64:
+			range = int64_t(NumericStats::GetMax<uint64_t>(nstats)) - int64_t(NumericStats::GetMin<uint64_t>(nstats));
 			break;
 		default:
 			throw InternalException("Unsupported type for perfect hash (should be caught before)");

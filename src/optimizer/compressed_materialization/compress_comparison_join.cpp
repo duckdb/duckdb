@@ -4,6 +4,22 @@
 
 namespace duckdb {
 
+void CompressedMaterialization::ComparisonJoinGetReferencedBindings(const JoinCondition &condition,
+                                                                    vector<ColumnBinding> &referenced_bindings) {
+	if (condition.left->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+		auto &colref = condition.left->Cast<BoundColumnRefExpression>();
+		referenced_bindings.emplace_back(colref.binding);
+	} else {
+		GetReferencedBindings(*condition.left, referenced_bindings);
+	}
+	if (condition.right->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+		auto &colref = condition.right->Cast<BoundColumnRefExpression>();
+		referenced_bindings.emplace_back(colref.binding);
+	} else {
+		GetReferencedBindings(*condition.right, referenced_bindings);
+	}
+}
+
 static void PopulateBindingMap(CompressedMaterializationInfo &info, const vector<ColumnBinding> &bindings_out,
                                const vector<LogicalType> &types, LogicalOperator &op_in) {
 	const auto rhs_bindings_in = op_in.GetColumnBindings();
@@ -27,21 +43,24 @@ void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperato
 	// But we can try to compress the expression directly
 	vector<ColumnBinding> referenced_bindings;
 	for (const auto &condition : join.conditions) {
-		if (condition.left->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-			auto &colref = condition.left->Cast<BoundColumnRefExpression>();
-			referenced_bindings.emplace_back(colref.binding);
-		} else {
-			GetReferencedBindings(*condition.left, referenced_bindings);
+		if (condition.left->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF &&
+		    condition.right->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+			// Both are bound column refs, see if both can be compressed generically to the same type
+			auto &lhs_colref = condition.left->Cast<BoundColumnRefExpression>();
+			auto &rhs_colref = condition.right->Cast<BoundColumnRefExpression>();
+			auto lhs_it = statistics_map.find(lhs_colref.binding);
+			auto rhs_it = statistics_map.find(rhs_colref.binding);
+			if (lhs_it != statistics_map.end() && rhs_it != statistics_map.end() && lhs_it->second && rhs_it->second) {
+				auto lhs_compress_expr = GetCompressExpression(condition.left->Copy(), *lhs_it->second);
+				auto rhs_compress_expr = GetCompressExpression(condition.right->Copy(), *rhs_it->second);
+				if (lhs_compress_expr->expression->return_type == rhs_compress_expr->expression->return_type) {
+					// Will be compressed generically
+					continue;
+				}
+			}
 		}
-		if (condition.right->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-			auto &colref = condition.right->Cast<BoundColumnRefExpression>();
-			referenced_bindings.emplace_back(colref.binding);
-		} else {
-			GetReferencedBindings(*condition.right, referenced_bindings);
-		}
-
-		// TODO compress conditions too
-		// TODO: update join stats if compress
+		ComparisonJoinGetReferencedBindings(condition, referenced_bindings);
+		continue;
 	}
 
 	// Create info for compression
@@ -54,6 +73,44 @@ void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperato
 
 	// Now try to compress
 	CreateProjections(op, info);
+
+	// Update join statistics
+	UpdateComparisonJoinStats(op);
+}
+
+void CompressedMaterialization::UpdateComparisonJoinStats(unique_ptr<LogicalOperator> &op) {
+	if (op->type != LogicalOperatorType::LOGICAL_PROJECTION) {
+		return;
+	}
+
+	// Update join stats if compressed
+	auto &compressed_join = op->children[0]->Cast<LogicalComparisonJoin>();
+	if (compressed_join.join_stats.empty()) {
+		return; // Nothing to update
+	}
+
+	for (idx_t condition_idx = 0; condition_idx < compressed_join.conditions.size(); condition_idx++) {
+		auto &condition = compressed_join.conditions[condition_idx];
+		if (condition.left->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF ||
+		    condition.right->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+			continue; // We definitely didn't compress these, nothing changed
+		}
+
+		auto &lhs_colref = condition.left->Cast<BoundColumnRefExpression>();
+		auto &rhs_colref = condition.right->Cast<BoundColumnRefExpression>();
+		auto &lhs_join_stats = compressed_join.join_stats[condition_idx * 2];
+		auto &rhs_join_stats = compressed_join.join_stats[condition_idx * 2 + 1];
+		if (lhs_colref.return_type == lhs_join_stats->GetType()) {
+			continue; // Wasn't compressed
+		}
+		D_ASSERT(rhs_colref.return_type != rhs_join_stats->GetType());
+
+		auto lhs_it = statistics_map.find(lhs_colref.binding);
+		auto rhs_it = statistics_map.find(rhs_colref.binding);
+		D_ASSERT(lhs_it != statistics_map.end() && rhs_it != statistics_map.end());
+		lhs_join_stats = lhs_it->second->ToUnique();
+		rhs_join_stats = rhs_it->second->ToUnique();
+	}
 }
 
 } // namespace duckdb

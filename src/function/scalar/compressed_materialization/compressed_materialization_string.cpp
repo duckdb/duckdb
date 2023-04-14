@@ -25,6 +25,15 @@ static inline RESULT_TYPE StringCompress(const string_t &input) {
 	return BSwap<RESULT_TYPE>(result);
 }
 
+template <>
+inline uint16_t StringCompress(const string_t &input) {
+	if (sizeof(uint16_t) <= string_t::INLINE_LENGTH) {
+		return input.GetSize() + *(uint8_t *)(data_ptr_t(&input) + sizeof(uint32_t));
+	} else {
+		return input.GetSize() + *(uint8_t *)input.GetDataUnsafe();
+	}
+}
+
 template <class RESULT_TYPE>
 static void StringCompressFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	UnaryExecutor::Execute<string_t, RESULT_TYPE>(args.data[0], result, args.size(), StringCompress<RESULT_TYPE>);
@@ -79,6 +88,19 @@ static inline string_t StringDecompress(const INPUT_TYPE &input, Vector &result_
 		return result;
 	} else {
 		return StringVector::AddString(result_v, (const char *)&input_swapped, string_size);
+	}
+}
+
+template <>
+inline string_t StringDecompress(const uint16_t &input, Vector &result_v) {
+	if (input == 0) {
+		return string_t(uint32_t(0));
+	} else if (sizeof(uint16_t) <= string_t::INLINE_LENGTH) {
+		char c = input - 1;
+		return string_t(&c, 1);
+	} else {
+		char c = input - 1;
+		return StringVector::AddString(result_v, &c, 1);
 	}
 }
 
