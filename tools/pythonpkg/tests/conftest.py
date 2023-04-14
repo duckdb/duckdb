@@ -25,6 +25,13 @@ def duckdb_empty_cursor(request):
     cursor = connection.cursor()
     return cursor
 
+def pandas_supports_arrow_backend():
+	try:
+		from pandas.compat import pa_version_under7p0
+	except:
+		return False
+	import pandas as pd
+	return Version(pd.__version__) >= Version('2.0.0')
 
 def numpy_pandas_df(*args, **kwargs):
 	pandas = pytest.importorskip("pandas")
