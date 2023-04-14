@@ -146,8 +146,8 @@ struct ArrowArrayStream {
 
 /// @}
 
-#ifndef ADBC
-#define ADBC
+#ifndef ARROW_ADBC
+#define ARROW_ADBC
 
 // Storage class macros for Windows
 // Allow overriding/aliasing with application-defined macros
