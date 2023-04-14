@@ -161,7 +161,7 @@ void AWSEnvironmentCredentialsProvider::SetAll() {
 	this->SetExtensionOptionValue("s3_session_token", this->SESSION_TOKEN_ENV_VAR);
 	this->SetExtensionOptionValue("s3_endpoint", this->DUCKDB_ENDPOINT_ENV_VAR);
 	this->SetExtensionOptionValue("s3_use_ssl", this->DUCKDB_USE_SSL_ENV_VAR);
-	}
+}
 
 S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener) {
 	string region;
