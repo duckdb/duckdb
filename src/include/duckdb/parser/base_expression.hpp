@@ -73,7 +73,7 @@ public:
 	//! Returns true if this expression is equal to another expression
 	virtual bool Equals(const BaseExpression *other) const;
 
-	static bool Equals(BaseExpression *left, BaseExpression *right) {
+	static bool Equals(const BaseExpression *left, const BaseExpression *right) {
 		if (left == right) {
 			return true;
 		}

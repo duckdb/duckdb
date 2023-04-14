@@ -16,9 +16,9 @@ class SchemaCatalogEntry;
 
 class DefaultTypeGenerator : public DefaultGenerator {
 public:
-	DefaultTypeGenerator(Catalog &catalog, SchemaCatalogEntry *schema);
+	DefaultTypeGenerator(Catalog &catalog, SchemaCatalogEntry &schema);
 
-	SchemaCatalogEntry *schema;
+	SchemaCatalogEntry &schema;
 
 public:
 	DUCKDB_API static LogicalTypeId GetDefaultType(const string &name);

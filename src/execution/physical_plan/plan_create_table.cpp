@@ -21,10 +21,10 @@ unique_ptr<PhysicalOperator> DuckCatalog::PlanCreateTableAs(ClientContext &conte
 	auto num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 	unique_ptr<PhysicalOperator> create;
 	if (!parallel_streaming_insert && use_batch_index) {
-		create = make_uniq<PhysicalBatchInsert>(op, op.schema, std::move(op.info), op.estimated_cardinality);
+		create = make_uniq<PhysicalBatchInsert>(op, *op.schema, std::move(op.info), op.estimated_cardinality);
 
 	} else {
-		create = make_uniq<PhysicalInsert>(op, op.schema, std::move(op.info), op.estimated_cardinality,
+		create = make_uniq<PhysicalInsert>(op, *op.schema, std::move(op.info), op.estimated_cardinality,
 		                                   parallel_streaming_insert && num_threads > 1);
 	}
 
@@ -42,7 +42,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateTabl
 		auto plan = CreatePlan(*op.children[0]);
 		return op.schema->catalog->PlanCreateTableAs(context, op, std::move(plan));
 	} else {
-		return make_uniq<PhysicalCreateTable>(op, op.schema, std::move(op.info), op.estimated_cardinality);
+		return make_uniq<PhysicalCreateTable>(op, *op.schema, std::move(op.info), op.estimated_cardinality);
 	}
 }
 

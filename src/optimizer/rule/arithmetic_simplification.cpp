@@ -22,10 +22,10 @@ ArithmeticSimplificationRule::ArithmeticSimplificationRule(ExpressionRewriter &r
 	root = std::move(op);
 }
 
-unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
+unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                            bool &changes_made, bool is_root) {
-	auto &root = bindings[0]->Cast<BoundFunctionExpression>();
-	auto &constant = bindings[1]->Cast<BoundConstantExpression>();
+	auto &root = bindings[0].get().Cast<BoundFunctionExpression>();
+	auto &constant = bindings[1].get().Cast<BoundConstantExpression>();
 	int constant_child = root.children[0].get() == &constant ? 0 : 1;
 	D_ASSERT(root.children.size() == 2);
 	(void)root;

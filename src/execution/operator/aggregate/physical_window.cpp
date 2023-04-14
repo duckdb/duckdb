@@ -18,6 +18,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -140,14 +141,14 @@ static idx_t FindPrevStart(const ValidityMask &mask, const idx_t l, idx_t r, idx
 	return l;
 }
 
-static void PrepareInputExpressions(Expression **exprs, idx_t expr_count, ExpressionExecutor &executor,
+static void PrepareInputExpressions(vector<unique_ptr<Expression>> &exprs, ExpressionExecutor &executor,
                                     DataChunk &chunk) {
-	if (expr_count == 0) {
+	if (exprs.empty()) {
 		return;
 	}
 
 	vector<LogicalType> types;
-	for (idx_t expr_idx = 0; expr_idx < expr_count; ++expr_idx) {
+	for (idx_t expr_idx = 0; expr_idx < exprs.size(); ++expr_idx) {
 		types.push_back(exprs[expr_idx]->return_type);
 		executor.AddExpression(*exprs[expr_idx]);
 	}
@@ -158,15 +159,20 @@ static void PrepareInputExpressions(Expression **exprs, idx_t expr_count, Expres
 	}
 }
 
-static void PrepareInputExpression(Expression *expr, ExpressionExecutor &executor, DataChunk &chunk) {
-	PrepareInputExpressions(&expr, 1, executor, chunk);
+static void PrepareInputExpression(Expression &expr, ExpressionExecutor &executor, DataChunk &chunk) {
+	vector<LogicalType> types;
+	types.push_back(expr.return_type);
+	executor.AddExpression(expr);
+
+	auto &allocator = executor.GetAllocator();
+	chunk.Initialize(allocator, types);
 }
 
 struct WindowInputExpression {
-	WindowInputExpression(Expression *expr_p, ClientContext &context)
+	WindowInputExpression(optional_ptr<Expression> expr_p, ClientContext &context)
 	    : expr(expr_p), ptype(PhysicalType::INVALID), scalar(true), executor(context) {
 		if (expr) {
-			PrepareInputExpression(expr, executor, chunk);
+			PrepareInputExpression(*expr, executor, chunk);
 			ptype = expr->return_type.InternalType();
 			scalar = expr->IsScalar();
 		}
@@ -202,7 +208,7 @@ struct WindowInputExpression {
 		VectorOperations::Copy(source, target, source_offset + 1, source_offset, target_offset);
 	}
 
-	Expression *expr;
+	optional_ptr<Expression> expr;
 	PhysicalType ptype;
 	bool scalar;
 	ExpressionExecutor executor;
@@ -235,7 +241,7 @@ struct WindowInputColumn {
 	}
 
 	template <typename T>
-	inline T GetCell(idx_t i) {
+	inline T GetCell(idx_t i) const {
 		D_ASSERT(target);
 		D_ASSERT(i < count);
 		const auto data = FlatVector::GetData<T>(*target);
@@ -266,15 +272,15 @@ struct WindowBoundariesState {
 		return expr ? expr->IsScalar() : true;
 	}
 
-	WindowBoundariesState(BoundWindowExpression *wexpr, const idx_t input_size)
-	    : type(wexpr->type), input_size(input_size), start_boundary(wexpr->start), end_boundary(wexpr->end),
-	      partition_count(wexpr->partitions.size()), order_count(wexpr->orders.size()),
-	      range_sense(wexpr->orders.empty() ? OrderType::INVALID : wexpr->orders[0].type),
-	      has_preceding_range(wexpr->start == WindowBoundary::EXPR_PRECEDING_RANGE ||
-	                          wexpr->end == WindowBoundary::EXPR_PRECEDING_RANGE),
-	      has_following_range(wexpr->start == WindowBoundary::EXPR_FOLLOWING_RANGE ||
-	                          wexpr->end == WindowBoundary::EXPR_FOLLOWING_RANGE),
-	      needs_peer(BoundaryNeedsPeer(wexpr->end) || wexpr->type == ExpressionType::WINDOW_CUME_DIST) {
+	WindowBoundariesState(BoundWindowExpression &wexpr, const idx_t input_size)
+	    : type(wexpr.type), input_size(input_size), start_boundary(wexpr.start), end_boundary(wexpr.end),
+	      partition_count(wexpr.partitions.size()), order_count(wexpr.orders.size()),
+	      range_sense(wexpr.orders.empty() ? OrderType::INVALID : wexpr.orders[0].type),
+	      has_preceding_range(wexpr.start == WindowBoundary::EXPR_PRECEDING_RANGE ||
+	                          wexpr.end == WindowBoundary::EXPR_PRECEDING_RANGE),
+	      has_following_range(wexpr.start == WindowBoundary::EXPR_FOLLOWING_RANGE ||
+	                          wexpr.end == WindowBoundary::EXPR_FOLLOWING_RANGE),
+	      needs_peer(BoundaryNeedsPeer(wexpr.end) || wexpr.type == ExpressionType::WINDOW_CUME_DIST) {
 	}
 
 	void Update(const idx_t row_idx, WindowInputColumn &range_collection, const idx_t source_offset,
@@ -305,9 +311,9 @@ struct WindowBoundariesState {
 	bool is_peer = false;
 };
 
-static bool WindowNeedsRank(BoundWindowExpression *wexpr) {
-	return wexpr->type == ExpressionType::WINDOW_PERCENT_RANK || wexpr->type == ExpressionType::WINDOW_RANK ||
-	       wexpr->type == ExpressionType::WINDOW_RANK_DENSE || wexpr->type == ExpressionType::WINDOW_CUME_DIST;
+static bool WindowNeedsRank(const BoundWindowExpression &wexpr) {
+	return wexpr.type == ExpressionType::WINDOW_PERCENT_RANK || wexpr.type == ExpressionType::WINDOW_RANK ||
+	       wexpr.type == ExpressionType::WINDOW_RANK_DENSE || wexpr.type == ExpressionType::WINDOW_CUME_DIST;
 }
 
 template <typename T>
@@ -367,7 +373,7 @@ struct WindowColumnIterator {
 	}
 
 private:
-	WindowInputColumn *coll;
+	optional_ptr<WindowInputColumn> coll;
 	pointer pos;
 };
 
@@ -610,7 +616,7 @@ void WindowBoundariesState::Update(const idx_t row_idx, WindowInputColumn &range
 struct WindowExecutor {
 	static bool IsConstantAggregate(const BoundWindowExpression &wexpr);
 
-	WindowExecutor(BoundWindowExpression *wexpr, ClientContext &context, const ValidityMask &partition_mask,
+	WindowExecutor(BoundWindowExpression &wexpr, ClientContext &context, const ValidityMask &partition_mask,
 	               const idx_t count);
 
 	void Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count);
@@ -620,7 +626,7 @@ struct WindowExecutor {
 	              const ValidityMask &order_mask);
 
 	// The function
-	BoundWindowExpression *wexpr;
+	BoundWindowExpression &wexpr;
 
 	// Frame management
 	WindowBoundariesState bounds;
@@ -714,41 +720,36 @@ bool WindowExecutor::IsConstantAggregate(const BoundWindowExpression &wexpr) {
 	return true;
 }
 
-WindowExecutor::WindowExecutor(BoundWindowExpression *wexpr, ClientContext &context, const ValidityMask &partition_mask,
+WindowExecutor::WindowExecutor(BoundWindowExpression &wexpr, ClientContext &context, const ValidityMask &partition_mask,
                                const idx_t count)
     : wexpr(wexpr), bounds(wexpr, count), payload_collection(), payload_executor(context), filter_executor(context),
-      leadlag_offset(wexpr->offset_expr.get(), context), leadlag_default(wexpr->default_expr.get(), context),
-      boundary_start(wexpr->start_expr.get(), context), boundary_end(wexpr->end_expr.get(), context),
-      range((bounds.has_preceding_range || bounds.has_following_range) ? wexpr->orders[0].expression.get() : nullptr,
+      leadlag_offset(wexpr.offset_expr.get(), context), leadlag_default(wexpr.default_expr.get(), context),
+      boundary_start(wexpr.start_expr.get(), context), boundary_end(wexpr.end_expr.get(), context),
+      range((bounds.has_preceding_range || bounds.has_following_range) ? wexpr.orders[0].expression.get() : nullptr,
             context, count)
 
 {
 	// TODO we could evaluate those expressions in parallel
 
 	//	Check for constant aggregate
-	if (IsConstantAggregate(*wexpr)) {
+	if (IsConstantAggregate(wexpr)) {
 		constant_aggregate =
-		    make_uniq<WindowConstantAggregate>(AggregateObject(*wexpr), wexpr->return_type, partition_mask, count);
+		    make_uniq<WindowConstantAggregate>(AggregateObject(wexpr), wexpr.return_type, partition_mask, count);
 	}
 
 	// evaluate the FILTER clause and stuff it into a large mask for compactness and reuse
-	if (wexpr->filter_expr) {
+	if (wexpr.filter_expr) {
 		// 	Start with all invalid and set the ones that pass
 		filter_bits.resize(ValidityMask::ValidityMaskSize(count), 0);
 		filter_mask.Initialize(filter_bits.data());
-		filter_executor.AddExpression(*wexpr->filter_expr);
+		filter_executor.AddExpression(*wexpr.filter_expr);
 		filter_sel.Initialize(STANDARD_VECTOR_SIZE);
 	}
 
 	// TODO: child may be a scalar, don't need to materialize the whole collection then
 
 	// evaluate inner expressions of window functions, could be more complex
-	vector<Expression *> exprs;
-	exprs.reserve(wexpr->children.size());
-	for (auto &child : wexpr->children) {
-		exprs.push_back(child.get());
-	}
-	PrepareInputExpressions(exprs.data(), exprs.size(), payload_executor, payload_chunk);
+	PrepareInputExpressions(wexpr.children, payload_executor, payload_chunk);
 
 	auto types = payload_chunk.GetTypes();
 	if (!types.empty()) {
@@ -762,8 +763,8 @@ void WindowExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const i
 
 	// Set up a validity mask for IGNORE NULLS
 	bool check_nulls = false;
-	if (wexpr->ignore_nulls) {
-		switch (wexpr->type) {
+	if (wexpr.ignore_nulls) {
+		switch (wexpr.type) {
 		case ExpressionType::WINDOW_LEAD:
 		case ExpressionType::WINDOW_LAG:
 		case ExpressionType::WINDOW_FIRST_VALUE:
@@ -780,7 +781,7 @@ void WindowExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const i
 
 	idx_t filtered = 0;
 	SelectionVector *filtering = nullptr;
-	if (wexpr->filter_expr) {
+	if (wexpr.filter_expr) {
 		filtering = &filter_sel;
 		filtered = filter_executor.SelectExpression(input_chunk, filter_sel);
 		for (idx_t f = 0; f < filtered; ++f) {
@@ -788,7 +789,7 @@ void WindowExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const i
 		}
 	}
 
-	if (!wexpr->children.empty()) {
+	if (!wexpr.children.empty()) {
 		payload_chunk.Reset();
 		payload_executor.Execute(input_chunk, payload_chunk);
 		payload_chunk.Verify();
@@ -833,8 +834,8 @@ void WindowExecutor::Finalize(WindowAggregationMode mode) {
 	// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
 	if (constant_aggregate) {
 		constant_aggregate->Finalize();
-	} else if (wexpr->aggregate) {
-		segment_tree = make_uniq<WindowSegmentTree>(AggregateObject(*wexpr), wexpr->return_type, &payload_collection,
+	} else if (wexpr.aggregate) {
+		segment_tree = make_uniq<WindowSegmentTree>(AggregateObject(wexpr), wexpr.return_type, &payload_collection,
 		                                            filter_mask, mode);
 	}
 }
@@ -871,7 +872,7 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 			continue;
 		}
 
-		switch (wexpr->type) {
+		switch (wexpr.type) {
 		case ExpressionType::WINDOW_AGGREGATE: {
 			if (constant_aggregate) {
 				constant_aggregate->Compute(result, output_offset, bounds.window_start, bounds.window_end);
@@ -951,11 +952,11 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 		case ExpressionType::WINDOW_LEAD:
 		case ExpressionType::WINDOW_LAG: {
 			int64_t offset = 1;
-			if (wexpr->offset_expr) {
+			if (wexpr.offset_expr) {
 				offset = leadlag_offset.GetCell<int64_t>(output_offset);
 			}
 			int64_t val_idx = (int64_t)row_idx;
-			if (wexpr->type == ExpressionType::WINDOW_LEAD) {
+			if (wexpr.type == ExpressionType::WINDOW_LEAD) {
 				val_idx += offset;
 			} else {
 				val_idx -= offset;
@@ -974,7 +975,7 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 
 			if (!delta) {
 				CopyCell(payload_collection, 0, val_idx, result, output_offset);
-			} else if (wexpr->default_expr) {
+			} else if (wexpr.default_expr) {
 				leadlag_default.CopyCell(result, output_offset);
 			} else {
 				FlatVector::SetNull(result, output_offset, true);
@@ -1025,7 +1026,7 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 			break;
 		}
 		default:
-			throw InternalException("Window aggregate type %s", ExpressionTypeToString(wexpr->type));
+			throw InternalException("Window aggregate type %s", ExpressionTypeToString(wexpr.type));
 		}
 	}
 
@@ -1147,7 +1148,7 @@ void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, co
 	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
 		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 		auto &wexpr = op.select_list[expr_idx]->Cast<BoundWindowExpression>();
-		auto wexec = make_uniq<WindowExecutor>(&wexpr, context, partition_mask, count);
+		auto wexec = make_uniq<WindowExecutor>(wexpr, context, partition_mask, count);
 		window_execs.emplace_back(std::move(wexec));
 	}
 

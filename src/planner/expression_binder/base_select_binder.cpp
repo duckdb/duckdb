@@ -56,14 +56,14 @@ idx_t BaseSelectBinder::TryBindGroup(ParsedExpression &expr, idx_t depth) {
 	}
 	// no alias reference found
 	// check the list of group columns for a match
-	auto entry = info.map.find(&expr);
+	auto entry = info.map.find(expr);
 	if (entry != info.map.end()) {
 		return entry->second;
 	}
 #ifdef DEBUG
 	for (auto entry : info.map) {
-		D_ASSERT(!entry.first->Equals(&expr));
-		D_ASSERT(!expr.Equals(entry.first));
+		D_ASSERT(!entry.first.get().Equals(&expr));
+		D_ASSERT(!expr.Equals(&entry.first.get()));
 	}
 #endif
 	return DConstants::INVALID_INDEX;
@@ -77,7 +77,7 @@ BindResult BaseSelectBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_pt
 	}
 	// binding failed
 	// check in the alias map
-	auto &colref = (ColumnRefExpression &)**expr_ptr;
+	auto &colref = (*expr_ptr)->Cast<ColumnRefExpression>();
 	if (!colref.IsQualified()) {
 		auto alias_entry = alias_map.find(colref.column_names[0]);
 		if (alias_entry != alias_map.end()) {

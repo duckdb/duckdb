@@ -167,7 +167,7 @@ public:
 		return root.GetContext();
 	}
 
-	Catalog *GetCatalog() override {
+	optional_ptr<Catalog> GetCatalog() override {
 		return root.GetCatalog();
 	}
 

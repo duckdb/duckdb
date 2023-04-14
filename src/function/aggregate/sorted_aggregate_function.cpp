@@ -429,15 +429,15 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 		// similarly, we only need to ORDER BY each aggregate once
 		expression_set_t seen_expressions;
 		for (auto &target : groups) {
-			seen_expressions.insert(target.get());
+			seen_expressions.insert(*target);
 		}
 		vector<BoundOrderByNode> new_order_nodes;
 		for (auto &order_node : expr.order_bys->orders) {
-			if (seen_expressions.find(order_node.expression.get()) != seen_expressions.end()) {
+			if (seen_expressions.find(*order_node.expression) != seen_expressions.end()) {
 				// we do not need to order by this node
 				continue;
 			}
-			seen_expressions.insert(order_node.expression.get());
+			seen_expressions.insert(*order_node.expression);
 			new_order_nodes.push_back(std::move(order_node));
 		}
 		if (new_order_nodes.empty()) {
