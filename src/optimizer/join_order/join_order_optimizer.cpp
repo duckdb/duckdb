@@ -955,16 +955,16 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 			for (auto &cond : join.conditions) {
 				auto comparison =
 				    make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left), std::move(cond.right));
-				if (filter_set.find(comparison.get()) == filter_set.end()) {
-					filter_set.insert(comparison.get());
+				if (filter_set.find(*comparison) == filter_set.end()) {
+					filter_set.insert(*comparison);
 					filters.push_back(std::move(comparison));
 				}
 			}
 			join.conditions.clear();
 		} else {
 			for (auto &expression : f_op->expressions) {
-				if (filter_set.find(expression.get()) == filter_set.end()) {
-					filter_set.insert(expression.get());
+				if (filter_set.find(*expression) == filter_set.end()) {
+					filter_set.insert(*expression);
 					filters.push_back(std::move(expression));
 				}
 			}

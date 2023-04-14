@@ -15,7 +15,7 @@ struct PragmaDatabaseSizeData : public GlobalTableFunctionState {
 	}
 
 	idx_t index;
-	vector<AttachedDatabase *> databases;
+	vector<optional_ptr<AttachedDatabase>> databases;
 	Value memory_usage;
 	Value memory_limit;
 };

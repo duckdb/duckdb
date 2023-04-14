@@ -14,6 +14,7 @@
 #include "duckdb/storage/compression/chimp/algorithm/chimp_utils.hpp"
 #include "duckdb/storage/compression/chimp/algorithm/packed_data.hpp"
 #include "duckdb/storage/compression/patas/shared.hpp"
+#include "duckdb/common/bit_utils.hpp"
 
 namespace duckdb {
 
