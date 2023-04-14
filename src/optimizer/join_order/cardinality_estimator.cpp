@@ -105,6 +105,7 @@ void CardinalityEstimator::AddRelationToColumnMapping(ColumnBinding key, ColumnB
 
 void CardinalityEstimator::CopyRelationMap(column_binding_map_t<ColumnBinding> &child_binding_map) {
 	for (auto &binding_map : relation_column_to_original_column) {
+		D_ASSERT(child_binding_map.find(binding_map.first) == child_binding_map.end());
 		child_binding_map[binding_map.first] = binding_map.second;
 	}
 }
