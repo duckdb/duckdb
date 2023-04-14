@@ -409,16 +409,16 @@ struct SortedAggregateFunction {
 		//	Go through the states accumulating values to sort until we hit the sort threshold
 		idx_t unsorted_count = 0;
 		idx_t sorted = 0;
-		for (idx_t finalized = 0; finalized < count; ++finalized) {
-			auto state = sdata[finalized];
+		for (idx_t finalized = 0; finalized < count;) {
 			if (unsorted_count < order_bind.threshold) {
+				auto state = sdata[finalized];
 				prefixed.Reset();
 				prefixed.data[0].Reference(Value::USMALLINT(finalized));
 				state->Finalize(order_bind, prefixed, *local_sort);
 				unsorted_count += state_unprocessed[finalized];
 
 				// Go to the next aggregate unless this is the last one
-				if (finalized + 1 < count) {
+				if (++finalized < count) {
 					continue;
 				}
 			}
@@ -488,7 +488,7 @@ struct SortedAggregateFunction {
 			++sorted;
 
 			//	Stop if we are done
-			if (finalized + 1 >= count) {
+			if (finalized >= count) {
 				break;
 			}
 
@@ -499,12 +499,6 @@ struct SortedAggregateFunction {
 			local_sort = make_uniq<LocalSortState>();
 			local_sort->Initialize(*global_sort, global_sort->buffer_manager);
 			unsorted_count = 0;
-
-			//	Add the current values to it
-			prefixed.Reset();
-			prefixed.data[0].Reference(Value::USMALLINT(finalized));
-			state->Finalize(order_bind, prefixed, *local_sort);
-			unsorted_count += state_unprocessed[finalized];
 		}
 
 		for (; sorted < count; ++sorted) {
