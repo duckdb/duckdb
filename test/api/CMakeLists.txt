@@ -1,4 +1,4 @@
-if(NOT OS_NAME STREQUAL "windows")
+if(NOT OS_NAME STREQUAL "windows" AND NOT CLANG_TIDY)
   add_subdirectory(adbc)
 endif()
 add_subdirectory(capi)
