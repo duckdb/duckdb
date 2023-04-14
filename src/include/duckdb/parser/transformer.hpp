@@ -35,6 +35,7 @@ class OnConflictInfo;
 class UpdateSetInfo;
 struct ParserOptions;
 struct PivotColumn;
+class CTENode;
 
 //! The transformer class is responsible for transforming the internal Postgres
 //! parser representation into the DuckDB representation
@@ -269,6 +270,7 @@ private:
 	string TransformAlias(duckdb_libpgquery::PGAlias *root, vector<string> &column_name_alias);
 	vector<string> TransformStringList(duckdb_libpgquery::PGList *list);
 	void TransformCTE(duckdb_libpgquery::PGWithClause *de_with_clause, CommonTableExpressionMap &cte_map);
+	void TransformCTEInternal(duckdb_libpgquery::PGWithClause *de_with_clause, CommonTableExpressionMap &cte_map, vector<unique_ptr<CTENode>> *materialized_ctes);
 	unique_ptr<SelectStatement> TransformRecursiveCTE(duckdb_libpgquery::PGCommonTableExpr *node,
 	                                                  CommonTableExpressionInfo &info);
 

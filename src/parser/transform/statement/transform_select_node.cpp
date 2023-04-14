@@ -5,6 +5,7 @@
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
+#include "duckdb/parser/query_node/cte_node.hpp"
 
 namespace duckdb {
 
@@ -50,8 +51,9 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 	case duckdb_libpgquery::PG_SETOP_NONE: {
 		node = make_uniq<SelectNode>();
 		auto &result = node->Cast<SelectNode>();
+		vector<unique_ptr<CTENode>> materialized_ctes;
 		if (stmt->withClause) {
-			TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), node->cte_map);
+			TransformCTEInternal(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), node->cte_map, &materialized_ctes);
 		}
 		if (stmt->windowClause) {
 			for (auto window_ele = stmt->windowClause->head; window_ele != nullptr; window_ele = window_ele->next) {
@@ -104,6 +106,14 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 		result.qualify = TransformExpression(stmt->qualifyClause);
 		// sample
 		result.sample = TransformSampleOptions(stmt->sampleOptions);
+
+		while(materialized_ctes.size() > 0) {
+			unique_ptr<CTENode> node_result;
+			node_result = std::move(materialized_ctes.back());
+			node_result->child = std::move(node);
+			node = std::move(node_result);
+			materialized_ctes.pop_back();
+		}
 		break;
 	}
 	case duckdb_libpgquery::PG_SETOP_UNION:

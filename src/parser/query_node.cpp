@@ -3,6 +3,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
+#include "duckdb/parser/query_node/cte_node.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/serializer/format_serializer.hpp"
@@ -59,7 +60,13 @@ string CommonTableExpressionMap::ToString() const {
 			}
 			result += ")";
 		}
-		result += " AS (";
+		if(kv.second->materialized == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
+			result += " AS MATERIALIZED (";
+		} else if(kv.second->materialized == CTEMaterialize::CTE_MATERIALIZE_NEVER) {
+			result += " AS NOT MATERIALIZED (";
+		} else {
+			result += " AS (";
+		}
 		result += cte.query->ToString();
 		result += ")";
 		first_cte = false;
@@ -206,6 +213,9 @@ unique_ptr<QueryNode> QueryNode::FormatDeserialize(FormatDeserializer &deseriali
 	case QueryNodeType::RECURSIVE_CTE_NODE:
 		result = RecursiveCTENode::FormatDeserialize(deserializer);
 		break;
+	case QueryNodeType::CTE_NODE:
+		result = CTENode::FormatDeserialize(deserializer);
+		break;
 	default:
 		throw SerializationException("Could not deserialize Query Node: unknown type!");
 	}
@@ -242,6 +252,9 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &main_source) {
 		break;
 	case QueryNodeType::RECURSIVE_CTE_NODE:
 		result = RecursiveCTENode::Deserialize(reader);
+		break;
+	case QueryNodeType::CTE_NODE:
+		result = CTENode::Deserialize(reader);
 		break;
 	default:
 		throw SerializationException("Could not deserialize Query Node: unknown type!");

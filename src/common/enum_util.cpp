@@ -2113,6 +2113,33 @@ LogicalTypeId EnumUtil::FromString<LogicalTypeId>(const char *value) {
 }
 
 template <>
+CTEMaterialize EnumUtil::FromString<CTEMaterialize>(const char *value) {
+	if (StringUtil::Equals(value, "CTE_MATERIALIZE_DEFAULT")) {
+		return CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
+	} else if (StringUtil::Equals(value, "CTE_MATERIALIZE_ALWAYS")) {
+		return CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
+	} else if (StringUtil::Equals(value, "CTE_MATERIALIZE_NEVER")) {
+		return CTEMaterialize::CTE_MATERIALIZE_NEVER;
+	} else {
+		throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	}
+}
+
+template <>
+const char *EnumUtil::ToChars<CTEMaterialize>(CTEMaterialize value) {
+	switch (value) {
+	case CTEMaterialize::CTE_MATERIALIZE_DEFAULT:
+		return "CTE_MATERIALIZE_DEFAULT";
+	case CTEMaterialize::CTE_MATERIALIZE_ALWAYS:
+		return "CTE_MATERIALIZE_ALWAYS";
+	case CTEMaterialize::CTE_MATERIALIZE_NEVER:
+		return "CTE_MATERIALIZE_NEVER";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	}
+}
+
+template <>
 const char *EnumUtil::ToChars<OutputStream>(OutputStream value) {
 	switch (value) {
 	case OutputStream::STREAM_STDOUT:
