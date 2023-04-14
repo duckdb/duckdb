@@ -90,7 +90,13 @@ bool DuckDBPyConnection::IsJupyter() {
 }
 
 py::object ArrowTableFromDataframe(const py::object &df) {
-	return py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_pandas")(df);
+	try {
+		return py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_pandas")(df);
+	} catch (py::error_already_set &e) {
+		throw InvalidInputException(
+		    "The dataframe could not be converted to a pyarrow.lib.Table, due to the following python exception: %s",
+		    e.what());
+	}
 }
 
 static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>> &m) {
