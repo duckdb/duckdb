@@ -41,7 +41,9 @@ struct FilterNode {
 };
 
 struct NeighborInfo {
-	JoinRelationSet *neighbor;
+	NeighborInfo(JoinRelationSet &neighbor) : neighbor(neighbor) {}
+
+	JoinRelationSet &neighbor;
 	vector<reference<FilterInfo>> filters;
 };
 

@@ -18,7 +18,7 @@ static string QueryEdgeToString(const QueryEdge *info, vector<idx_t> prefix) {
 	}
 	source += "]";
 	for (auto &entry : info->neighbors) {
-		result += StringUtil::Format("%s -> %s\n", source.c_str(), entry->neighbor->ToString().c_str());
+		result += StringUtil::Format("%s -> %s\n", source.c_str(), entry->neighbor.ToString().c_str());
 	}
 	for (auto &entry : info->children) {
 		vector<idx_t> new_prefix = prefix;
@@ -60,7 +60,7 @@ void QueryGraph::CreateEdge(JoinRelationSet &left, JoinRelationSet &right, optio
 	auto &info = GetQueryEdge(left);
 	// now insert the edge to the right relation, if it does not exist
 	for (idx_t i = 0; i < info.neighbors.size(); i++) {
-		if (info.neighbors[i]->neighbor == &right) {
+		if (&info.neighbors[i]->neighbor == &right) {
 			if (filter_info) {
 				// neighbor already exists just add the filter, if we have any
 				info.neighbors[i]->filters.push_back(*filter_info);
@@ -69,11 +69,10 @@ void QueryGraph::CreateEdge(JoinRelationSet &left, JoinRelationSet &right, optio
 		}
 	}
 	// neighbor does not exist, create it
-	auto n = make_uniq<NeighborInfo>();
+	auto n = make_uniq<NeighborInfo>(right);
 	if (filter_info) {
 		n->filters.push_back(*filter_info);
 	}
-	n->neighbor = &right;
 	info.neighbors.push_back(std::move(n));
 }
 
@@ -98,8 +97,8 @@ void QueryGraph::EnumerateNeighbors(JoinRelationSet &node, const std::function<b
 }
 
 //! Returns true if a JoinRelationSet is banned by the list of exclusion_set, false otherwise
-static bool JoinRelationSetIsExcluded(JoinRelationSet *node, unordered_set<idx_t> &exclusion_set) {
-	return exclusion_set.find(node->relations[0]) != exclusion_set.end();
+static bool JoinRelationSetIsExcluded(JoinRelationSet &node, unordered_set<idx_t> &exclusion_set) {
+	return exclusion_set.find(node.relations[0]) != exclusion_set.end();
 }
 
 vector<idx_t> QueryGraph::GetNeighbors(JoinRelationSet &node, unordered_set<idx_t> &exclusion_set) {
@@ -107,7 +106,7 @@ vector<idx_t> QueryGraph::GetNeighbors(JoinRelationSet &node, unordered_set<idx_
 	EnumerateNeighbors(node, [&](NeighborInfo &info) -> bool {
 		if (!JoinRelationSetIsExcluded(info.neighbor, exclusion_set)) {
 			// add the smallest node of the neighbor to the set
-			result.insert(info.neighbor->relations[0]);
+			result.insert(info.neighbor.relations[0]);
 		}
 		return false;
 	});
@@ -119,7 +118,7 @@ vector<idx_t> QueryGraph::GetNeighbors(JoinRelationSet &node, unordered_set<idx_
 vector<reference<NeighborInfo>> QueryGraph::GetConnections(JoinRelationSet &node, JoinRelationSet &other) {
 	vector<reference<NeighborInfo>> connections;
 	EnumerateNeighbors(node, [&](NeighborInfo &info) -> bool {
-		if (JoinRelationSet::IsSubset(other, *info.neighbor)) {
+		if (JoinRelationSet::IsSubset(other, info.neighbor)) {
 			connections.push_back(info);
 		}
 		return false;
