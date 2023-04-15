@@ -8,7 +8,8 @@ class TestPandasArrow(object):
     def test_pandas_arrow(self, duckdb_cursor):
         pd = pytest.importorskip("pandas")
         df = pd.DataFrame({'a': pd.Series([5,4,3])}).convert_dtypes()
-        res = duckdb.sql("select * from df").fetchall()
+        con = duckdb.connect()
+        res = con.sql("select * from df").fetchall()
         assert res == [(5,),(4,),(3,)]
 
     def test_mixed_columns(self):
@@ -34,8 +35,9 @@ class TestPandasArrow(object):
             'integers': np.ndarray((4,), buffer=np.array([1,2,3,4,5]), offset=np.int_().itemsize, dtype=int)
         })
         pyarrow_df = df.convert_dtypes(dtype_backend='pyarrow')
+        con = duckdb.connect()
         with pytest.raises(duckdb.InvalidInputException, match='Invalid Input Error: The dataframe could not be converted to a pyarrow.lib.Table, due to the following python exception:'):
-            res = duckdb.sql('select * from pyarrow_df').fetchall()
+            res = con.sql('select * from pyarrow_df').fetchall()
 
     def test_empty_df(self):
         df = pd.DataFrame({
@@ -53,7 +55,8 @@ class TestPandasArrow(object):
         })
         pyarrow_df = df.convert_dtypes(dtype_backend='pyarrow')
 
-        res = duckdb.sql('select * from pyarrow_df').fetchall()
+        con = duckdb.connect()
+        res = con.sql('select * from pyarrow_df').fetchall()
         assert res == []
     
     def test_completely_null_df(self):
@@ -66,7 +69,8 @@ class TestPandasArrow(object):
         })
         pyarrow_df = df.convert_dtypes(dtype_backend='pyarrow')
 
-        res = duckdb.sql('select * from pyarrow_df').fetchall()
+        con = duckdb.connect()
+        res = con.sql('select * from pyarrow_df').fetchall()
         assert res == [(None,), (None,), (None,)]
 
     def test_mixed_nulls(self):
@@ -117,5 +121,6 @@ class TestPandasArrow(object):
             ]),
         })
         pyarrow_df = df.convert_dtypes(dtype_backend='pyarrow')
-        res = duckdb.sql('select * from pyarrow_df').fetchone()
+        con = duckdb.connect()
+        res = con.sql('select * from pyarrow_df').fetchone()
         assert res == (4.123123, -234234124, None, 'NULL', ['Huey', 'Dewey', 'Louie'], datetime.datetime(2011, 8, 16, 22, 7, 8), datetime.date(2008, 5, 28))
