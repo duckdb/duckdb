@@ -90,6 +90,9 @@ struct ClientConfig {
 	//! The maximum amount of pivot columns
 	idx_t pivot_limit = 100000;
 
+	//! Whether or not the "/" division operator defaults to integer division or floating point division
+	bool integer_division = false;
+
 	//! Generic options
 	case_insensitive_map_t<Value> set_variables;
 

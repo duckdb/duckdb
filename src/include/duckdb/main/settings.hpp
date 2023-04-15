@@ -270,6 +270,16 @@ struct HomeDirectorySetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct IntegerDivisionSetting {
+	static constexpr const char *Name = "integer_division";
+	static constexpr const char *Description =
+	    "Whether or not the / operator defaults to integer division, or to floating point division";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct LogQueryPathSetting {
 	static constexpr const char *Name = "log_query_path";
 	static constexpr const char *Description =
