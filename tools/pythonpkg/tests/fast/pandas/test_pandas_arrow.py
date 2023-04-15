@@ -1,9 +1,12 @@
 import duckdb
 import pytest
 import datetime
+
+from conftest import pandas_supports_arrow_backend
 pd = pytest.importorskip("pandas", '2.0.0')
 import numpy as np
 
+@pytest.mark.skipif(not pandas_supports_arrow_backend(), reason="pandas does not support the 'pyarrow' backend")
 class TestPandasArrow(object):
     def test_pandas_arrow(self, duckdb_cursor):
         pd = pytest.importorskip("pandas")
