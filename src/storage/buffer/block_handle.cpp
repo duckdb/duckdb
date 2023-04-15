@@ -5,8 +5,6 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/common/file_buffer.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/buffer/buffer_pool.hpp"
 
 namespace duckdb {
 
