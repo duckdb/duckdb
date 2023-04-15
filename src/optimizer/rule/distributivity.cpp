@@ -18,10 +18,10 @@ void DistributivityRule::AddExpressionSet(Expression &expr, expression_set_t &se
 	if (expr.type == ExpressionType::CONJUNCTION_AND) {
 		auto &and_expr = expr.Cast<BoundConjunctionExpression>();
 		for (auto &child : and_expr.children) {
-			set.insert(child.get());
+			set.insert(*child);
 		}
 	} else {
-		set.insert(&expr);
+		set.insert(expr);
 	}
 }
 
@@ -53,9 +53,9 @@ unique_ptr<Expression> DistributivityRule::ExtractExpression(BoundConjunctionExp
 	return result;
 }
 
-unique_ptr<Expression> DistributivityRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
+unique_ptr<Expression> DistributivityRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                  bool &changes_made, bool is_root) {
-	auto &initial_or = bindings[0]->Cast<BoundConjunctionExpression>();
+	auto &initial_or = bindings[0].get().Cast<BoundConjunctionExpression>();
 
 	// we want to find expressions that occur in each of the children of the OR
 	// i.e. (X AND A) OR (X AND B) => X occurs in all branches
@@ -88,7 +88,7 @@ unique_ptr<Expression> DistributivityRule::Apply(LogicalOperator &op, vector<Exp
 		D_ASSERT(initial_or.children.size() > 0);
 
 		// extract the expression from the first child of the OR
-		auto result = ExtractExpression(initial_or, 0, (Expression &)*expr);
+		auto result = ExtractExpression(initial_or, 0, expr.get());
 		// now for the subsequent expressions, simply remove the expression
 		for (idx_t i = 1; i < initial_or.children.size(); i++) {
 			ExtractExpression(initial_or, i, *result);

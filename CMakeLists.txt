@@ -303,6 +303,7 @@ option(BUILD_INET_EXTENSION "Build the inet extension." FALSE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
 option(BUILD_SQLSMITH_EXTENSION "Enable building of the SQLSmith extension." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
+option(BUILD_AUTOCOMPLETE_EXTENSION "Enable building of the autocomplete extension" FALSE)
 option(DISABLE_BUILTIN_EXTENSIONS "Disable linking extensions." FALSE)
 option(JDBC_DRIVER "Build the DuckDB JDBC driver" FALSE)
 option(BUILD_ODBC_DRIVER "Build the DuckDB ODBC driver" FALSE)
@@ -629,6 +630,11 @@ function(add_extension_definitions)
     add_definitions(-DBUILD_INET_EXTENSION=${BUILD_INET_EXTENSION})
   endif()
 
+  if(${BUILD_AUTOCOMPLETE_EXTENSION})
+    include_directories(${PROJECT_SOURCE_DIR}/extension/autocomplete/include)
+    add_definitions(-DBUILD_AUTOCOMPLETE_EXTENSION=${BUILD_AUTOCOMPLETE_EXTENSION})
+  endif()
+
   # Include paths for any registered out-of-tree extensions
   foreach(OOTE_NAME IN LISTS DUCKDB_OOT_EXTENSION_NAMES)
     string(TOUPPER ${OOTE_NAME} OOTE_NAME_UPPERCASE)
@@ -749,6 +755,10 @@ function(link_extension_libraries LIBRARY)
 
   if(${BUILD_INET_EXTENSION})
     target_link_libraries(${LIBRARY} inet_extension)
+  endif()
+
+  if(${BUILD_AUTOCOMPLETE_EXTENSION})
+    target_link_libraries(${LIBRARY} autocomplete_extension)
   endif()
 
   # Now link against any registered out-of-tree extensions

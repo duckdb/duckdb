@@ -55,6 +55,9 @@ public:
 public:
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
 
+	OrderPreservationType OperatorOrder() const override {
+		return OrderPreservationType::NO_ORDER;
+	}
 	bool ParallelOperator() const override {
 		return true;
 	}
@@ -62,10 +65,6 @@ public:
 protected:
 	OperatorResultType ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                                   GlobalOperatorState &gstate, OperatorState &state) const override;
-
-	bool IsOrderPreserving() const override {
-		return false;
-	}
 
 public:
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
