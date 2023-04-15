@@ -55,6 +55,7 @@ OptionValuePair &GetValueForOption(const string &name) {
 	    {"max_expression_depth", {50}},
 	    {"max_memory", {"4.2GB"}},
 	    {"memory_limit", {"4.2GB"}},
+	    {"ordered_aggregate_threshold", {Value::UBIGINT(idx_t(1) << 12)}},
 	    {"null_order", {"nulls_last"}},
 	    {"perfect_ht_threshold", {0}},
 	    {"pivot_limit", {999}},
