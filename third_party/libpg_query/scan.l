@@ -334,6 +334,7 @@ colon_equals	":="
 lambda_arrow	"->"
 double_arrow    "->>"
 power_of        "**"
+integer_div     "//"
 
 /* " */
 
@@ -833,6 +834,11 @@ other			.
 {power_of}	{
 					SET_YYLLOC();
 					return POWER_OF;
+				}
+
+{integer_div}	{
+					SET_YYLLOC();
+					return INTEGER_DIVISION;
 				}
 
 {equals_greater} {

@@ -4,6 +4,7 @@
 #include "duckdb/parser/statement/list.hpp"
 #include "duckdb/parser/tableref/emptytableref.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/parser_options.hpp"
 
 namespace duckdb {
 
@@ -21,12 +22,12 @@ StackChecker::StackChecker(StackChecker &&other) noexcept
 	other.stack_usage = 0;
 }
 
-Transformer::Transformer(idx_t max_expression_depth_p)
-    : parent(nullptr), max_expression_depth(max_expression_depth_p), stack_depth(DConstants::INVALID_INDEX) {
+Transformer::Transformer(ParserOptions &options)
+    : parent(nullptr), options(options), stack_depth(DConstants::INVALID_INDEX) {
 }
 
 Transformer::Transformer(Transformer *parent)
-    : parent(parent), max_expression_depth(parent->max_expression_depth), stack_depth(DConstants::INVALID_INDEX) {
+    : parent(parent), options(parent->options), stack_depth(DConstants::INVALID_INDEX) {
 }
 
 Transformer::~Transformer() {
@@ -63,10 +64,10 @@ StackChecker Transformer::StackCheck(idx_t extra_stack) {
 		node = node->parent;
 	}
 	D_ASSERT(node->stack_depth != DConstants::INVALID_INDEX);
-	if (node->stack_depth + extra_stack >= max_expression_depth) {
+	if (node->stack_depth + extra_stack >= options.max_expression_depth) {
 		throw ParserException("Max expression depth limit of %lld exceeded. Use \"SET max_expression_depth TO x\" to "
 		                      "increase the maximum expression depth.",
-		                      max_expression_depth);
+		                      options.max_expression_depth);
 	}
 	return StackChecker(*node, extra_stack);
 }

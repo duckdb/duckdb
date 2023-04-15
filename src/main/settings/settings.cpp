@@ -661,6 +661,22 @@ Value HomeDirectorySetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Integer Division
+//===--------------------------------------------------------------------===//
+void IntegerDivisionSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).integer_division = ClientConfig().integer_division;
+}
+
+void IntegerDivisionSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.integer_division = input.GetValue<bool>();
+}
+
+Value IntegerDivisionSetting::GetSetting(ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value(config.integer_division);
+}
+//===--------------------------------------------------------------------===//
 // Log Query Path
 //===--------------------------------------------------------------------===//
 
