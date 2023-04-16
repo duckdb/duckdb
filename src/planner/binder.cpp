@@ -27,7 +27,6 @@ shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, optional_ptr<Bin
 
 Binder::Binder(bool, ClientContext &context, shared_ptr<Binder> parent_p, bool inherit_ctes_p)
     : context(context), parent(std::move(parent_p)), bound_tables(0), inherit_ctes(inherit_ctes_p) {
-	parameters = nullptr;
 	if (parent) {
 
 		// We have to inherit macro and lambda parameter bindings and from the parent binder, if there is a parent.
@@ -259,8 +258,7 @@ void Binder::AddBoundView(ViewCatalogEntry &view) {
 	auto current = this;
 	while (current) {
 		if (current->bound_views.find(view) != current->bound_views.end()) {
-			throw BinderException("infinite recursion detected: attempting to recursively bind view \"%s\"",
-			                      view.name);
+			throw BinderException("infinite recursion detected: attempting to recursively bind view \"%s\"", view.name);
 		}
 		current = current->parent.get();
 	}

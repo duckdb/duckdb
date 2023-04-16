@@ -92,7 +92,7 @@ public:
 	//! vector)
 	vector<CorrelatedColumnInfo> correlated_columns;
 	//! The set of parameter expressions bound by this binder
-	BoundParameterMap *parameters;
+	optional_ptr<BoundParameterMap> parameters;
 	//! Statement properties
 	StatementProperties properties;
 	//! The alias for the currently processing subquery, if it exists
@@ -107,13 +107,13 @@ public:
 	DUCKDB_API BoundStatement Bind(QueryNode &node);
 
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
-	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry *schema);
+	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema);
 
 	vector<unique_ptr<Expression>> BindCreateIndexExpressions(TableCatalogEntry *table, CreateIndexInfo *info);
 
 	void BindCreateViewInfo(CreateViewInfo &base);
-	SchemaCatalogEntry *BindSchema(CreateInfo &info);
-	SchemaCatalogEntry *BindCreateFunctionInfo(CreateInfo &info);
+	SchemaCatalogEntry &BindSchema(CreateInfo &info);
+	SchemaCatalogEntry &BindCreateFunctionInfo(CreateInfo &info);
 
 	//! Check usage, and cast named parameters to their types
 	static void BindNamedParameters(named_parameter_type_map_t &types, named_parameter_map_t &values,
@@ -350,7 +350,7 @@ private:
 
 	//! If only a schema name is provided (e.g. "a.b") then figure out if "a" is a schema or a catalog name
 	void BindSchemaOrCatalog(string &catalog_name, string &schema_name);
-	SchemaCatalogEntry *BindCreateSchema(CreateInfo &info);
+	SchemaCatalogEntry &BindCreateSchema(CreateInfo &info);
 
 	unique_ptr<BoundQueryNode> BindSelectNode(SelectNode &statement, unique_ptr<BoundTableRef> from_table);
 

@@ -29,8 +29,9 @@ struct ExportedTableData {
 };
 
 struct ExportedTableInfo {
-	ExportedTableInfo(TableCatalogEntry &entry, ExportedTableData table_data) :
- 		entry(entry), table_data(std::move(table_data)) {}
+	ExportedTableInfo(TableCatalogEntry &entry, ExportedTableData table_data)
+	    : entry(entry), table_data(std::move(table_data)) {
+	}
 
 	TableCatalogEntry &entry;
 	ExportedTableData table_data;

@@ -42,8 +42,8 @@ static void WriteValueAsSQL(stringstream &ss, Value &val) {
 	}
 }
 
-static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info,
-                               ExportedTableData &exported_table, CopyFunction const &function) {
+static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info, ExportedTableData &exported_table,
+                               CopyFunction const &function) {
 	ss << "COPY ";
 
 	if (exported_table.schema_name != DEFAULT_SCHEMA) {
@@ -151,8 +151,9 @@ void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, Global
 	}
 
 	// order macro's by timestamp so nested macro's are imported nicely
-	sort(macros.begin(), macros.end(),
-	     [](const reference<CatalogEntry> &lhs, const reference<CatalogEntry> &rhs) { return lhs.get().oid < rhs.get().oid; });
+	sort(macros.begin(), macros.end(), [](const reference<CatalogEntry> &lhs, const reference<CatalogEntry> &rhs) {
+		return lhs.get().oid < rhs.get().oid;
+	});
 
 	// write the schema.sql file
 	// export order is SCHEMA -> SEQUENCE -> TABLE -> VIEW -> INDEX

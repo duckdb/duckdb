@@ -95,7 +95,7 @@ const Transformer &Transformer::RootTransformer() const {
 	return node.get();
 }
 
-idx_t Transformer::ParamCount() const{
+idx_t Transformer::ParamCount() const {
 	auto &root = RootTransformer();
 	return root.prepared_statement_parameter_index;
 }

@@ -18,7 +18,8 @@ class SQLStatement;
 
 class QueryErrorContext {
 public:
-	explicit QueryErrorContext(optional_ptr<SQLStatement> statement_ = nullptr, idx_t query_location_ = DConstants::INVALID_INDEX)
+	explicit QueryErrorContext(optional_ptr<SQLStatement> statement_ = nullptr,
+	                           idx_t query_location_ = DConstants::INVALID_INDEX)
 	    : statement(statement_), query_location(query_location_) {
 	}
 

@@ -448,7 +448,7 @@ void CheckpointReader::ReadTable(ClientContext &context, MetaBlockReader &reader
 	// bind the info
 	auto binder = Binder::CreateBinder(context);
 	auto schema = catalog.GetSchema(context, info->schema);
-	auto bound_info = binder->BindCreateTableInfo(std::move(info), schema);
+	auto bound_info = binder->BindCreateTableInfo(std::move(info), *schema);
 
 	// now read the actual table data and place it into the create table info
 	ReadTableData(context, reader, *bound_info);

@@ -251,10 +251,10 @@ static void ExtractDependencies(BoundCreateTableInfo &info) {
 		}
 	}
 }
-unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry *schema) {
+unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema) {
 	auto &base = (CreateTableInfo &)*info;
 	auto result = make_uniq<BoundCreateTableInfo>(std::move(info));
-	result->schema = schema;
+	result->schema = &schema;
 	if (base.query) {
 		// construct the result object
 		auto query_obj = Bind(*base.query);
@@ -300,14 +300,14 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			result->dependencies.AddDependency(*type_dependency);
 		}
 	}
-	result->dependencies.VerifyDependencies(*schema->catalog, result->Base().table);
+	result->dependencies.VerifyDependencies(*schema.catalog, result->Base().table);
 	properties.allow_stream_result = false;
 	return result;
 }
 
 unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info) {
 	auto &base = (CreateTableInfo &)*info;
-	auto schema = BindCreateSchema(base);
+	auto &schema = BindCreateSchema(base);
 	return BindCreateTableInfo(std::move(info), schema);
 }
 
