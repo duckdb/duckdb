@@ -18,7 +18,7 @@ class Expression;
 template <class T>
 struct ReferenceHashFunction {
 	uint64_t operator()(const reference<T> &ref) const {
-		return std::hash<void*>()((void*) &ref.get());
+		return std::hash<void *>()((void *)&ref.get());
 	}
 };
 
