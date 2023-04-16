@@ -254,13 +254,13 @@ bool Binder::CTEIsAlreadyBound(CommonTableExpressionInfo &cte) {
 	return false;
 }
 
-void Binder::AddBoundView(ViewCatalogEntry *view) {
+void Binder::AddBoundView(ViewCatalogEntry &view) {
 	// check if the view is already bound
 	auto current = this;
 	while (current) {
 		if (current->bound_views.find(view) != current->bound_views.end()) {
 			throw BinderException("infinite recursion detected: attempting to recursively bind view \"%s\"",
-			                      view->name);
+			                      view.name);
 		}
 		current = current->parent.get();
 	}

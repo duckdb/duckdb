@@ -155,7 +155,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		subquery.column_name_alias =
 		    BindContext::AliasColumnNames(subquery.alias, view_catalog_entry->aliases, ref.column_name_alias);
 		// bind the child subquery
-		view_binder->AddBoundView(view_catalog_entry);
+		view_binder->AddBoundView(*view_catalog_entry);
 		auto bound_child = view_binder->Bind(subquery);
 		if (!view_binder->correlated_columns.empty()) {
 			throw BinderException("Contents of view were altered - view bound correlated columns");

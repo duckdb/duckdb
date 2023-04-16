@@ -133,7 +133,7 @@ public:
 	bool CTEIsAlreadyBound(CommonTableExpressionInfo &cte);
 
 	//! Add the view to the set of currently bound views - used for detecting recursive view definitions
-	void AddBoundView(ViewCatalogEntry *view);
+	void AddBoundView(ViewCatalogEntry &view);
 
 	void PushExpressionBinder(ExpressionBinder *binder);
 	void PopExpressionBinder();
@@ -213,7 +213,7 @@ private:
 	//! Table names extracted for BindingMode::EXTRACT_NAMES
 	unordered_set<string> table_names;
 	//! The set of bound views
-	unordered_set<ViewCatalogEntry *> bound_views;
+	reference_set_t<ViewCatalogEntry> bound_views;
 
 private:
 	//! Bind the expressions of generated columns to check for errors
