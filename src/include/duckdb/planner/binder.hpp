@@ -98,9 +98,9 @@ public:
 	//! The alias for the currently processing subquery, if it exists
 	string alias;
 	//! Macro parameter bindings (if any)
-	DummyBinding *macro_binding = nullptr;
+	optional_ptr<DummyBinding> macro_binding;
 	//! The intermediate lambda bindings to bind nested lambdas (if any)
-	vector<DummyBinding> *lambda_bindings = nullptr;
+	optional_ptr<vector<DummyBinding>> lambda_bindings;
 
 public:
 	DUCKDB_API BoundStatement Bind(SQLStatement &statement);
@@ -185,7 +185,7 @@ public:
 	BindingMode GetBindingMode();
 	void AddTableName(string table_name);
 	const unordered_set<string> &GetTableNames();
-	SQLStatement *GetRootStatement() {
+	optional_ptr<SQLStatement> GetRootStatement() {
 		return root_statement;
 	}
 
@@ -207,7 +207,7 @@ private:
 	//! Whether or not the binder can contain NULLs as the root of expressions
 	bool can_contain_nulls = false;
 	//! The root statement of the query that is currently being parsed
-	SQLStatement *root_statement = nullptr;
+	optional_ptr<SQLStatement> root_statement;
 	//! Binding mode
 	BindingMode mode = BindingMode::STANDARD_BINDING;
 	//! Table names extracted for BindingMode::EXTRACT_NAMES

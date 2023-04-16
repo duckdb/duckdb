@@ -343,10 +343,10 @@ bool Binder::HasMatchingBinding(const string &schema_name, const string &table_n
 
 bool Binder::HasMatchingBinding(const string &catalog_name, const string &schema_name, const string &table_name,
                                 const string &column_name, string &error_message) {
-	Binding *binding = nullptr;
+	optional_ptr<Binding> binding;
 	D_ASSERT(!lambda_bindings);
 	if (macro_binding && table_name == macro_binding->alias) {
-		binding = macro_binding;
+		binding = optional_ptr<Binding>(macro_binding.get());
 	} else {
 		binding = bind_context.GetBinding(table_name, error_message);
 	}
