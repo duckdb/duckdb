@@ -77,7 +77,7 @@ class Binder : public std::enable_shared_from_this<Binder> {
 	friend class RecursiveSubqueryPlanner;
 
 public:
-	DUCKDB_API static shared_ptr<Binder> CreateBinder(ClientContext &context, Binder *parent = nullptr,
+	DUCKDB_API static shared_ptr<Binder> CreateBinder(ClientContext &context, optional_ptr<Binder> parent = nullptr,
 	                                                  bool inherit_ctes = true);
 
 	//! The client context
@@ -135,13 +135,13 @@ public:
 	//! Add the view to the set of currently bound views - used for detecting recursive view definitions
 	void AddBoundView(ViewCatalogEntry &view);
 
-	void PushExpressionBinder(ExpressionBinder *binder);
+	void PushExpressionBinder(ExpressionBinder &binder);
 	void PopExpressionBinder();
-	void SetActiveBinder(ExpressionBinder *binder);
-	ExpressionBinder *GetActiveBinder();
+	void SetActiveBinder(ExpressionBinder &binder);
+	ExpressionBinder &GetActiveBinder();
 	bool HasActiveBinder();
 
-	vector<ExpressionBinder *> &GetActiveBinders();
+	vector<reference<ExpressionBinder>> &GetActiveBinders();
 
 	void MergeCorrelatedColumns(vector<CorrelatedColumnInfo> &other);
 	//! Add a correlated column to this binder (if it does not exist)
@@ -195,7 +195,7 @@ private:
 	//! The parent binder (if any)
 	shared_ptr<Binder> parent;
 	//! The vector of active binders
-	vector<ExpressionBinder *> active_binders;
+	vector<reference<ExpressionBinder>> active_binders;
 	//! The count of bound_tables
 	idx_t bound_tables;
 	//! Whether or not the binder has any unplanned subqueries that still need to be planned

@@ -21,7 +21,7 @@
 
 namespace duckdb {
 
-shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, Binder *parent, bool inherit_ctes) {
+shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, optional_ptr<Binder> parent, bool inherit_ctes) {
 	return make_shared<Binder>(true, context, parent ? parent->shared_from_this() : nullptr, inherit_ctes);
 }
 
@@ -275,7 +275,7 @@ idx_t Binder::GenerateTableIndex() {
 	return bound_tables++;
 }
 
-void Binder::PushExpressionBinder(ExpressionBinder *binder) {
+void Binder::PushExpressionBinder(ExpressionBinder &binder) {
 	GetActiveBinders().push_back(binder);
 }
 
@@ -284,12 +284,12 @@ void Binder::PopExpressionBinder() {
 	GetActiveBinders().pop_back();
 }
 
-void Binder::SetActiveBinder(ExpressionBinder *binder) {
+void Binder::SetActiveBinder(ExpressionBinder &binder) {
 	D_ASSERT(HasActiveBinder());
 	GetActiveBinders().back() = binder;
 }
 
-ExpressionBinder *Binder::GetActiveBinder() {
+ExpressionBinder &Binder::GetActiveBinder() {
 	return GetActiveBinders().back();
 }
 
@@ -297,7 +297,7 @@ bool Binder::HasActiveBinder() {
 	return !GetActiveBinders().empty();
 }
 
-vector<ExpressionBinder *> &Binder::GetActiveBinders() {
+vector<reference<ExpressionBinder>> &Binder::GetActiveBinders() {
 	if (parent) {
 		return parent->GetActiveBinders();
 	}
