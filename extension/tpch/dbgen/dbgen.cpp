@@ -408,7 +408,7 @@ const char *LineitemInfo::Columns[] = {"l_orderkey",    "l_partkey",       "l_su
                                        "l_receiptdate", "l_shipinstruct",  "l_shipmode", "l_comment"};
 const LogicalType LineitemInfo::Types[] = {
     LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER),
-    LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType::DECIMAL(15, 2),
+    LogicalType(LogicalTypeId::INTEGER), LogicalType::DECIMAL(15, 2),         LogicalType::DECIMAL(15, 2),
     LogicalType::DECIMAL(15, 2),         LogicalType::DECIMAL(15, 2),         LogicalType(LogicalTypeId::VARCHAR),
     LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DATE),    LogicalType(LogicalTypeId::DATE),
     LogicalType(LogicalTypeId::DATE),    LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR),
