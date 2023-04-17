@@ -66,34 +66,41 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		duckdb_re2::RE2 new_regex("");
 		auto regexp = new_regex.Regexp();
 
-		bool prefix_required = pattern.Regexp()->RequiredPrefix(&prefix, &fold_case, &regexp);
-		if (prefix_required) {
-			// means only a prefix was asked for, as the rest of the regex is an empty match.
-			if (regexp->op() == duckdb_re2::kRegexpEmptyMatch) {
-				auto prefix_expression = make_unique<BoundFunctionExpression>(root->return_type, PrefixFun::GetFunction(), std::move(root->children), nullptr);
-				prefix_expression->children[1] = make_unique<BoundConstantExpression>(Value(std::move(prefix)));
-				return std::move(prefix_expression);
+		auto num_subs = pattern.Regexp()->nsub();
+		if (num_subs >= 2) {
+			// check for prefix expression
+			bool prefix_required = pattern.Regexp()->RequiredPrefix(&prefix, &fold_case, &regexp);
+			if (prefix_required) {
+				// means only a prefix was asked for, as the rest of the regex is an empty match.
+				if (regexp->op() == duckdb_re2::kRegexpEmptyMatch) {
+					auto prefix_expression = make_unique<BoundFunctionExpression>(root->return_type, PrefixFun::GetFunction(), std::move(root->children), nullptr);
+					prefix_expression->children[1] = make_unique<BoundConstantExpression>(Value(std::move(prefix)));
+					return std::move(prefix_expression);
+				}
+			}
+
+			// check for suffix expression.
+			if (pattern.Regexp()->op() == duckdb_re2::kRegexpConcat) {
+				auto num_subs = pattern.Regexp()->nsub();
+				auto subs = pattern.Regexp()->sub();
+				if (num_subs == 2) {
+					auto before_last = subs[num_subs - 2];
+					auto last_sub = subs[num_subs - 1];
+					// check if we match a literal and then the end of the string. If so, the literal is the suffix.
+					if ((before_last->op() == duckdb_re2::kRegexpLiteral ||
+					     before_last->op() == duckdb_re2::kRegexpLiteralString) &&
+					    last_sub->op() == duckdb_re2::kRegexpEndText) {
+						auto suffix_string = before_last->ToString();
+						auto suffix_expression = make_unique<BoundFunctionExpression>(root->return_type, SuffixFun::GetFunction(), std::move(root->children), nullptr);
+						suffix_expression->children[1] = make_unique<BoundConstantExpression>(Value(std::move(suffix_string)));
+						return std::move(suffix_expression);
+					}
+				}
 			}
 		}
 		// check for a suffix
 		// check if regexes are concatenated
-		if (pattern.Regexp()->op() == duckdb_re2::kRegexpConcat) {
-			auto num_subs = pattern.Regexp()->nsub();
-			auto subs = pattern.Regexp()->sub();
-			if (num_subs == 2) {
-				auto before_last = subs[num_subs - 2];
-				auto last_sub = subs[num_subs - 1];
-				// check if we match a literal and then the end of the string. If so, the literal is the suffix.
-				if ((before_last->op() == duckdb_re2::kRegexpLiteral ||
-				     before_last->op() == duckdb_re2::kRegexpLiteralString) &&
-				    last_sub->op() == duckdb_re2::kRegexpEndText) {
-					auto suffix_string = before_last->ToString();
-					auto suffix_expression = make_unique<BoundFunctionExpression>(root->return_type, SuffixFun::GetFunction(), std::move(root->children), nullptr);
-					suffix_expression->children[1] = make_unique<BoundConstantExpression>(Value(std::move(suffix_string)));
-					return std::move(suffix_expression);
-				}
-			}
-		}
+
 	}
 
 	return nullptr;

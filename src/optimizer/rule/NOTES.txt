@@ -1,0 +1,5 @@
+
+I have a rule, but the rule can only rewrite the one operator. It can't create more operators.
+
+This is because a rule is applied to the children of the expression. but to the children of the operator.
+The regex matches is an operator on some expressions of the table.
