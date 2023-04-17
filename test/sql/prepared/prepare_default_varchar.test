@@ -237,12 +237,12 @@ statement ok
 PREPARE v13 AS SELECT CASE WHEN ? THEN ? ELSE ? END
 
 query I
-EXECUTE v13(1=1, 1, 2)
+EXECUTE v13(true, 1, 2)
 ----
 1
 
 query I
-EXECUTE v13(1=0, 'hello', 'world')
+EXECUTE v13(false, 'hello', 'world')
 ----
 world
 
