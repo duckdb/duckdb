@@ -18,7 +18,7 @@ bool Transaction::IsReadOnly() {
 		throw InternalException("Transaction::IsReadOnly() called after client context has been destroyed");
 	}
 	auto &db = manager.GetDB();
-	return MetaTransaction::Get(*ctxt).ModifiedDatabase() != &db;
+	return MetaTransaction::Get(*ctxt).ModifiedDatabase().get() != &db;
 }
 
 } // namespace duckdb

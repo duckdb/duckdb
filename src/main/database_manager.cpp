@@ -23,7 +23,7 @@ void DatabaseManager::InitializeSystemCatalog() {
 	system->Initialize();
 }
 
-AttachedDatabase *DatabaseManager::GetDatabase(ClientContext &context, const string &name) {
+optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &context, const string &name) {
 	if (StringUtil::Lower(name) == TEMP_CATALOG) {
 		return context.client_data->temporary_objects.get();
 	}
@@ -50,7 +50,7 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 	}
 }
 
-AttachedDatabase *DatabaseManager::GetDatabaseFromPath(ClientContext &context, const string &path) {
+optional_ptr<AttachedDatabase> DatabaseManager::GetDatabaseFromPath(ClientContext &context, const string &path) {
 	auto databases = GetDatabases(context);
 	for (auto db : databases) {
 		if (db->IsSystem()) {
@@ -81,8 +81,8 @@ const string &DatabaseManager::GetDefaultDatabase(ClientContext &context) {
 	return default_entry.catalog;
 }
 
-vector<AttachedDatabase *> DatabaseManager::GetDatabases(ClientContext &context) {
-	vector<AttachedDatabase *> result;
+vector<optional_ptr<AttachedDatabase>> DatabaseManager::GetDatabases(ClientContext &context) {
+	vector<optional_ptr<AttachedDatabase>> result;
 	databases->Scan(context, [&](CatalogEntry *entry) { result.push_back((AttachedDatabase *)entry); });
 	result.push_back(system.get());
 	result.push_back(context.client_data->temporary_objects.get());

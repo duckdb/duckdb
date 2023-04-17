@@ -69,14 +69,14 @@ static unique_ptr<CreateViewInfo> GetDefaultView(ClientContext &context, const s
 	return nullptr;
 }
 
-DefaultViewGenerator::DefaultViewGenerator(Catalog &catalog, SchemaCatalogEntry *schema)
+DefaultViewGenerator::DefaultViewGenerator(Catalog &catalog, SchemaCatalogEntry &schema)
     : DefaultGenerator(catalog), schema(schema) {
 }
 
 unique_ptr<CatalogEntry> DefaultViewGenerator::CreateDefaultEntry(ClientContext &context, const string &entry_name) {
-	auto info = GetDefaultView(context, schema->name, entry_name);
+	auto info = GetDefaultView(context, schema.name, entry_name);
 	if (info) {
-		return make_uniq_base<CatalogEntry, ViewCatalogEntry>(&catalog, schema, info.get());
+		return make_uniq_base<CatalogEntry, ViewCatalogEntry>(&catalog, &schema, info.get());
 	}
 	return nullptr;
 }
@@ -84,7 +84,7 @@ unique_ptr<CatalogEntry> DefaultViewGenerator::CreateDefaultEntry(ClientContext 
 vector<string> DefaultViewGenerator::GetDefaultEntries() {
 	vector<string> result;
 	for (idx_t index = 0; internal_views[index].name != nullptr; index++) {
-		if (internal_views[index].schema == schema->name) {
+		if (internal_views[index].schema == schema.name) {
 			result.emplace_back(internal_views[index].name);
 		}
 	}
