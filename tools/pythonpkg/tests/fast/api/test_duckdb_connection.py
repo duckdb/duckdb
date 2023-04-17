@@ -198,12 +198,12 @@ class TestDuckDBConnection(object):
         assert None != duckdb.register
 
     def test_register_relation(self):
-        rel = duckdb.sql('select [5,4,3]')
-        duckdb.register("relation", rel)
+        con = duckdb.connect()
+        rel = con.sql('select [5,4,3]')
+        con.register("relation", rel)
 
-        duckdb.sql("create table tbl as select * from relation")
-        assert duckdb.table('tbl').fetchall() == [([5, 4, 3],)]
-        duckdb.execute('drop table tbl')
+        con.sql("create table tbl as select * from relation")
+        assert con.table('tbl').fetchall() == [([5, 4, 3],)]
 
     def test_relation_out_of_scope(self):
         def temporary_scope():
@@ -223,9 +223,9 @@ class TestDuckDBConnection(object):
         print(res)
 
     def test_table(self):
-        duckdb.execute("create table tbl as select 1")
-        assert [(1,)] == duckdb.table("tbl").fetchall()
-        duckdb.execute("drop table tbl")
+        con = duckdb.connect()
+        con.execute("create table tbl as select 1")
+        assert [(1,)] == con.table("tbl").fetchall()
 
     def test_table_function(self):
         assert None != duckdb.table_function
