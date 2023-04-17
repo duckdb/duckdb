@@ -129,7 +129,7 @@ public:
 
 namespace duckdb {
 
-static scalar_function_t CreateFunction(PyObject *function) {
+static scalar_function_t CreateFunction(PyObject *function, PythonExceptionHandling exception_handling) {
 	// Through the capture of the lambda, we have access to the function pointer
 	// We just need to make sure that it doesn't get garbage collected
 	scalar_function_t func = [=](DataChunk &input, ExpressionState &state, Vector &result) -> void {
@@ -153,8 +153,14 @@ static scalar_function_t CreateFunction(PyObject *function) {
 			PyObject *ret = nullptr;
 			ret = PyObject_CallObject(function, bundled_parameters.ptr());
 			if (ret == nullptr && PyErr_Occurred()) {
-				auto exception = py::error_already_set();
-				throw InvalidInputException("Python exception occurred while executing the UDF: %s", exception.what());
+				if (exception_handling == PythonExceptionHandling::FORWARD_ERROR) {
+					auto exception = py::error_already_set();
+					throw InvalidInputException("Python exception occurred while executing the UDF: %s",
+					                            exception.what());
+				} else {
+					PyErr_Clear();
+					ret = Py_None;
+				}
 			}
 			python_objects.push_back(py::handle(ret));
 			python_results.push_back(ret);
@@ -172,8 +178,9 @@ static scalar_function_t CreateFunction(PyObject *function) {
 
 ScalarFunction DuckDBPyConnection::CreateScalarUDF(const string &name, const py::object &udf,
                                                    const py::object &parameters, shared_ptr<DuckDBPyType> return_type,
-                                                   bool varargs, FunctionNullHandling null_handling) {
-	scalar_function_t func = CreateFunction(udf.ptr());
+                                                   bool varargs, FunctionNullHandling null_handling,
+                                                   PythonExceptionHandling exception_handling) {
+	scalar_function_t func = CreateFunction(udf.ptr(), exception_handling);
 
 	PythonUDFData data(name, func, varargs, null_handling);
 

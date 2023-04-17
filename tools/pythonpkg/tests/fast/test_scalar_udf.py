@@ -5,7 +5,6 @@ import pytest
 from typing import Union
 
 from duckdb.typing import *
-from duckdb.typing import VARCHAR
 
 class TestScalarUDF(object):
     def test_basic_use(self):
@@ -101,12 +100,18 @@ class TestScalarUDF(object):
         assert res == [(5,)]
 
     def test_exceptions(self):
-        # TODO: we likely want an enum to define how exceptions should be handled
-        # - propagate:
-        #    throw the exception as a duckdb exception
-        # - ignore:
-        #    return NULL instead
-        pass
+        def throws(x):
+            raise AttributeError("test")
+
+        con = duckdb.connect()
+        con.register_scalar('forward_error', throws, [BIGINT], BIGINT, exception_handling='default')
+        res = con.sql('select forward_error(5)')
+        with pytest.raises(duckdb.InvalidInputException, match='Python exception occurred while executing the UDF'):
+            res.fetchall()
+        
+        con.register_scalar('return_null', throws, [BIGINT], BIGINT, exception_handling='return_null')
+        res = con.sql('select return_null(5)').fetchall()
+        assert res == [(None,)]
 
     def test_binding(self):
         # TODO: add a way to do extra binding for the UDF

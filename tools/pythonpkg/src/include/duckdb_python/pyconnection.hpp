@@ -20,6 +20,7 @@
 #include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
 #include "duckdb_python/pyfilesystem.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb_python/exception_handling_enum.hpp"
 
 namespace duckdb {
 
@@ -95,7 +96,8 @@ public:
 	shared_ptr<DuckDBPyConnection>
 	RegisterScalarUDF(const string &name, const py::object &udf, const py::object &arguments = py::none(),
 	                  shared_ptr<DuckDBPyType> return_type = nullptr, bool varargs = false,
-	                  FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING);
+	                  FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
+	                  PythonExceptionHandling exception_handling = PythonExceptionHandling::FORWARD_ERROR);
 
 	shared_ptr<DuckDBPyConnection> ExecuteMany(const string &query, py::object params = py::list());
 
@@ -207,7 +209,7 @@ private:
 	unique_lock<std::mutex> AcquireConnectionLock();
 	ScalarFunction CreateScalarUDF(const string &name, const py::object &udf, const py::object &parameters,
 	                               shared_ptr<DuckDBPyType> return_type, bool varargs,
-	                               FunctionNullHandling null_handling);
+	                               FunctionNullHandling null_handling, PythonExceptionHandling exception_handling);
 
 	static PythonEnvironmentType environment;
 	static void DetectEnvironment();
