@@ -37,7 +37,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op
 				make_uniq<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::CTE_SCAN, op.estimated_cardinality);
 
 			auto materialized_cte = materialized_ctes.find(op.cte_index);
-			// D_ASSERT(materialized_cte != materialized_ctes.end());
 
 			if(materialized_cte == materialized_ctes.end()) {
 				throw InvalidInputException("Referenced CTE does not exist.");
