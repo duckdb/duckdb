@@ -308,7 +308,8 @@ void TaskScheduler::RescheduleSleepingTasks() {
 	for (auto it = sleeping_tasks.begin(); it != sleeping_tasks.end(); ) {
 		if (it->first < current_time) {
 //			Printer::Print("Rescheduled task with sleeping time " + to_string(it->first));
-			ScheduleTask(*it->second->current_token, std::move(it->second));
+			auto token_ptr = it->second->current_token;
+			ScheduleTask(*token_ptr, std::move(it->second));
 			it = sleeping_tasks.erase(it);
 		} else {
 //			Printer::Print("Did not reschedule: " + to_string(it->first));
