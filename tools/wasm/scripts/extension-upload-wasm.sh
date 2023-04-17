@@ -43,7 +43,7 @@ do
 	# compress extension binary
 	gzip < $f.append > "$f.gz"
 	# upload compressed extension binary to S3
-	aws s3 cp $f.gz s3://duckdb-extensions/$2/wasm-$1/$ext.duckdb_extension.gz --acl public-read
+	aws s3 cp $f.gz s3://duckdb-extensions/$2/wasm-$1/$ext.duckdb_extension.wasm --acl public-read --content-encoding gzip
 done
 
 rm private.pem
