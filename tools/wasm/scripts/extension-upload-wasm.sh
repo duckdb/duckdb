@@ -9,6 +9,9 @@ echo "$DUCKDB_EXTENSION_SIGNING_PK" > private.pem
 FILES="build/$1/extensions/*/*.duckdb_extension.wasm"
 for f in $FILES
 do
+	# validate input file
+	wasm-validate --enable-all $f
+
 	ext=`basename $f .duckdb_extension.wasm`
 	echo $ext
 	# calculate SHA256 hash of extension binary
@@ -33,6 +36,10 @@ do
 	openssl pkeyutl -sign -in $f.hash -inkey private.pem -pkeyopt digest:sha256 -out $f.sign
 	# append signature to extension binary
 	cat $f.sign >> $f.append
+
+	# validate generated file
+	wasm-validate --enable-all $f.append
+
 	# compress extension binary
 	gzip < $f.append > "$f.gz"
 	# upload compressed extension binary to S3
