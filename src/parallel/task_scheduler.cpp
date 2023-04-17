@@ -336,7 +336,8 @@ void TaskScheduler::DescheduleTaskCallback(unique_ptr<Task> task, hugeint_t call
 	if (buffered_cb_lookup != buffered_callbacks.end()) {
 //		Printer::Print(" > Insta reschedule uuid " + to_string(callback_uuid.lower) + to_string(callback_uuid.upper));
 		// this callback already happened, reschedule straight away
-		ScheduleTask(*task->current_token, std::move(task));
+		auto token_ptr = task->current_token;
+		ScheduleTask(*token_ptr, std::move(task));
 		buffered_callbacks.erase(buffered_cb_lookup);
 		return;
 	}
