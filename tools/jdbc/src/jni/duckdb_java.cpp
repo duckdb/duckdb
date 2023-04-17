@@ -378,7 +378,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1catalog(J
 	try {
 		conn_ref->context->RunFunctionInTransaction([&]() {
 			ClientData::Get(*conn_ref->context)
-			    .catalog_search_path->Set(CatalogSearchEntry(jstring_to_string(env, catalog), INVALID_SCHEMA), false);
+			    .catalog_search_path->Set(CatalogSearchEntry(jstring_to_string(env, catalog), DEFAULT_SCHEMA), false);
 		});
 	} catch (const exception &e) {
 		env->ThrowNew(J_SQLException, e.what());
