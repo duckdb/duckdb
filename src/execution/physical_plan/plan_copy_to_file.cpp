@@ -16,7 +16,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile
 	auto copy = make_uniq<PhysicalCopyToFile>(op.types, op.function, std::move(op.bind_data), op.estimated_cardinality);
 	copy->file_path = op.file_path;
 	copy->use_tmp_file = op.use_tmp_file;
-	copy->allow_overwrite = op.allow_overwrite;
+	copy->overwrite_or_ignore = op.overwrite_or_ignore;
+	copy->filename_pattern = op.filename_pattern;
 	copy->per_thread_output = op.per_thread_output;
 	copy->partition_output = op.partition_output;
 	copy->partition_columns = op.partition_columns;
