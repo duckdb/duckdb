@@ -60,7 +60,6 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL(DefaultNullOrderSetting),
                                                  DUCKDB_GLOBAL(DisabledOptimizersSetting),
                                                  DUCKDB_GLOBAL(EnableExternalAccessSetting),
-                                                 DUCKDB_GLOBAL(EnableNamedParametersSetting),
                                                  DUCKDB_GLOBAL(EnableFSSTVectors),
                                                  DUCKDB_GLOBAL(AllowUnsignedExtensionsSetting),
                                                  DUCKDB_LOCAL(CustomExtensionRepository),

@@ -294,29 +294,6 @@ Value DisabledOptimizersSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
-// Named Prepared Parameters
-//===--------------------------------------------------------------------===//
-void EnableNamedParametersSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (db) {
-		throw InvalidInputException("This setting can only be set by the client, before the database is started");
-	}
-	auto new_value = input.GetValue<bool>();
-	config.options.prepared_parameters_can_be_named = new_value;
-}
-
-void EnableNamedParametersSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (db) {
-		throw InvalidInputException("This setting can only be set by the client, before the database is started");
-	}
-	config.options.prepared_parameters_can_be_named = DBConfig().options.prepared_parameters_can_be_named;
-}
-
-Value EnableNamedParametersSetting::GetSetting(ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.prepared_parameters_can_be_named);
-}
-
-//===--------------------------------------------------------------------===//
 // Enable External Access
 //===--------------------------------------------------------------------===//
 void EnableExternalAccessSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
