@@ -2350,8 +2350,14 @@ public class TestDuckDBJDBC {
 
 	public static void test_set_catalog() throws Exception {
 		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
-			conn.setCatalog("other");
 
+			assertThrows(() ->			conn.setCatalog("other"), SQLException.class);
+
+			try (Statement stmt = conn.createStatement()) {
+				stmt.execute("ATTACH ':memory:' AS other;");
+			}
+
+			conn.setCatalog("other");
 			assertEquals(conn.getCatalog(), "other");
 		}
 	}
