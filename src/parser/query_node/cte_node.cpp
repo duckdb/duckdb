@@ -7,7 +7,7 @@ namespace duckdb {
 
 string CTENode::ToString() const {
 	string result;
-	result += "(" + query->ToString() + ")";
+	result += child->ToString();
 	return result;
 }
 
