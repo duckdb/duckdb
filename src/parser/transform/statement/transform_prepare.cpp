@@ -27,18 +27,6 @@ static string NotAcceptedExpressionException() {
 	return "Only scalar parameters, named parameters or NULL supported for EXECUTE";
 }
 
-void VerifyNamedParameterExpression(ComparisonExpression &expr) {
-	auto &name = expr.left;
-	auto &value = expr.right;
-	if (name->type != ExpressionType::COLUMN_REF) {
-		throw InvalidInputException("Expected a parameter name, found expression of type '%s' instead",
-		                            ExpressionTypeToString(name->type));
-	}
-	if (!value->IsScalar()) {
-		throw InvalidInputException(NotAcceptedExpressionException());
-	}
-}
-
 unique_ptr<ExecuteStatement> Transformer::TransformExecute(duckdb_libpgquery::PGNode *node) {
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGExecuteStmt *>(node);
 	D_ASSERT(stmt);
@@ -51,15 +39,15 @@ unique_ptr<ExecuteStatement> Transformer::TransformExecute(duckdb_libpgquery::PG
 		TransformExpressionList(*stmt->params, intermediate_values);
 	}
 	for (auto &expr : intermediate_values) {
-		if (expr->type == ExpressionType::COMPARE_EQUAL) {
-			auto &name_and_value = expr->Cast<ComparisonExpression>();
-			VerifyNamedParameterExpression(name_and_value);
-			auto &name = name_and_value.left->Cast<ColumnRefExpression>();
-			result->named_values[name.GetColumnName()] = std::move(name_and_value.right);
-		} else if (expr->IsScalar()) {
-			result->values.push_back(std::move(expr));
-		} else {
+		if (!expr->IsScalar()) {
 			throw InvalidInputException(NotAcceptedExpressionException());
+		}
+		if (!expr->alias.empty()) {
+			auto name = expr->alias;
+			expr->alias.clear();
+			result->named_values[name] = std::move(expr);
+		} else {
+			result->values.push_back(std::move(expr));
 		}
 	}
 	intermediate_values.clear();

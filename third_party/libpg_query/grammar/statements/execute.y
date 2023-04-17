@@ -48,6 +48,30 @@ ExecuteStmt: EXECUTE name execute_param_clause
 		;
 
 
-execute_param_clause: '(' expr_list_opt_comma ')'				{ $$ = $2; }
+execute_param_expr:  a_expr
+				{
+					$$ = $1;
+				}
+			| param_name COLON_EQUALS a_expr
+				{
+					PGNamedArgExpr *na = makeNode(PGNamedArgExpr);
+					na->name = $1;
+					na->arg = (PGExpr *) $3;
+					na->argnumber = -1;		/* until determined */
+					na->location = @1;
+					$$ = (PGNode *) na;
+				}
+
+execute_param_list:  execute_param_expr
+				{
+					$$ = list_make1($1);
+				}
+			| execute_param_list ',' execute_param_expr
+				{
+					$$ = lappend($1, $3);
+				}
+		;
+
+execute_param_clause: '(' execute_param_list ')'				{ $$ = $2; }
 					| /* EMPTY */					{ $$ = NIL; }
 					;
