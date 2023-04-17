@@ -2351,7 +2351,7 @@ public class TestDuckDBJDBC {
 	public static void test_set_catalog() throws Exception {
 		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
 
-			assertThrows(() ->			conn.setCatalog("other"), SQLException.class);
+			assertThrows(() -> conn.setCatalog("other"), SQLException.class);
 
 			try (Statement stmt = conn.createStatement()) {
 				stmt.execute("ATTACH ':memory:' AS other;");
