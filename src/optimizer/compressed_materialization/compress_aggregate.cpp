@@ -18,7 +18,7 @@ void CompressedMaterialization::CompressAggregate(unique_ptr<LogicalOperator> &o
 	// Find all bindings referenced by non-colref expressions in the groups
 	// These are excluded from compression by projection
 	// But we can try to compress the expression directly
-	vector<ColumnBinding> referenced_bindings;
+	column_binding_set_t referenced_bindings;
 	vector<ColumnBinding> group_bindings(groups.size(), ColumnBinding());
 	vector<bool> needs_decompression(groups.size(), false);
 	for (idx_t group_idx = 0; group_idx < groups.size(); group_idx++) {

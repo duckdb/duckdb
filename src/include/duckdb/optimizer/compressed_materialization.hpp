@@ -20,7 +20,7 @@ struct JoinCondition;
 
 struct CMChildInfo {
 public:
-	CMChildInfo(LogicalOperator &op, const vector<ColumnBinding> &referenced_bindings);
+	CMChildInfo(LogicalOperator &op, const column_binding_set_t &referenced_bindings);
 
 public:
 	//! Bindings and types before compressing
@@ -49,7 +49,7 @@ public:
 struct CompressedMaterializationInfo {
 public:
 	CompressedMaterializationInfo(LogicalOperator &op, vector<idx_t> &&child_idxs,
-	                              const vector<ColumnBinding> &referenced_bindings);
+	                              const column_binding_set_t &referenced_bindings);
 
 public:
 	//! Mapping from incoming bindings to outgoing bindings
@@ -94,9 +94,9 @@ private:
 	void UpdateOrderStats(unique_ptr<LogicalOperator> &op);
 
 	//! Adds bindings referenced in expression to referenced_bindings
-	static void GetReferencedBindings(const Expression &expression, vector<ColumnBinding> &referenced_bindings);
+	static void GetReferencedBindings(const Expression &expression, column_binding_set_t &referenced_bindings);
 	static void ComparisonJoinGetReferencedBindings(const JoinCondition &condition,
-	                                                vector<ColumnBinding> &referenced_bindings);
+	                                                column_binding_set_t &referenced_bindings);
 	//! Updates CMBindingInfo in the binding_map in info
 	void UpdateBindingInfo(CompressedMaterializationInfo &info, const ColumnBinding &binding, bool needs_decompression);
 
@@ -123,9 +123,10 @@ private:
 	                                             const BaseStatistics &stats);
 	unique_ptr<Expression> GetStringDecompress(unique_ptr<Expression> input, const BaseStatistics &stats);
 
-private:
 	//! Removes redundant compress/decompress
 	void RemoveRedundantProjections(unique_ptr<LogicalOperator> &op);
+	//! Remove the given operator from the plan
+	void RemoveOperator(unique_ptr<LogicalOperator> &op);
 
 private:
 	ClientContext &context;

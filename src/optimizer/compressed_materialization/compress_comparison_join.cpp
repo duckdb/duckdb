@@ -5,16 +5,16 @@
 namespace duckdb {
 
 void CompressedMaterialization::ComparisonJoinGetReferencedBindings(const JoinCondition &condition,
-                                                                    vector<ColumnBinding> &referenced_bindings) {
+                                                                    column_binding_set_t &referenced_bindings) {
 	if (condition.left->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = condition.left->Cast<BoundColumnRefExpression>();
-		referenced_bindings.emplace_back(colref.binding);
+		referenced_bindings.insert(colref.binding);
 	} else {
 		GetReferencedBindings(*condition.left, referenced_bindings);
 	}
 	if (condition.right->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = condition.right->Cast<BoundColumnRefExpression>();
-		referenced_bindings.emplace_back(colref.binding);
+		referenced_bindings.insert(colref.binding);
 	} else {
 		GetReferencedBindings(*condition.right, referenced_bindings);
 	}
@@ -41,7 +41,7 @@ void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperato
 	// Find all bindings referenced by non-colref expressions in the conditions
 	// These are excluded from compression by projection
 	// But we can try to compress the expression directly
-	vector<ColumnBinding> referenced_bindings;
+	column_binding_set_t referenced_bindings;
 	for (const auto &condition : join.conditions) {
 		if (join.conditions.size() == 1) {
 			// We only try to compress the join condition cols if there's one join condition

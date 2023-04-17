@@ -11,7 +11,7 @@
 
 namespace duckdb {
 
-CMChildInfo::CMChildInfo(LogicalOperator &op, const vector<ColumnBinding> &referenced_bindings)
+CMChildInfo::CMChildInfo(LogicalOperator &op, const column_binding_set_t &referenced_bindings)
     : bindings_before(op.GetColumnBindings()), types(op.types), can_compress(bindings_before.size(), true) {
 	for (const auto &binding : referenced_bindings) {
 		for (idx_t binding_idx = 0; binding_idx < bindings_before.size(); binding_idx++) {
@@ -27,7 +27,7 @@ CMBindingInfo::CMBindingInfo(ColumnBinding binding_p, const LogicalType &type_p)
 }
 
 CompressedMaterializationInfo::CompressedMaterializationInfo(LogicalOperator &op, vector<idx_t> &&child_idxs_p,
-                                                             const vector<ColumnBinding> &referenced_bindings)
+                                                             const column_binding_set_t &referenced_bindings)
     : child_idxs(child_idxs_p) {
 	child_info.reserve(child_idxs.size());
 	for (const auto &child_idx : child_idxs) {
@@ -45,11 +45,11 @@ CompressedMaterialization::CompressedMaterialization(ClientContext &context_p, B
 }
 
 void CompressedMaterialization::GetReferencedBindings(const Expression &expression,
-                                                      vector<ColumnBinding> &referenced_bindings) {
+                                                      column_binding_set_t &referenced_bindings) {
 	ExpressionIterator::EnumerateChildren(expression, [&](const Expression &child) {
 		if (child.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 			const auto &col_ref = child.Cast<BoundColumnRefExpression>();
-			referenced_bindings.emplace_back(col_ref.binding);
+			referenced_bindings.insert(col_ref.binding);
 		}
 	});
 }
@@ -456,24 +456,140 @@ void CompressedMaterialization::RemoveRedundantProjections(unique_ptr<LogicalOpe
 		RemoveRedundantProjections(child);
 	}
 
-	if (op->type != LogicalOperatorType::LOGICAL_PROJECTION ||
-	    op->children[0]->type != LogicalOperatorType::LOGICAL_PROJECTION) {
+	if (op->type != LogicalOperatorType::LOGICAL_PROJECTION) {
 		return;
 	}
 
-	// Op and its child are projections, check if we made them
+	// Op is a projection, check if it's a compress that we made
 	auto &compression = op->Cast<LogicalProjection>();
-	auto &decompression = op->children[0]->Cast<LogicalProjection>();
-	if (compression_table_indices.find(compression.table_index) == compression_table_indices.end() ||
-	    decompression_table_indices.find(decompression.table_index) == decompression_table_indices.end()) {
-		return;
+	if (compression_table_indices.find(compression.table_index) == compression_table_indices.end()) {
+		return; // Nope
 	}
 
-	// We found a compression followed by a decompression, figure out if we can eliminate
-	D_ASSERT(compression.expressions.size() == decompression.expressions.size());
-	for (idx_t col_idx = 0; col_idx < compression.expressions.size(); col_idx++) {
-		
+	// Now try to find a decompress projection in the operators below
+	// This can currently only deal with pipelines that do not add or remove a column
+	column_binding_set_t referenced_bindings;
+	auto child_op = &op->children[0];
+	while (true) {
+		auto &current_child = **child_op;
+		bool found_decompression = false;
+		switch (child_op->get()->type) {
+		case LogicalOperatorType::LOGICAL_PROJECTION: {
+			auto &projection = child_op->get()->Cast<LogicalProjection>();
+			if (decompression_table_indices.find(projection.table_index) != decompression_table_indices.end()) {
+				found_decompression = true;
+				break;
+			}
+			// If it's a NOP projection we can get deal with it
+			idx_t only_basic_colref = true;
+			const auto projection_input_bindings = projection.children[0]->GetColumnBindings();
+			for (idx_t col_idx = 0; col_idx < projection.expressions.size(); col_idx++) {
+				const auto &expr = *projection.expressions[col_idx];
+				if (expr.type != ExpressionType::BOUND_COLUMN_REF) {
+					only_basic_colref = false;
+					break;
+				}
+				const auto &colref = expr.Cast<BoundColumnRefExpression>();
+				if (colref.binding != projection_input_bindings[col_idx]) {
+					only_basic_colref = false;
+					break;
+				}
+			}
+			if (only_basic_colref) {
+				break;
+			} else {
+				return;
+			}
+		}
+		case LogicalOperatorType::LOGICAL_FILTER:
+			if (current_child.GetColumnBindings() != current_child.children[0]->GetColumnBindings()) {
+				return;
+			}
+			break;
+		case LogicalOperatorType::LOGICAL_LIMIT:
+			break;
+		default:
+			return; // Default is to assume we cannot remove the redundant projection
+		}
+
+		if (found_decompression) {
+			break;
+		}
+
+		// Keep track of this operator's referenced bindings and recurse
+		LogicalOperatorVisitor::EnumerateExpressions(
+		    **child_op, [&](unique_ptr<Expression> *child) { GetReferencedBindings(**child, referenced_bindings); });
+		child_op = &child_op->get()->children[0];
 	}
+
+	D_ASSERT(child_op->get()->type == LogicalOperatorType::LOGICAL_PROJECTION);
+	auto &decompression = child_op->get()->Cast<LogicalProjection>();
+
+	// We found a decompression followed by a compression, try to eliminate redundant decompress/compress of columns
+	D_ASSERT(compression.expressions.size() == decompression.expressions.size());
+	auto &decompress_exprs = decompression.expressions;
+	auto &compress_exprs = compression.expressions;
+
+	idx_t decompress_count = 0;
+	idx_t compress_count = 0;
+	for (idx_t col_idx = 0; col_idx < compression.expressions.size(); col_idx++) {
+		auto &decompress_expr = decompress_exprs[col_idx];
+		auto &compress_expr = compress_exprs[col_idx];
+		if (decompress_expr->type == ExpressionType::BOUND_FUNCTION) {
+			decompress_count++;
+		}
+		if (compress_expr->type == ExpressionType::BOUND_FUNCTION) {
+			compress_count++;
+		}
+		if (decompress_expr->type == ExpressionType::BOUND_COLUMN_REF ||
+		    compress_expr->type == ExpressionType::BOUND_COLUMN_REF) {
+			continue;
+		}
+
+		auto &decompress_fun = decompress_expr->Cast<BoundFunctionExpression>();
+		auto &compress_fun = compress_expr->Cast<BoundFunctionExpression>();
+
+		D_ASSERT(decompress_fun.children[0]->type == ExpressionType::BOUND_COLUMN_REF);
+		auto &decompress_colref = decompress_fun.children[0]->Cast<BoundColumnRefExpression>();
+		if (referenced_bindings.find(decompress_colref.binding) != referenced_bindings.end()) {
+			continue; // Decompressed binding was referenced in between, don't remove the decompression
+		}
+
+		// Column is decompressed, then compressed again, remove the function
+		D_ASSERT(decompress_expr->type == ExpressionType::BOUND_FUNCTION);
+		D_ASSERT(compress_expr->type == ExpressionType::BOUND_FUNCTION);
+		decompress_expr = std::move(decompress_fun.children[0]);
+		compress_expr = std::move(compress_fun.children[0]);
+		decompress_count--;
+		compress_count--;
+	}
+
+	if (decompress_count == 0) {
+		RemoveOperator(*child_op);
+	}
+
+	if (compress_count == 0) {
+		RemoveOperator(op);
+	}
+
+	// NOTE: we don't have to update statistics_map here because this is the last step of this optimizer
+}
+
+void CompressedMaterialization::RemoveOperator(unique_ptr<LogicalOperator> &op) {
+	const auto bindings_before = op->GetColumnBindings();
+	const auto bindings_after = op->children[0]->GetColumnBindings();
+	op = std::move(op->children[0]);
+
+	ColumnBindingReplacer replacer;
+	auto &replace_bindings = replacer.replace_bindings;
+	for (idx_t col_idx = 0; col_idx < bindings_before.size(); col_idx++) {
+		const auto &old_binding = bindings_before[col_idx];
+		const auto &new_binding = bindings_after[col_idx];
+		replace_bindings.emplace_back(old_binding, new_binding);
+	}
+
+	// Make the plan consistent again
+	replacer.VisitOperator(*root);
 }
 
 } // namespace duckdb
