@@ -1144,9 +1144,11 @@ bool ClientContext::TryGetCurrentSetting(const std::string &key, Value &result) 
 }
 
 ParserOptions ClientContext::GetParserOptions() const {
+	auto &client_config = ClientConfig::GetConfig(*this);
 	ParserOptions options;
-	options.preserve_identifier_case = ClientConfig::GetConfig(*this).preserve_identifier_case;
-	options.max_expression_depth = ClientConfig::GetConfig(*this).max_expression_depth;
+	options.preserve_identifier_case = client_config.preserve_identifier_case;
+	options.integer_division = client_config.integer_division;
+	options.max_expression_depth = client_config.max_expression_depth;
 	options.extensions = &DBConfig::GetConfig(*this).parser_extensions;
 	return options;
 }
