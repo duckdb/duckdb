@@ -522,6 +522,11 @@ void LikeFun::RegisterFunction(BuiltinFunctions &set) {
 	                               nullptr, ILikePropagateStats<NotILikeOperatorASCII>));
 }
 
+ScalarFunction LikeFun::GetFunction() {
+	return ScalarFunction("~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
+	                      RegularLikeFunction<LikeOperator, false>, LikeBindFunction);
+}
+
 void LikeEscapeFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction({"like_escape"}, ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
 	                                                LogicalType::BOOLEAN, LikeEscapeFunction<LikeEscapeOperator>));

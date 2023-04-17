@@ -6,9 +6,6 @@ statement ok
 CREATE TABLE test(s VARCHAR);
 
 statement ok
-INSERT INTO test VALUES ('aaa');
-
-statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
 
 mode skip
@@ -57,21 +54,64 @@ aaa
 
 mode unskip
 
+statement ok
+INSERT INTO test VALUES ('aaa'), ('a.a'), ('baba'), ('abba'), ('a\.a');
+
+mode output_result
+
+statement ok
+select regexp_matches(s, 'a.a'), s from test;
+
+
 query II
-SELECT regexp_matches(s, '.*aa$'), s FROM TEST;
+select regexp_matches(s, 'a\.a'), s from test;
+----
+false	aaa
+
+mode skip
+
+query II
+SELECT regexp_matches(s, 'a.*a'), s FROM TEST;
 ----
 true	aaa
 
-
-mode skip 
-
-
-query I nosort correct_result
-SELECT regexp_matches(s, '^a.*b$') FROM TEST;
+query II
+SELECT regexp_matches(s, '^a.*b$'), s FROM TEST;
 ----
-aaa
+false	aaa
+
 
 query II
 SELECT regexp_matches(s, '^a'), s FROM TEST;
 ----
-1	aaa
+true	aaa
+
+
+query II
+select regexp_matches(s, '.*green.*'), s, from test;
+----
+false	aaa
+
+query II
+select regexp_matches(s, '.*special.*requests.*'), s from test;
+----
+false	aaa
+
+query II
+select regexp_matches(s, '.*special.*?requests.*'), s from test;
+----
+false	aaa
+
+
+
+query II
+select regexp_matches(s, 'promo.*'), s from test;
+----
+false	aaa
+
+query II
+select regexp_matches(s, '.*customer.*complaints.*'), s from test;
+----
+false	aaa
+
+
