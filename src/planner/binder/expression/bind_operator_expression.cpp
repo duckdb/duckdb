@@ -15,14 +15,27 @@ static LogicalType ResolveNotType(OperatorExpression &op, vector<BoundExpression
 	return LogicalType(LogicalTypeId::BOOLEAN);
 }
 
-static LogicalType ResolveInType(OperatorExpression &op, vector<BoundExpression *> &children) {
+static LogicalType ResolveInType(OperatorExpression &op, vector<BoundExpression *> &children, bool coalesce = false) {
 	if (children.empty()) {
 		throw InternalException("IN requires at least a single child node");
 	}
 	// get the maximum type from the children
 	LogicalType max_type = children[0]->expr->return_type;
+	bool any_varchar = children[0]->expr->return_type == LogicalType::VARCHAR;
+	bool any_enum = children[0]->expr->return_type.id() == LogicalTypeId::ENUM;
 	for (idx_t i = 1; i < children.size(); i++) {
 		max_type = LogicalType::MaxLogicalType(max_type, children[i]->expr->return_type);
+		if (children[i]->expr->return_type == LogicalType::VARCHAR) {
+			any_varchar = true;
+		}
+		if (children[i]->expr->return_type.id() == LogicalTypeId::ENUM) {
+			any_enum = true;
+		}
+	}
+	if (coalesce && any_varchar && any_enum) {
+		// For the coalesce function, we must be sure we always upcast the parameters to VARCHAR, if there are at least
+		// one enum and one varchar
+		max_type = LogicalType::VARCHAR;
 	}
 
 	// cast all children to the same type
@@ -46,7 +59,7 @@ static LogicalType ResolveOperatorType(OperatorExpression &op, vector<BoundExpre
 	case ExpressionType::COMPARE_NOT_IN:
 		return ResolveInType(op, children);
 	case ExpressionType::OPERATOR_COALESCE: {
-		ResolveInType(op, children);
+		ResolveInType(op, children, true);
 		return children[0]->expr->return_type;
 	}
 	case ExpressionType::OPERATOR_NOT:
