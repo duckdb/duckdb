@@ -59,8 +59,8 @@ public:
 	//! be added. Defaults to INVALID.
 	LogicalType target_type;
 
-	DummyBinding *macro_binding;
-	vector<DummyBinding> *lambda_bindings = nullptr;
+	optional_ptr<DummyBinding> macro_binding;
+	optional_ptr<vector<DummyBinding>> lambda_bindings;
 
 public:
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr, LogicalType *result_type = nullptr,
@@ -146,7 +146,7 @@ protected:
 
 	Binder &binder;
 	ClientContext &context;
-	ExpressionBinder *stored_binder;
+	optional_ptr<ExpressionBinder> stored_binder;
 	vector<BoundColumnReferenceInfo> bound_columns;
 };
 

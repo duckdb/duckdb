@@ -303,7 +303,7 @@ void Executor::InitializeInternal(PhysicalOperator *plan) {
 		// build and ready the pipelines
 		PipelineBuildState state;
 		auto root_pipeline = make_shared<MetaPipeline>(*this, state, nullptr);
-		root_pipeline->Build(physical_plan);
+		root_pipeline->Build(*physical_plan);
 		root_pipeline->Ready();
 
 		// ready recursive cte pipelines too

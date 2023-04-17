@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/bind_helpers.hpp"
+#include "duckdb/common/filename_pattern.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/execution/operator/persistent/parallel_csv_reader.hpp"
 #include "duckdb/function/table/read_csv.hpp"
@@ -76,7 +77,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
 	bool use_tmp_file = true;
-	bool allow_overwrite = false;
+	bool overwrite_or_ignore = false;
+	FilenamePattern filename_pattern;
 	bool user_set_use_tmp_file = false;
 	bool per_thread_output = false;
 	vector<idx_t> partition_cols;
@@ -92,9 +94,17 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 			user_set_use_tmp_file = true;
 			continue;
 		}
-		if (loption == "allow_overwrite") {
-			allow_overwrite =
+		if (loption == "overwrite_or_ignore") {
+			overwrite_or_ignore =
 			    option.second.empty() || option.second[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
+			continue;
+		}
+		if (loption == "filename_pattern") {
+			if (option.second.empty()) {
+				throw IOException("FILENAME_PATTERN cannot be empty");
+			}
+			filename_pattern.SetFilenamePattern(
+			    option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>());
 			continue;
 		}
 
@@ -133,8 +143,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	auto copy = make_uniq<LogicalCopyToFile>(copy_function->function, std::move(function_data));
 	copy->file_path = stmt.info->file_path;
 	copy->use_tmp_file = use_tmp_file;
-	copy->allow_overwrite = allow_overwrite;
-	copy->per_thread_output = per_thread_output;
+	copy->overwrite_or_ignore = overwrite_or_ignore;
+	copy->filename_pattern = filename_pattern;
 	copy->per_thread_output = per_thread_output;
 	copy->partition_output = !partition_cols.empty();
 	copy->partition_columns = std::move(partition_cols);

@@ -42,7 +42,8 @@ ClientContext &MetaBlockReader::GetContext() {
 	}
 	return *context;
 }
-Catalog *MetaBlockReader::GetCatalog() {
+
+optional_ptr<Catalog> MetaBlockReader::GetCatalog() {
 	return catalog;
 }
 
@@ -64,14 +65,14 @@ void MetaBlockReader::ReadNewBlock(block_id_t id) {
 	offset = sizeof(block_id_t);
 }
 
-void MetaBlockReader::SetCatalog(Catalog *catalog_p) {
+void MetaBlockReader::SetCatalog(Catalog &catalog_p) {
 	D_ASSERT(!catalog);
-	catalog = catalog_p;
+	catalog = &catalog_p;
 }
 
-void MetaBlockReader::SetContext(ClientContext *context_p) {
+void MetaBlockReader::SetContext(ClientContext &context_p) {
 	D_ASSERT(!context);
-	context = context_p;
+	context = &context_p;
 }
 
 } // namespace duckdb

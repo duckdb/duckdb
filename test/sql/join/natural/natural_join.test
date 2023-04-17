@@ -129,7 +129,7 @@ INSERT INTO sqlancer_t0 VALUES
 ;
 
 statement ok
-CREATE VIEW sqlancer_v0(c0, c1) AS SELECT sqlancer_t0.c0, ((sqlancer_t0.rowid)/(-1694294358))
+CREATE VIEW sqlancer_v0(c0, c1) AS SELECT sqlancer_t0.c0, ((sqlancer_t0.rowid)//(-1694294358))
 FROM sqlancer_t0
 ORDER BY TIMESTAMP '1970-01-08 16:19:01' ASC;
 

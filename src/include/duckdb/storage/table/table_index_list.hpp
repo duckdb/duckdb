@@ -35,7 +35,7 @@ public:
 
 	void AddIndex(unique_ptr<Index> index);
 
-	void RemoveIndex(Index *index);
+	void RemoveIndex(Index &index);
 
 	bool Empty();
 

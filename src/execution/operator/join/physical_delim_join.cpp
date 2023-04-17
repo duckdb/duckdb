@@ -125,7 +125,7 @@ void PhysicalDelimJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pip
 	sink_state.reset();
 
 	auto child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, this);
-	child_meta_pipeline->Build(children[0].get());
+	child_meta_pipeline->Build(*children[0]);
 
 	if (type == PhysicalOperatorType::DELIM_JOIN) {
 		// recurse into the actual join
