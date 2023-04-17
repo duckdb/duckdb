@@ -117,6 +117,9 @@ unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
 	case QueryNodeType::RECURSIVE_CTE_NODE:
 		result = BindNode(node.Cast<RecursiveCTENode>());
 		break;
+	case QueryNodeType::CTE_NODE:
+		result = BindNode(node.Cast<CTENode>());
+		break;
 	default:
 		D_ASSERT(node.type == QueryNodeType::SET_OPERATION_NODE);
 		result = BindNode(node.Cast<SetOperationNode>());
