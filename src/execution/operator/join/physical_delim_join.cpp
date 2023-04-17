@@ -46,7 +46,7 @@ public:
 	    : lhs_data(context, delim_join.children[0]->GetTypes()) {
 		D_ASSERT(delim_join.delim_scans.size() > 0);
 		// set up the delim join chunk to scan in the original join
-		auto &cached_chunk_scan = (PhysicalColumnDataScan &)*delim_join.join->children[0];
+		auto &cached_chunk_scan = delim_join.join->children[0]->Cast<PhysicalColumnDataScan>();
 		cached_chunk_scan.collection = &lhs_data;
 	}
 

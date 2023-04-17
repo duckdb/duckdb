@@ -6,6 +6,11 @@
 
 namespace duckdb {
 
+
+PhysicalColumnDataScan::PhysicalColumnDataScan(vector<LogicalType> types, PhysicalOperatorType op_type, idx_t estimated_cardinality, unique_ptr<ColumnDataCollection> owned_collection_p)
+	: PhysicalOperator(op_type, std::move(types), estimated_cardinality), collection(owned_collection_p.get()), owned_collection(std::move(owned_collection_p)) {
+}
+
 class PhysicalColumnDataScanState : public GlobalSourceState {
 public:
 	explicit PhysicalColumnDataScanState() : initialized(false) {
@@ -23,7 +28,6 @@ unique_ptr<GlobalSourceState> PhysicalColumnDataScan::GetGlobalSourceState(Clien
 void PhysicalColumnDataScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                                      LocalSourceState &lstate) const {
 	auto &state = gstate.Cast<PhysicalColumnDataScanState>();
-	D_ASSERT(collection);
 	if (collection->Count() == 0) {
 		return;
 	}
