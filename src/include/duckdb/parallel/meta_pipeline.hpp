@@ -61,7 +61,7 @@ public:
 
 public:
 	//! Build the MetaPipeline with 'op' as the first operator (excl. the shared sink)
-	void Build(PhysicalOperator *op);
+	void Build(PhysicalOperator &op);
 	//! Ready all the pipelines (recursively)
 	void Ready();
 

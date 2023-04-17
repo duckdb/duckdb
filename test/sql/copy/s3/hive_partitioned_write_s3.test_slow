@@ -28,7 +28,7 @@ pragma memory_limit='100mb'
 
 # around 200MB worth of data, will require the PartitionedColumnData to spill to disk
 statement ok
-COPY (SELECT i%2::INT32 as part_col, i::INT32 FROM range(0,25000000) tbl(i)) TO 's3://test-bucket/partitioned_memory_spill' (FORMAT parquet, PARTITION_BY part_col, ALLOW_OVERWRITE TRUE);
+COPY (SELECT i%2::INT32 as part_col, i::INT32 FROM range(0,25000000) tbl(i)) TO 's3://test-bucket/partitioned_memory_spill' (FORMAT parquet, PARTITION_BY part_col, overwrite_or_ignore TRUE);
 
 statement ok
 pragma memory_limit='-1'
@@ -38,7 +38,7 @@ call dbgen(sf=1);
 
 # Partition by 2 columns
 statement ok
-COPY lineitem TO 's3://test-bucket/lineitem_sf1_partitioned' (FORMAT PARQUET, PARTITION_BY (l_returnflag, l_linestatus), ALLOW_OVERWRITE TRUE);
+COPY lineitem TO 's3://test-bucket/lineitem_sf1_partitioned' (FORMAT PARQUET, PARTITION_BY (l_returnflag, l_linestatus), overwrite_or_ignore TRUE);
 
 statement ok
 DROP TABLE lineitem;

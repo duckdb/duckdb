@@ -34,7 +34,7 @@
 
 namespace duckdb {
 
-void ReorderTableEntries(vector<TableCatalogEntry *> &tables);
+void ReorderTableEntries(vector<reference<TableCatalogEntry>> &tables);
 
 SingleFileCheckpointWriter::SingleFileCheckpointWriter(AttachedDatabase &db, BlockManager &block_manager)
     : CheckpointWriter(db), partial_block_manager(block_manager) {
@@ -148,60 +148,60 @@ void CheckpointWriter::WriteSchema(SchemaCatalogEntry &schema) {
 	// write the schema data
 	schema.Serialize(GetMetaBlockWriter());
 	// then, we fetch the tables/views/sequences information
-	vector<TableCatalogEntry *> tables;
-	vector<ViewCatalogEntry *> views;
+	vector<reference<TableCatalogEntry>> tables;
+	vector<reference<ViewCatalogEntry>> views;
 	schema.Scan(CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
 		if (entry->internal) {
 			return;
 		}
 		if (entry->type == CatalogType::TABLE_ENTRY) {
-			tables.push_back((TableCatalogEntry *)entry);
+			tables.push_back(entry->Cast<TableCatalogEntry>());
 		} else if (entry->type == CatalogType::VIEW_ENTRY) {
-			views.push_back((ViewCatalogEntry *)entry);
+			views.push_back(entry->Cast<ViewCatalogEntry>());
 		} else {
 			throw NotImplementedException("Catalog type for entries");
 		}
 	});
-	vector<SequenceCatalogEntry *> sequences;
+	vector<reference<SequenceCatalogEntry>> sequences;
 	schema.Scan(CatalogType::SEQUENCE_ENTRY, [&](CatalogEntry *entry) {
 		if (entry->internal) {
 			return;
 		}
-		sequences.push_back((SequenceCatalogEntry *)entry);
+		sequences.push_back(entry->Cast<SequenceCatalogEntry>());
 	});
 
-	vector<TypeCatalogEntry *> custom_types;
+	vector<reference<TypeCatalogEntry>> custom_types;
 	schema.Scan(CatalogType::TYPE_ENTRY, [&](CatalogEntry *entry) {
 		if (entry->internal) {
 			return;
 		}
-		custom_types.push_back((TypeCatalogEntry *)entry);
+		custom_types.push_back(entry->Cast<TypeCatalogEntry>());
 	});
 
-	vector<ScalarMacroCatalogEntry *> macros;
+	vector<reference<ScalarMacroCatalogEntry>> macros;
 	schema.Scan(CatalogType::SCALAR_FUNCTION_ENTRY, [&](CatalogEntry *entry) {
 		if (entry->internal) {
 			return;
 		}
 		if (entry->type == CatalogType::MACRO_ENTRY) {
-			macros.push_back((ScalarMacroCatalogEntry *)entry);
+			macros.push_back(entry->Cast<ScalarMacroCatalogEntry>());
 		}
 	});
 
-	vector<TableMacroCatalogEntry *> table_macros;
+	vector<reference<TableMacroCatalogEntry>> table_macros;
 	schema.Scan(CatalogType::TABLE_FUNCTION_ENTRY, [&](CatalogEntry *entry) {
 		if (entry->internal) {
 			return;
 		}
 		if (entry->type == CatalogType::TABLE_MACRO_ENTRY) {
-			table_macros.push_back((TableMacroCatalogEntry *)entry);
+			table_macros.push_back(entry->Cast<TableMacroCatalogEntry>());
 		}
 	});
 
-	vector<IndexCatalogEntry *> indexes;
+	vector<reference<IndexCatalogEntry>> indexes;
 	schema.Scan(CatalogType::INDEX_ENTRY, [&](CatalogEntry *entry) {
 		D_ASSERT(!entry->internal);
-		indexes.push_back((IndexCatalogEntry *)entry);
+		indexes.push_back(entry->Cast<IndexCatalogEntry>());
 	});
 
 	FieldWriter writer(GetMetaBlockWriter());
@@ -216,36 +216,36 @@ void CheckpointWriter::WriteSchema(SchemaCatalogEntry &schema) {
 
 	// write the custom_types
 	for (auto &custom_type : custom_types) {
-		WriteType(*custom_type);
+		WriteType(custom_type);
 	}
 
 	// write the sequences
 	for (auto &seq : sequences) {
-		WriteSequence(*seq);
+		WriteSequence(seq);
 	}
 	// reorder tables because of foreign key constraint
 	ReorderTableEntries(tables);
 	// Write the tables
 	for (auto &table : tables) {
-		WriteTable(*table);
+		WriteTable(table);
 	}
 	// Write the views
 	for (auto &view : views) {
-		WriteView(*view);
+		WriteView(view);
 	}
 
 	// Write the macros
 	for (auto &macro : macros) {
-		WriteMacro(*macro);
+		WriteMacro(macro);
 	}
 
 	// Write the table's macros
 	for (auto &macro : table_macros) {
-		WriteTableMacro(*macro);
+		WriteTableMacro(macro);
 	}
 	// Write the indexes
 	for (auto &index : indexes) {
-		WriteIndex(*index);
+		WriteIndex(index);
 	}
 }
 
@@ -448,7 +448,7 @@ void CheckpointReader::ReadTable(ClientContext &context, MetaBlockReader &reader
 	// bind the info
 	auto binder = Binder::CreateBinder(context);
 	auto schema = catalog.GetSchema(context, info->schema);
-	auto bound_info = binder->BindCreateTableInfo(std::move(info), schema);
+	auto bound_info = binder->BindCreateTableInfo(std::move(info), *schema);
 
 	// now read the actual table data and place it into the create table info
 	ReadTableData(context, reader, *bound_info);

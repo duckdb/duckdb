@@ -907,23 +907,29 @@ static scalar_function_t GetBinaryFunctionIgnoreZero(const LogicalType &type) {
 }
 
 void DivideFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunctionSet functions("/");
+	ScalarFunctionSet fp_divide("/");
+	fp_divide.AddFunction(ScalarFunction({LogicalType::FLOAT, LogicalType::FLOAT}, LogicalType::FLOAT,
+	                                     GetBinaryFunctionIgnoreZero<DivideOperator>(LogicalType::FLOAT)));
+	fp_divide.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                                     GetBinaryFunctionIgnoreZero<DivideOperator>(LogicalType::DOUBLE)));
+	fp_divide.AddFunction(
+	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
+	                   BinaryScalarFunctionIgnoreZero<interval_t, int64_t, interval_t, DivideOperator>));
+	set.AddFunction(fp_divide);
+
+	ScalarFunctionSet full_divide("//");
 	for (auto &type : LogicalType::Numeric()) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			continue;
 		} else {
-			functions.AddFunction(
+			full_divide.AddFunction(
 			    ScalarFunction({type, type}, type, GetBinaryFunctionIgnoreZero<DivideOperator>(type)));
 		}
 	}
-	functions.AddFunction(
-	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
-	                   BinaryScalarFunctionIgnoreZero<interval_t, int64_t, interval_t, DivideOperator>));
+	set.AddFunction(full_divide);
 
-	set.AddFunction(functions);
-
-	functions.name = "divide";
-	set.AddFunction(functions);
+	full_divide.name = "divide";
+	set.AddFunction(full_divide);
 }
 
 //===--------------------------------------------------------------------===//
