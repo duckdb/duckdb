@@ -194,6 +194,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
 		plan = CreatePlan(op.Cast<LogicalRecursiveCTE>());
 		break;
+	case LogicalOperatorType::LOGICAL_CTE:
+		plan = CreatePlan(op.Cast<LogicalCTE>());
+		break;
 	case LogicalOperatorType::LOGICAL_CTE_REF:
 		plan = CreatePlan(op.Cast<LogicalCTERef>());
 		break;
