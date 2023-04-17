@@ -177,6 +177,7 @@ public:
 	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, const py::dict &config);
 
 	static vector<Value> TransformPythonParamList(const py::handle &params);
+	static case_insensitive_map_t<Value> TransformPythonParamDict(const py::dict &params);
 
 	void RegisterFilesystem(AbstractFileSystem filesystem);
 	void UnregisterFilesystem(const py::str &name);

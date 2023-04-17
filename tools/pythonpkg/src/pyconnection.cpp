@@ -358,6 +358,7 @@ unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(const string &query,
 		// if there are multiple statements, we directly execute the statements besides the last one
 		// we only return the result of the last statement to the user, unless one of the previous statements fails
 		for (idx_t i = 0; i + 1 < statements.size(); i++) {
+			// TODO: this doesn't take in any prepared parameters?
 			auto pending_query = connection->PendingQuery(std::move(statements[i]), false);
 			auto res = CompletePendingQuery(*pending_query);
 
@@ -370,19 +371,6 @@ unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(const string &query,
 		if (prep->HasError()) {
 			prep->error.Throw();
 		}
-	}
-
-	auto &named_param_map = prep->named_param_map;
-	if (py::isinstance<py::dict>(params)) {
-		if (named_param_map.empty()) {
-			throw InvalidInputException("Param is of type 'dict', but no named parameters were found in the query");
-		}
-		// Transform named parameters to regular positional parameters
-		params = TransformNamedParameters(named_param_map, params);
-		// Clear the map, we don't need it anymore
-		prep->named_param_map.clear();
-	} else if (!named_param_map.empty()) {
-		throw InvalidInputException("Named parameters found, but param is not of type 'dict'");
 	}
 
 	// this is a list of a list of parameters in executemany
@@ -400,12 +388,21 @@ unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(const string &query,
 			throw InvalidInputException("Prepared statement needs %d parameters, %d given", prep->n_param,
 			                            py::len(single_query_params));
 		}
-		auto args = DuckDBPyConnection::TransformPythonParamList(single_query_params);
+		vector<Value> unnamed_values;
+		case_insensitive_map_t<Value> named_values;
+		if (py::isinstance<py::list>(single_query_params)) {
+			unnamed_values = DuckDBPyConnection::TransformPythonParamList(single_query_params);
+		} else if (py::isinstance<py::dict>(single_query_params)) {
+			auto dict = py::cast<py::dict>(single_query_params);
+			named_values = DuckDBPyConnection::TransformPythonParamDict(dict);
+		} else {
+			throw InvalidInputException("Prepared parameters can only be passed as a list or a dictionary");
+		}
 		unique_ptr<QueryResult> res;
 		{
 			py::gil_scoped_release release;
 			unique_lock<std::mutex> lock(py_connection_lock);
-			auto pending_query = prep->PendingQuery(args);
+			auto pending_query = prep->PendingQuery(unnamed_values, named_values);
 			res = CompletePendingQuery(*pending_query);
 
 			if (res->HasError()) {
@@ -1370,6 +1367,17 @@ vector<Value> DuckDBPyConnection::TransformPythonParamList(const py::handle &par
 
 	for (auto param : params) {
 		args.emplace_back(TransformPythonValue(param, LogicalType::UNKNOWN, false));
+	}
+	return args;
+}
+
+case_insensitive_map_t<Value> DuckDBPyConnection::TransformPythonParamDict(const py::dict &params) {
+	case_insensitive_map_t<Value> args;
+
+	for (auto pair : params) {
+		auto &key = pair.first;
+		auto &value = pair.second;
+		args[std::string(py::str(key))] = TransformPythonValue(value, LogicalType::UNKNOWN, false);
 	}
 	return args;
 }
