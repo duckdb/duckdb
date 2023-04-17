@@ -281,23 +281,23 @@ void Executor::VerifyPipelines() {
 void Executor::Initialize(unique_ptr<PhysicalOperator> physical_plan) {
 	Reset();
 	owned_plan = std::move(physical_plan);
-	InitializeInternal(owned_plan.get());
+	InitializeInternal(*owned_plan);
 }
 
-void Executor::Initialize(PhysicalOperator *plan) {
+void Executor::Initialize(PhysicalOperator &plan) {
 	Reset();
 	InitializeInternal(plan);
 }
 
-void Executor::InitializeInternal(PhysicalOperator *plan) {
+void Executor::InitializeInternal(PhysicalOperator &plan) {
 
 	auto &scheduler = TaskScheduler::GetScheduler(context);
 	{
 		lock_guard<mutex> elock(executor_lock);
-		physical_plan = plan;
+		physical_plan = &plan;
 
 		this->profiler = ClientData::Get(context).profiler;
-		profiler->Initialize(physical_plan);
+		profiler->Initialize(plan);
 		this->producer = scheduler.CreateProducer();
 
 		// build and ready the pipelines

@@ -323,7 +323,7 @@ void PhysicalBatchInsert::Combine(ExecutionContext &context, GlobalSinkState &gs
 	auto &gstate = gstate_p.Cast<BatchInsertGlobalState>();
 	auto &lstate = lstate_p.Cast<BatchInsertLocalState>();
 	auto &client_profiler = QueryProfiler::Get(context.client);
-	context.thread.profiler.Flush(this, &lstate.default_executor, "default_executor", 1);
+	context.thread.profiler.Flush(*this, lstate.default_executor, "default_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
 
 	if (!lstate.current_collection) {

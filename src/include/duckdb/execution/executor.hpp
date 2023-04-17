@@ -12,7 +12,7 @@
 #include "duckdb/common/enums/pending_execution_result.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/pair.hpp"
-#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 
 namespace duckdb {
@@ -43,7 +43,7 @@ public:
 public:
 	static Executor &Get(ClientContext &context);
 
-	void Initialize(PhysicalOperator *physical_plan);
+	void Initialize(PhysicalOperator &physical_plan);
 	void Initialize(unique_ptr<PhysicalOperator> physical_plan);
 
 	void CancelTasks();
@@ -93,7 +93,7 @@ public:
 	bool ExecutionIsFinished();
 
 private:
-	void InitializeInternal(PhysicalOperator *physical_plan);
+	void InitializeInternal(PhysicalOperator &physical_plan);
 
 	void ScheduleEvents(const vector<shared_ptr<MetaPipeline>> &meta_pipelines);
 	static void ScheduleEventsInternal(ScheduleEventData &event_data);
@@ -112,7 +112,7 @@ private:
 	void VerifyPipelines();
 
 private:
-	PhysicalOperator *physical_plan;
+	optional_ptr<PhysicalOperator> physical_plan;
 	unique_ptr<PhysicalOperator> owned_plan;
 
 	mutex executor_lock;
