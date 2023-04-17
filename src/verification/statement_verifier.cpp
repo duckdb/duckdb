@@ -1,7 +1,7 @@
 #include "duckdb/verification/statement_verifier.hpp"
 
 #include "duckdb/common/preserved_error.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/verification/copied_statement_verifier.hpp"
 #include "duckdb/verification/deserialized_statement_verifier.hpp"

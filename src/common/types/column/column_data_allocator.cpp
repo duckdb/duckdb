@@ -1,6 +1,6 @@
-#include "duckdb/common/types/column_data_allocator.hpp"
+#include "duckdb/common/types/column/column_data_allocator.hpp"
 
-#include "duckdb/common/types/column_data_collection_segment.hpp"
+#include "duckdb/common/types/column/column_data_collection_segment.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 

@@ -1,4 +1,4 @@
-#include "duckdb/common/types/row_data_collection.hpp"
+#include "duckdb/common/types/row/row_data_collection.hpp"
 
 namespace duckdb {
 
