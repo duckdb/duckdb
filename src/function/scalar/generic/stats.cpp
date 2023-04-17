@@ -11,7 +11,7 @@ struct StatsBindData : public FunctionData {
 
 public:
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<StatsBindData>(stats);
+		return make_uniq<StatsBindData>(stats);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
@@ -21,8 +21,8 @@ public:
 };
 
 static void StatsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	auto &info = (StatsBindData &)*func_expr.bind_info;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &info = func_expr.bind_info->Cast<StatsBindData>();
 	if (info.stats.empty()) {
 		info.stats = "No statistics";
 	}
@@ -32,13 +32,13 @@ static void StatsFunction(DataChunk &args, ExpressionState &state, Vector &resul
 
 unique_ptr<FunctionData> StatsBind(ClientContext &context, ScalarFunction &bound_function,
                                    vector<unique_ptr<Expression>> &arguments) {
-	return make_unique<StatsBindData>();
+	return make_uniq<StatsBindData>();
 }
 
 static unique_ptr<BaseStatistics> StatsPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &bind_data = input.bind_data;
-	auto &info = (StatsBindData &)*bind_data;
+	auto &info = bind_data->Cast<StatsBindData>();
 	info.stats = child_stats[0].ToString();
 	return nullptr;
 }

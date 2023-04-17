@@ -6,12 +6,15 @@ include_directories(${pybind11_INCLUDE_DIR})
 include_directories(${PYTHON_INCLUDE_DIRS})
 
 add_subdirectory(pyrelation)
+add_subdirectory(typing)
+add_subdirectory(pyconnection)
 add_subdirectory(common)
 add_subdirectory(pandas)
 
 add_library(
   python_src OBJECT
   array_wrapper.cpp
+  path_like.cpp
   pyconnection.cpp
   python_import_cache.cpp
   pyrelation.cpp

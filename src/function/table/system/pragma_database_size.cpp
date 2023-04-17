@@ -15,7 +15,7 @@ struct PragmaDatabaseSizeData : public GlobalTableFunctionState {
 	}
 
 	idx_t index;
-	vector<AttachedDatabase *> databases;
+	vector<optional_ptr<AttachedDatabase>> databases;
 	Value memory_usage;
 	Value memory_limit;
 };
@@ -53,7 +53,7 @@ static unique_ptr<FunctionData> PragmaDatabaseSizeBind(ClientContext &context, T
 }
 
 unique_ptr<GlobalTableFunctionState> PragmaDatabaseSizeInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_unique<PragmaDatabaseSizeData>();
+	auto result = make_uniq<PragmaDatabaseSizeData>();
 	result->databases = DatabaseManager::Get(context).GetDatabases(context);
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	result->memory_usage = Value(StringUtil::BytesToHumanReadableString(buffer_manager.GetUsedMemory()));

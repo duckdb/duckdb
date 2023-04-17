@@ -44,6 +44,8 @@ jobs:
       BUILD_EXCEL: 1
       BUILD_ODBC: 1
       BUILD_JEMALLOC: 1
+      DEBUG_STACKTRACE: 1
+      BUILD_AUTOCOMPLETE: 1
       TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
       STATIC_LIBCPP: 1
@@ -534,86 +536,6 @@ jobs:
       shell: bash
       run: python scripts/test_vector_sizes.py
 
- linux-wasm-release:
-    name: WebAssembly Release
-    runs-on: ubuntu-20.04
-    needs: linux-release-64
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - name: Build Amalgamation
-      shell: bash
-      run: python scripts/amalgamation.py
-
-    - name: Setup
-      shell: bash
-      run: ./scripts/wasm_configure.sh
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Build Library Module
-      shell: bash
-      run: ./scripts/wasm_build_lib.sh Release
-
-    - name: Build Test Module
-      shell: bash
-      run: ./scripts/wasm_build_test.sh Release
-
-    - name: Test WASM Module
-      if: ${{ false }}
-      shell: bash
-      run: node ./test/wasm/hello_wasm_test.js
-
-    - name: Package
-      shell: bash
-      run: |
-        zip -j duckdb-wasm32-nothreads.zip ./.wasm/build/duckdb.wasm
-        python scripts/asset-upload-gha.py duckdb-wasm32-nothreads.zip
-
-    - uses: actions/upload-artifact@v3
-      with:
-        name: duckdb-wasm32-nothreads
-        path: |
-          duckdb-wasm32-nothreads.zip
-
- linux-wasm-experimental:
-    name: WebAssembly duckdb-wasm builds
-    runs-on: ubuntu-22.04
-    needs: linux-release-64
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - uses: mymindstorm/setup-emsdk@v11
-
-    - name: Setup
-      shell: bash
-      run: |
-        git clone --recurse-submodules https://github.com/duckdb/duckdb-wasm
-        cd duckdb-wasm
-        git checkout 2cee83b1
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Build WebAssembly
-      shell: bash
-      run: |
-        cd duckdb-wasm
-        bash scripts/wasm_build_lib.sh relsize mvp $(pwd)/..
-        bash scripts/wasm_build_lib.sh relsize eh $(pwd)/..
-        bash scripts/wasm_build_lib.sh relsize coi $(pwd)/..
-
  symbol-leakage:
     name: Symbol Leakage
     runs-on: ubuntu-20.04
@@ -686,6 +608,8 @@ jobs:
       BUILD_HTTPFS: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
+      BUILD_PARQUET: 1
+      BUILD_JSON: 1
       S3_TEST_SERVER_AVAILABLE: 1
       AWS_DEFAULT_REGION: eu-west-1
       AWS_ACCESS_KEY_ID: minio_duckdb_user

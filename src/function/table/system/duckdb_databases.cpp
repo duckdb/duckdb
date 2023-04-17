@@ -8,7 +8,7 @@ struct DuckDBDatabasesData : public GlobalTableFunctionState {
 	DuckDBDatabasesData() : offset(0) {
 	}
 
-	vector<AttachedDatabase *> entries;
+	vector<optional_ptr<AttachedDatabase>> entries;
 	idx_t offset;
 };
 
@@ -33,7 +33,7 @@ static unique_ptr<FunctionData> DuckDBDatabasesBind(ClientContext &context, Tabl
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBDatabasesInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_unique<DuckDBDatabasesData>();
+	auto result = make_uniq<DuckDBDatabasesData>();
 
 	// scan all the schemas for tables and collect them and collect them
 	auto &db_manager = DatabaseManager::Get(context);
@@ -53,7 +53,7 @@ void DuckDBDatabasesFunction(ClientContext &context, TableFunctionInput &data_p,
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset++];
 
-		auto &attached = (AttachedDatabase &)*entry;
+		auto &attached = entry->Cast<AttachedDatabase>();
 		// return values:
 
 		idx_t col = 0;

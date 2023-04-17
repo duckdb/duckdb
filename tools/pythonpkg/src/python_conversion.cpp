@@ -15,7 +15,7 @@ Value TransformListValue(py::handle ele);
 
 static Value EmptyMapValue() {
 	auto map_type = LogicalType::MAP(LogicalType::SQLNULL, LogicalType::SQLNULL);
-	return Value::MAP(ListType::GetChildType(map_type), std::vector<Value>());
+	return Value::MAP(ListType::GetChildType(map_type), vector<Value>());
 }
 
 vector<string> TransformStructKeys(py::handle keys, idx_t size, const LogicalType &type = LogicalType::UNKNOWN) {
@@ -280,7 +280,7 @@ PythonObjectType GetPythonObjectType(py::handle &ele) {
 		return PythonObjectType::MemoryView;
 	} else if (py::isinstance<py::bytes>(ele)) {
 		return PythonObjectType::Bytes;
-	} else if (py::isinstance<py::list>(ele)) {
+	} else if (py::isinstance<py::list>(ele) || py::isinstance<py::tuple>(ele)) {
 		return PythonObjectType::List;
 	} else if (py::isinstance<py::dict>(ele)) {
 		return PythonObjectType::Dict;

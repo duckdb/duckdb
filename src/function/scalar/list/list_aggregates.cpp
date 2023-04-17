@@ -22,7 +22,7 @@ struct ListAggregatesBindData : public FunctionData {
 	unique_ptr<Expression> aggr_expr;
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<ListAggregatesBindData>(stype, aggr_expr->Copy());
+		return make_uniq<ListAggregatesBindData>(stype, aggr_expr->Copy());
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
@@ -50,11 +50,12 @@ struct StateVector {
 	    : count(count_p), aggr_expr(std::move(aggr_expr_p)), state_vector(Vector(LogicalType::POINTER, count_p)) {
 	}
 
-	~StateVector() {
+	~StateVector() { // NOLINT
 		// destroy objects within the aggregate states
-		auto &aggr = (BoundAggregateExpression &)*aggr_expr;
+		auto &aggr = aggr_expr->Cast<BoundAggregateExpression>();
 		if (aggr.function.destructor) {
-			aggr.function.destructor(state_vector, count);
+			AggregateInputData aggr_input_data(aggr.bind_info.get(), Allocator::DefaultAllocator());
+			aggr.function.destructor(state_vector, aggr_input_data, count);
 		}
 	}
 
@@ -157,9 +158,9 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 	}
 
 	// get the aggregate function
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	auto &info = (ListAggregatesBindData &)*func_expr.bind_info;
-	auto &aggr = (BoundAggregateExpression &)*info.aggr_expr;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &info = func_expr.bind_info->Cast<ListAggregatesBindData>();
+	auto &aggr = info.aggr_expr->Cast<BoundAggregateExpression>();
 	AggregateInputData aggr_input_data(aggr.bind_info.get(), Allocator::DefaultAllocator());
 
 	D_ASSERT(aggr.function.update);
@@ -366,7 +367,7 @@ ListAggregatesBindFunction(ClientContext &context, ScalarFunction &bound_functio
 
 	// create the child expression and its type
 	vector<unique_ptr<Expression>> children;
-	auto expr = make_unique<BoundConstantExpression>(Value(list_child_type));
+	auto expr = make_uniq<BoundConstantExpression>(Value(list_child_type));
 	children.push_back(std::move(expr));
 	// push any extra arguments into the list aggregate bind
 	if (arguments.size() > 2) {
@@ -390,7 +391,7 @@ ListAggregatesBindFunction(ClientContext &context, ScalarFunction &bound_functio
 		    bound_aggr_function->ToString());
 	}
 
-	return make_unique<ListAggregatesBindData>(bound_function.return_type, std::move(bound_aggr_function));
+	return make_uniq<ListAggregatesBindData>(bound_function.return_type, std::move(bound_aggr_function));
 }
 
 template <bool IS_AGGR = false>
@@ -399,7 +400,7 @@ static unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, Scala
 	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
 		bound_function.arguments[0] = LogicalType::SQLNULL;
 		bound_function.return_type = LogicalType::SQLNULL;
-		return make_unique<VariableReturnBindData>(bound_function.return_type);
+		return make_uniq<VariableReturnBindData>(bound_function.return_type);
 	}
 
 	bool is_parameter = arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN;

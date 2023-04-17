@@ -24,8 +24,8 @@ namespace duckdb {
 class HivePartitioning {
 public:
 	//! Parse a filename that follows the hive partitioning scheme
-	DUCKDB_API static std::map<string, string> Parse(string &filename);
-	DUCKDB_API static std::map<string, string> Parse(string &filename, duckdb_re2::RE2 &regex);
+	DUCKDB_API static std::map<string, string> Parse(const string &filename);
+	DUCKDB_API static std::map<string, string> Parse(const string &filename, duckdb_re2::RE2 &regex);
 	//! Prunes a list of filenames based on a set of filters, can be used by TableFunctions in the
 	//! pushdown_complex_filter function to skip files with filename-based filters. Also removes the filters that always
 	//! evaluate to true.
@@ -75,7 +75,7 @@ public:
 	mutex lock;
 	hive_partition_map_t partition_map;
 	//! Used for incremental updating local copies of the partition map;
-	std::vector<hive_partition_map_t::const_iterator> partitions;
+	vector<hive_partition_map_t::const_iterator> partitions;
 };
 
 class HivePartitionedColumnData : public PartitionedColumnData {

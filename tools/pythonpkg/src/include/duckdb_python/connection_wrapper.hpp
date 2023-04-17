@@ -14,8 +14,32 @@ public:
 	static shared_ptr<DuckDBPyConnection> ExecuteMany(const string &query, py::object params = py::list(),
 	                                                  shared_ptr<DuckDBPyConnection> conn = nullptr);
 
+	static unique_ptr<DuckDBPyRelation> DistinctDF(const DataFrame &df, shared_ptr<DuckDBPyConnection> conn = nullptr);
+
+	static unique_ptr<DuckDBPyRelation> QueryDF(const DataFrame &df, const string &view_name, const string &sql_query,
+	                                            shared_ptr<DuckDBPyConnection> conn = nullptr);
+
+	static void WriteCsvDF(const DataFrame &df, const string &file, shared_ptr<DuckDBPyConnection> conn = nullptr);
+
+	static unique_ptr<DuckDBPyRelation> AggregateDF(const DataFrame &df, const string &expr, const string &groups = "",
+	                                                shared_ptr<DuckDBPyConnection> conn = nullptr);
+
 	static shared_ptr<DuckDBPyConnection> Execute(const string &query, py::object params = py::list(),
 	                                              bool many = false, shared_ptr<DuckDBPyConnection> conn = nullptr);
+
+	static shared_ptr<DuckDBPyType> ArrayType(const shared_ptr<DuckDBPyType> &type,
+	                                          shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static shared_ptr<DuckDBPyType> MapType(const shared_ptr<DuckDBPyType> &key, const shared_ptr<DuckDBPyType> &value,
+	                                        shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static shared_ptr<DuckDBPyType> StructType(const py::object &fields,
+	                                           const shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static shared_ptr<DuckDBPyType> UnionType(const py::object &members, shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static shared_ptr<DuckDBPyType> EnumType(const string &name, const shared_ptr<DuckDBPyType> &type,
+	                                         const py::list &values_p, shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static shared_ptr<DuckDBPyType> DecimalType(int width, int scale, shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static shared_ptr<DuckDBPyType> StringType(const string &collation = string(),
+	                                           shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static shared_ptr<DuckDBPyType> Type(const string &type_str, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static shared_ptr<DuckDBPyConnection> Append(const string &name, DataFrame value,
 	                                             shared_ptr<DuckDBPyConnection> conn = nullptr);
@@ -44,8 +68,6 @@ public:
 	static unique_ptr<DuckDBPyRelation> TableFunction(const string &fname, py::object params = py::list(),
 	                                                  shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> FromDF(const DataFrame &value, shared_ptr<DuckDBPyConnection> conn = nullptr);
-
 	static unique_ptr<DuckDBPyRelation> FromParquet(const string &file_glob, bool binary_as_string,
 	                                                bool file_row_number, bool filename, bool hive_partitioning,
 	                                                bool union_by_name, const py::object &compression = py::none(),
@@ -58,8 +80,6 @@ public:
 
 	static unique_ptr<DuckDBPyRelation> FromArrow(py::object &arrow_object,
 	                                              shared_ptr<DuckDBPyConnection> conn = nullptr);
-
-	static unique_ptr<DuckDBPyRelation> FromSubstrait(py::bytes &proto, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static unique_ptr<DuckDBPyRelation> GetSubstrait(const string &query, shared_ptr<DuckDBPyConnection> conn = nullptr,
 	                                                 bool enable_optimizer = true);
@@ -127,5 +147,30 @@ public:
 	static void UnregisterFilesystem(const py::str &name, shared_ptr<DuckDBPyConnection> conn);
 	static py::list ListFilesystems(shared_ptr<DuckDBPyConnection> conn);
 	static bool FileSystemIsRegistered(const string &name, shared_ptr<DuckDBPyConnection> conn);
+
+	static unique_ptr<DuckDBPyRelation> FromDF(const DataFrame &df, shared_ptr<DuckDBPyConnection> conn = nullptr);
+
+	static unique_ptr<DuckDBPyRelation> FromSubstrait(py::bytes &proto, shared_ptr<DuckDBPyConnection> conn = nullptr);
+
+	static unique_ptr<DuckDBPyRelation> FromSubstraitJSON(const string &json,
+	                                                      shared_ptr<DuckDBPyConnection> conn = nullptr);
+
+	static unique_ptr<DuckDBPyRelation> FromParquetDefault(const string &filename,
+	                                                       shared_ptr<DuckDBPyConnection> conn = nullptr);
+
+	static unique_ptr<DuckDBPyRelation> ProjectDf(const DataFrame &df, const string &expr,
+	                                              shared_ptr<DuckDBPyConnection> conn = nullptr);
+
+	static unique_ptr<DuckDBPyRelation> AliasDF(const DataFrame &df, const string &expr,
+	                                            shared_ptr<DuckDBPyConnection> conn = nullptr);
+
+	static unique_ptr<DuckDBPyRelation> FilterDf(const DataFrame &df, const string &expr,
+	                                             shared_ptr<DuckDBPyConnection> conn = nullptr);
+
+	static unique_ptr<DuckDBPyRelation> LimitDF(const DataFrame &df, int64_t n,
+	                                            shared_ptr<DuckDBPyConnection> conn = nullptr);
+
+	static unique_ptr<DuckDBPyRelation> OrderDf(const DataFrame &df, const string &expr,
+	                                            shared_ptr<DuckDBPyConnection> conn = nullptr);
 };
 } // namespace duckdb

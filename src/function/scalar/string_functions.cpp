@@ -39,12 +39,14 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<CHR>();
 	Register<MismatchesFun>();
 	Register<LevenshteinFun>();
+	Register<DamerauLevenshteinFun>();
 	Register<JaccardFun>();
 	Register<JaroWinklerFun>();
 
 	// blob functions
 	Register<Base64Fun>();
 	Register<EncodeFun>();
+	Register<HexFun>();
 
 	// bit functions
 	Register<GetBitFun>();

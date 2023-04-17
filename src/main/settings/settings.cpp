@@ -142,6 +142,26 @@ Value DebugForceNoCrossProduct::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Debug Ordered Aggregate Threshold
+//===--------------------------------------------------------------------===//
+
+void OrderedAggregateThreshold::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).ordered_aggregate_threshold = ClientConfig().ordered_aggregate_threshold;
+}
+
+void OrderedAggregateThreshold::SetLocal(ClientContext &context, const Value &input) {
+	const auto param = input.GetValue<uint64_t>();
+	if (!param) {
+		throw ParserException("Invalid option for PRAGMA ordered_aggregate_threshold, value must be positive");
+	}
+	ClientConfig::GetConfig(context).ordered_aggregate_threshold = param;
+}
+
+Value OrderedAggregateThreshold::GetSetting(ClientContext &context) {
+	return Value::UBIGINT(ClientConfig::GetConfig(context).ordered_aggregate_threshold);
+}
+
+//===--------------------------------------------------------------------===//
 // Debug Window Mode
 //===--------------------------------------------------------------------===//
 void DebugWindowMode::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -454,11 +474,15 @@ Value CustomExtensionRepository::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 
 void EnableProgressBarSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).enable_progress_bar = ClientConfig().enable_progress_bar;
+	auto &config = ClientConfig::GetConfig(context);
+	ProgressBar::SystemOverrideCheck(config);
+	config.enable_progress_bar = ClientConfig().enable_progress_bar;
 }
 
 void EnableProgressBarSetting::SetLocal(ClientContext &context, const Value &input) {
-	ClientConfig::GetConfig(context).enable_progress_bar = input.GetValue<bool>();
+	auto &config = ClientConfig::GetConfig(context);
+	ProgressBar::SystemOverrideCheck(config);
+	config.enable_progress_bar = input.GetValue<bool>();
 }
 
 Value EnableProgressBarSetting::GetSetting(ClientContext &context) {
@@ -469,11 +493,15 @@ Value EnableProgressBarSetting::GetSetting(ClientContext &context) {
 // Enable Progress Bar Print
 //===--------------------------------------------------------------------===//
 void EnableProgressBarPrintSetting::SetLocal(ClientContext &context, const Value &input) {
-	ClientConfig::GetConfig(context).print_progress_bar = input.GetValue<bool>();
+	auto &config = ClientConfig::GetConfig(context);
+	ProgressBar::SystemOverrideCheck(config);
+	config.print_progress_bar = input.GetValue<bool>();
 }
 
 void EnableProgressBarPrintSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).print_progress_bar = ClientConfig().print_progress_bar;
+	auto &config = ClientConfig::GetConfig(context);
+	ProgressBar::SystemOverrideCheck(config);
+	config.print_progress_bar = ClientConfig().print_progress_bar;
 }
 
 Value EnableProgressBarPrintSetting::GetSetting(ClientContext &context) {
@@ -653,6 +681,22 @@ Value HomeDirectorySetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Integer Division
+//===--------------------------------------------------------------------===//
+void IntegerDivisionSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).integer_division = ClientConfig().integer_division;
+}
+
+void IntegerDivisionSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.integer_division = input.GetValue<bool>();
+}
+
+Value IntegerDivisionSetting::GetSetting(ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value(config.integer_division);
+}
+//===--------------------------------------------------------------------===//
 // Log Query Path
 //===--------------------------------------------------------------------===//
 
@@ -670,8 +714,8 @@ void LogQueryPathSetting::SetLocal(ClientContext &context, const Value &input) {
 		client_data.log_query_writer = nullptr;
 	} else {
 		client_data.log_query_writer =
-		    make_unique<BufferedFileWriter>(FileSystem::GetFileSystem(context), path,
-		                                    BufferedFileWriter::DEFAULT_OPEN_FLAGS, client_data.file_opener.get());
+		    make_uniq<BufferedFileWriter>(FileSystem::GetFileSystem(context), path,
+		                                  BufferedFileWriter::DEFAULT_OPEN_FLAGS, client_data.file_opener.get());
 	}
 }
 
@@ -755,7 +799,7 @@ void PerfectHashThresholdSetting::ResetLocal(ClientContext &context) {
 }
 
 void PerfectHashThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto bits = input.GetValue<int32_t>();
+	auto bits = input.GetValue<int64_t>();
 	if (bits < 0 || bits > 32) {
 		throw ParserException("Perfect HT threshold out of range: should be within range 0 - 32");
 	}
@@ -764,6 +808,22 @@ void PerfectHashThresholdSetting::SetLocal(ClientContext &context, const Value &
 
 Value PerfectHashThresholdSetting::GetSetting(ClientContext &context) {
 	return Value::BIGINT(ClientConfig::GetConfig(context).perfect_ht_threshold);
+}
+
+//===--------------------------------------------------------------------===//
+// Pivot Limit
+//===--------------------------------------------------------------------===//
+
+void PivotLimitSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).pivot_limit = ClientConfig().pivot_limit;
+}
+
+void PivotLimitSetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).pivot_limit = input.GetValue<uint64_t>();
+}
+
+Value PivotLimitSetting::GetSetting(ClientContext &context) {
+	return Value::BIGINT(ClientConfig::GetConfig(context).pivot_limit);
 }
 
 //===--------------------------------------------------------------------===//
@@ -878,13 +938,17 @@ Value ProfilingModeSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 
 void ProgressBarTimeSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).wait_time = ClientConfig().wait_time;
-	ClientConfig::GetConfig(context).enable_progress_bar = ClientConfig().enable_progress_bar;
+	auto &config = ClientConfig::GetConfig(context);
+	ProgressBar::SystemOverrideCheck(config);
+	config.wait_time = ClientConfig().wait_time;
+	config.enable_progress_bar = ClientConfig().enable_progress_bar;
 }
 
 void ProgressBarTimeSetting::SetLocal(ClientContext &context, const Value &input) {
-	ClientConfig::GetConfig(context).wait_time = input.GetValue<int32_t>();
-	ClientConfig::GetConfig(context).enable_progress_bar = true;
+	auto &config = ClientConfig::GetConfig(context);
+	ProgressBar::SystemOverrideCheck(config);
+	config.wait_time = input.GetValue<int32_t>();
+	config.enable_progress_bar = true;
 }
 
 Value ProgressBarTimeSetting::GetSetting(ClientContext &context) {

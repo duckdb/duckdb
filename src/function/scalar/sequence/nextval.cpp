@@ -15,62 +15,62 @@
 namespace duckdb {
 
 struct NextvalBindData : public FunctionData {
-	explicit NextvalBindData(SequenceCatalogEntry *sequence) : sequence(sequence) {
+	explicit NextvalBindData(optional_ptr<SequenceCatalogEntry> sequence) : sequence(sequence) {
 	}
 
 	//! The sequence to use for the nextval computation; only if the sequence is a constant
-	SequenceCatalogEntry *sequence;
+	optional_ptr<SequenceCatalogEntry> sequence;
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<NextvalBindData>(sequence);
+		return make_uniq<NextvalBindData>(sequence);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (NextvalBindData &)other_p;
+		auto &other = other_p.Cast<NextvalBindData>();
 		return sequence == other.sequence;
 	}
 };
 
 struct CurrentSequenceValueOperator {
-	static int64_t Operation(DuckTransaction &transaction, SequenceCatalogEntry *seq) {
-		lock_guard<mutex> seqlock(seq->lock);
+	static int64_t Operation(DuckTransaction &transaction, SequenceCatalogEntry &seq) {
+		lock_guard<mutex> seqlock(seq.lock);
 		int64_t result;
-		if (seq->usage_count == 0u) {
+		if (seq.usage_count == 0u) {
 			throw SequenceException("currval: sequence is not yet defined in this session");
 		}
-		result = seq->last_value;
+		result = seq.last_value;
 		return result;
 	}
 };
 
 struct NextSequenceValueOperator {
-	static int64_t Operation(DuckTransaction &transaction, SequenceCatalogEntry *seq) {
-		lock_guard<mutex> seqlock(seq->lock);
+	static int64_t Operation(DuckTransaction &transaction, SequenceCatalogEntry &seq) {
+		lock_guard<mutex> seqlock(seq.lock);
 		int64_t result;
-		result = seq->counter;
-		bool overflow = !TryAddOperator::Operation(seq->counter, seq->increment, seq->counter);
-		if (seq->cycle) {
+		result = seq.counter;
+		bool overflow = !TryAddOperator::Operation(seq.counter, seq.increment, seq.counter);
+		if (seq.cycle) {
 			if (overflow) {
-				seq->counter = seq->increment < 0 ? seq->max_value : seq->min_value;
-			} else if (seq->counter < seq->min_value) {
-				seq->counter = seq->max_value;
-			} else if (seq->counter > seq->max_value) {
-				seq->counter = seq->min_value;
+				seq.counter = seq.increment < 0 ? seq.max_value : seq.min_value;
+			} else if (seq.counter < seq.min_value) {
+				seq.counter = seq.max_value;
+			} else if (seq.counter > seq.max_value) {
+				seq.counter = seq.min_value;
 			}
 		} else {
-			if (result < seq->min_value || (overflow && seq->increment < 0)) {
-				throw SequenceException("nextval: reached minimum value of sequence \"%s\" (%lld)", seq->name,
-				                        seq->min_value);
+			if (result < seq.min_value || (overflow && seq.increment < 0)) {
+				throw SequenceException("nextval: reached minimum value of sequence \"%s\" (%lld)", seq.name,
+				                        seq.min_value);
 			}
-			if (result > seq->max_value || overflow) {
-				throw SequenceException("nextval: reached maximum value of sequence \"%s\" (%lld)", seq->name,
-				                        seq->max_value);
+			if (result > seq.max_value || overflow) {
+				throw SequenceException("nextval: reached maximum value of sequence \"%s\" (%lld)", seq.name,
+				                        seq.max_value);
 			}
 		}
-		seq->last_value = result;
-		seq->usage_count++;
-		if (!seq->temporary) {
-			transaction.sequence_usage[seq] = SequenceValue(seq->usage_count, seq->counter);
+		seq.last_value = result;
+		seq.usage_count++;
+		if (!seq.temporary) {
+			transaction.sequence_usage[&seq] = SequenceValue(seq.usage_count, seq.counter);
 		}
 		return result;
 	}
@@ -85,8 +85,8 @@ SequenceCatalogEntry *BindSequence(ClientContext &context, const string &name) {
 
 template <class OP>
 static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	auto &info = (NextvalBindData &)*func_expr.bind_info;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &info = func_expr.bind_info->Cast<NextvalBindData>();
 	auto &input = args.data[0];
 
 	auto &context = state.GetContext();
@@ -98,7 +98,7 @@ static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &res
 		auto result_data = FlatVector::GetData<int64_t>(result);
 		for (idx_t i = 0; i < args.size(); i++) {
 			// get the next value from the sequence
-			result_data[i] = OP::Operation(transaction, info.sequence);
+			result_data[i] = OP::Operation(transaction, *info.sequence);
 		}
 	} else {
 		// sequence to use comes from the input
@@ -107,7 +107,7 @@ static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &res
 			auto sequence = BindSequence(context, value.GetString());
 			// finally get the next value from the sequence
 			auto &transaction = DuckTransaction::Get(context, *sequence->catalog);
-			return OP::Operation(transaction, sequence);
+			return OP::Operation(transaction, *sequence);
 		});
 	}
 }
@@ -123,13 +123,13 @@ static unique_ptr<FunctionData> NextValBind(ClientContext &context, ScalarFuncti
 			sequence = BindSequence(context, seqname.ToString());
 		}
 	}
-	return make_unique<NextvalBindData>(sequence);
+	return make_uniq<NextvalBindData>(sequence);
 }
 
 static void NextValDependency(BoundFunctionExpression &expr, DependencyList &dependencies) {
-	auto &info = (NextvalBindData &)*expr.bind_info;
+	auto &info = expr.bind_info->Cast<NextvalBindData>();
 	if (info.sequence) {
-		dependencies.AddDependency(info.sequence);
+		dependencies.AddDependency(*info.sequence);
 	}
 }
 

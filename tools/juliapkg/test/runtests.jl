@@ -8,6 +8,7 @@ using UUIDs
 test_files = [
     "test_appender.jl",
     "test_basic_queries.jl",
+    "test_big_nested.jl",
     "test_config.jl",
     "test_connection.jl",
     "test_df_scan.jl",
@@ -22,7 +23,8 @@ test_files = [
     "test_decimals.jl",
     "test_threading.jl",
     "test_tpch.jl",
-    "test_tpch_multithread.jl"
+    "test_tpch_multithread.jl",
+    "test_stream_data_chunk.jl"
 ]
 
 if size(ARGS)[1] > 0

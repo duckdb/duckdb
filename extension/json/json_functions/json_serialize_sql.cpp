@@ -1,7 +1,12 @@
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "json_deserializer.hpp"
 #include "json_functions.hpp"
 #include "json_serializer.hpp"
-#include "duckdb/parser/parser.hpp"
-#include "duckdb/execution/expression_executor.hpp"
+
+#include "duckdb/main/connection.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -16,7 +21,7 @@ struct JsonSerializeBindData : public FunctionData {
 
 public:
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<JsonSerializeBindData>(skip_if_null, skip_if_empty, format);
+		return make_uniq<JsonSerializeBindData>(skip_if_null, skip_if_empty, format);
 	}
 	bool Equals(const FunctionData &other_p) const override {
 		return true;
@@ -66,7 +71,7 @@ static unique_ptr<FunctionData> JsonSerializeBind(ClientContext &context, Scalar
 			throw BinderException(StringUtil::Format("Unknown argument to json_serialize_sql: %s", arg->alias.c_str()));
 		}
 	}
-	return make_unique<JsonSerializeBindData>(skip_if_null, skip_if_empty, format);
+	return make_uniq<JsonSerializeBindData>(skip_if_null, skip_if_empty, format);
 }
 
 static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -74,8 +79,8 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto alc = local_state.json_allocator.GetYYJSONAllocator();
 	auto &inputs = args.data[0];
 
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	const auto &info = (JsonSerializeBindData &)*func_expr.bind_info;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	const auto &info = func_expr.bind_info->Cast<JsonSerializeBindData>();
 
 	UnaryExecutor::Execute<string_t, string_t>(inputs, result, args.size(), [&](string_t input) {
 		auto doc = JSONCommon::CreateDocument(alc);
@@ -92,7 +97,7 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 				if (statement->type != StatementType::SELECT_STATEMENT) {
 					throw NotImplementedException("Only SELECT statements can be serialized to json!");
 				}
-				auto &select = (SelectStatement &)*statement;
+				auto &select = statement->Cast<SelectStatement>();
 				auto serializer = JsonSerializer(doc, info.skip_if_null, info.skip_if_empty);
 				select.FormatSerialize(serializer);
 				auto json = serializer.GetRootObject();
@@ -106,6 +111,10 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 			auto data = yyjson_mut_val_write_opts(result_obj,
 			                                      info.format ? JSONCommon::WRITE_PRETTY_FLAG : JSONCommon::WRITE_FLAG,
 			                                      alc, (size_t *)&len, nullptr);
+			if (data == nullptr) {
+				throw SerializationException(
+				    "Failed to serialize json, perhaps the query contains invalid utf8 characters?");
+			}
 			return StringVector::AddString(result, data, len);
 
 		} catch (Exception &exception) {
@@ -142,6 +151,129 @@ CreateScalarFunctionInfo JSONFunctions::GetSerializeSqlFunction() {
 	                   JSONFunctionLocalState::Init));
 
 	return CreateScalarFunctionInfo(set);
+}
+
+//----------------------------------------------------------------------
+// JSON DESERIALIZE
+//----------------------------------------------------------------------
+static unique_ptr<SelectStatement> DeserializeSelectStatement(string_t input, yyjson_alc *alc) {
+	auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);
+	if (!doc) {
+		throw ParserException("Could not parse json");
+	}
+	auto root = doc->root;
+	auto err = yyjson_obj_get(root, "error");
+	if (err && yyjson_is_true(err)) {
+		auto err_type = yyjson_obj_get(root, "error_type");
+		auto err_msg = yyjson_obj_get(root, "error_message");
+		if (err_type && err_msg) {
+			throw ParserException("Error parsing json: %s: %s", yyjson_get_str(err_type), yyjson_get_str(err_msg));
+		}
+		throw ParserException(
+		    "Error parsing json, expected error property to contain 'error_type' and 'error_message'");
+	}
+
+	auto statements = yyjson_obj_get(root, "statements");
+	if (!statements || !yyjson_is_arr(statements)) {
+		throw ParserException("Error parsing json: no statements array");
+	}
+	auto size = yyjson_arr_size(statements);
+	if (size == 0) {
+		throw ParserException("Error parsing json: no statements");
+	}
+	if (size > 1) {
+		throw ParserException("Error parsing json: more than one statement");
+	}
+	auto stmt_json = yyjson_arr_get(statements, 0);
+	JsonDeserializer deserializer(stmt_json, doc);
+	return SelectStatement::FormatDeserialize(deserializer);
+}
+
+//----------------------------------------------------------------------
+// JSON DESERIALIZE SQL FUNCTION
+//----------------------------------------------------------------------
+static void JsonDeserializeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+
+	auto &local_state = JSONFunctionLocalState::ResetAndGet(state);
+	auto alc = local_state.json_allocator.GetYYJSONAllocator();
+	auto &inputs = args.data[0];
+
+	UnaryExecutor::Execute<string_t, string_t>(inputs, result, args.size(), [&](string_t input) {
+		auto stmt = DeserializeSelectStatement(input, alc);
+		return StringVector::AddString(result, stmt->ToString());
+	});
+}
+
+CreateScalarFunctionInfo JSONFunctions::GetDeserializeSqlFunction() {
+	ScalarFunctionSet set("json_deserialize_sql");
+	set.AddFunction(ScalarFunction({JSONCommon::JSONType()}, LogicalType::VARCHAR, JsonDeserializeFunction, nullptr,
+	                               nullptr, nullptr, JSONFunctionLocalState::Init));
+	return CreateScalarFunctionInfo(set);
+}
+
+//----------------------------------------------------------------------
+// JSON EXECUTE SERIALIZED SQL (PRAGMA)
+//----------------------------------------------------------------------
+static string ExecuteJsonSerializedSqlPragmaFunction(ClientContext &context, const FunctionParameters &parameters) {
+	JSONFunctionLocalState local_state(context);
+	auto alc = local_state.json_allocator.GetYYJSONAllocator();
+
+	auto input = parameters.values[0].GetValueUnsafe<string_t>();
+	auto stmt = DeserializeSelectStatement(input, alc);
+	return stmt->ToString();
+}
+
+CreatePragmaFunctionInfo JSONFunctions::GetExecuteJsonSerializedSqlPragmaFunction() {
+	return CreatePragmaFunctionInfo(PragmaFunction::PragmaCall(
+	    "json_execute_serialized_sql", ExecuteJsonSerializedSqlPragmaFunction, {LogicalType::VARCHAR}));
+}
+
+//----------------------------------------------------------------------
+// JSON EXECUTE SERIALIZED SQL (TABLE FUNCTION)
+//----------------------------------------------------------------------
+struct ExecuteSqlTableFunction {
+	struct BindData : public TableFunctionData {
+		shared_ptr<Relation> plan;
+		unique_ptr<QueryResult> result;
+		unique_ptr<Connection> con;
+	};
+
+	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
+	                                     vector<LogicalType> &return_types, vector<string> &names) {
+		JSONFunctionLocalState local_state(context);
+		auto alc = local_state.json_allocator.GetYYJSONAllocator();
+
+		auto result = make_uniq<BindData>();
+
+		result->con = make_uniq<Connection>(*context.db);
+		auto serialized = input.inputs[0].GetValueUnsafe<string>();
+		auto stmt = DeserializeSelectStatement(serialized, alc);
+		result->plan = result->con->RelationFromQuery(std::move(stmt));
+
+		for (auto &col : result->plan->Columns()) {
+			return_types.emplace_back(col.Type());
+			names.emplace_back(col.Name());
+		}
+		return std::move(result);
+	}
+
+	static void Function(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+		auto &data = (BindData &)*data_p.bind_data;
+		if (!data.result) {
+			data.result = data.plan->Execute();
+		}
+		auto result_chunk = data.result->Fetch();
+		if (!result_chunk) {
+			return;
+		}
+		output.Move(*result_chunk);
+	}
+};
+
+CreateTableFunctionInfo JSONFunctions::GetExecuteJsonSerializedSqlFunction() {
+	TableFunction func("json_execute_serialized_sql", {LogicalType::VARCHAR}, ExecuteSqlTableFunction::Function,
+	                   ExecuteSqlTableFunction::Bind);
+	return CreateTableFunctionInfo(func);
 }
 
 } // namespace duckdb

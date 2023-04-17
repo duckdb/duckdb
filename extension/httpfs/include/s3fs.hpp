@@ -18,7 +18,8 @@
 namespace duckdb {
 
 struct AWSEnvironmentCredentialsProvider {
-	static constexpr const char *REGION_ENV_VAR = "AWS_DEFAULT_REGION";
+	static constexpr const char *REGION_ENV_VAR = "AWS_REGION";
+	static constexpr const char *DEFAULT_REGION_ENV_VAR = "AWS_DEFAULT_REGION";
 	static constexpr const char *ACCESS_KEY_ENV_VAR = "AWS_ACCESS_KEY_ID";
 	static constexpr const char *SECRET_KEY_ENV_VAR = "AWS_SECRET_ACCESS_KEY";
 	static constexpr const char *SESSION_TOKEN_ENV_VAR = "AWS_SESSION_TOKEN";
@@ -169,15 +170,18 @@ public:
 	string GetName() const override;
 
 public:
-	unique_ptr<ResponseWrapper> HeadRequest(FileHandle &handle, string s3_url, HeaderMap header_map) override;
-	unique_ptr<ResponseWrapper> GetRequest(FileHandle &handle, string url, HeaderMap header_map) override;
-	unique_ptr<ResponseWrapper> GetRangeRequest(FileHandle &handle, string s3_url, HeaderMap header_map,
-	                                            idx_t file_offset, char *buffer_out, idx_t buffer_out_len) override;
-	unique_ptr<ResponseWrapper> PostRequest(FileHandle &handle, string s3_url, HeaderMap header_map,
-	                                        unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len, char *buffer_in,
-	                                        idx_t buffer_in_len, string http_params = "") override;
-	unique_ptr<ResponseWrapper> PutRequest(FileHandle &handle, string s3_url, HeaderMap header_map, char *buffer_in,
-	                                       idx_t buffer_in_len, string http_params = "") override;
+	duckdb::unique_ptr<ResponseWrapper> HeadRequest(FileHandle &handle, string s3_url, HeaderMap header_map) override;
+	duckdb::unique_ptr<ResponseWrapper> GetRequest(FileHandle &handle, string url, HeaderMap header_map) override;
+	duckdb::unique_ptr<ResponseWrapper> GetRangeRequest(FileHandle &handle, string s3_url, HeaderMap header_map,
+	                                                    idx_t file_offset, char *buffer_out,
+	                                                    idx_t buffer_out_len) override;
+	duckdb::unique_ptr<ResponseWrapper> PostRequest(FileHandle &handle, string s3_url, HeaderMap header_map,
+	                                                duckdb::unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len,
+	                                                char *buffer_in, idx_t buffer_in_len,
+	                                                string http_params = "") override;
+	duckdb::unique_ptr<ResponseWrapper> PutRequest(FileHandle &handle, string s3_url, HeaderMap header_map,
+	                                               char *buffer_in, idx_t buffer_in_len,
+	                                               string http_params = "") override;
 
 	static void Verify();
 
@@ -216,8 +220,8 @@ public:
 	}
 
 protected:
-	unique_ptr<HTTPFileHandle> CreateHandle(const string &path, uint8_t flags, FileLockType lock,
-	                                        FileCompressionType compression, FileOpener *opener) override;
+	duckdb::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, uint8_t flags, FileLockType lock,
+	                                                FileCompressionType compression, FileOpener *opener) override;
 
 	void FlushBuffer(S3FileHandle &handle, shared_ptr<S3WriteBuffer> write_buffer);
 	string GetPayloadHash(char *buffer, idx_t buffer_len);

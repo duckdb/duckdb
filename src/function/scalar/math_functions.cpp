@@ -10,6 +10,7 @@ void BuiltinFunctions::RegisterMathFunctions() {
 	Register<CeilFun>();
 	Register<FloorFun>();
 	Register<RoundFun>();
+	Register<TruncFun>();
 
 	Register<DegreesFun>();
 	Register<RadiansFun>();
@@ -41,6 +42,9 @@ void BuiltinFunctions::RegisterMathFunctions() {
 	Register<SignBitFun>();
 	Register<IsInfiniteFun>();
 	Register<IsFiniteFun>();
+
+	Register<GreatestCommonDivisorFun>();
+	Register<LeastCommonMultipleFun>();
 }
 
 } // namespace duckdb

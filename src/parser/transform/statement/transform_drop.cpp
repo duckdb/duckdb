@@ -5,7 +5,7 @@ namespace duckdb {
 
 unique_ptr<SQLStatement> Transformer::TransformDrop(duckdb_libpgquery::PGNode *node) {
 	auto stmt = (duckdb_libpgquery::PGDropStmt *)(node);
-	auto result = make_unique<DropStatement>();
+	auto result = make_uniq<DropStatement>();
 	auto &info = *result->info.get();
 	D_ASSERT(stmt);
 	if (stmt->objects->length != 1) {

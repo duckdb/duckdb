@@ -88,7 +88,7 @@ SELECT four, ten, sum(ten) over (partition by four order by ten range between un
 
 # unbounded following with expressions
 query IIRI
-SELECT four, ten/4 as two, 	sum(ten/4) over (partition by four order by ten/4 range between unbounded preceding and current row) st, last_value(ten/4) over (partition by four order by ten/4 range between unbounded preceding and current row) lt FROM tenk1d order by four, ten/4
+SELECT four, ten//4 as two, 	sum(ten//4) over (partition by four order by ten//4 range between unbounded preceding and current row) st, last_value(ten//4) over (partition by four order by ten//4 range between unbounded preceding and current row) lt FROM tenk1d order by four, ten//4
 ----
 0	0	0.000000	0
 0	0	0.000000	0
@@ -113,7 +113,7 @@ SELECT four, ten/4 as two, 	sum(ten/4) over (partition by four order by ten/4 ra
 
 # unbounded following with named windows
 query IIRI
-SELECT four, ten/4 as two, sum(ten/4) OVER w st, last_value(ten/4) OVER w lt FROM tenk1d WINDOW w AS (partition by four order by ten/4 range between unbounded preceding and current row) order by four, ten/4 
+SELECT four, ten//4 as two, sum(ten//4) OVER w st, last_value(ten//4) OVER w lt FROM tenk1d WINDOW w AS (partition by four order by ten//4 range between unbounded preceding and current row) order by four, ten//4
 ----
 0	0	0.000000	0
 0	0	0.000000	0

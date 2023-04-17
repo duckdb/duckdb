@@ -40,6 +40,8 @@ struct ClientConfig {
 	//! to output anything
 	bool emit_profiler_output = true;
 
+	//! system-wide progress bar disable.
+	const char *system_progress_bar_disable_reason = nullptr;
 	//! If the progress bar is enabled or not.
 	bool enable_progress_bar = false;
 	//! If the print of the progress bar is enabled
@@ -75,6 +77,8 @@ struct ClientConfig {
 	//! Maximum bits allowed for using a perfect hash table (i.e. the perfect HT can hold up to 2^perfect_ht_threshold
 	//! elements)
 	idx_t perfect_ht_threshold = 12;
+	//! The maximum number of rows to accumulate before sorting ordered aggregates.
+	idx_t ordered_aggregate_threshold = (idx_t(1) << 18);
 
 	//! Callback to create a progress bar display
 	progress_bar_display_create_func_t display_create_func = nullptr;
@@ -84,6 +88,12 @@ struct ClientConfig {
 
 	//! The explain output type used when none is specified (default: PHYSICAL_ONLY)
 	ExplainOutputType explain_output_type = ExplainOutputType::PHYSICAL_ONLY;
+
+	//! The maximum amount of pivot columns
+	idx_t pivot_limit = 100000;
+
+	//! Whether or not the "/" division operator defaults to integer division or floating point division
+	bool integer_division = false;
 
 	//! Generic options
 	case_insensitive_map_t<Value> set_variables;
@@ -95,8 +105,6 @@ struct ClientConfig {
 public:
 	static ClientConfig &GetConfig(ClientContext &context);
 	static const ClientConfig &GetConfig(const ClientContext &context);
-
-	static string ExtractTimezoneFromConfig(ClientConfig &config);
 
 	string ExtractTimezone() const;
 

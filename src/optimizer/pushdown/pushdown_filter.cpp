@@ -8,7 +8,7 @@ using Filter = FilterPushdown::Filter;
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownFilter(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_FILTER);
-	auto &filter = (LogicalFilter &)*op;
+	auto &filter = op->Cast<LogicalFilter>();
 	if (!filter.projection_map.empty()) {
 		return FinishPushdown(std::move(op));
 	}
@@ -16,7 +16,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownFilter(unique_ptr<LogicalOpe
 	for (auto &expression : filter.expressions) {
 		if (AddFilter(std::move(expression)) == FilterResult::UNSATISFIABLE) {
 			// filter statically evaluates to false, strip tree
-			return make_unique<LogicalEmptyResult>(std::move(op));
+			return make_uniq<LogicalEmptyResult>(std::move(op));
 		}
 	}
 	GenerateFilters();

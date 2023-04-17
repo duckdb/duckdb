@@ -16,6 +16,7 @@
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/storage/table/append_state.hpp"
 
 namespace duckdb {
 
@@ -52,10 +53,10 @@ PhysicalInsert::PhysicalInsert(vector<LogicalType> types_p, TableCatalogEntry *t
 	}
 }
 
-PhysicalInsert::PhysicalInsert(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<BoundCreateTableInfo> info_p,
+PhysicalInsert::PhysicalInsert(LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info_p,
                                idx_t estimated_cardinality, bool parallel)
     : PhysicalOperator(PhysicalOperatorType::CREATE_TABLE_AS, op.types, estimated_cardinality), insert_table(nullptr),
-      return_chunk(false), schema(schema), info(std::move(info_p)), parallel(parallel),
+      return_chunk(false), schema(&schema), info(std::move(info_p)), parallel(parallel),
       action_type(OnConflictAction::THROW) {
 	GetInsertInfo(*info, insert_types, bound_defaults);
 }
@@ -65,7 +66,7 @@ void PhysicalInsert::GetInsertInfo(const BoundCreateTableInfo &info, vector<Logi
 	auto &create_info = (CreateTableInfo &)*info.base;
 	for (auto &col : create_info.columns.Physical()) {
 		insert_types.push_back(col.GetType());
-		bound_defaults.push_back(make_unique<BoundConstantExpression>(Value(col.GetType())));
+		bound_defaults.push_back(make_uniq<BoundConstantExpression>(Value(col.GetType())));
 	}
 }
 
@@ -79,7 +80,7 @@ public:
 	}
 
 	mutex lock;
-	DuckTableEntry *table;
+	optional_ptr<DuckTableEntry> table;
 	idx_t insert_count;
 	bool initialized;
 	LocalAppendState append_state;
@@ -98,19 +99,19 @@ public:
 	ExpressionExecutor default_executor;
 	TableAppendState local_append_state;
 	unique_ptr<RowGroupCollection> local_collection;
-	OptimisticDataWriter *writer;
+	optional_ptr<OptimisticDataWriter> writer;
 	// Rows that have been updated by a DO UPDATE conflict
 	unordered_set<row_t> updated_rows;
 };
 
 unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &context) const {
-	auto result = make_unique<InsertGlobalState>(context, GetTypes());
+	auto result = make_uniq<InsertGlobalState>(context, GetTypes());
 	if (info) {
 		// CREATE TABLE AS
 		D_ASSERT(!insert_table);
 		auto &catalog = *schema->catalog;
-		result->table =
-		    (DuckTableEntry *)catalog.CreateTable(catalog.GetCatalogTransaction(context), schema, info.get());
+		result->table = (DuckTableEntry *)catalog.CreateTable(catalog.GetCatalogTransaction(context),
+		                                                      *schema.get_mutable(), info.get());
 	} else {
 		D_ASSERT(insert_table);
 		D_ASSERT(insert_table->IsDuckTable());
@@ -120,10 +121,10 @@ unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &co
 }
 
 unique_ptr<LocalSinkState> PhysicalInsert::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<InsertLocalState>(context.client, insert_types, bound_defaults);
+	return make_uniq<InsertLocalState>(context.client, insert_types, bound_defaults);
 }
 
-void PhysicalInsert::ResolveDefaults(TableCatalogEntry *table, DataChunk &chunk,
+void PhysicalInsert::ResolveDefaults(const TableCatalogEntry &table, DataChunk &chunk,
                                      const physical_index_vector_t<idx_t> &column_index_map,
                                      ExpressionExecutor &default_executor, DataChunk &result) {
 	chunk.Flatten();
@@ -134,7 +135,7 @@ void PhysicalInsert::ResolveDefaults(TableCatalogEntry *table, DataChunk &chunk,
 
 	if (!column_index_map.empty()) {
 		// columns specified by the user, use column_index_map
-		for (auto &col : table->GetColumns().Physical()) {
+		for (auto &col : table.GetColumns().Physical()) {
 			auto storage_idx = col.StorageOid();
 			auto mapped_index = column_index_map[col.Physical()];
 			if (mapped_index == DConstants::INVALID_INDEX) {
@@ -215,7 +216,7 @@ void PhysicalInsert::CombineExistingAndInsertTuples(DataChunk &result, DataChunk
 	result.SetCardinality(input_chunk.size());
 }
 
-void PhysicalInsert::PerformOnConflictAction(ExecutionContext &context, DataChunk &chunk, TableCatalogEntry *table,
+void PhysicalInsert::PerformOnConflictAction(ExecutionContext &context, DataChunk &chunk, TableCatalogEntry &table,
                                              Vector &row_ids) const {
 	if (action_type == OnConflictAction::NOTHING) {
 		return;
@@ -254,9 +255,9 @@ void PhysicalInsert::PerformOnConflictAction(ExecutionContext &context, DataChun
 	executor.Execute(chunk, update_chunk);
 	update_chunk.SetCardinality(chunk);
 
-	auto &data_table = table->GetStorage();
+	auto &data_table = table.GetStorage();
 	// Perform the update, using the results of the SET expressions
-	data_table.Update(*table, context.client, row_ids, set_columns, update_chunk);
+	data_table.Update(table, context.client, row_ids, set_columns, update_chunk);
 }
 
 // TODO: should we use a hash table to keep track of this instead?
@@ -273,11 +274,11 @@ void PhysicalInsert::RegisterUpdatedRows(InsertLocalState &lstate, const Vector 
 	}
 }
 
-void PhysicalInsert::OnConflictHandling(TableCatalogEntry *table, ExecutionContext &context,
+void PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionContext &context,
                                         InsertLocalState &lstate) const {
-	auto &data_table = table->GetStorage();
+	auto &data_table = table.GetStorage();
 	if (action_type == OnConflictAction::THROW) {
-		data_table.VerifyAppendConstraints(*table, context.client, lstate.insert_chunk, nullptr);
+		data_table.VerifyAppendConstraints(table, context.client, lstate.insert_chunk, nullptr);
 		return;
 	}
 	// Check whether any conflicts arise, and if they all meet the conflict_target + condition
@@ -286,7 +287,7 @@ void PhysicalInsert::OnConflictHandling(TableCatalogEntry *table, ExecutionConte
 	// We either want to do nothing, or perform an update when conflicts arise
 	ConflictInfo conflict_info(conflict_target);
 	ConflictManager conflict_manager(VerifyExistenceType::APPEND, lstate.insert_chunk.size(), &conflict_info);
-	data_table.VerifyAppendConstraints(*table, context.client, lstate.insert_chunk, &conflict_manager);
+	data_table.VerifyAppendConstraints(table, context.client, lstate.insert_chunk, &conflict_manager);
 	conflict_manager.Finalize();
 	if (conflict_manager.ConflictCount() == 0) {
 		// No conflicts found
@@ -310,8 +311,8 @@ void PhysicalInsert::OnConflictHandling(TableCatalogEntry *table, ExecutionConte
 		// When these values are required for the conditions or the SET expressions,
 		// then we scan the existing table for the conflicting tuples, using the rowids
 		scan_chunk.Initialize(context.client, types_to_fetch);
-		auto fetch_state = make_unique<ColumnFetchState>();
-		auto &transaction = DuckTransaction::Get(context.client, *table->catalog);
+		auto fetch_state = make_uniq<ColumnFetchState>();
+		auto &transaction = DuckTransaction::Get(context.client, *table.catalog);
 		data_table.Fetch(transaction, scan_chunk, columns_to_fetch, row_ids, conflicts.Count(), *fetch_state);
 	}
 
@@ -334,7 +335,7 @@ void PhysicalInsert::OnConflictHandling(TableCatalogEntry *table, ExecutionConte
 			}
 			combined_chunk.Slice(sel.Selection(), sel.Count());
 			row_ids.Slice(sel.Selection(), sel.Count());
-			data_table.VerifyAppendConstraints(*table, context.client, combined_chunk, nullptr);
+			data_table.VerifyAppendConstraints(table, context.client, combined_chunk, nullptr);
 			throw InternalException("The previous operation was expected to throw but didn't");
 		}
 	}
@@ -353,12 +354,12 @@ void PhysicalInsert::OnConflictHandling(TableCatalogEntry *table, ExecutionConte
 
 SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
                                     DataChunk &chunk) const {
-	auto &gstate = (InsertGlobalState &)state;
-	auto &lstate = (InsertLocalState &)lstate_p;
+	auto &gstate = state.Cast<InsertGlobalState>();
+	auto &lstate = lstate_p.Cast<InsertLocalState>();
 
 	auto table = gstate.table;
 	auto &storage = table->GetStorage();
-	PhysicalInsert::ResolveDefaults(table, chunk, column_index_map, lstate.default_executor, lstate.insert_chunk);
+	PhysicalInsert::ResolveDefaults(*table, chunk, column_index_map, lstate.default_executor, lstate.insert_chunk);
 
 	if (!parallel) {
 		if (!gstate.initialized) {
@@ -366,7 +367,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 			gstate.initialized = true;
 		}
 
-		OnConflictHandling(table, context, lstate);
+		OnConflictHandling(*table, context, lstate);
 		storage.LocalAppend(gstate.append_state, *table, context.client, lstate.insert_chunk, true);
 
 		if (return_chunk) {
@@ -381,12 +382,12 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 			auto &table_info = storage.info;
 			auto &block_manager = TableIOManager::Get(storage).GetBlockManagerForRowData();
 			lstate.local_collection =
-			    make_unique<RowGroupCollection>(table_info, block_manager, insert_types, MAX_ROW_ID);
+			    make_uniq<RowGroupCollection>(table_info, block_manager, insert_types, MAX_ROW_ID);
 			lstate.local_collection->InitializeEmpty();
 			lstate.local_collection->InitializeAppend(lstate.local_append_state);
 			lstate.writer = gstate.table->GetStorage().CreateOptimisticWriter(context.client);
 		}
-		OnConflictHandling(table, context, lstate);
+		OnConflictHandling(*table, context, lstate);
 		auto new_row_group = lstate.local_collection->Append(lstate.insert_chunk, lstate.local_append_state);
 		if (new_row_group) {
 			lstate.writer->CheckFlushToDisk(*lstate.local_collection);
@@ -397,8 +398,8 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 }
 
 void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {
-	auto &gstate = (InsertGlobalState &)gstate_p;
-	auto &lstate = (InsertLocalState &)lstate_p;
+	auto &gstate = gstate_p.Cast<InsertGlobalState>();
+	auto &lstate = lstate_p.Cast<InsertLocalState>();
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(this, &lstate.default_executor, "default_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
@@ -442,7 +443,7 @@ void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 
 SinkFinalizeType PhysicalInsert::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                           GlobalSinkState &state) const {
-	auto &gstate = (InsertGlobalState &)state;
+	auto &gstate = state.Cast<InsertGlobalState>();
 	if (!parallel && gstate.initialized) {
 		auto table = gstate.table;
 		auto &storage = table->GetStorage();
@@ -459,7 +460,7 @@ public:
 	explicit InsertSourceState(const PhysicalInsert &op) : finished(false) {
 		if (op.return_chunk) {
 			D_ASSERT(op.sink_state);
-			auto &g = (InsertGlobalState &)*op.sink_state;
+			auto &g = op.sink_state->Cast<InsertGlobalState>();
 			g.return_collection.InitializeScan(scan_state);
 		}
 	}
@@ -469,13 +470,13 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalInsert::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<InsertSourceState>(*this);
+	return make_uniq<InsertSourceState>(*this);
 }
 
 void PhysicalInsert::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                              LocalSourceState &lstate) const {
-	auto &state = (InsertSourceState &)gstate;
-	auto &insert_gstate = (InsertGlobalState &)*sink_state;
+	auto &state = gstate.Cast<InsertSourceState>();
+	auto &insert_gstate = sink_state->Cast<InsertGlobalState>();
 	if (state.finished) {
 		return;
 	}

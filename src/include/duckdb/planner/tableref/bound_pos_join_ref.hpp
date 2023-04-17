@@ -16,6 +16,9 @@ namespace duckdb {
 //! Represents a positional join
 class BoundPositionalJoinRef : public BoundTableRef {
 public:
+	static constexpr const TableReferenceType TYPE = TableReferenceType::POSITIONAL_JOIN;
+
+public:
 	BoundPositionalJoinRef() : BoundTableRef(TableReferenceType::POSITIONAL_JOIN), lateral(false) {
 	}
 

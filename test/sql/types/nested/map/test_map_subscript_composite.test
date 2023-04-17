@@ -1,0 +1,154 @@
+# name: test/sql/types/nested/map/test_map_subscript_composite.test
+# description: Test cardinality function for maps
+# group: [map]
+
+# Single element on map
+query I
+select m[[2,0]] from (select MAP(LIST_VALUE([0], [1], [2,0], [3]),LIST_VALUE(10, 9, 8, 7)) as m) as T
+----
+[8]
+
+#Element not present on MAP
+query I
+select m[[2,3]] from (select MAP(LIST_VALUE([0], [1], [2,0], [3], [5]),LIST_VALUE(10, 9, 8, 7,11)) as m) as T
+----
+[]
+
+# Keys of a MAP can not be NULL
+statement error
+select m[NULL] from (select MAP(LIST_VALUE([2], [NULL], [3,0], [NULL,NULL],[5,4], NULL),LIST_VALUE(10, 9, 8, 7,11,42)) as m) as T
+
+# Null not present on map
+query I
+select m[NULL] from (select MAP(LIST_VALUE({a:3}, {b:4}, {c:5}, {d:6},{e:7}),LIST_VALUE(10, 9, 8, 7,11)) as m) as T
+----
+[]
+
+# Keys of a MAP have to be unique
+statement error
+select m[2] from (select MAP(LIST_VALUE([2,2], [2], [3,3], [4,4,4],[2]),LIST_VALUE(10, 9, 8, 7,11)) as m) as T
+----
+Invalid Input Error: Map keys have to be unique
+
+# Check autocast
+query I
+select m[[2::TINYINT,3::BIGINT]] from (select MAP(LIST_VALUE([1], [2,3], [3], [2],[3,2]),LIST_VALUE(10, 9, 8, 7,11)) as m) as T
+----
+[9]
+
+#Map with larger-than-vector-size cardinalities
+query I
+select m[[10,11]] from (select MAP(lst,lst) as m from (SELECT LIST([i,i+1]) as lst FROM range(10000) tbl(i)) as lst_tbl) as T
+----
+[[10, 11]]
+
+#Duplicate keys in a map
+statement error
+select m[[1]] from (select MAP(LIST_VALUE([1], [1], [1], [4]),LIST_VALUE(10, 9, 8, 7)) as m) as T
+----
+Invalid Input Error: Map keys have to be unique
+
+query I
+select m[['Tenacious D', 'test']] from (select MAP(LIST_VALUE(['Jon Lajoie'], ['test', NULL], ['Tenacious D', 'test'], ['test', 'Tenacious D']),LIST_VALUE(5,10,9,11)) as m) as T
+----
+[9]
+
+query I
+select m[['Jon Lajoie']] from (select MAP(LIST_VALUE(['Jon Lajoie'], ['Tenacious D', 'a', 'b', 'c']),LIST_VALUE(10,1)) as m) as T
+----
+[10]
+
+#Searching using a non-constant value (e.g. select m[a] from ...)
+statement ok
+create table ints (a integer[], b integer[])
+
+statement ok
+insert into ints values ([1],[1]), ([2],[2]),([3],[3]),([4],[4])
+
+query I
+select m from (select MAP(lsta,lstb) as m from (SELECT list(a) as lsta, list(b) as lstb FROM ints where a[1] < 4 and b[1] > 1) as lst_tbl) as T
+----
+{[2]=[2], [3]=[3]}
+
+query I
+select m[[2]] from (select MAP(lsta,lstb) as m from (SELECT list(a) as lsta, list(b) as lstb FROM ints where a[1] < 4 and b[1] > 1) as lst_tbl) as T
+----
+[[2]]
+
+#What about multiple rows each with a map, instead of just a single row?
+statement ok
+insert into ints values ([5],[1]), ([1],[2]),([2],[3]),([6],[4])
+
+query I rowsort
+select m from (select MAP(lsta,lstb) as m from (SELECT list(a) as lsta, list(b) as lstb FROM ints group by b) as lst_tbl) as T
+----
+{[1]=[1], [5]=[1]}
+{[2]=[2], [1]=[2]}
+{[3]=[3], [2]=[3]}
+{[4]=[4], [6]=[4]}
+
+query I rowsort
+select m[[1]] from (select MAP(lsta,lstb) as m from (SELECT list(a) as lsta, list(b) as lstb FROM ints group by b) as lst_tbl) as T
+----
+[[1]]
+[[2]]
+[]
+[]
+
+#What about multiple rows each with a map, with a selection vector on top of them (e.g. because of a WHERE clause)?
+statement ok
+insert into ints values ([1],[4])
+
+query I rowsort
+select m[[1]] from (select MAP(lsta,lstb) as m from (SELECT list(a) as lsta, list(b) as lstb FROM ints where b[1] <4 group by b) as lst_tbl) as T
+----
+[[1]]
+[[2]]
+[]
+
+#map_extract directly on a constant map (SELECT map_extract(MAP(..)), i.e. no FROM clause).
+query I
+SELECT map_extract(MAP(LIST_VALUE([10],[9],[12],[11],[13]),LIST_VALUE(10,9,10,11,13)),[10])
+----
+[10]
+
+#Multiple constants
+query I
+select m[{a:1, b:2, c:3}] from (select MAP(list_value({a:1, b:2, c:3}), list_value(2)) from range(5) tbl(i)) tbl(m);
+----
+[2]
+[2]
+[2]
+[2]
+[2]
+
+#Test dictionary vectors
+query III rowsort
+select grp, m, case when grp>1 then m[[0]] else list_value(null) end
+from (select grp, MAP(lsta,lstb) as m
+from (SELECT a%4 as grp, list([a]) as lsta, list(a) as lstb FROM range(7) tbl(a) group by grp) as lst_tbl) as T;
+----
+0	{[0]=0, [4]=4}	[NULL]
+1	{[1]=1, [5]=5}	[NULL]
+2	{[2]=2, [6]=6}	[]
+3	{[3]=3}	[]
+
+# Doubly nested lists
+query I
+select map([3, 2, 1],
+[
+	[
+		[4],
+		[4]
+	],
+	[
+		[4,3]
+	],
+	[
+		[3,3,3],
+		[2],
+		[NULL, 3, 2]
+	]
+])[1]
+----
+[[[3, 3, 3], [2], [NULL, 3, 2]]]

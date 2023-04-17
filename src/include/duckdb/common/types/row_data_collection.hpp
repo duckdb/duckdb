@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
 
 namespace duckdb {
 
@@ -40,7 +41,7 @@ private:
 
 public:
 	unique_ptr<RowDataBlock> Copy() {
-		auto result = make_unique<RowDataBlock>(entry_size);
+		auto result = make_uniq<RowDataBlock>(entry_size);
 		result->block = block;
 		result->capacity = capacity;
 		result->count = count;
@@ -61,7 +62,7 @@ public:
 	RowDataCollection(BufferManager &buffer_manager, idx_t block_capacity, idx_t entry_size, bool keep_pinned = false);
 
 	unique_ptr<RowDataCollection> CloneEmpty(bool keep_pinned = false) const {
-		return make_unique<RowDataCollection>(buffer_manager, block_capacity, entry_size, keep_pinned);
+		return make_uniq<RowDataCollection>(buffer_manager, block_capacity, entry_size, keep_pinned);
 	}
 
 	//! BufferManager

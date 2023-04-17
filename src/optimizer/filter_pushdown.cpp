@@ -23,6 +23,7 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 		return PushdownCrossProduct(std::move(op));
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 		return PushdownJoin(std::move(op));
 	case LogicalOperatorType::LOGICAL_PROJECTION:
@@ -48,8 +49,9 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
-	         op->type == LogicalOperatorType::LOGICAL_ANY_JOIN || op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
-	auto &join = (LogicalJoin &)*op;
+	         op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN || op->type == LogicalOperatorType::LOGICAL_ANY_JOIN ||
+	         op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
+	auto &join = op->Cast<LogicalJoin>();
 	unordered_set<idx_t> left_bindings, right_bindings;
 	LogicalJoin::GetTableReferences(*op->children[0], left_bindings);
 	LogicalJoin::GetTableReferences(*op->children[1], right_bindings);
@@ -98,7 +100,7 @@ void FilterPushdown::GenerateFilters() {
 		return;
 	}
 	combiner.GenerateFilters([&](unique_ptr<Expression> filter) {
-		auto f = make_unique<Filter>();
+		auto f = make_uniq<Filter>();
 		f->filter = std::move(filter);
 		f->ExtractBindings();
 		filters.push_back(std::move(f));
@@ -110,7 +112,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushFinalFilters(unique_ptr<LogicalO
 		// no filters to push
 		return op;
 	}
-	auto filter = make_unique<LogicalFilter>();
+	auto filter = make_uniq<LogicalFilter>();
 	for (auto &f : filters) {
 		filter->expressions.push_back(std::move(f->filter));
 	}

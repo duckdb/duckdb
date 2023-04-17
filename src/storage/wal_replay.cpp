@@ -25,7 +25,7 @@ namespace duckdb {
 
 bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 	Connection con(database.GetDatabase());
-	auto initial_reader = make_unique<BufferedFileReader>(FileSystem::Get(database), path.c_str(), con.context.get());
+	auto initial_reader = make_uniq<BufferedFileReader>(FileSystem::Get(database), path.c_str(), con.context.get());
 	if (initial_reader->Finished()) {
 		// WAL is empty
 		return false;
@@ -36,7 +36,7 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 	// first deserialize the WAL to look for a checkpoint flag
 	// if there is a checkpoint flag, we might have already flushed the contents of the WAL to disk
 	ReplayState checkpoint_state(database, *con.context, *initial_reader);
-	initial_reader->catalog = &checkpoint_state.catalog;
+	initial_reader->SetCatalog(checkpoint_state.catalog);
 	checkpoint_state.deserialize_only = true;
 	try {
 		while (true) {
@@ -73,7 +73,7 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 
 	// we need to recover from the WAL: actually set up the replay state
 	BufferedFileReader reader(FileSystem::Get(database), path.c_str(), con.context.get());
-	reader.catalog = &checkpoint_state.catalog;
+	reader.SetCatalog(checkpoint_state.catalog);
 	ReplayState state(database, *con.context, reader);
 
 	// replay the WAL
@@ -417,8 +417,8 @@ void ReplayState::ReplayCreateIndex() {
 	unique_ptr<Index> index;
 	switch (info->index_type) {
 	case IndexType::ART: {
-		index = make_unique<ART>(info->column_ids, TableIOManager::Get(data_table), expressions, info->constraint_type,
-		                         data_table.db, true);
+		index = make_uniq<ART>(info->column_ids, TableIOManager::Get(data_table), expressions, info->constraint_type,
+		                       data_table.db, true);
 		break;
 	}
 	default:

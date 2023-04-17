@@ -39,6 +39,9 @@ public:
 	DUCKDB_API static string ConversionError(const string &str);
 	DUCKDB_API static string ConversionError(string_t str);
 
+	DUCKDB_API static dtime_t FromTimeMs(int64_t time_ms);
+	DUCKDB_API static dtime_t FromTimeNs(int64_t time_ns);
+
 private:
 	static bool TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict);
 };

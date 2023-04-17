@@ -50,7 +50,7 @@ public:
 	static unique_ptr<ColumnReader> CreateReader(ParquetReader &reader, const LogicalType &type_p,
 	                                             const SchemaElement &schema_p, idx_t schema_idx_p, idx_t max_define,
 	                                             idx_t max_repeat);
-	virtual void InitializeRead(idx_t row_group_index, const std::vector<ColumnChunk> &columns, TProtocol &protocol_p);
+	virtual void InitializeRead(idx_t row_group_index, const vector<ColumnChunk> &columns, TProtocol &protocol_p);
 	virtual idx_t Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
 	                   Vector &result_out);
 
@@ -70,7 +70,7 @@ public:
 	// register the range this reader will touch for prefetching
 	virtual void RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge);
 
-	virtual unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const std::vector<ColumnChunk> &columns);
+	virtual unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns);
 
 	template <class VALUE_TYPE, class CONVERSION>
 	void PlainTemplated(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, uint64_t num_values,
@@ -129,7 +129,7 @@ protected:
 
 	ParquetReader &reader;
 	LogicalType type;
-	unique_ptr<Vector> byte_array_data;
+	duckdb::unique_ptr<Vector> byte_array_data;
 	idx_t byte_array_count = 0;
 
 	idx_t pending_skips = 0;
@@ -157,16 +157,33 @@ private:
 	ResizeableBuffer compressed_buffer;
 	ResizeableBuffer offset_buffer;
 
-	unique_ptr<RleBpDecoder> dict_decoder;
-	unique_ptr<RleBpDecoder> defined_decoder;
-	unique_ptr<RleBpDecoder> repeated_decoder;
-	unique_ptr<DbpDecoder> dbp_decoder;
-	unique_ptr<RleBpDecoder> rle_decoder;
+	duckdb::unique_ptr<RleBpDecoder> dict_decoder;
+	duckdb::unique_ptr<RleBpDecoder> defined_decoder;
+	duckdb::unique_ptr<RleBpDecoder> repeated_decoder;
+	duckdb::unique_ptr<DbpDecoder> dbp_decoder;
+	duckdb::unique_ptr<RleBpDecoder> rle_decoder;
 
 	// dummies for Skip()
 	parquet_filter_t none_filter;
 	ResizeableBuffer dummy_define;
 	ResizeableBuffer dummy_repeat;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (TARGET::TYPE != PhysicalType::INVALID && type.InternalType() != TARGET::TYPE) {
+			throw InternalException("Failed to cast column reader to type - type mismatch");
+		}
+		return (TARGET &)*this;
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (TARGET::TYPE != PhysicalType::INVALID && type.InternalType() != TARGET::TYPE) {
+			throw InternalException("Failed to cast column reader to type - type mismatch");
+		}
+		return (const TARGET &)*this;
+	}
 };
 
 } // namespace duckdb

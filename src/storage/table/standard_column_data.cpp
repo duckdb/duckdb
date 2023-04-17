@@ -45,18 +45,16 @@ void StandardColumnData::InitializeScan(ColumnScanState &state) {
 	ColumnData::InitializeScan(state);
 
 	// initialize the validity segment
-	ColumnScanState child_state;
-	validity.InitializeScan(child_state);
-	state.child_states.push_back(std::move(child_state));
+	D_ASSERT(state.child_states.size() == 1);
+	validity.InitializeScan(state.child_states[0]);
 }
 
 void StandardColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
 	ColumnData::InitializeScanWithOffset(state, row_idx);
 
 	// initialize the validity segment
-	ColumnScanState child_state;
-	validity.InitializeScanWithOffset(child_state, row_idx);
-	state.child_states.push_back(std::move(child_state));
+	D_ASSERT(state.child_states.size() == 1);
+	validity.InitializeScanWithOffset(state.child_states[0], row_idx);
 }
 
 idx_t StandardColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state,
@@ -148,7 +146,7 @@ void StandardColumnData::FetchRow(TransactionData transaction, ColumnFetchState 
                                   idx_t result_idx) {
 	// find the segment the row belongs to
 	if (state.child_states.empty()) {
-		auto child_state = make_unique<ColumnFetchState>();
+		auto child_state = make_uniq<ColumnFetchState>();
 		state.child_states.push_back(std::move(child_state));
 	}
 	validity.FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
@@ -187,7 +185,7 @@ public:
 
 unique_ptr<ColumnCheckpointState>
 StandardColumnData::CreateCheckpointState(RowGroup &row_group, PartialBlockManager &partial_block_manager) {
-	return make_unique<StandardColumnCheckpointState>(row_group, *this, partial_block_manager);
+	return make_uniq<StandardColumnCheckpointState>(row_group, *this, partial_block_manager);
 }
 
 unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_group,

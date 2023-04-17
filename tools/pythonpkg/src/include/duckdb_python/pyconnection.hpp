@@ -15,6 +15,8 @@
 #include "duckdb_python/registered_py_object.hpp"
 #include "duckdb_python/pandas_type.hpp"
 #include "duckdb_python/pyrelation.hpp"
+#include "duckdb_python/pytype.hpp"
+#include "duckdb_python/path_like.hpp"
 #include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
 #include "duckdb_python/pyfilesystem.hpp"
 
@@ -77,15 +79,26 @@ public:
 	                                      const py::object &sample_size = py::none(),
 	                                      const py::object &maximum_depth = py::none());
 
+	shared_ptr<DuckDBPyType> MapType(const shared_ptr<DuckDBPyType> &key_type,
+	                                 const shared_ptr<DuckDBPyType> &value_type);
+	shared_ptr<DuckDBPyType> StructType(const py::object &fields);
+	shared_ptr<DuckDBPyType> ArrayType(const shared_ptr<DuckDBPyType> &type);
+	shared_ptr<DuckDBPyType> UnionType(const py::object &members);
+	shared_ptr<DuckDBPyType> EnumType(const string &name, const shared_ptr<DuckDBPyType> &type,
+	                                  const py::list &values_p);
+	shared_ptr<DuckDBPyType> DecimalType(int width, int scale);
+	shared_ptr<DuckDBPyType> StringType(const string &collation = string());
+	shared_ptr<DuckDBPyType> Type(const string &type_str);
+
 	shared_ptr<DuckDBPyConnection> ExecuteMany(const string &query, py::object params = py::list());
 
 	unique_ptr<QueryResult> ExecuteInternal(const string &query, py::object params = py::list(), bool many = false);
 
 	shared_ptr<DuckDBPyConnection> Execute(const string &query, py::object params = py::list(), bool many = false);
 
-	shared_ptr<DuckDBPyConnection> Append(const string &name, DataFrame value);
+	shared_ptr<DuckDBPyConnection> Append(const string &name, const DataFrame &value);
 
-	shared_ptr<DuckDBPyConnection> RegisterPythonObject(const string &name, py::object python_object);
+	shared_ptr<DuckDBPyConnection> RegisterPythonObject(const string &name, const py::object &python_object);
 
 	void InstallExtension(const string &extension, bool force_install = false);
 
@@ -176,12 +189,16 @@ public:
 	static shared_ptr<PythonImportCache> import_cache;
 
 	static bool IsPandasDataframe(const py::object &object);
+	static bool IsPolarsDataframe(const py::object &object);
 	static bool IsAcceptedArrowObject(const py::object &object);
+	static NumpyObjectType IsAcceptedNumpyObject(const py::object &object);
 
 	static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_query);
 
 private:
+	PathLike GetPathLike(const py::object &object);
 	unique_lock<std::mutex> AcquireConnectionLock();
+
 	static PythonEnvironmentType environment;
 	static void DetectEnvironment();
 };

@@ -205,11 +205,19 @@ struct LevenshteinFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct DamerauLevenshteinFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct JaccardFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 struct JaroWinklerFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct HexFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

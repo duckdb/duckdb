@@ -30,6 +30,10 @@ struct FloorFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct TruncFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct RoundFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
@@ -119,6 +123,14 @@ struct IsInfiniteFun {
 };
 
 struct IsFiniteFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct GreatestCommonDivisorFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct LeastCommonMultipleFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
