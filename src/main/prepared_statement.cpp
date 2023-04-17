@@ -101,8 +101,18 @@ unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(vector<Value> &un
 	D_ASSERT(data);
 	PendingQueryParameters parameters;
 	// FIXME: if this goes out of scope before the parameters are no longer needed, we have a problem
-	auto prepared_parameters = PrepareParameters(std::move(unnamed_values), std::move(named_values), named_param_map);
-	parameters.parameters = &prepared_parameters;
+	reference<vector<Value>> prepared_parameters(unnamed_values);
+	vector<Value> mapped_named_values;
+	if (named_param_map.empty()) {
+		if (!named_values.empty()) {
+			throw InvalidInputException("The prepared statement doesn't expect any named parameters, but the execute "
+			                            "statement does contain name = value pairs");
+		}
+	} else {
+		mapped_named_values = PrepareParameters(named_values, named_param_map);
+		prepared_parameters = mapped_named_values;
+	}
+	parameters.parameters = &prepared_parameters.get();
 	parameters.allow_stream_result = allow_stream_result && data->properties.allow_stream_result;
 	auto result = context->PendingQuery(query, data, parameters);
 	return result;

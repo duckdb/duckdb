@@ -126,16 +126,8 @@ public:
 	}
 
 	template <class PAYLOAD>
-	static vector<PAYLOAD> PrepareParameters(vector<PAYLOAD> unnamed, case_insensitive_map_t<PAYLOAD> named,
+	static vector<PAYLOAD> PrepareParameters(case_insensitive_map_t<PAYLOAD> &named,
 	                                         const case_insensitive_map_t<idx_t> &named_params) {
-		if (named_params.empty()) {
-			if (!named.empty()) {
-				throw InvalidInputException(
-				    "The prepared statement doesn't expect any named parameters, but the execute "
-				    "statement does contain name = value pairs");
-			}
-			return std::move(unnamed);
-		}
 		if (named.empty()) {
 			throw InvalidInputException("The prepared statement expects named parameters, but none were provided");
 		}
@@ -153,7 +145,8 @@ public:
 			auto &name = pair.first;
 			auto entry = named.find(name);
 			if (entry == named.end()) {
-				throw InvalidInputException("Expected a parameter '%s' was not found in the provided values", name);
+				throw InvalidInputException("Expected parameter '%s', but it was not found in the provided values",
+				                            name);
 			}
 			auto &named_value = entry->second;
 

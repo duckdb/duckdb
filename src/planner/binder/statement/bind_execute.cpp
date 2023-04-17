@@ -25,15 +25,24 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 	auto prepared = entry->second;
 	auto &named_param_map = prepared->unbound_statement->named_param_map;
 
-	auto provided_values =
-	    PreparedStatement::PrepareParameters(std::move(stmt.values), std::move(stmt.named_values), named_param_map);
+	reference<vector<unique_ptr<ParsedExpression>>> provided_values(stmt.values);
+	vector<unique_ptr<ParsedExpression>> mapped_named_values;
+	if (named_param_map.empty()) {
+		if (!stmt.named_values.empty()) {
+			throw InvalidInputException("The prepared statement doesn't expect any named parameters, but the execute "
+			                            "statement does contain name = value pairs");
+		}
+	} else {
+		mapped_named_values = PreparedStatement::PrepareParameters(stmt.named_values, named_param_map);
+		provided_values = mapped_named_values;
+	}
 	// bind any supplied parameters
 	vector<Value> bind_values;
 	auto constant_binder = Binder::CreateBinder(context);
 	constant_binder->SetCanContainNulls(true);
-	for (idx_t i = 0; i < provided_values.size(); i++) {
+	for (idx_t i = 0; i < provided_values.get().size(); i++) {
 		ConstantBinder cbinder(*constant_binder, context, "EXECUTE statement");
-		auto bound_expr = cbinder.Bind(provided_values[i]);
+		auto bound_expr = cbinder.Bind(provided_values.get()[i]);
 
 		Value value = ExpressionExecutor::EvaluateScalar(context, *bound_expr, true);
 		bind_values.push_back(std::move(value));
