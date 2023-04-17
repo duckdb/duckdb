@@ -103,7 +103,7 @@ private:
 
 	//! Reset the operator index to the first operator
 	void GoToSource(idx_t &current_idx, idx_t initial_idx);
-	void FetchFromSource(DataChunk &result);
+	void FetchFromSource(DataChunk &result, bool allow_async);
 
 	void FinishProcessing(int32_t operator_idx = -1);
 	bool IsFinished();

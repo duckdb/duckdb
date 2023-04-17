@@ -109,9 +109,7 @@ public:
 	                     LocalSourceState &lstate) const;
 	//! Interruptable variant of GetData, this is what is actually called by the pipeline executor
 	virtual void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-	                     LocalSourceState &lstate, InterruptState& istate) const {
-		GetData(context, chunk, gstate, lstate);
-	};
+	                     LocalSourceState &lstate, InterruptState& istate) const;
 	virtual idx_t GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	                            LocalSourceState &lstate) const;
 

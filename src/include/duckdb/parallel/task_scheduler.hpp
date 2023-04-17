@@ -80,11 +80,12 @@ public:
 
 	//! This is the callback function that can be be called from anywhere.
 	static void RescheduleCallback(shared_ptr<DatabaseInstance> db, hugeint_t callback_uuid);
-private:
-	void SetThreadsInternal(int32_t n);
 
 	// Deschedule task based on its interrupt state
 	void DescheduleTask(unique_ptr<Task> task);
+private:
+	void SetThreadsInternal(int32_t n);
+
 	//! Deschedules a task which will be re-queued when the callback with callback_uuid has been made, or immediately
 	//! if it has already occured
 	void DescheduleTaskCallback(unique_ptr<Task> task, hugeint_t callback_uuid);

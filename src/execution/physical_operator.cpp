@@ -10,6 +10,10 @@
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/random_engine.hpp"
+
+#include <thread>
+#include <chrono>
 
 namespace duckdb {
 
@@ -75,6 +79,31 @@ unique_ptr<GlobalSourceState> PhysicalOperator::GetGlobalSourceState(ClientConte
 void PhysicalOperator::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                                LocalSourceState &lstate) const {
 	throw InternalException("Calling GetData on a node that is not a source!");
+}
+
+void PhysicalOperator::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+             LocalSourceState &lstate, InterruptState& istate) const {
+#ifdef DUCKDB_TEST_FORCE_ASYNC_OPERATORS
+	// This flag provides all Operators in duckdb with a (bogus) async variant. The first call will block, any next calls
+	// will just be sync
+	if (!lstate.did_async) {
+		lstate.did_async = true;
+		// Configure callback
+		auto callback_uuid = istate.SetInterruptCallback();
+		auto callback = TaskScheduler::GetScheduler(*context.client.db).RescheduleCallback;
+		auto db_ref = context.client.db;
+		// Launch thread that calls callback after a short sleep
+		std::thread rewake_thread([callback_uuid, callback, db_ref] {
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			callback(db_ref, callback_uuid);
+		});
+		rewake_thread.detach();
+	} else {
+		return GetData(context, chunk, gstate, lstate);
+	}
+#else
+	return GetData(context, chunk, gstate, lstate);
+#endif
 }
 
 idx_t PhysicalOperator::GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,

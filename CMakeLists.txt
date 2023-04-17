@@ -329,9 +329,15 @@ option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" FALSE)
 option(EXPORT_DLL_SYMBOLS "Export dll symbols on Windows, else import" TRUE)
 option(BUILD_RDTSC "Enable the rdtsc instruction." FALSE)
 option(TEST_REMOTE_INSTALL "Test installation of specific extensions." FALSE)
+# TODO: set to default off and add CI job
+option(TEST_FORCE_ASYNC_OPERATORS "Forces all operators to have an async sink and source" TRUE)
 
 if(${BUILD_RDTSC})
   add_compile_definitions(RDTSC)
+endif()
+
+if(NOT("${TEST_FORCE_ASYNC_OPERATORS}" STREQUAL "OFF"))
+  add_compile_definitions(DUCKDB_TEST_FORCE_ASYNC_OPERATORS)
 endif()
 
 if (NOT BUILD_MAIN_DUCKDB_LIBRARY)

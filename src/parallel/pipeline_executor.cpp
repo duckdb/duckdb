@@ -44,7 +44,7 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 			break;
 		}
 		source_chunk.Reset();
-		FetchFromSource(source_chunk);
+		FetchFromSource(source_chunk, true);
 
 		if(interrupt_state.result != InterruptResultType::NO_INTERRUPT) {
 			return PipelineExecuteResult::INTERRUPTED;
@@ -184,7 +184,11 @@ void PipelineExecutor::ExecutePull(DataChunk &result) {
 		while (result.size() == 0) {
 			if (in_process_operators.empty()) {
 				source_chunk.Reset();
-				FetchFromSource(source_chunk);
+
+				// TODO: here we currently force having a sync and an async implementation initially, we may want to
+				//		 switch to a busy wait for the async variant so both are fine?
+				FetchFromSource(source_chunk, false);
+
 				if (source_chunk.size() == 0) {
 					break;
 				}
@@ -312,14 +316,19 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 	return in_process_operators.empty() ? OperatorResultType::NEED_MORE_INPUT : OperatorResultType::HAVE_MORE_OUTPUT;
 }
 
-void PipelineExecutor::FetchFromSource(DataChunk &result) {
+void PipelineExecutor::FetchFromSource(DataChunk &result, bool allow_async) {
 	StartOperator(pipeline.source);
 
 	interrupt_state.Reset(); // TODO Do we need to reset this every time? or can we actually guarantee its reset here?
-	pipeline.source->GetData(context, result, *pipeline.source_state, *local_source_state, interrupt_state);
 
-	// Safety check that we don't interrupt + return data;
-	D_ASSERT(interrupt_state.result == InterruptResultType::NO_INTERRUPT || result.size() == 0);
+	if (allow_async) {
+		pipeline.source->GetData(context, result, *pipeline.source_state, *local_source_state, interrupt_state);
+
+		// Safety check that we don't interrupt + return data;
+		D_ASSERT(interrupt_state.result == InterruptResultType::NO_INTERRUPT || result.size() == 0);
+	} else {
+		pipeline.source->GetData(context, result, *pipeline.source_state, *local_source_state);
+	}
 
 	if (result.size() != 0 && requires_batch_index) {
 		auto next_batch_index =

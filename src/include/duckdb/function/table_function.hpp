@@ -11,6 +11,7 @@
 #include "duckdb/common/enums/operator_result_type.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/function/function.hpp"
+#include "duckdb/parallel/task.hpp"
 #include "duckdb/planner/bind_context.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
@@ -169,11 +170,11 @@ typedef unique_ptr<LocalTableFunctionState> (*table_function_init_local_t)(Execu
 typedef unique_ptr<BaseStatistics> (*table_statistics_t)(ClientContext &context, const FunctionData *bind_data,
                                                          column_t column_index);
 typedef void (*table_function_t)(ClientContext &context, TableFunctionInput &data, DataChunk &output);
-
 typedef OperatorResultType (*table_in_out_function_t)(ExecutionContext &context, TableFunctionInput &data,
                                                       DataChunk &input, DataChunk &output);
 typedef OperatorFinalizeResultType (*table_in_out_function_final_t)(ExecutionContext &context, TableFunctionInput &data,
                                                                     DataChunk &output);
+typedef void (*table_function_async_t)(ClientContext &context, TableFunctionInput &data, DataChunk &output, InterruptState& interrupt_state);
 typedef idx_t (*table_function_get_batch_index_t)(ClientContext &context, const FunctionData *bind_data,
                                                   LocalTableFunctionState *local_state,
                                                   GlobalTableFunctionState *global_state);
@@ -230,6 +231,10 @@ public:
 	table_in_out_function_t in_out_function;
 	//! The table in-out final function (if this is an in-out function)
 	table_in_out_function_final_t in_out_function_final;
+	//! (Optional) An asynchronous variant of the table function, e.g. for allowing async I/O. The async_function will
+	//! be called instead of the regular table_function wheres possible. However, providing both `function` and
+	//! `async_function` is currently required.
+	table_function_async_t async_function;
 	//! (Optional) statistics function
 	//! Returns the statistics of a specified column
 	table_statistics_t statistics;

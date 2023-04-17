@@ -100,6 +100,18 @@ TaskScheduler::~TaskScheduler() {
 #ifndef DUCKDB_NO_THREADS
 	SetThreadsInternal(1);
 #endif
+#ifdef DEBUG
+	// Ensure we're not missing any tasks we might have missed
+	{
+		unique_lock<mutex> lck(blocked_task_lock);
+		D_ASSERT(buffered_callbacks.size() == 0);
+		D_ASSERT(blocked_tasks.size() == 0);
+	}
+	{
+		unique_lock<mutex> lck(sleeping_task_lock);
+		D_ASSERT(sleeping_tasks.size() == 0);
+	}
+#endif
 }
 
 TaskScheduler &TaskScheduler::GetScheduler(ClientContext &context) {

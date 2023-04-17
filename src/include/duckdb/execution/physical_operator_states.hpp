@@ -143,6 +143,10 @@ public:
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
 		return (const TARGET &)*this;
 	}
+
+#ifdef DUCKDB_TEST_FORCE_ASYNC_OPERATORS
+	bool did_async = false;
+#endif
 };
 
 // LCOV_EXCL_STOP

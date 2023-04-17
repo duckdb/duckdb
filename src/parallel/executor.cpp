@@ -371,8 +371,12 @@ void Executor::WorkOnTasks() {
 
 	unique_ptr<Task> task;
 	while (scheduler.GetTaskFromProducer(*producer, task)) {
-		task->Execute(TaskExecutionMode::PROCESS_ALL);
-		task.reset();
+		auto res = task->Execute(TaskExecutionMode::PROCESS_ALL);
+		if (res == TaskExecutionResult::TASK_BLOCKED) {
+			scheduler.DescheduleTask(std::move(task));
+		} else {
+			task.reset();
+		}
 	}
 }
 
@@ -394,7 +398,9 @@ PendingExecutionResult Executor::ExecuteTask() {
 		if (task) {
 			// if we have a task, partially process it
 			auto result = task->Execute(TaskExecutionMode::PROCESS_PARTIAL);
-			if (result == TaskExecutionResult::TASK_FINISHED) {
+			if (result == TaskExecutionResult::TASK_BLOCKED) {
+				scheduler.DescheduleTask(std::move(task));
+			} else if (result == TaskExecutionResult::TASK_FINISHED) {
 				// if the task is finished, clean it up
 				task.reset();
 			}
