@@ -52,7 +52,7 @@ void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &met
 		D_ASSERT(delim_sink->type == PhysicalOperatorType::DELIM_JOIN);
 		auto &delim_join = delim_sink->Cast<PhysicalDelimJoin>();
 		current.AddDependency(delim_dependency);
-		state.SetPipelineSource(current, (PhysicalOperator &) *delim_join.distinct);
+		state.SetPipelineSource(current, (PhysicalOperator &)*delim_join.distinct);
 		return;
 	}
 	case PhysicalOperatorType::RECURSIVE_CTE_SCAN:

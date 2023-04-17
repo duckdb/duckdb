@@ -233,7 +233,7 @@ void PhysicalIndexJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pip
 	children[0]->BuildPipelines(current, meta_pipeline);
 }
 
-vector<const PhysicalOperator *> PhysicalIndexJoin::GetSources() const {
+vector<const_reference<PhysicalOperator>> PhysicalIndexJoin::GetSources() const {
 	return children[0]->GetSources();
 }
 

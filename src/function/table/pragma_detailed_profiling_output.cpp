@@ -129,7 +129,7 @@ static void PragmaDetailedProfilingOutputFunction(ClientContext &context, TableF
 		}
 		// For each Operator
 		auto &tree_map = client_data.query_profiler_history->GetPrevProfilers().back().second->GetTreeMap();
-		for (auto op :tree_map) {
+		for (auto op : tree_map) {
 			// For each Expression Executor
 			for (auto &expr_executor : op.second.get().info.executors_info) {
 				// For each Expression tree

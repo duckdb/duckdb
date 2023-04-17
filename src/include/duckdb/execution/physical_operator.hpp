@@ -170,7 +170,7 @@ public:
 
 public:
 	// Pipeline construction
-	virtual vector<const PhysicalOperator *> GetSources() const;
+	virtual vector<const_reference<PhysicalOperator>> GetSources() const;
 	bool AllSourcesSupportBatchIndex() const;
 
 	virtual void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline);

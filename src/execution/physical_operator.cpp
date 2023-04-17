@@ -154,16 +154,16 @@ void PhysicalOperator::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipe
 	}
 }
 
-vector<const PhysicalOperator *> PhysicalOperator::GetSources() const {
-	vector<const PhysicalOperator *> result;
+vector<const_reference<PhysicalOperator>> PhysicalOperator::GetSources() const {
+	vector<const_reference<PhysicalOperator>> result;
 	if (IsSink()) {
 		D_ASSERT(children.size() == 1);
-		result.push_back(this);
+		result.push_back(*this);
 		return result;
 	} else {
 		if (children.empty()) {
 			// source
-			result.push_back(this);
+			result.push_back(*this);
 			return result;
 		} else {
 			if (children.size() != 1) {
@@ -177,7 +177,7 @@ vector<const PhysicalOperator *> PhysicalOperator::GetSources() const {
 bool PhysicalOperator::AllSourcesSupportBatchIndex() const {
 	auto sources = GetSources();
 	for (auto &source : sources) {
-		if (!source->SupportsBatchIndex()) {
+		if (!source.get().SupportsBatchIndex()) {
 			return false;
 		}
 	}

@@ -131,7 +131,7 @@ void PipelineExecutor::FlushCachingOperatorsPush() {
 			auto &current_operator = pipeline.operators[op_idx].get();
 			StartOperator(current_operator);
 			finalize_result = current_operator.FinalExecute(context, curr_chunk, *current_operator.op_state,
-			                                                 *intermediate_states[op_idx]);
+			                                                *intermediate_states[op_idx]);
 			EndOperator(current_operator, &curr_chunk);
 			push_result = ExecutePushInternal(curr_chunk, op_idx + 1);
 		} while (finalize_result != OperatorFinalizeResultType::FINISHED &&
@@ -269,7 +269,7 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 			// operator
 			StartOperator(current_operator);
 			auto result = current_operator.Execute(context, prev_chunk, current_chunk, *current_operator.op_state,
-			                                        *intermediate_states[current_intermediate - 1]);
+			                                       *intermediate_states[current_intermediate - 1]);
 			EndOperator(current_operator, &current_chunk);
 			if (result == OperatorResultType::HAVE_MORE_OUTPUT) {
 				// more data remains in this operator

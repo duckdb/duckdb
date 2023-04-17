@@ -268,7 +268,8 @@ void PipelineBuildState::SetPipelineSource(Pipeline &pipeline, PhysicalOperator 
 	pipeline.source = &op;
 }
 
-void PipelineBuildState::SetPipelineSink(Pipeline &pipeline, optional_ptr<PhysicalOperator> op, idx_t sink_pipeline_count) {
+void PipelineBuildState::SetPipelineSink(Pipeline &pipeline, optional_ptr<PhysicalOperator> op,
+                                         idx_t sink_pipeline_count) {
 	pipeline.sink = op;
 	// set the base batch index of this pipeline based on how many other pipelines have this node as their sink
 	pipeline.base_batch_index = BATCH_INCREMENT * sink_pipeline_count;

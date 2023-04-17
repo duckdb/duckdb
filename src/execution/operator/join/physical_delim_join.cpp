@@ -134,7 +134,8 @@ void PhysicalDelimJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pip
 		// we add an entry to the mapping of (PhysicalOperator*) -> (Pipeline*)
 		auto &state = meta_pipeline.GetState();
 		for (auto &delim_scan : delim_scans) {
-			state.delim_join_dependencies.insert(make_pair(delim_scan, reference<Pipeline>(*child_meta_pipeline.GetBasePipeline())));
+			state.delim_join_dependencies.insert(
+			    make_pair(delim_scan, reference<Pipeline>(*child_meta_pipeline.GetBasePipeline())));
 		}
 		join->BuildPipelines(current, meta_pipeline);
 	}

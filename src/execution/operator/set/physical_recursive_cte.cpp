@@ -190,8 +190,8 @@ void PhysicalRecursiveCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_
 	recursive_meta_pipeline->Build(*children[1]);
 }
 
-vector<const PhysicalOperator *> PhysicalRecursiveCTE::GetSources() const {
-	return {this};
+vector<const_reference<PhysicalOperator>> PhysicalRecursiveCTE::GetSources() const {
+	return {*this};
 }
 
 } // namespace duckdb
