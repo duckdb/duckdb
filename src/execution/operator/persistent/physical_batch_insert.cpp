@@ -265,7 +265,7 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContext &context) const {
-	TableCatalogEntry *table;
+	optional_ptr<TableCatalogEntry> table;
 	if (info) {
 		// CREATE TABLE AS
 		D_ASSERT(!insert_table);
