@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/function/scalar/compressed_materialization_functions.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
@@ -123,9 +124,15 @@ private:
 	unique_ptr<Expression> GetStringDecompress(unique_ptr<Expression> input, const BaseStatistics &stats);
 
 private:
+	//! Removes redundant compress/decompress
+	void RemoveRedundantProjections(unique_ptr<LogicalOperator> &op);
+
+private:
 	ClientContext &context;
 	Binder &binder;
 	statistics_map_t statistics_map;
+	unordered_set<idx_t> compression_table_indices;
+	unordered_set<idx_t> decompression_table_indices;
 	LogicalOperator *root;
 };
 

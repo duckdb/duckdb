@@ -73,9 +73,10 @@ void CompressedMaterialization::UpdateBindingInfo(CompressedMaterializationInfo 
 unique_ptr<LogicalOperator> CompressedMaterialization::Optimize(unique_ptr<LogicalOperator> op) {
 	root = op.get();
 	root->ResolveOperatorTypes();
-	Compress(op);
 
-	// TODO remove redundant (de)compressions
+	Compress(op);
+	RemoveRedundantProjections(op);
+
 	return op;
 }
 
@@ -163,7 +164,10 @@ void CompressedMaterialization::CreateCompressProjection(unique_ptr<LogicalOpera
 	for (auto &compress_expr : compress_exprs) {
 		projections.emplace_back(std::move(compress_expr->expression));
 	}
-	auto compress_projection = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(projections));
+	const auto table_index = binder.GenerateTableIndex();
+	auto compress_projection = make_uniq<LogicalProjection>(table_index, std::move(projections));
+	compression_table_indices.insert(table_index);
+
 	compress_projection->children.emplace_back(std::move(child_op));
 	child_op = std::move(compress_projection);
 
@@ -247,7 +251,10 @@ void CompressedMaterialization::CreateDecompressProjection(unique_ptr<LogicalOpe
 	}
 
 	// Replace op with a projection
-	auto decompress_projection = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(decompress_exprs));
+	const auto table_index = binder.GenerateTableIndex();
+	auto decompress_projection = make_uniq<LogicalProjection>(table_index, std::move(decompress_exprs));
+	decompression_table_indices.insert(table_index);
+
 	decompress_projection->children.emplace_back(std::move(op));
 	op = std::move(decompress_projection);
 
@@ -401,8 +408,8 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetStringCompress(uniq
 		auto max = StringStats::Max(stats);
 		D_ASSERT(min.length() <= 1 && max.length() <= 1);
 
-		uint16_t min_val = max_string_length == 0 ? 0 : *(uint8_t *)min.c_str();
-		uint16_t max_val = max_string_length == 0 ? 0 : *(uint8_t *)max.c_str();
+		uint16_t min_val = min.length() == 0 ? 0 : *(uint8_t *)min.c_str();
+		uint16_t max_val = max.length() == 0 ? 0 : *(uint8_t *)max.c_str();
 		NumericStats::SetMin(compress_stats, Value(min_val).DefaultCastAs(cast_type));
 		NumericStats::SetMax(compress_stats, Value(max_val + 1).DefaultCastAs(cast_type));
 	}
@@ -442,6 +449,31 @@ unique_ptr<Expression> CompressedMaterialization::GetStringDecompress(unique_ptr
 	arguments.emplace_back(std::move(input));
 	return make_uniq<BoundFunctionExpression>(decompress_function.return_type, decompress_function,
 	                                          std::move(arguments), nullptr);
+}
+
+void CompressedMaterialization::RemoveRedundantProjections(unique_ptr<LogicalOperator> &op) {
+	for (auto &child : op->children) {
+		RemoveRedundantProjections(child);
+	}
+
+	if (op->type != LogicalOperatorType::LOGICAL_PROJECTION ||
+	    op->children[0]->type != LogicalOperatorType::LOGICAL_PROJECTION) {
+		return;
+	}
+
+	// Op and its child are projections, check if we made them
+	auto &compression = op->Cast<LogicalProjection>();
+	auto &decompression = op->children[0]->Cast<LogicalProjection>();
+	if (compression_table_indices.find(compression.table_index) == compression_table_indices.end() ||
+	    decompression_table_indices.find(decompression.table_index) == decompression_table_indices.end()) {
+		return;
+	}
+
+	// We found a compression followed by a decompression, figure out if we can eliminate
+	D_ASSERT(compression.expressions.size() == decompression.expressions.size());
+	for (idx_t col_idx = 0; col_idx < compression.expressions.size(); col_idx++) {
+		
+	}
 }
 
 } // namespace duckdb

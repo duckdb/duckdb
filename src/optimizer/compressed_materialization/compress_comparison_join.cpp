@@ -74,33 +74,6 @@ void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperato
 		ComparisonJoinGetReferencedBindings(condition, referenced_bindings);
 	}
 
-	for (const auto &condition : join.conditions) {
-		if (condition.left->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF &&
-		    condition.right->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-			// Both are bound column refs, see if both can be compressed generically to the same type
-			auto &lhs_colref = condition.left->Cast<BoundColumnRefExpression>();
-			auto &rhs_colref = condition.right->Cast<BoundColumnRefExpression>();
-			auto lhs_it = statistics_map.find(lhs_colref.binding);
-			auto rhs_it = statistics_map.find(rhs_colref.binding);
-			if (lhs_it != statistics_map.end() && rhs_it != statistics_map.end() && lhs_it->second && rhs_it->second) {
-				// For joins we need to compress both using the same statistics, otherwise comparisons don't work
-				auto merged_stats = lhs_it->second->Copy();
-				merged_stats.Merge(*rhs_it->second);
-
-				// If one can be compressed, both can (same stats)
-				auto compress_expr = GetCompressExpression(condition.left->Copy(), merged_stats);
-				if (compress_expr) {
-					D_ASSERT(GetCompressExpression(condition.right->Copy(), merged_stats));
-					// This will be compressed generically, but we have to merge the stats
-					lhs_it->second->Merge(merged_stats);
-					rhs_it->second->Merge(merged_stats);
-					continue;
-				}
-			}
-		}
-		ComparisonJoinGetReferencedBindings(condition, referenced_bindings);
-	}
-
 	// Create info for compression
 	CompressedMaterializationInfo info(*op, {0, 1}, referenced_bindings);
 
