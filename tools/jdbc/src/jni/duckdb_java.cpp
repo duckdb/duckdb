@@ -351,26 +351,38 @@ JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1schema
 	return env->NewStringUTF(entry.schema.c_str());
 }
 
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1schema(JNIEnv* env, jclass, jobject conn_ref_buf, jstring schema) {
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1schema(JNIEnv *env, jclass, jobject conn_ref_buf,
+                                                                              jstring schema) {
 	auto conn_ref = get_connection(env, conn_ref_buf);
 	if (!conn_ref) {
 		return;
 	}
 
-	conn_ref->context->RunFunctionInTransaction([&]() { 
-		ClientData::Get(*conn_ref->context).catalog_search_path->Set(CatalogSearchEntry(INVALID_CATALOG, jstring_to_string(env, schema)), true);
-	});
+	try {
+		conn_ref->context->RunFunctionInTransaction([&]() {
+			ClientData::Get(*conn_ref->context)
+			    .catalog_search_path->Set(CatalogSearchEntry(INVALID_CATALOG, jstring_to_string(env, schema)), true);
+		});
+	} catch (const exception &e) {
+		env->ThrowNew(J_SQLException, e.what());
+	}
 }
 
-JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1catalog(JNIEnv* env, jclass, jobject conn_ref_buf, jstring catalog) {
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1catalog(JNIEnv *env, jclass,
+                                                                               jobject conn_ref_buf, jstring catalog) {
 	auto conn_ref = get_connection(env, conn_ref_buf);
 	if (!conn_ref) {
 		return;
 	}
 
-	conn_ref->context->RunFunctionInTransaction([&]() { 
-		ClientData::Get(*conn_ref->context).catalog_search_path->Set(CatalogSearchEntry(jstring_to_string(env, catalog), INVALID_SCHEMA), false);
-	});
+	try {
+		conn_ref->context->RunFunctionInTransaction([&]() {
+			ClientData::Get(*conn_ref->context)
+			    .catalog_search_path->Set(CatalogSearchEntry(jstring_to_string(env, catalog), INVALID_SCHEMA), false);
+		});
+	} catch (const exception &e) {
+		env->ThrowNew(J_SQLException, e.what());
+	}
 }
 
 JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1catalog(JNIEnv *env, jclass,
