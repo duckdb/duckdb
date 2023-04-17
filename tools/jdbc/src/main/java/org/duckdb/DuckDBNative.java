@@ -75,6 +75,10 @@ public class DuckDBNative {
 
 	protected static native void duckdb_jdbc_disconnect(ByteBuffer conn_ref);
 
+	protected static native void duckdb_jdbc_set_schema(ByteBuffer conn_ref, String schema);
+
+	protected static native void duckdb_jdbc_set_catalog(ByteBuffer conn_ref, String catalog);
+
 	protected static native String duckdb_jdbc_get_schema(ByteBuffer conn_ref);
 
 	protected static native String duckdb_jdbc_get_catalog(ByteBuffer conn_ref);

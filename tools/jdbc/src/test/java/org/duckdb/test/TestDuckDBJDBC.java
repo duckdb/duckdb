@@ -2349,9 +2349,11 @@ public class TestDuckDBJDBC {
 	}
 
 	public static void test_set_catalog() throws Exception {
-		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
-		conn.setCatalog("we do not have this feature yet, sorry"); // Should be no-op until implemented
-		conn.close();
+		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
+			conn.setCatalog("other");
+
+			assertEquals(conn.getCatalog(), "other");
+		}
 	}
 
 	public static void test_get_table_types_bug1258() throws Exception {
@@ -2582,6 +2584,9 @@ public class TestDuckDBJDBC {
 		}
 
 		assertEquals(conn.getSchema(), "alternate_schema");
+
+		conn.setSchema("main");
+		assertEquals(conn.getSchema(), "main");
 
 		conn.close();
 

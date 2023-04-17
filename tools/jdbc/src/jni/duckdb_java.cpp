@@ -351,6 +351,28 @@ JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1schema
 	return env->NewStringUTF(entry.schema.c_str());
 }
 
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1schema(JNIEnv* env, jclass, jobject conn_ref_buf, jstring schema) {
+	auto conn_ref = get_connection(env, conn_ref_buf);
+	if (!conn_ref) {
+		return;
+	}
+
+	conn_ref->context->RunFunctionInTransaction([&]() { 
+		ClientData::Get(*conn_ref->context).catalog_search_path->Set(CatalogSearchEntry(INVALID_CATALOG, jstring_to_string(env, schema)), true);
+	});
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1catalog(JNIEnv* env, jclass, jobject conn_ref_buf, jstring catalog) {
+	auto conn_ref = get_connection(env, conn_ref_buf);
+	if (!conn_ref) {
+		return;
+	}
+
+	conn_ref->context->RunFunctionInTransaction([&]() { 
+		ClientData::Get(*conn_ref->context).catalog_search_path->Set(CatalogSearchEntry(jstring_to_string(env, catalog), INVALID_SCHEMA), false);
+	});
+}
+
 JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1catalog(JNIEnv *env, jclass,
                                                                                   jobject conn_ref_buf) {
 	auto conn_ref = get_connection(env, conn_ref_buf);
