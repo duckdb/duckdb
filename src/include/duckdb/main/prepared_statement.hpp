@@ -77,7 +77,7 @@ public:
 
 	//! Create a pending query result of the prepared statement with the given set of unnamed+named arguments
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(vector<Value> &unnamed_values,
-	                                                       optional_ptr<case_insensitive_map_t<Value>> named_values,
+	                                                       case_insensitive_map_t<Value> &named_values,
 	                                                       bool allow_stream_result = true);
 
 	//! Execute the prepared statement with the given set of values
@@ -85,7 +85,7 @@ public:
 
 	//! Execute the prepared statement with the given set of named+unnamed values
 	DUCKDB_API unique_ptr<QueryResult> Execute(vector<Value> &unnamed_values,
-	                                           optional_ptr<case_insensitive_map_t<Value>> named_values,
+	                                           case_insensitive_map_t<Value> &named_values,
 	                                           bool allow_stream_result = true);
 
 	//! Execute the prepared statement with the given set of arguments

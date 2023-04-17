@@ -291,9 +291,7 @@ duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statemen
 		return DuckDBError;
 	}
 
-	// explicitly create an optional ptr, otherwise the right overload isn't considered
-	optional_ptr<case_insensitive_map_t<Value>> named_values(&wrapper->named_values);
-	auto result = wrapper->statement->Execute(wrapper->values, named_values, false);
+	auto result = wrapper->statement->Execute(wrapper->values, wrapper->named_values, false);
 	return duckdb_translate_result(std::move(result), out_result);
 }
 
