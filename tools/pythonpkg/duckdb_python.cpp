@@ -12,6 +12,8 @@
 #include "duckdb_python/exceptions.hpp"
 #include "duckdb_python/connection_wrapper.hpp"
 #include "duckdb_python/conversions/pyconnection_default.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb_python/exception_handling_enum.hpp"
 
 #include "duckdb.hpp"
 
@@ -284,6 +286,16 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	py::enum_<duckdb::ExplainType>(m, "ExplainType")
 	    .value("STANDARD", duckdb::ExplainType::EXPLAIN_STANDARD)
 	    .value("ANALYZE", duckdb::ExplainType::EXPLAIN_ANALYZE)
+	    .export_values();
+
+	py::enum_<duckdb::FunctionNullHandling>(m, "FunctionNullHandling")
+	    .value("DEFAULT", duckdb::FunctionNullHandling::DEFAULT_NULL_HANDLING)
+	    .value("SPECIAL", duckdb::FunctionNullHandling::SPECIAL_HANDLING)
+	    .export_values();
+
+	py::enum_<duckdb::PythonExceptionHandling>(m, "PythonExceptionHandling")
+	    .value("DEFAULT", duckdb::PythonExceptionHandling::FORWARD_ERROR)
+	    .value("RETURN_NULL", duckdb::PythonExceptionHandling::RETURN_NULL)
 	    .export_values();
 
 	RegisterExceptions(m);

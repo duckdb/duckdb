@@ -10,6 +10,7 @@
 #include "duckdb/common/arrow/result_arrow_wrapper.hpp"
 #include "duckdb_python/arrow_array_stream.hpp"
 #include "duckdb/function/table/arrow.hpp"
+#include "duckdb/function/function.hpp"
 
 namespace {
 using namespace duckdb;
@@ -35,7 +36,11 @@ struct ParameterKind {
 
 struct PythonUDFData {
 public:
-	PythonUDFData(const string &name, scalar_function_t func, bool varargs) : name(name), func(func), varargs(varargs) {
+	PythonUDFData(const string &name, scalar_function_t func, bool varargs_p, FunctionNullHandling null_handling)
+	    : name(name), func(func), null_handling(null_handling) {
+		if (varargs_p) {
+			varargs = LogicalType::ANY;
+		}
 		return_type = LogicalType::INVALID;
 		param_count = DConstants::INVALID_INDEX;
 	}
@@ -44,7 +49,8 @@ public:
 	const string &name;
 	vector<LogicalType> parameters;
 	LogicalType return_type;
-	bool varargs;
+	LogicalType varargs = LogicalTypeId::INVALID;
+	FunctionNullHandling null_handling;
 	idx_t param_count;
 	scalar_function_t func;
 
@@ -112,7 +118,7 @@ public:
 				std::string kind = py::str(value.attr("kind"));
 				auto parameter_kind = ParameterKind::FromString(kind);
 				if (parameter_kind == ParameterKind::Type::VAR_POSITIONAL) {
-					varargs = true;
+					varargs = LogicalType::ANY;
 				}
 				parameters.push_back(LogicalType::ANY);
 			}
@@ -120,13 +126,12 @@ public:
 	}
 
 	ScalarFunction GetFunction() {
-		ScalarFunction scalar_function(name, std::move(parameters), return_type, func);
-		if (varargs) {
-			scalar_function.varargs = LogicalType::ANY;
-		}
+		ScalarFunction scalar_function(name, std::move(parameters), return_type, func, nullptr, nullptr, nullptr,
+		                               nullptr, varargs, FunctionSideEffects::NO_SIDE_EFFECTS, null_handling);
 		return scalar_function;
 	}
 };
+
 }; // namespace
 
 namespace duckdb {
@@ -209,7 +214,7 @@ static void ConvertPyArrowToDataChunk(const py::object &table, Vector &out, Clie
 	out.Reference(result.data[0]);
 }
 
-static scalar_function_t CreateVectorizedFunction(PyObject *function) {
+static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExceptionHandling exception_handling) {
 	// Through the capture of the lambda, we have access to the function pointer
 	// We just need to make sure that it doesn't get garbage collected
 	scalar_function_t func = [=](DataChunk &input, ExpressionState &state, Vector &result) -> void {
@@ -246,7 +251,7 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function) {
 	return func;
 }
 
-static scalar_function_t CreateNativeFunction(PyObject *function) {
+static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptionHandling exception_handling) {
 	// Through the capture of the lambda, we have access to the function pointer
 	// We just need to make sure that it doesn't get garbage collected
 	scalar_function_t func = [=](DataChunk &input, ExpressionState &state, Vector &result) -> void {
@@ -270,8 +275,14 @@ static scalar_function_t CreateNativeFunction(PyObject *function) {
 			PyObject *ret = nullptr;
 			ret = PyObject_CallObject(function, bundled_parameters.ptr());
 			if (ret == nullptr && PyErr_Occurred()) {
-				auto exception = py::error_already_set();
-				throw InvalidInputException("Python exception occurred while executing the UDF: %s", exception.what());
+				if (exception_handling == PythonExceptionHandling::FORWARD_ERROR) {
+					auto exception = py::error_already_set();
+					throw InvalidInputException("Python exception occurred while executing the UDF: %s",
+					                            exception.what());
+				} else {
+					PyErr_Clear();
+					ret = Py_None;
+				}
 			}
 			python_objects.push_back(py::handle(ret));
 			python_results.push_back(ret);
@@ -289,8 +300,8 @@ static scalar_function_t CreateNativeFunction(PyObject *function) {
 
 static ScalarFunction CreateUDFInternal(const string &name, scalar_function_t func, const py::object &udf,
                                         const py::object &parameters, shared_ptr<DuckDBPyType> return_type,
-                                        bool varargs) {
-	PythonUDFData data(name, func, varargs);
+                                        bool varargs, FunctionNullHandling null_handling) {
+	PythonUDFData data(name, func, varargs, null_handling);
 
 	data.AnalyzeSignature(udf);
 	data.OverrideParameters(parameters);
@@ -302,16 +313,19 @@ static ScalarFunction CreateUDFInternal(const string &name, scalar_function_t fu
 
 ScalarFunction DuckDBPyConnection::CreatePyArrowScalarUDF(const string &name, const py::object &udf,
                                                           const py::object &parameters,
-                                                          shared_ptr<DuckDBPyType> return_type, bool varargs) {
-	scalar_function_t func = CreateVectorizedFunction(udf.ptr());
-	return CreateUDFInternal(name, func, udf, parameters, return_type, varargs);
+                                                          shared_ptr<DuckDBPyType> return_type, bool varargs,
+                                                          FunctionNullHandling null_handling,
+                                                          PythonExceptionHandling exception_handling) {
+	scalar_function_t func = CreateVectorizedFunction(udf.ptr(), exception_handling);
+	return CreateUDFInternal(name, func, udf, parameters, return_type, varargs, null_handling);
 }
 
 ScalarFunction DuckDBPyConnection::CreateScalarUDF(const string &name, const py::object &udf,
                                                    const py::object &parameters, shared_ptr<DuckDBPyType> return_type,
-                                                   bool varargs) {
-	scalar_function_t func = CreateNativeFunction(udf.ptr());
-	return CreateUDFInternal(name, func, udf, parameters, return_type, varargs);
+                                                   bool varargs, FunctionNullHandling null_handling,
+                                                   PythonExceptionHandling exception_handling) {
+	scalar_function_t func = CreateNativeFunction(udf.ptr(), exception_handling);
+	return CreateUDFInternal(name, func, udf, parameters, return_type, varargs, null_handling);
 }
 
 } // namespace duckdb
