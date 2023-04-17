@@ -8,7 +8,7 @@ struct DuckDBDatabasesData : public GlobalTableFunctionState {
 	DuckDBDatabasesData() : offset(0) {
 	}
 
-	vector<AttachedDatabase *> entries;
+	vector<optional_ptr<AttachedDatabase>> entries;
 	idx_t offset;
 };
 

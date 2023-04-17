@@ -8,6 +8,7 @@ using UUIDs
 test_files = [
     "test_appender.jl",
     "test_basic_queries.jl",
+    "test_big_nested.jl",
     "test_config.jl",
     "test_connection.jl",
     "test_df_scan.jl",

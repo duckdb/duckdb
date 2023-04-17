@@ -21,9 +21,10 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	QueryErrorContext error_context(root_statement, ref.query_location);
 	// CTEs and views are also referred to using BaseTableRefs, hence need to distinguish here
 	// check if the table name refers to a CTE
-	auto cte = FindCTE(ref.table_name, ref.table_name == alias);
-	if (cte) {
+	auto found_cte = FindCTE(ref.table_name, ref.table_name == alias);
+	if (found_cte) {
 		// Check if there is a CTE binding in the BindContext
+		auto &cte = *found_cte;
 		auto ctebinding = bind_context.GetCTEBinding(ref.table_name);
 		if (!ctebinding) {
 			if (CTEIsAlreadyBound(cte)) {
@@ -31,9 +32,9 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 				                      ref.table_name);
 			}
 			// Move CTE to subquery and bind recursively
-			SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(cte->query->Copy()));
+			SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(cte.query->Copy()));
 			subquery.alias = ref.alias.empty() ? ref.table_name : ref.alias;
-			subquery.column_name_alias = cte->aliases;
+			subquery.column_name_alias = cte.aliases;
 			for (idx_t i = 0; i < ref.column_name_alias.size(); i++) {
 				if (i < subquery.column_name_alias.size()) {
 					subquery.column_name_alias[i] = ref.column_name_alias[i];
@@ -41,7 +42,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 					subquery.column_name_alias.push_back(ref.column_name_alias[i]);
 				}
 			}
-			return Bind(subquery, cte);
+			return Bind(subquery, found_cte);
 		} else {
 			// There is a CTE binding in the BindContext.
 			// This can only be the case if there is a recursive CTE present.
@@ -82,7 +83,6 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 					if (replacement_function->type == TableReferenceType::TABLE_FUNCTION) {
 						auto &table_function = replacement_function->Cast<TableFunctionRef>();
 						table_function.column_name_alias = ref.column_name_alias;
-						;
 					} else if (replacement_function->type == TableReferenceType::SUBQUERY) {
 						auto &subquery = replacement_function->Cast<SubqueryRef>();
 						subquery.column_name_alias = ref.column_name_alias;
@@ -155,7 +155,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		subquery.column_name_alias =
 		    BindContext::AliasColumnNames(subquery.alias, view_catalog_entry->aliases, ref.column_name_alias);
 		// bind the child subquery
-		view_binder->AddBoundView(view_catalog_entry);
+		view_binder->AddBoundView(*view_catalog_entry);
 		auto bound_child = view_binder->Bind(subquery);
 		if (!view_binder->correlated_columns.empty()) {
 			throw BinderException("Contents of view were altered - view bound correlated columns");

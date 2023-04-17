@@ -34,7 +34,7 @@ EXPLAIN SELECT 1*X FROM test
 ----
 
 query I nosort xnorm
-EXPLAIN SELECT X/1 FROM test
+EXPLAIN SELECT X//1 FROM test
 ----
 
 # division by zero results in a NULL
@@ -43,6 +43,6 @@ EXPLAIN SELECT NULL FROM test
 ----
 
 query I nosort xnull
-EXPLAIN SELECT X/0 FROM test
+EXPLAIN SELECT X//0 FROM test
 ----
 

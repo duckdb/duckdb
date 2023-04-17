@@ -98,7 +98,25 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	    .def("list_filesystems", &DuckDBPyConnection::ListFilesystems,
 	         "List registered filesystems, including builtin ones")
 	    .def("filesystem_is_registered", &DuckDBPyConnection::FileSystemIsRegistered,
-	         "Check if a filesystem with the provided name is currently registered", py::arg("name"))
+	         "Check if a filesystem with the provided name is currently registered", py::arg("name"));
+
+	DefineMethod({"sqltype", "dtype", "type"}, m, &DuckDBPyConnection::Type,
+	             "Create a type object by parsing the 'type_str' string", py::arg("type_str"));
+	DefineMethod({"array_type", "list_type"}, m, &DuckDBPyConnection::ArrayType,
+	             "Create an array type object of 'type'", py::arg("type").none(false));
+	m.def("union_type", &DuckDBPyConnection::UnionType, "Create a union type object from 'members'",
+	      py::arg("members").none(false))
+	    .def("string_type", &DuckDBPyConnection::StringType, "Create a string type with an optional collation",
+	         py::arg("collation") = string())
+	    .def("enum_type", &DuckDBPyConnection::EnumType,
+	         "Create an enum type of underlying 'type', consisting of the list of 'values'", py::arg("name"),
+	         py::arg("type"), py::arg("values"))
+	    .def("decimal_type", &DuckDBPyConnection::DecimalType, "Create a decimal type with 'width' and 'scale'",
+	         py::arg("width"), py::arg("scale"));
+	DefineMethod({"struct_type", "row_type"}, m, &DuckDBPyConnection::StructType,
+	             "Create a struct type object from 'fields'", py::arg("fields"));
+	m.def("map_type", &DuckDBPyConnection::MapType, "Create a map type object from 'key_type' and 'value_type'",
+	      py::arg("key").none(false), py::arg("value").none(false))
 	    .def("duplicate", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
 	    .def("execute", &DuckDBPyConnection::Execute,
 	         "Execute the given SQL query, optionally using prepared statements with parameters set", py::arg("query"),
@@ -122,13 +140,13 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	    .def("df", &DuckDBPyConnection::FetchDF, "Fetch a result as DataFrame following execute()", py::kw_only(),
 	         py::arg("date_as_object") = false)
 	    .def("pl", &DuckDBPyConnection::FetchPolars, "Fetch a result as Polars DataFrame following execute()",
-	         py::arg("chunk_size") = 1000000)
+	         py::arg("rows_per_batch") = 1000000)
 	    .def("fetch_arrow_table", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
-	         py::arg("chunk_size") = 1000000)
+	         py::arg("rows_per_batch") = 1000000)
 	    .def("fetch_record_batch", &DuckDBPyConnection::FetchRecordBatchReader,
-	         "Fetch an Arrow RecordBatchReader following execute()", py::arg("chunk_size") = 1000000)
+	         "Fetch an Arrow RecordBatchReader following execute()", py::arg("rows_per_batch") = 1000000)
 	    .def("arrow", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
-	         py::arg("chunk_size") = 1000000)
+	         py::arg("rows_per_batch") = 1000000)
 	    .def("torch", &DuckDBPyConnection::FetchPyTorch,
 	         "Fetch a result as dict of PyTorch Tensors following execute()")
 	    .def("tf", &DuckDBPyConnection::FetchTF, "Fetch a result as dict of TensorFlow Tensors following execute()")
@@ -1095,11 +1113,11 @@ DataFrame DuckDBPyConnection::FetchDFChunk(const idx_t vectors_per_chunk, bool d
 	return result->FetchDFChunk(vectors_per_chunk, date_as_object);
 }
 
-duckdb::pyarrow::Table DuckDBPyConnection::FetchArrow(idx_t chunk_size) {
+duckdb::pyarrow::Table DuckDBPyConnection::FetchArrow(idx_t rows_per_batch) {
 	if (!result) {
 		throw InvalidInputException("No open result set");
 	}
-	return result->ToArrowTable(chunk_size);
+	return result->ToArrowTable(rows_per_batch);
 }
 
 py::dict DuckDBPyConnection::FetchPyTorch() {
@@ -1116,16 +1134,16 @@ py::dict DuckDBPyConnection::FetchTF() {
 	return result->FetchTF();
 }
 
-PolarsDataFrame DuckDBPyConnection::FetchPolars(idx_t chunk_size) {
-	auto arrow = FetchArrow(chunk_size);
+PolarsDataFrame DuckDBPyConnection::FetchPolars(idx_t rows_per_batch) {
+	auto arrow = FetchArrow(rows_per_batch);
 	return py::cast<PolarsDataFrame>(py::module::import("polars").attr("DataFrame")(arrow));
 }
 
-duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(const idx_t chunk_size) const {
+duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(const idx_t rows_per_batch) const {
 	if (!result) {
 		throw InvalidInputException("No open result set");
 	}
-	return result->FetchRecordBatchReader(chunk_size);
+	return result->FetchRecordBatchReader(rows_per_batch);
 }
 
 static void CreateArrowScan(py::object entry, TableFunctionRef &table_function,

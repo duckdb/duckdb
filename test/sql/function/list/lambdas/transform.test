@@ -148,7 +148,7 @@ SELECT list_apply([1, NULL], arr_elem -> arr_elem - 4)
 # more tests on precedence
 
 query I
-select list_apply(i, x -> (6 + 2 * 12) / x) from (values (list_value(1, 2, 3))) tbl(i);
+select list_apply(i, x -> (6 + 2 * 12) // x) from (values (list_value(1, 2, 3))) tbl(i);
 ----
 [30, 15, 10]
 

@@ -30,6 +30,7 @@ class BufferPool {
 	friend class BlockHandle;
 	friend class BlockManager;
 	friend class BufferManager;
+	friend class StandardBufferManager;
 
 public:
 	explicit BufferPool(idx_t maximum_memory);
@@ -38,6 +39,8 @@ public:
 	//! Set a new memory limit to the buffer pool, throws an exception if the new limit is too low and not enough
 	//! blocks can be evicted
 	void SetLimit(idx_t limit, const char *exception_postscript);
+
+	void IncreaseUsedMemory(idx_t size);
 
 	idx_t GetUsedMemory();
 

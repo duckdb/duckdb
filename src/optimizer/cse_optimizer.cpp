@@ -60,10 +60,10 @@ void CommonSubExpressionOptimizer::CountExpressions(Expression &expr, CSEReplace
 	}
 	if (expr.expression_class != ExpressionClass::BOUND_AGGREGATE && !expr.HasSideEffects()) {
 		// we can't move aggregates to a projection, so we only consider the children of the aggregate
-		auto node = state.expression_count.find(&expr);
+		auto node = state.expression_count.find(expr);
 		if (node == state.expression_count.end()) {
 			// first time we encounter this expression, insert this node with [count = 1]
-			state.expression_count[&expr] = CSENode();
+			state.expression_count[expr] = CSENode();
 		} else {
 			// we encountered this expression before, increment the occurrence count
 			node->second.count++;
@@ -95,8 +95,8 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 	// check if this child is eligible for CSE elimination
 	bool can_cse = expr.expression_class != ExpressionClass::BOUND_CONJUNCTION &&
 	               expr.expression_class != ExpressionClass::BOUND_CASE;
-	if (can_cse && state.expression_count.find(&expr) != state.expression_count.end()) {
-		auto &node = state.expression_count[&expr];
+	if (can_cse && state.expression_count.find(expr) != state.expression_count.end()) {
+		auto &node = state.expression_count[expr];
 		if (node.count > 1) {
 			// this expression occurs more than once! push it into the projection
 			// check if it has already been pushed into the projection
