@@ -130,6 +130,11 @@ static AdbcStatusCode ReleaseDriver(struct AdbcDriver *driver, struct AdbcError 
 
 // Default stubs
 
+AdbcStatusCode DatabaseSetOption(struct AdbcDatabase *database, const char *key, const char *value,
+                                 struct AdbcError *error) {
+	return ADBC_STATUS_NOT_IMPLEMENTED;
+}
+
 AdbcStatusCode ConnectionCommit(struct AdbcConnection *, struct AdbcError *error) {
 	return ADBC_STATUS_NOT_IMPLEMENTED;
 }
@@ -139,8 +144,17 @@ AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, uint32_t *in
 	return ADBC_STATUS_NOT_IMPLEMENTED;
 }
 
+AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *, int, const char *, const char *, const char *,
+                                    const char **, const char *, struct ArrowArrayStream *, struct AdbcError *error) {
+	return ADBC_STATUS_NOT_IMPLEMENTED;
+}
+
 AdbcStatusCode ConnectionGetTableSchema(struct AdbcConnection *, const char *, const char *, const char *,
                                         struct ArrowSchema *, struct AdbcError *error) {
+	return ADBC_STATUS_NOT_IMPLEMENTED;
+}
+
+AdbcStatusCode ConnectionGetTableTypes(struct AdbcConnection *, struct ArrowArrayStream *, struct AdbcError *error) {
 	return ADBC_STATUS_NOT_IMPLEMENTED;
 }
 
@@ -151,6 +165,10 @@ AdbcStatusCode ConnectionReadPartition(struct AdbcConnection *connection, const 
 }
 
 AdbcStatusCode ConnectionRollback(struct AdbcConnection *, struct AdbcError *error) {
+	return ADBC_STATUS_NOT_IMPLEMENTED;
+}
+
+AdbcStatusCode ConnectionSetOption(struct AdbcConnection *, const char *, const char *, struct AdbcError *error) {
 	return ADBC_STATUS_NOT_IMPLEMENTED;
 }
 
@@ -167,6 +185,18 @@ AdbcStatusCode StatementExecutePartitions(struct AdbcStatement *statement, struc
 
 AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, struct ArrowSchema *schema,
                                            struct AdbcError *error) {
+	return ADBC_STATUS_NOT_IMPLEMENTED;
+}
+
+AdbcStatusCode StatementPrepare(struct AdbcStatement *, struct AdbcError *error) {
+	return ADBC_STATUS_NOT_IMPLEMENTED;
+}
+
+AdbcStatusCode StatementSetOption(struct AdbcStatement *, const char *, const char *, struct AdbcError *error) {
+	return ADBC_STATUS_NOT_IMPLEMENTED;
+}
+
+AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *, const char *, struct AdbcError *error) {
 	return ADBC_STATUS_NOT_IMPLEMENTED;
 }
 
