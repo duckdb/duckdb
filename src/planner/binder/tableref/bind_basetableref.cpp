@@ -45,7 +45,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			return Bind(subquery, found_cte);
 		} else {
 			// There is a CTE binding in the BindContext.
-			// This can only be the case if there is a recursive CTE present.
+			// This can only be the case if there is a recursive CTE,
+			// or a materialized CTE present.
 			auto index = GenerateTableIndex();
 			auto result = make_uniq<BoundCTERef>(index, ctebinding->index);
 			auto b = ctebinding;
