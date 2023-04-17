@@ -86,7 +86,7 @@ unique_ptr<PhysicalOperator> DuckCatalog::PlanInsert(ClientContext &context, Log
 	}
 	unique_ptr<PhysicalOperator> insert;
 	if (use_batch_index && !parallel_streaming_insert) {
-		insert = make_uniq<PhysicalBatchInsert>(op.types, op.table, op.column_index_map, std::move(op.bound_defaults),
+		insert = make_uniq<PhysicalBatchInsert>(op.types, *op.table, op.column_index_map, std::move(op.bound_defaults),
 		                                        op.estimated_cardinality);
 	} else {
 		insert = make_uniq<PhysicalInsert>(

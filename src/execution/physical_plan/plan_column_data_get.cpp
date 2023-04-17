@@ -9,8 +9,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalColumnData
 	D_ASSERT(op.collection);
 
 	// create a PhysicalChunkScan pointing towards the owned collection
-	auto chunk_scan =
-	    make_uniq<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::COLUMN_DATA_SCAN, op.estimated_cardinality, std::move(op.collection));
+	auto chunk_scan = make_uniq<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::COLUMN_DATA_SCAN,
+	                                                    op.estimated_cardinality, std::move(op.collection));
 	return std::move(chunk_scan);
 }
 

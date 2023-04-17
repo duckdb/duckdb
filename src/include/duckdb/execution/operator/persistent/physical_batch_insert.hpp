@@ -18,7 +18,7 @@ public:
 
 public:
 	//! INSERT INTO
-	PhysicalBatchInsert(vector<LogicalType> types, TableCatalogEntry *table,
+	PhysicalBatchInsert(vector<LogicalType> types, TableCatalogEntry &table,
 	                    physical_index_vector_t<idx_t> column_index_map, vector<unique_ptr<Expression>> bound_defaults,
 	                    idx_t estimated_cardinality);
 	//! CREATE TABLE AS
@@ -28,7 +28,7 @@ public:
 	//! The map from insert column index to table column index
 	physical_index_vector_t<idx_t> column_index_map;
 	//! The table to insert into
-	TableCatalogEntry *insert_table;
+	optional_ptr<TableCatalogEntry> insert_table;
 	//! The insert types
 	vector<LogicalType> insert_types;
 	//! The default expressions of the columns for which no value is provided
