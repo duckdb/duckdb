@@ -72,6 +72,22 @@ public:
 		return PendingQueryRecursive(values, args...);
 	}
 
+	//! Create a pending query result of the prepared statement with the given set of arguments
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(vector<Value> &values, bool allow_stream_result = true);
+
+	//! Create a pending query result of the prepared statement with the given set of unnamed+named arguments
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(vector<Value> &unnamed_values,
+	                                                       optional_ptr<case_insensitive_map_t<Value>> named_values,
+	                                                       bool allow_stream_result = true);
+
+	//! Execute the prepared statement with the given set of values
+	DUCKDB_API unique_ptr<QueryResult> Execute(vector<Value> &values, bool allow_stream_result = true);
+
+	//! Execute the prepared statement with the given set of named+unnamed values
+	DUCKDB_API unique_ptr<QueryResult> Execute(vector<Value> &unnamed_values,
+	                                           optional_ptr<case_insensitive_map_t<Value>> named_values,
+	                                           bool allow_stream_result = true);
+
 	//! Execute the prepared statement with the given set of arguments
 	template <typename... Args>
 	unique_ptr<QueryResult> Execute(Args... args) {
@@ -79,11 +95,75 @@ public:
 		return ExecuteRecursive(values, args...);
 	}
 
-	//! Create a pending query result of the prepared statement with the given set of arguments
-	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(vector<Value> &values, bool allow_stream_result = true);
+	template <class PAYLOAD>
+	static string ExcessValuesException(const case_insensitive_map_t<idx_t> &parameters,
+	                                    case_insensitive_map_t<PAYLOAD> &values) {
+		// Too many values
+		vector<string> excess_values;
+		for (auto &pair : values) {
+			auto &name = pair.first;
+			if (!parameters.count(name)) {
+				excess_values.push_back(name);
+			}
+		}
+		return StringUtil::Format("Some of the provided named values don't have a matching parameter: %s",
+		                          StringUtil::Join(excess_values, ", "));
+	}
 
-	//! Execute the prepared statement with the given set of values
-	DUCKDB_API unique_ptr<QueryResult> Execute(vector<Value> &values, bool allow_stream_result = true);
+	template <class PAYLOAD>
+	static string MissingValuesException(const case_insensitive_map_t<idx_t> &parameters,
+	                                     case_insensitive_map_t<PAYLOAD> &values) {
+		// Missing values
+		vector<string> missing_values;
+		for (auto &pair : parameters) {
+			auto &name = pair.first;
+			if (!values.count(name)) {
+				missing_values.push_back(name);
+			}
+		}
+		return StringUtil::Format("Values were not provided for the following prepared statement parameters: %s",
+		                          StringUtil::Join(missing_values, ", "));
+	}
+
+	template <class PAYLOAD>
+	static vector<PAYLOAD> PrepareParameters(vector<PAYLOAD> unnamed, case_insensitive_map_t<PAYLOAD> named,
+	                                         const case_insensitive_map_t<idx_t> &named_params) {
+		if (named_params.empty()) {
+			if (!named.empty()) {
+				throw InvalidInputException(
+				    "The prepared statement doesn't expect any named parameters, but the execute "
+				    "statement does contain name = value pairs");
+			}
+			return std::move(unnamed);
+		}
+		if (named.empty()) {
+			throw InvalidInputException("The prepared statement expects named parameters, but none were provided");
+		}
+		if (named_params.size() != named.size()) {
+			// Mismatch in expected and provided parameters/values
+			if (named_params.size() > named.size()) {
+				throw InvalidInputException(MissingValuesException(named_params, named));
+			} else {
+				D_ASSERT(named.size() > named_params.size());
+				throw InvalidInputException(ExcessValuesException(named_params, named));
+			}
+		}
+		vector<PAYLOAD> result(named_params.size());
+		for (auto &pair : named_params) {
+			auto &name = pair.first;
+			auto entry = named.find(name);
+			if (entry == named.end()) {
+				throw InvalidInputException("Expected a parameter '%s' was not found in the provided values", name);
+			}
+			auto &named_value = entry->second;
+
+			auto &param_idx = pair.second;
+			D_ASSERT(param_idx > 0);
+			D_ASSERT(param_idx - 1 < result.size());
+			result[param_idx - 1] = std::move(named_value);
+		}
+		return result;
+	}
 
 private:
 	unique_ptr<PendingQueryResult> PendingQueryRecursive(vector<Value> &values) {

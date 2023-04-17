@@ -2,12 +2,17 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/common/preserved_error.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
+using duckdb::case_insensitive_map_t;
 using duckdb::make_uniq;
+using duckdb::optional_ptr;
 using duckdb::PendingExecutionResult;
 using duckdb::PendingQueryResult;
 using duckdb::PendingStatementWrapper;
 using duckdb::PreparedStatementWrapper;
+using duckdb::Value;
 
 duckdb_state duckdb_pending_prepared_internal(duckdb_prepared_statement prepared_statement,
                                               duckdb_pending_result *out_result, bool allow_streaming) {
@@ -17,8 +22,14 @@ duckdb_state duckdb_pending_prepared_internal(duckdb_prepared_statement prepared
 	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
 	auto result = new PendingStatementWrapper();
 	result->allow_streaming = allow_streaming;
+	if (TransformNamedParameters(*wrapper) == DuckDBError) {
+		return DuckDBError;
+	}
+
 	try {
-		result->statement = wrapper->statement->PendingQuery(wrapper->values, allow_streaming);
+		// explicitly create an optional ptr, otherwise the right overload isn't considered
+		optional_ptr<case_insensitive_map_t<Value>> named_values(&wrapper->named_values);
+		result->statement = wrapper->statement->PendingQuery(wrapper->values, named_values, allow_streaming);
 	} catch (const duckdb::Exception &ex) {
 		result->statement = make_uniq<PendingQueryResult>(duckdb::PreservedError(ex));
 	} catch (std::exception &ex) {

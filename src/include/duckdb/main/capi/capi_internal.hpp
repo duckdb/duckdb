@@ -29,6 +29,9 @@ struct DatabaseData {
 };
 
 struct PreparedStatementWrapper {
+	//! Map of name -> values index, populated by 'bind_parameter_index'
+	case_insensitive_map_t<idx_t> name_to_index;
+	case_insensitive_map_t<Value> named_values;
 	unique_ptr<PreparedStatement> statement;
 	vector<Value> values;
 };
@@ -69,6 +72,7 @@ struct DuckDBResultData {
 	CAPIResultSetType result_set_type;
 };
 
+duckdb_state TransformNamedParameters(PreparedStatementWrapper &prepared);
 duckdb_type ConvertCPPTypeToC(const LogicalType &type);
 LogicalTypeId ConvertCTypeToCPP(duckdb_type c_type);
 idx_t GetCTypeSize(duckdb_type type);

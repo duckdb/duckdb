@@ -69,6 +69,16 @@ vector<LogicalType> PreparedStatement::GetExpectedParameterTypes() const {
 	return expected_types;
 }
 
+unique_ptr<QueryResult> PreparedStatement::Execute(vector<Value> &unnamed_values,
+                                                   optional_ptr<case_insensitive_map_t<Value>> named_values,
+                                                   bool allow_stream_result) {
+	auto pending = PendingQuery(unnamed_values, named_values, allow_stream_result);
+	if (pending->HasError()) {
+		return make_uniq<MaterializedQueryResult>(pending->GetErrorObject());
+	}
+	return pending->Execute();
+}
+
 unique_ptr<QueryResult> PreparedStatement::Execute(vector<Value> &values, bool allow_stream_result) {
 	auto pending = PendingQuery(values, allow_stream_result);
 	if (pending->HasError()) {
@@ -78,12 +88,25 @@ unique_ptr<QueryResult> PreparedStatement::Execute(vector<Value> &values, bool a
 }
 
 unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(vector<Value> &values, bool allow_stream_result) {
+	return PendingQuery(values, nullptr, allow_stream_result);
+}
+
+unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(vector<Value> &unnamed_values,
+                                                               optional_ptr<case_insensitive_map_t<Value>> named_values,
+                                                               bool allow_stream_result) {
 	if (!success) {
 		throw InvalidInputException("Attempting to execute an unsuccessfully prepared statement!");
 	}
 	D_ASSERT(data);
 	PendingQueryParameters parameters;
-	parameters.parameters = &values;
+	parameters.parameters = &unnamed_values;
+	if (named_values) {
+		parameters.named_parameters = *named_values;
+	}
+	// FIXME: if this goes out of scope before the parameters are no longer needed, we have a problem
+	auto prepared_parameters =
+	    PrepareParameters(std::move(unnamed_values), std::move(parameters.named_parameters), named_param_map);
+	parameters.parameters = &prepared_parameters;
 	parameters.allow_stream_result = allow_stream_result && data->properties.allow_stream_result;
 	auto result = context->PendingQuery(query, data, parameters);
 	return result;

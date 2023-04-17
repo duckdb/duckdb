@@ -47,6 +47,8 @@ struct ClientData;
 struct PendingQueryParameters {
 	//! Prepared statement parameters (if any)
 	vector<Value> *parameters = nullptr;
+	//! Named parameters (if any)
+	case_insensitive_map_t<Value> named_parameters;
 	//! Whether or not a stream result should be allowed
 	bool allow_stream_result = false;
 };

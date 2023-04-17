@@ -9,78 +9,6 @@
 
 namespace duckdb {
 
-static string ExcessValuesException(const case_insensitive_map_t<idx_t> &parameters,
-                                    case_insensitive_map_t<unique_ptr<ParsedExpression>> &values) {
-	// Too many values
-	vector<string> excess_values;
-	for (auto &pair : values) {
-		auto &name = pair.first;
-		if (!parameters.count(name)) {
-			excess_values.push_back(name);
-		}
-	}
-	return StringUtil::Format("Some of the provided named values don't have a matching parameter: %s",
-	                          StringUtil::Join(excess_values, ", "));
-}
-
-static string MissingValuesException(const case_insensitive_map_t<idx_t> &parameters,
-                                     case_insensitive_map_t<unique_ptr<ParsedExpression>> &values) {
-	// Missing values
-	vector<string> missing_values;
-	for (auto &pair : parameters) {
-		auto &name = pair.first;
-		if (!values.count(name)) {
-			missing_values.push_back(name);
-		}
-	}
-	return StringUtil::Format("Values were not provided for the following prepared statement parameters: %s",
-	                          StringUtil::Join(missing_values, ", "));
-}
-
-vector<unique_ptr<ParsedExpression>> PrepareParameters(ExecuteStatement &stmt,
-                                                       const case_insensitive_map_t<idx_t> &named_params) {
-	if (named_params.empty()) {
-		if (!stmt.named_values.empty()) {
-			// None of the parameters are named, but the execute statement does have named values
-			throw InvalidInputException("The prepared statement doesn't expect any named parameters, but the execute "
-			                            "statement does contain name = value pairs");
-		}
-		return std::move(stmt.values);
-	}
-	if (stmt.named_values.empty()) {
-		throw InvalidInputException("The prepared statement expects named parameters, but none were provided");
-	}
-	if (named_params.size() != stmt.named_values.size()) {
-		// Mismatch in expected and provided parameters/values
-		if (named_params.size() > stmt.named_values.size()) {
-			throw InvalidInputException(MissingValuesException(named_params, stmt.named_values));
-		} else {
-			D_ASSERT(stmt.named_values.size() > named_params.size());
-			throw InvalidInputException(ExcessValuesException(named_params, stmt.named_values));
-		}
-	}
-	vector<unique_ptr<ParsedExpression>> result(named_params.size());
-	for (auto &pair : named_params) {
-		auto &name = pair.first;
-		auto entry = stmt.named_values.find(name);
-		if (entry == stmt.named_values.end()) {
-			throw InvalidInputException("Expected a parameter '%s' was not found in the provided values", name);
-		}
-		auto &named_value = entry->second;
-
-		auto &param_idx = pair.second;
-		D_ASSERT(param_idx > 0);
-		D_ASSERT(param_idx - 1 < result.size());
-		result[param_idx - 1] = std::move(named_value);
-	}
-#ifdef DEBUG
-	for (idx_t i = 0; i < result.size(); i++) {
-		D_ASSERT(result[i] != nullptr);
-	}
-#endif
-	return result;
-}
-
 BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 	auto parameter_count = stmt.n_param;
 
@@ -97,7 +25,8 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 	auto prepared = entry->second;
 	auto &named_param_map = prepared->unbound_statement->named_param_map;
 
-	auto provided_values = PrepareParameters(stmt, named_param_map);
+	auto provided_values =
+	    PreparedStatement::PrepareParameters(std::move(stmt.values), std::move(stmt.named_values), named_param_map);
 	// bind any supplied parameters
 	vector<Value> bind_values;
 	auto constant_binder = Binder::CreateBinder(context);

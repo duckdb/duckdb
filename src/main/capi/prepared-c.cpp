@@ -2,7 +2,10 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
+using duckdb::case_insensitive_map_t;
 using duckdb::Connection;
 using duckdb::date_t;
 using duckdb::dtime_t;
@@ -10,10 +13,44 @@ using duckdb::ExtractStatementsWrapper;
 using duckdb::hugeint_t;
 using duckdb::LogicalType;
 using duckdb::MaterializedQueryResult;
+using duckdb::optional_ptr;
 using duckdb::PreparedStatementWrapper;
 using duckdb::QueryResultType;
 using duckdb::timestamp_t;
 using duckdb::Value;
+
+namespace duckdb {
+
+duckdb_state TransformNamedParameters(PreparedStatementWrapper &prepared) {
+	if (prepared.name_to_index.empty()) {
+		return DuckDBSuccess;
+	}
+	if (prepared.values.size() != prepared.name_to_index.size()) {
+		// mixed named/unnamed is not supported yet
+		return DuckDBError;
+	}
+	if (!prepared.named_values.empty()) {
+		// already transformed
+		return DuckDBSuccess;
+	}
+	for (auto &pair : prepared.name_to_index) {
+		auto &name = pair.first;
+		auto index = pair.second;
+		if (index <= 0) {
+			return DuckDBError;
+		}
+		index--;
+		// D_ASSERT(index < prepared.values.size());
+		if (prepared.values.size() < index) {
+			return DuckDBError;
+		}
+		prepared.named_values[name] = std::move(prepared.values[index]);
+	}
+	prepared.values.clear();
+	return DuckDBSuccess;
+}
+
+} // namespace duckdb
 
 idx_t duckdb_extract_statements(duckdb_connection connection, const char *query,
                                 duckdb_extracted_statements *out_extracted_statements) {
@@ -102,6 +139,8 @@ duckdb_state duckdb_clear_bindings(duckdb_prepared_statement prepared_statement)
 		return DuckDBError;
 	}
 	wrapper->values.clear();
+	wrapper->named_values.clear();
+	// TODO: also clear the name_to_index map?
 	return DuckDBSuccess;
 }
 
@@ -131,6 +170,8 @@ duckdb_state duckdb_bind_parameter_index(duckdb_prepared_statement prepared_stat
 		return DuckDBError;
 	}
 	*param_idx_out = statement->named_param_map.at(name);
+	// Register that this value was provided with a name
+	wrapper->name_to_index[name] = *param_idx_out;
 	return DuckDBSuccess;
 }
 
@@ -246,7 +287,13 @@ duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statemen
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
 		return DuckDBError;
 	}
-	auto result = wrapper->statement->Execute(wrapper->values, false);
+	if (TransformNamedParameters(*wrapper) == DuckDBError) {
+		return DuckDBError;
+	}
+
+	// explicitly create an optional ptr, otherwise the right overload isn't considered
+	optional_ptr<case_insensitive_map_t<Value>> named_values(&wrapper->named_values);
+	auto result = wrapper->statement->Execute(wrapper->values, named_values, false);
 	return duckdb_translate_result(std::move(result), out_result);
 }
 
