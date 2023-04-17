@@ -271,6 +271,7 @@ private:
 	vector<string> TransformStringList(duckdb_libpgquery::PGList *list);
 	void TransformCTE(duckdb_libpgquery::PGWithClause *de_with_clause, CommonTableExpressionMap &cte_map);
 	void TransformCTEInternal(duckdb_libpgquery::PGWithClause *de_with_clause, CommonTableExpressionMap &cte_map, vector<unique_ptr<CTENode>> *materialized_ctes);
+	static unique_ptr<QueryNode> TransformMaterializedCTE(unique_ptr<QueryNode> root, vector<unique_ptr<CTENode>> &materialized_ctes);
 	unique_ptr<SelectStatement> TransformRecursiveCTE(duckdb_libpgquery::PGCommonTableExpr *node,
 	                                                  CommonTableExpressionInfo &info);
 

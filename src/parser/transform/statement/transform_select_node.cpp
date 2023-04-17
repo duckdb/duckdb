@@ -108,14 +108,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 		result.sample = TransformSampleOptions(stmt->sampleOptions);
 
 		// Handle materialized CTEs
-		while(materialized_ctes.size() > 0) {
-			unique_ptr<CTENode> node_result;
-			node_result = std::move(materialized_ctes.back());
-			node_result->cte_map = node->cte_map.Copy();
-			node_result->child = std::move(node);
-			node = std::move(node_result);
-			materialized_ctes.pop_back();
-		}
+		node = Transformer::TransformMaterializedCTE(std::move(node), materialized_ctes);
 		break;
 	}
 	case duckdb_libpgquery::PG_SETOP_UNION:
