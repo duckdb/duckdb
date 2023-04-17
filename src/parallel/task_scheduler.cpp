@@ -394,7 +394,8 @@ void TaskScheduler::RescheduleCallback(shared_ptr<DatabaseInstance> db, hugeint_
 		scheduler.buffered_callbacks.insert(callback_uuid);
 	} else {
 //		Printer::Print(" > Reschedule task");
-		scheduler.ScheduleTask(*res->second->current_token, std::move(res->second));
+		auto token_ptr = res->second->current_token;
+		scheduler.ScheduleTask(*token_ptr, std::move(res->second));
 		scheduler.blocked_tasks.erase(res);
 	}
 //	Printer::Print("\n");
