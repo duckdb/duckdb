@@ -7,8 +7,12 @@ unique_ptr<DeleteStatement> Transformer::TransformDelete(duckdb_libpgquery::PGNo
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGDeleteStmt *>(node);
 	D_ASSERT(stmt);
 	auto result = make_uniq<DeleteStatement>();
+	vector<unique_ptr<CTENode>> materialized_ctes;
 	if (stmt->withClause) {
-		TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), result->cte_map);
+		TransformCTEInternal(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), result->cte_map, &materialized_ctes);
+		if(materialized_ctes.size() != 0) {
+			throw NotImplementedException("Materialized CTEs are not implemented for delete.");
+		}
 	}
 
 	result->condition = TransformExpression(stmt->whereClause);
