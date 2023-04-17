@@ -1,7 +1,15 @@
 # name: test/sql/prepared/prepared_named_param.test
 # group: [prepared]
 
-statement error
+statement ok
 prepare q123 as select $param, $other_name, $param;
+
+query III
+execute q123(param = 5, other_name = 3);
 ----
-Named parameters are not supported in this client yet
+5	3	5
+
+statement error
+execute q123(param = 5, 3)
+----
+Not implemented Error: Mixing named parameters and positional parameters is not supported yet
