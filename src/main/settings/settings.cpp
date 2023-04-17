@@ -142,7 +142,7 @@ Value DebugForceNoCrossProduct::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
-// Debug Ordered Aggregate Threshold
+// Ordered Aggregate Threshold
 //===--------------------------------------------------------------------===//
 
 void OrderedAggregateThreshold::ResetLocal(ClientContext &context) {
@@ -183,6 +183,21 @@ void DebugWindowMode::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 
 Value DebugWindowMode::GetSetting(ClientContext &context) {
 	return Value();
+}
+
+//===--------------------------------------------------------------------===//
+// Debug AsOf Join
+//===--------------------------------------------------------------------===//
+void DebugAsOfIEJoin::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).force_no_cross_product = ClientConfig().force_asof_iejoin;
+}
+
+void DebugAsOfIEJoin::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).force_asof_iejoin = input.GetValue<bool>();
+}
+
+Value DebugAsOfIEJoin::GetSetting(ClientContext &context) {
+	return Value::BOOLEAN(ClientConfig::GetConfig(context).force_asof_iejoin);
 }
 
 //===--------------------------------------------------------------------===//

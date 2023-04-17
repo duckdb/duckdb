@@ -66,9 +66,19 @@ struct DebugForceNoCrossProduct {
 };
 
 struct OrderedAggregateThreshold {
-	static constexpr const char *Name = "ordered_aggregate_threshold";
-	static constexpr const char *Description = "the number of rows to accumulate before sorting, used for tuning";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
+	static constexpr const char *Name = "ordered_aggregate_threshold"; // NOLINT
+	static constexpr const char *Description =                         // NOLINT
+	    "the number of rows to accumulate before sorting, used for tuning";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT; // NOLINT
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct DebugAsOfIEJoin {
+	static constexpr const char *Name = "debug_asof_iejoin";                                                 // NOLINT
+	static constexpr const char *Description = "DEBUG SETTING: force use of IEJoin to implement AsOf joins"; // NOLINT
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;                                 // NOLINT
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(ClientContext &context);

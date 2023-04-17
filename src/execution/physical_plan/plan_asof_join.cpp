@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/aggregate/physical_window.hpp"
+#include "duckdb/execution/operator/join/physical_asof_join.hpp"
 #include "duckdb/execution/operator/join/physical_iejoin.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
@@ -39,7 +40,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAsOfJoin &
 	}
 	D_ASSERT(asof_idx < op.conditions.size());
 
-	//	Temporary implementation: IEJoin of Window
+	if (!ClientConfig::GetConfig(context).force_asof_iejoin) {
+		return make_uniq<PhysicalAsOfJoin>(op, std::move(left), std::move(right));
+	}
+
+	//	Debug implementation: IEJoin of Window
 	//	LEAD(asof_column, 1, infinity) OVER (PARTITION BY equi_column... ORDER BY asof_column) AS asof_temp
 	auto &asof_comp = op.conditions[asof_idx];
 	auto &asof_column = asof_comp.right;
@@ -47,6 +52,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAsOfJoin &
 	auto asof_temp = make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_LEAD, asof_type, nullptr, nullptr);
 	asof_temp->children.emplace_back(asof_column->Copy());
 	asof_temp->offset_expr = make_uniq<BoundConstantExpression>(Value::BIGINT(1));
+	// TODO: If infinities are not supported for a type, fake them by looking at LHS statistics?
 	asof_temp->default_expr = make_uniq<BoundConstantExpression>(Value::Infinity(asof_type));
 	for (auto equi_idx : equi_indexes) {
 		asof_temp->partitions.emplace_back(op.conditions[equi_idx].right->Copy());

@@ -74,6 +74,8 @@ public:
 	const Types payload_types;
 	vector<HashGroupPtr> hash_groups;
 	bool external;
+	//	Reverse lookup from hash bins to non-empty hash groups
+	vector<size_t> bin_groups;
 
 	// OVER() (no sorting)
 	unique_ptr<RowDataCollection> rows;
@@ -127,7 +129,7 @@ class PartitionGlobalMergeState {
 public:
 	using GroupDataPtr = unique_ptr<ColumnDataCollection>;
 
-	explicit PartitionGlobalMergeState(PartitionGlobalSinkState &sink, GroupDataPtr group_data);
+	PartitionGlobalMergeState(PartitionGlobalSinkState &sink, GroupDataPtr group_data, hash_t hash_bin);
 
 	bool IsSorted() const {
 		lock_guard<mutex> guard(lock);

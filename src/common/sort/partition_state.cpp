@@ -350,7 +350,8 @@ void PartitionLocalSinkState::Combine() {
 	gstate.CombineLocalPartition(local_partition, local_append);
 }
 
-PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &sink, GroupDataPtr group_data)
+PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &sink, GroupDataPtr group_data,
+                                                     hash_t hash_bin)
     : sink(sink), group_data(std::move(group_data)), stage(PartitionSortStage::INIT), total_tasks(0), tasks_assigned(0),
       tasks_completed(0) {
 
@@ -361,6 +362,8 @@ PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &s
 
 	hash_group = sink.hash_groups[group_idx].get();
 	global_sort = sink.hash_groups[group_idx]->global_sort.get();
+
+	sink.bin_groups[hash_bin] = group_idx;
 }
 
 void PartitionLocalMergeState::Prepare() {
@@ -458,10 +461,13 @@ bool PartitionGlobalMergeState::TryPrepareNextStage() {
 
 PartitionGlobalMergeStates::PartitionGlobalMergeStates(PartitionGlobalSinkState &sink) {
 	// Schedule all the sorts for maximum thread utilisation
-	for (auto &group_data : sink.grouping_data->GetPartitions()) {
+	auto &partitions = sink.grouping_data->GetPartitions();
+	sink.bin_groups.resize(partitions.size(), partitions.size());
+	for (hash_t hash_bin = 0; hash_bin < partitions.size(); ++hash_bin) {
+		auto &group_data = partitions[hash_bin];
 		// Prepare for merge sort phase
 		if (group_data->Count()) {
-			auto state = make_uniq<PartitionGlobalMergeState>(sink, std::move(group_data));
+			auto state = make_uniq<PartitionGlobalMergeState>(sink, std::move(group_data), hash_bin);
 			states.emplace_back(std::move(state));
 		}
 	}

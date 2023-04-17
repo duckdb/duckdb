@@ -20,8 +20,7 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::ASOF_JOIN;
 
 public:
-	PhysicalAsOfJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
-	                 vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality);
+	PhysicalAsOfJoin(LogicalComparisonJoin &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right);
 
 	vector<LogicalType> join_key_types;
 	vector<column_t> null_sensitive;
@@ -34,8 +33,12 @@ public:
 	vector<BoundOrderByNode> lhs_orders;
 	vector<BoundOrderByNode> rhs_orders;
 
+	// Projection mappings
+	vector<column_t> right_projection_map;
+
 public:
 	// Operator Interface
+	unique_ptr<GlobalOperatorState> GetGlobalOperatorState(ClientContext &context) const override;
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
 
 	bool ParallelOperator() const override {
@@ -49,6 +52,8 @@ protected:
 
 public:
 	// Source interface
+	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
+	                                                 GlobalSourceState &gstate) const override;
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;

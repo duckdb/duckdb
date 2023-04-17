@@ -71,6 +71,8 @@ struct ClientConfig {
 	bool force_external = false;
 	//! Force disable cross product generation when hyper graph isn't connected, used for testing
 	bool force_no_cross_product = false;
+	//! Force use of IEJoin to implement AsOfJoin, used for testing
+	bool force_asof_iejoin = false;
 	//! If this context should also try to use the available replacement scans
 	//! True by default
 	bool use_replacement_scans = true;

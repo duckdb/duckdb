@@ -32,17 +32,11 @@ INSERT INTO probe0 VALUES
 	('infinity')
 ;
 
-# INNER Window version
-query II nosort inner_inequality
+# INNER ON inequality only
+query II nosort
 SELECT p.begin, e.value
-FROM 
-	probe0 p
-JOIN (
-	SELECT value, begin, 
-		LEAD(begin, 1, 'infinity') OVER (ORDER BY begin ASC) AS end
-	FROM events0
-) e
-ON p.begin >= e.begin AND p.begin < e.end
+FROM probe0 p ASOF JOIN events0 e
+ON p.begin >= e.begin
 ORDER BY p.begin ASC
 ----
 2023-03-21 13:00:00	0
@@ -54,36 +48,34 @@ ORDER BY p.begin ASC
 2023-03-21 19:00:00	3
 2023-03-21 20:00:00	3
 2023-03-21 21:00:00	3
-
-# INNER ON inequality only
-query II nosort inner_inequality
-SELECT p.begin, e.value
-FROM probe0 p ASOF JOIN events0 e
-ON p.begin >= e.begin
-ORDER BY p.begin ASC
-----
+infinity	9
 
 # INNER USING inequality only
-query II nosort inner_inequality
+query II nosort
 SELECT p.begin, e.value
 FROM probe0 p ASOF JOIN events0 e
 USING (begin)
 ORDER BY p.begin ASC
 ----
+2023-03-21 13:00:00	0
+2023-03-21 14:00:00	1
+2023-03-21 15:00:00	2
+2023-03-21 16:00:00	3
+2023-03-21 17:00:00	3
+2023-03-21 18:00:00	3
+2023-03-21 19:00:00	3
+2023-03-21 20:00:00	3
+2023-03-21 21:00:00	3
+infinity	9
 
-# LEFT Window version
-query II nosort left_inequality
+# LEFT ON inequality only
+query II nosort
 SELECT p.begin, e.value
-FROM 
-	probe0 p
-LEFT JOIN (
-	SELECT value, begin, 
-		LEAD(begin, 1, 'infinity') OVER (ORDER BY begin ASC) AS end
-	FROM events0
-) e
-ON p.begin >= e.begin AND p.begin < e.end
+FROM probe0 p ASOF LEFT JOIN events0 e
+ON p.begin >= e.begin
 ORDER BY p.begin ASC
 ----
+NULL	NULL
 2023-03-21 12:00:00	NULL
 2023-03-21 13:00:00	0
 2023-03-21 14:00:00	1
@@ -94,14 +86,7 @@ ORDER BY p.begin ASC
 2023-03-21 19:00:00	3
 2023-03-21 20:00:00	3
 2023-03-21 21:00:00	3
-
-# LEFT ON inequality only
-query II nosort left_inequality
-SELECT p.begin, e.value
-FROM probe0 p ASOF LEFT JOIN events0 e
-ON p.begin >= e.begin
-ORDER BY p.begin ASC
-----
+infinity	9
 
 # LEFT USING inequality only
 query II nosort left_inequality
@@ -110,23 +95,8 @@ FROM probe0 p ASOF LEFT JOIN events0 e
 USING (begin)
 ORDER BY p.begin ASC
 ----
-
-
-# RIGHT Window version
-query II nosort right_inequality
-SELECT p.begin, e.value
-FROM 
-	probe0 p
-RIGHT JOIN (
-	SELECT value, begin, 
-		LEAD(begin, 1, 'infinity') OVER (ORDER BY begin ASC) AS end
-	FROM events0
-) e
-ON p.begin >= e.begin AND p.begin < e.end
-ORDER BY ALL
-----
-NULL	-1
-NULL	9
+NULL	NULL
+2023-03-21 12:00:00	NULL
 2023-03-21 13:00:00	0
 2023-03-21 14:00:00	1
 2023-03-21 15:00:00	2
@@ -136,19 +106,42 @@ NULL	9
 2023-03-21 19:00:00	3
 2023-03-21 20:00:00	3
 2023-03-21 21:00:00	3
+infinity	9
 
 # RIGHT ON inequality only
-query II nosort right_inequality
+query II nosort 
 SELECT p.begin, e.value
 FROM probe0 p ASOF RIGHT JOIN events0 e
 ON p.begin >= e.begin
 ORDER BY ALL
 ----
+NULL	-1
+2023-03-21 13:00:00	0
+2023-03-21 14:00:00	1
+2023-03-21 15:00:00	2
+2023-03-21 16:00:00	3
+2023-03-21 17:00:00	3
+2023-03-21 18:00:00	3
+2023-03-21 19:00:00	3
+2023-03-21 20:00:00	3
+2023-03-21 21:00:00	3
+infinity	9
 
 # RIGHT USING inequality only
-query II nosort right_inequality
+query II nosort
 SELECT p.begin, e.value
 FROM probe0 p ASOF RIGHT JOIN events0 e
 USING (begin)
 ORDER BY ALL
 ----
+NULL	-1
+2023-03-21 13:00:00	0
+2023-03-21 14:00:00	1
+2023-03-21 15:00:00	2
+2023-03-21 16:00:00	3
+2023-03-21 17:00:00	3
+2023-03-21 18:00:00	3
+2023-03-21 19:00:00	3
+2023-03-21 20:00:00	3
+2023-03-21 21:00:00	3
+infinity	9

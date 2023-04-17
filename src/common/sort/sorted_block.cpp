@@ -367,7 +367,7 @@ int SBIterator::ComparisonValue(ExpressionType comparison) {
 }
 
 static idx_t GetBlockCountWithEmptyCheck(const GlobalSortState &gss) {
-	D_ASSERT(gss.sorted_blocks.size() > 0);
+	D_ASSERT(!gss.sorted_blocks.empty());
 	return gss.sorted_blocks[0]->radix_sorting_data.size();
 }
 
