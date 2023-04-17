@@ -11,6 +11,7 @@ unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::Copy() {
 	auto result = make_uniq<CommonTableExpressionInfo>();
 	result->aliases = aliases;
 	result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
+	result->materialized = materialized;
 	return result;
 }
 
@@ -86,8 +87,7 @@ void Transformer::TransformCTEInternal(duckdb_libpgquery::PGWithClause *de_with_
 			throw ParserException("Duplicate CTE name \"%s\"", cte_name);
 		}
 
-		if(cte->ctematerialized == duckdb_libpgquery::PGCTEMaterializeAlways) {
-			duckdb::Printer::Print("MATERIALIZED");
+		if(materialized_ctes && cte->ctematerialized == duckdb_libpgquery::PGCTEMaterializeAlways) {
 			auto materialize = make_uniq<CTENode>();
 			materialize->query = info->query->node->Copy();
 			materialize->ctename = cte_name;
