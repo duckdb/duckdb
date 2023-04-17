@@ -14,6 +14,7 @@
 namespace duckdb {
 class ClientContext;
 class Executor;
+struct ProducerToken;
 
 enum class TaskExecutionMode : uint8_t { PROCESS_ALL, PROCESS_PARTIAL };
 
@@ -68,9 +69,12 @@ public:
 	//! In case of an error, TASK_ERROR is returned
 	virtual TaskExecutionResult Execute(TaskExecutionMode mode) = 0;
 
-	//! While a task is running, it may set its interrupt state indicating to the schedular how it wants to be handled
+	//! While a task is running, it may set its interrupt state indicating to the scheduler how it wants to be handled
 	//! after returning a TaskExecutionResult::TASK_BLOCKED
 	InterruptState interrupt_state;
+
+	//! We need to store the current producer token in case the task needs to be rescheduled into the same queue
+	ProducerToken* current_token = nullptr;
 };
 
 //! Execute a task within an executor, including exception handling

@@ -79,22 +79,7 @@ public:
 	void Signal(idx_t n);
 
 	//! This is the callback function that can be be called from anywhere.
-	static void RescheduleCallback(shared_ptr<DatabaseInstance> db, hugeint_t callback_uuid) {
-		Printer::Print("Callback received for uuid " + to_string(callback_uuid.lower) + to_string(callback_uuid.upper));
-		auto& scheduler = GetScheduler(*db);
-		unique_lock<mutex> lck (scheduler.blocked_task_lock);
-
-		auto res = scheduler.blocked_tasks.find(callback_uuid);
-		if (res == scheduler.blocked_tasks.end()) {
-			scheduler.buffered_callbacks.insert(callback_uuid);
-		} else {
-			// TODO: use producer token of execution task?
-			auto producer = scheduler.CreateProducer();
-			scheduler.ScheduleTask(*producer, std::move(res->second));
-			scheduler.blocked_tasks.erase(res);
-		}
-	}
-
+	static void RescheduleCallback(shared_ptr<DatabaseInstance> db, hugeint_t callback_uuid);
 private:
 	void SetThreadsInternal(int32_t n);
 

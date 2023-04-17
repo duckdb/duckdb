@@ -117,6 +117,7 @@ unique_ptr<ProducerToken> TaskScheduler::CreateProducer() {
 
 void TaskScheduler::ScheduleTask(ProducerToken &token, unique_ptr<Task> task) {
 	// Enqueue a task for the given producer token and signal any sleeping threads
+	task->current_token = &token;
 	queue->Enqueue(token, std::move(task));
 }
 
@@ -294,25 +295,23 @@ void TaskScheduler::RescheduleSleepingTasks() {
 	// Reschedule any tasks who have exceeded their sleep timer
 	for (auto it = sleeping_tasks.begin(); it != sleeping_tasks.end(); ) {
 		if (it->first < current_time) {
-			Printer::Print("Rescheduled task with sleeping time " + to_string(it->first));
-			// TODO: use producer token of execution task?
-			auto producer = CreateProducer();
-			ScheduleTask(*producer, std::move(it->second));
+//			Printer::Print("Rescheduled task with sleeping time " + to_string(it->first));
+			ScheduleTask(*it->second->current_token, std::move(it->second));
 			it = sleeping_tasks.erase(it);
 		} else {
-			Printer::Print("Did not reschedule: " + to_string(it->first));
+//			Printer::Print("Did not reschedule: " + to_string(it->first));
 			++it;
 		}
 	}
 
-	// DEBUG
-	{
-		unique_lock<mutex> lck(sleeping_task_lock);
-		unique_lock<mutex> lck2(blocked_task_lock);
-		Printer::Print("	> currently have: " + to_string(sleeping_tasks.size()) + " sleeping");
-		Printer::Print("	> currently have: " + to_string(blocked_tasks.size()) + " Blocked");
-		Printer::Print("\n");
-	}
+//	// DEBUG
+//	{
+//		unique_lock<mutex> lck(sleeping_task_lock);
+//		unique_lock<mutex> lck2(blocked_task_lock);
+//		Printer::Print("	> currently have: " + to_string(sleeping_tasks.size()) + " sleeping");
+//		Printer::Print("	> currently have: " + to_string(blocked_tasks.size()) + " Blocked");
+//		Printer::Print("\n");
+//	}
 
 	have_sleeping_tasks = !sleeping_tasks.empty();
 }
@@ -323,12 +322,14 @@ void TaskScheduler::DescheduleTaskCallback(unique_ptr<Task> task, hugeint_t call
 	// First check if callback was made already
 	auto buffered_cb_lookup = buffered_callbacks.find(callback_uuid);
 	if (buffered_cb_lookup != buffered_callbacks.end()) {
+//		Printer::Print(" > Insta reschedule uuid " + to_string(callback_uuid.lower) + to_string(callback_uuid.upper));
 		// this callback already happened, reschedule straight away
-		// TODO: use producer token of execution task?
-		auto producer = CreateProducer();
-		ScheduleTask(*producer, std::move(task));
+		ScheduleTask(*task->current_token, std::move(task));
 		buffered_callbacks.erase(buffered_cb_lookup);
+		return;
 	}
+
+//	Printer::Print(" > added to blocked");
 
 	// Callback was not made yet, this task will need to block
 	D_ASSERT(blocked_tasks.find(callback_uuid) == blocked_tasks.end());
@@ -348,26 +349,52 @@ void TaskScheduler::DescheduleTask(unique_ptr<Task> task) {
 	switch(task->interrupt_state.result) {
 	case InterruptResultType::CALLBACK_UUID:
 		uuid = task->interrupt_state.callback_uuid;
-		Printer::Print("Descheduled Task with callback id " + to_string(uuid.lower) + to_string(uuid.upper));
+//		Printer::Print("Descheduled Task with callback id " + to_string(uuid.lower) + to_string(uuid.upper));
 		DescheduleTaskCallback(std::move(task), uuid);
 		break;
 	case InterruptResultType::SLEEP:
 		sleep = task->interrupt_state.sleep_until_ns_from_epoch;
-		Printer::Print("Descheduled Task with end time " + to_string(sleep));
+//		Printer::Print("Descheduled Task with end time " + to_string(sleep));
 		DescheduleTaskSleeping(std::move(task), sleep);
 		break;
 	default:
 		throw InternalException("Unexpected interrupt result type found: (" + to_string((int)task->interrupt_state.result)+ ")");
 	}
 
-	// DEBUG
-	{
-		unique_lock<mutex> lck(sleeping_task_lock);
-		unique_lock<mutex> lck2(blocked_task_lock);
-		Printer::Print("	> currently have: " + to_string(sleeping_tasks.size()) + " sleeping");
-		Printer::Print("	> currently have: " + to_string(blocked_tasks.size()) + " Blocked");
-		Printer::Print("\n");
+//	// DEBUG
+//	{
+//		unique_lock<mutex> lck(sleeping_task_lock);
+//		unique_lock<mutex> lck2(blocked_task_lock);
+//		Printer::Print("	> currently have: " + to_string(sleeping_tasks.size()) + " sleeping");
+//		Printer::Print("	> currently have: " + to_string(blocked_tasks.size()) + " Blocked");
+//		Printer::Print("\n");
+//	}
+}
+
+void TaskScheduler::RescheduleCallback(shared_ptr<DatabaseInstance> db, hugeint_t callback_uuid) {
+//	Printer::Print("Callback received for uuid " + to_string(callback_uuid.lower) + to_string(callback_uuid.upper));
+	auto& scheduler = GetScheduler(*db);
+	unique_lock<mutex> lck (scheduler.blocked_task_lock);
+
+	auto res = scheduler.blocked_tasks.find(callback_uuid);
+	if (res == scheduler.blocked_tasks.end()) {
+//		Printer::Print(" > adding to buffered");
+		scheduler.buffered_callbacks.insert(callback_uuid);
+	} else {
+//		Printer::Print(" > Reschedule task");
+		scheduler.ScheduleTask(*res->second->current_token, std::move(res->second));
+		scheduler.blocked_tasks.erase(res);
 	}
+//	Printer::Print("\n");
+
+//	// DEBUG
+//	{
+//		unique_lock<mutex> lck(scheduler.sleeping_task_lock);
+//		unique_lock<mutex> lck2(scheduler.blocked_task_lock);
+//		Printer::Print("	> currently have: " + to_string(scheduler.sleeping_tasks.size()) + " sleeping");
+//		Printer::Print("	> currently have: " + to_string(scheduler.blocked_tasks.size()) + " Blocked");
+//		Printer::Print("\n");
+//	}
 }
 
 } // namespace duckdb

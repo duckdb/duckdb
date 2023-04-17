@@ -394,12 +394,11 @@ PendingExecutionResult Executor::ExecuteTask() {
 		if (task) {
 			// if we have a task, partially process it
 			auto result = task->Execute(TaskExecutionMode::PROCESS_PARTIAL);
-			if (result != TaskExecutionResult::TASK_NOT_FINISHED) {
+			if (result == TaskExecutionResult::TASK_FINISHED) {
 				// if the task is finished, clean it up
 				task.reset();
 			}
 		}
-		// TODO: For some reason, this is not
 		if (!HasError()) {
 			// we (partially) processed a task and no exceptions were thrown
 			// give back control to the caller
