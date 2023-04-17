@@ -45,7 +45,7 @@ public:
 	std::mutex py_connection_lock;
 	//! MemoryFileSystem used to temporarily store file-like objects for reading
 	shared_ptr<ModifiedMemoryFileSystem> internal_object_filesystem;
-	unordered_map<string, unique_ptr<PythonDependencies>> registered_functions;
+	case_insensitive_map_t<unique_ptr<PythonDependencies>> registered_functions;
 
 public:
 	explicit DuckDBPyConnection() {
@@ -92,10 +92,10 @@ public:
 	shared_ptr<DuckDBPyType> StringType(const string &collation = string());
 	shared_ptr<DuckDBPyType> Type(const string &type_str);
 
-	shared_ptr<DuckDBPyConnection> RegisterScalarUDF(const string &name, const py::object &udf,
-	                                                 const py::object &arguments = py::none(),
-	                                                 shared_ptr<DuckDBPyType> return_type = nullptr,
-	                                                 bool varargs = false);
+	shared_ptr<DuckDBPyConnection>
+	RegisterScalarUDF(const string &name, const py::object &udf, const py::object &arguments = py::none(),
+	                  shared_ptr<DuckDBPyType> return_type = nullptr, bool varargs = false,
+	                  FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING);
 
 	shared_ptr<DuckDBPyConnection> ExecuteMany(const string &query, py::object params = py::list());
 
@@ -206,7 +206,8 @@ private:
 	PathLike GetPathLike(const py::object &object);
 	unique_lock<std::mutex> AcquireConnectionLock();
 	ScalarFunction CreateScalarUDF(const string &name, const py::object &udf, const py::object &parameters,
-	                               shared_ptr<DuckDBPyType> return_type, bool varargs);
+	                               shared_ptr<DuckDBPyType> return_type, bool varargs,
+	                               FunctionNullHandling null_handling);
 
 	static PythonEnvironmentType environment;
 	static void DetectEnvironment();

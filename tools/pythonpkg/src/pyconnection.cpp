@@ -43,6 +43,7 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb_python/vector_conversion.hpp"
 #include "duckdb_python/python_objects.hpp"
+#include "duckdb/function/function.hpp"
 
 #include <random>
 
@@ -107,7 +108,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	m.def("register_scalar", &DuckDBPyConnection::RegisterScalarUDF,
 	      "Register a scalar UDF so it can be used in queries", py::arg("name"), py::arg("function"),
 	      py::arg("return_type") = py::none(), py::arg("parameters") = py::none(), py::kw_only(),
-	      py::arg("varargs") = false);
+	      py::arg("varargs") = false, py::arg("null_handling") = 0);
 
 	DefineMethod({"sqltype", "dtype", "type"}, m, &DuckDBPyConnection::Type,
 	             "Create a type object by parsing the 'type_str' string", py::arg("type_str"));
@@ -279,14 +280,14 @@ bool DuckDBPyConnection::FileSystemIsRegistered(const string &name) {
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::object &udf,
                                                                      const py::object &parameters_p,
                                                                      shared_ptr<DuckDBPyType> return_type_p,
-                                                                     bool varargs) {
+                                                                     bool varargs, FunctionNullHandling null_handling) {
 	if (!connection) {
 		throw ConnectionException("Connection already closed!");
 	}
 	auto &context = *connection->context;
 	auto &catalog = Catalog::GetSystemCatalog(context);
 
-	auto scalar_function = CreateScalarUDF(name, udf, parameters_p, return_type_p, varargs);
+	auto scalar_function = CreateScalarUDF(name, udf, parameters_p, return_type_p, varargs, null_handling);
 	CreateScalarFunctionInfo info(scalar_function);
 
 	context.transaction.BeginTransaction();

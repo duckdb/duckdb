@@ -17,6 +17,7 @@
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb_python/explain_enum.hpp"
+#include "duckdb_python/null_handling_enum.hpp"
 
 namespace duckdb {
 

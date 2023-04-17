@@ -1,4 +1,3 @@
-from sqlalchemy import VARCHAR
 import duckdb
 import os
 import pandas as pd
@@ -6,6 +5,7 @@ import pytest
 from typing import Union
 
 from duckdb.typing import *
+from duckdb.typing import VARCHAR
 
 class TestScalarUDF(object):
     def test_basic_use(self):
@@ -63,23 +63,43 @@ class TestScalarUDF(object):
         assert res == [(5,)]
 
     def test_overwrite_name(self):
+        def func(x):
+            return x
         # TODO: test proper behavior when you register two functions with the same name
-        
+        con = duckdb.connect()
         # create first version of the function
+        con.register_scalar('func', func, [BIGINT], BIGINT)
 
         # create relation that uses the function
+        rel1 = con.sql('select func(3)')
 
+        def other_func(x):
+            return x
         # create second version of the function
+        with pytest.raises(duckdb.CatalogException, match="""Catalog Error: Scalar Function with name "func" already exists!"""):
+            con.register_scalar('func', other_func, [VARCHAR], VARCHAR)
+        return
 
         # create relation that uses the new version
+        rel2 = con.sql("select func('test')")
 
         # execute both relations
+        res1 = rel1.fetchall()
+        res2 = rel2.fetchall()
+        print(res1)
+        print(res2)
         pass
 
     def test_nulls(self):
-        # TODO: provide 'null_handling' option?
-        pass
-    
+        def five_if_null(x):
+            if (x == None):
+                return 5
+            return x
+        con = duckdb.connect()
+        con.register_scalar('null_test', five_if_null, [BIGINT], BIGINT, null_handling = "SPECIAL")
+        res = con.sql('select null_test(NULL)').fetchall()
+        assert res == [(5,)]
+
     def test_exceptions(self):
         # TODO: we likely want an enum to define how exceptions should be handled
         # - propagate:
@@ -107,7 +127,7 @@ class TestScalarUDF(object):
         """)
         # added extra column to the struct
         assert len(res.fetchone()[0].keys()) == 3
-        # FIXME: this is needed, otherwise the transaction is still active in 'register_scalar' and we can't begin a new one
+        # FIXME: this is needed, otherwise the old transaction is still active when we try to start a new transaction inside of 'register_scalar', which means the call would fail
         res.fetchall()
 
         def swap_keys(dict):

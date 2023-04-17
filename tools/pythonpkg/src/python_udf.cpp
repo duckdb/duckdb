@@ -3,6 +3,7 @@
 #include "duckdb_python/pytype.hpp"
 #include "duckdb_python/pyconnection.hpp"
 #include "duckdb_python/vector_conversion.hpp"
+#include "duckdb/function/function.hpp"
 
 namespace {
 using namespace duckdb;
@@ -28,7 +29,11 @@ struct ParameterKind {
 
 struct PythonUDFData {
 public:
-	PythonUDFData(const string &name, scalar_function_t func, bool varargs) : name(name), func(func), varargs(varargs) {
+	PythonUDFData(const string &name, scalar_function_t func, bool varargs_p, FunctionNullHandling null_handling)
+	    : name(name), func(func), null_handling(null_handling) {
+		if (varargs_p) {
+			varargs = LogicalType::ANY;
+		}
 		return_type = LogicalType::INVALID;
 		param_count = DConstants::INVALID_INDEX;
 	}
@@ -37,7 +42,8 @@ public:
 	const string &name;
 	vector<LogicalType> parameters;
 	LogicalType return_type;
-	bool varargs;
+	LogicalType varargs = LogicalTypeId::INVALID;
+	FunctionNullHandling null_handling;
 	idx_t param_count;
 	scalar_function_t func;
 
@@ -105,7 +111,7 @@ public:
 				std::string kind = py::str(value.attr("kind"));
 				auto parameter_kind = ParameterKind::FromString(kind);
 				if (parameter_kind == ParameterKind::Type::VAR_POSITIONAL) {
-					varargs = true;
+					varargs = LogicalType::ANY;
 				}
 				parameters.push_back(LogicalType::ANY);
 			}
@@ -113,13 +119,12 @@ public:
 	}
 
 	ScalarFunction GetFunction() {
-		ScalarFunction scalar_function(name, std::move(parameters), return_type, func);
-		if (varargs) {
-			scalar_function.varargs = LogicalType::ANY;
-		}
+		ScalarFunction scalar_function(name, std::move(parameters), return_type, func, nullptr, nullptr, nullptr,
+		                               nullptr, varargs, FunctionSideEffects::NO_SIDE_EFFECTS, null_handling);
 		return scalar_function;
 	}
 };
+
 }; // namespace
 
 namespace duckdb {
@@ -167,10 +172,10 @@ static scalar_function_t CreateFunction(PyObject *function) {
 
 ScalarFunction DuckDBPyConnection::CreateScalarUDF(const string &name, const py::object &udf,
                                                    const py::object &parameters, shared_ptr<DuckDBPyType> return_type,
-                                                   bool varargs) {
+                                                   bool varargs, FunctionNullHandling null_handling) {
 	scalar_function_t func = CreateFunction(udf.ptr());
 
-	PythonUDFData data(name, func, varargs);
+	PythonUDFData data(name, func, varargs, null_handling);
 
 	data.AnalyzeSignature(udf);
 	data.OverrideParameters(parameters);
