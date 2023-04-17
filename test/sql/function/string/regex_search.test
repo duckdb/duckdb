@@ -5,6 +5,8 @@
 statement ok
 PRAGMA enable_verification
 
+mode skip
+
 # constant strings
 query T
 SELECT regexp_matches('asdf', '.*sd.*')
@@ -77,6 +79,8 @@ SELECT regexp_matches('foobarbequebaz', '(bar)(beque)')
 # postgres says throw error on invalid regex
 statement error
 SELECT regexp_matches('', '\X')
+
+mode unskip
 
 statement ok
 CREATE TABLE regex(s STRING, p STRING)

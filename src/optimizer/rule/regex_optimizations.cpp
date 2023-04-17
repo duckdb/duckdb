@@ -8,6 +8,8 @@
 #include "re2/re2.h"
 #include "re2/regexp.h"
 
+#include "iostream"
+
 namespace duckdb {
 
 RegexOptimizationRule::RegexOptimizationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
@@ -24,18 +26,32 @@ struct LikeString {
 	string like_string = "";
 };
 
+static bool RegexpIsDotMatch(duckdb_re2::Regexp *regexp) {
+	return (regexp->nsub() == 0 && regexp->op() == duckdb_re2::kRegexpCharClass && regexp->ToString() == "[^\\n]");
+}
+
 static LikeString LikeMatchExists(duckdb_re2::RE2 &pattern) {
 	LikeString ret = LikeString();
+	auto parent_op = pattern.Regexp()->op();
 	auto num_subs = pattern.Regexp()->nsub();
 	auto subs = pattern.Regexp()->sub();
 	auto cur_sub_index = 0;
 	while (cur_sub_index < num_subs) {
 		switch (subs[cur_sub_index]->op()) {
 		case duckdb_re2::kRegexpStar:
-			ret.like_string += "%";
-			break;
+			if (subs[cur_sub_index]->nsub() == 1 && RegexpIsDotMatch(subs[cur_sub_index]->sub()[0])) {
+				ret.like_string += "%";
+				break;
+			}
+			ret.exists = false;
+			return ret;
 		case duckdb_re2::kRegexpLiteralString:
 		case duckdb_re2::kRegexpLiteral:
+			// means you repeat a literal. Like cannot process this.
+			if (parent_op == duckdb_re2::kRegexpStar) {
+				ret.exists = false;
+				return ret;
+			}
 			if (cur_sub_index == 0) {
 				ret.like_string += "%";
 			}
@@ -45,11 +61,18 @@ static LikeString LikeMatchExists(duckdb_re2::RE2 &pattern) {
 			}
 			break;
 		case duckdb_re2::kRegexpCharClass: {
-			if (subs[cur_sub_index]->ToString() == "[^\\n]") {
-				ret.like_string += "_";
+			if (RegexpIsDotMatch(subs[cur_sub_index])) {
+				if (parent_op == duckdb_re2::kRegexpStar) {
+					ret.like_string += "%";
+				} else {
+					ret.like_string += "_";
+				}
 				break;
 			}
-		}
+			// could be a concatenation of character sets or otherwise. return no SQL like match
+			ret.exists = false;
+			return ret;
+		} // for some reason this is never hit
 		case duckdb_re2::kRegexpAnyChar:
 			ret.like_string += "_";
 			break;
@@ -113,10 +136,8 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 	if (!pattern.ok()) {
 		return nullptr; // this should fail somewhere else
 	}
-
 	if (pattern.Regexp()->op() == duckdb_re2::kRegexpLiteralString ||
 	    pattern.Regexp()->op() == duckdb_re2::kRegexpLiteral) {
-
 		string min;
 		string max;
 		pattern.PossibleMatchRange(&min, &max, patt_str.size() + 1);
@@ -127,12 +148,18 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		auto contains = make_uniq<BoundFunctionExpression>(root.return_type, ContainsFun::GetFunction(),
 		                                                   std::move(root.children), nullptr);
 		contains->children[1] = std::move(parameter);
-
 		return std::move(contains);
+	}
+	LikeString like_string;
+	if (pattern.Regexp()->op() == duckdb_re2::kRegexpCharClass) {
+		// TODO: This is probably a regex match like regexp_matches(s, '[AS]')
+		// you can go through the runes in the re2 library and iteratively create a conjuction expression
+		// of contains(s, 'a') or contains(s, 's') to optimize the regex out.
+		return nullptr;
 	}
 	// check for a like string. If we can convert it to a like string, the like string
 	// optimizer will further optimize suffix and prefix things.
-	auto like_string = LikeMatchExists(pattern);
+	like_string = LikeMatchExists(pattern);
 	if (!like_string.exists) {
 		return nullptr;
 	}

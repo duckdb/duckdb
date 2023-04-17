@@ -64,7 +64,6 @@ explain select regexp_matches(s, 'a.a'), s from test;
 ----
 physical_plan	<REGEX>:'.*%a_a%.*'
 
-
 query II nosort converttolike2
 explain SELECT regexp_matches(s, 'a.*a'), s FROM TEST;
 ----
