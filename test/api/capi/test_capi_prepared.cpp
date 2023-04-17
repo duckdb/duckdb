@@ -309,7 +309,19 @@ TEST_CASE("Test prepared statements with named parameters in C API", "[capi]") {
 	status = duckdb_execute_prepared(stmt, &res);
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(duckdb_value_int64(&res, 0, 0) == 1);
-
 	duckdb_destroy_result(&res);
+
+	// Clear the bindings, don't rebind the parameter index
+	status = duckdb_clear_bindings(stmt);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_bind_boolean(stmt, parameter_index, 1);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_execute_prepared(stmt, &res);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(duckdb_value_int64(&res, 0, 0) == 1);
+	duckdb_destroy_result(&res);
+
 	duckdb_destroy_prepare(&stmt);
 }
