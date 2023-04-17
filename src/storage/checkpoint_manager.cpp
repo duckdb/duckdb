@@ -128,8 +128,8 @@ void SingleFileCheckpointReader::LoadFromStorage() {
 	con.BeginTransaction();
 	// create the MetaBlockReader to read from the storage
 	MetaBlockReader reader(block_manager, meta_block);
-	reader.SetCatalog(&catalog.GetAttached().GetCatalog());
-	reader.SetContext(con.context.get());
+	reader.SetCatalog(catalog.GetAttached().GetCatalog());
+	reader.SetContext(*con.context);
 	LoadCheckpoint(*con.context, reader);
 	con.Commit();
 }

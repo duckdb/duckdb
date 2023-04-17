@@ -217,3 +217,19 @@ template <>
 double RIntegralType::DoubleCast<>(hugeint_t val) {
 	return Hugeint::Cast<double>(val);
 }
+
+string_t RStringSexpType::Convert(SEXP val) {
+	return string_t((char *)CHAR(val));
+}
+
+bool RStringSexpType::IsNull(SEXP val) {
+	return val == NA_STRING;
+}
+
+string_t RRawSexpType::Convert(SEXP val) {
+	return string_t((char *)RAW(val), Rf_xlength(val));
+}
+
+bool RRawSexpType::IsNull(SEXP val) {
+	return val == R_NilValue;
+}

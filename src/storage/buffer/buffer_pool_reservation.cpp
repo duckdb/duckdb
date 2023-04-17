@@ -3,6 +3,9 @@
 
 namespace duckdb {
 
+BufferPoolReservation::BufferPoolReservation(BufferPool &pool) : pool(pool) {
+}
+
 BufferPoolReservation::BufferPoolReservation(BufferPoolReservation &&src) noexcept : pool(src.pool) {
 	size = src.size;
 	src.size = 0;

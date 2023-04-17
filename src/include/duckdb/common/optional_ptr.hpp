@@ -22,19 +22,42 @@ public:
 	optional_ptr(const unique_ptr<T> &ptr_p) : ptr(ptr_p.get()) { // NOLINT: allow implicit creation from unique pointer
 	}
 
+	void CheckValid() const {
+		if (!ptr) {
+			throw InternalException("Attempting to dereference an optional pointer that is not set");
+		}
+	}
+
 	operator bool() const {
 		return ptr;
 	}
 	T &operator*() {
-		if (!ptr) {
-			throw InternalException("Attempting to dereference an optional pointer that is not set");
-		}
+		CheckValid();
+		return *ptr;
+	}
+	const T &operator*() const {
+		CheckValid();
 		return *ptr;
 	}
 	T *operator->() {
-		if (!ptr) {
-			throw InternalException("Attempting to call a method on an optional pointer that is not set");
-		}
+		CheckValid();
+		return ptr;
+	}
+	const T *operator->() const {
+		CheckValid();
+		return ptr;
+	}
+	T *get() {
+		// CheckValid();
+		return ptr;
+	}
+	const T *get() const {
+		// CheckValid();
+		return ptr;
+	}
+	// this looks dirty - but this is the default behavior of raw pointers
+	T *get_mutable() const {
+		// CheckValid();
 		return ptr;
 	}
 
