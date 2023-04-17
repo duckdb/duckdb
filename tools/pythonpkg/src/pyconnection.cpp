@@ -1392,8 +1392,8 @@ PythonImportCache *DuckDBPyConnection::ImportCache() {
 ModifiedMemoryFileSystem &DuckDBPyConnection::GetObjectFileSystem() {
 	if (!internal_object_filesystem) {
 		D_ASSERT(!FileSystemIsRegistered("DUCKDB_INTERNAL_OBJECTSTORE"));
-		auto &py_import_cache = *ImportCache();
-		auto modified_memory_fs = py_import_cache.pyduckdb().filesystem.modified_memory_filesystem();
+		auto &import_cache_py = *ImportCache();
+		auto modified_memory_fs = import_cache_py.pyduckdb().filesystem.modified_memory_filesystem();
 		if (modified_memory_fs.ptr() == nullptr) {
 			throw InvalidInputException(
 			    "This operation could not be completed because required module 'fsspec' is not installed");
