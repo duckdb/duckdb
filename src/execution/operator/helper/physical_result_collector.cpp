@@ -31,8 +31,8 @@ unique_ptr<PhysicalResultCollector> PhysicalResultCollector::GetResultCollector(
 	}
 }
 
-vector<PhysicalOperator *> PhysicalResultCollector::GetChildren() const {
-	return {&plan};
+vector<const_reference<PhysicalOperator>> PhysicalResultCollector::GetChildren() const {
+	return {plan};
 }
 
 void PhysicalResultCollector::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
@@ -43,11 +43,11 @@ void PhysicalResultCollector::BuildPipelines(Pipeline &current, MetaPipeline &me
 
 	// single operator: the operator becomes the data source of the current pipeline
 	auto &state = meta_pipeline.GetState();
-	state.SetPipelineSource(current, this);
+	state.SetPipelineSource(current, *this);
 
 	// we create a new pipeline starting from the child
-	auto child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, this);
-	child_meta_pipeline->Build(plan);
+	auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
+	child_meta_pipeline.Build(plan);
 }
 
 } // namespace duckdb

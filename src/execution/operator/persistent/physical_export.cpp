@@ -197,7 +197,7 @@ void PhysicalExport::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeli
 	// EXPORT has an optional child
 	// we only need to schedule child pipelines if there is a child
 	auto &state = meta_pipeline.GetState();
-	state.SetPipelineSource(current, this);
+	state.SetPipelineSource(current, *this);
 	if (children.empty()) {
 		return;
 	}

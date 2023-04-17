@@ -231,7 +231,7 @@ void Executor::VerifyScheduledEventsInternal(const idx_t vertex, const vector<Ev
 	recursion_stack[vertex] = false;
 }
 
-void Executor::AddRecursiveCTE(PhysicalOperator *rec_cte) {
+void Executor::AddRecursiveCTE(PhysicalOperator &rec_cte) {
 	recursive_ctes.push_back(rec_cte);
 }
 
@@ -258,8 +258,8 @@ void Executor::VerifyPipeline(Pipeline &pipeline) {
 		auto other_operators = other_pipeline->GetOperators();
 		for (idx_t op_idx = 0; op_idx < operators.size(); op_idx++) {
 			for (idx_t other_idx = 0; other_idx < other_operators.size(); other_idx++) {
-				auto &left = *operators[op_idx];
-				auto &right = *other_operators[other_idx];
+				auto &left = operators[op_idx].get();
+				auto &right = other_operators[other_idx].get();
 				if (left.Equals(right)) {
 					D_ASSERT(right.Equals(left));
 				} else {
@@ -307,10 +307,9 @@ void Executor::InitializeInternal(PhysicalOperator &plan) {
 		root_pipeline->Ready();
 
 		// ready recursive cte pipelines too
-		for (auto &rec_cte : recursive_ctes) {
-			D_ASSERT(rec_cte->type == PhysicalOperatorType::RECURSIVE_CTE);
-			auto &rec_cte_op = (PhysicalRecursiveCTE &)*rec_cte;
-			rec_cte_op.recursive_meta_pipeline->Ready();
+		for (auto &rec_cte_ref : recursive_ctes) {
+			auto &rec_cte = rec_cte_ref.get().Cast<PhysicalRecursiveCTE>();
+			rec_cte.recursive_meta_pipeline->Ready();
 		}
 
 		// set root pipelines, i.e., all pipelines that end in the final sink
@@ -346,9 +345,8 @@ void Executor::CancelTasks() {
 		for (auto &pipeline : pipelines) {
 			weak_references.push_back(weak_ptr<Pipeline>(pipeline));
 		}
-		for (auto op : recursive_ctes) {
-			D_ASSERT(op->type == PhysicalOperatorType::RECURSIVE_CTE);
-			auto &rec_cte = (PhysicalRecursiveCTE &)*op;
+		for (auto &rec_cte_ref : recursive_ctes) {
+			auto &rec_cte = rec_cte_ref.get().Cast<PhysicalRecursiveCTE>();
 			rec_cte.recursive_meta_pipeline.reset();
 		}
 		pipelines.clear();
@@ -441,18 +439,18 @@ void Executor::Reset() {
 	execution_result = PendingExecutionResult::RESULT_NOT_READY;
 }
 
-shared_ptr<Pipeline> Executor::CreateChildPipeline(Pipeline *current, PhysicalOperator *op) {
-	D_ASSERT(!current->operators.empty());
-	D_ASSERT(op->IsSource());
+shared_ptr<Pipeline> Executor::CreateChildPipeline(Pipeline &current, PhysicalOperator &op) {
+	D_ASSERT(!current.operators.empty());
+	D_ASSERT(op.IsSource());
 	// found another operator that is a source, schedule a child pipeline
 	// 'op' is the source, and the sink is the same
 	auto child_pipeline = make_shared<Pipeline>(*this);
-	child_pipeline->sink = current->sink;
-	child_pipeline->source = op;
+	child_pipeline->sink = current.sink;
+	child_pipeline->source = &op;
 
 	// the child pipeline has the same operators up until 'op'
-	for (auto current_op : current->operators) {
-		if (current_op == op) {
+	for (auto current_op : current.operators) {
+		if (&current_op.get() == &op) {
 			break;
 		}
 		child_pipeline->operators.push_back(current_op);

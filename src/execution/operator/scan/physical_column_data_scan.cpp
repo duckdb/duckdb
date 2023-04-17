@@ -42,17 +42,17 @@ void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &met
 	auto &state = meta_pipeline.GetState();
 	switch (type) {
 	case PhysicalOperatorType::DELIM_SCAN: {
-		auto entry = state.delim_join_dependencies.find(this);
+		auto entry = state.delim_join_dependencies.find(*this);
 		D_ASSERT(entry != state.delim_join_dependencies.end());
 		// this chunk scan introduces a dependency to the current pipeline
 		// namely a dependency on the duplicate elimination pipeline to finish
-		auto delim_dependency = entry->second->shared_from_this();
+		auto delim_dependency = entry->second.get().shared_from_this();
 		auto delim_sink = state.GetPipelineSink(*delim_dependency);
 		D_ASSERT(delim_sink);
 		D_ASSERT(delim_sink->type == PhysicalOperatorType::DELIM_JOIN);
-		auto &delim_join = (PhysicalDelimJoin &)*delim_sink;
+		auto &delim_join = delim_sink->Cast<PhysicalDelimJoin>();
 		current.AddDependency(delim_dependency);
-		state.SetPipelineSource(current, (PhysicalOperator *)delim_join.distinct.get());
+		state.SetPipelineSource(current, (PhysicalOperator &) *delim_join.distinct);
 		return;
 	}
 	case PhysicalOperatorType::RECURSIVE_CTE_SCAN:
@@ -64,7 +64,7 @@ void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &met
 		break;
 	}
 	D_ASSERT(children.empty());
-	state.SetPipelineSource(current, this);
+	state.SetPipelineSource(current, *this);
 }
 
 } // namespace duckdb

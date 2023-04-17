@@ -81,7 +81,7 @@ public:
 	}
 	void AddEvent(shared_ptr<Event> event);
 
-	void AddRecursiveCTE(PhysicalOperator *rec_cte);
+	void AddRecursiveCTE(PhysicalOperator &rec_cte);
 	void ReschedulePipelines(const vector<shared_ptr<MetaPipeline>> &pipelines, vector<shared_ptr<Event>> &events);
 
 	//! Whether or not the root of the pipeline is a result collector object
@@ -106,7 +106,7 @@ private:
 
 	bool NextExecutor();
 
-	shared_ptr<Pipeline> CreateChildPipeline(Pipeline *current, PhysicalOperator *op);
+	shared_ptr<Pipeline> CreateChildPipeline(Pipeline &current, PhysicalOperator &op);
 
 	void VerifyPipeline(Pipeline &pipeline);
 	void VerifyPipelines();
@@ -122,7 +122,7 @@ private:
 	//! The root pipelines of the query
 	vector<shared_ptr<Pipeline>> root_pipelines;
 	//! The recursive CTE's in this query plan
-	vector<PhysicalOperator *> recursive_ctes;
+	vector<reference<PhysicalOperator>> recursive_ctes;
 	//! The pipeline executor for the root pipeline
 	unique_ptr<PipelineExecutor> root_executor;
 	//! The current root pipeline index

@@ -25,7 +25,7 @@ public:
 	shared_ptr<PreparedStatementData> prepared;
 
 public:
-	vector<PhysicalOperator *> GetChildren() const override;
+	vector<const_reference<PhysicalOperator>> GetChildren() const override;
 
 public:
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;

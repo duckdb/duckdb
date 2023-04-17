@@ -10,13 +10,12 @@
 
 namespace duckdb {
 
-static void GatherDelimScans(PhysicalOperator *op, vector<PhysicalOperator *> &delim_scans) {
-	D_ASSERT(op);
-	if (op->type == PhysicalOperatorType::DELIM_SCAN) {
+static void GatherDelimScans(const PhysicalOperator &op, vector<const_reference<PhysicalOperator>> &delim_scans) {
+	if (op.type == PhysicalOperatorType::DELIM_SCAN) {
 		delim_scans.push_back(op);
 	}
-	for (auto &child : op->children) {
-		GatherDelimScans(child.get(), delim_scans);
+	for (auto &child : op.children) {
+		GatherDelimScans(*child, delim_scans);
 	}
 }
 
@@ -27,8 +26,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimJoin 
 	D_ASSERT(plan && plan->type != PhysicalOperatorType::CROSS_PRODUCT);
 	// duplicate eliminated join
 	// first gather the scans on the duplicate eliminated data set from the RHS
-	vector<PhysicalOperator *> delim_scans;
-	GatherDelimScans(plan->children[1].get(), delim_scans);
+	vector<const_reference<PhysicalOperator>> delim_scans;
+	GatherDelimScans(*plan->children[1], delim_scans);
 	if (delim_scans.empty()) {
 		// no duplicate eliminated scans in the RHS!
 		// in this case we don't need to create a delim join

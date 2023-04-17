@@ -624,7 +624,7 @@ unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(const PhysicalOper
 	tree_map.insert(make_pair(reference<const PhysicalOperator>(root), reference<QueryProfiler::TreeNode>(*node)));
 	auto children = root.GetChildren();
 	for (auto &child : children) {
-		auto child_node = CreateTree(*child, depth + 1);
+		auto child_node = CreateTree(child.get(), depth + 1);
 		node->children.push_back(std::move(child_node));
 	}
 	return node;

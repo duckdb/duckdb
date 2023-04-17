@@ -229,7 +229,7 @@ void PhysicalIndexJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pip
 	// index join: we only continue into the LHS
 	// the right side is probed by the index join
 	// so we don't need to do anything in the pipeline with this child
-	meta_pipeline.GetState().AddPipelineOperator(current, this);
+	meta_pipeline.GetState().AddPipelineOperator(current, *this);
 	children[0]->BuildPipelines(current, meta_pipeline);
 }
 

@@ -32,7 +32,7 @@ void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipe
 
 	// 'current' is the probe pipeline: add this operator
 	auto &state = meta_pipeline.GetState();
-	state.AddPipelineOperator(current, &op);
+	state.AddPipelineOperator(current, op);
 
 	// save the last added pipeline to set up dependencies later (in case we need to add a child pipeline)
 	vector<shared_ptr<Pipeline>> pipelines_so_far;
@@ -40,8 +40,8 @@ void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipe
 	auto last_pipeline = pipelines_so_far.back().get();
 
 	// on the RHS (build side), we construct a child MetaPipeline with this operator as its sink
-	auto child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, &op);
-	child_meta_pipeline->Build(*op.children[1]);
+	auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, op);
+	child_meta_pipeline.Build(*op.children[1]);
 
 	// continue building the current pipeline on the LHS (probe side)
 	op.children[0]->BuildPipelines(current, meta_pipeline);
@@ -49,7 +49,7 @@ void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipe
 	switch (op.type) {
 	case PhysicalOperatorType::POSITIONAL_JOIN:
 		// Positional joins are always outer
-		meta_pipeline.CreateChildPipeline(current, &op, last_pipeline);
+		meta_pipeline.CreateChildPipeline(current, op, last_pipeline);
 		return;
 	case PhysicalOperatorType::CROSS_PRODUCT:
 		return;
@@ -73,7 +73,7 @@ void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipe
 	}
 
 	if (add_child_pipeline) {
-		meta_pipeline.CreateChildPipeline(current, &op, last_pipeline);
+		meta_pipeline.CreateChildPipeline(current, op, last_pipeline);
 	}
 }
 
