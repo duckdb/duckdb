@@ -37,8 +37,8 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/transaction.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
-#include "duckdb/common/types/column_data_allocator.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_allocator.hpp"
 #include "duckdb/common/vector.hpp"
 
 using namespace duckdb;

@@ -142,6 +142,26 @@ Value DebugForceNoCrossProduct::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Debug Ordered Aggregate Threshold
+//===--------------------------------------------------------------------===//
+
+void OrderedAggregateThreshold::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).ordered_aggregate_threshold = ClientConfig().ordered_aggregate_threshold;
+}
+
+void OrderedAggregateThreshold::SetLocal(ClientContext &context, const Value &input) {
+	const auto param = input.GetValue<uint64_t>();
+	if (!param) {
+		throw ParserException("Invalid option for PRAGMA ordered_aggregate_threshold, value must be positive");
+	}
+	ClientConfig::GetConfig(context).ordered_aggregate_threshold = param;
+}
+
+Value OrderedAggregateThreshold::GetSetting(ClientContext &context) {
+	return Value::UBIGINT(ClientConfig::GetConfig(context).ordered_aggregate_threshold);
+}
+
+//===--------------------------------------------------------------------===//
 // Debug Window Mode
 //===--------------------------------------------------------------------===//
 void DebugWindowMode::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

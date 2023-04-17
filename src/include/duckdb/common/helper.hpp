@@ -82,6 +82,13 @@ unique_ptr<S> make_uniq_base(Args &&... args) {
 	return unique_ptr<S>(new T(std::forward<Args>(args)...));
 }
 
+#ifdef DUCKDB_ENABLE_DEPRECATED_API
+template <typename S, typename T, typename... Args>
+unique_ptr<S> make_unique_base(Args &&... args) {
+	return unique_ptr<S>(new T(std::forward<Args>(args)...));
+}
+#endif // DUCKDB_ENABLE_DEPRECATED_API
+
 template <typename T, typename S>
 unique_ptr<S> unique_ptr_cast(unique_ptr<T> src) {
 	return unique_ptr<S>(static_cast<S *>(src.release()));
@@ -111,7 +118,10 @@ typename std::remove_reference<T>::type&& move(T&& t) noexcept {
 
 template <class T, class... _Args>
 static duckdb::unique_ptr<T> make_unique(_Args&&... __args) {
+#ifndef DUCKDB_ENABLE_DEPRECATED_API
 	static_assert(sizeof(T) == 0, "Use make_uniq instead of make_unique!");
+#endif // DUCKDB_ENABLE_DEPRECATED_API
+	return unique_ptr<T>(new T(std::forward<_Args>(__args)...));
 }
 
 template <typename T>

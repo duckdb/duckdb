@@ -107,6 +107,8 @@ public class DuckDBNative {
 
 	protected static native void duckdb_jdbc_appender_flush(ByteBuffer appender_ref) throws SQLException;
 
+	protected static native void duckdb_jdbc_interrupt(ByteBuffer conn_ref);
+
 	protected static native void duckdb_jdbc_appender_close(ByteBuffer appender_ref) throws SQLException;
 
 	protected static native void duckdb_jdbc_appender_append_boolean(ByteBuffer appender_ref, boolean value) throws SQLException;

@@ -77,6 +77,8 @@ struct ClientConfig {
 	//! Maximum bits allowed for using a perfect hash table (i.e. the perfect HT can hold up to 2^perfect_ht_threshold
 	//! elements)
 	idx_t perfect_ht_threshold = 12;
+	//! The maximum number of rows to accumulate before sorting ordered aggregates.
+	idx_t ordered_aggregate_threshold = (idx_t(1) << 18);
 
 	//! Callback to create a progress bar display
 	progress_bar_display_create_func_t display_create_func = nullptr;
