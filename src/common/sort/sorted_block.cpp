@@ -3,7 +3,7 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sort/sort.hpp"
-#include "duckdb/common/types/row_data_collection.hpp"
+#include "duckdb/common/types/row/row_data_collection.hpp"
 
 #include <numeric>
 

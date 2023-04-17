@@ -1,16 +1,16 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/types/column_data_consumer.hpp
+// duckdb/common/types/column/column_data_consumer.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/common/types/column_data_collection.hpp"
-#include "duckdb/common/types/column_data_collection_segment.hpp"
-#include "duckdb/common/types/column_data_scan_states.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_collection_segment.hpp"
+#include "duckdb/common/types/column/column_data_scan_states.hpp"
 
 namespace duckdb {
 
@@ -43,6 +43,10 @@ public:
 
 public:
 	ColumnDataConsumer(ColumnDataCollection &collection, vector<column_t> column_ids);
+
+	idx_t Count() const {
+		return collection.Count();
+	}
 
 	idx_t ChunkCount() const {
 		return chunk_count;

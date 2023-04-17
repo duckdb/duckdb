@@ -5,16 +5,15 @@
 //
 //
 //===----------------------------------------------------------------------===//
-#include "duckdb/common/row_operations/row_operations.hpp"
-
-#include "duckdb/common/types/row_layout.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/common/row_operations/row_operations.hpp"
+#include "duckdb/common/types/row/tuple_data_layout.hpp"
 #include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
 
 namespace duckdb {
 
-void RowOperations::InitializeStates(RowLayout &layout, Vector &addresses, const SelectionVector &sel, idx_t count) {
+void RowOperations::InitializeStates(TupleDataLayout &layout, Vector &addresses, const SelectionVector &sel,
+                                     idx_t count) {
 	if (count == 0) {
 		return;
 	}
@@ -32,7 +31,7 @@ void RowOperations::InitializeStates(RowLayout &layout, Vector &addresses, const
 	}
 }
 
-void RowOperations::DestroyStates(RowOperationsState &state, RowLayout &layout, Vector &addresses, idx_t count) {
+void RowOperations::DestroyStates(RowOperationsState &state, TupleDataLayout &layout, Vector &addresses, idx_t count) {
 	if (count == 0) {
 		return;
 	}
@@ -68,7 +67,7 @@ void RowOperations::UpdateFilteredStates(RowOperationsState &state, AggregateFil
 	UpdateStates(state, aggr, filtered_addresses, filter_data.filtered_payload, arg_idx, count);
 }
 
-void RowOperations::CombineStates(RowOperationsState &state, RowLayout &layout, Vector &sources, Vector &targets,
+void RowOperations::CombineStates(RowOperationsState &state, TupleDataLayout &layout, Vector &sources, Vector &targets,
                                   idx_t count) {
 	if (count == 0) {
 		return;
@@ -88,8 +87,8 @@ void RowOperations::CombineStates(RowOperationsState &state, RowLayout &layout, 
 	}
 }
 
-void RowOperations::FinalizeStates(RowOperationsState &state, RowLayout &layout, Vector &addresses, DataChunk &result,
-                                   idx_t aggr_idx) {
+void RowOperations::FinalizeStates(RowOperationsState &state, TupleDataLayout &layout, Vector &addresses,
+                                   DataChunk &result, idx_t aggr_idx) {
 	//	Move to the first aggregate state
 	VectorOperations::AddInPlace(addresses, layout.GetAggrOffset(), result.size());
 
