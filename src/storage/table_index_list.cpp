@@ -9,13 +9,13 @@ void TableIndexList::AddIndex(unique_ptr<Index> index) {
 	lock_guard<mutex> lock(indexes_lock);
 	indexes.push_back(std::move(index));
 }
-void TableIndexList::RemoveIndex(Index *index) {
-	D_ASSERT(index);
+
+void TableIndexList::RemoveIndex(Index &index) {
 	lock_guard<mutex> lock(indexes_lock);
 
 	for (idx_t index_idx = 0; index_idx < indexes.size(); index_idx++) {
 		auto &index_entry = indexes[index_idx];
-		if (index_entry.get() == index) {
+		if (index_entry.get() == &index) {
 			indexes.erase(indexes.begin() + index_idx);
 			break;
 		}

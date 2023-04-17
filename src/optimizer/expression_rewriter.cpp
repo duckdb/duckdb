@@ -9,14 +9,14 @@
 
 namespace duckdb {
 
-unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const vector<Rule *> &rules,
+unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const vector<reference<Rule>> &rules,
                                                       unique_ptr<Expression> expr, bool &changes_made, bool is_root) {
 	for (auto &rule : rules) {
 		vector<reference<Expression>> bindings;
-		if (rule->root->Match(*expr, bindings)) {
+		if (rule.get().root->Match(*expr, bindings)) {
 			// the rule matches! try to apply it
 			bool rule_made_change = false;
-			auto result = rule->Apply(op, bindings, rule_made_change, is_root);
+			auto result = rule.get().Apply(op, bindings, rule_made_change, is_root);
 			if (result) {
 				changes_made = true;
 				// the base node changed: the rule applied changes
@@ -63,7 +63,7 @@ void ExpressionRewriter::VisitOperator(LogicalOperator &op) {
 			// this rule does not apply to this type of LogicalOperator
 			continue;
 		}
-		to_apply_rules.push_back(rule.get());
+		to_apply_rules.push_back(*rule);
 	}
 	if (to_apply_rules.empty()) {
 		// no rules to apply on this node

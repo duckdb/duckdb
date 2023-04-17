@@ -1351,7 +1351,7 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 			if (vtype != VectorType::FLAT_VECTOR) {
 				continue;
 			}
-			ValidityMask *child_validity;
+			optional_ptr<ValidityMask> child_validity;
 			SelectionVector owned_child_sel;
 			const SelectionVector *child_sel = &owned_child_sel;
 			if (children[child_idx]->GetVectorType() == VectorType::FLAT_VECTOR) {

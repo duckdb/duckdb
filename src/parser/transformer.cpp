@@ -26,8 +26,8 @@ Transformer::Transformer(ParserOptions &options)
     : parent(nullptr), options(options), stack_depth(DConstants::INVALID_INDEX) {
 }
 
-Transformer::Transformer(Transformer *parent)
-    : parent(parent), options(parent->options), stack_depth(DConstants::INVALID_INDEX) {
+Transformer::Transformer(Transformer &parent)
+    : parent(&parent), options(parent.options), stack_depth(DConstants::INVALID_INDEX) {
 }
 
 Transformer::~Transformer() {
@@ -59,17 +59,14 @@ void Transformer::InitializeStackCheck() {
 }
 
 StackChecker Transformer::StackCheck(idx_t extra_stack) {
-	auto node = this;
-	while (node->parent) {
-		node = node->parent;
-	}
-	D_ASSERT(node->stack_depth != DConstants::INVALID_INDEX);
-	if (node->stack_depth + extra_stack >= options.max_expression_depth) {
+	auto &root = RootTransformer();
+	D_ASSERT(root.stack_depth != DConstants::INVALID_INDEX);
+	if (root.stack_depth + extra_stack >= options.max_expression_depth) {
 		throw ParserException("Max expression depth limit of %lld exceeded. Use \"SET max_expression_depth TO x\" to "
 		                      "increase the maximum expression depth.",
 		                      options.max_expression_depth);
 	}
-	return StackChecker(*node, extra_stack);
+	return StackChecker(root, extra_stack);
 }
 
 unique_ptr<SQLStatement> Transformer::TransformStatement(duckdb_libpgquery::PGNode *stmt) {
@@ -80,6 +77,50 @@ unique_ptr<SQLStatement> Transformer::TransformStatement(duckdb_libpgquery::PGNo
 		result->named_param_map = std::move(named_param_map);
 	}
 	return result;
+}
+
+Transformer &Transformer::RootTransformer() {
+	reference<Transformer> node = *this;
+	while (node.get().parent) {
+		node = *node.get().parent;
+	}
+	return node.get();
+}
+
+const Transformer &Transformer::RootTransformer() const {
+	reference<const Transformer> node = *this;
+	while (node.get().parent) {
+		node = *node.get().parent;
+	}
+	return node.get();
+}
+
+idx_t Transformer::ParamCount() const {
+	auto &root = RootTransformer();
+	return root.prepared_statement_parameter_index;
+}
+
+void Transformer::SetParamCount(idx_t new_count) {
+	auto &root = RootTransformer();
+	root.prepared_statement_parameter_index = new_count;
+}
+void Transformer::SetNamedParam(const string &name, int32_t index) {
+	auto &root = RootTransformer();
+	D_ASSERT(!root.named_param_map.count(name));
+	root.named_param_map[name] = index;
+}
+bool Transformer::GetNamedParam(const string &name, int32_t &index) {
+	auto &root = RootTransformer();
+	auto entry = root.named_param_map.find(name);
+	if (entry == root.named_param_map.end()) {
+		return false;
+	}
+	index = entry->second;
+	return true;
+}
+bool Transformer::HasNamedParameters() const {
+	auto &root = RootTransformer();
+	return !root.named_param_map.empty();
 }
 
 unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgquery::PGNode *stmt) {

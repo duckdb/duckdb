@@ -66,7 +66,7 @@ void Binder::BindSchemaOrCatalog(string &catalog, string &schema) {
 	BindSchemaOrCatalog(context, catalog, schema);
 }
 
-SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
+SchemaCatalogEntry &Binder::BindSchema(CreateInfo &info) {
 	BindSchemaOrCatalog(info.catalog, info.schema);
 	if (IsInvalidCatalog(info.catalog) && info.temporary) {
 		info.catalog = TEMP_CATALOG;
@@ -101,12 +101,12 @@ SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
 	if (!info.temporary) {
 		properties.modified_databases.insert(schema_obj->catalog->GetName());
 	}
-	return schema_obj;
+	return *schema_obj;
 }
 
-SchemaCatalogEntry *Binder::BindCreateSchema(CreateInfo &info) {
-	auto schema = BindSchema(info);
-	if (schema->catalog->IsSystemCatalog()) {
+SchemaCatalogEntry &Binder::BindCreateSchema(CreateInfo &info) {
+	auto &schema = BindSchema(info);
+	if (schema.catalog->IsSystemCatalog()) {
 		throw BinderException("Cannot create entry in system catalog");
 	}
 	return schema;
@@ -159,7 +159,7 @@ static void QualifyFunctionNames(ClientContext &context, unique_ptr<ParsedExpres
 	    *expr, [&](unique_ptr<ParsedExpression> &child) { QualifyFunctionNames(context, child); });
 }
 
-SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
+SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	auto &base = (CreateMacroInfo &)info;
 	auto &scalar_function = (ScalarMacroFunction &)*base.function;
 
@@ -477,25 +477,27 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::VIEW_ENTRY: {
 		auto &base = (CreateViewInfo &)*stmt.info;
 		// bind the schema
-		auto schema = BindCreateSchema(*stmt.info);
+		auto &schema = BindCreateSchema(*stmt.info);
 		BindCreateViewInfo(base);
-		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_VIEW, std::move(stmt.info), schema);
+		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_VIEW, std::move(stmt.info), &schema);
 		break;
 	}
 	case CatalogType::SEQUENCE_ENTRY: {
-		auto schema = BindCreateSchema(*stmt.info);
+		auto &schema = BindCreateSchema(*stmt.info);
 		result.plan =
-		    make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SEQUENCE, std::move(stmt.info), schema);
+		    make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SEQUENCE, std::move(stmt.info), &schema);
 		break;
 	}
 	case CatalogType::TABLE_MACRO_ENTRY: {
-		auto schema = BindCreateSchema(*stmt.info);
-		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, std::move(stmt.info), schema);
+		auto &schema = BindCreateSchema(*stmt.info);
+		result.plan =
+		    make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, std::move(stmt.info), &schema);
 		break;
 	}
 	case CatalogType::MACRO_ENTRY: {
-		auto schema = BindCreateFunctionInfo(*stmt.info);
-		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, std::move(stmt.info), schema);
+		auto &schema = BindCreateFunctionInfo(*stmt.info);
+		result.plan =
+		    make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, std::move(stmt.info), &schema);
 		break;
 	}
 	case CatalogType::INDEX_ENTRY: {
@@ -589,9 +591,9 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		break;
 	}
 	case CatalogType::TYPE_ENTRY: {
-		auto schema = BindCreateSchema(*stmt.info);
+		auto &schema = BindCreateSchema(*stmt.info);
 		auto &create_type_info = (CreateTypeInfo &)(*stmt.info);
-		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, std::move(stmt.info), schema);
+		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, std::move(stmt.info), &schema);
 		if (create_type_info.query) {
 			// CREATE TYPE mood AS ENUM (SELECT 'happy')
 			auto &select_stmt = create_type_info.query->Cast<SelectStatement>();
@@ -634,7 +636,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			// 2: create a type alias with a custom type.
 			// eg. CREATE TYPE a AS INT; CREATE TYPE b AS a;
 			// We set b to be an alias for the underlying type of a
-			auto inner_type = Catalog::GetType(context, schema->catalog->GetName(), schema->name,
+			auto inner_type = Catalog::GetType(context, schema.catalog->GetName(), schema.name,
 			                                   UserType::GetTypeName(create_type_info.type));
 			// clear to nullptr, we don't need this
 			LogicalType::SetCatalog(inner_type, nullptr);

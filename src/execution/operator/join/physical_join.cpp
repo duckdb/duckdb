@@ -41,7 +41,7 @@ void PhysicalJoin::BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipe
 
 	// on the RHS (build side), we construct a child MetaPipeline with this operator as its sink
 	auto child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, &op);
-	child_meta_pipeline->Build(op.children[1].get());
+	child_meta_pipeline->Build(*op.children[1]);
 
 	// continue building the current pipeline on the LHS (probe side)
 	op.children[0]->BuildPipelines(current, meta_pipeline);
