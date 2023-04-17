@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
 
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
+#include "duckdb/execution/operator/set/physical_cte.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 
@@ -61,6 +62,19 @@ void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &met
 		auto &delim_join = delim_sink->Cast<PhysicalDelimJoin>();
 		current.AddDependency(delim_dependency);
 		state.SetPipelineSource(current, (PhysicalOperator &)*delim_join.distinct);
+		return;
+	}
+	case PhysicalOperatorType::CTE_SCAN: {
+		auto entry = state.cte_dependencies.find(this);
+		D_ASSERT(entry != state.cte_dependencies.end());
+		// this chunk scan introduces a dependency to the current pipeline
+		// namely a dependency on the CTE pipeline to finish
+		auto cte_dependency = entry->second->shared_from_this();
+		auto cte_sink = state.GetPipelineSink(*cte_dependency);
+		D_ASSERT(cte_sink);
+		D_ASSERT(cte_sink->type == PhysicalOperatorType::CTE);
+		current.AddDependency(cte_dependency);
+		state.SetPipelineSource(current, this);
 		return;
 	}
 	case PhysicalOperatorType::RECURSIVE_CTE_SCAN:
