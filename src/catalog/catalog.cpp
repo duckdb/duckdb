@@ -287,8 +287,8 @@ struct CatalogLookup {
 
 //! Return value of Catalog::LookupEntry
 struct CatalogEntryLookup {
-	SchemaCatalogEntry *schema;
-	CatalogEntry *entry;
+	optional_ptr<SchemaCatalogEntry> schema;
+	optional_ptr<CatalogEntry> entry;
 
 	DUCKDB_API bool Found() const {
 		return entry;
@@ -323,18 +323,19 @@ SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &sch
 // Lookup
 //===--------------------------------------------------------------------===//
 SimilarCatalogEntry Catalog::SimilarEntryInSchemas(ClientContext &context, const string &entry_name, CatalogType type,
-                                                   const unordered_set<SchemaCatalogEntry *> &schemas) {
+                                                   const reference_set_t<SchemaCatalogEntry> &schemas) {
 	SimilarCatalogEntry result;
-	for (auto schema : schemas) {
-		auto transaction = schema->catalog->GetCatalogTransaction(context);
-		auto entry = schema->GetSimilarEntry(transaction, type, entry_name);
+	for (auto schema_ref : schemas) {
+		auto &schema = schema_ref.get();
+		auto transaction = schema.catalog->GetCatalogTransaction(context);
+		auto entry = schema.GetSimilarEntry(transaction, type, entry_name);
 		if (!entry.Found()) {
 			// no similar entry found
 			continue;
 		}
 		if (!result.Found() || result.distance > entry.distance) {
 			result = entry;
-			result.schema = schema;
+			result.schema = &schema;
 		}
 	}
 	return result;
@@ -446,18 +447,18 @@ CatalogException Catalog::UnrecognizedConfigurationError(ClientContext &context,
 
 CatalogException Catalog::CreateMissingEntryException(ClientContext &context, const string &entry_name,
                                                       CatalogType type,
-                                                      const unordered_set<SchemaCatalogEntry *> &schemas,
+                                                      const reference_set_t<SchemaCatalogEntry> &schemas,
                                                       QueryErrorContext error_context) {
 	auto entry = SimilarEntryInSchemas(context, entry_name, type, schemas);
 
-	unordered_set<SchemaCatalogEntry *> unseen_schemas;
+	reference_set_t<SchemaCatalogEntry> unseen_schemas;
 	auto &db_manager = DatabaseManager::Get(context);
 	auto databases = db_manager.GetDatabases(context);
 	for (auto database : databases) {
 		auto &catalog = database->GetCatalog();
 		auto current_schemas = catalog.GetAllSchemas(context);
 		for (auto &current_schema : current_schemas) {
-			unseen_schemas.insert(current_schema);
+			unseen_schemas.insert(*current_schema);
 		}
 	}
 	// check if the entry exists in any extension
@@ -506,7 +507,7 @@ CatalogEntryLookup Catalog::LookupEntryInternal(CatalogTransaction transaction, 
 
 CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type, const string &schema,
                                         const string &name, bool if_exists, QueryErrorContext error_context) {
-	unordered_set<SchemaCatalogEntry *> schemas;
+	reference_set_t<SchemaCatalogEntry> schemas;
 	if (IsInvalidSchema(schema)) {
 		// try all schemas for this catalog
 		auto catalog_name = GetName();
@@ -522,7 +523,7 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type
 				return result;
 			}
 			if (result.schema) {
-				schemas.insert(result.schema);
+				schemas.insert(*result.schema);
 			}
 		}
 	} else {
@@ -532,7 +533,7 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type
 			return result;
 		}
 		if (result.schema) {
-			schemas.insert(result.schema);
+			schemas.insert(*result.schema);
 		}
 	}
 	if (if_exists) {
@@ -543,7 +544,7 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type
 
 CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, vector<CatalogLookup> &lookups, CatalogType type,
                                         const string &name, bool if_exists, QueryErrorContext error_context) {
-	unordered_set<SchemaCatalogEntry *> schemas;
+	reference_set_t<SchemaCatalogEntry> schemas;
 	for (auto &lookup : lookups) {
 		auto transaction = lookup.catalog.GetCatalogTransaction(context);
 		auto result = lookup.catalog.LookupEntryInternal(transaction, type, lookup.schema, name);
@@ -551,7 +552,7 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, vector<CatalogLo
 			return result;
 		}
 		if (result.schema) {
-			schemas.insert(result.schema);
+			schemas.insert(*result.schema);
 		}
 	}
 	if (if_exists) {
@@ -575,7 +576,7 @@ CatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema, co
 
 CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, const string &schema_name, const string &name,
                                 bool if_exists, QueryErrorContext error_context) {
-	return LookupEntry(context, type, schema_name, name, if_exists, error_context).entry;
+	return LookupEntry(context, type, schema_name, name, if_exists, error_context).entry.get();
 }
 
 CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, const string &catalog, const string &schema,
@@ -599,7 +600,7 @@ CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, const 
 		D_ASSERT(if_exists_p);
 		return nullptr;
 	}
-	return result.entry;
+	return result.entry.get();
 }
 
 SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &catalog_name, const string &schema_name,

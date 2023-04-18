@@ -12,7 +12,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/parser/query_error_context.hpp"
 #include "duckdb/catalog/catalog_transaction.hpp"
-#include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 
@@ -279,12 +279,12 @@ private:
 	//! Return an exception with did-you-mean suggestion.
 	static CatalogException CreateMissingEntryException(ClientContext &context, const string &entry_name,
 	                                                    CatalogType type,
-	                                                    const unordered_set<SchemaCatalogEntry *> &schemas,
+	                                                    const reference_set_t<SchemaCatalogEntry> &schemas,
 	                                                    QueryErrorContext error_context);
 
 	//! Return the close entry name, the distance and the belonging schema.
 	static SimilarCatalogEntry SimilarEntryInSchemas(ClientContext &context, const string &entry_name, CatalogType type,
-	                                                 const unordered_set<SchemaCatalogEntry *> &schemas);
+	                                                 const reference_set_t<SchemaCatalogEntry> &schemas);
 
 	virtual void DropSchema(ClientContext &context, DropInfo *info) = 0;
 
