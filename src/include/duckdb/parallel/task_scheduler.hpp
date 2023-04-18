@@ -14,6 +14,7 @@
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/printer.hpp"
+#include "duckdb/common/types/hash.hpp"
 
 #include <list>
 #include <unordered_map>
@@ -58,7 +59,7 @@ public:
 
 	unique_ptr<ProducerToken> CreateProducer();
 	//! Schedule a task to be executed by the task scheduler
-	void ScheduleTask(ProducerToken &producer, unique_ptr<Task> task);
+	void ScheduleTask(shared_ptr<ProducerToken> producer, unique_ptr<Task> task);
 	//! Fetches a task from a specific producer, returns true if successful or false if no tasks were available
 	bool GetTaskFromProducer(ProducerToken &token, unique_ptr<Task> &task);
 	//! Run tasks forever until "marker" is set to false, "marker" must remain valid until the thread is joined

@@ -127,10 +127,12 @@ unique_ptr<ProducerToken> TaskScheduler::CreateProducer() {
 	return make_uniq<ProducerToken>(*this, std::move(token));
 }
 
-void TaskScheduler::ScheduleTask(ProducerToken &token, unique_ptr<Task> task) {
+void TaskScheduler::ScheduleTask(shared_ptr<ProducerToken> token, unique_ptr<Task> task) {
+	// We need to store the producer token in the task to be able to reschedule it in case of an interrupt
+	task->current_token = token;
+
 	// Enqueue a task for the given producer token and signal any sleeping threads
-	task->current_token = &token;
-	queue->Enqueue(token, std::move(task));
+	queue->Enqueue(*token, std::move(task));
 }
 
 bool TaskScheduler::GetTaskFromProducer(ProducerToken &token, unique_ptr<Task> &task) {
@@ -308,8 +310,7 @@ void TaskScheduler::RescheduleSleepingTasks() {
 	for (auto it = sleeping_tasks.begin(); it != sleeping_tasks.end(); ) {
 		if (it->first < current_time) {
 //			Printer::Print("Rescheduled task with sleeping time " + to_string(it->first));
-			auto token_ptr = it->second->current_token;
-			ScheduleTask(*token_ptr, std::move(it->second));
+			ScheduleTask(it->second->current_token, std::move(it->second));
 			it = sleeping_tasks.erase(it);
 		} else {
 //			Printer::Print("Did not reschedule: " + to_string(it->first));
@@ -337,8 +338,7 @@ void TaskScheduler::DescheduleTaskCallback(unique_ptr<Task> task, hugeint_t call
 	if (buffered_cb_lookup != buffered_callbacks.end()) {
 //		Printer::Print(" > Insta reschedule uuid " + to_string(callback_uuid.lower) + to_string(callback_uuid.upper));
 		// this callback already happened, reschedule straight away
-		auto token_ptr = task->current_token;
-		ScheduleTask(*token_ptr, std::move(task));
+		ScheduleTask(task->current_token, std::move(task));
 		buffered_callbacks.erase(buffered_cb_lookup);
 		return;
 	}
@@ -397,7 +397,7 @@ void TaskScheduler::RescheduleCallback(shared_ptr<DatabaseInstance> db, hugeint_
 	} else {
 //		Printer::Print(" > Reschedule task");
 		auto token_ptr = res->second->current_token;
-		scheduler.ScheduleTask(*token_ptr, std::move(res->second));
+		scheduler.ScheduleTask(res->second->current_token, std::move(res->second));
 		scheduler.blocked_tasks.erase(res);
 	}
 //	Printer::Print("\n");

@@ -73,8 +73,8 @@ public:
 	//! after returning a TaskExecutionResult::TASK_BLOCKED
 	InterruptState interrupt_state;
 
-	//! We need to store the current producer token in case the task needs to be rescheduled into the same queue
-	ProducerToken* current_token = nullptr;
+	//! We need to store the current producer token in case the task needs to be rescheduled
+	shared_ptr<ProducerToken> current_token;
 };
 
 //! Execute a task within an executor, including exception handling
