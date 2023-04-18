@@ -164,8 +164,8 @@ public:
 		return FormatErrorRecursive(query_location, msg, values, params...);
 	}
 
-	unique_ptr<LogicalOperator> BindUpdateSet(LogicalOperator *op, unique_ptr<LogicalOperator> root,
-	                                          UpdateSetInfo &set_info, TableCatalogEntry *table,
+	unique_ptr<LogicalOperator> BindUpdateSet(LogicalOperator &op, unique_ptr<LogicalOperator> root,
+	                                          UpdateSetInfo &set_info, TableCatalogEntry &table,
 	                                          vector<PhysicalIndex> &columns);
 	void BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert *insert, UpdateSetInfo &set_info,
 	                                TableCatalogEntry &table);
@@ -255,7 +255,7 @@ private:
 	BoundStatement Bind(AttachStatement &stmt);
 	BoundStatement Bind(DetachStatement &stmt);
 
-	BoundStatement BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry *table,
+	BoundStatement BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry &table,
 	                             const string &alias, idx_t update_table_index,
 	                             unique_ptr<LogicalOperator> child_operator, BoundStatement result);
 

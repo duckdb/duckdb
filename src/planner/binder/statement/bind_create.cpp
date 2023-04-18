@@ -509,9 +509,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			throw BinderException("Can only create an index over a base table!");
 		}
 		auto &table_binding = bound_table->Cast<BoundBaseTableRef>();
-		;
-		auto table = table_binding.table;
-		if (table->temporary) {
+		auto &table = table_binding.table;
+		if (table.temporary) {
 			stmt.info->temporary = true;
 		}
 		// create a plan over the bound table
@@ -520,7 +519,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			throw BinderException("Cannot create index on a view!");
 		}
 
-		result.plan = table->catalog->BindCreateIndex(*this, stmt, *table, std::move(plan));
+		result.plan = table.catalog->BindCreateIndex(*this, stmt, table, std::move(plan));
 		break;
 	}
 	case CatalogType::TABLE_ENTRY: {

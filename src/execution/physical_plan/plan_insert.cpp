@@ -86,11 +86,11 @@ unique_ptr<PhysicalOperator> DuckCatalog::PlanInsert(ClientContext &context, Log
 	}
 	unique_ptr<PhysicalOperator> insert;
 	if (use_batch_index && !parallel_streaming_insert) {
-		insert = make_uniq<PhysicalBatchInsert>(op.types, *op.table, op.column_index_map, std::move(op.bound_defaults),
+		insert = make_uniq<PhysicalBatchInsert>(op.types, op.table, op.column_index_map, std::move(op.bound_defaults),
 		                                        op.estimated_cardinality);
 	} else {
 		insert = make_uniq<PhysicalInsert>(
-		    op.types, *op.table, op.column_index_map, std::move(op.bound_defaults), std::move(op.expressions),
+		    op.types, op.table, op.column_index_map, std::move(op.bound_defaults), std::move(op.expressions),
 		    std::move(op.set_columns), std::move(op.set_types), op.estimated_cardinality, op.return_chunk,
 		    parallel_streaming_insert && num_threads > 1, op.action_type, std::move(op.on_conflict_condition),
 		    std::move(op.do_update_condition), std::move(op.on_conflict_filter), std::move(op.columns_to_fetch));
@@ -106,8 +106,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalInsert &op
 		D_ASSERT(op.children.size() == 1);
 		plan = CreatePlan(*op.children[0]);
 	}
-	dependencies.AddDependency(*op.table);
-	return op.table->catalog->PlanInsert(context, op, std::move(plan));
+	dependencies.AddDependency(op.table);
+	return op.table.catalog->PlanInsert(context, op, std::move(plan));
 }
 
 } // namespace duckdb

@@ -5,12 +5,12 @@
 
 namespace duckdb {
 
-LogicalUpdate::LogicalUpdate(TableCatalogEntry *table)
+LogicalUpdate::LogicalUpdate(TableCatalogEntry &table)
     : LogicalOperator(LogicalOperatorType::LOGICAL_UPDATE), table(table), table_index(0), return_chunk(false) {
 }
 
 void LogicalUpdate::Serialize(FieldWriter &writer) const {
-	table->Serialize(writer.GetSerializer());
+	table.Serialize(writer.GetSerializer());
 	writer.WriteField(table_index);
 	writer.WriteField(return_chunk);
 	writer.WriteIndexList<PhysicalIndex>(columns);
@@ -23,13 +23,12 @@ unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(LogicalDeserializationSta
 	auto info = TableCatalogEntry::Deserialize(reader.GetSource(), context);
 	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
 
-	TableCatalogEntry *table_catalog_entry = catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->table);
-
+	auto table_catalog_entry = catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->table);
 	if (!table_catalog_entry) {
 		throw InternalException("Cant find catalog entry for table %s", info->table);
 	}
 
-	auto result = make_uniq<LogicalUpdate>(table_catalog_entry);
+	auto result = make_uniq<LogicalUpdate>(*table_catalog_entry);
 	result->table_index = reader.ReadRequired<idx_t>();
 	result->return_chunk = reader.ReadRequired<bool>();
 	result->columns = reader.ReadRequiredIndexList<PhysicalIndex>();
@@ -44,14 +43,14 @@ idx_t LogicalUpdate::EstimateCardinality(ClientContext &context) {
 
 vector<ColumnBinding> LogicalUpdate::GetColumnBindings() {
 	if (return_chunk) {
-		return GenerateColumnBindings(table_index, table->GetTypes().size());
+		return GenerateColumnBindings(table_index, table.GetTypes().size());
 	}
 	return {ColumnBinding(0, 0)};
 }
 
 void LogicalUpdate::ResolveTypes() {
 	if (return_chunk) {
-		types = table->GetTypes();
+		types = table.GetTypes();
 	} else {
 		types.emplace_back(LogicalType::BIGINT);
 	}
