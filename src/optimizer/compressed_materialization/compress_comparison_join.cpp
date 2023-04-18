@@ -106,6 +106,9 @@ void CompressedMaterialization::UpdateComparisonJoinStats(unique_ptr<LogicalOper
 		    condition.right->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			continue; // We definitely didn't compress these, nothing changed
 		}
+		if (condition_idx * 2 >= compressed_join.join_stats.size()) {
+			break;
+		}
 
 		auto &lhs_colref = condition.left->Cast<BoundColumnRefExpression>();
 		auto &rhs_colref = condition.right->Cast<BoundColumnRefExpression>();

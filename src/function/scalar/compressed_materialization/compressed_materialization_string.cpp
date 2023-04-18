@@ -4,7 +4,8 @@
 namespace duckdb {
 
 static string StringCompressFunctionName(const LogicalType &result_type) {
-	return StringUtil::Format("cm_compress_string_%s", StringUtil::Lower(LogicalTypeIdToString(result_type.id())));
+	return StringUtil::Format("__internal_compress_string_%s",
+	                          StringUtil::Lower(LogicalTypeIdToString(result_type.id())));
 }
 
 template <class RESULT_TYPE>
@@ -58,7 +59,7 @@ static scalar_function_t GetStringCompressFunctionSwitch(const LogicalType &resu
 }
 
 static string StringDecompressFunctionName() {
-	return "cm_decompress_string";
+	return "__internal_decompress_string";
 }
 
 template <class INPUT_TYPE>

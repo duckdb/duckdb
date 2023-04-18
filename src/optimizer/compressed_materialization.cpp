@@ -413,10 +413,8 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetStringCompress(uniq
 	if (cast_type.id() == LogicalTypeId::USMALLINT) {
 		auto min = StringStats::Min(stats);
 		auto max = StringStats::Max(stats);
-		D_ASSERT(min.length() <= 1 && max.length() <= 1);
-
-		uint16_t min_val = min.length() == 0 ? 0 : *(uint8_t *)min.c_str();
-		uint16_t max_val = max.length() == 0 ? 0 : *(uint8_t *)max.c_str();
+		uint16_t min_val = max_string_length == 0 || min.length() == 0 ? 0 : *(uint8_t *)min.c_str();
+		uint16_t max_val = max_string_length == 0 || max.length() == 0 ? 0 : *(uint8_t *)max.c_str();
 		NumericStats::SetMin(compress_stats, Value(min_val).DefaultCastAs(cast_type));
 		NumericStats::SetMax(compress_stats, Value(max_val + 1).DefaultCastAs(cast_type));
 	}
@@ -486,12 +484,17 @@ void CompressedMaterialization::RemoveRedundantProjections(unique_ptr<LogicalOpe
 	// We found a decompression followed by a compression, try to eliminate redundant decompress/compress of columns
 	idx_t decompress_count;
 	idx_t compress_count;
-	RemoveRedundantExpressions(decompression, compression, decompress_count, compress_count, referenced_bindings);
+	if (!RemoveRedundantExpressions(decompression, compression, decompress_count, compress_count,
+	                                referenced_bindings)) {
+		return; // Couldn't remove any expressions
+	}
 	compression.ResolveOperatorTypes();
 
 	if (decompress_count == 0) {
 		RemoveOperator(*decompression_ptr);
-		mapping_chain.pop_back(); // If we fully remove the operator we can remove the back of the chain
+		if (!mapping_chain.empty()) {
+			mapping_chain.pop_back(); // If we fully remove the operator we can remove the back of the chain
+		}
 	}
 
 	if (!mapping_chain.empty()) {
@@ -499,10 +502,11 @@ void CompressedMaterialization::RemoveRedundantProjections(unique_ptr<LogicalOpe
 		// If there was more than 1 operator in between the compress /  decompress projection
 		// The expression types there are not consistent
 		// Make them consistent by following the mapping chain
-		UpdateTypesRecursively(decompression_parent->get()->GetColumnBindings(),
-		                       decompression_parent->get()->children[0]->types, std::move(mapping_chain));
-		root->ResolveOperatorTypes();
+		auto &op_with_new_types = *decompression_parent->get()->children[0];
+		UpdateTypesRecursively(op_with_new_types.GetColumnBindings(), op_with_new_types.types,
+		                       std::move(mapping_chain));
 	}
+	compression.ResolveOperatorTypes();
 
 	if (compress_count == 0) {
 		RemoveOperator(op);
@@ -511,7 +515,7 @@ void CompressedMaterialization::RemoveRedundantProjections(unique_ptr<LogicalOpe
 	// NOTE: we don't have to update statistics_map here because this is the last step of this optimizer
 }
 
-void CompressedMaterialization::RemoveRedundantExpressions(LogicalProjection &decompression,
+bool CompressedMaterialization::RemoveRedundantExpressions(LogicalProjection &decompression,
                                                            LogicalProjection &compression, idx_t &decompress_count,
                                                            idx_t &compress_count,
                                                            const column_binding_set_t &referenced_bindings) {
@@ -519,6 +523,7 @@ void CompressedMaterialization::RemoveRedundantExpressions(LogicalProjection &de
 	auto &decompress_exprs = decompression.expressions;
 	auto &compress_exprs = compression.expressions;
 
+	bool removed_anything = false;
 	decompress_count = 0;
 	compress_count = 0;
 	for (idx_t col_idx = 0; col_idx < compression.expressions.size(); col_idx++) {
@@ -549,9 +554,12 @@ void CompressedMaterialization::RemoveRedundantExpressions(LogicalProjection &de
 		D_ASSERT(compress_expr->type == ExpressionType::BOUND_FUNCTION);
 		decompress_expr = std::move(decompress_fun.children[0]);
 		compress_expr = std::move(compress_fun.children[0]);
+
+		removed_anything = true;
 		decompress_count--;
 		compress_count--;
 	}
+	return removed_anything;
 }
 
 unique_ptr<LogicalOperator> *
@@ -631,6 +639,9 @@ void CompressedMaterialization::RemoveOperator(unique_ptr<LogicalOperator> &op) 
 
 	// Make the plan consistent again
 	replacer.VisitOperator(*root);
+
+	// Resolve types
+	root->ResolveOperatorTypes();
 }
 
 void CompressedMaterialization::UpdateTypesRecursively(const vector<ColumnBinding> &bindings,

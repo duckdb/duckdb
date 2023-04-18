@@ -4,7 +4,8 @@
 namespace duckdb {
 
 static string IntegralCompressFunctionName(const LogicalType &result_type) {
-	return StringUtil::Format("cm_compress_integral_%s", StringUtil::Lower(LogicalTypeIdToString(result_type.id())));
+	return StringUtil::Format("__internal_compress_integral_%s",
+	                          StringUtil::Lower(LogicalTypeIdToString(result_type.id())));
 }
 
 template <class INPUT_TYPE, class RESULT_TYPE>
@@ -77,7 +78,8 @@ static scalar_function_t GetIntegralCompressFunctionInputSwitch(const LogicalTyp
 }
 
 static string IntegralDecompressFunctionName(const LogicalType &result_type) {
-	return StringUtil::Format("cm_decompress_integral_%s", StringUtil::Lower(LogicalTypeIdToString(result_type.id())));
+	return StringUtil::Format("__internal_decompress_integral_%s",
+	                          StringUtil::Lower(LogicalTypeIdToString(result_type.id())));
 }
 
 unique_ptr<FunctionData> IntegralDecompressBind(ClientContext &context, ScalarFunction &bound_function,

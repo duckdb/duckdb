@@ -1,4 +1,5 @@
 #include "duckdb/optimizer/compressed_materialization.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 
@@ -48,7 +49,23 @@ void CompressedMaterialization::CompressAggregate(unique_ptr<LogicalOperator> &o
 
 	// Anything referenced in the aggregate functions is also excluded
 	for (idx_t expr_idx = 0; expr_idx < aggregate.expressions.size(); expr_idx++) {
-		GetReferencedBindings(*aggregate.expressions[expr_idx], referenced_bindings);
+		const auto &expr = *aggregate.expressions[expr_idx];
+		D_ASSERT(expr.type == ExpressionType::BOUND_AGGREGATE);
+		const auto &aggr_expr = expr.Cast<BoundAggregateExpression>();
+		for (const auto &child : aggr_expr.children) {
+			GetReferencedBindings(*child, referenced_bindings);
+		}
+		if (aggr_expr.filter) {
+			GetReferencedBindings(*aggr_expr.filter, referenced_bindings);
+		}
+		if (aggr_expr.order_bys) {
+			for (const auto &order : aggr_expr.order_bys->orders) {
+				const auto &order_expr = *order.expression;
+				if (order_expr.type != ExpressionType::BOUND_COLUMN_REF) {
+					GetReferencedBindings(order_expr, referenced_bindings);
+				}
+			}
+		}
 	}
 
 	// Create info for compression
