@@ -48,8 +48,11 @@ public:
 		return return_type == ((Expression *)other)->return_type;
 	}
 
-	static bool Equals(Expression *left, Expression *right) {
-		return BaseExpression::Equals((BaseExpression *)left, (BaseExpression *)right);
+	static bool Equals(const Expression *left, const Expression *right) {
+		return BaseExpression::Equals((const BaseExpression *)left, (const BaseExpression *)right);
+	}
+	static bool Equals(const Expression &left, const Expression &right) {
+		return left.Equals(&right);
 	}
 	//! Create a copy of this expression
 	virtual unique_ptr<Expression> Copy() = 0;

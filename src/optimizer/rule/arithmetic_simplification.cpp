@@ -14,7 +14,7 @@ ArithmeticSimplificationRule::ArithmeticSimplificationRule(ExpressionRewriter &r
 	op->matchers.push_back(make_uniq<ExpressionMatcher>());
 	op->policy = SetMatcher::Policy::SOME;
 	// we only match on simple arithmetic expressions (+, -, *, /)
-	op->function = make_uniq<ManyFunctionMatcher>(unordered_set<string> {"+", "-", "*", "/"});
+	op->function = make_uniq<ManyFunctionMatcher>(unordered_set<string> {"+", "-", "*", "//"});
 	// and only with numeric results
 	op->type = make_uniq<IntegerTypeMatcher>();
 	op->matchers[0]->type = make_uniq<IntegerTypeMatcher>();
@@ -22,10 +22,10 @@ ArithmeticSimplificationRule::ArithmeticSimplificationRule(ExpressionRewriter &r
 	root = std::move(op);
 }
 
-unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
+unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                            bool &changes_made, bool is_root) {
-	auto &root = bindings[0]->Cast<BoundFunctionExpression>();
-	auto &constant = bindings[1]->Cast<BoundConstantExpression>();
+	auto &root = bindings[0].get().Cast<BoundFunctionExpression>();
+	auto &constant = bindings[1].get().Cast<BoundConstantExpression>();
 	int constant_child = root.children[0].get() == &constant ? 0 : 1;
 	D_ASSERT(root.children.size() == 2);
 	(void)root;
@@ -55,8 +55,7 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 			return ExpressionRewriter::ConstantOrNull(std::move(root.children[1 - constant_child]),
 			                                          Value::Numeric(root.return_type, 0));
 		}
-	} else {
-		D_ASSERT(func_name == "/");
+	} else if (func_name == "//") {
 		if (constant_child == 1) {
 			if (constant.value == 1) {
 				// divide by 1, replace with non-constant child
@@ -66,6 +65,8 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 				return make_uniq<BoundConstantExpression>(Value(root.return_type));
 			}
 		}
+	} else {
+		throw InternalException("Unrecognized function name in ArithmeticSimplificationRule");
 	}
 	return nullptr;
 }

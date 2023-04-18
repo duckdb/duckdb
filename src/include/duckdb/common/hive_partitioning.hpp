@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/types/partitioned_column_data.hpp"
+#include "duckdb/common/types/column/partitioned_column_data.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/optimizer/filter_combiner.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
@@ -16,8 +16,8 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "re2/re2.h"
 
-#include <sstream>
 #include <iostream>
+#include <sstream>
 
 namespace duckdb {
 
@@ -83,7 +83,9 @@ public:
 	HivePartitionedColumnData(ClientContext &context, vector<LogicalType> types, vector<idx_t> partition_by_cols,
 	                          shared_ptr<GlobalHivePartitionState> global_state = nullptr)
 	    : PartitionedColumnData(PartitionedColumnDataType::HIVE, context, std::move(types)),
-	      global_state(std::move(global_state)), group_by_columns(partition_by_cols) {
+	      global_state(std::move(global_state)), group_by_columns(std::move(partition_by_cols)),
+	      hashes_v(LogicalType::HASH) {
+		InitializeKeys();
 	}
 	HivePartitionedColumnData(const HivePartitionedColumnData &other);
 	void ComputePartitionIndices(PartitionedColumnDataAppendState &state, DataChunk &input) override;
@@ -103,12 +105,20 @@ protected:
 	//! Copy the newly added entries in the global_state.map to the local_partition_map (requires lock!)
 	void SynchronizeLocalMap();
 
+private:
+	void InitializeKeys();
+
+protected:
 	//! Shared HivePartitionedColumnData should always have a global state to allow parallel key discovery
 	shared_ptr<GlobalHivePartitionState> global_state;
 	//! Thread-local copy of the partition map
 	hive_partition_map_t local_partition_map;
 	//! The columns that make up the key
 	vector<idx_t> group_by_columns;
+	//! Thread-local pre-allocated vector for hashes
+	Vector hashes_v;
+	//! Thread-local pre-allocated HivePartitionKeys
+	vector<HivePartitionKey> keys;
 };
 
 } // namespace duckdb

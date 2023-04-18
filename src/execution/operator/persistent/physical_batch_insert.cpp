@@ -19,10 +19,10 @@ PhysicalBatchInsert::PhysicalBatchInsert(vector<LogicalType> types, TableCatalog
       bound_defaults(std::move(bound_defaults)) {
 }
 
-PhysicalBatchInsert::PhysicalBatchInsert(LogicalOperator &op, SchemaCatalogEntry *schema,
+PhysicalBatchInsert::PhysicalBatchInsert(LogicalOperator &op, SchemaCatalogEntry &schema,
                                          unique_ptr<BoundCreateTableInfo> info_p, idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::BATCH_CREATE_TABLE_AS, op.types, estimated_cardinality),
-      insert_table(nullptr), schema(schema), info(std::move(info_p)) {
+      insert_table(nullptr), schema(&schema), info(std::move(info_p)) {
 	PhysicalInsert::GetInsertInfo(*info, insert_types, bound_defaults);
 }
 
@@ -100,7 +100,7 @@ public:
 	}
 
 	mutex lock;
-	DuckTableEntry *table;
+	optional_ptr<DuckTableEntry> table;
 	idx_t insert_count;
 	map<idx_t, unique_ptr<RowGroupCollection>> collections;
 
@@ -156,7 +156,8 @@ public:
 	}
 
 	void AddCollection(ClientContext &context, idx_t batch_index, unique_ptr<RowGroupCollection> current_collection,
-	                   OptimisticDataWriter *writer = nullptr, bool *written_to_disk = nullptr) {
+	                   optional_ptr<OptimisticDataWriter> writer = nullptr,
+	                   optional_ptr<bool> written_to_disk = nullptr) {
 		vector<unique_ptr<RowGroupCollection>> merge_collections;
 		idx_t merge_count;
 		{
@@ -240,7 +241,7 @@ public:
 	idx_t current_index;
 	TableAppendState current_append_state;
 	unique_ptr<RowGroupCollection> current_collection;
-	OptimisticDataWriter *writer;
+	optional_ptr<OptimisticDataWriter> writer;
 	bool written_to_disk;
 
 	void FlushToDisk() {
@@ -253,9 +254,9 @@ public:
 		writer->FlushToDisk(*current_collection, true);
 	}
 
-	void CreateNewCollection(DuckTableEntry *table, const vector<LogicalType> &insert_types) {
-		auto &table_info = table->GetStorage().info;
-		auto &block_manager = TableIOManager::Get(table->GetStorage()).GetBlockManagerForRowData();
+	void CreateNewCollection(DuckTableEntry &table, const vector<LogicalType> &insert_types) {
+		auto &table_info = table.GetStorage().info;
+		auto &block_manager = TableIOManager::Get(table.GetStorage()).GetBlockManagerForRowData();
 		current_collection = make_uniq<RowGroupCollection>(table_info, block_manager, insert_types, MAX_ROW_ID);
 		current_collection->InitializeEmpty();
 		current_collection->InitializeAppend(current_append_state);
@@ -269,8 +270,8 @@ unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContex
 		// CREATE TABLE AS
 		D_ASSERT(!insert_table);
 		auto &catalog = *schema->catalog;
-		result->table =
-		    (DuckTableEntry *)catalog.CreateTable(catalog.GetCatalogTransaction(context), schema, info.get());
+		result->table = (DuckTableEntry *)catalog.CreateTable(catalog.GetCatalogTransaction(context),
+		                                                      *schema.get_mutable(), info.get());
 	} else {
 		D_ASSERT(insert_table);
 		D_ASSERT(insert_table->IsDuckTable());
@@ -289,12 +290,12 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkSt
 	auto &lstate = lstate_p.Cast<BatchInsertLocalState>();
 
 	auto table = gstate.table;
-	PhysicalInsert::ResolveDefaults(table, chunk, column_index_map, lstate.default_executor, lstate.insert_chunk);
+	PhysicalInsert::ResolveDefaults(*table, chunk, column_index_map, lstate.default_executor, lstate.insert_chunk);
 
 	if (!lstate.current_collection) {
 		lock_guard<mutex> l(gstate.lock);
 		// no collection yet: create a new one
-		lstate.CreateNewCollection(table, insert_types);
+		lstate.CreateNewCollection(*table, insert_types);
 		lstate.writer = gstate.table->GetStorage().CreateOptimisticWriter(context.client);
 	} else if (lstate.current_index != lstate.batch_index) {
 		// batch index has changed: move the old collection to the global state and create a new collection
@@ -303,7 +304,7 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkSt
 		lstate.FlushToDisk();
 		gstate.AddCollection(context.client, lstate.current_index, std::move(lstate.current_collection), lstate.writer,
 		                     &lstate.written_to_disk);
-		lstate.CreateNewCollection(table, insert_types);
+		lstate.CreateNewCollection(*table, insert_types);
 	}
 	lstate.current_index = lstate.batch_index;
 

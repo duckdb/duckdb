@@ -27,6 +27,20 @@ public:
 	static shared_ptr<DuckDBPyConnection> Execute(const string &query, py::object params = py::list(),
 	                                              bool many = false, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
+	static shared_ptr<DuckDBPyType> ArrayType(const shared_ptr<DuckDBPyType> &type,
+	                                          shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static shared_ptr<DuckDBPyType> MapType(const shared_ptr<DuckDBPyType> &key, const shared_ptr<DuckDBPyType> &value,
+	                                        shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static shared_ptr<DuckDBPyType> StructType(const py::object &fields,
+	                                           const shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static shared_ptr<DuckDBPyType> UnionType(const py::object &members, shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static shared_ptr<DuckDBPyType> EnumType(const string &name, const shared_ptr<DuckDBPyType> &type,
+	                                         const py::list &values_p, shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static shared_ptr<DuckDBPyType> DecimalType(int width, int scale, shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static shared_ptr<DuckDBPyType> StringType(const string &collation = string(),
+	                                           shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static shared_ptr<DuckDBPyType> Type(const string &type_str, shared_ptr<DuckDBPyConnection> conn = nullptr);
+
 	static shared_ptr<DuckDBPyConnection> Append(const string &name, DataFrame value,
 	                                             shared_ptr<DuckDBPyConnection> conn = nullptr);
 
@@ -118,16 +132,16 @@ public:
 	static DataFrame FetchDFChunk(const idx_t vectors_per_chunk = 1, bool date_as_object = false,
 	                              shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static duckdb::pyarrow::Table FetchArrow(idx_t chunk_size, shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static duckdb::pyarrow::Table FetchArrow(idx_t rows_per_batch, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static py::dict FetchPyTorch(shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static py::dict FetchTF(shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(const idx_t chunk_size,
+	static duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(const idx_t rows_per_batch,
 	                                                                 shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static PolarsDataFrame FetchPolars(idx_t chunk_size, shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static PolarsDataFrame FetchPolars(idx_t rows_per_batch, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static void RegisterFilesystem(AbstractFileSystem file_system, shared_ptr<DuckDBPyConnection> conn);
 	static void UnregisterFilesystem(const py::str &name, shared_ptr<DuckDBPyConnection> conn);
