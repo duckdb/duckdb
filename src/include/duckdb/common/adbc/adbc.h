@@ -59,6 +59,10 @@ extern "C" {
 #ifndef ARROW_ADBC
 #define ARROW_ADBC
 
+#ifndef ADBC_EXPORTING
+#define ADBC_EXPORTING
+#endif
+
 // Storage class macros for Windows
 // Allow overriding/aliasing with application-defined macros
 #if !defined(ADBC_EXPORT)
