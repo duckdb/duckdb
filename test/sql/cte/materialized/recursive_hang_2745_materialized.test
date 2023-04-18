@@ -1,6 +1,6 @@
 # name: test/sql/cte/materialized/recursive_hang_2745_materialized.test
 # description: Issue #2745: sql with RECURSIVE keyword but does not RECURSIVE hang
-# group: [cte]
+# group: [materialized]
 
 statement ok
 PRAGMA enable_verification

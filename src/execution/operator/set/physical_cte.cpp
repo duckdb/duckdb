@@ -13,8 +13,9 @@
 namespace duckdb {
 
 PhysicalCTE::PhysicalCTE(string ctename, idx_t table_index, vector<LogicalType> types, unique_ptr<PhysicalOperator> top,
-                                           unique_ptr<PhysicalOperator> bottom, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::CTE, std::move(types), estimated_cardinality), table_index(table_index), ctename(ctename) {
+                         unique_ptr<PhysicalOperator> bottom, idx_t estimated_cardinality)
+    : PhysicalOperator(PhysicalOperatorType::CTE, std::move(types), estimated_cardinality), table_index(table_index),
+      ctename(ctename) {
 	children.push_back(std::move(top));
 	children.push_back(std::move(bottom));
 }
@@ -27,8 +28,8 @@ PhysicalCTE::~PhysicalCTE() {
 //===--------------------------------------------------------------------===//
 
 SinkResultType PhysicalCTE::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-                                          DataChunk &input) const {
-  working_table->Append(input);
+                                 DataChunk &input) const {
+	working_table->Append(input);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -45,11 +46,11 @@ void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
 
 	auto &state = meta_pipeline.GetState();
 
-	for(auto &cte_scan : cte_scans) {
+	for (auto &cte_scan : cte_scans) {
 		state.cte_dependencies[cte_scan] = child_meta_pipeline->GetBasePipeline().get();
 	}
 
-	children[1]->BuildPipelines(current,meta_pipeline);
+	children[1]->BuildPipelines(current, meta_pipeline);
 }
 
 vector<const PhysicalOperator *> PhysicalCTE::GetSources() const {

@@ -1,6 +1,6 @@
 # name: test/sql/cte/materialized/test_outer_joins_recursive_cte_materialized.test
 # description: Test Recursive Common Table Expressions (CTE) with outer joins
-# group: [cte]
+# group: [materialized]
 
 statement ok
 PRAGMA enable_verification

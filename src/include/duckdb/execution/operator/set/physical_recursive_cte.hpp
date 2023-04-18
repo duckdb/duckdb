@@ -20,8 +20,9 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::RECURSIVE_CTE;
 
 public:
-	PhysicalRecursiveCTE(string ctename, idx_t table_index, vector<LogicalType> types, bool union_all, unique_ptr<PhysicalOperator> top,
-	                     unique_ptr<PhysicalOperator> bottom, idx_t estimated_cardinality);
+	PhysicalRecursiveCTE(string ctename, idx_t table_index, vector<LogicalType> types, bool union_all,
+	                     unique_ptr<PhysicalOperator> top, unique_ptr<PhysicalOperator> bottom,
+	                     idx_t estimated_cardinality);
 	~PhysicalRecursiveCTE() override;
 
 	string ctename;

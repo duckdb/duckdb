@@ -1,6 +1,6 @@
-# name: test/sql/cte/materialized/recursive_cte_complex_pipelines_materialized.test
+# name: test/sql/cte/materialized/recursive_cte_complex_pipelines.test
 # description: Recursive CTEs with complex pipelines
-# group: [cte]
+# group: [materialized]
 
 statement ok
 PRAGMA enable_verification

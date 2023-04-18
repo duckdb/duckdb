@@ -21,7 +21,7 @@ public:
 
 public:
 	PhysicalCTE(string ctename, idx_t table_index, vector<LogicalType> types, unique_ptr<PhysicalOperator> top,
-	                     unique_ptr<PhysicalOperator> bottom, idx_t estimated_cardinality);
+	            unique_ptr<PhysicalOperator> bottom, idx_t estimated_cardinality);
 	~PhysicalCTE() override;
 
 	vector<PhysicalOperator *> cte_scans;

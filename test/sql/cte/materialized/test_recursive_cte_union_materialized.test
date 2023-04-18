@@ -1,6 +1,6 @@
 # name: test/sql/cte/materialized/test_recursive_cte_union_materialized.test
 # description: Test Recursive Common Table Expressions UNION (CTE)
-# group: [cte]
+# group: [materialized]
 
 statement ok
 PRAGMA enable_verification

@@ -35,8 +35,9 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause *de_with_clause, 
 	TransformCTEInternal(de_with_clause, cte_map, nullptr);
 }
 
-void Transformer::TransformCTEInternal(duckdb_libpgquery::PGWithClause *de_with_clause, CommonTableExpressionMap &cte_map,
-																vector<unique_ptr<CTENode>> *materialized_ctes) {
+void Transformer::TransformCTEInternal(duckdb_libpgquery::PGWithClause *de_with_clause,
+                                       CommonTableExpressionMap &cte_map,
+                                       vector<unique_ptr<CTENode>> *materialized_ctes) {
 	// TODO: might need to update in case of future lawsuit
 	D_ASSERT(de_with_clause);
 	stored_cte_map.push_back(&cte_map);
@@ -87,7 +88,7 @@ void Transformer::TransformCTEInternal(duckdb_libpgquery::PGWithClause *de_with_
 			throw ParserException("Duplicate CTE name \"%s\"", cte_name);
 		}
 
-		if(materialized_ctes && cte->ctematerialized == duckdb_libpgquery::PGCTEMaterializeAlways) {
+		if (materialized_ctes && cte->ctematerialized == duckdb_libpgquery::PGCTEMaterializeAlways) {
 			auto materialize = make_uniq<CTENode>();
 			materialize->query = info->query->node->Copy();
 			materialize->ctename = cte_name;

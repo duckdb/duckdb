@@ -13,16 +13,14 @@
 namespace duckdb {
 
 class LogicalCTE : public LogicalOperator {
-	LogicalCTE(idx_t table_index)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_CTE), table_index(table_index) {
+	LogicalCTE(idx_t table_index) : LogicalOperator(LogicalOperatorType::LOGICAL_CTE), table_index(table_index) {
 	}
 
 public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_CTE;
 
 public:
-	LogicalCTE(string ctename, idx_t table_index, unique_ptr<LogicalOperator> cte,
-	                    unique_ptr<LogicalOperator> child)
+	LogicalCTE(string ctename, idx_t table_index, unique_ptr<LogicalOperator> cte, unique_ptr<LogicalOperator> child)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_CTE), table_index(table_index), ctename(ctename) {
 		children.push_back(std::move(cte));
 		children.push_back(std::move(child));

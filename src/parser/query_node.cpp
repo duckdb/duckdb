@@ -60,9 +60,9 @@ string CommonTableExpressionMap::ToString() const {
 			}
 			result += ")";
 		}
-		if(kv.second->materialized == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
+		if (kv.second->materialized == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
 			result += " AS MATERIALIZED (";
-		} else if(kv.second->materialized == CTEMaterialize::CTE_MATERIALIZE_NEVER) {
+		} else if (kv.second->materialized == CTEMaterialize::CTE_MATERIALIZE_NEVER) {
 			result += " AS NOT MATERIALIZED (";
 		} else {
 			result += " AS (";

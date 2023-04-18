@@ -1,6 +1,6 @@
 # name: test/sql/cte/materialized/recursive_cte_error_materialized.test
 # description: Recursive CTEs with an error thrown in the pipelines
-# group: [cte]
+# group: [materialized]
 
 statement ok
 PRAGMA enable_verification

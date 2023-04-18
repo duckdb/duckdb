@@ -1,6 +1,6 @@
-# name: test/sql/cte/materialized/game_of_life.test_slow
+# name: test/sql/cte/materialized/game_of_life_materialized.test_slow
 # description: Run conways game of life as a CTE (https://gist.github.com/janickr/58fab629ee3ea7e5638a)
-# group: [cte]
+# group: [materialized]
 
 statement ok
 create table series as select * from generate_series(-1,1) x(n);

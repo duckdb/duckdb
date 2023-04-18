@@ -1,6 +1,6 @@
 # name: test/sql/cte/materialized/recursive_cte_correlated_subquery_materialized.test_slow
 # description: Issue #2713: reports struct_extract error when run a sql
-# group: [cte]
+# group: [materialized]
 
 query I
 WITH RECURSIVE

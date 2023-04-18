@@ -91,14 +91,14 @@ void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &met
 
 string PhysicalColumnDataScan::ParamsToString() const {
 	string result = "";
-	switch(type) {
-		case PhysicalOperatorType::CTE_SCAN:
-		case PhysicalOperatorType::RECURSIVE_CTE_SCAN: {
-			result += "\n[INFOSEPARATOR]\n";
-			result += StringUtil::Format("idx: %llu", cte_index);
-			break;
-		}
-		default:
+	switch (type) {
+	case PhysicalOperatorType::CTE_SCAN:
+	case PhysicalOperatorType::RECURSIVE_CTE_SCAN: {
+		result += "\n[INFOSEPARATOR]\n";
+		result += StringUtil::Format("idx: %llu", cte_index);
+		break;
+	}
+	default:
 		break;
 	}
 

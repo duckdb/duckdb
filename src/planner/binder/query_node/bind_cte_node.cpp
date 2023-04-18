@@ -36,7 +36,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(CTENode &statement) {
 	result->child_binder = Binder::CreateBinder(context, this);
 
 	// Move all modifiers to the child node.
-	for(auto &modifier : statement.modifiers) {
+	for (auto &modifier : statement.modifiers) {
 		statement.child->modifiers.push_back(std::move(modifier));
 	}
 

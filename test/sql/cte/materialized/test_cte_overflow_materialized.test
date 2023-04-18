@@ -1,6 +1,6 @@
 # name: test/sql/cte/materialized/test_cte_overflow_materialized.test
 # description: Ensure no stack overflow for CTE names that match existing tables
-# group: [cte]
+# group: [materialized]
 
 statement ok
 create table a (id integer)

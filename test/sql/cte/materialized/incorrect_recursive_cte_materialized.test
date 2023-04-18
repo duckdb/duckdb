@@ -1,6 +1,6 @@
 # name: test/sql/cte/materialized/incorrect_recursive_cte_materialized.test
 # description: Incorrect recursive ctes
-# group: [cte]
+# group: [materialized]
 
 # recursive CTE without UNION is just a normal CTE
 query I

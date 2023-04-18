@@ -1,6 +1,6 @@
 # name: test/sql/cte/materialized/test_recursive_cte_tutorial_materialized.test
 # description: Test Recursive CTEs from the CyberTec tutorial: https://www.cybertec-postgresql.com/en/recursive-queries-postgresql/
-# group: [cte]
+# group: [materialized]
 
 statement ok
 PRAGMA enable_verification

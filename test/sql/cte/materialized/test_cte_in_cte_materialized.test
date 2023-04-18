@@ -1,6 +1,6 @@
 # name: test/sql/cte/materialized/test_cte_in_cte_materialized.test
 # description: Test Nested Common Table Expressions (CTE)
-# group: [cte]
+# group: [materialized]
 
 statement ok
 PRAGMA enable_verification

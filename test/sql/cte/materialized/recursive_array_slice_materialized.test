@@ -1,6 +1,6 @@
 # name: test/sql/cte/materialized/recursive_array_slice_materialized.test
 # description: Issue #3005: array_slice prevents row values to be used more than once
-# group: [cte]
+# group: [materialized]
 
 statement ok
 PRAGMA enable_verification

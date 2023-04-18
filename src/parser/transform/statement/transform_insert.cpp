@@ -29,8 +29,9 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGNo
 	auto result = make_uniq<InsertStatement>();
 	vector<unique_ptr<CTENode>> materialized_ctes;
 	if (stmt->withClause) {
-		TransformCTEInternal(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), result->cte_map, &materialized_ctes);
-		if(materialized_ctes.size() != 0) {
+		TransformCTEInternal(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), result->cte_map,
+		                     &materialized_ctes);
+		if (materialized_ctes.size() != 0) {
 			throw NotImplementedException("Materialized CTEs are not implemented for insert.");
 		}
 	}
