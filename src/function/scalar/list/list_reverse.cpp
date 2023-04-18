@@ -90,7 +90,7 @@ static unique_ptr<FunctionData> ListReverseBind(ClientContext &context, ScalarFu
 		bound_function.arguments[0] = list_type;
 		bound_function.return_type = list_type;
 	}
-	return make_unique<VariableReturnBindData>(bound_function.return_type);
+	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
 static unique_ptr<BaseStatistics> ListReverseStats(ClientContext &context, FunctionStatisticsInput &input) {
