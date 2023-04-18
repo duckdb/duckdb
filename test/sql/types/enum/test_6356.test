@@ -5,6 +5,7 @@
 statement ok
 PRAGMA enable_verification
 
+
 statement ok
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
 
@@ -64,3 +65,8 @@ woof
 NULL
 quack
 moo
+
+query II
+select * from a where b in ('sad','woof', NULL)
+----
+moo	sad
