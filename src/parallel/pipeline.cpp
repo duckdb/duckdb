@@ -81,8 +81,9 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 	if (!source->ParallelSource()) {
 		return false;
 	}
-	for (auto &op : operators) {
-		if (!op->ParallelOperator()) {
+	for (auto &op_ref : operators) {
+		auto &op = op_ref.get();
+		if (!op.ParallelOperator()) {
 			return false;
 		}
 	}
@@ -107,11 +108,12 @@ bool Pipeline::IsOrderDependent() const {
 			return false;
 		}
 	}
-	for (auto &op : operators) {
-		if (op->OperatorOrder() == OrderPreservationType::NO_ORDER) {
+	for (auto &op_ref : operators) {
+		auto &op = op_ref.get();
+		if (op.OperatorOrder() == OrderPreservationType::NO_ORDER) {
 			return false;
 		}
-		if (op->OperatorOrder() == OrderPreservationType::FIXED_ORDER) {
+		if (op.OperatorOrder() == OrderPreservationType::FIXED_ORDER) {
 			return true;
 		}
 	}
@@ -169,12 +171,11 @@ void Pipeline::ResetSink() {
 
 void Pipeline::Reset() {
 	ResetSink();
-	for (auto &op : operators) {
-		if (op) {
-			lock_guard<mutex> guard(op->lock);
-			if (!op->op_state) {
-				op->op_state = op->GetGlobalOperatorState(GetClientContext());
-			}
+	for (auto &op_ref : operators) {
+		auto &op = op_ref.get();
+		lock_guard<mutex> guard(op.lock);
+		if (!op.op_state) {
+			op.op_state = op.GetGlobalOperatorState(GetClientContext());
 		}
 	}
 	ResetSource(false);
@@ -238,13 +239,28 @@ void Pipeline::PrintDependencies() const {
 	}
 }
 
-vector<PhysicalOperator *> Pipeline::GetOperators() const {
-	vector<PhysicalOperator *> result;
+vector<reference<PhysicalOperator>> Pipeline::GetOperators() {
+	vector<reference<PhysicalOperator>> result;
 	D_ASSERT(source);
-	result.push_back(source);
-	result.insert(result.end(), operators.begin(), operators.end());
+	result.push_back(*source);
+	for (auto &op : operators) {
+		result.push_back(op.get());
+	}
 	if (sink) {
-		result.push_back(sink);
+		result.push_back(*sink);
+	}
+	return result;
+}
+
+vector<const_reference<PhysicalOperator>> Pipeline::GetOperators() const {
+	vector<const_reference<PhysicalOperator>> result;
+	D_ASSERT(source);
+	result.push_back(*source);
+	for (auto &op : operators) {
+		result.push_back(op.get());
+	}
+	if (sink) {
+		result.push_back(*sink);
 	}
 	return result;
 }
@@ -252,38 +268,39 @@ vector<PhysicalOperator *> Pipeline::GetOperators() const {
 //===--------------------------------------------------------------------===//
 // Pipeline Build State
 //===--------------------------------------------------------------------===//
-void PipelineBuildState::SetPipelineSource(Pipeline &pipeline, PhysicalOperator *op) {
-	pipeline.source = op;
+void PipelineBuildState::SetPipelineSource(Pipeline &pipeline, PhysicalOperator &op) {
+	pipeline.source = &op;
 }
 
-void PipelineBuildState::SetPipelineSink(Pipeline &pipeline, PhysicalOperator *op, idx_t sink_pipeline_count) {
+void PipelineBuildState::SetPipelineSink(Pipeline &pipeline, optional_ptr<PhysicalOperator> op,
+                                         idx_t sink_pipeline_count) {
 	pipeline.sink = op;
 	// set the base batch index of this pipeline based on how many other pipelines have this node as their sink
 	pipeline.base_batch_index = BATCH_INCREMENT * sink_pipeline_count;
 }
 
-void PipelineBuildState::AddPipelineOperator(Pipeline &pipeline, PhysicalOperator *op) {
+void PipelineBuildState::AddPipelineOperator(Pipeline &pipeline, PhysicalOperator &op) {
 	pipeline.operators.push_back(op);
 }
 
-PhysicalOperator *PipelineBuildState::GetPipelineSource(Pipeline &pipeline) {
+optional_ptr<PhysicalOperator> PipelineBuildState::GetPipelineSource(Pipeline &pipeline) {
 	return pipeline.source;
 }
 
-PhysicalOperator *PipelineBuildState::GetPipelineSink(Pipeline &pipeline) {
+optional_ptr<PhysicalOperator> PipelineBuildState::GetPipelineSink(Pipeline &pipeline) {
 	return pipeline.sink;
 }
 
-void PipelineBuildState::SetPipelineOperators(Pipeline &pipeline, vector<PhysicalOperator *> operators) {
+void PipelineBuildState::SetPipelineOperators(Pipeline &pipeline, vector<reference<PhysicalOperator>> operators) {
 	pipeline.operators = std::move(operators);
 }
 
 shared_ptr<Pipeline> PipelineBuildState::CreateChildPipeline(Executor &executor, Pipeline &pipeline,
-                                                             PhysicalOperator *op) {
-	return executor.CreateChildPipeline(&pipeline, op);
+                                                             PhysicalOperator &op) {
+	return executor.CreateChildPipeline(pipeline, op);
 }
 
-vector<PhysicalOperator *> PipelineBuildState::GetPipelineOperators(Pipeline &pipeline) {
+vector<reference<PhysicalOperator>> PipelineBuildState::GetPipelineOperators(Pipeline &pipeline) {
 	return pipeline.operators;
 }
 

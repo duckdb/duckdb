@@ -30,7 +30,7 @@ public:
 	virtual ~OperatorState() {
 	}
 
-	virtual void Finalize(PhysicalOperator *op, ExecutionContext &context) {
+	virtual void Finalize(const PhysicalOperator &op, ExecutionContext &context) {
 	}
 
 	template <class TARGET>

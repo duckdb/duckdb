@@ -42,7 +42,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBDatabasesInit(ClientContext &context,
 }
 
 void DuckDBDatabasesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (DuckDBDatabasesData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<DuckDBDatabasesData>();
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;

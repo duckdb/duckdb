@@ -62,7 +62,7 @@ public:
 	}
 	virtual string ToString() const;
 	void Print() const;
-	virtual vector<PhysicalOperator *> GetChildren() const;
+	virtual vector<const_reference<PhysicalOperator>> GetChildren() const;
 
 	//! Return a vector of the types that will be returned by this operator
 	const vector<LogicalType> &GetTypes() const {
@@ -170,7 +170,7 @@ public:
 
 public:
 	// Pipeline construction
-	virtual vector<const PhysicalOperator *> GetSources() const;
+	virtual vector<const_reference<PhysicalOperator>> GetSources() const;
 	bool AllSourcesSupportBatchIndex() const;
 
 	virtual void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline);
@@ -199,7 +199,7 @@ public:
 	~CachingOperatorState() override {
 	}
 
-	virtual void Finalize(PhysicalOperator *op, ExecutionContext &context) override {
+	virtual void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
 	}
 
 	unique_ptr<DataChunk> cached_chunk;

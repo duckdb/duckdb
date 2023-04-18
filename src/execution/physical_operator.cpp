@@ -28,10 +28,10 @@ void PhysicalOperator::Print() const {
 }
 // LCOV_EXCL_STOP
 
-vector<PhysicalOperator *> PhysicalOperator::GetChildren() const {
-	vector<PhysicalOperator *> result;
+vector<const_reference<PhysicalOperator>> PhysicalOperator::GetChildren() const {
+	vector<const_reference<PhysicalOperator>> result;
 	for (auto &child : children) {
-		result.push_back(child.get());
+		result.push_back(*child);
 	}
 	return result;
 }
@@ -134,36 +134,36 @@ void PhysicalOperator::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipe
 		D_ASSERT(children.size() == 1);
 
 		// single operator: the operator becomes the data source of the current pipeline
-		state.SetPipelineSource(current, this);
+		state.SetPipelineSource(current, *this);
 
 		// we create a new pipeline starting from the child
-		auto child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, this);
-		child_meta_pipeline->Build(*children[0]);
+		auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
+		child_meta_pipeline.Build(*children[0]);
 	} else {
 		// operator is not a sink! recurse in children
 		if (children.empty()) {
 			// source
-			state.SetPipelineSource(current, this);
+			state.SetPipelineSource(current, *this);
 		} else {
 			if (children.size() != 1) {
 				throw InternalException("Operator not supported in BuildPipelines");
 			}
-			state.AddPipelineOperator(current, this);
+			state.AddPipelineOperator(current, *this);
 			children[0]->BuildPipelines(current, meta_pipeline);
 		}
 	}
 }
 
-vector<const PhysicalOperator *> PhysicalOperator::GetSources() const {
-	vector<const PhysicalOperator *> result;
+vector<const_reference<PhysicalOperator>> PhysicalOperator::GetSources() const {
+	vector<const_reference<PhysicalOperator>> result;
 	if (IsSink()) {
 		D_ASSERT(children.size() == 1);
-		result.push_back(this);
+		result.push_back(*this);
 		return result;
 	} else {
 		if (children.empty()) {
 			// source
-			result.push_back(this);
+			result.push_back(*this);
 			return result;
 		} else {
 			if (children.size() != 1) {
@@ -177,7 +177,7 @@ vector<const PhysicalOperator *> PhysicalOperator::GetSources() const {
 bool PhysicalOperator::AllSourcesSupportBatchIndex() const {
 	auto sources = GetSources();
 	for (auto &source : sources) {
-		if (!source->SupportsBatchIndex()) {
+		if (!source.get().SupportsBatchIndex()) {
 			return false;
 		}
 	}

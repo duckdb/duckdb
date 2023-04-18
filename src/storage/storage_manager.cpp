@@ -143,7 +143,7 @@ void SingleFileStorageManager::LoadDatabase() {
 class SingleFileStorageCommitState : public StorageCommitState {
 	idx_t initial_wal_size = 0;
 	idx_t initial_written = 0;
-	WriteAheadLog *log;
+	optional_ptr<WriteAheadLog> log;
 	bool checkpoint;
 
 public:

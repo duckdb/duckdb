@@ -55,8 +55,8 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 	meta_pipeline.AssignNextBatchIndex(union_pipeline);
 }
 
-vector<const PhysicalOperator *> PhysicalUnion::GetSources() const {
-	vector<const PhysicalOperator *> result;
+vector<const_reference<PhysicalOperator>> PhysicalUnion::GetSources() const {
+	vector<const_reference<PhysicalOperator>> result;
 	for (auto &child : children) {
 		auto child_sources = child->GetSources();
 		result.insert(result.end(), child_sources.begin(), child_sources.end());

@@ -150,7 +150,7 @@ void PhysicalIEJoin::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 	gstate.tables[gstate.child]->Combine(lstate.table);
 	auto &client_profiler = QueryProfiler::Get(context.client);
 
-	context.thread.profiler.Flush(this, &lstate.table.executor, gstate.child ? "rhs_executor" : "lhs_executor", 1);
+	context.thread.profiler.Flush(*this, lstate.table.executor, gstate.child ? "rhs_executor" : "lhs_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
 }
 
@@ -1011,24 +1011,24 @@ void PhysicalIEJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeli
 	}
 
 	// becomes a source after both children fully sink their data
-	meta_pipeline.GetState().SetPipelineSource(current, this);
+	meta_pipeline.GetState().SetPipelineSource(current, *this);
 
 	// Create one child meta pipeline that will hold the LHS and RHS pipelines
-	auto child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, this);
-	auto lhs_pipeline = child_meta_pipeline->GetBasePipeline();
-	auto rhs_pipeline = child_meta_pipeline->CreatePipeline();
+	auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
+	auto lhs_pipeline = child_meta_pipeline.GetBasePipeline();
+	auto rhs_pipeline = child_meta_pipeline.CreatePipeline();
 
 	// Build out LHS
-	children[0]->BuildPipelines(*lhs_pipeline, *child_meta_pipeline);
+	children[0]->BuildPipelines(*lhs_pipeline, child_meta_pipeline);
 
 	// RHS depends on everything in LHS
-	child_meta_pipeline->AddDependenciesFrom(rhs_pipeline, lhs_pipeline.get(), true);
+	child_meta_pipeline.AddDependenciesFrom(rhs_pipeline, lhs_pipeline.get(), true);
 
 	// Build out RHS
-	children[1]->BuildPipelines(*rhs_pipeline, *child_meta_pipeline);
+	children[1]->BuildPipelines(*rhs_pipeline, child_meta_pipeline);
 
 	// Despite having the same sink, RHS needs its own PipelineFinishEvent
-	child_meta_pipeline->AddFinishEvent(rhs_pipeline);
+	child_meta_pipeline.AddFinishEvent(rhs_pipeline);
 }
 
 } // namespace duckdb

@@ -1,9 +1,10 @@
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/planner/expression_binder/column_alias_binder.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 
 namespace duckdb {
 
-WhereBinder::WhereBinder(Binder &binder, ClientContext &context, ColumnAliasBinder *column_alias_binder)
+WhereBinder::WhereBinder(Binder &binder, ClientContext &context, optional_ptr<ColumnAliasBinder> column_alias_binder)
     : ExpressionBinder(binder, context), column_alias_binder(column_alias_binder) {
 	target_type = LogicalType(LogicalTypeId::BOOLEAN);
 }

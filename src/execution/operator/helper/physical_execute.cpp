@@ -8,8 +8,8 @@ PhysicalExecute::PhysicalExecute(PhysicalOperator &plan)
     : PhysicalOperator(PhysicalOperatorType::EXECUTE, plan.types, -1), plan(plan) {
 }
 
-vector<PhysicalOperator *> PhysicalExecute::GetChildren() const {
-	return {&plan};
+vector<const_reference<PhysicalOperator>> PhysicalExecute::GetChildren() const {
+	return {plan};
 }
 
 void PhysicalExecute::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {

@@ -144,7 +144,7 @@ unique_ptr<LocalSinkState> PhysicalUpdate::GetLocalSinkState(ExecutionContext &c
 void PhysicalUpdate::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {
 	auto &state = lstate.Cast<UpdateLocalState>();
 	auto &client_profiler = QueryProfiler::Get(context.client);
-	context.thread.profiler.Flush(this, &state.default_executor, "default_executor", 1);
+	context.thread.profiler.Flush(*this, state.default_executor, "default_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
 }
 

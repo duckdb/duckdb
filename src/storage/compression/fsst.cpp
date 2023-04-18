@@ -199,10 +199,8 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 
 class FSSTCompressionState : public CompressionState {
 public:
-	explicit FSSTCompressionState(ColumnDataCheckpointer &checkpointer) : checkpointer(checkpointer) {
-		auto &db = checkpointer.GetDatabase();
-		auto &config = DBConfig::GetConfig(db);
-		function = config.GetCompressionFunction(CompressionType::COMPRESSION_FSST, PhysicalType::VARCHAR);
+	explicit FSSTCompressionState(ColumnDataCheckpointer &checkpointer)
+	    : checkpointer(checkpointer), function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_FSST)) {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
 	}
 
@@ -372,7 +370,7 @@ public:
 	}
 
 	ColumnDataCheckpointer &checkpointer;
-	CompressionFunction *function;
+	CompressionFunction &function;
 
 	// State regarding current segment
 	unique_ptr<ColumnSegment> current_segment;

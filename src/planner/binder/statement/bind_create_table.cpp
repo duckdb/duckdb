@@ -253,8 +253,7 @@ static void ExtractDependencies(BoundCreateTableInfo &info) {
 }
 unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema) {
 	auto &base = (CreateTableInfo &)*info;
-	auto result = make_uniq<BoundCreateTableInfo>(std::move(info));
-	result->schema = &schema;
+	auto result = make_uniq<BoundCreateTableInfo>(schema, std::move(info));
 	if (base.query) {
 		// construct the result object
 		auto query_obj = Bind(*base.query);
@@ -292,7 +291,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		if (column.Type().id() == LogicalTypeId::VARCHAR) {
 			ExpressionBinder::TestCollation(context, StringType::GetCollation(column.Type()));
 		}
-		BindLogicalType(context, column.TypeMutable(), result->schema->catalog);
+		BindLogicalType(context, column.TypeMutable(), result->schema.catalog);
 		// We add a catalog dependency
 		auto type_dependency = LogicalType::GetCatalog(column.Type());
 		if (type_dependency) {
@@ -311,12 +310,11 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	return BindCreateTableInfo(std::move(info), schema);
 }
 
-vector<unique_ptr<Expression>> Binder::BindCreateIndexExpressions(TableCatalogEntry *table, CreateIndexInfo *info) {
-
-	auto index_binder = IndexBinder(*this, this->context, table, info);
+vector<unique_ptr<Expression>> Binder::BindCreateIndexExpressions(TableCatalogEntry &table, CreateIndexInfo &info) {
+	auto index_binder = IndexBinder(*this, this->context, &table, &info);
 	vector<unique_ptr<Expression>> expressions;
-	expressions.reserve(info->expressions.size());
-	for (auto &expr : info->expressions) {
+	expressions.reserve(info.expressions.size());
+	for (auto &expr : info.expressions) {
 		expressions.push_back(index_binder.Bind(expr));
 	}
 

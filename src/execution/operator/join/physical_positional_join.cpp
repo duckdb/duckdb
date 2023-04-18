@@ -183,10 +183,10 @@ void PhysicalPositionalJoin::BuildPipelines(Pipeline &current, MetaPipeline &met
 	PhysicalJoin::BuildJoinPipelines(current, meta_pipeline, *this);
 }
 
-vector<const PhysicalOperator *> PhysicalPositionalJoin::GetSources() const {
+vector<const_reference<PhysicalOperator>> PhysicalPositionalJoin::GetSources() const {
 	auto result = children[0]->GetSources();
 	if (IsSource()) {
-		result.push_back(this);
+		result.push_back(*this);
 	}
 	return result;
 }

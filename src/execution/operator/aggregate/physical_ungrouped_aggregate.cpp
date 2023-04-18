@@ -342,7 +342,7 @@ void PhysicalUngroupedAggregate::Combine(ExecutionContext &context, GlobalSinkSt
 	}
 
 	auto &client_profiler = QueryProfiler::Get(context.client);
-	context.thread.profiler.Flush(this, &source.child_executor, "child_executor", 0);
+	context.thread.profiler.Flush(*this, source.child_executor, "child_executor", 0);
 	client_profiler.Flush(context.thread.profiler);
 }
 

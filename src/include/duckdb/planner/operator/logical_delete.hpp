@@ -18,9 +18,9 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_DELETE;
 
 public:
-	explicit LogicalDelete(TableCatalogEntry *table, idx_t table_index);
+	explicit LogicalDelete(TableCatalogEntry &table, idx_t table_index);
 
-	TableCatalogEntry *table;
+	TableCatalogEntry &table;
 	idx_t table_index;
 	bool return_chunk;
 

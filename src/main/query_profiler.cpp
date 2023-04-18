@@ -208,7 +208,7 @@ void QueryProfiler::EndPhase() {
 	}
 }
 
-void QueryProfiler::Initialize(PhysicalOperator *root_op) {
+void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
 	if (!IsEnabled() || !running) {
 		return;
 	}
@@ -227,7 +227,7 @@ void QueryProfiler::Initialize(PhysicalOperator *root_op) {
 OperatorProfiler::OperatorProfiler(bool enabled_p) : enabled(enabled_p), active_operator(nullptr) {
 }
 
-void OperatorProfiler::StartOperator(const PhysicalOperator *phys_op) {
+void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_op) {
 	if (!enabled) {
 		return;
 	}
@@ -242,7 +242,7 @@ void OperatorProfiler::StartOperator(const PhysicalOperator *phys_op) {
 	op.Start();
 }
 
-void OperatorProfiler::EndOperator(DataChunk *chunk) {
+void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 	if (!enabled) {
 		return;
 	}
@@ -254,11 +254,11 @@ void OperatorProfiler::EndOperator(DataChunk *chunk) {
 	// finish timing for the current element
 	op.End();
 
-	AddTiming(active_operator, op.Elapsed(), chunk ? chunk->size() : 0);
+	AddTiming(*active_operator, op.Elapsed(), chunk ? chunk->size() : 0);
 	active_operator = nullptr;
 }
 
-void OperatorProfiler::AddTiming(const PhysicalOperator *op, double time, idx_t elements) {
+void OperatorProfiler::AddTiming(const PhysicalOperator &op, double time, idx_t elements) {
 	if (!enabled) {
 		return;
 	}
@@ -275,7 +275,7 @@ void OperatorProfiler::AddTiming(const PhysicalOperator *op, double time, idx_t 
 		entry->second.elements += elements;
 	}
 }
-void OperatorProfiler::Flush(const PhysicalOperator *phys_op, ExpressionExecutor *expression_executor,
+void OperatorProfiler::Flush(const PhysicalOperator &phys_op, ExpressionExecutor &expression_executor,
                              const string &name, int id) {
 	auto entry = timings.find(phys_op);
 	if (entry == timings.end()) {
@@ -285,8 +285,8 @@ void OperatorProfiler::Flush(const PhysicalOperator *phys_op, ExpressionExecutor
 	if (int(operator_timing.executors_info.size()) <= id) {
 		operator_timing.executors_info.resize(id + 1);
 	}
-	operator_timing.executors_info[id] = make_uniq<ExpressionExecutorInfo>(*expression_executor, name, id);
-	operator_timing.name = phys_op->GetName();
+	operator_timing.executors_info[id] = make_uniq<ExpressionExecutorInfo>(expression_executor, name, id);
+	operator_timing.name = phys_op.GetName();
 }
 
 void QueryProfiler::Flush(OperatorProfiler &profiler) {
@@ -295,11 +295,13 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 		return;
 	}
 	for (auto &node : profiler.timings) {
-		auto entry = tree_map.find(node.first);
+		auto &op = node.first.get();
+		auto entry = tree_map.find(op);
 		D_ASSERT(entry != tree_map.end());
+		auto &tree_node = entry->second.get();
 
-		entry->second->info.time += node.second.time;
-		entry->second->info.elements += node.second.elements;
+		tree_node.info.time += node.second.time;
+		tree_node.info.elements += node.second.elements;
 		if (!IsDetailedEnabled()) {
 			continue;
 		}
@@ -308,10 +310,10 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 				continue;
 			}
 			auto info_id = info->id;
-			if (int(entry->second->info.executors_info.size()) <= info_id) {
-				entry->second->info.executors_info.resize(info_id + 1);
+			if (int32_t(tree_node.info.executors_info.size()) <= info_id) {
+				tree_node.info.executors_info.resize(info_id + 1);
 			}
-			entry->second->info.executors_info[info_id] = std::move(info);
+			tree_node.info.executors_info[info_id] = std::move(info);
 		}
 	}
 	profiler.timings.clear();
@@ -610,19 +612,19 @@ void QueryProfiler::WriteToFile(const char *path, string &info) const {
 	}
 }
 
-unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(PhysicalOperator *root, idx_t depth) {
-	if (OperatorRequiresProfiling(root->type)) {
+unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(const PhysicalOperator &root, idx_t depth) {
+	if (OperatorRequiresProfiling(root.type)) {
 		this->query_requires_profiling = true;
 	}
 	auto node = make_uniq<QueryProfiler::TreeNode>();
-	node->type = root->type;
-	node->name = root->GetName();
-	node->extra_info = root->ParamsToString();
+	node->type = root.type;
+	node->name = root.GetName();
+	node->extra_info = root.ParamsToString();
 	node->depth = depth;
-	tree_map[root] = node.get();
-	auto children = root->GetChildren();
+	tree_map.insert(make_pair(reference<const PhysicalOperator>(root), reference<QueryProfiler::TreeNode>(*node)));
+	auto children = root.GetChildren();
 	for (auto &child : children) {
-		auto child_node = CreateTree(child, depth + 1);
+		auto child_node = CreateTree(child.get(), depth + 1);
 		node->children.push_back(std::move(child_node));
 	}
 	return node;

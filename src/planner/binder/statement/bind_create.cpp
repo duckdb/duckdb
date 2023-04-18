@@ -509,9 +509,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			throw BinderException("Can only create an index over a base table!");
 		}
 		auto &table_binding = bound_table->Cast<BoundBaseTableRef>();
-		;
-		auto table = table_binding.table;
-		if (table->temporary) {
+		auto &table = table_binding.table;
+		if (table.temporary) {
 			stmt.info->temporary = true;
 		}
 		// create a plan over the bound table
@@ -520,13 +519,13 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			throw BinderException("Cannot create index on a view!");
 		}
 
-		result.plan = table->catalog->BindCreateIndex(*this, stmt, *table, std::move(plan));
+		result.plan = table.catalog->BindCreateIndex(*this, stmt, table, std::move(plan));
 		break;
 	}
 	case CatalogType::TABLE_ENTRY: {
 		auto &create_info = (CreateTableInfo &)*stmt.info;
 		// If there is a foreign key constraint, resolve primary key column's index from primary key column's name
-		unordered_set<SchemaCatalogEntry *> fk_schemas;
+		reference_set_t<SchemaCatalogEntry> fk_schemas;
 		for (idx_t i = 0; i < create_info.constraints.size(); i++) {
 			auto &cond = create_info.constraints[i];
 			if (cond->type != ConstraintType::FOREIGN_KEY) {
@@ -549,7 +548,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				// have to resolve referenced table
 				auto pk_table_entry_ptr =
 				    Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, fk.info.schema, fk.info.table);
-				fk_schemas.insert(pk_table_entry_ptr->schema);
+				fk_schemas.insert(*pk_table_entry_ptr->schema);
 				FindMatchingPrimaryKeyColumns(pk_table_entry_ptr->GetColumns(), pk_table_entry_ptr->GetConstraints(),
 				                              fk);
 				FindForeignKeyIndexes(pk_table_entry_ptr->GetColumns(), fk.pk_columns, fk.info.pk_keys);
@@ -574,7 +573,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto bound_info = BindCreateTableInfo(std::move(stmt.info));
 		auto root = std::move(bound_info->query);
 		for (auto &fk_schema : fk_schemas) {
-			if (fk_schema != bound_info->schema) {
+			if (&fk_schema.get() != &bound_info->schema) {
 				throw BinderException("Creating foreign keys across different schemas or catalogs is not supported");
 			}
 		}

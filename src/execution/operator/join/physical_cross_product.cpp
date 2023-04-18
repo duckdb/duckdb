@@ -140,7 +140,7 @@ void PhysicalCrossProduct::BuildPipelines(Pipeline &current, MetaPipeline &meta_
 	PhysicalJoin::BuildJoinPipelines(current, meta_pipeline, *this);
 }
 
-vector<const PhysicalOperator *> PhysicalCrossProduct::GetSources() const {
+vector<const_reference<PhysicalOperator>> PhysicalCrossProduct::GetSources() const {
 	return children[0]->GetSources();
 }
 

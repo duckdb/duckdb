@@ -9,10 +9,10 @@
 #pragma once
 
 #include "duckdb/common/atomic.hpp"
-#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/common/reference_map.hpp"
 
 namespace duckdb {
 
@@ -27,18 +27,18 @@ public:
 
 public:
 	//! Duplicate eliminated join scan dependencies
-	unordered_map<PhysicalOperator *, Pipeline *> delim_join_dependencies;
+	reference_map_t<const PhysicalOperator, reference<Pipeline>> delim_join_dependencies;
 
 public:
-	void SetPipelineSource(Pipeline &pipeline, PhysicalOperator *op);
-	void SetPipelineSink(Pipeline &pipeline, PhysicalOperator *op, idx_t sink_pipeline_count);
-	void SetPipelineOperators(Pipeline &pipeline, vector<PhysicalOperator *> operators);
-	void AddPipelineOperator(Pipeline &pipeline, PhysicalOperator *op);
-	shared_ptr<Pipeline> CreateChildPipeline(Executor &executor, Pipeline &pipeline, PhysicalOperator *op);
+	void SetPipelineSource(Pipeline &pipeline, PhysicalOperator &op);
+	void SetPipelineSink(Pipeline &pipeline, optional_ptr<PhysicalOperator> op, idx_t sink_pipeline_count);
+	void SetPipelineOperators(Pipeline &pipeline, vector<reference<PhysicalOperator>> operators);
+	void AddPipelineOperator(Pipeline &pipeline, PhysicalOperator &op);
+	shared_ptr<Pipeline> CreateChildPipeline(Executor &executor, Pipeline &pipeline, PhysicalOperator &op);
 
-	PhysicalOperator *GetPipelineSource(Pipeline &pipeline);
-	PhysicalOperator *GetPipelineSink(Pipeline &pipeline);
-	vector<PhysicalOperator *> GetPipelineOperators(Pipeline &pipeline);
+	optional_ptr<PhysicalOperator> GetPipelineSource(Pipeline &pipeline);
+	optional_ptr<PhysicalOperator> GetPipelineSink(Pipeline &pipeline);
+	vector<reference<PhysicalOperator>> GetPipelineOperators(Pipeline &pipeline);
 };
 
 //! The Pipeline class represents an execution pipeline starting at a
@@ -80,13 +80,14 @@ public:
 	bool GetProgress(double &current_percentage, idx_t &estimated_cardinality);
 
 	//! Returns a list of all operators (including source and sink) involved in this pipeline
-	vector<PhysicalOperator *> GetOperators() const;
+	vector<reference<PhysicalOperator>> GetOperators();
+	vector<const_reference<PhysicalOperator>> GetOperators() const;
 
-	PhysicalOperator *GetSink() {
+	optional_ptr<PhysicalOperator> GetSink() {
 		return sink;
 	}
 
-	PhysicalOperator *GetSource() {
+	optional_ptr<PhysicalOperator> GetSource() {
 		return source;
 	}
 
@@ -99,11 +100,11 @@ private:
 	//! Whether or not the pipeline has been initialized
 	atomic<bool> initialized;
 	//! The source of this pipeline
-	PhysicalOperator *source = nullptr;
+	optional_ptr<PhysicalOperator> source;
 	//! The chain of intermediate operators
-	vector<PhysicalOperator *> operators;
+	vector<reference<PhysicalOperator>> operators;
 	//! The sink (i.e. destination) for data; this is e.g. a hash table to-be-built
-	PhysicalOperator *sink = nullptr;
+	optional_ptr<PhysicalOperator> sink;
 
 	//! The global source state
 	unique_ptr<GlobalSourceState> source_state;

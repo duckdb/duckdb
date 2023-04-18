@@ -22,14 +22,14 @@ public:
 
 public:
 	PhysicalDelimJoin(vector<LogicalType> types, unique_ptr<PhysicalOperator> original_join,
-	                  vector<PhysicalOperator *> delim_scans, idx_t estimated_cardinality);
+	                  vector<const_reference<PhysicalOperator>> delim_scans, idx_t estimated_cardinality);
 
 	unique_ptr<PhysicalOperator> join;
 	unique_ptr<PhysicalHashAggregate> distinct;
-	vector<PhysicalOperator *> delim_scans;
+	vector<const_reference<PhysicalOperator>> delim_scans;
 
 public:
-	vector<PhysicalOperator *> GetChildren() const override;
+	vector<const_reference<PhysicalOperator>> GetChildren() const override;
 
 public:
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
