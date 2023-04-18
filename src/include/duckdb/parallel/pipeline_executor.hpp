@@ -97,6 +97,16 @@ private:
 	//! how to deschedule it.
 	InterruptState interrupt_state;
 
+	//! This flag is set when the pipeline gets interrupted by the Sink. It means that before continuing the pipeline
+	//! we need to resink the last chunk
+	bool remaining_sink_chunk = false;
+
+	//! Flushing state
+	bool started_flushing = false;
+	bool done_flushing = false;
+
+	idx_t flushing_idx;
+
 private:
 	void StartOperator(PhysicalOperator *op);
 	void EndOperator(PhysicalOperator *op, DataChunk *chunk);
@@ -115,7 +125,9 @@ private:
 
 	//! FlushCachedOperators methods push/pull any remaining cached results through the pipeline
 	void FlushCachingOperatorsPull(DataChunk &result);
-	void FlushCachingOperatorsPush();
+
+	//! Flushes a single chunk through the pipeline. May need to be called multiple times to flush all caching operators
+	OperatorResultType FlushCachingOperatorsPush();
 
 	static bool CanCacheType(const LogicalType &type);
 	void CacheChunk(DataChunk &input, idx_t operator_idx);

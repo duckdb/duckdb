@@ -101,7 +101,7 @@ TaskScheduler::~TaskScheduler() {
 	SetThreadsInternal(1);
 #endif
 #ifdef DEBUG
-	// Ensure we're not missing any tasks we might have missed
+	// Ensure we're not missing any tasks that are blocked
 	{
 		unique_lock<mutex> lck(blocked_task_lock);
 		D_ASSERT(buffered_callbacks.size() == 0);

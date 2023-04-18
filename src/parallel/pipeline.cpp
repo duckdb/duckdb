@@ -34,8 +34,6 @@ public:
 			pipeline_executor = make_uniq<PipelineExecutor>(pipeline.GetClientContext(), pipeline);
 		}
 		if (mode == TaskExecutionMode::PROCESS_PARTIAL) {
-
-			// TODO: How to pass back the callback_uuid / sleep timeout here?
 			auto res = pipeline_executor->Execute(PARTIAL_CHUNK_COUNT);
 
 			switch(res) {

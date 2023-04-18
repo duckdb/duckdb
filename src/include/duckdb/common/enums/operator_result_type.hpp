@@ -21,7 +21,9 @@ namespace duckdb {
 //! The operator will be called again with the same input.
 //! FINISHED means the operator has finished the entire pipeline and no more processing is necessary.
 //! The operator will not be called again, and neither will any other operators in this pipeline.
-enum class OperatorResultType : uint8_t { NEED_MORE_INPUT, HAVE_MORE_OUTPUT, FINISHED };
+//! BLOCKED means the operator does not want to be called right now. e.g. because its currently doing async I/O. The
+//! operator has set the interrupt state and the caller is expected to handle it.
+enum class OperatorResultType : uint8_t { NEED_MORE_INPUT, HAVE_MORE_OUTPUT, FINISHED, BLOCKED };
 
 //! OperatorFinalizeResultType is used to indicate whether operators have finished flushing their cached results.
 //! FINISHED means the operator has flushed all cached data.
@@ -32,7 +34,8 @@ enum class OperatorFinalizeResultType : uint8_t { HAVE_MORE_OUTPUT, FINISHED };
 //! There are two possible results:
 //! NEED_MORE_INPUT means the sink needs more input
 //! FINISHED means the sink is finished executing, and more input will not change the result any further
-enum class SinkResultType : uint8_t { NEED_MORE_INPUT, FINISHED };
+//! BLOCKED means the sink has indicated it is currently blocked
+enum class SinkResultType : uint8_t { NEED_MORE_INPUT, FINISHED, BLOCKED };
 
 //! The SinkFinalizeType is used to indicate the result of a Finalize call on a sink
 //! There are two possible results:

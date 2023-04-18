@@ -35,35 +35,121 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 	InitializeChunk(final_chunk);
 }
 
+OperatorResultType PipelineExecutor::FlushCachingOperatorsPush() {
+	if (!started_flushing) {
+		started_flushing = true;
+		flushing_idx = IsFinished() ? idx_t(finished_processing_idx) : 0;
+	}
+
+	// Find next idx to flush
+	while (flushing_idx < pipeline.operators.size()) {
+		if (pipeline.operators[flushing_idx]->RequiresFinalExecute()) {
+			break;
+		}
+		flushing_idx++;
+	}
+
+	// All operators are flushed
+	if (flushing_idx >= pipeline.operators.size()){
+		done_flushing = true;
+		return OperatorResultType::FINISHED;
+	}
+
+	// TODO what if empty chunk?
+	auto &curr_chunk =
+		flushing_idx + 1 >= intermediate_chunks.size() ? final_chunk : *intermediate_chunks[flushing_idx + 1];
+	auto current_operator = pipeline.operators[flushing_idx];
+	StartOperator(current_operator);
+	OperatorFinalizeResultType finalize_result = current_operator->FinalExecute(context, curr_chunk, *current_operator->op_state,
+																				*intermediate_states[flushing_idx]);
+	EndOperator(current_operator, &curr_chunk);
+
+	// Push chunk into pipeline
+	auto push_result = ExecutePushInternal(curr_chunk, flushing_idx + 1);
+
+	// We're done flushing this operator, we can move on to the next one next time;
+	if (finalize_result == OperatorFinalizeResultType::FINISHED) {
+		flushing_idx++;
+	}
+
+	// Sink interrupted -> when continueing the pipeline we need to re-sink the final_chunk
+	if (push_result == OperatorResultType::BLOCKED) {
+		return OperatorResultType::BLOCKED;
+	}
+
+	// Sink is done!
+	if (push_result == OperatorResultType::FINISHED) {
+		done_flushing = true;
+		return OperatorResultType::FINISHED;
+	}
+
+	return OperatorResultType::NEED_MORE_INPUT;
+}
+
 PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 	D_ASSERT(pipeline.sink);
 	bool exhausted_source = false;
 	auto &source_chunk = pipeline.operators.empty() ? final_chunk : *intermediate_chunks[0];
 	for (idx_t i = 0; i < max_chunks; i++) {
-		if (IsFinished()) {
+
+		// There's 3 ways we can process a chunk in the pipeline here:
+		// 1. Regular: 					      Fetch from source, push through pipeline
+		// 2. Resuming after Sink interrupt:  Retry pushing the chunk into the sink
+		// 3. Flushing operators: 			  Flushing a cached chunk in the pipeline
+		if (exhausted_source && done_flushing && !remaining_sink_chunk) {
 			break;
 		}
-		source_chunk.Reset();
-		FetchFromSource(source_chunk, true);
 
-		if(interrupt_state.result != InterruptResultType::NO_INTERRUPT) {
+		OperatorResultType result;
+		if (remaining_sink_chunk) {
+			result = ExecutePushInternal(final_chunk);
+			remaining_sink_chunk = false;
+		} else if (exhausted_source && !done_flushing) {
+			result = FlushCachingOperatorsPush();
+		} else if (!exhausted_source) {
+			source_chunk.Reset();
+			FetchFromSource(source_chunk, true);
+
+			// SOURCE INTERRUPT
+			if(interrupt_state.result != InterruptResultType::NO_INTERRUPT) {
+				return PipelineExecuteResult::INTERRUPTED;
+			}
+
+			if (source_chunk.size() == 0) {
+				exhausted_source = true;
+				continue;
+			}
+			result = ExecutePushInternal(source_chunk);
+		} else {
+			throw InternalException("Unexpected state reached in pipeline executor");
+		}
+
+		// SINK INTERRUPT
+		if(result == OperatorResultType::BLOCKED) {
+			D_ASSERT(interrupt_state.result != InterruptResultType::NO_INTERRUPT);
+			remaining_sink_chunk = true;
 			return PipelineExecuteResult::INTERRUPTED;
 		}
 
-		if (source_chunk.size() == 0) {
-			exhausted_source = true;
-			break;
-		}
-		auto result = ExecutePushInternal(source_chunk);
 		if (result == OperatorResultType::FINISHED) {
-			D_ASSERT(IsFinished());
 			break;
 		}
 	}
+
+	// TODO this may be wrong?
 	if (!exhausted_source && !IsFinished()) {
 		return PipelineExecuteResult::NOT_FINISHED;
 	}
+
+	// TODO this does not respect the flush limit also its not resumable
 	PushFinalize();
+
+	// SINK INTERRUPT IN FINALIZE
+	if(interrupt_state.result != InterruptResultType::NO_INTERRUPT) {
+		remaining_sink_chunk = true;
+		return PipelineExecuteResult::INTERRUPTED;
+	}
+
 	return PipelineExecuteResult::FINISHED;
 }
 
@@ -106,9 +192,16 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t
 			StartOperator(pipeline.sink);
 			D_ASSERT(pipeline.sink);
 			D_ASSERT(pipeline.sink->sink_state);
-			auto sink_result = pipeline.sink->Sink(context, *pipeline.sink->sink_state, *local_sink_state, sink_chunk);
+
+			interrupt_state.Reset();
+			auto sink_result = pipeline.sink->Sink(context, *pipeline.sink->sink_state, *local_sink_state, sink_chunk, interrupt_state);
+
 			EndOperator(pipeline.sink, nullptr);
-			if (sink_result == SinkResultType::FINISHED) {
+
+			if (sink_result == SinkResultType::BLOCKED) {
+				// TODO: this is confusing we are returning have_more_output which means something else
+				return OperatorResultType::BLOCKED;
+			} else if (sink_result == SinkResultType::FINISHED) {
 				FinishProcessing();
 				return OperatorResultType::FINISHED;
 			}
@@ -119,49 +212,15 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t
 	}
 }
 
-// Push all remaining cached operator output through the pipeline
-void PipelineExecutor::FlushCachingOperatorsPush() {
-	idx_t start_idx = IsFinished() ? idx_t(finished_processing_idx) : 0;
-	for (idx_t op_idx = start_idx; op_idx < pipeline.operators.size(); op_idx++) {
-		if (!pipeline.operators[op_idx]->RequiresFinalExecute()) {
-			continue;
-		}
-
-		OperatorFinalizeResultType finalize_result;
-		OperatorResultType push_result;
-
-		do {
-			auto &curr_chunk =
-			    op_idx + 1 >= intermediate_chunks.size() ? final_chunk : *intermediate_chunks[op_idx + 1];
-			auto current_operator = pipeline.operators[op_idx];
-			StartOperator(current_operator);
-			finalize_result = current_operator->FinalExecute(context, curr_chunk, *current_operator->op_state,
-			                                                 *intermediate_states[op_idx]);
-			EndOperator(current_operator, &curr_chunk);
-			push_result = ExecutePushInternal(curr_chunk, op_idx + 1);
-		} while (finalize_result != OperatorFinalizeResultType::FINISHED &&
-		         push_result != OperatorResultType::FINISHED);
-
-		if (push_result == OperatorResultType::FINISHED) {
-			break;
-		}
-	}
-}
-
 void PipelineExecutor::PushFinalize() {
 	if (finalized) {
 		throw InternalException("Calling PushFinalize on a pipeline that has been finalized already");
 	}
-	finalized = true;
-	// flush all caching operators
-	// note that even if an operator has finished, we might still need to flush caches AFTER
-	// that operator e.g. if we have SOURCE -> LIMIT -> CROSS_PRODUCT -> SINK, if the
-	// LIMIT reports no more rows will be passed on we still need to flush caches from the CROSS_PRODUCT
-	D_ASSERT(in_process_operators.empty());
-
-	FlushCachingOperatorsPush();
 
 	D_ASSERT(local_sink_state);
+
+	finalized = true;
+
 	// run the combine for the sink
 	pipeline.sink->Combine(context, *pipeline.sink->sink_state, *local_sink_state);
 

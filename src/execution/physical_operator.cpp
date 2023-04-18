@@ -95,6 +95,7 @@ void PhysicalOperator::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 		// Launch thread that calls callback after a short sleep
 		std::thread rewake_thread([callback_uuid, callback, db_ref] {
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+//			printf("THREAD SOURCE\n");
 			callback(db_ref, callback_uuid);
 		});
 		rewake_thread.detach();
@@ -124,6 +125,39 @@ SinkResultType PhysicalOperator::Sink(ExecutionContext &context, GlobalSinkState
                                       DataChunk &input) const {
 	throw InternalException("Calling Sink on a node that is not a sink!");
 }
+
+// Default Async implementation is to just call the
+SinkResultType PhysicalOperator::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
+                                      DataChunk &input, InterruptState& istate) const {
+
+#ifdef DUCKDB_TEST_FORCE_ASYNC_OPERATORS
+	// This flag provides all Operators in duckdb with a (bogus) async variant. The first call will block, any next calls
+	// will just be sync
+
+	if (!lstate.did_async) {
+		lstate.did_async = true;
+		// Configure callback
+		auto callback_uuid = istate.SetInterruptCallback();
+		auto callback = TaskScheduler::GetScheduler(*context.client.db).RescheduleCallback;
+		auto db_ref = context.client.db;
+
+		// Launch thread that calls callback after a short sleep
+		std::thread rewake_thread([callback_uuid, callback, db_ref] {
+//			printf("THREAD SINKSINK\n");
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			callback(db_ref, callback_uuid);
+		});
+
+		rewake_thread.detach();
+		return SinkResultType::BLOCKED;
+	} else {
+		return Sink(context, gstate, lstate, input);
+	}
+#else
+	return Sink(context, gstate, lstate, input);
+#endif
+}
+
 // LCOV_EXCL_STOP
 
 void PhysicalOperator::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {

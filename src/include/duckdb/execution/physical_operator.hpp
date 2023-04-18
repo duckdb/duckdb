@@ -140,6 +140,9 @@ public:
 	//! CAN be called in parallel, proper locking is needed when accessing data inside the GlobalSinkState.
 	virtual SinkResultType Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
 	                            DataChunk &input) const;
+	//! Interruptable variant of Sink
+	virtual SinkResultType Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
+	                            DataChunk &input, InterruptState& istate) const;
 	// The combine is called when a single thread has completed execution of its part of the pipeline, it is the final
 	// time that a specific LocalSinkState is accessible. This method can be called in parallel while other Sink() or
 	// Combine() calls are active on the same GlobalSinkState.
