@@ -360,14 +360,13 @@ idx_t LocateErrorIndex(bool is_append, const ManagedSelection &matches) {
 	return failed_index;
 }
 
-[[noreturn]] static void ThrowForeignKeyConstraintError(idx_t failed_index, bool is_append, Index *index,
+[[noreturn]] static void ThrowForeignKeyConstraintError(idx_t failed_index, bool is_append, Index &index,
                                                         DataChunk &input) {
 	auto verify_type = is_append ? VerifyExistenceType::APPEND_FK : VerifyExistenceType::DELETE_FK;
 
 	D_ASSERT(failed_index != DConstants::INVALID_INDEX);
-	D_ASSERT(index->type == IndexType::ART);
-	auto &art_index = index->Cast<ART>();
-	;
+	D_ASSERT(index.type == IndexType::ART);
+	auto &art_index = index.Cast<ART>();
 	auto key_name = art_index.GenerateErrorKeyName(input, failed_index);
 	auto exception_msg = art_index.GenerateConstraintErrorMessage(verify_type, key_name);
 	throw ConstraintException(exception_msg);
@@ -453,8 +452,8 @@ void DataTable::VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk,
 	}
 
 	// Some error occurred, and we likely want to throw
-	Index *index;
-	Index *transaction_index;
+	optional_ptr<Index> index;
+	optional_ptr<Index> transaction_index;
 
 	auto fk_type = is_append ? ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE : ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
 	// check whether or not the chunk can be inserted or deleted into the referenced table' storage
@@ -470,7 +469,7 @@ void DataTable::VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk,
 		D_ASSERT(error);
 		auto failed_index = LocateErrorIndex(is_append, regular_matches);
 		D_ASSERT(failed_index != DConstants::INVALID_INDEX);
-		ThrowForeignKeyConstraintError(failed_index, is_append, index, dst_chunk);
+		ThrowForeignKeyConstraintError(failed_index, is_append, *index, dst_chunk);
 	}
 	if (transaction_error && error && is_append) {
 		// When we want to do an append, we only throw if the foreign key does not exist in both transaction and local
@@ -496,20 +495,20 @@ void DataTable::VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk,
 			// We don't throw, every value was present in either regular or transaction storage
 			return;
 		}
-		ThrowForeignKeyConstraintError(failed_index, true, index, dst_chunk);
+		ThrowForeignKeyConstraintError(failed_index, true, *index, dst_chunk);
 	}
 	if (!is_append && transaction_check) {
 		auto &transaction_matches = transaction_conflicts.Conflicts();
 		if (error) {
 			auto failed_index = LocateErrorIndex(false, regular_matches);
 			D_ASSERT(failed_index != DConstants::INVALID_INDEX);
-			ThrowForeignKeyConstraintError(failed_index, false, index, dst_chunk);
+			ThrowForeignKeyConstraintError(failed_index, false, *index, dst_chunk);
 		} else {
 			D_ASSERT(transaction_error);
 			D_ASSERT(transaction_matches.Count() != DConstants::INVALID_INDEX);
 			auto failed_index = LocateErrorIndex(false, transaction_matches);
 			D_ASSERT(failed_index != DConstants::INVALID_INDEX);
-			ThrowForeignKeyConstraintError(failed_index, false, transaction_index, dst_chunk);
+			ThrowForeignKeyConstraintError(failed_index, false, *transaction_index, dst_chunk);
 		}
 	}
 }

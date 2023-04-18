@@ -116,7 +116,7 @@ string DuckTransaction::Commit(AttachedDatabase &db, transaction_t commit_id, bo
 	UndoBuffer::IteratorState iterator_state;
 	LocalStorage::CommitState commit_state;
 	unique_ptr<StorageCommitState> storage_commit_state;
-	WriteAheadLog *log;
+	optional_ptr<WriteAheadLog> log;
 	if (!db.IsSystem()) {
 		auto &storage_manager = db.GetStorageManager();
 		log = storage_manager.GetWriteAheadLog();

@@ -181,7 +181,6 @@ unique_ptr<LogicalOperator> Binder::BindUpdateSet(LogicalOperator &op, unique_pt
 BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	BoundStatement result;
 	unique_ptr<LogicalOperator> root;
-	LogicalGet *get;
 
 	// visit the table reference
 	auto bound_table = Bind(*stmt.table);
@@ -194,17 +193,18 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	// Add CTEs as bindable
 	AddCTEMap(stmt.cte_map);
 
+	optional_ptr<LogicalGet> get;
 	if (stmt.from_table) {
 		auto from_binder = Binder::CreateBinder(context, this);
 		BoundJoinRef bound_crossproduct(JoinRefType::CROSS);
 		bound_crossproduct.left = std::move(bound_table);
 		bound_crossproduct.right = from_binder->Bind(*stmt.from_table);
 		root = CreatePlan(bound_crossproduct);
-		get = (LogicalGet *)root->children[0].get();
+		get = &root->children[0]->Cast<LogicalGet>();
 		bind_context.AddContext(std::move(from_binder->bind_context));
 	} else {
 		root = CreatePlan(*bound_table);
-		get = (LogicalGet *)root.get();
+		get = &root->Cast<LogicalGet>();
 	}
 
 	if (!table.temporary) {
