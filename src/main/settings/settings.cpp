@@ -512,16 +512,15 @@ Value EnableProgressBarPrintSetting::GetSetting(ClientContext &context) {
 // Experimental Parallel CSV
 //===--------------------------------------------------------------------===//
 void ExperimentalParallelCSVSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.experimental_parallel_csv_reader = input.GetValue<bool>();
+	Printer::Print("experimental_parallel_csv is deprecated and will be removed with the next release - the parallel "
+	               "CSV reader is now standard and does not need to be manually enabled anymore 1");
 }
 
 void ExperimentalParallelCSVSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.experimental_parallel_csv_reader = DBConfig().options.experimental_parallel_csv_reader;
 }
 
 Value ExperimentalParallelCSVSetting::GetSetting(ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BIGINT(config.options.experimental_parallel_csv_reader);
+	return Value();
 }
 
 //===--------------------------------------------------------------------===//

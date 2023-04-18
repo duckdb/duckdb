@@ -4,9 +4,6 @@
 
 require json
 
-statement ok
-SET experimental_parallel_csv=true;
-
 # force parallelism of the queries
 statement ok
 PRAGMA verify_parallelism

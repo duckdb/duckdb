@@ -12,6 +12,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/main/client_data.hpp"
 
 #include <limits>
 
@@ -23,21 +24,22 @@ unique_ptr<CSVFileHandle> ReadCSV::OpenCSV(const string &file_path, FileCompress
 	auto opener = FileSystem::GetFileOpener(context);
 	auto file_handle =
 	    fs.OpenFile(file_path.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK, compression, opener);
+	if (file_handle->CanSeek()) {
+		file_handle->Reset();
+	}
 	return make_uniq<CSVFileHandle>(std::move(file_handle));
 }
 
 void ReadCSVData::FinalizeRead(ClientContext &context) {
 	BaseCSVData::Finalize();
-	auto &config = DBConfig::GetConfig(context);
-	single_threaded = !config.options.experimental_parallel_csv_reader;
-	if (options.has_parallel) {
-		// Override the option set in the config
-		single_threaded = !options.use_parallel;
-	}
+	// Here we identify if we can run this CSV file on parallel or not.
 	bool null_or_empty = options.delimiter.empty() || options.escape.empty() || options.quote.empty() ||
 	                     options.delimiter[0] == '\0' || options.escape[0] == '\0' || options.quote[0] == '\0';
 	bool complex_options = options.delimiter.size() > 1 || options.escape.size() > 1 || options.quote.size() > 1;
-	if (null_or_empty || complex_options || options.new_line == NewLineIdentifier::MIX) {
+	bool not_supported_options = options.null_padding;
+
+	if (!options.run_parallel || null_or_empty || not_supported_options || complex_options ||
+	    options.new_line == NewLineIdentifier::MIX) {
 		// not supported for parallel CSV reading
 		single_threaded = true;
 	}
@@ -175,6 +177,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			options.all_varchar = BooleanValue::Get(kv.second);
 		} else if (loption == "normalize_names") {
 			options.normalize_names = BooleanValue::Get(kv.second);
+		} else if (loption == "parallel") {
+			options.run_parallel = BooleanValue::Get(kv.second);
 		} else {
 			options.SetReadOption(loption, kv.second, names);
 		}
@@ -214,6 +218,13 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	if (options.file_options.union_by_name) {
 		result->reader_bind =
 		    MultiFileReader::BindUnionReader<BufferedCSVReader>(context, return_types, names, *result, options);
+		if (result->union_readers.size() > 1) {
+			result->column_info.emplace_back(result->csv_names, result->csv_types);
+			for (idx_t i = 1; i < result->union_readers.size(); i++) {
+				result->column_info.emplace_back(result->union_readers[i]->names,
+				                                 result->union_readers[i]->return_types);
+			}
+		}
 		if (!options.sql_types_per_column.empty()) {
 			auto exception = BufferedCSVReader::ColumnTypesError(options.sql_types_per_column, names);
 			if (!exception.empty()) {
@@ -253,17 +264,27 @@ public:
 		file_size = file_handle->FileSize();
 		first_file_size = file_size;
 		bytes_read = 0;
-		if (buffer_size < file_size) {
+		if (buffer_size < file_size || file_size == 0) {
 			bytes_per_local_state = buffer_size / ParallelCSVGlobalState::MaxThreads();
 		} else {
 			bytes_per_local_state = file_size / MaxThreads();
 		}
-		current_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position);
-		next_buffer =
-		    shared_ptr<CSVBuffer>(current_buffer->Next(*file_handle, buffer_size, current_csv_position).release());
+		if (bytes_per_local_state == 0) {
+			// In practice, I think this won't happen, it only happens because we are mocking up test scenarios
+			// this boy needs to be at least one.
+			bytes_per_local_state = 1;
+		}
+		for (idx_t i = 0; i < rows_to_skip; i++) {
+			file_handle->ReadLine();
+		}
+		first_position = current_csv_position;
+		current_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position, file_number);
+		next_buffer = shared_ptr<CSVBuffer>(
+		    current_buffer->Next(*file_handle, buffer_size, current_csv_position, file_number).release());
 		running_threads = MaxThreads();
 	}
 	ParallelCSVGlobalState() {
+		running_threads = MaxThreads();
 	}
 
 	~ParallelCSVGlobalState() override {
@@ -281,7 +302,7 @@ public:
 	//! Verify if the CSV File was read correctly
 	void Verify();
 
-	void UpdateVerification(VerificationPositions positions);
+	void UpdateVerification(VerificationPositions positions, idx_t file_number);
 
 	void IncrementThread();
 
@@ -332,14 +353,18 @@ private:
 	//! Current batch index
 	idx_t batch_index = 0;
 	//! Forces parallelism for small CSV Files, should only be used for testing.
-	bool force_parallelism;
+	bool force_parallelism = false;
 	//! Current (Global) position of CSV
 	idx_t current_csv_position = 0;
+	//! First Position of First Buffer
+	idx_t first_position = 0;
+	//! Current File Number
+	idx_t file_number = 0;
 	idx_t max_tuple_end = 0;
 	//! the vector stores positions where threads ended the last line they read in the CSV File, and the set stores
 	//! positions where they started reading the first line.
-	vector<idx_t> tuple_end;
-	set<idx_t> tuple_start;
+	vector<vector<idx_t>> tuple_end;
+	vector<set<idx_t>> tuple_start;
 	idx_t running_threads = 0;
 	//! The column ids to read
 	vector<column_t> column_ids;
@@ -349,10 +374,9 @@ idx_t ParallelCSVGlobalState::MaxThreads() const {
 	if (force_parallelism) {
 		return system_threads;
 	}
-
 	idx_t one_mb = 1000000; // We initialize max one thread per Mb
 	idx_t threads_per_mb = first_file_size / one_mb + 1;
-	if (threads_per_mb < system_threads) {
+	if (threads_per_mb < system_threads || threads_per_mb == 1) {
 		return threads_per_mb;
 	}
 
@@ -378,25 +402,36 @@ bool ParallelCSVGlobalState::Finished() {
 void ParallelCSVGlobalState::Verify() {
 	// All threads are done, we run some magic sweet verification code
 	if (running_threads == 0) {
-		for (auto &last_pos : tuple_end) {
-			auto first_pos = tuple_start.find(last_pos);
-			if (first_pos == tuple_start.end()) {
-				// this might be necessary due to carriage returns outside buffer scopes.
-				first_pos = tuple_start.find(last_pos + 1);
+		D_ASSERT(tuple_end.size() == tuple_start.size());
+		for (idx_t i = 0; i < tuple_start.size(); i++) {
+			auto &current_tuple_end = tuple_end[i];
+			auto &current_tuple_start = tuple_start[i];
+			// figure out max value of last_pos
+			if (current_tuple_end.empty()) {
+				return;
 			}
-			if (first_pos == tuple_start.end() && last_pos != NumericLimits<uint64_t>::Maximum()) {
-				string error = "Not possible to read this CSV File with multithreading. Tuple: " + to_string(last_pos) +
-				               " does not have a match\n";
-				error += "End Lines: \n";
-				for (auto &end_line : tuple_end) {
-					error += to_string(end_line) + "\n";
+			auto max_value = *max_element(std::begin(current_tuple_end), std::end(current_tuple_end));
+			for (auto &last_pos : current_tuple_end) {
+				auto first_pos = current_tuple_start.find(last_pos);
+				if (first_pos == current_tuple_start.end()) {
+					// this might be necessary due to carriage returns outside buffer scopes.
+					first_pos = current_tuple_start.find(last_pos + 1);
 				}
-				error += "Start Lines: \n";
-				for (auto &start_line : tuple_start) {
-					error += to_string(start_line) + "\n";
+				if (first_pos == current_tuple_start.end() && last_pos != max_value) {
+					string error =
+					    "Not possible to read this CSV File with multithreading. Tuple: " + to_string(last_pos) +
+					    " does not have a match\n";
+					error += "End Lines: \n";
+					for (auto &end_line : current_tuple_end) {
+						error += to_string(end_line) + "\n";
+					}
+					error += "Start Lines: \n";
+					for (auto &start_line : current_tuple_start) {
+						error += to_string(start_line) + "\n";
+					}
+					throw InvalidInputException(
+					    "CSV File not supported for multithreading. Please run single-threaded CSV Reading");
 				}
-				throw InvalidInputException(
-				    "CSV File not supported for multithreading. Please run single-threaded CSV Reading");
 			}
 		}
 	}
@@ -411,9 +446,11 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 			current_file_path = bind_data.files[file_index++];
 			file_handle = ReadCSV::OpenCSV(current_file_path, bind_data.options.compression, context);
 			current_csv_position = 0;
-			current_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position);
-			next_buffer =
-			    shared_ptr<CSVBuffer>(current_buffer->Next(*file_handle, buffer_size, current_csv_position).release());
+			file_number++;
+			current_buffer =
+			    make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position, file_number);
+			next_buffer = shared_ptr<CSVBuffer>(
+			    current_buffer->Next(*file_handle, buffer_size, current_csv_position, file_number).release());
 		} else {
 			// We are done scanning.
 			reader.reset();
@@ -433,8 +470,8 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 		current_buffer = next_buffer;
 		if (next_buffer) {
 			// Next buffer gets the next-next buffer
-			next_buffer =
-			    shared_ptr<CSVBuffer>(next_buffer->Next(*file_handle, buffer_size, current_csv_position).release());
+			next_buffer = shared_ptr<CSVBuffer>(
+			    next_buffer->Next(*file_handle, buffer_size, current_csv_position, file_number).release());
 		}
 	}
 	if (!reader || reader->options.file_path != current_file_path) {
@@ -443,13 +480,18 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 		if (file_index > 0 && file_index <= bind_data.union_readers.size() && bind_data.union_readers[file_index - 1]) {
 			// we are doing UNION BY NAME - fetch the options from the union reader for this file
 			auto &union_reader = *bind_data.union_readers[file_index - 1];
-			reader =
-			    make_uniq<ParallelCSVReader>(context, union_reader.options, std::move(result), union_reader.GetTypes());
+			reader = make_uniq<ParallelCSVReader>(context, union_reader.options, std::move(result), first_position,
+			                                      union_reader.GetTypes());
 			reader->names = union_reader.GetNames();
+		} else if (file_index <= bind_data.column_info.size()) {
+			// Serialized Union By name
+			reader = make_uniq<ParallelCSVReader>(context, bind_data.options, std::move(result), first_position,
+			                                      bind_data.column_info[file_index - 1].types);
+			reader->names = bind_data.column_info[file_index - 1].names;
 		} else {
 			// regular file - use the standard options
-			reader = make_uniq<ParallelCSVReader>(context, bind_data.options, std::move(result), bind_data.csv_types);
-			reader->options.file_path = current_file_path;
+			reader = make_uniq<ParallelCSVReader>(context, bind_data.options, std::move(result), first_position,
+			                                      bind_data.csv_types);
 			reader->names = bind_data.csv_names;
 		}
 		reader->options.file_path = current_file_path;
@@ -461,14 +503,20 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 	}
 	return true;
 }
-void ParallelCSVGlobalState::UpdateVerification(VerificationPositions positions) {
+void ParallelCSVGlobalState::UpdateVerification(VerificationPositions positions, idx_t file_number_p) {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	if (positions.beginning_of_first_line < positions.end_of_last_line) {
 		if (positions.end_of_last_line > max_tuple_end) {
 			max_tuple_end = positions.end_of_last_line;
 		}
-		tuple_start.insert(positions.beginning_of_first_line);
-		tuple_end.push_back(positions.end_of_last_line);
+		while (file_number_p >= tuple_start.size()) {
+			vector<idx_t> empty_tuple_end;
+			set<idx_t> empty_set;
+			tuple_start.emplace_back(empty_set);
+			tuple_end.emplace_back(empty_tuple_end);
+		}
+		tuple_start[file_number_p].insert(positions.beginning_of_first_line);
+		tuple_end[file_number_p].push_back(positions.end_of_last_line);
 	}
 }
 
@@ -483,11 +531,9 @@ static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext 
 
 	bind_data.options.file_path = bind_data.files[0];
 	file_handle = ReadCSV::OpenCSV(bind_data.options.file_path, bind_data.options.compression, context);
-	idx_t rows_to_skip =
-	    bind_data.options.skip_rows + (bind_data.options.has_header && bind_data.options.header ? 1 : 0);
-	return make_uniq<ParallelCSVGlobalState>(context, std::move(file_handle), bind_data.files,
-	                                         context.db->NumberOfThreads(), bind_data.options.buffer_size, rows_to_skip,
-	                                         ClientConfig::GetConfig(context).verify_parallelism, input.column_ids);
+	return make_uniq<ParallelCSVGlobalState>(
+	    context, std::move(file_handle), bind_data.files, context.db->NumberOfThreads(), bind_data.options.buffer_size,
+	    bind_data.options.skip_rows, ClientConfig::GetConfig(context).verify_parallelism, input.column_ids);
 }
 
 //===--------------------------------------------------------------------===//
@@ -534,11 +580,10 @@ static void ParallelReadCSVFunction(ClientContext &context, TableFunctionInput &
 		}
 		if (csv_local_state.csv_reader->finished) {
 			auto verification_updates = csv_local_state.csv_reader->GetVerificationPositions();
-			if (!csv_local_state.csv_reader->buffer->next_buffer) {
-				// if it's the last line of the file we mark as the maximum
-				verification_updates.end_of_last_line = NumericLimits<uint64_t>::Maximum();
+			if (verification_updates.beginning_of_first_line != verification_updates.end_of_last_line) {
+				csv_global_state.UpdateVerification(verification_updates,
+				                                    csv_local_state.csv_reader->buffer->buffer->GetFileNumber());
 			}
-			csv_global_state.UpdateVerification(verification_updates);
 			auto has_next = csv_global_state.Next(context, bind_data, csv_local_state.csv_reader);
 			if (!has_next) {
 				csv_global_state.DecrementThread();
@@ -642,14 +687,17 @@ static unique_ptr<GlobalTableFunctionState> SingleThreadedCSVInit(ClientContext 
                                                                   TableFunctionInitInput &input) {
 	auto &bind_data = (ReadCSVData &)*input.bind_data;
 	auto result = make_uniq<SingleThreadedCSVState>(bind_data.files.size());
-	if (bind_data.initial_reader) {
-		result->initial_reader = std::move(bind_data.initial_reader);
-	} else if (bind_data.files.empty()) {
+	if (bind_data.files.empty()) {
 		// This can happen when a filename based filter pushdown has eliminated all possible files for this scan.
 		return std::move(result);
 	} else {
 		bind_data.options.file_path = bind_data.files[0];
-		result->initial_reader = make_uniq<BufferedCSVReader>(context, bind_data.options, bind_data.csv_types);
+		if (bind_data.initial_reader && !bind_data.file_exists) {
+			// If this is not an on disk file we gotta reuse the reader.
+			result->initial_reader = std::move(bind_data.initial_reader);
+		} else {
+			result->initial_reader = make_uniq<BufferedCSVReader>(context, bind_data.options, bind_data.csv_types);
+		}
 		if (!bind_data.options.file_options.union_by_name) {
 			result->initial_reader->names = bind_data.csv_names;
 		}
@@ -741,6 +789,14 @@ static void SingleThreadedCSVFunction(ClientContext &context, TableFunctionInput
 //===--------------------------------------------------------------------===//
 static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = (ReadCSVData &)*input.bind_data;
+	auto &fs = FileSystem::GetFileSystem(context);
+	for (auto &file : bind_data.files) {
+		if (!fs.FileExists(file)) {
+			bind_data.file_exists = false;
+			break;
+		}
+	}
+	bind_data.single_threaded = bind_data.single_threaded || !bind_data.file_exists;
 	if (bind_data.single_threaded) {
 		return SingleThreadedCSVInit(context, input);
 	} else {
@@ -863,6 +919,7 @@ void BufferedCSVReaderOptions::Serialize(FieldWriter &writer) const {
 	writer.WriteField<idx_t>(buffer_sample_size);
 	writer.WriteString(null_str);
 	writer.WriteField<FileCompressionType>(compression);
+	writer.WriteField<NewLineIdentifier>(new_line);
 	// read options
 	writer.WriteField<idx_t>(skip_rows);
 	writer.WriteField<bool>(skip_rows_set);
@@ -896,6 +953,7 @@ void BufferedCSVReaderOptions::Deserialize(FieldReader &reader) {
 	buffer_sample_size = reader.ReadRequired<idx_t>();
 	null_str = reader.ReadRequired<string>();
 	compression = reader.ReadRequired<FileCompressionType>();
+	new_line = reader.ReadRequired<NewLineIdentifier>();
 	// read options
 	skip_rows = reader.ReadRequired<idx_t>();
 	skip_rows_set = reader.ReadRequired<bool>();
@@ -926,6 +984,10 @@ static void CSVReaderSerialize(FieldWriter &writer, const FunctionData *bind_dat
 	bind_data.options.Serialize(writer);
 	writer.WriteField<bool>(bind_data.single_threaded);
 	writer.WriteSerializable(bind_data.reader_bind);
+	writer.WriteField<uint32_t>(bind_data.column_info.size());
+	for (auto &col : bind_data.column_info) {
+		col.Serialize(writer);
+	}
 }
 
 static unique_ptr<FunctionData> CSVReaderDeserialize(ClientContext &context, FieldReader &reader,
@@ -941,6 +1003,10 @@ static unique_ptr<FunctionData> CSVReaderDeserialize(ClientContext &context, Fie
 	result_data->options.Deserialize(reader);
 	result_data->single_threaded = reader.ReadField<bool>(true);
 	result_data->reader_bind = reader.ReadRequiredSerializable<MultiFileReaderBindData, MultiFileReaderBindData>();
+	uint32_t file_number = reader.ReadRequired<uint32_t>();
+	for (idx_t i = 0; i < file_number; i++) {
+		result_data->column_info.emplace_back(ColumnInfo::Deserialize(reader));
+	}
 	return std::move(result_data);
 }
 

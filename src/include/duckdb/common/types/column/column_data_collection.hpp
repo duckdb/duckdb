@@ -131,8 +131,8 @@ public:
 	//! Compare two column data collections to another. If they are equal according to result equality rules,
 	//! return true. That means null values are equal, and approx equality is used for floating point values.
 	//! If they are not equal, return false and fill in the error message.
-	static bool ResultEquals(const ColumnDataCollection &left, const ColumnDataCollection &right,
-	                         string &error_message);
+	static bool ResultEquals(const ColumnDataCollection &left, const ColumnDataCollection &right, string &error_message,
+	                         bool ordered = false);
 
 	//! Obtains the next scan index to scan from
 	bool NextScanIndex(ColumnDataScanState &state, idx_t &chunk_index, idx_t &segment_index, idx_t &row_index) const;
