@@ -189,7 +189,7 @@ void SingleFileStorageCommitState::FlushCommit() {
 	log = nullptr;
 }
 
-SingleFileStorageCommitState::~SingleFileStorageCommitState() {
+SingleFileStorageCommitState::~SingleFileStorageCommitState() { // NOLINT - false positive on exception being thrown
 	// If log is non-null, then commit threw an exception before flushing.
 	if (log) {
 		log->skip_writing = false;

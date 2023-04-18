@@ -353,6 +353,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 			// this collection has very few rows: add it to the merge set
 			if (!current_merger) {
 				current_merger = make_uniq<CollectionMerger>(context);
+				current_merger.reset();
 			}
 			current_merger->AddCollection(std::move(collection.second));
 		} else {

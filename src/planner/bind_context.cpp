@@ -523,7 +523,7 @@ void BindContext::AddContext(BindContext other) {
 		bindings[binding.first] = std::move(binding.second);
 	}
 	for (auto &binding : other.bindings_list) {
-		bindings_list.push_back(std::move(binding));
+		bindings_list.push_back(binding);
 	}
 	for (auto &entry : other.using_columns) {
 		for (auto &alias : entry.second) {
