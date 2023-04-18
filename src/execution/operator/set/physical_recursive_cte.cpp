@@ -1,6 +1,6 @@
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 
-#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/executor.hpp"
@@ -183,12 +183,12 @@ void PhysicalRecursiveCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_
 
 	// the LHS of the recursive CTE is our initial state
 	auto initial_state_pipeline = meta_pipeline.CreateChildMetaPipeline(current, this);
-	initial_state_pipeline->Build(children[0].get());
+	initial_state_pipeline->Build(*children[0]);
 
 	// the RHS is the recursive pipeline
 	recursive_meta_pipeline = make_shared<MetaPipeline>(executor, state, this);
 	recursive_meta_pipeline->SetRecursiveCTE();
-	recursive_meta_pipeline->Build(children[1].get());
+	recursive_meta_pipeline->Build(*children[1]);
 }
 
 vector<const PhysicalOperator *> PhysicalRecursiveCTE::GetSources() const {

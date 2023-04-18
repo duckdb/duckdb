@@ -200,7 +200,7 @@ void StandardBufferManager::VerifyZeroReaders(shared_ptr<BlockHandle> &handle) {
 	auto replacement_buffer = make_uniq<FileBuffer>(Allocator::Get(db), handle->buffer->type,
 	                                                handle->memory_usage - Storage::BLOCK_HEADER_SIZE);
 	memcpy(replacement_buffer->Buffer(), handle->buffer->Buffer(), handle->buffer->size);
-	memset(handle->buffer->Buffer(), 165, handle->buffer->size); // 165 is default memory in debug mode
+	memset(handle->buffer->Buffer(), 0xa5, handle->buffer->size); // 0xa5 is default memory in debug mode
 	handle->buffer = std::move(replacement_buffer);
 #endif
 }

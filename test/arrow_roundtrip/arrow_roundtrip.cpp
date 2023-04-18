@@ -64,7 +64,7 @@ public:
 					break;
 				}
 				count += chunk->size();
-				appender.Append(*chunk);
+				appender.Append(*chunk, 0, chunk->size(), chunk->size());
 			}
 			if (count > 0) {
 				*out = appender.Finalize();

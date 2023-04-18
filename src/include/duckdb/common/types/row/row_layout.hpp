@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/types/row_layout.hpp
+// duckdb/common/types/row/row_layout.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -17,6 +17,8 @@ namespace duckdb {
 
 class RowLayout {
 public:
+	friend class TupleDataLayout;
+
 	using Aggregates = vector<AggregateObject>;
 	using ValidityBytes = TemplatedValidityMask<uint8_t>;
 

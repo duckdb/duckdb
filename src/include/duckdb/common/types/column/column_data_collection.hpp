@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/types/column_data_collection.hpp
+// duckdb/common/types/column/column_data_collection.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,8 +9,8 @@
 #pragma once
 
 #include "duckdb/common/pair.hpp"
-#include "duckdb/common/types/column_data_collection_iterators.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/types/column/column_data_collection_iterators.hpp"
 
 namespace duckdb {
 class BlockHandle;

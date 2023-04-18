@@ -1,4 +1,5 @@
-#include "duckdb/common/types/column_data_collection_segment.hpp"
+#include "duckdb/common/types/column/column_data_collection_segment.hpp"
+
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {

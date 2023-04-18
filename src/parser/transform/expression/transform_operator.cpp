@@ -10,6 +10,7 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/emptytableref.hpp"
+#include "duckdb/parser/parser_options.hpp"
 #include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
@@ -24,12 +25,15 @@ unique_ptr<ParsedExpression> Transformer::TransformUnaryOperator(const string &o
 	return std::move(result);
 }
 
-unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(const string &op, unique_ptr<ParsedExpression> left,
+unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(string op, unique_ptr<ParsedExpression> left,
                                                                   unique_ptr<ParsedExpression> right) {
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(std::move(left));
 	children.push_back(std::move(right));
 
+	if (options.integer_division && op == "/") {
+		op = "//";
+	}
 	if (op == "~" || op == "!~") {
 		// rewrite 'asdf' SIMILAR TO '.*sd.*' into regexp_full_match('asdf', '.*sd.*')
 		bool invert_similar = op == "!~";
@@ -47,7 +51,7 @@ unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(const string &
 			return make_uniq<ComparisonExpression>(target_type, std::move(children[0]), std::move(children[1]));
 		}
 		// not a special operator: convert to a function expression
-		auto result = make_uniq<FunctionExpression>(op, std::move(children));
+		auto result = make_uniq<FunctionExpression>(std::move(op), std::move(children));
 		result->is_operator = true;
 		return std::move(result);
 	}
@@ -197,7 +201,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExprInternal(duckdb_libpgque
 		// postfix operator, only ! is currently supported
 		return TransformUnaryOperator(name + "__postfix", std::move(left_expr));
 	} else {
-		return TransformBinaryOperator(name, std::move(left_expr), std::move(right_expr));
+		return TransformBinaryOperator(std::move(name), std::move(left_expr), std::move(right_expr));
 	}
 }
 

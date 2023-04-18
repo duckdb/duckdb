@@ -22,6 +22,14 @@
 
 namespace duckdb {
 
+struct GenerateJoinRelation {
+	GenerateJoinRelation(JoinRelationSet &set, unique_ptr<LogicalOperator> op_p) : set(set), op(std::move(op_p)) {
+	}
+
+	JoinRelationSet &set;
+	unique_ptr<LogicalOperator> op;
+};
+
 class JoinOrderOptimizer {
 public:
 	explicit JoinOrderOptimizer(ClientContext &context)
@@ -31,8 +39,9 @@ public:
 	//! Perform join reordering inside a plan
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
 
-	unique_ptr<JoinNode> CreateJoinTree(JoinRelationSet *set, const vector<NeighborInfo *> &possible_connections,
-	                                    JoinNode *left, JoinNode *right);
+	unique_ptr<JoinNode> CreateJoinTree(JoinRelationSet &set,
+	                                    const vector<reference<NeighborInfo>> &possible_connections, JoinNode &left,
+	                                    JoinNode &right);
 
 private:
 	ClientContext &context;
@@ -71,23 +80,23 @@ private:
 
 	//! Traverse the query tree to find (1) base relations, (2) existing join conditions and (3) filters that can be
 	//! rewritten into joins. Returns true if there are joins in the tree that can be reordered, false otherwise.
-	bool ExtractJoinRelations(LogicalOperator &input_op, vector<LogicalOperator *> &filter_operators,
-	                          LogicalOperator *parent = nullptr);
+	bool ExtractJoinRelations(LogicalOperator &input_op, vector<reference<LogicalOperator>> &filter_operators,
+	                          optional_ptr<LogicalOperator> parent = nullptr);
 
 	//! Emit a pair as a potential join candidate. Returns the best plan found for the (left, right) connection (either
 	//! the newly created plan, or an existing plan)
-	JoinNode *EmitPair(JoinRelationSet *left, JoinRelationSet *right, const vector<NeighborInfo *> &info);
+	JoinNode &EmitPair(JoinRelationSet &left, JoinRelationSet &right, const vector<reference<NeighborInfo>> &info);
 	//! Tries to emit a potential join candidate pair. Returns false if too many pairs have already been emitted,
 	//! cancelling the dynamic programming step.
-	bool TryEmitPair(JoinRelationSet *left, JoinRelationSet *right, const vector<NeighborInfo *> &info);
+	bool TryEmitPair(JoinRelationSet &left, JoinRelationSet &right, const vector<reference<NeighborInfo>> &info);
 
-	bool EnumerateCmpRecursive(JoinRelationSet *left, JoinRelationSet *right, unordered_set<idx_t> exclusion_set);
+	bool EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSet &right, unordered_set<idx_t> exclusion_set);
 	//! Emit a relation set node
-	bool EmitCSG(JoinRelationSet *node);
+	bool EmitCSG(JoinRelationSet &node);
 	//! Enumerate the possible connected subgraphs that can be joined together in the join graph
-	bool EnumerateCSGRecursive(JoinRelationSet *node, unordered_set<idx_t> &exclusion_set);
+	bool EnumerateCSGRecursive(JoinRelationSet &node, unordered_set<idx_t> &exclusion_set);
 	//! Rewrite a logical query plan given the join plan
-	unique_ptr<LogicalOperator> RewritePlan(unique_ptr<LogicalOperator> plan, JoinNode *node);
+	unique_ptr<LogicalOperator> RewritePlan(unique_ptr<LogicalOperator> plan, JoinNode &node);
 	//! Generate cross product edges inside the side
 	void GenerateCrossProducts();
 	//! Perform the join order solving
@@ -98,13 +107,12 @@ private:
 	//! Solve the join order approximately using a greedy algorithm
 	void SolveJoinOrderApproximately();
 
-	void UpdateDPTree(JoinNode *new_plan);
+	void UpdateDPTree(JoinNode &new_plan);
 
-	void UpdateJoinNodesInFullPlan(JoinNode *node);
-	bool NodeInFullPlan(JoinNode *node);
+	void UpdateJoinNodesInFullPlan(JoinNode &node);
+	bool NodeInFullPlan(JoinNode &node);
 
-	std::pair<JoinRelationSet *, unique_ptr<LogicalOperator>>
-	GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinNode *node);
+	GenerateJoinRelation GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinNode &node);
 };
 
 } // namespace duckdb
