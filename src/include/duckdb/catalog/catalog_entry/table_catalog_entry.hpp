@@ -69,7 +69,6 @@ public:
 	DUCKDB_API ColumnList &GetColumnsMutable();
 	//! Returns the underlying storage of the table
 	virtual DataTable &GetStorage();
-	virtual DataTable *GetStoragePtr();
 	//! Returns a list of the bound constraints of the table
 	virtual const vector<unique_ptr<BoundConstraint>> &GetBoundConstraints();
 

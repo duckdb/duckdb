@@ -196,10 +196,6 @@ DataTable &TableCatalogEntry::GetStorage() {
 	throw InternalException("Calling GetStorage on a TableCatalogEntry that is not a DuckTableEntry");
 }
 
-DataTable *TableCatalogEntry::GetStoragePtr() {
-	throw InternalException("Calling GetStoragePtr on a TableCatalogEntry that is not a DuckTableEntry");
-}
-
 const vector<unique_ptr<BoundConstraint>> &TableCatalogEntry::GetBoundConstraints() {
 	throw InternalException("Calling GetBoundConstraints on a TableCatalogEntry that is not a DuckTableEntry");
 }
