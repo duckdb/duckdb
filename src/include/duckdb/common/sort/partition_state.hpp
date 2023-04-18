@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/sort/sort.hpp"
-#include "duckdb/common/types/partitioned_column_data.hpp"
+#include "duckdb/common/types/column/partitioned_column_data.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
 

@@ -21,14 +21,15 @@ public:
 
 	//! Constructor for Initial Buffer
 	CSVBuffer(ClientContext &context, idx_t buffer_size_p, CSVFileHandle &file_handle,
-	          idx_t &global_csv_current_position);
+	          idx_t &global_csv_current_position, idx_t file_number);
 
 	//! Constructor for `Next()` Buffers
 	CSVBuffer(ClientContext &context, BufferHandle handle, idx_t buffer_size_p, idx_t actual_size_p, bool final_buffer,
-	          idx_t global_csv_current_position);
+	          idx_t global_csv_current_position, idx_t file_number);
 
 	//! Creates a new buffer with the next part of the CSV File
-	unique_ptr<CSVBuffer> Next(CSVFileHandle &file_handle, idx_t buffer_size, idx_t &global_csv_current_position);
+	unique_ptr<CSVBuffer> Next(CSVFileHandle &file_handle, idx_t buffer_size, idx_t &global_csv_current_position,
+	                           idx_t file_number);
 
 	//! Gets the buffer actual size
 	idx_t GetBufferSize();
@@ -43,6 +44,8 @@ public:
 	bool IsCSVFileFirstBuffer();
 
 	idx_t GetCSVGlobalStart();
+
+	idx_t GetFileNumber();
 
 	BufferHandle AllocateBuffer(idx_t buffer_size);
 
@@ -65,5 +68,7 @@ private:
 	bool first_buffer = false;
 	//! Global position from the CSV File where this buffer starts
 	idx_t global_csv_start = 0;
+	//! Number of the file that is in this buffer
+	idx_t file_number = 0;
 };
 } // namespace duckdb

@@ -1,15 +1,16 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/types/partitioned_column_data.hpp
+// duckdb/common/types/column/partitioned_column_data.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/common/types/column_data_allocator.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/common/perfect_map_set.hpp"
+#include "duckdb/common/types/column/column_data_allocator.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 
 namespace duckdb {
 
@@ -22,16 +23,23 @@ public:
 public:
 	Vector partition_indices;
 	SelectionVector partition_sel;
+	perfect_map_t<list_entry_t> partition_entries;
 	DataChunk slice_chunk;
 
 	vector<unique_ptr<DataChunk>> partition_buffers;
 	vector<unique_ptr<ColumnDataAppendState>> partition_append_states;
 };
 
-enum class PartitionedColumnDataType : uint8_t { RADIX, HIVE, INVALID };
+enum class PartitionedColumnDataType : uint8_t {
+	INVALID,
+	//! Radix partitioning on a hash column
+	RADIX,
+	//! Hive-style multi-field partitioning
+	HIVE
+};
 
 //! Shared allocators for parallel partitioning
-struct PartitionAllocators {
+struct PartitionColumnDataAllocators {
 	mutex lock;
 	vector<shared_ptr<ColumnDataAllocator>> allocators;
 };
@@ -80,7 +88,7 @@ protected:
 
 	//! If the buffer is half full, we append to the partition
 	inline idx_t HalfBufferSize() const {
-		D_ASSERT((BufferSize() & (BufferSize() - 1)) == 0); // BufferSize should be a power of two
+		D_ASSERT(IsPowerOfTwo(BufferSize()));
 		return BufferSize() / 2;
 	}
 	//! Create a new shared allocator
@@ -98,7 +106,7 @@ protected:
 	vector<LogicalType> types;
 
 	mutex lock;
-	shared_ptr<PartitionAllocators> allocators;
+	shared_ptr<PartitionColumnDataAllocators> allocators;
 	vector<unique_ptr<ColumnDataCollection>> partitions;
 };
 

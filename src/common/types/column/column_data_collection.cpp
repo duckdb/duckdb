@@ -1,11 +1,11 @@
-#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/types/column_data_collection_segment.hpp"
+#include "duckdb/common/types/column/column_data_collection_segment.hpp"
+#include "duckdb/common/types/value_map.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/common/types/value_map.hpp"
 
 namespace duckdb {
 
@@ -887,6 +887,7 @@ void ColumnDataCollection::Combine(ColumnDataCollection &other) {
 	for (auto &other_seg : other.segments) {
 		segments.push_back(std::move(other_seg));
 	}
+	other.Reset();
 	Verify();
 }
 
@@ -930,7 +931,24 @@ void ColumnDataCollection::Verify() {
 }
 
 string ColumnDataCollection::ToString() const {
-	return "Column Data Collection";
+	DataChunk chunk;
+	InitializeScanChunk(chunk);
+
+	ColumnDataScanState scan_state;
+	InitializeScan(scan_state);
+
+	string result = StringUtil::Format("ColumnDataCollection - [%llu Chunks, %llu Rows]\n", ChunkCount(), Count());
+	idx_t chunk_idx = 0;
+	idx_t row_count = 0;
+	while (Scan(scan_state, chunk)) {
+		result +=
+		    StringUtil::Format("Chunk %llu - [Rows %llu - %llu]\n", chunk_idx, row_count, row_count + chunk.size()) +
+		    chunk.ToString();
+		chunk_idx++;
+		row_count += chunk.size();
+	}
+
+	return result;
 }
 
 void ColumnDataCollection::Print() const {
@@ -952,7 +970,7 @@ struct ValueResultEquals {
 };
 
 bool ColumnDataCollection::ResultEquals(const ColumnDataCollection &left, const ColumnDataCollection &right,
-                                        string &error_message) {
+                                        string &error_message, bool ordered) {
 	if (left.ColumnCount() != right.ColumnCount()) {
 		error_message = "Column count mismatch";
 		return false;
@@ -967,6 +985,7 @@ bool ColumnDataCollection::ResultEquals(const ColumnDataCollection &left, const 
 		for (idx_t c = 0; c < left.ColumnCount(); c++) {
 			auto lvalue = left_rows.GetValue(c, r);
 			auto rvalue = right_rows.GetValue(c, r);
+
 			if (!Value::DefaultValuesAreEqual(lvalue, rvalue)) {
 				error_message =
 				    StringUtil::Format("%s <> %s (row: %lld, col: %lld)\n", lvalue.ToString(), rvalue.ToString(), r, c);
@@ -974,7 +993,11 @@ bool ColumnDataCollection::ResultEquals(const ColumnDataCollection &left, const 
 			}
 		}
 		if (!error_message.empty()) {
-			break;
+			if (ordered) {
+				return false;
+			} else {
+				break;
+			}
 		}
 	}
 	if (!error_message.empty()) {

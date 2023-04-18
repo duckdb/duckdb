@@ -5,9 +5,6 @@
 # Test read_csv with user defined variable
 
 statement ok
-SET experimental_parallel_csv=true;
-
-statement ok
 pragma threads=4
 
 statement ok

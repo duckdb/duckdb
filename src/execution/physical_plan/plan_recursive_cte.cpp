@@ -1,10 +1,10 @@
-#include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
+#include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/planner/operator/logical_recursive_cte.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/planner/operator/logical_recursive_cte.hpp"
 
 namespace duckdb {
 

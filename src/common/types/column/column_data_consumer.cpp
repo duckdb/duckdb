@@ -1,4 +1,4 @@
-#include "duckdb/common/types/column_data_consumer.hpp"
+#include "duckdb/common/types/column/column_data_consumer.hpp"
 
 #include <algorithm>
 

@@ -21,8 +21,6 @@ SELECT COUNT(*) FROM "test/sql/copy/csv/data/real/voter.tsv";
 
 require notwindows
 
-statement ok
-SET experimental_parallel_csv=true;
 
 statement ok
 PRAGMA verify_parallelism

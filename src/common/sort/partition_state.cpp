@@ -1,6 +1,6 @@
 #include "duckdb/common/sort/partition_state.hpp"
 
-#include "duckdb/common/types/column_data_consumer.hpp"
+#include "duckdb/common/types/column/column_data_consumer.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parallel/event.hpp"

@@ -1,14 +1,15 @@
-#include "duckdb/common/types/partitioned_column_data.hpp"
+#include "duckdb/common/types/column/partitioned_column_data.hpp"
 
-#include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/hive_partitioning.hpp"
+#include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
 PartitionedColumnData::PartitionedColumnData(PartitionedColumnDataType type_p, ClientContext &context_p,
                                              vector<LogicalType> types_p)
-    : type(type_p), context(context_p), types(std::move(types_p)), allocators(make_shared<PartitionAllocators>()) {
+    : type(type_p), context(context_p), types(std::move(types_p)),
+      allocators(make_shared<PartitionColumnDataAllocators>()) {
 }
 
 PartitionedColumnData::PartitionedColumnData(const PartitionedColumnData &other)
@@ -47,8 +48,9 @@ void PartitionedColumnData::Append(PartitionedColumnDataAppendState &state, Data
 
 	// Compute the counts per partition
 	const auto count = input.size();
-	unordered_map<idx_t, list_entry_t> partition_entries;
 	const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
+	auto &partition_entries = state.partition_entries;
+	partition_entries.clear();
 	switch (state.partition_indices.GetVectorType()) {
 	case VectorType::FLAT_VECTOR:
 		for (idx_t i = 0; i < count; i++) {
@@ -72,8 +74,8 @@ void PartitionedColumnData::Append(PartitionedColumnDataAppendState &state, Data
 	if (partition_entries.size() == 1) {
 		const auto &partition_index = partition_entries.begin()->first;
 		auto &partition = *partitions[partition_index];
-		auto &partition_append_state = state.partition_append_states[partition_index];
-		partition.Append(*partition_append_state, input);
+		auto &partition_append_state = *state.partition_append_states[partition_index];
+		partition.Append(partition_append_state, input);
 		return;
 	}
 
@@ -101,7 +103,7 @@ void PartitionedColumnData::Append(PartitionedColumnDataAppendState &state, Data
 		// Partition, buffer, and append state for this partition index
 		auto &partition = *partitions[partition_index];
 		auto &partition_buffer = *state.partition_buffers[partition_index];
-		auto &partition_append_state = state.partition_append_states[partition_index];
+		auto &partition_append_state = *state.partition_append_states[partition_index];
 
 		// Length and offset into the selection vector for this chunk, for this partition
 		const auto &partition_entry = pc.second;
@@ -117,14 +119,14 @@ void PartitionedColumnData::Append(PartitionedColumnDataAppendState &state, Data
 			state.slice_chunk.Slice(input, partition_sel, partition_length);
 
 			// Append it to the partition directly
-			partition.Append(*partition_append_state, state.slice_chunk);
+			partition.Append(partition_append_state, state.slice_chunk);
 		} else {
 			// Append the input chunk to the partition buffer using the selection vector
 			partition_buffer.Append(input, false, &partition_sel, partition_length);
 
 			if (partition_buffer.size() >= HalfBufferSize()) {
 				// Next batch won't fit in the buffer, flush it to the partition
-				partition.Append(*partition_append_state, partition_buffer);
+				partition.Append(partition_append_state, partition_buffer);
 				partition_buffer.Reset();
 				partition_buffer.SetCapacity(BufferSize());
 			}
