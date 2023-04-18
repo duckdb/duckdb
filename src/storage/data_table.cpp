@@ -992,7 +992,7 @@ idx_t DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector
 				Fetch(transaction, verify_chunk, col_ids, offset_ids, current_count, fetch_state);
 				VerifyDeleteConstraints(table, context, verify_chunk);
 			}
-			delete_count += row_groups->Delete(transaction, this, ids + current_offset, current_count);
+			delete_count += row_groups->Delete(transaction, *this, ids + current_offset, current_count);
 		}
 	}
 	return delete_count;

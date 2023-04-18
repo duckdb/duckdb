@@ -476,7 +476,7 @@ idx_t LocalStorage::Delete(DataTable &table, Vector &row_ids, idx_t count) {
 	}
 
 	auto ids = FlatVector::GetData<row_t>(row_ids);
-	idx_t delete_count = storage->row_groups->Delete(TransactionData(0, 0), &table, ids, count);
+	idx_t delete_count = storage->row_groups->Delete(TransactionData(0, 0), table, ids, count);
 	storage->deleted_rows += delete_count;
 	return delete_count;
 }
@@ -519,7 +519,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 		// append to the indexes and append to the base table
 		storage.AppendToIndexes(transaction, append_state, append_count, true);
 	}
-	transaction.PushAppend(&table, append_state.row_start, append_count);
+	transaction.PushAppend(table, append_state.row_start, append_count);
 }
 
 void LocalStorage::Commit(LocalStorage::CommitState &commit_state, DuckTransaction &transaction) {

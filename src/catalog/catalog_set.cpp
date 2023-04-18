@@ -144,7 +144,7 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
 		auto &dtransaction = (DuckTransaction &)*transaction.transaction;
-		dtransaction.PushCatalogEntry(value_ptr->child.get());
+		dtransaction.PushCatalogEntry(*value_ptr->child);
 	}
 	return true;
 }
@@ -265,7 +265,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
 		auto &dtransaction = (DuckTransaction &)*transaction.transaction;
-		dtransaction.PushCatalogEntry(new_entry->child.get(), serialized_alter.data.get(), serialized_alter.size);
+		dtransaction.PushCatalogEntry(*new_entry->child, serialized_alter.data.get(), serialized_alter.size);
 	}
 
 	// Check the dependency manager to verify that there are no conflicting dependencies with this alter
@@ -311,7 +311,7 @@ void CatalogSet::DropEntryInternal(CatalogTransaction transaction, EntryIndex en
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
 		auto &dtransaction = (DuckTransaction &)*transaction.transaction;
-		dtransaction.PushCatalogEntry(value_ptr->child.get());
+		dtransaction.PushCatalogEntry(*value_ptr->child);
 	}
 }
 
