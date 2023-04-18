@@ -1578,17 +1578,18 @@ void ExtraTypeInfo::Serialize(ExtraTypeInfo *info, FieldWriter &writer) {
 }
 void ExtraTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("type", type);
+	// BREAKING: we used to write the alias last if there was additional type info, but now we write it second.
 	serializer.WriteProperty("alias", alias);
 }
 
 shared_ptr<ExtraTypeInfo> ExtraTypeInfo::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto type = deserializer.ReadProperty<ExtraTypeInfoType>("type");
+	auto alias = deserializer.ReadProperty<string>("alias");
+	// BREAKING: we used to read the alias last, but now we read it second.
 
 	shared_ptr<ExtraTypeInfo> result;
 	switch (type) {
 	case ExtraTypeInfoType::INVALID_TYPE_INFO: {
-		string alias;
-		deserializer.ReadOptionalProperty("alias", alias);
 		if (!alias.empty()) {
 			return make_shared<ExtraTypeInfo>(type, alias);
 		}
@@ -1632,11 +1633,10 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::FormatDeserialize(FormatDeserializer &d
 	case ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO:
 		result = AggregateStateTypeInfo::FormatDeserialize(deserializer);
 		break;
-
 	default:
 		throw InternalException("Unimplemented type info in ExtraTypeInfo::Deserialize");
 	}
-	deserializer.ReadOptionalPropertyOrDefault("alias", result->alias, string());
+	result->alias = alias;
 	return result;
 }
 
