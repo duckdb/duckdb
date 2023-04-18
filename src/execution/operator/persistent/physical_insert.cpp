@@ -386,7 +386,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 			    make_uniq<RowGroupCollection>(table_info, block_manager, insert_types, MAX_ROW_ID);
 			lstate.local_collection->InitializeEmpty();
 			lstate.local_collection->InitializeAppend(lstate.local_append_state);
-			lstate.writer = gstate.table.GetStorage().CreateOptimisticWriter(context.client);
+			lstate.writer = &gstate.table.GetStorage().CreateOptimisticWriter(context.client);
 		}
 		OnConflictHandling(table, context, lstate);
 		auto new_row_group = lstate.local_collection->Append(lstate.insert_chunk, lstate.local_append_state);

@@ -297,7 +297,7 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkSt
 		lock_guard<mutex> l(gstate.lock);
 		// no collection yet: create a new one
 		lstate.CreateNewCollection(table, insert_types);
-		lstate.writer = table.GetStorage().CreateOptimisticWriter(context.client);
+		lstate.writer = &table.GetStorage().CreateOptimisticWriter(context.client);
 	} else if (lstate.current_index != lstate.batch_index) {
 		// batch index has changed: move the old collection to the global state and create a new collection
 		TransactionData tdata(0, 0);
@@ -374,11 +374,11 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 	// now that we have created all of the mergers, perform the actual merging
 	vector<unique_ptr<RowGroupCollection>> final_collections;
 	final_collections.reserve(mergers.size());
-	auto writer = storage.CreateOptimisticWriter(context);
+	auto &writer = storage.CreateOptimisticWriter(context);
 	for (auto &merger : mergers) {
-		final_collections.push_back(merger->Flush(*writer));
+		final_collections.push_back(merger->Flush(writer));
 	}
-	writer->FinalFlush();
+	writer.FinalFlush();
 
 	// finally, merge the row groups into the local storage
 	for (auto &collection : final_collections) {
