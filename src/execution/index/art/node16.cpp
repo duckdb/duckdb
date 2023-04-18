@@ -9,15 +9,14 @@
 
 namespace duckdb {
 
-Node16 *Node16::New(ART &art, Node &node) {
+Node16 &Node16::New(ART &art, Node &node) {
 
 	node.SetPtr(Node::GetAllocator(art, NType::NODE_16).New());
 	node.type = (uint8_t)NType::NODE_16;
-	auto n16 = Node16::Get(art, node);
+	auto &n16 = Node16::Get(art, node);
 
-	n16->count = 0;
-	n16->prefix.Initialize();
-
+	n16.count = 0;
+	n16.prefix.Initialize();
 	return n16;
 }
 
@@ -26,49 +25,49 @@ void Node16::Free(ART &art, Node &node) {
 	D_ASSERT(node.IsSet());
 	D_ASSERT(!node.IsSwizzled());
 
-	auto n16 = Node16::Get(art, node);
+	auto &n16 = Node16::Get(art, node);
 
 	// free all children
-	for (idx_t i = 0; i < n16->count; i++) {
-		Node::Free(art, n16->children[i]);
+	for (idx_t i = 0; i < n16.count; i++) {
+		Node::Free(art, n16.children[i]);
 	}
 }
 
-Node16 *Node16::GrowNode4(ART &art, Node &node16, Node &node4) {
+Node16 &Node16::GrowNode4(ART &art, Node &node16, Node &node4) {
 
-	auto n4 = Node4::Get(art, node4);
-	auto n16 = Node16::New(art, node16);
+	auto &n4 = Node4::Get(art, node4);
+	auto &n16 = Node16::New(art, node16);
 
-	n16->count = n4->count;
-	n16->prefix.Move(n4->prefix);
+	n16.count = n4.count;
+	n16.prefix.Move(n4.prefix);
 
-	for (idx_t i = 0; i < n4->count; i++) {
-		n16->key[i] = n4->key[i];
-		n16->children[i] = n4->children[i];
+	for (idx_t i = 0; i < n4.count; i++) {
+		n16.key[i] = n4.key[i];
+		n16.children[i] = n4.children[i];
 	}
 
-	n4->count = 0;
+	n4.count = 0;
 	Node::Free(art, node4);
 	return n16;
 }
 
-Node16 *Node16::ShrinkNode48(ART &art, Node &node16, Node &node48) {
+Node16 &Node16::ShrinkNode48(ART &art, Node &node16, Node &node48) {
 
-	auto n16 = Node16::New(art, node16);
-	auto n48 = Node48::Get(art, node48);
+	auto &n16 = Node16::New(art, node16);
+	auto &n48 = Node48::Get(art, node48);
 
-	n16->count = 0;
-	n16->prefix.Move(n48->prefix);
+	n16.count = 0;
+	n16.prefix.Move(n48.prefix);
 
 	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
-		if (n48->child_index[i] != Node::EMPTY_MARKER) {
-			n16->key[n16->count] = i;
-			n16->children[n16->count] = n48->children[n48->child_index[i]];
-			n16->count++;
+		if (n48.child_index[i] != Node::EMPTY_MARKER) {
+			n16.key[n16.count] = i;
+			n16.children[n16.count] = n48.children[n48.child_index[i]];
+			n16.count++;
 		}
 	}
 
-	n48->count = 0;
+	n48.count = 0;
 	Node::Free(art, node48);
 	return n16;
 }
@@ -84,29 +83,29 @@ void Node16::InsertChild(ART &art, Node &node, const uint8_t byte, const Node ch
 
 	D_ASSERT(node.IsSet());
 	D_ASSERT(!node.IsSwizzled());
-	auto n16 = Node16::Get(art, node);
+	auto &n16 = Node16::Get(art, node);
 
 	// ensure that there is no other child at the same byte
-	for (idx_t i = 0; i < n16->count; i++) {
-		D_ASSERT(n16->key[i] != byte);
+	for (idx_t i = 0; i < n16.count; i++) {
+		D_ASSERT(n16.key[i] != byte);
 	}
 
 	// insert new child node into node
-	if (n16->count < Node::NODE_16_CAPACITY) {
+	if (n16.count < Node::NODE_16_CAPACITY) {
 		// still space, just insert the child
 		idx_t child_pos = 0;
-		while (child_pos < n16->count && n16->key[child_pos] < byte) {
+		while (child_pos < n16.count && n16.key[child_pos] < byte) {
 			child_pos++;
 		}
 		// move children backwards to make space
-		for (idx_t i = n16->count; i > child_pos; i--) {
-			n16->key[i] = n16->key[i - 1];
-			n16->children[i] = n16->children[i - 1];
+		for (idx_t i = n16.count; i > child_pos; i--) {
+			n16.key[i] = n16.key[i - 1];
+			n16.children[i] = n16.children[i - 1];
 		}
 
-		n16->key[child_pos] = byte;
-		n16->children[child_pos] = child;
-		n16->count++;
+		n16.key[child_pos] = byte;
+		n16.children[child_pos] = child;
+		n16.count++;
 
 	} else {
 		// node is full, grow to Node48
@@ -120,29 +119,29 @@ void Node16::DeleteChild(ART &art, Node &node, const uint8_t byte) {
 
 	D_ASSERT(node.IsSet());
 	D_ASSERT(!node.IsSwizzled());
-	auto n16 = Node16::Get(art, node);
+	auto &n16 = Node16::Get(art, node);
 
 	idx_t child_pos = 0;
-	for (; child_pos < n16->count; child_pos++) {
-		if (n16->key[child_pos] == byte) {
+	for (; child_pos < n16.count; child_pos++) {
+		if (n16.key[child_pos] == byte) {
 			break;
 		}
 	}
 
-	D_ASSERT(child_pos < n16->count);
+	D_ASSERT(child_pos < n16.count);
 
 	// free the child and decrease the count
-	Node::Free(art, n16->children[child_pos]);
-	n16->count--;
+	Node::Free(art, n16.children[child_pos]);
+	n16.count--;
 
 	// potentially move any children backwards
-	for (idx_t i = child_pos; i < n16->count; i++) {
-		n16->key[i] = n16->key[i + 1];
-		n16->children[i] = n16->children[i + 1];
+	for (idx_t i = child_pos; i < n16.count; i++) {
+		n16.key[i] = n16.key[i + 1];
+		n16.children[i] = n16.children[i + 1];
 	}
 
 	// shrink node to Node4
-	if (n16->count < Node::NODE_4_CAPACITY) {
+	if (n16.count < Node::NODE_4_CAPACITY) {
 		auto node16 = node;
 		Node4::ShrinkNode16(art, node, node16);
 	}
@@ -157,7 +156,7 @@ void Node16::ReplaceChild(const uint8_t byte, const Node child) {
 	}
 }
 
-Node *Node16::GetChild(const uint8_t byte) {
+optional_ptr<Node> Node16::GetChild(const uint8_t byte) {
 
 	for (idx_t i = 0; i < count; i++) {
 		if (key[i] == byte) {
@@ -167,7 +166,7 @@ Node *Node16::GetChild(const uint8_t byte) {
 	return nullptr;
 }
 
-Node *Node16::GetNextChild(uint8_t &byte) {
+optional_ptr<Node> Node16::GetNextChild(uint8_t &byte) {
 
 	for (idx_t i = 0; i < count; i++) {
 		if (key[i] >= byte) {

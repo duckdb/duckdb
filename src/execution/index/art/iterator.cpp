@@ -66,9 +66,9 @@ void Iterator::FindMinimum(Node &node) {
 
 	// reconstruct the prefix
 	// FIXME: get all bytes at once to increase performance
-	auto node_prefix = node.GetPrefix(*art);
-	for (idx_t i = 0; i < node_prefix->count; i++) {
-		cur_key.Push(node_prefix->GetByte(*art, i));
+	auto &node_prefix = node.GetPrefix(*art);
+	for (idx_t i = 0; i < node_prefix.count; i++) {
+		cur_key.Push(node_prefix.GetByte(*art, i));
 	}
 
 	// found the minimum
@@ -132,7 +132,7 @@ bool Iterator::Scan(const ARTKey &key, const idx_t &max_count, vector<row_t> &re
 
 void Iterator::PopNode() {
 	auto cur_node = nodes.top();
-	idx_t elements_to_pop = cur_node.node.GetPrefix(*art)->count + (nodes.size() != 1);
+	idx_t elements_to_pop = cur_node.node.GetPrefix(*art).count + (nodes.size() != 1);
 	cur_key.Pop(elements_to_pop);
 	nodes.pop();
 }
@@ -176,9 +176,9 @@ bool Iterator::Next() {
 
 			// add prefix of new node
 			// FIXME: get all bytes at once to increase performance
-			auto next_node_prefix = next_node->GetPrefix(*art);
-			for (idx_t i = 0; i < next_node_prefix->count; i++) {
-				cur_key.Push(next_node_prefix->GetByte(*art, i));
+			auto &next_node_prefix = next_node->GetPrefix(*art);
+			for (idx_t i = 0; i < next_node_prefix.count; i++) {
+				cur_key.Push(next_node_prefix.GetByte(*art, i));
 			}
 
 			// next node found: push it
@@ -207,9 +207,9 @@ bool Iterator::LowerBound(Node node, const ARTKey &key, const bool &is_inclusive
 
 		// reconstruct the prefix
 		// FIXME: get all bytes at once to increase performance
-		auto node_prefix = top.node.GetPrefix(*art);
-		for (idx_t i = 0; i < node_prefix->count; i++) {
-			cur_key.Push(node_prefix->GetByte(*art, i));
+		reference<Prefix> node_prefix(top.node.GetPrefix(*art));
+		for (idx_t i = 0; i < node_prefix.get().count; i++) {
+			cur_key.Push(node_prefix.get().GetByte(*art, i));
 		}
 
 		// greater case: find leftmost leaf node directly
@@ -226,8 +226,8 @@ bool Iterator::LowerBound(Node node, const ARTKey &key, const bool &is_inclusive
 
 				// reconstruct the prefix
 				node_prefix = node.GetPrefix(*art);
-				for (idx_t i = 0; i < node_prefix->count; i++) {
-					cur_key.Push(node_prefix->GetByte(*art, i));
+				for (idx_t i = 0; i < node_prefix.get().count; i++) {
+					cur_key.Push(node_prefix.get().GetByte(*art, i));
 				}
 
 				auto &c_top = nodes.top();
@@ -265,9 +265,9 @@ bool Iterator::LowerBound(Node node, const ARTKey &key, const bool &is_inclusive
 
 		// equal case:
 		node_prefix = node.GetPrefix(*art);
-		auto mismatch_pos = node_prefix->KeyMismatchPosition(*art, key, depth);
-		if (mismatch_pos != node_prefix->count) {
-			if (node_prefix->GetByte(*art, mismatch_pos) < key[depth + mismatch_pos]) {
+		auto mismatch_pos = node_prefix.get().KeyMismatchPosition(*art, key, depth);
+		if (mismatch_pos != node_prefix.get().count) {
+			if (node_prefix.get().GetByte(*art, mismatch_pos) < key[depth + mismatch_pos]) {
 				// less
 				PopNode();
 				return Next();
@@ -278,7 +278,7 @@ bool Iterator::LowerBound(Node node, const ARTKey &key, const bool &is_inclusive
 		}
 
 		// prefix matches, search inside the child for the key
-		depth += node_prefix->count;
+		depth += node_prefix.get().count;
 		top.byte = key[depth];
 		auto child = node.GetNextChild(*art, top.byte);
 		equal = key[depth] == top.byte;

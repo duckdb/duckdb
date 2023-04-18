@@ -84,9 +84,9 @@ public:
 	static void DeleteChild(ART &art, Node &node, const uint8_t byte);
 
 	//! Get the child for the respective byte in the node
-	Node *GetChild(ART &art, const uint8_t byte) const;
+	optional_ptr<Node> GetChild(ART &art, const uint8_t byte) const;
 	//! Get the first child that is greater or equal to the specific byte
-	Node *GetNextChild(ART &art, uint8_t &byte) const;
+	optional_ptr<Node> GetNextChild(ART &art, uint8_t &byte) const;
 
 	//! Serialize the node
 	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);
@@ -98,7 +98,7 @@ public:
 	//! Returns the capacity of the node
 	idx_t GetCapacity() const;
 	//! Returns a pointer to the prefix of the node
-	Prefix *GetPrefix(ART &art);
+	Prefix &GetPrefix(ART &art);
 	//! Returns the matching node type for a given count
 	static NType GetARTNodeTypeByCount(const idx_t count);
 	//! Get references to the different allocators

@@ -38,18 +38,18 @@ public:
 	} row_ids;
 
 public:
-	//! Get a new pointer to a node, might cause a new buffer allocation, and initializes a leaf holding one
+	//! Get a new leaf node, might cause a new buffer allocation, and initializes a leaf holding one
 	//! row ID and a prefix starting at depth
-	static Leaf *New(ART &art, Node &node, const ARTKey &key, const uint32_t depth, const row_t row_id);
-	//! Get a new pointer to a node, might cause a new buffer allocation, and initializes a leaf holding
+	static Leaf &New(ART &art, Node &node, const ARTKey &key, const uint32_t depth, const row_t row_id);
+	//! Get a new leaf node, might cause a new buffer allocation, and initializes a leaf holding
 	//! n_row_ids row IDs and a prefix starting at depth
-	static Leaf *New(ART &art, Node &node, const ARTKey &key, const uint32_t depth, const row_t *row_ids,
+	static Leaf &New(ART &art, Node &node, const ARTKey &key, const uint32_t depth, const row_t *row_ids,
 	                 const idx_t count);
 	//! Free the leaf
 	static void Free(ART &art, Node &node);
-	//! Get a pointer to the leaf
-	static inline Leaf *Get(const ART &art, const Node ptr) {
-		return Node::GetAllocator(art, NType::LEAF).Get<Leaf>(ptr);
+	//! Get a reference to the leaf
+	static inline Leaf &Get(const ART &art, const Node ptr) {
+		return *Node::GetAllocator(art, NType::LEAF).Get<Leaf>(ptr);
 	}
 
 	//! Initializes a merge by incrementing the buffer IDs of the leaf segments

@@ -24,17 +24,17 @@ public:
 	Node next;
 
 public:
-	//! Get a new pointer to a node, might cause a new buffer allocation, and initialize it
-	static PrefixSegment *New(ART &art, Node &node);
-	//! Get a pointer to a prefix segment
-	static inline PrefixSegment *Get(const ART &art, const Node ptr) {
-		return Node::GetAllocator(art, NType::PREFIX_SEGMENT).Get<PrefixSegment>(ptr);
+	//! Get a new prefix segment node, might cause a new buffer allocation, and initialize it
+	static PrefixSegment &New(ART &art, Node &node);
+	//! Get a reference to the prefix segment
+	static inline PrefixSegment &Get(const ART &art, const Node ptr) {
+		return *Node::GetAllocator(art, NType::PREFIX_SEGMENT).Get<PrefixSegment>(ptr);
 	}
 
 	//! Append a byte to the current segment, or create a new segment containing that byte
-	PrefixSegment *Append(ART &art, uint32_t &count, const uint8_t byte);
+	PrefixSegment &Append(ART &art, uint32_t &count, const uint8_t byte);
 	//! Get the tail of a list of segments
-	PrefixSegment *GetTail(const ART &art);
+	PrefixSegment &GetTail(const ART &art);
 };
 
 } // namespace duckdb

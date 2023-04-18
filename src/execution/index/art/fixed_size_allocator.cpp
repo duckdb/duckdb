@@ -9,8 +9,8 @@ namespace duckdb {
 constexpr idx_t FixedSizeAllocator::BASE[];
 constexpr uint8_t FixedSizeAllocator::SHIFT[];
 
-FixedSizeAllocator::FixedSizeAllocator(const idx_t allocation_size, BufferManager &buffer_manager)
-    : allocation_size(allocation_size), total_allocations(0), buffer_manager(buffer_manager) {
+FixedSizeAllocator::FixedSizeAllocator(const idx_t allocation_size, Allocator &allocator)
+    : allocation_size(allocation_size), total_allocations(0), allocator(allocator) {
 
 	// calculate how many allocations fit into one buffer
 
@@ -42,7 +42,7 @@ FixedSizeAllocator::FixedSizeAllocator(const idx_t allocation_size, BufferManage
 
 FixedSizeAllocator::~FixedSizeAllocator() {
 	for (auto &buffer : buffers) {
-		buffer_manager.GetBufferAllocator().FreeData(buffer.ptr, BUFFER_ALLOC_SIZE);
+		allocator.FreeData(buffer.ptr, BUFFER_ALLOC_SIZE);
 	}
 }
 
@@ -54,7 +54,7 @@ SwizzleablePointer FixedSizeAllocator::New() {
 		// add a new buffer
 		idx_t buffer_id = buffers.size();
 		D_ASSERT(buffer_id <= (uint32_t)DConstants::INVALID_INDEX);
-		auto buffer = buffer_manager.GetBufferAllocator().AllocateData(BUFFER_ALLOC_SIZE);
+		auto buffer = allocator.AllocateData(BUFFER_ALLOC_SIZE);
 		buffers.emplace_back(buffer, 0);
 		buffers_with_free_space.insert(buffer_id);
 
@@ -97,7 +97,7 @@ void FixedSizeAllocator::Free(const SwizzleablePointer ptr) {
 void FixedSizeAllocator::Reset() {
 
 	for (auto &buffer : buffers) {
-		buffer_manager.GetBufferAllocator().FreeData(buffer.ptr, BUFFER_ALLOC_SIZE);
+		allocator.FreeData(buffer.ptr, BUFFER_ALLOC_SIZE);
 	}
 	buffers.clear();
 	buffers_with_free_space.clear();
@@ -161,7 +161,7 @@ void FixedSizeAllocator::FinalizeVacuum() {
 
 	// free all (now unused) buffers
 	while (min_vacuum_buffer_id < buffers.size()) {
-		buffer_manager.GetBufferAllocator().FreeData(buffers.back().ptr, BUFFER_ALLOC_SIZE);
+		allocator.FreeData(buffers.back().ptr, BUFFER_ALLOC_SIZE);
 		buffers.pop_back();
 	}
 }

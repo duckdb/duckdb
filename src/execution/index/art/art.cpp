@@ -45,13 +45,13 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	}
 
 	// initialize all allocators
-	allocators.emplace_back(make_uniq<FixedSizeAllocator>(sizeof(PrefixSegment), buffer_manager));
-	allocators.emplace_back(make_uniq<FixedSizeAllocator>(sizeof(LeafSegment), buffer_manager));
-	allocators.emplace_back(make_uniq<FixedSizeAllocator>(sizeof(Leaf), buffer_manager));
-	allocators.emplace_back(make_uniq<FixedSizeAllocator>(sizeof(Node4), buffer_manager));
-	allocators.emplace_back(make_uniq<FixedSizeAllocator>(sizeof(Node16), buffer_manager));
-	allocators.emplace_back(make_uniq<FixedSizeAllocator>(sizeof(Node48), buffer_manager));
-	allocators.emplace_back(make_uniq<FixedSizeAllocator>(sizeof(Node256), buffer_manager));
+	allocators.emplace_back(make_uniq<FixedSizeAllocator>(sizeof(PrefixSegment), buffer_manager.GetBufferAllocator()));
+	allocators.emplace_back(make_uniq<FixedSizeAllocator>(sizeof(LeafSegment), buffer_manager.GetBufferAllocator()));
+	allocators.emplace_back(make_uniq<FixedSizeAllocator>(sizeof(Leaf), buffer_manager.GetBufferAllocator()));
+	allocators.emplace_back(make_uniq<FixedSizeAllocator>(sizeof(Node4), buffer_manager.GetBufferAllocator()));
+	allocators.emplace_back(make_uniq<FixedSizeAllocator>(sizeof(Node16), buffer_manager.GetBufferAllocator()));
+	allocators.emplace_back(make_uniq<FixedSizeAllocator>(sizeof(Node48), buffer_manager.GetBufferAllocator()));
+	allocators.emplace_back(make_uniq<FixedSizeAllocator>(sizeof(Node256), buffer_manager.GetBufferAllocator()));
 
 	// set the root node of the tree
 	tree = make_uniq<Node>();
@@ -322,7 +322,7 @@ bool Construct(ART &art, vector<ARTKey> &keys, row_t *row_ids, Node &node, KeySe
 	Node::New(art, node, node_type);
 
 	auto prefix_length = key_section.depth - prefix_start;
-	node.GetPrefix(art)->Initialize(art, start_key, prefix_start, prefix_length);
+	node.GetPrefix(art).Initialize(art, start_key, prefix_start, prefix_length);
 
 	// recurse on each child section
 	for (auto &child_section : child_sections) {
@@ -420,17 +420,17 @@ void ART::VerifyAppend(DataChunk &chunk, ConflictManager &conflict_manager) {
 
 bool ART::InsertToLeaf(Node &leaf_node, const row_t &row_id) {
 
-	auto leaf = Leaf::Get(*this, leaf_node);
+	auto &leaf = Leaf::Get(*this, leaf_node);
 
 #ifdef DEBUG
-	for (idx_t k = 0; k < leaf->count; k++) {
-		D_ASSERT(leaf->GetRowId(*this, k) != row_id);
+	for (idx_t k = 0; k < leaf.count; k++) {
+		D_ASSERT(leaf.GetRowId(*this, k) != row_id);
 	}
 #endif
-	if (IsUnique() && leaf->count != 0) {
+	if (IsUnique() && leaf.count != 0) {
 		return false;
 	}
-	leaf->Insert(*this, row_id);
+	leaf.Insert(*this, row_id);
 	return true;
 }
 
@@ -445,18 +445,18 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id
 	if (node.DecodeARTNodeType() == NType::LEAF) {
 
 		// add a row ID to a leaf, if they have the same key
-		auto leaf = Leaf::Get(*this, node);
-		auto mismatch_position = leaf->prefix.KeyMismatchPosition(*this, key, depth);
-		if (mismatch_position == leaf->prefix.count && depth + leaf->prefix.count == key.len) {
+		auto &leaf = Leaf::Get(*this, node);
+		auto mismatch_position = leaf.prefix.KeyMismatchPosition(*this, key, depth);
+		if (mismatch_position == leaf.prefix.count && depth + leaf.prefix.count == key.len) {
 			return InsertToLeaf(node, row_id);
 		}
 
 		// replace leaf with Node4 and store both leaves in it
 		auto old_node = node;
-		auto new_n4 = Node4::New(*this, node);
-		new_n4->prefix.Initialize(*this, key, depth, mismatch_position);
+		auto &new_n4 = Node4::New(*this, node);
+		new_n4.prefix.Initialize(*this, key, depth, mismatch_position);
 
-		auto key_byte = old_node.GetPrefix(*this)->Reduce(*this, mismatch_position);
+		auto key_byte = old_node.GetPrefix(*this).Reduce(*this, mismatch_position);
 		Node4::InsertChild(*this, node, key_byte, old_node);
 
 		Node leaf_node;
@@ -467,18 +467,18 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id
 	}
 
 	// handle prefix of inner node
-	auto old_node_prefix = node.GetPrefix(*this);
-	if (old_node_prefix->count) {
+	auto &old_node_prefix = node.GetPrefix(*this);
+	if (old_node_prefix.count) {
 
-		auto mismatch_position = old_node_prefix->KeyMismatchPosition(*this, key, depth);
-		if (mismatch_position != old_node_prefix->count) {
+		auto mismatch_position = old_node_prefix.KeyMismatchPosition(*this, key, depth);
+		if (mismatch_position != old_node_prefix.count) {
 
 			// prefix differs, create new node
 			auto old_node = node;
-			auto new_n4 = Node4::New(*this, node);
-			new_n4->prefix.Initialize(*this, key, depth, mismatch_position);
+			auto &new_n4 = Node4::New(*this, node);
+			new_n4.prefix.Initialize(*this, key, depth, mismatch_position);
 
-			auto key_byte = old_node_prefix->Reduce(*this, mismatch_position);
+			auto key_byte = old_node_prefix.Reduce(*this, mismatch_position);
 			Node4::InsertChild(*this, node, key_byte, old_node);
 
 			Node leaf_node;
@@ -487,7 +487,7 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id
 
 			return true;
 		}
-		depth += node.GetPrefix(*this)->count;
+		depth += node.GetPrefix(*this).count;
 	}
 
 	// recurse
@@ -535,9 +535,9 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 #ifdef DEBUG
 		auto node = Lookup(*tree, keys[i], 0);
 		if (node.IsSet()) {
-			auto leaf = Leaf::Get(*this, node);
-			for (idx_t k = 0; k < leaf->count; k++) {
-				D_ASSERT(leaf->GetRowId(*this, k) != row_identifiers[i]);
+			auto &leaf = Leaf::Get(*this, node);
+			for (idx_t k = 0; k < leaf.count; k++) {
+				D_ASSERT(leaf.GetRowId(*this, k) != row_identifiers[i]);
 			}
 		}
 #endif
@@ -552,10 +552,10 @@ void ART::Erase(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id)
 
 	// delete a row ID from a leaf
 	if (node.DecodeARTNodeType() == NType::LEAF) {
-		auto leaf = Leaf::Get(*this, node);
-		leaf->Remove(*this, row_id);
+		auto &leaf = Leaf::Get(*this, node);
+		leaf.Remove(*this, row_id);
 
-		if (leaf->count == 0) {
+		if (leaf.count == 0) {
 			Node::Free(*this, node);
 			node.Reset();
 		}
@@ -563,12 +563,12 @@ void ART::Erase(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id)
 	}
 
 	// handle prefix
-	auto node_prefix = node.GetPrefix(*this);
-	if (node_prefix->count) {
-		if (node_prefix->KeyMismatchPosition(*this, key, depth) != node_prefix->count) {
+	auto &node_prefix = node.GetPrefix(*this);
+	if (node_prefix.count) {
+		if (node_prefix.KeyMismatchPosition(*this, key, depth) != node_prefix.count) {
 			return;
 		}
-		depth += node_prefix->count;
+		depth += node_prefix.count;
 	}
 
 	auto child = node.GetChild(*this, key[depth]);
@@ -577,10 +577,10 @@ void ART::Erase(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id)
 
 		if (child->DecodeARTNodeType() == NType::LEAF) {
 			// leaf found, remove entry
-			auto leaf = Leaf::Get(*this, *child);
-			leaf->Remove(*this, row_id);
+			auto &leaf = Leaf::Get(*this, *child);
+			leaf.Remove(*this, row_id);
 
-			if (leaf->count == 0) {
+			if (leaf.count == 0) {
 				// leaf is empty, delete leaf, decrement node counter and maybe shrink node
 				Node::DeleteChild(*this, node, key[depth]);
 			}
@@ -638,12 +638,12 @@ bool ART::SearchEqual(ARTKey &key, idx_t max_count, vector<row_t> &result_ids) {
 		return true;
 	}
 
-	auto leaf = Leaf::Get(*this, leaf_node);
-	if (leaf->count > max_count) {
+	auto &leaf = Leaf::Get(*this, leaf_node);
+	if (leaf.count > max_count) {
 		return false;
 	}
-	for (idx_t i = 0; i < leaf->count; i++) {
-		row_t row_id = leaf->GetRowId(*this, i);
+	for (idx_t i = 0; i < leaf.count; i++) {
+		row_t row_id = leaf.GetRowId(*this, i);
 		result_ids.push_back(row_id);
 	}
 	return true;
@@ -658,8 +658,8 @@ void ART::SearchEqualJoinNoFetch(ARTKey &key, idx_t &result_size) {
 		return;
 	}
 
-	auto leaf = Leaf::Get(*this, leaf_node);
-	result_size = leaf->count;
+	auto &leaf = Leaf::Get(*this, leaf_node);
+	result_size = leaf.count;
 }
 
 //===--------------------------------------------------------------------===//
@@ -670,26 +670,26 @@ Node ART::Lookup(Node node, const ARTKey &key, idx_t depth) {
 
 	while (node.IsSet()) {
 		if (node.DecodeARTNodeType() == NType::LEAF) {
-			auto leaf = Leaf::Get(*this, node);
+			auto &leaf = Leaf::Get(*this, node);
 
 			// check if leaf contains key
-			for (idx_t i = 0; i < leaf->prefix.count; i++) {
-				if (leaf->prefix.GetByte(*this, i) != key[i + depth]) {
+			for (idx_t i = 0; i < leaf.prefix.count; i++) {
+				if (leaf.prefix.GetByte(*this, i) != key[i + depth]) {
 					return Node();
 				}
 			}
 			return node;
 		}
 
-		auto node_prefix = node.GetPrefix(*this);
-		if (node_prefix->count) {
-			for (idx_t pos = 0; pos < node_prefix->count; pos++) {
-				if (key[depth + pos] != node_prefix->GetByte(*this, pos)) {
+		auto &node_prefix = node.GetPrefix(*this);
+		if (node_prefix.count) {
+			for (idx_t pos = 0; pos < node_prefix.count; pos++) {
+				if (key[depth + pos] != node_prefix.GetByte(*this, pos)) {
 					// prefix mismatch, subtree of node does not contain key
 					return Node();
 				}
 			}
-			depth += node_prefix->count;
+			depth += node_prefix.count;
 		}
 
 		// prefix matches key, but no child at byte, does not contain key
@@ -932,9 +932,9 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 
 		// When we find a node, we need to update the 'matches' and 'row_ids'
 		// NOTE: Leafs can have more than one row_id, but for UNIQUE/PRIMARY KEY they will only have one
-		Leaf *leaf_ptr = Leaf::Get(*this, leaf_node);
-		D_ASSERT(leaf_ptr->count == 1);
-		auto row_id = leaf_ptr->GetRowId(*this, 0);
+		Leaf &leaf = Leaf::Get(*this, leaf_node);
+		D_ASSERT(leaf.count == 1);
+		auto row_id = leaf.GetRowId(*this, 0);
 		if (conflict_manager.AddHit(i, row_id)) {
 			found_conflict = i;
 		}

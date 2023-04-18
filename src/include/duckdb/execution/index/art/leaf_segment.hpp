@@ -20,17 +20,17 @@ public:
 	Node next;
 
 public:
-	//! Get a new pointer to a node, might cause a new buffer allocation, and initialize it
-	static LeafSegment *New(ART &art, Node &node);
-	//! Get a pointer to a leaf segment
-	static inline LeafSegment *Get(const ART &art, const Node ptr) {
-		return Node::GetAllocator(art, NType::LEAF_SEGMENT).Get<LeafSegment>(ptr);
+	//! Get a new leaf segment node, might cause a new buffer allocation, and initialize it
+	static LeafSegment &New(ART &art, Node &node);
+	//! Get a reference to the leaf segment
+	static inline LeafSegment &Get(const ART &art, const Node ptr) {
+		return *Node::GetAllocator(art, NType::LEAF_SEGMENT).Get<LeafSegment>(ptr);
 	}
 
 	//! Append a row ID to the current segment, or create a new segment containing that row ID
-	LeafSegment *Append(ART &art, uint32_t &count, const row_t row_id);
+	LeafSegment &Append(ART &art, uint32_t &count, const row_t row_id);
 	//! Get the tail of a list of segments
-	LeafSegment *GetTail(const ART &art);
+	LeafSegment &GetTail(const ART &art);
 };
 
 } // namespace duckdb

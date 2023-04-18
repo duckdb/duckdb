@@ -39,7 +39,7 @@ public:
 	static constexpr uint8_t SHIFT[] = {32, 16, 8, 4, 2, 1};
 
 public:
-	explicit FixedSizeAllocator(const idx_t allocation_size, BufferManager &buffer_manager);
+	explicit FixedSizeAllocator(const idx_t allocation_size, Allocator &allocator);
 	~FixedSizeAllocator();
 
 	//! Allocation size of one element in a buffer
@@ -62,7 +62,7 @@ public:
 	idx_t min_vacuum_buffer_id;
 
 	//! Buffer manager of the database instance
-	BufferManager &buffer_manager;
+	Allocator &allocator;
 
 public:
 	//! Get a new pointer to data, might cause a new buffer allocation

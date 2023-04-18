@@ -29,18 +29,18 @@ public:
 	Node children[Node::NODE_48_CAPACITY];
 
 public:
-	//! Get a new pointer to a node, might cause a new buffer allocation, and initialize it
-	static Node48 *New(ART &art, Node &node);
+	//! Get a new Node48 node, might cause a new buffer allocation, and initialize it
+	static Node48 &New(ART &art, Node &node);
 	//! Free the node (and its subtree)
 	static void Free(ART &art, Node &node);
-	//! Get a pointer to the node
-	static inline Node48 *Get(const ART &art, const Node ptr) {
-		return Node::GetAllocator(art, NType::NODE_48).Get<Node48>(ptr);
+	//! Get a reference to the node
+	static inline Node48 &Get(const ART &art, const Node ptr) {
+		return *Node::GetAllocator(art, NType::NODE_48).Get<Node48>(ptr);
 	}
 	//! Initializes all the fields of the node while growing a Node16 to a Node48
-	static Node48 *GrowNode16(ART &art, Node &node48, Node &node16);
+	static Node48 &GrowNode16(ART &art, Node &node48, Node &node16);
 	//! Initializes all fields of the node while shrinking a Node256 to a Node48
-	static Node48 *ShrinkNode256(ART &art, Node &node48, Node &node256);
+	static Node48 &ShrinkNode256(ART &art, Node &node48, Node &node256);
 
 	//! Initializes a merge by incrementing the buffer IDs of the node
 	void InitializeMerge(ART &art, const ARTFlags &flags);
@@ -57,14 +57,14 @@ public:
 	}
 
 	//! Get the child for the respective byte in the node
-	inline Node *GetChild(const uint8_t byte) {
+	inline optional_ptr<Node> GetChild(const uint8_t byte) {
 		if (child_index[byte] != Node::EMPTY_MARKER) {
 			return &children[child_index[byte]];
 		}
 		return nullptr;
 	}
 	//! Get the first child that is greater or equal to the specific byte
-	Node *GetNextChild(uint8_t &byte);
+	optional_ptr<Node> GetNextChild(uint8_t &byte);
 
 	//! Serialize an ART node
 	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);

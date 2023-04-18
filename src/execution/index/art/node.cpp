@@ -64,7 +64,7 @@ void Node::Free(ART &art, Node &node) {
 
 		auto type = node.DecodeARTNodeType();
 		if (type != NType::PREFIX_SEGMENT && type != NType::LEAF_SEGMENT) {
-			node.GetPrefix(art)->Free(art);
+			node.GetPrefix(art).Free(art);
 		}
 
 		// free the prefixes and children of the nodes
@@ -105,13 +105,13 @@ void Node::ReplaceChild(const ART &art, const uint8_t byte, const Node child) {
 
 	switch (DecodeARTNodeType()) {
 	case NType::NODE_4:
-		return Node4::Get(art, *this)->ReplaceChild(byte, child);
+		return Node4::Get(art, *this).ReplaceChild(byte, child);
 	case NType::NODE_16:
-		return Node16::Get(art, *this)->ReplaceChild(byte, child);
+		return Node16::Get(art, *this).ReplaceChild(byte, child);
 	case NType::NODE_48:
-		return Node48::Get(art, *this)->ReplaceChild(byte, child);
+		return Node48::Get(art, *this).ReplaceChild(byte, child);
 	case NType::NODE_256:
-		return Node256::Get(art, *this)->ReplaceChild(byte, child);
+		return Node256::Get(art, *this).ReplaceChild(byte, child);
 	default:
 		throw InternalException("Invalid node type for ReplaceChild.");
 	}
@@ -157,26 +157,26 @@ void Node::DeleteChild(ART &art, Node &node, const uint8_t byte) {
 // Get functions
 //===--------------------------------------------------------------------===//
 
-Node *Node::GetChild(ART &art, const uint8_t byte) const {
+optional_ptr<Node> Node::GetChild(ART &art, const uint8_t byte) const {
 
 	D_ASSERT(!IsSwizzled());
 
-	Node *child;
+	optional_ptr<Node> child;
 	switch (DecodeARTNodeType()) {
 	case NType::NODE_4: {
-		child = Node4::Get(art, *this)->GetChild(byte);
+		child = Node4::Get(art, *this).GetChild(byte);
 		break;
 	}
 	case NType::NODE_16: {
-		child = Node16::Get(art, *this)->GetChild(byte);
+		child = Node16::Get(art, *this).GetChild(byte);
 		break;
 	}
 	case NType::NODE_48: {
-		child = Node48::Get(art, *this)->GetChild(byte);
+		child = Node48::Get(art, *this).GetChild(byte);
 		break;
 	}
 	case NType::NODE_256: {
-		child = Node256::Get(art, *this)->GetChild(byte);
+		child = Node256::Get(art, *this).GetChild(byte);
 		break;
 	}
 	default:
@@ -190,26 +190,26 @@ Node *Node::GetChild(ART &art, const uint8_t byte) const {
 	return child;
 }
 
-Node *Node::GetNextChild(ART &art, uint8_t &byte) const {
+optional_ptr<Node> Node::GetNextChild(ART &art, uint8_t &byte) const {
 
 	D_ASSERT(!IsSwizzled());
 
-	Node *child;
+	optional_ptr<Node> child;
 	switch (DecodeARTNodeType()) {
 	case NType::NODE_4: {
-		child = Node4::Get(art, *this)->GetNextChild(byte);
+		child = Node4::Get(art, *this).GetNextChild(byte);
 		break;
 	}
 	case NType::NODE_16: {
-		child = Node16::Get(art, *this)->GetNextChild(byte);
+		child = Node16::Get(art, *this).GetNextChild(byte);
 		break;
 	}
 	case NType::NODE_48: {
-		child = Node48::Get(art, *this)->GetNextChild(byte);
+		child = Node48::Get(art, *this).GetNextChild(byte);
 		break;
 	}
 	case NType::NODE_256: {
-		child = Node256::Get(art, *this)->GetNextChild(byte);
+		child = Node256::Get(art, *this).GetNextChild(byte);
 		break;
 	}
 	default:
@@ -239,15 +239,15 @@ BlockPointer Node::Serialize(ART &art, MetaBlockWriter &writer) {
 
 	switch (DecodeARTNodeType()) {
 	case NType::LEAF:
-		return Leaf::Get(art, *this)->Serialize(art, writer);
+		return Leaf::Get(art, *this).Serialize(art, writer);
 	case NType::NODE_4:
-		return Node4::Get(art, *this)->Serialize(art, writer);
+		return Node4::Get(art, *this).Serialize(art, writer);
 	case NType::NODE_16:
-		return Node16::Get(art, *this)->Serialize(art, writer);
+		return Node16::Get(art, *this).Serialize(art, writer);
 	case NType::NODE_48:
-		return Node48::Get(art, *this)->Serialize(art, writer);
+		return Node48::Get(art, *this).Serialize(art, writer);
 	case NType::NODE_256:
-		return Node256::Get(art, *this)->Serialize(art, writer);
+		return Node256::Get(art, *this).Serialize(art, writer);
 	default:
 		throw InternalException("Invalid node type for Serialize.");
 	}
@@ -265,15 +265,15 @@ void Node::Deserialize(ART &art) {
 
 	switch (type) {
 	case NType::LEAF:
-		return Leaf::Get(art, *this)->Deserialize(art, reader);
+		return Leaf::Get(art, *this).Deserialize(art, reader);
 	case NType::NODE_4:
-		return Node4::Get(art, *this)->Deserialize(art, reader);
+		return Node4::Get(art, *this).Deserialize(art, reader);
 	case NType::NODE_16:
-		return Node16::Get(art, *this)->Deserialize(art, reader);
+		return Node16::Get(art, *this).Deserialize(art, reader);
 	case NType::NODE_48:
-		return Node48::Get(art, *this)->Deserialize(art, reader);
+		return Node48::Get(art, *this).Deserialize(art, reader);
 	case NType::NODE_256:
-		return Node256::Get(art, *this)->Deserialize(art, reader);
+		return Node256::Get(art, *this).Deserialize(art, reader);
 	default:
 		throw InternalException("Invalid node type for Deserialize.");
 	}
@@ -288,7 +288,7 @@ string Node::ToString(ART &art) const {
 	D_ASSERT(!IsSwizzled());
 
 	if (DecodeARTNodeType() == NType::LEAF) {
-		return Leaf::Get(art, *this)->ToString(art);
+		return Leaf::Get(art, *this).ToString(art);
 	}
 
 	string str = "Node" + to_string(GetCapacity()) + ": [";
@@ -325,7 +325,7 @@ idx_t Node::GetCapacity() const {
 	}
 }
 
-Prefix *Node::GetPrefix(ART &art) {
+Prefix &Node::GetPrefix(ART &art) {
 
 	if (IsSwizzled()) {
 		Deserialize(art);
@@ -333,15 +333,15 @@ Prefix *Node::GetPrefix(ART &art) {
 
 	switch (DecodeARTNodeType()) {
 	case NType::LEAF:
-		return &Leaf::Get(art, *this)->prefix;
+		return Leaf::Get(art, *this).prefix;
 	case NType::NODE_4:
-		return &Node4::Get(art, *this)->prefix;
+		return Node4::Get(art, *this).prefix;
 	case NType::NODE_16:
-		return &Node16::Get(art, *this)->prefix;
+		return Node16::Get(art, *this).prefix;
 	case NType::NODE_48:
-		return &Node48::Get(art, *this)->prefix;
+		return Node48::Get(art, *this).prefix;
 	case NType::NODE_256:
-		return &Node256::Get(art, *this)->prefix;
+		return Node256::Get(art, *this).prefix;
 	default:
 		throw InternalException("Invalid node type for GetPrefix.");
 	}
@@ -380,7 +380,7 @@ void Node::InitializeMerge(ART &art, const ARTFlags &flags) {
 	// if not all prefixes are inlined
 	if (flags.merge_buffer_counts[(uint8_t)NType::PREFIX_SEGMENT - 1] != 0) {
 		// initialize prefix segments
-		GetPrefix(art)->InitializeMerge(art, flags.merge_buffer_counts[(uint8_t)NType::PREFIX_SEGMENT - 1]);
+		GetPrefix(art).InitializeMerge(art, flags.merge_buffer_counts[(uint8_t)NType::PREFIX_SEGMENT - 1]);
 	}
 
 	auto type = DecodeARTNodeType();
@@ -389,20 +389,20 @@ void Node::InitializeMerge(ART &art, const ARTFlags &flags) {
 		// if not all leaves are inlined
 		if (flags.merge_buffer_counts[(uint8_t)NType::LEAF_SEGMENT - 1] != 0) {
 			// initialize leaf segments
-			Leaf::Get(art, *this)->InitializeMerge(art, flags.merge_buffer_counts[(uint8_t)NType::LEAF_SEGMENT - 1]);
+			Leaf::Get(art, *this).InitializeMerge(art, flags.merge_buffer_counts[(uint8_t)NType::LEAF_SEGMENT - 1]);
 		}
 		break;
 	case NType::NODE_4:
-		Node4::Get(art, *this)->InitializeMerge(art, flags);
+		Node4::Get(art, *this).InitializeMerge(art, flags);
 		break;
 	case NType::NODE_16:
-		Node16::Get(art, *this)->InitializeMerge(art, flags);
+		Node16::Get(art, *this).InitializeMerge(art, flags);
 		break;
 	case NType::NODE_48:
-		Node48::Get(art, *this)->InitializeMerge(art, flags);
+		Node48::Get(art, *this).InitializeMerge(art, flags);
 		break;
 	case NType::NODE_256:
-		Node256::Get(art, *this)->InitializeMerge(art, flags);
+		Node256::Get(art, *this).InitializeMerge(art, flags);
 		break;
 	default:
 		throw InternalException("Invalid node type for InitializeMerge.");
@@ -430,39 +430,39 @@ bool Node::ResolvePrefixes(ART &art, Node &other) {
 	D_ASSERT(other.IsSet());
 
 	// make sure that r_node has the longer (or equally long) prefix
-	if (GetPrefix(art)->count > other.GetPrefix(art)->count) {
+	if (GetPrefix(art).count > other.GetPrefix(art).count) {
 		swap(*this, other);
 	}
 
 	auto &l_node = *this;
 	auto &r_node = other;
-	auto l_prefix = l_node.GetPrefix(art);
-	auto r_prefix = r_node.GetPrefix(art);
+	auto &l_prefix = l_node.GetPrefix(art);
+	auto &r_prefix = r_node.GetPrefix(art);
 
-	auto mismatch_position = l_prefix->MismatchPosition(art, *r_prefix);
+	auto mismatch_position = l_prefix.MismatchPosition(art, r_prefix);
 
 	// both nodes have no prefix or the same prefix
-	if (mismatch_position == l_prefix->count && l_prefix->count == r_prefix->count) {
+	if (mismatch_position == l_prefix.count && l_prefix.count == r_prefix.count) {
 		return MergeInternal(art, r_node);
 	}
 
-	if (mismatch_position == l_prefix->count) {
+	if (mismatch_position == l_prefix.count) {
 		// r_node's prefix contains l_node's prefix
 		// l_node cannot be a leaf, otherwise the key represented by l_node would be a subset of another key
 		// which is not possible by our construction
 		D_ASSERT(l_node.DecodeARTNodeType() != NType::LEAF);
 
 		// test if the next byte (mismatch_position) in r_node (longer prefix) exists in l_node
-		auto mismatch_byte = r_prefix->GetByte(art, mismatch_position);
+		auto mismatch_byte = r_prefix.GetByte(art, mismatch_position);
 		auto child_node = l_node.GetChild(art, mismatch_byte);
 
 		// update the prefix of r_node to only consist of the bytes after mismatch_position
-		r_prefix->Reduce(art, mismatch_position);
+		r_prefix.Reduce(art, mismatch_position);
 
 		// insert r_node as a child of l_node at empty position
 		if (!child_node) {
 			Node::InsertChild(art, l_node, mismatch_byte, r_node);
-			r_node = Node();
+			r_node.Reset();
 			return true;
 		}
 
@@ -474,18 +474,18 @@ bool Node::ResolvePrefixes(ART &art, Node &other) {
 
 	// create new node
 	auto old_l_node = l_node;
-	auto new_n4 = Node4::New(art, l_node);
-	new_n4->prefix.Initialize(art, *l_prefix, mismatch_position);
+	auto &new_n4 = Node4::New(art, l_node);
+	new_n4.prefix.Initialize(art, l_prefix, mismatch_position);
 
 	// insert old l_node, break up prefix of old l_node
-	auto key_byte = l_prefix->Reduce(art, mismatch_position);
+	auto key_byte = l_prefix.Reduce(art, mismatch_position);
 	Node4::InsertChild(art, l_node, key_byte, old_l_node);
 
 	// insert r_node, break up prefix of r_node
-	key_byte = r_prefix->Reduce(art, mismatch_position);
+	key_byte = r_prefix.Reduce(art, mismatch_position);
 	Node4::InsertChild(art, l_node, key_byte, r_node);
 
-	r_node = Node();
+	r_node.Reset();
 	return true;
 }
 
@@ -512,7 +512,7 @@ bool Node::MergeInternal(ART &art, Node &other) {
 			return false;
 		}
 
-		Leaf::Get(art, *this)->Merge(art, r_node);
+		Leaf::Get(art, *this).Merge(art, r_node);
 		return true;
 	}
 
@@ -559,7 +559,7 @@ void Node::Vacuum(ART &art, Node &node, const ARTFlags &flags) {
 	bool needs_vacuum = flags.vacuum_flags[(uint8_t)NType::PREFIX_SEGMENT - 1];
 	if (needs_vacuum) {
 		// vacuum prefix segments
-		node.GetPrefix(art)->Vacuum(art);
+		node.GetPrefix(art).Vacuum(art);
 	}
 
 	auto type = node.DecodeARTNodeType();
@@ -573,18 +573,18 @@ void Node::Vacuum(ART &art, Node &node, const ARTFlags &flags) {
 	case NType::LEAF: {
 		// possibly vacuum leaf segments, if not all leaves are inlined
 		if (flags.vacuum_flags[(uint8_t)NType::LEAF_SEGMENT - 1]) {
-			Leaf::Get(art, node)->Vacuum(art);
+			Leaf::Get(art, node).Vacuum(art);
 		}
 		return;
 	}
 	case NType::NODE_4:
-		return Node4::Get(art, node)->Vacuum(art, flags);
+		return Node4::Get(art, node).Vacuum(art, flags);
 	case NType::NODE_16:
-		return Node16::Get(art, node)->Vacuum(art, flags);
+		return Node16::Get(art, node).Vacuum(art, flags);
 	case NType::NODE_48:
-		return Node48::Get(art, node)->Vacuum(art, flags);
+		return Node48::Get(art, node).Vacuum(art, flags);
 	case NType::NODE_256:
-		return Node256::Get(art, node)->Vacuum(art, flags);
+		return Node256::Get(art, node).Vacuum(art, flags);
 	default:
 		throw InternalException("Invalid node type for Vacuum.");
 	}

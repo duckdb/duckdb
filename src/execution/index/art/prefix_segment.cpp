@@ -5,20 +5,19 @@
 
 namespace duckdb {
 
-PrefixSegment *PrefixSegment::New(ART &art, Node &node) {
+PrefixSegment &PrefixSegment::New(ART &art, Node &node) {
 
 	node.SetPtr(Node::GetAllocator(art, NType::PREFIX_SEGMENT).New());
 	node.type = (uint8_t)NType::PREFIX_SEGMENT;
 
-	auto segment = PrefixSegment::Get(art, node);
-	segment->next.Reset();
-
+	auto &segment = PrefixSegment::Get(art, node);
+	segment.next.Reset();
 	return segment;
 }
 
-PrefixSegment *PrefixSegment::Append(ART &art, uint32_t &count, const uint8_t byte) {
+PrefixSegment &PrefixSegment::Append(ART &art, uint32_t &count, const uint8_t byte) {
 
-	auto *segment = this;
+	reference<PrefixSegment> segment(*this);
 	auto position = count % Node::PREFIX_SEGMENT_SIZE;
 
 	// we need a new segment
@@ -26,18 +25,18 @@ PrefixSegment *PrefixSegment::Append(ART &art, uint32_t &count, const uint8_t by
 		segment = PrefixSegment::New(art, next);
 	}
 
-	segment->bytes[position] = byte;
+	segment.get().bytes[position] = byte;
 	count++;
-	return segment;
+	return segment.get();
 }
 
-PrefixSegment *PrefixSegment::GetTail(const ART &art) {
+PrefixSegment &PrefixSegment::GetTail(const ART &art) {
 
-	auto segment = this;
-	while (segment->next.IsSet()) {
-		segment = PrefixSegment::Get(art, segment->next);
+	reference<PrefixSegment> segment(*this);
+	while (segment.get().next.IsSet()) {
+		segment = PrefixSegment::Get(art, segment.get().next);
 	}
-	return segment;
+	return segment.get();
 }
 
 } // namespace duckdb
