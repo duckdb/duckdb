@@ -61,6 +61,14 @@ public:
 		return ptr;
 	}
 
+	bool operator==(const optional_ptr<T> &rhs) const {
+		return ptr == rhs.ptr;
+	}
+
+	bool operator!=(const optional_ptr<T> &rhs) const {
+		return ptr != rhs.ptr;
+	}
+
 private:
 	T *ptr;
 };

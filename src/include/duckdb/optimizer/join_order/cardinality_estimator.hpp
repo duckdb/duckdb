@@ -41,9 +41,9 @@ struct RelationsToTDom {
 
 struct NodeOp {
 	unique_ptr<JoinNode> node;
-	LogicalOperator *op;
+	LogicalOperator &op;
 
-	NodeOp(unique_ptr<JoinNode> node, LogicalOperator *op) : node(std::move(node)), op(op) {};
+	NodeOp(unique_ptr<JoinNode> node, LogicalOperator &op) : node(std::move(node)), op(op) {};
 };
 
 struct Subgraph2Denominator {
@@ -71,7 +71,7 @@ private:
 public:
 	static constexpr double DEFAULT_SELECTIVITY = 0.2;
 
-	static void VerifySymmetry(JoinNode *result, JoinNode *entry);
+	static void VerifySymmetry(JoinNode &result, JoinNode &entry);
 
 	//! given a binding of (relation, column) used for DP, and a (table, column) in that catalog
 	//! Add the key value entry into the relation_column_to_original_column
@@ -83,20 +83,20 @@ public:
 	// in the child join plan.
 	void CopyRelationMap(column_binding_map_t<ColumnBinding> &child_binding_map);
 	void MergeBindings(idx_t, idx_t relation_id, vector<column_binding_map_t<ColumnBinding>> &child_binding_maps);
-	void AddRelationColumnMapping(LogicalGet *get, idx_t relation_id);
+	void AddRelationColumnMapping(LogicalGet &get, idx_t relation_id);
 
 	void InitTotalDomains();
-	void UpdateTotalDomains(JoinNode *node, LogicalOperator *op);
-	void InitEquivalentRelations(vector<unique_ptr<FilterInfo>> *filter_infos);
+	void UpdateTotalDomains(JoinNode &node, LogicalOperator &op);
+	void InitEquivalentRelations(vector<unique_ptr<FilterInfo>> &filter_infos);
 
-	void InitCardinalityEstimatorProps(vector<NodeOp> *node_ops, vector<unique_ptr<FilterInfo>> *filter_infos);
-	double EstimateCardinalityWithSet(JoinRelationSet *new_set);
-	void EstimateBaseTableCardinality(JoinNode *node, LogicalOperator *op);
-	double EstimateCrossProduct(const JoinNode *left, const JoinNode *right);
-	static double ComputeCost(JoinNode *left, JoinNode *right, double expected_cardinality);
+	void InitCardinalityEstimatorProps(vector<NodeOp> &node_ops, vector<unique_ptr<FilterInfo>> &filter_infos);
+	double EstimateCardinalityWithSet(JoinRelationSet &new_set);
+	void EstimateBaseTableCardinality(JoinNode &node, LogicalOperator &op);
+	double EstimateCrossProduct(const JoinNode &left, const JoinNode &right);
+	static double ComputeCost(JoinNode &left, JoinNode &right, double expected_cardinality);
 
 private:
-	bool SingleColumnFilter(FilterInfo *filter_info);
+	bool SingleColumnFilter(FilterInfo &filter_info);
 	//! Filter & bindings -> list of indexes into the equivalent_relations array.
 	// The column binding set at each index is an equivalence set.
 	vector<idx_t> DetermineMatchingEquivalentSets(FilterInfo *filter_info);
@@ -106,16 +106,16 @@ private:
 	//! If there are multiple equivalence sets, they are merged.
 	void AddToEquivalenceSets(FilterInfo *filter_info, vector<idx_t> matching_equivalent_sets);
 
-	TableFilterSet *GetTableFilters(LogicalOperator *op, idx_t table_index);
+	optional_ptr<TableFilterSet> GetTableFilters(LogicalOperator &op, idx_t table_index);
 
-	void AddRelationTdom(FilterInfo *filter_info);
-	bool EmptyFilter(FilterInfo *filter_info);
+	void AddRelationTdom(FilterInfo &filter_info);
+	bool EmptyFilter(FilterInfo &filter_info);
 
 	idx_t InspectConjunctionAND(idx_t cardinality, idx_t column_index, ConjunctionAndFilter *fil,
 	                            unique_ptr<BaseStatistics> base_stats);
 	idx_t InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter *fil,
 	                           unique_ptr<BaseStatistics> base_stats);
-	idx_t InspectTableFilters(idx_t cardinality, LogicalOperator *op, TableFilterSet *table_filters, idx_t table_index);
+	idx_t InspectTableFilters(idx_t cardinality, LogicalOperator &op, TableFilterSet &table_filters, idx_t table_index);
 };
 
 } // namespace duckdb

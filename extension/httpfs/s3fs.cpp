@@ -154,6 +154,7 @@ void AWSEnvironmentCredentialsProvider::SetExtensionOptionValue(string key, cons
 }
 
 void AWSEnvironmentCredentialsProvider::SetAll() {
+	this->SetExtensionOptionValue("s3_region", this->DEFAULT_REGION_ENV_VAR);
 	this->SetExtensionOptionValue("s3_region", this->REGION_ENV_VAR);
 	this->SetExtensionOptionValue("s3_access_key_id", this->ACCESS_KEY_ENV_VAR);
 	this->SetExtensionOptionValue("s3_secret_access_key", this->SECRET_KEY_ENV_VAR);
