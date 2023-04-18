@@ -11,9 +11,9 @@ static void ListReverseFunction(DataChunk &args, ExpressionState &state, Vector 
 	auto count = args.size();
 
 	Vector &input_list = args.data[0];
-		if (input_list.GetType().id() == LogicalTypeId::SQLNULL) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
+	if (input_list.GetType().id() == LogicalTypeId::SQLNULL) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, true);
 		return;
 	}
 
@@ -64,23 +64,21 @@ static void ListReverseFunction(DataChunk &args, ExpressionState &state, Vector 
 }
 
 static unique_ptr<FunctionData> ListReverseBind(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+                                                vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 1);
-
 
 	auto &input_list = arguments[0]->return_type;
 	if (input_list.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
-	} 
+	}
 	// if the input is a NULL, we should just return a NULL
 	else if (input_list.id() == LogicalTypeId::SQLNULL) {
 		auto return_type = input_list;
 		bound_function.arguments[0] = return_type;
 		bound_function.return_type = return_type;
-	} 
-	else {
+	} else {
 		D_ASSERT(input_list.id() == LogicalTypeId::LIST);
-	
+
 		LogicalType child_type = LogicalType::SQLNULL;
 		for (const auto &argument : arguments) {
 			child_type = LogicalType::MaxLogicalType(child_type, ListType::GetChildType(argument->return_type));
@@ -99,7 +97,6 @@ static unique_ptr<BaseStatistics> ListReverseStats(ClientContext &context, Funct
 
 	auto &left_stats = child_stats[0];
 
-
 	auto stats = left_stats.ToUnique();
 
 	return stats;
@@ -107,9 +104,8 @@ static unique_ptr<BaseStatistics> ListReverseStats(ClientContext &context, Funct
 
 ScalarFunction ListReverseFun::GetFunction() {
 	// the arguments and return types are actually set in the binder function
-	auto fun = ScalarFunction({LogicalType::LIST(LogicalType::ANY)},
-	                          LogicalType::LIST(LogicalType::ANY), ListReverseFunction, ListReverseBind, nullptr,
-	                          ListReverseStats);
+	auto fun = ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY),
+	                          ListReverseFunction, ListReverseBind, nullptr, ListReverseStats);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return fun;
 }
