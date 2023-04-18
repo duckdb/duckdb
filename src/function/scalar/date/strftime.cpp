@@ -670,7 +670,7 @@ static void StrfTimeFunctionDate(DataChunk &args, ExpressionState &state, Vector
 }
 
 void StrfTimeFormat::ConvertTimestampVector(Vector &input, Vector &result, idx_t count) {
-	D_ASSERT(input.GetType().id() == LogicalTypeId::TIMESTAMP);
+	D_ASSERT(input.GetType().id() == LogicalTypeId::TIMESTAMP || input.GetType().id() == LogicalTypeId::TIMESTAMP_TZ);
 	D_ASSERT(result.GetType().id() == LogicalTypeId::VARCHAR);
 	UnaryExecutor::ExecuteWithNulls<timestamp_t, string_t>(
 	    input, result, count, [&](timestamp_t input, ValidityMask &mask, idx_t idx) {
