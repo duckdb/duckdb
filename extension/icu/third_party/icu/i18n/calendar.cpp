@@ -2981,6 +2981,10 @@ void Calendar::computeTime(UErrorCode& status) {
 
     // Compute the Julian day
     int32_t julianDay = computeJulianDay();
+    if (julianDay < getMinimum(UCAL_JULIAN_DAY) || julianDay > getMaximum(UCAL_JULIAN_DAY)) {
+        status = U_ILLEGAL_ARGUMENT_ERROR;
+        return;
+    }
 
     double millis = Grego::julianDayToMillis(julianDay);
 
