@@ -68,6 +68,7 @@ public:
 		return_type = type->Type();
 	}
 
+	template <bool PYARROW>
 	void OverrideParameters(const py::object &parameters_p) {
 		if (py::none().is(parameters_p)) {
 			return;
@@ -78,8 +79,14 @@ public:
 
 		auto params = py::list(parameters_p);
 		if (params.size() != param_count) {
-			throw InvalidInputException("%d types provided, but the provided function takes %d parameters",
+			if (PYARROW) {
+				for (; param_count < params.size(); param_count++) {
+					parameters.push_back(LogicalType::ANY);
+				}
+			} else {
+				throw InvalidInputException("%d types provided, but the provided function takes %d parameters",
 			                            params.size(), param_count);
+			}
 		}
 		D_ASSERT(parameters.empty() || parameters.size() == param_count);
 		if (parameters.empty()) {
@@ -228,7 +235,6 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 			timezone_config = state.GetContext().GetClientProperties().timezone;
 		}
 		auto pyarrow_table = ConvertDataChunkToPyArrowTable(input, timezone_config);
-		py::print(py::str(pyarrow_table));
 		py::tuple bundled_parameters(1);
 		bundled_parameters[0] = pyarrow_table;
 
@@ -298,13 +304,14 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 	return func;
 }
 
+template <bool PYARROW>
 static ScalarFunction CreateUDFInternal(const string &name, scalar_function_t func, const py::object &udf,
                                         const py::object &parameters, shared_ptr<DuckDBPyType> return_type,
                                         bool varargs, FunctionNullHandling null_handling) {
 	PythonUDFData data(name, func, varargs, null_handling);
 
 	data.AnalyzeSignature(udf);
-	data.OverrideParameters(parameters);
+	data.OverrideParameters<PYARROW>(parameters);
 	data.OverrideReturnType(return_type);
 	data.Verify();
 
@@ -317,7 +324,7 @@ ScalarFunction DuckDBPyConnection::CreatePyArrowScalarUDF(const string &name, co
                                                           FunctionNullHandling null_handling,
                                                           PythonExceptionHandling exception_handling) {
 	scalar_function_t func = CreateVectorizedFunction(udf.ptr(), exception_handling);
-	return CreateUDFInternal(name, func, udf, parameters, return_type, varargs, null_handling);
+	return CreateUDFInternal<true>(name, func, udf, parameters, return_type, varargs, null_handling);
 }
 
 ScalarFunction DuckDBPyConnection::CreateScalarUDF(const string &name, const py::object &udf,
@@ -325,7 +332,7 @@ ScalarFunction DuckDBPyConnection::CreateScalarUDF(const string &name, const py:
                                                    bool varargs, FunctionNullHandling null_handling,
                                                    PythonExceptionHandling exception_handling) {
 	scalar_function_t func = CreateNativeFunction(udf.ptr(), exception_handling);
-	return CreateUDFInternal(name, func, udf, parameters, return_type, varargs, null_handling);
+	return CreateUDFInternal<false>(name, func, udf, parameters, return_type, varargs, null_handling);
 }
 
 } // namespace duckdb

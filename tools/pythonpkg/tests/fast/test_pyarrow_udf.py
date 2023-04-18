@@ -3,16 +3,20 @@ import os
 import pandas as pd
 import pytest
 from typing import Union
+import pyarrow.compute as pc
+import pyarrow as pa
+import pyarrow.compute as pc
+even_filter = (pc.bit_wise_and(pc.field("nums"), pc.scalar(1)) == pc.scalar(0))
 
 from duckdb.typing import *
+
+# sort an entire chunk of data
 
 class TestPyArrowUDF(object):
 
     def test_basic_use(self):
         def plus_one(x):
             column = x['c0']
-            print(column)
-            print(column.__class__)
             return x
 
         con = duckdb.connect()
@@ -27,6 +31,27 @@ class TestPyArrowUDF(object):
         # which we can get through `duckdb.__standard_vector_size__`
         res = con.sql('select i, plus_one(i) from test_vector_types(NULL::BIGINT, false) t(i), range(2000)')
         assert len(res) == 22000
+
+    # This only works up to duckdb.__standard_vector_size__
+    def test_sort_table(self):
+        def sort_table(table):
+            sorted_table = table.sort_by([("c0", "ascending")])
+            return sorted_table
+
+        con = duckdb.connect()
+        con.register_vectorized('sort_table', sort_table, [BIGINT], BIGINT)
+        res = con.sql("select 100-i as original, sort_table(original) from range(100) tbl(i)").fetchall()
+        assert res[0] == (100, 1)
+
+    def test_predicates_pyarrow(self):
+        def is_round(table):
+            res = table.compute(even_filter)
+            return res
+
+        con = duckdb.connect()
+        con.register_vectorized('is_round', is_round, [BIGINT], BIGINT)
+        res = con.sql("select 100-i as original, is_round(original) from range(100) tbl(i)").fetchall()
+        assert res[0] == (100, 1)
 
     #def test_detected_parameters(self):
     #    def concatenate(a: str, b: str):
