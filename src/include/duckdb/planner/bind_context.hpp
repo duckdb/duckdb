@@ -10,8 +10,7 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb/common/unordered_map.hpp"
-#include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/qualified_name_set.hpp"
@@ -52,7 +51,7 @@ public:
 	//! matching ones
 	vector<string> GetSimilarBindings(const string &column_name);
 
-	Binding *GetCTEBinding(const string &ctename);
+	optional_ptr<Binding> GetCTEBinding(const string &ctename);
 	//! Binds a column expression to the base table. Returns the bound expression
 	//! or throws an exception if the column could not be bound.
 	BindResult BindColumn(ColumnRefExpression &colref, idx_t depth);
@@ -73,7 +72,7 @@ public:
 	void GenerateAllColumnExpressions(StarExpression &expr, vector<unique_ptr<ParsedExpression>> &new_select_list);
 	//! Check if the given (binding, column_name) is in the exclusion/replacement lists.
 	//! Returns true if it is in one of these lists, and should therefore be skipped.
-	bool CheckExclusionList(StarExpression &expr, Binding *binding, const string &column_name,
+	bool CheckExclusionList(StarExpression &expr, const string &column_name,
 	                        vector<unique_ptr<ParsedExpression>> &new_select_list,
 	                        case_insensitive_set_t &excluded_columns);
 
@@ -107,21 +106,19 @@ public:
 	void AddCTEBinding(idx_t index, const string &alias, const vector<string> &names, const vector<LogicalType> &types);
 
 	//! Add an implicit join condition (e.g. USING (x))
-	void AddUsingBinding(const string &column_name, UsingColumnSet *set);
+	void AddUsingBinding(const string &column_name, UsingColumnSet &set);
 
 	void AddUsingBindingSet(unique_ptr<UsingColumnSet> set);
 
 	//! Returns any using column set for the given column name, or nullptr if there is none. On conflict (multiple using
 	//! column sets with the same name) throw an exception.
-	UsingColumnSet *GetUsingBinding(const string &column_name);
+	optional_ptr<UsingColumnSet> GetUsingBinding(const string &column_name);
 	//! Returns any using column set for the given column name, or nullptr if there is none
-	UsingColumnSet *GetUsingBinding(const string &column_name, const string &binding_name);
+	optional_ptr<UsingColumnSet> GetUsingBinding(const string &column_name, const string &binding_name);
 	//! Erase a using binding from the set of using bindings
-	void RemoveUsingBinding(const string &column_name, UsingColumnSet *set);
-	//! Finds the using bindings for a given column. Returns true if any exists, false otherwise.
-	bool FindUsingBinding(const string &column_name, unordered_set<UsingColumnSet *> **using_columns);
+	void RemoveUsingBinding(const string &column_name, UsingColumnSet &set);
 	//! Transfer a using binding from one bind context to this bind context
-	void TransferUsingBinding(BindContext &current_context, UsingColumnSet *current_set, UsingColumnSet *new_set,
+	void TransferUsingBinding(BindContext &current_context, optional_ptr<UsingColumnSet> current_set, UsingColumnSet &new_set,
 	                          const string &binding, const string &using_column);
 
 	//! Fetch the actual column name from the given binding, or throws if none exists
@@ -148,7 +145,7 @@ public:
 
 	//! Gets a binding of the specified name. Returns a nullptr and sets the out_error if the binding could not be
 	//! found.
-	Binding *GetBinding(const string &name, string &out_error);
+	optional_ptr<Binding> GetBinding(const string &name, string &out_error);
 
 private:
 	void AddBinding(const string &alias, unique_ptr<Binding> binding);
@@ -159,7 +156,7 @@ private:
 	//! The list of bindings in insertion order
 	vector<std::pair<string, Binding *>> bindings_list;
 	//! The set of columns used in USING join conditions
-	case_insensitive_map_t<unordered_set<UsingColumnSet *>> using_columns;
+	case_insensitive_map_t<reference_set_t<UsingColumnSet>> using_columns;
 	//! Using column sets
 	vector<unique_ptr<UsingColumnSet>> using_column_sets;
 

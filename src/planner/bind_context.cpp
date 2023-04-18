@@ -51,7 +51,7 @@ vector<string> BindContext::GetSimilarBindings(const string &column_name) {
 	return StringUtil::TopNStrings(scores);
 }
 
-void BindContext::AddUsingBinding(const string &column_name, UsingColumnSet *set) {
+void BindContext::AddUsingBinding(const string &column_name, UsingColumnSet &set) {
 	using_columns[column_name].insert(set);
 }
 
@@ -59,25 +59,18 @@ void BindContext::AddUsingBindingSet(unique_ptr<UsingColumnSet> set) {
 	using_column_sets.push_back(std::move(set));
 }
 
-bool BindContext::FindUsingBinding(const string &column_name, unordered_set<UsingColumnSet *> **out) {
+optional_ptr<UsingColumnSet> BindContext::GetUsingBinding(const string &column_name) {
 	auto entry = using_columns.find(column_name);
-	if (entry != using_columns.end()) {
-		*out = &entry->second;
-		return true;
-	}
-	return false;
-}
-
-UsingColumnSet *BindContext::GetUsingBinding(const string &column_name) {
-	unordered_set<UsingColumnSet *> *using_bindings;
-	if (!FindUsingBinding(column_name, &using_bindings)) {
+	if (entry == using_columns.end()) {
 		return nullptr;
 	}
-	if (using_bindings->size() > 1) {
+	auto &using_bindings = entry->second;
+	if (using_bindings.size() > 1) {
 		string error = "Ambiguous column reference: column \"" + column_name + "\" can refer to either:\n";
-		for (auto &using_set : *using_bindings) {
+		for (auto &using_set_ref : using_bindings) {
+			auto &using_set = using_set_ref.get();
 			string result_bindings;
-			for (auto &binding : using_set->bindings) {
+			for (auto &binding : using_set.bindings) {
 				if (result_bindings.empty()) {
 					result_bindings = "[";
 				} else {
@@ -91,33 +84,32 @@ UsingColumnSet *BindContext::GetUsingBinding(const string &column_name) {
 		}
 		throw BinderException(error);
 	}
-	for (auto &using_set : *using_bindings) {
-		return using_set;
+	for (auto &using_set : using_bindings) {
+		return &using_set.get();
 	}
 	throw InternalException("Using binding found but no entries");
 }
 
-UsingColumnSet *BindContext::GetUsingBinding(const string &column_name, const string &binding_name) {
+optional_ptr<UsingColumnSet> BindContext::GetUsingBinding(const string &column_name, const string &binding_name) {
 	if (binding_name.empty()) {
 		throw InternalException("GetUsingBinding: expected non-empty binding_name");
 	}
-	unordered_set<UsingColumnSet *> *using_bindings;
-	if (!FindUsingBinding(column_name, &using_bindings)) {
+	auto entry = using_columns.find(column_name);
+	if (entry == using_columns.end()) {
 		return nullptr;
 	}
-	for (auto &using_set : *using_bindings) {
-		auto &bindings = using_set->bindings;
+	auto &using_bindings = entry->second;
+	for (auto &using_set_ref : using_bindings) {
+		auto &using_set = using_set_ref.get();
+		auto &bindings = using_set.bindings;
 		if (bindings.find(binding_name) != bindings.end()) {
-			return using_set;
+			return &using_set;
 		}
 	}
 	return nullptr;
 }
 
-void BindContext::RemoveUsingBinding(const string &column_name, UsingColumnSet *set) {
-	if (!set) {
-		return;
-	}
+void BindContext::RemoveUsingBinding(const string &column_name, UsingColumnSet &set) {
 	auto entry = using_columns.find(column_name);
 	if (entry == using_columns.end()) {
 		throw InternalException("Attempting to remove using binding that is not there");
@@ -131,10 +123,12 @@ void BindContext::RemoveUsingBinding(const string &column_name, UsingColumnSet *
 	}
 }
 
-void BindContext::TransferUsingBinding(BindContext &current_context, UsingColumnSet *current_set,
-                                       UsingColumnSet *new_set, const string &binding, const string &using_column) {
+void BindContext::TransferUsingBinding(BindContext &current_context, optional_ptr<UsingColumnSet> current_set,
+                                       UsingColumnSet &new_set, const string &binding, const string &using_column) {
 	AddUsingBinding(using_column, new_set);
-	current_context.RemoveUsingBinding(using_column, current_set);
+	if (current_set) {
+		current_context.RemoveUsingBinding(using_column, *current_set);
+	}
 }
 
 string BindContext::GetActualColumnName(const string &binding_name, const string &column_name) {
@@ -167,7 +161,7 @@ unique_ptr<ParsedExpression> BindContext::ExpandGeneratedColumn(const string &ta
 
 	auto binding = GetBinding(table_name, error_message);
 	D_ASSERT(binding);
-	auto &table_binding = *(TableBinding *)binding;
+	auto &table_binding = (TableBinding &)*binding;
 	auto result = table_binding.ExpandGeneratedColumn(column_name);
 	result->alias = column_name;
 	return result;
@@ -230,7 +224,7 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &sc
 	return CreateColumnReference(catalog_name, schema_name, table_name, column_name);
 }
 
-Binding *BindContext::GetCTEBinding(const string &ctename) {
+optional_ptr<Binding> BindContext::GetCTEBinding(const string &ctename) {
 	auto match = cte_bindings.find(ctename);
 	if (match == cte_bindings.end()) {
 		return nullptr;
@@ -238,7 +232,7 @@ Binding *BindContext::GetCTEBinding(const string &ctename) {
 	return match->second.get();
 }
 
-Binding *BindContext::GetBinding(const string &name, string &out_error) {
+optional_ptr<Binding> BindContext::GetBinding(const string &name, string &out_error) {
 	auto match = bindings.find(name);
 	if (match == bindings.end()) {
 		// alias not found in this BindContext
@@ -301,7 +295,7 @@ BindResult BindContext::BindColumn(PositionalReferenceExpression &ref, idx_t dep
 	return BindColumn(*column_ref, depth);
 }
 
-bool BindContext::CheckExclusionList(StarExpression &expr, Binding *binding, const string &column_name,
+bool BindContext::CheckExclusionList(StarExpression &expr, const string &column_name,
                                      vector<unique_ptr<ParsedExpression>> &new_select_list,
                                      case_insensitive_set_t &excluded_columns) {
 	if (expr.exclude_list.find(column_name) != expr.exclude_list.end()) {
@@ -328,16 +322,17 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 	if (expr.relation_name.empty()) {
 		// SELECT * case
 		// bind all expressions of each table in-order
-		unordered_set<UsingColumnSet *> handled_using_columns;
+		reference_set_t<UsingColumnSet> handled_using_columns;
 		for (auto &entry : bindings_list) {
 			auto binding = entry.second;
 			for (auto &column_name : binding->names) {
-				if (CheckExclusionList(expr, binding, column_name, new_select_list, excluded_columns)) {
+				if (CheckExclusionList(expr, column_name, new_select_list, excluded_columns)) {
 					continue;
 				}
 				// check if this column is a USING column
-				auto using_binding = GetUsingBinding(column_name, binding->alias);
-				if (using_binding) {
+				auto using_binding_ptr = GetUsingBinding(column_name, binding->alias);
+				if (using_binding_ptr) {
+					auto &using_binding = *using_binding_ptr;
 					// it is!
 					// check if we have already emitted the using column
 					if (handled_using_columns.find(using_binding) != handled_using_columns.end()) {
@@ -345,10 +340,10 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 						continue;
 					}
 					// we have not! output the using column
-					if (using_binding->primary_binding.empty()) {
+					if (using_binding.primary_binding.empty()) {
 						// no primary binding: output a coalesce
 						auto coalesce = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
-						for (auto &child_binding : using_binding->bindings) {
+						for (auto &child_binding : using_binding.bindings) {
 							coalesce->children.push_back(make_uniq<ColumnRefExpression>(column_name, child_binding));
 						}
 						coalesce->alias = column_name;
@@ -356,7 +351,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 					} else {
 						// primary binding: output the qualified column ref
 						new_select_list.push_back(
-						    make_uniq<ColumnRefExpression>(column_name, using_binding->primary_binding));
+						    make_uniq<ColumnRefExpression>(column_name, using_binding.primary_binding));
 					}
 					handled_using_columns.insert(using_binding);
 					continue;
@@ -391,7 +386,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 			column_names[0] = binding->alias;
 			column_names[1] = expr.relation_name;
 			for (auto &child : struct_children) {
-				if (CheckExclusionList(expr, binding, child.first, new_select_list, excluded_columns)) {
+				if (CheckExclusionList(expr, child.first, new_select_list, excluded_columns)) {
 					continue;
 				}
 				column_names[2] = child.first;
@@ -399,7 +394,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 			}
 		} else {
 			for (auto &column_name : binding->names) {
-				if (CheckExclusionList(expr, binding, column_name, new_select_list, excluded_columns)) {
+				if (CheckExclusionList(expr, column_name, new_select_list, excluded_columns)) {
 					continue;
 				}
 
@@ -533,8 +528,8 @@ void BindContext::AddContext(BindContext other) {
 		for (auto &alias : entry.second) {
 #ifdef DEBUG
 			for (auto &other_alias : using_columns[entry.first]) {
-				for (auto &col : alias->bindings) {
-					D_ASSERT(other_alias->bindings.find(col) == other_alias->bindings.end());
+				for (auto &col : alias.get().bindings) {
+					D_ASSERT(other_alias.get().bindings.find(col) == other_alias.get().bindings.end());
 				}
 			}
 #endif
