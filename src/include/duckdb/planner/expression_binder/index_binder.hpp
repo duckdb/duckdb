@@ -19,8 +19,8 @@ class BoundColumnRefExpression;
 //! The IndexBinder is responsible for binding an expression within an index statement
 class IndexBinder : public ExpressionBinder {
 public:
-	IndexBinder(Binder &binder, ClientContext &context, TableCatalogEntry *table = nullptr,
-	            CreateIndexInfo *info = nullptr);
+	IndexBinder(Binder &binder, ClientContext &context, optional_ptr<TableCatalogEntry> table = nullptr,
+	            optional_ptr<CreateIndexInfo> info = nullptr);
 
 protected:
 	BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,
@@ -29,8 +29,8 @@ protected:
 
 private:
 	// only for WAL replay
-	TableCatalogEntry *table;
-	CreateIndexInfo *info;
+	optional_ptr<TableCatalogEntry> table;
+	optional_ptr<CreateIndexInfo> info;
 };
 
 } // namespace duckdb

@@ -411,7 +411,7 @@ void ReplayState::ReplayCreateIndex() {
 		}
 	}
 	auto binder = Binder::CreateBinder(context);
-	auto expressions = binder->BindCreateIndexExpressions(table, info.get());
+	auto expressions = binder->BindCreateIndexExpressions(*table, *info);
 
 	// create the empty index
 	unique_ptr<Index> index;
