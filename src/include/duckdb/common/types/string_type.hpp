@@ -81,6 +81,10 @@ public:
 		return value.pointer.prefix;
 	}
 
+	char *GetPrefixWriteable() const {
+		return (char *)value.pointer.prefix;
+	}
+
 	idx_t GetSize() const {
 		return value.inlined.length;
 	}

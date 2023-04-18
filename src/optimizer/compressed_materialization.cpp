@@ -386,7 +386,7 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetStringCompress(uniq
 
 	const auto max_string_length = StringStats::MaxStringLength(stats);
 	LogicalType cast_type = LogicalType::INVALID;
-	for (const auto &compressed_type : CompressedMaterializationTypes::String()) {
+	for (const auto &compressed_type : CompressedMaterializationFunctions::StringTypes()) {
 		if (max_string_length < GetTypeIdSize(compressed_type.InternalType())) {
 			cast_type = compressed_type;
 			break;

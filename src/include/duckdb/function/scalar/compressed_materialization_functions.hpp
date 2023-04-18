@@ -13,35 +13,37 @@
 
 namespace duckdb {
 
-struct CompressedMaterializationTypes {
+struct CompressedMaterializationFunctions {
 	//! The types we compress integral types to
-	static const vector<LogicalType> Integral() {
-		return {LogicalType::UTINYINT, LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT};
-	}
+	static const vector<LogicalType> IntegralTypes();
 	//! The types we compress strings to
-	static const vector<LogicalType> String() {
-		return {LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT, LogicalTypeId::HUGEINT};
-	}
+	static const vector<LogicalType> StringTypes();
+
+	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
+	                                     vector<unique_ptr<Expression>> &arguments);
 };
 
+//! Needed for (de)serialization without binding
+enum class CompressedMaterializationDirection : uint8_t { INVALID = 0, COMPRESS = 1, DECOMPRESS = 2 };
+
 struct CMIntegralCompressFun {
-	static void RegisterFunction(BuiltinFunctions &set);
 	static ScalarFunction GetFunction(const LogicalType &input_type, const LogicalType &result_type);
+	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 struct CMIntegralDecompressFun {
-	static void RegisterFunction(BuiltinFunctions &set);
 	static ScalarFunction GetFunction(const LogicalType &input_type, const LogicalType &result_type);
+	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 struct CMStringCompressFun {
-	static void RegisterFunction(BuiltinFunctions &set);
 	static ScalarFunction GetFunction(const LogicalType &result_type);
+	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 struct CMStringDecompressFun {
-	static void RegisterFunction(BuiltinFunctions &set);
 	static ScalarFunction GetFunction(const LogicalType &input_type);
+	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 } // namespace duckdb
