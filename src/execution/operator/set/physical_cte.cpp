@@ -12,9 +12,9 @@
 
 namespace duckdb {
 
-PhysicalCTE::PhysicalCTE(vector<LogicalType> types, unique_ptr<PhysicalOperator> top,
+PhysicalCTE::PhysicalCTE(string ctename, idx_t table_index, vector<LogicalType> types, unique_ptr<PhysicalOperator> top,
                                            unique_ptr<PhysicalOperator> bottom, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::CTE, std::move(types), estimated_cardinality) {
+    : PhysicalOperator(PhysicalOperatorType::CTE, std::move(types), estimated_cardinality), table_index(table_index), ctename(ctename) {
 	children.push_back(std::move(top));
 	children.push_back(std::move(bottom));
 }
@@ -54,6 +54,15 @@ void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
 
 vector<const PhysicalOperator *> PhysicalCTE::GetSources() const {
 	return {this};
+}
+
+string PhysicalCTE::ParamsToString() const {
+	string result = "";
+	result += "\n[INFOSEPARATOR]\n";
+	result += ctename;
+	result += "\n[INFOSEPARATOR]\n";
+	result += StringUtil::Format("idx: %llu", table_index);
+	return result;
 }
 
 } // namespace duckdb

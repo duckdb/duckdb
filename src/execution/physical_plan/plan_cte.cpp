@@ -25,7 +25,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCTE &op) {
 	materialized_ctes[op.table_index] = vector<PhysicalOperator *> ();
 	auto right = CreatePlan(*op.children[1]);
 
-	auto cte = make_uniq<PhysicalCTE>(op.children[1]->types, std::move(left), std::move(right),
+	auto cte = make_uniq<PhysicalCTE>(op.ctename, op.table_index, op.children[1]->types, std::move(left), std::move(right),
 	                                           op.estimated_cardinality);
 	cte->working_table = working_table;
 	cte->cte_scans = materialized_ctes[op.table_index];

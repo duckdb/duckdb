@@ -20,7 +20,7 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::CTE;
 
 public:
-	PhysicalCTE(vector<LogicalType> types, unique_ptr<PhysicalOperator> top,
+	PhysicalCTE(string ctename, idx_t table_index, vector<LogicalType> types, unique_ptr<PhysicalOperator> top,
 	                     unique_ptr<PhysicalOperator> bottom, idx_t estimated_cardinality);
 	~PhysicalCTE() override;
 
@@ -28,6 +28,9 @@ public:
 
 	std::shared_ptr<ColumnDataCollection> working_table;
 	shared_ptr<MetaPipeline> recursive_meta_pipeline;
+
+	idx_t table_index;
+	string ctename;
 
 public:
 	bool IsSource() const override {
@@ -42,6 +45,8 @@ public:
 	bool IsSink() const override {
 		return true;
 	}
+
+	string ParamsToString() const override;
 
 public:
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
