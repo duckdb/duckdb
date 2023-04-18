@@ -11,8 +11,9 @@ IndexBinder::IndexBinder(Binder &binder, ClientContext &context, TableCatalogEnt
     : ExpressionBinder(binder, context), table(table), info(info) {
 }
 
-BindResult IndexBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = **expr_ptr;
+BindResult IndexBinder::BindExpression(reference<unique_ptr<ParsedExpression>> expr_ptr, idx_t depth,
+                                       bool root_expression) {
+	auto &expr = *expr_ptr.get();
 	switch (expr.expression_class) {
 	case ExpressionClass::WINDOW:
 		return BindResult("window functions are not allowed in index expressions");

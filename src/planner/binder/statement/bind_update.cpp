@@ -162,7 +162,7 @@ unique_ptr<LogicalOperator> Binder::BindUpdateSet(LogicalOperator *op, unique_pt
 			UpdateBinder binder(*this, context);
 			binder.target_type = column.Type();
 			auto bound_expr = binder.Bind(expr);
-			PlanSubqueries(&bound_expr, &root);
+			PlanSubqueries(bound_expr, root);
 
 			op->expressions.push_back(make_uniq<BoundColumnRefExpression>(
 			    bound_expr->return_type, ColumnBinding(proj_index, projection_expressions.size())));
@@ -181,7 +181,7 @@ unique_ptr<LogicalOperator> Binder::BindUpdateSet(LogicalOperator *op, unique_pt
 BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	BoundStatement result;
 	unique_ptr<LogicalOperator> root;
-	LogicalGet *get;
+	optional_ptr<LogicalGet> get;
 
 	// visit the table reference
 	auto bound_table = Bind(*stmt.table);
@@ -226,7 +226,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		WhereBinder binder(*this, context);
 		auto condition = binder.Bind(stmt.set_info->condition);
 
-		PlanSubqueries(&condition, &root);
+		PlanSubqueries(condition, root);
 		auto filter = make_uniq<LogicalFilter>(std::move(condition));
 		filter->AddChild(std::move(root));
 		root = std::move(filter);

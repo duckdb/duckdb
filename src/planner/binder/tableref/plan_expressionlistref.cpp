@@ -10,7 +10,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundExpressionListRef &ref) {
 	// values list, first plan any subqueries in the list
 	for (auto &expr_list : ref.values) {
 		for (auto &expr : expr_list) {
-			PlanSubqueries(&expr, &root);
+			PlanSubqueries(expr, root);
 		}
 	}
 	// now create a LogicalExpressionGet from the set of expressions

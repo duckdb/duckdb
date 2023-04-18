@@ -45,7 +45,7 @@ void ExpressionBinder::ReplaceMacroParametersRecursive(unique_ptr<ParsedExpressi
 }
 
 BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacroCatalogEntry *macro_func, idx_t depth,
-                                       unique_ptr<ParsedExpression> *expr) {
+                                       reference<unique_ptr<ParsedExpression>> expr) {
 	// recast function so we can access the scalar member function->expression
 	auto &macro_def = (ScalarMacroFunction &)*macro_func->function;
 
@@ -56,7 +56,7 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacro
 	string error =
 	    MacroFunction::ValidateArguments(*macro_func->function, macro_func->name, function, positionals, defaults);
 	if (!error.empty()) {
-		throw BinderException(binder.FormatError(*expr->get(), error));
+		throw BinderException(binder.FormatError(*expr.get(), error));
 	}
 
 	// create a MacroBinding to bind this macro's parameters to its arguments
@@ -80,11 +80,11 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacro
 	macro_binding = new_macro_binding.get();
 
 	// replace current expression with stored macro expression, and replace params
-	*expr = macro_def.expression->Copy();
-	ReplaceMacroParametersRecursive(*expr);
+	expr.get() = macro_def.expression->Copy();
+	ReplaceMacroParametersRecursive(expr.get());
 
 	// bind the unfolded macro
-	return BindExpression(expr, depth);
+	return BindExpression(expr.get(), depth);
 }
 
 } // namespace duckdb

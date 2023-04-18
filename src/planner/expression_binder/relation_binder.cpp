@@ -6,8 +6,9 @@ RelationBinder::RelationBinder(Binder &binder, ClientContext &context, string op
     : ExpressionBinder(binder, context), op(std::move(op)) {
 }
 
-BindResult RelationBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = **expr_ptr;
+BindResult RelationBinder::BindExpression(reference<unique_ptr<ParsedExpression>> expr_ptr, idx_t depth,
+                                          bool root_expression) {
+	auto &expr = *expr_ptr.get();
 	switch (expr.expression_class) {
 	case ExpressionClass::AGGREGATE:
 		return BindResult("aggregate functions are not allowed in " + op);

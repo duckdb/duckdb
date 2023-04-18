@@ -21,7 +21,8 @@ public:
 	string clause;
 
 protected:
-	BindResult BindExpression(unique_ptr<ParsedExpression> *expr, idx_t depth, bool root_expression = false) override;
+	BindResult BindExpression(reference<unique_ptr<ParsedExpression>> expr, idx_t depth,
+	                          bool root_expression = false) override;
 
 	string UnsupportedAggregateMessage() override;
 };

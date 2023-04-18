@@ -8,7 +8,7 @@ namespace duckdb {
 
 BindResult ExpressionBinder::BindExpression(CastExpression &expr, idx_t depth) {
 	// first try to bind the child of the cast expression
-	string error = Bind(&expr.child, depth);
+	string error = Bind(expr.child, depth);
 	if (!error.empty()) {
 		return BindResult(error);
 	}

@@ -15,8 +15,9 @@ QualifyBinder::QualifyBinder(Binder &binder, ClientContext &context, BoundSelect
 	target_type = LogicalType(LogicalTypeId::BOOLEAN);
 }
 
-BindResult QualifyBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = (ColumnRefExpression &)**expr_ptr;
+BindResult QualifyBinder::BindColumnRef(reference<unique_ptr<ParsedExpression>> expr_ptr, idx_t depth,
+                                        bool root_expression) {
+	auto &expr = (ColumnRefExpression &)*expr_ptr.get();
 	auto result = duckdb::BaseSelectBinder::BindExpression(expr_ptr, depth);
 	if (!result.HasError()) {
 		return result;
@@ -31,8 +32,9 @@ BindResult QualifyBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, 
 	                                     expr.ToString()));
 }
 
-BindResult QualifyBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = **expr_ptr;
+BindResult QualifyBinder::BindExpression(reference<unique_ptr<ParsedExpression>> expr_ptr, idx_t depth,
+                                         bool root_expression) {
+	auto &expr = *expr_ptr.get();
 	// check if the expression binds to one of the groups
 	auto group_index = TryBindGroup(expr, depth);
 	if (group_index != DConstants::INVALID_INDEX) {

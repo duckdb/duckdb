@@ -78,13 +78,13 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 
 	// bind the parameter expressions
 	for (idx_t i = 0; i < expr.params.size(); i++) {
-		auto result = BindExpression(&expr.params[i], depth, false);
+		auto result = BindExpression(expr.params[i], depth, false);
 		if (result.HasError()) {
 			throw InternalException("Error during lambda binding: %s", result.error);
 		}
 	}
 
-	auto result = BindExpression(&expr.expr, depth, false);
+	auto result = BindExpression(expr.expr, depth, false);
 	lambda_bindings->pop_back();
 
 	// successfully bound a subtree of nested lambdas, set this to nullptr in case other parts of the

@@ -23,7 +23,8 @@ void LateralBinder::ExtractCorrelatedColumns(Expression &expr) {
 	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { ExtractCorrelatedColumns(child); });
 }
 
-BindResult LateralBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
+BindResult LateralBinder::BindColumnRef(reference<unique_ptr<ParsedExpression>> expr_ptr, idx_t depth,
+                                        bool root_expression) {
 	if (depth == 0) {
 		throw InternalException("Lateral binder can only bind correlated columns");
 	}
@@ -66,8 +67,9 @@ vector<CorrelatedColumnInfo> LateralBinder::ExtractCorrelatedColumns(Binder &bin
 	return all_correlated_columns;
 }
 
-BindResult LateralBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = **expr_ptr;
+BindResult LateralBinder::BindExpression(reference<unique_ptr<ParsedExpression>> expr_ptr, idx_t depth,
+                                         bool root_expression) {
+	auto &expr = *expr_ptr.get();
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::DEFAULT:
 		return BindResult("LATERAL join cannot contain DEFAULT clause");

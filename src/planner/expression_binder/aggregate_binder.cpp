@@ -7,8 +7,9 @@ namespace duckdb {
 AggregateBinder::AggregateBinder(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context, true) {
 }
 
-BindResult AggregateBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = **expr_ptr;
+BindResult AggregateBinder::BindExpression(reference<unique_ptr<ParsedExpression>> expr_ptr, idx_t depth,
+                                           bool root_expression) {
+	auto &expr = *expr_ptr.get();
 	switch (expr.expression_class) {
 	case ExpressionClass::WINDOW:
 		throw ParserException("aggregate function calls cannot contain window function calls");
