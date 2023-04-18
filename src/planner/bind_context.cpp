@@ -541,18 +541,17 @@ void BindContext::AddContext(BindContext other) {
 
 void BindContext::RemoveContext(vector<reference<Binding>> &other_bindings_list) {
 	for (auto &other_binding : other_bindings_list) {
+		auto it = std::remove_if(bindings_list.begin(), bindings_list.end(), [other_binding](reference<Binding> x) {
+			return x.get().alias == other_binding.get().alias;
+		});
+		bindings_list.erase(it, bindings_list.end());
+	}
+
+	for (auto &other_binding : other_bindings_list) {
 		auto &alias = other_binding.get().alias;
 		if (bindings.find(alias) != bindings.end()) {
 			bindings.erase(alias);
 		}
-	}
-
-	vector<idx_t> delete_list_indexes;
-	for (auto &other_binding : other_bindings_list) {
-		auto it = std::remove_if(bindings_list.begin(), bindings_list.end(), [other_binding](reference<Binding> &x) {
-			return x.get().alias == other_binding.get().alias;
-		});
-		bindings_list.erase(it, bindings_list.end());
 	}
 }
 

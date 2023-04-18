@@ -1,5 +1,6 @@
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/planner/expression_binder/column_alias_binder.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 
 namespace duckdb {
 
