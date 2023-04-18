@@ -265,16 +265,17 @@ string BindContext::BindColumn(PositionalReferenceExpression &ref, string &table
 	idx_t total_columns = 0;
 	idx_t current_position = ref.index - 1;
 	for (auto &entry : bindings_list) {
-		idx_t entry_column_count = entry.second->names.size();
+		auto &binding = entry.get();
+		idx_t entry_column_count = binding.names.size();
 		if (ref.index == 0) {
 			// this is a row id
-			table_name = entry.first;
+			table_name = binding.alias;
 			column_name = "rowid";
 			return string();
 		}
 		if (current_position < entry_column_count) {
-			table_name = entry.first;
-			column_name = entry.second->names[current_position];
+			table_name = binding.alias;
+			column_name = binding.names[current_position];
 			return string();
 		} else {
 			total_columns += entry_column_count;
@@ -324,13 +325,13 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 		// bind all expressions of each table in-order
 		reference_set_t<UsingColumnSet> handled_using_columns;
 		for (auto &entry : bindings_list) {
-			auto binding = entry.second;
-			for (auto &column_name : binding->names) {
+			auto &binding = entry.get();
+			for (auto &column_name : binding.names) {
 				if (CheckExclusionList(expr, column_name, new_select_list, excluded_columns)) {
 					continue;
 				}
 				// check if this column is a USING column
-				auto using_binding_ptr = GetUsingBinding(column_name, binding->alias);
+				auto using_binding_ptr = GetUsingBinding(column_name, binding.alias);
 				if (using_binding_ptr) {
 					auto &using_binding = *using_binding_ptr;
 					// it is!
@@ -356,7 +357,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 					handled_using_columns.insert(using_binding);
 					continue;
 				}
-				new_select_list.push_back(make_uniq<ColumnRefExpression>(column_name, binding->alias));
+				new_select_list.push_back(make_uniq<ColumnRefExpression>(column_name, binding.alias));
 			}
 		}
 	} else {
@@ -418,7 +419,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 
 void BindContext::GetTypesAndNames(vector<string> &result_names, vector<LogicalType> &result_types) {
 	for (auto &binding_entry : bindings_list) {
-		auto &binding = *binding_entry.second;
+		auto &binding = binding_entry.get();
 		D_ASSERT(binding.names.size() == binding.types.size());
 		for (idx_t i = 0; i < binding.names.size(); i++) {
 			result_names.push_back(binding.names[i]);
@@ -431,7 +432,7 @@ void BindContext::AddBinding(const string &alias, unique_ptr<Binding> binding) {
 	if (bindings.find(alias) != bindings.end()) {
 		throw BinderException("Duplicate alias \"%s\" in query!", alias);
 	}
-	bindings_list.emplace_back(alias, binding.get());
+	bindings_list.push_back(*binding);
 	bindings[alias] = std::move(binding);
 }
 
@@ -538,10 +539,11 @@ void BindContext::AddContext(BindContext other) {
 	}
 }
 
-void BindContext::RemoveContext(vector<std::pair<string, duckdb::Binding *>> &other_bindings_list) {
+void BindContext::RemoveContext(vector<reference<Binding>> &other_bindings_list) {
 	for (auto &other_binding : other_bindings_list) {
-		if (bindings.find(other_binding.first) != bindings.end()) {
-			bindings.erase(other_binding.first);
+		auto &alias = other_binding.get().alias;
+		if (bindings.find(alias) != bindings.end()) {
+			bindings.erase(alias);
 		}
 	}
 
@@ -549,7 +551,7 @@ void BindContext::RemoveContext(vector<std::pair<string, duckdb::Binding *>> &ot
 	for (auto &other_binding : other_bindings_list) {
 		auto it =
 		    std::remove_if(bindings_list.begin(), bindings_list.end(),
-		                   [other_binding](std::pair<string, Binding *> &x) { return x.first == other_binding.first; });
+		                   [other_binding](reference<Binding> &x) { return x.get().alias == other_binding.get().alias; });
 		bindings_list.erase(it, bindings_list.end());
 	}
 }

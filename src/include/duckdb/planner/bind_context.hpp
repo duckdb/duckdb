@@ -76,7 +76,7 @@ public:
 	                        vector<unique_ptr<ParsedExpression>> &new_select_list,
 	                        case_insensitive_set_t &excluded_columns);
 
-	const vector<std::pair<string, Binding *>> &GetBindingsList() {
+	const vector<reference<Binding>> &GetBindingsList() {
 		return bindings_list;
 	}
 
@@ -141,7 +141,7 @@ public:
 	//! Add all the bindings from a BindContext to this BindContext. The other BindContext is destroyed in the process.
 	void AddContext(BindContext other);
 	//! For semi and anti joins we remove the binding context of the right table after binding the condition.
-	void RemoveContext(vector<std::pair<string, duckdb::Binding *>> &other_bindings_list);
+	void RemoveContext(vector<reference<Binding>> &other_bindings_list);
 
 	//! Gets a binding of the specified name. Returns a nullptr and sets the out_error if the binding could not be
 	//! found.
@@ -154,7 +154,7 @@ private:
 	//! The set of bindings
 	case_insensitive_map_t<unique_ptr<Binding>> bindings;
 	//! The list of bindings in insertion order
-	vector<std::pair<string, Binding *>> bindings_list;
+	vector<reference<Binding>> bindings_list;
 	//! The set of columns used in USING join conditions
 	case_insensitive_map_t<reference_set_t<UsingColumnSet>> using_columns;
 	//! Using column sets

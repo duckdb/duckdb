@@ -150,7 +150,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 		case_insensitive_set_t lhs_columns;
 		auto &lhs_binding_list = left_binder.bind_context.GetBindingsList();
 		for (auto &binding : lhs_binding_list) {
-			for (auto &column_name : binding.second->names) {
+			for (auto &column_name : binding.get().names) {
 				lhs_columns.insert(column_name);
 			}
 		}
@@ -175,20 +175,22 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			// gather all left/right candidates
 			string left_candidates, right_candidates;
 			auto &rhs_binding_list = right_binder.bind_context.GetBindingsList();
-			for (auto &binding : lhs_binding_list) {
-				for (auto &column_name : binding.second->names) {
+			for (auto &binding_ref : lhs_binding_list) {
+				auto &binding = binding_ref.get();
+				for (auto &column_name : binding.names) {
 					if (!left_candidates.empty()) {
 						left_candidates += ", ";
 					}
-					left_candidates += binding.first + "." + column_name;
+					left_candidates += binding.alias + "." + column_name;
 				}
 			}
-			for (auto &binding : rhs_binding_list) {
-				for (auto &column_name : binding.second->names) {
+			for (auto &binding_ref : rhs_binding_list) {
+				auto &binding = binding_ref.get();
+				for (auto &column_name : binding.names) {
 					if (!right_candidates.empty()) {
 						right_candidates += ", ";
 					}
-					right_candidates += binding.first + "." + column_name;
+					right_candidates += binding.alias + "." + column_name;
 				}
 			}
 			error_msg += "\n   Left candidates: " + left_candidates;
