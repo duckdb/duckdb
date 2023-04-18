@@ -1,0 +1,186 @@
+# name: test/sql/copy/format_uuid.test
+# description: basic tests for the hive partitioned write
+# group: [copy]
+
+require parquet
+
+require vector_size 512
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA verify_parallelism;
+
+statement ok
+PRAGMA threads=4;
+
+# Create some tables
+statement ok
+CREATE TABLE test2 as SELECT i as a, (i*2) as b, power(i,2) as c from range(0,10) tbl(i);
+CREATE TABLE test3 as SELECT i as a, (i*3) as b, power(i,3) as c from range(0,10) tbl(i);
+CREATE TABLE test4 as SELECT i as a, (i*4) as b, power(i,4) as c from range(0,10) tbl(i);
+CREATE TABLE test5 as SELECT i as a, (i*5) as b, power(i,5) as c from range(0,10) tbl(i);
+CREATE TABLE testpto as SELECT i as a, (i*10) as b, (i*100) as c from range(0,10000) tbl(i);
+
+query III
+SELECT * FROM test2;
+----
+0	0	0
+1	2	1 
+2	4	4
+3	6	9
+4	8	16 
+5	10	25
+6	12	36
+7	14	49
+8	16	64
+9	18	81    
+
+# Test with the FILENAME_PATTERN option. "{uuid}" will be replaced with a unique string.
+statement ok
+COPY test2 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PATTERN "leading_{uuid}");
+
+# the filename contains a uuid
+query III
+SELECT * FROM '__TEST_DIR__/part/a=9/leading_????????-????-4???-????-????????????.parquet';
+----
+9	18	81
+
+# create a second file in the same partition dirs. This is the append workflow
+statement ok
+COPY test3 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), overwrite_or_ignore TRUE, FILENAME_PATTERN "leading_{uuid}_trailing");
+
+# the filename contains a uuid
+query III sort
+SELECT * FROM '__TEST_DIR__/part/a=9/leading_????????-????-4???-????-????????????_trailing.parquet';
+----
+9	27	729
+
+# the partition dir contains the files from previous 2 queries
+query III sort
+SELECT * FROM '__TEST_DIR__/part/a=9/leading_????????-????-4???-????-????????????*.parquet';
+----
+9	18	81
+9	27	729
+
+# Test without a specified format name for the outputfile.
+statement ok
+COPY test4 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), overwrite_or_ignore TRUE);
+
+# the filename is the default: "data_{i}"
+query III sort
+SELECT * FROM '__TEST_DIR__/part/a=9/data_[0-9]*.parquet';
+----
+9	36	6561
+
+# the partition dir contains the files from test[2-4]
+query III sort
+SELECT * FROM '__TEST_DIR__/part/a=9/*.parquet';
+----
+9	18	81
+9	27	729
+9	36	6561
+
+# Test where the FILENAME_PATTERN does not contain "{i}" or "{uuid}". 
+statement ok
+COPY test5 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a), overwrite_or_ignore TRUE, FILENAME_PATTERN "basename");
+
+# the file has the name of the given input
+query III sort
+SELECT * FROM '__TEST_DIR__/part/a=9/basename[0-9]*.parquet';
+----
+9	45	59049
+
+# the partition dir contains the files from test[2-5]
+query III sort
+SELECT * FROM '__TEST_DIR__/part/a=9/*.parquet';
+----
+9	18	81
+9	27	729
+9	36	6561
+9	45	59049
+
+# Test without the overwrite_or_ignore param, that tries to add a file to an existing directory
+statement error
+COPY test5 TO '__TEST_DIR__/part' (FORMAT PARQUET, PARTITION_BY (a));
+----
+IO Error: Directory
+
+
+
+# Test where the FILENAME_PATTERN param has no value
+statement error
+COPY test4 TO '__TEST_DIR__/to_be_overwritten' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PATTERN);
+----
+IO Error: FILENAME_PATTERN
+
+statement ok
+COPY test4 TO '__TEST_DIR__/to_be_overwritten' (FORMAT PARQUET, PARTITION_BY (a), FILENAME_PATTERN a_file_name);
+
+query I
+SELECT COUNT(*) FROM GLOB('__TEST_DIR__/to_be_overwritten/a=9/a_file_name*');
+----
+1
+
+query III sort
+SELECT * FROM '__TEST_DIR__/to_be_overwritten/a=9/a_file_name*.parquet';
+----
+9	36	6561
+
+
+# Test with a combination of {i} and {uuid}
+statement ok
+COPY test5 TO '__TEST_DIR__/incorrect_pos' (FORMAT PARQUET, PARTITION_BY (a), filename_pattern "a_name{i}_with_{uuid}_numbers");
+
+query III sort
+SELECT * FROM '__TEST_DIR__/incorrect_pos/a=5/a_name_with_????????-????-4???-????-????????????_numbers.parquet';
+----
+5	25	3125
+
+# Test "{uuid}" with per_thread_output TRUE
+statement ok
+COPY testpto TO '__TEST_DIR__/pto' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE, OVERWRITE_OR_IGNORE TRUE, FILENAME_PATTERN "basename_{uuid}");
+
+query I sort
+SELECT COUNT(*) FROM '__TEST_DIR__/pto/basename_????????-????-4???-????-????????????.parquet';
+----
+10000
+
+query I
+SELECT COUNT(*) FROM GLOB('__TEST_DIR__/pto/basename_????????-????-4???-????-????????????.parquet');
+----
+4
+
+
+
+statement ok
+PRAGMA threads=1;
+
+# Test where overwrite_or_ignore param has no value -> will be true -> overwrite previous test
+statement ok
+COPY test5 TO '__TEST_DIR__/to_be_overwritten2' (FORMAT PARQUET, PARTITION_BY (a), OVERWRITE_OR_IGNORE);
+
+query I
+SELECT COUNT(*) FROM GLOB('__TEST_DIR__/to_be_overwritten2/a=9/*');
+----
+1
+
+query III sort
+SELECT * FROM '__TEST_DIR__/to_be_overwritten2/a=9/data_0*.parquet';
+----
+9	45	59049
+
+# Test where overwrite_or_ignore param == true, and filename_pattern is set to an existing file
+statement ok
+COPY test5 TO '__TEST_DIR__/directory0' (FORMAT PARQUET, PARTITION_BY (a), overwrite_or_ignore TRUE, FILENAME_PATTERN "my_filename");
+
+query I
+SELECT COUNT(*) FROM GLOB('__TEST_DIR__/directory0/a=7/*');
+----
+1
+
+query III sort
+SELECT * FROM '__TEST_DIR__/directory0/a=7/my_filename0.parquet';
+----
+7	35	16807

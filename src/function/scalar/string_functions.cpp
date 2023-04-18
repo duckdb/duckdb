@@ -39,6 +39,7 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<CHR>();
 	Register<MismatchesFun>();
 	Register<LevenshteinFun>();
+	Register<DamerauLevenshteinFun>();
 	Register<JaccardFun>();
 	Register<JaroWinklerFun>();
 

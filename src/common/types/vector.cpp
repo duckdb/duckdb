@@ -237,10 +237,10 @@ void Vector::Initialize(bool zero_data, idx_t capacity) {
 struct DataArrays {
 	Vector &vec;
 	data_ptr_t data;
-	VectorBuffer *buffer;
+	optional_ptr<VectorBuffer> buffer;
 	idx_t type_size;
 	bool is_nested;
-	DataArrays(Vector &vec, data_ptr_t data, VectorBuffer *buffer, idx_t type_size, bool is_nested)
+	DataArrays(Vector &vec, data_ptr_t data, optional_ptr<VectorBuffer> buffer, idx_t type_size, bool is_nested)
 	    : vec(vec), data(data), buffer(buffer), type_size(type_size), is_nested(is_nested) {
 	}
 };
@@ -1351,7 +1351,7 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 			if (vtype != VectorType::FLAT_VECTOR) {
 				continue;
 			}
-			ValidityMask *child_validity;
+			optional_ptr<ValidityMask> child_validity;
 			SelectionVector owned_child_sel;
 			const SelectionVector *child_sel = &owned_child_sel;
 			if (children[child_idx]->GetVectorType() == VectorType::FLAT_VECTOR) {

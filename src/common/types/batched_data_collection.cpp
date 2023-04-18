@@ -1,6 +1,7 @@
 #include "duckdb/common/types/batched_data_collection.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
 
@@ -9,7 +10,7 @@ BatchedDataCollection::BatchedDataCollection(vector<LogicalType> types_p) : type
 
 void BatchedDataCollection::Append(DataChunk &input, idx_t batch_index) {
 	D_ASSERT(batch_index != DConstants::INVALID_INDEX);
-	ColumnDataCollection *collection;
+	optional_ptr<ColumnDataCollection> collection;
 	if (last_collection.collection && last_collection.batch_index == batch_index) {
 		// we are inserting into the same collection as before: use it directly
 		collection = last_collection.collection;

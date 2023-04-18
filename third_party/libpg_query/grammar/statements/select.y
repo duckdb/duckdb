@@ -2123,6 +2123,8 @@ a_expr:		c_expr									{ $$ = $1; }
 				{ $$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "*", $1, $3, @2); }
 			| a_expr '/' a_expr
 				{ $$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "/", $1, $3, @2); }
+			| a_expr INTEGER_DIVISION a_expr
+				{ $$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "//", $1, $3, @2); }
 			| a_expr '%' a_expr
 				{ $$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "%", $1, $3, @2); }
 			| a_expr '^' a_expr
@@ -2543,6 +2545,8 @@ b_expr:		c_expr
 				{ $$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "*", $1, $3, @2); }
 			| b_expr '/' b_expr
 				{ $$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "/", $1, $3, @2); }
+			| b_expr INTEGER_DIVISION b_expr
+				{ $$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "//", $1, $3, @2); }
 			| b_expr '%' b_expr
 				{ $$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "%", $1, $3, @2); }
 			| b_expr '^' b_expr
@@ -3239,6 +3243,7 @@ MathOp:		 '+'									{ $$ = "+"; }
 			| '-'									{ $$ = "-"; }
 			| '*'									{ $$ = "*"; }
 			| '/'									{ $$ = "/"; }
+			| INTEGER_DIVISION						{ $$ = "//"; }
 			| '%'									{ $$ = "%"; }
 			| '^'									{ $$ = "^"; }
 			| POWER_OF								{ $$ = "**"; }

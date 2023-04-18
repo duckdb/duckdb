@@ -1,6 +1,7 @@
 #include "duckdb/common/constants.hpp"
-#include "duckdb/common/vector_size.hpp"
+
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/vector_size.hpp"
 
 namespace duckdb {
 
@@ -15,6 +16,10 @@ const transaction_t MAX_TRANSACTION_ID = NumericLimits<transaction_t>::Maximum()
 const transaction_t NOT_DELETED_ID = NumericLimits<transaction_t>::Maximum() - 1; // 2^64 - 1
 const transaction_t MAXIMUM_QUERY_ID = NumericLimits<transaction_t>::Maximum();   // 2^64
 
+bool IsPowerOfTwo(uint64_t v) {
+	return (v & (v - 1)) == 0;
+}
+
 uint64_t NextPowerOfTwo(uint64_t v) {
 	v--;
 	v |= v >> 1;
@@ -25,6 +30,10 @@ uint64_t NextPowerOfTwo(uint64_t v) {
 	v |= v >> 32;
 	v++;
 	return v;
+}
+
+uint64_t PreviousPowerOfTwo(uint64_t v) {
+	return NextPowerOfTwo((v / 2) + 1);
 }
 
 bool IsInvalidSchema(const string &str) {

@@ -9,9 +9,9 @@
 #pragma once
 
 #include "duckdb/common/mutex.hpp"
-#include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/execution/physical_operator.hpp"
 
 namespace duckdb {
 

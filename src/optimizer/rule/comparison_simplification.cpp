@@ -14,18 +14,17 @@ ComparisonSimplificationRule::ComparisonSimplificationRule(ExpressionRewriter &r
 	root = std::move(op);
 }
 
-unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
+unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                            bool &changes_made, bool is_root) {
-	D_ASSERT(bindings[0]->expression_class == ExpressionClass::BOUND_COMPARISON);
-	auto &expr = bindings[0]->Cast<BoundComparisonExpression>();
-	auto constant_expr = bindings[1];
-	bool column_ref_left = expr.left.get() != constant_expr;
+	auto &expr = bindings[0].get().Cast<BoundComparisonExpression>();
+	auto &constant_expr = bindings[1].get();
+	bool column_ref_left = expr.left.get() != &constant_expr;
 	auto column_ref_expr = !column_ref_left ? expr.right.get() : expr.left.get();
 	// the constant_expr is a scalar expression that we have to fold
 	// use an ExpressionExecutor to execute the expression
-	D_ASSERT(constant_expr->IsFoldable());
+	D_ASSERT(constant_expr.IsFoldable());
 	Value constant_value;
-	if (!ExpressionExecutor::TryEvaluateScalar(GetContext(), *constant_expr, constant_value)) {
+	if (!ExpressionExecutor::TryEvaluateScalar(GetContext(), constant_expr, constant_value)) {
 		return nullptr;
 	}
 	if (constant_value.IsNull() && !(expr.type == ExpressionType::COMPARE_NOT_DISTINCT_FROM ||

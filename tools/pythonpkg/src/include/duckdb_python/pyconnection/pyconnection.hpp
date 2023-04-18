@@ -165,14 +165,14 @@ public:
 	PandasDataFrame FetchDF(bool date_as_object);
 	PandasDataFrame FetchDFChunk(const idx_t vectors_per_chunk = 1, bool date_as_object = false) const;
 
-	duckdb::pyarrow::Table FetchArrow(idx_t chunk_size);
-	PolarsDataFrame FetchPolars(idx_t chunk_size);
+	duckdb::pyarrow::Table FetchArrow(idx_t rows_per_batch);
+	PolarsDataFrame FetchPolars(idx_t rows_per_batch);
 
 	py::dict FetchPyTorch();
 
 	py::dict FetchTF();
 
-	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(const idx_t chunk_size) const;
+	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(const idx_t rows_per_batch) const;
 
 	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, const py::dict &config);
 

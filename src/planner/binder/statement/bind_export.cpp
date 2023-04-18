@@ -41,21 +41,21 @@ string SanitizeExportIdentifier(const string &str) {
 	return result;
 }
 
-bool IsExistMainKeyTable(string &table_name, vector<TableCatalogEntry *> &unordered) {
+bool IsExistMainKeyTable(string &table_name, vector<reference<TableCatalogEntry>> &unordered) {
 	for (idx_t i = 0; i < unordered.size(); i++) {
-		if (unordered[i]->name == table_name) {
+		if (unordered[i].get().name == table_name) {
 			return true;
 		}
 	}
 	return false;
 }
 
-void ScanForeignKeyTable(vector<TableCatalogEntry *> &ordered, vector<TableCatalogEntry *> &unordered,
+void ScanForeignKeyTable(vector<reference<TableCatalogEntry>> &ordered, vector<reference<TableCatalogEntry>> &unordered,
                          bool move_only_pk_table) {
 	for (auto i = unordered.begin(); i != unordered.end();) {
 		auto table_entry = *i;
 		bool move_to_ordered = true;
-		auto &constraints = table_entry->GetConstraints();
+		auto &constraints = table_entry.get().GetConstraints();
 		for (idx_t j = 0; j < constraints.size(); j++) {
 			auto &cond = constraints[j];
 			if (cond->type == ConstraintType::FOREIGN_KEY) {
@@ -77,9 +77,9 @@ void ScanForeignKeyTable(vector<TableCatalogEntry *> &ordered, vector<TableCatal
 	}
 }
 
-void ReorderTableEntries(vector<TableCatalogEntry *> &tables) {
-	vector<TableCatalogEntry *> ordered;
-	vector<TableCatalogEntry *> unordered = tables;
+void ReorderTableEntries(vector<reference<TableCatalogEntry>> &tables) {
+	vector<reference<TableCatalogEntry>> ordered;
+	vector<reference<TableCatalogEntry>> unordered = tables;
 	ScanForeignKeyTable(ordered, unordered, true);
 	while (!unordered.empty()) {
 		ScanForeignKeyTable(ordered, unordered, false);
@@ -87,12 +87,12 @@ void ReorderTableEntries(vector<TableCatalogEntry *> &tables) {
 	tables = ordered;
 }
 
-string CreateFileName(const string &id_suffix, TableCatalogEntry *table, const string &extension) {
-	auto name = SanitizeExportIdentifier(table->name);
-	if (table->schema->name == DEFAULT_SCHEMA) {
+string CreateFileName(const string &id_suffix, TableCatalogEntry &table, const string &extension) {
+	auto name = SanitizeExportIdentifier(table.name);
+	if (table.schema->name == DEFAULT_SCHEMA) {
 		return StringUtil::Format("%s%s.%s", name, id_suffix, extension);
 	}
-	auto schema = SanitizeExportIdentifier(table->schema->name);
+	auto schema = SanitizeExportIdentifier(table.schema->name);
 	return StringUtil::Format("%s_%s%s.%s", schema, name, id_suffix, extension);
 }
 
@@ -115,12 +115,12 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 	// gather a list of all the tables
 	string catalog = stmt.database.empty() ? INVALID_CATALOG : stmt.database;
-	vector<TableCatalogEntry *> tables;
+	vector<reference<TableCatalogEntry>> tables;
 	auto schemas = Catalog::GetSchemas(context, catalog);
 	for (auto &schema : schemas) {
 		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
 			if (entry->type == CatalogType::TABLE_ENTRY) {
-				tables.push_back((TableCatalogEntry *)entry);
+				tables.push_back(entry->Cast<TableCatalogEntry>());
 			}
 		});
 	}
@@ -135,14 +135,14 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	BoundExportData exported_tables;
 
 	unordered_set<string> table_name_index;
-	for (auto &table : tables) {
+	for (auto &t : tables) {
+		auto &table = t.get();
 		auto info = make_uniq<CopyInfo>();
 		// we copy the options supplied to the EXPORT
 		info->format = stmt.info->format;
 		info->options = stmt.info->options;
 		// set up the file name for the COPY TO
 
-		auto exported_data = ExportedTableData();
 		idx_t id = 0;
 		while (true) {
 			string id_suffix = id == 0 ? string() : "_" + to_string(id);
@@ -159,23 +159,22 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		}
 		info->is_from = false;
 		info->catalog = catalog;
-		info->schema = table->schema->name;
-		info->table = table->name;
+		info->schema = table.schema->name;
+		info->table = table.name;
 
 		// We can not export generated columns
-		for (auto &col : table->GetColumns().Physical()) {
+		for (auto &col : table.GetColumns().Physical()) {
 			info->select_list.push_back(col.GetName());
 		}
 
+		ExportedTableData exported_data;
 		exported_data.database_name = catalog;
 		exported_data.table_name = info->table;
 		exported_data.schema_name = info->schema;
 
 		exported_data.file_path = info->file_path;
 
-		ExportedTableInfo table_info;
-		table_info.entry = table;
-		table_info.table_data = exported_data;
+		ExportedTableInfo table_info(table, std::move(exported_data));
 		exported_tables.data.push_back(table_info);
 		id++;
 

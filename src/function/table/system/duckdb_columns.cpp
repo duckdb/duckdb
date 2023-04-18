@@ -16,7 +16,7 @@ struct DuckDBColumnsData : public GlobalTableFunctionState {
 	DuckDBColumnsData() : offset(0), column_offset(0) {
 	}
 
-	vector<CatalogEntry *> entries;
+	vector<optional_ptr<CatalogEntry>> entries;
 	idx_t offset;
 	idx_t column_offset;
 };
@@ -90,12 +90,12 @@ unique_ptr<GlobalTableFunctionState> DuckDBColumnsInit(ClientContext &context, T
 
 class ColumnHelper {
 public:
-	static unique_ptr<ColumnHelper> Create(CatalogEntry *entry);
+	static unique_ptr<ColumnHelper> Create(CatalogEntry &entry);
 
 	virtual ~ColumnHelper() {
 	}
 
-	virtual StandardEntry *Entry() = 0;
+	virtual StandardEntry &Entry() = 0;
 	virtual idx_t NumColumns() = 0;
 	virtual const string &ColumnName(idx_t col) = 0;
 	virtual const LogicalType &ColumnType(idx_t col) = 0;
@@ -107,8 +107,8 @@ public:
 
 class TableColumnHelper : public ColumnHelper {
 public:
-	explicit TableColumnHelper(TableCatalogEntry *entry) : entry(entry) {
-		for (auto &constraint : entry->GetConstraints()) {
+	explicit TableColumnHelper(TableCatalogEntry &entry) : entry(entry) {
+		for (auto &constraint : entry.GetConstraints()) {
 			if (constraint->type == ConstraintType::NOT_NULL) {
 				auto &not_null = *reinterpret_cast<NotNullConstraint *>(constraint.get());
 				not_null_cols.insert(not_null.index.index);
@@ -116,20 +116,20 @@ public:
 		}
 	}
 
-	StandardEntry *Entry() override {
+	StandardEntry &Entry() override {
 		return entry;
 	}
 	idx_t NumColumns() override {
-		return entry->GetColumns().LogicalColumnCount();
+		return entry.GetColumns().LogicalColumnCount();
 	}
 	const string &ColumnName(idx_t col) override {
-		return entry->GetColumn(LogicalIndex(col)).Name();
+		return entry.GetColumn(LogicalIndex(col)).Name();
 	}
 	const LogicalType &ColumnType(idx_t col) override {
-		return entry->GetColumn(LogicalIndex(col)).Type();
+		return entry.GetColumn(LogicalIndex(col)).Type();
 	}
 	const Value ColumnDefault(idx_t col) override {
-		auto &column = entry->GetColumn(LogicalIndex(col));
+		auto &column = entry.GetColumn(LogicalIndex(col));
 		if (column.DefaultValue()) {
 			return Value(column.DefaultValue()->ToString());
 		}
@@ -140,26 +140,26 @@ public:
 	}
 
 private:
-	TableCatalogEntry *entry;
+	TableCatalogEntry &entry;
 	std::set<idx_t> not_null_cols;
 };
 
 class ViewColumnHelper : public ColumnHelper {
 public:
-	explicit ViewColumnHelper(ViewCatalogEntry *entry) : entry(entry) {
+	explicit ViewColumnHelper(ViewCatalogEntry &entry) : entry(entry) {
 	}
 
-	StandardEntry *Entry() override {
+	StandardEntry &Entry() override {
 		return entry;
 	}
 	idx_t NumColumns() override {
-		return entry->types.size();
+		return entry.types.size();
 	}
 	const string &ColumnName(idx_t col) override {
-		return entry->aliases[col];
+		return entry.aliases[col];
 	}
 	const LogicalType &ColumnType(idx_t col) override {
-		return entry->types[col];
+		return entry.types[col];
 	}
 	const Value ColumnDefault(idx_t col) override {
 		return Value();
@@ -169,15 +169,15 @@ public:
 	}
 
 private:
-	ViewCatalogEntry *entry;
+	ViewCatalogEntry &entry;
 };
 
-unique_ptr<ColumnHelper> ColumnHelper::Create(CatalogEntry *entry) {
-	switch (entry->type) {
+unique_ptr<ColumnHelper> ColumnHelper::Create(CatalogEntry &entry) {
+	switch (entry.type) {
 	case CatalogType::TABLE_ENTRY:
-		return make_uniq<TableColumnHelper>((TableCatalogEntry *)entry);
+		return make_uniq<TableColumnHelper>(entry.Cast<TableCatalogEntry>());
 	case CatalogType::VIEW_ENTRY:
-		return make_uniq<ViewColumnHelper>((ViewCatalogEntry *)entry);
+		return make_uniq<ViewColumnHelper>(entry.Cast<ViewCatalogEntry>());
 	default:
 		throw NotImplementedException("Unsupported catalog type for duckdb_columns");
 	}
@@ -186,7 +186,7 @@ unique_ptr<ColumnHelper> ColumnHelper::Create(CatalogEntry *entry) {
 void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_col, DataChunk &output) {
 	for (idx_t i = start_col; i < end_col; i++) {
 		auto index = start_index + (i - start_col);
-		auto &entry = *Entry();
+		auto &entry = Entry();
 
 		idx_t col = 0;
 		// database_name, VARCHAR
@@ -284,7 +284,7 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 }
 
 void DuckDBColumnsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (DuckDBColumnsData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<DuckDBColumnsData>();
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;
@@ -298,7 +298,7 @@ void DuckDBColumnsFunction(ClientContext &context, TableFunctionInput &data_p, D
 	idx_t column_offset = data.column_offset;
 	idx_t index = 0;
 	while (next < data.entries.size() && index < STANDARD_VECTOR_SIZE) {
-		auto column_helper = ColumnHelper::Create(data.entries[next]);
+		auto column_helper = ColumnHelper::Create(*data.entries[next]);
 		idx_t columns = column_helper->NumColumns();
 
 		// Check to see if we are going to exceed the maximum index for a DataChunk
