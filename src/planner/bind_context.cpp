@@ -178,12 +178,12 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &ta
 	return CreateColumnReference(schema_name, table_name, column_name);
 }
 
-static bool ColumnIsGenerated(Binding *binding, column_t index) {
-	if (binding->binding_type != BindingType::TABLE) {
+static bool ColumnIsGenerated(Binding &binding, column_t index) {
+	if (binding.binding_type != BindingType::TABLE) {
 		return false;
 	}
-	auto table_binding = (TableBinding *)binding;
-	auto catalog_entry = table_binding->GetStandardEntry();
+	auto &table_binding = (TableBinding &)binding;
+	auto catalog_entry = table_binding.GetStandardEntry();
 	if (!catalog_entry) {
 		return false;
 	}
@@ -191,8 +191,8 @@ static bool ColumnIsGenerated(Binding *binding, column_t index) {
 		return false;
 	}
 	D_ASSERT(catalog_entry->type == CatalogType::TABLE_ENTRY);
-	auto table_entry = (TableCatalogEntry *)catalog_entry;
-	return table_entry->GetColumn(LogicalIndex(index)).Generated();
+	auto &table_entry = catalog_entry->Cast<TableCatalogEntry>();
+	return table_entry.GetColumn(LogicalIndex(index)).Generated();
 }
 
 unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &catalog_name, const string &schema_name,
@@ -214,7 +214,7 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &ca
 		return std::move(result);
 	}
 	auto column_index = binding->GetBindingIndex(column_name);
-	if (ColumnIsGenerated(binding, column_index)) {
+	if (ColumnIsGenerated(*binding, column_index)) {
 		return ExpandGeneratedColumn(table_name, column_name);
 	} else if (column_index < binding->names.size() && binding->names[column_index] != column_name) {
 		// because of case insensitivity in the binder we rename the column to the original name
