@@ -87,7 +87,8 @@ optional_ptr<StandardEntry> EntryBinding::GetStandardEntry() {
 }
 
 TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p,
-                           vector<column_t> &bound_column_ids, optional_ptr<StandardEntry> entry, idx_t index, bool add_row_id)
+                           vector<column_t> &bound_column_ids, optional_ptr<StandardEntry> entry, idx_t index,
+                           bool add_row_id)
     : Binding(BindingType::TABLE, alias, std::move(types_p), std::move(names_p), index),
       bound_column_ids(bound_column_ids), entry(entry) {
 	if (add_row_id) {

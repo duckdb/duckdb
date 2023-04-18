@@ -19,7 +19,8 @@ enum class LookupResultType : uint8_t { LOOKUP_MISS, LOOKUP_HIT, LOOKUP_NULL };
 
 class ConflictManager {
 public:
-	ConflictManager(VerifyExistenceType lookup_type, idx_t input_size, optional_ptr<ConflictInfo> conflict_info = nullptr);
+	ConflictManager(VerifyExistenceType lookup_type, idx_t input_size,
+	                optional_ptr<ConflictInfo> conflict_info = nullptr);
 
 public:
 	void SetIndexCount(idx_t count);

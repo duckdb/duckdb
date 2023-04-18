@@ -95,8 +95,8 @@ static void SetPrimaryBinding(UsingColumnSet &set, JoinType join_type, const str
 	}
 }
 
-string Binder::RetrieveUsingBinding(Binder &current_binder, optional_ptr<UsingColumnSet> current_set, const string &using_column,
-                                    const string &join_side) {
+string Binder::RetrieveUsingBinding(Binder &current_binder, optional_ptr<UsingColumnSet> current_set,
+                                    const string &using_column, const string &join_side) {
 	string binding;
 	if (!current_set) {
 		binding = current_binder.FindBinding(using_column, join_side);

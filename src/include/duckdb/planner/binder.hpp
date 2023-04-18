@@ -336,8 +336,8 @@ private:
 	bool TryFindBinding(const string &using_column, const string &join_side, string &result);
 
 	void AddUsingBindingSet(unique_ptr<UsingColumnSet> set);
-	string RetrieveUsingBinding(Binder &current_binder, optional_ptr<UsingColumnSet> current_set, const string &column_name,
-	                            const string &join_side);
+	string RetrieveUsingBinding(Binder &current_binder, optional_ptr<UsingColumnSet> current_set,
+	                            const string &column_name, const string &join_side);
 
 	void AddCTEMap(CommonTableExpressionMap &cte_map);
 

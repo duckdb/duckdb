@@ -32,7 +32,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBKeywordsInit(ClientContext &context, 
 }
 
 void DuckDBKeywordsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (DuckDBKeywordsData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<DuckDBKeywordsData>();
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;

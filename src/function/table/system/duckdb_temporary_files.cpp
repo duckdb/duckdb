@@ -30,7 +30,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBTemporaryFilesInit(ClientContext &con
 }
 
 void DuckDBTemporaryFilesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (DuckDBTemporaryFilesData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<DuckDBTemporaryFilesData>();
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;

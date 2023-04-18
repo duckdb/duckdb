@@ -549,9 +549,9 @@ void BindContext::RemoveContext(vector<reference<Binding>> &other_bindings_list)
 
 	vector<idx_t> delete_list_indexes;
 	for (auto &other_binding : other_bindings_list) {
-		auto it =
-		    std::remove_if(bindings_list.begin(), bindings_list.end(),
-		                   [other_binding](reference<Binding> &x) { return x.get().alias == other_binding.get().alias; });
+		auto it = std::remove_if(bindings_list.begin(), bindings_list.end(), [other_binding](reference<Binding> &x) {
+			return x.get().alias == other_binding.get().alias;
+		});
 		bindings_list.erase(it, bindings_list.end());
 	}
 }

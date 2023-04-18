@@ -91,7 +91,7 @@ unique_ptr<GlobalTableFunctionState> PragmaStorageInfoInit(ClientContext &contex
 }
 
 static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &bind_data = (PragmaStorageFunctionData &)*data_p.bind_data;
+	auto &bind_data = data_p.bind_data->Cast<PragmaStorageFunctionData>();
 	auto &data = data_p.global_state->Cast<PragmaStorageOperatorData>();
 	idx_t count = 0;
 	auto &columns = bind_data.table_entry.GetColumns();

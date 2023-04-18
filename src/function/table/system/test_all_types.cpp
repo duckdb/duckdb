@@ -224,7 +224,7 @@ unique_ptr<GlobalTableFunctionState> TestAllTypesInit(ClientContext &context, Ta
 }
 
 void TestAllTypesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (TestAllTypesData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<TestAllTypesData>();
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;

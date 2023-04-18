@@ -68,7 +68,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBTypesInit(ClientContext &context, Tab
 }
 
 void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (DuckDBTypesData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<DuckDBTypesData>();
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;

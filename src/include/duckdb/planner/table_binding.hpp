@@ -71,7 +71,8 @@ public:
 //! node for projection pushdown purposes.
 struct TableBinding : public Binding {
 	TableBinding(const string &alias, vector<LogicalType> types, vector<string> names,
-	             vector<column_t> &bound_column_ids, optional_ptr<StandardEntry> entry, idx_t index, bool add_row_id = false);
+	             vector<column_t> &bound_column_ids, optional_ptr<StandardEntry> entry, idx_t index,
+	             bool add_row_id = false);
 
 	//! A reference to the set of bound column ids
 	vector<column_t> &bound_column_ids;

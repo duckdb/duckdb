@@ -72,7 +72,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBIndexesInit(ClientContext &context, T
 }
 
 void DuckDBIndexesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (DuckDBIndexesData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<DuckDBIndexesData>();
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;
