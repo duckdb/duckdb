@@ -9,7 +9,7 @@ PRAGMA enable_verification
 
 # null padding with a header
 query IIII
-FROM read_csv_auto('data/csv/nullpadding_header.csv')
+FROM read_csv_auto('data/csv/nullpadding_header.csv', null_padding=True)
 ----
 1	a	alice	NULL
 2	b	bob	NULL
@@ -44,7 +44,7 @@ FROM read_csv_auto('data/csv/nullpadding_header.csv', null_padding=False, skip=2
 2	b	bob
 
 query I
-FROM read_csv_auto('data/csv/blank_line.csv')
+FROM read_csv_auto('data/csv/blank_line.csv', null_padding=True)
 ----
 1
 2

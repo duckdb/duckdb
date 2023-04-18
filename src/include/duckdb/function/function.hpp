@@ -91,6 +91,8 @@ public:
 
 	//! The name of the function
 	string name;
+	//! Additional Information to specify function from it's name
+	string extra_info;
 
 public:
 	//! Returns the formatted string name(arg1, arg2, ...)
