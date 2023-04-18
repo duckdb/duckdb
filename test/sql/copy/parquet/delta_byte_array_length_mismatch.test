@@ -6,7 +6,5 @@ require parquet
 
 require httpfs
 
-statement error
+statement ok
 SELECT * FROM parquet_scan('https://github.com/duckdb/duckdb-data/releases/download/v1.0/delta_byte_array_length_mismatch.parquet')
-----
-length mismatch
