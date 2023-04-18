@@ -243,7 +243,9 @@ vector<reference<PhysicalOperator>> Pipeline::GetOperators() {
 	vector<reference<PhysicalOperator>> result;
 	D_ASSERT(source);
 	result.push_back(*source);
-	result.insert(result.end(), operators.begin(), operators.end());
+	for(auto &op : operators) {
+		result.push_back(op.get());
+	}
 	if (sink) {
 		result.push_back(*sink);
 	}
@@ -254,7 +256,9 @@ vector<const_reference<PhysicalOperator>> Pipeline::GetOperators() const {
 	vector<const_reference<PhysicalOperator>> result;
 	D_ASSERT(source);
 	result.push_back(*source);
-	result.insert(result.end(), operators.begin(), operators.end());
+	for(auto &op : operators) {
+		result.push_back(op.get());
+	}
 	if (sink) {
 		result.push_back(*sink);
 	}
