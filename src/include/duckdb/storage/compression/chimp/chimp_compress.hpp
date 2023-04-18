@@ -33,7 +33,8 @@ public:
 	using CHIMP_TYPE = typename ChimpType<T>::type;
 
 	explicit ChimpCompressionState(ColumnDataCheckpointer &checkpointer, ChimpAnalyzeState<T> *analyze_state)
-	    : checkpointer(checkpointer), function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_CHIMP)) {
+	    : checkpointer(checkpointer),
+	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_CHIMP)) {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
 
 		// These buffers are recycled for every group, so they only have to be set once

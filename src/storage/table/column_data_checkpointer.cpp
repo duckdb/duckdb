@@ -15,7 +15,7 @@ ColumnDataCheckpointer::ColumnDataCheckpointer(ColumnData &col_data_p, RowGroup 
       checkpoint_info(checkpoint_info_p) {
 	auto &config = DBConfig::GetConfig(GetDatabase());
 	auto functions = config.GetCompressionFunctions(GetType().InternalType());
-	for(auto &func : functions) {
+	for (auto &func : functions) {
 		compression_functions.push_back(&func.get());
 	}
 }

@@ -39,8 +39,8 @@ class TransactionManager;
 class ReplayState {
 public:
 	ReplayState(AttachedDatabase &db, ClientContext &context, Deserializer &source)
-	    : db(db), context(context), catalog(db.GetCatalog()), source(source),
-	      deserialize_only(false), checkpoint_id(INVALID_BLOCK) {
+	    : db(db), context(context), catalog(db.GetCatalog()), source(source), deserialize_only(false),
+	      checkpoint_id(INVALID_BLOCK) {
 	}
 
 	AttachedDatabase &db;

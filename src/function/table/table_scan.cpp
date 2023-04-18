@@ -220,8 +220,7 @@ static unique_ptr<GlobalTableFunctionState> IndexScanInitGlobal(ClientContext &c
 	auto &local_storage = LocalStorage::Get(context, *bind_data.table->catalog);
 	result->column_ids = input.column_ids;
 	result->local_storage_state.Initialize(input.column_ids, input.filters);
-	local_storage.InitializeScan(bind_data.table->GetStorage(), result->local_storage_state.local_state,
-	                             input.filters);
+	local_storage.InitializeScan(bind_data.table->GetStorage(), result->local_storage_state.local_state, input.filters);
 
 	result->finished = false;
 	return std::move(result);

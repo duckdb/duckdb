@@ -246,8 +246,8 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 			return true;
 		});
 	} else {
-		error = AppendToIndexes(transaction, *row_groups, table.info->indexes, table.GetTypes(),
-		                        append_state.current_row);
+		error =
+		    AppendToIndexes(transaction, *row_groups, table.info->indexes, table.GetTypes(), append_state.current_row);
 	}
 	if (error) {
 		// need to revert the append
@@ -376,7 +376,8 @@ LocalStorage &LocalStorage::Get(ClientContext &context, Catalog &catalog) {
 	return LocalStorage::Get(context, catalog.GetAttached());
 }
 
-void LocalStorage::InitializeScan(DataTable &table, CollectionScanState &state, optional_ptr<TableFilterSet> table_filters) {
+void LocalStorage::InitializeScan(DataTable &table, CollectionScanState &state,
+                                  optional_ptr<TableFilterSet> table_filters) {
 	auto storage = table_manager.GetStorage(table);
 	if (storage == nullptr) {
 		return;

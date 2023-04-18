@@ -27,7 +27,7 @@ static DefaultCompressionMethod internal_compression_methods[] = {
     {CompressionType::COMPRESSION_AUTO, nullptr, nullptr}};
 
 static optional_ptr<CompressionFunction> FindCompressionFunction(CompressionFunctionSet &set, CompressionType type,
-                                                    PhysicalType data_type) {
+                                                                 PhysicalType data_type) {
 	auto &functions = set.functions;
 	auto comp_entry = functions.find(type);
 	if (comp_entry != functions.end()) {
@@ -41,7 +41,7 @@ static optional_ptr<CompressionFunction> FindCompressionFunction(CompressionFunc
 }
 
 static optional_ptr<CompressionFunction> LoadCompressionFunction(CompressionFunctionSet &set, CompressionType type,
-                                                    PhysicalType data_type) {
+                                                                 PhysicalType data_type) {
 	for (idx_t index = 0; internal_compression_methods[index].get_function; index++) {
 		const auto &method = internal_compression_methods[index];
 		if (method.type == type) {

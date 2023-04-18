@@ -14,7 +14,8 @@ namespace duckdb {
 class CatalogEntry;
 
 struct BoundCreateFunctionInfo {
-	explicit BoundCreateFunctionInfo(SchemaCatalogEntry &schema, unique_ptr<CreateInfo> base) : schema(schema), base(std::move(base)) {
+	explicit BoundCreateFunctionInfo(SchemaCatalogEntry &schema, unique_ptr<CreateInfo> base)
+	    : schema(schema), base(std::move(base)) {
 	}
 
 	//! The schema to create the table in

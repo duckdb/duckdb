@@ -19,7 +19,8 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_INVALID;
 
 public:
-	LogicalCreate(LogicalOperatorType type, unique_ptr<CreateInfo> info, optional_ptr<SchemaCatalogEntry> schema = nullptr)
+	LogicalCreate(LogicalOperatorType type, unique_ptr<CreateInfo> info,
+	              optional_ptr<SchemaCatalogEntry> schema = nullptr)
 	    : LogicalOperator(type), schema(schema), info(std::move(info)) {
 	}
 

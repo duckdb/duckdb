@@ -136,7 +136,8 @@ struct RLECompressState : public CompressionState {
 		return max_vector_count * STANDARD_VECTOR_SIZE;
 	}
 
-	explicit RLECompressState(ColumnDataCheckpointer &checkpointer_p) : checkpointer(checkpointer_p),
+	explicit RLECompressState(ColumnDataCheckpointer &checkpointer_p)
+	    : checkpointer(checkpointer_p),
 	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_RLE)) {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
 
