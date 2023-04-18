@@ -54,7 +54,7 @@ public:
 	}
 
 	//! Get the WAL of the StorageManager, returns nullptr if in-memory
-	WriteAheadLog *GetWriteAheadLog() {
+	optional_ptr<WriteAheadLog> GetWriteAheadLog() {
 		return wal.get();
 	}
 
