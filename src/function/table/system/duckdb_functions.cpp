@@ -239,7 +239,7 @@ struct MacroExtractor {
 
 	static Value GetMacroDefinition(ScalarMacroCatalogEntry &entry, idx_t offset) {
 		D_ASSERT(entry.function->type == MacroType::SCALAR_MACRO);
-		auto &func = (ScalarMacroFunction &)*entry.function;
+		auto &func = entry.function->Cast<ScalarMacroFunction>();
 		return func.expression->ToString();
 	}
 
@@ -295,7 +295,7 @@ struct TableMacroExtractor {
 
 	static Value GetMacroDefinition(TableMacroCatalogEntry &entry, idx_t offset) {
 		if (entry.function->type == MacroType::SCALAR_MACRO) {
-			auto &func = (ScalarMacroFunction &)*entry.function;
+			auto &func = entry.function->Cast<ScalarMacroFunction>();
 			return func.expression->ToString();
 		}
 		return Value();

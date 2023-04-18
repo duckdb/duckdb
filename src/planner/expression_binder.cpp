@@ -28,9 +28,8 @@ ExpressionBinder::~ExpressionBinder() {
 	}
 }
 
-BindResult ExpressionBinder::BindExpression(reference<unique_ptr<ParsedExpression>> expr, idx_t depth,
-                                            bool root_expression) {
-	auto &expr_ref = *expr.get();
+BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression) {
+	auto &expr_ref = *expr;
 	switch (expr_ref.expression_class) {
 	case ExpressionClass::BETWEEN:
 		return BindExpression(expr_ref.Cast<BetweenExpression>(), depth);
@@ -185,8 +184,8 @@ LogicalType ExpressionBinder::ExchangeNullType(const LogicalType &type) {
 	return ExchangeType(type, LogicalTypeId::SQLNULL, LogicalType::INTEGER);
 }
 
-unique_ptr<Expression> ExpressionBinder::Bind(reference<unique_ptr<ParsedExpression>> expr,
-                                              optional_ptr<LogicalType> result_type, bool root_expression) {
+unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, optional_ptr<LogicalType> result_type,
+                                              bool root_expression) {
 	// bind the main expression
 	auto error_msg = Bind(expr, 0, root_expression);
 	if (!error_msg.empty()) {
@@ -222,9 +221,9 @@ unique_ptr<Expression> ExpressionBinder::Bind(reference<unique_ptr<ParsedExpress
 	return result;
 }
 
-string ExpressionBinder::Bind(reference<unique_ptr<ParsedExpression>> expr, idx_t depth, bool root_expression) {
+string ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression) {
 	// bind the node, but only if it has not been bound yet
-	auto &expression = *expr.get();
+	auto &expression = *expr;
 	auto alias = expression.alias;
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION) {
 		// already bound, don't bind it again
@@ -236,8 +235,8 @@ string ExpressionBinder::Bind(reference<unique_ptr<ParsedExpression>> expr, idx_
 		return result.error;
 	}
 	// successfully bound: replace the node with a BoundExpression
-	expr.get() = make_uniq<BoundExpression>(std::move(result.expression));
-	auto &be = (expr.get())->Cast<BoundExpression>();
+	expr = make_uniq<BoundExpression>(std::move(result.expression));
+	auto &be = expr->Cast<BoundExpression>();
 	be.alias = alias;
 	if (!alias.empty()) {
 		be.expr->alias = alias;

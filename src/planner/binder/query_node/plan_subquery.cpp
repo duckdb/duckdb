@@ -378,11 +378,11 @@ unique_ptr<Expression> Binder::PlanSubquery(BoundSubqueryExpression &expr, uniqu
 	return result_expression;
 }
 
-void Binder::PlanSubqueries(reference<unique_ptr<Expression>> expr_ptr, reference<unique_ptr<LogicalOperator>> root) {
-	if (!expr_ptr.get()) {
+void Binder::PlanSubqueries(unique_ptr<Expression> &expr_ptr, unique_ptr<LogicalOperator> &root) {
+	if (!expr_ptr) {
 		return;
 	}
-	auto &expr = *expr_ptr.get();
+	auto &expr = *expr_ptr;
 
 	// first visit the children of the node, if any
 	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> &expr) { PlanSubqueries(expr, root); });
@@ -398,7 +398,7 @@ void Binder::PlanSubqueries(reference<unique_ptr<Expression>> expr_ptr, referenc
 			has_unplanned_subqueries = true;
 			return;
 		}
-		expr_ptr.get() = PlanSubquery(subquery, root);
+		expr_ptr = PlanSubquery(subquery, root);
 	}
 }
 

@@ -8,8 +8,7 @@ WhereBinder::WhereBinder(Binder &binder, ClientContext &context, ColumnAliasBind
 	target_type = LogicalType(LogicalTypeId::BOOLEAN);
 }
 
-BindResult WhereBinder::BindColumnRef(reference<unique_ptr<ParsedExpression>> expr_ptr, idx_t depth,
-                                      bool root_expression) {
+BindResult WhereBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
 	auto &expr = expr_ptr.get()->Cast<ColumnRefExpression>();
 	auto result = ExpressionBinder::BindExpression(expr_ptr, depth);
 	if (!result.HasError() || !column_alias_binder) {
@@ -25,9 +24,8 @@ BindResult WhereBinder::BindColumnRef(reference<unique_ptr<ParsedExpression>> ex
 	return result;
 }
 
-BindResult WhereBinder::BindExpression(reference<unique_ptr<ParsedExpression>> expr_ptr, idx_t depth,
-                                       bool root_expression) {
-	auto &expr = *expr_ptr.get();
+BindResult WhereBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
+	auto &expr = *expr_ptr;
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::DEFAULT:
 		return BindResult("WHERE clause cannot contain DEFAULT clause");

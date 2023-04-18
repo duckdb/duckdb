@@ -15,9 +15,8 @@ HavingBinder::HavingBinder(Binder &binder, ClientContext &context, BoundSelectNo
 	target_type = LogicalType(LogicalTypeId::BOOLEAN);
 }
 
-BindResult HavingBinder::BindColumnRef(reference<unique_ptr<ParsedExpression>> expr_ptr, idx_t depth,
-                                       bool root_expression) {
-	auto &expr = (*expr_ptr.get()).Cast<ColumnRefExpression>();
+BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
+	auto &expr = expr_ptr->Cast<ColumnRefExpression>();
 	auto alias_result = column_alias_binder.BindAlias(*this, expr, depth, root_expression);
 	if (!alias_result.HasError()) {
 		if (depth > 0) {
@@ -42,9 +41,8 @@ BindResult HavingBinder::BindColumnRef(reference<unique_ptr<ParsedExpression>> e
 	    "column %s must appear in the GROUP BY clause or be used in an aggregate function", expr.ToString()));
 }
 
-BindResult HavingBinder::BindExpression(reference<unique_ptr<ParsedExpression>> expr_ptr, idx_t depth,
-                                        bool root_expression) {
-	auto &expr = *expr_ptr.get();
+BindResult HavingBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
+	auto &expr = *expr_ptr;
 	// check if the expression binds to one of the groups
 	auto group_index = TryBindGroup(expr, depth);
 	if (group_index != DConstants::INVALID_INDEX) {

@@ -29,9 +29,9 @@ BindResult TableFunctionBinder::BindColumnReference(ColumnRefExpression &expr, i
 	return BindResult(make_uniq<BoundConstantExpression>(Value(result_name)));
 }
 
-BindResult TableFunctionBinder::BindExpression(reference<unique_ptr<ParsedExpression>> expr_ptr, idx_t depth,
+BindResult TableFunctionBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
                                                bool root_expression) {
-	auto &expr = *expr_ptr.get();
+	auto &expr = *expr_ptr;
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::COLUMN_REF:
 		return BindColumnReference(expr.Cast<ColumnRefExpression>(), depth, root_expression);

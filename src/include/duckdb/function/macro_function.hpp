@@ -44,6 +44,23 @@ public:
 	                                unordered_map<string, unique_ptr<ParsedExpression>> &defaults);
 
 	virtual string ToSQL(const string &schema, const string &name) const;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast macro to type - macro type mismatch");
+		}
+		return (TARGET &)*this;
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast macro to type - macro type mismatch");
+		}
+		return (const TARGET &)*this;
+	}
 };
 
 } // namespace duckdb

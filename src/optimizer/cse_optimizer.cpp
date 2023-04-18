@@ -73,9 +73,8 @@ void CommonSubExpressionOptimizer::CountExpressions(Expression &expr, CSEReplace
 	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { CountExpressions(child, state); });
 }
 
-void CommonSubExpressionOptimizer::PerformCSEReplacement(reference<unique_ptr<Expression>> expr_ptr,
-                                                         CSEReplacementState &state) {
-	Expression &expr = *expr_ptr.get();
+void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> &expr_ptr, CSEReplacementState &state) {
+	Expression &expr = *expr_ptr;
 	if (expr.expression_class == ExpressionClass::BOUND_COLUMN_REF) {
 		auto &bound_column_ref = expr.Cast<BoundColumnRefExpression>();
 		// bound column ref, check if this one has already been recorded in the expression list
@@ -106,13 +105,13 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(reference<unique_ptr<Ex
 			if (node.column_index == DConstants::INVALID_INDEX) {
 				// has not been pushed yet: push it
 				node.column_index = state.expressions.size();
-				state.expressions.push_back(std::move(expr_ptr.get()));
+				state.expressions.push_back(std::move(expr_ptr));
 			} else {
-				state.cached_expressions.push_back(std::move(expr_ptr.get()));
+				state.cached_expressions.push_back(std::move(expr_ptr));
 			}
 			// replace the original expression with a bound column ref
-			expr_ptr.get() = make_uniq<BoundColumnRefExpression>(
-			    alias, type, ColumnBinding(state.projection_index, node.column_index));
+			expr_ptr = make_uniq<BoundColumnRefExpression>(alias, type,
+			                                               ColumnBinding(state.projection_index, node.column_index));
 			return;
 		}
 	}
@@ -145,7 +144,6 @@ void CommonSubExpressionOptimizer::ExtractCommonSubExpresions(LogicalOperator &o
 	// we found common subexpressions to extract
 	// now we iterate over all the expressions and perform the actual CSE elimination
 
-	// FIXME: can EnumerateExpressions also be a `reference<unique_ptr<Expression>> child` instead?
 	LogicalOperatorVisitor::EnumerateExpressions(
 	    op, [&](unique_ptr<Expression> *child) { PerformCSEReplacement(*child, state); });
 	D_ASSERT(state.expressions.size() > 0);

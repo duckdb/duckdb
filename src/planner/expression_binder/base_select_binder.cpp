@@ -23,9 +23,8 @@ BaseSelectBinder::BaseSelectBinder(Binder &binder, ClientContext &context, Bound
     : BaseSelectBinder(binder, context, node, info, case_insensitive_map_t<idx_t>()) {
 }
 
-BindResult BaseSelectBinder::BindExpression(reference<unique_ptr<ParsedExpression>> expr_ptr, idx_t depth,
-                                            bool root_expression) {
-	auto &expr = *expr_ptr.get();
+BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
+	auto &expr = *expr_ptr;
 	// check if the expression binds to one of the groups
 	auto group_index = TryBindGroup(expr, depth);
 	if (group_index != DConstants::INVALID_INDEX) {
@@ -70,7 +69,7 @@ idx_t BaseSelectBinder::TryBindGroup(ParsedExpression &expr, idx_t depth) {
 	return DConstants::INVALID_INDEX;
 }
 
-BindResult BaseSelectBinder::BindColumnRef(reference<unique_ptr<ParsedExpression>> expr_ptr, idx_t depth) {
+BindResult BaseSelectBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth) {
 	// first try to bind the column reference regularly
 	auto result = ExpressionBinder::BindExpression(expr_ptr, depth);
 	if (!result.HasError()) {

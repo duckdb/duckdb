@@ -12,9 +12,8 @@ CheckBinder::CheckBinder(Binder &binder, ClientContext &context, string table_p,
 	target_type = LogicalType::INTEGER;
 }
 
-BindResult CheckBinder::BindExpression(reference<unique_ptr<ParsedExpression>> expr_ptr, idx_t depth,
-                                       bool root_expression) {
-	auto &expr = *expr_ptr.get();
+BindResult CheckBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
+	auto &expr = *expr_ptr;
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::WINDOW:
 		return BindResult("window functions are not allowed in check constraints");

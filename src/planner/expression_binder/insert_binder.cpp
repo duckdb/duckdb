@@ -7,9 +7,8 @@ namespace duckdb {
 InsertBinder::InsertBinder(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context) {
 }
 
-BindResult InsertBinder::BindExpression(reference<unique_ptr<ParsedExpression>> expr_ptr, idx_t depth,
-                                        bool root_expression) {
-	auto &expr = *expr_ptr.get();
+BindResult InsertBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
+	auto &expr = *expr_ptr;
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::DEFAULT:
 		return BindResult("DEFAULT is not allowed here!");

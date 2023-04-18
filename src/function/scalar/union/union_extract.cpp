@@ -60,7 +60,7 @@ static unique_ptr<FunctionData> UnionExtractBind(ClientContext &context, ScalarF
 	if (key_child->return_type.id() != LogicalTypeId::VARCHAR || !key_child->IsFoldable()) {
 		throw BinderException("Key name for union_extract needs to be a constant string");
 	}
-	Value key_val = ExpressionExecutor::EvaluateScalar(context, *key_child.get());
+	Value key_val = ExpressionExecutor::EvaluateScalar(context, *key_child);
 	D_ASSERT(key_val.type().id() == LogicalTypeId::VARCHAR);
 	auto &key_str = StringValue::Get(key_val);
 	if (key_val.IsNull() || key_str.empty()) {
