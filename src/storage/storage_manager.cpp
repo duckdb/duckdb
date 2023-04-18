@@ -192,10 +192,11 @@ void SingleFileStorageCommitState::FlushCommit() {
 SingleFileStorageCommitState::~SingleFileStorageCommitState() {
 	// If log is non-null, then commit threw an exception before flushing.
 	if (log) {
-		log->skip_writing = false;
-		if (log->GetTotalWritten() > initial_written) {
+		auto &log_ref = *log.get_mutable();
+		log_ref.skip_writing = false;
+		if (log_ref.GetTotalWritten() > initial_written) {
 			// remove any entries written into the WAL by truncating it
-			log->Truncate(initial_wal_size);
+			log_ref.Truncate(initial_wal_size);
 		}
 	}
 }
