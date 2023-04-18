@@ -201,10 +201,10 @@ void ParallelCSVReader::SetBufferRead(unique_ptr<CSVBufferRead> buffer_read_p) {
 	} else {
 		buffer_size = buffer_read_p->buffer->GetBufferSize();
 	}
-	linenr = buffer_read_p->estimated_linenr;
+//	linenr = buffer_read_p->estimated_linenr;
 	buffer = std::move(buffer_read_p);
 
-	linenr_estimated = true;
+//	linenr_estimated = true;
 	reached_remainder_state = false;
 	verification_positions.beginning_of_first_line = 0;
 	verification_positions.end_of_last_line = 0;
@@ -562,6 +562,7 @@ final_state : {
 	// flush the parsed chunk and finalize parsing
 	if (mode == ParserMode::PARSING) {
 		Flush(insert_chunk);
+        buffer->lines_read += insert_chunk.size();
 	}
 	if (position_buffer - verification_positions.end_of_last_line > options.buffer_size) {
 		error_message = "Line does not fit in one buffer. Increase the buffer size.";

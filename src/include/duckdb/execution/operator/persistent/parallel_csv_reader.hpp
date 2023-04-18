@@ -19,10 +19,8 @@
 namespace duckdb {
 
 struct CSVBufferRead {
-	CSVBufferRead(shared_ptr<CSVBuffer> buffer_p, idx_t buffer_start_p, idx_t buffer_end_p, idx_t batch_index,
-	              idx_t estimated_linenr)
-	    : buffer(std::move(buffer_p)), buffer_start(buffer_start_p), buffer_end(buffer_end_p), batch_index(batch_index),
-	      estimated_linenr(estimated_linenr) {
+	CSVBufferRead(shared_ptr<CSVBuffer> buffer_p, idx_t buffer_start_p, idx_t buffer_end_p, idx_t batch_index)
+	    : buffer(std::move(buffer_p)), buffer_start(buffer_start_p), buffer_end(buffer_end_p), batch_index(batch_index) {
 		if (buffer) {
 			if (buffer_end > buffer->GetBufferSize()) {
 				buffer_end = buffer->GetBufferSize();
@@ -34,8 +32,8 @@ struct CSVBufferRead {
 	}
 
 	CSVBufferRead(shared_ptr<CSVBuffer> buffer_p, shared_ptr<CSVBuffer> nxt_buffer_p, idx_t buffer_start_p,
-	              idx_t buffer_end_p, idx_t batch_index, idx_t estimated_linenr)
-	    : CSVBufferRead(std::move(buffer_p), buffer_start_p, buffer_end_p, batch_index, estimated_linenr) {
+	              idx_t buffer_end_p, idx_t batch_index)
+	    : CSVBufferRead(std::move(buffer_p), buffer_start_p, buffer_end_p, batch_index) {
 		next_buffer = std::move(nxt_buffer_p);
 	}
 
@@ -88,7 +86,7 @@ struct CSVBufferRead {
 	idx_t buffer_start;
 	idx_t buffer_end;
 	idx_t batch_index;
-	idx_t estimated_linenr;
+    idx_t lines_read = 0;
 };
 
 struct VerificationPositions {

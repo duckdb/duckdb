@@ -2,8 +2,6 @@
 # description: Support decimal separators
 # group: [csv]
 
-#FIXME: ADD LINE BACK FOR CSV MULTITHREADING ERROR
-
 require vector_size 512
 
 statement ok
@@ -13,7 +11,7 @@ PRAGMA enable_verification
 statement error
 CREATE TABLE decimal_separators AS SELECT * FROM read_csv_auto('data/csv/decimal_separators/decimal_separators.csv', header=1, column_types={'commas': 'double', 'periods': 'double'}, delim=';', decimal_separator=',')
 ----
-Could not cast string to double: "1.1" in column "periods"
+Invalid Input Error: Could not cast string to double: "1.1" in column "periods", at line 7.
 
 statement ok
 CREATE TABLE decimal_separators AS SELECT * FROM read_csv_auto('data/csv/decimal_separators/decimal_separators.csv', header=1, column_types={'commas': 'double'}, delim=';', decimal_separator=',')
@@ -42,13 +40,13 @@ Could not convert string "1,1" to DECIMAL(18,3) in column "commas"
 statement error
 CREATE TABLE decimal_separators2 AS SELECT * FROM read_csv_auto('data/csv/decimal_separators/decimal_separators.csv', header=1, column_types={'commas': 'double', 'periods': 'decimal'}, delim=';', decimal_separator='.')
 ----
-Could not convert string '1,1' to DOUBLE in column "commas"
+Invalid Input Error: Could not convert string '1,1' to DOUBLE in column "commas", at line 2.
 
 # reading the commas column as float fails when decimal separator is set to '.'
 statement error
 CREATE TABLE decimal_separators2 AS SELECT * FROM read_csv_auto('data/csv/decimal_separators/decimal_separators.csv', header=1, column_types={'commas': 'float', 'periods': 'decimal'}, delim=';', decimal_separator='.')
 ----
-Could not convert string '1,1' to FLOAT in column "commas"
+Invalid Input Error: Could not convert string '1,1' to FLOAT in column "commas", at line 2.
 
 statement ok
 CREATE TABLE decimal_separators2 AS SELECT * FROM read_csv_auto('data/csv/decimal_separators/decimal_separators.csv', header=1, column_types={'commas': 'decimal'}, delim=';', decimal_separator=',')
@@ -107,4 +105,4 @@ Binder Error: Unsupported parameter for DECIMAL_SEPARATOR: should be '.' or ','
 statement error
 SELECT * FROM read_csv_auto('data/csv/decimal_separators/mixed_format_fail.csv', header=true, column_types={'foo': 'double'}, decimal_separator=',', skip=0)
 ----
-Could not cast string to double: "5.25" in column "foo"
+Invalid Input Error: Could not cast string to double: "5.25" in column "foo", at line 5.

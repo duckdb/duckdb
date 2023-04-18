@@ -260,7 +260,7 @@ public:
 	    : file_handle(std::move(file_handle_p)), system_threads(system_threads_p), buffer_size(buffer_size_p),
 	      force_parallelism(force_parallelism_p), column_ids(std::move(column_ids_p)) {
 		current_file_path = files_path_p[0];
-		estimated_linenr = rows_to_skip;
+        lines_read[0] = rows_to_skip;
 		file_size = file_handle->FileSize();
 		first_file_size = file_size;
 		bytes_read = 0;
@@ -304,6 +304,12 @@ public:
 
 	void UpdateVerification(VerificationPositions positions, idx_t file_number);
 
+    void UpdateLinesRead(idx_t batch_idx, idx_t lines_read);
+
+    bool CanItGetLine(idx_t batch_idx);
+
+    idx_t GetLine(idx_t batch_idx);
+
 	void IncrementThread();
 
 	void DecrementThread();
@@ -340,8 +346,6 @@ private:
 	mutex main_mutex;
 	//! Byte set from for last thread
 	idx_t next_byte = 0;
-	//! The current estimated line number
-	idx_t estimated_linenr;
 	//! How many bytes we should execute per local state
 	idx_t bytes_per_local_state;
 	//! Size of first file
@@ -352,6 +356,10 @@ private:
 	idx_t buffer_size;
 	//! Current batch index
 	idx_t batch_index = 0;
+    //! Lines read per batch, <batch_index,count>
+    unordered_map<idx_t, idx_t> lines_read;
+    //! Set of batches that have been initialized but are not yet finished.
+    set<idx_t> current_batches;
 	//! Forces parallelism for small CSV Files, should only be used for testing.
 	bool force_parallelism = false;
 	//! Current (Global) position of CSV
@@ -458,11 +466,11 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 		}
 	}
 	// set up the current buffer
+    current_batches.insert(batch_index);
 	auto result = make_uniq<CSVBufferRead>(current_buffer, next_buffer, next_byte, next_byte + bytes_per_local_state,
-	                                       batch_index++, estimated_linenr);
+	                                       batch_index++);
 	// move the byte index of the CSV reader to the next buffer
 	next_byte += bytes_per_local_state;
-	estimated_linenr += bytes_per_local_state / (bind_data.csv_types.size() * 5); // estimate 5 bytes per column
 	if (next_byte >= current_buffer->GetBufferSize()) {
 		// We replace the current buffer with the next buffer
 		next_byte = 0;
@@ -518,6 +526,36 @@ void ParallelCSVGlobalState::UpdateVerification(VerificationPositions positions,
 		tuple_start[file_number_p].insert(positions.beginning_of_first_line);
 		tuple_end[file_number_p].push_back(positions.end_of_last_line);
 	}
+}
+
+void ParallelCSVGlobalState::UpdateLinesRead(duckdb::idx_t batch_idx_p, duckdb::idx_t lines_read_p){
+	lock_guard<mutex> parallel_lock(main_mutex);
+    current_batches.erase(batch_idx_p);
+	lines_read[batch_idx_p] += lines_read_p;
+}
+
+bool ParallelCSVGlobalState::CanItGetLine(idx_t batch_idx){
+    lock_guard<mutex> parallel_lock(main_mutex);
+    if (current_batches.empty()){
+        return true;
+    }
+    auto min_value = *current_batches.begin();
+    if (min_value >= batch_idx){
+        return true;
+    }
+    return false;
+}
+
+idx_t ParallelCSVGlobalState::GetLine(idx_t batch_idx){
+    lock_guard<mutex> parallel_lock(main_mutex);
+    idx_t line_count = 0;
+    for (idx_t i = 0; i < batch_idx; i++){
+        if (lines_read.find(i) == lines_read.end()){
+            throw InternalException("Missing batch index on Parallel CSV Reader GetLine");
+        }
+        line_count += lines_read[i];
+    }
+    return line_count;
 }
 
 static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext &context,
@@ -584,6 +622,7 @@ static void ParallelReadCSVFunction(ClientContext &context, TableFunctionInput &
 				csv_global_state.UpdateVerification(verification_updates,
 				                                    csv_local_state.csv_reader->buffer->buffer->GetFileNumber());
 			}
+            csv_global_state.UpdateLinesRead(csv_local_state.csv_reader->buffer->batch_index,csv_local_state.csv_reader->buffer->lines_read);
 			auto has_next = csv_global_state.Next(context, bind_data, csv_local_state.csv_reader);
 			if (!has_next) {
 				csv_global_state.DecrementThread();
