@@ -100,8 +100,9 @@ void CompressedMaterialization::UpdateAggregateStats(unique_ptr<LogicalOperator>
 			continue;
 		}
 		auto it = statistics_map.find(colref.binding);
-		D_ASSERT(it != statistics_map.end());
-		group_stats[group_idx] = it->second->ToUnique();
+		if (it != statistics_map.end() && it->second) {
+			group_stats[group_idx] = it->second->ToUnique();
+		}
 	}
 }
 

@@ -14,10 +14,8 @@ namespace duckdb {
 void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, unique_ptr<LogicalOperator> *node_ptr) {
 	for (idx_t i = 0; i < join.conditions.size(); i++) {
 		auto &condition = join.conditions[i];
-		auto stats_left = PropagateExpression(condition.left);
-		auto stats_right = PropagateExpression(condition.right);
-		const auto stored_stats_left = stats_left->Copy();
-		const auto stored_stats_right = stats_right->Copy();
+		const auto stats_left = PropagateExpression(condition.left);
+		const auto stats_right = PropagateExpression(condition.right);
 		if (stats_left && stats_right) {
 			if ((condition.comparison == ExpressionType::COMPARE_DISTINCT_FROM ||
 			     condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) &&
@@ -28,8 +26,8 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 			}
 			auto prune_result = PropagateComparison(*stats_left, *stats_right, condition.comparison);
 			// Add stats to logical_join for perfect hash join
-			join.join_stats.push_back(std::move(stats_left));
-			join.join_stats.push_back(std::move(stats_right));
+			join.join_stats.push_back(stats_left->ToUnique());
+			join.join_stats.push_back(stats_right->ToUnique());
 			switch (prune_result) {
 			case FilterPropagateResult::FILTER_FALSE_OR_NULL:
 			case FilterPropagateResult::FILTER_ALWAYS_FALSE:
@@ -128,8 +126,10 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 			UpdateFilterStatistics(*condition.left, *condition.right, condition.comparison);
 			auto updated_stats_left = PropagateExpression(condition.left);
 			auto updated_stats_right = PropagateExpression(condition.right);
-			CreateFilterFromJoinStats(join.children[0], condition.left, stored_stats_left, *updated_stats_left);
-			CreateFilterFromJoinStats(join.children[1], condition.right, stored_stats_right, *updated_stats_right);
+			if (stats_left && stats_right && updated_stats_left && updated_stats_right) {
+				CreateFilterFromJoinStats(join.children[0], condition.left, *stats_left, *updated_stats_left);
+				CreateFilterFromJoinStats(join.children[1], condition.right, *stats_right, *updated_stats_right);
+			}
 			// Update join_stats when is already part of the join
 			if (join.join_stats.size() == 2) {
 				join.join_stats[0] = std::move(updated_stats_left);

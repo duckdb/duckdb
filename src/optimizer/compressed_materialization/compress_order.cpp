@@ -67,12 +67,10 @@ void CompressedMaterialization::UpdateOrderStats(unique_ptr<LogicalOperator> &op
 			continue;
 		}
 		auto &colref = order_expression.Cast<BoundColumnRefExpression>();
-		if (colref.return_type == bound_order.stats->GetType()) {
-			continue;
-		}
 		auto it = statistics_map.find(colref.binding);
-		D_ASSERT(it != statistics_map.end());
-		bound_order.stats = it->second->ToUnique();
+		if (it != statistics_map.end() && it->second) {
+			bound_order.stats = it->second->ToUnique();
+		}
 	}
 }
 

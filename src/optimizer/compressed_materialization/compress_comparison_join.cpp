@@ -111,16 +111,14 @@ void CompressedMaterialization::UpdateComparisonJoinStats(unique_ptr<LogicalOper
 		auto &rhs_colref = condition.right->Cast<BoundColumnRefExpression>();
 		auto &lhs_join_stats = compressed_join.join_stats[condition_idx * 2];
 		auto &rhs_join_stats = compressed_join.join_stats[condition_idx * 2 + 1];
-		if (lhs_colref.return_type == lhs_join_stats->GetType()) {
-			continue; // Wasn't compressed
-		}
-		D_ASSERT(rhs_colref.return_type != rhs_join_stats->GetType());
-
 		auto lhs_it = statistics_map.find(lhs_colref.binding);
 		auto rhs_it = statistics_map.find(rhs_colref.binding);
-		D_ASSERT(lhs_it != statistics_map.end() && rhs_it != statistics_map.end());
-		lhs_join_stats = lhs_it->second->ToUnique();
-		rhs_join_stats = rhs_it->second->ToUnique();
+		if (lhs_it != statistics_map.end() && lhs_it->second) {
+			lhs_join_stats = lhs_it->second->ToUnique();
+		}
+		if (rhs_it != statistics_map.end() && rhs_it->second) {
+			rhs_join_stats = rhs_it->second->ToUnique();
+		}
 	}
 }
 

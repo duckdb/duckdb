@@ -5,28 +5,40 @@
 statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY
 
-mode skip
-
 statement ok
-create table test as select cast(random() * 10 as int) i from range(10)
+create table test as
+select (range + 7) % 4 i,
+       (range + 7) % 11 j
+from range(10)
 
+# should see compress exactly twice (for columns i and j)
+# if we see less than twice we're not compressing,
+# and if we see it more than twice we're likely compressing and decompressing twice (once for each ORDER BY)
+# but we can compress once, then do both ORDER BYs, then decompress
 query II
-explain select count(*) from (select i from (select i from test order by i offset 1) order by i offset 1)
+explain select count(i), count(j) from (select i, j from (select i, j from test order by j offset 1) order by j offset 1)
 ----
-logical_opt	<REGEX>:.*cm_decompress.*cm_compress.*
+logical_opt	<REGEX>:(.*cm_compress.*){2}
 
-mode unskip
+# should see it exactly once here, as we can only compress the group (i), not the value being summed (j)
+# after the GROUP BY we do the ORDER BY, and finally decompress
+query II
+explain select i, sum(j) from test group by i order by i
+----
+logical_opt	<REGEX>:(.*cm_compress.*){1}
 
 require tpch
 
 statement ok
 call dbgen(sf=0.01)
 
+# test that we're compressing lineitem
 query II
 explain select * from lineitem order by l_shipdate
 ----
 logical_opt	<REGEX>:.*cm_decompress.*cm_compress.*
 
+# test that we get the same result with or without the optimizer
 query IIIIIIIIIIIIIII nosort q0
 select * from lineitem order by l_shipdate
 ----

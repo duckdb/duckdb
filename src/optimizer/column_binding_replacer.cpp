@@ -4,11 +4,11 @@
 
 namespace duckdb {
 
-ReplaceBinding::ReplaceBinding() {
+ReplaceBinding::ReplaceBinding() : replace_type(false) {
 }
 
 ReplaceBinding::ReplaceBinding(ColumnBinding old_binding, ColumnBinding new_binding)
-    : old_binding(old_binding), new_binding(new_binding) {
+    : old_binding(old_binding), new_binding(new_binding), replace_type(false) {
 }
 
 ReplaceBinding::ReplaceBinding(ColumnBinding old_binding, ColumnBinding new_binding, LogicalType new_type)
