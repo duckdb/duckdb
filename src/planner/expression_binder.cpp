@@ -194,10 +194,10 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 		if (!success) {
 			throw BinderException(error_msg);
 		}
-		auto &bound_expr = expr.get()->Cast<BoundExpression>();
+		auto &bound_expr = expr->Cast<BoundExpression>();
 		ExtractCorrelatedExpressions(binder, *bound_expr.expr);
 	}
-	auto &bound_expr = expr.get()->Cast<BoundExpression>();
+	auto &bound_expr = expr->Cast<BoundExpression>();
 	unique_ptr<Expression> result = std::move(bound_expr.expr);
 	if (target_type.id() != LogicalTypeId::INVALID) {
 		// the binder has a specific target type: add a cast to that type

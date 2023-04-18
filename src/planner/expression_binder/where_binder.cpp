@@ -9,7 +9,7 @@ WhereBinder::WhereBinder(Binder &binder, ClientContext &context, ColumnAliasBind
 }
 
 BindResult WhereBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = expr_ptr.get()->Cast<ColumnRefExpression>();
+	auto &expr = expr_ptr->Cast<ColumnRefExpression>();
 	auto result = ExpressionBinder::BindExpression(expr_ptr, depth);
 	if (!result.HasError() || !column_alias_binder) {
 		return result;
