@@ -27,6 +27,7 @@ public:
 	ColumnCheckpointState &GetCheckpointState();
 
 	void Checkpoint(vector<SegmentNode<ColumnSegment>> nodes);
+	CompressionFunction &GetCompressionFunction(CompressionType type);
 
 private:
 	void ScanSegments(const std::function<void(Vector &, idx_t)> &callback);
@@ -42,7 +43,7 @@ private:
 	bool is_validity;
 	Vector intermediate;
 	vector<SegmentNode<ColumnSegment>> nodes;
-	vector<CompressionFunction *> compression_functions;
+	vector<optional_ptr<CompressionFunction>> compression_functions;
 	ColumnCheckpointInfo &checkpoint_info;
 };
 

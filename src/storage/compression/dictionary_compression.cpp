@@ -130,16 +130,15 @@ struct DictionaryCompressionStorage {
 // scanning the whole dictionary at once and then scanning the selection buffer for each emitted vector. Secondly, it
 // allows for efficient bitpacking compression as the selection values should remain relatively small.
 struct DictionaryCompressionCompressState : public DictionaryCompressionState {
-	explicit DictionaryCompressionCompressState(ColumnDataCheckpointer &checkpointer)
-	    : checkpointer(checkpointer), heap(BufferAllocator::Get(checkpointer.GetDatabase())) {
-		auto &db = checkpointer.GetDatabase();
-		auto &config = DBConfig::GetConfig(db);
-		function = config.GetCompressionFunction(CompressionType::COMPRESSION_DICTIONARY, PhysicalType::VARCHAR);
+	explicit DictionaryCompressionCompressState(ColumnDataCheckpointer &checkpointer_p)
+	    : checkpointer(checkpointer_p),
+	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_DICTIONARY)),
+	      heap(BufferAllocator::Get(checkpointer.GetDatabase())) {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
 	}
 
 	ColumnDataCheckpointer &checkpointer;
-	CompressionFunction *function;
+	CompressionFunction &function;
 
 	// State regarding current segment
 	unique_ptr<ColumnSegment> current_segment;
