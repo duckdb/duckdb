@@ -41,7 +41,9 @@ string TestDirectoryPath();
 string TestCreatePath(string suffix);
 unique_ptr<DBConfig> GetTestConfig();
 bool TestIsInternalError(unordered_set<string> &internal_error_messages, const string &error);
-
+void SetTestDirectory(string path);
+void SetZeroInitialize(bool new_zero_init);
+string GetTestDirectory();
 string GetCSVPath();
 void WriteCSV(string path, const char *csv);
 void WriteBinary(string path, const uint8_t *data, uint64_t length);

@@ -20,13 +20,19 @@ namespace duckdb {
 
 class DatabaseInstance;
 
+struct StorageManagerOptions {
+	bool read_only = false;
+	bool use_direct_io = false;
+	bool zero_initialize = false;
+};
+
 //! SingleFileBlockManager is an implementation for a BlockManager which manages blocks in a single file
 class SingleFileBlockManager : public BlockManager {
 	//! The location in the file where the block writing starts
 	static constexpr uint64_t BLOCK_START = Storage::FILE_HEADER_SIZE * 3;
 
 public:
-	SingleFileBlockManager(AttachedDatabase &db, string path, bool read_only, bool use_direct_io);
+	SingleFileBlockManager(AttachedDatabase &db, string path, StorageManagerOptions options);
 
 	void GetFileFlags(uint8_t &flags, FileLockType &lock, bool create_new);
 	void CreateNewDatabase();
@@ -96,10 +102,8 @@ private:
 	block_id_t free_list_id;
 	//! The current header iteration count
 	uint64_t iteration_count;
-	//! Whether or not the db is opened in read-only mode
-	bool read_only;
-	//! Whether or not to use Direct IO to read the blocks
-	bool use_direct_io;
+	//! The storage manager options
+	StorageManagerOptions options;
 	//! Lock for performing various operations in the single file block manager
 	mutex block_lock;
 };

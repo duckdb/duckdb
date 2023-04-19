@@ -20,6 +20,8 @@ using namespace std;
 #define TESTING_DIRECTORY_NAME "duckdb_unittest_tempdir"
 
 namespace duckdb {
+static string custom_test_directory;
+static bool zero_initialize = false;
 
 bool NO_FAIL(QueryResult &result) {
 	if (result.HasError()) {
@@ -58,6 +60,9 @@ void TestChangeDirectory(string path) {
 }
 
 void DeleteDatabase(string path) {
+	if (!custom_test_directory.empty()) {
+		return;
+	}
 	TestDeleteFile(path);
 	TestDeleteFile(path + ".wal");
 }
@@ -67,12 +72,34 @@ void TestCreateDirectory(string path) {
 	fs->CreateDirectory(path);
 }
 
+void SetTestDirectory(string path) {
+	custom_test_directory = path;
+}
+
+void SetZeroInitialize(bool new_zero_init) {
+	zero_initialize = new_zero_init;
+}
+
+string GetTestDirectory() {
+	if (custom_test_directory.empty()) {
+		return TESTING_DIRECTORY_NAME;
+	}
+	return custom_test_directory;
+}
+
 string TestDirectoryPath() {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	if (!fs->DirectoryExists(TESTING_DIRECTORY_NAME)) {
-		fs->CreateDirectory(TESTING_DIRECTORY_NAME);
+	auto test_directory = GetTestDirectory();
+	if (!fs->DirectoryExists(test_directory)) {
+		fs->CreateDirectory(test_directory);
 	}
-	string path = StringUtil::Format(TESTING_DIRECTORY_NAME "/%d", getpid());
+	string path;
+	if (custom_test_directory.empty()) {
+		// add the PID to the test directory - but only if it was not specified explicitly by the user
+		path = StringUtil::Format(test_directory + "/%d", getpid());
+	} else {
+		path = test_directory;
+	}
 	if (!fs->DirectoryExists(path)) {
 		fs->CreateDirectory(path);
 	}
@@ -97,6 +124,7 @@ unique_ptr<DBConfig> GetTestConfig() {
 	auto result = make_uniq<DBConfig>();
 	result->options.checkpoint_wal_size = 0;
 	result->options.allow_unsigned_extensions = true;
+	result->options.zero_initialize = zero_initialize;
 	return result;
 }
 
