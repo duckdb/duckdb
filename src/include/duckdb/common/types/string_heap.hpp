@@ -20,7 +20,6 @@ class StringHeap {
 public:
 	DUCKDB_API explicit StringHeap(Allocator &allocator = Allocator::DefaultAllocator());
 
-	DUCKDB_API void Reset();
 	DUCKDB_API void Destroy();
 	DUCKDB_API void Move(StringHeap &other);
 

@@ -37,6 +37,11 @@ static void PopulateBindingMap(CompressedMaterializationInfo &info, const vector
 
 void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperator> &op) {
 	auto &join = op->Cast<LogicalComparisonJoin>();
+	if (join.join_type == JoinType::MARK) {
+		// Tricky to get bindings right. RHS binding stays the same even though it changes type
+		// Do not compress for now
+		return;
+	}
 
 	// Find all bindings referenced by non-colref expressions in the conditions
 	// These are excluded from compression by projection

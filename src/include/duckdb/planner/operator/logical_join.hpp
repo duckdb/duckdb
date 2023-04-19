@@ -35,7 +35,6 @@ public:
 	vector<idx_t> left_projection_map;
 	//! The columns of the RHS that are output by the join
 	vector<idx_t> right_projection_map;
-
 	//! Join Keys statistics (optional)
 	vector<unique_ptr<BaseStatistics>> join_stats;
 
