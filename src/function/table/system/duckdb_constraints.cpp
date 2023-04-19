@@ -19,7 +19,8 @@
 namespace duckdb {
 
 struct UniqueKeyInfo {
-	string schema, table;
+	string schema;
+	string table;
 	vector<LogicalIndex> columns;
 
 	bool operator==(const UniqueKeyInfo &other) const {
@@ -52,7 +53,7 @@ struct DuckDBConstraintsData : public GlobalTableFunctionState {
 	DuckDBConstraintsData() : offset(0), constraint_offset(0), unique_constraint_offset(0) {
 	}
 
-	vector<CatalogEntry *> entries;
+	vector<optional_ptr<CatalogEntry>> entries;
 	idx_t offset;
 	idx_t constraint_offset;
 	idx_t unique_constraint_offset;
@@ -125,7 +126,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBConstraintsInit(ClientContext &contex
 }
 
 void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (DuckDBConstraintsData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<DuckDBConstraintsData>();
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;
@@ -134,10 +135,10 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
-		auto &entry = data.entries[data.offset];
-		D_ASSERT(entry->type == CatalogType::TABLE_ENTRY);
+		auto &entry = *data.entries[data.offset];
+		D_ASSERT(entry.type == CatalogType::TABLE_ENTRY);
 
-		auto &table = entry->Cast<TableCatalogEntry>();
+		auto &table = entry.Cast<TableCatalogEntry>();
 		auto &constraints = table.GetConstraints();
 		bool is_duck_table = table.IsDuckTable();
 		for (; data.constraint_offset < constraints.size() && count < STANDARD_VECTOR_SIZE; data.constraint_offset++) {

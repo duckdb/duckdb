@@ -11,9 +11,9 @@ CaseSimplificationRule::CaseSimplificationRule(ExpressionRewriter &rewriter) : R
 	root = std::move(op);
 }
 
-unique_ptr<Expression> CaseSimplificationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
+unique_ptr<Expression> CaseSimplificationRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                      bool &changes_made, bool is_root) {
-	auto &root = bindings[0]->Cast<BoundCaseExpression>();
+	auto &root = bindings[0].get().Cast<BoundCaseExpression>();
 	for (idx_t i = 0; i < root.case_checks.size(); i++) {
 		auto &case_check = root.case_checks[i];
 		if (case_check.when_expr->IsFoldable()) {

@@ -23,7 +23,7 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_INSERT;
 
 public:
-	LogicalInsert(TableCatalogEntry *table, idx_t table_index);
+	LogicalInsert(TableCatalogEntry &table, idx_t table_index);
 
 	vector<vector<unique_ptr<Expression>>> insert_values;
 	//! The insertion map ([table_index -> index in result, or DConstants::INVALID_INDEX if not specified])
@@ -31,7 +31,7 @@ public:
 	//! The expected types for the INSERT statement (obtained from the column types)
 	vector<LogicalType> expected_types;
 	//! The base table to insert into
-	TableCatalogEntry *table;
+	TableCatalogEntry &table;
 	idx_t table_index;
 	//! if returning option is used, return actual chunk to projection
 	bool return_chunk;

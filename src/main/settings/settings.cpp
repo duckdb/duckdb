@@ -142,6 +142,26 @@ Value DebugForceNoCrossProduct::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Debug Ordered Aggregate Threshold
+//===--------------------------------------------------------------------===//
+
+void OrderedAggregateThreshold::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).ordered_aggregate_threshold = ClientConfig().ordered_aggregate_threshold;
+}
+
+void OrderedAggregateThreshold::SetLocal(ClientContext &context, const Value &input) {
+	const auto param = input.GetValue<uint64_t>();
+	if (!param) {
+		throw ParserException("Invalid option for PRAGMA ordered_aggregate_threshold, value must be positive");
+	}
+	ClientConfig::GetConfig(context).ordered_aggregate_threshold = param;
+}
+
+Value OrderedAggregateThreshold::GetSetting(ClientContext &context) {
+	return Value::UBIGINT(ClientConfig::GetConfig(context).ordered_aggregate_threshold);
+}
+
+//===--------------------------------------------------------------------===//
 // Debug Window Mode
 //===--------------------------------------------------------------------===//
 void DebugWindowMode::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -492,16 +512,15 @@ Value EnableProgressBarPrintSetting::GetSetting(ClientContext &context) {
 // Experimental Parallel CSV
 //===--------------------------------------------------------------------===//
 void ExperimentalParallelCSVSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.experimental_parallel_csv_reader = input.GetValue<bool>();
+	Printer::Print("experimental_parallel_csv is deprecated and will be removed with the next release - the parallel "
+	               "CSV reader is now standard and does not need to be manually enabled anymore 1");
 }
 
 void ExperimentalParallelCSVSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.experimental_parallel_csv_reader = DBConfig().options.experimental_parallel_csv_reader;
 }
 
 Value ExperimentalParallelCSVSetting::GetSetting(ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BIGINT(config.options.experimental_parallel_csv_reader);
+	return Value();
 }
 
 //===--------------------------------------------------------------------===//
@@ -660,6 +679,22 @@ Value HomeDirectorySetting::GetSetting(ClientContext &context) {
 	return Value(config.home_directory);
 }
 
+//===--------------------------------------------------------------------===//
+// Integer Division
+//===--------------------------------------------------------------------===//
+void IntegerDivisionSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).integer_division = ClientConfig().integer_division;
+}
+
+void IntegerDivisionSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.integer_division = input.GetValue<bool>();
+}
+
+Value IntegerDivisionSetting::GetSetting(ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value(config.integer_division);
+}
 //===--------------------------------------------------------------------===//
 // Log Query Path
 //===--------------------------------------------------------------------===//

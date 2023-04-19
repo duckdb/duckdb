@@ -125,7 +125,7 @@ end:
 }
 
 void Parser::ParseQuery(const string &query) {
-	Transformer transformer(options.max_expression_depth);
+	Transformer transformer(options);
 	string parser_error;
 	{
 		// check if there are any unicode spaces in the string

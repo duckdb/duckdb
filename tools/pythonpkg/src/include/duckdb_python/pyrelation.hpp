@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb_python/pyresult.hpp
+// duckdb_python/pyrelation.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -58,6 +58,8 @@ public:
 
 	unique_ptr<DuckDBPyRelation> SetAlias(const string &expr);
 
+	unique_ptr<DuckDBPyRelation> ProjectFromExpression(const string &expr);
+	unique_ptr<DuckDBPyRelation> ProjectFromTypes(const py::object &types);
 	unique_ptr<DuckDBPyRelation> Project(const string &expr);
 
 	unique_ptr<DuckDBPyRelation> Filter(const string &expr);
@@ -107,7 +109,7 @@ public:
 
 	string ToSQL();
 
-	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(idx_t chunk_size);
+	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(idx_t rows_per_batch);
 
 	idx_t Length();
 

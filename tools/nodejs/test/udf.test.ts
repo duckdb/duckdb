@@ -220,5 +220,14 @@ describe('UDFs', function() {
             });
             db.unregister_udf("udf", done);
         });
+
+        it('blob', function(done) {
+            db.register_udf("udf", "varchar", (buf: Buffer) => buf.toString("hex"));
+            db.all("select udf('\\xAA\\xAB\\xAC'::BLOB) v", function(err: null | Error, rows: TableData) {
+                if (err) throw err;
+                assert.equal(rows[0].v, "aaabac");
+            });
+            db.unregister_udf("udf", done);
+        });
     });
 });

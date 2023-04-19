@@ -19,7 +19,7 @@
 
 namespace duckdb {
 
-CommitState::CommitState(ClientContext &context, transaction_t commit_id, WriteAheadLog *log)
+CommitState::CommitState(ClientContext &context, transaction_t commit_id, optional_ptr<WriteAheadLog> log)
     : log(log), commit_id(commit_id), current_table_info(nullptr), context(context) {
 }
 
@@ -149,10 +149,10 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 	}
 }
 
-void CommitState::WriteDelete(DeleteInfo *info) {
+void CommitState::WriteDelete(DeleteInfo &info) {
 	D_ASSERT(log);
 	// switch to the current table, if necessary
-	SwitchTable(info->table->info.get(), UndoFlags::DELETE_TUPLE);
+	SwitchTable(info.table->info.get(), UndoFlags::DELETE_TUPLE);
 
 	if (!delete_chunk) {
 		delete_chunk = make_uniq<DataChunk>();
@@ -160,17 +160,17 @@ void CommitState::WriteDelete(DeleteInfo *info) {
 		delete_chunk->Initialize(Allocator::DefaultAllocator(), delete_types);
 	}
 	auto rows = FlatVector::GetData<row_t>(delete_chunk->data[0]);
-	for (idx_t i = 0; i < info->count; i++) {
-		rows[i] = info->base_row + info->rows[i];
+	for (idx_t i = 0; i < info.count; i++) {
+		rows[i] = info.base_row + info.rows[i];
 	}
-	delete_chunk->SetCardinality(info->count);
+	delete_chunk->SetCardinality(info.count);
 	log->WriteDelete(*delete_chunk);
 }
 
-void CommitState::WriteUpdate(UpdateInfo *info) {
+void CommitState::WriteUpdate(UpdateInfo &info) {
 	D_ASSERT(log);
 	// switch to the current table, if necessary
-	auto &column_data = info->segment->column_data;
+	auto &column_data = info.segment->column_data;
 	auto &table_info = column_data.GetTableInfo();
 
 	SwitchTable(&table_info, UndoFlags::UPDATE_TUPLE);
@@ -188,25 +188,25 @@ void CommitState::WriteUpdate(UpdateInfo *info) {
 	update_chunk->Initialize(Allocator::DefaultAllocator(), update_types);
 
 	// fetch the updated values from the base segment
-	info->segment->FetchCommitted(info->vector_index, update_chunk->data[0]);
+	info.segment->FetchCommitted(info.vector_index, update_chunk->data[0]);
 
 	// write the row ids into the chunk
 	auto row_ids = FlatVector::GetData<row_t>(update_chunk->data[1]);
-	idx_t start = column_data.start + info->vector_index * STANDARD_VECTOR_SIZE;
-	for (idx_t i = 0; i < info->N; i++) {
-		row_ids[info->tuples[i]] = start + info->tuples[i];
+	idx_t start = column_data.start + info.vector_index * STANDARD_VECTOR_SIZE;
+	for (idx_t i = 0; i < info.N; i++) {
+		row_ids[info.tuples[i]] = start + info.tuples[i];
 	}
 	if (column_data.type.id() == LogicalTypeId::VALIDITY) {
 		// zero-initialize the booleans
 		// FIXME: this is only required because of NullValue<T> in Vector::Serialize...
 		auto booleans = FlatVector::GetData<bool>(update_chunk->data[0]);
-		for (idx_t i = 0; i < info->N; i++) {
-			auto idx = info->tuples[i];
+		for (idx_t i = 0; i < info.N; i++) {
+			auto idx = info.tuples[i];
 			booleans[idx] = false;
 		}
 	}
-	SelectionVector sel(info->tuples);
-	update_chunk->Slice(sel, info->N);
+	SelectionVector sel(info.tuples);
+	update_chunk->Slice(sel, info.N);
 
 	// construct the column index path
 	vector<column_t> column_indexes;
@@ -215,7 +215,7 @@ void CommitState::WriteUpdate(UpdateInfo *info) {
 		column_indexes.push_back(column_data_ptr->column_index);
 		column_data_ptr = column_data_ptr->parent;
 	}
-	column_indexes.push_back(info->column_index);
+	column_indexes.push_back(info.column_index);
 	std::reverse(column_indexes.begin(), column_indexes.end());
 
 	log->WriteUpdate(*update_chunk, column_indexes);
@@ -260,7 +260,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 		// deletion:
 		auto info = (DeleteInfo *)data;
 		if (HAS_LOG && !info->table->info->IsTemporary()) {
-			WriteDelete(info);
+			WriteDelete(*info);
 		}
 		// mark the tuples as committed
 		info->vinfo->CommitDelete(commit_id, info->rows, info->count);
@@ -270,7 +270,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 		// update:
 		auto info = (UpdateInfo *)data;
 		if (HAS_LOG && !info->segment->column_data.GetTableInfo().IsTemporary()) {
-			WriteUpdate(info);
+			WriteUpdate(*info);
 		}
 		info->version_number = commit_id;
 		break;

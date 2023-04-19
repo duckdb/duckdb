@@ -30,6 +30,10 @@ struct FloorFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct TruncFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct RoundFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

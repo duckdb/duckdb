@@ -71,7 +71,9 @@ jobs:
 
     - name: Test
       shell: bash
-      run: make unittestci
+      run: |
+          echo "DUCKDB_INSTALL_LIB=$(find `pwd` -name "libduck*.so" | head -n 1)" >> $GITHUB_ENV
+          make unittestci
 
 
  force-storage:

@@ -22,7 +22,7 @@ statement ok
 CREATE TABLE test (id INTEGER, l VARCHAR[]);
 
 statement ok
-INSERT INTO test SELECT i, case when (i/1000)%2=0 then [1::VARCHAR, 1::VARCHAR, 1::VARCHAR] else [2::VARCHAR, 2::VARCHAR] end FROM range(200000) tbl(i)
+INSERT INTO test SELECT i, case when (i//1000)%2=0 then [1::VARCHAR, 1::VARCHAR, 1::VARCHAR] else [2::VARCHAR, 2::VARCHAR] end FROM range(200000) tbl(i)
 
 # full unnest
 query II

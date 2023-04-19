@@ -174,6 +174,9 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		statements.push_back(std::move(parser.statements[0]));
 
 		db->con->context->HandlePragmaStatements(statements);
+		if (statements.empty()) {
+			return SQLITE_OK;
+		}
 
 		// if there are multiple statements here, we are dealing with an import database statement
 		// we directly execute all statements besides the final one

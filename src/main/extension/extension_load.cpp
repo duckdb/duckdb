@@ -4,6 +4,10 @@
 #include "duckdb/main/error_manager.hpp"
 #include "mbedtls_wrapper.hpp"
 
+#ifdef WASM_LOADABLE_EXTENSIONS
+#include <emscripten.h>
+#endif
+
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -86,12 +90,34 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileOpener *opener, const
 			throw IOException(config.error_manager->FormatException(ErrorType::UNSIGNED_EXTENSION, filename));
 		}
 	}
-	auto lib_hdl = dlopen(filename.c_str(), RTLD_NOW | RTLD_LOCAL);
+	auto basename = fs.ExtractBaseName(filename);
+
+#ifdef WASM_LOADABLE_EXTENSIONS
+	EM_ASM(
+	    {
+		    // Next few lines should argubly in separate JavaScript-land function call
+		    // TODO: move them out / have them configurable
+		    const xhr = new XMLHttpRequest();
+		    xhr.open("GET", UTF8ToString($0), false);
+		    xhr.responseType = "arraybuffer";
+		    xhr.send(null);
+		    var uInt8Array = xhr.response;
+		    WebAssembly.validate(uInt8Array);
+		    console.log('Loading extension ', UTF8ToString($1));
+
+		    // Here we add the uInt8Array to Emscripten's filesystem, for it to be found by dlopen
+		    FS.writeFile(UTF8ToString($1), new Uint8Array(uInt8Array));
+	    },
+	    filename.c_str(), basename.c_str());
+	auto dopen_from = basename;
+#else
+	auto dopen_from = filename;
+#endif
+
+	auto lib_hdl = dlopen(dopen_from.c_str(), RTLD_NOW | RTLD_LOCAL);
 	if (!lib_hdl) {
 		throw IOException("Extension \"%s\" could not be loaded: %s", filename, GetDLError());
 	}
-
-	auto basename = fs.ExtractBaseName(filename);
 
 	ext_version_fun_t version_fun;
 	auto version_fun_name = basename + "_version";

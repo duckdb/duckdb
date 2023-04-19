@@ -27,7 +27,7 @@ public:
 
 	//! Checks if the given expression matches this ExpressionMatcher. If it does, the expression is appended to the
 	//! bindings list and true is returned. Otherwise, false is returned.
-	virtual bool Match(Expression *expr, vector<Expression *> &bindings);
+	virtual bool Match(Expression &expr, vector<reference<Expression>> &bindings);
 
 	//! The ExpressionClass of the to-be-matched expression. ExpressionClass::INVALID for ANY.
 	ExpressionClass expr_class;
@@ -40,14 +40,14 @@ public:
 //! The ExpressionEqualityMatcher matches on equality with another (given) expression
 class ExpressionEqualityMatcher : public ExpressionMatcher {
 public:
-	explicit ExpressionEqualityMatcher(Expression *expr)
+	explicit ExpressionEqualityMatcher(Expression &expr)
 	    : ExpressionMatcher(ExpressionClass::INVALID), expression(expr) {
 	}
 
-	bool Match(Expression *expr, vector<Expression *> &bindings) override;
+	bool Match(Expression &expr, vector<reference<Expression>> &bindings) override;
 
 private:
-	Expression *expression;
+	const Expression &expression;
 };
 
 class ConstantExpressionMatcher : public ExpressionMatcher {
@@ -61,7 +61,7 @@ public:
 	CaseExpressionMatcher() : ExpressionMatcher(ExpressionClass::BOUND_CASE) {
 	}
 
-	bool Match(Expression *expr_, vector<Expression *> &bindings) override;
+	bool Match(Expression &expr_, vector<reference<Expression>> &bindings) override;
 };
 
 class ComparisonExpressionMatcher : public ExpressionMatcher {
@@ -74,7 +74,7 @@ public:
 	//! The set matcher matching policy to use
 	SetMatcher::Policy policy;
 
-	bool Match(Expression *expr_, vector<Expression *> &bindings) override;
+	bool Match(Expression &expr_, vector<reference<Expression>> &bindings) override;
 };
 
 class CastExpressionMatcher : public ExpressionMatcher {
@@ -84,7 +84,7 @@ public:
 	//! The matcher for the child expressions
 	unique_ptr<ExpressionMatcher> matcher;
 
-	bool Match(Expression *expr_, vector<Expression *> &bindings) override;
+	bool Match(Expression &expr_, vector<reference<Expression>> &bindings) override;
 };
 
 class InClauseExpressionMatcher : public ExpressionMatcher {
@@ -96,7 +96,7 @@ public:
 	//! The set matcher matching policy to use
 	SetMatcher::Policy policy;
 
-	bool Match(Expression *expr_, vector<Expression *> &bindings) override;
+	bool Match(Expression &expr_, vector<reference<Expression>> &bindings) override;
 };
 
 class ConjunctionExpressionMatcher : public ExpressionMatcher {
@@ -109,7 +109,7 @@ public:
 	//! The set matcher matching policy to use
 	SetMatcher::Policy policy;
 
-	bool Match(Expression *expr_, vector<Expression *> &bindings) override;
+	bool Match(Expression &expr_, vector<reference<Expression>> &bindings) override;
 };
 
 class FunctionExpressionMatcher : public ExpressionMatcher {
@@ -123,7 +123,7 @@ public:
 	//! The function name to match
 	unique_ptr<FunctionMatcher> function;
 
-	bool Match(Expression *expr_, vector<Expression *> &bindings) override;
+	bool Match(Expression &expr_, vector<reference<Expression>> &bindings) override;
 };
 
 //! The FoldableConstant matcher matches any expression that is foldable into a constant by the ExpressionExecutor (i.e.
@@ -133,7 +133,7 @@ public:
 	FoldableConstantMatcher() : ExpressionMatcher(ExpressionClass::INVALID) {
 	}
 
-	bool Match(Expression *expr, vector<Expression *> &bindings) override;
+	bool Match(Expression &expr, vector<reference<Expression>> &bindings) override;
 };
 
 } // namespace duckdb

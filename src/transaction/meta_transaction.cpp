@@ -20,19 +20,19 @@ ValidChecker &ValidChecker::Get(MetaTransaction &transaction) {
 
 Transaction &Transaction::Get(ClientContext &context, AttachedDatabase &db) {
 	auto &meta_transaction = MetaTransaction::Get(context);
-	return meta_transaction.GetTransaction(&db);
+	return meta_transaction.GetTransaction(db);
 }
 
-Transaction &MetaTransaction::GetTransaction(AttachedDatabase *db) {
-	auto entry = transactions.find(db);
+Transaction &MetaTransaction::GetTransaction(AttachedDatabase &db) {
+	auto entry = transactions.find(&db);
 	if (entry == transactions.end()) {
-		auto new_transaction = db->GetTransactionManager().StartTransaction(context);
+		auto new_transaction = db.GetTransactionManager().StartTransaction(context);
 		if (!new_transaction) {
 			throw InternalException("StartTransaction did not return a valid transaction");
 		}
 		new_transaction->active_query = active_query;
-		all_transactions.push_back(db);
-		transactions[db] = new_transaction;
+		all_transactions.push_back(&db);
+		transactions[&db] = new_transaction;
 		return *new_transaction;
 	} else {
 		D_ASSERT(entry->second->active_query == active_query);
@@ -49,7 +49,7 @@ string MetaTransaction::Commit() {
 	// commit transactions in reverse order
 	for (idx_t i = all_transactions.size(); i > 0; i--) {
 		auto db = all_transactions[i - 1];
-		auto entry = transactions.find(db);
+		auto entry = transactions.find(db.get());
 		if (entry == transactions.end()) {
 			throw InternalException("Could not find transaction corresponding to database in MetaTransaction");
 		}
@@ -71,7 +71,7 @@ void MetaTransaction::Rollback() {
 	for (idx_t i = all_transactions.size(); i > 0; i--) {
 		auto db = all_transactions[i - 1];
 		auto &transaction_manager = db->GetTransactionManager();
-		auto entry = transactions.find(db);
+		auto entry = transactions.find(db.get());
 		D_ASSERT(entry != transactions.end());
 		auto transaction = entry->second;
 		transaction_manager.RollbackTransaction(transaction);
@@ -89,20 +89,20 @@ void MetaTransaction::SetActiveQuery(transaction_t query_number) {
 	}
 }
 
-void MetaTransaction::ModifyDatabase(AttachedDatabase *db) {
-	if (db->IsSystem() || db->IsTemporary()) {
+void MetaTransaction::ModifyDatabase(AttachedDatabase &db) {
+	if (db.IsSystem() || db.IsTemporary()) {
 		// we can always modify the system and temp databases
 		return;
 	}
 	if (!modified_database) {
-		modified_database = db;
+		modified_database = &db;
 		return;
 	}
-	if (db != modified_database) {
+	if (&db != modified_database.get()) {
 		throw TransactionException(
 		    "Attempting to write to database \"%s\" in a transaction that has already modified database \"%s\" - a "
 		    "single transaction can only write to a single attached database.",
-		    db->GetName(), modified_database->GetName());
+		    db.GetName(), modified_database->GetName());
 	}
 }
 

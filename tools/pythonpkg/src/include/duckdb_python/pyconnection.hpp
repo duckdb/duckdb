@@ -15,6 +15,7 @@
 #include "duckdb_python/registered_py_object.hpp"
 #include "duckdb_python/pandas_type.hpp"
 #include "duckdb_python/pyrelation.hpp"
+#include "duckdb_python/pytype.hpp"
 #include "duckdb_python/path_like.hpp"
 #include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
 #include "duckdb_python/pyfilesystem.hpp"
@@ -77,6 +78,17 @@ public:
 	unique_ptr<DuckDBPyRelation> ReadJSON(const string &filename, const py::object &columns = py::none(),
 	                                      const py::object &sample_size = py::none(),
 	                                      const py::object &maximum_depth = py::none());
+
+	shared_ptr<DuckDBPyType> MapType(const shared_ptr<DuckDBPyType> &key_type,
+	                                 const shared_ptr<DuckDBPyType> &value_type);
+	shared_ptr<DuckDBPyType> StructType(const py::object &fields);
+	shared_ptr<DuckDBPyType> ArrayType(const shared_ptr<DuckDBPyType> &type);
+	shared_ptr<DuckDBPyType> UnionType(const py::object &members);
+	shared_ptr<DuckDBPyType> EnumType(const string &name, const shared_ptr<DuckDBPyType> &type,
+	                                  const py::list &values_p);
+	shared_ptr<DuckDBPyType> DecimalType(int width, int scale);
+	shared_ptr<DuckDBPyType> StringType(const string &collation = string());
+	shared_ptr<DuckDBPyType> Type(const string &type_str);
 
 	shared_ptr<DuckDBPyConnection> ExecuteMany(const string &query, py::object params = py::list());
 
@@ -153,14 +165,14 @@ public:
 	DataFrame FetchDF(bool date_as_object);
 	DataFrame FetchDFChunk(const idx_t vectors_per_chunk = 1, bool date_as_object = false) const;
 
-	duckdb::pyarrow::Table FetchArrow(idx_t chunk_size);
-	PolarsDataFrame FetchPolars(idx_t chunk_size);
+	duckdb::pyarrow::Table FetchArrow(idx_t rows_per_batch);
+	PolarsDataFrame FetchPolars(idx_t rows_per_batch);
 
 	py::dict FetchPyTorch();
 
 	py::dict FetchTF();
 
-	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(const idx_t chunk_size) const;
+	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(const idx_t rows_per_batch) const;
 
 	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, const py::dict &config);
 

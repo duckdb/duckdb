@@ -48,13 +48,19 @@ jobs:
         key: ${{ github.job }}
         save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
+    - name: Install ninja
+      shell: bash
+      run: brew install ninja
+
     - name: Build
       shell: bash
-      run: make debug
+      run: GEN=ninja make debug
 
     - name: Test
       shell: bash
-      run: make unittestci
+      run: |
+          echo "DUCKDB_INSTALL_LIB=$(find `pwd` -name "libduck*.dylib" | head -n 1)" >> $GITHUB_ENV
+          make unittestci
 
     - name: Amalgamation
       shell: bash
