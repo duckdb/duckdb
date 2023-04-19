@@ -51,9 +51,33 @@ CREATE TABLE abbrevs AS (
 	ORDER BY utc_offset
 );
 
+statement ok
+CREATE TABLE offsets AS (
+	SELECT
+		CASE WHEN EXTRACT(MINUTE FROM utc_offset) <> 0
+		THEN
+			CASE WHEN utc_offset < INTERVAL 0 SECOND
+				THEN LEFT(utc_offset, 6)
+				ELSE '+' || LEFT(utc_offset, 5)
+			END
+		ELSE
+			CASE WHEN utc_offset < INTERVAL 0 SECOND
+				THEN LEFT(utc_offset, 3)
+				ELSE '+' || LEFT(utc_offset, 2)
+			END
+		END AS utc_offset
+	FROM (
+		SELECT DISTINCT utc_offset
+		FROM pg_timezone_names()
+		ORDER BY ALL
+	) z
+);
+
+foreach func strptime try_strptime
+
 # Full zone names
 query II
-SELECT strptime('2022-03-05 17:59:17.877 ' || tz_name, '%Y-%m-%d %H:%M:%S.%g %Z') tstz, tz_name
+SELECT ${func}('2022-03-05 17:59:17.877 ' || tz_name, '%Y-%m-%d %H:%M:%S.%g %Z') tstz, tz_name
 FROM zones
 ORDER BY ALL
 ----
@@ -98,7 +122,7 @@ ORDER BY ALL
 
 # Abbreviations
 query II
-SELECT strptime('2022-03-05 17:59:17.877 ' || tz_name, '%Y-%m-%d %H:%M:%S.%g %Z') tstz, tz_name
+SELECT ${func}('2022-03-05 17:59:17.877 ' || tz_name, '%Y-%m-%d %H:%M:%S.%g %Z') tstz, tz_name
 FROM abbrevs
 ORDER BY ALL
 ----
@@ -145,31 +169,9 @@ ORDER BY ALL
 # UTC Offsets
 #
 
-statement ok
-CREATE TABLE offsets AS (
-	SELECT
-		CASE WHEN EXTRACT(MINUTE FROM utc_offset) <> 0
-		THEN
-			CASE WHEN utc_offset < INTERVAL 0 SECOND
-				THEN LEFT(utc_offset, 6)
-				ELSE '+' || LEFT(utc_offset, 5)
-			END
-		ELSE
-			CASE WHEN utc_offset < INTERVAL 0 SECOND
-				THEN LEFT(utc_offset, 3)
-				ELSE '+' || LEFT(utc_offset, 2)
-			END
-		END AS utc_offset
-	FROM (
-		SELECT DISTINCT utc_offset
-		FROM pg_timezone_names()
-		ORDER BY ALL
-	) z
-);
-
 # These should be TSTZs because there is an offset specified.
 query II
-SELECT strptime('2022-03-05 17:59:17.877 ' || utc_offset, '%Y-%m-%d %H:%M:%S.%g %z') tstz, utc_offset
+SELECT ${func}('2022-03-05 17:59:17.877 ' || utc_offset, '%Y-%m-%d %H:%M:%S.%g %z') tstz, utc_offset
 FROM offsets
 ORDER BY tstz
 ----
@@ -211,6 +213,68 @@ ORDER BY tstz
 2022-03-05 19:59:17.877-08	-10
 2022-03-05 20:59:17.877-08	-11
 2022-03-05 21:59:17.877-08	-12
+
+#
+# Multiple formats
+#
+
+# First fails
+query II
+SELECT ${func}('2022-03-05 17:59:17.877 ' || tz_name, ['%m/%d/%Y  %H:%M:%S.%g %Z', '%Y-%m-%d %H:%M:%S.%g %Z']) tstz, tz_name
+FROM zones
+ORDER BY ALL
+----
+2022-03-04 19:59:17.877-08	Etc/GMT-14
+2022-03-04 20:14:17.877-08	NZ-CHAT
+2022-03-04 20:59:17.877-08	Pacific/Auckland
+2022-03-04 20:59:17.877-08	Pacific/Enderbury
+2022-03-04 22:59:17.877-08	Australia/LHI
+2022-03-04 22:59:17.877-08	Australia/Melbourne
+2022-03-04 22:59:17.877-08	Pacific/Efate
+2022-03-05 00:29:17.877-08	Australia/Darwin
+2022-03-05 00:59:17.877-08	Asia/Tokyo
+2022-03-05 01:14:17.877-08	Australia/Eucla
+2022-03-05 01:59:17.877-08	Asia/Shanghai
+2022-03-05 02:59:17.877-08	Asia/Novosibirsk
+2022-03-05 03:29:17.877-08	Asia/Yangon
+2022-03-05 03:59:17.877-08	Asia/Omsk
+2022-03-05 04:14:17.877-08	Asia/Kathmandu
+2022-03-05 04:29:17.877-08	Asia/Colombo
+2022-03-05 04:59:17.877-08	Asia/Oral
+2022-03-05 05:29:17.877-08	Asia/Kabul
+2022-03-05 05:59:17.877-08	Europe/Astrakhan
+2022-03-05 06:29:17.877-08	Asia/Tehran
+2022-03-05 06:59:17.877-08	Asia/Kuwait
+2022-03-05 07:59:17.877-08	Asia/Nicosia
+2022-03-05 08:59:17.877-08	Europe/Budapest
+2022-03-05 09:59:17.877-08	Etc/GMT-0
+2022-03-05 10:59:17.877-08	Atlantic/Azores
+2022-03-05 11:59:17.877-08	Atlantic/South_Georgia
+2022-03-05 12:59:17.877-08	America/Cordoba
+2022-03-05 13:29:17.877-08	CNT
+2022-03-05 13:59:17.877-08	America/Martinique
+2022-03-05 14:59:17.877-08	America/Louisville
+2022-03-05 15:59:17.877-08	America/Rainy_River
+2022-03-05 16:59:17.877-08	America/Shiprock
+2022-03-05 17:59:17.877-08	Mexico/BajaNorte
+2022-03-05 18:59:17.877-08	America/Sitka
+2022-03-05 19:29:17.877-08	Pacific/Marquesas
+2022-03-05 19:59:17.877-08	Pacific/Johnston
+2022-03-05 20:59:17.877-08	Pacific/Niue
+2022-03-05 21:59:17.877-08	Etc/GMT+12
+
+endloop
+
+#
+# Try
+#
+
+query II
+SELECT try_strptime('2022-03-05 17:59:17.877 ' || tz_name, '%m/%d/%Y  %H:%M:%S.%g %Z') tstz, tz_name
+FROM zones
+WHERE tstz IS NOT NULL
+ORDER BY ALL
+----
 
 #
 # Errors/Coverage

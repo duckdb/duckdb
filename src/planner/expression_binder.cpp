@@ -9,19 +9,19 @@
 namespace duckdb {
 
 ExpressionBinder::ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder)
-    : binder(binder), context(context), stored_binder(nullptr) {
+    : binder(binder), context(context) {
 	if (replace_binder) {
-		stored_binder = binder.GetActiveBinder();
-		binder.SetActiveBinder(this);
+		stored_binder = &binder.GetActiveBinder();
+		binder.SetActiveBinder(*this);
 	} else {
-		binder.PushExpressionBinder(this);
+		binder.PushExpressionBinder(*this);
 	}
 }
 
 ExpressionBinder::~ExpressionBinder() {
 	if (binder.HasActiveBinder()) {
 		if (stored_binder) {
-			binder.SetActiveBinder(stored_binder);
+			binder.SetActiveBinder(*stored_binder);
 		} else {
 			binder.PopExpressionBinder();
 		}
@@ -82,9 +82,9 @@ bool ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr)
 	idx_t depth = 1;
 	bool success = false;
 	while (!active_binders.empty()) {
-		auto &next_binder = active_binders.back();
-		ExpressionBinder::QualifyColumnNames(next_binder->binder, expr);
-		auto bind_result = next_binder->Bind(&expr, depth);
+		auto &next_binder = active_binders.back().get();
+		ExpressionBinder::QualifyColumnNames(next_binder.binder, expr);
+		auto bind_result = next_binder.Bind(&expr, depth);
 		if (bind_result.empty()) {
 			success = true;
 			break;

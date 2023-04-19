@@ -19,6 +19,7 @@
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/function/table/read_csv.hpp"
 
 namespace duckdb {
 
@@ -142,6 +143,14 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 		if (table_function.name == "pandas_scan" || table_function.name == "arrow_scan") {
 			auto arrow_bind = (PyTableFunctionData *)bind_data.get();
 			arrow_bind->external_dependency = std::move(external_dependency);
+		}
+		if (table_function.name == "read_csv" || table_function.name == "read_csv_auto") {
+			auto &csv_bind = bind_data->Cast<ReadCSVData>();
+			if (csv_bind.single_threaded) {
+				table_function.extra_info = "(Single-Threaded)";
+			} else {
+				table_function.extra_info = "(Multi-Threaded)";
+			}
 		}
 	}
 	if (return_types.size() != return_names.size()) {

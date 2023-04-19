@@ -151,13 +151,13 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	    .def("df", &DuckDBPyConnection::FetchDF, "Fetch a result as DataFrame following execute()", py::kw_only(),
 	         py::arg("date_as_object") = false)
 	    .def("pl", &DuckDBPyConnection::FetchPolars, "Fetch a result as Polars DataFrame following execute()",
-	         py::arg("chunk_size") = 1000000)
+	         py::arg("rows_per_batch") = 1000000)
 	    .def("fetch_arrow_table", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
-	         py::arg("chunk_size") = 1000000)
+	         py::arg("rows_per_batch") = 1000000)
 	    .def("fetch_record_batch", &DuckDBPyConnection::FetchRecordBatchReader,
-	         "Fetch an Arrow RecordBatchReader following execute()", py::arg("chunk_size") = 1000000)
+	         "Fetch an Arrow RecordBatchReader following execute()", py::arg("rows_per_batch") = 1000000)
 	    .def("arrow", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
-	         py::arg("chunk_size") = 1000000)
+	         py::arg("rows_per_batch") = 1000000)
 	    .def("torch", &DuckDBPyConnection::FetchPyTorch,
 	         "Fetch a result as dict of PyTorch Tensors following execute()")
 	    .def("tf", &DuckDBPyConnection::FetchTF, "Fetch a result as dict of TensorFlow Tensors following execute()")
@@ -1148,11 +1148,11 @@ DataFrame DuckDBPyConnection::FetchDFChunk(const idx_t vectors_per_chunk, bool d
 	return result->FetchDFChunk(vectors_per_chunk, date_as_object);
 }
 
-duckdb::pyarrow::Table DuckDBPyConnection::FetchArrow(idx_t chunk_size) {
+duckdb::pyarrow::Table DuckDBPyConnection::FetchArrow(idx_t rows_per_batch) {
 	if (!result) {
 		throw InvalidInputException("No open result set");
 	}
-	return result->ToArrowTable(chunk_size);
+	return result->ToArrowTable(rows_per_batch);
 }
 
 py::dict DuckDBPyConnection::FetchPyTorch() {
@@ -1169,16 +1169,16 @@ py::dict DuckDBPyConnection::FetchTF() {
 	return result->FetchTF();
 }
 
-PolarsDataFrame DuckDBPyConnection::FetchPolars(idx_t chunk_size) {
-	auto arrow = FetchArrow(chunk_size);
+PolarsDataFrame DuckDBPyConnection::FetchPolars(idx_t rows_per_batch) {
+	auto arrow = FetchArrow(rows_per_batch);
 	return py::cast<PolarsDataFrame>(py::module::import("polars").attr("DataFrame")(arrow));
 }
 
-duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(const idx_t chunk_size) const {
+duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(const idx_t rows_per_batch) const {
 	if (!result) {
 		throw InvalidInputException("No open result set");
 	}
-	return result->FetchRecordBatchReader(chunk_size);
+	return result->FetchRecordBatchReader(rows_per_batch);
 }
 
 static void CreateArrowScan(py::object entry, TableFunctionRef &table_function,
@@ -1466,17 +1466,17 @@ bool DuckDBPyConnection::IsPandasDataframe(const py::object &object) {
 	if (!ModuleIsLoaded<PandasCacheItem>()) {
 		return false;
 	}
-	auto &import_cache_py = *DuckDBPyConnection::ImportCache();
-	return import_cache_py.pandas().DataFrame.IsInstance(object);
+	auto &py_import_cache = *DuckDBPyConnection::ImportCache();
+	return py_import_cache.pandas().DataFrame.IsInstance(object);
 }
 
 bool DuckDBPyConnection::IsPolarsDataframe(const py::object &object) {
 	if (!ModuleIsLoaded<PolarsCacheItem>()) {
 		return false;
 	}
-	auto &import_cache_py = *DuckDBPyConnection::ImportCache();
-	return import_cache_py.polars().DataFrame.IsInstance(object) ||
-	       import_cache_py.polars().LazyFrame.IsInstance(object);
+	auto &py_import_cache = *DuckDBPyConnection::ImportCache();
+	return py_import_cache.polars().DataFrame.IsInstance(object) ||
+	       py_import_cache.polars().LazyFrame.IsInstance(object);
 }
 
 bool IsValidNumpyDimensions(const py::handle &object, int &dim) {
@@ -1530,14 +1530,29 @@ NumpyObjectType DuckDBPyConnection::IsAcceptedNumpyObject(const py::object &obje
 }
 
 bool DuckDBPyConnection::IsAcceptedArrowObject(const py::object &object) {
-	if (!ModuleIsLoaded<ArrowCacheItem>()) {
+	if (!ModuleIsLoaded<ArrowLibCacheItem>()) {
 		return false;
 	}
-	auto &import_cache_py = *DuckDBPyConnection::ImportCache();
-	return import_cache_py.arrow().lib.Table.IsInstance(object) ||
-	       import_cache_py.arrow().lib.RecordBatchReader.IsInstance(object) ||
-	       import_cache_py.arrow().dataset.Dataset.IsInstance(object) ||
-	       import_cache_py.arrow().dataset.Scanner.IsInstance(object);
+	auto &py_import_cache = *DuckDBPyConnection::ImportCache();
+	if (py_import_cache.arrow_lib().Table.IsInstance(object) ||
+	    py_import_cache.arrow_lib().RecordBatchReader.IsInstance(object)) {
+		return true;
+	}
+	if (!ModuleIsLoaded<ArrowDatasetCacheItem>()) {
+		return false;
+	}
+	return py_import_cache.arrow_dataset().Dataset.IsInstance(object) ||
+	       py_import_cache.arrow_dataset().Scanner.IsInstance(object);
+}
+
+unique_lock<std::mutex> DuckDBPyConnection::AcquireConnectionLock() {
+	// we first release the gil and then acquire the connection lock
+	unique_lock<std::mutex> lock(py_connection_lock, std::defer_lock);
+	{
+		py::gil_scoped_release release;
+		lock.lock();
+	}
+	return lock;
 }
 
 } // namespace duckdb

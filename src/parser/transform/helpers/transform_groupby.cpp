@@ -22,7 +22,7 @@ static void CheckGroupingSetCubes(idx_t current_count, idx_t cube_count) {
 }
 
 struct GroupingExpressionMap {
-	expression_map_t<idx_t> map;
+	parsed_expression_map_t<idx_t> map;
 };
 
 static GroupingSet VectorToGroupingSet(vector<idx_t> &indexes) {
@@ -49,11 +49,11 @@ void Transformer::AddGroupByExpression(unique_ptr<ParsedExpression> expression, 
 			return;
 		}
 	}
-	auto entry = map.map.find(expression.get());
+	auto entry = map.map.find(*expression);
 	idx_t result_idx;
 	if (entry == map.map.end()) {
 		result_idx = result.group_expressions.size();
-		map.map[expression.get()] = result_idx;
+		map.map[*expression] = result_idx;
 		result.group_expressions.push_back(std::move(expression));
 	} else {
 		result_idx = entry->second;

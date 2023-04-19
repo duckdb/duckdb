@@ -12,7 +12,7 @@ namespace duckdb {
 
 PhysicalResultCollector::PhysicalResultCollector(PreparedStatementData &data)
     : PhysicalOperator(PhysicalOperatorType::RESULT_COLLECTOR, {LogicalType::BOOLEAN}, 0),
-      statement_type(data.statement_type), properties(data.properties), plan(data.plan.get()), names(data.names) {
+      statement_type(data.statement_type), properties(data.properties), plan(*data.plan), names(data.names) {
 	this->types = data.types;
 }
 
@@ -31,7 +31,7 @@ unique_ptr<PhysicalResultCollector> PhysicalResultCollector::GetResultCollector(
 	}
 }
 
-vector<PhysicalOperator *> PhysicalResultCollector::GetChildren() const {
+vector<const_reference<PhysicalOperator>> PhysicalResultCollector::GetChildren() const {
 	return {plan};
 }
 
@@ -40,15 +40,14 @@ void PhysicalResultCollector::BuildPipelines(Pipeline &current, MetaPipeline &me
 	sink_state.reset();
 
 	D_ASSERT(children.empty());
-	D_ASSERT(plan);
 
 	// single operator: the operator becomes the data source of the current pipeline
 	auto &state = meta_pipeline.GetState();
-	state.SetPipelineSource(current, this);
+	state.SetPipelineSource(current, *this);
 
 	// we create a new pipeline starting from the child
-	auto child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, this);
-	child_meta_pipeline->Build(plan);
+	auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
+	child_meta_pipeline.Build(plan);
 }
 
 } // namespace duckdb

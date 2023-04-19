@@ -19,7 +19,7 @@ VacuumStmt: VACUUM opt_full opt_freeze opt_verbose
 					n->va_cols = NIL;
 					$$ = (PGNode *)n;
 				}
-			| VACUUM opt_full opt_freeze opt_verbose qualified_name
+			| VACUUM opt_full opt_freeze opt_verbose qualified_name opt_name_list
 				{
 					PGVacuumStmt *n = makeNode(PGVacuumStmt);
 					n->options = PG_VACOPT_VACUUM;
@@ -30,7 +30,7 @@ VacuumStmt: VACUUM opt_full opt_freeze opt_verbose
 					if ($4)
 						n->options |= PG_VACOPT_VERBOSE;
 					n->relation = $5;
-					n->va_cols = NIL;
+					n->va_cols = $6;
 					$$ = (PGNode *)n;
 				}
 			| VACUUM opt_full opt_freeze opt_verbose AnalyzeStmt

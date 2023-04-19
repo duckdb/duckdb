@@ -233,11 +233,11 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 
 	// check for all the aggregates if this aggregate already exists
 	idx_t aggr_index;
-	auto entry = node.aggregate_map.find(aggregate.get());
+	auto entry = node.aggregate_map.find(*aggregate);
 	if (entry == node.aggregate_map.end()) {
 		// new aggregate: insert into aggregate list
 		aggr_index = node.aggregates.size();
-		node.aggregate_map.insert(make_pair(aggregate.get(), aggr_index));
+		node.aggregate_map[*aggregate] = aggr_index;
 		node.aggregates.push_back(std::move(aggregate));
 	} else {
 		// duplicate aggregate: simplify refer to this aggregate
