@@ -128,7 +128,8 @@ struct BufferedCSVReaderOptions {
 	std::map<LogicalTypeId, StrfTimeFormat> write_date_format = {{LogicalTypeId::DATE, {}},
 	                                                             {LogicalTypeId::TIMESTAMP, {}}};
 	//! Whether or not a type format is specified
-	std::map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
+	std::map<LogicalTypeId, bool> has_format = {
+	    {LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}, {LogicalTypeId::TIMESTAMP_TZ, false}};
 
 	void Serialize(FieldWriter &writer) const;
 	void Deserialize(FieldReader &reader);

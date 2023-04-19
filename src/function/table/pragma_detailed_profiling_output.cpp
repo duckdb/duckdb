@@ -109,7 +109,7 @@ static void ExtractFunctions(ColumnDataCollection &collection, ExpressionInfo &i
 static void PragmaDetailedProfilingOutputFunction(ClientContext &context, TableFunctionInput &data_p,
                                                   DataChunk &output) {
 	auto &state = data_p.global_state->Cast<PragmaDetailedProfilingOutputOperatorData>();
-	auto &data = (PragmaDetailedProfilingOutputData &)*data_p.bind_data;
+	auto &data = data_p.bind_data->CastNoConst<PragmaDetailedProfilingOutputData>();
 
 	if (!state.initialized) {
 		// create a ColumnDataCollection
@@ -123,14 +123,15 @@ static void PragmaDetailedProfilingOutputFunction(ClientContext &context, TableF
 		int operator_counter = 1;
 		int function_counter = 1;
 		int expression_counter = 1;
-		if (ClientData::Get(context).query_profiler_history->GetPrevProfilers().empty()) {
+		auto &client_data = ClientData::Get(context);
+		if (client_data.query_profiler_history->GetPrevProfilers().empty()) {
 			return;
 		}
 		// For each Operator
-		for (auto op :
-		     ClientData::Get(context).query_profiler_history->GetPrevProfilers().back().second->GetTreeMap()) {
+		auto &tree_map = client_data.query_profiler_history->GetPrevProfilers().back().second->GetTreeMap();
+		for (auto op : tree_map) {
 			// For each Expression Executor
-			for (auto &expr_executor : op.second->info.executors_info) {
+			for (auto &expr_executor : op.second.get().info.executors_info) {
 				// For each Expression tree
 				if (!expr_executor) {
 					continue;

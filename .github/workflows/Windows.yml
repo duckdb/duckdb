@@ -58,7 +58,8 @@ jobs:
 
     - name: Test
       shell: bash
-      run: test/Release/unittest.exe
+      run: |
+          test/Release/unittest.exe
 
     - name: Tools Test
       shell: bash

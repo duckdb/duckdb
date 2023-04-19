@@ -7,7 +7,8 @@
 
 namespace duckdb {
 
-IndexBinder::IndexBinder(Binder &binder, ClientContext &context, TableCatalogEntry *table, CreateIndexInfo *info)
+IndexBinder::IndexBinder(Binder &binder, ClientContext &context, optional_ptr<TableCatalogEntry> table,
+                         optional_ptr<CreateIndexInfo> info)
     : ExpressionBinder(binder, context), table(table), info(info) {
 }
 
