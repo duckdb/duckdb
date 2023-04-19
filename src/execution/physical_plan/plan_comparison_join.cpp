@@ -19,12 +19,8 @@
 
 namespace duckdb {
 
-static bool CanPlanIndexJoin(ClientContext &context, TableScanBindData *bind_data, PhysicalTableScan &scan) {
-	if (!bind_data) {
-		// not a table scan
-		return false;
-	}
-	auto table = bind_data->table;
+static bool CanPlanIndexJoin(ClientContext &context, TableScanBindData &bind_data, PhysicalTableScan &scan) {
+	auto table = bind_data.table;
 	auto &transaction = DuckTransaction::Get(context, *table->catalog);
 	auto &local_storage = LocalStorage::Get(transaction);
 	if (local_storage.Find(table->GetStoragePtr())) {
@@ -139,21 +135,23 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	return;
 }
 
-static void CanUseIndexJoin(TableScanBindData *tbl, Expression &expr, Index **result_index) {
-	tbl->table->GetStorage().info->indexes.Scan([&](Index &index) {
+static optional_ptr<Index> CanUseIndexJoin(TableScanBindData &tbl, Expression &expr) {
+	optional_ptr<Index> result;
+	tbl.table->GetStorage().info->indexes.Scan([&](Index &index) {
 		if (index.unbound_expressions.size() != 1) {
 			return false;
 		}
 		if (expr.alias == index.unbound_expressions[0]->alias) {
-			*result_index = &index;
+			result = &index;
 			return true;
 		}
 		return false;
 	});
+	return result;
 }
 
-Index *CheckIndexJoin(ClientContext &context, LogicalComparisonJoin &op, PhysicalOperator &plan,
-                      Expression &condition) {
+optional_ptr<Index> CheckIndexJoin(ClientContext &context, LogicalComparisonJoin &op, PhysicalOperator &plan,
+                                   Expression &condition) {
 	if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		return nullptr;
 	}
@@ -169,17 +167,20 @@ Index *CheckIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Physica
 		return nullptr;
 	}
 	auto &tbl_scan = plan.Cast<PhysicalTableScan>();
-	auto tbl = dynamic_cast<TableScanBindData *>(tbl_scan.bind_data.get());
-	Index *result = nullptr;
-	if (CanPlanIndexJoin(context, tbl, tbl_scan)) {
-		CanUseIndexJoin(tbl, condition, &result);
+	auto tbl_data = dynamic_cast<TableScanBindData *>(tbl_scan.bind_data.get());
+	if (!tbl_data) {
+		return nullptr;
+	}
+	optional_ptr<Index> result;
+	if (CanPlanIndexJoin(context, *tbl_data, tbl_scan)) {
+		result = CanUseIndexJoin(*tbl_data, condition);
 	}
 	return result;
 }
 
 static bool PlanIndexJoin(ClientContext &context, LogicalComparisonJoin &op, unique_ptr<PhysicalOperator> &plan,
-                          unique_ptr<PhysicalOperator> &left, unique_ptr<PhysicalOperator> &right, Index *index,
-                          bool swap_condition = false) {
+                          unique_ptr<PhysicalOperator> &left, unique_ptr<PhysicalOperator> &right,
+                          optional_ptr<Index> index, bool swap_condition = false) {
 	if (!index) {
 		return false;
 	}
@@ -205,7 +206,7 @@ static bool PlanIndexJoin(ClientContext &context, LogicalComparisonJoin &op, uni
 		swap(op.left_projection_map, op.right_projection_map);
 	}
 	plan = make_uniq<PhysicalIndexJoin>(op, std::move(left), std::move(right), std::move(op.conditions), op.join_type,
-	                                    op.left_projection_map, op.right_projection_map, tbl_scan.column_ids, index,
+	                                    op.left_projection_map, op.right_projection_map, tbl_scan.column_ids, *index,
 	                                    !swap_condition, op.estimated_cardinality);
 	return true;
 }

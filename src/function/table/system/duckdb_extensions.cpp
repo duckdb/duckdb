@@ -75,7 +75,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 		}
 		installed_extensions[info.name] = std::move(info);
 	}
-
+#ifndef WASM_LOADABLE_EXTENSIONS
 	// scan the install directory for installed extensions
 	auto ext_directory = ExtensionHelper::ExtensionDirectory(context);
 	fs.ListFiles(ext_directory, [&](const string &path, bool is_directory) {
@@ -96,7 +96,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 			entry->second.installed = true;
 		}
 	});
-
+#endif
 	// now check the list of currently loaded extensions
 	auto &loaded_extensions = db.LoadedExtensions();
 	for (auto &ext_name : loaded_extensions) {

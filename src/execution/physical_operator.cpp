@@ -138,7 +138,7 @@ void PhysicalOperator::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipe
 
 		// we create a new pipeline starting from the child
 		auto child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, this);
-		child_meta_pipeline->Build(children[0].get());
+		child_meta_pipeline->Build(*children[0]);
 	} else {
 		// operator is not a sink! recurse in children
 		if (children.empty()) {

@@ -42,18 +42,19 @@ OptionValuePair &GetValueForOption(const string &name) {
 	    {"enable_object_cache", {true}},
 	    {"enable_profiling", {"json"}},
 	    {"enable_progress_bar", {true}},
-	    {"experimental_parallel_csv", {true}},
 	    {"explain_output", {true}},
 	    {"external_threads", {8}},
 	    {"file_search_path", {"test"}},
 	    {"force_compression", {"uncompressed", "Uncompressed"}},
 	    {"home_directory", {"test"}},
+	    {"integer_division", {true}},
 	    {"extension_directory", {"test"}},
 	    {"immediate_transaction_mode", {true}},
 	    {"log_query_path", {"test"}},
 	    {"max_expression_depth", {50}},
 	    {"max_memory", {"4.2GB"}},
 	    {"memory_limit", {"4.2GB"}},
+	    {"ordered_aggregate_threshold", {Value::UBIGINT(idx_t(1) << 12)}},
 	    {"null_order", {"nulls_last"}},
 	    {"perfect_ht_threshold", {0}},
 	    {"pivot_limit", {999}},
@@ -89,7 +90,8 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "password",
 	    "username",
 	    "user",
-	    "profiling_output", // just an alias
+	    "profiling_output",         // just an alias
+	    "experimental_parallel_csv" // FIXME:deprecated option, should be removed after next release
 	};
 	return excluded_options.count(name) == 1;
 }

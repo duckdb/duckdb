@@ -111,14 +111,14 @@ CatalogEntry *Catalog::CreateTable(ClientContext &context, unique_ptr<CreateTabl
 	return CreateTable(context, bound_info.get());
 }
 
-CatalogEntry *Catalog::CreateTable(CatalogTransaction transaction, SchemaCatalogEntry *schema,
+CatalogEntry *Catalog::CreateTable(CatalogTransaction transaction, SchemaCatalogEntry &schema,
                                    BoundCreateTableInfo *info) {
-	return schema->CreateTable(transaction, info);
+	return schema.CreateTable(transaction, info);
 }
 
 CatalogEntry *Catalog::CreateTable(CatalogTransaction transaction, BoundCreateTableInfo *info) {
 	auto schema = GetSchema(transaction, info->base->schema);
-	return CreateTable(transaction, schema, info);
+	return CreateTable(transaction, *schema, info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -126,15 +126,15 @@ CatalogEntry *Catalog::CreateTable(CatalogTransaction transaction, BoundCreateTa
 //===--------------------------------------------------------------------===//
 CatalogEntry *Catalog::CreateView(CatalogTransaction transaction, CreateViewInfo *info) {
 	auto schema = GetSchema(transaction, info->schema);
-	return CreateView(transaction, schema, info);
+	return CreateView(transaction, *schema, info);
 }
 
 CatalogEntry *Catalog::CreateView(ClientContext &context, CreateViewInfo *info) {
 	return CreateView(GetCatalogTransaction(context), info);
 }
 
-CatalogEntry *Catalog::CreateView(CatalogTransaction transaction, SchemaCatalogEntry *schema, CreateViewInfo *info) {
-	return schema->CreateView(transaction, info);
+CatalogEntry *Catalog::CreateView(CatalogTransaction transaction, SchemaCatalogEntry &schema, CreateViewInfo *info) {
+	return schema.CreateView(transaction, info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -142,16 +142,16 @@ CatalogEntry *Catalog::CreateView(CatalogTransaction transaction, SchemaCatalogE
 //===--------------------------------------------------------------------===//
 CatalogEntry *Catalog::CreateSequence(CatalogTransaction transaction, CreateSequenceInfo *info) {
 	auto schema = GetSchema(transaction, info->schema);
-	return CreateSequence(transaction, schema, info);
+	return CreateSequence(transaction, *schema, info);
 }
 
 CatalogEntry *Catalog::CreateSequence(ClientContext &context, CreateSequenceInfo *info) {
 	return CreateSequence(GetCatalogTransaction(context), info);
 }
 
-CatalogEntry *Catalog::CreateSequence(CatalogTransaction transaction, SchemaCatalogEntry *schema,
+CatalogEntry *Catalog::CreateSequence(CatalogTransaction transaction, SchemaCatalogEntry &schema,
                                       CreateSequenceInfo *info) {
-	return schema->CreateSequence(transaction, info);
+	return schema.CreateSequence(transaction, info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -159,15 +159,15 @@ CatalogEntry *Catalog::CreateSequence(CatalogTransaction transaction, SchemaCata
 //===--------------------------------------------------------------------===//
 CatalogEntry *Catalog::CreateType(CatalogTransaction transaction, CreateTypeInfo *info) {
 	auto schema = GetSchema(transaction, info->schema);
-	return CreateType(transaction, schema, info);
+	return CreateType(transaction, *schema, info);
 }
 
 CatalogEntry *Catalog::CreateType(ClientContext &context, CreateTypeInfo *info) {
 	return CreateType(GetCatalogTransaction(context), info);
 }
 
-CatalogEntry *Catalog::CreateType(CatalogTransaction transaction, SchemaCatalogEntry *schema, CreateTypeInfo *info) {
-	return schema->CreateType(transaction, info);
+CatalogEntry *Catalog::CreateType(CatalogTransaction transaction, SchemaCatalogEntry &schema, CreateTypeInfo *info) {
+	return schema.CreateType(transaction, info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -175,16 +175,16 @@ CatalogEntry *Catalog::CreateType(CatalogTransaction transaction, SchemaCatalogE
 //===--------------------------------------------------------------------===//
 CatalogEntry *Catalog::CreateTableFunction(CatalogTransaction transaction, CreateTableFunctionInfo *info) {
 	auto schema = GetSchema(transaction, info->schema);
-	return CreateTableFunction(transaction, schema, info);
+	return CreateTableFunction(transaction, *schema, info);
 }
 
 CatalogEntry *Catalog::CreateTableFunction(ClientContext &context, CreateTableFunctionInfo *info) {
 	return CreateTableFunction(GetCatalogTransaction(context), info);
 }
 
-CatalogEntry *Catalog::CreateTableFunction(CatalogTransaction transaction, SchemaCatalogEntry *schema,
+CatalogEntry *Catalog::CreateTableFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
                                            CreateTableFunctionInfo *info) {
-	return schema->CreateTableFunction(transaction, info);
+	return schema.CreateTableFunction(transaction, info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -192,16 +192,16 @@ CatalogEntry *Catalog::CreateTableFunction(CatalogTransaction transaction, Schem
 //===--------------------------------------------------------------------===//
 CatalogEntry *Catalog::CreateCopyFunction(CatalogTransaction transaction, CreateCopyFunctionInfo *info) {
 	auto schema = GetSchema(transaction, info->schema);
-	return CreateCopyFunction(transaction, schema, info);
+	return CreateCopyFunction(transaction, *schema, info);
 }
 
 CatalogEntry *Catalog::CreateCopyFunction(ClientContext &context, CreateCopyFunctionInfo *info) {
 	return CreateCopyFunction(GetCatalogTransaction(context), info);
 }
 
-CatalogEntry *Catalog::CreateCopyFunction(CatalogTransaction transaction, SchemaCatalogEntry *schema,
+CatalogEntry *Catalog::CreateCopyFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
                                           CreateCopyFunctionInfo *info) {
-	return schema->CreateCopyFunction(transaction, info);
+	return schema.CreateCopyFunction(transaction, info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -209,16 +209,16 @@ CatalogEntry *Catalog::CreateCopyFunction(CatalogTransaction transaction, Schema
 //===--------------------------------------------------------------------===//
 CatalogEntry *Catalog::CreatePragmaFunction(CatalogTransaction transaction, CreatePragmaFunctionInfo *info) {
 	auto schema = GetSchema(transaction, info->schema);
-	return CreatePragmaFunction(transaction, schema, info);
+	return CreatePragmaFunction(transaction, *schema, info);
 }
 
 CatalogEntry *Catalog::CreatePragmaFunction(ClientContext &context, CreatePragmaFunctionInfo *info) {
 	return CreatePragmaFunction(GetCatalogTransaction(context), info);
 }
 
-CatalogEntry *Catalog::CreatePragmaFunction(CatalogTransaction transaction, SchemaCatalogEntry *schema,
+CatalogEntry *Catalog::CreatePragmaFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
                                             CreatePragmaFunctionInfo *info) {
-	return schema->CreatePragmaFunction(transaction, info);
+	return schema.CreatePragmaFunction(transaction, info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -226,16 +226,16 @@ CatalogEntry *Catalog::CreatePragmaFunction(CatalogTransaction transaction, Sche
 //===--------------------------------------------------------------------===//
 CatalogEntry *Catalog::CreateFunction(CatalogTransaction transaction, CreateFunctionInfo *info) {
 	auto schema = GetSchema(transaction, info->schema);
-	return CreateFunction(transaction, schema, info);
+	return CreateFunction(transaction, *schema, info);
 }
 
 CatalogEntry *Catalog::CreateFunction(ClientContext &context, CreateFunctionInfo *info) {
 	return CreateFunction(GetCatalogTransaction(context), info);
 }
 
-CatalogEntry *Catalog::CreateFunction(CatalogTransaction transaction, SchemaCatalogEntry *schema,
+CatalogEntry *Catalog::CreateFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
                                       CreateFunctionInfo *info) {
-	return schema->CreateFunction(transaction, info);
+	return schema.CreateFunction(transaction, info);
 }
 
 CatalogEntry *Catalog::AddFunction(ClientContext &context, CreateFunctionInfo *info) {
@@ -248,16 +248,16 @@ CatalogEntry *Catalog::AddFunction(ClientContext &context, CreateFunctionInfo *i
 //===--------------------------------------------------------------------===//
 CatalogEntry *Catalog::CreateCollation(CatalogTransaction transaction, CreateCollationInfo *info) {
 	auto schema = GetSchema(transaction, info->schema);
-	return CreateCollation(transaction, schema, info);
+	return CreateCollation(transaction, *schema, info);
 }
 
 CatalogEntry *Catalog::CreateCollation(ClientContext &context, CreateCollationInfo *info) {
 	return CreateCollation(GetCatalogTransaction(context), info);
 }
 
-CatalogEntry *Catalog::CreateCollation(CatalogTransaction transaction, SchemaCatalogEntry *schema,
+CatalogEntry *Catalog::CreateCollation(CatalogTransaction transaction, SchemaCatalogEntry &schema,
                                        CreateCollationInfo *info) {
-	return schema->CreateCollation(transaction, info);
+	return schema.CreateCollation(transaction, info);
 }
 
 //===--------------------------------------------------------------------===//

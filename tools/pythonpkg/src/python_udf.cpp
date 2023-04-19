@@ -37,7 +37,7 @@ struct ParameterKind {
 struct PythonUDFData {
 public:
 	PythonUDFData(const string &name, scalar_function_t func, bool varargs_p, FunctionNullHandling null_handling)
-	    : name(name), func(func), null_handling(null_handling) {
+	    : name(name), null_handling(null_handling), func(func) {
 		if (varargs_p) {
 			varargs = LogicalType::ANY;
 		}
@@ -116,7 +116,6 @@ public:
 		parameters.reserve(param_count);
 		auto params = py::dict(sig_params);
 		for (auto &item : params) {
-			auto &key = item.first;
 			auto &value = item.second;
 			shared_ptr<DuckDBPyType> pytype;
 			if (py::try_cast<shared_ptr<DuckDBPyType>>(value.attr("annotation"), pytype)) {
@@ -150,7 +149,7 @@ static py::list ConvertToSingleBatch(const string &timezone_config, vector<Logic
 
 	py::list single_batch;
 	ArrowAppender appender(types, STANDARD_VECTOR_SIZE);
-	appender.Append(input);
+	appender.Append(input, 0, input.size(), input.size());
 	auto array = appender.Finalize();
 	TransformDuckToArrowChunk(schema, array, single_batch);
 	return single_batch;

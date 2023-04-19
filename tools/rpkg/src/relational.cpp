@@ -24,6 +24,7 @@
 #include "duckdb/main/relation/setop_relation.hpp"
 #include "duckdb/main/relation/limit_relation.hpp"
 #include "duckdb/main/relation/distinct_relation.hpp"
+#include "duckdb/main/relation/table_relation.hpp"
 
 using namespace duckdb;
 using namespace cpp11;
@@ -449,4 +450,15 @@ static SEXP result_to_df(duckdb::unique_ptr<QueryResult> res) {
 	cpp11::writable::list prot = {rel_a, rel_b};
 
 	return make_external_prot<RelationWrapper>("duckdb_relation", prot, symdiff);
+}
+
+[[cpp11::register]] SEXP rapi_rel_from_table(duckdb::conn_eptr_t con, const std::string schema_name,
+                                             const std::string table_name) {
+	if (!con || !con.get() || !con->conn) {
+		stop("rel_from_df: Invalid connection");
+	}
+	auto desc = make_uniq<TableDescription>();
+	auto rel = con->conn->Table(schema_name, table_name);
+	cpp11::writable::list prot = {};
+	return make_external_prot<RelationWrapper>("duckdb_relation", prot, std::move(rel));
 }

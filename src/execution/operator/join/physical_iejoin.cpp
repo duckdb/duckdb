@@ -402,6 +402,10 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 	r_executor.AddExpression(*op.rhs_orders[1][0].expression);
 	AppendKey(t2, r_executor, *l1, -1, -1, b2);
 
+	if (l1->global_sort_state.sorted_blocks.empty()) {
+		return;
+	}
+
 	Sort(*l1);
 
 	op1 = make_uniq<SBIterator>(l1->global_sort_state, cmp1);

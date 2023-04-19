@@ -156,13 +156,13 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	    .def("df", &DuckDBPyConnection::FetchDF, "Fetch a result as DataFrame following execute()", py::kw_only(),
 	         py::arg("date_as_object") = false)
 	    .def("pl", &DuckDBPyConnection::FetchPolars, "Fetch a result as Polars DataFrame following execute()",
-	         py::arg("chunk_size") = 1000000)
+	         py::arg("rows_per_batch") = 1000000)
 	    .def("fetch_arrow_table", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
-	         py::arg("chunk_size") = 1000000)
+	         py::arg("rows_per_batch") = 1000000)
 	    .def("fetch_record_batch", &DuckDBPyConnection::FetchRecordBatchReader,
-	         "Fetch an Arrow RecordBatchReader following execute()", py::arg("chunk_size") = 1000000)
+	         "Fetch an Arrow RecordBatchReader following execute()", py::arg("rows_per_batch") = 1000000)
 	    .def("arrow", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
-	         py::arg("chunk_size") = 1000000)
+	         py::arg("rows_per_batch") = 1000000)
 	    .def("torch", &DuckDBPyConnection::FetchPyTorch,
 	         "Fetch a result as dict of PyTorch Tensors following execute()")
 	    .def("tf", &DuckDBPyConnection::FetchTF, "Fetch a result as dict of TensorFlow Tensors following execute()")
@@ -1175,11 +1175,11 @@ DataFrame DuckDBPyConnection::FetchDFChunk(const idx_t vectors_per_chunk, bool d
 	return result->FetchDFChunk(vectors_per_chunk, date_as_object);
 }
 
-duckdb::pyarrow::Table DuckDBPyConnection::FetchArrow(idx_t chunk_size) {
+duckdb::pyarrow::Table DuckDBPyConnection::FetchArrow(idx_t rows_per_batch) {
 	if (!result) {
 		throw InvalidInputException("No open result set");
 	}
-	return result->ToArrowTable(chunk_size);
+	return result->ToArrowTable(rows_per_batch);
 }
 
 py::dict DuckDBPyConnection::FetchPyTorch() {
@@ -1196,16 +1196,16 @@ py::dict DuckDBPyConnection::FetchTF() {
 	return result->FetchTF();
 }
 
-PolarsDataFrame DuckDBPyConnection::FetchPolars(idx_t chunk_size) {
-	auto arrow = FetchArrow(chunk_size);
+PolarsDataFrame DuckDBPyConnection::FetchPolars(idx_t rows_per_batch) {
+	auto arrow = FetchArrow(rows_per_batch);
 	return py::cast<PolarsDataFrame>(py::module::import("polars").attr("DataFrame")(arrow));
 }
 
-duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(const idx_t chunk_size) const {
+duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(const idx_t rows_per_batch) const {
 	if (!result) {
 		throw InvalidInputException("No open result set");
 	}
-	return result->FetchRecordBatchReader(chunk_size);
+	return result->FetchRecordBatchReader(rows_per_batch);
 }
 
 static void CreateArrowScan(py::object entry, TableFunctionRef &table_function,

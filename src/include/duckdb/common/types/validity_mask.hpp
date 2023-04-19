@@ -170,6 +170,9 @@ public:
 		}
 		return ValidityBuffer::MAX_ENTRY >> (BITS_PER_VALUE - n);
 	}
+	static inline idx_t SizeInBytes(idx_t n) {
+		return (n + BITS_PER_VALUE - 1) / BITS_PER_VALUE;
+	}
 
 	//! RowIsValidUnsafe should only be used if AllValid() is false: it achieves the same as RowIsValid but skips a
 	//! not-null check

@@ -21,6 +21,8 @@ include_dir = os.path.join('src', 'include')
 main_header_files = [os.path.join(include_dir, 'duckdb.hpp'),
     os.path.join(include_dir, 'duckdb.h'),
     os.path.join(include_dir, 'duckdb', 'common', 'types', 'date.hpp'),
+    os.path.join(include_dir, 'duckdb', 'common', 'adbc', 'adbc.h'),
+    os.path.join(include_dir, 'duckdb', 'common', 'adbc', 'adbc.hpp'),
     os.path.join(include_dir, 'duckdb', 'common', 'arrow', 'arrow.hpp'),
     os.path.join(include_dir, 'duckdb', 'common', 'arrow', 'arrow_converter.hpp'),
     os.path.join(include_dir, 'duckdb', 'common', 'arrow', 'arrow_wrapper.hpp'),

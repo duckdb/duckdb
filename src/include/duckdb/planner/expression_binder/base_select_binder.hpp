@@ -19,7 +19,7 @@ class WindowExpression;
 class BoundSelectNode;
 
 struct BoundGroupInformation {
-	expression_map_t<idx_t> map;
+	parsed_expression_map_t<idx_t> map;
 	case_insensitive_map_t<idx_t> alias_map;
 };
 

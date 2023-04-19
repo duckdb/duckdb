@@ -91,6 +91,9 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath) {
 
 void SQLLogicTestRunner::Reconnect() {
 	con = make_uniq<Connection>(*db);
+	if (original_sqlite_test) {
+		con->Query("SET integer_division=true");
+	}
 	if (enable_verification) {
 		con->EnableQueryVerification();
 	}

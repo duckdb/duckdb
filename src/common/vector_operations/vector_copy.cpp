@@ -23,6 +23,17 @@ static void TemplatedCopy(const Vector &source, const SelectionVector &sel, Vect
 	}
 }
 
+static const ValidityMask &CopyValidityMask(const Vector &v) {
+	switch (v.GetVectorType()) {
+	case VectorType::FLAT_VECTOR:
+		return FlatVector::Validity(v);
+	case VectorType::FSST_VECTOR:
+		return FSSTVector::Validity(v);
+	default:
+		throw InternalException("Unsupported vector type in vector copy");
+	}
+}
+
 void VectorOperations::Copy(const Vector &source_p, Vector &target, const SelectionVector &sel_p, idx_t source_count,
                             idx_t source_offset, idx_t target_offset) {
 	D_ASSERT(source_offset <= source_count);
@@ -90,20 +101,12 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 			tmask.Set(target_offset + i, valid);
 		}
 	} else {
-		const ValidityMask *smask;
-		if (source->GetVectorType() == VectorType::FLAT_VECTOR) {
-			smask = &(FlatVector::Validity(*source));
-		} else if (source->GetVectorType() == VectorType::FSST_VECTOR) {
-			smask = &(FSSTVector::Validity(*source));
-		} else {
-			throw InternalException("Unsupported vector type in vector copy");
-		}
-
-		if (smask->IsMaskSet()) {
+		auto &smask = CopyValidityMask(*source);
+		if (smask.IsMaskSet()) {
 			for (idx_t i = 0; i < copy_count; i++) {
 				auto idx = sel->get_index(source_offset + i);
 
-				if (smask->RowIsValid(idx)) {
+				if (smask.RowIsValid(idx)) {
 					// set valid
 					if (!tmask.AllValid()) {
 						tmask.SetValidUnsafe(target_offset + i);
