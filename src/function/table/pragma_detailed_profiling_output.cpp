@@ -1,12 +1,12 @@
-#include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
-#include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
-#include "duckdb/main/query_profiler.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
-#include "duckdb/common/limits.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/main/query_profiler.hpp"
+#include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 
 namespace duckdb {
 

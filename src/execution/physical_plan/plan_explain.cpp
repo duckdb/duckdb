@@ -1,11 +1,10 @@
-#include "duckdb/execution/physical_plan_generator.hpp"
-#include "duckdb/planner/operator/logical_explain.hpp"
-#include "duckdb/execution/operator/helper/physical_explain_analyze.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
-#include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
-
 #include "duckdb/common/tree_renderer.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/execution/operator/helper/physical_explain_analyze.hpp"
+#include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/planner/operator/logical_explain.hpp"
 
 namespace duckdb {
 

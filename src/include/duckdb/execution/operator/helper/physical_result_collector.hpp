@@ -21,7 +21,7 @@ public:
 
 	StatementType statement_type;
 	StatementProperties properties;
-	PhysicalOperator *plan;
+	PhysicalOperator &plan;
 	vector<string> names;
 
 public:

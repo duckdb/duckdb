@@ -1,3 +1,6 @@
+if(NOT WIN32 AND NOT CLANG_TIDY)
+  add_subdirectory(adbc)
+endif()
 add_subdirectory(capi)
 add_subdirectory(udf_function)
 

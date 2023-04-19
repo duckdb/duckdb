@@ -1,11 +1,12 @@
 #include "duckdb/common/hive_partitioning.hpp"
-#include "duckdb/planner/table_filter.hpp"
+
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/optimizer/filter_combiner.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/table_filter.hpp"
 #include "re2/re2.h"
 
 namespace duckdb {
@@ -140,29 +141,157 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 }
 
 HivePartitionedColumnData::HivePartitionedColumnData(const HivePartitionedColumnData &other)
-    : PartitionedColumnData(other) {
+    : PartitionedColumnData(other), hashes_v(LogicalType::HASH) {
 	// Synchronize to ensure consistency of shared partition map
 	if (other.global_state) {
 		global_state = other.global_state;
 		unique_lock<mutex> lck(global_state->lock);
 		SynchronizeLocalMap();
 	}
+	InitializeKeys();
+}
+
+void HivePartitionedColumnData::InitializeKeys() {
+	keys.resize(STANDARD_VECTOR_SIZE);
+	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+		keys[i].values.resize(group_by_columns.size());
+	}
+}
+
+template <class T>
+static inline Value GetHiveKeyValue(const T &val) {
+	return Value::CreateValue<T>(val);
+}
+
+template <class T>
+static inline Value GetHiveKeyValue(const T &val, const LogicalType &type) {
+	auto result = GetHiveKeyValue(val);
+	result.Reinterpret(type);
+	return result;
+}
+
+static inline Value GetHiveKeyNullValue(const LogicalType &type) {
+	Value result;
+	result.Reinterpret(type);
+	return result;
+}
+
+template <class T>
+static void TemplatedGetHivePartitionValues(Vector &input, vector<HivePartitionKey> &keys, const idx_t col_idx,
+                                            const idx_t count) {
+	UnifiedVectorFormat format;
+	input.ToUnifiedFormat(count, format);
+
+	const auto &sel = *format.sel;
+	const auto data = (T *)format.data;
+	const auto &validity = format.validity;
+
+	const auto &type = input.GetType();
+
+	const auto reinterpret = Value::CreateValue<T>(data[0]).GetTypeMutable() != type;
+	if (reinterpret) {
+		for (idx_t i = 0; i < count; i++) {
+			auto &key = keys[i];
+			const auto idx = sel.get_index(i);
+			if (validity.RowIsValid(idx)) {
+				key.values[col_idx] = GetHiveKeyValue(data[idx], type);
+			} else {
+				key.values[col_idx] = GetHiveKeyNullValue(type);
+			}
+		}
+	} else {
+		for (idx_t i = 0; i < count; i++) {
+			auto &key = keys[i];
+			const auto idx = sel.get_index(i);
+			if (validity.RowIsValid(idx)) {
+				key.values[col_idx] = GetHiveKeyValue(data[idx]);
+			} else {
+				key.values[col_idx] = GetHiveKeyNullValue(type);
+			}
+		}
+	}
+}
+
+static void GetNestedHivePartitionValues(Vector &input, vector<HivePartitionKey> &keys, const idx_t col_idx,
+                                         const idx_t count) {
+	for (idx_t i = 0; i < count; i++) {
+		auto &key = keys[i];
+		key.values[col_idx] = input.GetValue(i);
+	}
+}
+
+static void GetHivePartitionValuesTypeSwitch(Vector &input, vector<HivePartitionKey> &keys, const idx_t col_idx,
+                                             const idx_t count) {
+	const auto &type = input.GetType();
+	switch (type.InternalType()) {
+	case PhysicalType::BOOL:
+		TemplatedGetHivePartitionValues<bool>(input, keys, col_idx, count);
+		break;
+	case PhysicalType::INT8:
+		TemplatedGetHivePartitionValues<int8_t>(input, keys, col_idx, count);
+		break;
+	case PhysicalType::INT16:
+		TemplatedGetHivePartitionValues<int16_t>(input, keys, col_idx, count);
+		break;
+	case PhysicalType::INT32:
+		TemplatedGetHivePartitionValues<int32_t>(input, keys, col_idx, count);
+		break;
+	case PhysicalType::INT64:
+		TemplatedGetHivePartitionValues<int64_t>(input, keys, col_idx, count);
+		break;
+	case PhysicalType::INT128:
+		TemplatedGetHivePartitionValues<hugeint_t>(input, keys, col_idx, count);
+		break;
+	case PhysicalType::UINT8:
+		TemplatedGetHivePartitionValues<uint8_t>(input, keys, col_idx, count);
+		break;
+	case PhysicalType::UINT16:
+		TemplatedGetHivePartitionValues<uint16_t>(input, keys, col_idx, count);
+		break;
+	case PhysicalType::UINT32:
+		TemplatedGetHivePartitionValues<uint32_t>(input, keys, col_idx, count);
+		break;
+	case PhysicalType::UINT64:
+		TemplatedGetHivePartitionValues<uint64_t>(input, keys, col_idx, count);
+		break;
+	case PhysicalType::FLOAT:
+		TemplatedGetHivePartitionValues<float>(input, keys, col_idx, count);
+		break;
+	case PhysicalType::DOUBLE:
+		TemplatedGetHivePartitionValues<double>(input, keys, col_idx, count);
+		break;
+	case PhysicalType::INTERVAL:
+		TemplatedGetHivePartitionValues<interval_t>(input, keys, col_idx, count);
+		break;
+	case PhysicalType::VARCHAR:
+		TemplatedGetHivePartitionValues<string_t>(input, keys, col_idx, count);
+		break;
+	case PhysicalType::STRUCT:
+	case PhysicalType::LIST:
+		GetNestedHivePartitionValues(input, keys, col_idx, count);
+		break;
+	default:
+		throw InternalException("Unsupported type for HivePartitionedColumnData::ComputePartitionIndices");
+	}
 }
 
 void HivePartitionedColumnData::ComputePartitionIndices(PartitionedColumnDataAppendState &state, DataChunk &input) {
-	Vector hashes(LogicalType::HASH, input.size());
-	input.Hash(group_by_columns, hashes);
-	hashes.Flatten(input.size());
+	const auto count = input.size();
 
-	for (idx_t i = 0; i < input.size(); i++) {
-		HivePartitionKey key;
-		key.hash = FlatVector::GetData<hash_t>(hashes)[i];
-		for (auto &col : group_by_columns) {
-			key.values.emplace_back(input.GetValue(col, i));
-		}
+	input.Hash(group_by_columns, hashes_v);
+	hashes_v.Flatten(count);
 
+	for (idx_t col_idx = 0; col_idx < group_by_columns.size(); col_idx++) {
+		auto &group_by_col = input.data[group_by_columns[col_idx]];
+		GetHivePartitionValuesTypeSwitch(group_by_col, keys, col_idx, count);
+	}
+
+	const auto hashes = FlatVector::GetData<hash_t>(hashes_v);
+	const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
+	for (idx_t i = 0; i < count; i++) {
+		auto &key = keys[i];
+		key.hash = hashes[i];
 		auto lookup = local_partition_map.find(key);
-		const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
 		if (lookup == local_partition_map.end()) {
 			idx_t new_partition_id = RegisterNewPartition(key, state);
 			partition_indices[i] = new_partition_id;

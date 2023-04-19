@@ -39,11 +39,6 @@ struct BufferedCSVReaderOptions {
 	bool has_newline = false;
 	//! New Line separator
 	NewLineIdentifier new_line = NewLineIdentifier::NOT_SET;
-
-	//! Whether or not an option was provided for parallel
-	bool has_parallel = false;
-	//! Whether or not the read will use the ParallelCSVReader
-	bool use_parallel = false;
 	//! Whether or not a quote was defined by the user
 	bool has_quote = false;
 	//! Quote used for columns that contain reserved characters, e.g., delimiter
@@ -114,8 +109,12 @@ struct BufferedCSVReaderOptions {
 	//! Decimal separator when reading as numeric
 	string decimal_separator = ".";
 	//! Whether or not to pad rows that do not have enough columns with NULL values
-	bool null_padding = true;
+	bool null_padding = false;
 
+	//! If we are running the parallel version of the CSV Reader. In general, the system should always auto-detect
+	//! When it can't execute a parallel run before execution. However, there are (rather specific) situations where
+	//! setting up this manually might be important
+	bool run_parallel = true;
 	//===--------------------------------------------------------------------===//
 	// WriteCSVOptions
 	//===--------------------------------------------------------------------===//
@@ -139,7 +138,6 @@ struct BufferedCSVReaderOptions {
 	void SetEscape(const string &escape);
 	void SetQuote(const string &quote);
 	void SetDelimiter(const string &delimiter);
-	void SetParallel(bool use_parallel);
 
 	void SetNewline(const string &input);
 	//! Set an option that is supported by both reading and writing functions, called by

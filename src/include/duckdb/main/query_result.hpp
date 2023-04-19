@@ -58,7 +58,16 @@ protected:
 	//! The error (in case execution was not successful)
 	PreservedError error;
 };
-
+struct CurrentChunk {
+	//! The current data chunk
+	unique_ptr<DataChunk> data_chunk;
+	//! The current position in the data chunk
+	idx_t position;
+	//! If we have a current chunk we must scan for result production
+	bool Valid();
+	//! The remaining size of the current chunk
+	idx_t RemainingSize();
+};
 //! The QueryResult object holds the result of a query. It can either be a MaterializedQueryResult, in which case the
 //! result contains the entire result set, or a StreamQueryResult in which case the Fetch method can be called to
 //! incrementally fetch data from the database.
@@ -75,6 +84,10 @@ public:
 	ClientProperties client_properties;
 	//! The next result (if any)
 	unique_ptr<QueryResult> next;
+	//! In case we are converting the result from Native DuckDB to a different library (e.g., Arrow, Polars)
+	//! We might be producing chunks of a pre-determined size.
+	//! To comply, we use the following variable to store the current chunk, and it's position.
+	CurrentChunk current_chunk;
 
 public:
 	//! Returns the name of the column for the given index

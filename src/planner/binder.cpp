@@ -21,13 +21,12 @@
 
 namespace duckdb {
 
-shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, Binder *parent, bool inherit_ctes) {
+shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, optional_ptr<Binder> parent, bool inherit_ctes) {
 	return make_shared<Binder>(true, context, parent ? parent->shared_from_this() : nullptr, inherit_ctes);
 }
 
 Binder::Binder(bool, ClientContext &context, shared_ptr<Binder> parent_p, bool inherit_ctes_p)
     : context(context), parent(std::move(parent_p)), bound_tables(0), inherit_ctes(inherit_ctes_p) {
-	parameters = nullptr;
 	if (parent) {
 
 		// We have to inherit macro and lambda parameter bindings and from the parent binder, if there is a parent.
@@ -102,7 +101,7 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 
 void Binder::AddCTEMap(CommonTableExpressionMap &cte_map) {
 	for (auto &cte_it : cte_map.map) {
-		AddCTE(cte_it.first, cte_it.second.get());
+		AddCTE(cte_it.first, *cte_it.second);
 	}
 }
 
@@ -222,21 +221,20 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 	return root;
 }
 
-void Binder::AddCTE(const string &name, CommonTableExpressionInfo *info) {
-	D_ASSERT(info);
+void Binder::AddCTE(const string &name, CommonTableExpressionInfo &info) {
 	D_ASSERT(!name.empty());
 	auto entry = CTE_bindings.find(name);
 	if (entry != CTE_bindings.end()) {
 		throw InternalException("Duplicate CTE \"%s\" in query!", name);
 	}
-	CTE_bindings[name] = info;
+	CTE_bindings.insert(make_pair(name, reference<CommonTableExpressionInfo>(info)));
 }
 
-CommonTableExpressionInfo *Binder::FindCTE(const string &name, bool skip) {
+optional_ptr<CommonTableExpressionInfo> Binder::FindCTE(const string &name, bool skip) {
 	auto entry = CTE_bindings.find(name);
 	if (entry != CTE_bindings.end()) {
-		if (!skip || entry->second->query->node->type == QueryNodeType::RECURSIVE_CTE_NODE) {
-			return entry->second;
+		if (!skip || entry->second.get().query->node->type == QueryNodeType::RECURSIVE_CTE_NODE) {
+			return &entry->second.get();
 		}
 	}
 	if (parent && inherit_ctes) {
@@ -245,7 +243,7 @@ CommonTableExpressionInfo *Binder::FindCTE(const string &name, bool skip) {
 	return nullptr;
 }
 
-bool Binder::CTEIsAlreadyBound(CommonTableExpressionInfo *cte) {
+bool Binder::CTEIsAlreadyBound(CommonTableExpressionInfo &cte) {
 	if (bound_ctes.find(cte) != bound_ctes.end()) {
 		return true;
 	}
@@ -255,13 +253,12 @@ bool Binder::CTEIsAlreadyBound(CommonTableExpressionInfo *cte) {
 	return false;
 }
 
-void Binder::AddBoundView(ViewCatalogEntry *view) {
+void Binder::AddBoundView(ViewCatalogEntry &view) {
 	// check if the view is already bound
 	auto current = this;
 	while (current) {
 		if (current->bound_views.find(view) != current->bound_views.end()) {
-			throw BinderException("infinite recursion detected: attempting to recursively bind view \"%s\"",
-			                      view->name);
+			throw BinderException("infinite recursion detected: attempting to recursively bind view \"%s\"", view.name);
 		}
 		current = current->parent.get();
 	}
@@ -276,7 +273,7 @@ idx_t Binder::GenerateTableIndex() {
 	return bound_tables++;
 }
 
-void Binder::PushExpressionBinder(ExpressionBinder *binder) {
+void Binder::PushExpressionBinder(ExpressionBinder &binder) {
 	GetActiveBinders().push_back(binder);
 }
 
@@ -285,12 +282,12 @@ void Binder::PopExpressionBinder() {
 	GetActiveBinders().pop_back();
 }
 
-void Binder::SetActiveBinder(ExpressionBinder *binder) {
+void Binder::SetActiveBinder(ExpressionBinder &binder) {
 	D_ASSERT(HasActiveBinder());
 	GetActiveBinders().back() = binder;
 }
 
-ExpressionBinder *Binder::GetActiveBinder() {
+ExpressionBinder &Binder::GetActiveBinder() {
 	return GetActiveBinders().back();
 }
 
@@ -298,7 +295,7 @@ bool Binder::HasActiveBinder() {
 	return !GetActiveBinders().empty();
 }
 
-vector<ExpressionBinder *> &Binder::GetActiveBinders() {
+vector<reference<ExpressionBinder>> &Binder::GetActiveBinders() {
 	if (parent) {
 		return parent->GetActiveBinders();
 	}
@@ -344,10 +341,10 @@ bool Binder::HasMatchingBinding(const string &schema_name, const string &table_n
 
 bool Binder::HasMatchingBinding(const string &catalog_name, const string &schema_name, const string &table_name,
                                 const string &column_name, string &error_message) {
-	Binding *binding = nullptr;
+	optional_ptr<Binding> binding;
 	D_ASSERT(!lambda_bindings);
 	if (macro_binding && table_name == macro_binding->alias) {
-		binding = macro_binding;
+		binding = optional_ptr<Binding>(macro_binding.get());
 	} else {
 		binding = bind_context.GetBinding(table_name, error_message);
 	}

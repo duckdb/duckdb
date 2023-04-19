@@ -49,19 +49,17 @@ class Transformer {
 
 public:
 	explicit Transformer(ParserOptions &options);
-	explicit Transformer(Transformer *parent);
+	explicit Transformer(Transformer &parent);
 	~Transformer();
 
 	//! Transforms a Postgres parse tree into a set of SQL Statements
 	bool TransformParseTree(duckdb_libpgquery::PGList *tree, vector<unique_ptr<SQLStatement>> &statements);
 	string NodetypeToString(duckdb_libpgquery::PGNodeTag type);
 
-	idx_t ParamCount() {
-		return parent ? parent->ParamCount() : prepared_statement_parameter_index;
-	}
+	idx_t ParamCount() const;
 
 private:
-	Transformer *parent;
+	optional_ptr<Transformer> parent;
 	//! Parser options
 	ParserOptions &options;
 	//! The current prepared statement parameter index
@@ -80,36 +78,12 @@ private:
 	void Clear();
 	bool InWindowDefinition();
 
-	void SetParamCount(idx_t new_count) {
-		if (parent) {
-			parent->SetParamCount(new_count);
-		} else {
-			this->prepared_statement_parameter_index = new_count;
-		}
-	}
-	void SetNamedParam(const string &name, int32_t index) {
-		if (parent) {
-			parent->SetNamedParam(name, index);
-		} else {
-			D_ASSERT(!named_param_map.count(name));
-			this->named_param_map[name] = index;
-		}
-	}
-	bool GetNamedParam(const string &name, int32_t &index) {
-		if (parent) {
-			return parent->GetNamedParam(name, index);
-		} else {
-			auto entry = named_param_map.find(name);
-			if (entry == named_param_map.end()) {
-				return false;
-			}
-			index = entry->second;
-			return true;
-		}
-	}
-	bool HasNamedParameters() const {
-		return parent ? parent->HasNamedParameters() : !named_param_map.empty();
-	}
+	Transformer &RootTransformer();
+	const Transformer &RootTransformer() const;
+	void SetParamCount(idx_t new_count);
+	void SetNamedParam(const string &name, int32_t index);
+	bool GetNamedParam(const string &name, int32_t &index);
+	bool HasNamedParameters() const;
 
 	void AddPivotEntry(string enum_name, unique_ptr<SelectNode> source, unique_ptr<ParsedExpression> column);
 	unique_ptr<SQLStatement> GenerateCreateEnumStmt(unique_ptr<CreatePivotEntry> entry);

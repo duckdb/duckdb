@@ -1,0 +1,23 @@
+# name: test/sql/copy/parquet/delta_byte_array_multiple_pages.test
+# description: Test delta byte array parquet file with multiple pages
+# group: [parquet]
+
+require parquet
+
+require httpfs
+
+statement ok
+CREATE TABLE delta_byte_array AS SELECT * FROM parquet_scan('https://github.com/duckdb/duckdb-data/releases/download/v1.0/delta_byte_array_multiple_pages.parquet')
+
+query I
+SELECT COUNT(*) FROM delta_byte_array
+----
+100000
+
+query II
+SELECT min(strlen(json_column)), max(strlen(json_column)) FROM delta_byte_array
+----
+54	54
+
+
+
