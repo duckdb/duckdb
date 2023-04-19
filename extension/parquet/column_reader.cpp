@@ -647,6 +647,7 @@ void StringColumnReader::PrepareDeltaLengthByteArray(ResizeableBuffer &buffer) {
 	auto length_data = (uint32_t *)length_buffer->ptr;
 	byte_array_data = make_uniq<Vector>(LogicalType::VARCHAR, value_count);
 	byte_array_count = value_count;
+	delta_offset = 0;
 	auto string_data = FlatVector::GetData<string_t>(*byte_array_data);
 	for (idx_t i = 0; i < value_count; i++) {
 		auto str_len = length_data[i];
@@ -674,6 +675,7 @@ void StringColumnReader::PrepareDeltaByteArray(ResizeableBuffer &buffer) {
 	auto suffix_data = (uint32_t *)suffix_buffer->ptr;
 	byte_array_data = make_uniq<Vector>(LogicalType::VARCHAR, prefix_count);
 	byte_array_count = prefix_count;
+	delta_offset = 0;
 	auto string_data = FlatVector::GetData<string_t>(*byte_array_data);
 	for (idx_t i = 0; i < prefix_count; i++) {
 		auto str_len = prefix_data[i] + suffix_data[i];
@@ -715,6 +717,7 @@ void StringColumnReader::DeltaByteArray(uint8_t *defines, idx_t num_values, parq
 			delta_offset++;
 		}
 	}
+	StringVector::AddHeapReference(result, *byte_array_data);
 }
 
 class ParquetStringVectorBuffer : public VectorBuffer {

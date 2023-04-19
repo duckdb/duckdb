@@ -18,6 +18,7 @@ struct AggregateObject;
 struct AggregateFilterData;
 class DataChunk;
 class RowLayout;
+class TupleDataLayout;
 class RowDataCollection;
 struct SelectionVector;
 class StringHeap;
@@ -37,9 +38,9 @@ struct RowOperations {
 	// Aggregation Operators
 	//===--------------------------------------------------------------------===//
 	//! initialize - unaligned addresses
-	static void InitializeStates(RowLayout &layout, Vector &addresses, const SelectionVector &sel, idx_t count);
+	static void InitializeStates(TupleDataLayout &layout, Vector &addresses, const SelectionVector &sel, idx_t count);
 	//! destructor - unaligned addresses, updated
-	static void DestroyStates(RowOperationsState &state, RowLayout &layout, Vector &addresses, idx_t count);
+	static void DestroyStates(RowOperationsState &state, TupleDataLayout &layout, Vector &addresses, idx_t count);
 	//! update - aligned addresses
 	static void UpdateStates(RowOperationsState &state, AggregateObject &aggr, Vector &addresses, DataChunk &payload,
 	                         idx_t arg_idx, idx_t count);
@@ -47,10 +48,10 @@ struct RowOperations {
 	static void UpdateFilteredStates(RowOperationsState &state, AggregateFilterData &filter_data, AggregateObject &aggr,
 	                                 Vector &addresses, DataChunk &payload, idx_t arg_idx);
 	//! combine - unaligned addresses, updated
-	static void CombineStates(RowOperationsState &state, RowLayout &layout, Vector &sources, Vector &targets,
+	static void CombineStates(RowOperationsState &state, TupleDataLayout &layout, Vector &sources, Vector &targets,
 	                          idx_t count);
 	//! finalize - unaligned addresses, updated
-	static void FinalizeStates(RowOperationsState &state, RowLayout &layout, Vector &addresses, DataChunk &result,
+	static void FinalizeStates(RowOperationsState &state, TupleDataLayout &layout, Vector &addresses, DataChunk &result,
 	                           idx_t aggr_idx);
 
 	//===--------------------------------------------------------------------===//
@@ -66,7 +67,7 @@ struct RowOperations {
 	                   const idx_t count, const RowLayout &layout, const idx_t col_no, const idx_t build_size = 0,
 	                   data_ptr_t heap_ptr = nullptr);
 	//! Full Scan an entire columns
-	static void FullScanColumn(const RowLayout &layout, Vector &rows, Vector &col, idx_t count, idx_t col_idx);
+	static void FullScanColumn(const TupleDataLayout &layout, Vector &rows, Vector &col, idx_t count, idx_t col_idx);
 
 	//===--------------------------------------------------------------------===//
 	// Comparison Operators
@@ -76,7 +77,7 @@ struct RowOperations {
 	//! Returns the number of matches remaining in the selection.
 	using Predicates = vector<ExpressionType>;
 
-	static idx_t Match(DataChunk &columns, UnifiedVectorFormat col_data[], const RowLayout &layout, Vector &rows,
+	static idx_t Match(DataChunk &columns, UnifiedVectorFormat col_data[], const TupleDataLayout &layout, Vector &rows,
 	                   const Predicates &predicates, SelectionVector &sel, idx_t count, SelectionVector *no_match,
 	                   idx_t &no_match_count);
 

@@ -1,7 +1,7 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
 
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"

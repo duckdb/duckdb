@@ -143,8 +143,6 @@ struct DBConfigOptions {
 	bool allow_unsigned_extensions = false;
 	//! Enable emitting FSST Vectors
 	bool enable_fsst_vectors = false;
-	//! Experimental parallel CSV reader
-	bool experimental_parallel_csv_reader = false;
 	//! Start transactions immediately in all attached databases - instead of lazily when a database is referenced
 	bool immediate_transaction_mode = false;
 	//! The set of unrecognized (other) options

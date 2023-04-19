@@ -348,14 +348,14 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetIntegralCompress(un
 	// Get the smallest type that the range can fit into
 	const auto range = UBigIntValue::Get(range_value);
 	LogicalType cast_type;
-	if (range < NumericLimits<uint8_t>().Maximum()) {
+	if (range <= NumericLimits<uint8_t>().Maximum()) {
 		cast_type = LogicalType::UTINYINT;
-	} else if (range < NumericLimits<uint16_t>().Maximum()) {
+	} else if (range <= NumericLimits<uint16_t>().Maximum()) {
 		cast_type = LogicalType::USMALLINT;
-	} else if (range < NumericLimits<uint32_t>().Maximum()) {
+	} else if (range <= NumericLimits<uint32_t>().Maximum()) {
 		cast_type = LogicalType::UINTEGER;
 	} else {
-		D_ASSERT(range < NumericLimits<uint64_t>().Maximum());
+		D_ASSERT(range <= NumericLimits<uint64_t>().Maximum());
 		cast_type = LogicalType::UBIGINT;
 	}
 
@@ -453,6 +453,10 @@ unique_ptr<Expression> CompressedMaterialization::GetStringDecompress(unique_ptr
 }
 
 void CompressedMaterialization::RemoveRedundantProjections(unique_ptr<LogicalOperator> &op) {
+	if (compression_table_indices.empty() || decompression_table_indices.empty()) {
+		return;
+	}
+
 	for (auto &child : op->children) {
 		RemoveRedundantProjections(child);
 	}
@@ -526,6 +530,10 @@ CompressedMaterialization::FindDecompression(unique_ptr<LogicalOperator> &op, co
 		switch (current_child.type) {
 		case LogicalOperatorType::LOGICAL_PROJECTION: {
 			auto &projection = current_child.Cast<LogicalProjection>();
+			if (projection.expressions.size() != op->expressions.size()) {
+				// For now, we only deal with NOP projections
+				return nullptr;
+			}
 			if (decompression_table_indices.find(projection.table_index) != decompression_table_indices.end()) {
 				found_decompression = true;
 				break;
@@ -576,9 +584,9 @@ bool CompressedMaterialization::RemoveRedundantExpressions(LogicalProjection &de
                                                            LogicalProjection &compression, idx_t &decompress_count,
                                                            idx_t &compress_count,
                                                            const column_binding_set_t &referenced_bindings) {
-	D_ASSERT(compression.expressions.size() == decompression.expressions.size());
 	auto &decompress_exprs = decompression.expressions;
 	auto &compress_exprs = compression.expressions;
+	D_ASSERT(decompress_exprs.size() == compress_exprs.size());
 
 	bool removed_anything = false;
 	decompress_count = 0;
@@ -597,6 +605,7 @@ bool CompressedMaterialization::RemoveRedundantExpressions(LogicalProjection &de
 
 				auto &compress_fun = compress_expr->Cast<BoundFunctionExpression>();
 				compress_expr = std::move(compress_fun.children[0]);
+				compress_expr->return_type = decompress_expr->return_type;
 
 				removed_anything = true;
 			}

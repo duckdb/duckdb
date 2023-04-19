@@ -1,7 +1,7 @@
 #include "duckdb/execution/operator/schema/physical_create_type.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 
 namespace duckdb {
 
