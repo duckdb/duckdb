@@ -255,11 +255,14 @@ struct ParallelCSVGlobalState : public GlobalTableFunctionState {
 public:
 	ParallelCSVGlobalState(ClientContext &context, unique_ptr<CSVFileHandle> file_handle_p,
 	                       vector<string> &files_path_p, idx_t system_threads_p, idx_t buffer_size_p,
-	                       idx_t rows_to_skip, bool force_parallelism_p, vector<column_t> column_ids_p)
+	                       idx_t rows_to_skip, bool force_parallelism_p, vector<column_t> column_ids_p, bool has_header)
 	    : file_handle(std::move(file_handle_p)), system_threads(system_threads_p), buffer_size(buffer_size_p),
 	      force_parallelism(force_parallelism_p), column_ids(std::move(column_ids_p)), line_info(&main_mutex) {
 		current_file_path = files_path_p[0];
 		line_info.lines_read[0] = rows_to_skip;
+		if (has_header) {
+			line_info.lines_read[0]++;
+		}
 		file_size = file_handle->FileSize();
 		first_file_size = file_size;
 		bytes_read = 0;
@@ -543,8 +546,8 @@ bool LineInfo::CanItGetLine(idx_t batch_idx) {
 idx_t LineInfo::GetLine(idx_t batch_idx) {
 	lock_guard<mutex> parallel_lock(*main_mutex);
 	idx_t line_count = 0;
-	for (idx_t i = 0; i < batch_idx; i++) {
-		if (lines_read.find(i) == lines_read.end()) {
+	for (idx_t i = 0; i <= batch_idx; i++) {
+		if (lines_read.find(i) == lines_read.end() && i != batch_idx) {
 			throw InternalException("Missing batch index on Parallel CSV Reader GetLine");
 		}
 		line_count += lines_read[i];
@@ -565,7 +568,8 @@ static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext 
 	file_handle = ReadCSV::OpenCSV(bind_data.options.file_path, bind_data.options.compression, context);
 	return make_uniq<ParallelCSVGlobalState>(
 	    context, std::move(file_handle), bind_data.files, context.db->NumberOfThreads(), bind_data.options.buffer_size,
-	    bind_data.options.skip_rows, ClientConfig::GetConfig(context).verify_parallelism, input.column_ids);
+	    bind_data.options.skip_rows, ClientConfig::GetConfig(context).verify_parallelism, input.column_ids,
+	    bind_data.options.has_header);
 }
 
 //===--------------------------------------------------------------------===//
