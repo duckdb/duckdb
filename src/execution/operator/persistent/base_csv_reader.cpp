@@ -484,6 +484,7 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 			string error_message;
 			bool success;
 			idx_t line_error = 0;
+			bool target_type_not_varchar = false;
 			if (options.has_format[LogicalTypeId::DATE] && type.id() == LogicalTypeId::DATE) {
 				// use the date format to cast the chunk
 				success = TryCastDateVector(options, parse_vector, result_vector, parse_chunk.size(), error_message);
@@ -500,6 +501,7 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 				                                             error_message, type);
 			} else {
 				// target type is not varchar: perform a cast
+				target_type_not_varchar = true;
 				success =
 				    VectorOperations::TryCast(context, parse_vector, result_vector, parse_chunk.size(), &error_message);
 			}
@@ -519,14 +521,17 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 			}
 
 			// figure out the exact line number
-			//			UnifiedVectorFormat inserted_column_data;
-			//			result_vector.ToUnifiedFormat(parse_chunk.size(), inserted_column_data);
-			//			idx_t row_idx;
-			//			for (row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
-			//				if (!inserted_column_data.validity.RowIsValid(row_idx) && !FlatVector::IsNull(parse_vector,
-			//row_idx)) { 					break;
-			//				}
-			//			}
+			if (target_type_not_varchar) {
+				UnifiedVectorFormat inserted_column_data;
+				result_vector.ToUnifiedFormat(parse_chunk.size(), inserted_column_data);
+				for (;line_error < parse_chunk.size(); line_error++) {
+					if (!inserted_column_data.validity.RowIsValid(line_error) &&
+					    !FlatVector::IsNull(parse_vector, line_error)) {
+						break;
+					}
+				}
+			}
+
 			idx_t error_line;
 			if (line_info) {
 				while (true) {

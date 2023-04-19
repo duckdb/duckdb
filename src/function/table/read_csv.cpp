@@ -569,7 +569,7 @@ static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext 
 	return make_uniq<ParallelCSVGlobalState>(
 	    context, std::move(file_handle), bind_data.files, context.db->NumberOfThreads(), bind_data.options.buffer_size,
 	    bind_data.options.skip_rows, ClientConfig::GetConfig(context).verify_parallelism, input.column_ids,
-	    bind_data.options.has_header);
+	    bind_data.options.header);
 }
 
 //===--------------------------------------------------------------------===//
