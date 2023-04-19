@@ -148,7 +148,17 @@ class SingleFileStorageCommitState : public StorageCommitState {
 
 public:
 	SingleFileStorageCommitState(StorageManager &storage_manager, bool checkpoint);
-	~SingleFileStorageCommitState() override;
+	~SingleFileStorageCommitState() override {
+		// If log is non-null, then commit threw an exception before flushing.
+		if (log) {
+			auto &wal = *log.get();
+			wal.skip_writing = false;
+			if (wal.GetTotalWritten() > initial_written) {
+				// remove any entries written into the WAL by truncating it
+				wal.Truncate(initial_wal_size);
+			}
+		}
+	}
 
 	// Make the commit persistent
 	void FlushCommit() override;
@@ -187,17 +197,6 @@ void SingleFileStorageCommitState::FlushCommit() {
 	}
 	// Null so that the destructor will not truncate the log.
 	log = nullptr;
-}
-
-SingleFileStorageCommitState::~SingleFileStorageCommitState() { // NOLINT - false positive on exception being thrown
-	// If log is non-null, then commit threw an exception before flushing.
-	if (log) {
-		log->skip_writing = false;
-		if (log->GetTotalWritten() > initial_written) {
-			// remove any entries written into the WAL by truncating it
-			log->Truncate(initial_wal_size);
-		}
-	}
 }
 
 unique_ptr<StorageCommitState> SingleFileStorageManager::GenStorageCommitState(Transaction &transaction,
