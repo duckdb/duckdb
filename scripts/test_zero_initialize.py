@@ -71,10 +71,18 @@ def compare_files(standard_dir, zero_init_dir):
         compare_database(os.path.join(standard_dir, entry), os.path.join(zero_init_dir, entry))
 
 
+def clear_directories(directories):
+    for dir in directories:
+        try:
+            shutil.rmtree(dir)
+        except FileNotFoundError as e:
+            pass
+
+test_dirs = [args.standard_dir, args.zero_init_dir]
+
 for test in test_list:
     print(f"Running test {test}")
-    shutil.rmtree(args.standard_dir)
-    shutil.rmtree(args.zero_init_dir)
+    clear_directories(test_dirs)
     standard_args = [args.unittest, '--test-temp-dir', args.standard_dir, test, '--one-initialize']
     zero_init_args = [args.unittest, '--test-temp-dir', args.zero_init_dir, '--zero-initialize', test]
     print(f"Running test in one-initialize mode")
@@ -82,3 +90,5 @@ for test in test_list:
     print(f"Running test in zero-initialize mode")
     run_test(zero_init_args)
     compare_files(args.standard_dir, args.zero_init_dir)
+
+clear_directories(test_dirs)
