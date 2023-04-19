@@ -19,12 +19,11 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::COLUMN_DATA_SCAN;
 
 public:
-	PhysicalColumnDataScan(vector<LogicalType> types, PhysicalOperatorType op_type, idx_t estimated_cardinality)
-	    : PhysicalOperator(op_type, std::move(types), estimated_cardinality), collection(nullptr) {
-	}
+	PhysicalColumnDataScan(vector<LogicalType> types, PhysicalOperatorType op_type, idx_t estimated_cardinality,
+	                       unique_ptr<ColumnDataCollection> owned_collection = nullptr);
 
 	// the column data collection to scan
-	ColumnDataCollection *collection;
+	optional_ptr<ColumnDataCollection> collection;
 	//! Owned column data collection, if any
 	unique_ptr<ColumnDataCollection> owned_collection;
 

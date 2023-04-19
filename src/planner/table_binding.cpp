@@ -73,7 +73,7 @@ BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	return BindResult(make_uniq<BoundColumnRefExpression>(colref.GetName(), sql_type, binding, depth));
 }
 
-StandardEntry *Binding::GetStandardEntry() {
+optional_ptr<StandardEntry> Binding::GetStandardEntry() {
 	return nullptr;
 }
 
@@ -82,12 +82,13 @@ EntryBinding::EntryBinding(const string &alias, vector<LogicalType> types_p, vec
     : Binding(BindingType::CATALOG_ENTRY, alias, std::move(types_p), std::move(names_p), index), entry(entry) {
 }
 
-StandardEntry *EntryBinding::GetStandardEntry() {
-	return &this->entry;
+optional_ptr<StandardEntry> EntryBinding::GetStandardEntry() {
+	return &entry;
 }
 
 TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p,
-                           vector<column_t> &bound_column_ids, StandardEntry *entry, idx_t index, bool add_row_id)
+                           vector<column_t> &bound_column_ids, optional_ptr<StandardEntry> entry, idx_t index,
+                           bool add_row_id)
     : Binding(BindingType::TABLE, alias, std::move(types_p), std::move(names_p), index),
       bound_column_ids(bound_column_ids), entry(entry) {
 	if (add_row_id) {
@@ -213,7 +214,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	return BindResult(make_uniq<BoundColumnRefExpression>(colref.GetName(), col_type, binding, depth));
 }
 
-StandardEntry *TableBinding::GetStandardEntry() {
+optional_ptr<StandardEntry> TableBinding::GetStandardEntry() {
 	return entry;
 }
 

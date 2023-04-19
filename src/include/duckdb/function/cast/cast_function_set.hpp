@@ -59,7 +59,7 @@ public:
 private:
 	vector<BindCastFunction> bind_functions;
 	//! If any custom cast functions have been defined using RegisterCastFunction, this holds the map
-	MapCastInfo *map_info;
+	optional_ptr<MapCastInfo> map_info;
 
 private:
 	void RegisterCastFunction(const LogicalType &source, const LogicalType &target, MapCastNode node);

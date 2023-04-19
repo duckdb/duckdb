@@ -1525,14 +1525,29 @@ NumpyObjectType DuckDBPyConnection::IsAcceptedNumpyObject(const py::object &obje
 }
 
 bool DuckDBPyConnection::IsAcceptedArrowObject(const py::object &object) {
-	if (!ModuleIsLoaded<ArrowCacheItem>()) {
+	if (!ModuleIsLoaded<ArrowLibCacheItem>()) {
 		return false;
 	}
 	auto &import_cache_py = *DuckDBPyConnection::ImportCache();
-	return py::isinstance(object, import_cache_py.arrow().lib.Table()) ||
-	       py::isinstance(object, import_cache_py.arrow().lib.RecordBatchReader()) ||
-	       py::isinstance(object, import_cache_py.arrow().dataset.Dataset()) ||
-	       py::isinstance(object, import_cache_py.arrow().dataset.Scanner());
+	if (py::isinstance(object, import_cache_py.arrow_lib().Table()) ||
+	    py::isinstance(object, import_cache_py.arrow_lib().RecordBatchReader())) {
+		return true;
+	}
+	if (!ModuleIsLoaded<ArrowDatasetCacheItem>()) {
+		return false;
+	}
+	return (py::isinstance(object, import_cache_py.arrow_dataset().Dataset()) ||
+	        py::isinstance(object, import_cache_py.arrow_dataset().Scanner()));
+}
+
+unique_lock<std::mutex> DuckDBPyConnection::AcquireConnectionLock() {
+	// we first release the gil and then acquire the connection lock
+	unique_lock<std::mutex> lock(py_connection_lock, std::defer_lock);
+	{
+		py::gil_scoped_release release;
+		lock.lock();
+	}
+	return lock;
 }
 
 } // namespace duckdb

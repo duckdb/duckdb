@@ -135,7 +135,7 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 		// set up the compression function to constant
 		auto &config = DBConfig::GetConfig(db);
 		segment->function =
-		    config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, segment->type.InternalType());
+		    *config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, segment->type.InternalType());
 		segment->ConvertToPersistent(nullptr, INVALID_BLOCK);
 	}
 
@@ -149,7 +149,7 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 		data_pointer.row_start = last_pointer.row_start + last_pointer.tuple_count;
 	}
 	data_pointer.tuple_count = tuple_count;
-	data_pointer.compression_type = segment->function->type;
+	data_pointer.compression_type = segment->function.get().type;
 
 	// append the segment to the new segment tree
 	new_tree.AppendSegment(std::move(segment));

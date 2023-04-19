@@ -24,7 +24,7 @@ public:
 public:
 	template <class T>
 	T &LazyLoadModule(T &module) {
-		if (!module.LoadAttempted()) {
+		if (!module.LoadSucceeded()) {
 			module.LoadModule(T::Name, *this);
 		}
 		return module;
@@ -60,8 +60,11 @@ public:
 	PolarsCacheItem &polars() {
 		return LazyLoadModule(polars_module);
 	}
-	ArrowCacheItem &arrow() {
-		return LazyLoadModule(arrow_module);
+	ArrowLibCacheItem &arrow_lib() {
+		return LazyLoadModule(arrow_lib_module);
+	}
+	ArrowDatasetCacheItem &arrow_dataset() {
+		return LazyLoadModule(arrow_dataset_module);
 	}
 	IPythonCacheItem &IPython() {
 		return LazyLoadModule(IPython_module);
@@ -81,7 +84,9 @@ private:
 	UUIDCacheItem uuid_module;
 	PandasCacheItem pandas_module;
 	PolarsCacheItem polars_module;
-	ArrowCacheItem arrow_module;
+	ArrowDatasetCacheItem arrow_dataset_module;
+	ArrowLibCacheItem arrow_lib_module;
+
 	IPythonCacheItem IPython_module;
 	IpywidgetsCacheItem ipywidgets_module;
 
