@@ -70,11 +70,13 @@ static void PragmaLastProfilingOutputFunction(ClientContext &context, TableFunct
 		DataChunk chunk;
 		chunk.Initialize(context, data.types);
 		int operator_counter = 1;
-		if (!ClientData::Get(context).query_profiler_history->GetPrevProfilers().empty()) {
-			for (auto op :
-			     ClientData::Get(context).query_profiler_history->GetPrevProfilers().back().second->GetTreeMap()) {
-				SetValue(chunk, chunk.size(), operator_counter++, op.second->name, op.second->info.time,
-				         op.second->info.elements, " ");
+		auto &client_data = ClientData::Get(context);
+		if (!client_data.query_profiler_history->GetPrevProfilers().empty()) {
+			auto &tree_map = client_data.query_profiler_history->GetPrevProfilers().back().second->GetTreeMap();
+			for (auto op : tree_map) {
+				auto &tree_info = op.second.get();
+				SetValue(chunk, chunk.size(), operator_counter++, tree_info.name, tree_info.info.time,
+				         tree_info.info.elements, " ");
 				chunk.SetCardinality(chunk.size() + 1);
 				if (chunk.size() == STANDARD_VECTOR_SIZE) {
 					collection->Append(chunk);

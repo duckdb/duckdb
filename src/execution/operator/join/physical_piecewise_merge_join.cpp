@@ -125,7 +125,7 @@ void PhysicalPiecewiseMergeJoin::Combine(ExecutionContext &context, GlobalSinkSt
 	gstate.table->Combine(lstate.table);
 	auto &client_profiler = QueryProfiler::Get(context.client);
 
-	context.thread.profiler.Flush(this, &lstate.table.executor, "rhs_executor", 1);
+	context.thread.profiler.Flush(*this, lstate.table.executor, "rhs_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
 }
 
@@ -245,9 +245,9 @@ public:
 		lhs_local_table->executor.Execute(lhs_payload, lhs_local_table->keys);
 	}
 
-	void Finalize(PhysicalOperator *op, ExecutionContext &context) override {
+	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
 		if (lhs_local_table) {
-			context.thread.profiler.Flush(op, &lhs_local_table->executor, "lhs_executor", 0);
+			context.thread.profiler.Flush(op, lhs_local_table->executor, "lhs_executor", 0);
 		}
 	}
 };

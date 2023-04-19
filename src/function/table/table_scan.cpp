@@ -103,7 +103,7 @@ static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, co
                                                       column_t column_id) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 	auto &local_storage = LocalStorage::Get(context, *bind_data.table->catalog);
-	if (local_storage.Find(bind_data.table->GetStoragePtr())) {
+	if (local_storage.Find(bind_data.table->GetStorage())) {
 		// we don't emit any statistics for tables that have outstanding transaction-local data
 		return nullptr;
 	}
@@ -192,7 +192,7 @@ unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const Fu
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 	auto &local_storage = LocalStorage::Get(context, *bind_data.table->catalog);
 	auto &storage = bind_data.table->GetStorage();
-	idx_t estimated_cardinality = storage.info->cardinality + local_storage.AddedRows(bind_data.table->GetStoragePtr());
+	idx_t estimated_cardinality = storage.info->cardinality + local_storage.AddedRows(bind_data.table->GetStorage());
 	return make_uniq<NodeStatistics>(storage.info->cardinality, estimated_cardinality);
 }
 
@@ -220,8 +220,7 @@ static unique_ptr<GlobalTableFunctionState> IndexScanInitGlobal(ClientContext &c
 	auto &local_storage = LocalStorage::Get(context, *bind_data.table->catalog);
 	result->column_ids = input.column_ids;
 	result->local_storage_state.Initialize(input.column_ids, input.filters);
-	local_storage.InitializeScan(bind_data.table->GetStoragePtr(), result->local_storage_state.local_state,
-	                             input.filters);
+	local_storage.InitializeScan(bind_data.table->GetStorage(), result->local_storage_state.local_state, input.filters);
 
 	result->finished = false;
 	return std::move(result);
