@@ -231,7 +231,7 @@ void MultiFileReader::CreateNameMapping(const string &file_name, const vector<Lo
 			}
 			throw IOException(StringUtil::Format(
 			    "Failed to read file \"%s\": schema mismatch in glob: column \"%s\" was read from "
-			    "\"%s\", but could not be found in file \"%s\".\nCandidate names: %s\nIf you are trying to "
+			    "the original file \"%s\", but could not be found in file \"%s\".\nCandidate names: %s\nIf you are trying to "
 			    "read files with different schemas, try setting union_by_name=True",
 			    file_name, global_name, initial_file, file_name, candidate_names));
 		}
