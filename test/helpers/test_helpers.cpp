@@ -124,7 +124,7 @@ unique_ptr<DBConfig> GetTestConfig() {
 	auto result = make_uniq<DBConfig>();
 	result->options.checkpoint_wal_size = 0;
 	result->options.allow_unsigned_extensions = true;
-	switch(debug_initialize_value) {
+	switch (debug_initialize_value) {
 	case -1:
 		break;
 	case 0:

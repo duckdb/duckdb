@@ -46,7 +46,8 @@ int main(int argc, char *argv[]) {
 		} else if (string(argv[i]) == "--test-temp-dir") {
 			auto test_dir = string(argv[++i]);
 			if (fs->DirectoryExists(test_dir)) {
-				fprintf(stderr, "--test-temp-dir cannot point to a directory that already exists (%s)\n", test_dir.c_str());
+				fprintf(stderr, "--test-temp-dir cannot point to a directory that already exists (%s)\n",
+				        test_dir.c_str());
 				return 1;
 			}
 			SetTestDirectory(test_dir);

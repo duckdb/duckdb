@@ -12,7 +12,13 @@ parser.add_argument('--standard_dir', default='test_standard_db', help='director
 args = parser.parse_args()
 
 test_list = [
-    'test/sql/storage/test_store_integers.test'
+    'test/sql/storage/compression/compression_selection.test',
+    'test/sql/storage/compression/simple_compression.test',
+    'test/sql/storage/test_store_deletes.test',
+    'test/sql/storage/test_store_nulls_strings.test',
+    'test/sql/storage/test_store_null_updates.test',
+    'test/sql/storage/test_store_integers.test',
+    'test/sql/storage/test_update_delete_string.test'
 ]
 
 def run_test(args):
@@ -37,11 +43,11 @@ def compare_database(standard_db, zero_init_db):
     with open(zero_init_db, 'rb') as f:
         zero_data = f.read()
     if len(standard_data) != len(zero_data):
-        print(f"Length mismatch between database {standard_db} ({str(len(standard_data))}) and {zero_init_db} ({str(len(zero_data))})")
+        print(f"FAIL - Length mismatch between database {standard_db} ({str(len(standard_data))}) and {zero_init_db} ({str(len(zero_data))})")
         exit(1)
     for i in range(len(standard_data)):
         if standard_data[i] != zero_data[i]:
-            print(f"Mismatch between standard database ({standard_data[i]}) and zero-initialized database ({zero_data[i]}) at byte position {i}")
+            print(f"FAIL - Mismatch between standard database ({standard_data[i]}) and zero-initialized database ({zero_data[i]}) at byte position {i}")
             if i < header_size:
                 print("This byte is in the initial headers of the file")
             else:
@@ -56,7 +62,10 @@ def compare_files(standard_dir, zero_init_dir):
     standard_list.sort()
     zero_init_list.sort()
     if standard_list != zero_init_list:
-        print(f"Directories contain mismatching files (standard - {str(standard_list)}, zero init - {str(zero_init_list)})")
+        print(f"FAIL - Directories contain mismatching files (standard - {str(standard_list)}, zero init - {str(zero_init_list)})")
+        exit(1)
+    if len(standard_list) == 0:
+        print("FAIL - Directory is empty!")
         exit(1)
     for entry in standard_list:
         compare_database(os.path.join(standard_dir, entry), os.path.join(zero_init_dir, entry))
