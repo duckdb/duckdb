@@ -368,7 +368,7 @@ public:
 				continue;
 			}
 			MultiFileReader::InitializeReader(*reader, bind_data.parquet_options.file_options, bind_data.reader_bind,
-			                                  bind_data.types, bind_data.names, input.column_ids, input.filters);
+			                                  bind_data.types, bind_data.names, input.column_ids, input.filters, bind_data.files[0]);
 		}
 
 		result->column_ids = input.column_ids;
@@ -562,7 +562,7 @@ public:
 					reader = make_shared<ParquetReader>(context, file, pq_options);
 					MultiFileReader::InitializeReader(*reader, bind_data.parquet_options.file_options,
 					                                  bind_data.reader_bind, bind_data.types, bind_data.names,
-					                                  parallel_state.column_ids, parallel_state.filters);
+					                                  parallel_state.column_ids, parallel_state.filters, bind_data.files.front());
 				} catch (...) {
 					parallel_lock.lock();
 					parallel_state.error_opening_file = true;
