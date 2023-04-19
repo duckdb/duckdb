@@ -380,6 +380,31 @@ void Executor::WorkOnTasks() {
 	}
 }
 
+void Executor::RescheduleTask(shared_ptr<Task> task) {
+	while(true) {
+		lock_guard<mutex> l(executor_lock);
+		if (cancelled) {
+			return;
+		}
+		auto entry = to_be_rescheduled_tasks.find(task.get());
+		if (entry != to_be_rescheduled_tasks.end()) {
+			// found!
+			auto &scheduler = TaskScheduler::GetScheduler(context);
+			to_be_rescheduled_tasks.erase(task.get());
+			scheduler.ScheduleTask(task->current_token, task);
+			break;
+		}
+	}
+}
+
+void Executor::AddToBeRescheduled(shared_ptr<Task> task) {
+	lock_guard<mutex> l(executor_lock);
+	if (to_be_rescheduled_tasks.find(task.get()) != to_be_rescheduled_tasks.end()) {
+		return;
+	}
+	to_be_rescheduled_tasks[task.get()] = std::move(task);
+}
+
 bool Executor::ExecutionIsFinished() {
 	return completed_pipelines >= total_pipelines || HasError();
 }

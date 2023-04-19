@@ -26,33 +26,21 @@ enum class InterruptResultType {
 	NO_INTERRUPT,
 
 	//! A callback will be made to the scheduler with the specified uuid
-	CALLBACK_UUID,
-	//! A time in ns from epoch is provided after which rescheduling should occur
-	SLEEP
+	CALLBACK,
 };
 
 //! State of an interrupt, allows the interrupting code to specify how the interrupt should be handled
 struct InterruptState {
 	InterruptResultType result = InterruptResultType::NO_INTERRUPT;
 	hugeint_t callback_uuid;
-	int64_t sleep_until_ns_from_epoch;
 
 	void Reset() {
 		result = InterruptResultType::NO_INTERRUPT;
 	}
 
-	void SetInterruptSleep(int64_t sleep_ns) {
-		sleep_until_ns_from_epoch = sleep_ns;
-		result = InterruptResultType::SLEEP;
-	}
-
-	void SetInterruptSleepMillis(int64_t sleep_millis) {
-		SetInterruptSleep(sleep_millis*1000);
-	}
-
 	hugeint_t SetInterruptCallback() {
 		callback_uuid = UUID::GenerateRandomUUID();
-		result = InterruptResultType::CALLBACK_UUID;
+		result = InterruptResultType::CALLBACK;
 		return callback_uuid;
 	}
 };
@@ -69,6 +57,12 @@ public:
 	//! In case of an error, TASK_ERROR is returned
 	virtual TaskExecutionResult Execute(TaskExecutionMode mode) = 0;
 
+	//! Descheduling a task ensures the task remains available for rescheduling as long as required, generally until some
+	//! external event calls the relevant callback for this task for it to be rescheduled.
+	virtual void Deschedule() {
+	    throw InternalException("Cannot deschedule task of base Task class");
+	};
+
 	//! While a task is running, it may set its interrupt state indicating to the scheduler how it wants to be handled
 	//! after returning a TaskExecutionResult::TASK_BLOCKED
 	InterruptState interrupt_state;
@@ -84,6 +78,10 @@ public:
 	ExecutorTask(Executor &executor);
 	ExecutorTask(ClientContext &context);
 	virtual ~ExecutorTask();
+
+	void Deschedule() override {
+//		executor.Deschedule();
+	};
 
 	Executor &executor;
 

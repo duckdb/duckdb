@@ -91,22 +91,28 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 	bool exhausted_source = false;
 	auto &source_chunk = pipeline.operators.empty() ? final_chunk : *intermediate_chunks[0];
 	for (idx_t i = 0; i < max_chunks; i++) {
-
-		// There's 3 ways we can process a chunk in the pipeline here:
-		// 1. Regular: 					      Fetch from source, push through pipeline
-		// 2. Resuming after Sink interrupt:  Retry pushing the chunk into the sink
-		// 3. Flushing operators: 			  Flushing a cached chunk in the pipeline
 		if (exhausted_source && done_flushing && !remaining_sink_chunk) {
 			break;
 		}
 
+		// There's 4 ways we can process a chunk in the pipeline here:
+		// 1. Regular fetch from source into pipeline:      Fetch from source, push through pipeline
+		// 2. Resuming after Sink interrupt:                Retry pushing the final chunk into the sink
+		// 3. Flushing operators:                           Flushing a cached chunk through the pipeline into sink
+		// 4. Resume in process ops after Sink interrupt:   Retry pushing the last source chunk through the pipeline
 		OperatorResultType result;
 		if (remaining_sink_chunk) {
+			// Resuming after Sink interrupt
 			result = ExecutePushInternal(final_chunk);
 			remaining_sink_chunk = false;
+		} else if (!in_process_operators.empty()) {
+			// Resume in process ops after Sink interrupt
+			result = ExecutePushInternal(source_chunk);
 		} else if (exhausted_source && !done_flushing) {
+			// Flushing operators
 			result = FlushCachingOperatorsPush();
 		} else if (!exhausted_source) {
+			// Regular fetch from source into pipeline
 			source_chunk.Reset();
 			FetchFromSource(source_chunk, true);
 
@@ -141,14 +147,7 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 		return PipelineExecuteResult::NOT_FINISHED;
 	}
 
-	// TODO this does not respect the flush limit also its not resumable
 	PushFinalize();
-
-	// SINK INTERRUPT IN FINALIZE
-	if(interrupt_state.result != InterruptResultType::NO_INTERRUPT) {
-		remaining_sink_chunk = true;
-		return PipelineExecuteResult::INTERRUPTED;
-	}
 
 	return PipelineExecuteResult::FINISHED;
 }
@@ -199,7 +198,6 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t
 			EndOperator(pipeline.sink, nullptr);
 
 			if (sink_result == SinkResultType::BLOCKED) {
-				// TODO: this is confusing we are returning have_more_output which means something else
 				return OperatorResultType::BLOCKED;
 			} else if (sink_result == SinkResultType::FINISHED) {
 				FinishProcessing();

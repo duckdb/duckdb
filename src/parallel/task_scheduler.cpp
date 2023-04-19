@@ -309,23 +309,12 @@ void TaskScheduler::RescheduleSleepingTasks() {
 	// Reschedule any tasks who have exceeded their sleep timer
 	for (auto it = sleeping_tasks.begin(); it != sleeping_tasks.end(); ) {
 		if (it->first < current_time) {
-//			Printer::Print("Rescheduled task with sleeping time " + to_string(it->first));
 			ScheduleTask(it->second->current_token, std::move(it->second));
 			it = sleeping_tasks.erase(it);
 		} else {
-//			Printer::Print("Did not reschedule: " + to_string(it->first));
 			++it;
 		}
 	}
-
-//	// DEBUG
-//	{
-//		unique_lock<mutex> lck(sleeping_task_lock);
-//		unique_lock<mutex> lck2(blocked_task_lock);
-//		Printer::Print("	> currently have: " + to_string(sleeping_tasks.size()) + " sleeping");
-//		Printer::Print("	> currently have: " + to_string(blocked_tasks.size()) + " Blocked");
-//		Printer::Print("\n");
-//	}
 
 	have_sleeping_tasks = !sleeping_tasks.empty();
 }
@@ -357,32 +346,15 @@ void TaskScheduler::DescheduleTaskSleeping(unique_ptr<Task> task, uint64_t end_t
 }
 
 void TaskScheduler::DescheduleTask(unique_ptr<Task> task) {
-	hugeint_t uuid;
-	int64_t sleep;
-
 	switch(task->interrupt_state.result) {
-	case InterruptResultType::CALLBACK_UUID:
-		uuid = task->interrupt_state.callback_uuid;
+	case InterruptResultType::CALLBACK:
+//		DescheduleTask(task);
 //		Printer::Print("Descheduled Task with callback id " + to_string(uuid.lower) + to_string(uuid.upper));
-		DescheduleTaskCallback(std::move(task), uuid);
-		break;
-	case InterruptResultType::SLEEP:
-		sleep = task->interrupt_state.sleep_until_ns_from_epoch;
-//		Printer::Print("Descheduled Task with end time " + to_string(sleep));
-		DescheduleTaskSleeping(std::move(task), sleep);
+		DescheduleTaskCallback(std::move(task), hugeint_t(1));
 		break;
 	default:
 		throw InternalException("Unexpected interrupt result type found: (" + to_string((int)task->interrupt_state.result)+ ")");
 	}
-
-//	// DEBUG
-//	{
-//		unique_lock<mutex> lck(sleeping_task_lock);
-//		unique_lock<mutex> lck2(blocked_task_lock);
-//		Printer::Print("	> currently have: " + to_string(sleeping_tasks.size()) + " sleeping");
-//		Printer::Print("	> currently have: " + to_string(blocked_tasks.size()) + " Blocked");
-//		Printer::Print("\n");
-//	}
 }
 
 void TaskScheduler::RescheduleCallback(shared_ptr<DatabaseInstance> db, hugeint_t callback_uuid) {
