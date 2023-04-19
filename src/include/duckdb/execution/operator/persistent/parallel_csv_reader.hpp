@@ -12,6 +12,7 @@
 #include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
 #include "duckdb/execution/operator/persistent/csv_file_handle.hpp"
 #include "duckdb/execution/operator/persistent/csv_buffer.hpp"
+#include "duckdb/execution/operator/persistent/csv_line_info.hpp"
 
 #include <sstream>
 #include <utility>
@@ -20,7 +21,8 @@ namespace duckdb {
 
 struct CSVBufferRead {
 	CSVBufferRead(shared_ptr<CSVBuffer> buffer_p, idx_t buffer_start_p, idx_t buffer_end_p, idx_t batch_index)
-	    : buffer(std::move(buffer_p)), buffer_start(buffer_start_p), buffer_end(buffer_end_p), batch_index(batch_index) {
+	    : buffer(std::move(buffer_p)), buffer_start(buffer_start_p), buffer_end(buffer_end_p),
+	      batch_index(batch_index) {
 		if (buffer) {
 			if (buffer_end > buffer->GetBufferSize()) {
 				buffer_end = buffer->GetBufferSize();
@@ -86,18 +88,19 @@ struct CSVBufferRead {
 	idx_t buffer_start;
 	idx_t buffer_end;
 	idx_t batch_index;
-    idx_t lines_read = 0;
+	idx_t lines_read = 0;
 };
 
 struct VerificationPositions {
 	idx_t beginning_of_first_line = 0;
 	idx_t end_of_last_line = 0;
 };
-//! Buffered CSV reader is a class that reads values from a stream and parses them as a CSV file
+
+//! CSV Reader for Parallel Reading
 class ParallelCSVReader : public BaseCSVReader {
 public:
 	ParallelCSVReader(ClientContext &context, BufferedCSVReaderOptions options, unique_ptr<CSVBufferRead> buffer,
-	                  idx_t first_pos_first_buffer, const vector<LogicalType> &requested_types);
+	                  idx_t first_pos_first_buffer, const vector<LogicalType> &requested_types, LineInfo *line_info);
 	~ParallelCSVReader();
 
 	//! Current Position (Relative to the Buffer)
@@ -116,6 +119,7 @@ public:
 	bool finished = false;
 
 	unique_ptr<CSVBufferRead> buffer;
+
 	VerificationPositions GetVerificationPositions();
 
 public:

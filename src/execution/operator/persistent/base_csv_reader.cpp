@@ -25,15 +25,23 @@
 
 namespace duckdb {
 
-string BaseCSVReader::GetLineNumberStr(idx_t linenr, bool linenr_estimated) {
+string BaseCSVReader::GetLineNumberStr(idx_t linenr, bool linenr_estimated, LineInfo *line_info, idx_t buffer_idx) {
+	//! If an error happens during auto detect it is an estimated line
 	string estimated = (linenr_estimated ? string(" (estimated)") : string(""));
+	if (line_info) {
+		while (true) {
+			if (line_info->CanItGetLine(buffer_idx)) {
+				return to_string(linenr + 1 + line_info->GetLine(buffer_idx));
+			}
+		}
+	}
 	return to_string(linenr + 1) + estimated;
 }
 
 BaseCSVReader::BaseCSVReader(ClientContext &context_p, BufferedCSVReaderOptions options_p,
-                             const vector<LogicalType> &requested_types)
+                             const vector<LogicalType> &requested_types, LineInfo *line_info)
     : context(context_p), fs(FileSystem::GetFileSystem(context)), allocator(Allocator::Get(context)),
-      opener(FileSystem::GetFileOpener(context)), options(std::move(options_p)) {
+      opener(FileSystem::GetFileOpener(context)), options(std::move(options_p)), line_info(line_info) {
 }
 
 BaseCSVReader::~BaseCSVReader() {
@@ -238,7 +246,8 @@ bool BaseCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, const Log
 	}
 }
 
-void BaseCSVReader::AddValue(string_t str_val, idx_t &column, vector<idx_t> &escape_positions, bool has_quotes) {
+void BaseCSVReader::AddValue(string_t str_val, idx_t &column, vector<idx_t> &escape_positions, bool has_quotes,
+                             idx_t buffer_idx) {
 	auto length = str_val.GetSize();
 	if (length == 0 && column == 0) {
 		row_empty = true;
@@ -260,7 +269,8 @@ void BaseCSVReader::AddValue(string_t str_val, idx_t &column, vector<idx_t> &esc
 		} else {
 			throw InvalidInputException(
 			    "Error in file \"%s\", on line %s: expected %lld values per row, but got more. (%s)", options.file_path,
-			    GetLineNumberStr(linenr, linenr_estimated).c_str(), return_types.size(), options.ToString());
+			    GetLineNumberStr(linenr, linenr_estimated, line_info, buffer_idx).c_str(), return_types.size(),
+			    options.ToString());
 		}
 	}
 
@@ -301,7 +311,7 @@ void BaseCSVReader::AddValue(string_t str_val, idx_t &column, vector<idx_t> &esc
 	column++;
 }
 
-bool BaseCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column, string &error_message) {
+bool BaseCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column, string &error_message, idx_t buffer_idx) {
 	linenr++;
 
 	if (row_empty) {
@@ -338,8 +348,8 @@ bool BaseCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column, string &error
 			} else {
 				throw InvalidInputException(
 				    "Error in file \"%s\" on line %s: expected %lld values per row, but got %d.\nParser options:\n%s",
-				    options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str(), return_types.size(), column,
-				    options.ToString());
+				    options.file_path, GetLineNumberStr(linenr, linenr_estimated, line_info, buffer_idx).c_str(),
+				    return_types.size(), column, options.ToString());
 			}
 		}
 	}
@@ -363,7 +373,7 @@ bool BaseCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column, string &error
 	}
 
 	if (mode == ParserMode::PARSING && parse_chunk.size() == STANDARD_VECTOR_SIZE) {
-		Flush(insert_chunk);
+		Flush(insert_chunk, buffer_idx);
 		return true;
 	}
 
@@ -439,7 +449,7 @@ bool TryCastFloatingVectorCommaSeparated(BufferedCSVReaderOptions &options, Vect
 	}
 }
 
-bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
+bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_add_line) {
 	if (parse_chunk.size() == 0) {
 		return true;
 	}
@@ -511,8 +521,15 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 					break;
 				}
 			}
-			auto error_line = linenr - (parse_chunk.size() - row_idx) + 1;
-
+			idx_t error_line = linenr - (parse_chunk.size() - row_idx) + 1;
+			if (line_info) {
+				while (true) {
+					if (line_info->CanItGetLine(buffer_idx)) {
+						error_line += line_info->GetLine(buffer_idx);
+						break;
+					}
+				}
+			}
 			if (options.auto_detect) {
 				throw InvalidInputException("%s in column %s, at line %llu.\n\nParser "
 				                            "options:\n%s.\n\nConsider either increasing the sample size "

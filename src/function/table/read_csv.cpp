@@ -13,6 +13,7 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/execution/operator/persistent/csv_line_info.hpp"
 
 #include <limits>
 
@@ -249,18 +250,16 @@ static unique_ptr<FunctionData> ReadCSVAutoBind(ClientContext &context, TableFun
 //===--------------------------------------------------------------------===//
 // Parallel CSV Reader CSV Global State
 //===--------------------------------------------------------------------===//
-//===--------------------------------------------------------------------===//
-// Read CSV Global State
-//===--------------------------------------------------------------------===//
+
 struct ParallelCSVGlobalState : public GlobalTableFunctionState {
 public:
 	ParallelCSVGlobalState(ClientContext &context, unique_ptr<CSVFileHandle> file_handle_p,
 	                       vector<string> &files_path_p, idx_t system_threads_p, idx_t buffer_size_p,
 	                       idx_t rows_to_skip, bool force_parallelism_p, vector<column_t> column_ids_p)
 	    : file_handle(std::move(file_handle_p)), system_threads(system_threads_p), buffer_size(buffer_size_p),
-	      force_parallelism(force_parallelism_p), column_ids(std::move(column_ids_p)) {
+	      force_parallelism(force_parallelism_p), column_ids(std::move(column_ids_p)), line_info(&main_mutex) {
 		current_file_path = files_path_p[0];
-        lines_read[0] = rows_to_skip;
+		line_info.lines_read[0] = rows_to_skip;
 		file_size = file_handle->FileSize();
 		first_file_size = file_size;
 		bytes_read = 0;
@@ -283,7 +282,7 @@ public:
 		    current_buffer->Next(*file_handle, buffer_size, current_csv_position, file_number).release());
 		running_threads = MaxThreads();
 	}
-	ParallelCSVGlobalState() {
+	ParallelCSVGlobalState() : line_info(&main_mutex) {
 		running_threads = MaxThreads();
 	}
 
@@ -304,11 +303,7 @@ public:
 
 	void UpdateVerification(VerificationPositions positions, idx_t file_number);
 
-    void UpdateLinesRead(idx_t batch_idx, idx_t lines_read);
-
-    bool CanItGetLine(idx_t batch_idx);
-
-    idx_t GetLine(idx_t batch_idx);
+	void UpdateLinesRead(idx_t batch_idx, idx_t lines_read);
 
 	void IncrementThread();
 
@@ -356,10 +351,7 @@ private:
 	idx_t buffer_size;
 	//! Current batch index
 	idx_t batch_index = 0;
-    //! Lines read per batch, <batch_index,count>
-    unordered_map<idx_t, idx_t> lines_read;
-    //! Set of batches that have been initialized but are not yet finished.
-    set<idx_t> current_batches;
+
 	//! Forces parallelism for small CSV Files, should only be used for testing.
 	bool force_parallelism = false;
 	//! Current (Global) position of CSV
@@ -376,6 +368,8 @@ private:
 	idx_t running_threads = 0;
 	//! The column ids to read
 	vector<column_t> column_ids;
+	//! Line Info used in error messages
+	LineInfo line_info;
 };
 
 idx_t ParallelCSVGlobalState::MaxThreads() const {
@@ -466,7 +460,7 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 		}
 	}
 	// set up the current buffer
-    current_batches.insert(batch_index);
+	line_info.current_batches.insert(batch_index);
 	auto result = make_uniq<CSVBufferRead>(current_buffer, next_buffer, next_byte, next_byte + bytes_per_local_state,
 	                                       batch_index++);
 	// move the byte index of the CSV reader to the next buffer
@@ -489,17 +483,17 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 			// we are doing UNION BY NAME - fetch the options from the union reader for this file
 			auto &union_reader = *bind_data.union_readers[file_index - 1];
 			reader = make_uniq<ParallelCSVReader>(context, union_reader.options, std::move(result), first_position,
-			                                      union_reader.GetTypes());
+			                                      union_reader.GetTypes(), &line_info);
 			reader->names = union_reader.GetNames();
 		} else if (file_index <= bind_data.column_info.size()) {
 			// Serialized Union By name
 			reader = make_uniq<ParallelCSVReader>(context, bind_data.options, std::move(result), first_position,
-			                                      bind_data.column_info[file_index - 1].types);
+			                                      bind_data.column_info[file_index - 1].types, &line_info);
 			reader->names = bind_data.column_info[file_index - 1].names;
 		} else {
 			// regular file - use the standard options
 			reader = make_uniq<ParallelCSVReader>(context, bind_data.options, std::move(result), first_position,
-			                                      bind_data.csv_types);
+			                                      bind_data.csv_types, &line_info);
 			reader->names = bind_data.csv_names;
 		}
 		reader->options.file_path = current_file_path;
@@ -528,34 +522,34 @@ void ParallelCSVGlobalState::UpdateVerification(VerificationPositions positions,
 	}
 }
 
-void ParallelCSVGlobalState::UpdateLinesRead(duckdb::idx_t batch_idx_p, duckdb::idx_t lines_read_p){
+void ParallelCSVGlobalState::UpdateLinesRead(duckdb::idx_t batch_idx_p, duckdb::idx_t lines_read_p) {
 	lock_guard<mutex> parallel_lock(main_mutex);
-    current_batches.erase(batch_idx_p);
-	lines_read[batch_idx_p] += lines_read_p;
+	line_info.current_batches.erase(batch_idx_p);
+	line_info.lines_read[batch_idx_p] += lines_read_p;
 }
 
-bool ParallelCSVGlobalState::CanItGetLine(idx_t batch_idx){
-    lock_guard<mutex> parallel_lock(main_mutex);
-    if (current_batches.empty()){
-        return true;
-    }
-    auto min_value = *current_batches.begin();
-    if (min_value >= batch_idx){
-        return true;
-    }
-    return false;
+bool LineInfo::CanItGetLine(idx_t batch_idx) {
+	lock_guard<mutex> parallel_lock(*main_mutex);
+	if (current_batches.empty()) {
+		return true;
+	}
+	auto min_value = *current_batches.begin();
+	if (min_value >= batch_idx) {
+		return true;
+	}
+	return false;
 }
 
-idx_t ParallelCSVGlobalState::GetLine(idx_t batch_idx){
-    lock_guard<mutex> parallel_lock(main_mutex);
-    idx_t line_count = 0;
-    for (idx_t i = 0; i < batch_idx; i++){
-        if (lines_read.find(i) == lines_read.end()){
-            throw InternalException("Missing batch index on Parallel CSV Reader GetLine");
-        }
-        line_count += lines_read[i];
-    }
-    return line_count;
+idx_t LineInfo::GetLine(idx_t batch_idx) {
+	lock_guard<mutex> parallel_lock(*main_mutex);
+	idx_t line_count = 0;
+	for (idx_t i = 0; i < batch_idx; i++) {
+		if (lines_read.find(i) == lines_read.end()) {
+			throw InternalException("Missing batch index on Parallel CSV Reader GetLine");
+		}
+		line_count += lines_read[i];
+	}
+	return line_count;
 }
 
 static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext &context,
@@ -622,7 +616,8 @@ static void ParallelReadCSVFunction(ClientContext &context, TableFunctionInput &
 				csv_global_state.UpdateVerification(verification_updates,
 				                                    csv_local_state.csv_reader->buffer->buffer->GetFileNumber());
 			}
-            csv_global_state.UpdateLinesRead(csv_local_state.csv_reader->buffer->batch_index,csv_local_state.csv_reader->buffer->lines_read);
+			csv_global_state.UpdateLinesRead(csv_local_state.csv_reader->buffer->batch_index,
+			                                 csv_local_state.csv_reader->buffer->lines_read);
 			auto has_next = csv_global_state.Next(context, bind_data, csv_local_state.csv_reader);
 			if (!has_next) {
 				csv_global_state.DecrementThread();
