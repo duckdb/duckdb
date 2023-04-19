@@ -61,6 +61,7 @@ public:
 		// into the page owned by first_segment. We flush all segment data to
 		// disk with the following call.
 		if (free_space_left > 0) {
+			// memset any free space to 0 prior to writing to disk
 			auto handle = block_manager.buffer_manager.Pin(first_segment->block);
 			memset(handle.Ptr() + Storage::BLOCK_SIZE - free_space_left, 0, free_space_left);
 		}
