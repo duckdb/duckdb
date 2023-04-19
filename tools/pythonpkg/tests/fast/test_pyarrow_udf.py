@@ -32,7 +32,8 @@ class TestPyArrowUDF(object):
         res = con.sql('select i, plus_one(i) from test_vector_types(NULL::BIGINT, false) t(i), range(2000)')
         assert len(res) == 22000
 
-    # NOTE: This only works up to duckdb.__standard_vector_size__
+    # NOTE: This only works up to duckdb.__standard_vector_size__,
+    # because we process up to STANDARD_VECTOR_SIZE tuples at a time
     def test_sort_table(self):
         def sort_table(table):
             sorted_table = table.sort_by([("c0", "ascending")])
@@ -45,18 +46,25 @@ class TestPyArrowUDF(object):
 
     def test_varargs(self):
         def variable_args(table):
+	        # We return a chunked array here, but internally we convert this into a Table
             return table['c0']
-        
+
         con = duckdb.connect()
+        # This function takes any number of arguments, returning the first column
         con.register_vectorized('varargs', variable_args, None, BIGINT, varargs=True)
         res = con.sql("""select varargs(5, '3', '2', 1, 0.12345)""").fetchall()
         assert res == [(5,)]
+    
+        res = con.sql("""select varargs(42, 'test', [5,4,3])""").fetchall()
+        assert res == [(42,)]
 
     def test_cast_varchar_to_int(self):
         def takes_string(table):
             return table
         con = duckdb.connect()
+        # The return type of the function is set to BIGINT, but it takes a VARCHAR
         con.register_vectorized('pyarrow_string_to_num', takes_string, [VARCHAR], BIGINT)
+
         # Succesful conversion
         res = con.sql("""select pyarrow_string_to_num('5')""").fetchall()
         assert res == [(5,)]
@@ -67,9 +75,11 @@ class TestPyArrowUDF(object):
     def test_return_multiple_columns(self):
         def returns_two_columns(table):
             import pandas as pd
+            # Return a pyarrow table consisting of two columns
             return pa.lib.Table.from_pandas(pd.DataFrame({'a': [5,4,3], 'b': ['test', 'quack', 'duckdb']}))
 
         con = duckdb.connect()
+        # Scalar functions only return a single value per tuple
         con.register_vectorized('two_columns', returns_two_columns, [BIGINT], BIGINT)
         with pytest.raises(duckdb.InvalidInputException, match='The returned table from a pyarrow scalar udf should only contain one column, found 2'):
             res = con.sql("""select two_columns(5)""").fetchall()
@@ -85,6 +95,7 @@ class TestPyArrowUDF(object):
 
     def test_empty_result(self):
         def return_empty(table):
+	        # Always returns an empty table
             return pa.lib.Table.from_arrays([[]], names=['c0'])
 
         con = duckdb.connect()
@@ -94,8 +105,9 @@ class TestPyArrowUDF(object):
 
     def test_excessive_result(self):
         def return_too_many(table):
+	        # Always returns a table consisting of 5 tuples
             return pa.lib.Table.from_arrays([[5,4,3,2,1]], names=['c0'])
-        
+
         con = duckdb.connect()
         con.register_vectorized('too_many_tuples', return_too_many, [BIGINT], BIGINT)
         with pytest.raises(duckdb.InvalidInputException, match='Returned pyarrow table should have 1 tuples, found 5'):
@@ -109,7 +121,8 @@ class TestPyArrowUDF(object):
             """).arrow()
         
         con = duckdb.connect()
-        con.register_vectorized('return_struct', return_struct, [BIGINT], con.struct_type({'a': BIGINT, 'b': VARCHAR, 'c': con.list_type(BIGINT)}))
+        struct_type = con.struct_type({'a': BIGINT, 'b': VARCHAR, 'c': con.list_type(BIGINT)})
+        con.register_vectorized('return_struct', return_struct, [BIGINT], struct_type)
         res = con.sql("""select return_struct(5)""").fetchall()
         assert res == [({'a': 5, 'b': 'test', 'c': [5, 3, 2]},)]
 
@@ -124,6 +137,7 @@ class TestPyArrowUDF(object):
         """).fetchall()
 
         assert len(res) == 5000
+        assert res == con.sql('select * from range(5000)').fetchall()
 
     def test_nulls(self):
         # TODO: provide 'null_handling' option?
