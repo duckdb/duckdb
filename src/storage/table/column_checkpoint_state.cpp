@@ -56,10 +56,14 @@ public:
 		return !first_segment;
 	}
 
-	void Flush() override {
+	void Flush(idx_t free_space_left) override {
 		// At this point, we've already copied all data from tail_segments
 		// into the page owned by first_segment. We flush all segment data to
 		// disk with the following call.
+		if (free_space_left > 0) {
+			auto handle = block_manager.buffer_manager.Pin(first_segment->block);
+			memset(handle.Ptr() + Storage::BLOCK_SIZE - free_space_left, 0, free_space_left);
+		}
 		first_data->IncrementVersion();
 		first_segment->ConvertToPersistent(&block_manager, state.block_id);
 		// Now that the page is persistent, update tail_segments to point to the

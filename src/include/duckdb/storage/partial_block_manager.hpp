@@ -44,7 +44,7 @@ struct PartialBlock {
 	PartialBlockState state;
 
 public:
-	virtual void Flush() = 0;
+	virtual void Flush(idx_t free_space_left) = 0;
 	virtual void Clear() {
 	}
 };

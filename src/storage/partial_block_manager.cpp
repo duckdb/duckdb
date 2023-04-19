@@ -54,7 +54,7 @@ bool PartialBlockManager::GetPartialBlock(idx_t segment_size, unique_ptr<Partial
 }
 
 void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation &&allocation) {
-	auto &state(allocation.partial_block->state);
+	auto &state = allocation.partial_block->state;
 	if (state.block_use_count < max_use_count) {
 		auto new_size = AlignValue(allocation.allocation_size + state.offset_in_block);
 		state.offset_in_block = new_size;
@@ -65,22 +65,24 @@ void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation &&allocati
 			partially_filled_blocks.insert(make_pair(new_space_left, std::move(allocation.partial_block)));
 		}
 	}
+	idx_t free_space = state.block_size - state.offset_in_block;
 	auto block_to_free = std::move(allocation.partial_block);
 	if (!block_to_free && partially_filled_blocks.size() > MAX_BLOCK_MAP_SIZE) {
 		// Free the page with the least space free.
 		auto itr = partially_filled_blocks.begin();
 		block_to_free = std::move(itr->second);
+		free_space = state.block_size - itr->first;
 		partially_filled_blocks.erase(itr);
 	}
 	// Flush any block that we're not going to reuse.
 	if (block_to_free) {
-		block_to_free->Flush();
+		block_to_free->Flush(free_space);
 	}
 }
 
 void PartialBlockManager::FlushPartialBlocks() {
 	for (auto &e : partially_filled_blocks) {
-		e.second->Flush();
+		e.second->Flush(e.first);
 	}
 	partially_filled_blocks.clear();
 }
