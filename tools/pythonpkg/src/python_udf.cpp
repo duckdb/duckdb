@@ -5,8 +5,9 @@
 #include "duckdb_python/vector_conversion.hpp"
 #include "duckdb/function/function.hpp"
 
+namespace duckdb {
+
 namespace {
-using namespace duckdb;
 
 struct ParameterKind {
 	enum class Type : uint8_t { POSITIONAL_ONLY, POSITIONAL_OR_KEYWORD, VAR_POSITIONAL, KEYWORD_ONLY, VAR_KEYWORD };
@@ -30,7 +31,7 @@ struct ParameterKind {
 struct PythonUDFData {
 public:
 	PythonUDFData(const string &name, scalar_function_t func, bool varargs_p, FunctionNullHandling null_handling)
-	    : name(name), func(func), null_handling(null_handling) {
+	    : name(name), func(std::move(func)), null_handling(null_handling) {
 		if (varargs_p) {
 			varargs = LogicalType::ANY;
 		}
@@ -54,7 +55,7 @@ public:
 		}
 	}
 
-	void OverrideReturnType(shared_ptr<DuckDBPyType> type) {
+	void OverrideReturnType(const shared_ptr<DuckDBPyType> &type) {
 		if (!type) {
 			return;
 		}
@@ -127,8 +128,6 @@ public:
 
 }; // namespace
 
-namespace duckdb {
-
 static scalar_function_t CreateFunction(PyObject *function, PythonExceptionHandling exception_handling) {
 	// Through the capture of the lambda, we have access to the function pointer
 	// We just need to make sure that it doesn't get garbage collected
@@ -177,8 +176,9 @@ static scalar_function_t CreateFunction(PyObject *function, PythonExceptionHandl
 }
 
 ScalarFunction DuckDBPyConnection::CreateScalarUDF(const string &name, const py::object &udf,
-                                                   const py::object &parameters, shared_ptr<DuckDBPyType> return_type,
-                                                   bool varargs, FunctionNullHandling null_handling,
+                                                   const py::object &parameters,
+                                                   const shared_ptr<DuckDBPyType> &return_type, bool varargs,
+                                                   FunctionNullHandling null_handling,
                                                    PythonExceptionHandling exception_handling) {
 	scalar_function_t func = CreateFunction(udf.ptr(), exception_handling);
 
