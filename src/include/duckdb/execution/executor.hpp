@@ -12,7 +12,7 @@
 #include "duckdb/common/enums/pending_execution_result.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/pair.hpp"
-#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 
 namespace duckdb {
@@ -43,7 +43,7 @@ public:
 public:
 	static Executor &Get(ClientContext &context);
 
-	void Initialize(PhysicalOperator *physical_plan);
+	void Initialize(PhysicalOperator &physical_plan);
 	void Initialize(unique_ptr<PhysicalOperator> physical_plan);
 
 	void CancelTasks();
@@ -81,7 +81,7 @@ public:
 	}
 	void AddEvent(shared_ptr<Event> event);
 
-	void AddRecursiveCTE(PhysicalOperator *rec_cte);
+	void AddRecursiveCTE(PhysicalOperator &rec_cte);
 	void ReschedulePipelines(const vector<shared_ptr<MetaPipeline>> &pipelines, vector<shared_ptr<Event>> &events);
 
 	//! Whether or not the root of the pipeline is a result collector object
@@ -93,7 +93,7 @@ public:
 	bool ExecutionIsFinished();
 
 private:
-	void InitializeInternal(PhysicalOperator *physical_plan);
+	void InitializeInternal(PhysicalOperator &physical_plan);
 
 	void ScheduleEvents(const vector<shared_ptr<MetaPipeline>> &meta_pipelines);
 	static void ScheduleEventsInternal(ScheduleEventData &event_data);
@@ -106,13 +106,13 @@ private:
 
 	bool NextExecutor();
 
-	shared_ptr<Pipeline> CreateChildPipeline(Pipeline *current, PhysicalOperator *op);
+	shared_ptr<Pipeline> CreateChildPipeline(Pipeline &current, PhysicalOperator &op);
 
 	void VerifyPipeline(Pipeline &pipeline);
 	void VerifyPipelines();
 
 private:
-	PhysicalOperator *physical_plan;
+	optional_ptr<PhysicalOperator> physical_plan;
 	unique_ptr<PhysicalOperator> owned_plan;
 
 	mutex executor_lock;
@@ -122,7 +122,7 @@ private:
 	//! The root pipelines of the query
 	vector<shared_ptr<Pipeline>> root_pipelines;
 	//! The recursive CTE's in this query plan
-	vector<PhysicalOperator *> recursive_ctes;
+	vector<reference<PhysicalOperator>> recursive_ctes;
 	//! The pipeline executor for the root pipeline
 	unique_ptr<PipelineExecutor> root_executor;
 	//! The current root pipeline index

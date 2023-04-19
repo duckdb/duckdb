@@ -35,7 +35,7 @@ public:
 public:
 	static void BuildJoinPipelines(Pipeline &current, MetaPipeline &confluent_pipelines, PhysicalOperator &op);
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
-	vector<const PhysicalOperator *> GetSources() const override;
+	vector<const_reference<PhysicalOperator>> GetSources() const override;
 
 	OrderPreservationType SourceOrder() const override {
 		return OrderPreservationType::NO_ORDER;

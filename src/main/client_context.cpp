@@ -419,7 +419,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 		D_ASSERT(collector->type == PhysicalOperatorType::RESULT_COLLECTOR);
 		executor.Initialize(std::move(collector));
 	} else {
-		executor.Initialize(statement.plan.get());
+		executor.Initialize(*statement.plan);
 	}
 	auto types = executor.GetTypes();
 	D_ASSERT(types == statement.types);
