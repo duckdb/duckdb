@@ -85,7 +85,7 @@ public:
 				}
 			} else {
 				throw InvalidInputException("%d types provided, but the provided function takes %d parameters",
-			                            params.size(), param_count);
+				                            params.size(), param_count);
 			}
 		}
 		D_ASSERT(parameters.empty() || parameters.size() == param_count);
@@ -179,10 +179,7 @@ static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, const string 
 	return py::cast<duckdb::pyarrow::Table>(from_batches_func(single_batch, schema_obj));
 }
 
-static void ConvertPyArrowToDataChunk(const py::object &table, Vector &out, ClientContext &context) {
-	// TODO: make this not allocate anything
-	DataChunk result;
-	result.Initialize(context, {out.GetType()}, STANDARD_VECTOR_SIZE);
+static void ConvertPyArrowToDataChunk(const py::object &table, Vector &out, ClientContext &context, idx_t count) {
 
 	// Create the stream factory from the Table object
 	auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(table.ptr(), context.config);
@@ -211,6 +208,16 @@ static void ConvertPyArrowToDataChunk(const py::object &table, Vector &out, Clie
 
 	auto bind_data = bind(context, bind_input, return_types, return_names);
 
+	if (return_types.size() != 1) {
+		throw InvalidInputException(
+		    "The returned table from a pyarrow scalar udf should only contain one column, found %d",
+		    return_types.size());
+	}
+
+	DataChunk result;
+	// Reserve for STANDARD_VECTOR_SIZE instead of count, in case the returned table contains too many tuples
+	result.Initialize(context, return_types, STANDARD_VECTOR_SIZE);
+
 	vector<column_t> column_ids = {0};
 	TableFunctionInitInput input(bind_data.get(), column_ids, vector<idx_t>(), nullptr);
 	auto global_state = init_global(context, input);
@@ -218,7 +225,10 @@ static void ConvertPyArrowToDataChunk(const py::object &table, Vector &out, Clie
 
 	TableFunctionInput function_input(bind_data.get(), local_state.get(), global_state.get());
 	function(context, function_input, result);
-	out.Reference(result.data[0]);
+	if (result.size() != count) {
+		throw InvalidInputException("Returned pyarrow table should have %d tuples, found %d", count, result.size());
+	}
+	VectorOperations::Cast(context, result.data[0], out, count);
 }
 
 static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExceptionHandling exception_handling) {
@@ -238,6 +248,8 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 		py::tuple bundled_parameters(1);
 		bundled_parameters[0] = pyarrow_table;
 
+		auto count = input.size();
+
 		// Call the function
 		PyObject *ret = nullptr;
 		ret = PyObject_CallObject(function, bundled_parameters.ptr());
@@ -246,9 +258,18 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 			throw InvalidInputException("Python exception occurred while executing the UDF: %s", exception.what());
 		}
 		python_object = py::reinterpret_steal<py::object>(ret);
+		if (!py::isinstance(python_object, py::module_::import("pyarrow").attr("lib").attr("Table"))) {
+			// Try to convert into a table
+			py::list single_array(1);
+			py::list single_name(1);
 
+			single_array[0] = python_object;
+			single_name[0] = "c0";
+			python_object = py::module_::import("pyarrow").attr("lib").attr("Table").attr("from_arrays")(
+			    single_array, py::arg("names") = single_name);
+		}
 		// Convert the pyarrow result back to a DuckDB datachunk
-		ConvertPyArrowToDataChunk(python_object, result, state.GetContext());
+		ConvertPyArrowToDataChunk(python_object, result, state.GetContext(), count);
 
 		if (input.AllConstant()) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);

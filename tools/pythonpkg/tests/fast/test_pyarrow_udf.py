@@ -10,13 +10,10 @@ even_filter = (pc.bit_wise_and(pc.field("nums"), pc.scalar(1)) == pc.scalar(0))
 
 from duckdb.typing import *
 
-# sort an entire chunk of data
-
 class TestPyArrowUDF(object):
 
     def test_basic_use(self):
         def plus_one(x):
-            column = x['c0']
             return x
 
         con = duckdb.connect()
@@ -32,7 +29,7 @@ class TestPyArrowUDF(object):
         res = con.sql('select i, plus_one(i) from test_vector_types(NULL::BIGINT, false) t(i), range(2000)')
         assert len(res) == 22000
 
-    # This only works up to duckdb.__standard_vector_size__
+    # NOTE: This only works up to duckdb.__standard_vector_size__
     def test_sort_table(self):
         def sort_table(table):
             sorted_table = table.sort_by([("c0", "ascending")])
@@ -43,109 +40,101 @@ class TestPyArrowUDF(object):
         res = con.sql("select 100-i as original, sort_table(original) from range(100) tbl(i)").fetchall()
         assert res[0] == (100, 1)
 
-    def test_predicates_pyarrow(self):
-        def is_round(table):
-            res = table.compute(even_filter)
-            return res
+    def test_varargs(self):
+        def variable_args(table):
+            return table['c0']
+        
+        con = duckdb.connect()
+        con.register_vectorized('varargs', variable_args, None, BIGINT, varargs=True)
+        res = con.sql("""select varargs(5, '3', '2', 1, 0.12345)""").fetchall()
+        assert res == [(5,)]
+
+    def test_cast_varchar_to_int(self):
+        def takes_string(table):
+            return table
+        con = duckdb.connect()
+        con.register_vectorized('pyarrow_string_to_num', takes_string, [VARCHAR], BIGINT)
+        # Succesful conversion
+        res = con.sql("""select pyarrow_string_to_num('5')""").fetchall()
+        assert res == [(5,)]
+
+        with pytest.raises(duckdb.ConversionException, match="""Could not convert string 'test' to INT64"""):
+            res = con.sql("""select pyarrow_string_to_num('test')""").fetchall()
+
+    def test_return_multiple_columns(self):
+        def returns_two_columns(table):
+            import pandas as pd
+            return pa.lib.Table.from_pandas(pd.DataFrame({'a': [5,4,3], 'b': ['test', 'quack', 'duckdb']}))
 
         con = duckdb.connect()
-        con.register_vectorized('is_round', is_round, [BIGINT], BIGINT)
-        res = con.sql("select 100-i as original, is_round(original) from range(100) tbl(i)").fetchall()
-        assert res[0] == (100, 1)
+        con.register_vectorized('two_columns', returns_two_columns, [BIGINT], BIGINT)
+        with pytest.raises(duckdb.InvalidInputException, match='The returned table from a pyarrow scalar udf should only contain one column, found 2'):
+            res = con.sql("""select two_columns(5)""").fetchall()
 
-    #def test_detected_parameters(self):
-    #    def concatenate(a: str, b: str):
-    #        return a + b
+    def test_return_none(self):
+        def returns_none(table):
+            return None
+
+        con = duckdb.connect()
+        con.register_vectorized('will_crash', returns_none, [BIGINT], BIGINT)
+        with pytest.raises(duckdb.Error, match="""Invalid Error: TypeError: 'NoneType' object is not iterable"""):
+            res = con.sql("""select will_crash(5)""").fetchall()
+
+    def test_empty_result(self):
+        def return_empty(table):
+            return pa.lib.Table.from_arrays([[]], names=['c0'])
+
+        con = duckdb.connect()
+        con.register_vectorized('empty_result', return_empty, [BIGINT], BIGINT)
+        with pytest.raises(duckdb.InvalidInputException, match='Returned pyarrow table should have 1 tuples, found 0'):
+            res = con.sql("""select empty_result(5)""").fetchall()
+
+    def test_excessive_result(self):
+        def return_too_many(table):
+            return pa.lib.Table.from_arrays([[5,4,3,2,1]], names=['c0'])
         
-    #    con = duckdb.connect()
-    #    con.register_scalar('py_concatenate', concatenate, None, VARCHAR)
-    #    res = con.sql("""
-    #        select py_concatenate('5','3');
-    #    """).fetchall()
-    #    assert res[0][0] == '53'
+        con = duckdb.connect()
+        con.register_vectorized('too_many_tuples', return_too_many, [BIGINT], BIGINT)
+        with pytest.raises(duckdb.InvalidInputException, match='Returned pyarrow table should have 1 tuples, found 5'):
+            res = con.sql("""select too_many_tuples(5)""").fetchall()
 
-    #def test_detected_return_type(self):
-    #    def add_nums(*args) -> int:
-    #        sum = 0;
-    #        for arg in args:
-    #            sum += arg
-    #        return sum
-
-    #    con = duckdb.connect()
-    #    con.register_scalar('add_nums', add_nums)
-    #    res = con.sql("""
-    #        select add_nums(5,3,2,1);
-    #    """).fetchall()
-    #    assert res[0][0] == 11
-
-    #def test_varargs(self):
-    #    def variable_args(*args):
-    #        amount = len(args)
-    #        return amount
+    def test_return_struct(self):
+        def return_struct(table):
+            con = duckdb.connect()
+            return con.sql("""
+                select {'a': 5, 'b': 'test', 'c': [5,3,2]}
+            """).arrow()
         
-    #    con = duckdb.connect()
-    #    con.register_scalar('varargs', variable_args, None, BIGINT, varargs=True)
-    #    res = con.sql("""select varargs('5', '3', '2', 1, 0.12345)""").fetchall()
-    #    assert res == [(5,)]
+        con = duckdb.connect()
+        con.register_vectorized('return_struct', return_struct, [BIGINT], con.struct_type({'a': BIGINT, 'b': VARCHAR, 'c': con.list_type(BIGINT)}))
+        res = con.sql("""select return_struct(5)""").fetchall()
+        assert res == [({'a': 5, 'b': 'test', 'c': [5, 3, 2]},)]
 
-    #def test_overwrite_name(self):
-    #    # TODO: test proper behavior when you register two functions with the same name
+    def test_multiple_chunks(self):
+        def return_unmodified(table):
+            return table
         
-    #    # create first version of the function
+        con = duckdb.connect()
+        con.register_vectorized('unmodified', return_unmodified, [BIGINT], BIGINT)
+        res = con.sql("""
+            select unmodified(i) from range(5000) tbl(i)
+        """).fetchall()
 
-    #    # create relation that uses the function
+        assert len(res) == 5000
 
-    #    # create second version of the function
-
-    #    # create relation that uses the new version
-
-    #    # execute both relations
-    #    pass
-
-    #def test_nulls(self):
-    #    # TODO: provide 'null_handling' option?
-    #    pass
+    def test_nulls(self):
+        # TODO: provide 'null_handling' option?
+        pass
     
-    #def test_exceptions(self):
-    #    # TODO: we likely want an enum to define how exceptions should be handled
-    #    # - propagate:
-    #    #    throw the exception as a duckdb exception
-    #    # - ignore:
-    #    #    return NULL instead
-    #    pass
+    def test_exceptions(self):
+        # TODO: we likely want an enum to define how exceptions should be handled
+        # - propagate:
+        #    throw the exception as a duckdb exception
+        # - ignore:
+        #    return NULL instead
+        pass
 
-    #def test_binding(self):
-    #    # TODO: add a way to do extra binding for the UDF
-    #    pass
-    
-    #def test_structs(self):
-    #    def add_extra_column(original):
-    #        original['a'] = 200
-    #        original['bb'] = 0
-    #        return original
+    def test_binding(self):
+        # TODO: add a way to do extra binding for the UDF
+        pass
 
-    #    con = duckdb.connect()
-    #    range_table = con.table_function('range', [5000])
-    #    con.register_scalar("append_field", add_extra_column, [duckdb.struct_type({'a': BIGINT, 'b': BIGINT})], duckdb.struct_type({'a': BIGINT, 'b': BIGINT, 'c': BIGINT}))
-
-    #    res = con.sql("""
-    #        select append_field({'a': i::BIGINT, 'b': 3::BIGINT}) from range_table tbl(i)
-    #    """)
-    #    # added extra column to the struct
-    #    assert len(res.fetchone()[0].keys()) == 3
-    #    # FIXME: this is needed, otherwise the transaction is still active in 'register_scalar' and we can't begin a new one
-    #    res.fetchall()
-
-    #    def swap_keys(dict):
-    #        result = {}
-    #        reversed_keys = list(dict.keys())
-    #        reversed_keys.reverse()
-    #        for item in reversed_keys:
-    #            result[item] = dict[item]
-    #        return result
-        
-    #    con.register_scalar('swap_keys', swap_keys, [con.struct_type({'a': BIGINT, 'b': VARCHAR})], con.struct_type({'a': VARCHAR, 'b': BIGINT}))
-    #    res = con.sql("""
-    #    select swap_keys({'a': 42, 'b': 'answer_to_life'})
-    #    """).fetchall()
-    #    assert res == [({'a': 'answer_to_life', 'b': 42},)]
