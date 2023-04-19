@@ -1,3 +1,4 @@
+from inspect import Attribute
 import duckdb
 import os
 import pandas as pd
@@ -6,16 +7,16 @@ from typing import Union
 import pyarrow.compute as pc
 import pyarrow as pa
 import pyarrow.compute as pc
-even_filter = (pc.bit_wise_and(pc.field("nums"), pc.scalar(1)) == pc.scalar(0))
 
 from duckdb.typing import *
 
 class TestPyArrowUDF(object):
 
     def test_basic_use(self):
-        def plus_one(x : pa.lib.Table):
+        def plus_one(x):
+            table = pa.lib.Table.from_arrays([x], names=['c0'])
             import pandas as pd
-            df = x.to_pandas()
+            df = pd.DataFrame(x.to_pandas())
             df['c0'] = df['c0'] + 1
             return pa.lib.Table.from_pandas(df)
 
@@ -35,7 +36,8 @@ class TestPyArrowUDF(object):
     # NOTE: This only works up to duckdb.__standard_vector_size__,
     # because we process up to STANDARD_VECTOR_SIZE tuples at a time
     def test_sort_table(self):
-        def sort_table(table):
+        def sort_table(x):
+            table = pa.lib.Table.from_arrays([x], names=['c0'])
             sorted_table = table.sort_by([("c0", "ascending")])
             return sorted_table
 
@@ -45,9 +47,12 @@ class TestPyArrowUDF(object):
         assert res[0] == (100, 1)
 
     def test_varargs(self):
-        def variable_args(table):
-	        # We return a chunked array here, but internally we convert this into a Table
-            return table['c0']
+        def variable_args(*args):
+            # We return a chunked array here, but internally we convert this into a Table
+            if (len(args) == 0):
+                raise ValueError("Expected at least one argument")
+            for item in args:
+                return item
 
         con = duckdb.connect()
         # This function takes any number of arguments, returning the first column
@@ -59,8 +64,8 @@ class TestPyArrowUDF(object):
         assert res == [(42,)]
 
     def test_cast_varchar_to_int(self):
-        def takes_string(table):
-            return table
+        def takes_string(col):
+            return col
         con = duckdb.connect()
         # The return type of the function is set to BIGINT, but it takes a VARCHAR
         con.register_vectorized('pyarrow_string_to_num', takes_string, [VARCHAR], BIGINT)
@@ -73,7 +78,7 @@ class TestPyArrowUDF(object):
             res = con.sql("""select pyarrow_string_to_num('test')""").fetchall()
 
     def test_return_multiple_columns(self):
-        def returns_two_columns(table):
+        def returns_two_columns(col):
             import pandas as pd
             # Return a pyarrow table consisting of two columns
             return pa.lib.Table.from_pandas(pd.DataFrame({'a': [5,4,3], 'b': ['test', 'quack', 'duckdb']}))
@@ -85,7 +90,7 @@ class TestPyArrowUDF(object):
             res = con.sql("""select two_columns(5)""").fetchall()
 
     def test_return_none(self):
-        def returns_none(table):
+        def returns_none(col):
             return None
 
         con = duckdb.connect()
@@ -94,8 +99,8 @@ class TestPyArrowUDF(object):
             res = con.sql("""select will_crash(5)""").fetchall()
 
     def test_empty_result(self):
-        def return_empty(table):
-	        # Always returns an empty table
+        def return_empty(col):
+            # Always returns an empty table
             return pa.lib.Table.from_arrays([[]], names=['c0'])
 
         con = duckdb.connect()
@@ -104,8 +109,8 @@ class TestPyArrowUDF(object):
             res = con.sql("""select empty_result(5)""").fetchall()
 
     def test_excessive_result(self):
-        def return_too_many(table):
-	        # Always returns a table consisting of 5 tuples
+        def return_too_many(col):
+            # Always returns a table consisting of 5 tuples
             return pa.lib.Table.from_arrays([[5,4,3,2,1]], names=['c0'])
 
         con = duckdb.connect()
@@ -114,7 +119,7 @@ class TestPyArrowUDF(object):
             res = con.sql("""select too_many_tuples(5)""").fetchall()
 
     def test_return_struct(self):
-        def return_struct(table):
+        def return_struct(col):
             con = duckdb.connect()
             return con.sql("""
                 select {'a': 5, 'b': 'test', 'c': [5,3,2]}
@@ -127,8 +132,8 @@ class TestPyArrowUDF(object):
         assert res == [({'a': 5, 'b': 'test', 'c': [5, 3, 2]},)]
 
     def test_multiple_chunks(self):
-        def return_unmodified(table):
-            return table
+        def return_unmodified(col):
+            return col
         
         con = duckdb.connect()
         con.register_vectorized('unmodified', return_unmodified, [BIGINT], BIGINT)
@@ -138,6 +143,18 @@ class TestPyArrowUDF(object):
 
         assert len(res) == 5000
         assert res == con.sql('select * from range(5000)').fetchall()
+
+    def test_inferred(self):
+        def func(x: int) -> int:
+            import pandas as pd
+            df = pd.DataFrame({'c0': x})
+            df['c0'] = df['c0'] ** 2
+            return pa.lib.Table.from_pandas(df)
+        
+        con = duckdb.connect()
+        con.register_vectorized('inferred', func)
+        res = con.sql('select inferred(42)').fetchall()
+        assert res == [(1764,)]
 
     def test_nulls(self):
         # TODO: provide 'null_handling' option?

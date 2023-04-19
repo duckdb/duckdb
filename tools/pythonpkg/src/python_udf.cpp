@@ -174,7 +174,6 @@ static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, const string 
 
 	py::list single_batch = ConvertToSingleBatch(timezone_config, types, names, input);
 
-	// We return an Arrow Table
 	return py::cast<duckdb::pyarrow::Table>(from_batches_func(single_batch, schema_obj));
 }
 
@@ -244,14 +243,13 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 			timezone_config = state.GetContext().GetClientProperties().timezone;
 		}
 		auto pyarrow_table = ConvertDataChunkToPyArrowTable(input, timezone_config);
-		py::tuple bundled_parameters(1);
-		bundled_parameters[0] = pyarrow_table;
+		py::tuple column_list = pyarrow_table.attr("columns");
 
 		auto count = input.size();
 
 		// Call the function
 		PyObject *ret = nullptr;
-		ret = PyObject_CallObject(function, bundled_parameters.ptr());
+		ret = PyObject_CallObject(function, column_list.ptr());
 		if (ret == nullptr && PyErr_Occurred()) {
 			auto exception = py::error_already_set();
 			throw InvalidInputException("Python exception occurred while executing the UDF: %s", exception.what());
