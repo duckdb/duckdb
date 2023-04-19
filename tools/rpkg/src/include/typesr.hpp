@@ -120,4 +120,14 @@ struct RBooleanType : public RIntegerType {
 	static bool Convert(int val);
 };
 
+struct RStringSexpType {
+	static string_t Convert(SEXP val);
+	static bool IsNull(SEXP val);
+};
+
+struct RRawSexpType {
+	static string_t Convert(SEXP val);
+	static bool IsNull(SEXP val);
+};
+
 } // namespace duckdb

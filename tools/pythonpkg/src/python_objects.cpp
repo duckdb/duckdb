@@ -251,6 +251,7 @@ Value PyDateTime::ToDuckValue() {
 		// Need to subtract the UTC offset, so we invert the interval
 		utc_offset = Interval::Invert(utc_offset);
 		timestamp = Interval::Add(timestamp, utc_offset);
+		return Value::TIMESTAMPTZ(timestamp);
 	}
 	return Value::TIMESTAMP(timestamp);
 }

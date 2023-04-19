@@ -42,6 +42,9 @@ BaseCSVReader::~BaseCSVReader() {
 unique_ptr<CSVFileHandle> BaseCSVReader::OpenCSV(const BufferedCSVReaderOptions &options_p) {
 	auto file_handle = fs.OpenFile(options_p.file_path.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK,
 	                               options_p.compression, this->opener);
+	if (file_handle->CanSeek()) {
+		file_handle->Reset();
+	}
 	return make_uniq<CSVFileHandle>(std::move(file_handle));
 }
 

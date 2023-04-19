@@ -98,7 +98,7 @@ struct ArgMinMaxState : public ArgMinMaxStateBase {
 template <class COMPARATOR>
 struct ArgMinMaxBase {
 	template <class STATE>
-	static void Destroy(STATE *state) {
+	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
 		state->~STATE();
 	}
 

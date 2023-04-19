@@ -8,8 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
 
 namespace duckdb {
 
@@ -26,18 +26,16 @@ public:
 	// Operator Interface
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
 
+	OrderPreservationType OperatorOrder() const override {
+		return OrderPreservationType::NO_ORDER;
+	}
 	bool ParallelOperator() const override {
 		return true;
 	}
 
 protected:
-	// CachingOperator Interface
 	OperatorResultType ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                                   GlobalOperatorState &gstate, OperatorState &state) const override;
-
-	bool IsOrderPreserving() const override {
-		return false;
-	}
 
 public:
 	// Sink Interface
@@ -51,10 +49,13 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
+	bool SinkOrderDependent() const override {
+		return false;
+	}
 
 public:
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
-	vector<const PhysicalOperator *> GetSources() const override;
+	vector<const_reference<PhysicalOperator>> GetSources() const override;
 };
 
 class CrossProductExecutor {

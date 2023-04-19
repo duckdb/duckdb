@@ -54,7 +54,8 @@ struct StateVector {
 		// destroy objects within the aggregate states
 		auto &aggr = aggr_expr->Cast<BoundAggregateExpression>();
 		if (aggr.function.destructor) {
-			aggr.function.destructor(state_vector, count);
+			AggregateInputData aggr_input_data(aggr.bind_info.get(), Allocator::DefaultAllocator());
+			aggr.function.destructor(state_vector, aggr_input_data, count);
 		}
 	}
 

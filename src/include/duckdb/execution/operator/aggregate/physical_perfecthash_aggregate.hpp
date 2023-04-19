@@ -37,6 +37,13 @@ public:
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
 
+	bool IsSource() const override {
+		return true;
+	}
+	OrderPreservationType SourceOrder() const override {
+		return OrderPreservationType::NO_ORDER;
+	}
+
 public:
 	// Sink interface
 	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
@@ -59,7 +66,7 @@ public:
 		return true;
 	}
 
-	bool IsOrderPreserving() const override {
+	bool SinkOrderDependent() const override {
 		return false;
 	}
 

@@ -977,6 +977,7 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 		throw IOException("Cannot use multiple \'**\' in one path");
 	}
 
+	bool recursive_search = false;
 	for (idx_t i = absolute_path ? 1 : 0; i < splits.size(); i++) {
 		bool is_last_chunk = i + 1 == splits.size();
 		bool has_glob = HasGlob(splits[i]);
@@ -988,12 +989,22 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 			if (previous_directories.empty()) {
 				result.push_back(splits[i]);
 			} else {
-				for (auto &prev_directory : previous_directories) {
-					result.push_back(JoinPath(prev_directory, splits[i]));
+				if (recursive_search && is_last_chunk) {
+					for (auto &prev_directory : previous_directories) {
+						const string filename = JoinPath(prev_directory, splits[i]);
+						if (FileExists(filename) || DirectoryExists(filename)) {
+							result.push_back(filename);
+						}
+					}
+				} else {
+					for (auto &prev_directory : previous_directories) {
+						result.push_back(JoinPath(prev_directory, splits[i]));
+					}
 				}
 			}
 		} else {
 			if (IsCrawl(splits[i])) {
+				recursive_search = true;
 				if (!is_last_chunk) {
 					result = previous_directories;
 				}

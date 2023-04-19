@@ -68,9 +68,9 @@ struct FirstFunction : public FirstFunctionBase {
 template <bool LAST, bool SKIP_NULLS>
 struct FirstFunctionString : public FirstFunctionBase {
 	template <class STATE>
-	static void SetValue(STATE *state, string_t value, bool is_null) {
+	static void SetValue(STATE *state, AggregateInputData &input_data, string_t value, bool is_null) {
 		if (LAST && state->is_set) {
-			Destroy(state);
+			Destroy(input_data, state);
 		}
 		if (is_null) {
 			if (!SKIP_NULLS) {
@@ -94,9 +94,10 @@ struct FirstFunctionString : public FirstFunctionBase {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &input_data, INPUT_TYPE *input, ValidityMask &mask,
+	                      idx_t idx) {
 		if (LAST || !state->is_set) {
-			SetValue(state, input[idx], !mask.RowIsValid(idx));
+			SetValue(state, input_data, input[idx], !mask.RowIsValid(idx));
 		}
 	}
 
@@ -107,9 +108,9 @@ struct FirstFunctionString : public FirstFunctionBase {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &input_data) {
 		if (source.is_set && (LAST || !target->is_set)) {
-			SetValue(target, source.value, source.is_null);
+			SetValue(target, input_data, source.value, source.is_null);
 		}
 	}
 
@@ -123,7 +124,7 @@ struct FirstFunctionString : public FirstFunctionBase {
 	}
 
 	template <class STATE>
-	static void Destroy(STATE *state) {
+	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
 		if (state->is_set && !state->is_null && !state->value.IsInlined()) {
 			delete[] state->value.GetDataUnsafe();
 		}
@@ -142,7 +143,7 @@ struct FirstVectorFunction {
 	}
 
 	template <class STATE>
-	static void Destroy(STATE *state) {
+	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
 		if (state->value) {
 			delete state->value;
 		}

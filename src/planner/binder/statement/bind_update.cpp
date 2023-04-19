@@ -135,8 +135,8 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 
 // This creates a LogicalProjection and moves 'root' into it as a child
 // unless there are no expressions to project, in which case it just returns 'root'
-unique_ptr<LogicalOperator> Binder::BindUpdateSet(LogicalOperator *op, unique_ptr<LogicalOperator> root,
-                                                  UpdateSetInfo &set_info, TableCatalogEntry *table,
+unique_ptr<LogicalOperator> Binder::BindUpdateSet(LogicalOperator &op, unique_ptr<LogicalOperator> root,
+                                                  UpdateSetInfo &set_info, TableCatalogEntry &table,
                                                   vector<PhysicalIndex> &columns) {
 	auto proj_index = GenerateTableIndex();
 
@@ -145,10 +145,10 @@ unique_ptr<LogicalOperator> Binder::BindUpdateSet(LogicalOperator *op, unique_pt
 	for (idx_t i = 0; i < set_info.columns.size(); i++) {
 		auto &colname = set_info.columns[i];
 		auto &expr = set_info.expressions[i];
-		if (!table->ColumnExists(colname)) {
+		if (!table.ColumnExists(colname)) {
 			throw BinderException("Referenced update column %s not found in table!", colname);
 		}
-		auto &column = table->GetColumn(colname);
+		auto &column = table.GetColumn(colname);
 		if (column.Generated()) {
 			throw BinderException("Cant update column \"%s\" because it is a generated column!", column.Name());
 		}
@@ -157,19 +157,19 @@ unique_ptr<LogicalOperator> Binder::BindUpdateSet(LogicalOperator *op, unique_pt
 		}
 		columns.push_back(column.Physical());
 		if (expr->type == ExpressionType::VALUE_DEFAULT) {
-			op->expressions.push_back(make_uniq<BoundDefaultExpression>(column.Type()));
+			op.expressions.push_back(make_uniq<BoundDefaultExpression>(column.Type()));
 		} else {
 			UpdateBinder binder(*this, context);
 			binder.target_type = column.Type();
 			auto bound_expr = binder.Bind(expr);
 			PlanSubqueries(&bound_expr, &root);
 
-			op->expressions.push_back(make_uniq<BoundColumnRefExpression>(
+			op.expressions.push_back(make_uniq<BoundColumnRefExpression>(
 			    bound_expr->return_type, ColumnBinding(proj_index, projection_expressions.size())));
 			projection_expressions.push_back(std::move(bound_expr));
 		}
 	}
-	if (op->type != LogicalOperatorType::LOGICAL_UPDATE && projection_expressions.empty()) {
+	if (op.type != LogicalOperatorType::LOGICAL_UPDATE && projection_expressions.empty()) {
 		return root;
 	}
 	// now create the projection
@@ -181,7 +181,6 @@ unique_ptr<LogicalOperator> Binder::BindUpdateSet(LogicalOperator *op, unique_pt
 BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	BoundStatement result;
 	unique_ptr<LogicalOperator> root;
-	LogicalGet *get;
 
 	// visit the table reference
 	auto bound_table = Bind(*stmt.table);
@@ -189,28 +188,28 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		throw BinderException("Can only update base table!");
 	}
 	auto &table_binding = bound_table->Cast<BoundBaseTableRef>();
-	;
-	auto table = table_binding.table;
+	auto &table = table_binding.table;
 
 	// Add CTEs as bindable
 	AddCTEMap(stmt.cte_map);
 
+	optional_ptr<LogicalGet> get;
 	if (stmt.from_table) {
 		auto from_binder = Binder::CreateBinder(context, this);
 		BoundJoinRef bound_crossproduct(JoinRefType::CROSS);
 		bound_crossproduct.left = std::move(bound_table);
 		bound_crossproduct.right = from_binder->Bind(*stmt.from_table);
 		root = CreatePlan(bound_crossproduct);
-		get = (LogicalGet *)root->children[0].get();
+		get = &root->children[0]->Cast<LogicalGet>();
 		bind_context.AddContext(std::move(from_binder->bind_context));
 	} else {
 		root = CreatePlan(*bound_table);
-		get = (LogicalGet *)root.get();
+		get = &root->Cast<LogicalGet>();
 	}
 
-	if (!table->temporary) {
+	if (!table.temporary) {
 		// update of persistent table: not read only!
-		properties.modified_databases.insert(table->catalog->GetName());
+		properties.modified_databases.insert(table.catalog->GetName());
 	}
 	auto update = make_uniq<LogicalUpdate>(table);
 
@@ -219,7 +218,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		update->return_chunk = true;
 	}
 	// bind the default values
-	BindDefaultValues(table->GetColumns(), update->bound_defaults);
+	BindDefaultValues(table.GetColumns(), update->bound_defaults);
 
 	// project any additional columns required for the condition/expressions
 	if (stmt.set_info->condition) {
@@ -235,12 +234,12 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	D_ASSERT(stmt.set_info);
 	D_ASSERT(stmt.set_info->columns.size() == stmt.set_info->expressions.size());
 
-	auto proj_tmp = BindUpdateSet(update.get(), std::move(root), *stmt.set_info, table, update->columns);
+	auto proj_tmp = BindUpdateSet(*update, std::move(root), *stmt.set_info, table, update->columns);
 	D_ASSERT(proj_tmp->type == LogicalOperatorType::LOGICAL_PROJECTION);
 	auto proj = unique_ptr_cast<LogicalOperator, LogicalProjection>(std::move(proj_tmp));
 
 	// bind any extra columns necessary for CHECK constraints or indexes
-	BindUpdateConstraints(*table, *get, *proj, *update);
+	BindUpdateConstraints(table, *get, *proj, *update);
 	// finally add the row id column to the projection list
 	proj->expressions.push_back(make_uniq<BoundColumnRefExpression>(
 	    LogicalType::ROW_TYPE, ColumnBinding(get->table_index, get->column_ids.size())));

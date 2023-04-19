@@ -50,7 +50,7 @@ insert into pixel
     select
         1 as image_id,
         r % 500 as x,
-        r / 500 as y,
+        r // 500 as y,
         random() * 255 as red,
         random() * 255 as green,
         random() * 255 as blue

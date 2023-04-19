@@ -2,9 +2,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/common/value_operations/value_operations.hpp"
-#include "duckdb/common/vector_operations/aggregate_executor.hpp"
-#include "duckdb/common/operator/aggregate_operators.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/planner/expression.hpp"
 
@@ -57,24 +54,25 @@ struct MinMaxBase {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask,
+	static void ConstantOperation(STATE *state, AggregateInputData &input_data, INPUT_TYPE *input, ValidityMask &mask,
 	                              idx_t count) {
 		D_ASSERT(mask.RowIsValid(0));
 		if (!state->isset) {
-			OP::template Assign<INPUT_TYPE, STATE>(state, input[0]);
+			OP::template Assign<INPUT_TYPE, STATE>(state, input_data, input[0]);
 			state->isset = true;
 		} else {
-			OP::template Execute<INPUT_TYPE, STATE>(state, input[0]);
+			OP::template Execute<INPUT_TYPE, STATE>(state, input_data, input[0]);
 		}
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &input_data, INPUT_TYPE *input, ValidityMask &mask,
+	                      idx_t idx) {
 		if (!state->isset) {
-			OP::template Assign<INPUT_TYPE, STATE>(state, input[idx]);
+			OP::template Assign<INPUT_TYPE, STATE>(state, input_data, input[idx]);
 			state->isset = true;
 		} else {
-			OP::template Execute<INPUT_TYPE, STATE>(state, input[idx]);
+			OP::template Execute<INPUT_TYPE, STATE>(state, input_data, input[idx]);
 		}
 	}
 
@@ -85,7 +83,7 @@ struct MinMaxBase {
 
 struct NumericMinMaxBase : public MinMaxBase {
 	template <class INPUT_TYPE, class STATE>
-	static void Assign(STATE *state, INPUT_TYPE input) {
+	static void Assign(STATE *state, AggregateInputData &, INPUT_TYPE input) {
 		state->value = input;
 	}
 
@@ -98,7 +96,7 @@ struct NumericMinMaxBase : public MinMaxBase {
 
 struct MinOperation : public NumericMinMaxBase {
 	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE *state, INPUT_TYPE input) {
+	static void Execute(STATE *state, AggregateInputData &, INPUT_TYPE input) {
 		if (LessThan::Operation<INPUT_TYPE>(input, state->value)) {
 			state->value = input;
 		}
@@ -121,7 +119,7 @@ struct MinOperation : public NumericMinMaxBase {
 
 struct MaxOperation : public NumericMinMaxBase {
 	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE *state, INPUT_TYPE input) {
+	static void Execute(STATE *state, AggregateInputData &, INPUT_TYPE input) {
 		if (GreaterThan::Operation<INPUT_TYPE>(input, state->value)) {
 			state->value = input;
 		}
@@ -144,15 +142,15 @@ struct MaxOperation : public NumericMinMaxBase {
 
 struct StringMinMaxBase : public MinMaxBase {
 	template <class STATE>
-	static void Destroy(STATE *state) {
+	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
 		if (state->isset && !state->value.IsInlined()) {
 			delete[] state->value.GetDataUnsafe();
 		}
 	}
 
 	template <class INPUT_TYPE, class STATE>
-	static void Assign(STATE *state, INPUT_TYPE input) {
-		Destroy(state);
+	static void Assign(STATE *state, AggregateInputData &input_data, INPUT_TYPE input) {
+		Destroy(input_data, state);
 		if (input.IsInlined()) {
 			state->value = input;
 		} else {
@@ -175,35 +173,35 @@ struct StringMinMaxBase : public MinMaxBase {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &input_data) {
 		if (!source.isset) {
 			// source is NULL, nothing to do
 			return;
 		}
 		if (!target->isset) {
 			// target is NULL, use source value directly
-			Assign(target, source.value);
+			Assign(target, input_data, source.value);
 			target->isset = true;
 		} else {
-			OP::template Execute<string_t, STATE>(target, source.value);
+			OP::template Execute<string_t, STATE>(target, input_data, source.value);
 		}
 	}
 };
 
 struct MinOperationString : public StringMinMaxBase {
 	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE *state, INPUT_TYPE input) {
+	static void Execute(STATE *state, AggregateInputData &input_data, INPUT_TYPE input) {
 		if (LessThan::Operation<INPUT_TYPE>(input, state->value)) {
-			Assign(state, input);
+			Assign(state, input_data, input);
 		}
 	}
 };
 
 struct MaxOperationString : public StringMinMaxBase {
 	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE *state, INPUT_TYPE input) {
+	static void Execute(STATE *state, AggregateInputData &input_data, INPUT_TYPE input) {
 		if (GreaterThan::Operation<INPUT_TYPE>(input, state->value)) {
-			Assign(state, input);
+			Assign(state, input_data, input);
 		}
 	}
 };
@@ -386,7 +384,7 @@ struct VectorMinMaxBase {
 	}
 
 	template <class STATE>
-	static void Destroy(STATE *state) {
+	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
 		if (state->value) {
 			delete state->value;
 		}

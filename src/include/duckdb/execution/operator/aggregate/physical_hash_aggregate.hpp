@@ -93,12 +93,15 @@ public:
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
 
+	bool IsSource() const override {
+		return true;
+	}
 	bool ParallelSource() const override {
 		return true;
 	}
 
-	bool IsOrderPreserving() const override {
-		return false;
+	OrderPreservationType SourceOrder() const override {
+		return OrderPreservationType::NO_ORDER;
 	}
 
 public:
@@ -120,6 +123,10 @@ public:
 
 	bool ParallelSink() const override {
 		return true;
+	}
+
+	bool SinkOrderDependent() const override {
+		return false;
 	}
 
 public:

@@ -30,6 +30,7 @@ add_library_unity(
   string_split.cpp
   mismatches.cpp
   levenshtein.cpp
+  damerau_levenshtein.cpp
   jaccard.cpp
   jaro_winkler.cpp
   hex.cpp)
