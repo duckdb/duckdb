@@ -23,25 +23,27 @@ void TransformDuckToArrowChunk(ArrowSchema &arrow_schema, ArrowArray &data, py::
 
 void VerifyArrowDatasetLoaded() {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	if (!import_cache.arrow().dataset.IsLoaded()) {
+	if (!import_cache.arrow_dataset().IsLoaded()) {
 		throw InvalidInputException("Optional module 'pyarrow.dataset' is required to perform this action");
 	}
 }
 
 PyArrowObjectType GetArrowType(const py::handle &obj) {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-
-	auto scanner_class = import_cache.arrow().dataset.Scanner();
-	auto table_class = import_cache.arrow().lib.Table();
-	auto record_batch_reader_class = import_cache.arrow().lib.RecordBatchReader();
-	auto dataset_class = import_cache.arrow().dataset.Dataset();
-
-	if (py::isinstance(obj, scanner_class)) {
-		return PyArrowObjectType::Scanner;
-	} else if (py::isinstance(obj, table_class)) {
+	// First Verify Lib Types
+	auto table_class = import_cache.arrow_lib().Table();
+	auto record_batch_reader_class = import_cache.arrow_lib().RecordBatchReader();
+	if (py::isinstance(obj, table_class)) {
 		return PyArrowObjectType::Table;
 	} else if (py::isinstance(obj, record_batch_reader_class)) {
 		return PyArrowObjectType::RecordBatchReader;
+	}
+	// Then Verify dataset types
+	auto dataset_class = import_cache.arrow_dataset().Dataset();
+	auto scanner_class = import_cache.arrow_dataset().Scanner();
+
+	if (py::isinstance(obj, scanner_class)) {
+		return PyArrowObjectType::Scanner;
 	} else if (py::isinstance(obj, dataset_class)) {
 		return PyArrowObjectType::Dataset;
 	}
@@ -76,8 +78,6 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
 	D_ASSERT(factory->arrow_object);
 	py::handle arrow_obj_handle(factory->arrow_object);
 	auto arrow_object_type = GetArrowType(arrow_obj_handle);
-
-	VerifyArrowDatasetLoaded();
 
 	py::object scanner;
 	py::object arrow_batch_scanner = py::module_::import("pyarrow.dataset").attr("Scanner").attr("from_batches");
@@ -120,12 +120,21 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
 
 void PythonTableArrowArrayStreamFactory::GetSchema(uintptr_t factory_ptr, ArrowSchemaWrapper &schema) {
 	py::gil_scoped_acquire acquire;
-
-	VerifyArrowDatasetLoaded();
 	PythonTableArrowArrayStreamFactory *factory = (PythonTableArrowArrayStreamFactory *)factory_ptr;
 	D_ASSERT(factory->arrow_object);
-	auto scanner_class = py::module::import("pyarrow.dataset").attr("Scanner");
+	auto table_class = py::module::import("pyarrow").attr("Table");
 	py::handle arrow_obj_handle(factory->arrow_object);
+	if (py::isinstance(arrow_obj_handle, table_class)) {
+		auto obj_schema = arrow_obj_handle.attr("schema");
+		auto export_to_c = obj_schema.attr("_export_to_c");
+		export_to_c((uint64_t)&schema);
+		return;
+	}
+
+	VerifyArrowDatasetLoaded();
+
+	auto scanner_class = py::module::import("pyarrow.dataset").attr("Scanner");
+
 	if (py::isinstance(arrow_obj_handle, scanner_class)) {
 		auto obj_schema = arrow_obj_handle.attr("projected_schema");
 		auto export_to_c = obj_schema.attr("_export_to_c");

@@ -5,8 +5,7 @@
 
 namespace duckdb {
 void BoundCreateTableInfo::Serialize(Serializer &serializer) const {
-	D_ASSERT(schema);
-	schema->Serialize(serializer);
+	schema.Serialize(serializer);
 	serializer.WriteOptional(base);
 
 	// TODO[YLM]: Review if we want/need to serialize more of the fields.
@@ -35,11 +34,11 @@ void BoundCreateTableInfo::Serialize(Serializer &serializer) const {
 
 unique_ptr<BoundCreateTableInfo> BoundCreateTableInfo::Deserialize(Deserializer &source,
                                                                    PlanDeserializationState &state) {
+	auto &context = state.context;
 	auto create_info = SchemaCatalogEntry::Deserialize(source);
 	auto schema_name = create_info->schema;
-	auto result = make_uniq<BoundCreateTableInfo>(std::move(create_info));
-	auto &context = state.context;
-	result->schema = Catalog::GetSchema(context, INVALID_CATALOG, schema_name);
+	auto schema = Catalog::GetSchema(context, INVALID_CATALOG, schema_name);
+	auto result = make_uniq<BoundCreateTableInfo>(*schema, std::move(create_info));
 	result->base = source.ReadOptional<CreateInfo>();
 
 	source.ReadList<Constraint>(result->constraints);

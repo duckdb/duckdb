@@ -1493,17 +1493,17 @@ bool DuckDBPyConnection::IsPandasDataframe(const py::object &object) {
 	if (!ModuleIsLoaded<PandasCacheItem>()) {
 		return false;
 	}
-	auto &import_cache_py = *DuckDBPyConnection::ImportCache();
-	return import_cache_py.pandas().DataFrame.IsInstance(object);
+	auto &py_import_cache = *DuckDBPyConnection::ImportCache();
+	return py_import_cache.pandas().DataFrame.IsInstance(object);
 }
 
 bool DuckDBPyConnection::IsPolarsDataframe(const py::object &object) {
 	if (!ModuleIsLoaded<PolarsCacheItem>()) {
 		return false;
 	}
-	auto &import_cache_py = *DuckDBPyConnection::ImportCache();
-	return import_cache_py.polars().DataFrame.IsInstance(object) ||
-	       import_cache_py.polars().LazyFrame.IsInstance(object);
+	auto &py_import_cache = *DuckDBPyConnection::ImportCache();
+	return py_import_cache.polars().DataFrame.IsInstance(object) ||
+	       py_import_cache.polars().LazyFrame.IsInstance(object);
 }
 
 bool IsValidNumpyDimensions(const py::handle &object, int &dim) {
@@ -1557,14 +1557,29 @@ NumpyObjectType DuckDBPyConnection::IsAcceptedNumpyObject(const py::object &obje
 }
 
 bool DuckDBPyConnection::IsAcceptedArrowObject(const py::object &object) {
-	if (!ModuleIsLoaded<ArrowCacheItem>()) {
+	if (!ModuleIsLoaded<ArrowLibCacheItem>()) {
 		return false;
 	}
-	auto &import_cache_py = *DuckDBPyConnection::ImportCache();
-	return import_cache_py.arrow().lib.Table.IsInstance(object) ||
-	       import_cache_py.arrow().lib.RecordBatchReader.IsInstance(object) ||
-	       import_cache_py.arrow().dataset.Dataset.IsInstance(object) ||
-	       import_cache_py.arrow().dataset.Scanner.IsInstance(object);
+	auto &py_import_cache = *DuckDBPyConnection::ImportCache();
+	if (py_import_cache.arrow_lib().Table.IsInstance(object) ||
+	    py_import_cache.arrow_lib().RecordBatchReader.IsInstance(object)) {
+		return true;
+	}
+	if (!ModuleIsLoaded<ArrowDatasetCacheItem>()) {
+		return false;
+	}
+	return py_import_cache.arrow_dataset().Dataset.IsInstance(object) ||
+	       py_import_cache.arrow_dataset().Scanner.IsInstance(object);
+}
+
+unique_lock<std::mutex> DuckDBPyConnection::AcquireConnectionLock() {
+	// we first release the gil and then acquire the connection lock
+	unique_lock<std::mutex> lock(py_connection_lock, std::defer_lock);
+	{
+		py::gil_scoped_release release;
+		lock.lock();
+	}
+	return lock;
 }
 
 } // namespace duckdb
