@@ -143,8 +143,6 @@ struct DBConfigOptions {
 	bool allow_unsigned_extensions = false;
 	//! Enable emitting FSST Vectors
 	bool enable_fsst_vectors = false;
-	//! Experimental parallel CSV reader
-	bool experimental_parallel_csv_reader = false;
 	//! Start transactions immediately in all attached databases - instead of lazily when a database is referenced
 	bool immediate_transaction_mode = false;
 	//! The set of unrecognized (other) options
@@ -217,9 +215,9 @@ public:
 	DUCKDB_API static idx_t ParseMemoryLimit(const string &arg);
 
 	//! Return the list of possible compression functions for the specific physical type
-	DUCKDB_API vector<CompressionFunction *> GetCompressionFunctions(PhysicalType data_type);
+	DUCKDB_API vector<reference<CompressionFunction>> GetCompressionFunctions(PhysicalType data_type);
 	//! Return the compression function for the specified compression type/physical type combo
-	DUCKDB_API CompressionFunction *GetCompressionFunction(CompressionType type, PhysicalType data_type);
+	DUCKDB_API optional_ptr<CompressionFunction> GetCompressionFunction(CompressionType type, PhysicalType data_type);
 
 	bool operator==(const DBConfig &other);
 	bool operator!=(const DBConfig &other);

@@ -24,7 +24,6 @@ public:
 	void UndoAlter(ClientContext &context, AlterInfo *info) override;
 	//! Returns the underlying storage of the table
 	DataTable &GetStorage() override;
-	DataTable *GetStoragePtr() override;
 	//! Returns a list of the bound constraints of the table
 	const vector<unique_ptr<BoundConstraint>> &GetBoundConstraints() override;
 
@@ -42,7 +41,7 @@ public:
 
 	TableStorageInfo GetStorageInfo(ClientContext &context) override;
 
-	bool IsDuckTable() override {
+	bool IsDuckTable() const override {
 		return true;
 	}
 

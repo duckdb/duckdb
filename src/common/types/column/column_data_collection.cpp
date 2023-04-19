@@ -970,7 +970,7 @@ struct ValueResultEquals {
 };
 
 bool ColumnDataCollection::ResultEquals(const ColumnDataCollection &left, const ColumnDataCollection &right,
-                                        string &error_message) {
+                                        string &error_message, bool ordered) {
 	if (left.ColumnCount() != right.ColumnCount()) {
 		error_message = "Column count mismatch";
 		return false;
@@ -985,6 +985,7 @@ bool ColumnDataCollection::ResultEquals(const ColumnDataCollection &left, const 
 		for (idx_t c = 0; c < left.ColumnCount(); c++) {
 			auto lvalue = left_rows.GetValue(c, r);
 			auto rvalue = right_rows.GetValue(c, r);
+
 			if (!Value::DefaultValuesAreEqual(lvalue, rvalue)) {
 				error_message =
 				    StringUtil::Format("%s <> %s (row: %lld, col: %lld)\n", lvalue.ToString(), rvalue.ToString(), r, c);
@@ -992,7 +993,11 @@ bool ColumnDataCollection::ResultEquals(const ColumnDataCollection &left, const 
 			}
 		}
 		if (!error_message.empty()) {
-			break;
+			if (ordered) {
+				return false;
+			} else {
+				break;
+			}
 		}
 	}
 	if (!error_message.empty()) {

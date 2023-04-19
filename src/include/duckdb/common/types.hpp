@@ -10,7 +10,6 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/constants.hpp"
-#include "duckdb/common/single_thread_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 
 #include <limits>

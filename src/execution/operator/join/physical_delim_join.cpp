@@ -12,7 +12,7 @@
 namespace duckdb {
 
 PhysicalDelimJoin::PhysicalDelimJoin(vector<LogicalType> types, unique_ptr<PhysicalOperator> original_join,
-                                     vector<PhysicalOperator *> delim_scans, idx_t estimated_cardinality)
+                                     vector<const_reference<PhysicalOperator>> delim_scans, idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::DELIM_JOIN, std::move(types), estimated_cardinality),
       join(std::move(original_join)), delim_scans(std::move(delim_scans)) {
 	D_ASSERT(join->children.size() == 2);
@@ -27,13 +27,13 @@ PhysicalDelimJoin::PhysicalDelimJoin(vector<LogicalType> types, unique_ptr<Physi
 	join->children[0] = std::move(cached_chunk_scan);
 }
 
-vector<PhysicalOperator *> PhysicalDelimJoin::GetChildren() const {
-	vector<PhysicalOperator *> result;
+vector<const_reference<PhysicalOperator>> PhysicalDelimJoin::GetChildren() const {
+	vector<const_reference<PhysicalOperator>> result;
 	for (auto &child : children) {
-		result.push_back(child.get());
+		result.push_back(*child);
 	}
-	result.push_back(join.get());
-	result.push_back(distinct.get());
+	result.push_back(*join);
+	result.push_back(*distinct);
 	return result;
 }
 
@@ -46,7 +46,7 @@ public:
 	    : lhs_data(context, delim_join.children[0]->GetTypes()) {
 		D_ASSERT(delim_join.delim_scans.size() > 0);
 		// set up the delim join chunk to scan in the original join
-		auto &cached_chunk_scan = (PhysicalColumnDataScan &)*delim_join.join->children[0];
+		auto &cached_chunk_scan = delim_join.join->children[0]->Cast<PhysicalColumnDataScan>();
 		cached_chunk_scan.collection = &lhs_data;
 	}
 
@@ -124,8 +124,8 @@ void PhysicalDelimJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pip
 	op_state.reset();
 	sink_state.reset();
 
-	auto child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, this);
-	child_meta_pipeline->Build(*children[0]);
+	auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
+	child_meta_pipeline.Build(*children[0]);
 
 	if (type == PhysicalOperatorType::DELIM_JOIN) {
 		// recurse into the actual join
@@ -134,7 +134,8 @@ void PhysicalDelimJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pip
 		// we add an entry to the mapping of (PhysicalOperator*) -> (Pipeline*)
 		auto &state = meta_pipeline.GetState();
 		for (auto &delim_scan : delim_scans) {
-			state.delim_join_dependencies[delim_scan] = child_meta_pipeline->GetBasePipeline().get();
+			state.delim_join_dependencies.insert(
+			    make_pair(delim_scan, reference<Pipeline>(*child_meta_pipeline.GetBasePipeline())));
 		}
 		join->BuildPipelines(current, meta_pipeline);
 	}

@@ -20,7 +20,7 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
                                                                  CompressionType compression_type,
                                                                  BaseStatistics statistics) {
 	auto &config = DBConfig::GetConfig(db);
-	CompressionFunction *function;
+	optional_ptr<CompressionFunction> function;
 	shared_ptr<BlockHandle> block;
 	if (block_id == INVALID_BLOCK) {
 		// constant segment, no need to allocate an actual block
@@ -30,7 +30,7 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
 		block = block_manager.RegisterBlock(block_id);
 	}
 	auto segment_size = Storage::BLOCK_SIZE;
-	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::PERSISTENT, start, count, function,
+	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::PERSISTENT, start, count, *function,
 	                                std::move(statistics), block_id, offset, segment_size);
 }
 
@@ -46,7 +46,7 @@ unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance
 	} else {
 		buffer_manager.Allocate(segment_size, false, &block);
 	}
-	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::TRANSIENT, start, 0, function,
+	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::TRANSIENT, start, 0, *function,
 	                                BaseStatistics::CreateEmpty(type), INVALID_BLOCK, 0, segment_size);
 }
 
@@ -55,15 +55,14 @@ unique_ptr<ColumnSegment> ColumnSegment::CreateSegment(ColumnSegment &other, idx
 }
 
 ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, LogicalType type_p,
-                             ColumnSegmentType segment_type, idx_t start, idx_t count, CompressionFunction *function_p,
+                             ColumnSegmentType segment_type, idx_t start, idx_t count, CompressionFunction &function_p,
                              BaseStatistics statistics, block_id_t block_id_p, idx_t offset_p, idx_t segment_size_p)
     : SegmentBase<ColumnSegment>(start, count), db(db), type(std::move(type_p)),
       type_size(GetTypeIdSize(type.InternalType())), segment_type(segment_type), function(function_p),
       stats(std::move(statistics)), block(std::move(block)), block_id(block_id_p), offset(offset_p),
       segment_size(segment_size_p) {
-	D_ASSERT(function);
-	if (function->init_segment) {
-		segment_state = function->init_segment(*this, block_id);
+	if (function.get().init_segment) {
+		segment_state = function.get().init_segment(*this, block_id);
 	}
 }
 
@@ -81,7 +80,7 @@ ColumnSegment::~ColumnSegment() {
 // Scan
 //===--------------------------------------------------------------------===//
 void ColumnSegment::InitializeScan(ColumnScanState &state) {
-	state.scan_state = function->init_scan(*this);
+	state.scan_state = function.get().init_scan(*this);
 }
 
 void ColumnSegment::Scan(ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset,
@@ -97,23 +96,23 @@ void ColumnSegment::Scan(ColumnScanState &state, idx_t scan_count, Vector &resul
 }
 
 void ColumnSegment::Skip(ColumnScanState &state) {
-	function->skip(*this, state, state.row_index - state.internal_index);
+	function.get().skip(*this, state, state.row_index - state.internal_index);
 	state.internal_index = state.row_index;
 }
 
 void ColumnSegment::Scan(ColumnScanState &state, idx_t scan_count, Vector &result) {
-	function->scan_vector(*this, state, scan_count, result);
+	function.get().scan_vector(*this, state, scan_count, result);
 }
 
 void ColumnSegment::ScanPartial(ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset) {
-	function->scan_partial(*this, state, scan_count, result, result_offset);
+	function.get().scan_partial(*this, state, scan_count, result, result_offset);
 }
 
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
 void ColumnSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
-	function->fetch_row(*this, state, row_id - this->start, result, result_idx);
+	function.get().fetch_row(*this, state, row_id - this->start, result, result_idx);
 }
 
 //===--------------------------------------------------------------------===//
@@ -138,34 +137,34 @@ void ColumnSegment::Resize(idx_t new_size) {
 
 void ColumnSegment::InitializeAppend(ColumnAppendState &state) {
 	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
-	if (!function->init_append) {
+	if (!function.get().init_append) {
 		throw InternalException("Attempting to init append to a segment without init_append method");
 	}
-	state.append_state = function->init_append(*this);
+	state.append_state = function.get().init_append(*this);
 }
 
 idx_t ColumnSegment::Append(ColumnAppendState &state, UnifiedVectorFormat &append_data, idx_t offset, idx_t count) {
 	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
-	if (!function->append) {
+	if (!function.get().append) {
 		throw InternalException("Attempting to append to a segment without append method");
 	}
-	return function->append(*state.append_state, *this, stats, append_data, offset, count);
+	return function.get().append(*state.append_state, *this, stats, append_data, offset, count);
 }
 
 idx_t ColumnSegment::FinalizeAppend(ColumnAppendState &state) {
 	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
-	if (!function->finalize_append) {
+	if (!function.get().finalize_append) {
 		throw InternalException("Attempting to call FinalizeAppend on a segment without a finalize_append method");
 	}
-	auto result_count = function->finalize_append(*this, stats);
+	auto result_count = function.get().finalize_append(*this, stats);
 	state.append_state.reset();
 	return result_count;
 }
 
 void ColumnSegment::RevertAppend(idx_t start_row) {
 	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
-	if (function->revert_append) {
-		function->revert_append(*this, start_row);
+	if (function.get().revert_append) {
+		function.get().revert_append(*this, start_row);
 	}
 	this->count = start_row - this->start;
 }
@@ -193,8 +192,8 @@ void ColumnSegment::ConvertToPersistent(BlockManager *block_manager, block_id_t 
 	}
 
 	segment_state.reset();
-	if (function->init_segment) {
-		segment_state = function->init_segment(*this, block_id);
+	if (function.get().init_segment) {
+		segment_state = function.get().init_segment(*this, block_id);
 	}
 }
 
@@ -207,8 +206,8 @@ void ColumnSegment::MarkAsPersistent(shared_ptr<BlockHandle> block_p, uint32_t o
 	block = std::move(block_p);
 
 	segment_state.reset();
-	if (function->init_segment) {
-		segment_state = function->init_segment(*this, block_id);
+	if (function.get().init_segment) {
+		segment_state = function.get().init_segment(*this, block_id);
 	}
 }
 

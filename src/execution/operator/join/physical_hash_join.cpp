@@ -220,7 +220,7 @@ void PhysicalHashJoin::Combine(ExecutionContext &context, GlobalSinkState &gstat
 		gstate.local_hash_tables.push_back(std::move(lstate.hash_table));
 	}
 	auto &client_profiler = QueryProfiler::Get(context.client);
-	context.thread.profiler.Flush(this, &lstate.build_executor, "build_executor", 1);
+	context.thread.profiler.Flush(*this, lstate.build_executor, "build_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
 }
 
@@ -429,8 +429,8 @@ public:
 	DataChunk spill_chunk;
 
 public:
-	void Finalize(PhysicalOperator *op, ExecutionContext &context) override {
-		context.thread.profiler.Flush(op, &probe_executor, "probe_executor", 0);
+	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
+		context.thread.profiler.Flush(op, probe_executor, "probe_executor", 0);
 	}
 };
 

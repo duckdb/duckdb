@@ -456,7 +456,7 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data) {
 //===--------------------------------------------------------------------===//
 // Delete
 //===--------------------------------------------------------------------===//
-idx_t RowGroupCollection::Delete(TransactionData transaction, DataTable *table, row_t *ids, idx_t count) {
+idx_t RowGroupCollection::Delete(TransactionData transaction, DataTable &table, row_t *ids, idx_t count) {
 	idx_t delete_count = 0;
 	// delete is in the row groups
 	// we need to figure out for each id to which row group it belongs

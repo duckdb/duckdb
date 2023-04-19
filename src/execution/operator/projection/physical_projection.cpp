@@ -14,8 +14,8 @@ public:
 	ExpressionExecutor executor;
 
 public:
-	void Finalize(PhysicalOperator *op, ExecutionContext &context) override {
-		context.thread.profiler.Flush(op, &executor, "projection", 0);
+	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
+		context.thread.profiler.Flush(op, executor, "projection", 0);
 	}
 };
 

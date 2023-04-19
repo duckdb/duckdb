@@ -42,7 +42,6 @@ OptionValuePair &GetValueForOption(const string &name) {
 	    {"enable_object_cache", {true}},
 	    {"enable_profiling", {"json"}},
 	    {"enable_progress_bar", {true}},
-	    {"experimental_parallel_csv", {true}},
 	    {"explain_output", {true}},
 	    {"external_threads", {8}},
 	    {"file_search_path", {"test"}},
@@ -91,7 +90,8 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "password",
 	    "username",
 	    "user",
-	    "profiling_output", // just an alias
+	    "profiling_output",         // just an alias
+	    "experimental_parallel_csv" // FIXME:deprecated option, should be removed after next release
 	};
 	return excluded_options.count(name) == 1;
 }
