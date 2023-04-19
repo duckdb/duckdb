@@ -357,7 +357,7 @@ static void WriteCSVSink(ExecutionContext &context, FunctionData &bind_data, Glo
 			// FIXME: we could gain some performance here by checking for certain types if they ever require quotes
 			// (e.g. integers only require quotes if the delimiter is a number, decimals only require quotes if the
 			// delimiter is a number or "." character)
-			WriteQuotedString(writer, csv_data, str_value.GetDataUnsafe(), str_value.GetSize(),
+			WriteQuotedString(writer, csv_data, str_value.GetData(), str_value.GetSize(),
 			                  csv_data.options.force_quote[col_idx]);
 		}
 		writer.WriteBufferData(csv_data.newline);

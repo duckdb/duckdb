@@ -16,13 +16,13 @@ namespace duckdb {
 static string_t TranslateScalarFunction(const string_t &haystack, const string_t &needle, const string_t &thread,
                                         vector<char> &result) {
 	// Get information about the haystack, the needle and the "thread"
-	auto input_haystack = haystack.GetDataUnsafe();
+	auto input_haystack = haystack.GetData();
 	auto size_haystack = haystack.GetSize();
 
-	auto input_needle = needle.GetDataUnsafe();
+	auto input_needle = needle.GetData();
 	auto size_needle = needle.GetSize();
 
-	auto input_thread = thread.GetDataUnsafe();
+	auto input_thread = thread.GetData();
 	auto size_thread = thread.GetSize();
 
 	// Reuse the buffer

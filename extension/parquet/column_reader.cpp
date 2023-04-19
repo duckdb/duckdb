@@ -685,7 +685,7 @@ void StringColumnReader::PrepareDeltaByteArray(ResizeableBuffer &buffer) {
 			if (i == 0 || prefix_data[i] > string_data[i - 1].GetSize()) {
 				throw std::runtime_error("DELTA_BYTE_ARRAY - prefix is out of range - corrupt file?");
 			}
-			memcpy(result_data, string_data[i - 1].GetDataUnsafe(), prefix_data[i]);
+			memcpy(result_data, string_data[i - 1].GetData(), prefix_data[i]);
 		}
 		memcpy(result_data + prefix_data[i], buffer.ptr, suffix_data[i]);
 		buffer.inc(suffix_data[i]);

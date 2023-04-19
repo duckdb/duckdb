@@ -106,7 +106,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 			}
 			if (child_validity.RowIsValid(idx)) {
 				auto len = child_data[idx].GetSize();
-				memcpy(dataptr + offset, child_data[idx].GetDataUnsafe(), len);
+				memcpy(dataptr + offset, child_data[idx].GetData(), len);
 				offset += len;
 			} else {
 				memcpy(dataptr + offset, "NULL", NULL_LENGTH);
