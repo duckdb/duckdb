@@ -1,5 +1,5 @@
 # name: test/sql/copy/csv/glob/read_csv_glob_crawl.test_slow
-# description: Test crawling CSVs
+# description: Test glob **
 # group: [glob]
 
 statement ok
