@@ -2,7 +2,6 @@ import duckdb
 import os
 import pandas as pd
 import pytest
-from typing import Union
 
 from duckdb.typing import *
 
@@ -113,10 +112,6 @@ class TestScalarUDF(object):
         res = con.sql('select return_null(5)').fetchall()
         assert res == [(None,)]
 
-    def test_binding(self):
-        # TODO: add a way to do extra binding for the UDF
-        pass
-    
     def test_structs(self):
         def add_extra_column(original):
             original['a'] = 200
