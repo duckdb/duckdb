@@ -141,7 +141,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 }
 
 void ResultArrowArrayStreamWrapper::MyStreamRelease(struct ArrowArrayStream *stream) {
-	if (!stream->release) {
+	if (!stream || !stream->release) {
 		return;
 	}
 	stream->release = nullptr;
