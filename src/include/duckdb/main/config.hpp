@@ -49,8 +49,6 @@ enum class CheckpointAbort : uint8_t {
 	DEBUG_ABORT_AFTER_FREE_LIST_WRITE = 3
 };
 
-enum class DebugInitialize : uint8_t { NO_INITIALIZE = 0, DEBUG_ZERO_INITIALIZE = 1, DEBUG_ONE_INITIALIZE = 2 };
-
 typedef void (*set_global_function_t)(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 typedef void (*set_local_function_t)(ClientContext &context, const Value &parameter);
 typedef void (*reset_global_function_t)(DatabaseInstance *db, DBConfig &config);

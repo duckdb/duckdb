@@ -40,6 +40,7 @@ public:
 	void LoadExistingDatabase();
 
 	//! Creates a new Block using the specified block_id and returns a pointer
+	unique_ptr<Block> ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) override;
 	unique_ptr<Block> CreateBlock(block_id_t block_id, FileBuffer *source_buffer) override;
 	//! Return the next free block id
 	block_id_t GetFreeBlockId() override;

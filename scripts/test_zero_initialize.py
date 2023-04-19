@@ -36,6 +36,27 @@ def run_test(args):
 
 header_size = 4096 * 3
 block_size = 262144
+checksum_size = 8
+
+def handle_error(i, standard_db, zero_init_db, standard_data, zero_data):
+    print("------------------------------------------------------------------")
+    print(f"FAIL - Mismatch between one-initialized and zero-initialized databases at byte position {i}")
+    print("------------------------------------------------------------------")
+    print(f"One-initialized database {standard_db} - byte value {standard_data}")
+    print(f"Zero-initialized database {zero_init_db} - byte value {zero_data}")
+    if i < header_size:
+        print("This byte is in the initial headers of the file")
+    else:
+        byte_pos = (i - header_size) % block_size
+        if byte_pos >= checksum_size:
+            print(f"This byte is in block id {(i - header_size) // block_size} at byte position {byte_pos - checksum_size} (position {byte_pos} including the block checksum)")
+        else:
+            print(f"This byte is in block id {(i - header_size) // block_size} at byte position {byte_pos}")
+            print("This is in the checksum part of the block")
+    print("------------------------------------------------------------------")
+    print("This error likely means that memory was not correctly zero-initialized in a block before being written out to disk.")
+    exit(1)
+
 
 def compare_database(standard_db, zero_init_db):
     with open(standard_db, 'rb') as f:
@@ -45,15 +66,20 @@ def compare_database(standard_db, zero_init_db):
     if len(standard_data) != len(zero_data):
         print(f"FAIL - Length mismatch between database {standard_db} ({str(len(standard_data))}) and {zero_init_db} ({str(len(zero_data))})")
         exit(1)
+    found_error = None
     for i in range(len(standard_data)):
         if standard_data[i] != zero_data[i]:
-            print(f"FAIL - Mismatch between standard database ({standard_data[i]}) and zero-initialized database ({zero_data[i]}) at byte position {i}")
-            if i < header_size:
-                print("This byte is in the initial headers of the file")
-            else:
-                print(f"This byte is in block id {(i - header_size) // block_size}")
-            print("This likely means that memory was not correctly zero-initialized in a block before being written out to disk")
-            exit(1)
+            if i > header_size:
+                byte_pos = (i - header_size) % block_size
+                if byte_pos <= 8:
+                    # different checksum, skip because it does not tell us anything!
+                    if found_error is None:
+                        found_error = i
+                    continue
+            handle_error(i, standard_db, zero_init_db, standard_data[i], zero_data[i])
+    if found_error is not None:
+        i = found_error
+        handle_error(i, standard_db, zero_init_db, standard_data[i], zero_data[i])
     print("Success!")
 
 def compare_files(standard_dir, zero_init_dir):

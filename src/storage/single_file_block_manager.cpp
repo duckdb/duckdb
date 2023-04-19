@@ -343,18 +343,19 @@ idx_t SingleFileBlockManager::FreeBlocks() {
 	return free_list.size();
 }
 
+unique_ptr<Block> SingleFileBlockManager::ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) {
+	D_ASSERT(source_buffer.AllocSize() == Storage::BLOCK_ALLOC_SIZE);
+	return make_uniq<Block>(source_buffer, block_id);
+}
+
 unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileBuffer *source_buffer) {
 	unique_ptr<Block> result;
 	if (source_buffer) {
-		D_ASSERT(source_buffer->AllocSize() == Storage::BLOCK_ALLOC_SIZE);
-		result = make_uniq<Block>(*source_buffer, block_id);
+		result = ConvertBlock(block_id, *source_buffer);
 	} else {
 		result = make_uniq<Block>(Allocator::Get(db), block_id);
-		if (options.debug_initialize != DebugInitialize::NO_INITIALIZE) {
-			uint8_t value = options.debug_initialize == DebugInitialize::DEBUG_ZERO_INITIALIZE ? 0 : 0xFF;
-			memset(result->InternalBuffer(), value, Storage::BLOCK_ALLOC_SIZE);
-		}
 	}
+	result->Initialize(options.debug_initialize);
 	return result;
 }
 
