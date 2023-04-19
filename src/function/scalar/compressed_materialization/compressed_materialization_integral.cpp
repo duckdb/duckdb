@@ -26,6 +26,7 @@ struct TemplatedIntegralCompress<hugeint_t, RESULT_TYPE> {
 
 template <class INPUT_TYPE, class RESULT_TYPE>
 static void IntegralCompressFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	D_ASSERT(args.ColumnCount() == 2);
 	D_ASSERT(args.data[1].GetVectorType() == VectorType::CONSTANT_VECTOR);
 	const auto min_val = ConstantVector::GetData<INPUT_TYPE>(args.data[1])[0];
 	UnaryExecutor::Execute<INPUT_TYPE, RESULT_TYPE>(args.data[0], result, args.size(), [&](const INPUT_TYPE &input) {
@@ -82,19 +83,6 @@ static string IntegralDecompressFunctionName(const LogicalType &result_type) {
 	                          StringUtil::Lower(LogicalTypeIdToString(result_type.id())));
 }
 
-unique_ptr<FunctionData> IntegralDecompressBind(ClientContext &context, ScalarFunction &bound_function,
-                                                vector<unique_ptr<Expression>> &arguments) {
-	const auto input_type_size = GetTypeIdSize(arguments[0]->return_type.InternalType());
-	const auto result_type_size = GetTypeIdSize(bound_function.return_type.InternalType());
-	if (result_type_size <= input_type_size) {
-		throw InternalException("Cannot decompress to smaller type!");
-	}
-	if (!arguments[1]->IsFoldable()) {
-		throw InternalException("Second argument must be constant!");
-	}
-	return nullptr;
-}
-
 template <class INPUT_TYPE, class RESULT_TYPE>
 static inline RESULT_TYPE TemplatedIntegralDecompress(const INPUT_TYPE &input, const RESULT_TYPE &min_val) {
 	return min_val + input;
@@ -102,7 +90,9 @@ static inline RESULT_TYPE TemplatedIntegralDecompress(const INPUT_TYPE &input, c
 
 template <class INPUT_TYPE, class RESULT_TYPE>
 static void IntegralDecompressFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	D_ASSERT(args.ColumnCount() == 2);
 	D_ASSERT(args.data[1].GetVectorType() == VectorType::CONSTANT_VECTOR);
+	D_ASSERT(args.data[1].GetType() == result.GetType());
 	const auto min_val = ConstantVector::GetData<RESULT_TYPE>(args.data[1])[0];
 	UnaryExecutor::Execute<INPUT_TYPE, RESULT_TYPE>(args.data[0], result, args.size(), [&](const INPUT_TYPE &input) {
 		return TemplatedIntegralDecompress<INPUT_TYPE, RESULT_TYPE>(input, min_val);

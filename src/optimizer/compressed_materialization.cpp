@@ -71,18 +71,12 @@ void CompressedMaterialization::UpdateBindingInfo(CompressedMaterializationInfo 
 	}
 }
 
-unique_ptr<LogicalOperator> CompressedMaterialization::Optimize(unique_ptr<LogicalOperator> op) {
-	if (op->type == LogicalOperatorType::LOGICAL_TRANSACTION) {
-		return op;
-	}
-
+unique_ptr<LogicalOperator> CompressedMaterialization::Compress(unique_ptr<LogicalOperator> &&op) {
 	root = op.get();
 	root->ResolveOperatorTypes();
 
 	Compress(op);
 	RemoveRedundantProjections(op);
-
-	root->ResolveOperatorTypes();
 
 	return op;
 }
@@ -323,17 +317,19 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetCompressExpression(
 static Value GetIntegralRangeValue(ClientContext &context, const LogicalType &type, const BaseStatistics &stats) {
 	auto min = NumericStats::Min(stats);
 	auto max = NumericStats::Max(stats);
-	if (max < min) {
-		// Subtracting max from min will result in an underflow, so we cannot compress
-		// Return max hugeint as range so GetIntegralCompress will return nullptr
-		return Value::HUGEINT(NumericLimits<hugeint_t>::Maximum());
-	}
 
 	vector<unique_ptr<Expression>> arguments;
 	arguments.emplace_back(make_uniq<BoundConstantExpression>(max));
 	arguments.emplace_back(make_uniq<BoundConstantExpression>(min));
 	BoundFunctionExpression sub(type, SubtractFun::GetFunction(type, type), std::move(arguments), nullptr);
-	return ExpressionExecutor::EvaluateScalar(context, sub);
+
+	Value result;
+	if (ExpressionExecutor::TryEvaluateScalar(context, sub, result)) {
+		return result;
+	} else {
+		// Couldn't evaluate: Return max hugeint as range so GetIntegralCompress will return nullptr
+		return Value::HUGEINT(NumericLimits<hugeint_t>::Maximum());
+	}
 }
 
 unique_ptr<CompressExpression> CompressedMaterialization::GetIntegralCompress(unique_ptr<Expression> input,
@@ -493,7 +489,7 @@ void CompressedMaterialization::RemoveRedundantProjections(unique_ptr<LogicalOpe
 	if (decompress_count == 0) {
 		RemoveOperator(*decompression_ptr);
 		if (!mapping_chain.empty()) {
-			mapping_chain.pop_back(); // If we fully remove the operator we can remove the back of the chain
+			mapping_chain.pop_back();
 		}
 	}
 
@@ -502,7 +498,8 @@ void CompressedMaterialization::RemoveRedundantProjections(unique_ptr<LogicalOpe
 		// If there was more than 1 operator in between the compress /  decompress projection
 		// The expression types there are not consistent
 		// Make them consistent by following the mapping chain
-		auto &op_with_new_types = *decompression_parent->get()->children[0];
+		auto &op_with_new_types =
+		    decompress_count == 0 ? **decompression_parent : *decompression_parent->get()->children[0];
 		UpdateTypesRecursively(op_with_new_types.GetColumnBindings(), op_with_new_types.types,
 		                       std::move(mapping_chain));
 	}
@@ -513,53 +510,6 @@ void CompressedMaterialization::RemoveRedundantProjections(unique_ptr<LogicalOpe
 	}
 
 	// NOTE: we don't have to update statistics_map here because this is the last step of this optimizer
-}
-
-bool CompressedMaterialization::RemoveRedundantExpressions(LogicalProjection &decompression,
-                                                           LogicalProjection &compression, idx_t &decompress_count,
-                                                           idx_t &compress_count,
-                                                           const column_binding_set_t &referenced_bindings) {
-	D_ASSERT(compression.expressions.size() == decompression.expressions.size());
-	auto &decompress_exprs = decompression.expressions;
-	auto &compress_exprs = compression.expressions;
-
-	bool removed_anything = false;
-	decompress_count = 0;
-	compress_count = 0;
-	for (idx_t col_idx = 0; col_idx < compression.expressions.size(); col_idx++) {
-		auto &decompress_expr = decompress_exprs[col_idx];
-		auto &compress_expr = compress_exprs[col_idx];
-		if (decompress_expr->type == ExpressionType::BOUND_FUNCTION) {
-			decompress_count++;
-		}
-		if (compress_expr->type == ExpressionType::BOUND_FUNCTION) {
-			compress_count++;
-		}
-		if (decompress_expr->type == ExpressionType::BOUND_COLUMN_REF ||
-		    compress_expr->type == ExpressionType::BOUND_COLUMN_REF) {
-			continue;
-		}
-
-		auto &decompress_fun = decompress_expr->Cast<BoundFunctionExpression>();
-		auto &compress_fun = compress_expr->Cast<BoundFunctionExpression>();
-
-		D_ASSERT(decompress_fun.children[0]->type == ExpressionType::BOUND_COLUMN_REF);
-		auto &decompress_colref = decompress_fun.children[0]->Cast<BoundColumnRefExpression>();
-		if (referenced_bindings.find(decompress_colref.binding) != referenced_bindings.end()) {
-			continue; // Decompressed binding was referenced in between, don't remove the decompression
-		}
-
-		// Column is decompressed, then compressed again, remove the function
-		D_ASSERT(decompress_expr->type == ExpressionType::BOUND_FUNCTION);
-		D_ASSERT(compress_expr->type == ExpressionType::BOUND_FUNCTION);
-		decompress_expr = std::move(decompress_fun.children[0]);
-		compress_expr = std::move(compress_fun.children[0]);
-
-		removed_anything = true;
-		decompress_count--;
-		compress_count--;
-	}
-	return removed_anything;
 }
 
 unique_ptr<LogicalOperator> *
@@ -620,6 +570,46 @@ CompressedMaterialization::FindDecompression(unique_ptr<LogicalOperator> &op, co
 		decompression_ptr = &decompression_parent->get()->children[0];
 	}
 	return decompression_ptr;
+}
+
+bool CompressedMaterialization::RemoveRedundantExpressions(LogicalProjection &decompression,
+                                                           LogicalProjection &compression, idx_t &decompress_count,
+                                                           idx_t &compress_count,
+                                                           const column_binding_set_t &referenced_bindings) {
+	D_ASSERT(compression.expressions.size() == decompression.expressions.size());
+	auto &decompress_exprs = decompression.expressions;
+	auto &compress_exprs = compression.expressions;
+
+	bool removed_anything = false;
+	decompress_count = 0;
+	compress_count = 0;
+	for (idx_t col_idx = 0; col_idx < compression.expressions.size(); col_idx++) {
+		auto &decompress_expr = decompress_exprs[col_idx];
+		auto &compress_expr = compress_exprs[col_idx];
+
+		if (decompress_expr->type == ExpressionType::BOUND_FUNCTION &&
+		    compress_expr->type == ExpressionType::BOUND_FUNCTION) {
+			auto &decompress_fun = decompress_expr->Cast<BoundFunctionExpression>();
+			auto &decompress_colref = decompress_fun.children[0]->Cast<BoundColumnRefExpression>();
+
+			if (referenced_bindings.find(decompress_colref.binding) == referenced_bindings.end()) {
+				decompress_expr = std::move(decompress_fun.children[0]);
+
+				auto &compress_fun = compress_expr->Cast<BoundFunctionExpression>();
+				compress_expr = std::move(compress_fun.children[0]);
+
+				removed_anything = true;
+			}
+		}
+
+		if (decompress_expr->type == ExpressionType::BOUND_FUNCTION) {
+			decompress_count++;
+		}
+		if (compress_expr->type == ExpressionType::BOUND_FUNCTION) {
+			compress_count++;
+		}
+	}
+	return removed_anything;
 }
 
 void CompressedMaterialization::RemoveOperator(unique_ptr<LogicalOperator> &op) {

@@ -65,7 +65,7 @@ static string StringDecompressFunctionName() {
 template <class INPUT_TYPE>
 static inline string_t StringDecompress(const INPUT_TYPE &input, Vector &result_v) {
 	const auto input_swapped = BSwap<INPUT_TYPE>(input);
-	const auto string_size = ((uint8_t *)&input_swapped)[sizeof(INPUT_TYPE) - 1];
+	const uint32_t string_size = ((uint8_t *)&input_swapped)[sizeof(INPUT_TYPE) - 1];
 	if (sizeof(INPUT_TYPE) <= string_t::INLINE_LENGTH) {
 		string_t result(string_size);
 		memcpy(result.GetPrefixWriteable(), &input_swapped, sizeof(INPUT_TYPE));

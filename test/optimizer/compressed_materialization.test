@@ -18,14 +18,14 @@ from range(10)
 query II
 explain select count(i), count(j) from (select i, j from (select i, j from test order by j offset 1) order by j offset 1)
 ----
-logical_opt	<REGEX>:(.*cm_compress.*){2}
+logical_opt	<REGEX>:(.*__internal_compress.*){2}
 
 # should see it exactly once here, as we can only compress the group (i), not the value being summed (j)
 # after the GROUP BY we do the ORDER BY, and finally decompress
 query II
 explain select i, sum(j) from test group by i order by i
 ----
-logical_opt	<REGEX>:(.*cm_compress.*){1}
+logical_opt	<REGEX>:(.*__internal_compress.*){1}
 
 require tpch
 
@@ -36,7 +36,7 @@ call dbgen(sf=0.01)
 query II
 explain select * from lineitem order by l_shipdate
 ----
-logical_opt	<REGEX>:.*cm_decompress.*cm_compress.*
+logical_opt	<REGEX>:.*__internal_decompress.*__internal_compress.*
 
 # test that we get the same result with or without the optimizer
 query IIIIIIIIIIIIIII nosort q0

@@ -77,7 +77,7 @@ class CompressedMaterialization {
 public:
 	explicit CompressedMaterialization(ClientContext &context, Binder &binder, statistics_map_t &&statistics_map);
 
-	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
+	unique_ptr<LogicalOperator> Compress(unique_ptr<LogicalOperator> &&op);
 
 private:
 	//! Depth-first traversal of the plan
@@ -125,15 +125,15 @@ private:
 
 	//! Removes redundant compress/decompress projections
 	void RemoveRedundantProjections(unique_ptr<LogicalOperator> &op);
-	//! Removes redundant compress/decompress expressions in projections
-	bool RemoveRedundantExpressions(LogicalProjection &decompression, LogicalProjection &compression,
-	                                idx_t &decompress_count, idx_t &compress_count,
-	                                const column_binding_set_t &referenced_bindings);
 	//! Finds the decompression corresponding to compression 'op'
 	unique_ptr<LogicalOperator> *FindDecompression(unique_ptr<LogicalOperator> &op,
 	                                               column_binding_set_t &referenced_bindings,
 	                                               vector<column_binding_map_t<ColumnBinding>> &mapping_chain,
 	                                               unique_ptr<LogicalOperator> *&decompression_parent);
+	//! Removes redundant compress/decompress expressions in projections
+	bool RemoveRedundantExpressions(LogicalProjection &decompression, LogicalProjection &compression,
+	                                idx_t &decompress_count, idx_t &compress_count,
+	                                const column_binding_set_t &referenced_bindings);
 	//! Remove the given operator from the plan
 	void RemoveOperator(unique_ptr<LogicalOperator> &op);
 	//! Updates the types of expression recursively after removing an operator
