@@ -98,6 +98,14 @@ struct SortedAggregateState {
 		}
 	}
 
+	void InitializeBuffers(const SortedAggregateBindData &order_bind) {
+		// Lazy instantiation of the buffer chunks
+		InitializeBuffer(sort_buffer, order_bind.sort_types);
+		if (!order_bind.sorted_on_args) {
+			InitializeBuffer(arg_buffer, order_bind.arg_types);
+		}
+	}
+
 	//! Make sure the buffer is large enough for slicing
 	static inline void ResetBuffer(DataChunk &chunk, const vector<LogicalType> &types) {
 		chunk.Reset();
@@ -107,40 +115,50 @@ struct SortedAggregateState {
 
 	void Flush(const SortedAggregateBindData &order_bind) {
 		if (ordering) {
+			ordering->Append(*ordering_append, sort_buffer);
+			sort_buffer.Reset();
+			if (arguments) {
+				arguments->Append(*arguments_append, arg_buffer);
+				arg_buffer.Reset();
+			}
 			return;
 		}
 
 		ordering = make_uniq<ColumnDataCollection>(order_bind.buffer_manager, order_bind.sort_types);
-		InitializeBuffer(sort_buffer, order_bind.sort_types);
-		ordering->Append(sort_buffer);
-		ResetBuffer(sort_buffer, order_bind.sort_types);
+		ordering_append = make_uniq<ColumnDataAppendState>();
+		ordering->InitializeAppend(*ordering_append);
+		if (sort_buffer.size()) {
+			InitializeBuffer(sort_buffer, order_bind.sort_types);
+			ordering->Append(*ordering_append, sort_buffer);
+			ResetBuffer(sort_buffer, order_bind.sort_types);
+		} else {
+			sort_buffer.Initialize(Allocator::DefaultAllocator(), order_bind.sort_types);
+		}
 
 		if (!order_bind.sorted_on_args) {
 			arguments = make_uniq<ColumnDataCollection>(order_bind.buffer_manager, order_bind.arg_types);
-			InitializeBuffer(arg_buffer, order_bind.arg_types);
-			arguments->Append(arg_buffer);
-			ResetBuffer(arg_buffer, order_bind.arg_types);
+			arguments_append = make_uniq<ColumnDataAppendState>();
+			arguments->InitializeAppend(*arguments_append);
+			if (arg_buffer.size()) {
+				InitializeBuffer(arg_buffer, order_bind.arg_types);
+				arguments->Append(*arguments_append, arg_buffer);
+				ResetBuffer(arg_buffer, order_bind.arg_types);
+			} else {
+				arg_buffer.Initialize(Allocator::DefaultAllocator(), order_bind.arg_types);
+			}
 		}
 	}
 
 	void Update(const SortedAggregateBindData &order_bind, DataChunk &sort_chunk, DataChunk &arg_chunk) {
 		count += sort_chunk.size();
 
-		// Lazy instantiation of the buffer chunks
-		InitializeBuffer(sort_buffer, order_bind.sort_types);
-		if (!order_bind.sorted_on_args) {
-			InitializeBuffer(arg_buffer, order_bind.arg_types);
-		}
-
 		if (sort_chunk.size() + sort_buffer.size() > STANDARD_VECTOR_SIZE) {
 			Flush(order_bind);
+		} else {
+			InitializeBuffers(order_bind);
 		}
-		if (arguments) {
-			ordering->Append(sort_chunk);
-			arguments->Append(arg_chunk);
-		} else if (ordering) {
-			ordering->Append(sort_chunk);
-		} else if (order_bind.sorted_on_args) {
+
+		if (order_bind.sorted_on_args) {
 			sort_buffer.Append(sort_chunk, true);
 		} else {
 			sort_buffer.Append(sort_chunk, true);
@@ -151,28 +169,13 @@ struct SortedAggregateState {
 	void UpdateSlice(const SortedAggregateBindData &order_bind, DataChunk &sort_inputs, DataChunk &arg_inputs) {
 		count += nsel;
 
-		// Lazy instantiation of the buffer chunks
-		InitializeBuffer(sort_buffer, order_bind.sort_types);
-		if (!order_bind.sorted_on_args) {
-			InitializeBuffer(arg_buffer, order_bind.arg_types);
-		}
-
 		if (nsel + sort_buffer.size() > STANDARD_VECTOR_SIZE) {
 			Flush(order_bind);
+		} else {
+			InitializeBuffers(order_bind);
 		}
-		if (arguments) {
-			sort_buffer.Reset();
-			sort_buffer.Slice(sort_inputs, sel, nsel);
-			ordering->Append(sort_buffer);
 
-			arg_buffer.Reset();
-			arg_buffer.Slice(arg_inputs, sel, nsel);
-			arguments->Append(arg_buffer);
-		} else if (ordering) {
-			sort_buffer.Reset();
-			sort_buffer.Slice(sort_inputs, sel, nsel);
-			ordering->Append(sort_buffer);
-		} else if (order_bind.sorted_on_args) {
+		if (order_bind.sorted_on_args) {
 			sort_buffer.Append(sort_inputs, true, &sel, nsel);
 		} else {
 			sort_buffer.Append(sort_inputs, true, &sel, nsel);
@@ -209,6 +212,7 @@ struct SortedAggregateState {
 
 	void Finalize(const SortedAggregateBindData &order_bind, DataChunk &prefixed, LocalSortState &local_sort) {
 		if (arguments) {
+			Flush(order_bind);
 			ColumnDataScanState sort_state;
 			ordering->InitializeScan(sort_state);
 			ColumnDataScanState arg_state;
@@ -222,6 +226,7 @@ struct SortedAggregateState {
 			ordering->Reset();
 			arguments->Reset();
 		} else if (ordering) {
+			Flush(order_bind);
 			ColumnDataScanState sort_state;
 			ordering->InitializeScan(sort_state);
 			for (sort_buffer.Reset(); ordering->Scan(sort_state, sort_buffer); sort_buffer.Reset()) {
@@ -240,7 +245,9 @@ struct SortedAggregateState {
 
 	idx_t count;
 	unique_ptr<ColumnDataCollection> arguments;
+	unique_ptr<ColumnDataAppendState> arguments_append;
 	unique_ptr<ColumnDataCollection> ordering;
+	unique_ptr<ColumnDataAppendState> ordering_append;
 
 	DataChunk sort_buffer;
 	DataChunk arg_buffer;
