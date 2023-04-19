@@ -65,8 +65,8 @@ void BufferedCSVReaderOptions::SetHeader(bool input) {
 	this->has_header = true;
 }
 
-void BufferedCSVReaderOptions::SetCompression(const string &compression) {
-	this->compression = FileCompressionTypeFromString(compression);
+void BufferedCSVReaderOptions::SetCompression(const string &compression_p) {
+	this->compression = FileCompressionTypeFromString(compression_p);
 }
 
 void BufferedCSVReaderOptions::SetEscape(const string &input) {
@@ -82,8 +82,8 @@ void BufferedCSVReaderOptions::SetDelimiter(const string &input) {
 	}
 }
 
-void BufferedCSVReaderOptions::SetQuote(const string &quote) {
-	this->quote = quote;
+void BufferedCSVReaderOptions::SetQuote(const string &quote_p) {
+	this->quote = quote_p;
 	this->has_quote = true;
 }
 
@@ -101,12 +101,10 @@ void BufferedCSVReaderOptions::SetNewline(const string &input) {
 void BufferedCSVReaderOptions::SetDateFormat(LogicalTypeId type, const string &format, bool read_format) {
 	string error;
 	if (read_format) {
-		auto &date_format = this->date_format[type];
-		error = StrTimeFormat::ParseFormatSpecifier(format, date_format);
-		date_format.format_specifier = format;
+		error = StrTimeFormat::ParseFormatSpecifier(format, date_format[type]);
+		date_format[type].format_specifier = format;
 	} else {
-		auto &date_format = this->write_date_format[type];
-		error = StrTimeFormat::ParseFormatSpecifier(format, date_format);
+		error = StrTimeFormat::ParseFormatSpecifier(format, write_date_format[type]);
 	}
 	if (!error.empty()) {
 		throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());
@@ -198,6 +196,7 @@ void BufferedCSVReaderOptions::SetWriteOption(const string &loption, const Value
 			format = "%Y-%m-%dT%H:%M:%S.%fZ";
 		}
 		SetDateFormat(LogicalTypeId::TIMESTAMP, format, false);
+		SetDateFormat(LogicalTypeId::TIMESTAMP_TZ, format, false);
 	} else {
 		throw BinderException("Unrecognized option CSV writer \"%s\"", loption);
 	}
