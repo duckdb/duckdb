@@ -303,7 +303,7 @@ private:
 };
 
 void RadixPartitionedHashTable::ScheduleTasks(Executor &executor, const shared_ptr<Event> &event,
-                                              GlobalSinkState &state, vector<unique_ptr<Task>> &tasks) const {
+                                              GlobalSinkState &state, vector<shared_ptr<Task>> &tasks) const {
 	auto &gstate = state.Cast<RadixHTGlobalState>();
 	if (!gstate.is_partitioned) {
 		return;

@@ -85,7 +85,7 @@ bool Pipeline::GetProgress(double &current_percentage, idx_t &source_cardinality
 }
 
 void Pipeline::ScheduleSequentialTask(shared_ptr<Event> &event) {
-	vector<unique_ptr<Task>> tasks;
+	vector<shared_ptr<Task>> tasks;
 	tasks.push_back(make_uniq<PipelineTask>(*this, event));
 	event->SetTasks(std::move(tasks));
 }
@@ -164,7 +164,7 @@ bool Pipeline::LaunchScanTasks(shared_ptr<Event> &event, idx_t max_threads) {
 	}
 
 	// launch a task for every thread
-	vector<unique_ptr<Task>> tasks;
+	vector<shared_ptr<Task>> tasks;
 	for (idx_t i = 0; i < max_threads; i++) {
 		tasks.push_back(make_uniq<PipelineTask>(*this, event));
 	}

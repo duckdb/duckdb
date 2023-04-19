@@ -24,15 +24,15 @@ struct SchedulerThread {
 };
 
 #ifndef DUCKDB_NO_THREADS
-typedef duckdb_moodycamel::ConcurrentQueue<unique_ptr<Task>> concurrent_queue_t;
+typedef duckdb_moodycamel::ConcurrentQueue<shared_ptr<Task>> concurrent_queue_t;
 typedef duckdb_moodycamel::LightweightSemaphore lightweight_semaphore_t;
 
 struct ConcurrentQueue {
 	concurrent_queue_t q;
 	lightweight_semaphore_t semaphore;
 
-	void Enqueue(ProducerToken &token, unique_ptr<Task> task);
-	bool DequeueFromProducer(ProducerToken &token, unique_ptr<Task> &task);
+	void Enqueue(ProducerToken &token, shared_ptr<Task> task);
+	bool DequeueFromProducer(ProducerToken &token, shared_ptr<Task> &task);
 };
 
 struct QueueProducerToken {
@@ -42,7 +42,7 @@ struct QueueProducerToken {
 	duckdb_moodycamel::ProducerToken queue_token;
 };
 
-void ConcurrentQueue::Enqueue(ProducerToken &token, unique_ptr<Task> task) {
+void ConcurrentQueue::Enqueue(ProducerToken &token, shared_ptr<Task> task) {
 	lock_guard<mutex> producer_lock(token.producer_lock);
 	if (q.enqueue(token.token->queue_token, std::move(task))) {
 		semaphore.signal();
@@ -51,26 +51,26 @@ void ConcurrentQueue::Enqueue(ProducerToken &token, unique_ptr<Task> task) {
 	}
 }
 
-bool ConcurrentQueue::DequeueFromProducer(ProducerToken &token, unique_ptr<Task> &task) {
+bool ConcurrentQueue::DequeueFromProducer(ProducerToken &token, shared_ptr<Task> &task) {
 	lock_guard<mutex> producer_lock(token.producer_lock);
 	return q.try_dequeue_from_producer(token.token->queue_token, task);
 }
 
 #else
 struct ConcurrentQueue {
-	std::queue<unique_ptr<Task>> q;
+	std::queue<shared_ptr<Task>> q;
 	mutex qlock;
 
-	void Enqueue(ProducerToken &token, unique_ptr<Task> task);
-	bool DequeueFromProducer(ProducerToken &token, unique_ptr<Task> &task);
+	void Enqueue(ProducerToken &token, shared_ptr<Task> task);
+	bool DequeueFromProducer(ProducerToken &token, shared_ptr<Task> &task);
 };
 
-void ConcurrentQueue::Enqueue(ProducerToken &token, unique_ptr<Task> task) {
+void ConcurrentQueue::Enqueue(ProducerToken &token, shared_ptr<Task> task) {
 	lock_guard<mutex> lock(qlock);
 	q.push(std::move(task));
 }
 
-bool ConcurrentQueue::DequeueFromProducer(ProducerToken &token, unique_ptr<Task> &task) {
+bool ConcurrentQueue::DequeueFromProducer(ProducerToken &token, shared_ptr<Task> &task) {
 	lock_guard<mutex> lock(qlock);
 	if (q.empty()) {
 		return false;
@@ -127,7 +127,7 @@ unique_ptr<ProducerToken> TaskScheduler::CreateProducer() {
 	return make_uniq<ProducerToken>(*this, std::move(token));
 }
 
-void TaskScheduler::ScheduleTask(shared_ptr<ProducerToken> token, unique_ptr<Task> task) {
+void TaskScheduler::ScheduleTask(shared_ptr<ProducerToken> token, shared_ptr<Task> task) {
 	// We need to store the producer token in the task to be able to reschedule it in case of an interrupt
 	task->current_token = token;
 
@@ -135,13 +135,13 @@ void TaskScheduler::ScheduleTask(shared_ptr<ProducerToken> token, unique_ptr<Tas
 	queue->Enqueue(*token, std::move(task));
 }
 
-bool TaskScheduler::GetTaskFromProducer(ProducerToken &token, unique_ptr<Task> &task) {
+bool TaskScheduler::GetTaskFromProducer(ProducerToken &token, shared_ptr<Task> &task) {
 	return queue->DequeueFromProducer(token, task);
 }
 
 void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 #ifndef DUCKDB_NO_THREADS
-	unique_ptr<Task> task;
+	shared_ptr<Task> task;
 	// loop until the marker is set to false
 	while (*marker) {
 		// wait for a signal with a timeout
@@ -173,7 +173,7 @@ idx_t TaskScheduler::ExecuteTasks(atomic<bool> *marker, idx_t max_tasks) {
 	idx_t completed_tasks = 0;
 	// loop until the marker is set to false
 	while (*marker && completed_tasks < max_tasks) {
-		unique_ptr<Task> task;
+		shared_ptr<Task> task;
 		RescheduleSleepingTasks();
 		if (!queue->q.try_dequeue(task)) {
 			return completed_tasks;
@@ -201,7 +201,7 @@ idx_t TaskScheduler::ExecuteTasks(atomic<bool> *marker, idx_t max_tasks) {
 
 void TaskScheduler::ExecuteTasks(idx_t max_tasks) {
 #ifndef DUCKDB_NO_THREADS
-	unique_ptr<Task> task;
+	shared_ptr<Task> task;
 	for (idx_t i = 0; i < max_tasks; i++) {
 		RescheduleSleepingTasks();
 		queue->semaphore.wait(TASK_TIMEOUT_USECS);
@@ -319,7 +319,7 @@ void TaskScheduler::RescheduleSleepingTasks() {
 	have_sleeping_tasks = !sleeping_tasks.empty();
 }
 
-void TaskScheduler::DescheduleTaskCallback(unique_ptr<Task> task, hugeint_t callback_uuid) {
+void TaskScheduler::DescheduleTaskCallback(shared_ptr<Task> task, hugeint_t callback_uuid) {
 	unique_lock<mutex> lck(blocked_task_lock);
 
 	// First check if callback was made already
@@ -339,13 +339,13 @@ void TaskScheduler::DescheduleTaskCallback(unique_ptr<Task> task, hugeint_t call
 	blocked_tasks[callback_uuid] = std::move(task);
 }
 
-void TaskScheduler::DescheduleTaskSleeping(unique_ptr<Task> task, uint64_t end_time) {
+void TaskScheduler::DescheduleTaskSleeping(shared_ptr<Task> task, uint64_t end_time) {
 	unique_lock<mutex> lck(sleeping_task_lock);
 	sleeping_tasks.insert({end_time, std::move(task)});
 	have_sleeping_tasks = true;
 }
 
-void TaskScheduler::DescheduleTask(unique_ptr<Task> task) {
+void TaskScheduler::DescheduleTask(shared_ptr<Task> task) {
 	switch(task->interrupt_state.result) {
 	case InterruptResultType::CALLBACK:
 //		DescheduleTask(task);

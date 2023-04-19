@@ -452,7 +452,7 @@ public:
 
 public:
 	void Schedule() override {
-		vector<unique_ptr<Task>> tasks;
+		vector<shared_ptr<Task>> tasks;
 		for (idx_t i = 0; i < op.groupings.size(); i++) {
 			auto &grouping_gstate = gstate.grouping_states[i];
 
@@ -504,7 +504,7 @@ public:
 
 public:
 	void Schedule() override {
-		vector<unique_ptr<Task>> tasks;
+		vector<shared_ptr<Task>> tasks;
 		tasks.push_back(make_uniq<HashAggregateFinalizeTask>(*pipeline, shared_from_this(), gstate, context, op));
 		D_ASSERT(!tasks.empty());
 		SetTasks(std::move(tasks));
@@ -650,7 +650,7 @@ public:
 	void Schedule() override {
 		global_sources = CreateGlobalSources();
 
-		vector<unique_ptr<Task>> tasks;
+		vector<shared_ptr<Task>> tasks;
 		auto &scheduler = TaskScheduler::GetScheduler(context);
 		auto number_of_threads = scheduler.NumberOfThreads();
 		tasks.reserve(number_of_threads);
@@ -714,7 +714,7 @@ public:
 
 public:
 	void Schedule() override {
-		vector<unique_ptr<Task>> tasks;
+		vector<shared_ptr<Task>> tasks;
 		for (idx_t i = 0; i < op.groupings.size(); i++) {
 			auto &grouping = op.groupings[i];
 			auto &distinct_data = *grouping.distinct_data;

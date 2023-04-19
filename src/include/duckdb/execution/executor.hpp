@@ -153,7 +153,7 @@ private:
 	//! The last pending execution result (if any)
 	PendingExecutionResult execution_result;
 	//! The current task in process (if any)
-	unique_ptr<Task> task;
+	shared_ptr<Task> task;
 
 	//! Task that have been descheduled
 	unordered_map<Task*, shared_ptr<Task>> to_be_rescheduled_tasks;

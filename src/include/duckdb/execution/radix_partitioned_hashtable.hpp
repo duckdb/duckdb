@@ -47,7 +47,7 @@ public:
 	bool Finalize(ClientContext &context, GlobalSinkState &gstate_p) const;
 
 	void ScheduleTasks(Executor &executor, const shared_ptr<Event> &event, GlobalSinkState &state,
-	                   vector<unique_ptr<Task>> &tasks) const;
+	                   vector<shared_ptr<Task>> &tasks) const;
 
 	//! Source interface
 	idx_t Size(GlobalSinkState &sink_state) const;

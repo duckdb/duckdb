@@ -271,7 +271,7 @@ public:
 	void Schedule() override {
 		auto &context = pipeline->GetClientContext();
 
-		vector<unique_ptr<Task>> finalize_tasks;
+		vector<shared_ptr<Task>> finalize_tasks;
 		auto &ht = *sink.hash_table;
 		const auto &block_collection = ht.GetBlockCollection();
 		const auto &blocks = block_collection.blocks;
@@ -357,7 +357,7 @@ public:
 public:
 	void Schedule() override {
 		auto &context = pipeline->GetClientContext();
-		vector<unique_ptr<Task>> partition_tasks;
+		vector<shared_ptr<Task>> partition_tasks;
 		partition_tasks.reserve(local_hts.size());
 		for (auto &local_ht : local_hts) {
 			partition_tasks.push_back(

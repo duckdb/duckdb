@@ -450,7 +450,7 @@ public:
 
 public:
 	void Schedule() override {
-		vector<unique_ptr<Task>> tasks;
+		vector<shared_ptr<Task>> tasks;
 		tasks.push_back(make_uniq<UngroupedDistinctAggregateFinalizeTask>(pipeline->executor, shared_from_this(),
 		                                                                  gstate, context, op));
 		D_ASSERT(!tasks.empty());
@@ -474,7 +474,7 @@ public:
 	void Schedule() override {
 		auto &distinct_state = *gstate.distinct_state;
 		auto &distinct_data = *op.distinct_data;
-		vector<unique_ptr<Task>> tasks;
+		vector<shared_ptr<Task>> tasks;
 		for (idx_t table_idx = 0; table_idx < distinct_data.radix_tables.size(); table_idx++) {
 			distinct_data.radix_tables[table_idx]->ScheduleTasks(pipeline->executor, shared_from_this(),
 			                                                     *distinct_state.radix_states[table_idx], tasks);

@@ -369,7 +369,7 @@ void Executor::CancelTasks() {
 void Executor::WorkOnTasks() {
 	auto &scheduler = TaskScheduler::GetScheduler(context);
 
-	unique_ptr<Task> task;
+	shared_ptr<Task> task;
 	while (scheduler.GetTaskFromProducer(*producer, task)) {
 		auto res = task->Execute(TaskExecutionMode::PROCESS_ALL);
 		if (res == TaskExecutionResult::TASK_BLOCKED) {
