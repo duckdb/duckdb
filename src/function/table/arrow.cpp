@@ -16,7 +16,7 @@ namespace duckdb {
 LogicalType ArrowTableFunction::GetArrowLogicalType(
     ArrowSchema &schema, std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx) {
 	auto format = string(schema.format);
-	if (!arrow_convert_data.count(col_idx)) {
+	if (arrow_convert_data.find(col_idx) == arrow_convert_data.end()) {
 		arrow_convert_data[col_idx] = make_uniq<ArrowConvertData>();
 	}
 	auto &convert_data = *arrow_convert_data[col_idx];
