@@ -256,17 +256,22 @@ void AsOfLocalState::ResolveJoinKeys(DataChunk &input) {
 	//	We need this anyway for sorting
 	lhs_valid = 0;
 	const auto entry_count = lhs_valid_mask.EntryCount(count);
+	idx_t base_idx = 0;
 	for (idx_t entry_idx = 0; entry_idx < entry_count;) {
-		const auto entry = lhs_valid_mask.GetValidityEntry(entry_idx++);
-		idx_t idx_in_entry = lhs_valid_mask.BITS_PER_VALUE;
-		if (entry_idx == entry_count && count % lhs_valid_mask.BITS_PER_VALUE != 0) {
-			idx_t count_idx;
-			lhs_valid_mask.GetEntryIndex(count, count_idx, idx_in_entry);
-		}
-
-		for (idx_t i = 0; i < idx_in_entry; ++i) {
-			if (lhs_valid_mask.RowIsValid(entry, i)) {
-				lhs_sel.set_index(lhs_valid++, i);
+		const auto validity_entry = lhs_valid_mask.GetValidityEntry(entry_idx++);
+		const auto next = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
+		if (ValidityMask::AllValid(validity_entry)) {
+			for (; base_idx < next; ++base_idx) {
+				lhs_sel.set_index(lhs_valid++, base_idx);
+			}
+		} else if (ValidityMask::NoneValid(validity_entry)) {
+			base_idx = next;
+		} else {
+			const auto start = base_idx;
+			for (; base_idx < next; ++base_idx) {
+				if (ValidityMask::RowIsValid(validity_entry, base_idx - start)) {
+					lhs_sel.set_index(lhs_valid++, base_idx);
+				}
 			}
 		}
 	}
@@ -336,7 +341,7 @@ void AsOfLocalState::ResolveJoin(DataChunk &input, bool *found_match, std::pair<
 	bin_vector.ToUnifiedFormat(lhs_valid, bin_unified);
 	const auto bins = (hash_t *)bin_unified.data;
 
-	hash_t prev_bin = global_partition.hash_groups.size();
+	hash_t prev_bin = global_partition.bin_groups.size();
 	PartitionGlobalHashGroup *hash_group = nullptr;
 	OuterJoinMarker *right_outer = nullptr;
 	//	Searching for right <= left
@@ -473,7 +478,7 @@ OperatorResultType PhysicalAsOfJoin::ResolveComplexJoin(ExecutionContext &contex
 	lstate.rhs_payload.Reset();
 
 	auto &global_partition = gsink.global_partition;
-	hash_t scan_bin = global_partition.hash_groups.size();
+	hash_t scan_bin = global_partition.bin_groups.size();
 	PartitionGlobalHashGroup *hash_group = nullptr;
 	unique_ptr<PayloadScanner> scanner;
 	for (idx_t i = 0; i < lstate.lhs_match_count; ++i) {
@@ -489,7 +494,7 @@ OperatorResultType PhysicalAsOfJoin::ResolveComplexJoin(ExecutionContext &contex
 			lstate.group_payload.Reset();
 		}
 		// Skip to the range containing the match
-		while (match_pos >= scanner->Scanned() + lstate.group_payload.size()) {
+		while (match_pos >= scanner->Scanned()) {
 			lstate.group_payload.Reset();
 			scanner->Scan(lstate.group_payload);
 		}
