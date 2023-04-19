@@ -13,12 +13,15 @@ from duckdb.typing import *
 class TestPyArrowUDF(object):
 
     def test_basic_use(self):
-        def plus_one(x):
-            return x
+        def plus_one(x : pa.lib.Table):
+            import pandas as pd
+            df = x.to_pandas()
+            df['c0'] = df['c0'] + 1
+            return pa.lib.Table.from_pandas(df)
 
         con = duckdb.connect()
         con.register_vectorized('plus_one', plus_one, [BIGINT], BIGINT)
-        assert [(5,)] == con.sql('select plus_one(5)').fetchall()
+        assert [(6,)] == con.sql('select plus_one(5)').fetchall()
 
         range_table = con.table_function('range', [5000])
         res = con.sql('select plus_one(i) from range_table tbl(i)').fetchall()
