@@ -350,8 +350,9 @@ unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileB
 		result = make_uniq<Block>(*source_buffer, block_id);
 	} else {
 		result = make_uniq<Block>(Allocator::Get(db), block_id);
-		if (options.zero_initialize) {
-			memset(result->InternalBuffer(), 0, Storage::BLOCK_ALLOC_SIZE);
+		if (options.debug_initialize != DebugInitialize::NO_INITIALIZE) {
+			uint8_t value = options.debug_initialize == DebugInitialize::DEBUG_ZERO_INITIALIZE ? 0 : 0xFF;
+			memset(result->InternalBuffer(), value, Storage::BLOCK_ALLOC_SIZE);
 		}
 	}
 	return result;

@@ -42,7 +42,7 @@ string TestCreatePath(string suffix);
 unique_ptr<DBConfig> GetTestConfig();
 bool TestIsInternalError(unordered_set<string> &internal_error_messages, const string &error);
 void SetTestDirectory(string path);
-void SetZeroInitialize(bool new_zero_init);
+void SetDebugInitialize(int value);
 string GetTestDirectory();
 string GetCSVPath();
 void WriteCSV(string path, const char *csv);

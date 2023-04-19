@@ -99,7 +99,7 @@ void SingleFileStorageManager::LoadDatabase() {
 	StorageManagerOptions options;
 	options.read_only = read_only;
 	options.use_direct_io = config.options.use_direct_io;
-	options.zero_initialize = config.options.zero_initialize;
+	options.debug_initialize = config.options.debug_initialize;
 	// first check if the database exists
 	if (!fs.FileExists(path)) {
 		if (read_only) {

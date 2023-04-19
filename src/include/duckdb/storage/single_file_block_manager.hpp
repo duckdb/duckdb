@@ -15,6 +15,7 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -23,7 +24,7 @@ class DatabaseInstance;
 struct StorageManagerOptions {
 	bool read_only = false;
 	bool use_direct_io = false;
-	bool zero_initialize = false;
+	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
 };
 
 //! SingleFileBlockManager is an implementation for a BlockManager which manages blocks in a single file

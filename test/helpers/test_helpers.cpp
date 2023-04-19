@@ -21,7 +21,7 @@ using namespace std;
 
 namespace duckdb {
 static string custom_test_directory;
-static bool zero_initialize = false;
+static int debug_initialize_value = -1;
 
 bool NO_FAIL(QueryResult &result) {
 	if (result.HasError()) {
@@ -76,8 +76,8 @@ void SetTestDirectory(string path) {
 	custom_test_directory = path;
 }
 
-void SetZeroInitialize(bool new_zero_init) {
-	zero_initialize = new_zero_init;
+void SetDebugInitialize(int value) {
+	debug_initialize_value = value;
 }
 
 string GetTestDirectory() {
@@ -124,7 +124,19 @@ unique_ptr<DBConfig> GetTestConfig() {
 	auto result = make_uniq<DBConfig>();
 	result->options.checkpoint_wal_size = 0;
 	result->options.allow_unsigned_extensions = true;
-	result->options.zero_initialize = zero_initialize;
+	switch(debug_initialize_value) {
+	case -1:
+		break;
+	case 0:
+		result->options.debug_initialize = DebugInitialize::DEBUG_ZERO_INITIALIZE;
+		break;
+	case 0xFF:
+		result->options.debug_initialize = DebugInitialize::DEBUG_ONE_INITIALIZE;
+		break;
+	default:
+		fprintf(stderr, "Invalid value for debug_initialize_value\n");
+		exit(1);
+	}
 	return result;
 }
 

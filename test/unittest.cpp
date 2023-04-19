@@ -52,7 +52,9 @@ int main(int argc, char *argv[]) {
 			SetTestDirectory(test_dir);
 			delete_test_path = false;
 		} else if (string(argv[i]) == "--zero-initialize") {
-			SetZeroInitialize(true);
+			SetDebugInitialize(0);
+		} else if (string(argv[i]) == "--one-initialize") {
+			SetDebugInitialize(0xFF);
 		} else {
 			new_argv[new_argc] = argv[i];
 			new_argc++;
