@@ -12,8 +12,9 @@
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/function/function.hpp"
 
+namespace duckdb {
+
 namespace {
-using namespace duckdb;
 
 struct ParameterKind {
 	enum class Type : uint8_t { POSITIONAL_ONLY, POSITIONAL_OR_KEYWORD, VAR_POSITIONAL, KEYWORD_ONLY, VAR_KEYWORD };
@@ -37,7 +38,7 @@ struct ParameterKind {
 struct PythonUDFData {
 public:
 	PythonUDFData(const string &name, scalar_function_t func, bool varargs_p, FunctionNullHandling null_handling)
-	    : name(name), null_handling(null_handling), func(func) {
+	    : name(name), null_handling(null_handling), func(std::move(func)) {
 		if (varargs_p) {
 			varargs = LogicalType::ANY;
 		}
@@ -61,7 +62,7 @@ public:
 		}
 	}
 
-	void OverrideReturnType(shared_ptr<DuckDBPyType> type) {
+	void OverrideReturnType(const shared_ptr<DuckDBPyType> &type) {
 		if (!type) {
 			return;
 		}
@@ -139,8 +140,6 @@ public:
 };
 
 }; // namespace
-
-namespace duckdb {
 
 static py::list ConvertToSingleBatch(const string &timezone_config, vector<LogicalType> &types, vector<string> &names,
                                      DataChunk &input) {
@@ -324,7 +323,7 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 
 template <bool PYARROW>
 static ScalarFunction CreateUDFInternal(const string &name, scalar_function_t func, const py::object &udf,
-                                        const py::object &parameters, shared_ptr<DuckDBPyType> return_type,
+                                        const py::object &parameters, const shared_ptr<DuckDBPyType> &return_type,
                                         bool varargs, FunctionNullHandling null_handling) {
 	PythonUDFData data(name, func, varargs, null_handling);
 
@@ -338,19 +337,20 @@ static ScalarFunction CreateUDFInternal(const string &name, scalar_function_t fu
 
 ScalarFunction DuckDBPyConnection::CreatePyArrowScalarUDF(const string &name, const py::object &udf,
                                                           const py::object &parameters,
-                                                          shared_ptr<DuckDBPyType> return_type, bool varargs,
+                                                          const shared_ptr<DuckDBPyType> &return_type, bool varargs,
                                                           FunctionNullHandling null_handling,
                                                           PythonExceptionHandling exception_handling) {
 	scalar_function_t func = CreateVectorizedFunction(udf.ptr(), exception_handling);
-	return CreateUDFInternal<true>(name, func, udf, parameters, return_type, varargs, null_handling);
+	return CreateUDFInternal<true>(name, std::move(func), udf, parameters, return_type, varargs, null_handling);
 }
 
 ScalarFunction DuckDBPyConnection::CreateScalarUDF(const string &name, const py::object &udf,
-                                                   const py::object &parameters, shared_ptr<DuckDBPyType> return_type,
-                                                   bool varargs, FunctionNullHandling null_handling,
+                                                   const py::object &parameters,
+                                                   const shared_ptr<DuckDBPyType> &return_type, bool varargs,
+                                                   FunctionNullHandling null_handling,
                                                    PythonExceptionHandling exception_handling) {
 	scalar_function_t func = CreateNativeFunction(udf.ptr(), exception_handling);
-	return CreateUDFInternal<false>(name, func, udf, parameters, return_type, varargs, null_handling);
+	return CreateUDFInternal<false>(name, std::move(func), udf, parameters, return_type, varargs, null_handling);
 }
 
 } // namespace duckdb

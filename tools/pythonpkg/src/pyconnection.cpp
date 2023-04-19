@@ -295,7 +295,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterScalarUDF(const strin
 	auto &catalog = Catalog::GetSystemCatalog(context);
 
 	auto scalar_function =
-	    CreateScalarUDF(name, udf, parameters_p, return_type_p, varargs, null_handling, exception_handling);
+	    CreateScalarUDF(name, udf, parameters_p, std::move(return_type_p), varargs, null_handling, exception_handling);
 	CreateScalarFunctionInfo info(scalar_function);
 
 	context.transaction.BeginTransaction();

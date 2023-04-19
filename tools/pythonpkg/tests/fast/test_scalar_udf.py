@@ -2,7 +2,6 @@ import duckdb
 import os
 import pandas as pd
 import pytest
-from typing import Union
 
 from duckdb.typing import *
 
@@ -26,10 +25,40 @@ class TestScalarUDF(object):
         res = con.sql('select i, plus_one(i) from test_vector_types(NULL::BIGINT, false) t(i), range(2000)')
         assert len(res) == 22000
 
+    def test_passthrough(self):
+        def passthrough(x):
+            return x
+
+        con = duckdb.connect()
+        con.register_scalar('passthrough', passthrough, [BIGINT], BIGINT)
+        assert con.sql('select passthrough(i) from range(5000) tbl(i)').fetchall() == con.sql('select * from range(5000)').fetchall()
+
+    def test_execute(self):
+        def func(x):
+            return x % 2
+
+        con = duckdb.connect()
+        con.register_scalar('modulo_op', func, [BIGINT], TINYINT)
+        res = con.execute('select modulo_op(?)', [5]).fetchall()
+        assert res == [(1,)]
+
+    def test_cast_output(self):
+        def takes_string(x):
+            return x
+
+        con = duckdb.connect()
+        con.register_scalar('casts_from_string', takes_string, [VARCHAR], BIGINT)
+
+        res = con.sql("select casts_from_string('42')").fetchall()
+        assert res == [(42,)]
+
+        with pytest.raises(duckdb.InvalidInputException):
+            res = con.sql("select casts_from_string('test')").fetchall()
+
     def test_detected_parameters(self):
         def concatenate(a: str, b: str):
             return a + b
-        
+
         con = duckdb.connect()
         con.register_scalar('py_concatenate', concatenate, None, VARCHAR)
         res = con.sql("""
@@ -55,7 +84,7 @@ class TestScalarUDF(object):
         def variable_args(*args):
             amount = len(args)
             return amount
-        
+
         con = duckdb.connect()
         con.register_scalar('varargs', variable_args, None, BIGINT, varargs=True)
         res = con.sql("""select varargs('5', '3', '2', 1, 0.12345)""").fetchall()
@@ -108,15 +137,11 @@ class TestScalarUDF(object):
         res = con.sql('select forward_error(5)')
         with pytest.raises(duckdb.InvalidInputException, match='Python exception occurred while executing the UDF'):
             res.fetchall()
-        
+
         con.register_scalar('return_null', throws, [BIGINT], BIGINT, exception_handling='return_null')
         res = con.sql('select return_null(5)').fetchall()
         assert res == [(None,)]
 
-    def test_binding(self):
-        # TODO: add a way to do extra binding for the UDF
-        pass
-    
     def test_structs(self):
         def add_extra_column(original):
             original['a'] = 200
@@ -142,7 +167,7 @@ class TestScalarUDF(object):
             for item in reversed_keys:
                 result[item] = dict[item]
             return result
-        
+
         con.register_scalar('swap_keys', swap_keys, [con.struct_type({'a': BIGINT, 'b': VARCHAR})], con.struct_type({'a': VARCHAR, 'b': BIGINT}))
         res = con.sql("""
         select swap_keys({'a': 42, 'b': 'answer_to_life'})

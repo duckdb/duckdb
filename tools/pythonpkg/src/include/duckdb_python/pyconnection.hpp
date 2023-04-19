@@ -214,11 +214,11 @@ private:
 	PathLike GetPathLike(const py::object &object);
 	unique_lock<std::mutex> AcquireConnectionLock();
 	ScalarFunction CreatePyArrowScalarUDF(const string &name, const py::object &udf, const py::object &parameters,
-	                                      shared_ptr<DuckDBPyType> return_type, bool varargs,
+	                                      const shared_ptr<DuckDBPyType> &return_type, bool varargs,
 	                                      FunctionNullHandling null_handling,
 	                                      PythonExceptionHandling exception_handling);
 	ScalarFunction CreateScalarUDF(const string &name, const py::object &udf, const py::object &parameters,
-	                               shared_ptr<DuckDBPyType> return_type, bool varargs,
+	                               const shared_ptr<DuckDBPyType> &return_type, bool varargs,
 	                               FunctionNullHandling null_handling, PythonExceptionHandling exception_handling);
 
 	static PythonEnvironmentType environment;
