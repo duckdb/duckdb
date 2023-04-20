@@ -72,7 +72,7 @@ OperatorResultType PipelineExecutor::FlushCachingOperatorsPush() {
 		flushing_idx++;
 	}
 
-	// Sink interrupted -> when continueing the pipeline we need to re-sink the final_chunk
+	// Sink interrupted -> when continuing the pipeline we need to re-sink the final_chunk
 	if (push_result == OperatorResultType::BLOCKED) {
 		return OperatorResultType::BLOCKED;
 	}
@@ -149,8 +149,7 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 		}
 	}
 
-	// TODO this may be wrong?
-	if (!exhausted_source && !IsFinished()) {
+	if ((!exhausted_source || !done_flushing) && !IsFinished()) {
 		return PipelineExecuteResult::NOT_FINISHED;
 	}
 

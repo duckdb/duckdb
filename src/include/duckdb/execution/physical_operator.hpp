@@ -206,6 +206,7 @@ public:
 class CachingOperatorState : public OperatorState {
 public:
 	~CachingOperatorState() override {
+		D_ASSERT(!cached_chunk || cached_chunk->size() == 0);
 	}
 
 	virtual void Finalize(PhysicalOperator *op, ExecutionContext &context) override {
