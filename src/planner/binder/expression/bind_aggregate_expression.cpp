@@ -60,7 +60,7 @@ static Value NegatePercentileValue(const Value &v, const bool desc) {
 static void NegatePercentileFractions(ClientContext &context, unique_ptr<ParsedExpression> &fractions, bool desc) {
 	D_ASSERT(fractions.get());
 	D_ASSERT(fractions->expression_class == ExpressionClass::BOUND_EXPRESSION);
-	auto &bound = (BoundExpression &)*fractions;
+	auto &bound = fractions->Cast<BoundExpression>();
 
 	if (!bound.expr->IsFoldable()) {
 		return;
@@ -81,7 +81,8 @@ static void NegatePercentileFractions(ClientContext &context, unique_ptr<ParsedE
 	}
 }
 
-BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry *func, idx_t depth) {
+BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, optional_ptr<AggregateFunctionCatalogEntry> func,
+                                           idx_t depth) {
 	// first bind the child of the aggregate expression (if any)
 	this->bound_aggregate = true;
 	unique_ptr<Expression> bound_filter;
@@ -137,7 +138,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 				if (!success) {
 					throw BinderException(error);
 				}
-				auto &bound_expr = (BoundExpression &)*aggr.children[i];
+				auto &bound_expr = aggr.children[i]->Cast<BoundExpression>();
 				ExtractCorrelatedExpressions(binder, *bound_expr.expr);
 			}
 			if (aggr.filter) {
@@ -146,7 +147,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 				if (!success) {
 					throw BinderException(error);
 				}
-				auto &bound_expr = (BoundExpression &)*aggr.filter;
+				auto &bound_expr = aggr.filter->Cast<BoundExpression>();
 				ExtractCorrelatedExpressions(binder, *bound_expr.expr);
 			}
 			if (aggr.order_bys && !aggr.order_bys->orders.empty()) {
@@ -155,7 +156,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 					if (!success) {
 						throw BinderException(error);
 					}
-					auto &bound_expr = (BoundExpression &)*order.expression;
+					auto &bound_expr = order.expression->Cast<BoundExpression>();
 					ExtractCorrelatedExpressions(binder, *bound_expr.expr);
 				}
 			}

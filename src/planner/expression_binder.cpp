@@ -28,8 +28,8 @@ ExpressionBinder::~ExpressionBinder() {
 	}
 }
 
-BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> *expr, idx_t depth, bool root_expression) {
-	auto &expr_ref = **expr;
+BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression) {
+	auto &expr_ref = *expr;
 	switch (expr_ref.expression_class) {
 	case ExpressionClass::BETWEEN:
 		return BindExpression(expr_ref.Cast<BetweenExpression>(), depth);
@@ -84,7 +84,7 @@ bool ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr)
 	while (!active_binders.empty()) {
 		auto &next_binder = active_binders.back().get();
 		ExpressionBinder::QualifyColumnNames(next_binder.binder, expr);
-		auto bind_result = next_binder.Bind(&expr, depth);
+		auto bind_result = next_binder.Bind(expr, depth);
 		if (bind_result.empty()) {
 			success = true;
 			break;
@@ -98,7 +98,7 @@ bool ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr)
 
 void ExpressionBinder::BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, string &error) {
 	if (expr) {
-		string bind_error = Bind(&expr, depth);
+		string bind_error = Bind(expr, depth);
 		if (error.empty()) {
 			error = bind_error;
 		}
@@ -184,10 +184,10 @@ LogicalType ExpressionBinder::ExchangeNullType(const LogicalType &type) {
 	return ExchangeType(type, LogicalTypeId::SQLNULL, LogicalType::INTEGER);
 }
 
-unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, LogicalType *result_type,
+unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, optional_ptr<LogicalType> result_type,
                                               bool root_expression) {
 	// bind the main expression
-	auto error_msg = Bind(&expr, 0, root_expression);
+	auto error_msg = Bind(expr, 0, root_expression);
 	if (!error_msg.empty()) {
 		// failed to bind: try to bind correlated columns in the expression (if any)
 		bool success = BindCorrelatedColumns(expr);
@@ -207,8 +207,8 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 			// SQL NULL type is only used internally in the binder
 			// cast to INTEGER if we encounter it outside of the binder
 			if (ContainsNullType(result->return_type)) {
-				auto result_type = ExchangeNullType(result->return_type);
-				result = BoundCastExpression::AddCastToType(context, std::move(result), result_type);
+				auto exchanged_type = ExchangeNullType(result->return_type);
+				result = BoundCastExpression::AddCastToType(context, std::move(result), exchanged_type);
 			}
 		}
 		if (result->return_type.id() == LogicalTypeId::UNKNOWN) {
@@ -221,9 +221,9 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 	return result;
 }
 
-string ExpressionBinder::Bind(unique_ptr<ParsedExpression> *expr, idx_t depth, bool root_expression) {
+string ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression) {
 	// bind the node, but only if it has not been bound yet
-	auto &expression = **expr;
+	auto &expression = *expr;
 	auto alias = expression.alias;
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION) {
 		// already bound, don't bind it again
@@ -235,8 +235,8 @@ string ExpressionBinder::Bind(unique_ptr<ParsedExpression> *expr, idx_t depth, b
 		return result.error;
 	}
 	// successfully bound: replace the node with a BoundExpression
-	*expr = make_uniq<BoundExpression>(std::move(result.expression));
-	auto &be = (*expr)->Cast<BoundExpression>();
+	expr = make_uniq<BoundExpression>(std::move(result.expression));
+	auto &be = expr->Cast<BoundExpression>();
 	be.alias = alias;
 	if (!alias.empty()) {
 		be.expr->alias = alias;

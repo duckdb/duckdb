@@ -30,7 +30,7 @@ private:
 	//! First iteration: count how many times each expression occurs
 	void CountExpressions(Expression &expr, CSEReplacementState &state);
 	//! Second iteration: perform the actual replacement of the duplicate expressions with common subexpressions nodes
-	void PerformCSEReplacement(unique_ptr<Expression> *expr, CSEReplacementState &state);
+	void PerformCSEReplacement(unique_ptr<Expression> &expr, CSEReplacementState &state);
 
 	//! Main method to extract common subexpressions
 	void ExtractCommonSubExpresions(LogicalOperator &op);
