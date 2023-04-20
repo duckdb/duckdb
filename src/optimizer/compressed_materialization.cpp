@@ -76,7 +76,7 @@ unique_ptr<LogicalOperator> CompressedMaterialization::Compress(unique_ptr<Logic
 	root->ResolveOperatorTypes();
 
 	Compress(op);
-	RemoveRedundantProjections(op);
+	RemoveRedundantExpressions(op);
 
 	return op;
 }
@@ -452,13 +452,13 @@ unique_ptr<Expression> CompressedMaterialization::GetStringDecompress(unique_ptr
 	                                          std::move(arguments), nullptr);
 }
 
-void CompressedMaterialization::RemoveRedundantProjections(unique_ptr<LogicalOperator> &op) {
+void CompressedMaterialization::RemoveRedundantExpressions(unique_ptr<LogicalOperator> &op) {
 	if (compression_table_indices.empty() || decompression_table_indices.empty()) {
 		return;
 	}
 
 	for (auto &child : op->children) {
-		RemoveRedundantProjections(child);
+		RemoveRedundantExpressions(child);
 	}
 
 	if (op->type != LogicalOperatorType::LOGICAL_PROJECTION) {
@@ -471,208 +471,159 @@ void CompressedMaterialization::RemoveRedundantProjections(unique_ptr<LogicalOpe
 		return; // Nope
 	}
 
-	column_binding_set_t referenced_bindings;
-	vector<column_binding_map_t<ColumnBinding>> mapping_chain;
-	unique_ptr<LogicalOperator> *decompression_parent;
-	auto decompression_ptr = FindDecompression(op, referenced_bindings, mapping_chain, decompression_parent);
+	vector<LogicalOperator *> operators_in_between;
+	auto decompression_ptr = FindDecompression(*op, operators_in_between);
 	if (!decompression_ptr) {
 		return;
 	}
-	D_ASSERT(decompression_ptr->get()->type == LogicalOperatorType::LOGICAL_PROJECTION);
-	auto &decompression = decompression_ptr->get()->Cast<LogicalProjection>();
+	auto &decompression = decompression_ptr->Cast<LogicalProjection>();
 
 	// We found a decompression followed by a compression, try to eliminate redundant decompress/compress of columns
-	idx_t decompress_count;
-	idx_t compress_count;
-	if (!RemoveRedundantExpressions(decompression, compression, decompress_count, compress_count,
-	                                referenced_bindings)) {
-		return; // Couldn't remove any expressions
-	}
-	compression.ResolveOperatorTypes();
-
-	if (decompress_count == 0) {
-		RemoveOperator(*decompression_ptr);
-		if (!mapping_chain.empty()) {
-			mapping_chain.pop_back();
-		}
-	}
-
-	if (!mapping_chain.empty()) {
-		// We removed the decompress projection, but the plan is not yet consistent
-		// If there was more than 1 operator in between the compress /  decompress projection
-		// The expression types there are not consistent
-		// Make them consistent by following the mapping chain
-		auto &op_with_new_types =
-		    decompress_count == 0 ? **decompression_parent : *decompression_parent->get()->children[0];
-		UpdateTypesRecursively(op_with_new_types.GetColumnBindings(), op_with_new_types.types,
-		                       std::move(mapping_chain));
-	}
-	compression.ResolveOperatorTypes();
-
-	if (compress_count == 0) {
-		RemoveOperator(op);
-	}
+	RemoveRedundantExpressions(decompression, compression, operators_in_between);
 
 	// NOTE: we don't have to update statistics_map here because this is the last step of this optimizer
 }
 
-unique_ptr<LogicalOperator> *
-CompressedMaterialization::FindDecompression(unique_ptr<LogicalOperator> &op, column_binding_set_t &referenced_bindings,
-                                             vector<column_binding_map_t<ColumnBinding>> &mapping_chain,
-                                             unique_ptr<LogicalOperator> *&decompression_parent) {
-	// Now try to find a decompress projection in the operators below
-	// This can currently only deal with pipelines that do not add or remove a column
-	decompression_parent = &op;
-	auto decompression_ptr = &decompression_parent->get()->children[0];
+LogicalOperator *CompressedMaterialization::FindDecompression(LogicalOperator &compression,
+                                                              vector<LogicalOperator *> &operators_in_between) {
+	auto decompression_ptr = compression.children[0].get();
 	while (true) {
-		auto &current_child = **decompression_ptr;
-		bool found_decompression = false;
-		switch (current_child.type) {
-		case LogicalOperatorType::LOGICAL_PROJECTION: {
-			auto &projection = current_child.Cast<LogicalProjection>();
-			if (projection.expressions.size() != op->expressions.size()) {
-				// For now, we only deal with NOP projections
-				return nullptr;
-			}
+		const auto &current_child = *decompression_ptr;
+		if (current_child.type == LogicalOperatorType::LOGICAL_PROJECTION) {
+			const auto &projection = current_child.Cast<LogicalProjection>();
 			if (decompression_table_indices.find(projection.table_index) != decompression_table_indices.end()) {
-				found_decompression = true;
-				break;
+				std::reverse(operators_in_between.begin(), operators_in_between.end()); // Reverse so it's bottom-up
+				return decompression_ptr;
 			}
-			// If it's a NOP projection we can deal with it, also build the mapping chain
-			mapping_chain.emplace_back();
-			auto &mapping = mapping_chain.back();
-			const auto projection_input_bindings = projection.children[0]->GetColumnBindings();
-			const auto projection_output_bindings = projection.GetColumnBindings();
-			for (idx_t col_idx = 0; col_idx < projection.expressions.size(); col_idx++) {
-				const auto &expr = *projection.expressions[col_idx];
-				const auto &input_binding = projection_input_bindings[col_idx];
-				if (expr.type != ExpressionType::BOUND_COLUMN_REF ||
-				    expr.Cast<BoundColumnRefExpression>().binding != input_binding) {
-					// Not a colref, or the binding does not match the input (columns changed order)
-					return nullptr;
-				}
-				const auto &output_binding = projection_output_bindings[col_idx];
-				mapping.emplace(input_binding, output_binding);
-			}
-			break;
+		} else if (current_child.children.size() != 1) {
+			return nullptr; // Cannot find corresponding decompression
 		}
-		case LogicalOperatorType::LOGICAL_FILTER:
-			if (current_child.GetColumnBindings() != current_child.children[0]->GetColumnBindings()) {
-				return nullptr;
-			}
-			break;
-		case LogicalOperatorType::LOGICAL_LIMIT:
-			break;
-		default:
-			return nullptr; // Default is to assume we cannot remove the redundant projection
-		}
-
-		if (found_decompression) {
-			break;
-		}
-
-		// Keep track of this operator's referenced bindings and recurse
-		LogicalOperatorVisitor::EnumerateExpressions(
-		    current_child, [&](unique_ptr<Expression> *child) { GetReferencedBindings(**child, referenced_bindings); });
-		decompression_parent = decompression_ptr;
-		decompression_ptr = &decompression_parent->get()->children[0];
+		D_ASSERT(current_child.children.size() == 1);
+		operators_in_between.emplace_back(decompression_ptr);
+		decompression_ptr = current_child.children[0].get();
 	}
-	return decompression_ptr;
 }
 
-bool CompressedMaterialization::RemoveRedundantExpressions(LogicalProjection &decompression,
-                                                           LogicalProjection &compression, idx_t &decompress_count,
-                                                           idx_t &compress_count,
-                                                           const column_binding_set_t &referenced_bindings) {
+bool UsesBinding(const Expression &expression, const ColumnBinding &binding) {
+	if (expression.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+		const auto &col_ref = expression.Cast<BoundColumnRefExpression>();
+		return col_ref.binding == binding;
+	} else {
+		bool uses_binding = false;
+		ExpressionIterator::EnumerateChildren(
+		    expression, [&](const Expression &child) { uses_binding = uses_binding || UsesBinding(child, binding); });
+		return uses_binding;
+	}
+}
+
+void CompressedMaterialization::RemoveRedundantExpressions(LogicalProjection &decompression,
+                                                           LogicalProjection &compression,
+                                                           const vector<LogicalOperator *> &operators_in_between) {
 	auto &decompress_exprs = decompression.expressions;
 	auto &compress_exprs = compression.expressions;
-	D_ASSERT(decompress_exprs.size() == compress_exprs.size());
-
-	bool removed_anything = false;
-	decompress_count = 0;
-	compress_count = 0;
-	for (idx_t col_idx = 0; col_idx < compression.expressions.size(); col_idx++) {
+	const auto decompress_bindings = decompression.GetColumnBindings();
+	for (idx_t col_idx = 0; col_idx < decompression.expressions.size(); col_idx++) {
 		auto &decompress_expr = decompress_exprs[col_idx];
-		auto &compress_expr = compress_exprs[col_idx];
+		if (decompress_expr->type != ExpressionType::BOUND_FUNCTION) {
+			continue;
+		}
 
-		if (decompress_expr->type == ExpressionType::BOUND_FUNCTION &&
-		    compress_expr->type == ExpressionType::BOUND_FUNCTION) {
-			auto &decompress_fun = decompress_expr->Cast<BoundFunctionExpression>();
-			auto &decompress_colref = decompress_fun.children[0]->Cast<BoundColumnRefExpression>();
-
-			if (referenced_bindings.find(decompress_colref.binding) == referenced_bindings.end()) {
-				decompress_expr = std::move(decompress_fun.children[0]);
-
-				auto &compress_fun = compress_expr->Cast<BoundFunctionExpression>();
-				compress_expr = std::move(compress_fun.children[0]);
-				compress_expr->return_type = decompress_expr->return_type;
-
-				removed_anything = true;
+		// Build chain of expressions referencing this column
+		bool can_remove_current = true;
+		idx_t current_col_idx = col_idx;
+		auto current_binding = decompress_bindings[current_col_idx];
+		vector<Expression *> expressions_in_between;
+		for (auto current_op : operators_in_between) {
+			const auto current_bindings = current_op->GetColumnBindings();
+			switch (current_op->type) {
+			case LogicalOperatorType::LOGICAL_PROJECTION: {
+				for (idx_t expr_idx = 0; expr_idx < current_op->expressions.size(); expr_idx++) {
+					const auto &expr = current_op->expressions[expr_idx];
+					if (expr->type != ExpressionType::BOUND_COLUMN_REF) {
+						if (UsesBinding(*expr, current_binding)) {
+							can_remove_current = false;
+							break;
+						}
+						continue;
+					}
+					const auto &colref = expr->Cast<BoundColumnRefExpression>();
+					if (colref.binding == current_binding) {
+						current_col_idx = expr_idx;
+						current_binding = current_bindings[current_col_idx];
+						expressions_in_between.emplace_back(expr.get());
+						break;
+					}
+				}
+				break;
+			}
+			case LogicalOperatorType::LOGICAL_FILTER: {
+				for (auto &expr : current_op->expressions) {
+					if (UsesBinding(*expr, current_binding)) {
+						can_remove_current = false;
+						break;
+					}
+				}
+				if (!can_remove_current) {
+					break;
+				}
+				bool projected_out = false;
+				for (idx_t filter_out_idx = 0; filter_out_idx < current_bindings.size(); filter_out_idx++) {
+					if (current_bindings[filter_out_idx] == current_binding) {
+						current_col_idx = filter_out_idx;
+						projected_out = true;
+						break;
+					}
+				}
+				D_ASSERT(projected_out); // Should always be projected out if not used in filter exprs
+				break;
+			}
+			case LogicalOperatorType::LOGICAL_LIMIT:
+				break;
+			default:
+				can_remove_current = false;
 			}
 		}
 
-		if (decompress_expr->type == ExpressionType::BOUND_FUNCTION) {
-			decompress_count++;
+		if (!can_remove_current) {
+			continue;
 		}
-		if (compress_expr->type == ExpressionType::BOUND_FUNCTION) {
-			compress_count++;
+
+		// Check if the column it maps to is actually a compression
+		auto &compress_expr = compress_exprs[current_col_idx];
+		if (compress_expr->type != ExpressionType::BOUND_FUNCTION) {
+			continue;
 		}
+
+		auto &decompress_fun = decompress_expr->Cast<BoundFunctionExpression>();
+		auto &compress_fun = compress_expr->Cast<BoundFunctionExpression>();
+		D_ASSERT(decompress_fun.return_type == compress_fun.children[0]->return_type);
+
+		if (decompress_fun.children[0]->return_type != compress_fun.return_type) {
+			continue; // Different statistics, different type
+		}
+
+		if (decompress_fun.return_type.IsIntegral()) {
+			const auto &decompress_constant = decompress_fun.children[1]->Cast<BoundConstantExpression>();
+			const auto &compress_constant = compress_fun.children[1]->Cast<BoundConstantExpression>();
+			if (decompress_constant.value != compress_constant.value) {
+				continue; // Different min value
+			}
+		}
+
+		// Replace the decompress with its child so it stays compressed
+		decompress_expr = std::move(decompress_fun.children[0]);
+		const auto &compressed_type = decompress_expr->return_type;
+
+		// All references in between have to be updated with the compressed type
+		for (auto &expr : expressions_in_between) {
+			D_ASSERT(expr->type == ExpressionType::BOUND_COLUMN_REF);
+			expr->return_type = compressed_type;
+		}
+
+		// Replace the compress with its child because it wasn't decompressed
+		compress_expr = std::move(compress_fun.children[0]);
+		compress_expr->return_type = compressed_type;
 	}
-	return removed_anything;
-}
-
-void CompressedMaterialization::RemoveOperator(unique_ptr<LogicalOperator> &op) {
-	const auto bindings_before = op->GetColumnBindings();
-	const auto bindings_after = op->children[0]->GetColumnBindings();
-	const auto &types_after = op->children[0]->types;
-	op = std::move(op->children[0]);
-
-	ColumnBindingReplacer replacer;
-	auto &replace_bindings = replacer.replace_bindings;
-	for (idx_t col_idx = 0; col_idx < bindings_before.size(); col_idx++) {
-		const auto &old_binding = bindings_before[col_idx];
-		const auto &new_binding = bindings_after[col_idx];
-		const auto &new_type = types_after[col_idx];
-		replace_bindings.emplace_back(old_binding, new_binding, new_type);
-	}
-
-	// Make the plan consistent again
-	replacer.VisitOperator(*root);
-
-	// Resolve types
-	root->ResolveOperatorTypes();
-}
-
-void CompressedMaterialization::UpdateTypesRecursively(const vector<ColumnBinding> &bindings,
-                                                       const vector<LogicalType> &types,
-                                                       vector<column_binding_map_t<ColumnBinding>> &&mapping_chain) {
-	if (mapping_chain.empty()) {
-		return;
-	}
-
-	// The current mapping
-	const auto mapping = std::move(mapping_chain.back());
-	mapping_chain.pop_back();
-
-	// Not actually replacing columns, just types
-	ColumnBindingReplacer replacer;
-	auto &replace_bindings = replacer.replace_bindings;
-
-	// Also build for the next round
-	vector<ColumnBinding> bindings_next;
-	bindings_next.reserve(bindings.size());
-	for (idx_t col_idx = 0; col_idx < bindings.size(); col_idx++) {
-		const auto &binding = bindings[col_idx];
-		auto it = mapping.find(binding);
-		D_ASSERT(it != mapping.end());
-		bindings_next.emplace_back(it->second);
-		replace_bindings.emplace_back(it->first, it->first, types[col_idx]);
-	}
-
-	// Replace types
-	replacer.VisitOperator(*root);
-
-	UpdateTypesRecursively(bindings_next, types, std::move(mapping_chain));
 }
 
 } // namespace duckdb

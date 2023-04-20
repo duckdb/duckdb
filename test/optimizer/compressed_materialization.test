@@ -38,7 +38,7 @@ explain select * from lineitem order by l_shipdate
 ----
 logical_opt	<REGEX>:.*__internal_decompress.*__internal_compress.*
 
-# test that we get the same result with or without the optimizer
+# test that we get the same result with and without compressed materialization
 query IIIIIIIIIIIIIII nosort q0
 select * from lineitem order by l_shipdate
 ----

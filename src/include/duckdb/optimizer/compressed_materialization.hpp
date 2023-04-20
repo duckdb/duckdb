@@ -123,22 +123,13 @@ private:
 	                                             const BaseStatistics &stats);
 	unique_ptr<Expression> GetStringDecompress(unique_ptr<Expression> input, const BaseStatistics &stats);
 
-	//! Removes redundant compress/decompress projections
-	void RemoveRedundantProjections(unique_ptr<LogicalOperator> &op);
-	//! Finds the decompression corresponding to compression 'op'
-	unique_ptr<LogicalOperator> *FindDecompression(unique_ptr<LogicalOperator> &op,
-	                                               column_binding_set_t &referenced_bindings,
-	                                               vector<column_binding_map_t<ColumnBinding>> &mapping_chain,
-	                                               unique_ptr<LogicalOperator> *&decompression_parent);
+	//! Finds compress/decompress projections and removes redundant compress/decompress expressions
+	void RemoveRedundantExpressions(unique_ptr<LogicalOperator> &op);
+	//! Finds a potentially redundant decompress projection corresponding to the given compress projection
+	LogicalOperator *FindDecompression(LogicalOperator &compression, vector<LogicalOperator *> &operators_in_between);
 	//! Removes redundant compress/decompress expressions in projections
-	bool RemoveRedundantExpressions(LogicalProjection &decompression, LogicalProjection &compression,
-	                                idx_t &decompress_count, idx_t &compress_count,
-	                                const column_binding_set_t &referenced_bindings);
-	//! Remove the given operator from the plan
-	void RemoveOperator(unique_ptr<LogicalOperator> &op);
-	//! Updates the types of expression recursively after removing an operator
-	void UpdateTypesRecursively(const vector<ColumnBinding> &bindings, const vector<LogicalType> &types,
-	                            vector<column_binding_map_t<ColumnBinding>> &&mapping_chain);
+	void RemoveRedundantExpressions(LogicalProjection &decompression, LogicalProjection &compression,
+	                                const vector<LogicalOperator *> &operators_in_between);
 
 private:
 	ClientContext &context;
