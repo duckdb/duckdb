@@ -45,6 +45,8 @@
 #include "duckdb_python/python_objects.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb_python/exception_handling_enum.hpp"
+#include "duckdb/parser/parsed_data/drop_info.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 
 #include <random>
 
@@ -110,6 +112,9 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      "Register a scalar UDF so it can be used in queries", py::arg("name"), py::arg("function"),
 	      py::arg("return_type") = py::none(), py::arg("parameters") = py::none(), py::kw_only(),
 	      py::arg("varargs") = false, py::arg("null_handling") = 0, py::arg("exception_handling") = 0);
+
+	m.def("unregister_function", &DuckDBPyConnection::UnregisterUDF, "Remove a previously registered function",
+	      py::arg("name"));
 
 	DefineMethod({"sqltype", "dtype", "type"}, m, &DuckDBPyConnection::Type,
 	             "Create a type object by parsing the 'type_str' string", py::arg("type_str"));
@@ -278,6 +283,35 @@ bool DuckDBPyConnection::FileSystemIsRegistered(const string &name) {
 	return std::find(subsystems.begin(), subsystems.end(), name) != subsystems.end();
 }
 
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterUDF(const string &name) {
+	if (!connection) {
+		throw ConnectionException("Connection already closed!");
+	}
+	auto entry = registered_functions.find(name);
+	if (entry == registered_functions.end()) {
+		// Not registered or already unregistered
+		throw InvalidInputException("No function by the name of '%s' was found in the list of registered functions",
+		                            name);
+	}
+
+	auto &context = *connection->context;
+
+	context.RunFunctionInTransaction([&]() {
+		// create function
+		auto &catalog = Catalog::GetCatalog(context, SYSTEM_CATALOG);
+		DropInfo info;
+		info.type = CatalogType::SCALAR_FUNCTION_ENTRY;
+		info.name = name;
+		info.allow_drop_internal = true;
+		info.cascade = false;
+		info.if_exists = false;
+		catalog.DropEntry(context, &info);
+	});
+	registered_functions.erase(entry);
+
+	return shared_from_this();
+}
+
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::object &udf,
                                                                      const py::object &parameters_p,
                                                                      const shared_ptr<DuckDBPyType> &return_type_p,
@@ -287,15 +321,17 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterScalarUDF(const strin
 		throw ConnectionException("Connection already closed!");
 	}
 	auto &context = *connection->context;
-	auto &catalog = Catalog::GetSystemCatalog(context);
 
+	if (registered_functions.find(name) != registered_functions.end()) {
+		throw NotImplementedException("A function by the name of '%s' is already registered, registering multiple "
+		                              "functions by the same name is not supported yet, please unregister it first",
+		                              name);
+	}
 	auto scalar_function =
 	    CreateScalarUDF(name, udf, parameters_p, return_type_p, varargs, null_handling, exception_handling);
 	CreateScalarFunctionInfo info(scalar_function);
 
-	context.transaction.BeginTransaction();
-	catalog.CreateFunction(context, &info);
-	context.transaction.Commit();
+	context.RegisterFunction(&info);
 
 	registered_functions[name] = make_uniq<PythonDependencies>(udf);
 

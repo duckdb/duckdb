@@ -101,7 +101,6 @@ class TestScalarUDF(object):
     def test_overwrite_name(self):
         def func(x):
             return x
-        # TODO: test proper behavior when you register two functions with the same name
         con = duckdb.connect()
         # create first version of the function
         con.register_scalar('func', func, [BIGINT], BIGINT)
@@ -111,20 +110,26 @@ class TestScalarUDF(object):
 
         def other_func(x):
             return x
-        # create second version of the function
-        with pytest.raises(duckdb.CatalogException, match="""Catalog Error: Scalar Function with name "func" already exists!"""):
-            con.register_scalar('func', other_func, [VARCHAR], VARCHAR)
-        return
 
+        with pytest.raises(duckdb.NotImplementedException, match="A function by the name of 'func' is already registered, registering multiple functions by the same name is not supported yet, please unregister it first"):
+            con.register_scalar('func', other_func, [VARCHAR], VARCHAR)
+
+        con.unregister_function('func')
+
+        with pytest.raises(duckdb.InvalidInputException, match='Catalog Error: Scalar Function with name func does not exist!'):
+            # Attempted to execute the relation using the 'func' function, but it was deleted
+            rel1.fetchall()
+
+        con.register_scalar('func', other_func, [VARCHAR], VARCHAR)
         # create relation that uses the new version
         rel2 = con.sql("select func('test')")
 
         # execute both relations
         res1 = rel1.fetchall()
         res2 = rel2.fetchall()
-        print(res1)
-        print(res2)
-        pass
+        # This has been converted to string, because the previous version of the function no longer exists
+        assert res1 == [('3',)]
+        assert res2 == [('test',)]
 
     def test_nulls(self):
         def five_if_null(x):

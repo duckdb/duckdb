@@ -99,6 +99,8 @@ public:
 	                  FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
 	                  PythonExceptionHandling exception_handling = PythonExceptionHandling::FORWARD_ERROR);
 
+	shared_ptr<DuckDBPyConnection> UnregisterUDF(const string &name);
+
 	shared_ptr<DuckDBPyConnection> ExecuteMany(const string &query, py::object params = py::list());
 
 	unique_ptr<QueryResult> ExecuteInternal(const string &query, py::object params = py::list(), bool many = false);
