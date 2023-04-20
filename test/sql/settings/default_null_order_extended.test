@@ -44,7 +44,7 @@ NULL	1
 query II
 SELECT list_sort(LIST(i)), list_reverse_sort(LIST(i)) FROM integers
 ----
-[NULL, 1, 2, 3]	[3, 2, 1, NULL]
+[NULL, 1, 2, 3]	[NULL, 3, 2, 1]
 
 # SQLite-style null order
 statement ok

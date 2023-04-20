@@ -254,11 +254,11 @@ static T GetOrder(ClientContext &context, Expression &expr) {
 	return EnumSerializer::StringToEnum<T>(order_name.c_str());
 }
 
-void BindListSort(ClientContext &context, vector<unique_ptr<Expression>> &arguments, OrderType &order,
-                  OrderByNullType &null_order) {
+static unique_ptr<FunctionData> ListNormalSortBind(ClientContext &context, ScalarFunction &bound_function,
+                                                   vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(!arguments.empty() && arguments.size() <= 3);
-	order = OrderType::ORDER_DEFAULT;
-	null_order = OrderByNullType::ORDER_DEFAULT;
+	auto order = OrderType::ORDER_DEFAULT;
+	auto null_order = OrderByNullType::ORDER_DEFAULT;
 
 	// get the sorting order
 	if (arguments.size() >= 2) {
@@ -271,22 +271,19 @@ void BindListSort(ClientContext &context, vector<unique_ptr<Expression>> &argume
 	auto &config = DBConfig::GetConfig(context);
 	order = config.ResolveOrder(order);
 	null_order = config.ResolveNullOrder(order, null_order);
-}
-
-static unique_ptr<FunctionData> ListNormalSortBind(ClientContext &context, ScalarFunction &bound_function,
-                                                   vector<unique_ptr<Expression>> &arguments) {
-	OrderType order;
-	OrderByNullType null_order;
-	BindListSort(context, arguments, order, null_order);
-
 	return ListSortBind(context, bound_function, arguments, order, null_order);
 }
 
 static unique_ptr<FunctionData> ListReverseSortBind(ClientContext &context, ScalarFunction &bound_function,
                                                     vector<unique_ptr<Expression>> &arguments) {
-	OrderType order;
-	OrderByNullType null_order;
-	BindListSort(context, arguments, order, null_order);
+	auto order = OrderType::ORDER_DEFAULT;
+	auto null_order = OrderByNullType::ORDER_DEFAULT;
+
+	if (arguments.size() == 2) {
+		null_order = GetOrder<OrderByNullType>(context, *arguments[1]);
+	}
+	auto &config = DBConfig::GetConfig(context);
+	order = config.ResolveOrder(order);
 	switch (order) {
 	case OrderType::ASCENDING:
 		order = OrderType::DESCENDING;
@@ -297,17 +294,7 @@ static unique_ptr<FunctionData> ListReverseSortBind(ClientContext &context, Scal
 	default:
 		throw InternalException("Unexpected order type in list reverse sort");
 	}
-	switch (null_order) {
-	case OrderByNullType::NULLS_FIRST:
-		null_order = OrderByNullType::NULLS_LAST;
-		break;
-	case OrderByNullType::NULLS_LAST:
-		null_order = OrderByNullType::NULLS_FIRST;
-		break;
-	default:
-		throw InternalException("Unexpected null order type in list reverse sort");
-	}
-
+	null_order = config.ResolveNullOrder(order, null_order);
 	return ListSortBind(context, bound_function, arguments, order, null_order);
 }
 
