@@ -157,16 +157,36 @@ class TestPyArrowUDF(object):
         assert res == [(1764,)]
 
     def test_nulls(self):
-        # TODO: provide 'null_handling' option?
-        pass
-    
+        def return_five(x):
+            import pandas as pd
+            length = len(x)
+            return pa.lib.Table.from_pandas(pd.DataFrame({'a': [5 for _ in range(length)]}))
+        
+        con = duckdb.connect()
+        con.register_vectorized('return_five', return_five, [BIGINT], BIGINT, null_handling='special')
+        res = con.sql('select return_five(NULL) from range(10)').fetchall()
+        # without 'special' null handling these would all be NULL
+        assert res == [(5,), (5,), (5,), (5,), (5,), (5,), (5,), (5,), (5,), (5,)]
+
+        con = duckdb.connect()
+        con.register_vectorized('return_five', return_five, [BIGINT], BIGINT, null_handling='default')
+        res = con.sql('select return_five(NULL) from range(10)').fetchall()
+        # without 'special' null handling these would all be NULL
+        assert res == [(None,), (None,), (None,), (None,), (None,), (None,), (None,), (None,), (None,), (None,)]
+
     def test_exceptions(self):
-        # TODO: we likely want an enum to define how exceptions should be handled
-        # - propagate:
-        #    throw the exception as a duckdb exception
-        # - ignore:
-        #    return NULL instead
-        pass
+        def raises_exception(x):
+            raise AttributeError("error")
+        
+        con = duckdb.connect()
+        con.register_vectorized('raises', raises_exception, [BIGINT], BIGINT)
+        with pytest.raises(duckdb.InvalidInputException, match=' Python exception occurred while executing the UDF: AttributeError: error'):
+            res = con.sql('select raises(3)').fetchall()
+        
+        con.unregister_function('raises')
+        con.register_vectorized('raises', raises_exception, [BIGINT], BIGINT, exception_handling='return_null')
+        res = con.sql('select raises(3) from range(5)').fetchall()
+        assert res == [(None,), (None,), (None,), (None,), (None,)]
 
     def test_binding(self):
         # TODO: add a way to do extra binding for the UDF

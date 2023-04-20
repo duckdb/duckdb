@@ -95,7 +95,7 @@ public:
 
 	shared_ptr<DuckDBPyConnection>
 	RegisterScalarUDF(const string &name, const py::object &udf, const py::object &arguments = py::none(),
-	                  shared_ptr<DuckDBPyType> return_type = nullptr, bool varargs = false,
+	                  const shared_ptr<DuckDBPyType> &return_type = nullptr, bool varargs = false,
 	                  FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
 	                  PythonExceptionHandling exception_handling = PythonExceptionHandling::FORWARD_ERROR);
 
@@ -104,6 +104,7 @@ public:
 	                      shared_ptr<DuckDBPyType> return_type = nullptr, bool varargs = false,
 	                      FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
 	                      PythonExceptionHandling exception_handling = PythonExceptionHandling::FORWARD_ERROR);
+	shared_ptr<DuckDBPyConnection> UnregisterUDF(const string &name);
 
 	shared_ptr<DuckDBPyConnection> ExecuteMany(const string &query, py::object params = py::list());
 

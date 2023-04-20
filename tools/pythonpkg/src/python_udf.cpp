@@ -250,10 +250,18 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 		PyObject *ret = nullptr;
 		ret = PyObject_CallObject(function, column_list.ptr());
 		if (ret == nullptr && PyErr_Occurred()) {
-			auto exception = py::error_already_set();
-			throw InvalidInputException("Python exception occurred while executing the UDF: %s", exception.what());
+			if (exception_handling == PythonExceptionHandling::FORWARD_ERROR) {
+				auto exception = py::error_already_set();
+				throw InvalidInputException("Python exception occurred while executing the UDF: %s", exception.what());
+			} else if (exception_handling == PythonExceptionHandling::RETURN_NULL) {
+				PyErr_Clear();
+				python_object = py::module_::import("pyarrow").attr("nulls")(count);
+			} else {
+				throw NotImplementedException("Exception handling type not implemented");
+			}
+		} else {
+			python_object = py::reinterpret_steal<py::object>(ret);
 		}
-		python_object = py::reinterpret_steal<py::object>(ret);
 		if (!py::isinstance(python_object, py::module_::import("pyarrow").attr("lib").attr("Table"))) {
 			// Try to convert into a table
 			py::list single_array(1);
@@ -286,7 +294,7 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 		python_results.reserve(input.size());
 		for (idx_t row = 0; row < input.size(); row++) {
 
-			auto bundled_parameters = py::tuple(input.ColumnCount());
+			auto bundled_parameters = py::tuple((int)input.ColumnCount());
 			for (idx_t i = 0; i < input.ColumnCount(); i++) {
 				// Fill the tuple with the arguments for this row
 				auto &column = input.data[i];
@@ -302,9 +310,11 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 					auto exception = py::error_already_set();
 					throw InvalidInputException("Python exception occurred while executing the UDF: %s",
 					                            exception.what());
-				} else {
+				} else if (exception_handling == PythonExceptionHandling::RETURN_NULL) {
 					PyErr_Clear();
 					ret = Py_None;
+				} else {
+					throw NotImplementedException("Exception handling type not implemented");
 				}
 			}
 			python_objects.push_back(py::handle(ret));

@@ -95,24 +95,26 @@ shared_ptr<DuckDBPyConnection> PyConnectionWrapper::Execute(const string &query,
 	return conn->Execute(query, params, many);
 }
 
-shared_ptr<DuckDBPyConnection> PyConnectionWrapper::RegisterScalarUDF(const string &name, const py::object &udf,
-                                                                      const py::list &args,
-                                                                      shared_ptr<DuckDBPyType> return_type,
-                                                                      shared_ptr<DuckDBPyConnection> conn) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
-	return conn->RegisterScalarUDF(name, udf, args, return_type);
+shared_ptr<DuckDBPyConnection> PyConnectionWrapper::UnregisterUDF(const string &name,
+                                                                  shared_ptr<DuckDBPyConnection> conn) {
+	return conn->UnregisterUDF(name);
 }
 
-shared_ptr<DuckDBPyConnection> PyConnectionWrapper::RegisterVectorizedUDF(const string &name, const py::object &udf,
-                                                                          const py::list &args,
-                                                                          shared_ptr<DuckDBPyType> return_type,
-                                                                          shared_ptr<DuckDBPyConnection> conn) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
-	return conn->RegisterVectorizedUDF(name, udf, args, return_type);
+shared_ptr<DuckDBPyConnection> PyConnectionWrapper::RegisterScalarUDF(const string &name, const py::object &udf,
+                                                                      const py::object &parameters_p,
+                                                                      const shared_ptr<DuckDBPyType> &return_type_p,
+                                                                      bool varargs, FunctionNullHandling null_handling,
+                                                                      PythonExceptionHandling exception_handling,
+                                                                      shared_ptr<DuckDBPyConnection> conn) {
+	return conn->RegisterScalarUDF(name, udf, parameters_p, return_type_p, varargs, null_handling, exception_handling);
+}
+
+shared_ptr<DuckDBPyConnection> PyConnectionWrapper::RegisterVectorizedUDF(
+    const string &name, const py::object &udf, const py::object &parameters_p,
+    const shared_ptr<DuckDBPyType> &return_type_p, bool varargs, FunctionNullHandling null_handling,
+    PythonExceptionHandling exception_handling, shared_ptr<DuckDBPyConnection> conn) {
+	return conn->RegisterVectorizedUDF(name, udf, parameters_p, return_type_p, varargs, null_handling,
+	                                   exception_handling);
 }
 
 shared_ptr<DuckDBPyConnection> PyConnectionWrapper::Append(const string &name, DataFrame value,

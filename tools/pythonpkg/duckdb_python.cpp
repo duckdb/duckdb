@@ -72,10 +72,19 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         py::arg("connection") = py::none());
 	m.def("register_scalar", &PyConnectionWrapper::RegisterScalarUDF,
 	      "Register a scalar UDF so it can be used in queries", py::arg("name"), py::arg("function"),
-	      py::arg("arguments"), py::arg("return_type"), py::arg("connection") = py::none());
+	      py::arg("return_type") = py::none(), py::arg("parameters") = py::none(), py::kw_only(),
+	      py::arg("varargs") = false, py::arg("null_handling") = 0, py::arg("exception_handling") = 0,
+	      py::arg("connection") = py::none());
+
 	m.def("register_vectorized", &PyConnectionWrapper::RegisterVectorizedUDF,
 	      "Register a scalar UDF so it can be used in queries", py::arg("name"), py::arg("function"),
-	      py::arg("arguments"), py::arg("return_type"), py::arg("connection") = py::none());
+	      py::arg("return_type") = py::none(), py::arg("parameters") = py::none(), py::kw_only(),
+	      py::arg("varargs") = false, py::arg("null_handling") = 0, py::arg("exception_handling") = 0,
+	      py::arg("connection") = py::none());
+
+	m.def("unregister_function", &PyConnectionWrapper::UnregisterUDF, "Remove a previously registered function",
+	      py::arg("name"), py::arg("connection") = py::none());
+
 	DefineMethod({"sqltype", "dtype", "type"}, m, &PyConnectionWrapper::Type, "Create a type object from 'type_str'",
 	             py::arg("type_str"), py::arg("connection") = py::none());
 	DefineMethod({"struct_type", "row_type"}, m, &PyConnectionWrapper::StructType,
