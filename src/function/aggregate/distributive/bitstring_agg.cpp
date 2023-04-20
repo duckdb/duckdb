@@ -134,7 +134,7 @@ struct BitStringAggOperation {
 		} else { // non-inlined string, need to allocate space for it
 			auto len = input.GetSize();
 			auto ptr = new char[len];
-			memcpy(ptr, input.GetDataUnsafe(), len);
+			memcpy(ptr, input.GetData(), len);
 			state->value = string_t(ptr, len);
 		}
 	}
@@ -151,7 +151,7 @@ struct BitStringAggOperation {
 	template <class STATE>
 	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
 		if (state->is_set && !state->value.IsInlined()) {
-			delete[] state->value.GetDataUnsafe();
+			delete[] state->value.GetData();
 		}
 	}
 

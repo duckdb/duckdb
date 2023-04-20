@@ -58,7 +58,7 @@ struct LengthFun {
 
 	template <class TA, class TR>
 	static inline TR Length(TA input) {
-		auto input_data = input.GetDataUnsafe();
+		auto input_data = input.GetData();
 		auto input_length = input.GetSize();
 		TR length = 0;
 		for (idx_t i = 0; i < input_length; i++) {
@@ -69,7 +69,7 @@ struct LengthFun {
 
 	template <class TA, class TR>
 	static inline TR GraphemeCount(TA input) {
-		auto input_data = input.GetDataUnsafe();
+		auto input_data = input.GetData();
 		auto input_length = input.GetSize();
 		for (idx_t i = 0; i < input_length; i++) {
 			if (input_data[i] & 0x80) {

@@ -381,7 +381,7 @@ void BaseCSVReader::VerifyUTF8(idx_t col_idx, idx_t row_idx, DataChunk &chunk, i
 
 	auto parse_data = FlatVector::GetData<string_t>(chunk.data[col_idx]);
 	auto s = parse_data[row_idx];
-	auto utf_type = Utf8Proc::Analyze(s.GetDataUnsafe(), s.GetSize());
+	auto utf_type = Utf8Proc::Analyze(s.GetData(), s.GetSize());
 	if (utf_type == UnicodeType::INVALID) {
 		string col_name = to_string(col_idx);
 		if (col_idx < names.size()) {

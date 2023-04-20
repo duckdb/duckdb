@@ -120,7 +120,7 @@ template <bool IS_UPPER>
 struct CaseConvertOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
-		auto input_data = input.GetDataUnsafe();
+		auto input_data = input.GetData();
 		auto input_length = input.GetSize();
 		return UnicodeCaseConvert<IS_UPPER>(result, input_data, input_length);
 	}
@@ -135,7 +135,7 @@ template <bool IS_UPPER>
 struct CaseConvertOperatorASCII {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
-		auto input_data = input.GetDataUnsafe();
+		auto input_data = input.GetData();
 		auto input_length = input.GetSize();
 		return ASCIICaseConvert<IS_UPPER>(result, input_data, input_length);
 	}
