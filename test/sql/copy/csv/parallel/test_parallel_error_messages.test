@@ -11,27 +11,25 @@ PRAGMA verify_parallelism
 statement ok
 SET threads=4
 
-## This is not the exact line, but that's a tough one since the parallel csv reader tries to figure out where lines start
-#statement error
-#SELECT * FROM read_csv('data/csv/missing_column.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True)
-#----
-#line 8
-#
-#
-#
-#loop i 0 100
-#
-#statement error
-#SELECT * FROM read_csv('data/csv/wrongtype.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True)
-#----
-#line 7
-#
-#endloop
-#
-#statement error
-#SELECT * FROM read_csv('data/csv/wrongtype.csv', parallel=false, sep=',', columns={'h1': int, 'h2': varchar}, header=True)
-#----
-#line 7
+# This is not the exact line, but that's a tough one since the parallel csv reader tries to figure out where lines start
+statement error
+SELECT * FROM read_csv('data/csv/missing_column.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True)
+----
+line 8
+
+loop i 0 1
+
+statement error
+SELECT * FROM read_csv('data/csv/wrongtype.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True)
+----
+line 7
+
+endloop
+
+statement error
+SELECT * FROM read_csv('data/csv/wrongtype.csv', parallel=false, sep=',', columns={'h1': int, 'h2': varchar}, header=True)
+----
+line 7
 
 # copy a file that starts with a bunch of numbers, and then has alternating numbers and strings
 statement ok
@@ -48,7 +46,7 @@ SELECT i, 'world' FROM (
 
 # the first error is on line 10001
 statement error
-SELECT * FROM read_csv('./mixedtypes.csv', parallel=false, sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True)
+SELECT * FROM read_csv('__TEST_DIR__/mixedtypes.csv', parallel=false, sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True)
 ----
 line 10001
 
@@ -98,3 +96,92 @@ statement error
 SELECT * FROM read_csv('__TEST_DIR__/quotednewlines.csv', parallel=true, sep=',', buffer_size=200, columns={'h1': int, 'h2': varchar}, header=True)
 ----
 not supported for multithreading
+
+statement ok
+COPY (
+SELECT '1' , 'world' FROM range(3000) t(i)
+UNION ALL
+SELECT 'bla', 'world'
+UNION ALL
+SELECT '1', 'world' FROM range(100) t(i)
+) TO '__TEST_DIR__/csv_error.csv' (HEADER);
+
+# Let's do an All-Type error testing
+foreach type bool int bigint hugeint float double 'decimal(4,1)' 'decimal(8,1)' 'decimal(12,1)' 'decimal(18,1)'
+
+# the first error is on line 3000
+statement error
+SELECT * FROM read_csv('__TEST_DIR__/csv_error.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': ${type}, 'h2': varchar}, header=True)
+----
+line 3001
+
+# the first error is on line 3000
+statement error
+SELECT * FROM read_csv('__TEST_DIR__/csv_error.csv', parallel=false, sep=',', buffer_size=100, columns={'h1': ${type}, 'h2': varchar}, header=True)
+----
+line 3001
+
+endloop
+
+statement ok
+COPY (
+SELECT '2008-01-01' , 'worlds' FROM range(3000) t(i)
+UNION ALL
+SELECT 'bla', 'worlds'
+UNION ALL
+SELECT '2008-01-01', 'worlds' FROM range(100) t(i)
+) TO '__TEST_DIR__/date.csv' (HEADER);
+
+# the first error is on line 3000
+statement error
+SELECT * FROM read_csv('__TEST_DIR__/date.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': date, 'h2': varchar}, header=True)
+----
+line 3001
+
+# the first error is on line 3000
+statement error
+SELECT * FROM read_csv('__TEST_DIR__/date.csv', parallel=false, sep=',', buffer_size=100, columns={'h1': date, 'h2': varchar}, header=True)
+----
+line 3001
+
+statement ok
+COPY (
+SELECT '00:01:01' , 'worlds' FROM range(3000) t(i)
+UNION ALL
+SELECT 'bla', 'worlds'
+UNION ALL
+SELECT '00:01:01', 'worlds' FROM range(100) t(i)
+) TO '__TEST_DIR__/time.csv' (HEADER);
+
+# the first error is on line 3000
+statement error
+SELECT * FROM read_csv('__TEST_DIR__/time.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': time, 'h2': varchar}, header=True)
+----
+line 3001
+
+# the first error is on line 3000
+statement error
+SELECT * FROM read_csv('__TEST_DIR__/time.csv', parallel=false, sep=',', buffer_size=100, columns={'h1': time, 'h2': varchar}, header=True)
+----
+line 3001
+
+statement ok
+COPY (
+SELECT '2020-01-01 00:01:01' , 'worlds' FROM range(3000) t(i)
+UNION ALL
+SELECT 'bla', 'worlds'
+UNION ALL
+SELECT '2020-01-01 00:01:01', 'worlds' FROM range(100) t(i)
+) TO '__TEST_DIR__/time.csv' (HEADER);
+
+# the first error is on line 3000
+statement error
+SELECT * FROM read_csv('__TEST_DIR__/time.csv', parallel=true, sep=',', buffer_size=200, columns={'h1': timestamp, 'h2': varchar}, header=True)
+----
+line 3001
+
+# the first error is on line 3000
+statement error
+SELECT * FROM read_csv('__TEST_DIR__/time.csv', parallel=false, sep=',', columns={'h1': timestamp, 'h2': varchar}, header=True)
+----
+line 3001

@@ -360,7 +360,7 @@ add_row : {
 		bool success = column == insert_chunk.ColumnCount();
 		if (success) {
 			AddRow(insert_chunk, column, error_message, buffer->batch_index);
-			success = Flush(insert_chunk, buffer->batch_index);
+			success = Flush(insert_chunk, buffer->batch_index, true);
 		}
 		reached_remainder_state = false;
 		parse_chunk.Reset();

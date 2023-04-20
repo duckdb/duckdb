@@ -14,13 +14,16 @@ public:
 	explicit LineInfo(mutex *main_mutex_p) : main_mutex(main_mutex_p) {};
 	bool CanItGetLine(idx_t batch_idx);
 
-	idx_t GetLine(idx_t batch_idx);
+	idx_t GetLine(idx_t batch_idx, idx_t line_error);
 
 	//! Lines read per batch, <batch_index,count>
 	unordered_map<idx_t, idx_t> lines_read;
 	//! Set of batches that have been initialized but are not yet finished.
 	set<idx_t> current_batches;
 	mutex *main_mutex = nullptr;
+	//! If we already threw an exception on a previous thread.
+	bool done = false;
+	idx_t first_line = 0;
 };
 
 } // namespace duckdb

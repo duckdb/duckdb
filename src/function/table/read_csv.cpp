@@ -533,7 +533,7 @@ void ParallelCSVGlobalState::UpdateLinesRead(duckdb::idx_t batch_idx_p, duckdb::
 
 bool LineInfo::CanItGetLine(idx_t batch_idx) {
 	lock_guard<mutex> parallel_lock(*main_mutex);
-	if (current_batches.empty()) {
+	if (current_batches.empty() || done) {
 		return true;
 	}
 	auto min_value = *current_batches.begin();
@@ -543,19 +543,22 @@ bool LineInfo::CanItGetLine(idx_t batch_idx) {
 	return false;
 }
 
-idx_t LineInfo::GetLine(idx_t batch_idx) {
+idx_t LineInfo::GetLine(idx_t batch_idx, idx_t line_error) {
 	lock_guard<mutex> parallel_lock(*main_mutex);
 	idx_t line_count = 0;
+	if (done) {
+		return first_line;
+	}
 	for (idx_t i = 0; i <= batch_idx; i++) {
 		if (lines_read.find(i) == lines_read.end() && i != batch_idx) {
 			throw InternalException("Missing batch index on Parallel CSV Reader GetLine");
 		}
 		line_count += lines_read[i];
 	}
-	// We do a cleanup, since this function is only called when an error has happened, and all threads before it
-	// have already finished
-	current_batches.clear();
-	return line_count;
+
+	done = true;
+	first_line = line_count + line_error;
+	return first_line;
 }
 
 static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext &context,

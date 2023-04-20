@@ -31,7 +31,7 @@ string BaseCSVReader::GetLineNumberStr(idx_t linenr, bool linenr_estimated, Line
 	if (line_info) {
 		while (true) {
 			if (line_info->CanItGetLine(buffer_idx)) {
-				return to_string(linenr + 1 + line_info->GetLine(buffer_idx));
+				return to_string(line_info->GetLine(buffer_idx, linenr + 1));
 			}
 		}
 	}
@@ -173,29 +173,33 @@ struct TryCastTimestampOperator {
 
 template <class OP, class T>
 static bool TemplatedTryCastDateVector(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector,
-                                       idx_t count, string &error_message) {
+                                       idx_t count, string &error_message, idx_t &line_error) {
 	D_ASSERT(input_vector.GetType().id() == LogicalTypeId::VARCHAR);
 	bool all_converted = true;
+	idx_t cur_line = 0;
 	UnaryExecutor::Execute<string_t, T>(input_vector, result_vector, count, [&](string_t input) {
 		T result;
 		if (!OP::Operation(options, input, result, error_message)) {
+			line_error = cur_line;
 			all_converted = false;
 		}
+		cur_line++;
 		return result;
 	});
 	return all_converted;
 }
 
 bool TryCastDateVector(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector, idx_t count,
-                       string &error_message) {
+                       string &error_message, idx_t &line_error) {
 	return TemplatedTryCastDateVector<TryCastDateOperator, date_t>(options, input_vector, result_vector, count,
-	                                                               error_message);
+	                                                               error_message, line_error);
 }
 
 bool TryCastTimestampVector(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector, idx_t count,
                             string &error_message) {
+	idx_t line_error;
 	return TemplatedTryCastDateVector<TryCastTimestampOperator, timestamp_t>(options, input_vector, result_vector,
-	                                                                         count, error_message);
+	                                                                         count, error_message, line_error);
 }
 
 template <class OP, class T>
@@ -238,7 +242,8 @@ bool BaseCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, const Log
 	if (options.has_format[LogicalTypeId::DATE] && sql_type == LogicalTypeId::DATE) {
 		// use the date format to cast the chunk
 		string error_message;
-		return TryCastDateVector(options, parse_chunk_col, dummy_result, size, error_message);
+		idx_t line_error;
+		return TryCastDateVector(options, parse_chunk_col, dummy_result, size, error_message, line_error);
 	} else if (options.has_format[LogicalTypeId::TIMESTAMP] && sql_type == LogicalTypeId::TIMESTAMP) {
 		// use the timestamp format to cast the chunk
 		string error_message;
@@ -487,7 +492,8 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 			bool target_type_not_varchar = false;
 			if (options.has_format[LogicalTypeId::DATE] && type.id() == LogicalTypeId::DATE) {
 				// use the date format to cast the chunk
-				success = TryCastDateVector(options, parse_vector, result_vector, parse_chunk.size(), error_message);
+				success = TryCastDateVector(options, parse_vector, result_vector, parse_chunk.size(), error_message,
+				                            line_error);
 			} else if (options.has_format[LogicalTypeId::TIMESTAMP] && type.id() == LogicalTypeId::TIMESTAMP) {
 				// use the date format to cast the chunk
 				success =
@@ -536,7 +542,7 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 			if (line_info) {
 				while (true) {
 					if (line_info->CanItGetLine(buffer_idx)) {
-						error_line = line_info->GetLine(buffer_idx) + line_error;
+						error_line = line_info->GetLine(buffer_idx, line_error);
 						break;
 					}
 				}
