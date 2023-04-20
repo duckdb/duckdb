@@ -312,7 +312,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterUDF(const string &n
 	return shared_from_this();
 }
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::object &udf,
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::function &udf,
                                                                      const py::object &parameters_p,
                                                                      const shared_ptr<DuckDBPyType> &return_type_p,
                                                                      bool varargs, FunctionNullHandling null_handling,
