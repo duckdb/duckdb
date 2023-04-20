@@ -707,10 +707,6 @@ DataTable &DuckTableEntry::GetStorage() {
 	return *storage;
 }
 
-DataTable *DuckTableEntry::GetStoragePtr() {
-	return storage.get();
-}
-
 const vector<unique_ptr<BoundConstraint>> &DuckTableEntry::GetBoundConstraints() {
 	return bound_constraints;
 }

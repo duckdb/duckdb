@@ -77,7 +77,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBSequencesInit(ClientContext &context,
 }
 
 void DuckDBSequencesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (DuckDBSequencesData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<DuckDBSequencesData>();
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;

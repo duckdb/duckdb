@@ -35,7 +35,7 @@ public:
 	//! Get the PipelineBuildState for this MetaPipeline
 	PipelineBuildState &GetState() const;
 	//! Get the sink operator for this MetaPipeline
-	PhysicalOperator *GetSink() const;
+	optional_ptr<PhysicalOperator> GetSink() const;
 
 	//! Get the initial pipeline of this MetaPipeline
 	shared_ptr<Pipeline> &GetBasePipeline();
@@ -71,9 +71,9 @@ public:
 	Pipeline *CreateUnionPipeline(Pipeline &current, bool order_matters);
 	//! Create a child pipeline op 'current' starting at 'op',
 	//! where 'last_pipeline' is the last pipeline added before building out 'current'
-	void CreateChildPipeline(Pipeline &current, PhysicalOperator *op, Pipeline *last_pipeline);
+	void CreateChildPipeline(Pipeline &current, PhysicalOperator &op, Pipeline *last_pipeline);
 	//! Create a MetaPipeline child that 'current' depends on
-	MetaPipeline *CreateChildMetaPipeline(Pipeline &current, PhysicalOperator *op);
+	MetaPipeline &CreateChildMetaPipeline(Pipeline &current, PhysicalOperator &op);
 
 private:
 	//! The executor for all MetaPipelines in the query plan
@@ -81,7 +81,7 @@ private:
 	//! The PipelineBuildState for all MetaPipelines in the query plan
 	PipelineBuildState &state;
 	//! The sink of all pipelines within this MetaPipeline
-	PhysicalOperator *sink;
+	optional_ptr<PhysicalOperator> sink;
 	//! Whether this MetaPipeline is a the recursive pipeline of a recursive CTE
 	bool recursive_cte;
 	//! All pipelines with a different source, but the same sink

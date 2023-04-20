@@ -36,7 +36,7 @@ public:
 	}
 
 public:
-	vector<PhysicalOperator *> GetChildren() const override;
+	vector<const_reference<PhysicalOperator>> GetChildren() const override;
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
 
 	bool IsSource() const override {

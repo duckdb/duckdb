@@ -197,15 +197,15 @@ void PhysicalExport::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeli
 	// EXPORT has an optional child
 	// we only need to schedule child pipelines if there is a child
 	auto &state = meta_pipeline.GetState();
-	state.SetPipelineSource(current, this);
+	state.SetPipelineSource(current, *this);
 	if (children.empty()) {
 		return;
 	}
 	PhysicalOperator::BuildPipelines(current, meta_pipeline);
 }
 
-vector<const PhysicalOperator *> PhysicalExport::GetSources() const {
-	return {this};
+vector<const_reference<PhysicalOperator>> PhysicalExport::GetSources() const {
+	return {*this};
 }
 
 } // namespace duckdb

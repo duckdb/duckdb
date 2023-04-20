@@ -129,14 +129,15 @@ void UndoBuffer::Cleanup() {
 
 	// possibly vacuum indexes
 	for (const auto &table : state.indexed_tables) {
-		table->info->indexes.Scan([&](Index &index) {
+		table.second->info->indexes.Scan([&](Index &index) {
 			index.Vacuum();
 			return false;
 		});
 	}
 }
 
-void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, WriteAheadLog *log, transaction_t commit_id) {
+void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, optional_ptr<WriteAheadLog> log,
+                        transaction_t commit_id) {
 	CommitState state(context, commit_id, log);
 	if (log) {
 		// commit WITH write ahead log

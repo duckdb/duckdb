@@ -21,7 +21,7 @@ static void stem_function(DataChunk &args, ExpressionState &state, Vector &resul
 
 	BinaryExecutor::Execute<string_t, string_t, string_t>(
 	    input_vector, stemmer_vector, result, args.size(), [&](string_t input, string_t stemmer) {
-		    auto input_data = input.GetDataUnsafe();
+		    auto input_data = input.GetData();
 		    auto input_size = input.GetSize();
 
 		    if (stemmer.GetString() == "none") {

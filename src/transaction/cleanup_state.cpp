@@ -29,12 +29,12 @@ void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 	}
 	case UndoFlags::DELETE_TUPLE: {
 		auto info = (DeleteInfo *)data;
-		CleanupDelete(info);
+		CleanupDelete(*info);
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {
 		auto info = (UpdateInfo *)data;
-		CleanupUpdate(info);
+		CleanupUpdate(*info);
 		break;
 	}
 	default:
@@ -42,16 +42,16 @@ void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 	}
 }
 
-void CleanupState::CleanupUpdate(UpdateInfo *info) {
+void CleanupState::CleanupUpdate(UpdateInfo &info) {
 	// remove the update info from the update chain
 	// first obtain an exclusive lock on the segment
-	info->segment->CleanupUpdate(info);
+	info.segment->CleanupUpdate(info);
 }
 
-void CleanupState::CleanupDelete(DeleteInfo *info) {
-	auto version_table = info->table;
-	D_ASSERT(version_table->info->cardinality >= info->count);
-	version_table->info->cardinality -= info->count;
+void CleanupState::CleanupDelete(DeleteInfo &info) {
+	auto version_table = info.table;
+	D_ASSERT(version_table->info->cardinality >= info.count);
+	version_table->info->cardinality -= info.count;
 
 	if (version_table->info->indexes.Empty()) {
 		// this table has no indexes: no cleanup to be done
@@ -65,11 +65,11 @@ void CleanupState::CleanupDelete(DeleteInfo *info) {
 	}
 
 	// possibly vacuum any indexes in this table later
-	indexed_tables.insert(current_table);
+	indexed_tables[current_table->info->table] = current_table;
 
 	count = 0;
-	for (idx_t i = 0; i < info->count; i++) {
-		row_numbers[count++] = info->vinfo->start + info->rows[i];
+	for (idx_t i = 0; i < info.count; i++) {
+		row_numbers[count++] = info.vinfo->start + info.rows[i];
 	}
 	Flush();
 }

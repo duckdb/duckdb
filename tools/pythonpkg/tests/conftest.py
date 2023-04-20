@@ -5,13 +5,36 @@ from os.path import abspath, join, dirname, normpath
 import glob
 import duckdb
 
+# https://docs.pytest.org/en/latest/example/simple.html#control-skipping-of-tests-according-to-command-line-option
+# https://stackoverflow.com/a/47700320
+def pytest_addoption(parser):
+    parser.addoption("--skiplist", action="append", nargs="+", type=str, help="skip listed tests")
+
+def pytest_collection_modifyitems(config, items):
+    tests_to_skip = config.getoption("--skiplist")
+    if not tests_to_skip:
+        # --skiplist not given in cli, therefore move on
+        return
+
+    # Combine all the lists into one
+    skipped_tests = []
+    for item in tests_to_skip:
+        skipped_tests.extend(item)
+
+    skip_listed = pytest.mark.skip(reason="included in --skiplist")
+    for item in items:
+        if item.name in skipped_tests:
+            # test is named specifically
+            item.add_marker(skip_listed)
+        elif item.parent != None and item.parent.name in skipped_tests:
+            # the class is named specifically
+            item.add_marker(skip_listed)
 
 @pytest.fixture(scope="function")
 def duckdb_empty_cursor(request):
     connection = duckdb.connect('')
     cursor = connection.cursor()
     return cursor
-
 
 @pytest.fixture(scope="function")
 def require():

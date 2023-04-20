@@ -185,7 +185,7 @@ inline yyjson_mut_val *CreateJSONValue(yyjson_mut_doc *doc, const double &value)
 
 template <>
 inline yyjson_mut_val *CreateJSONValue(yyjson_mut_doc *doc, const string_t &value) {
-	return yyjson_mut_strn(doc, value.GetDataUnsafe(), value.GetSize());
+	return yyjson_mut_strn(doc, value.GetData(), value.GetSize());
 }
 
 inline yyjson_mut_val *CreateJSONValueFromJSON(yyjson_mut_doc *doc, const string_t &value) {

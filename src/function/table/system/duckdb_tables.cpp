@@ -102,7 +102,7 @@ static idx_t CheckConstraintCount(TableCatalogEntry &table) {
 }
 
 void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (DuckDBTablesData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<DuckDBTablesData>();
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;
