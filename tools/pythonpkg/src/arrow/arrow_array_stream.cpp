@@ -197,6 +197,8 @@ py::object GetScalar(Value &constant, const string &timezone_config) {
 		return dataset_scalar(constant.GetValue<double>());
 	case LogicalTypeId::VARCHAR:
 		return dataset_scalar(constant.ToString());
+	case LogicalTypeId::BLOB:
+		return dataset_scalar(constant.GetValueUnsafe<string>());
 	case LogicalTypeId::DECIMAL: {
 		py::object date_type = py::module_::import("pyarrow").attr("decimal128");
 		uint8_t width;

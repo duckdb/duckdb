@@ -22,16 +22,16 @@ BindResult TableFunctionBinder::BindColumnReference(ColumnRefExpression &expr, i
 	}
 	auto value_function = ExpressionBinder::GetSQLValueFunction(expr.GetColumnName());
 	if (value_function) {
-		return BindExpression(&value_function, depth, root_expression);
+		return BindExpression(value_function, depth, root_expression);
 	}
 
 	auto result_name = StringUtil::Join(expr.column_names, ".");
 	return BindResult(make_uniq<BoundConstantExpression>(Value(result_name)));
 }
 
-BindResult TableFunctionBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,
+BindResult TableFunctionBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
                                                bool root_expression) {
-	auto &expr = **expr_ptr;
+	auto &expr = *expr_ptr;
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::COLUMN_REF:
 		return BindColumnReference(expr.Cast<ColumnRefExpression>(), depth, root_expression);
