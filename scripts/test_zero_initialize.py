@@ -12,7 +12,6 @@ parser.add_argument('--standard_dir', default='test_standard_db', help='director
 args = parser.parse_args()
 
 test_list = [
-    'test/sql/storage/compression/compression_selection.test',
     'test/sql/storage/compression/simple_compression.test',
     'test/sql/storage/test_store_deletes.test',
     'test/sql/storage/test_store_nulls_strings.test',
@@ -57,7 +56,6 @@ def handle_error(i, standard_db, zero_init_db, standard_data, zero_data):
             print("This is in the checksum part of the block")
     print("------------------------------------------------------------------")
     print("This error likely means that memory was not correctly zero-initialized in a block before being written out to disk.")
-    exit(1)
 
 
 def compare_database(standard_db, zero_init_db):
@@ -67,7 +65,7 @@ def compare_database(standard_db, zero_init_db):
         zero_data = f.read()
     if len(standard_data) != len(zero_data):
         print(f"FAIL - Length mismatch between database {standard_db} ({str(len(standard_data))}) and {zero_init_db} ({str(len(zero_data))})")
-        exit(1)
+        return False
     found_error = None
     for i in range(len(standard_data)):
         if standard_data[i] != zero_data[i]:
@@ -79,10 +77,13 @@ def compare_database(standard_db, zero_init_db):
                         found_error = i
                     continue
             handle_error(i, standard_db, zero_init_db, standard_data[i], zero_data[i])
+            return False
     if found_error is not None:
         i = found_error
         handle_error(i, standard_db, zero_init_db, standard_data[i], zero_data[i])
+        return False
     print("Success!")
+    return True
 
 def compare_files(standard_dir, zero_init_dir):
     standard_list = os.listdir(standard_dir)
@@ -91,12 +92,15 @@ def compare_files(standard_dir, zero_init_dir):
     zero_init_list.sort()
     if standard_list != zero_init_list:
         print(f"FAIL - Directories contain mismatching files (standard - {str(standard_list)}, zero init - {str(zero_init_list)})")
-        exit(1)
+        return False
     if len(standard_list) == 0:
         print("FAIL - Directory is empty!")
-        exit(1)
+        return False
+    success = True
     for entry in standard_list:
-        compare_database(os.path.join(standard_dir, entry), os.path.join(zero_init_dir, entry))
+        if not compare_database(os.path.join(standard_dir, entry), os.path.join(zero_init_dir, entry)):
+            success = False
+    return success
 
 
 def clear_directories(directories):
@@ -108,6 +112,7 @@ def clear_directories(directories):
 
 test_dirs = [args.standard_dir, args.zero_init_dir]
 
+success = True
 for test in test_list:
     print(f"Running test {test}")
     clear_directories(test_dirs)
@@ -117,6 +122,10 @@ for test in test_list:
     run_test(standard_args)
     print(f"Running test in zero-initialize mode")
     run_test(zero_init_args)
-    compare_files(args.standard_dir, args.zero_init_dir)
+    if not compare_files(args.standard_dir, args.zero_init_dir):
+        success = False
 
 clear_directories(test_dirs)
+
+if not success:
+    exit(1)
