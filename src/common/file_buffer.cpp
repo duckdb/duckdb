@@ -105,5 +105,4 @@ void FileBuffer::Initialize(DebugInitialize initialize) {
 	memset(internal_buffer, value, internal_size);
 }
 
-
 } // namespace duckdb

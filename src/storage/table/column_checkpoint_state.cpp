@@ -50,10 +50,21 @@ public:
 	BlockManager &block_manager;
 	vector<PartialColumnSegment> tail_segments;
 
+private:
+	struct UninitializedRegion {
+		idx_t start;
+		idx_t end;
+	};
+	vector<UninitializedRegion> uninitialized_regions;
+
 public:
 	bool IsFlushed() {
 		// first_segment is zeroed on Flush
 		return !first_segment;
+	}
+
+	void AddUninitializedRegion(idx_t start, idx_t end) override {
+		uninitialized_regions.push_back({start, end});
 	}
 
 	void Flush(idx_t free_space_left) override {
@@ -61,8 +72,12 @@ public:
 		// into the page owned by first_segment. We flush all segment data to
 		// disk with the following call.
 		if (free_space_left > 0) {
-			// memset any free space to 0 prior to writing to disk
 			auto handle = block_manager.buffer_manager.Pin(first_segment->block);
+			// memset any uninitialized regions
+			for (auto &uninitialized : uninitialized_regions) {
+				memset(handle.Ptr() + uninitialized.start, 0, uninitialized.end - uninitialized.start);
+			}
+			// memset any free space at the end of the block to 0 prior to writing to disk
 			memset(handle.Ptr() + Storage::BLOCK_SIZE - free_space_left, 0, free_space_left);
 		}
 		first_data->IncrementVersion();

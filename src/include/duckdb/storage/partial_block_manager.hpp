@@ -44,6 +44,7 @@ struct PartialBlock {
 	PartialBlockState state;
 
 public:
+	virtual void AddUninitializedRegion(idx_t start, idx_t end) = 0;
 	virtual void Flush(idx_t free_space_left) = 0;
 	virtual void Clear() {
 	}
