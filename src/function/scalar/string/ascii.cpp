@@ -7,7 +7,7 @@ namespace duckdb {
 struct AsciiOperator {
 	template <class TA, class TR>
 	static inline TR Operation(const TA &input) {
-		auto str = input.GetDataUnsafe();
+		auto str = input.GetData();
 		if (Utf8Proc::Analyze(str, input.GetSize()) == UnicodeType::ASCII) {
 			return str[0];
 		}

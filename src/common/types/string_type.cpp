@@ -7,7 +7,7 @@
 namespace duckdb {
 
 void string_t::Verify() const {
-	auto dataptr = GetDataUnsafe();
+	auto dataptr = GetData();
 	(void)dataptr;
 	D_ASSERT(dataptr);
 
@@ -22,7 +22,7 @@ void string_t::Verify() const {
 	}
 	// verify that for strings with length <= INLINE_LENGTH, the rest of the string is zero
 	for (idx_t i = GetSize(); i < INLINE_LENGTH; i++) {
-		D_ASSERT(GetDataUnsafe()[i] == '\0');
+		D_ASSERT(GetData()[i] == '\0');
 	}
 }
 

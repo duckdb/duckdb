@@ -91,7 +91,7 @@ static void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, V
 
 		if (state_data.validity.RowIsValid(state_idx)) {
 			D_ASSERT(state_entry->GetSize() == bind_data.state_size);
-			memcpy((void *)target_ptr, state_entry->GetDataUnsafe(), bind_data.state_size);
+			memcpy((void *)target_ptr, state_entry->GetData(), bind_data.state_size);
 		} else {
 			// create a dummy state because finalize does not understand NULLs in its input
 			// we put the NULL back in explicitly below
@@ -145,13 +145,11 @@ static void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Ve
 			continue;
 		}
 		if (state0_data.validity.RowIsValid(state0_idx) && !state1_data.validity.RowIsValid(state1_idx)) {
-			result_ptr[i] =
-			    StringVector::AddStringOrBlob(result, (const char *)state0.GetDataUnsafe(), bind_data.state_size);
+			result_ptr[i] = StringVector::AddStringOrBlob(result, (const char *)state0.GetData(), bind_data.state_size);
 			continue;
 		}
 		if (!state0_data.validity.RowIsValid(state0_idx) && state1_data.validity.RowIsValid(state1_idx)) {
-			result_ptr[i] =
-			    StringVector::AddStringOrBlob(result, (const char *)state1.GetDataUnsafe(), bind_data.state_size);
+			result_ptr[i] = StringVector::AddStringOrBlob(result, (const char *)state1.GetData(), bind_data.state_size);
 			continue;
 		}
 
@@ -161,8 +159,8 @@ static void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Ve
 			                  state0.GetSize(), state1.GetSize());
 		}
 
-		memcpy(local_state.state_buffer0.get(), state0.GetDataUnsafe(), bind_data.state_size);
-		memcpy(local_state.state_buffer1.get(), state1.GetDataUnsafe(), bind_data.state_size);
+		memcpy(local_state.state_buffer0.get(), state0.GetData(), bind_data.state_size);
+		memcpy(local_state.state_buffer1.get(), state1.GetData(), bind_data.state_size);
 
 		AggregateInputData aggr_input_data(nullptr, Allocator::DefaultAllocator());
 		bind_data.aggr.combine(local_state.state_vector0, local_state.state_vector1, aggr_input_data, 1);

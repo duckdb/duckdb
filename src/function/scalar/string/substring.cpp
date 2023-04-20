@@ -82,7 +82,7 @@ bool SubstringStartEnd(int64_t input_size, int64_t offset, int64_t length, int64
 }
 
 string_t SubstringASCII(Vector &result, string_t input, int64_t offset, int64_t length) {
-	auto input_data = input.GetDataUnsafe();
+	auto input_data = input.GetData();
 	auto input_size = input.GetSize();
 
 	AssertInSupportedRange(input_size, offset, length);
@@ -95,7 +95,7 @@ string_t SubstringASCII(Vector &result, string_t input, int64_t offset, int64_t 
 }
 
 string_t SubstringFun::SubstringUnicode(Vector &result, string_t input, int64_t offset, int64_t length) {
-	auto input_data = input.GetDataUnsafe();
+	auto input_data = input.GetData();
 	auto input_size = input.GetSize();
 
 	AssertInSupportedRange(input_size, offset, length);
@@ -190,7 +190,7 @@ string_t SubstringFun::SubstringUnicode(Vector &result, string_t input, int64_t 
 }
 
 string_t SubstringFun::SubstringGrapheme(Vector &result, string_t input, int64_t offset, int64_t length) {
-	auto input_data = input.GetDataUnsafe();
+	auto input_data = input.GetData();
 	auto input_size = input.GetSize();
 
 	AssertInSupportedRange(input_size, offset, length);
