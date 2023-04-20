@@ -52,7 +52,7 @@ class TestPandasArrow(object):
         python_df = pd.DataFrame({'a': pd.Series(['test', [5,4,3], {'a': 42}])}).convert_dtypes()
 
         df = pd.concat([numpy_df['a'], arrow_df['a'], python_df['a']], axis=1, keys=['numpy', 'arrow', 'python'])
-        assert isinstance(df.dtypes[0], pd.core.arrays.integer.Int64Dtype)
+        assert isinstance(df.dtypes[0], pd.core.arrays.integer.IntegerDtype)
         assert isinstance(df.dtypes[1], pd.core.arrays.arrow.dtype.ArrowDtype)
         assert isinstance(df.dtypes[2], np.dtype('O').__class__)
 
