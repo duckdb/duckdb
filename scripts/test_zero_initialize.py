@@ -27,6 +27,8 @@ def run_test(args):
     stderr = res.stderr.decode('utf8').strip()
     if res.returncode != 0:
         print("Failed to run test!")
+        print("----------COMMAND-----------")
+        print(' '.join(args))
         print("----------STDOUT-----------")
         print(stdout)
         print("----------STDERR-----------")
