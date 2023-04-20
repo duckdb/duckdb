@@ -137,7 +137,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 
 		result->right = right_binder.Bind(*ref.right);
 
-		// UNION left binder and right binder correlated columns 
+		// UNION left binder and right binder correlated columns
 		auto all_correlated_columns = right_binder.correlated_columns;
 		for (auto corr : left_binder.correlated_columns)
 		{
@@ -154,16 +154,16 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 		}
 
 		// Get ONLY the bindings for this level
-		std::vector<CorrelatedColumnInfo> my_correlated_columns;
-		for (auto corr : all_correlated_columns) 
+		std::vector<CorrelatedColumnInfo> current_correlated_columns;
+		for (auto corr : all_correlated_columns)
 		{
-			if (corr.depth == 1)
+			if (corr.depth >= 1)
 			{
-				my_correlated_columns.push_back(corr);
+				current_correlated_columns.push_back(corr);
 			}
 		}
 
-		result->correlated_columns = my_correlated_columns;
+		result->correlated_columns = current_correlated_columns;
 
 		std::cout << "\tresult->correlated_columns: " << std::endl;
 		for (auto corr : result->correlated_columns)
@@ -171,8 +171,17 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			std::cout << "\t\tColumn: " << corr.name << " " << corr.depth << std::endl;
 		}
 
-		result->lateral = !my_correlated_columns.empty();
+		bool is_lateral = false;
+		for (auto corr : current_correlated_columns)
+		{
+			if (corr.depth == 1)
+			{
+				is_lateral  = true;
+			}
+		}
+		result->lateral = is_lateral;
 		if (result->lateral) {
+			std::cout << "BindJoinRef: Encountered a Lateral" << std::endl;
 			// lateral join: can only be an INNER or LEFT join
 			if (ref.type != JoinType::INNER && ref.type != JoinType::LEFT) {
 				throw BinderException("The combining JOIN type must be INNER or LEFT for a LATERAL reference");
