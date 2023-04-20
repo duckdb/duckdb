@@ -59,7 +59,10 @@ jobs:
     - name: Test
       shell: bash
       run: |
-          test/Release/unittest.exe
+        $duckDbLib = Get-ChildItem -Path $(Get-Location) -Filter "libduck*.dll" -File | Select-Object -First 1
+        echo "DUCKDB_INSTALL_LIB=$duckDbLib" >> $env:GITHUB_ENV
+        echo "duckDbLib: $duckDbLib"
+        test/Release/unittest.exe
 
     - name: Tools Test
       shell: bash
