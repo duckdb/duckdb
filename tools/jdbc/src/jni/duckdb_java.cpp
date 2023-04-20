@@ -784,7 +784,7 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 					continue;
 				}
 				auto &d_str = ((string_t *)FlatVector::GetData(vec))[row_idx];
-				auto j_obj = env->NewDirectByteBuffer((void *)d_str.GetDataUnsafe(), d_str.GetSize());
+				auto j_obj = env->NewDirectByteBuffer((void *)d_str.GetData(), d_str.GetSize());
 				env->SetObjectArrayElement(varlen_data, row_idx, j_obj);
 			}
 			break;
@@ -804,7 +804,7 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 					continue;
 				}
 				auto d_str = ((string_t *)FlatVector::GetData(vec))[row_idx];
-				auto j_str = decode_charbuffer_to_jstring(env, d_str.GetDataUnsafe(), d_str.GetSize());
+				auto j_str = decode_charbuffer_to_jstring(env, d_str.GetData(), d_str.GetSize());
 				env->SetObjectArrayElement(varlen_data, row_idx, j_str);
 			}
 			break;

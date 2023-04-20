@@ -51,14 +51,14 @@ LocalStorage &DuckTransaction::GetLocalStorage() {
 	return *storage;
 }
 
-void DuckTransaction::PushCatalogEntry(CatalogEntry *entry, data_ptr_t extra_data, idx_t extra_data_size) {
+void DuckTransaction::PushCatalogEntry(CatalogEntry &entry, data_ptr_t extra_data, idx_t extra_data_size) {
 	idx_t alloc_size = sizeof(CatalogEntry *);
 	if (extra_data_size > 0) {
 		alloc_size += extra_data_size + sizeof(idx_t);
 	}
 	auto baseptr = undo_buffer.CreateEntry(UndoFlags::CATALOG_ENTRY, alloc_size);
 	// store the pointer to the catalog entry
-	Store<CatalogEntry *>(entry, baseptr);
+	Store<CatalogEntry *>(&entry, baseptr);
 	if (extra_data_size > 0) {
 		// copy the extra data behind the catalog entry pointer (if any)
 		baseptr += sizeof(CatalogEntry *);
@@ -70,19 +70,19 @@ void DuckTransaction::PushCatalogEntry(CatalogEntry *entry, data_ptr_t extra_dat
 	}
 }
 
-void DuckTransaction::PushDelete(DataTable *table, ChunkVectorInfo *vinfo, row_t rows[], idx_t count, idx_t base_row) {
+void DuckTransaction::PushDelete(DataTable &table, ChunkVectorInfo *vinfo, row_t rows[], idx_t count, idx_t base_row) {
 	auto delete_info =
 	    (DeleteInfo *)undo_buffer.CreateEntry(UndoFlags::DELETE_TUPLE, sizeof(DeleteInfo) + sizeof(row_t) * count);
 	delete_info->vinfo = vinfo;
-	delete_info->table = table;
+	delete_info->table = &table;
 	delete_info->count = count;
 	delete_info->base_row = base_row;
 	memcpy(delete_info->rows, rows, sizeof(row_t) * count);
 }
 
-void DuckTransaction::PushAppend(DataTable *table, idx_t start_row, idx_t row_count) {
+void DuckTransaction::PushAppend(DataTable &table, idx_t start_row, idx_t row_count) {
 	auto append_info = (AppendInfo *)undo_buffer.CreateEntry(UndoFlags::INSERT_TUPLE, sizeof(AppendInfo));
-	append_info->table = table;
+	append_info->table = &table;
 	append_info->start_row = start_row;
 	append_info->count = row_count;
 }
@@ -116,7 +116,7 @@ string DuckTransaction::Commit(AttachedDatabase &db, transaction_t commit_id, bo
 	UndoBuffer::IteratorState iterator_state;
 	LocalStorage::CommitState commit_state;
 	unique_ptr<StorageCommitState> storage_commit_state;
-	WriteAheadLog *log;
+	optional_ptr<WriteAheadLog> log;
 	if (!db.IsSystem()) {
 		auto &storage_manager = db.GetStorageManager();
 		log = storage_manager.GetWriteAheadLog();

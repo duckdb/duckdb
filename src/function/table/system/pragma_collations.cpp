@@ -35,7 +35,7 @@ unique_ptr<GlobalTableFunctionState> PragmaCollateInit(ClientContext &context, T
 }
 
 static void PragmaCollateFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (PragmaCollateData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<PragmaCollateData>();
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;
