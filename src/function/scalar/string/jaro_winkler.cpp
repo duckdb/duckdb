@@ -5,14 +5,14 @@
 namespace duckdb {
 
 static inline double JaroScalarFunction(const string_t &s1, const string_t &s2) {
-	auto s1_begin = s1.GetDataUnsafe();
-	auto s2_begin = s2.GetDataUnsafe();
+	auto s1_begin = s1.GetData();
+	auto s2_begin = s2.GetData();
 	return duckdb_jaro_winkler::jaro_similarity(s1_begin, s1_begin + s1.GetSize(), s2_begin, s2_begin + s2.GetSize());
 }
 
 static inline double JaroWinklerScalarFunction(const string_t &s1, const string_t &s2) {
-	auto s1_begin = s1.GetDataUnsafe();
-	auto s2_begin = s2.GetDataUnsafe();
+	auto s1_begin = s1.GetData();
+	auto s2_begin = s2.GetData();
 	return duckdb_jaro_winkler::jaro_winkler_similarity(s1_begin, s1_begin + s1.GetSize(), s2_begin,
 	                                                    s2_begin + s2.GetSize());
 }
@@ -29,7 +29,7 @@ static void CachedFunction(Vector &constant, Vector &other, Vector &result, idx_
 	auto str_val = StringValue::Get(val);
 	auto cached = CACHED_SIMILARITY(str_val);
 	UnaryExecutor::Execute<string_t, double>(other, result, count, [&](const string_t &other_str) {
-		auto other_str_begin = other_str.GetDataUnsafe();
+		auto other_str_begin = other_str.GetData();
 		return cached.similarity(other_str_begin, other_str_begin + other_str.GetSize());
 	});
 }

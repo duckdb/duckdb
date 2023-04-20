@@ -228,7 +228,7 @@ public:
 	//! Get JSON value using JSON path query (safe, checks the path query)
 	template <class YYJSON_VAL_T>
 	static inline YYJSON_VAL_T *GetPointer(YYJSON_VAL_T *root, const string_t &path_str) {
-		auto ptr = path_str.GetDataUnsafe();
+		auto ptr = path_str.GetData();
 		auto len = path_str.GetSize();
 		if (len == 0) {
 			return GetPointerUnsafe<YYJSON_VAL_T>(root, ptr, len);

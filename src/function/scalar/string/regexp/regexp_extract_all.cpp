@@ -86,7 +86,7 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, int32_
 		idx_t child_idx = current_list_size;
 		if (match_group.empty()) {
 			// This group was not matched
-			list_content[child_idx] = string_t(string.GetDataUnsafe(), 0);
+			list_content[child_idx] = string_t(string.GetData(), 0);
 			if (match_group.begin() == nullptr) {
 				// This group is optional
 				child_validity.SetInvalid(child_idx);
@@ -94,9 +94,9 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, int32_
 		} else {
 			// Every group is a substring of the original, we can find out the offset using the pointer
 			// the 'match_group' address is guaranteed to be bigger than that of the source
-			D_ASSERT((const char *)match_group.begin() >= string.GetDataUnsafe());
-			idx_t offset = match_group.begin() - string.GetDataUnsafe();
-			list_content[child_idx] = string_t(string.GetDataUnsafe() + offset, match_group.size());
+			D_ASSERT((const char *)match_group.begin() >= string.GetData());
+			idx_t offset = match_group.begin() - string.GetData();
+			list_content[child_idx] = string_t(string.GetData() + offset, match_group.size());
 		}
 		current_list_size++;
 		if (startpos > input.size()) {

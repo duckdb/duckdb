@@ -169,7 +169,7 @@ inline uint64_t HashOtherSize(const data_ptr_t &data, const idx_t &len) {
 
 template <>
 inline uint64_t TemplatedHash(const string_t &elem) {
-	data_ptr_t data = (data_ptr_t)elem.GetDataUnsafe();
+	data_ptr_t data = (data_ptr_t)elem.GetData();
 	const auto &len = elem.GetSize();
 	uint64_t h = 0;
 	for (idx_t i = 0; i + sizeof(uint64_t) <= len; i += sizeof(uint64_t)) {

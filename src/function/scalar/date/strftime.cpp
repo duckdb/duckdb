@@ -154,7 +154,7 @@ idx_t StrfTimeFormat::GetLength(date_t date, dtime_t time, int32_t utc_offset, c
 
 char *StrfTimeFormat::WriteString(char *target, const string_t &str) {
 	idx_t size = str.GetSize();
-	memcpy(target, str.GetDataUnsafe(), size);
+	memcpy(target, str.GetData(), size);
 	return target + size;
 }
 
@@ -766,7 +766,7 @@ int32_t StrpTimeFormat::TryParseCollection(const char *data, idx_t &pos, idx_t s
                                            idx_t collection_count) {
 	for (idx_t c = 0; c < collection_count; c++) {
 		auto &entry = collection[c];
-		auto entry_data = entry.GetDataUnsafe();
+		auto entry_data = entry.GetData();
 		auto entry_size = entry.GetSize();
 		// check if this entry matches
 		if (pos + entry_size > size) {
@@ -805,7 +805,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 	result_data[6] = 0;
 	result_data[7] = 0;
 
-	auto data = str.GetDataUnsafe();
+	auto data = str.GetData();
 	idx_t size = str.GetSize();
 	// skip leading spaces
 	while (StringUtil::CharacterIsSpace(*data)) {

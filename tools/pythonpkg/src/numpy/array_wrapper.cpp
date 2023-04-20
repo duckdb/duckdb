@@ -186,7 +186,7 @@ struct StringConvert {
 	static PyObject *ConvertValue(string_t val) {
 		// we could use PyUnicode_FromStringAndSize here, but it does a lot of verification that we don't need
 		// because of that it is a lot slower than it needs to be
-		auto data = (uint8_t *)val.GetDataUnsafe();
+		auto data = (uint8_t *)val.GetData();
 		auto len = val.GetSize();
 		// check if there are any non-ascii characters in there
 		for (idx_t i = 0; i < len; i++) {
@@ -211,7 +211,7 @@ struct StringConvert {
 struct BlobConvert {
 	template <class DUCKDB_T, class NUMPY_T>
 	static PyObject *ConvertValue(string_t val) {
-		return PyByteArray_FromStringAndSize(val.GetDataUnsafe(), val.GetSize());
+		return PyByteArray_FromStringAndSize(val.GetData(), val.GetSize());
 	}
 
 	template <class NUMPY_T>
@@ -223,7 +223,7 @@ struct BlobConvert {
 struct BitConvert {
 	template <class DUCKDB_T, class NUMPY_T>
 	static PyObject *ConvertValue(string_t val) {
-		return PyBytes_FromStringAndSize(val.GetDataUnsafe(), val.GetSize());
+		return PyBytes_FromStringAndSize(val.GetData(), val.GetSize());
 	}
 
 	template <class NUMPY_T>
