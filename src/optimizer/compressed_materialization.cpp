@@ -543,6 +543,7 @@ void CompressedMaterialization::RemoveRedundantExpressions(LogicalProjection &de
 						break;
 					}
 				}
+				bool found = false;
 				for (idx_t expr_idx = 0; expr_idx < current_op->expressions.size(); expr_idx++) {
 					const auto &expr = current_op->expressions[expr_idx];
 					if (expr->type != ExpressionType::BOUND_COLUMN_REF) {
@@ -553,8 +554,12 @@ void CompressedMaterialization::RemoveRedundantExpressions(LogicalProjection &de
 						current_col_idx = expr_idx;
 						current_binding = current_bindings[current_col_idx];
 						expressions_in_between.emplace_back(expr.get());
+						found = true;
 						break;
 					}
+				}
+				if (!found) { // Projected out
+					can_remove_current = false;
 				}
 				break;
 			}
@@ -575,7 +580,9 @@ void CompressedMaterialization::RemoveRedundantExpressions(LogicalProjection &de
 						break;
 					}
 				}
-				D_ASSERT(filter_out_idx != current_bindings.size()); // Should always find the binding
+				if (filter_out_idx == current_bindings.size()) { // Projected out
+					can_remove_current = false;
+				}
 				break;
 			}
 			case LogicalOperatorType::LOGICAL_LIMIT:
