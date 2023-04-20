@@ -59,43 +59,46 @@ DELETE FROM test;
 statement ok
 INSERT INTO test VALUES ('aaa'), ('a.a'), ('baba'), ('abba'), ('a\.a');
 
-query II nosort converttolike
-explain select regexp_matches(s, 'a.a'), s from test;
+query II
+explain analyze select regexp_matches(s, 'a.a'), s from test;
 ----
-physical_plan	<REGEX>:'.*%a_a%.*'
+analyzed_plan	<REGEX>:.*~~\(s, '%a_a%'\).*
 
-query II nosort converttolike2
-explain SELECT regexp_matches(s, 'a.*a'), s FROM TEST;
+query II
+explain analyze SELECT regexp_matches(s, 'a.*a'), s FROM TEST;
 ----
-physical_plan	<REGEX>:'%a%a%'
+analyzed_plan	<REGEX>:.*~~\(s, '%a%a%'\).*
 
-query II nosort converttolike3
-explain SELECT regexp_matches(s, '^a.*b$'), s FROM TEST;
+query II
+explain analyze SELECT regexp_matches(s, '^a.*b$'), s FROM TEST;
 ----
-physical_plan <REGEX>:"~~(s, 'a%b')"
+analyzed_plan	<REGEX>:.*~~\(s, 'a%b'\).*
 
-query II nosort converttolike5
-explain select regexp_matches(s, 'a\.a'), s from test;
+query II
+explain analyze select regexp_matches(s, 'a\.a'), s from test;
 ----
-physical_plan	<REGEX>:".*contains(s, 'a.a').*"
+analyzed_plan	<REGEX>:.*contains\(s, 'a.a'\).*
 
-query II nosort prefix
-explain SELECT regexp_matches(s, '^a'), s FROM TEST;
+query II
+explain analyze SELECT regexp_matches(s, '^a'), s FROM TEST;
 ----
-physical_plan	<REGEX>:"prefix(s, 'a')"
+analyzed_plan	<REGEX>:.*prefix\(s, 'a'\).*
 
-query II nosort suffix
-explain SELECT regexp_matches(s, 'a$'), s FROM TEST;
+query II
+explain analyze SELECT regexp_matches(s, 'a$'), s FROM TEST;
 ----
-physical_plan	<REGEX>:"suffix(s, 'a')"
+analyzed_plan	<REGEX>:.*suffix\(s, 'a'\).*
 
-query II nosort converttolike6
-explain select regexp_matches(s, '.*green.*'), s, from test;
+query II
+explain analyze select regexp_matches(s, '.*green.*'), s, from test;
 ----
-physical_plan	<REGEX>:"prefix(s, '%green%')"
+analyzed_plan	<REGEX>:.*contains\(s, 'green'\).*
 
-query II nosort converttolike7
-explain select regexp_matches(s, '.*special.*requests.*'), s from test;
+query II
+explain analyze select regexp_matches(s, '.*special.*requests.*'), s from test;
 ----
-physical_plan	<REGEX>:"prefix(s, '%special%requests%')"
+analyzed_plan	<REGEX>:.*~~\(s, '%special%requests%'\).*
 
+
+# write more tests regarding new line characters. "." in regexp should only match characters that aren't new lines
+# and yet, I can't seem to trigger that case. 

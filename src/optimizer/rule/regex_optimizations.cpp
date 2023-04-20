@@ -8,8 +8,6 @@
 #include "re2/re2.h"
 #include "re2/regexp.h"
 
-#include "iostream"
-
 namespace duckdb {
 
 RegexOptimizationRule::RegexOptimizationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
@@ -72,7 +70,7 @@ static LikeString LikeMatchExists(duckdb_re2::RE2 &pattern) {
 			// could be a concatenation of character sets or otherwise. return no SQL like match
 			ret.exists = false;
 			return ret;
-		} // for some reason this is never hit
+		} // most likely only triggered when '.' can also match newline
 		case duckdb_re2::kRegexpAnyChar:
 			ret.like_string += "_";
 			break;
