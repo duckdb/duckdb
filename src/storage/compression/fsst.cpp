@@ -155,7 +155,7 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	vector<unsigned char *> fsst_string_ptrs;
 	for (auto &str : state.fsst_strings) {
 		fsst_string_sizes.push_back(str.GetSize());
-		fsst_string_ptrs.push_back((unsigned char *)str.GetDataUnsafe());
+		fsst_string_ptrs.push_back((unsigned char *)str.GetData());
 	}
 
 	state.fsst_encoder = duckdb_fsst_create(string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0], 0);
@@ -431,7 +431,7 @@ void FSSTStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t
 		total_count++;
 		total_size += data[idx].GetSize();
 		sizes_in.push_back(data[idx].GetSize());
-		strings_in.push_back((unsigned char *)data[idx].GetDataUnsafe());
+		strings_in.push_back((unsigned char *)data[idx].GetData());
 	}
 
 	// Only Nulls or empty strings in this vector, nothing to compress
@@ -669,7 +669,7 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 		    segment, dict, result, base_ptr, delta_decode_buffer[offsets.unused_delta_decoded_values], string_length);
 
 		result_data[result_idx] = FSSTPrimitives::DecompressValue(
-		    (void *)&decoder, result, (unsigned char *)compressed_string.GetDataUnsafe(), compressed_string.GetSize());
+		    (void *)&decoder, result, (unsigned char *)compressed_string.GetData(), compressed_string.GetSize());
 	} else {
 		// There's no fsst symtable, this only happens for empty strings or nulls, we can just emit an empty string
 		result_data[result_idx] = string_t(nullptr, 0);

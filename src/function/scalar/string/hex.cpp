@@ -63,7 +63,7 @@ static void WriteHugeIntBinBytes(hugeint_t x, char *&output, idx_t buffer_size) 
 struct HexStrOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
-		auto data = input.GetDataUnsafe();
+		auto data = input.GetData();
 		auto size = input.GetSize();
 
 		// Allocate empty space
@@ -150,7 +150,7 @@ static void ToHexFunction(DataChunk &args, ExpressionState &state, Vector &resul
 struct BinaryStrOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
-		auto data = input.GetDataUnsafe();
+		auto data = input.GetData();
 		auto size = input.GetSize();
 
 		// Allocate empty space
@@ -228,7 +228,7 @@ struct BinaryHugeIntOperator {
 struct FromHexOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
-		auto data = input.GetDataUnsafe();
+		auto data = input.GetData();
 		auto size = input.GetSize();
 
 		if (size > NumericLimits<uint32_t>::Maximum()) {
@@ -265,7 +265,7 @@ struct FromHexOperator {
 struct FromBinaryOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
-		auto data = input.GetDataUnsafe();
+		auto data = input.GetData();
 		auto size = input.GetSize();
 
 		if (size > NumericLimits<uint32_t>::Maximum()) {

@@ -208,7 +208,7 @@ public:
 		// Copy string to dict
 		current_dictionary.size += str.GetSize();
 		auto dict_pos = current_end_ptr - current_dictionary.size;
-		memcpy(dict_pos, str.GetDataUnsafe(), str.GetSize());
+		memcpy(dict_pos, str.GetData(), str.GetSize());
 		current_dictionary.Verify();
 		D_ASSERT(current_dictionary.end == Storage::BLOCK_SIZE);
 

@@ -412,11 +412,12 @@ jobs:
           cd tools/pythonpkg
           ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pip install .
 
+# explicitly skip the TestMemoryLeaks tests, as the address sanitizer will increase the memory usage, causing the test to fail
       - name: Run Python Tests
         shell: bash
         run: |
           cd tools/pythonpkg
-          ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pytest tests/fast
+          ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pytest tests/fast --skiplist TestMemoryLeaks
 
    linux-release-cleanup:
       if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
