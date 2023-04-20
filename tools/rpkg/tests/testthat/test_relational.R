@@ -586,3 +586,13 @@ test_that("semi joins for eq_na_matches works", {
    expect_equal(res, data.frame(x=c(2, 2)))
 })
 
+test_that("rel_project does not automatically quote upper-case column names", {
+  df <- data.frame(B = 1)
+  rel <- duckdb:::rel_from_df(con, df)
+  ref <- duckdb:::expr_reference(names(df))
+  exprs <- list(ref)
+  proj <- duckdb:::rel_project(rel, exprs)
+  ans <- duckdb:::rapi_rel_to_df(proj)
+  expect_equal(df, ans)
+})
+
