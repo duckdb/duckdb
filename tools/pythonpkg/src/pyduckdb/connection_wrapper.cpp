@@ -110,7 +110,7 @@ shared_ptr<DuckDBPyConnection> PyConnectionWrapper::RegisterScalarUDF(const stri
 }
 
 shared_ptr<DuckDBPyConnection> PyConnectionWrapper::RegisterVectorizedUDF(
-    const string &name, const py::object &udf, const py::object &parameters_p,
+    const string &name, const py::function &udf, const py::object &parameters_p,
     const shared_ptr<DuckDBPyType> &return_type_p, bool varargs, FunctionNullHandling null_handling,
     PythonExceptionHandling exception_handling, shared_ptr<DuckDBPyConnection> conn) {
 	return conn->RegisterVectorizedUDF(name, udf, parameters_p, return_type_p, varargs, null_handling,

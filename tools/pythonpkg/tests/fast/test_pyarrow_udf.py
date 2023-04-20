@@ -174,6 +174,23 @@ class TestPyArrowUDF(object):
         # without 'special' null handling these would all be NULL
         assert res == [(None,), (None,), (None,), (None,), (None,), (None,), (None,), (None,), (None,), (None,)]
 
+    def test_non_callable(self):
+        con = duckdb.connect()
+        with pytest.raises(TypeError):
+            con.register_vectorized('func', 5, [BIGINT], BIGINT)
+
+        class MyCallable:
+            def __init__(self):
+                pass
+
+            def __call__(self, x):
+                return x
+
+        my_callable = MyCallable()
+        con.register_vectorized('func', my_callable, [BIGINT], BIGINT)
+        res = con.sql('select func(5)').fetchall()
+        assert res == [(5,)]
+
     def test_exceptions(self):
         def raises_exception(x):
             raise AttributeError("error")
