@@ -254,15 +254,11 @@ static T GetOrder(ClientContext &context, Expression &expr) {
 	return EnumSerializer::StringToEnum<T>(order_name.c_str());
 }
 
-static unique_ptr<FunctionData> ListNormalSortBind(ClientContext &context, ScalarFunction &bound_function,
-                                                   vector<unique_ptr<Expression>> &arguments) {
-
-	D_ASSERT(!bound_function.arguments.empty() && bound_function.arguments.size() <= 3);
+void BindListSort(ClientContext &context, vector<unique_ptr<Expression>> &arguments, OrderType &order,
+                  OrderByNullType &null_order) {
 	D_ASSERT(!arguments.empty() && arguments.size() <= 3);
-
-	// set default values
-	auto order = OrderType::ORDER_DEFAULT;
-	auto null_order = OrderByNullType::ORDER_DEFAULT;
+	order = OrderType::ORDER_DEFAULT;
+	null_order = OrderByNullType::ORDER_DEFAULT;
 
 	// get the sorting order
 	if (arguments.size() >= 2) {
@@ -275,36 +271,44 @@ static unique_ptr<FunctionData> ListNormalSortBind(ClientContext &context, Scala
 	auto &config = DBConfig::GetConfig(context);
 	order = config.ResolveOrder(order);
 	null_order = config.ResolveNullOrder(order, null_order);
+}
+
+static unique_ptr<FunctionData> ListNormalSortBind(ClientContext &context, ScalarFunction &bound_function,
+                                                   vector<unique_ptr<Expression>> &arguments) {
+	OrderType order;
+	OrderByNullType null_order;
+	BindListSort(context, arguments, order, null_order);
 
 	return ListSortBind(context, bound_function, arguments, order, null_order);
 }
 
 static unique_ptr<FunctionData> ListReverseSortBind(ClientContext &context, ScalarFunction &bound_function,
                                                     vector<unique_ptr<Expression>> &arguments) {
-	auto result = ListNormalSortBind(context, bound_function, arguments);
-
-	auto &bind_data = result->Cast<ListSortBindData>();
-	switch (bind_data.order_type) {
+	OrderType order;
+	OrderByNullType null_order;
+	BindListSort(context, arguments, order, null_order);
+	switch (order) {
 	case OrderType::ASCENDING:
-		bind_data.order_type = OrderType::DESCENDING;
+		order = OrderType::DESCENDING;
 		break;
 	case OrderType::DESCENDING:
-		bind_data.order_type = OrderType::ASCENDING;
+		order = OrderType::ASCENDING;
 		break;
 	default:
 		throw InternalException("Unexpected order type in list reverse sort");
 	}
-	switch (bind_data.null_order) {
+	switch (null_order) {
 	case OrderByNullType::NULLS_FIRST:
-		bind_data.null_order = OrderByNullType::NULLS_LAST;
+		null_order = OrderByNullType::NULLS_LAST;
 		break;
 	case OrderByNullType::NULLS_LAST:
-		bind_data.null_order = OrderByNullType::NULLS_FIRST;
+		null_order = OrderByNullType::NULLS_FIRST;
 		break;
 	default:
 		throw InternalException("Unexpected null order type in list reverse sort");
 	}
-	return result;
+
+	return ListSortBind(context, bound_function, arguments, order, null_order);
 }
 
 void ListSortFun::RegisterFunction(BuiltinFunctions &set) {
