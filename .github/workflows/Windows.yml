@@ -56,12 +56,15 @@ jobs:
         cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DBUILD_VISUALIZER_EXTENSION=1 -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1 -DBUILD_AUTOCOMPLETE_EXTENSION=1
         cmake --build . --config Release
 
-    - name: Test
-      shell: bash
+    - name: Set DuckDB Library Path
       run: |
         $duckDbLib = Get-ChildItem -Path $PWD -Filter "libduck*.dll" -File | Select-Object -First 1
         echo "DUCKDB_INSTALL_LIB=$($duckDbLib.FullName)" >> $env:GITHUB_ENV
         echo "duckDbLib: $($duckDbLib.FullName)"
+
+    - name: Test
+      shell: bash
+      run: |
         test/Release/unittest.exe
 
     - name: Tools Test
