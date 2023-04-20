@@ -13,6 +13,8 @@
 #include "duckdb/planner/expression_binder/lateral_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 
+#include <iostream>
+
 namespace duckdb {
 
 static unique_ptr<ParsedExpression> BindColumn(Binder &binder, ClientContext &context, const string &alias,
@@ -119,6 +121,7 @@ static vector<string> RemoveDuplicateUsingColumns(const vector<string> &using_co
 }
 
 unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
+	auto ref_string = ref.ToString();
 	auto result = make_unique<BoundJoinRef>(ref.ref_type);
 	result->left_binder = Binder::CreateBinder(context, this);
 	result->right_binder = Binder::CreateBinder(context, this);
@@ -129,10 +132,46 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 	result->left = left_binder.Bind(*ref.left);
 	{
 		LateralBinder binder(left_binder, context);
-		result->right = right_binder.Bind(*ref.right);
-		result->correlated_columns = binder.ExtractCorrelatedColumns(right_binder);
 
-		result->lateral = binder.HasCorrelatedColumns();
+		auto right_str = ref.right->ToString();
+
+		result->right = right_binder.Bind(*ref.right);
+
+		// UNION left binder and right binder correlated columns 
+		auto all_correlated_columns = right_binder.correlated_columns;
+		for (auto corr : left_binder.correlated_columns)
+		{
+			if (std::find(all_correlated_columns.begin(), all_correlated_columns.end(), corr) == all_correlated_columns.end())
+			{
+				all_correlated_columns.push_back(corr);
+			}
+		}
+		std::cout << "BindJoinRef: " << ref_string << std::endl;
+		std::cout << "\tAll Correlated Columns: " << std::endl;
+		for (auto corr : all_correlated_columns)
+		{
+			std::cout << "\t\tColumn: " << corr.name << " " << corr.depth << std::endl;
+		}
+
+		// Get ONLY the bindings for this level
+		std::vector<CorrelatedColumnInfo> my_correlated_columns;
+		for (auto corr : all_correlated_columns) 
+		{
+			if (corr.depth == 1)
+			{
+				my_correlated_columns.push_back(corr);
+			}
+		}
+
+		result->correlated_columns = my_correlated_columns;
+
+		std::cout << "\tresult->correlated_columns: " << std::endl;
+		for (auto corr : result->correlated_columns)
+		{
+			std::cout << "\t\tColumn: " << corr.name << " " << corr.depth << std::endl;
+		}
+
+		result->lateral = !my_correlated_columns.empty();
 		if (result->lateral) {
 			// lateral join: can only be an INNER or LEFT join
 			if (ref.type != JoinType::INNER && ref.type != JoinType::LEFT) {
@@ -266,8 +305,30 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 
 	bind_context.AddContext(std::move(left_binder.bind_context));
 	bind_context.AddContext(std::move(right_binder.bind_context));
-	MoveCorrelatedExpressions(left_binder);
-	MoveCorrelatedExpressions(right_binder);
+
+	// TODO: Do we decrement here or before bind_context above???
+
+	// MoveCorrelatedExpressions(left_binder);
+	// MoveCorrelatedExpressions(right_binder);
+
+	for (auto col : left_binder.correlated_columns)
+	{
+		if (col.depth > 1)
+		{
+			col.depth--;
+			AddCorrelatedColumn(col);
+		}
+	}
+
+	for (auto col : right_binder.correlated_columns)
+	{
+		if (col.depth > 1)
+		{
+			col.depth--;
+			AddCorrelatedColumn(col);
+		}
+	}
+
 	for (auto &condition : extra_conditions) {
 		if (ref.condition) {
 			ref.condition = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND,

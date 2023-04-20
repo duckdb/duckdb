@@ -4,6 +4,8 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 
+#include <iostream>
+
 namespace duckdb {
 
 LateralBinder::LateralBinder(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context) {
@@ -31,40 +33,44 @@ BindResult LateralBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, 
 	if (result.HasError()) {
 		return result;
 	}
-	if (depth > 1) {
-		throw BinderException("Nested lateral joins are not supported yet");
-	}
+
+	std::cout << "LateralBinder::BindColumnRef" << std::endl;
+	std::cout << "\t Expr: " << (*expr_ptr)->ToString() << std::endl;
+	std::cout << "\tDepth: " << depth << std::endl;
+	// if (depth > 1) {
+	// 	throw BinderException("Nested lateral joins are not supported yet");
+	// }
 	ExtractCorrelatedColumns(*result.expression);
 	return result;
 }
 
-vector<CorrelatedColumnInfo> LateralBinder::ExtractCorrelatedColumns(Binder &binder) {
+// vector<CorrelatedColumnInfo> LateralBinder::ExtractCorrelatedColumns(Binder &binder) {
 
-	if (correlated_columns.empty()) {
-		return binder.correlated_columns;
-	}
+// 	if (correlated_columns.empty()) {
+// 		return binder.correlated_columns;
+// 	}
 
-	// clear outer
-	correlated_columns.clear();
-	auto all_correlated_columns = binder.correlated_columns;
+// 	// clear outer
+// 	// correlated_columns.clear();
+// 	auto all_correlated_columns = binder.correlated_columns;
 
-	// remove outer from inner
-	for (auto &corr_column : correlated_columns) {
-		auto entry = std::find(binder.correlated_columns.begin(), binder.correlated_columns.end(), corr_column);
-		if (entry != binder.correlated_columns.end()) {
-			binder.correlated_columns.erase(entry);
-		}
-	}
+// 	// remove outer from inner
+// 	for (auto &corr_column : correlated_columns) {
+// 		auto entry = std::find(binder.correlated_columns.begin(), binder.correlated_columns.end(), corr_column);
+// 		if (entry != binder.correlated_columns.end()) {
+// 			binder.correlated_columns.erase(entry);
+// 		}
+// 	}
 
-	// add inner to outer
-	for (auto &corr_column : binder.correlated_columns) {
-		correlated_columns.push_back(corr_column);
-	}
+// 	// add inner to outer
+// 	for (auto &corr_column : binder.correlated_columns) {
+// 		correlated_columns.push_back(corr_column);
+// 	}
 
-	// clear inner
-	binder.correlated_columns.clear();
-	return all_correlated_columns;
-}
+// 	// clear inner
+// 	// binder.correlated_columns.clear();
+// 	return all_correlated_columns;
+// }
 
 BindResult LateralBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
 	auto &expr = **expr_ptr;

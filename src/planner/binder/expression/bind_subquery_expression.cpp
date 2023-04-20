@@ -5,6 +5,8 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/common/string_util.hpp"
 
+#include <iostream>
+
 namespace duckdb {
 
 class BoundSubqueryNode : public QueryNode {
@@ -44,15 +46,23 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		// first bind the actual subquery in a new binder
 		auto subquery_binder = Binder::CreateBinder(context, &binder);
 		subquery_binder->can_contain_nulls = true;
+
+		auto expr_str = expr.ToString();
+
 		auto bound_node = subquery_binder->BindNode(*expr.subquery->node);
 		// check the correlated columns of the subquery for correlated columns with depth > 1
+		std::cout << "SUBQUERY expr: " << expr_str << std::endl;
 		for (idx_t i = 0; i < subquery_binder->correlated_columns.size(); i++) {
 			CorrelatedColumnInfo corr = subquery_binder->correlated_columns[i];
+			std::cout << "\tColumn: " << corr.name << " " << corr.depth << std::endl;
+
 			if (corr.depth > 1) {
 				// depth > 1, the column references the query ABOVE the current one
 				// add to the set of correlated columns for THIS query
 				corr.depth -= 1;
 				binder.AddCorrelatedColumn(corr);
+				std::cout << "\tDepth > 1 detected!" << std::endl;
+                std::cout << "\tUpdated Column: " << corr.name << " " << corr.depth << std::endl;
 			}
 		}
 		if (expr.subquery_type != SubqueryType::EXISTS && bound_node->types.size() > 1) {

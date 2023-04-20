@@ -16,6 +16,8 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression_binder/lateral_binder.hpp"
 
+#include <iostream>
+
 namespace duckdb {
 
 //! Create a JoinCondition from a comparison
@@ -248,6 +250,10 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	}
 	if (ref.lateral) {
 		// lateral join
+		std::cout << "PlanLateralJoin" << std::endl;
+		std::cout << "\tLeft Plan: \n" << left->ToString() << std::endl;
+		std::cout << "\tRight Plan: \n" << right->ToString() << std::endl;
+
 		return PlanLateralJoin(std::move(left), std::move(right), ref.correlated_columns, ref.type,
 		                       std::move(ref.condition));
 	}
