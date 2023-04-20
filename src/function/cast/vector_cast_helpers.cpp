@@ -105,7 +105,7 @@ struct SplitStringListOperation {
 
 template <class OP>
 static bool SplitStringListInternal(const string_t &input, OP &state) {
-	const char *buf = input.GetDataUnsafe();
+	const char *buf = input.GetData();
 	idx_t len = input.GetSize();
 	idx_t lvl = 1;
 	idx_t pos = 0;
@@ -221,7 +221,7 @@ static bool FindKeyOrValueMap(const char *buf, idx_t len, idx_t &pos, OP &state,
 
 template <class OP>
 static bool SplitStringMapInternal(const string_t &input, OP &state) {
-	const char *buf = input.GetDataUnsafe();
+	const char *buf = input.GetData();
 	idx_t len = input.GetSize();
 	idx_t pos = 0;
 
@@ -301,7 +301,7 @@ static bool FindValueStruct(const char *buf, idx_t len, idx_t &pos, Vector &varc
 
 bool VectorStringToStruct::SplitStruct(string_t &input, vector<unique_ptr<Vector>> &varchar_vectors, idx_t &row_idx,
                                        string_map_t<idx_t> &child_names, vector<ValidityMask *> &child_masks) {
-	const char *buf = input.GetDataUnsafe();
+	const char *buf = input.GetData();
 	idx_t len = input.GetSize();
 	idx_t pos = 0;
 	idx_t child_idx;

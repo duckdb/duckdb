@@ -68,9 +68,9 @@ struct RegexpStringSplit {
 struct StringSplitter {
 	template <class OP>
 	static idx_t Split(string_t input, string_t delim, StringSplitInput &state, void *data) {
-		auto input_data = input.GetDataUnsafe();
+		auto input_data = input.GetData();
 		auto input_size = input.GetSize();
-		auto delim_data = delim.GetDataUnsafe();
+		auto delim_data = delim.GetData();
 		auto delim_size = delim.GetSize();
 		idx_t list_idx = 0;
 		while (input_size > 0) {
@@ -135,7 +135,7 @@ static void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector 
 		StringSplitInput split_input(result, child_entry, total_splits);
 		if (!delim_data.validity.RowIsValid(delim_idx)) {
 			// delim is NULL: copy the complete entry
-			split_input.AddSplit(inputs[input_idx].GetDataUnsafe(), inputs[input_idx].GetSize(), 0);
+			split_input.AddSplit(inputs[input_idx].GetData(), inputs[input_idx].GetSize(), 0);
 			list_struct_data[i].length = 1;
 			list_struct_data[i].offset = total_splits;
 			total_splits++;
