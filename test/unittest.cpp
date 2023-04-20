@@ -56,6 +56,8 @@ int main(int argc, char *argv[]) {
 			SetDebugInitialize(0);
 		} else if (string(argv[i]) == "--one-initialize") {
 			SetDebugInitialize(0xFF);
+		} else if (string(argv[i]) == "--single-threaded") {
+			SetSingleThreaded();
 		} else {
 			new_argv[new_argc] = argv[i];
 			new_argc++;

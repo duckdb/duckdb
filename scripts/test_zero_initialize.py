@@ -111,8 +111,8 @@ test_dirs = [args.standard_dir, args.zero_init_dir]
 for test in test_list:
     print(f"Running test {test}")
     clear_directories(test_dirs)
-    standard_args = [args.unittest, '--test-temp-dir', args.standard_dir, test, '--one-initialize']
-    zero_init_args = [args.unittest, '--test-temp-dir', args.zero_init_dir, '--zero-initialize', test]
+    standard_args = [args.unittest, '--test-temp-dir', args.standard_dir, '--one-initialize', '--single-threaded', test]
+    zero_init_args = [args.unittest, '--test-temp-dir', args.zero_init_dir, '--zero-initialize', '--single-threaded', test]
     print(f"Running test in one-initialize mode")
     run_test(standard_args)
     print(f"Running test in zero-initialize mode")

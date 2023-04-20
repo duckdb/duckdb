@@ -22,6 +22,7 @@ using namespace std;
 namespace duckdb {
 static string custom_test_directory;
 static int debug_initialize_value = -1;
+static bool single_threaded = false;
 
 bool NO_FAIL(QueryResult &result) {
 	if (result.HasError()) {
@@ -80,6 +81,10 @@ void SetDebugInitialize(int value) {
 	debug_initialize_value = value;
 }
 
+void SetSingleThreaded() {
+	single_threaded = true;
+}
+
 string GetTestDirectory() {
 	if (custom_test_directory.empty()) {
 		return TESTING_DIRECTORY_NAME;
@@ -124,6 +129,9 @@ unique_ptr<DBConfig> GetTestConfig() {
 	auto result = make_uniq<DBConfig>();
 	result->options.checkpoint_wal_size = 0;
 	result->options.allow_unsigned_extensions = true;
+	if (single_threaded) {
+		result->options.maximum_threads = 1;
+	}
 	switch (debug_initialize_value) {
 	case -1:
 		break;
