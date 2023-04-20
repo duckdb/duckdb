@@ -1,0 +1,31 @@
+# Global excludes across all subdirectories
+*.o
+*.so
+*.so.[0-9]
+*.so.[0-9].[0-9]
+*.sl
+*.sl.[0-9]
+*.sl.[0-9].[0-9]
+*.dylib
+*.dll
+*.a
+*.mo
+*.html
+*.css
+*.targz
+.obj.*
+
+# Local excludes in root directory
+.idea
+.autotools
+.cproject
+.project
+.vscode
+build
+server/minidumps/
+ivy-*.xml
+concourse/gporca_vars.yml
+xcode_build
+server/*.md_actual
+server/*.md_expected
+
