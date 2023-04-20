@@ -14,8 +14,10 @@ PRAGMA enable_verification
 # * Multiple scanned payload blocks
 
 # Change to true to check results
+foreach debug False True
+
 statement ok 
-PRAGMA debug_asof_iejoin=False
+PRAGMA debug_asof_iejoin=${debug}
 
 # 10 dates, 5 keys
 query I
@@ -142,3 +144,5 @@ SELECT SUM(v)
 FROM probe ASOF JOIN build USING(k, t);
 ----
 1249625025
+
+endloop

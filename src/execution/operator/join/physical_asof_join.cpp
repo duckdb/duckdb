@@ -342,8 +342,8 @@ void AsOfLocalState::ResolveJoin(DataChunk &input, bool *found_match, std::pair<
 	const auto bins = (hash_t *)bin_unified.data;
 
 	hash_t prev_bin = global_partition.bin_groups.size();
-	PartitionGlobalHashGroup *hash_group = nullptr;
-	OuterJoinMarker *right_outer = nullptr;
+	optional_ptr<PartitionGlobalHashGroup> hash_group;
+	optional_ptr<OuterJoinMarker> right_outer;
 	//	Searching for right <= left
 	SBIterator left(*lhs_global_state, ExpressionType::COMPARE_LESSTHANOREQUALTO);
 	unique_ptr<SBIterator> right;
@@ -479,7 +479,7 @@ OperatorResultType PhysicalAsOfJoin::ResolveComplexJoin(ExecutionContext &contex
 
 	auto &global_partition = gsink.global_partition;
 	hash_t scan_bin = global_partition.bin_groups.size();
-	PartitionGlobalHashGroup *hash_group = nullptr;
+	optional_ptr<PartitionGlobalHashGroup> hash_group;
 	unique_ptr<PayloadScanner> scanner;
 	for (idx_t i = 0; i < lstate.lhs_match_count; ++i) {
 		const auto idx = lstate.lhs_matched[i];
