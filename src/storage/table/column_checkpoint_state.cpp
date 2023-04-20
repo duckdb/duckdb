@@ -71,7 +71,7 @@ public:
 		// At this point, we've already copied all data from tail_segments
 		// into the page owned by first_segment. We flush all segment data to
 		// disk with the following call.
-		if (free_space_left > 0) {
+		if (free_space_left > 0 || !uninitialized_regions.empty()) {
 			auto handle = block_manager.buffer_manager.Pin(first_segment->block);
 			// memset any uninitialized regions
 			for (auto &uninitialized : uninitialized_regions) {
