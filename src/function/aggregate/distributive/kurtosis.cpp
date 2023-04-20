@@ -70,9 +70,10 @@ struct KurtosisOperation {
 		            6 * state->sum_sqr * state->sum * state->sum * temp * temp - 3 * pow(state->sum, 4) * pow(temp, 3));
 
 		double m2 = temp * (state->sum_sqr - state->sum * state->sum * temp);
-		if (((m2 * m2) - 3 * (n - 1)) == 0 || ((n - 2) * (n - 3)) == 0) { // LCOV_EXCL_START
+		if (m2 <= 0 || ((n - 2) * (n - 3)) == 0) { // m2 shouldn't be below 0 but floating points are weird
 			mask.SetInvalid(idx);
-		} // LCOV_EXCL_STOP
+			return;
+		}
 		target[idx] = (n - 1) * ((n + 1) * m4 / (m2 * m2) - 3 * (n - 1)) / ((n - 2) * (n - 3));
 		if (!Value::DoubleIsFinite(target[idx])) {
 			throw OutOfRangeException("Kurtosis is out of range!");
