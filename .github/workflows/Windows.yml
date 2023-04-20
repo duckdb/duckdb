@@ -42,12 +42,6 @@ jobs:
     - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
-        
-    - name: Set DuckDB library path
-      run: |
-        $duckDbLib = Get-ChildItem -Path $PWD -Filter "libduck*.dll" -File | Select-Object -First 1
-        echo "DUCKDB_INSTALL_LIB=$($duckDbLib.FullName)" >> $env:GITHUB_ENV
-        echo "duckDbLib: $($duckDbLib.FullName)"
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -65,9 +59,9 @@ jobs:
     - name: Test
       shell: bash
       run: |
-        $duckDbLib = Get-ChildItem -Path $(Get-Location) -Filter "libduck*.dll" -File | Select-Object -First 1
-        echo "DUCKDB_INSTALL_LIB=$duckDbLib" >> $env:GITHUB_ENV
-        echo "duckDbLib: $duckDbLib"
+        $duckDbLib = Get-ChildItem -Path $PWD -Filter "libduck*.dll" -File | Select-Object -First 1
+        echo "DUCKDB_INSTALL_LIB=$($duckDbLib.FullName)" >> $env:GITHUB_ENV
+        echo "duckDbLib: $($duckDbLib.FullName)"
         test/Release/unittest.exe
 
     - name: Tools Test
