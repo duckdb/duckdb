@@ -73,6 +73,10 @@ void Optimizer::Verify(LogicalOperator &op) {
 }
 
 unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan_p) {
+	if (plan_p->type == LogicalOperatorType::LOGICAL_TRANSACTION) {
+		return std::move(plan_p);
+	}
+
 	Verify(*plan_p);
 	this->plan = std::move(plan_p);
 	// first we perform expression rewrites using the ExpressionRewriter

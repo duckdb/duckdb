@@ -537,13 +537,15 @@ void CompressedMaterialization::RemoveRedundantExpressions(LogicalProjection &de
 			const auto current_bindings = current_op->GetColumnBindings();
 			switch (current_op->type) {
 			case LogicalOperatorType::LOGICAL_PROJECTION: {
+				for (const auto &expr : current_op->expressions) {
+					if (expr->type != ExpressionType::BOUND_COLUMN_REF && UsesBinding(*expr, current_binding)) {
+						can_remove_current = false;
+						break;
+					}
+				}
 				for (idx_t expr_idx = 0; expr_idx < current_op->expressions.size(); expr_idx++) {
 					const auto &expr = current_op->expressions[expr_idx];
 					if (expr->type != ExpressionType::BOUND_COLUMN_REF) {
-						if (UsesBinding(*expr, current_binding)) {
-							can_remove_current = false;
-							break;
-						}
 						continue;
 					}
 					const auto &colref = expr->Cast<BoundColumnRefExpression>();
@@ -566,15 +568,14 @@ void CompressedMaterialization::RemoveRedundantExpressions(LogicalProjection &de
 				if (!can_remove_current) {
 					break;
 				}
-				bool projected_out = false;
-				for (idx_t filter_out_idx = 0; filter_out_idx < current_bindings.size(); filter_out_idx++) {
+				idx_t filter_out_idx;
+				for (filter_out_idx = 0; filter_out_idx < current_bindings.size(); filter_out_idx++) {
 					if (current_bindings[filter_out_idx] == current_binding) {
 						current_col_idx = filter_out_idx;
-						projected_out = true;
 						break;
 					}
 				}
-				D_ASSERT(projected_out); // Should always be projected out if not used in filter exprs
+				D_ASSERT(filter_out_idx != current_bindings.size()); // Should always find the binding
 				break;
 			}
 			case LogicalOperatorType::LOGICAL_LIMIT:
