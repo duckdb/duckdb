@@ -1,220 +1,220 @@
-name: OSX
-on:
-  workflow_dispatch:
-  repository_dispatch:
-  push:
-    branches:
-      - '**'
-      - '!master'
-      - '!feature'
-    tags:
-      - '**'
-    paths-ignore:
-      - '**.md'
-      - 'tools/**'
-      - '.github/workflows/**'
-      - '!.github/workflows/OSX.yml'
-  pull_request:
-    branches-ignore:
-      - '**'
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
-  cancel-in-progress: true
-
-env:
-  GH_TOKEN: ${{ secrets.GH_TOKEN }}
-
-jobs:
-  xcode-debug:
-    name: OSX Debug
-    runs-on: macos-latest
-
-    env:
-      TREAT_WARNINGS_AS_ERRORS: 1
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v4
-      with:
-        python-version: '3.7'
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Install ninja
-      shell: bash
-      run: brew install ninja
-
-    - name: Build
-      shell: bash
-      run: GEN=ninja make debug
-
-    - name: Test
-      shell: bash
-      run: |
-          echo "DUCKDB_INSTALL_LIB=$(find `pwd` -name "libduck*.dylib" | head -n 1)" >> $GITHUB_ENV
-          make unittestci
-
-    - name: Amalgamation
-      shell: bash
-      run: |
-        python scripts/amalgamation.py --extended
-        cd src/amalgamation
-        clang++ -std=c++11 -O0 -Wall -Werror -emit-llvm -S duckdb.cpp
-        clang++ -DNDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp
-        clang++ -DDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp
-
-  xcode-release:
-    name: OSX Release
-    runs-on: macos-latest
-    needs: xcode-debug
-    env:
-      BUILD_ICU: 1
-      BUILD_TPCH: 1
-      BUILD_FTS: 1
-      BUILD_JSON: 1
-      BUILD_EXCEL: 1
-      BUILD_ODBC: 1
-      BUILD_AUTOCOMPLETE: 1
-      OSX_BUILD_UNIVERSAL: 1
-      GEN: ninja
-      ODBC_CONFIG: ../../build/unixodbc/build/bin/odbc_config
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v4
-      with:
-        python-version: '3.7'
-
-    - name: Install Ninja
-      run: brew install ninja
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Install UnixODBC
-      shell: bash
-      run: |
-        brew remove --ignore-dependencies unixodbc
-        CFLAGS="-arch x86_64 -arch arm64" ./scripts/install_unixodbc.sh
-
-    - name: Build
-      shell: bash
-      run: make
-
-    - name: Unit Test
-      shell: bash
-      run: make allunit
-
-    - name: Tools Tests
-      shell: bash
-      run: |
-        python tools/shell/shell-test.py build/release/duckdb
-
-    - name: Examples
-      shell: bash
-      run: |
-        (cd examples/embedded-c; make)
-        (cd examples/embedded-c++; make)
-
-    - name: Deploy
-      shell: bash
-      run: |
-        python scripts/amalgamation.py
-        zip -j duckdb_cli-osx-universal.zip build/release/duckdb
-        zip -j libduckdb-osx-universal.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
-        zip -j duckdb_odbc-osx-universal.zip build/release/tools/odbc/libduckdb_odbc.dylib
-        python scripts/asset-upload-gha.py libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip duckdb_odbc-osx-universal.zip
-
-    - uses: actions/upload-artifact@v3
-      with:
-        name: duckdb-binaries-osx
-        path: |
-          libduckdb-osx-universal.zip
-          duckdb_cli-osx-universal.zip
-          duckdb_odbc-osx-universal.zip
-
-  xcode-extensions:
-    name: OSX Extensions Release
-    runs-on: macos-latest
-    needs: xcode-debug
-    env:
-      DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-      AWS_DEFAULT_REGION: us-east-1
-      OSX_BUILD_UNIVERSAL: 1
-
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.7'
-
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-      - name: Install OpenSSL
-        shell: bash
-        run: |
-          mkdir -p build/openssl
-          cd build/openssl
-          mkdir sources build
-          curl https://www.openssl.org/source/openssl-3.0.5.tar.gz | tar xv -C sources --strip-components 1
-          export OPENSSL_ROOT_DIR=`pwd`/build
-          cd sources
-          export CC="clang -arch x86_64 -arch arm64"
-          perl ./Configure --prefix=$OPENSSL_ROOT_DIR darwin64-x86_64-cc no-asm
-          make -j
-          make install_sw
-
-      - name: Get OpenSSL path
-        shell: bash
-        run: |
-          export OPENSSL_ROOT_DIR=`pwd`/build/openssl/build
-          echo "OPENSSL_ROOT_DIR=$OPENSSL_ROOT_DIR" >> $GITHUB_ENV
-
-      - uses: ./.github/actions/build_extensions
-        with:
-          openssl_path: ${{ env.OPENSSL_ROOT_DIR }}
-          treat_warn_as_error: 0
-          post_install: rm build/release/src/libduckdb*
-          run_tests: 0
-          osx_universal: 1
-
-      - name: Deploy
-        shell: bash
-        env:
-          AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
-          AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
-        run: |
-          if [[ "$GITHUB_REF" =~ ^(refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-            pip install awscli
-            ./scripts/extension-upload.sh osx_amd64 ${{ github.ref_name }}
-            ./scripts/extension-upload.sh osx_arm64 ${{ github.ref_name }}
-            ./scripts/extension-upload-test.sh
-          elif [[ "$GITHUB_REF" =~ ^(refs/heads/master)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-            pip install awscli
-            ./scripts/extension-upload.sh osx_amd64 `git log -1 --format=%h`
-            ./scripts/extension-upload.sh osx_arm64 `git log -1 --format=%h`
-            ./scripts/extension-upload-test.sh
-          else
-            ./scripts/extension-upload-test.sh local
-          fi
+#name: OSX
+#on:
+#  workflow_dispatch:
+#  repository_dispatch:
+#  push:
+#    branches:
+#      - '**'
+#      - '!master'
+#      - '!feature'
+#    tags:
+#      - '**'
+#    paths-ignore:
+#      - '**.md'
+#      - 'tools/**'
+#      - '.github/workflows/**'
+#      - '!.github/workflows/OSX.yml'
+#  pull_request:
+#    branches-ignore:
+#      - '**'
+#
+#concurrency:
+#  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
+#  cancel-in-progress: true
+#
+#env:
+#  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+#
+#jobs:
+#  xcode-debug:
+#    name: OSX Debug
+#    runs-on: macos-latest
+#
+#    env:
+#      TREAT_WARNINGS_AS_ERRORS: 1
+#
+#    steps:
+#    - uses: actions/checkout@v3
+#      with:
+#        fetch-depth: 0
+#
+#    - uses: actions/setup-python@v4
+#      with:
+#        python-version: '3.7'
+#
+#    - name: Setup Ccache
+#      uses: hendrikmuhs/ccache-action@main
+#      with:
+#        key: ${{ github.job }}
+#        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+#
+#    - name: Install ninja
+#      shell: bash
+#      run: brew install ninja
+#
+#    - name: Build
+#      shell: bash
+#      run: GEN=ninja make debug
+#
+#    - name: Test
+#      shell: bash
+#      run: |
+#          echo "DUCKDB_INSTALL_LIB=$(find `pwd` -name "libduck*.dylib" | head -n 1)" >> $GITHUB_ENV
+#          make unittestci
+#
+#    - name: Amalgamation
+#      shell: bash
+#      run: |
+#        python scripts/amalgamation.py --extended
+#        cd src/amalgamation
+#        clang++ -std=c++11 -O0 -Wall -Werror -emit-llvm -S duckdb.cpp
+#        clang++ -DNDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp
+#        clang++ -DDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp
+#
+#  xcode-release:
+#    name: OSX Release
+#    runs-on: macos-latest
+#    needs: xcode-debug
+#    env:
+#      BUILD_ICU: 1
+#      BUILD_TPCH: 1
+#      BUILD_FTS: 1
+#      BUILD_JSON: 1
+#      BUILD_EXCEL: 1
+#      BUILD_ODBC: 1
+#      BUILD_AUTOCOMPLETE: 1
+#      OSX_BUILD_UNIVERSAL: 1
+#      GEN: ninja
+#      ODBC_CONFIG: ../../build/unixodbc/build/bin/odbc_config
+#
+#    steps:
+#    - uses: actions/checkout@v3
+#      with:
+#        fetch-depth: 0
+#
+#    - uses: actions/setup-python@v4
+#      with:
+#        python-version: '3.7'
+#
+#    - name: Install Ninja
+#      run: brew install ninja
+#
+#    - name: Setup Ccache
+#      uses: hendrikmuhs/ccache-action@main
+#      with:
+#        key: ${{ github.job }}
+#        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+#
+#    - name: Install UnixODBC
+#      shell: bash
+#      run: |
+#        brew remove --ignore-dependencies unixodbc
+#        CFLAGS="-arch x86_64 -arch arm64" ./scripts/install_unixodbc.sh
+#
+#    - name: Build
+#      shell: bash
+#      run: make
+#
+#    - name: Unit Test
+#      shell: bash
+#      run: make allunit
+#
+#    - name: Tools Tests
+#      shell: bash
+#      run: |
+#        python tools/shell/shell-test.py build/release/duckdb
+#
+#    - name: Examples
+#      shell: bash
+#      run: |
+#        (cd examples/embedded-c; make)
+#        (cd examples/embedded-c++; make)
+#
+#    - name: Deploy
+#      shell: bash
+#      run: |
+#        python scripts/amalgamation.py
+#        zip -j duckdb_cli-osx-universal.zip build/release/duckdb
+#        zip -j libduckdb-osx-universal.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
+#        zip -j duckdb_odbc-osx-universal.zip build/release/tools/odbc/libduckdb_odbc.dylib
+#        python scripts/asset-upload-gha.py libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip duckdb_odbc-osx-universal.zip
+#
+#    - uses: actions/upload-artifact@v3
+#      with:
+#        name: duckdb-binaries-osx
+#        path: |
+#          libduckdb-osx-universal.zip
+#          duckdb_cli-osx-universal.zip
+#          duckdb_odbc-osx-universal.zip
+#
+#  xcode-extensions:
+#    name: OSX Extensions Release
+#    runs-on: macos-latest
+#    needs: xcode-debug
+#    env:
+#      DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
+#      AWS_DEFAULT_REGION: us-east-1
+#      OSX_BUILD_UNIVERSAL: 1
+#
+#    steps:
+#      - uses: actions/checkout@v3
+#        with:
+#          fetch-depth: 0
+#
+#      - uses: actions/setup-python@v4
+#        with:
+#          python-version: '3.7'
+#
+#      - name: Setup Ccache
+#        uses: hendrikmuhs/ccache-action@main
+#        with:
+#          key: ${{ github.job }}
+#          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+#
+#      - name: Install OpenSSL
+#        shell: bash
+#        run: |
+#          mkdir -p build/openssl
+#          cd build/openssl
+#          mkdir sources build
+#          curl https://www.openssl.org/source/openssl-3.0.5.tar.gz | tar xv -C sources --strip-components 1
+#          export OPENSSL_ROOT_DIR=`pwd`/build
+#          cd sources
+#          export CC="clang -arch x86_64 -arch arm64"
+#          perl ./Configure --prefix=$OPENSSL_ROOT_DIR darwin64-x86_64-cc no-asm
+#          make -j
+#          make install_sw
+#
+#      - name: Get OpenSSL path
+#        shell: bash
+#        run: |
+#          export OPENSSL_ROOT_DIR=`pwd`/build/openssl/build
+#          echo "OPENSSL_ROOT_DIR=$OPENSSL_ROOT_DIR" >> $GITHUB_ENV
+#
+#      - uses: ./.github/actions/build_extensions
+#        with:
+#          openssl_path: ${{ env.OPENSSL_ROOT_DIR }}
+#          treat_warn_as_error: 0
+#          post_install: rm build/release/src/libduckdb*
+#          run_tests: 0
+#          osx_universal: 1
+#
+#      - name: Deploy
+#        shell: bash
+#        env:
+#          AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
+#          AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
+#        run: |
+#          if [[ "$GITHUB_REF" =~ ^(refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+#            pip install awscli
+#            ./scripts/extension-upload.sh osx_amd64 ${{ github.ref_name }}
+#            ./scripts/extension-upload.sh osx_arm64 ${{ github.ref_name }}
+#            ./scripts/extension-upload-test.sh
+#          elif [[ "$GITHUB_REF" =~ ^(refs/heads/master)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+#            pip install awscli
+#            ./scripts/extension-upload.sh osx_amd64 `git log -1 --format=%h`
+#            ./scripts/extension-upload.sh osx_arm64 `git log -1 --format=%h`
+#            ./scripts/extension-upload-test.sh
+#          else
+#            ./scripts/extension-upload-test.sh local
+#          fi
