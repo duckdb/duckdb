@@ -524,7 +524,7 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 			if (target_type_not_varchar) {
 				UnifiedVectorFormat inserted_column_data;
 				result_vector.ToUnifiedFormat(parse_chunk.size(), inserted_column_data);
-				for (;line_error < parse_chunk.size(); line_error++) {
+				for (; line_error < parse_chunk.size(); line_error++) {
 					if (!inserted_column_data.validity.RowIsValid(line_error) &&
 					    !FlatVector::IsNull(parse_vector, line_error)) {
 						break;

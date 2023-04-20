@@ -552,6 +552,9 @@ idx_t LineInfo::GetLine(idx_t batch_idx) {
 		}
 		line_count += lines_read[i];
 	}
+	// We do a cleanup, since this function is only called when an error has happened, and all threads before it
+	// have already finished
+	current_batches.clear();
 	return line_count;
 }
 
@@ -971,6 +974,7 @@ void BufferedCSVReaderOptions::Serialize(FieldWriter &writer) const {
 	writer.WriteString(file_path);
 	writer.WriteString(decimal_separator);
 	writer.WriteField<bool>(null_padding);
+	writer.WriteField<idx_t>(buffer_size);
 	writer.WriteSerializable(file_options);
 	// write options
 	writer.WriteListNoReference<bool>(force_quote);
@@ -1005,6 +1009,7 @@ void BufferedCSVReaderOptions::Deserialize(FieldReader &reader) {
 	file_path = reader.ReadRequired<string>();
 	decimal_separator = reader.ReadRequired<string>();
 	null_padding = reader.ReadRequired<bool>();
+	buffer_size = reader.ReadRequired<idx_t>();
 	file_options = reader.ReadRequiredSerializable<MultiFileReaderOptions, MultiFileReaderOptions>();
 	// write options
 	force_quote = reader.ReadRequiredList<bool>();

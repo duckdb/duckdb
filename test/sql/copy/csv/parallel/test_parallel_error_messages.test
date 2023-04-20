@@ -11,73 +11,90 @@ PRAGMA verify_parallelism
 statement ok
 SET threads=4
 
-statement error
-SELECT * FROM read_csv('data/csv/missing_column.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True)
-----
-line 7
-
-
-
+## This is not the exact line, but that's a tough one since the parallel csv reader tries to figure out where lines start
+#statement error
+#SELECT * FROM read_csv('data/csv/missing_column.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True)
+#----
+#line 8
+#
+#
+#
 #loop i 0 100
 #
 #statement error
 #SELECT * FROM read_csv('data/csv/wrongtype.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True)
 #----
-#line 8
+#line 7
 #
 #endloop
 #
-## copy a file that starts with a bunch of numbers, and then has alternating numbers and strings
-#statement ok
-#COPY (
-#SELECT i, 'world' FROM range(10000) t(i)
-#UNION ALL
-#SELECT i, 'world' FROM (
-#	SELECT i, r FROM (
-#		SELECT * FROM range(33) t(i)
-#		UNION ALL
-#		SELECT 'hello'
-#	) t(i), range(100) r(r) ORDER BY r
-#)) TO '__TEST_DIR__/mixedtypes.csv' (HEADER);
-#
-## the first error is on line 10035
 #statement error
-#SELECT * FROM read_csv('__TEST_DIR__/mixedtypes.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True)
+#SELECT * FROM read_csv('data/csv/wrongtype.csv', parallel=false, sep=',', columns={'h1': int, 'h2': varchar}, header=True)
 #----
-#line 10035
-#
-#statement ok
-#COPY (
-#SELECT i, 'world' FROM range(1) t(i)
-#UNION ALL
-#SELECT i, 'world' FROM (
-#	SELECT i, r FROM (
-#		SELECT * FROM range(33) t(i)
-#		UNION ALL
-#		SELECT 'h
-#e
-#l
-#l
-#o'
-#	) t(i), range(100) r(r) ORDER BY r
-#)) TO '__TEST_DIR__/quotednewlines.csv' (HEADER);
-#
-#statement ok
-#SELECT * FROM read_csv('__TEST_DIR__/quotednewlines.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': varchar, 'h2': varchar}, header=True)
-#
-## quoted newlines that match the CSV schema should not be supported
-#statement ok
-#COPY (
-#SELECT i, 'world' FROM range(10000) t(i)
-#UNION ALL
-#SELECT i, 'h
-#1,e
-#2,l
-#3,l
-#4,o' FROM range(100) t(i)
-#) TO '__TEST_DIR__/quotednewlines.csv' (HEADER);
-#
-#statement error
-#SELECT * FROM read_csv('__TEST_DIR__/quotednewlines.csv', parallel=true, sep=',', buffer_size=200, columns={'h1': int, 'h2': varchar}, header=True)
-#----
-#not supported for multithreading
+#line 7
+
+# copy a file that starts with a bunch of numbers, and then has alternating numbers and strings
+statement ok
+COPY (
+SELECT i, 'world' FROM range(10000) t(i)
+UNION ALL
+SELECT i, 'world' FROM (
+	SELECT i, r FROM (
+		SELECT * FROM range(33) t(i)
+		UNION ALL
+		SELECT 'hello'
+	) t(i), range(100) r(r) ORDER BY r
+)) TO '__TEST_DIR__/mixedtypes.csv' (HEADER);
+
+# the first error is on line 10001
+statement error
+SELECT * FROM read_csv('./mixedtypes.csv', parallel=false, sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True)
+----
+line 10001
+
+# the first error is on line 10001
+statement error
+SELECT * FROM read_csv('__TEST_DIR__/mixedtypes.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True)
+----
+line 10001
+
+statement error
+SELECT * FROM read_csv('__TEST_DIR__/mixedtypes.csv', parallel=false, sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True)
+----
+line 10001
+
+statement ok
+COPY (
+SELECT i, 'world' FROM range(1) t(i)
+UNION ALL
+SELECT i, 'world' FROM (
+	SELECT i, r FROM (
+		SELECT * FROM range(33) t(i)
+		UNION ALL
+		SELECT 'h
+e
+l
+l
+o'
+	) t(i), range(100) r(r) ORDER BY r
+)) TO '__TEST_DIR__/quotednewlines.csv' (HEADER);
+
+statement ok
+SELECT * FROM read_csv('__TEST_DIR__/quotednewlines.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': varchar, 'h2': varchar}, header=True)
+
+# quoted newlines that match the CSV schema should not be supported
+statement ok
+COPY (
+SELECT i, 'world' FROM range(10000) t(i)
+UNION ALL
+SELECT i, 'h
+1,e
+2,l
+3,l
+4,o' FROM range(100) t(i)
+) TO '__TEST_DIR__/quotednewlines.csv' (HEADER);
+
+statement error
+SELECT * FROM read_csv('__TEST_DIR__/quotednewlines.csv', parallel=true, sep=',', buffer_size=200, columns={'h1': int, 'h2': varchar}, header=True)
+----
+not supported for multithreading
