@@ -592,7 +592,7 @@ test_that("rel_project does not automatically quote upper-case column names", {
   ref <- duckdb:::expr_reference(names(df))
   exprs <- list(ref)
   proj <- duckdb:::rel_project(rel, exprs)
-  ans <- duckdb:::rapi_rel_to_df(proj)
+  ans <- duckdb:::rapi_rel_to_altrep(proj)
   expect_equal(df, ans)
 })
 
