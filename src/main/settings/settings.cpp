@@ -262,9 +262,9 @@ void DefaultNullOrderSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, 
 	} else if (parameter == "nulls_last_on_asc_first_on_desc" || parameter == "postgres") {
 		config.options.default_null_order = DefaultOrderByNullType::NULLS_LAST_ON_ASC_FIRST_ON_DESC;
 	} else {
-		throw ParserException(
-		    "Unrecognized parameter for option NULL_ORDER \"%s\", expected either NULLS FIRST or NULLS LAST",
-		    parameter);
+		throw ParserException("Unrecognized parameter for option NULL_ORDER \"%s\", expected either NULLS FIRST, NULLS "
+		                      "LAST, SQLite, MySQL or Postgres",
+		                      parameter);
 	}
 }
 
