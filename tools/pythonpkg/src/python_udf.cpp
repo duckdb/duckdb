@@ -327,7 +327,7 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 static ScalarFunction CreateUDFInternal(const string &name, scalar_function_t func, const py::object &udf,
                                         const py::object &parameters, const shared_ptr<DuckDBPyType> &return_type,
                                         bool varargs, FunctionNullHandling null_handling) {
-	PythonUDFData data(name, func, varargs, null_handling);
+	PythonUDFData data(name, std::move(func), varargs, null_handling);
 
 	data.AnalyzeSignature(udf);
 	data.OverrideParameters(parameters);

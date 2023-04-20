@@ -1,11 +1,9 @@
-from inspect import Attribute
 import duckdb
 import os
-import pandas as pd
 import pytest
+pd = pytest.importorskip("pandas")
+pa = pytest.importorskip("pyarrow")
 from typing import Union
-import pyarrow.compute as pc
-import pyarrow as pa
 import pyarrow.compute as pc
 
 from duckdb.typing import *

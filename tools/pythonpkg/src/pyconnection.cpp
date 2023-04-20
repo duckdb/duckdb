@@ -342,9 +342,12 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterScalarUDF(const strin
 	return shared_from_this();
 }
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterVectorizedUDF(
-    const string &name, const py::function &udf, const py::object &parameters_p, shared_ptr<DuckDBPyType> return_type_p,
-    bool varargs, FunctionNullHandling null_handling, PythonExceptionHandling exception_handling) {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterVectorizedUDF(const string &name, const py::function &udf,
+                                                                         const py::object &parameters_p,
+                                                                         const shared_ptr<DuckDBPyType> &return_type_p,
+                                                                         bool varargs,
+                                                                         FunctionNullHandling null_handling,
+                                                                         PythonExceptionHandling exception_handling) {
 	if (!connection) {
 		throw ConnectionException("Connection already closed!");
 	}
