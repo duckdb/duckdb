@@ -280,7 +280,7 @@ bool DuckDBPyConnection::FileSystemIsRegistered(const string &name) {
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::object &udf,
                                                                      const py::object &parameters_p,
-                                                                     shared_ptr<DuckDBPyType> return_type_p,
+                                                                     const shared_ptr<DuckDBPyType> &return_type_p,
                                                                      bool varargs, FunctionNullHandling null_handling,
                                                                      PythonExceptionHandling exception_handling) {
 	if (!connection) {
@@ -290,7 +290,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterScalarUDF(const strin
 	auto &catalog = Catalog::GetSystemCatalog(context);
 
 	auto scalar_function =
-	    CreateScalarUDF(name, udf, parameters_p, std::move(return_type_p), varargs, null_handling, exception_handling);
+	    CreateScalarUDF(name, udf, parameters_p, return_type_p, varargs, null_handling, exception_handling);
 	CreateScalarFunctionInfo info(scalar_function);
 
 	context.transaction.BeginTransaction();
