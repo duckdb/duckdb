@@ -11,6 +11,8 @@
 #include "duckdb/planner/subquery/has_correlated_expressions.hpp"
 #include "duckdb/planner/subquery/rewrite_correlated_expressions.hpp"
 
+#include <iostream>
+
 namespace duckdb {
 
 FlattenDependentJoins::FlattenDependentJoins(Binder &binder, const vector<CorrelatedColumnInfo> &correlated,
@@ -25,6 +27,10 @@ FlattenDependentJoins::FlattenDependentJoins(Binder &binder, const vector<Correl
 }
 
 bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator *op, bool lateral) {
+
+	// std::cout << "FlattenDependentJoins::DetectCorrelatedExpressions" << std::endl;
+	// std::cout << op->ToString() << std::endl;
+
 	D_ASSERT(op);
 	// check if this entry has correlated expressions
 	HasCorrelatedExpressions visitor(correlated_columns, lateral);

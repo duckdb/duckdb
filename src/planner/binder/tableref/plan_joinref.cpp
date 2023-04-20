@@ -233,7 +233,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	auto left = CreatePlan(*ref.left);
 	auto right = CreatePlan(*ref.right);
-	if (!ref.lateral && !ref.correlated_columns.empty()) {
+	if (!ref.lateral /*&& !ref.correlated_columns.empty()*/) {
 		// non-lateral join with correlated columns
 		// this happens if there is a join (or cross product) in a correlated subquery
 		// due to the lateral binder the expression depth of all correlated columns in the "ref.correlated_columns" set
@@ -250,9 +250,9 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	}
 	if (ref.lateral) {
 		// lateral join
-		std::cout << "PlanLateralJoin" << std::endl;
-		std::cout << "\tLeft Plan: \n" << left->ToString() << std::endl;
-		std::cout << "\tRight Plan: \n" << right->ToString() << std::endl;
+		// std::cout << "PlanLateralJoin" << std::endl;
+		// std::cout << "\tLeft Plan: \n" << left->ToString() << std::endl;
+		// std::cout << "\tRight Plan: \n" << right->ToString() << std::endl;
 
 		return PlanLateralJoin(std::move(left), std::move(right), ref.correlated_columns, ref.type,
 		                       std::move(ref.condition));

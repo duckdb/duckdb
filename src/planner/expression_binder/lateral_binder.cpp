@@ -146,6 +146,12 @@ protected:
 };
 
 void LateralBinder::ReduceExpressionDepth(LogicalOperator &op, const vector<CorrelatedColumnInfo> &correlated) {
+	std::cout << "Reducing Expression Depth!!" << std::endl;
+	std::cout << "Correlated columns are: " << std::endl;
+	for (auto col : correlated)
+	{
+		std::cout << "\tCol: " << col.name << " Depth: " << col.depth << std::endl;
+	}
 	ExpressionDepthReducer depth_reducer(correlated);
 	depth_reducer.VisitOperator(op);
 }
