@@ -231,6 +231,9 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 }
 
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
+
+	std::cout << "STARTING PlanJoinRef " << std::endl;
+
 	auto left = CreatePlan(*ref.left);
 	auto right = CreatePlan(*ref.right);
 	if (!ref.lateral /*&& !ref.correlated_columns.empty()*/) {
@@ -250,12 +253,14 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	}
 	if (ref.lateral) {
 		// lateral join
-		// std::cout << "PlanLateralJoin" << std::endl;
+		std::cout << "STARTING PlanLateralJoin" << std::endl;
 		// std::cout << "\tLeft Plan: \n" << left->ToString() << std::endl;
 		// std::cout << "\tRight Plan: \n" << right->ToString() << std::endl;
 
-		return PlanLateralJoin(std::move(left), std::move(right), ref.correlated_columns, ref.type,
+		auto res = PlanLateralJoin(std::move(left), std::move(right), ref.correlated_columns, ref.type,
 		                       std::move(ref.condition));
+		std::cout << "COMPLETED PlanLateralJoin" << std::endl;
+		return res;
 	}
 	switch (ref.ref_type) {
 	case JoinRefType::CROSS:
@@ -324,6 +329,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	default:
 		break;
 	}
+	std::cout << "END PlanJoinRef " << std::endl;
 	return result;
 }
 

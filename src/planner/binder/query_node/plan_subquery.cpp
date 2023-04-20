@@ -352,6 +352,7 @@ public:
 		return binder.PlanSubquery(expr, root);
 	}
 
+
 private:
 	unique_ptr<LogicalOperator> root;
 	Binder &binder;

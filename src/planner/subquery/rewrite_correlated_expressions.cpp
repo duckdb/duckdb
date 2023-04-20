@@ -55,6 +55,8 @@ RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelatedRecur
 
 void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelatedSubquery(
     BoundSubqueryExpression &expr) {
+	std::cout << "BoundSubqueryExpression: " << std::endl;
+	expr.Print();
 	// rewrite the binding in the correlated list of the subquery)
 	for (auto &corr : expr.binder->correlated_columns) {
 		auto entry = correlated_map.find(corr.binding);
@@ -81,6 +83,9 @@ void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelated
 		if (entry != correlated_map.end()) {
 			// we found the column in the correlated map!
 			// update the binding and reduce the depth by 1
+			std::cout << "DECREMENT DURING FLATTENING!!!" << std::endl;
+			std::cout << child.ToString() << std::endl;
+			std::cout << "Depth from " << bound_colref.depth << " to " << (bound_colref.depth-1) << std::endl;  
 			bound_colref.binding = ColumnBinding(base_binding.table_index, base_binding.column_index + entry->second);
 			bound_colref.depth--;
 		}

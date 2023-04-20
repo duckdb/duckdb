@@ -13,6 +13,8 @@
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/expression.hpp"
 
+#include <iostream>
+
 namespace duckdb {
 
 class BoundSubqueryExpression : public Expression {
@@ -20,6 +22,11 @@ public:
 	explicit BoundSubqueryExpression(LogicalType return_type);
 
 	bool IsCorrelated() {
+		std::cout << "IsCorrelated! Printing CorrelatedColumns" << std::endl;
+		for (auto corr : binder->correlated_columns)
+		{
+			std::cout << "\tColumn: " << corr.name << " " << corr.depth << std::endl;
+		}
 		return binder->correlated_columns.size() > 0;
 	}
 
