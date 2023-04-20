@@ -58,7 +58,7 @@ jobs:
 
     - name: Set DuckDB Library Path
       run: |
-        $duckDbLib = Get-ChildItem -Path $(Get-Location) -Filter "libduck*.dll" -File | Select-Object -First 1
+        $duckDbLib = Get-ChildItem -Path $(Get-Location) -Filter "*duck*.dll" -File | Select-Object -First 1
         echo "DUCKDB_INSTALL_LIB=$($duckDbLib.FullName)" >> $env:GITHUB_ENV
         echo "duckDbLib: $($duckDbLib.FullName)"
 
