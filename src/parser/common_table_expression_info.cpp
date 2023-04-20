@@ -14,7 +14,7 @@ unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::FormatDeseriali
 	auto result = make_uniq<CommonTableExpressionInfo>();
 	result->aliases = deserializer.ReadProperty<vector<string>>("aliases");
 	result->query = deserializer.ReadProperty<unique_ptr<SelectStatement>>("query");
-	result->materialized = deserializer.ReadProperty<CTEMaterialize>("materialize");
+	result->materialized = deserializer.ReadProperty<CTEMaterialize>("materialized");
 	return result;
 }
 
