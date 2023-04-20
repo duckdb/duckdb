@@ -94,7 +94,7 @@ public:
 	shared_ptr<DuckDBPyType> Type(const string &type_str);
 
 	shared_ptr<DuckDBPyConnection>
-	RegisterScalarUDF(const string &name, const py::object &udf, const py::object &arguments = py::none(),
+	RegisterScalarUDF(const string &name, const py::function &udf, const py::object &arguments = py::none(),
 	                  const shared_ptr<DuckDBPyType> &return_type = nullptr, bool varargs = false,
 	                  FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
 	                  PythonExceptionHandling exception_handling = PythonExceptionHandling::FORWARD_ERROR);

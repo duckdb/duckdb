@@ -100,7 +100,7 @@ shared_ptr<DuckDBPyConnection> PyConnectionWrapper::UnregisterUDF(const string &
 	return conn->UnregisterUDF(name);
 }
 
-shared_ptr<DuckDBPyConnection> PyConnectionWrapper::RegisterScalarUDF(const string &name, const py::object &udf,
+shared_ptr<DuckDBPyConnection> PyConnectionWrapper::RegisterScalarUDF(const string &name, const py::function &udf,
                                                                       const py::object &parameters_p,
                                                                       const shared_ptr<DuckDBPyType> &return_type_p,
                                                                       bool varargs, FunctionNullHandling null_handling,
