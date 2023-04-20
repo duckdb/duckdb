@@ -6,6 +6,14 @@ import pytest
 from duckdb.typing import *
 
 class TestScalarUDF(object):
+    def test_default_conn(self):
+        def passthrough(x):
+            return x
+        
+        duckdb.register_scalar('default_conn_passthrough', passthrough, [BIGINT], BIGINT)
+        res = duckdb.sql('select default_conn_passthrough(5)').fetchall()
+        assert res == [(5,)]
+
     def test_basic_use(self):
         def plus_one(x):
             if x == None or x > 50:
