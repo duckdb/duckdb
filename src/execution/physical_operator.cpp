@@ -88,15 +88,11 @@ void PhysicalOperator::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 	// will just be sync
 	if (!lstate.did_async) {
 		lstate.did_async = true;
-		// Configure callback
-		auto callback_uuid = istate.SetInterruptCallback();
-		auto callback = TaskScheduler::GetScheduler(*context.client.db).RescheduleCallback;
-		auto db_ref = context.client.db;
-		// Launch thread that calls callback after a short sleep
-		std::thread rewake_thread([callback_uuid, callback, db_ref] {
+
+		auto callback_state = istate.GetCallbackState(context.client);
+		std::thread rewake_thread([callback_state] {
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
-//			printf("THREAD SOURCE\n");
-			callback(db_ref, callback_uuid);
+			InterruptState::Callback(callback_state);
 		});
 		rewake_thread.detach();
 	} else {
@@ -133,19 +129,13 @@ SinkResultType PhysicalOperator::Sink(ExecutionContext &context, GlobalSinkState
 #ifdef DUCKDB_TEST_FORCE_ASYNC_OPERATORS
 	// This flag provides all Operators in duckdb with a (bogus) async variant. The first call will block, any next calls
 	// will just be sync
-
 	if (!lstate.did_async) {
 		lstate.did_async = true;
-		// Configure callback
-		auto callback_uuid = istate.SetInterruptCallback();
-		auto callback = TaskScheduler::GetScheduler(*context.client.db).RescheduleCallback;
-		auto db_ref = context.client.db;
 
-		// Launch thread that calls callback after a short sleep
-		std::thread rewake_thread([callback_uuid, callback, db_ref] {
-//			printf("THREAD SINKSINK\n");
+		auto callback_state = istate.GetCallbackState(context.client);
+		std::thread rewake_thread([callback_state] {
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
-			callback(db_ref, callback_uuid);
+			InterruptState::Callback(callback_state);
 		});
 
 		rewake_thread.detach();

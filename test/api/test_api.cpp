@@ -65,27 +65,27 @@ static void long_running_query(Connection *conn, bool *correct) {
 	*correct = result->HasError();
 }
 
-//TEST_CASE("Test closing database during long running query", "[api]") {
-//	auto db = make_uniq<DuckDB>(nullptr);
-//	auto conn = make_uniq<Connection>(*db);
-//	// create the database
-//	REQUIRE_NO_FAIL(conn->Query("CREATE TABLE integers(i INTEGER)"));
-//	REQUIRE_NO_FAIL(conn->Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
-//	conn->DisableProfiling();
-//	// perform a long running query in the background (many cross products)
-//	bool correct = true;
-//	auto background_thread = thread(long_running_query, conn.get(), &correct);
-//	// wait a little bit
-//	std::this_thread::sleep_for(std::chrono::milliseconds(100));
-//	// destroy the database
-//	conn->Interrupt();
-//	db.reset();
-//	// wait for the thread
-//	background_thread.join();
-//	REQUIRE(correct);
-//	// try to use the connection
-//	REQUIRE_NO_FAIL(conn->Query("SELECT 42"));
-//}
+TEST_CASE("Test closing database during long running query", "[api]") {
+	auto db = make_uniq<DuckDB>(nullptr);
+	auto conn = make_uniq<Connection>(*db);
+	// create the database
+	REQUIRE_NO_FAIL(conn->Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(conn->Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
+	conn->DisableProfiling();
+	// perform a long running query in the background (many cross products)
+	bool correct = true;
+	auto background_thread = thread(long_running_query, conn.get(), &correct);
+	// wait a little bit
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	// destroy the database
+	conn->Interrupt();
+	db.reset();
+	// wait for the thread
+	background_thread.join();
+	REQUIRE(correct);
+	// try to use the connection
+	REQUIRE_NO_FAIL(conn->Query("SELECT 42"));
+}
 
 TEST_CASE("Test closing result after database is gone", "[api]") {
 	auto db = make_uniq<DuckDB>(nullptr);

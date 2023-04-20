@@ -100,18 +100,6 @@ TaskScheduler::~TaskScheduler() {
 #ifndef DUCKDB_NO_THREADS
 	SetThreadsInternal(1);
 #endif
-#ifdef DEBUG
-	// Ensure we're not missing any tasks that are blocked
-	{
-		unique_lock<mutex> lck(blocked_task_lock);
-		D_ASSERT(buffered_callbacks.size() == 0);
-		D_ASSERT(blocked_tasks.size() == 0);
-	}
-	{
-		unique_lock<mutex> lck(sleeping_task_lock);
-		D_ASSERT(sleeping_tasks.size() == 0);
-	}
-#endif
 }
 
 TaskScheduler &TaskScheduler::GetScheduler(ClientContext &context) {
@@ -127,12 +115,9 @@ unique_ptr<ProducerToken> TaskScheduler::CreateProducer() {
 	return make_uniq<ProducerToken>(*this, std::move(token));
 }
 
-void TaskScheduler::ScheduleTask(shared_ptr<ProducerToken> token, shared_ptr<Task> task) {
-	// We need to store the producer token in the task to be able to reschedule it in case of an interrupt
-	task->current_token = token;
-
+void TaskScheduler::ScheduleTask(ProducerToken& token, shared_ptr<Task> task) {
 	// Enqueue a task for the given producer token and signal any sleeping threads
-	queue->Enqueue(*token, std::move(task));
+	queue->Enqueue(token, std::move(task));
 }
 
 bool TaskScheduler::GetTaskFromProducer(ProducerToken &token, shared_ptr<Task> &task) {
@@ -145,7 +130,6 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 	// loop until the marker is set to false
 	while (*marker) {
 		// wait for a signal with a timeout
-		RescheduleSleepingTasks();
 		queue->semaphore.wait();
 		if (queue->q.try_dequeue(task)) {
 			auto execute_result = task->Execute(TaskExecutionMode::PROCESS_ALL);
@@ -158,7 +142,8 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 			case TaskExecutionResult::TASK_NOT_FINISHED:
 				throw InternalException("Task should not return TASK_NOT_FINISHED in PROCESS_ALL mode");
 			case TaskExecutionResult::TASK_BLOCKED:
-				DescheduleTask(std::move(task));
+				task->Deschedule();
+				task.reset();
 				break;
 			}
 		}
@@ -174,7 +159,6 @@ idx_t TaskScheduler::ExecuteTasks(atomic<bool> *marker, idx_t max_tasks) {
 	// loop until the marker is set to false
 	while (*marker && completed_tasks < max_tasks) {
 		shared_ptr<Task> task;
-		RescheduleSleepingTasks();
 		if (!queue->q.try_dequeue(task)) {
 			return completed_tasks;
 		}
@@ -189,7 +173,8 @@ idx_t TaskScheduler::ExecuteTasks(atomic<bool> *marker, idx_t max_tasks) {
 		case TaskExecutionResult::TASK_NOT_FINISHED:
 			throw InternalException("Task should not return TASK_NOT_FINISHED in PROCESS_ALL mode");
 		case TaskExecutionResult::TASK_BLOCKED:
-			DescheduleTask(std::move(task));
+			task->Deschedule();
+			task.reset();
 			break;
 		}
 	}
@@ -203,7 +188,6 @@ void TaskScheduler::ExecuteTasks(idx_t max_tasks) {
 #ifndef DUCKDB_NO_THREADS
 	shared_ptr<Task> task;
 	for (idx_t i = 0; i < max_tasks; i++) {
-		RescheduleSleepingTasks();
 		queue->semaphore.wait(TASK_TIMEOUT_USECS);
 		if (!queue->q.try_dequeue(task)) {
 			return;
@@ -218,7 +202,8 @@ void TaskScheduler::ExecuteTasks(idx_t max_tasks) {
 			case TaskExecutionResult::TASK_NOT_FINISHED:
 				throw InternalException("Task should not return TASK_NOT_FINISHED in PROCESS_ALL mode");
 			case TaskExecutionResult::TASK_BLOCKED:
-				DescheduleTask(std::move(task));
+				task->Deschedule();
+				task.reset();
 				break;
 			}
 		} catch (...) {
@@ -296,92 +281,6 @@ void TaskScheduler::SetThreadsInternal(int32_t n) {
 		}
 	}
 #endif
-}
-
-void TaskScheduler::RescheduleSleepingTasks() {
-	if (!have_sleeping_tasks) {
-		return;
-	}
-
-	uint64_t current_time = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
-	unique_lock<mutex> lck(sleeping_task_lock);
-
-	// Reschedule any tasks who have exceeded their sleep timer
-	for (auto it = sleeping_tasks.begin(); it != sleeping_tasks.end(); ) {
-		if (it->first < current_time) {
-			ScheduleTask(it->second->current_token, std::move(it->second));
-			it = sleeping_tasks.erase(it);
-		} else {
-			++it;
-		}
-	}
-
-	have_sleeping_tasks = !sleeping_tasks.empty();
-}
-
-void TaskScheduler::DescheduleTaskCallback(shared_ptr<Task> task, hugeint_t callback_uuid) {
-	unique_lock<mutex> lck(blocked_task_lock);
-
-	// First check if callback was made already
-	auto buffered_cb_lookup = buffered_callbacks.find(callback_uuid);
-	if (buffered_cb_lookup != buffered_callbacks.end()) {
-//		Printer::Print(" > Insta reschedule uuid " + to_string(callback_uuid.lower) + to_string(callback_uuid.upper));
-		// this callback already happened, reschedule straight away
-		ScheduleTask(task->current_token, std::move(task));
-		buffered_callbacks.erase(buffered_cb_lookup);
-		return;
-	}
-
-//	Printer::Print(" > added to blocked");
-
-	// Callback was not made yet, this task will need to block
-	D_ASSERT(blocked_tasks.find(callback_uuid) == blocked_tasks.end());
-	blocked_tasks[callback_uuid] = std::move(task);
-}
-
-void TaskScheduler::DescheduleTaskSleeping(shared_ptr<Task> task, uint64_t end_time) {
-	unique_lock<mutex> lck(sleeping_task_lock);
-	sleeping_tasks.insert({end_time, std::move(task)});
-	have_sleeping_tasks = true;
-}
-
-void TaskScheduler::DescheduleTask(shared_ptr<Task> task) {
-	switch(task->interrupt_state.result) {
-	case InterruptResultType::CALLBACK:
-//		DescheduleTask(task);
-//		Printer::Print("Descheduled Task with callback id " + to_string(uuid.lower) + to_string(uuid.upper));
-		DescheduleTaskCallback(std::move(task), hugeint_t(1));
-		break;
-	default:
-		throw InternalException("Unexpected interrupt result type found: (" + to_string((int)task->interrupt_state.result)+ ")");
-	}
-}
-
-void TaskScheduler::RescheduleCallback(shared_ptr<DatabaseInstance> db, hugeint_t callback_uuid) {
-//	Printer::Print("Callback received for uuid " + to_string(callback_uuid.lower) + to_string(callback_uuid.upper));
-	auto& scheduler = GetScheduler(*db);
-	unique_lock<mutex> lck (scheduler.blocked_task_lock);
-
-	auto res = scheduler.blocked_tasks.find(callback_uuid);
-	if (res == scheduler.blocked_tasks.end()) {
-//		Printer::Print(" > adding to buffered");
-		scheduler.buffered_callbacks.insert(callback_uuid);
-	} else {
-//		Printer::Print(" > Reschedule task");
-		auto token_ptr = res->second->current_token;
-		scheduler.ScheduleTask(res->second->current_token, std::move(res->second));
-		scheduler.blocked_tasks.erase(res);
-	}
-//	Printer::Print("\n");
-
-//	// DEBUG
-//	{
-//		unique_lock<mutex> lck(scheduler.sleeping_task_lock);
-//		unique_lock<mutex> lck2(scheduler.blocked_task_lock);
-//		Printer::Print("	> currently have: " + to_string(scheduler.sleeping_tasks.size()) + " sleeping");
-//		Printer::Print("	> currently have: " + to_string(scheduler.blocked_tasks.size()) + " Blocked");
-//		Printer::Print("\n");
-//	}
 }
 
 } // namespace duckdb

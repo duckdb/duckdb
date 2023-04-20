@@ -83,8 +83,8 @@ public:
 	void CompletePipeline() {
 		completed_pipelines++;
 	}
-	shared_ptr<ProducerToken> GetToken() {
-		return producer;
+	ProducerToken& GetToken() {
+		return *producer;
 	}
 	void AddEvent(shared_ptr<Event> event);
 
@@ -135,7 +135,7 @@ private:
 	//! The current root pipeline index
 	idx_t root_pipeline_idx;
 	//! The producer of this query
-	shared_ptr<ProducerToken> producer;
+	unique_ptr<ProducerToken> producer;
 	//! Exceptions that occurred during the execution of the current query
 	vector<PreservedError> exceptions;
 	//! List of events

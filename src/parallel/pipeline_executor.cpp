@@ -95,6 +95,13 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 			break;
 		}
 
+		// The reasoning we now also need this is because before in this loop we would always go through FetchFromSource
+		// which now
+		// TODO: move up? remove call in FetchFromSource?
+		if (context.client.interrupted) {
+			throw InterruptException();
+		}
+
 		// There's 4 ways we can process a chunk in the pipeline here:
 		// 1. Regular fetch from source into pipeline:      Fetch from source, push through pipeline
 		// 2. Resuming after Sink interrupt:                Retry pushing the final chunk into the sink

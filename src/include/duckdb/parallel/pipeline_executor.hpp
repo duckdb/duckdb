@@ -59,7 +59,7 @@ public:
 	void PullFinalize();
 
 	//! Allows the PipelineTask to propagate the interrupt up to the scheduler
-	InterruptState GetInterruptState() {
+	InterruptState& GetInterruptState() {
 		return interrupt_state;
 	}
 
