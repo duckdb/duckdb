@@ -114,7 +114,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      py::arg("varargs") = false, py::arg("null_handling") = 0, py::arg("exception_handling") = 0);
 
 	m.def("register_vectorized", &DuckDBPyConnection::RegisterVectorizedUDF,
-	      "Register a scalar UDF so it can be used in queries", py::arg("name"), py::arg("function"),
+	      "Register a (vectorized) scalar UDF so it can be used in queries", py::arg("name"), py::arg("function"),
 	      py::arg("return_type") = py::none(), py::arg("parameters") = py::none(), py::kw_only(),
 	      py::arg("varargs") = false, py::arg("null_handling") = 0, py::arg("exception_handling") = 0);
 	m.def("unregister_function", &DuckDBPyConnection::UnregisterUDF, "Remove a previously registered function",
