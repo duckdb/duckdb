@@ -140,7 +140,7 @@ static scalar_function_t CreateFunction(PyObject *function, PythonExceptionHandl
 		python_results.reserve(input.size());
 		for (idx_t row = 0; row < input.size(); row++) {
 
-			auto bundled_parameters = py::tuple(input.ColumnCount());
+			auto bundled_parameters = py::tuple((int)input.ColumnCount());
 			for (idx_t i = 0; i < input.ColumnCount(); i++) {
 				// Fill the tuple with the arguments for this row
 				auto &column = input.data[i];
