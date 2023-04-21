@@ -6,11 +6,11 @@ namespace duckdb {
 
 BindResult ExpressionBinder::BindExpression(CollateExpression &expr, idx_t depth) {
 	// first try to bind the child of the cast expression
-	string error = Bind(&expr.child, depth);
+	string error = Bind(expr.child, depth);
 	if (!error.empty()) {
 		return BindResult(error);
 	}
-	auto &child = (BoundExpression &)*expr.child;
+	auto &child = expr.child->Cast<BoundExpression>();
 	if (child.expr->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
