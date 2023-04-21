@@ -685,7 +685,7 @@ void CatalogSet::CreateDefaultEntries(CatalogTransaction transaction, unique_loc
 	defaults->created_all_entries = true;
 }
 
-void CatalogSet::Scan(CatalogTransaction transaction, const std::function<void(CatalogEntry *)> &callback) {
+void CatalogSet::Scan(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback) {
 	// lock the catalog set
 	unique_lock<mutex> lock(catalog_lock);
 	CreateDefaultEntries(transaction, lock);
@@ -694,33 +694,33 @@ void CatalogSet::Scan(CatalogTransaction transaction, const std::function<void(C
 		auto entry = kv.second.entry.get();
 		entry = GetEntryForTransaction(transaction, entry);
 		if (!entry->deleted) {
-			callback(entry);
+			callback(*entry);
 		}
 	}
 }
 
-void CatalogSet::Scan(ClientContext &context, const std::function<void(CatalogEntry *)> &callback) {
+void CatalogSet::Scan(ClientContext &context, const std::function<void(CatalogEntry &)> &callback) {
 	Scan(catalog.GetCatalogTransaction(context), callback);
 }
 
-void CatalogSet::Scan(const std::function<void(CatalogEntry *)> &callback) {
+void CatalogSet::Scan(const std::function<void(CatalogEntry &)> &callback) {
 	// lock the catalog set
 	lock_guard<mutex> lock(catalog_lock);
 	for (auto &kv : entries) {
 		auto entry = kv.second.entry.get();
 		entry = GetCommittedEntry(entry);
 		if (!entry->deleted) {
-			callback(entry);
+			callback(*entry);
 		}
 	}
 }
 
 void CatalogSet::Verify(Catalog &catalog_p) {
 	D_ASSERT(&catalog_p == &catalog);
-	vector<CatalogEntry *> entries;
-	Scan([&](CatalogEntry *entry) { entries.push_back(entry); });
+	vector<reference<CatalogEntry>> entries;
+	Scan([&](CatalogEntry &entry) { entries.push_back(entry); });
 	for (auto &entry : entries) {
-		entry->Verify(catalog_p);
+		entry.get().Verify(catalog_p);
 	}
 }
 

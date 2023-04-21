@@ -45,7 +45,7 @@ public:
 	static const string &GetDefaultDatabase(ClientContext &context);
 
 	optional_ptr<AttachedDatabase> GetDatabaseFromPath(ClientContext &context, const string &path);
-	vector<optional_ptr<AttachedDatabase>> GetDatabases(ClientContext &context);
+	vector<reference<AttachedDatabase>> GetDatabases(ClientContext &context);
 
 	transaction_t GetNewQueryNumber() {
 		return current_query_number++;

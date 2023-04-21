@@ -53,7 +53,7 @@ struct DuckDBConstraintsData : public GlobalTableFunctionState {
 	DuckDBConstraintsData() : offset(0), constraint_offset(0), unique_constraint_offset(0) {
 	}
 
-	vector<optional_ptr<CatalogEntry>> entries;
+	vector<reference<CatalogEntry>> entries;
 	idx_t offset;
 	idx_t constraint_offset;
 	idx_t unique_constraint_offset;
@@ -109,15 +109,15 @@ unique_ptr<GlobalTableFunctionState> DuckDBConstraintsInit(ClientContext &contex
 	auto schemas = Catalog::GetAllSchemas(context);
 
 	for (auto &schema : schemas) {
-		vector<CatalogEntry *> entries;
+		vector<reference<CatalogEntry>> entries;
 
-		schema.get().Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
-			if (entry->type == CatalogType::TABLE_ENTRY) {
+		schema.get().Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.type == CatalogType::TABLE_ENTRY) {
 				entries.push_back(entry);
 			}
 		});
 
-		sort(entries.begin(), entries.end(), [&](CatalogEntry *x, CatalogEntry *y) { return (x->name < y->name); });
+		sort(entries.begin(), entries.end(), [&](CatalogEntry &x, CatalogEntry &y) { return (x.name < y.name); });
 
 		result->entries.insert(result->entries.end(), entries.begin(), entries.end());
 	};
@@ -135,7 +135,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
-		auto &entry = *data.entries[data.offset];
+		auto &entry = data.entries[data.offset].get();
 		D_ASSERT(entry.type == CatalogType::TABLE_ENTRY);
 
 		auto &table = entry.Cast<TableCatalogEntry>();

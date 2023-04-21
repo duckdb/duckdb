@@ -15,7 +15,7 @@ struct DuckDBIndexesData : public GlobalTableFunctionState {
 	DuckDBIndexesData() : offset(0) {
 	}
 
-	vector<CatalogEntry *> entries;
+	vector<reference<CatalogEntry>> entries;
 	idx_t offset;
 };
 
@@ -66,7 +66,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBIndexesInit(ClientContext &context, T
 	// scan all the schemas for tables and collect them and collect them
 	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto &schema : schemas) {
-		schema.get().Scan(context, CatalogType::INDEX_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+		schema.get().Scan(context, CatalogType::INDEX_ENTRY, [&](CatalogEntry &entry) { result->entries.push_back(entry); });
 	};
 	return std::move(result);
 }
@@ -81,9 +81,9 @@ void DuckDBIndexesFunction(ClientContext &context, TableFunctionInput &data_p, D
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
-		auto &entry = data.entries[data.offset++];
+		auto &entry = data.entries[data.offset++].get();
 
-		auto &index = entry->Cast<IndexCatalogEntry>();
+		auto &index = entry.Cast<IndexCatalogEntry>();
 		// return values:
 
 		idx_t col = 0;

@@ -118,9 +118,9 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	vector<reference<TableCatalogEntry>> tables;
 	auto schemas = Catalog::GetSchemas(context, catalog);
 	for (auto &schema : schemas) {
-		schema.get().Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
-			if (entry->type == CatalogType::TABLE_ENTRY) {
-				tables.push_back(entry->Cast<TableCatalogEntry>());
+		schema.get().Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.type == CatalogType::TABLE_ENTRY) {
+				tables.push_back(entry.Cast<TableCatalogEntry>());
 			}
 		});
 	}

@@ -455,7 +455,7 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 	auto &db_manager = DatabaseManager::Get(context);
 	auto databases = db_manager.GetDatabases(context);
 	for (auto database : databases) {
-		auto &catalog = database->GetCatalog();
+		auto &catalog = database.get().GetCatalog();
 		auto current_schemas = catalog.GetAllSchemas(context);
 		for (auto &current_schema : current_schemas) {
 			unseen_schemas.insert(current_schema.get());
@@ -685,7 +685,7 @@ vector<reference<SchemaCatalogEntry>> Catalog::GetAllSchemas(ClientContext &cont
 	auto &db_manager = DatabaseManager::Get(context);
 	auto databases = db_manager.GetDatabases(context);
 	for (auto database : databases) {
-		auto &catalog = database->GetCatalog();
+		auto &catalog = database.get().GetCatalog();
 		auto new_schemas = catalog.GetSchemas(context);
 		result.insert(result.end(), new_schemas.begin(), new_schemas.end());
 	}

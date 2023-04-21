@@ -105,15 +105,15 @@ public:
 	void Undo(CatalogEntry &entry);
 
 	//! Scan the catalog set, invoking the callback method for every committed entry
-	DUCKDB_API void Scan(const std::function<void(CatalogEntry *)> &callback);
+	DUCKDB_API void Scan(const std::function<void(CatalogEntry &)> &callback);
 	//! Scan the catalog set, invoking the callback method for every entry
-	DUCKDB_API void Scan(CatalogTransaction transaction, const std::function<void(CatalogEntry *)> &callback);
-	DUCKDB_API void Scan(ClientContext &context, const std::function<void(CatalogEntry *)> &callback);
+	DUCKDB_API void Scan(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback);
+	DUCKDB_API void Scan(ClientContext &context, const std::function<void(CatalogEntry &)> &callback);
 
 	template <class T>
-	vector<T *> GetEntries(CatalogTransaction transaction) {
-		vector<T *> result;
-		Scan(transaction, [&](CatalogEntry *entry) { result.push_back((T *)entry); });
+	vector<reference<T>> GetEntries(CatalogTransaction transaction) {
+		vector<reference<T>> result;
+		Scan(transaction, [&](CatalogEntry &entry) { result.push_back(entry.Cast<T>()); });
 		return result;
 	}
 

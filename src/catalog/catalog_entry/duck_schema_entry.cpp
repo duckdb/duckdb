@@ -240,12 +240,12 @@ void DuckSchemaEntry::Alter(ClientContext &context, AlterInfo *info) {
 }
 
 void DuckSchemaEntry::Scan(ClientContext &context, CatalogType type,
-                           const std::function<void(CatalogEntry *)> &callback) {
+                           const std::function<void(CatalogEntry &)> &callback) {
 	auto &set = GetCatalogSet(type);
 	set.Scan(GetCatalogTransaction(context), callback);
 }
 
-void DuckSchemaEntry::Scan(CatalogType type, const std::function<void(CatalogEntry *)> &callback) {
+void DuckSchemaEntry::Scan(CatalogType type, const std::function<void(CatalogEntry &)> &callback) {
 	auto &set = GetCatalogSet(type);
 	set.Scan(callback);
 }

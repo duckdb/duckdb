@@ -100,11 +100,11 @@ void DuckCatalog::DropSchema(ClientContext &context, DropInfo *info) {
 }
 
 void DuckCatalog::ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) {
-	schemas->Scan(GetCatalogTransaction(context), [&](CatalogEntry *entry) { callback(entry->Cast<SchemaCatalogEntry>()); });
+	schemas->Scan(GetCatalogTransaction(context), [&](CatalogEntry &entry) { callback(entry.Cast<SchemaCatalogEntry>()); });
 }
 
 void DuckCatalog::ScanSchemas(std::function<void(SchemaCatalogEntry &)> callback) {
-	schemas->Scan([&](CatalogEntry *entry) { callback(entry->Cast<SchemaCatalogEntry>()); });
+	schemas->Scan([&](CatalogEntry &entry) { callback(entry.Cast<SchemaCatalogEntry>()); });
 }
 
 SchemaCatalogEntry *DuckCatalog::GetSchema(CatalogTransaction transaction, const string &schema_name, bool if_exists,

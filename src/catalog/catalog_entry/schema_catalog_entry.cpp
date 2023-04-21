@@ -23,11 +23,11 @@ CatalogTransaction SchemaCatalogEntry::GetCatalogTransaction(ClientContext &cont
 SimilarCatalogEntry SchemaCatalogEntry::GetSimilarEntry(CatalogTransaction transaction, CatalogType type,
                                                         const string &name) {
 	SimilarCatalogEntry result;
-	Scan(transaction.GetContext(), type, [&](CatalogEntry *entry) {
-		auto ldist = StringUtil::SimilarityScore(entry->name, name);
+	Scan(transaction.GetContext(), type, [&](CatalogEntry &entry) {
+		auto ldist = StringUtil::SimilarityScore(entry.name, name);
 		if (ldist < result.distance) {
 			result.distance = ldist;
-			result.name = entry->name;
+			result.name = entry.name;
 		}
 	});
 	return result;

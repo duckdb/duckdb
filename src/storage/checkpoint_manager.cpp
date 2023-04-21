@@ -150,58 +150,58 @@ void CheckpointWriter::WriteSchema(SchemaCatalogEntry &schema) {
 	// then, we fetch the tables/views/sequences information
 	vector<reference<TableCatalogEntry>> tables;
 	vector<reference<ViewCatalogEntry>> views;
-	schema.Scan(CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
-		if (entry->internal) {
+	schema.Scan(CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+		if (entry.internal) {
 			return;
 		}
-		if (entry->type == CatalogType::TABLE_ENTRY) {
-			tables.push_back(entry->Cast<TableCatalogEntry>());
-		} else if (entry->type == CatalogType::VIEW_ENTRY) {
-			views.push_back(entry->Cast<ViewCatalogEntry>());
+		if (entry.type == CatalogType::TABLE_ENTRY) {
+			tables.push_back(entry.Cast<TableCatalogEntry>());
+		} else if (entry.type == CatalogType::VIEW_ENTRY) {
+			views.push_back(entry.Cast<ViewCatalogEntry>());
 		} else {
 			throw NotImplementedException("Catalog type for entries");
 		}
 	});
 	vector<reference<SequenceCatalogEntry>> sequences;
-	schema.Scan(CatalogType::SEQUENCE_ENTRY, [&](CatalogEntry *entry) {
-		if (entry->internal) {
+	schema.Scan(CatalogType::SEQUENCE_ENTRY, [&](CatalogEntry &entry) {
+		if (entry.internal) {
 			return;
 		}
-		sequences.push_back(entry->Cast<SequenceCatalogEntry>());
+		sequences.push_back(entry.Cast<SequenceCatalogEntry>());
 	});
 
 	vector<reference<TypeCatalogEntry>> custom_types;
-	schema.Scan(CatalogType::TYPE_ENTRY, [&](CatalogEntry *entry) {
-		if (entry->internal) {
+	schema.Scan(CatalogType::TYPE_ENTRY, [&](CatalogEntry &entry) {
+		if (entry.internal) {
 			return;
 		}
-		custom_types.push_back(entry->Cast<TypeCatalogEntry>());
+		custom_types.push_back(entry.Cast<TypeCatalogEntry>());
 	});
 
 	vector<reference<ScalarMacroCatalogEntry>> macros;
-	schema.Scan(CatalogType::SCALAR_FUNCTION_ENTRY, [&](CatalogEntry *entry) {
-		if (entry->internal) {
+	schema.Scan(CatalogType::SCALAR_FUNCTION_ENTRY, [&](CatalogEntry &entry) {
+		if (entry.internal) {
 			return;
 		}
-		if (entry->type == CatalogType::MACRO_ENTRY) {
-			macros.push_back(entry->Cast<ScalarMacroCatalogEntry>());
+		if (entry.type == CatalogType::MACRO_ENTRY) {
+			macros.push_back(entry.Cast<ScalarMacroCatalogEntry>());
 		}
 	});
 
 	vector<reference<TableMacroCatalogEntry>> table_macros;
-	schema.Scan(CatalogType::TABLE_FUNCTION_ENTRY, [&](CatalogEntry *entry) {
-		if (entry->internal) {
+	schema.Scan(CatalogType::TABLE_FUNCTION_ENTRY, [&](CatalogEntry &entry) {
+		if (entry.internal) {
 			return;
 		}
-		if (entry->type == CatalogType::TABLE_MACRO_ENTRY) {
-			table_macros.push_back(entry->Cast<TableMacroCatalogEntry>());
+		if (entry.type == CatalogType::TABLE_MACRO_ENTRY) {
+			table_macros.push_back(entry.Cast<TableMacroCatalogEntry>());
 		}
 	});
 
 	vector<reference<IndexCatalogEntry>> indexes;
-	schema.Scan(CatalogType::INDEX_ENTRY, [&](CatalogEntry *entry) {
-		D_ASSERT(!entry->internal);
-		indexes.push_back(entry->Cast<IndexCatalogEntry>());
+	schema.Scan(CatalogType::INDEX_ENTRY, [&](CatalogEntry &entry) {
+		D_ASSERT(!entry.internal);
+		indexes.push_back(entry.Cast<IndexCatalogEntry>());
 	});
 
 	FieldWriter writer(GetMetaBlockWriter());

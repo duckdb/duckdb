@@ -13,7 +13,7 @@ struct DuckDBSequencesData : public GlobalTableFunctionState {
 	DuckDBSequencesData() : offset(0) {
 	}
 
-	vector<SequenceCatalogEntry *> entries;
+	vector<reference<SequenceCatalogEntry>> entries;
 	idx_t offset;
 };
 
@@ -71,7 +71,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBSequencesInit(ClientContext &context,
 	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto &schema : schemas) {
 		schema.get().Scan(context, CatalogType::SEQUENCE_ENTRY,
-		             [&](CatalogEntry *entry) { result->entries.push_back((SequenceCatalogEntry *)entry); });
+		             [&](CatalogEntry &entry) { result->entries.push_back(entry.Cast<SequenceCatalogEntry>()); });
 	};
 	return std::move(result);
 }
@@ -86,15 +86,14 @@ void DuckDBSequencesFunction(ClientContext &context, TableFunctionInput &data_p,
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
-		auto &entry = data.entries[data.offset++];
+		auto &seq = data.entries[data.offset++].get();
 
-		auto &seq = entry->Cast<SequenceCatalogEntry>();
 		// return values:
 		idx_t col = 0;
 		// database_name, VARCHAR
-		output.SetValue(col++, count, entry->catalog->GetName());
+		output.SetValue(col++, count, seq.catalog->GetName());
 		// database_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(entry->catalog->GetOid()));
+		output.SetValue(col++, count, Value::BIGINT(seq.catalog->GetOid()));
 		// schema_name, VARCHAR
 		output.SetValue(col++, count, Value(seq.schema->name));
 		// schema_oid, BIGINT

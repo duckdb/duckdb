@@ -51,9 +51,9 @@ public:
 public:
 	//! Scan the specified catalog set, invoking the callback method for every entry
 	virtual void Scan(ClientContext &context, CatalogType type,
-	                  const std::function<void(CatalogEntry *)> &callback) = 0;
+	                  const std::function<void(CatalogEntry &)> &callback) = 0;
 	//! Scan the specified catalog set, invoking the callback method for every committed entry
-	virtual void Scan(CatalogType type, const std::function<void(CatalogEntry *)> &callback) = 0;
+	virtual void Scan(CatalogType type, const std::function<void(CatalogEntry &)> &callback) = 0;
 
 	//! Serialize the meta information of the SchemaCatalogEntry a serializer
 	virtual void Serialize(Serializer &serializer) const;
