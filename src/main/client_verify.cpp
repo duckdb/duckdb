@@ -27,6 +27,7 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::COPIED, stmt));
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::DESERIALIZED, stmt));
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::UNOPTIMIZED, stmt));
+		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::NO_OPERATOR_CACHING, stmt));
 		prepared_statement_verifier = StatementVerifier::Create(VerificationType::PREPARED, stmt);
 	}
 	if (config.verify_external) {

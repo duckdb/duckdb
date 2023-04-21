@@ -291,7 +291,9 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 		state.initialized = true;
 		state.can_cache_chunk = true;
 
-		if (!context.pipeline || !caching_supported) {
+		if (!context.client.config.enable_caching_operators) {
+			state.can_cache_chunk = false;
+		} else if (!context.pipeline || !caching_supported) {
 			state.can_cache_chunk = false;
 		} else if (!context.pipeline->GetSink()) {
 			// Disabling for pipelines without Sink, i.e. when pulling
