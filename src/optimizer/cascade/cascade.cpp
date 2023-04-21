@@ -1,6 +1,6 @@
 #include "duckdb/optimizer/cascade/cascade.h"
 
-Cascade::Optimizer(unique_ptr<logial_operator> plan) {
+Cascade::Optimize(unique_ptr<LogialOperator> plan) {
 		CSearchStageArray *search_strategy_arr = LoadSearchStrategy(mp, optimizer_search_strategy_path);
 
 		CBitSet *trace_flags = NULL;
