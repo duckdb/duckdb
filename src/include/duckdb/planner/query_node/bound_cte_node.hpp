@@ -37,7 +37,7 @@ public:
 
 public:
 	idx_t GetRootIndex() override {
-		return setop_index;
+		return child->GetRootIndex();
 	}
 };
 
