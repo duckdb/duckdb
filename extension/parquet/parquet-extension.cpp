@@ -725,11 +725,11 @@ void ParquetExtension::Load(DuckDB &db) {
 		throw InvalidInputException("Parquet extension is either already loaded or built-in");
 	}
 
-	catalog.CreateCopyFunction(context, &info);
-	catalog.CreateTableFunction(context, &cinfo);
-	catalog.CreateTableFunction(context, &pq_scan);
-	catalog.CreateTableFunction(context, &meta_cinfo);
-	catalog.CreateTableFunction(context, &schema_cinfo);
+	catalog.CreateCopyFunction(context, info);
+	catalog.CreateTableFunction(context, cinfo);
+	catalog.CreateTableFunction(context, pq_scan);
+	catalog.CreateTableFunction(context, meta_cinfo);
+	catalog.CreateTableFunction(context, schema_cinfo);
 	con.Commit();
 
 	auto &config = DBConfig::GetConfig(*db.instance);

@@ -247,13 +247,13 @@ void ICUExtension::Load(DuckDB &db) {
 
 		CreateCollationInfo info(collation, GetICUFunction(collation), false, true);
 		info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
-		catalog.CreateCollation(*con.context, &info);
+		catalog.CreateCollation(*con.context, info);
 	}
 	ScalarFunction sort_key("icu_sort_key", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                        ICUCollateFunction, ICUSortKeyBind);
 
 	CreateScalarFunctionInfo sort_key_info(std::move(sort_key));
-	catalog.CreateFunction(*con.context, &sort_key_info);
+	catalog.CreateFunction(*con.context, sort_key_info);
 
 	// Time Zones
 	auto &config = DBConfig::GetConfig(*db.instance);
@@ -283,7 +283,7 @@ void ICUExtension::Load(DuckDB &db) {
 
 	TableFunction cal_names("icu_calendar_names", {}, ICUCalendarFunction, ICUCalendarBind, ICUCalendarInit);
 	CreateTableFunctionInfo cal_names_info(std::move(cal_names));
-	catalog.CreateTableFunction(*con.context, &cal_names_info);
+	catalog.CreateTableFunction(*con.context, cal_names_info);
 
 	con.Commit();
 }

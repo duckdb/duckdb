@@ -86,10 +86,10 @@ void PhysicalCreateType::GetData(ExecutionContext &context, DataChunk &chunk, Gl
 	}
 
 	auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
-	auto catalog_entry = catalog.CreateType(context.client, info.get());
+	auto catalog_entry = catalog.CreateType(context.client, *info);
 	D_ASSERT(catalog_entry->type == CatalogType::TYPE_ENTRY);
-	auto catalog_type = (TypeCatalogEntry *)catalog_entry;
-	LogicalType::SetCatalog(info->type, catalog_type);
+	auto &catalog_type = catalog_entry->Cast<TypeCatalogEntry>();
+	LogicalType::SetCatalog(info->type, &catalog_type);
 	state.finished = true;
 }
 

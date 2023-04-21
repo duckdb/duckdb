@@ -288,7 +288,7 @@ duckdb_state duckdb_register_table_function(duckdb_connection connection, duckdb
 		duckdb::CreateTableFunctionInfo tf_info(*tf);
 
 		// create the function in the catalog
-		catalog.CreateTableFunction(*con->context, &tf_info);
+		catalog.CreateTableFunction(*con->context, tf_info);
 	});
 	return DuckDBSuccess;
 }

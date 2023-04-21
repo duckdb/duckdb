@@ -33,7 +33,7 @@ public:
 	}
 
 public:
-	DUCKDB_API CatalogEntry *CreateSchema(CatalogTransaction transaction, CreateSchemaInfo *info) override;
+	DUCKDB_API optional_ptr<CatalogEntry> CreateSchema(CatalogTransaction transaction, CreateSchemaInfo &info) override;
 	DUCKDB_API void ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) override;
 	DUCKDB_API void ScanSchemas(std::function<void(SchemaCatalogEntry &)> callback);
 
@@ -61,7 +61,7 @@ public:
 private:
 	DUCKDB_API void DropSchema(CatalogTransaction transaction, DropInfo *info);
 	DUCKDB_API void DropSchema(ClientContext &context, DropInfo *info) override;
-	CatalogEntry *CreateSchemaInternal(CatalogTransaction transaction, CreateSchemaInfo *info);
+	optional_ptr<CatalogEntry> CreateSchemaInternal(CatalogTransaction transaction, CreateSchemaInfo &info);
 	void Verify() override;
 
 private:

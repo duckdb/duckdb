@@ -63,25 +63,25 @@ public:
 	string ToSQL() const override;
 
 	//! Creates an index with the given name in the schema
-	virtual CatalogEntry *CreateIndex(ClientContext &context, CreateIndexInfo *info, TableCatalogEntry *table) = 0;
+	virtual optional_ptr<CatalogEntry> CreateIndex(ClientContext &context, CreateIndexInfo &info, TableCatalogEntry &table) = 0;
 	//! Create a scalar or aggregate function within the given schema
-	virtual CatalogEntry *CreateFunction(CatalogTransaction transaction, CreateFunctionInfo *info) = 0;
+	virtual optional_ptr<CatalogEntry> CreateFunction(CatalogTransaction transaction, CreateFunctionInfo &info) = 0;
 	//! Creates a table with the given name in the schema
-	virtual CatalogEntry *CreateTable(CatalogTransaction transaction, BoundCreateTableInfo *info) = 0;
+	virtual optional_ptr<CatalogEntry> CreateTable(CatalogTransaction transaction, BoundCreateTableInfo &info) = 0;
 	//! Creates a view with the given name in the schema
-	virtual CatalogEntry *CreateView(CatalogTransaction transaction, CreateViewInfo *info) = 0;
+	virtual optional_ptr<CatalogEntry> CreateView(CatalogTransaction transaction, CreateViewInfo &info) = 0;
 	//! Creates a sequence with the given name in the schema
-	virtual CatalogEntry *CreateSequence(CatalogTransaction transaction, CreateSequenceInfo *info) = 0;
+	virtual optional_ptr<CatalogEntry> CreateSequence(CatalogTransaction transaction, CreateSequenceInfo &info) = 0;
 	//! Create a table function within the given schema
-	virtual CatalogEntry *CreateTableFunction(CatalogTransaction transaction, CreateTableFunctionInfo *info) = 0;
+	virtual optional_ptr<CatalogEntry> CreateTableFunction(CatalogTransaction transaction, CreateTableFunctionInfo &info) = 0;
 	//! Create a copy function within the given schema
-	virtual CatalogEntry *CreateCopyFunction(CatalogTransaction transaction, CreateCopyFunctionInfo *info) = 0;
+	virtual optional_ptr<CatalogEntry> CreateCopyFunction(CatalogTransaction transaction, CreateCopyFunctionInfo &info) = 0;
 	//! Create a pragma function within the given schema
-	virtual CatalogEntry *CreatePragmaFunction(CatalogTransaction transaction, CreatePragmaFunctionInfo *info) = 0;
+	virtual optional_ptr<CatalogEntry> CreatePragmaFunction(CatalogTransaction transaction, CreatePragmaFunctionInfo &info) = 0;
 	//! Create a collation within the given schema
-	virtual CatalogEntry *CreateCollation(CatalogTransaction transaction, CreateCollationInfo *info) = 0;
+	virtual optional_ptr<CatalogEntry> CreateCollation(CatalogTransaction transaction, CreateCollationInfo &info) = 0;
 	//! Create a enum within the given schema
-	virtual CatalogEntry *CreateType(CatalogTransaction transaction, CreateTypeInfo *info) = 0;
+	virtual optional_ptr<CatalogEntry> CreateType(CatalogTransaction transaction, CreateTypeInfo &info) = 0;
 
 	DUCKDB_API virtual CatalogEntry *GetEntry(CatalogTransaction transaction, CatalogType type, const string &name) = 0;
 	DUCKDB_API virtual SimilarCatalogEntry GetSimilarEntry(CatalogTransaction transaction, CatalogType type,

@@ -205,7 +205,7 @@ void ReplayState::ReplayCreateTable() {
 	auto binder = Binder::CreateBinder(context);
 	auto bound_info = binder->BindCreateTableInfo(std::move(info));
 
-	catalog.CreateTable(context, bound_info.get());
+	catalog.CreateTable(context, *bound_info);
 }
 
 void ReplayState::ReplayDropTable() {
@@ -238,7 +238,7 @@ void ReplayState::ReplayCreateView() {
 		return;
 	}
 
-	catalog.CreateView(context, entry.get());
+	catalog.CreateView(context, *entry);
 }
 
 void ReplayState::ReplayDropView() {
@@ -262,7 +262,7 @@ void ReplayState::ReplayCreateSchema() {
 		return;
 	}
 
-	catalog.CreateSchema(context, &info);
+	catalog.CreateSchema(context, info);
 }
 
 void ReplayState::ReplayDropSchema() {
@@ -285,7 +285,7 @@ void ReplayState::ReplayCreateType() {
 	if (Catalog::TypeExists(context, info->catalog, info->schema, info->name)) {
 		return;
 	}
-	catalog.CreateType(context, info.get());
+	catalog.CreateType(context, *info);
 }
 
 void ReplayState::ReplayDropType() {
@@ -310,7 +310,7 @@ void ReplayState::ReplayCreateSequence() {
 		return;
 	}
 
-	catalog.CreateSequence(context, entry.get());
+	catalog.CreateSequence(context, *entry);
 }
 
 void ReplayState::ReplayDropSequence() {
@@ -351,7 +351,7 @@ void ReplayState::ReplayCreateMacro() {
 		return;
 	}
 
-	catalog.CreateFunction(context, entry.get());
+	catalog.CreateFunction(context, *entry);
 }
 
 void ReplayState::ReplayDropMacro() {
@@ -375,7 +375,7 @@ void ReplayState::ReplayCreateTableMacro() {
 		return;
 	}
 
-	catalog.CreateFunction(context, entry.get());
+	catalog.CreateFunction(context, *entry);
 }
 
 void ReplayState::ReplayDropTableMacro() {
@@ -426,11 +426,11 @@ void ReplayState::ReplayCreateIndex() {
 	}
 
 	// add the index to the catalog
-	auto index_entry = (DuckIndexEntry *)catalog.CreateIndex(context, info.get());
-	index_entry->index = index.get();
-	index_entry->info = data_table.info;
+	auto &index_entry = catalog.CreateIndex(context, *info)->Cast<DuckIndexEntry>();
+	index_entry.index = index.get();
+	index_entry.info = data_table.info;
 	for (auto &parsed_expr : info->parsed_expressions) {
-		index_entry->parsed_expressions.push_back(parsed_expr->Copy());
+		index_entry.parsed_expressions.push_back(parsed_expr->Copy());
 	}
 
 	// physically add the index to the data table storage

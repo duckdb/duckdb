@@ -110,68 +110,68 @@ public:
 	DUCKDB_API CatalogTransaction GetCatalogTransaction(ClientContext &context);
 
 	//! Creates a schema in the catalog.
-	DUCKDB_API virtual CatalogEntry *CreateSchema(CatalogTransaction transaction, CreateSchemaInfo *info) = 0;
-	DUCKDB_API CatalogEntry *CreateSchema(ClientContext &context, CreateSchemaInfo *info);
+	DUCKDB_API virtual optional_ptr<CatalogEntry> CreateSchema(CatalogTransaction transaction, CreateSchemaInfo &info) = 0;
+	DUCKDB_API optional_ptr<CatalogEntry> CreateSchema(ClientContext &context, CreateSchemaInfo &info);
 	//! Creates a table in the catalog.
-	DUCKDB_API CatalogEntry *CreateTable(CatalogTransaction transaction, BoundCreateTableInfo *info);
-	DUCKDB_API CatalogEntry *CreateTable(ClientContext &context, BoundCreateTableInfo *info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreateTable(CatalogTransaction transaction, BoundCreateTableInfo &info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreateTable(ClientContext &context, BoundCreateTableInfo &info);
 	//! Creates a table in the catalog.
-	DUCKDB_API CatalogEntry *CreateTable(ClientContext &context, unique_ptr<CreateTableInfo> info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreateTable(ClientContext &context, unique_ptr<CreateTableInfo> info);
 	//! Create a table function in the catalog
-	DUCKDB_API CatalogEntry *CreateTableFunction(CatalogTransaction transaction, CreateTableFunctionInfo *info);
-	DUCKDB_API CatalogEntry *CreateTableFunction(ClientContext &context, CreateTableFunctionInfo *info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreateTableFunction(CatalogTransaction transaction, CreateTableFunctionInfo &info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreateTableFunction(ClientContext &context, CreateTableFunctionInfo &info);
 	//! Create a copy function in the catalog
-	DUCKDB_API CatalogEntry *CreateCopyFunction(CatalogTransaction transaction, CreateCopyFunctionInfo *info);
-	DUCKDB_API CatalogEntry *CreateCopyFunction(ClientContext &context, CreateCopyFunctionInfo *info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreateCopyFunction(CatalogTransaction transaction, CreateCopyFunctionInfo &info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreateCopyFunction(ClientContext &context, CreateCopyFunctionInfo &info);
 	//! Create a pragma function in the catalog
-	DUCKDB_API CatalogEntry *CreatePragmaFunction(CatalogTransaction transaction, CreatePragmaFunctionInfo *info);
-	DUCKDB_API CatalogEntry *CreatePragmaFunction(ClientContext &context, CreatePragmaFunctionInfo *info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreatePragmaFunction(CatalogTransaction transaction, CreatePragmaFunctionInfo &info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreatePragmaFunction(ClientContext &context, CreatePragmaFunctionInfo &info);
 	//! Create a scalar or aggregate function in the catalog
-	DUCKDB_API CatalogEntry *CreateFunction(CatalogTransaction transaction, CreateFunctionInfo *info);
-	DUCKDB_API CatalogEntry *CreateFunction(ClientContext &context, CreateFunctionInfo *info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreateFunction(CatalogTransaction transaction, CreateFunctionInfo &info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreateFunction(ClientContext &context, CreateFunctionInfo &info);
 	//! Creates a table in the catalog.
-	DUCKDB_API CatalogEntry *CreateView(CatalogTransaction transaction, CreateViewInfo *info);
-	DUCKDB_API CatalogEntry *CreateView(ClientContext &context, CreateViewInfo *info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreateView(CatalogTransaction transaction, CreateViewInfo &info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreateView(ClientContext &context, CreateViewInfo &info);
 	//! Creates a sequence in the catalog.
-	DUCKDB_API CatalogEntry *CreateSequence(CatalogTransaction transaction, CreateSequenceInfo *info);
-	DUCKDB_API CatalogEntry *CreateSequence(ClientContext &context, CreateSequenceInfo *info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreateSequence(CatalogTransaction transaction, CreateSequenceInfo &info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreateSequence(ClientContext &context, CreateSequenceInfo &info);
 	//! Creates a Enum in the catalog.
-	DUCKDB_API CatalogEntry *CreateType(CatalogTransaction transaction, CreateTypeInfo *info);
-	DUCKDB_API CatalogEntry *CreateType(ClientContext &context, CreateTypeInfo *info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreateType(CatalogTransaction transaction, CreateTypeInfo &info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreateType(ClientContext &context, CreateTypeInfo &info);
 	//! Creates a collation in the catalog
-	DUCKDB_API CatalogEntry *CreateCollation(CatalogTransaction transaction, CreateCollationInfo *info);
-	DUCKDB_API CatalogEntry *CreateCollation(ClientContext &context, CreateCollationInfo *info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreateCollation(CatalogTransaction transaction, CreateCollationInfo &info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreateCollation(ClientContext &context, CreateCollationInfo &info);
 	//! Creates an index in the catalog
-	DUCKDB_API CatalogEntry *CreateIndex(CatalogTransaction transaction, CreateIndexInfo *info);
-	DUCKDB_API CatalogEntry *CreateIndex(ClientContext &context, CreateIndexInfo *info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreateIndex(CatalogTransaction transaction, CreateIndexInfo &info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreateIndex(ClientContext &context, CreateIndexInfo &info);
 
 	//! Creates a table in the catalog.
-	DUCKDB_API CatalogEntry *CreateTable(CatalogTransaction transaction, SchemaCatalogEntry &schema,
-	                                     BoundCreateTableInfo *info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreateTable(CatalogTransaction transaction, SchemaCatalogEntry &schema,
+	                                     BoundCreateTableInfo &info);
 	//! Create a table function in the catalog
-	DUCKDB_API CatalogEntry *CreateTableFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
-	                                             CreateTableFunctionInfo *info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreateTableFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
+	                                             CreateTableFunctionInfo &info);
 	//! Create a copy function in the catalog
-	DUCKDB_API CatalogEntry *CreateCopyFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
-	                                            CreateCopyFunctionInfo *info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreateCopyFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
+	                                            CreateCopyFunctionInfo &info);
 	//! Create a pragma function in the catalog
-	DUCKDB_API CatalogEntry *CreatePragmaFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
-	                                              CreatePragmaFunctionInfo *info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreatePragmaFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
+	                                              CreatePragmaFunctionInfo &info);
 	//! Create a scalar or aggregate function in the catalog
-	DUCKDB_API CatalogEntry *CreateFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
-	                                        CreateFunctionInfo *info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreateFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
+	                                        CreateFunctionInfo &info);
 	//! Creates a view in the catalog
-	DUCKDB_API CatalogEntry *CreateView(CatalogTransaction transaction, SchemaCatalogEntry &schema,
-	                                    CreateViewInfo *info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreateView(CatalogTransaction transaction, SchemaCatalogEntry &schema,
+	                                    CreateViewInfo &info);
 	//! Creates a table in the catalog.
-	DUCKDB_API CatalogEntry *CreateSequence(CatalogTransaction transaction, SchemaCatalogEntry &schema,
-	                                        CreateSequenceInfo *info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreateSequence(CatalogTransaction transaction, SchemaCatalogEntry &schema,
+	                                        CreateSequenceInfo &info);
 	//! Creates a enum in the catalog.
-	DUCKDB_API CatalogEntry *CreateType(CatalogTransaction transaction, SchemaCatalogEntry &schema,
-	                                    CreateTypeInfo *info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreateType(CatalogTransaction transaction, SchemaCatalogEntry &schema,
+	                                    CreateTypeInfo &info);
 	//! Creates a collation in the catalog
-	DUCKDB_API CatalogEntry *CreateCollation(CatalogTransaction transaction, SchemaCatalogEntry &schema,
-	                                         CreateCollationInfo *info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreateCollation(CatalogTransaction transaction, SchemaCatalogEntry &schema,
+	                                         CreateCollationInfo &info);
 
 	//! Drops an entry from the catalog
 	DUCKDB_API void DropEntry(ClientContext &context, DropInfo *info);
@@ -222,7 +222,7 @@ public:
 	}
 
 	//! Append a scalar or aggregate function to the catalog
-	DUCKDB_API CatalogEntry *AddFunction(ClientContext &context, CreateFunctionInfo *info);
+	DUCKDB_API optional_ptr<CatalogEntry> AddFunction(ClientContext &context, CreateFunctionInfo &info);
 
 	//! Alter an existing entry in the catalog.
 	DUCKDB_API void Alter(ClientContext &context, AlterInfo *info);

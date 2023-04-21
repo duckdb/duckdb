@@ -916,15 +916,15 @@ void ClientContext::DisableProfiling() {
 	config.enable_profiler = false;
 }
 
-void ClientContext::RegisterFunction(CreateFunctionInfo *info) {
+void ClientContext::RegisterFunction(CreateFunctionInfo &info) {
 	RunFunctionInTransaction([&]() {
 		auto existing_function =
-		    Catalog::GetEntry<ScalarFunctionCatalogEntry>(*this, INVALID_CATALOG, info->schema, info->name, true);
+		    Catalog::GetEntry<ScalarFunctionCatalogEntry>(*this, INVALID_CATALOG, info.schema, info.name, true);
 		if (existing_function) {
-			auto new_info = (CreateScalarFunctionInfo *)info;
-			if (new_info->functions.MergeFunctionSet(existing_function->functions)) {
+			auto &new_info = (CreateScalarFunctionInfo &)info;
+			if (new_info.functions.MergeFunctionSet(existing_function->functions)) {
 				// function info was updated from catalog entry, rewrite is needed
-				info->on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
+				info.on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
 			}
 		}
 		// create function

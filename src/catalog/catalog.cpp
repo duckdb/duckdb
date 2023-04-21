@@ -90,7 +90,7 @@ Catalog &Catalog::GetCatalog(ClientContext &context, const string &catalog_name)
 //===--------------------------------------------------------------------===//
 // Schema
 //===--------------------------------------------------------------------===//
-CatalogEntry *Catalog::CreateSchema(ClientContext &context, CreateSchemaInfo *info) {
+optional_ptr<CatalogEntry> Catalog::CreateSchema(ClientContext &context, CreateSchemaInfo &info) {
 	return CreateSchema(GetCatalogTransaction(context), info);
 }
 
@@ -101,177 +101,177 @@ CatalogTransaction Catalog::GetCatalogTransaction(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Table
 //===--------------------------------------------------------------------===//
-CatalogEntry *Catalog::CreateTable(ClientContext &context, BoundCreateTableInfo *info) {
+optional_ptr<CatalogEntry> Catalog::CreateTable(ClientContext &context, BoundCreateTableInfo &info) {
 	return CreateTable(GetCatalogTransaction(context), info);
 }
 
-CatalogEntry *Catalog::CreateTable(ClientContext &context, unique_ptr<CreateTableInfo> info) {
+optional_ptr<CatalogEntry> Catalog::CreateTable(ClientContext &context, unique_ptr<CreateTableInfo> info) {
 	auto binder = Binder::CreateBinder(context);
 	auto bound_info = binder->BindCreateTableInfo(std::move(info));
-	return CreateTable(context, bound_info.get());
+	return CreateTable(context, *bound_info);
 }
 
-CatalogEntry *Catalog::CreateTable(CatalogTransaction transaction, SchemaCatalogEntry &schema,
-                                   BoundCreateTableInfo *info) {
+optional_ptr<CatalogEntry> Catalog::CreateTable(CatalogTransaction transaction, SchemaCatalogEntry &schema,
+                                   BoundCreateTableInfo &info) {
 	return schema.CreateTable(transaction, info);
 }
 
-CatalogEntry *Catalog::CreateTable(CatalogTransaction transaction, BoundCreateTableInfo *info) {
-	auto schema = GetSchema(transaction, info->base->schema);
+optional_ptr<CatalogEntry> Catalog::CreateTable(CatalogTransaction transaction, BoundCreateTableInfo &info) {
+	auto schema = GetSchema(transaction, info.base->schema);
 	return CreateTable(transaction, *schema, info);
 }
 
 //===--------------------------------------------------------------------===//
 // View
 //===--------------------------------------------------------------------===//
-CatalogEntry *Catalog::CreateView(CatalogTransaction transaction, CreateViewInfo *info) {
-	auto schema = GetSchema(transaction, info->schema);
+optional_ptr<CatalogEntry> Catalog::CreateView(CatalogTransaction transaction, CreateViewInfo &info) {
+	auto schema = GetSchema(transaction, info.schema);
 	return CreateView(transaction, *schema, info);
 }
 
-CatalogEntry *Catalog::CreateView(ClientContext &context, CreateViewInfo *info) {
+optional_ptr<CatalogEntry> Catalog::CreateView(ClientContext &context, CreateViewInfo &info) {
 	return CreateView(GetCatalogTransaction(context), info);
 }
 
-CatalogEntry *Catalog::CreateView(CatalogTransaction transaction, SchemaCatalogEntry &schema, CreateViewInfo *info) {
+optional_ptr<CatalogEntry> Catalog::CreateView(CatalogTransaction transaction, SchemaCatalogEntry &schema, CreateViewInfo &info) {
 	return schema.CreateView(transaction, info);
 }
 
 //===--------------------------------------------------------------------===//
 // Sequence
 //===--------------------------------------------------------------------===//
-CatalogEntry *Catalog::CreateSequence(CatalogTransaction transaction, CreateSequenceInfo *info) {
-	auto schema = GetSchema(transaction, info->schema);
+optional_ptr<CatalogEntry> Catalog::CreateSequence(CatalogTransaction transaction, CreateSequenceInfo &info) {
+	auto schema = GetSchema(transaction, info.schema);
 	return CreateSequence(transaction, *schema, info);
 }
 
-CatalogEntry *Catalog::CreateSequence(ClientContext &context, CreateSequenceInfo *info) {
+optional_ptr<CatalogEntry> Catalog::CreateSequence(ClientContext &context, CreateSequenceInfo &info) {
 	return CreateSequence(GetCatalogTransaction(context), info);
 }
 
-CatalogEntry *Catalog::CreateSequence(CatalogTransaction transaction, SchemaCatalogEntry &schema,
-                                      CreateSequenceInfo *info) {
+optional_ptr<CatalogEntry> Catalog::CreateSequence(CatalogTransaction transaction, SchemaCatalogEntry &schema,
+                                      CreateSequenceInfo &info) {
 	return schema.CreateSequence(transaction, info);
 }
 
 //===--------------------------------------------------------------------===//
 // Type
 //===--------------------------------------------------------------------===//
-CatalogEntry *Catalog::CreateType(CatalogTransaction transaction, CreateTypeInfo *info) {
-	auto schema = GetSchema(transaction, info->schema);
+optional_ptr<CatalogEntry> Catalog::CreateType(CatalogTransaction transaction, CreateTypeInfo &info) {
+	auto schema = GetSchema(transaction, info.schema);
 	return CreateType(transaction, *schema, info);
 }
 
-CatalogEntry *Catalog::CreateType(ClientContext &context, CreateTypeInfo *info) {
+optional_ptr<CatalogEntry> Catalog::CreateType(ClientContext &context, CreateTypeInfo &info) {
 	return CreateType(GetCatalogTransaction(context), info);
 }
 
-CatalogEntry *Catalog::CreateType(CatalogTransaction transaction, SchemaCatalogEntry &schema, CreateTypeInfo *info) {
+optional_ptr<CatalogEntry> Catalog::CreateType(CatalogTransaction transaction, SchemaCatalogEntry &schema, CreateTypeInfo &info) {
 	return schema.CreateType(transaction, info);
 }
 
 //===--------------------------------------------------------------------===//
 // Table Function
 //===--------------------------------------------------------------------===//
-CatalogEntry *Catalog::CreateTableFunction(CatalogTransaction transaction, CreateTableFunctionInfo *info) {
-	auto schema = GetSchema(transaction, info->schema);
+optional_ptr<CatalogEntry> Catalog::CreateTableFunction(CatalogTransaction transaction, CreateTableFunctionInfo &info) {
+	auto schema = GetSchema(transaction, info.schema);
 	return CreateTableFunction(transaction, *schema, info);
 }
 
-CatalogEntry *Catalog::CreateTableFunction(ClientContext &context, CreateTableFunctionInfo *info) {
+optional_ptr<CatalogEntry> Catalog::CreateTableFunction(ClientContext &context, CreateTableFunctionInfo &info) {
 	return CreateTableFunction(GetCatalogTransaction(context), info);
 }
 
-CatalogEntry *Catalog::CreateTableFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
-                                           CreateTableFunctionInfo *info) {
+optional_ptr<CatalogEntry> Catalog::CreateTableFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
+                                           CreateTableFunctionInfo &info) {
 	return schema.CreateTableFunction(transaction, info);
 }
 
 //===--------------------------------------------------------------------===//
 // Copy Function
 //===--------------------------------------------------------------------===//
-CatalogEntry *Catalog::CreateCopyFunction(CatalogTransaction transaction, CreateCopyFunctionInfo *info) {
-	auto schema = GetSchema(transaction, info->schema);
+optional_ptr<CatalogEntry> Catalog::CreateCopyFunction(CatalogTransaction transaction, CreateCopyFunctionInfo &info) {
+	auto schema = GetSchema(transaction, info.schema);
 	return CreateCopyFunction(transaction, *schema, info);
 }
 
-CatalogEntry *Catalog::CreateCopyFunction(ClientContext &context, CreateCopyFunctionInfo *info) {
+optional_ptr<CatalogEntry> Catalog::CreateCopyFunction(ClientContext &context, CreateCopyFunctionInfo &info) {
 	return CreateCopyFunction(GetCatalogTransaction(context), info);
 }
 
-CatalogEntry *Catalog::CreateCopyFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
-                                          CreateCopyFunctionInfo *info) {
+optional_ptr<CatalogEntry> Catalog::CreateCopyFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
+                                          CreateCopyFunctionInfo &info) {
 	return schema.CreateCopyFunction(transaction, info);
 }
 
 //===--------------------------------------------------------------------===//
 // Pragma Function
 //===--------------------------------------------------------------------===//
-CatalogEntry *Catalog::CreatePragmaFunction(CatalogTransaction transaction, CreatePragmaFunctionInfo *info) {
-	auto schema = GetSchema(transaction, info->schema);
+optional_ptr<CatalogEntry> Catalog::CreatePragmaFunction(CatalogTransaction transaction, CreatePragmaFunctionInfo &info) {
+	auto schema = GetSchema(transaction, info.schema);
 	return CreatePragmaFunction(transaction, *schema, info);
 }
 
-CatalogEntry *Catalog::CreatePragmaFunction(ClientContext &context, CreatePragmaFunctionInfo *info) {
+optional_ptr<CatalogEntry> Catalog::CreatePragmaFunction(ClientContext &context, CreatePragmaFunctionInfo &info) {
 	return CreatePragmaFunction(GetCatalogTransaction(context), info);
 }
 
-CatalogEntry *Catalog::CreatePragmaFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
-                                            CreatePragmaFunctionInfo *info) {
+optional_ptr<CatalogEntry> Catalog::CreatePragmaFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
+                                            CreatePragmaFunctionInfo &info) {
 	return schema.CreatePragmaFunction(transaction, info);
 }
 
 //===--------------------------------------------------------------------===//
 // Function
 //===--------------------------------------------------------------------===//
-CatalogEntry *Catalog::CreateFunction(CatalogTransaction transaction, CreateFunctionInfo *info) {
-	auto schema = GetSchema(transaction, info->schema);
+optional_ptr<CatalogEntry> Catalog::CreateFunction(CatalogTransaction transaction, CreateFunctionInfo &info) {
+	auto schema = GetSchema(transaction, info.schema);
 	return CreateFunction(transaction, *schema, info);
 }
 
-CatalogEntry *Catalog::CreateFunction(ClientContext &context, CreateFunctionInfo *info) {
+optional_ptr<CatalogEntry> Catalog::CreateFunction(ClientContext &context, CreateFunctionInfo &info) {
 	return CreateFunction(GetCatalogTransaction(context), info);
 }
 
-CatalogEntry *Catalog::CreateFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
-                                      CreateFunctionInfo *info) {
+optional_ptr<CatalogEntry> Catalog::CreateFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
+                                      CreateFunctionInfo &info) {
 	return schema.CreateFunction(transaction, info);
 }
 
-CatalogEntry *Catalog::AddFunction(ClientContext &context, CreateFunctionInfo *info) {
-	info->on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+optional_ptr<CatalogEntry> Catalog::AddFunction(ClientContext &context, CreateFunctionInfo &info) {
+	info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
 	return CreateFunction(context, info);
 }
 
 //===--------------------------------------------------------------------===//
 // Collation
 //===--------------------------------------------------------------------===//
-CatalogEntry *Catalog::CreateCollation(CatalogTransaction transaction, CreateCollationInfo *info) {
-	auto schema = GetSchema(transaction, info->schema);
+optional_ptr<CatalogEntry> Catalog::CreateCollation(CatalogTransaction transaction, CreateCollationInfo &info) {
+	auto schema = GetSchema(transaction, info.schema);
 	return CreateCollation(transaction, *schema, info);
 }
 
-CatalogEntry *Catalog::CreateCollation(ClientContext &context, CreateCollationInfo *info) {
+optional_ptr<CatalogEntry> Catalog::CreateCollation(ClientContext &context, CreateCollationInfo &info) {
 	return CreateCollation(GetCatalogTransaction(context), info);
 }
 
-CatalogEntry *Catalog::CreateCollation(CatalogTransaction transaction, SchemaCatalogEntry &schema,
-                                       CreateCollationInfo *info) {
+optional_ptr<CatalogEntry> Catalog::CreateCollation(CatalogTransaction transaction, SchemaCatalogEntry &schema,
+                                       CreateCollationInfo &info) {
 	return schema.CreateCollation(transaction, info);
 }
 
 //===--------------------------------------------------------------------===//
 // Index
 //===--------------------------------------------------------------------===//
-CatalogEntry *Catalog::CreateIndex(CatalogTransaction transaction, CreateIndexInfo *info) {
+optional_ptr<CatalogEntry> Catalog::CreateIndex(CatalogTransaction transaction, CreateIndexInfo &info) {
 	auto &context = transaction.GetContext();
 	return CreateIndex(context, info);
 }
 
-CatalogEntry *Catalog::CreateIndex(ClientContext &context, CreateIndexInfo *info) {
-	auto schema = GetSchema(context, info->schema);
-	auto table = GetEntry<TableCatalogEntry>(context, schema->name, info->table->table_name);
-	return schema->CreateIndex(context, info, table);
+optional_ptr<CatalogEntry> Catalog::CreateIndex(ClientContext &context, CreateIndexInfo &info) {
+	auto schema = GetSchema(context, info.schema);
+	auto table = GetEntry<TableCatalogEntry>(context, schema->name, info.table->table_name);
+	return schema->CreateIndex(context, info, *table);
 }
 
 //===--------------------------------------------------------------------===//
