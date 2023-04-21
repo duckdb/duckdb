@@ -11,6 +11,7 @@
 #include "duckdb_python/arrow_array_stream.hpp"
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/function/function.hpp"
+#include "duckdb/main/query_result.hpp"
 
 namespace duckdb {
 
@@ -232,7 +233,9 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 		// Convert the input datachunk to pyarrow
 		string timezone_config = "UTC";
 		if (state.HasContext()) {
-			timezone_config = state.GetContext().GetClientProperties().timezone;
+			auto &context = state.GetContext();
+			auto client_properties = context.GetClientProperties();
+			timezone_config = client_properties.timezone;
 		}
 		auto pyarrow_table = ConvertDataChunkToPyArrowTable(input, timezone_config);
 		py::tuple column_list = pyarrow_table.attr("columns");
