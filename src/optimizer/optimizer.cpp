@@ -74,6 +74,11 @@ void Optimizer::Verify(LogicalOperator &op) {
 unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan_p) {
 	Verify(*plan_p);
 	this->plan = std::move(plan_p);
+	
+	RunOptimizer(OptimizerType::CASCADE, [&]() {
+		CEngine cascade(context);
+		plan = cascade.Optimize(std::move(plan));
+	});
 	// first we perform expression rewrites using the ExpressionRewriter
 	// this does not change the logical plan structure, but only simplifies the expression trees
 	RunOptimizer(OptimizerType::EXPRESSION_REWRITER, [&]() { rewriter.VisitOperator(*plan); });
