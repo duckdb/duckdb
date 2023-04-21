@@ -461,15 +461,15 @@ void UpdateSegment::FetchRow(TransactionData transaction, idx_t row_id, Vector &
 // Rollback update
 //===--------------------------------------------------------------------===//
 template <class T>
-static void RollbackUpdate(UpdateInfo *base_info, UpdateInfo *rollback_info) {
-	auto base_data = (T *)base_info->tuple_data;
-	auto rollback_data = (T *)rollback_info->tuple_data;
+static void RollbackUpdate(UpdateInfo &base_info, UpdateInfo &rollback_info) {
+	auto base_data = (T *)base_info.tuple_data;
+	auto rollback_data = (T *)rollback_info.tuple_data;
 	idx_t base_offset = 0;
-	for (idx_t i = 0; i < rollback_info->N; i++) {
-		auto id = rollback_info->tuples[i];
-		while (base_info->tuples[base_offset] < id) {
+	for (idx_t i = 0; i < rollback_info.N; i++) {
+		auto id = rollback_info.tuples[i];
+		while (base_info.tuples[base_offset] < id) {
 			base_offset++;
-			D_ASSERT(base_offset < base_info->N);
+			D_ASSERT(base_offset < base_info.N);
 		}
 		base_data[base_offset] = rollback_data[i];
 	}
@@ -511,13 +511,13 @@ static UpdateSegment::rollback_update_function_t GetRollbackUpdateFunction(Physi
 	}
 }
 
-void UpdateSegment::RollbackUpdate(UpdateInfo *info) {
+void UpdateSegment::RollbackUpdate(UpdateInfo &info) {
 	// obtain an exclusive lock
 	auto lock_handle = lock.GetExclusiveLock();
 
 	// move the data from the UpdateInfo back into the base info
-	D_ASSERT(root->info[info->vector_index]);
-	rollback_update_function(root->info[info->vector_index]->info.get(), info);
+	D_ASSERT(root->info[info.vector_index]);
+	rollback_update_function(*root->info[info.vector_index]->info, info);
 
 	// clean up the update chain
 	CleanupUpdateInternal(*lock_handle, info);
@@ -526,16 +526,16 @@ void UpdateSegment::RollbackUpdate(UpdateInfo *info) {
 //===--------------------------------------------------------------------===//
 // Cleanup Update
 //===--------------------------------------------------------------------===//
-void UpdateSegment::CleanupUpdateInternal(const StorageLockKey &lock, UpdateInfo *info) {
-	D_ASSERT(info->prev);
-	auto prev = info->prev;
-	prev->next = info->next;
+void UpdateSegment::CleanupUpdateInternal(const StorageLockKey &lock, UpdateInfo &info) {
+	D_ASSERT(info.prev);
+	auto prev = info.prev;
+	prev->next = info.next;
 	if (prev->next) {
 		prev->next->prev = prev;
 	}
 }
 
-void UpdateSegment::CleanupUpdate(UpdateInfo *info) {
+void UpdateSegment::CleanupUpdate(UpdateInfo &info) {
 	// obtain an exclusive lock
 	auto lock_handle = lock.GetExclusiveLock();
 	CleanupUpdateInternal(*lock_handle, info);

@@ -20,6 +20,9 @@ namespace duckdb {
 
 class TableMacroFunction : public MacroFunction {
 public:
+	static constexpr const MacroType TYPE = MacroType::TABLE_MACRO;
+
+public:
 	explicit TableMacroFunction(unique_ptr<QueryNode> query_node);
 	TableMacroFunction(void);
 

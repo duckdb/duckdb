@@ -52,7 +52,7 @@ SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, GlobalSinkSta
 			throw InvalidInputException("Attempted to create ENUM type with NULL value!");
 		}
 		result_ptr[gstate.size++] =
-		    StringVector::AddStringOrBlob(gstate.result, src_ptr[idx].GetDataUnsafe(), src_ptr[idx].GetSize());
+		    StringVector::AddStringOrBlob(gstate.result, src_ptr[idx].GetData(), src_ptr[idx].GetSize());
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }

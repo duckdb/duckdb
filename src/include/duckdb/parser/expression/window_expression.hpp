@@ -87,8 +87,10 @@ public:
 		// Start with function call
 		string result = schema.empty() ? function_name : schema + "." + function_name;
 		result += "(";
-		result += StringUtil::Join(entry.children, entry.children.size(), ", ",
-		                           [](const unique_ptr<BASE> &child) { return child->ToString(); });
+		if (entry.children.size()) {
+			result += StringUtil::Join(entry.children, entry.children.size(), ", ",
+			                           [](const unique_ptr<BASE> &child) { return child->ToString(); });
+		}
 		// Lead/Lag extra arguments
 		if (entry.offset_expr.get()) {
 			result += ", ";

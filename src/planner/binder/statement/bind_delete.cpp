@@ -21,16 +21,15 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 		throw BinderException("Can only delete from base table!");
 	}
 	auto &table_binding = bound_table->Cast<BoundBaseTableRef>();
-	;
-	auto table = table_binding.table;
+	auto &table = table_binding.table;
 
 	auto root = CreatePlan(*bound_table);
 	auto &get = root->Cast<LogicalGet>();
 	D_ASSERT(root->type == LogicalOperatorType::LOGICAL_GET);
 
-	if (!table->temporary) {
+	if (!table.temporary) {
 		// delete from persistent table: not read only!
-		properties.modified_databases.insert(table->catalog->GetName());
+		properties.modified_databases.insert(table.catalog->GetName());
 	}
 
 	// Add CTEs as bindable
@@ -63,7 +62,7 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 		WhereBinder binder(*this, context);
 		condition = binder.Bind(stmt.condition);
 
-		PlanSubqueries(&condition, &root);
+		PlanSubqueries(condition, root);
 		auto filter = make_uniq<LogicalFilter>(std::move(condition));
 		filter->AddChild(std::move(root));
 		root = std::move(filter);
