@@ -176,4 +176,15 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	return std::move(plan);
 }
 
+unique_ptr<PhysicalOperator> Optimizer::OptimizebyCascade(unique_ptr<LogicalOperator> plan_p) {
+	Verify(*plan_p);
+	this->plan = std::move(plan_p);
+	
+	RunOptimizer(OptimizerType::CASCADE, [&]() {
+		Cascade cascade(context);
+		plan = cascade.Optimize(std::move(plan));
+	});	
+	Planner::VerifyPlan(context, plan);
+	return std::move(plan);
+}
 } // namespace duckdb
