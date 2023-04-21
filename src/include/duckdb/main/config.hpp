@@ -145,6 +145,8 @@ struct DBConfigOptions {
 	bool enable_fsst_vectors = false;
 	//! Start transactions immediately in all attached databases - instead of lazily when a database is referenced
 	bool immediate_transaction_mode = false;
+	//! Debug setting - how to initialize  blocks in the storage layer when allocating
+	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
 	//! The set of unrecognized (other) options
 	unordered_map<string, Value> unrecognized_options;
 

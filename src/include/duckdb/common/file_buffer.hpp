@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/debug_initialize.hpp"
 
 namespace duckdb {
 class Allocator;
@@ -61,6 +62,8 @@ public:
 	};
 
 	MemoryRequirement CalculateMemory(uint64_t user_size);
+
+	void Initialize(DebugInitialize info);
 
 protected:
 	//! The pointer to the internal buffer that will be read or written, including the buffer header

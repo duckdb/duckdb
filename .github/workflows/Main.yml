@@ -204,6 +204,39 @@ jobs:
       shell: bash
       run: build/debug/test/unittest
 
+
+ storage-initialization:
+    name: Storage Initialization Verification
+    needs: linux-debug
+    runs-on: ubuntu-20.04
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+
+    - name: Build
+      shell: bash
+      run: make debug
+
+    - name: Test
+      shell: bash
+      run: python3 scripts/test_zero_initialize.py
+
  threadsan:
     name: Thread Sanitizer
     runs-on: ubuntu-20.04
