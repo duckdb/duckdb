@@ -3,6 +3,7 @@ import pandas as pd
 import numpy
 import pytest
 from datetime import date, timedelta
+import re
 
 class TestMap(object):
     def test_map(self, duckdb_cursor):
@@ -63,7 +64,7 @@ class TestMap(object):
         with pytest.raises(duckdb.InvalidInputException, match='UDF column name mismatch'):
             print(testrel.map(evil3).df())
 
-        with pytest.raises(AttributeError):
+        with pytest.raises(duckdb.InvalidInputException, match="Expected the UDF to return an object of type 'pandas.DataFrame'"):
             print(testrel.map(evil4).df())
 
         with pytest.raises(duckdb.InvalidInputException):
@@ -120,3 +121,63 @@ class TestMap(object):
         rel = process(rel)
         x = rel.fetchdf()
         assert x['days_to_add'].to_numpy()[0] == 1
+
+    def test_explicit_schema(self):
+        def cast_to_string(df):
+            df['i'] = df['i'].astype(str)
+            return df
+
+        con = duckdb.connect()
+        rel = con.sql('select i from range (10) tbl(i)')
+        assert rel.types[0] == int
+        mapped_rel = rel.map(cast_to_string, schema={'i': str})
+        assert mapped_rel.types[0] == str
+
+    def test_explicit_schema_returntype_mismatch(self):
+        def does_nothing(df):
+            return df
+
+        con = duckdb.connect()
+        rel = con.sql('select i from range(10) tbl(i)')
+        # expects the mapper to return a string column
+        rel = rel.map(does_nothing, schema={'i': str})
+        with pytest.raises(duckdb.InvalidInputException, match=re.escape("UDF column type mismatch, expected [VARCHAR], got [BIGINT]")):
+            rel.fetchall()
+
+    def test_explicit_schema_name_mismatch(self):
+        def renames_column(df):
+            return pd.DataFrame({'a': df['i']})
+
+        con = duckdb.connect()
+        rel = con.sql('select i from range(10) tbl(i)')
+        rel = rel.map(renames_column, schema={'i': int})
+        with pytest.raises(duckdb.InvalidInputException, match=re.escape('UDF column name mismatch')):
+            rel.fetchall()
+
+    def test_explicit_schema_error(self):
+        def no_op(df):
+            return df
+
+        con = duckdb.connect()
+        rel = con.sql('select 42')
+        with pytest.raises(duckdb.InvalidInputException, match=re.escape("Invalid Input Error: 'schema' should be given as a Dict[str, DuckDBType]")):
+            rel.map(no_op, schema=[int])
+
+    def test_returns_non_dataframe(self):
+        def returns_series(df):
+            return df.loc[:,'i']
+
+        con = duckdb.connect()
+        rel = con.sql('select i, i as j from range(10) tbl(i)')
+        with pytest.raises(duckdb.InvalidInputException, match=re.escape("Expected the UDF to return an object of type 'pandas.DataFrame', found '<class 'pandas.core.series.Series'>' instead")):
+            rel = rel.map(returns_series)
+
+    def test_explicit_schema_columncount_mismatch(self):
+        def returns_subset(df):
+            return pd.DataFrame({'i': df.loc[:,'i']})
+
+        con = duckdb.connect()
+        rel = con.sql('select i, i as j from range(10) tbl(i)')
+        rel = rel.map(returns_subset, schema={'i': int, 'j': int})
+        with pytest.raises(duckdb.InvalidInputException, match='Invalid Input Error: Expected 2 columns from UDF, got 1'):
+            rel.fetchall()
