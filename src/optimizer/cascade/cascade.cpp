@@ -1,5 +1,7 @@
 #include "duckdb/optimizer/cascade/Cascade.h"
 
+#include "duckdb/optimizer/cascade/search/CSearchStageArray.h"
+
 Cascade::Optimize(unique_ptr<LogialOperator> plan) {
 		CSearchStageArray *search_strategy_arr = LoadSearchStrategy(mp, optimizer_search_strategy_path);
 
@@ -90,4 +92,26 @@ Cascade::Optimize(unique_ptr<LogialOperator> plan) {
 					CMDCache::Shutdown();
 		}
 		return NULL;
+}
+
+CSearchStageArray* COptTasks::LoadSearchStrategy(CMemoryPool *mp, char *path)
+{
+	CSearchStageArray *search_strategy_arr = NULL;
+	CParseHandlerDXL *dxl_parse_handler = NULL;
+
+	if (NULL != path)
+	{
+		dxl_parse_handler = CDXLUtils::GetParseHandlerForDXLFile(mp, path, NULL);
+		if (NULL != dxl_parse_handler)
+		{
+			elog(DEBUG2, "\n[OPT]: Using search strategy in (%s)", path);
+
+			search_strategy_arr = dxl_parse_handler->GetSearchStageArray();
+			search_strategy_arr->AddRef();
+		}
+	}
+
+	GPOS_DELETE(dxl_parse_handler);
+
+	return search_strategy_arr;
 }
