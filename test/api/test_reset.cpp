@@ -82,6 +82,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	static unordered_set<string> excluded_options = {
 	    "schema",
 	    "search_path",
+	    "debug_asof_iejoin",
 	    "debug_force_external",
 	    "debug_force_no_cross_product",
 	    "debug_window_mode",
