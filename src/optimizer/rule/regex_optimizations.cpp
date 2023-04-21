@@ -83,12 +83,6 @@ static LikeString LikeMatchExists(duckdb_re2::RE2 &pattern) {
 			}
 			break;
 		}
-		case duckdb_re2::kRegexpQuest: {
-			auto last_ind = ret.like_string.size() - 1;
-			if (ret.like_string.at(last_ind) == '%') {
-				break;
-			}
-		}
 		case duckdb_re2::kRegexpBeginText: {
 			if (cur_sub_index != 0) {
 				// cur_sub_index should be 0 if we are matching the beginning of the text
