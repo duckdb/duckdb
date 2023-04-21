@@ -23,7 +23,7 @@ public:
 	Optimizer(Binder &binder, ClientContext &context);
 
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
-
+	unique_ptr<PhysicalOperator> OptimizebyCascade(unique_ptr<LogicalOperator> plan);
 	ClientContext &context;
 	Binder &binder;
 	ExpressionRewriter rewriter;
