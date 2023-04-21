@@ -1,4 +1,4 @@
-#include "duckdb/optimizer/cascade/cascade.h"
+#include "duckdb/optimizer/cascade/Cascade.h"
 
 Cascade::Optimize(unique_ptr<LogialOperator> plan) {
 		CSearchStageArray *search_strategy_arr = LoadSearchStrategy(mp, optimizer_search_strategy_path);
