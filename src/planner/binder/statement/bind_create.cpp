@@ -66,7 +66,7 @@ void Binder::BindSchemaOrCatalog(string &catalog, string &schema) {
 	BindSchemaOrCatalog(context, catalog, schema);
 }
 
-SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
+SchemaCatalogEntry &Binder::BindSchema(CreateInfo &info) {
 	BindSchemaOrCatalog(info.catalog, info.schema);
 	if (IsInvalidCatalog(info.catalog) && info.temporary) {
 		info.catalog = TEMP_CATALOG;
@@ -101,12 +101,12 @@ SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
 	if (!info.temporary) {
 		properties.modified_databases.insert(schema_obj->catalog->GetName());
 	}
-	return schema_obj;
+	return *schema_obj;
 }
 
-SchemaCatalogEntry *Binder::BindCreateSchema(CreateInfo &info) {
-	auto schema = BindSchema(info);
-	if (schema->catalog->IsSystemCatalog()) {
+SchemaCatalogEntry &Binder::BindCreateSchema(CreateInfo &info) {
+	auto &schema = BindSchema(info);
+	if (schema.catalog->IsSystemCatalog()) {
 		throw BinderException("Cannot create entry in system catalog");
 	}
 	return schema;
@@ -159,9 +159,9 @@ static void QualifyFunctionNames(ClientContext &context, unique_ptr<ParsedExpres
 	    *expr, [&](unique_ptr<ParsedExpression> &child) { QualifyFunctionNames(context, child); });
 }
 
-SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
+SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	auto &base = (CreateMacroInfo &)info;
-	auto &scalar_function = (ScalarMacroFunction &)*base.function;
+	auto &scalar_function = base.function->Cast<ScalarMacroFunction>();
 
 	if (scalar_function.expression->HasParameter()) {
 		throw BinderException("Parameter expressions within macro's are not supported!");
@@ -198,7 +198,7 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	auto sel_node = make_uniq<BoundSelectNode>();
 	auto group_info = make_uniq<BoundGroupInformation>();
 	SelectBinder binder(*this, context, *sel_node, *group_info);
-	error = binder.Bind(&expression, 0, false);
+	error = binder.Bind(expression, 0, false);
 
 	if (!error.empty()) {
 		throw BinderException(error);
@@ -477,25 +477,27 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::VIEW_ENTRY: {
 		auto &base = (CreateViewInfo &)*stmt.info;
 		// bind the schema
-		auto schema = BindCreateSchema(*stmt.info);
+		auto &schema = BindCreateSchema(*stmt.info);
 		BindCreateViewInfo(base);
-		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_VIEW, std::move(stmt.info), schema);
+		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_VIEW, std::move(stmt.info), &schema);
 		break;
 	}
 	case CatalogType::SEQUENCE_ENTRY: {
-		auto schema = BindCreateSchema(*stmt.info);
+		auto &schema = BindCreateSchema(*stmt.info);
 		result.plan =
-		    make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SEQUENCE, std::move(stmt.info), schema);
+		    make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SEQUENCE, std::move(stmt.info), &schema);
 		break;
 	}
 	case CatalogType::TABLE_MACRO_ENTRY: {
-		auto schema = BindCreateSchema(*stmt.info);
-		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, std::move(stmt.info), schema);
+		auto &schema = BindCreateSchema(*stmt.info);
+		result.plan =
+		    make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, std::move(stmt.info), &schema);
 		break;
 	}
 	case CatalogType::MACRO_ENTRY: {
-		auto schema = BindCreateFunctionInfo(*stmt.info);
-		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, std::move(stmt.info), schema);
+		auto &schema = BindCreateFunctionInfo(*stmt.info);
+		result.plan =
+		    make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, std::move(stmt.info), &schema);
 		break;
 	}
 	case CatalogType::INDEX_ENTRY: {
@@ -507,9 +509,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			throw BinderException("Can only create an index over a base table!");
 		}
 		auto &table_binding = bound_table->Cast<BoundBaseTableRef>();
-		;
-		auto table = table_binding.table;
-		if (table->temporary) {
+		auto &table = table_binding.table;
+		if (table.temporary) {
 			stmt.info->temporary = true;
 		}
 		// create a plan over the bound table
@@ -518,13 +519,13 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			throw BinderException("Cannot create index on a view!");
 		}
 
-		result.plan = table->catalog->BindCreateIndex(*this, stmt, *table, std::move(plan));
+		result.plan = table.catalog->BindCreateIndex(*this, stmt, table, std::move(plan));
 		break;
 	}
 	case CatalogType::TABLE_ENTRY: {
 		auto &create_info = (CreateTableInfo &)*stmt.info;
 		// If there is a foreign key constraint, resolve primary key column's index from primary key column's name
-		unordered_set<SchemaCatalogEntry *> fk_schemas;
+		reference_set_t<SchemaCatalogEntry> fk_schemas;
 		for (idx_t i = 0; i < create_info.constraints.size(); i++) {
 			auto &cond = create_info.constraints[i];
 			if (cond->type != ConstraintType::FOREIGN_KEY) {
@@ -547,7 +548,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				// have to resolve referenced table
 				auto pk_table_entry_ptr =
 				    Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, fk.info.schema, fk.info.table);
-				fk_schemas.insert(pk_table_entry_ptr->schema);
+				fk_schemas.insert(*pk_table_entry_ptr->schema);
 				FindMatchingPrimaryKeyColumns(pk_table_entry_ptr->GetColumns(), pk_table_entry_ptr->GetConstraints(),
 				                              fk);
 				FindForeignKeyIndexes(pk_table_entry_ptr->GetColumns(), fk.pk_columns, fk.info.pk_keys);
@@ -572,7 +573,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto bound_info = BindCreateTableInfo(std::move(stmt.info));
 		auto root = std::move(bound_info->query);
 		for (auto &fk_schema : fk_schemas) {
-			if (fk_schema != bound_info->schema) {
+			if (&fk_schema.get() != &bound_info->schema) {
 				throw BinderException("Creating foreign keys across different schemas or catalogs is not supported");
 			}
 		}
@@ -589,9 +590,9 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		break;
 	}
 	case CatalogType::TYPE_ENTRY: {
-		auto schema = BindCreateSchema(*stmt.info);
+		auto &schema = BindCreateSchema(*stmt.info);
 		auto &create_type_info = (CreateTypeInfo &)(*stmt.info);
-		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, std::move(stmt.info), schema);
+		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, std::move(stmt.info), &schema);
 		if (create_type_info.query) {
 			// CREATE TYPE mood AS ENUM (SELECT 'happy')
 			auto &select_stmt = create_type_info.query->Cast<SelectStatement>();
@@ -634,7 +635,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			// 2: create a type alias with a custom type.
 			// eg. CREATE TYPE a AS INT; CREATE TYPE b AS a;
 			// We set b to be an alias for the underlying type of a
-			auto inner_type = Catalog::GetType(context, schema->catalog->GetName(), schema->name,
+			auto inner_type = Catalog::GetType(context, schema.catalog->GetName(), schema.name,
 			                                   UserType::GetTypeName(create_type_info.type));
 			// clear to nullptr, we don't need this
 			LogicalType::SetCatalog(inner_type, nullptr);

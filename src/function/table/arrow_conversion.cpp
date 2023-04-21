@@ -39,7 +39,7 @@ void GetValidityMask(ValidityMask &mask, ArrowArray &array, ArrowScanLocalState 
 			memcpy((void *)mask.GetData(), (uint8_t *)array.buffers[0] + bit_offset / 8, n_bitmask_bytes);
 		} else {
 			//! need to re-align nullmask
-			std::vector<uint8_t> temp_nullmask(n_bitmask_bytes + 1);
+			vector<uint8_t> temp_nullmask(n_bitmask_bytes + 1);
 			memcpy(temp_nullmask.data(), (uint8_t *)array.buffers[0] + bit_offset / 8, n_bitmask_bytes + 1);
 			ShiftRight(temp_nullmask.data(), n_bitmask_bytes + 1,
 			           bit_offset % 8); //! why this has to be a right shift is a mystery to me

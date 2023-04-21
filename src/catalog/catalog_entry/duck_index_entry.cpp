@@ -13,7 +13,7 @@ DuckIndexEntry::~DuckIndexEntry() {
 	if (!info || !index) {
 		return;
 	}
-	info->indexes.RemoveIndex(index);
+	info->indexes.RemoveIndex(*index);
 }
 
 string DuckIndexEntry::GetSchemaName() const {

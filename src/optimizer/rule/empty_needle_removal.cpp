@@ -21,25 +21,25 @@ EmptyNeedleRemovalRule::EmptyNeedleRemovalRule(ExpressionRewriter &rewriter) : R
 	root = std::move(func);
 }
 
-unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
+unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                      bool &changes_made, bool is_root) {
-	auto &root = bindings[0]->Cast<BoundFunctionExpression>();
+	auto &root = bindings[0].get().Cast<BoundFunctionExpression>();
 	D_ASSERT(root.children.size() == 2);
-	auto prefix_expr = bindings[2];
+	auto &prefix_expr = bindings[2].get();
 
 	// the constant_expr is a scalar expression that we have to fold
-	if (!prefix_expr->IsFoldable()) {
+	if (!prefix_expr.IsFoldable()) {
 		return nullptr;
 	}
 	D_ASSERT(root.return_type.id() == LogicalTypeId::BOOLEAN);
 
-	auto prefix_value = ExpressionExecutor::EvaluateScalar(GetContext(), *prefix_expr);
+	auto prefix_value = ExpressionExecutor::EvaluateScalar(GetContext(), prefix_expr);
 
 	if (prefix_value.IsNull()) {
 		return make_uniq<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
 	}
 
-	D_ASSERT(prefix_value.type() == prefix_expr->return_type);
+	D_ASSERT(prefix_value.type() == prefix_expr.return_type);
 	auto &needle_string = StringValue::Get(prefix_value);
 
 	// PREFIX('xyz', '') is TRUE

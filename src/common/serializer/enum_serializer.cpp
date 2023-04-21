@@ -192,6 +192,8 @@ TableReferenceType EnumSerializer::StringToEnum(const char *value) {
 		return TableReferenceType::EXPRESSION_LIST;
 	} else if (StringUtil::Equals(value, "CTE")) {
 		return TableReferenceType::CTE;
+	} else if (StringUtil::Equals(value, "PIVOT")) {
+		return TableReferenceType::PIVOT;
 	} else if (StringUtil::Equals(value, "EMPTY")) {
 		return TableReferenceType::EMPTY;
 	} else {
@@ -216,6 +218,8 @@ const char *EnumSerializer::EnumToString(TableReferenceType value) {
 		return "EXPRESSION_LIST";
 	case TableReferenceType::CTE:
 		return "CTE";
+	case TableReferenceType::PIVOT:
+		return "PIVOT";
 	case TableReferenceType::EMPTY:
 		return "EMPTY";
 	default:

@@ -99,7 +99,7 @@ struct VerificationPositions {
 class ParallelCSVReader : public BaseCSVReader {
 public:
 	ParallelCSVReader(ClientContext &context, BufferedCSVReaderOptions options, unique_ptr<CSVBufferRead> buffer,
-	                  const vector<LogicalType> &requested_types);
+	                  idx_t first_pos_first_buffer, const vector<LogicalType> &requested_types);
 	~ParallelCSVReader();
 
 	//! Current Position (Relative to the Buffer)
@@ -136,6 +136,8 @@ private:
 	bool TryParseCSV(ParserMode mode, DataChunk &insert_chunk, string &error_message);
 	//! Sets Position depending on the byte_start of this thread
 	bool SetPosition(DataChunk &insert_chunk);
+	//! Called when scanning the 1st buffer, skips empty lines
+	void SkipEmptyLines();
 	//! When a buffer finishes reading its piece, it still can try to scan up to the real end of the buffer
 	//! Up to finding a new line. This function sets the buffer_end and marks a boolean variable
 	//! when changing the buffer end the first time.
@@ -148,6 +150,8 @@ private:
 	bool TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message, bool try_add_line = false);
 	//! Position of the first read line and last read line for verification purposes
 	VerificationPositions verification_positions;
+	//! First Position of First Buffer
+	idx_t first_pos_first_buffer = 0;
 };
 
 } // namespace duckdb

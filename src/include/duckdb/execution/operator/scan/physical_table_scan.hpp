@@ -60,6 +60,9 @@ public:
 	idx_t GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	                    LocalSourceState &lstate) const override;
 
+	bool IsSource() const override {
+		return true;
+	}
 	bool ParallelSource() const override {
 		return true;
 	}

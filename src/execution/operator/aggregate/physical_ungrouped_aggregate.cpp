@@ -41,6 +41,7 @@ struct AggregateState {
 			auto state = unique_ptr<data_t[]>(new data_t[aggr.function.state_size()]);
 			aggr.function.initialize(state.get());
 			aggregates.push_back(std::move(state));
+			bind_data.push_back(aggr.bind_info.get());
 			destructors.push_back(aggr.function.destructor);
 #ifdef DEBUG
 			counts.push_back(0);
@@ -56,7 +57,8 @@ struct AggregateState {
 			Vector state_vector(Value::POINTER((uintptr_t)aggregates[i].get()));
 			state_vector.SetVectorType(VectorType::FLAT_VECTOR);
 
-			destructors[i](state_vector, 1);
+			AggregateInputData aggr_input_data(bind_data[i], Allocator::DefaultAllocator());
+			destructors[i](state_vector, aggr_input_data, 1);
 		}
 	}
 
@@ -67,6 +69,8 @@ struct AggregateState {
 
 	//! The aggregate values
 	vector<unique_ptr<data_t[]>> aggregates;
+	//! The bind data
+	vector<FunctionData *> bind_data;
 	//! The destructors
 	vector<aggregate_destructor_t> destructors;
 	//! Counts (used for verification)
@@ -161,6 +165,16 @@ public:
 		}
 	}
 };
+
+bool PhysicalUngroupedAggregate::SinkOrderDependent() const {
+	for (auto &expr : aggregates) {
+		auto &aggr = expr->Cast<BoundAggregateExpression>();
+		if (aggr.function.order_dependent == AggregateOrderDependent::ORDER_DEPENDENT) {
+			return true;
+		}
+	}
+	return false;
+}
 
 unique_ptr<GlobalSinkState> PhysicalUngroupedAggregate::GetGlobalSinkState(ClientContext &context) const {
 	return make_uniq<UngroupedAggregateGlobalState>(*this, context);
@@ -328,7 +342,7 @@ void PhysicalUngroupedAggregate::Combine(ExecutionContext &context, GlobalSinkSt
 	}
 
 	auto &client_profiler = QueryProfiler::Get(context.client);
-	context.thread.profiler.Flush(this, &source.child_executor, "child_executor", 0);
+	context.thread.profiler.Flush(*this, source.child_executor, "child_executor", 0);
 	client_profiler.Flush(context.thread.profiler);
 }
 

@@ -12,7 +12,7 @@
 
 #include <sqltypes.h>
 #include <sqlext.h>
-#include <vector>
+#include "duckdb/common/vector.hpp"
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -35,7 +35,7 @@ struct OdbcHandle {
 
 	OdbcHandleType type;
 	// appending all error messages into it
-	std::vector<std::string> error_messages;
+	vector<std::string> error_messages;
 
 	duckdb::unique_ptr<OdbcDiagnostic> odbc_diagnostic;
 };
@@ -77,7 +77,7 @@ public:
 	// Ex: "DSN=DuckDB"
 	std::string dsn;
 	// reference to an open statement handled by this connection
-	std::vector<OdbcHandleStmt *> vec_stmt_ref;
+	vector<OdbcHandleStmt *> vec_stmt_ref;
 };
 
 struct OdbcBoundCol {
@@ -167,7 +167,7 @@ public:
 
 public:
 	DescHeader header;
-	std::vector<DescRecord> records;
+	vector<DescRecord> records;
 	OdbcHandleDbc *dbc;
 	OdbcHandleStmt *stmt;
 };

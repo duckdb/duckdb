@@ -20,6 +20,8 @@ public:
 
 public:
 	explicit LogicalAsOfJoin(JoinType type);
+
+	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 };
 
 } // namespace duckdb

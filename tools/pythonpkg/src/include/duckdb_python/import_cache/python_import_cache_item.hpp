@@ -19,7 +19,7 @@ struct PythonImportCache;
 
 struct PythonImportCacheItem {
 public:
-	PythonImportCacheItem() : load_attempted(false), object(nullptr) {
+	PythonImportCacheItem() : load_succeeded(false), object(nullptr) {
 	}
 	virtual ~PythonImportCacheItem() {
 	}
@@ -27,7 +27,7 @@ public:
 	}
 
 public:
-	bool LoadAttempted() const;
+	bool LoadSucceeded() const;
 	bool IsLoaded() const;
 	bool IsInstance(py::handle object) const;
 	py::handle operator()(void) const;
@@ -44,7 +44,7 @@ private:
 
 private:
 	//! Whether or not we attempted to load the module
-	bool load_attempted;
+	bool load_succeeded;
 	//! The stored item
 	PyObject *object;
 };

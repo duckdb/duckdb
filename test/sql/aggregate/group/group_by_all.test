@@ -67,7 +67,7 @@ NULL	NULL	1
 
 # NOT like this
 query III
-SELECT i%2, SUM(i), SUM(g) FROM integers GROUP BY i ORDER BY 1
+SELECT i%2, SUM(i), SUM(g) FROM integers GROUP BY i ORDER BY 1 NULLS FIRST, 2
 ----
 NULL	NULL	1
 0	2	0
@@ -76,21 +76,21 @@ NULL	NULL	1
 
 # we can do this with multiple columns in the group too
 query III
-SELECT (g+i)%2, SUM(i), SUM(g) FROM integers GROUP BY ALL ORDER BY 1
+SELECT (g+i)%2, SUM(i), SUM(g) FROM integers GROUP BY ALL ORDER BY 1 NULLS FIRST
 ----
 NULL	NULL	1
 0	5	1
 1	1	0
 
 query III
-SELECT (g+i)%2, SUM(i), SUM(g) FROM integers GROUP BY 1 ORDER BY 1
+SELECT (g+i)%2, SUM(i), SUM(g) FROM integers GROUP BY 1 ORDER BY 1 NULLS FIRST
 ----
 NULL	NULL	1
 0	5	1
 1	1	0
 
 query III
-SELECT (g+i)%2, SUM(i), SUM(g) FROM integers GROUP BY g, i ORDER BY 1, 2
+SELECT (g+i)%2, SUM(i), SUM(g) FROM integers GROUP BY g, i ORDER BY 1 NULLS FIRST, 2
 ----
 NULL	NULL	1
 0	2	0
@@ -113,7 +113,7 @@ SELECT g, i, g%2, SUM(i), SUM(g) FROM integers GROUP BY 1, 2, 3 ORDER BY 1, 2, 3
 1	3	1	3	1
 
 query IIIII
-SELECT g, i, g%2, SUM(i), SUM(g) FROM integers GROUP BY ALL ORDER BY 1, 2, 3, 4
+SELECT g, i, g%2, SUM(i), SUM(g) FROM integers GROUP BY ALL ORDER BY 1, 2 NULLS FIRST, 3, 4
 ----
 0	1	0	1	0
 0	2	0	2	0

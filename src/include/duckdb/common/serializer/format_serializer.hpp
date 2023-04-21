@@ -20,6 +20,8 @@
 namespace duckdb {
 
 class FormatSerializer {
+	friend Vector;
+
 protected:
 	bool serialize_enum_as_string = false;
 
@@ -29,14 +31,6 @@ public:
 	typename std::enable_if<!std::is_enum<T>::value, void>::type WriteProperty(const char *tag, T &value) {
 		SetTag(tag);
 		WriteValue(value);
-	}
-
-	// Serialize a range
-	template <class T>
-	typename std::enable_if<std::is_pointer<T>::value, void>::type WriteProperty(const char *tag, const T start,
-	                                                                             idx_t count) {
-		SetTag(tag);
-		WriteValue(start, count);
 	}
 
 	// Serialize an enum
@@ -81,6 +75,12 @@ public:
 		}
 	}
 
+	// Special case: data_ptr_T
+	void WriteProperty(const char *tag, const_data_ptr_t ptr, idx_t count) {
+		SetTag(tag);
+		WriteDataPtr(ptr, count);
+	}
+
 protected:
 	// Unique Pointer Ref
 	template <typename T>
@@ -96,27 +96,6 @@ protected:
 		} else {
 			WriteValue(*ptr);
 		}
-	}
-
-	// data_ptr_t
-	void WriteValue(data_ptr_t ptr, idx_t count) {
-		OnListBegin(count);
-		auto end = ptr + count;
-		while (ptr != end) {
-			WriteValue(*ptr);
-			ptr++;
-		}
-		OnListEnd(count);
-	}
-
-	void WriteValue(const_data_ptr_t ptr, idx_t count) {
-		OnListBegin(count);
-		auto end = ptr + count;
-		while (ptr != end) {
-			WriteValue(*ptr);
-			ptr++;
-		}
-		OnListEnd(count);
 	}
 
 	// Pair
@@ -187,7 +166,7 @@ protected:
 
 	// class or struct implementing `FormatSerialize(FormatSerializer& FormatSerializer)`;
 	template <typename T>
-	typename std::enable_if<has_serialize_v<T>(), void>::type WriteValue(T &value) {
+	typename std::enable_if<has_serialize<T>::value>::type WriteValue(T &value) {
 		// Else, we defer to the .FormatSerialize method
 		OnObjectBegin();
 		value.FormatSerialize(*this);
@@ -247,6 +226,7 @@ protected:
 
 	// Handle primitive types, a serializer needs to implement these.
 	virtual void WriteNull() = 0;
+	virtual void WriteValue(bool value) = 0;
 	virtual void WriteValue(uint8_t value) = 0;
 	virtual void WriteValue(int8_t value) = 0;
 	virtual void WriteValue(uint16_t value) = 0;
@@ -258,11 +238,11 @@ protected:
 	virtual void WriteValue(hugeint_t value) = 0;
 	virtual void WriteValue(float value) = 0;
 	virtual void WriteValue(double value) = 0;
-	virtual void WriteValue(interval_t value) = 0;
-	virtual void WriteValue(const string &value) = 0;
 	virtual void WriteValue(const string_t value) = 0;
-	virtual void WriteValue(const char *value) = 0;
-	virtual void WriteValue(bool value) = 0;
+	virtual void WriteValue(const string &value) = 0;
+	virtual void WriteValue(const char *str) = 0;
+	virtual void WriteValue(interval_t value) = 0;
+	virtual void WriteDataPtr(const_data_ptr_t ptr, idx_t count) = 0;
 };
 
 } // namespace duckdb

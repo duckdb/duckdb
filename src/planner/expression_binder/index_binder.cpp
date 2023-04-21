@@ -7,12 +7,13 @@
 
 namespace duckdb {
 
-IndexBinder::IndexBinder(Binder &binder, ClientContext &context, TableCatalogEntry *table, CreateIndexInfo *info)
+IndexBinder::IndexBinder(Binder &binder, ClientContext &context, optional_ptr<TableCatalogEntry> table,
+                         optional_ptr<CreateIndexInfo> info)
     : ExpressionBinder(binder, context), table(table), info(info) {
 }
 
-BindResult IndexBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = **expr_ptr;
+BindResult IndexBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
+	auto &expr = *expr_ptr;
 	switch (expr.expression_class) {
 	case ExpressionClass::WINDOW:
 		return BindResult("window functions are not allowed in index expressions");

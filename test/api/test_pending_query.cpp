@@ -181,7 +181,7 @@ TEST_CASE("Test Pending Query Prepared Statements API", "[api][.]") {
 		REQUIRE_THROWS(prepare->PendingQuery(0));
 	}
 	SECTION("Error during execution") {
-		vector<Value> parameters;
+		duckdb::vector<Value> parameters;
 		auto prepared = con.Prepare("SELECT concat(SUM(i)::varchar, CASE WHEN SUM(i) IS NULL THEN 0 ELSE 'hello' "
 		                            "END)::INT FROM range(1000000) tbl(i) WHERE i>$1");
 		// this succeeds initially

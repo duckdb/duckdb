@@ -13,9 +13,9 @@ TEST_CASE("Vectorized UDF functions using templates", "[coverage][.]") {
 
 	string func_name, table_name, col_type;
 	// The types supported by the templated CreateVectorizedFunction
-	const vector<LogicalType> sql_templated_types = {LogicalType::BOOLEAN, LogicalType::TINYINT, LogicalType::SMALLINT,
-	                                                 LogicalType::INTEGER, LogicalType::BIGINT,  LogicalType::FLOAT,
-	                                                 LogicalType::DOUBLE,  LogicalType::VARCHAR};
+	const duckdb::vector<LogicalType> sql_templated_types = {
+	    LogicalType::BOOLEAN, LogicalType::TINYINT, LogicalType::SMALLINT, LogicalType::INTEGER,
+	    LogicalType::BIGINT,  LogicalType::FLOAT,   LogicalType::DOUBLE,   LogicalType::VARCHAR};
 
 	// Creating the tables
 	for (LogicalType sql_type : sql_templated_types) {

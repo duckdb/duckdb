@@ -39,6 +39,10 @@ public:
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
 
+	bool IsSource() const override {
+		return true;
+	}
+
 public:
 	// Sink interface
 	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
@@ -59,6 +63,8 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
+
+	bool SinkOrderDependent() const override;
 
 private:
 	//! Finalize the distinct aggregates

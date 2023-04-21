@@ -14,12 +14,13 @@ struct ThrottlingSum {
 	struct CustomFunctionData : public TableFunctionData {
 		CustomFunctionData() {
 		}
-		vector<int> row_sums;
+		duckdb::vector<int> row_sums;
 		idx_t current_idx = 0;
 	};
 
 	static duckdb::unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
-	                                             vector<LogicalType> &return_types, vector<string> &names) {
+	                                             duckdb::vector<LogicalType> &return_types,
+	                                             duckdb::vector<string> &names) {
 		auto result = make_uniq<ThrottlingSum::CustomFunctionData>();
 		return_types.emplace_back(LogicalType::INTEGER);
 		names.emplace_back("total");

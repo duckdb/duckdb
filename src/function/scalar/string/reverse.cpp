@@ -32,7 +32,7 @@ static void StrReverseUnicode(const char *input, idx_t n, char *output) {
 struct ReverseOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
-		auto input_data = input.GetDataUnsafe();
+		auto input_data = input.GetData();
 		auto input_length = input.GetSize();
 
 		auto target = StringVector::EmptyString(result, input_length);

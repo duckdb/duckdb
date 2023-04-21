@@ -56,6 +56,28 @@ struct WriteCSVData : public BaseCSVData {
 	idx_t flush_size = 4096 * 8;
 };
 
+struct ColumnInfo {
+	ColumnInfo() {
+	}
+	ColumnInfo(vector<std::string> names_p, vector<LogicalType> types_p) {
+		names = std::move(names_p);
+		types = std::move(types_p);
+	}
+	void Serialize(FieldWriter &writer) {
+		writer.WriteList<string>(names);
+		writer.WriteRegularSerializableList<LogicalType>(types);
+	}
+
+	static ColumnInfo Deserialize(FieldReader &reader) {
+		ColumnInfo info;
+		info.names = reader.ReadRequiredList<string>();
+		info.types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+		return info;
+	}
+	vector<std::string> names;
+	vector<LogicalType> types;
+};
+
 struct ReadCSVData : public BaseCSVData {
 	//! The expected SQL types to read from the file
 	vector<LogicalType> csv_types;
@@ -75,6 +97,9 @@ struct ReadCSVData : public BaseCSVData {
 	bool single_threaded = false;
 	//! Reader bind data
 	MultiFileReaderBindData reader_bind;
+	//! If all files are On-Disk file (e.g., not a pipe)
+	bool file_exists = true;
+	vector<ColumnInfo> column_info;
 
 	void Initialize(unique_ptr<BufferedCSVReader> &reader) {
 		this->initial_reader = std::move(reader);

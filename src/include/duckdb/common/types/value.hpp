@@ -175,24 +175,16 @@ public:
 	DUCKDB_API static Value BIT(const string &data);
 
 	template <class T>
-	T GetValue() const {
-		throw InternalException("Unimplemented template type for Value::GetValue");
-	}
+	T GetValue() const;
 	template <class T>
-	static Value CreateValue(T value) {
-		throw InternalException("Unimplemented template type for Value::CreateValue");
-	}
+	static Value CreateValue(T value);
 	// Returns the internal value. Unlike GetValue(), this method does not perform casting, and assumes T matches the
 	// type of the value. Only use this if you know what you are doing.
 	template <class T>
-	T GetValueUnsafe() const {
-		throw InternalException("Unimplemented template type for Value::GetValueUnsafe");
-	}
+	T GetValueUnsafe() const;
 	//! Returns a reference to the internal value. This can only be used for primitive types.
 	template <class T>
-	T &GetReferenceUnsafe() {
-		throw InternalException("Unimplemented template type for Value::GetReferenceUnsafe");
-	}
+	T &GetReferenceUnsafe();
 
 	//! Return a copy of this value
 	Value Copy() const {

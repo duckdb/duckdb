@@ -24,6 +24,9 @@ class CallbackColumnReader
 	                          CallbackParquetValueConversion<PARQUET_PHYSICAL_TYPE, DUCKDB_PHYSICAL_TYPE, FUNC>>;
 
 public:
+	static constexpr const PhysicalType TYPE = PhysicalType::INVALID;
+
+public:
 	CallbackColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
 	                     idx_t max_define_p, idx_t max_repeat_p)
 	    : TemplatedColumnReader<DUCKDB_PHYSICAL_TYPE,

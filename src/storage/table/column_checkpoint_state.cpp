@@ -50,16 +50,36 @@ public:
 	BlockManager &block_manager;
 	vector<PartialColumnSegment> tail_segments;
 
+private:
+	struct UninitializedRegion {
+		idx_t start;
+		idx_t end;
+	};
+	vector<UninitializedRegion> uninitialized_regions;
+
 public:
 	bool IsFlushed() {
 		// first_segment is zeroed on Flush
 		return !first_segment;
 	}
 
-	void Flush() override {
+	void AddUninitializedRegion(idx_t start, idx_t end) override {
+		uninitialized_regions.push_back({start, end});
+	}
+
+	void Flush(idx_t free_space_left) override {
 		// At this point, we've already copied all data from tail_segments
 		// into the page owned by first_segment. We flush all segment data to
 		// disk with the following call.
+		if (free_space_left > 0 || !uninitialized_regions.empty()) {
+			auto handle = block_manager.buffer_manager.Pin(first_segment->block);
+			// memset any uninitialized regions
+			for (auto &uninitialized : uninitialized_regions) {
+				memset(handle.Ptr() + uninitialized.start, 0, uninitialized.end - uninitialized.start);
+			}
+			// memset any free space at the end of the block to 0 prior to writing to disk
+			memset(handle.Ptr() + Storage::BLOCK_SIZE - free_space_left, 0, free_space_left);
+		}
 		first_data->IncrementVersion();
 		first_segment->ConvertToPersistent(&block_manager, state.block_id);
 		// Now that the page is persistent, update tail_segments to point to the
@@ -135,7 +155,7 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 		// set up the compression function to constant
 		auto &config = DBConfig::GetConfig(db);
 		segment->function =
-		    config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, segment->type.InternalType());
+		    *config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, segment->type.InternalType());
 		segment->ConvertToPersistent(nullptr, INVALID_BLOCK);
 	}
 
@@ -149,7 +169,7 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 		data_pointer.row_start = last_pointer.row_start + last_pointer.tuple_count;
 	}
 	data_pointer.tuple_count = tuple_count;
-	data_pointer.compression_type = segment->function->type;
+	data_pointer.compression_type = segment->function.get().type;
 
 	// append the segment to the new segment tree
 	new_tree.AppendSegment(std::move(segment));

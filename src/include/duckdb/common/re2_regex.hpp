@@ -3,7 +3,7 @@
 #pragma once
 
 #include "duckdb/common/winapi.hpp"
-#include <vector>
+#include "duckdb/common/vector.hpp"
 #include <string>
 #include <stdexcept>
 
@@ -38,7 +38,7 @@ struct GroupMatch {
 };
 
 struct Match {
-	std::vector<GroupMatch> groups;
+	duckdb::vector<GroupMatch> groups;
 
 	GroupMatch &GetGroup(uint64_t index) {
 		if (index >= groups.size()) {
@@ -68,6 +68,6 @@ DUCKDB_API bool RegexSearch(const std::string &input, Match &match, const Regex 
 DUCKDB_API bool RegexMatch(const std::string &input, Match &match, const Regex &regex);
 DUCKDB_API bool RegexMatch(const char *start, const char *end, Match &match, const Regex &regex);
 DUCKDB_API bool RegexMatch(const std::string &input, const Regex &regex);
-DUCKDB_API std::vector<Match> RegexFindAll(const std::string &input, const Regex &regex);
+DUCKDB_API duckdb::vector<Match> RegexFindAll(const std::string &input, const Regex &regex);
 
 } // namespace duckdb_re2

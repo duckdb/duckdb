@@ -1,7 +1,7 @@
 #include "duckdb/execution/operator/schema/physical_create_type.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 
 namespace duckdb {
 
@@ -52,7 +52,7 @@ SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, GlobalSinkSta
 			throw InvalidInputException("Attempted to create ENUM type with NULL value!");
 		}
 		result_ptr[gstate.size++] =
-		    StringVector::AddStringOrBlob(gstate.result, src_ptr[idx].GetDataUnsafe(), src_ptr[idx].GetSize());
+		    StringVector::AddStringOrBlob(gstate.result, src_ptr[idx].GetData(), src_ptr[idx].GetSize());
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }

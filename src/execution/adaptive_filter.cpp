@@ -1,7 +1,7 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
-#include <vector>
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 

@@ -103,7 +103,7 @@ static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, co
                                                       column_t column_id) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 	auto &local_storage = LocalStorage::Get(context, *bind_data.table->catalog);
-	if (local_storage.Find(bind_data.table->GetStoragePtr())) {
+	if (local_storage.Find(bind_data.table->GetStorage())) {
 		// we don't emit any statistics for tables that have outstanding transaction-local data
 		return nullptr;
 	}
@@ -185,14 +185,14 @@ BindInfo TableScanGetBindInfo(const FunctionData *bind_data) {
 
 void TableScanDependency(DependencyList &entries, const FunctionData *bind_data_p) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
-	entries.AddDependency(bind_data.table);
+	entries.AddDependency(*bind_data.table);
 }
 
 unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 	auto &local_storage = LocalStorage::Get(context, *bind_data.table->catalog);
 	auto &storage = bind_data.table->GetStorage();
-	idx_t estimated_cardinality = storage.info->cardinality + local_storage.AddedRows(bind_data.table->GetStoragePtr());
+	idx_t estimated_cardinality = storage.info->cardinality + local_storage.AddedRows(bind_data.table->GetStorage());
 	return make_uniq<NodeStatistics>(storage.info->cardinality, estimated_cardinality);
 }
 
@@ -220,8 +220,7 @@ static unique_ptr<GlobalTableFunctionState> IndexScanInitGlobal(ClientContext &c
 	auto &local_storage = LocalStorage::Get(context, *bind_data.table->catalog);
 	result->column_ids = input.column_ids;
 	result->local_storage_state.Initialize(input.column_ids, input.filters);
-	local_storage.InitializeScan(bind_data.table->GetStoragePtr(), result->local_storage_state.local_state,
-	                             input.filters);
+	local_storage.InitializeScan(bind_data.table->GetStorage(), result->local_storage_state.local_state, input.filters);
 
 	result->finished = false;
 	return std::move(result);
@@ -302,30 +301,27 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 		ExpressionType low_comparison_type = ExpressionType::INVALID, high_comparison_type = ExpressionType::INVALID;
 		// try to find a matching index for any of the filter expressions
 		for (auto &filter : filters) {
-			auto expr = filter.get();
+			auto &expr = *filter;
 
 			// create a matcher for a comparison with a constant
 			ComparisonExpressionMatcher matcher;
 			// match on a comparison type
 			matcher.expr_type = make_uniq<ComparisonExpressionTypeMatcher>();
 			// match on a constant comparison with the indexed expression
-			matcher.matchers.push_back(make_uniq<ExpressionEqualityMatcher>(index_expression.get()));
+			matcher.matchers.push_back(make_uniq<ExpressionEqualityMatcher>(*index_expression));
 			matcher.matchers.push_back(make_uniq<ConstantExpressionMatcher>());
 
 			matcher.policy = SetMatcher::Policy::UNORDERED;
 
-			vector<Expression *> bindings;
+			vector<reference<Expression>> bindings;
 			if (matcher.Match(expr, bindings)) {
 				// range or equality comparison with constant value
 				// we can use our index here
 				// bindings[0] = the expression
 				// bindings[1] = the index expression
 				// bindings[2] = the constant
-				auto &comparison = bindings[0]->Cast<BoundComparisonExpression>();
-				D_ASSERT(bindings[0]->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
-				D_ASSERT(bindings[2]->type == ExpressionType::VALUE_CONSTANT);
-
-				auto constant_value = bindings[2]->Cast<BoundConstantExpression>().value;
+				auto &comparison = bindings[0].get().Cast<BoundComparisonExpression>();
+				auto constant_value = bindings[2].get().Cast<BoundConstantExpression>().value;
 				auto comparison_type = comparison.type;
 				if (comparison.left->type == ExpressionType::VALUE_CONSTANT) {
 					// the expression is on the right side, we flip them around
@@ -346,9 +342,9 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 					high_value = constant_value;
 					high_comparison_type = comparison_type;
 				}
-			} else if (expr->type == ExpressionType::COMPARE_BETWEEN) {
+			} else if (expr.type == ExpressionType::COMPARE_BETWEEN) {
 				// BETWEEN expression
-				auto &between = expr->Cast<BoundBetweenExpression>();
+				auto &between = expr.Cast<BoundBetweenExpression>();
 				if (!between.input->Equals(index_expression.get())) {
 					// expression doesn't match the current index expression
 					continue;

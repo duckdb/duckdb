@@ -30,8 +30,8 @@ public:
 	SelectionVector sel;
 
 public:
-	void Finalize(PhysicalOperator *op, ExecutionContext &context) override {
-		context.thread.profiler.Flush(op, &executor, "filter", 0);
+	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
+		context.thread.profiler.Flush(op, executor, "filter", 0);
 	}
 };
 
