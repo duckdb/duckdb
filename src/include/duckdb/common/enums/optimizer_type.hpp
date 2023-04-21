@@ -29,6 +29,7 @@ enum class OptimizerType : uint32_t {
 	COLUMN_LIFETIME,
 	TOP_N,
 	REORDER_FILTER,
+	CASCADE,
 	EXTENSION
 };
 
