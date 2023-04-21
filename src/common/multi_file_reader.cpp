@@ -9,43 +9,6 @@
 
 namespace duckdb {
 
-// struct	AutoDetectHivePartitioning{
-
-// 	static bool BasicChecks(const string& file) {
-// 		const auto vec = StringUtil::Split(file, "/");
-// 		if (vec.size() < 2) {
-// 			return false;
-// 		}
-// 		const string& last_dir = vec.at(vec.size() - 2);
-// 		if (last_dir.find('=') == string::npos) {
-// 			return false;
-// 		}
-// 		return true;
-// 	}
-
-// 	static bool AutoDetect(const vector<string>& files) {
-// 		if (files.empty()) {
-// 			return false;
-// 		}
-// 		if (!BasicChecks(files.front())) {
-// 			return false;
-// 		}
-// 		const auto partitions = HivePartitioning::Parse(files.front());
-// 		for (auto& f : files) {
-// 			auto scheme = HivePartitioning::Parse(f);
-// 			if (scheme.size() != partitions.size()) {
-// 				return false;
-// 			}
-// 			for (auto& i : scheme) {
-// 				if (partitions.find(i.first) == partitions.end()) {
-// 					return false;
-// 				}
-// 			}
-// 		}
-// 		return true;
-// 	}
-// };
-
 void MultiFileReader::AddParameters(TableFunction &table_function) {
 	table_function.named_parameters["filename"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
