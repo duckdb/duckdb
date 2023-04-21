@@ -5,7 +5,7 @@
 //	@doc:
 //		Implementation of optimization engine
 //---------------------------------------------------------------------------
-#include "optimizer/cascade/engine/CEngine.h"
+#include "duckdb/optimizer/cascade/engine/CEngine.h"
 
 #include "gpos/base.h"
 #include "gpos/common/CAutoTimer.h"
