@@ -22,6 +22,7 @@ CommonTableExpressionMap CommonTableExpressionMap::Copy() const {
 			kv_info->aliases.push_back(al);
 		}
 		kv_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(kv.second->query->Copy());
+		kv_info->materialized = kv.second->materialized;
 		res.map[kv.first] = std::move(kv_info);
 	}
 	return res;
@@ -165,6 +166,7 @@ void QueryNode::CopyProperties(QueryNode &other) const {
 			kv_info->aliases.push_back(al);
 		}
 		kv_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(kv.second->query->Copy());
+		kv_info->materialized = kv.second->materialized;
 		other.cte_map.map[kv.first] = std::move(kv_info);
 	}
 }
@@ -181,6 +183,7 @@ void QueryNode::Serialize(Serializer &main_serializer) const {
 		serializer.WriteString(cte.first);
 		serializer.WriteStringVector(cte.second->aliases);
 		cte.second->query->Serialize(serializer);
+		writer.WriteField<CTEMaterialize>(cte.second->materialized);
 	}
 	Serialize(writer);
 
@@ -240,6 +243,7 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &main_source) {
 		auto info = make_uniq<CommonTableExpressionInfo>();
 		source.ReadStringVector(info->aliases);
 		info->query = SelectStatement::Deserialize(source);
+		info->materialized = reader.ReadRequired<CTEMaterialize>();
 		new_map[name] = std::move(info);
 	}
 	unique_ptr<QueryNode> result;
