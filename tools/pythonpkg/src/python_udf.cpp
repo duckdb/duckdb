@@ -132,7 +132,7 @@ public:
 	}
 };
 
-}; // namespace
+} // namespace
 
 static py::list ConvertToSingleBatch(const string &timezone_config, vector<LogicalType> &types, vector<string> &names,
                                      DataChunk &input) {
