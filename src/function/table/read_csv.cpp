@@ -304,7 +304,7 @@ public:
 	//! Verify if the CSV File was read correctly
 	void Verify();
 
-	void UpdateVerification(VerificationPositions positions, idx_t file_number);
+	void UpdateVerification(VerificationPositions positions, idx_t file_number, idx_t batch_idx);
 
 	void UpdateLinesRead(idx_t batch_idx, idx_t lines_read);
 
@@ -368,6 +368,8 @@ private:
 	//! positions where they started reading the first line.
 	vector<vector<idx_t>> tuple_end;
 	vector<set<idx_t>> tuple_start;
+	//! Tuple end to batch
+	vector<unordered_map<idx_t, idx_t>> tuple_end_to_batch;
 	idx_t running_threads = 0;
 	//! The column ids to read
 	vector<column_t> column_ids;
@@ -416,26 +418,21 @@ void ParallelCSVGlobalState::Verify() {
 				return;
 			}
 			auto max_value = *max_element(std::begin(current_tuple_end), std::end(current_tuple_end));
-			for (auto &last_pos : current_tuple_end) {
+			for (idx_t tpl_idx = 0; tpl_idx < current_tuple_end.size(); tpl_idx++) {
+				auto last_pos = current_tuple_end[tpl_idx];
 				auto first_pos = current_tuple_start.find(last_pos);
 				if (first_pos == current_tuple_start.end()) {
 					// this might be necessary due to carriage returns outside buffer scopes.
 					first_pos = current_tuple_start.find(last_pos + 1);
 				}
 				if (first_pos == current_tuple_start.end() && last_pos != max_value) {
-					string error =
-					    "Not possible to read this CSV File with multithreading. Tuple: " + to_string(last_pos) +
-					    " does not have a match\n";
-					error += "End Lines: \n";
-					for (auto &end_line : current_tuple_end) {
-						error += to_string(end_line) + "\n";
-					}
-					error += "Start Lines: \n";
-					for (auto &start_line : current_tuple_start) {
-						error += to_string(start_line) + "\n";
-					}
+					auto batch_idx = tuple_end_to_batch[i][last_pos];
+					auto problematic_line = line_info.GetLine(batch_idx, 0);
 					throw InvalidInputException(
-					    "CSV File not supported for multithreading. Please run single-threaded CSV Reading");
+					    "CSV File not supported for multithreading. This can be a problematic line in your CSV File or "
+					    "that this CSV can't be read in Parallel. Please, inspect if the line %llu is correct. If so, "
+					    "please run single-threaded CSV Reading by setting parallel=false in the read_csv call.",
+					    problematic_line);
 				}
 			}
 		}
@@ -508,7 +505,7 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 	}
 	return true;
 }
-void ParallelCSVGlobalState::UpdateVerification(VerificationPositions positions, idx_t file_number_p) {
+void ParallelCSVGlobalState::UpdateVerification(VerificationPositions positions, idx_t file_number_p, idx_t batch_idx) {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	if (positions.beginning_of_first_line < positions.end_of_last_line) {
 		if (positions.end_of_last_line > max_tuple_end) {
@@ -519,7 +516,9 @@ void ParallelCSVGlobalState::UpdateVerification(VerificationPositions positions,
 			set<idx_t> empty_set;
 			tuple_start.emplace_back(empty_set);
 			tuple_end.emplace_back(empty_tuple_end);
+			tuple_end_to_batch.push_back({});
 		}
+		tuple_end_to_batch[file_number_p][positions.end_of_last_line] = batch_idx;
 		tuple_start[file_number_p].insert(positions.beginning_of_first_line);
 		tuple_end[file_number_p].push_back(positions.end_of_last_line);
 	}
@@ -624,7 +623,8 @@ static void ParallelReadCSVFunction(ClientContext &context, TableFunctionInput &
 			auto verification_updates = csv_local_state.csv_reader->GetVerificationPositions();
 			if (verification_updates.beginning_of_first_line != verification_updates.end_of_last_line) {
 				csv_global_state.UpdateVerification(verification_updates,
-				                                    csv_local_state.csv_reader->buffer->buffer->GetFileNumber());
+				                                    csv_local_state.csv_reader->buffer->buffer->GetFileNumber(),
+				                                    csv_local_state.csv_reader->buffer->batch_index);
 			}
 			csv_global_state.UpdateLinesRead(csv_local_state.csv_reader->buffer->batch_index,
 			                                 csv_local_state.csv_reader->buffer->lines_read);

@@ -185,3 +185,9 @@ statement error
 SELECT * FROM read_csv('__TEST_DIR__/time.csv', parallel=false, sep=',', columns={'h1': timestamp, 'h2': varchar}, header=True)
 ----
 line 3001
+
+# the first error is on line 3000
+statement error
+SELECT * FROM read_csv('__TEST_DIR__/time.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': timestamp, 'h2': varchar}, header=True)
+----
+line 3001
