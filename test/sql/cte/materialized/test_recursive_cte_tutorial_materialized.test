@@ -114,6 +114,7 @@ WITH RECURSIVE fib AS MATERIALIZED (
              "fibₙ₊₁",
              "fibₙ" + "fibₙ₊₁"
       FROM fib
+      WHERE  n <= 20
 )
 SELECT n, "fibₙ" FROM fib
 LIMIT 20;
