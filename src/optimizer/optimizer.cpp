@@ -24,6 +24,7 @@
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
+#include "duckdb/optimizer/cascade/Cascade.h"
 
 namespace duckdb {
 
