@@ -31,21 +31,20 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op
 	D_ASSERT(op.children.empty());
 
 	// Check if this LogicalCTERef is supposed to scan a materialized CTE.
-	for (idx_t i = 0; i < materialized_cte_ids.size(); i++) {
-		if (op.cte_index == materialized_cte_ids[i]) {
+	if (op.materialized_cte) {
+		// Lookup if there is a materialized CTE for the cte_index.
+		auto materialized_cte = materialized_ctes.find(op.cte_index);
+
+		// If this check fails, this is a reference to a materialized recursive CTE.
+		if (materialized_cte != materialized_ctes.end()) {
 			auto chunk_scan = make_uniq<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::CTE_SCAN,
 			                                                    op.estimated_cardinality, op.cte_index);
 
-			auto materialized_cte = materialized_ctes.find(op.cte_index);
-
-			if (materialized_cte == materialized_ctes.end()) {
-				throw InvalidInputException("Referenced CTE does not exist.");
-			}
 			materialized_cte->second.push_back(chunk_scan.get());
 
 			auto cte = recursive_cte_tables.find(op.cte_index);
 			if (cte == recursive_cte_tables.end()) {
-				throw InvalidInputException("Referenced CTE does not exist.");
+				throw InvalidInputException("Referenced materialized CTE does not exist.");
 			}
 			chunk_scan->collection = cte->second.get();
 

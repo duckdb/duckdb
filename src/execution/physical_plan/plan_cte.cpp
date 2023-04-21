@@ -19,8 +19,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCTE &op) {
 
 	// Create the plan for the left side. This is the materialization.
 	auto left = CreatePlan(*op.children[0]);
-	// Register this CTE as materialized.
-	materialized_cte_ids.push_back(op.table_index);
 	// Initialize an empty vector to collect the scan operators.
 	materialized_ctes[op.table_index] = vector<PhysicalOperator *>();
 	auto right = CreatePlan(*op.children[1]);

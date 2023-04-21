@@ -34,7 +34,6 @@ public:
 	unordered_map<idx_t, std::shared_ptr<ColumnDataCollection>> recursive_cte_tables;
 	//! Materialized CTE scans need to be collected for each CTE operator.
 	unordered_map<idx_t, vector<PhysicalOperator *>> materialized_ctes;
-	vector<idx_t> materialized_cte_ids;
 
 public:
 	//! Creates a plan from the logical operator. This involves resolving column bindings and generating physical
