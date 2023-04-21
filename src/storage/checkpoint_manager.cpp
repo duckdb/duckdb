@@ -71,15 +71,15 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	// get the id of the first meta block
 	block_id_t meta_block = metadata_writer->GetBlockPointer().block_id;
 
-	vector<SchemaCatalogEntry *> schemas;
+	vector<reference<SchemaCatalogEntry>> schemas;
 	// we scan the set of committed schemas
 	auto &catalog = (DuckCatalog &)Catalog::GetCatalog(db);
-	catalog.ScanSchemas([&](CatalogEntry *entry) { schemas.push_back((SchemaCatalogEntry *)entry); });
+	catalog.ScanSchemas([&](SchemaCatalogEntry &entry) { schemas.push_back(entry); });
 	// write the actual data into the database
 	// write the amount of schemas
 	metadata_writer->Write<uint32_t>(schemas.size());
 	for (auto &schema : schemas) {
-		WriteSchema(*schema);
+		WriteSchema(schema.get());
 	}
 	partial_block_manager.FlushPartialBlocks();
 	// flush the meta data to disk

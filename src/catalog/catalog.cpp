@@ -638,7 +638,7 @@ LogicalType Catalog::GetType(ClientContext &context, const string &catalog_name,
 
 vector<reference<SchemaCatalogEntry>> Catalog::GetSchemas(ClientContext &context) {
 	vector<reference<SchemaCatalogEntry>> schemas;
-	ScanSchemas(context, [&](CatalogEntry *entry) { schemas.push_back(entry->Cast<SchemaCatalogEntry>()); });
+	ScanSchemas(context, [&](SchemaCatalogEntry &entry) { schemas.push_back(entry); });
 	return schemas;
 }
 

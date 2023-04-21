@@ -34,8 +34,8 @@ public:
 
 public:
 	DUCKDB_API CatalogEntry *CreateSchema(CatalogTransaction transaction, CreateSchemaInfo *info) override;
-	DUCKDB_API void ScanSchemas(ClientContext &context, std::function<void(CatalogEntry *)> callback) override;
-	DUCKDB_API void ScanSchemas(std::function<void(CatalogEntry *)> callback);
+	DUCKDB_API void ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) override;
+	DUCKDB_API void ScanSchemas(std::function<void(SchemaCatalogEntry &)> callback);
 
 	DUCKDB_API SchemaCatalogEntry *GetSchema(CatalogTransaction transaction, const string &schema_name,
 	                                         bool if_exists = false,
