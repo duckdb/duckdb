@@ -219,7 +219,7 @@ TEST_CASE("Test DataChunk varchar result fetch in C API", "[capi]") {
 	REQUIRE(duckdb_row_count(&result) == 5000);
 	REQUIRE(duckdb_result_error(&result) == nullptr);
 
-	auto expected_chunk_count = (5000 / STANDARD_VECTOR_SIZE) + (5000 % STANDARD_VECTOR_SIZE != 0);
+	idx_t expected_chunk_count = (5000 / STANDARD_VECTOR_SIZE) + (5000 % STANDARD_VECTOR_SIZE != 0);
 
 	REQUIRE(duckdb_result_chunk_count(result) == expected_chunk_count);
 
@@ -247,7 +247,7 @@ TEST_CASE("Test DataChunk varchar result fetch in C API", "[capi]") {
 				continue;
 			}
 			idx_t expected_length = (tuple_index % 12) + 4;
-			auto expected_character = (tuple_index % 26) + 'A';
+			char expected_character = (tuple_index % 26) + 'A';
 
 			// TODO: how does the c-api handle non-flat vectors?
 			auto tuple = string_data[i];
