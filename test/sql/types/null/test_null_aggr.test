@@ -3,6 +3,9 @@
 # group: [null]
 
 statement ok
+SET default_null_order='nulls_first';
+
+statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);
 
 statement ok

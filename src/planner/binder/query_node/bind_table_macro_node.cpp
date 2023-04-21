@@ -19,7 +19,7 @@ namespace duckdb {
 unique_ptr<QueryNode> Binder::BindTableMacro(FunctionExpression &function, TableMacroCatalogEntry *macro_func,
                                              idx_t depth) {
 
-	auto &macro_def = (TableMacroFunction &)*macro_func->function;
+	auto &macro_def = macro_func->function->Cast<TableMacroFunction>();
 	auto node = macro_def.query_node->Copy();
 
 	// auto &macro_def = *macro_func->function;

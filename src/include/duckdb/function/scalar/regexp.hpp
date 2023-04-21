@@ -22,7 +22,7 @@ void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, 
 void ParseRegexOptions(ClientContext &context, Expression &expr, RE2::Options &target, bool *global_replace = nullptr);
 
 inline duckdb_re2::StringPiece CreateStringPiece(const string_t &input) {
-	return duckdb_re2::StringPiece(input.GetDataUnsafe(), input.GetSize());
+	return duckdb_re2::StringPiece(input.GetData(), input.GetSize());
 }
 
 inline string_t Extract(const string_t &input, Vector &result, const RE2 &re, const duckdb_re2::StringPiece &rewrite) {

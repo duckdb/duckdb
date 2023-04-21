@@ -303,7 +303,8 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type) {
 	case LogicalTypeId::UBIGINT:
 		return py::cast(val.GetValue<uint64_t>());
 	case LogicalTypeId::HUGEINT:
-		return py::cast<py::object>(PyLong_FromString((char *)val.GetValue<string>().c_str(), nullptr, 10));
+		return py::reinterpret_steal<py::object>(
+		    PyLong_FromString((char *)val.GetValue<string>().c_str(), nullptr, 10));
 	case LogicalTypeId::FLOAT:
 		return py::cast(val.GetValue<float>());
 	case LogicalTypeId::DOUBLE:
@@ -339,7 +340,7 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type) {
 		Timestamp::Convert(timestamp, date, time);
 		Date::Convert(date, year, month, day);
 		Time::Convert(time, hour, min, sec, micros);
-		return py::cast<py::object>(PyDateTime_FromDateAndTime(year, month, day, hour, min, sec, micros));
+		return py::reinterpret_steal<py::object>(PyDateTime_FromDateAndTime(year, month, day, hour, min, sec, micros));
 	}
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ: {
@@ -348,7 +349,7 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type) {
 		int32_t hour, min, sec, microsec;
 		auto time = val.GetValueUnsafe<dtime_t>();
 		duckdb::Time::Convert(time, hour, min, sec, microsec);
-		return py::cast<py::object>(PyTime_FromTime(hour, min, sec, microsec));
+		return py::reinterpret_steal<py::object>(PyTime_FromTime(hour, min, sec, microsec));
 	}
 	case LogicalTypeId::DATE: {
 		D_ASSERT(type.InternalType() == PhysicalType::INT32);
@@ -356,7 +357,7 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type) {
 		auto date = val.GetValueUnsafe<date_t>();
 		int32_t year, month, day;
 		duckdb::Date::Convert(date, year, month, day);
-		return py::cast<py::object>(PyDate_FromDate(year, month, day));
+		return py::reinterpret_steal<py::object>(PyDate_FromDate(year, month, day));
 	}
 	case LogicalTypeId::LIST: {
 		auto &list_values = ListValue::GetChildren(val);
@@ -400,13 +401,13 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type) {
 	}
 	case LogicalTypeId::UUID: {
 		auto uuid_value = val.GetValueUnsafe<hugeint_t>();
-		return py::cast<py::object>(import_cache.uuid().UUID()(UUID::ToString(uuid_value)));
+		return import_cache.uuid().UUID()(UUID::ToString(uuid_value));
 	}
 	case LogicalTypeId::INTERVAL: {
 		auto interval_value = val.GetValueUnsafe<interval_t>();
 		uint64_t days = duckdb::Interval::DAYS_PER_MONTH * interval_value.months + interval_value.days;
-		return py::cast<py::object>(import_cache.datetime().timedelta()(
-		    py::arg("days") = days, py::arg("microseconds") = interval_value.micros));
+		return import_cache.datetime().timedelta()(py::arg("days") = days,
+		                                           py::arg("microseconds") = interval_value.micros);
 	}
 
 	default:

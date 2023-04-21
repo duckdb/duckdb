@@ -33,6 +33,7 @@ public:
 
 public:
 	//! Creates a new block inside the block manager
+	virtual unique_ptr<Block> ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) = 0;
 	virtual unique_ptr<Block> CreateBlock(block_id_t block_id, FileBuffer *source_buffer) = 0;
 	//! Return the next free block id
 	virtual block_id_t GetFreeBlockId() = 0;

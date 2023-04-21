@@ -323,6 +323,34 @@ class TestArrowFilterPushdown(object):
         # Try Or
         assert duckdb_conn.execute("SELECT count(*) from testarrow where a = '2010-01-01' or b ='2000-01-01'").fetchone()[0] == 2
 
+    def test_filter_pushdown_blob(self,duckdb_cursor):
+        if not can_run:
+            return
+        df = pd.DataFrame({'a': [bytes([1]), bytes([2]), bytes([3]), None], 'b': [bytes([1]), bytes([2]), bytes([3]), None],'c': [bytes([1]), bytes([2]), bytes([3]), None]})
+        arrow_table = pa.Table.from_pandas(df)
+
+        # Try ==
+        assert duckdb_conn.execute("SELECT count(*) from arrow_table where a ='\x01'").fetchone()[0] == 1
+        # # Try >
+        assert duckdb_conn.execute("SELECT count(*) from arrow_table where a >'\x01'").fetchone()[0] == 2
+        # Try >=
+        assert duckdb_conn.execute("SELECT count(*) from arrow_table where a >='\x02'").fetchone()[0] == 2
+        # Try <
+        assert duckdb_conn.execute("SELECT count(*) from arrow_table where a <'\x02'").fetchone()[0] == 1
+        # Try <=
+        assert duckdb_conn.execute("SELECT count(*) from arrow_table where a <='\x02'").fetchone()[0] == 2
+
+        # Try Is Null
+        assert duckdb_conn.execute("SELECT count(*) from arrow_table where a IS NULL").fetchone()[0] == 1
+        # Try Is Not Null
+        assert duckdb_conn.execute("SELECT count(*) from arrow_table where a IS NOT NULL").fetchone()[0] == 3
+
+        # Try And
+        assert duckdb_conn.execute("SELECT count(*) from arrow_table where a='\x02' and b ='\x01'").fetchone()[0] == 0
+        assert duckdb_conn.execute("SELECT count(*) from arrow_table where a ='\x02' and b = '\x02' and c = '\x02'").fetchone()[0] == 1
+        # Try Or
+        assert duckdb_conn.execute("SELECT count(*) from arrow_table where a = '\x01' or b ='\x02'").fetchone()[0] == 2
+
 
     def test_filter_pushdown_no_projection(self,duckdb_cursor):
         if not can_run:

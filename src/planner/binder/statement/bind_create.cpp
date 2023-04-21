@@ -161,7 +161,7 @@ static void QualifyFunctionNames(ClientContext &context, unique_ptr<ParsedExpres
 
 SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	auto &base = (CreateMacroInfo &)info;
-	auto &scalar_function = (ScalarMacroFunction &)*base.function;
+	auto &scalar_function = base.function->Cast<ScalarMacroFunction>();
 
 	if (scalar_function.expression->HasParameter()) {
 		throw BinderException("Parameter expressions within macro's are not supported!");
@@ -198,7 +198,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	auto sel_node = make_uniq<BoundSelectNode>();
 	auto group_info = make_uniq<BoundGroupInformation>();
 	SelectBinder binder(*this, context, *sel_node, *group_info);
-	error = binder.Bind(&expression, 0, false);
+	error = binder.Bind(expression, 0, false);
 
 	if (!error.empty()) {
 		throw BinderException(error);
