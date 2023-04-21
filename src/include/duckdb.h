@@ -190,6 +190,23 @@ typedef struct {
 	idx_t size;
 } duckdb_string;
 
+/*
+    The internal data representation of a VARCHAR/BLOB column
+*/
+typedef struct {
+	union {
+		struct {
+			uint32_t length;
+			char prefix[4];
+			char *ptr;
+		} pointer;
+		struct {
+			uint32_t length;
+			char inlined[12];
+		} inlined;
+	} value;
+} duckdb_string_t;
+
 typedef struct {
 	void *data;
 	idx_t size;
@@ -750,6 +767,13 @@ This is the amount of tuples that will fit into a data chunk created by `duckdb_
 * returns: The vector size.
 */
 DUCKDB_API idx_t duckdb_vector_size();
+
+/*!
+Whether or not the duckdb_string_t value is inlined.
+This means that the data of the string does not have a separate allocation.
+
+*/
+DUCKDB_API bool duckdb_string_is_inlined(duckdb_string_t *string);
 
 //===--------------------------------------------------------------------===//
 // Date/Time/Timestamp Helpers
