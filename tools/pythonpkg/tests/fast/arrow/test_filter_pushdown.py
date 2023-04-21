@@ -303,10 +303,9 @@ class TestArrowFilterPushdown(object):
         # Try Or
         assert duckdb_conn.execute("SELECT count(*) from testarrow where a = '2010-01-01' or b ='2000-01-01'").fetchone()[0] == 2
 
-    def test_filter_pushdown_blob(self,duckdb_cursor):
-        if not can_run:
-            return
-        df = pd.DataFrame({'a': [bytes([1]), bytes([2]), bytes([3]), None], 'b': [bytes([1]), bytes([2]), bytes([3]), None],'c': [bytes([1]), bytes([2]), bytes([3]), None]})
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_filter_pushdown_blob(self, pandas):
+        df = pandas.DataFrame({'a': [bytes([1]), bytes([2]), bytes([3]), None], 'b': [bytes([1]), bytes([2]), bytes([3]), None],'c': [bytes([1]), bytes([2]), bytes([3]), None]})
         arrow_table = pa.Table.from_pandas(df)
 
         # Try ==
