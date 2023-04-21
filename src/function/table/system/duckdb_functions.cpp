@@ -86,7 +86,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBFunctionsInit(ClientContext &context,
 	// scan all the schemas for tables and collect themand collect them
 	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto &schema : schemas) {
-		ExtractFunctionsFromSchema(context, *schema, *result);
+		ExtractFunctionsFromSchema(context, schema.get(), *result);
 	};
 
 	std::sort(result->entries.begin(), result->entries.end(),

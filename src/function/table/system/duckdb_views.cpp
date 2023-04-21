@@ -58,13 +58,13 @@ unique_ptr<GlobalTableFunctionState> DuckDBViewsInit(ClientContext &context, Tab
 	// scan all the schemas for tables and collect them and collect them
 	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto &schema : schemas) {
-		schema->Scan(context, CatalogType::VIEW_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+		schema.get().Scan(context, CatalogType::VIEW_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	};
 	return std::move(result);
 }
 
 void DuckDBViewsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (DuckDBViewsData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<DuckDBViewsData>();
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;

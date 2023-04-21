@@ -255,9 +255,9 @@ public:
 		return (T *)entry;
 	}
 
-	DUCKDB_API vector<SchemaCatalogEntry *> GetSchemas(ClientContext &context);
-	DUCKDB_API static vector<SchemaCatalogEntry *> GetSchemas(ClientContext &context, const string &catalog_name);
-	DUCKDB_API static vector<SchemaCatalogEntry *> GetAllSchemas(ClientContext &context);
+	DUCKDB_API vector<reference<SchemaCatalogEntry>> GetSchemas(ClientContext &context);
+	DUCKDB_API static vector<reference<SchemaCatalogEntry>> GetSchemas(ClientContext &context, const string &catalog_name);
+	DUCKDB_API static vector<reference<SchemaCatalogEntry>> GetAllSchemas(ClientContext &context);
 
 	virtual void Verify();
 

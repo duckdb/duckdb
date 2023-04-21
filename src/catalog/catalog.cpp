@@ -458,7 +458,7 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 		auto &catalog = database->GetCatalog();
 		auto current_schemas = catalog.GetAllSchemas(context);
 		for (auto &current_schema : current_schemas) {
-			unseen_schemas.insert(*current_schema);
+			unseen_schemas.insert(current_schema.get());
 		}
 	}
 	// check if the entry exists in any extension
@@ -636,9 +636,9 @@ LogicalType Catalog::GetType(ClientContext &context, const string &catalog_name,
 	return result_type;
 }
 
-vector<SchemaCatalogEntry *> Catalog::GetSchemas(ClientContext &context) {
-	vector<SchemaCatalogEntry *> schemas;
-	ScanSchemas(context, [&](CatalogEntry *entry) { schemas.push_back((SchemaCatalogEntry *)entry); });
+vector<reference<SchemaCatalogEntry>> Catalog::GetSchemas(ClientContext &context) {
+	vector<reference<SchemaCatalogEntry>> schemas;
+	ScanSchemas(context, [&](CatalogEntry *entry) { schemas.push_back(entry->Cast<SchemaCatalogEntry>()); });
 	return schemas;
 }
 
@@ -655,8 +655,8 @@ bool Catalog::TypeExists(ClientContext &context, const string &catalog_name, con
 	return true;
 }
 
-vector<SchemaCatalogEntry *> Catalog::GetSchemas(ClientContext &context, const string &catalog_name) {
-	vector<Catalog *> catalogs;
+vector<reference<SchemaCatalogEntry>> Catalog::GetSchemas(ClientContext &context, const string &catalog_name) {
+	vector<reference<Catalog>> catalogs;
 	if (IsInvalidCatalog(catalog_name)) {
 		unordered_set<string> name;
 
@@ -666,21 +666,21 @@ vector<SchemaCatalogEntry *> Catalog::GetSchemas(ClientContext &context, const s
 				continue;
 			}
 			name.insert(entry.catalog);
-			catalogs.push_back(&Catalog::GetCatalog(context, entry.catalog));
+			catalogs.push_back(Catalog::GetCatalog(context, entry.catalog));
 		}
 	} else {
-		catalogs.push_back(&Catalog::GetCatalog(context, catalog_name));
+		catalogs.push_back(Catalog::GetCatalog(context, catalog_name));
 	}
-	vector<SchemaCatalogEntry *> result;
+	vector<reference<SchemaCatalogEntry>> result;
 	for (auto catalog : catalogs) {
-		auto schemas = catalog->GetSchemas(context);
+		auto schemas = catalog.get().GetSchemas(context);
 		result.insert(result.end(), schemas.begin(), schemas.end());
 	}
 	return result;
 }
 
-vector<SchemaCatalogEntry *> Catalog::GetAllSchemas(ClientContext &context) {
-	vector<SchemaCatalogEntry *> result;
+vector<reference<SchemaCatalogEntry>> Catalog::GetAllSchemas(ClientContext &context) {
+	vector<reference<SchemaCatalogEntry>> result;
 
 	auto &db_manager = DatabaseManager::Get(context);
 	auto databases = db_manager.GetDatabases(context);
@@ -689,12 +689,14 @@ vector<SchemaCatalogEntry *> Catalog::GetAllSchemas(ClientContext &context) {
 		auto new_schemas = catalog.GetSchemas(context);
 		result.insert(result.end(), new_schemas.begin(), new_schemas.end());
 	}
-	sort(result.begin(), result.end(), [&](SchemaCatalogEntry *x, SchemaCatalogEntry *y) {
-		if (x->catalog->GetName() < y->catalog->GetName()) {
+	sort(result.begin(), result.end(), [&](reference<SchemaCatalogEntry> left_p, reference<SchemaCatalogEntry> right_p) {
+		auto &left = left_p.get();
+		auto &right = right_p.get();
+		if (left.catalog->GetName() < right.catalog->GetName()) {
 			return true;
 		}
-		if (x->catalog->GetName() == y->catalog->GetName()) {
-			return x->name < y->name;
+		if (left.catalog->GetName() == right.catalog->GetName()) {
+			return left.name < right.name;
 		}
 		return false;
 	});

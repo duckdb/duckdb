@@ -70,7 +70,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBSequencesInit(ClientContext &context,
 	// scan all the schemas for tables and collect themand collect them
 	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto &schema : schemas) {
-		schema->Scan(context, CatalogType::SEQUENCE_ENTRY,
+		schema.get().Scan(context, CatalogType::SEQUENCE_ENTRY,
 		             [&](CatalogEntry *entry) { result->entries.push_back((SequenceCatalogEntry *)entry); });
 	};
 	return std::move(result);

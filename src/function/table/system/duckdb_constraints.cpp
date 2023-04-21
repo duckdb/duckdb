@@ -111,7 +111,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBConstraintsInit(ClientContext &contex
 	for (auto &schema : schemas) {
 		vector<CatalogEntry *> entries;
 
-		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
+		schema.get().Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
 			if (entry->type == CatalogType::TABLE_ENTRY) {
 				entries.push_back(entry);
 			}
