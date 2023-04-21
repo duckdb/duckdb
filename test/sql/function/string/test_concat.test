@@ -2,6 +2,9 @@
 # description: Test concat function
 # group: [string]
 
+statement ok
+SET default_null_order='nulls_first';
+
 # Test Case disclaimer
 
 # Assertions built using the Domain Testing technique

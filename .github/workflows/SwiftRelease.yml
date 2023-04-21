@@ -1,6 +1,7 @@
 name: SwiftRelease
 on:
   workflow_dispatch:
+  repository_dispatch:
   push:
     tags:
       - '**'
@@ -12,13 +13,11 @@ env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
 jobs:
-
   update:
 
     name: Update Swift Repo
     runs-on: ubuntu-latest
     steps:
-
       - name: Checkout Source Repo
         uses: actions/checkout@v3
         with:
@@ -54,14 +53,13 @@ jobs:
           fi
 
       - name: Push Update
-        if: github.event_name == 'push'
         run: |
           git -C updated-repo push
 
       - name: Tag Release
-        if: github.event_name == 'release'
-        env:
-          TAG_NAME: ${{ github.ref_name }}
         run: |
+          cd source-repo
+          export TAG_NAME=`python3 -c "import sys, os; sys.path.append(os.path.join('scripts')); import package_build; print(package_build.git_dev_version())"`
+          cd ..
           git -C updated-repo tag -a $TAG_NAME -m "Release $TAG_NAME"
           git -C updated-repo push origin $TAG_NAME
