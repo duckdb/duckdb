@@ -267,6 +267,8 @@ TEST_CASE("Test DataChunk varchar result fetch in C API", "[capi]") {
 		duckdb_destroy_data_chunk(&chunk);
 	}
 	duckdb_destroy_result(&result);
+	duckdb_disconnect(&connection);
+	duckdb_close(&database);
 }
 
 TEST_CASE("Test DataChunk result fetch in C API", "[capi]") {
