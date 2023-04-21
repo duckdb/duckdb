@@ -3,6 +3,9 @@
 # group: [insert]
 
 statement ok
+SET default_null_order='nulls_first';
+
+statement ok
 CREATE TABLE strings(a VARCHAR)
 
 statement ok

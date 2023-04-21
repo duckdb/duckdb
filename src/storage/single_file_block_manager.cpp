@@ -107,15 +107,15 @@ T DeserializeHeaderStructure(data_ptr_t ptr) {
 	return T::Deserialize(source);
 }
 
-SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, string path_p, bool read_only, bool use_direct_io)
+SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, string path_p, StorageManagerOptions options)
     : BlockManager(BufferManager::GetBufferManager(db)), db(db), path(std::move(path_p)),
       header_buffer(Allocator::Get(db), FileBufferType::MANAGED_BUFFER,
                     Storage::FILE_HEADER_SIZE - Storage::BLOCK_HEADER_SIZE),
-      iteration_count(0), read_only(read_only), use_direct_io(use_direct_io) {
+      iteration_count(0), options(options) {
 }
 
 void SingleFileBlockManager::GetFileFlags(uint8_t &flags, FileLockType &lock, bool create_new) {
-	if (read_only) {
+	if (options.read_only) {
 		D_ASSERT(!create_new);
 		flags = FileFlags::FILE_FLAGS_READ;
 		lock = FileLockType::READ_LOCK;
@@ -126,7 +126,7 @@ void SingleFileBlockManager::GetFileFlags(uint8_t &flags, FileLockType &lock, bo
 			flags |= FileFlags::FILE_FLAGS_FILE_CREATE;
 		}
 	}
-	if (use_direct_io) {
+	if (options.use_direct_io) {
 		flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
 	}
 }
@@ -241,7 +241,7 @@ void SingleFileBlockManager::Initialize(DatabaseHeader &header) {
 }
 
 void SingleFileBlockManager::LoadFreeList() {
-	if (read_only) {
+	if (options.read_only) {
 		// no need to load free list for read only db
 		return;
 	}
@@ -343,13 +343,20 @@ idx_t SingleFileBlockManager::FreeBlocks() {
 	return free_list.size();
 }
 
+unique_ptr<Block> SingleFileBlockManager::ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) {
+	D_ASSERT(source_buffer.AllocSize() == Storage::BLOCK_ALLOC_SIZE);
+	return make_uniq<Block>(source_buffer, block_id);
+}
+
 unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileBuffer *source_buffer) {
+	unique_ptr<Block> result;
 	if (source_buffer) {
-		D_ASSERT(source_buffer->AllocSize() == Storage::BLOCK_ALLOC_SIZE);
-		return make_uniq<Block>(*source_buffer, block_id);
+		result = ConvertBlock(block_id, *source_buffer);
 	} else {
-		return make_uniq<Block>(Allocator::Get(db), block_id);
+		result = make_uniq<Block>(Allocator::Get(db), block_id);
 	}
+	result->Initialize(options.debug_initialize);
+	return result;
 }
 
 void SingleFileBlockManager::Read(Block &block) {
@@ -459,7 +466,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 		throw FatalException("Checkpoint aborted after free list write because of PRAGMA checkpoint_abort flag");
 	}
 
-	if (!use_direct_io) {
+	if (!options.use_direct_io) {
 		// if we are not using Direct IO we need to fsync BEFORE we write the header to ensure that all the previous
 		// blocks are written as well
 		handle->Sync();

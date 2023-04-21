@@ -3,6 +3,9 @@
 # group: [order]
 
 statement ok
+SET default_null_order='nulls_first';
+
+statement ok
 PRAGMA verify_parallelism
 
 # we run this with an uneven amount of threads to force the merge sort to have an odd amount of blocks to merge

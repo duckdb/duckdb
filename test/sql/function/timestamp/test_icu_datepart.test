@@ -2,6 +2,9 @@
 # description: Test moving ICU date part functions
 # group: [timestamp]
 
+statement ok
+SET default_null_order='nulls_first';
+
 require icu
 
 # Normalise the testing locale

@@ -29,9 +29,9 @@ PRAGMA wal_autocheckpoint='1TB';
 query II
 SELECT a, b FROM test ORDER BY a
 ----
-NULL	hello
 12	NULL
 13	abcdefgh
+NULL	hello
 
 statement error
 CREATE TABLE test (a INTEGER, b STRING);
