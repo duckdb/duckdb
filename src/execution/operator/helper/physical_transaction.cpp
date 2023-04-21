@@ -4,8 +4,7 @@
 
 namespace duckdb {
 
-void PhysicalTransaction::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                                  LocalSourceState &lstate) const {
+SourceResultType PhysicalTransaction::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
 	auto &client = context.client;
 
 	auto type = info->type;
@@ -48,6 +47,8 @@ void PhysicalTransaction::GetData(ExecutionContext &context, DataChunk &chunk, G
 	default:
 		throw NotImplementedException("Unrecognized transaction type!");
 	}
+
+	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 } // namespace duckdb

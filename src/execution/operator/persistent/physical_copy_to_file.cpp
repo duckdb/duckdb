@@ -241,17 +241,18 @@ unique_ptr<GlobalSourceState> PhysicalCopyToFile::GetGlobalSourceState(ClientCon
 	return make_uniq<CopyToFileState>();
 }
 
-void PhysicalCopyToFile::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                                 LocalSourceState &lstate) const {
-	auto &state = (CopyToFileState &)gstate;
+SourceResultType PhysicalCopyToFile::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+	auto &state = (CopyToFileState &)input.global_state;
 	auto &g = sink_state->Cast<CopyToFunctionGlobalState>();
 	if (state.finished) {
-		return;
+		return SourceResultType::FINISHED;
 	}
 
 	chunk.SetCardinality(1);
 	chunk.SetValue(0, 0, Value::BIGINT(g.rows_copied));
 	state.finished = true;
+
+	return SourceResultType::FINISHED;
 }
 
 } // namespace duckdb

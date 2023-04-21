@@ -28,15 +28,16 @@ unique_ptr<GlobalSourceState> PhysicalCreateTable::GetGlobalSourceState(ClientCo
 	return make_uniq<CreateTableSourceState>();
 }
 
-void PhysicalCreateTable::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                                  LocalSourceState &lstate) const {
-	auto &state = gstate.Cast<CreateTableSourceState>();
+SourceResultType PhysicalCreateTable::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+	auto &state = input.global_state.Cast<CreateTableSourceState>();
 	if (state.finished) {
-		return;
+		return SourceResultType::FINISHED;
 	}
 	auto &catalog = *schema->catalog;
 	catalog.CreateTable(catalog.GetCatalogTransaction(context.client), schema, info.get());
 	state.finished = true;
+
+	return SourceResultType::FINISHED;
 }
 
 } // namespace duckdb

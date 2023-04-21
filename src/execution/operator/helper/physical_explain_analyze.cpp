@@ -44,18 +44,19 @@ unique_ptr<GlobalSourceState> PhysicalExplainAnalyze::GetGlobalSourceState(Clien
 	return make_uniq<ExplainAnalyzeState>();
 }
 
-void PhysicalExplainAnalyze::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &source_state,
-                                     LocalSourceState &lstate) const {
-	auto &state = (ExplainAnalyzeState &)source_state;
+SourceResultType PhysicalExplainAnalyze::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+	auto &state = (ExplainAnalyzeState &)input.global_state;
 	auto &gstate = sink_state->Cast<ExplainAnalyzeStateGlobalState>();
 	if (state.finished) {
-		return;
+		return SourceResultType::FINISHED;
 	}
 	chunk.SetValue(0, 0, Value("analyzed_plan"));
 	chunk.SetValue(1, 0, Value(gstate.analyzed_plan));
 	chunk.SetCardinality(1);
 
 	state.finished = true;
+
+	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 } // namespace duckdb

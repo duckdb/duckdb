@@ -401,17 +401,17 @@ unique_ptr<GlobalSourceState> PhysicalBatchInsert::GetGlobalSourceState(ClientCo
 	return make_uniq<BatchInsertSourceState>();
 }
 
-void PhysicalBatchInsert::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                                  LocalSourceState &lstate) const {
-	auto &state = gstate.Cast<BatchInsertSourceState>();
+SourceResultType PhysicalBatchInsert::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+	auto &state = input.global_state.Cast<BatchInsertSourceState>();
 	auto &insert_gstate = sink_state->Cast<BatchInsertGlobalState>();
 	if (state.finished) {
-		return;
+		return SourceResultType::FINISHED;
 	}
 	chunk.SetCardinality(1);
 	chunk.SetValue(0, 0, Value::BIGINT(insert_gstate.insert_count));
 	state.finished = true;
-	return;
+
+	return SourceResultType::FINISHED;
 }
 
 } // namespace duckdb

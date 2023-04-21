@@ -579,10 +579,14 @@ public:
 				output_chunk.Reset();
 				group_chunk.Reset();
 				aggregate_input_chunk.Reset();
-				radix_table_p->GetData(temp_exec_context, output_chunk, *state.radix_states[table_idx], *global_source,
-				                       *local_source);
 
-				if (output_chunk.size() == 0) {
+				InterruptState interrupt_state(context);
+				interrupt_state.allow_async = false;
+				OperatorSourceInput source_input {*global_source, *local_source, interrupt_state};
+				auto res = radix_table_p->GetData(temp_exec_context, output_chunk, *state.radix_states[table_idx], source_input);
+
+				if (res == SourceResultType::FINISHED) {
+					D_ASSERT(output_chunk.size() == 0);
 					break;
 				}
 
@@ -868,11 +872,10 @@ unique_ptr<LocalSourceState> PhysicalHashAggregate::GetLocalSourceState(Executio
 	return make_uniq<PhysicalHashAggregateLocalSourceState>(context, *this);
 }
 
-void PhysicalHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-                                    LocalSourceState &lstate_p) const {
+SourceResultType PhysicalHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
 	auto &sink_gstate = sink_state->Cast<HashAggregateGlobalState>();
-	auto &gstate = gstate_p.Cast<PhysicalHashAggregateGlobalSourceState>();
-	auto &lstate = lstate_p.Cast<PhysicalHashAggregateLocalSourceState>();
+	auto &gstate = input.global_state.Cast<PhysicalHashAggregateGlobalSourceState>();
+	auto &lstate = input.local_state.Cast<PhysicalHashAggregateLocalSourceState>();
 	while (true) {
 		idx_t radix_idx = gstate.state_index;
 		if (radix_idx >= groupings.size()) {
@@ -881,11 +884,20 @@ void PhysicalHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk,
 		auto &grouping = groupings[radix_idx];
 		auto &radix_table = grouping.table_data;
 		auto &grouping_gstate = sink_gstate.grouping_states[radix_idx];
-		radix_table.GetData(context, chunk, *grouping_gstate.table_state, *gstate.radix_states[radix_idx],
-		                    *lstate.radix_states[radix_idx]);
+
+		InterruptState interrupt_state(context.client);
+		OperatorSourceInput source_input {
+		    *gstate.radix_states[radix_idx],
+		    *lstate.radix_states[radix_idx],
+		    interrupt_state
+		};
+		auto res = radix_table.GetData(context, chunk, *grouping_gstate.table_state, source_input);
 		if (chunk.size() != 0) {
-			return;
+			return SourceResultType::HAVE_MORE_OUTPUT;
+		} else if (res == SourceResultType::BLOCKED) {
+			throw InternalException("Unexpectedly Blocked from radix_table");
 		}
+
 		// move to the next table
 		lock_guard<mutex> l(gstate.lock);
 		radix_idx++;
@@ -895,6 +907,8 @@ void PhysicalHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk,
 			gstate.state_index = radix_idx;
 		}
 	}
+
+	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 string PhysicalHashAggregate::ParamsToString() const {

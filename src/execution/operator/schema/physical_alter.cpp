@@ -19,15 +19,16 @@ unique_ptr<GlobalSourceState> PhysicalAlter::GetGlobalSourceState(ClientContext 
 	return make_uniq<AlterSourceState>();
 }
 
-void PhysicalAlter::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                            LocalSourceState &lstate) const {
-	auto &state = gstate.Cast<AlterSourceState>();
+SourceResultType PhysicalAlter::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+	auto &state = input.global_state.Cast<AlterSourceState>();
 	if (state.finished) {
-		return;
+		return SourceResultType::FINISHED;
 	}
 	auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
 	catalog.Alter(context.client, info.get());
 	state.finished = true;
+
+	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 } // namespace duckdb

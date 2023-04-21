@@ -2,11 +2,12 @@
 
 namespace duckdb {
 
-void PhysicalPragma::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-                             LocalSourceState &lstate) const {
+SourceResultType PhysicalPragma::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
 	auto &client = context.client;
 	FunctionParameters parameters {info.parameters, info.named_parameters};
 	function.function(client, parameters);
+
+	return SourceResultType::FINISHED;
 }
 
 } // namespace duckdb

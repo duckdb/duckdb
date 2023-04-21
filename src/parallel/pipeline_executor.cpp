@@ -5,7 +5,7 @@
 namespace duckdb {
 
 PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_p)
-    : pipeline(pipeline_p), thread(context_p), context(context_p, thread, &pipeline_p) {
+    : pipeline(pipeline_p), thread(context_p), context(context_p, thread, &pipeline_p), interrupt_state(context_p) {
 	D_ASSERT(pipeline.source_state);
 	local_source_state = pipeline.source->GetLocalSourceState(context, *pipeline.source_state);
 	if (pipeline.sink) {
@@ -121,14 +121,15 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 		} else if (!exhausted_source) {
 			// Regular fetch from source into pipeline
 			source_chunk.Reset();
-			FetchFromSource(source_chunk, true);
+			auto res = FetchFromSource(source_chunk, true);
 
 			// SOURCE INTERRUPT
-			if(interrupt_state.result != InterruptResultType::NO_INTERRUPT) {
+			if(res == SourceResultType::BLOCKED) {
+				throw InternalException("Should currently not happen : for testing");
 				return PipelineExecuteResult::INTERRUPTED;
 			}
-
 			if (source_chunk.size() == 0) {
+				D_ASSERT(res == SourceResultType::FINISHED);
 				exhausted_source = true;
 				continue;
 			}
@@ -250,9 +251,10 @@ void PipelineExecutor::ExecutePull(DataChunk &result) {
 
 				// TODO: here we currently force having a sync and an async implementation initially, we may want to
 				//		 switch to a busy wait for the async variant so both are fine?
-				FetchFromSource(source_chunk, false);
+				auto res = FetchFromSource(source_chunk, false);
 
 				if (source_chunk.size() == 0) {
+//					D_ASSERT(res == SourceResultType::FINISHED);
 					break;
 				}
 			}
@@ -379,19 +381,15 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 	return in_process_operators.empty() ? OperatorResultType::NEED_MORE_INPUT : OperatorResultType::HAVE_MORE_OUTPUT;
 }
 
-void PipelineExecutor::FetchFromSource(DataChunk &result, bool allow_async) {
+SourceResultType PipelineExecutor::FetchFromSource(DataChunk &result, bool allow_async) {
 	StartOperator(pipeline.source);
 
 	interrupt_state.Reset(); // TODO Do we need to reset this every time? or can we actually guarantee its reset here?
-
-	if (allow_async) {
-		pipeline.source->GetData(context, result, *pipeline.source_state, *local_source_state, interrupt_state);
-
-		// Safety check that we don't interrupt + return data;
-		D_ASSERT(interrupt_state.result == InterruptResultType::NO_INTERRUPT || result.size() == 0);
-	} else {
-		pipeline.source->GetData(context, result, *pipeline.source_state, *local_source_state);
-	}
+	interrupt_state.allow_async = allow_async;
+	OperatorSourceInput source_input = { *pipeline.source_state, *local_source_state, interrupt_state };
+	auto res = pipeline.source->GetData(context, result, source_input);
+	D_ASSERT(res != SourceResultType::BLOCKED || result.size() == 0);
+	D_ASSERT(res != SourceResultType::FINISHED || result.size() == 0);
 
 	if (result.size() != 0 && requires_batch_index) {
 		auto next_batch_index =
@@ -404,6 +402,8 @@ void PipelineExecutor::FetchFromSource(DataChunk &result, bool allow_async) {
 
 	// TODO: how to handle the profiler when a pipeline was interrupted?
 	EndOperator(pipeline.source, &result);
+
+	return res;
 }
 
 void PipelineExecutor::InitializeChunk(DataChunk &chunk) {

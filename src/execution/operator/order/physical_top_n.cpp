@@ -480,12 +480,11 @@ unique_ptr<GlobalSourceState> PhysicalTopN::GetGlobalSourceState(ClientContext &
 	return make_uniq<TopNOperatorState>();
 }
 
-void PhysicalTopN::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-                           LocalSourceState &lstate) const {
+SourceResultType PhysicalTopN::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
 	if (limit == 0) {
-		return;
+		return SourceResultType::FINISHED;
 	}
-	auto &state = gstate_p.Cast<TopNOperatorState>();
+	auto &state = input.global_state.Cast<TopNOperatorState>();
 	auto &gstate = sink_state->Cast<TopNGlobalState>();
 
 	if (!state.initialized) {
@@ -493,6 +492,8 @@ void PhysicalTopN::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSo
 		state.initialized = true;
 	}
 	gstate.heap.Scan(state.state, chunk);
+
+	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 string PhysicalTopN::ParamsToString() const {

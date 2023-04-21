@@ -82,9 +82,9 @@ SinkFinalizeType PhysicalVacuum::Finalize(Pipeline &pipeline, Event &event, Clie
 	return SinkFinalizeType::READY;
 }
 
-void PhysicalVacuum::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                             LocalSourceState &lstate) const {
+SourceResultType PhysicalVacuum::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
 	// NOP
+	return SourceResultType::FINISHED;
 }
 
 } // namespace duckdb

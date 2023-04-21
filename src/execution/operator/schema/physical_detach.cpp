@@ -23,15 +23,16 @@ unique_ptr<GlobalSourceState> PhysicalDetach::GetGlobalSourceState(ClientContext
 	return make_uniq<DetachSourceState>();
 }
 
-void PhysicalDetach::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                             LocalSourceState &lstate) const {
-	auto &state = gstate.Cast<DetachSourceState>();
+SourceResultType PhysicalDetach::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+	auto &state = input.global_state.Cast<DetachSourceState>();
 	if (state.finished) {
-		return;
+		return SourceResultType::FINISHED;
 	}
 	auto &db_manager = DatabaseManager::Get(context.client);
 	db_manager.DetachDatabase(context.client, info->name, info->if_exists);
 	state.finished = true;
+
+	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 } // namespace duckdb

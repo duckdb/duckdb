@@ -51,17 +51,18 @@ SinkResultType PhysicalReservoirSample::Sink(ExecutionContext &context, GlobalSi
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-void PhysicalReservoirSample::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                                      LocalSourceState &lstate) const {
+SourceResultType PhysicalReservoirSample::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
 	auto &sink = this->sink_state->Cast<SampleGlobalSinkState>();
 	if (!sink.sample) {
-		return;
+		return SourceResultType::FINISHED;
 	}
 	auto sample_chunk = sink.sample->GetChunk();
 	if (!sample_chunk) {
-		return;
+		return SourceResultType::FINISHED;
 	}
 	chunk.Move(*sample_chunk);
+
+	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 string PhysicalReservoirSample::ParamsToString() const {

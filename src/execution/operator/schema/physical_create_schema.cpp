@@ -18,11 +18,10 @@ unique_ptr<GlobalSourceState> PhysicalCreateSchema::GetGlobalSourceState(ClientC
 	return make_uniq<CreateSchemaSourceState>();
 }
 
-void PhysicalCreateSchema::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                                   LocalSourceState &lstate) const {
-	auto &state = gstate.Cast<CreateSchemaSourceState>();
+SourceResultType PhysicalCreateSchema::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+	auto &state = input.global_state.Cast<CreateSchemaSourceState>();
 	if (state.finished) {
-		return;
+		return SourceResultType::FINISHED;
 	}
 	auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
 	if (catalog.IsSystemCatalog()) {
@@ -30,6 +29,8 @@ void PhysicalCreateSchema::GetData(ExecutionContext &context, DataChunk &chunk, 
 	}
 	catalog.CreateSchema(context.client, info.get());
 	state.finished = true;
+
+	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 } // namespace duckdb

@@ -53,8 +53,7 @@ public:
 	idx_t Size(GlobalSinkState &sink_state) const;
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const;
 	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context) const;
-	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSinkState &sink_state, GlobalSourceState &gstate_p,
-	             LocalSourceState &lstate_p) const;
+	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, GlobalSinkState &sink_state, OperatorSourceInput &input) const;
 
 	static void SetMultiScan(GlobalSinkState &state);
 	bool ForceSingleHT(GlobalSinkState &state) const;

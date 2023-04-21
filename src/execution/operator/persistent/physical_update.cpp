@@ -168,21 +168,22 @@ unique_ptr<GlobalSourceState> PhysicalUpdate::GetGlobalSourceState(ClientContext
 	return make_uniq<UpdateSourceState>(*this);
 }
 
-void PhysicalUpdate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                             LocalSourceState &lstate) const {
-	auto &state = gstate.Cast<UpdateSourceState>();
+SourceResultType PhysicalUpdate::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+	auto &state = input.global_state.Cast<UpdateSourceState>();
 	auto &g = sink_state->Cast<UpdateGlobalState>();
 	if (state.finished) {
-		return;
+		return SourceResultType::FINISHED;
 	}
 	if (!return_chunk) {
 		chunk.SetCardinality(1);
 		chunk.SetValue(0, 0, Value::BIGINT(g.updated_count));
 		state.finished = true;
-		return;
+		return SourceResultType::HAVE_MORE_OUTPUT;
 	}
 
 	g.return_collection.Scan(state.scan_state, chunk);
+
+	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 } // namespace duckdb

@@ -27,6 +27,18 @@ class Pipeline;
 class PipelineBuildState;
 class MetaPipeline;
 
+struct OperatorSinkInput {
+	GlobalSinkState &gstate;
+	LocalSinkState &lstate;
+	InterruptState &istate;
+};
+
+struct OperatorSourceInput {
+	GlobalSourceState &global_state;
+	LocalSourceState &local_state;
+	InterruptState &interrupt_state;
+};
+
 //! PhysicalOperator is the base class of the physical operators present in the
 //! execution plan
 class PhysicalOperator {
@@ -104,12 +116,17 @@ public:
 	                                                         GlobalSourceState &gstate) const;
 	virtual unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const;
 
-	//! Regular GetData returns a single Chunk from the source.
-	virtual void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-	                     LocalSourceState &lstate) const;
-	//! Interruptable variant of GetData, this is what is actually called by the pipeline executor
-	virtual void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-	                     LocalSourceState &lstate, InterruptState& istate) const;
+//	//! Regular GetData returns a single Chunk from the source.
+//	virtual void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+//	                     LocalSourceState &lstate) const;
+//	//! Interruptable variant of GetData, this is what is actually called by the pipeline executor
+//
+//	//! TODO: Return enum to indicate blocking
+//	virtual void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+//	                     LocalSourceState &lstate, InterruptState& istate) const;
+
+	virtual SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const;
+
 	virtual idx_t GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	                            LocalSourceState &lstate) const;
 

@@ -78,8 +78,7 @@ SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, GlobalSinkS
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-void PhysicalRecursiveCTE::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-                                   LocalSourceState &lstate) const {
+SourceResultType PhysicalRecursiveCTE::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
 	auto &gstate = sink_state->Cast<RecursiveCTEState>();
 	if (!gstate.initialized) {
 		gstate.intermediate_table.InitializeScan(gstate.scan_state);
@@ -117,6 +116,8 @@ void PhysicalRecursiveCTE::GetData(ExecutionContext &context, DataChunk &chunk, 
 			gstate.intermediate_table.InitializeScan(gstate.scan_state);
 		}
 	}
+
+	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) const {

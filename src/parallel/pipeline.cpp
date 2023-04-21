@@ -45,7 +45,6 @@ public:
 			case PipelineExecuteResult::NOT_FINISHED:
 				return TaskExecutionResult::TASK_NOT_FINISHED;
 			case PipelineExecuteResult::INTERRUPTED:
-				interrupt_state = pipeline_executor->GetInterruptState();
 				return TaskExecutionResult::TASK_BLOCKED;
 			case PipelineExecuteResult::FINISHED:
 				break;
@@ -56,7 +55,6 @@ public:
 			case PipelineExecuteResult::NOT_FINISHED:
 				throw InternalException("Execute without limit should not return NOT_FINISHED");
 			case PipelineExecuteResult::INTERRUPTED:
-				interrupt_state = pipeline_executor->GetInterruptState();
 				return TaskExecutionResult::TASK_BLOCKED;
 			case PipelineExecuteResult::FINISHED:
 				break;

@@ -851,11 +851,10 @@ void HashJoinLocalSourceState::ScanFullOuter(HashJoinGlobalSinkState &sink, Hash
 	full_outer_in_progress = scanned;
 }
 
-void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-                               LocalSourceState &lstate_p) const {
+SourceResultType PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
 	auto &sink = sink_state->Cast<HashJoinGlobalSinkState>();
-	auto &gstate = gstate_p.Cast<HashJoinGlobalSourceState>();
-	auto &lstate = lstate_p.Cast<HashJoinLocalSourceState>();
+	auto &gstate = input.global_state.Cast<HashJoinGlobalSourceState>();
+	auto &lstate = input.local_state.Cast<HashJoinLocalSourceState>();
 	sink.scanned_data = true;
 
 	if (!sink.external) {
@@ -866,7 +865,7 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 			}
 			sink.hash_table->GatherFullOuter(chunk, lstate.addresses, lstate.full_outer_found_entries);
 		}
-		return;
+		return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 	}
 
 	D_ASSERT(can_go_external);
@@ -883,6 +882,8 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 			gstate.TryPrepareNextStage(sink);
 		}
 	}
+
+	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 } // namespace duckdb

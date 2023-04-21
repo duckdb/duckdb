@@ -473,21 +473,21 @@ unique_ptr<GlobalSourceState> PhysicalInsert::GetGlobalSourceState(ClientContext
 	return make_uniq<InsertSourceState>(*this);
 }
 
-void PhysicalInsert::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                             LocalSourceState &lstate) const {
-	auto &state = gstate.Cast<InsertSourceState>();
+SourceResultType PhysicalInsert::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+	auto &state = input.global_state.Cast<InsertSourceState>();
 	auto &insert_gstate = sink_state->Cast<InsertGlobalState>();
 	if (state.finished) {
-		return;
+		return SourceResultType::FINISHED;
 	}
 	if (!return_chunk) {
 		chunk.SetCardinality(1);
 		chunk.SetValue(0, 0, Value::BIGINT(insert_gstate.insert_count));
 		state.finished = true;
-		return;
+		return SourceResultType::HAVE_MORE_OUTPUT;
 	}
 
 	insert_gstate.return_collection.Scan(state.scan_state, chunk);
+	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 } // namespace duckdb

@@ -35,29 +35,33 @@ enum class InterruptResultType {
 //! State that is passed to the asynchronous callback that signals task can be rescheduled
 struct InterruptCallbackState {
 	weak_ptr<Task> current_task;
-	weak_ptr<DatabaseInstance> db;
+	weak_ptr<DatabaseInstance> db; // TODO: remove?
 };
 
 //! State of an interrupt, allows the interrupting code to specify how the interrupt should be handled
 struct InterruptState {
+	InterruptState(ClientContext& context);
 	InterruptResultType result = InterruptResultType::NO_INTERRUPT;
 
 	void Reset() {
 		result = InterruptResultType::NO_INTERRUPT;
+		allow_async = true;
 	}
 
 	void SetInterruptCallback() {
 		result = InterruptResultType::CALLBACK;
 	}
 
-	//! Get the callbackstate required to make the interrupt callback,
-	InterruptCallbackState GetCallbackState(ClientContext& context);
+	//! Get the state required
+	InterruptCallbackState GetCallbackState();
 
 	//! Make the interrupt callback, signals that the task from which the callback state was generated is ready to be
 	//! rescheduled
 	static void Callback(InterruptCallbackState callback_state);
 
 	weak_ptr<Task> current_task;
+	ClientContext& context;
+	bool allow_async = true;
 };
 
 //! Generic parallel task
@@ -83,10 +87,6 @@ public:
 	virtual void Reschedule() {
 		throw InternalException("Cannot reschedule task of base Task class");
 	}
-
-	//! While a task is running, it may set its interrupt state indicating to the scheduler how it wants to be handled
-	//! after returning a TaskExecutionResult::TASK_BLOCKED
-	InterruptState interrupt_state;
 };
 
 //! Execute a task within an executor, including exception handling

@@ -184,12 +184,17 @@ unique_ptr<GlobalSourceState> PhysicalPerfectHashAggregate::GetGlobalSourceState
 	return make_uniq<PerfectHashAggregateState>();
 }
 
-void PhysicalPerfectHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-                                           LocalSourceState &lstate) const {
-	auto &state = (PerfectHashAggregateState &)gstate_p;
+SourceResultType PhysicalPerfectHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+	auto &state = (PerfectHashAggregateState &)input.global_state;
 	auto &gstate = sink_state->Cast<PerfectHashAggregateGlobalState>();
 
 	gstate.ht->Scan(state.ht_scan_position, chunk);
+
+	if (chunk.size() > 0) {
+		return SourceResultType::HAVE_MORE_OUTPUT;
+	} else {
+		return SourceResultType::FINISHED;
+	}
 }
 
 string PhysicalPerfectHashAggregate::ParamsToString() const {

@@ -20,15 +20,16 @@ unique_ptr<GlobalSourceState> PhysicalCreateFunction::GetGlobalSourceState(Clien
 	return make_uniq<CreateFunctionSourceState>();
 }
 
-void PhysicalCreateFunction::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                                     LocalSourceState &lstate) const {
-	auto &state = gstate.Cast<CreateFunctionSourceState>();
+SourceResultType PhysicalCreateFunction::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+	auto &state = input.global_state.Cast<CreateFunctionSourceState>();
 	if (state.finished) {
-		return;
+		return SourceResultType::FINISHED;
 	}
 	auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
 	catalog.CreateFunction(context.client, info.get());
 	state.finished = true;
+
+	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 } // namespace duckdb

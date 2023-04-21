@@ -72,11 +72,10 @@ unique_ptr<GlobalSourceState> PhysicalCreateType::GetGlobalSourceState(ClientCon
 	return make_uniq<CreateTypeSourceState>();
 }
 
-void PhysicalCreateType::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                                 LocalSourceState &lstate) const {
-	auto &state = gstate.Cast<CreateTypeSourceState>();
+SourceResultType PhysicalCreateType::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+	auto &state = input.global_state.Cast<CreateTypeSourceState>();
 	if (state.finished) {
-		return;
+		return SourceResultType::FINISHED;
 	}
 
 	if (IsSink()) {
@@ -91,6 +90,8 @@ void PhysicalCreateType::GetData(ExecutionContext &context, DataChunk &chunk, Gl
 	auto catalog_type = (TypeCatalogEntry *)catalog_entry;
 	LogicalType::SetCatalog(info->type, catalog_type);
 	state.finished = true;
+
+	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 } // namespace duckdb

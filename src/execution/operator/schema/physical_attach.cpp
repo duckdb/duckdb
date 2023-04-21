@@ -24,11 +24,10 @@ unique_ptr<GlobalSourceState> PhysicalAttach::GetGlobalSourceState(ClientContext
 	return make_uniq<AttachSourceState>();
 }
 
-void PhysicalAttach::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                             LocalSourceState &lstate) const {
-	auto &state = gstate.Cast<AttachSourceState>();
+SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+	auto &state = input.global_state.Cast<AttachSourceState>();
 	if (state.finished) {
-		return;
+		return SourceResultType::FINISHED;
 	}
 	// parse the options
 	auto &config = DBConfig::GetConfig(context.client);
@@ -92,6 +91,8 @@ void PhysicalAttach::GetData(ExecutionContext &context, DataChunk &chunk, Global
 
 	db_manager.AddDatabase(context.client, std::move(new_db));
 	state.finished = true;
+
+	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 } // namespace duckdb

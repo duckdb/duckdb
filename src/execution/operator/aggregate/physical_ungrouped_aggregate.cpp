@@ -396,10 +396,15 @@ public:
 			//! Retrieve the stored data from the hashtable
 			while (true) {
 				output_chunk.Reset();
-				radix_table_p->GetData(temp_exec_context, output_chunk, *distinct_state.radix_states[table_idx],
-				                       *global_source_state, *local_source_state);
-				if (output_chunk.size() == 0) {
+
+				InterruptState istate(context);
+				OperatorSourceInput source_input { *global_source_state, *local_source_state, istate };
+				auto res = radix_table_p->GetData(temp_exec_context, output_chunk, *distinct_state.radix_states[table_idx], source_input);
+				if (res == SourceResultType::FINISHED) {
+					D_ASSERT(output_chunk.size() == 0);
 					break;
+				} else if (res == SourceResultType::BLOCKED) {
+					throw InternalException("Unexpected interrupt in radix table scan");
 				}
 
 				// We dont need to resolve the filter, we already did this in Sink
@@ -559,13 +564,12 @@ void VerifyNullHandling(DataChunk &chunk, AggregateState &state, const vector<un
 #endif
 }
 
-void PhysicalUngroupedAggregate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-                                         LocalSourceState &lstate) const {
+SourceResultType PhysicalUngroupedAggregate::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
 	auto &gstate = sink_state->Cast<UngroupedAggregateGlobalState>();
-	auto &state = (UngroupedAggregateState &)gstate_p;
+	auto &state = (UngroupedAggregateState &)input.global_state;
 	D_ASSERT(gstate.finished);
 	if (state.finished) {
-		return;
+		return SourceResultType::FINISHED;
 	}
 
 	// initialize the result chunk with the aggregate values
@@ -579,6 +583,8 @@ void PhysicalUngroupedAggregate::GetData(ExecutionContext &context, DataChunk &c
 	}
 	VerifyNullHandling(chunk, gstate.state, aggregates);
 	state.finished = true;
+
+	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 string PhysicalUngroupedAggregate::ParamsToString() const {

@@ -677,19 +677,18 @@ unique_ptr<GlobalSourceState> PhysicalPiecewiseMergeJoin::GetGlobalSourceState(C
 	return make_uniq<PiecewiseJoinScanState>(*this);
 }
 
-void PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, DataChunk &result, GlobalSourceState &gstate,
-                                         LocalSourceState &lstate) const {
+SourceResultType PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, DataChunk &result, OperatorSourceInput &input) const {
 	D_ASSERT(IsRightOuterJoin(join_type));
 	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
 	auto &sink = sink_state->Cast<MergeJoinGlobalState>();
-	auto &state = (PiecewiseJoinScanState &)gstate;
+	auto &state = (PiecewiseJoinScanState &)input.global_state;
 
 	lock_guard<mutex> l(state.lock);
 	if (!state.scanner) {
 		// Initialize scanner (if not yet initialized)
 		auto &sort_state = sink.table->global_sort_state;
 		if (sort_state.sorted_blocks.empty()) {
-			return;
+			return SourceResultType::FINISHED;
 		}
 		state.scanner = make_uniq<PayloadScanner>(*sort_state.sorted_blocks[0]->payload_data, sort_state);
 	}
@@ -707,7 +706,7 @@ void PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, DataChunk &r
 
 		const auto count = rhs_chunk.size();
 		if (count == 0) {
-			return;
+			return result.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 		}
 
 		idx_t result_count = 0;
@@ -732,9 +731,11 @@ void PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, DataChunk &r
 				result.data[left_column_count + col_idx].Slice(rhs_chunk.data[col_idx], rsel, result_count);
 			}
 			result.SetCardinality(result_count);
-			return;
+			break;
 		}
 	}
+
+	return result.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 } // namespace duckdb

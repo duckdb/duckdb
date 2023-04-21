@@ -146,10 +146,9 @@ unique_ptr<GlobalSourceState> PhysicalLimit::GetGlobalSourceState(ClientContext 
 	return make_uniq<LimitSourceState>();
 }
 
-void PhysicalLimit::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-                            LocalSourceState &lstate) const {
+SourceResultType PhysicalLimit::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
 	auto &gstate = sink_state->Cast<LimitGlobalState>();
-	auto &state = gstate_p.Cast<LimitSourceState>();
+	auto &state = input.global_state.Cast<LimitSourceState>();
 	while (state.current_offset < gstate.limit + gstate.offset) {
 		if (!state.initialized) {
 			gstate.data.InitializeScan(state.scan_state);
@@ -157,12 +156,14 @@ void PhysicalLimit::GetData(ExecutionContext &context, DataChunk &chunk, GlobalS
 		}
 		gstate.data.Scan(state.scan_state, chunk);
 		if (chunk.size() == 0) {
-			break;
+			return SourceResultType::FINISHED;
 		}
 		if (HandleOffset(chunk, state.current_offset, gstate.offset, gstate.limit)) {
 			break;
 		}
 	}
+
+	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 bool PhysicalLimit::HandleOffset(DataChunk &input, idx_t &current_offset, idx_t offset, idx_t limit) {

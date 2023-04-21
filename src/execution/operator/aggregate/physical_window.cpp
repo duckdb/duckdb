@@ -1223,11 +1223,10 @@ unique_ptr<GlobalSourceState> PhysicalWindow::GetGlobalSourceState(ClientContext
 	return make_uniq<WindowGlobalSourceState>(gsink);
 }
 
-void PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-                             LocalSourceState &lstate_p) const {
-	auto &lsource = lstate_p.Cast<WindowLocalSourceState>();
+SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+	auto &lsource = input.local_state.Cast<WindowLocalSourceState>();
 	auto &lpsource = lsource.partition_source;
-	auto &gsource = gstate_p.Cast<WindowGlobalSourceState>();
+	auto &gsource = input.global_state.Cast<WindowGlobalSourceState>();
 	auto &gpsource = gsource.partition_source;
 	auto &gsink = sink_state->Cast<WindowGlobalSinkState>();
 
@@ -1243,7 +1242,7 @@ void PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk, Global
 			lpsource.hash_group.reset();
 			auto hash_bin = gpsource.next_bin++;
 			if (hash_bin >= bin_count) {
-				return;
+				return chunk.size() > 0 ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED;
 			}
 
 			for (; hash_bin < hash_groups.size(); hash_bin = gpsource.next_bin++) {
@@ -1256,6 +1255,8 @@ void PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk, Global
 
 		lsource.Scan(chunk);
 	}
+
+	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 string PhysicalWindow::ParamsToString() const {

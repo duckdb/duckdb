@@ -26,8 +26,11 @@ void ExecutorTask::Reschedule() {
 	executor.RescheduleTask(shared_from_this());
 };
 
-InterruptCallbackState InterruptState::GetCallbackState(ClientContext& context) {
+InterruptState::InterruptState(ClientContext &context) : context(context) {}
+
+InterruptCallbackState InterruptState::GetCallbackState() {
 	result = InterruptResultType::CALLBACK;
+	throw InternalException("NO CALLBACKS FOR TESTING");
 	return {current_task, context.db};
 }
 
@@ -36,7 +39,10 @@ void InterruptState::Callback(InterruptCallbackState callback_state) {
 	auto db = callback_state.db.lock();
 	auto task = callback_state.current_task.lock();
 
+	throw InternalException("NO CALLBACKS FOR TESTING");
+
 	if (!db || !task) {
+		throw InternalException("NO TASK OR DB");
 		return;
 	}
 

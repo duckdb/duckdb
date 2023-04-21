@@ -23,11 +23,10 @@ unique_ptr<GlobalSourceState> PhysicalDrop::GetGlobalSourceState(ClientContext &
 	return make_uniq<DropSourceState>();
 }
 
-void PhysicalDrop::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                           LocalSourceState &lstate) const {
-	auto &state = gstate.Cast<DropSourceState>();
+SourceResultType PhysicalDrop::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+	auto &state = input.global_state.Cast<DropSourceState>();
 	if (state.finished) {
-		return;
+		return SourceResultType::FINISHED;
 	}
 	switch (info->type) {
 	case CatalogType::PREPARED_STATEMENT: {
@@ -63,6 +62,8 @@ void PhysicalDrop::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSo
 	}
 	}
 	state.finished = true;
+
+	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 } // namespace duckdb

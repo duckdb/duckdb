@@ -160,9 +160,8 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 // Source
 //===--------------------------------------------------------------------===//
 
-void PhysicalCreateIndex::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                                  LocalSourceState &lstate) const {
-	// NOP
+SourceResultType PhysicalCreateIndex::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+	return SourceResultType::FINISHED;
 }
 
 } // namespace duckdb
