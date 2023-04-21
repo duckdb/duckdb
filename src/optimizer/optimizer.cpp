@@ -76,7 +76,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	this->plan = std::move(plan_p);
 	
 	RunOptimizer(OptimizerType::CASCADE, [&]() {
-		CEngine cascade(context);
+		Cascade cascade(context);
 		plan = cascade.Optimize(std::move(plan));
 	});
 	// first we perform expression rewrites using the ExpressionRewriter
