@@ -120,66 +120,66 @@ unique_ptr<BaseStatistics> DuckTableEntry::GetStatistics(ClientContext &context,
 	return storage->GetStatistics(context, column.StorageOid());
 }
 
-unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, AlterInfo *info) {
+unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, AlterInfo &info) {
 	D_ASSERT(!internal);
-	if (info->type != AlterType::ALTER_TABLE) {
+	if (info.type != AlterType::ALTER_TABLE) {
 		throw CatalogException("Can only modify table with ALTER TABLE statement");
 	}
-	auto table_info = (AlterTableInfo *)info;
-	switch (table_info->alter_table_type) {
+	auto &table_info = info.Cast<AlterTableInfo>();
+	switch (table_info.alter_table_type) {
 	case AlterTableType::RENAME_COLUMN: {
-		auto rename_info = (RenameColumnInfo *)table_info;
-		return RenameColumn(context, *rename_info);
+		auto &rename_info = table_info.Cast<RenameColumnInfo>();
+		return RenameColumn(context, rename_info);
 	}
 	case AlterTableType::RENAME_TABLE: {
-		auto rename_info = (RenameTableInfo *)table_info;
+		auto &rename_info = table_info.Cast<RenameTableInfo>();
 		auto copied_table = Copy(context);
-		copied_table->name = rename_info->new_table_name;
-		storage->info->table = rename_info->new_table_name;
+		copied_table->name = rename_info.new_table_name;
+		storage->info->table = rename_info.new_table_name;
 		return copied_table;
 	}
 	case AlterTableType::ADD_COLUMN: {
-		auto add_info = (AddColumnInfo *)table_info;
-		return AddColumn(context, *add_info);
+		auto &add_info = table_info.Cast<AddColumnInfo>();
+		return AddColumn(context, add_info);
 	}
 	case AlterTableType::REMOVE_COLUMN: {
-		auto remove_info = (RemoveColumnInfo *)table_info;
-		return RemoveColumn(context, *remove_info);
+		auto &remove_info = table_info.Cast<RemoveColumnInfo>();
+		return RemoveColumn(context, remove_info);
 	}
 	case AlterTableType::SET_DEFAULT: {
-		auto set_default_info = (SetDefaultInfo *)table_info;
-		return SetDefault(context, *set_default_info);
+		auto &set_default_info = table_info.Cast<SetDefaultInfo>();
+		return SetDefault(context, set_default_info);
 	}
 	case AlterTableType::ALTER_COLUMN_TYPE: {
-		auto change_type_info = (ChangeColumnTypeInfo *)table_info;
-		return ChangeColumnType(context, *change_type_info);
+		auto &change_type_info = table_info.Cast<ChangeColumnTypeInfo>();
+		return ChangeColumnType(context, change_type_info);
 	}
 	case AlterTableType::FOREIGN_KEY_CONSTRAINT: {
-		auto foreign_key_constraint_info = (AlterForeignKeyInfo *)table_info;
-		if (foreign_key_constraint_info->type == AlterForeignKeyType::AFT_ADD) {
-			return AddForeignKeyConstraint(context, *foreign_key_constraint_info);
+		auto &foreign_key_constraint_info = table_info.Cast<AlterForeignKeyInfo>();
+		if (foreign_key_constraint_info.type == AlterForeignKeyType::AFT_ADD) {
+			return AddForeignKeyConstraint(context, foreign_key_constraint_info);
 		} else {
-			return DropForeignKeyConstraint(context, *foreign_key_constraint_info);
+			return DropForeignKeyConstraint(context, foreign_key_constraint_info);
 		}
 	}
 	case AlterTableType::SET_NOT_NULL: {
-		auto set_not_null_info = (SetNotNullInfo *)table_info;
-		return SetNotNull(context, *set_not_null_info);
+		auto &set_not_null_info = table_info.Cast<SetNotNullInfo>();
+		return SetNotNull(context, set_not_null_info);
 	}
 	case AlterTableType::DROP_NOT_NULL: {
-		auto drop_not_null_info = (DropNotNullInfo *)table_info;
-		return DropNotNull(context, *drop_not_null_info);
+		auto &drop_not_null_info = table_info.Cast<DropNotNullInfo>();
+		return DropNotNull(context, drop_not_null_info);
 	}
 	default:
 		throw InternalException("Unrecognized alter table type!");
 	}
 }
 
-void DuckTableEntry::UndoAlter(ClientContext &context, AlterInfo *info) {
+void DuckTableEntry::UndoAlter(ClientContext &context, AlterInfo &info) {
 	D_ASSERT(!internal);
-	D_ASSERT(info->type == AlterType::ALTER_TABLE);
-	auto table_info = (AlterTableInfo *)info;
-	switch (table_info->alter_table_type) {
+	D_ASSERT(info.type == AlterType::ALTER_TABLE);
+	auto &table_info = info.Cast<AlterTableInfo>();
+	switch (table_info.alter_table_type) {
 	case AlterTableType::RENAME_TABLE: {
 		storage->info->table = this->name;
 		break;

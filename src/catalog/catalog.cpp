@@ -298,15 +298,15 @@ struct CatalogEntryLookup {
 //===--------------------------------------------------------------------===//
 // Generic
 //===--------------------------------------------------------------------===//
-void Catalog::DropEntry(ClientContext &context, DropInfo *info) {
+void Catalog::DropEntry(ClientContext &context, DropInfo &info) {
 	ModifyCatalog();
-	if (info->type == CatalogType::SCHEMA_ENTRY) {
+	if (info.type == CatalogType::SCHEMA_ENTRY) {
 		// DROP SCHEMA
 		DropSchema(context, info);
 		return;
 	}
 
-	auto lookup = LookupEntry(context, info->type, info->schema, info->name, info->if_exists);
+	auto lookup = LookupEntry(context, info.type, info.schema, info.name, info.if_exists);
 	if (!lookup.Found()) {
 		return;
 	}
@@ -704,9 +704,9 @@ vector<reference<SchemaCatalogEntry>> Catalog::GetAllSchemas(ClientContext &cont
 	return result;
 }
 
-void Catalog::Alter(ClientContext &context, AlterInfo *info) {
+void Catalog::Alter(ClientContext &context, AlterInfo &info) {
 	ModifyCatalog();
-	auto lookup = LookupEntry(context, info->GetCatalogType(), info->schema, info->name, info->if_exists);
+	auto lookup = LookupEntry(context, info.GetCatalogType(), info.schema, info.name, info.if_exists);
 	if (!lookup.Found()) {
 		return;
 	}

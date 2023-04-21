@@ -16,11 +16,11 @@ void CatalogEntry::SetAsRoot() {
 }
 
 // LCOV_EXCL_START
-unique_ptr<CatalogEntry> CatalogEntry::AlterEntry(ClientContext &context, AlterInfo *info) {
+unique_ptr<CatalogEntry> CatalogEntry::AlterEntry(ClientContext &context, AlterInfo &info) {
 	throw InternalException("Unsupported alter type for catalog entry!");
 }
 
-void CatalogEntry::UndoAlter(ClientContext &context, AlterInfo *info) {
+void CatalogEntry::UndoAlter(ClientContext &context, AlterInfo &info) {
 }
 
 unique_ptr<CatalogEntry> CatalogEntry::Copy(ClientContext &context) const {

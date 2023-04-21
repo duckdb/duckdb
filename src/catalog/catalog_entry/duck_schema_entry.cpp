@@ -117,12 +117,12 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTable(CatalogTransaction trans
 	FindForeignKeyInformation(*entry, AlterForeignKeyType::AFT_ADD, fk_arrays);
 	for (idx_t i = 0; i < fk_arrays.size(); i++) {
 		// alter primary key table
-		AlterForeignKeyInfo *fk_info = fk_arrays[i].get();
+		auto &fk_info = *fk_arrays[i];
 		catalog->Alter(transaction.GetContext(), fk_info);
 
 		// make a dependency between this table and referenced table
 		auto &set = GetCatalogSet(CatalogType::TABLE_ENTRY);
-		info.dependencies.AddDependency(*set.GetEntry(transaction, fk_info->name));
+		info.dependencies.AddDependency(*set.GetEntry(transaction, fk_info.name));
 	}
 	return entry;
 }
@@ -135,7 +135,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateFunction(CatalogTransaction tr
 		if (current_entry) {
 			// the current entry exists - alter it instead
 			auto alter_info = info.GetAlterInfo();
-			Alter(transaction.GetContext(), alter_info.get());
+			Alter(transaction.GetContext(), *alter_info);
 			return nullptr;
 		}
 	}
@@ -223,16 +223,16 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreatePragmaFunction(CatalogTransact
 	return AddEntry(transaction, std::move(pragma_function), info.on_conflict);
 }
 
-void DuckSchemaEntry::Alter(ClientContext &context, AlterInfo *info) {
-	CatalogType type = info->GetCatalogType();
+void DuckSchemaEntry::Alter(ClientContext &context, AlterInfo &info) {
+	CatalogType type = info.GetCatalogType();
 	auto &set = GetCatalogSet(type);
 	auto transaction = GetCatalogTransaction(context);
-	if (info->type == AlterType::CHANGE_OWNERSHIP) {
-		if (!set.AlterOwnership(transaction, (ChangeOwnershipInfo *)info)) {
+	if (info.type == AlterType::CHANGE_OWNERSHIP) {
+		if (!set.AlterOwnership(transaction, info.Cast<ChangeOwnershipInfo>())) {
 			throw CatalogException("Couldn't change ownership!");
 		}
 	} else {
-		string name = info->name;
+		string name = info.name;
 		if (!set.AlterEntry(transaction, name, info)) {
 			throw CatalogException("Entry with name \"%s\" does not exist!", name);
 		}
@@ -250,32 +250,32 @@ void DuckSchemaEntry::Scan(CatalogType type, const std::function<void(CatalogEnt
 	set.Scan(callback);
 }
 
-void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo *info) {
-	auto &set = GetCatalogSet(info->type);
+void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
+	auto &set = GetCatalogSet(info.type);
 
 	// first find the entry
 	auto transaction = GetCatalogTransaction(context);
-	auto existing_entry = set.GetEntry(transaction, info->name);
+	auto existing_entry = set.GetEntry(transaction, info.name);
 	if (!existing_entry) {
-		throw InternalException("Failed to drop entry \"%s\" - entry could not be found", info->name);
+		throw InternalException("Failed to drop entry \"%s\" - entry could not be found", info.name);
 	}
-	if (existing_entry->type != info->type) {
-		throw CatalogException("Existing object %s is of type %s, trying to replace with type %s", info->name,
-		                       CatalogTypeToString(existing_entry->type), CatalogTypeToString(info->type));
+	if (existing_entry->type != info.type) {
+		throw CatalogException("Existing object %s is of type %s, trying to replace with type %s", info.name,
+		                       CatalogTypeToString(existing_entry->type), CatalogTypeToString(info.type));
 	}
 
 	// if there is a foreign key constraint, get that information
 	vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;
 	FindForeignKeyInformation(*existing_entry, AlterForeignKeyType::AFT_DELETE, fk_arrays);
 
-	if (!set.DropEntry(transaction, info->name, info->cascade, info->allow_drop_internal)) {
+	if (!set.DropEntry(transaction, info.name, info.cascade, info.allow_drop_internal)) {
 		throw InternalException("Could not drop element because of an internal error");
 	}
 
 	// remove the foreign key constraint in main key table if main key table's name is valid
 	for (idx_t i = 0; i < fk_arrays.size(); i++) {
 		// alter primary key table
-		catalog->Alter(context, fk_arrays[i].get());
+		catalog->Alter(context, *fk_arrays[i]);
 	}
 }
 

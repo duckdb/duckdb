@@ -8,16 +8,16 @@ ScalarFunctionCatalogEntry::ScalarFunctionCatalogEntry(Catalog *catalog, SchemaC
     : StandardEntry(CatalogType::SCALAR_FUNCTION_ENTRY, schema, catalog, info->name), functions(info->functions) {
 }
 
-unique_ptr<CatalogEntry> ScalarFunctionCatalogEntry::AlterEntry(ClientContext &context, AlterInfo *info) {
-	if (info->type != AlterType::ALTER_SCALAR_FUNCTION) {
+unique_ptr<CatalogEntry> ScalarFunctionCatalogEntry::AlterEntry(ClientContext &context, AlterInfo &info) {
+	if (info.type != AlterType::ALTER_SCALAR_FUNCTION) {
 		throw InternalException("Attempting to alter ScalarFunctionCatalogEntry with unsupported alter type");
 	}
-	auto &function_info = (AlterScalarFunctionInfo &)*info;
+	auto &function_info = info.Cast<AlterScalarFunctionInfo>();
 	if (function_info.alter_scalar_function_type != AlterScalarFunctionType::ADD_FUNCTION_OVERLOADS) {
 		throw InternalException(
 		    "Attempting to alter ScalarFunctionCatalogEntry with unsupported alter scalar function type");
 	}
-	auto &add_overloads = (AddScalarFunctionOverloadInfo &)function_info;
+	auto &add_overloads = function_info.Cast<AddScalarFunctionOverloadInfo>();
 
 	ScalarFunctionSet new_set = functions;
 	if (!new_set.MergeFunctionSet(add_overloads.new_overloads)) {

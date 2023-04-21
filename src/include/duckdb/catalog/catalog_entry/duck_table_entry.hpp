@@ -20,8 +20,8 @@ public:
 	               std::shared_ptr<DataTable> inherited_storage = nullptr);
 
 public:
-	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info) override;
-	void UndoAlter(ClientContext &context, AlterInfo *info) override;
+	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo &info) override;
+	void UndoAlter(ClientContext &context, AlterInfo &info) override;
 	//! Returns the underlying storage of the table
 	DataTable &GetStorage() override;
 	//! Returns a list of the bound constraints of the table

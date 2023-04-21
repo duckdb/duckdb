@@ -79,7 +79,7 @@ public:
 	DUCKDB_API bool CreateEntry(ClientContext &context, const string &name, unique_ptr<CatalogEntry> value,
 	                            DependencyList &dependencies);
 
-	DUCKDB_API bool AlterEntry(CatalogTransaction transaction, const string &name, AlterInfo *alter_info);
+	DUCKDB_API bool AlterEntry(CatalogTransaction transaction, const string &name, AlterInfo &alter_info);
 
 	DUCKDB_API bool DropEntry(CatalogTransaction transaction, const string &name, bool cascade,
 	                          bool allow_drop_internal = false);
@@ -88,7 +88,7 @@ public:
 
 	DUCKDB_API DuckCatalog &GetCatalog();
 
-	bool AlterOwnership(CatalogTransaction transaction, ChangeOwnershipInfo *info);
+	bool AlterOwnership(CatalogTransaction transaction, ChangeOwnershipInfo &info);
 
 	void CleanupEntry(CatalogEntry *catalog_entry);
 

@@ -174,7 +174,7 @@ public:
 	                                         CreateCollationInfo &info);
 
 	//! Drops an entry from the catalog
-	DUCKDB_API void DropEntry(ClientContext &context, DropInfo *info);
+	DUCKDB_API void DropEntry(ClientContext &context, DropInfo &info);
 
 	//! Returns the schema object with the specified name, or throws an exception if it does not exist
 	DUCKDB_API SchemaCatalogEntry *GetSchema(ClientContext &context, const string &name = DEFAULT_SCHEMA,
@@ -225,7 +225,7 @@ public:
 	DUCKDB_API optional_ptr<CatalogEntry> AddFunction(ClientContext &context, CreateFunctionInfo &info);
 
 	//! Alter an existing entry in the catalog.
-	DUCKDB_API void Alter(ClientContext &context, AlterInfo *info);
+	DUCKDB_API void Alter(ClientContext &context, AlterInfo &info);
 
 	virtual unique_ptr<PhysicalOperator> PlanCreateTableAs(ClientContext &context, LogicalCreateTable &op,
 	                                                       unique_ptr<PhysicalOperator> plan) = 0;
@@ -286,7 +286,7 @@ private:
 	static SimilarCatalogEntry SimilarEntryInSchemas(ClientContext &context, const string &entry_name, CatalogType type,
 	                                                 const reference_set_t<SchemaCatalogEntry> &schemas);
 
-	virtual void DropSchema(ClientContext &context, DropInfo *info) = 0;
+	virtual void DropSchema(ClientContext &context, DropInfo &info) = 0;
 
 public:
 	template <class TARGET>

@@ -218,7 +218,7 @@ void ReplayState::ReplayDropTable() {
 		return;
 	}
 
-	catalog.DropEntry(context, &info);
+	catalog.DropEntry(context, info);
 }
 
 void ReplayState::ReplayAlter() {
@@ -226,7 +226,7 @@ void ReplayState::ReplayAlter() {
 	if (deserialize_only) {
 		return;
 	}
-	catalog.Alter(context, info.get());
+	catalog.Alter(context, *info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -249,7 +249,7 @@ void ReplayState::ReplayDropView() {
 	if (deserialize_only) {
 		return;
 	}
-	catalog.DropEntry(context, &info);
+	catalog.DropEntry(context, info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -274,7 +274,7 @@ void ReplayState::ReplayDropSchema() {
 		return;
 	}
 
-	catalog.DropEntry(context, &info);
+	catalog.DropEntry(context, info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -298,7 +298,7 @@ void ReplayState::ReplayDropType() {
 		return;
 	}
 
-	catalog.DropEntry(context, &info);
+	catalog.DropEntry(context, info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -322,7 +322,7 @@ void ReplayState::ReplayDropSequence() {
 		return;
 	}
 
-	catalog.DropEntry(context, &info);
+	catalog.DropEntry(context, info);
 }
 
 void ReplayState::ReplaySequenceValue() {
@@ -363,7 +363,7 @@ void ReplayState::ReplayDropMacro() {
 		return;
 	}
 
-	catalog.DropEntry(context, &info);
+	catalog.DropEntry(context, info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -387,7 +387,7 @@ void ReplayState::ReplayDropTableMacro() {
 		return;
 	}
 
-	catalog.DropEntry(context, &info);
+	catalog.DropEntry(context, info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -447,7 +447,7 @@ void ReplayState::ReplayDropIndex() {
 		return;
 	}
 
-	catalog.DropEntry(context, &info);
+	catalog.DropEntry(context, info);
 }
 
 //===--------------------------------------------------------------------===//

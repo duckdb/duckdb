@@ -68,7 +68,7 @@ optional_ptr<CatalogEntry> DuckCatalog::CreateSchema(CatalogTransaction transact
 			drop_info.type = CatalogType::SCHEMA_ENTRY;
 			drop_info.catalog = info.catalog;
 			drop_info.name = info.schema;
-			DropSchema(transaction, &drop_info);
+			DropSchema(transaction, drop_info);
 			result = CreateSchemaInternal(transaction, info);
 			if (!result) {
 				throw InternalException("Failed to create schema entry in CREATE_OR_REPLACE");
@@ -85,17 +85,17 @@ optional_ptr<CatalogEntry> DuckCatalog::CreateSchema(CatalogTransaction transact
 	return result;
 }
 
-void DuckCatalog::DropSchema(CatalogTransaction transaction, DropInfo *info) {
-	D_ASSERT(!info->name.empty());
+void DuckCatalog::DropSchema(CatalogTransaction transaction, DropInfo &info) {
+	D_ASSERT(!info.name.empty());
 	ModifyCatalog();
-	if (!schemas->DropEntry(transaction, info->name, info->cascade)) {
-		if (!info->if_exists) {
-			throw CatalogException("Schema with name \"%s\" does not exist!", info->name);
+	if (!schemas->DropEntry(transaction, info.name, info.cascade)) {
+		if (!info.if_exists) {
+			throw CatalogException("Schema with name \"%s\" does not exist!", info.name);
 		}
 	}
 }
 
-void DuckCatalog::DropSchema(ClientContext &context, DropInfo *info) {
+void DuckCatalog::DropSchema(ClientContext &context, DropInfo &info) {
 	DropSchema(GetCatalogTransaction(context), info);
 }
 

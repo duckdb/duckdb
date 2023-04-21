@@ -88,10 +88,10 @@ public:
 	                                                       const string &name);
 
 	//! Drops an entry from the schema
-	virtual void DropEntry(ClientContext &context, DropInfo *info) = 0;
+	virtual void DropEntry(ClientContext &context, DropInfo &info) = 0;
 
 	//! Alters a catalog entry
-	virtual void Alter(ClientContext &context, AlterInfo *info) = 0;
+	virtual void Alter(ClientContext &context, AlterInfo &info) = 0;
 
 	CatalogTransaction GetCatalogTransaction(ClientContext &context);
 };

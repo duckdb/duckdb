@@ -185,23 +185,22 @@ bool CatalogSet::GetEntryInternal(CatalogTransaction transaction, const string &
 	return GetEntryInternal(transaction, mapping_value->index, catalog_entry);
 }
 
-bool CatalogSet::AlterOwnership(CatalogTransaction transaction, ChangeOwnershipInfo *info) {
+bool CatalogSet::AlterOwnership(CatalogTransaction transaction, ChangeOwnershipInfo &info) {
 	CatalogEntry *entry;
-	if (!GetEntryInternal(transaction, info->name, nullptr, entry)) {
+	if (!GetEntryInternal(transaction, info.name, nullptr, entry)) {
 		return false;
 	}
 
-	auto owner_entry = catalog.GetEntry(transaction.GetContext(), info->owner_schema, info->owner_name);
+	auto owner_entry = catalog.GetEntry(transaction.GetContext(), info.owner_schema, info.owner_name);
 	if (!owner_entry) {
 		return false;
 	}
 
 	catalog.GetDependencyManager().AddOwnership(transaction, *owner_entry, *entry);
-
 	return true;
 }
 
-bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, AlterInfo *alter_info) {
+bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, AlterInfo &alter_info) {
 	// lock the catalog for writing
 	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 
@@ -211,7 +210,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	if (!GetEntryInternal(transaction, name, &entry_index, entry)) {
 		return false;
 	}
-	if (!alter_info->allow_internal && entry->internal) {
+	if (!alter_info.allow_internal && entry->internal) {
 		throw CatalogException("Cannot alter entry \"%s\" because it is an internal system entry", entry->name);
 	}
 
@@ -258,8 +257,8 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 
 	// serialize the AlterInfo into a temporary buffer
 	BufferedSerializer serializer;
-	serializer.WriteString(alter_info->GetColumnName());
-	alter_info->Serialize(serializer);
+	serializer.WriteString(alter_info.GetColumnName());
+	alter_info.Serialize(serializer);
 	BinaryData serialized_alter = serializer.GetData();
 
 	// push the old entry in the undo buffer for this transaction

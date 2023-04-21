@@ -59,8 +59,8 @@ public:
 	DUCKDB_API string GetDBPath() override;
 
 private:
-	DUCKDB_API void DropSchema(CatalogTransaction transaction, DropInfo *info);
-	DUCKDB_API void DropSchema(ClientContext &context, DropInfo *info) override;
+	DUCKDB_API void DropSchema(CatalogTransaction transaction, DropInfo &info);
+	DUCKDB_API void DropSchema(ClientContext &context, DropInfo &info) override;
 	optional_ptr<CatalogEntry> CreateSchemaInternal(CatalogTransaction transaction, CreateSchemaInfo &info);
 	void Verify() override;
 

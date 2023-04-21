@@ -25,17 +25,17 @@ ViewCatalogEntry::ViewCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
 	Initialize(info);
 }
 
-unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, AlterInfo *info) {
+unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, AlterInfo &info) {
 	D_ASSERT(!internal);
-	if (info->type != AlterType::ALTER_VIEW) {
+	if (info.type != AlterType::ALTER_VIEW) {
 		throw CatalogException("Can only modify view with ALTER VIEW statement");
 	}
-	auto view_info = (AlterViewInfo *)info;
-	switch (view_info->alter_view_type) {
+	auto &view_info = info.Cast<AlterViewInfo>();
+	switch (view_info.alter_view_type) {
 	case AlterViewType::RENAME_VIEW: {
-		auto rename_info = (RenameViewInfo *)view_info;
+		auto &rename_info = view_info.Cast<RenameViewInfo>();
 		auto copied_view = Copy(context);
-		copied_view->name = rename_info->new_view_name;
+		copied_view->name = rename_info.new_view_name;
 		return copied_view;
 	}
 	default:
