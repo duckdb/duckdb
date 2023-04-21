@@ -2,6 +2,9 @@
 # description: Test mode function
 # group: [aggregates]
 
+statement ok
+SET default_null_order='nulls_first';
+
 #Corner cases
 statement error
 select mode()
