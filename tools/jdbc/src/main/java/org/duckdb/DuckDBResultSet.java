@@ -221,7 +221,11 @@ public class DuckDBResultSet implements ResultSet {
 
 	private boolean check_and_null(int columnIndex) throws SQLException {
 		check(columnIndex);
-		was_null = current_chunk[columnIndex - 1].nullmask[chunk_idx - 1];
+		try {
+			was_null = current_chunk[columnIndex - 1].nullmask[chunk_idx - 1];
+		} catch (ArrayIndexOutOfBoundsException e) {
+			throw new SQLException("No row in context", e);
+		}
 		return was_null;
 	}
 
