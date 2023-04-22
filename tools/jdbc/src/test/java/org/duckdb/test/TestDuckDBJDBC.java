@@ -629,11 +629,7 @@ public class TestDuckDBJDBC {
 		ResultSet rs = stmt.executeQuery("SELECT * FROM a");
 		assertFalse(rs.next());
 
-		try {
-			rs.getObject(1);
-			fail();
-		} catch (ArrayIndexOutOfBoundsException e) {
-		}
+		assertEquals(assertThrows(() -> rs.getObject(1), SQLException.class), "No row in context");
 
 		rs.close();
 		stmt.close();
