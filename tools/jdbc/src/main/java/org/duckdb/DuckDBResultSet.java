@@ -28,6 +28,7 @@ import java.sql.Time;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.OffsetTime;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Map;
@@ -191,6 +192,8 @@ public class DuckDBResultSet implements ResultSet {
 			return getBigDecimal(columnIndex);
 		case TIME:
 			return getTime(columnIndex);
+		case TIME_WITH_TIME_ZONE:
+			return getOffsetTime(columnIndex);
 		case DATE:
 			return getDate(columnIndex);
 		case TIMESTAMP:
@@ -210,6 +213,10 @@ public class DuckDBResultSet implements ResultSet {
 			return getLazyString(columnIndex);
 		}
 
+	}
+
+	public OffsetTime getOffsetTime(int columnIndex) throws SQLException {
+		return DuckDBTimestamp.toOffsetTime(getbuf(columnIndex, 8).getLong());
 	}
 
 	public boolean wasNull() throws SQLException {
