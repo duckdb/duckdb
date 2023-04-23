@@ -94,7 +94,7 @@ static void append_line(order_t *o, tpch_append_information *info) {
 		// l_linenumber
 		append_value(append_info, o->l[i].lcnt);
 		// l_quantity
-		append_value(append_info, o->l[i].quantity);
+		append_decimal(append_info, o->l[i].quantity);
 		// l_extendedprice
 		append_decimal(append_info, o->l[i].eprice);
 		// l_discount
