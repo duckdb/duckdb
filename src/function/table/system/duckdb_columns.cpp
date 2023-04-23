@@ -194,9 +194,9 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 		// database_oid, BIGINT
 		output.SetValue(col++, index, Value::BIGINT(entry.catalog->GetOid()));
 		// schema_name, VARCHAR
-		output.SetValue(col++, index, entry.schema->name);
+		output.SetValue(col++, index, entry.schema.name);
 		// schema_oid, BIGINT
-		output.SetValue(col++, index, Value::BIGINT(entry.schema->oid));
+		output.SetValue(col++, index, Value::BIGINT(entry.schema.oid));
 		// table_name, VARCHAR
 		output.SetValue(col++, index, entry.name);
 		// table_oid, BIGINT

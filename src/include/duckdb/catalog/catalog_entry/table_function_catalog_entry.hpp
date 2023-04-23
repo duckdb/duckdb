@@ -22,7 +22,7 @@ public:
 	static constexpr const char *Name = "table function";
 
 public:
-	TableFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTableFunctionInfo *info);
+	TableFunctionCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableFunctionInfo &info);
 
 	//! The table function
 	TableFunctionSet functions;

@@ -178,13 +178,13 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 
 			idx_t col = 0;
 			// database_name, LogicalType::VARCHAR
-			output.SetValue(col++, count, Value(table.schema->catalog->GetName()));
+			output.SetValue(col++, count, Value(table.schema.catalog->GetName()));
 			// database_oid, LogicalType::BIGINT
-			output.SetValue(col++, count, Value::BIGINT(table.schema->catalog->GetOid()));
+			output.SetValue(col++, count, Value::BIGINT(table.schema.catalog->GetOid()));
 			// schema_name, LogicalType::VARCHAR
-			output.SetValue(col++, count, Value(table.schema->name));
+			output.SetValue(col++, count, Value(table.schema.name));
 			// schema_oid, LogicalType::BIGINT
-			output.SetValue(col++, count, Value::BIGINT(table.schema->oid));
+			output.SetValue(col++, count, Value::BIGINT(table.schema.oid));
 			// table_name, LogicalType::VARCHAR
 			output.SetValue(col++, count, Value(table.name));
 			// table_oid, LogicalType::BIGINT
@@ -198,7 +198,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 				switch (bound_constraint.type) {
 				case ConstraintType::UNIQUE: {
 					auto &bound_unique = bound_constraint.Cast<BoundUniqueConstraint>();
-					uk_info = {table.schema->name, table.name, bound_unique.keys};
+					uk_info = {table.schema.name, table.name, bound_unique.keys};
 					break;
 				}
 				case ConstraintType::FOREIGN_KEY: {
@@ -215,7 +215,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 					for (auto &key : info.pk_keys) {
 						index.push_back(table_entry->GetColumns().PhysicalToLogical(key));
 					}
-					uk_info = {table_entry->schema->name, table_entry->name, index};
+					uk_info = {table_entry->schema.name, table_entry->name, index};
 					break;
 				}
 				default:

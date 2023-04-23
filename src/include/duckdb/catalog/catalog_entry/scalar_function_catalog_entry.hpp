@@ -22,7 +22,7 @@ public:
 	static constexpr const char *Name = "scalar function";
 
 public:
-	ScalarFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateScalarFunctionInfo *info);
+	ScalarFunctionCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateScalarFunctionInfo &info);
 
 	//! The scalar functions
 	ScalarFunctionSet functions;

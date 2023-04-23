@@ -87,9 +87,9 @@ void DuckDBViewsFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		// database_oid, BIGINT
 		output.SetValue(col++, count, Value::BIGINT(view.catalog->GetOid()));
 		// schema_name, LogicalType::VARCHAR
-		output.SetValue(col++, count, Value(view.schema->name));
+		output.SetValue(col++, count, Value(view.schema.name));
 		// schema_oid, LogicalType::BIGINT
-		output.SetValue(col++, count, Value::BIGINT(view.schema->oid));
+		output.SetValue(col++, count, Value::BIGINT(view.schema.oid));
 		// view_name, LogicalType::VARCHAR
 		output.SetValue(col++, count, Value(view.name));
 		// view_oid, LogicalType::BIGINT

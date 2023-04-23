@@ -44,7 +44,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 			// we can only drop temporary tables in read-only mode
 			properties.modified_databases.insert(stmt.info->catalog);
 		}
-		stmt.info->schema = entry->Cast<StandardEntry>().schema->name;
+		stmt.info->schema = entry->Cast<StandardEntry>().schema.name;
 		break;
 	}
 	case CatalogType::DATABASE_ENTRY: {

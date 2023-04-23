@@ -360,7 +360,7 @@ bool Binder::HasMatchingBinding(const string &catalog_name, const string &schema
 		if (!catalog_name.empty() && catalog_entry->catalog->GetName() != catalog_name) {
 			return false;
 		}
-		if (!schema_name.empty() && catalog_entry->schema->name != schema_name) {
+		if (!schema_name.empty() && catalog_entry->schema.name != schema_name) {
 			return false;
 		}
 		if (catalog_entry->name != table_name) {

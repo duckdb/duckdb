@@ -139,7 +139,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		state.global_index->buffer_manager.IncreaseUsedMemory(state.global_index->memory_size);
 	}
 
-	auto &schema = *table.schema;
+	auto &schema = table.schema;
 	auto index_entry = schema.CreateIndex(context, *info, table).get();
 	if (!index_entry) {
 		// index already exists, but error ignored because of IF NOT EXISTS

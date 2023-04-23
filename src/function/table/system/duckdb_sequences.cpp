@@ -95,9 +95,9 @@ void DuckDBSequencesFunction(ClientContext &context, TableFunctionInput &data_p,
 		// database_oid, BIGINT
 		output.SetValue(col++, count, Value::BIGINT(seq.catalog->GetOid()));
 		// schema_name, VARCHAR
-		output.SetValue(col++, count, Value(seq.schema->name));
+		output.SetValue(col++, count, Value(seq.schema.name));
 		// schema_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(seq.schema->oid));
+		output.SetValue(col++, count, Value::BIGINT(seq.schema.oid));
 		// sequence_name, VARCHAR
 		output.SetValue(col++, count, Value(seq.name));
 		// sequence_oid, BIGINT

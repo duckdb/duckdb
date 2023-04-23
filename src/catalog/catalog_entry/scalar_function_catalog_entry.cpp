@@ -3,9 +3,9 @@
 
 namespace duckdb {
 
-ScalarFunctionCatalogEntry::ScalarFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
-                                                       CreateScalarFunctionInfo *info)
-    : StandardEntry(CatalogType::SCALAR_FUNCTION_ENTRY, schema, catalog, info->name), functions(info->functions) {
+ScalarFunctionCatalogEntry::ScalarFunctionCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema,
+                                                       CreateScalarFunctionInfo &info)
+    : StandardEntry(CatalogType::SCALAR_FUNCTION_ENTRY, schema, catalog, info.name), functions(info.functions) {
 }
 
 unique_ptr<CatalogEntry> ScalarFunctionCatalogEntry::AlterEntry(ClientContext &context, AlterInfo &info) {
@@ -24,7 +24,7 @@ unique_ptr<CatalogEntry> ScalarFunctionCatalogEntry::AlterEntry(ClientContext &c
 		throw BinderException("Failed to add new function overloads to function \"%s\": function already exists", name);
 	}
 	CreateScalarFunctionInfo new_info(std::move(new_set));
-	return make_uniq<ScalarFunctionCatalogEntry>(catalog, schema, &new_info);
+	return make_uniq<ScalarFunctionCatalogEntry>(*catalog, schema, new_info);
 }
 
 } // namespace duckdb

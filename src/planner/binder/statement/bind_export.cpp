@@ -89,10 +89,10 @@ void ReorderTableEntries(vector<reference<TableCatalogEntry>> &tables) {
 
 string CreateFileName(const string &id_suffix, TableCatalogEntry &table, const string &extension) {
 	auto name = SanitizeExportIdentifier(table.name);
-	if (table.schema->name == DEFAULT_SCHEMA) {
+	if (table.schema.name == DEFAULT_SCHEMA) {
 		return StringUtil::Format("%s%s.%s", name, id_suffix, extension);
 	}
-	auto schema = SanitizeExportIdentifier(table.schema->name);
+	auto schema = SanitizeExportIdentifier(table.schema.name);
 	return StringUtil::Format("%s_%s%s.%s", schema, name, id_suffix, extension);
 }
 
@@ -159,7 +159,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		}
 		info->is_from = false;
 		info->catalog = catalog;
-		info->schema = table.schema->name;
+		info->schema = table.schema.name;
 		info->table = table.name;
 
 		// We can not export generated columns

@@ -25,7 +25,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 			properties.modified_databases.insert(entry->catalog->GetName());
 		}
 		stmt.info->catalog = entry->catalog->GetName();
-		stmt.info->schema = entry->Cast<StandardEntry>().schema->name;
+		stmt.info->schema = entry->Cast<StandardEntry>().schema.name;
 	}
 	result.plan = make_uniq<LogicalSimple>(LogicalOperatorType::LOGICAL_ALTER, std::move(stmt.info));
 	properties.return_type = StatementReturnType::NOTHING;

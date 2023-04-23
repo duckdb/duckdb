@@ -46,7 +46,7 @@ public:
 	static constexpr const char *Name = "schema";
 
 public:
-	SchemaCatalogEntry(Catalog *catalog, string name, bool is_internal);
+	SchemaCatalogEntry(Catalog &catalog, string name, bool is_internal);
 
 public:
 	//! Scan the specified catalog set, invoking the callback method for every entry

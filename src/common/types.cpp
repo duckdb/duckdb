@@ -1327,7 +1327,7 @@ struct EnumTypeInfo : public ExtraTypeInfo {
 		return enum_name;
 	};
 	const string GetSchemaName() const {
-		return catalog_entry ? catalog_entry->schema->name : "";
+		return catalog_entry ? catalog_entry->schema.name : "";
 	};
 	const Vector &GetValuesInsertOrder() {
 		return values_insert_order;
@@ -1551,7 +1551,7 @@ TypeCatalogEntry *EnumType::GetCatalog(const LogicalType &type) {
 
 string EnumType::GetSchemaName(const LogicalType &type) {
 	auto catalog_entry = EnumType::GetCatalog(type);
-	return catalog_entry ? catalog_entry->schema->name : "";
+	return catalog_entry ? catalog_entry->schema.name : "";
 }
 
 PhysicalType EnumType::GetPhysicalType(const LogicalType &type) {

@@ -11,17 +11,17 @@
 
 namespace duckdb {
 
-void ViewCatalogEntry::Initialize(CreateViewInfo *info) {
-	query = std::move(info->query);
-	this->aliases = info->aliases;
-	this->types = info->types;
-	this->temporary = info->temporary;
-	this->sql = info->sql;
-	this->internal = info->internal;
+void ViewCatalogEntry::Initialize(CreateViewInfo &info) {
+	query = std::move(info.query);
+	this->aliases = info.aliases;
+	this->types = info.types;
+	this->temporary = info.temporary;
+	this->sql = info.sql;
+	this->internal = info.internal;
 }
 
-ViewCatalogEntry::ViewCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateViewInfo *info)
-    : StandardEntry(CatalogType::VIEW_ENTRY, schema, catalog, info->view_name) {
+ViewCatalogEntry::ViewCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateViewInfo &info)
+    : StandardEntry(CatalogType::VIEW_ENTRY, schema, catalog, info.view_name) {
 	Initialize(info);
 }
 
@@ -46,7 +46,7 @@ unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, Al
 void ViewCatalogEntry::Serialize(Serializer &serializer) const {
 	D_ASSERT(!internal);
 	FieldWriter writer(serializer);
-	writer.WriteString(schema->name);
+	writer.WriteString(schema.name);
 	writer.WriteString(name);
 	writer.WriteString(sql);
 	writer.WriteSerializable(*query);
@@ -80,18 +80,18 @@ string ViewCatalogEntry::ToSQL() const {
 
 unique_ptr<CatalogEntry> ViewCatalogEntry::Copy(ClientContext &context) const {
 	D_ASSERT(!internal);
-	auto create_info = make_uniq<CreateViewInfo>(schema, name);
-	create_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
+	CreateViewInfo create_info(schema, name);
+	create_info.query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
 	for (idx_t i = 0; i < aliases.size(); i++) {
-		create_info->aliases.push_back(aliases[i]);
+		create_info.aliases.push_back(aliases[i]);
 	}
 	for (idx_t i = 0; i < types.size(); i++) {
-		create_info->types.push_back(types[i]);
+		create_info.types.push_back(types[i]);
 	}
-	create_info->temporary = temporary;
-	create_info->sql = sql;
+	create_info.temporary = temporary;
+	create_info.sql = sql;
 
-	return make_uniq<ViewCatalogEntry>(catalog, schema, create_info.get());
+	return make_uniq<ViewCatalogEntry>(*catalog, schema, create_info);
 }
 
 } // namespace duckdb

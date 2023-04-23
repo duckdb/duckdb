@@ -425,10 +425,10 @@ bool ExtractFunctionData(CatalogEntry &entry, idx_t function_idx, DataChunk &out
 	idx_t col = 0;
 
 	// database_name, LogicalType::VARCHAR
-	output.SetValue(col++, output_offset, Value(function.schema->catalog->GetName()));
+	output.SetValue(col++, output_offset, Value(function.schema.catalog->GetName()));
 
 	// schema_name, LogicalType::VARCHAR
-	output.SetValue(col++, output_offset, Value(function.schema->name));
+	output.SetValue(col++, output_offset, Value(function.schema.name));
 
 	// function_name, LogicalType::VARCHAR
 	output.SetValue(col++, output_offset, Value(function.name));

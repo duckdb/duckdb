@@ -141,7 +141,7 @@ static void QualifyFunctionNames(ClientContext &context, unique_ptr<ParsedExpres
 		if (function) {
 			auto &standard = function->Cast<StandardEntry>();
 			func.catalog = function->catalog->GetName();
-			func.schema = standard.schema->name;
+			func.schema = standard.schema.name;
 		}
 		break;
 	}
@@ -549,7 +549,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				// have to resolve referenced table
 				auto &pk_table_entry_ptr =
 				    Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, fk.info.schema, fk.info.table);
-				fk_schemas.insert(*pk_table_entry_ptr.schema);
+				fk_schemas.insert(pk_table_entry_ptr.schema);
 				FindMatchingPrimaryKeyColumns(pk_table_entry_ptr.GetColumns(), pk_table_entry_ptr.GetConstraints(),
 				                              fk);
 				FindForeignKeyIndexes(pk_table_entry_ptr.GetColumns(), fk.pk_columns, fk.info.pk_keys);

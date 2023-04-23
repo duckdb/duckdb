@@ -404,12 +404,12 @@ string TableScanToString(const FunctionData *bind_data_p) {
 static void TableScanSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 
-	writer.WriteString(bind_data.table.schema->name);
+	writer.WriteString(bind_data.table.schema.name);
 	writer.WriteString(bind_data.table.name);
 	writer.WriteField<bool>(bind_data.is_index_scan);
 	writer.WriteField<bool>(bind_data.is_create_index);
 	writer.WriteList<row_t>(bind_data.result_ids);
-	writer.WriteString(bind_data.table.schema->catalog->GetName());
+	writer.WriteString(bind_data.table.schema.catalog->GetName());
 }
 
 static unique_ptr<FunctionData> TableScanDeserialize(ClientContext &context, FieldReader &reader,

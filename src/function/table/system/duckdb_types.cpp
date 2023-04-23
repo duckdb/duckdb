@@ -87,9 +87,9 @@ void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		// database_oid, BIGINT
 		output.SetValue(col++, count, Value::BIGINT(type_entry.catalog->GetOid()));
 		// schema_name, LogicalType::VARCHAR
-		output.SetValue(col++, count, Value(type_entry.schema->name));
+		output.SetValue(col++, count, Value(type_entry.schema.name));
 		// schema_oid, LogicalType::BIGINT
-		output.SetValue(col++, count, Value::BIGINT(type_entry.schema->oid));
+		output.SetValue(col++, count, Value::BIGINT(type_entry.schema.oid));
 		// type_oid, BIGINT
 		int64_t oid;
 		if (type_entry.internal) {

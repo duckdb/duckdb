@@ -11,8 +11,8 @@
 
 namespace duckdb {
 
-SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name_p, bool internal)
-    : CatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, std::move(name_p)) {
+SchemaCatalogEntry::SchemaCatalogEntry(Catalog &catalog, string name_p, bool internal)
+    : CatalogEntry(CatalogType::SCHEMA_ENTRY, &catalog, std::move(name_p)) {
 	this->internal = internal;
 }
 
