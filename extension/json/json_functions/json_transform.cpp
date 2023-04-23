@@ -98,7 +98,7 @@ static duckdb::unique_ptr<FunctionData> JSONTransformBind(ClientContext &context
 		auto doc = JSONCommon::ReadDocumentUnsafe(structure_string, JSONCommon::READ_FLAG,
 		                                          json_allocator.GetYYJSONAllocator(), &err);
 		if (err.code != YYJSON_READ_SUCCESS) {
-			JSONCommon::ThrowParseError(structure_string.GetDataUnsafe(), structure_string.GetSize(), err);
+			JSONCommon::ThrowParseError(structure_string.GetData(), structure_string.GetSize(), err);
 		}
 		bound_function.return_type = StructureStringToType(doc->root, context);
 	}

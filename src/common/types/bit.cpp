@@ -20,7 +20,7 @@ idx_t Bit::ComputeBitstringLen(idx_t len) {
 }
 
 static inline idx_t GetBitPadding(const string_t &bit_string) {
-	auto data = (const_data_ptr_t)bit_string.GetDataUnsafe();
+	auto data = (const_data_ptr_t)bit_string.GetData();
 	D_ASSERT(idx_t(data[0]) <= 8);
 	return data[0];
 }
@@ -46,7 +46,7 @@ void Bit::Finalize(string_t &str) {
 
 void Bit::SetEmptyBitString(string_t &target, string_t &input) {
 	char *res_buf = target.GetDataWriteable();
-	const char *buf = input.GetDataUnsafe();
+	const char *buf = input.GetData();
 	memset(res_buf, 0, input.GetSize());
 	res_buf[0] = buf[0];
 	Bit::Finalize(target);
@@ -61,7 +61,7 @@ void Bit::SetEmptyBitString(string_t &target, idx_t len) {
 
 // **** casting functions ****
 void Bit::ToString(string_t bits, char *output) {
-	auto data = (const_data_ptr_t)bits.GetDataUnsafe();
+	auto data = (const_data_ptr_t)bits.GetData();
 	auto len = bits.GetSize();
 
 	idx_t padding = GetBitPadding(bits);
@@ -84,7 +84,7 @@ string Bit::ToString(string_t str) {
 }
 
 bool Bit::TryGetBitStringSize(string_t str, idx_t &str_len, string *error_message) {
-	auto data = (const_data_ptr_t)str.GetDataUnsafe();
+	auto data = (const_data_ptr_t)str.GetData();
 	auto len = str.GetSize();
 	str_len = 0;
 	for (idx_t i = 0; i < len; i++) {
@@ -107,7 +107,7 @@ bool Bit::TryGetBitStringSize(string_t str, idx_t &str_len, string *error_messag
 }
 
 void Bit::ToBit(string_t str, string_t &output_str) {
-	auto data = (const_data_ptr_t)str.GetDataUnsafe();
+	auto data = (const_data_ptr_t)str.GetData();
 	auto len = str.GetSize();
 	auto output = output_str.GetDataWriteable();
 
@@ -149,7 +149,7 @@ string Bit::ToBit(string_t str) {
 // **** scalar functions ****
 void Bit::BitString(const string_t &input, const idx_t &bit_length, string_t &result) {
 	char *res_buf = result.GetDataWriteable();
-	const char *buf = input.GetDataUnsafe();
+	const char *buf = input.GetData();
 
 	auto padding = ComputePadding(bit_length);
 	res_buf[0] = padding;
@@ -174,7 +174,7 @@ idx_t Bit::OctetLength(string_t bits) {
 
 idx_t Bit::BitCount(string_t bits) {
 	idx_t count = 0;
-	const char *buf = bits.GetDataUnsafe();
+	const char *buf = bits.GetData();
 	for (idx_t byte_idx = 1; byte_idx < OctetLength(bits) + 1; byte_idx++) {
 		for (idx_t bit_idx = 0; bit_idx < 8; bit_idx++) {
 			count += (buf[byte_idx] & (1 << bit_idx)) ? 1 : 0;
@@ -184,7 +184,7 @@ idx_t Bit::BitCount(string_t bits) {
 }
 
 idx_t Bit::BitPosition(string_t substring, string_t bits) {
-	const char *buf = bits.GetDataUnsafe();
+	const char *buf = bits.GetData();
 	auto len = bits.GetSize();
 	auto substr_len = BitLength(substring);
 	idx_t substr_idx = 0;
@@ -226,7 +226,7 @@ idx_t Bit::GetBitIndex(idx_t n) {
 }
 
 idx_t Bit::GetBitInternal(string_t bit_string, idx_t n) {
-	const char *buf = bit_string.GetDataUnsafe();
+	const char *buf = bit_string.GetData();
 	auto idx = Bit::GetBitIndex(n);
 	D_ASSERT(idx < bit_string.GetSize());
 	char byte = buf[idx] >> (7 - (n % 8));
@@ -254,7 +254,7 @@ void Bit::SetBitInternal(string_t &bit_string, idx_t n, idx_t new_value) {
 // **** BITWISE operators ****
 void Bit::RightShift(const string_t &bit_string, const idx_t &shift, string_t &result) {
 	char *res_buf = result.GetDataWriteable();
-	const char *buf = bit_string.GetDataUnsafe();
+	const char *buf = bit_string.GetData();
 	res_buf[0] = buf[0];
 	for (idx_t i = 0; i < Bit::BitLength(result); i++) {
 		if (i < shift) {
@@ -269,7 +269,7 @@ void Bit::RightShift(const string_t &bit_string, const idx_t &shift, string_t &r
 
 void Bit::LeftShift(const string_t &bit_string, const idx_t &shift, string_t &result) {
 	char *res_buf = result.GetDataWriteable();
-	const char *buf = bit_string.GetDataUnsafe();
+	const char *buf = bit_string.GetData();
 	res_buf[0] = buf[0];
 	for (idx_t i = 0; i < Bit::BitLength(bit_string); i++) {
 		if (i < (Bit::BitLength(bit_string) - shift)) {
@@ -289,8 +289,8 @@ void Bit::BitwiseAnd(const string_t &rhs, const string_t &lhs, string_t &result)
 	}
 
 	char *buf = result.GetDataWriteable();
-	const char *r_buf = rhs.GetDataUnsafe();
-	const char *l_buf = lhs.GetDataUnsafe();
+	const char *r_buf = rhs.GetData();
+	const char *l_buf = lhs.GetData();
 
 	buf[0] = l_buf[0];
 	for (idx_t i = 1; i < lhs.GetSize(); i++) {
@@ -306,8 +306,8 @@ void Bit::BitwiseOr(const string_t &rhs, const string_t &lhs, string_t &result) 
 	}
 
 	char *buf = result.GetDataWriteable();
-	const char *r_buf = rhs.GetDataUnsafe();
-	const char *l_buf = lhs.GetDataUnsafe();
+	const char *r_buf = rhs.GetData();
+	const char *l_buf = lhs.GetData();
 
 	buf[0] = l_buf[0];
 	for (idx_t i = 1; i < lhs.GetSize(); i++) {
@@ -323,8 +323,8 @@ void Bit::BitwiseXor(const string_t &rhs, const string_t &lhs, string_t &result)
 	}
 
 	char *buf = result.GetDataWriteable();
-	const char *r_buf = rhs.GetDataUnsafe();
-	const char *l_buf = lhs.GetDataUnsafe();
+	const char *r_buf = rhs.GetData();
+	const char *l_buf = lhs.GetData();
 
 	buf[0] = l_buf[0];
 	for (idx_t i = 1; i < lhs.GetSize(); i++) {
@@ -335,7 +335,7 @@ void Bit::BitwiseXor(const string_t &rhs, const string_t &lhs, string_t &result)
 
 void Bit::BitwiseNot(const string_t &input, string_t &result) {
 	char *result_buf = result.GetDataWriteable();
-	const char *buf = input.GetDataUnsafe();
+	const char *buf = input.GetData();
 
 	result_buf[0] = buf[0];
 	for (idx_t i = 1; i < input.GetSize(); i++) {

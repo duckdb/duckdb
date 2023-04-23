@@ -23,8 +23,8 @@ static idx_t LevenshteinDistance(const string_t &txt, const string_t &tgt) {
 		return txt_len;
 	}
 
-	auto txt_str = txt.GetDataUnsafe();
-	auto tgt_str = tgt.GetDataUnsafe();
+	auto txt_str = txt.GetData();
+	auto tgt_str = tgt.GetData();
 
 	// Create two working vectors
 	vector<idx_t> distances0(tgt_len + 1, 0);

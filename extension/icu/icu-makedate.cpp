@@ -3,6 +3,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/senary_executor.hpp"
 #include "duckdb/common/vector_operations/septenary_executor.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "include/icu-datefunc.hpp"
 #include "include/icu-datetrunc.hpp"
@@ -10,6 +11,56 @@
 #include <cmath>
 
 namespace duckdb {
+
+struct ICUMakeDate : public ICUDateFunc {
+	static inline date_t Operation(icu::Calendar *calendar, timestamp_t instant) {
+		if (!Timestamp::IsFinite(instant)) {
+			return Timestamp::GetDate(instant);
+		}
+
+		// Extract the time zone parts
+		auto micros = SetTime(calendar, instant);
+		const auto era = ExtractField(calendar, UCAL_ERA);
+		const auto year = ExtractField(calendar, UCAL_YEAR);
+		const auto mm = ExtractField(calendar, UCAL_MONTH) + 1;
+		const auto dd = ExtractField(calendar, UCAL_DATE);
+
+		const auto yyyy = era ? year : (-year + 1);
+		date_t result;
+		if (!Date::TryFromDate(yyyy, mm, dd, result)) {
+			throw ConversionException("Unable to convert TIMESTAMPTZ to DATE");
+		}
+
+		return result;
+	}
+
+	static bool CastToDate(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+		auto &cast_data = parameters.cast_data->Cast<CastData>();
+		auto info = (BindData *)cast_data.info.get();
+		CalendarPtr calendar(info->calendar->clone());
+
+		UnaryExecutor::Execute<timestamp_t, date_t>(
+		    source, result, count, [&](timestamp_t input) { return Operation(calendar.get(), input); });
+		return true;
+	}
+
+	static BoundCastInfo BindCastToDate(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
+		if (!input.context) {
+			throw InternalException("Missing context for TIMESTAMPTZ to DATE cast.");
+		}
+
+		auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
+
+		return BoundCastInfo(CastToDate, std::move(cast_data));
+	}
+
+	static void AddCasts(ClientContext &context) {
+		auto &config = DBConfig::GetConfig(context);
+		auto &casts = config.GetCastFunctions();
+
+		casts.RegisterCastFunction(LogicalType::TIMESTAMP_TZ, LogicalType::DATE, BindCastToDate);
+	}
+};
 
 struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 	template <typename T>
@@ -95,6 +146,7 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 
 void RegisterICUMakeDateFunctions(ClientContext &context) {
 	ICUMakeTimestampTZFunc::AddFunction("make_timestamptz", context);
+	ICUMakeDate::AddCasts(context);
 }
 
 } // namespace duckdb

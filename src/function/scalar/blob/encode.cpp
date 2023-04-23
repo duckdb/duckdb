@@ -12,7 +12,7 @@ static void EncodeFunction(DataChunk &args, ExpressionState &state, Vector &resu
 struct BlobDecodeOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input) {
-		auto input_data = input.GetDataUnsafe();
+		auto input_data = input.GetData();
 		auto input_length = input.GetSize();
 		if (Utf8Proc::Analyze(input_data, input_length) == UnicodeType::INVALID) {
 			throw ConversionException(

@@ -255,7 +255,7 @@ struct ICUStrptime : public ICUDateFunc {
 		UnaryExecutor::ExecuteWithNulls<string_t, timestamp_t>(
 		    source, result, count, [&](string_t input, ValidityMask &mask, idx_t idx) {
 			    timestamp_t result;
-			    const auto str = input.GetDataUnsafe();
+			    const auto str = input.GetData();
 			    const auto len = input.GetSize();
 			    string_t tz(nullptr, 0);
 			    bool has_offset = false;

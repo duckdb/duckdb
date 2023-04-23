@@ -118,7 +118,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 			// value
 			if (child_validity.RowIsValid(i)) {
 				auto len = data[i].GetSize();
-				memcpy(dataptr + offset, data[i].GetDataUnsafe(), len);
+				memcpy(dataptr + offset, data[i].GetData(), len);
 				offset += len;
 			} else {
 				memcpy(dataptr + offset, "NULL", NULL_LENGTH);

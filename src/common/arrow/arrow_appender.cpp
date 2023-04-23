@@ -195,7 +195,7 @@ struct ArrowEnumData : public ArrowScalarBaseData<TGT> {
 		return input.GetSize();
 	}
 	static void WriteData(data_ptr_t target, string_t input) {
-		memcpy(target, input.GetDataUnsafe(), input.GetSize());
+		memcpy(target, input.GetData(), input.GetSize());
 	}
 	static void EnumAppendVector(ArrowAppendData &append_data, const Vector &input, idx_t size) {
 		D_ASSERT(input.GetVectorType() == VectorType::FLAT_VECTOR);
@@ -301,7 +301,7 @@ struct ArrowVarcharConverter {
 
 	template <class SRC>
 	static void WriteData(data_ptr_t target, SRC input) {
-		memcpy(target, input.GetDataUnsafe(), input.GetSize());
+		memcpy(target, input.GetData(), input.GetSize());
 	}
 };
 

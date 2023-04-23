@@ -13,7 +13,7 @@ template <bool LTRIM, bool RTRIM>
 struct TrimOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
-		auto data = input.GetDataUnsafe();
+		auto data = input.GetData();
 		auto size = input.GetSize();
 
 		utf8proc_int32_t codepoint;
@@ -64,7 +64,7 @@ static void UnaryTrimFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 static void GetIgnoredCodepoints(string_t ignored, unordered_set<utf8proc_int32_t> &ignored_codepoints) {
-	auto dataptr = (utf8proc_uint8_t *)ignored.GetDataUnsafe();
+	auto dataptr = (utf8proc_uint8_t *)ignored.GetData();
 	auto size = ignored.GetSize();
 	idx_t pos = 0;
 	while (pos < size) {
@@ -78,7 +78,7 @@ template <bool LTRIM, bool RTRIM>
 static void BinaryTrimFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<string_t, string_t, string_t>(
 	    input.data[0], input.data[1], result, input.size(), [&](string_t input, string_t ignored) {
-		    auto data = input.GetDataUnsafe();
+		    auto data = input.GetData();
 		    auto size = input.GetSize();
 
 		    unordered_set<utf8proc_int32_t> ignored_codepoints;

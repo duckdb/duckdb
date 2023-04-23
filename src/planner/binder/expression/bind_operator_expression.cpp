@@ -127,8 +127,8 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		break;
 	}
 	if (!function_name.empty()) {
-		auto function = make_uniq<FunctionExpression>(function_name, std::move(op.children));
-		return BindExpression(*function, depth, nullptr);
+		auto function = make_uniq_base<ParsedExpression, FunctionExpression>(function_name, std::move(op.children));
+		return BindExpression(function, depth, false);
 	}
 
 	vector<BoundExpression *> children;
