@@ -90,7 +90,7 @@ public:
 
 	bool AlterOwnership(CatalogTransaction transaction, ChangeOwnershipInfo &info);
 
-	void CleanupEntry(CatalogEntry *catalog_entry);
+	void CleanupEntry(CatalogEntry &catalog_entry);
 
 	//! Returns the entry with the specified name
 	DUCKDB_API CatalogEntry *GetEntry(CatalogTransaction transaction, const string &name);
@@ -132,15 +132,15 @@ private:
 	//! Adjust User dependency
 	void AdjustUserDependency(CatalogEntry &entry, ColumnDefinition &column, bool remove);
 	//! Given a root entry, gets the entry valid for this transaction
-	CatalogEntry *GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry *current);
-	CatalogEntry *GetCommittedEntry(CatalogEntry *current);
+	CatalogEntry &GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry &current);
+	CatalogEntry &GetCommittedEntry(CatalogEntry &current);
 	bool GetEntryInternal(CatalogTransaction transaction, const string &name, EntryIndex *entry_index,
 	                      CatalogEntry *&entry);
 	bool GetEntryInternal(CatalogTransaction transaction, EntryIndex &entry_index, CatalogEntry *&entry);
 	//! Drops an entry from the catalog set; must hold the catalog_lock to safely call this
 	void DropEntryInternal(CatalogTransaction transaction, EntryIndex entry_index, CatalogEntry &entry, bool cascade);
 	CatalogEntry *CreateEntryInternal(CatalogTransaction transaction, unique_ptr<CatalogEntry> entry);
-	MappingValue *GetMapping(CatalogTransaction transaction, const string &name, bool get_latest = false);
+	optional_ptr<MappingValue> GetMapping(CatalogTransaction transaction, const string &name, bool get_latest = false);
 	void PutMapping(CatalogTransaction transaction, const string &name, EntryIndex entry_index);
 	void DeleteMapping(CatalogTransaction transaction, const string &name);
 	void DropEntryDependencies(CatalogTransaction transaction, EntryIndex &entry_index, CatalogEntry &entry,

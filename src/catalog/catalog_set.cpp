@@ -230,8 +230,8 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	if (value->name != original_name) {
 		auto mapping_value = GetMapping(transaction, value->name);
 		if (mapping_value && !mapping_value->deleted) {
-			auto original_entry = GetEntryForTransaction(transaction, mapping_value->index.GetEntry().get());
-			if (!original_entry->deleted) {
+			auto &original_entry = GetEntryForTransaction(transaction, *mapping_value->index.GetEntry());
+			if (!original_entry.deleted) {
 				entry->UndoAlter(context, alter_info);
 				string rename_err_msg =
 				    "Could not rename \"%s\" to \"%s\": another entry with this name already exists!";
@@ -336,19 +336,19 @@ DuckCatalog &CatalogSet::GetCatalog() {
 	return catalog;
 }
 
-void CatalogSet::CleanupEntry(CatalogEntry *catalog_entry) {
+void CatalogSet::CleanupEntry(CatalogEntry &catalog_entry) {
 	// destroy the backed up entry: it is no longer required
-	D_ASSERT(catalog_entry->parent);
-	if (catalog_entry->parent->type != CatalogType::UPDATED_ENTRY) {
+	D_ASSERT(catalog_entry.parent);
+	if (catalog_entry.parent->type != CatalogType::UPDATED_ENTRY) {
 		lock_guard<mutex> write_lock(catalog.GetWriteLock());
 		lock_guard<mutex> lock(catalog_lock);
-		if (!catalog_entry->deleted) {
+		if (!catalog_entry.deleted) {
 			// delete the entry from the dependency manager, if it is not deleted yet
-			D_ASSERT(catalog_entry->catalog->IsDuckCatalog());
-			((DuckCatalog &)*catalog_entry->catalog).GetDependencyManager().EraseObject(*catalog_entry);
+			D_ASSERT(catalog_entry.catalog->IsDuckCatalog());
+			catalog_entry.catalog->Cast<DuckCatalog>().GetDependencyManager().EraseObject(catalog_entry);
 		}
-		auto parent = catalog_entry->parent;
-		parent->child = std::move(catalog_entry->child);
+		auto parent = catalog_entry.parent;
+		parent->child = std::move(catalog_entry.child);
 		if (parent->deleted && !parent->child && !parent->parent) {
 			auto mapping_entry = mapping.find(parent->name);
 			D_ASSERT(mapping_entry != mapping.end());
@@ -366,8 +366,8 @@ bool CatalogSet::HasConflict(CatalogTransaction transaction, transaction_t times
 	       (timestamp < TRANSACTION_ID_START && timestamp > transaction.start_time);
 }
 
-MappingValue *CatalogSet::GetMapping(CatalogTransaction transaction, const string &name, bool get_latest) {
-	MappingValue *mapping_value;
+optional_ptr<MappingValue> CatalogSet::GetMapping(CatalogTransaction transaction, const string &name, bool get_latest) {
+	optional_ptr<MappingValue> mapping_value;
 	auto entry = mapping.find(name);
 	if (entry != mapping.end()) {
 		mapping_value = entry->second.get();
@@ -425,27 +425,27 @@ bool CatalogSet::UseTimestamp(CatalogTransaction transaction, transaction_t time
 	return false;
 }
 
-CatalogEntry *CatalogSet::GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry *current) {
-	while (current->child) {
-		if (UseTimestamp(transaction, current->timestamp)) {
+CatalogEntry &CatalogSet::GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry &current) {
+	reference<CatalogEntry> entry(current);
+	while (entry.get().child) {
+		if (UseTimestamp(transaction, entry.get().timestamp)) {
 			break;
 		}
-		current = current->child.get();
-		D_ASSERT(current);
+		entry = *entry.get().child;
 	}
-	return current;
+	return entry.get();
 }
 
-CatalogEntry *CatalogSet::GetCommittedEntry(CatalogEntry *current) {
-	while (current->child) {
-		if (current->timestamp < TRANSACTION_ID_START) {
+CatalogEntry &CatalogSet::GetCommittedEntry(CatalogEntry &current) {
+	reference<CatalogEntry> entry(current);
+	while (entry.get().child) {
+		if (entry.get().timestamp < TRANSACTION_ID_START) {
 			// this entry is committed: use it
 			break;
 		}
-		current = current->child.get();
-		D_ASSERT(current);
+		entry = *entry.get().child;
 	}
-	return current;
+	return entry.get();
 }
 
 SimilarCatalogEntry CatalogSet::SimilarEntry(CatalogTransaction transaction, const string &name) {
@@ -522,12 +522,12 @@ CatalogEntry *CatalogSet::GetEntry(CatalogTransaction transaction, const string 
 		// we found an entry for this name
 		// check the version numbers
 
-		auto catalog_entry = mapping_value->index.GetEntry().get();
-		CatalogEntry *current = GetEntryForTransaction(transaction, catalog_entry);
-		if (current->deleted || (current->name != name && !UseTimestamp(transaction, mapping_value->timestamp))) {
+		auto &catalog_entry = *mapping_value->index.GetEntry();
+		auto &current = GetEntryForTransaction(transaction, catalog_entry);
+		if (current.deleted || (current.name != name && !UseTimestamp(transaction, mapping_value->timestamp))) {
 			return nullptr;
 		}
-		return current;
+		return &current;
 	}
 	return CreateDefaultEntry(transaction, name, lock);
 }
@@ -686,10 +686,10 @@ void CatalogSet::Scan(CatalogTransaction transaction, const std::function<void(C
 	CreateDefaultEntries(transaction, lock);
 
 	for (auto &kv : entries) {
-		auto entry = kv.second.entry.get();
-		entry = GetEntryForTransaction(transaction, entry);
-		if (!entry->deleted) {
-			callback(*entry);
+		auto &entry = *kv.second.entry.get();
+		auto &entry_for_transaction = GetEntryForTransaction(transaction, entry);
+		if (!entry_for_transaction.deleted) {
+			callback(entry_for_transaction);
 		}
 	}
 }
@@ -703,9 +703,9 @@ void CatalogSet::Scan(const std::function<void(CatalogEntry &)> &callback) {
 	lock_guard<mutex> lock(catalog_lock);
 	for (auto &kv : entries) {
 		auto entry = kv.second.entry.get();
-		entry = GetCommittedEntry(entry);
-		if (!entry->deleted) {
-			callback(*entry);
+		auto &commited_entry = GetCommittedEntry(*entry);
+		if (!commited_entry.deleted) {
+			callback(commited_entry);
 		}
 	}
 }
