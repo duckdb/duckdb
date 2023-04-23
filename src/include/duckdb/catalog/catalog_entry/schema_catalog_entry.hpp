@@ -83,7 +83,7 @@ public:
 	//! Create a enum within the given schema
 	virtual optional_ptr<CatalogEntry> CreateType(CatalogTransaction transaction, CreateTypeInfo &info) = 0;
 
-	DUCKDB_API virtual CatalogEntry *GetEntry(CatalogTransaction transaction, CatalogType type, const string &name) = 0;
+	DUCKDB_API virtual optional_ptr<CatalogEntry> GetEntry(CatalogTransaction transaction, CatalogType type, const string &name) = 0;
 	DUCKDB_API virtual SimilarCatalogEntry GetSimilarEntry(CatalogTransaction transaction, CatalogType type,
 	                                                       const string &name);
 

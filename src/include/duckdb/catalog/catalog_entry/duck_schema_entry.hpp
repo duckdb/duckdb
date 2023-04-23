@@ -57,7 +57,7 @@ public:
 	void Scan(ClientContext &context, CatalogType type, const std::function<void(CatalogEntry &)> &callback) override;
 	void Scan(CatalogType type, const std::function<void(CatalogEntry &)> &callback) override;
 	void DropEntry(ClientContext &context, DropInfo &info) override;
-	CatalogEntry *GetEntry(CatalogTransaction transaction, CatalogType type, const string &name) override;
+	optional_ptr<CatalogEntry> GetEntry(CatalogTransaction transaction, CatalogType type, const string &name) override;
 	SimilarCatalogEntry GetSimilarEntry(CatalogTransaction transaction, CatalogType type, const string &name) override;
 
 	void Verify(Catalog &catalog) override;
