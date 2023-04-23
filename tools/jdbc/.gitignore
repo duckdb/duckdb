@@ -1,0 +1,6 @@
+.gradle/
+build/
+.idea/
+out/
+*.class
+src/main/resources/libduckdb_java.so_*

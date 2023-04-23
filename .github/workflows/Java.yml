@@ -51,7 +51,11 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
+
+      - uses: gradle/wrapper-validation-action@v1
+
       - uses: ./.github/actions/ubuntu_16_setup
+
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
         with:
@@ -63,9 +67,7 @@ jobs:
         run: make
       - name: Java Tests
         shell: bash
-        run: >
-          java -cp build/release/tools/jdbc/duckdb_jdbc.jar
-          org.duckdb.test.TestDuckDBJDBC
+        run: (cd tools/jdbc && ./gradlew test)
       - name: Java Example
         shell: bash
         run: |
@@ -95,6 +97,9 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
+
+      - uses: gradle/wrapper-validation-action@v1
+
       - uses: ./.github/actions/ubuntu_16_setup
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
@@ -133,6 +138,9 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
+
+      - uses: gradle/wrapper-validation-action@v1
+
       - uses: actions/setup-python@v4
         with:
           python-version: "3.7"
@@ -152,8 +160,7 @@ jobs:
           cmake --build . --config Release
       - name: Java Tests
         shell: bash
-        run: |
-          java -cp tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
+        run: (cd tools/jdbc && ./gradlew test)
       - name: Deploy
         shell: bash
         run: >
@@ -178,6 +185,9 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
+
+      - uses: gradle/wrapper-validation-action@v1
+
       - uses: actions/setup-python@v4
         with:
           python-version: "3.7"
@@ -191,9 +201,7 @@ jobs:
         run: make
       - name: Java Tests
         shell: bash
-        run: >
-          java -cp build/release/tools/jdbc/duckdb_jdbc.jar
-          org.duckdb.test.TestDuckDBJDBC
+        run: (cd tools/jdbc && ./gradlew test)
       - name: Java Example
         shell: bash
         run: |
@@ -223,6 +231,8 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
+
+      - uses: gradle/wrapper-validation-action@v1
 
       - shell: bash
         run: mkdir jdbc-artifacts
@@ -291,6 +301,9 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
+
+      - uses: gradle/wrapper-validation-action@v1
+
       - uses: ./.github/actions/ubuntu_16_setup
 
       - name: Install
