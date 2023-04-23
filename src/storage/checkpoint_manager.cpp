@@ -342,9 +342,9 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetaBlockReader &reader
 	auto info = IndexCatalogEntry::Deserialize(reader, context);
 
 	// Create index in the catalog
-	auto schema_catalog = catalog.GetSchema(context, info->schema);
-	auto &table_catalog = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, info->schema, info->table->table_name)->Cast<DuckTableEntry>();
-	auto &index_catalog = schema_catalog->CreateIndex(context, *info, table_catalog)->Cast<DuckIndexEntry>();
+	auto &schema_catalog = catalog.GetSchema(context, info->schema);
+	auto &table_catalog = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, info->schema, info->table->table_name).Cast<DuckTableEntry>();
+	auto &index_catalog = schema_catalog.CreateIndex(context, *info, table_catalog)->Cast<DuckIndexEntry>();
 	index_catalog.info = table_catalog.GetStorage().info;
 	// Here we just gotta read the root node
 	auto root_block_id = reader.Read<block_id_t>();
@@ -446,8 +446,8 @@ void CheckpointReader::ReadTable(ClientContext &context, MetaBlockReader &reader
 	auto info = TableCatalogEntry::Deserialize(reader, context);
 	// bind the info
 	auto binder = Binder::CreateBinder(context);
-	auto schema = catalog.GetSchema(context, info->schema);
-	auto bound_info = binder->BindCreateTableInfo(std::move(info), *schema);
+	auto &schema = catalog.GetSchema(context, info->schema);
+	auto bound_info = binder->BindCreateTableInfo(std::move(info), schema);
 
 	// now read the actual table data and place it into the create table info
 	ReadTableData(context, reader, *bound_info);

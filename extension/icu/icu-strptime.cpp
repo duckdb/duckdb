@@ -222,9 +222,9 @@ struct ICUStrptime : public ICUDateFunc {
 	static void TailPatch(const string &name, ClientContext &context, const vector<LogicalType> &types) {
 		// Find the old function
 		auto &catalog = Catalog::GetSystemCatalog(context);
-		auto entry = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, name);
-		D_ASSERT(entry && entry->type == CatalogType::SCALAR_FUNCTION_ENTRY);
-		auto &func = entry->Cast<ScalarFunctionCatalogEntry>();
+		auto &entry = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, name);
+		D_ASSERT(entry.type == CatalogType::SCALAR_FUNCTION_ENTRY);
+		auto &func = entry.Cast<ScalarFunctionCatalogEntry>();
 		string error;
 
 		FunctionBinder function_binder(context);

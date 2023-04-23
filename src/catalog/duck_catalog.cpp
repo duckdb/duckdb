@@ -89,7 +89,7 @@ void DuckCatalog::DropSchema(CatalogTransaction transaction, DropInfo &info) {
 	D_ASSERT(!info.name.empty());
 	ModifyCatalog();
 	if (!schemas->DropEntry(transaction, info.name, info.cascade)) {
-		if (!info.if_exists) {
+		if (info.if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
 			throw CatalogException("Schema with name \"%s\" does not exist!", info.name);
 		}
 	}
@@ -107,14 +107,17 @@ void DuckCatalog::ScanSchemas(std::function<void(SchemaCatalogEntry &)> callback
 	schemas->Scan([&](CatalogEntry &entry) { callback(entry.Cast<SchemaCatalogEntry>()); });
 }
 
-SchemaCatalogEntry *DuckCatalog::GetSchema(CatalogTransaction transaction, const string &schema_name, bool if_exists,
+optional_ptr<SchemaCatalogEntry> DuckCatalog::GetSchema(CatalogTransaction transaction, const string &schema_name, OnEntryNotFound if_not_found,
                                            QueryErrorContext error_context) {
 	D_ASSERT(!schema_name.empty());
 	auto entry = schemas->GetEntry(transaction, schema_name);
-	if (!entry && !if_exists) {
-		throw CatalogException(error_context.FormatError("Schema with name %s does not exist!", schema_name));
+	if (!entry) {
+		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+			throw CatalogException(error_context.FormatError("Schema with name %s does not exist!", schema_name));
+		}
+		return nullptr;
 	}
-	return (SchemaCatalogEntry *)entry;
+	return &entry->Cast<SchemaCatalogEntry>();
 }
 
 DatabaseSize DuckCatalog::GetDatabaseSize(ClientContext &context) {

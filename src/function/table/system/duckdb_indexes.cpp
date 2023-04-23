@@ -100,12 +100,12 @@ void DuckDBIndexesFunction(ClientContext &context, TableFunctionInput &data_p, D
 		// index_oid, BIGINT
 		output.SetValue(col++, count, Value::BIGINT(index.oid));
 		// find the table in the catalog
-		auto table_entry =
+		auto &table_entry =
 		    index.schema->catalog->GetEntry<TableCatalogEntry>(context, index.GetSchemaName(), index.GetTableName());
 		// table_name, VARCHAR
-		output.SetValue(col++, count, Value(table_entry->name));
+		output.SetValue(col++, count, Value(table_entry.name));
 		// table_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(table_entry->oid));
+		output.SetValue(col++, count, Value::BIGINT(table_entry.oid));
 		if (index.index) {
 			// is_unique, BOOLEAN
 			output.SetValue(col++, count, Value::BOOLEAN(index.index->IsUnique()));

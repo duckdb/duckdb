@@ -712,7 +712,7 @@ const vector<unique_ptr<BoundConstraint>> &DuckTableEntry::GetBoundConstraints()
 }
 
 TableFunction DuckTableEntry::GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) {
-	bind_data = make_uniq<TableScanBindData>(this);
+	bind_data = make_uniq<TableScanBindData>(*this);
 	return TableScanFunction::GetFunction();
 }
 

@@ -39,7 +39,7 @@ public:
 	optional_ptr<AttachedDatabase> GetDatabase(ClientContext &context, const string &name);
 	//! Add a new attached database to the database manager
 	void AddDatabase(ClientContext &context, unique_ptr<AttachedDatabase> db);
-	void DetachDatabase(ClientContext &context, const string &name, bool if_exists);
+	void DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found);
 	//! Returns a reference to the system catalog
 	Catalog &GetSystemCatalog();
 	static const string &GetDefaultDatabase(ClientContext &context);

@@ -35,28 +35,29 @@ unique_ptr<Expression> ExpressionBinder::PushCollation(ClientContext &context, u
 	}
 	auto &catalog = Catalog::GetSystemCatalog(context);
 	auto splits = StringUtil::Split(StringUtil::Lower(collation), ".");
-	vector<CollateCatalogEntry *> entries;
+	vector<reference<CollateCatalogEntry>> entries;
 	for (auto &collation_argument : splits) {
-		auto collation_entry = catalog.GetEntry<CollateCatalogEntry>(context, DEFAULT_SCHEMA, collation_argument);
-		if (collation_entry->combinable) {
+		auto &collation_entry = catalog.GetEntry<CollateCatalogEntry>(context, DEFAULT_SCHEMA, collation_argument);
+		if (collation_entry.combinable) {
 			entries.insert(entries.begin(), collation_entry);
 		} else {
-			if (!entries.empty() && !entries.back()->combinable) {
-				throw BinderException("Cannot combine collation types \"%s\" and \"%s\"", entries.back()->name,
-				                      collation_entry->name);
+			if (!entries.empty() && !entries.back().get().combinable) {
+				throw BinderException("Cannot combine collation types \"%s\" and \"%s\"", entries.back().get().name,
+				                      collation_entry.name);
 			}
 			entries.push_back(collation_entry);
 		}
 	}
-	for (auto &collation_entry : entries) {
-		if (equality_only && collation_entry->not_required_for_equality) {
+	for (auto &entry : entries) {
+		auto &collation_entry = entry.get();
+		if (equality_only && collation_entry.not_required_for_equality) {
 			continue;
 		}
 		vector<unique_ptr<Expression>> children;
 		children.push_back(std::move(source));
 
 		FunctionBinder function_binder(context);
-		auto function = function_binder.BindScalarFunction(collation_entry->function, std::move(children));
+		auto function = function_binder.BindScalarFunction(collation_entry.function, std::move(children));
 		source = std::move(function);
 	}
 	return source;

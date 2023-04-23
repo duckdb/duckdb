@@ -192,19 +192,19 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	unique_ptr<FunctionData> bind_info;
 	if (window.type == ExpressionType::WINDOW_AGGREGATE) {
 		//  Look up the aggregate function in the catalog
-		auto func = Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, window.catalog, window.schema,
-		                                                             window.function_name, false, error_context);
-		D_ASSERT(func->type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
+		auto &func = Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, window.catalog, window.schema,
+		                                                             window.function_name, error_context);
+		D_ASSERT(func.type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
 
 		// bind the aggregate
 		string error;
 		FunctionBinder function_binder(context);
-		auto best_function = function_binder.BindFunction(func->name, func->functions, types, error);
+		auto best_function = function_binder.BindFunction(func.name, func.functions, types, error);
 		if (best_function == DConstants::INVALID_INDEX) {
 			throw BinderException(binder.FormatError(window, error));
 		}
 		// found a matching function! bind it as an aggregate
-		auto bound_function = func->functions.GetFunctionByOffset(best_function);
+		auto bound_function = func.functions.GetFunctionByOffset(best_function);
 		auto bound_aggregate = function_binder.BindAggregateFunction(bound_function, std::move(children));
 		// create the aggregate
 		aggregate = make_uniq<AggregateFunction>(bound_aggregate->function);

@@ -537,8 +537,8 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 		auto tname = get_table_name(i);
 		if (!tname.empty()) {
 			string full_tname = string(tname) + string(suffix);
-			auto tbl_catalog = catalog.GetEntry<TableCatalogEntry>(context, schema, full_tname);
-			append_info[i].appender = make_uniq<InternalAppender>(context, *tbl_catalog);
+			auto &tbl_catalog = catalog.GetEntry<TableCatalogEntry>(context, schema, full_tname);
+			append_info[i].appender = make_uniq<InternalAppender>(context, tbl_catalog);
 		}
 	}
 

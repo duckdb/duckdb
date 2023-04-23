@@ -81,7 +81,7 @@ static void NegatePercentileFractions(ClientContext &context, unique_ptr<ParsedE
 	}
 }
 
-BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, optional_ptr<AggregateFunctionCatalogEntry> func,
+BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry &func,
                                            idx_t depth) {
 	// first bind the child of the aggregate expression (if any)
 	this->bound_aggregate = true;
@@ -172,7 +172,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, optional_pt
 	}
 
 	if (aggr.filter) {
-		auto &child = (BoundExpression &)*aggr.filter;
+		auto &child = aggr.filter->Cast<BoundExpression>();
 		bound_filter = BoundCastExpression::AddCastToType(context, std::move(child.expr), LogicalType::BOOLEAN);
 	}
 
@@ -184,7 +184,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, optional_pt
 
 	if (ordered_set_agg) {
 		for (auto &order : aggr.order_bys->orders) {
-			auto &child = (BoundExpression &)*order.expression;
+			auto &child = order.expression->Cast<BoundExpression>();
 			types.push_back(child.expr->return_type);
 			arguments.push_back(child.expr->return_type);
 			children.push_back(std::move(child.expr));
@@ -193,7 +193,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, optional_pt
 	}
 
 	for (idx_t i = 0; i < aggr.children.size(); i++) {
-		auto &child = (BoundExpression &)*aggr.children[i];
+		auto &child = aggr.children[i]->Cast<BoundExpression>();
 		types.push_back(child.expr->return_type);
 		arguments.push_back(child.expr->return_type);
 		children.push_back(std::move(child.expr));
@@ -201,12 +201,12 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, optional_pt
 
 	// bind the aggregate
 	FunctionBinder function_binder(context);
-	idx_t best_function = function_binder.BindFunction(func->name, func->functions, types, error);
+	idx_t best_function = function_binder.BindFunction(func.name, func.functions, types, error);
 	if (best_function == DConstants::INVALID_INDEX) {
 		throw BinderException(binder.FormatError(aggr, error));
 	}
 	// found a matching function!
-	auto bound_function = func->functions.GetFunctionByOffset(best_function);
+	auto bound_function = func.functions.GetFunctionByOffset(best_function);
 
 	// Bind any sort columns, unless the aggregate is order-insensitive
 	unique_ptr<BoundOrderModifier> order_bys;

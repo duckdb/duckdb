@@ -27,7 +27,7 @@ unique_ptr<CreateInfo> CreateScalarFunctionInfo::Copy() const {
 }
 
 unique_ptr<AlterInfo> CreateScalarFunctionInfo::GetAlterInfo() const {
-	return make_uniq_base<AlterInfo, AddScalarFunctionOverloadInfo>(AlterEntryData(catalog, schema, name, true),
+	return make_uniq_base<AlterInfo, AddScalarFunctionOverloadInfo>(AlterEntryData(catalog, schema, name, OnEntryNotFound::RETURN_NULL),
 	                                                                functions);
 }
 

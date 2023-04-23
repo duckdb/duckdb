@@ -335,10 +335,10 @@ void ReplayState::ReplaySequenceValue() {
 	}
 
 	// fetch the sequence from the catalog
-	auto seq = catalog.GetEntry<SequenceCatalogEntry>(context, schema, name);
-	if (usage_count > seq->usage_count) {
-		seq->usage_count = usage_count;
-		seq->counter = counter;
+	auto &seq = catalog.GetEntry<SequenceCatalogEntry>(context, schema, name);
+	if (usage_count > seq.usage_count) {
+		seq.usage_count = usage_count;
+		seq.counter = counter;
 	}
 }
 
@@ -394,15 +394,14 @@ void ReplayState::ReplayDropTableMacro() {
 // Replay Index
 //===--------------------------------------------------------------------===//
 void ReplayState::ReplayCreateIndex() {
-
 	auto info = IndexCatalogEntry::Deserialize(source, context);
 	if (deserialize_only) {
 		return;
 	}
 
 	// get the physical table to which we'll add the index
-	auto table = catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->table->table_name);
-	auto &data_table = table->GetStorage();
+	auto &table = catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->table->table_name);
+	auto &data_table = table.GetStorage();
 
 	// bind the parsed expressions
 	if (info->expressions.empty()) {
@@ -411,7 +410,7 @@ void ReplayState::ReplayCreateIndex() {
 		}
 	}
 	auto binder = Binder::CreateBinder(context);
-	auto expressions = binder->BindCreateIndexExpressions(*table, *info);
+	auto expressions = binder->BindCreateIndexExpressions(table, *info);
 
 	// create the empty index
 	unique_ptr<Index> index;
@@ -438,7 +437,6 @@ void ReplayState::ReplayCreateIndex() {
 }
 
 void ReplayState::ReplayDropIndex() {
-
 	DropInfo info;
 	info.type = CatalogType::INDEX_ENTRY;
 	info.schema = source.Read<string>();
@@ -459,7 +457,7 @@ void ReplayState::ReplayUseTable() {
 	if (deserialize_only) {
 		return;
 	}
-	current_table = catalog.GetEntry<TableCatalogEntry>(context, schema_name, table_name);
+	current_table = &catalog.GetEntry<TableCatalogEntry>(context, schema_name, table_name);
 }
 
 void ReplayState::ReplayInsert() {

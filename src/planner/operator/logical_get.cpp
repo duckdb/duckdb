@@ -20,7 +20,7 @@ string LogicalGet::GetName() const {
 	return StringUtil::Upper(function.name);
 }
 
-TableCatalogEntry *LogicalGet::GetTable() const {
+optional_ptr<TableCatalogEntry> LogicalGet::GetTable() const {
 	return TableScanFunction::GetTableEntry(function, bind_data.get());
 }
 

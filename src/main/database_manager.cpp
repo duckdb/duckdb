@@ -42,9 +42,9 @@ void DatabaseManager::AddDatabase(ClientContext &context, unique_ptr<AttachedDat
 	}
 }
 
-void DatabaseManager::DetachDatabase(ClientContext &context, const string &name, bool if_exists) {
+void DatabaseManager::DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found) {
 	if (!databases->DropEntry(context, name, false, true)) {
-		if (!if_exists) {
+		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
 			throw BinderException("Failed to detach database with name \"%s\": database not found", name);
 		}
 	}

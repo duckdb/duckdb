@@ -107,9 +107,9 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	result.names = {"Success"};
 
 	// lookup the format in the catalog
-	auto copy_function =
+	auto &copy_function =
 	    Catalog::GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, stmt.info->format);
-	if (!copy_function->function.copy_to_bind && !copy_function->function.plan) {
+	if (!copy_function.function.copy_to_bind && !copy_function.function.plan) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
 
@@ -146,7 +146,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		idx_t id = 0;
 		while (true) {
 			string id_suffix = id == 0 ? string() : "_" + to_string(id);
-			auto name = CreateFileName(id_suffix, table, copy_function->function.extension);
+			auto name = CreateFileName(id_suffix, table, copy_function.function.extension);
 			auto directory = stmt.info->file_path;
 			auto full_path = fs.JoinPath(directory, name);
 			info->file_path = full_path;
@@ -202,7 +202,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	}
 
 	// create the export node
-	auto export_node = make_uniq<LogicalExport>(copy_function->function, std::move(stmt.info), exported_tables);
+	auto export_node = make_uniq<LogicalExport>(copy_function.function, std::move(stmt.info), exported_tables);
 
 	if (child_operator) {
 		export_node->children.push_back(std::move(child_operator));

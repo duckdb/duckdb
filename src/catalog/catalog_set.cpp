@@ -191,12 +191,8 @@ bool CatalogSet::AlterOwnership(CatalogTransaction transaction, ChangeOwnershipI
 		return false;
 	}
 
-	auto owner_entry = catalog.GetEntry(transaction.GetContext(), info.owner_schema, info.owner_name);
-	if (!owner_entry) {
-		return false;
-	}
-
-	catalog.GetDependencyManager().AddOwnership(transaction, *owner_entry, *entry);
+	auto &owner_entry = catalog.GetEntry(transaction.GetContext(), info.owner_schema, info.owner_name);
+	catalog.GetDependencyManager().AddOwnership(transaction, owner_entry, *entry);
 	return true;
 }
 

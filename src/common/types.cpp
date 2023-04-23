@@ -1679,7 +1679,7 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(FieldReader &reader) {
 			// See if the serializer has a catalog
 			auto catalog = reader.GetSource().GetCatalog();
 			if (catalog) {
-				auto enum_type = catalog->GetType(client_context, schema_name, enum_name, true);
+				auto enum_type = catalog->GetType(client_context, schema_name, enum_name, OnEntryNotFound::RETURN_NULL);
 				if (enum_type != LogicalType::INVALID) {
 					extra_info = enum_type.GetAuxInfoShrPtr();
 				}

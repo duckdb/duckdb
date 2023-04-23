@@ -21,7 +21,7 @@ unique_ptr<LogicalOperator> LogicalCreateIndex::Deserialize(LogicalDeserializati
 	auto &context = state.gstate.context;
 	auto catalog_info = TableCatalogEntry::Deserialize(reader.GetSource(), context);
 
-	auto table =
+	auto &table =
 	    Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, catalog_info->schema, catalog_info->table);
 	auto unbound_expressions = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 
@@ -42,7 +42,7 @@ unique_ptr<LogicalOperator> LogicalCreateIndex::Deserialize(LogicalDeserializati
 	    reader, state.gstate, CatalogType::TABLE_FUNCTION_ENTRY, bind_data, has_deserialize);
 
 	reader.Finalize();
-	return make_uniq<LogicalCreateIndex>(std::move(bind_data), std::move(info), std::move(unbound_expressions), *table,
+	return make_uniq<LogicalCreateIndex>(std::move(bind_data), std::move(info), std::move(unbound_expressions), table,
 	                                     std::move(function));
 }
 
