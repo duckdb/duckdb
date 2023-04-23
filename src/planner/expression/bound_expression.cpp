@@ -6,6 +6,10 @@ BoundExpression::BoundExpression(unique_ptr<Expression> expr)
     : ParsedExpression(ExpressionType::INVALID, ExpressionClass::BOUND_EXPRESSION), expr(std::move(expr)) {
 }
 
+unique_ptr<Expression> &BoundExpression::GetExpression(ParsedExpression &expr) {
+	return expr.Cast<BoundExpression>().expr;
+}
+
 string BoundExpression::ToString() const {
 	if (!expr) {
 		throw InternalException("ToString(): BoundExpression does not have a child");

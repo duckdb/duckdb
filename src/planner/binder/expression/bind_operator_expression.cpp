@@ -90,8 +90,8 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	switch (op.type) {
 	case ExpressionType::ARRAY_EXTRACT: {
 		D_ASSERT(op.children[0]->expression_class == ExpressionClass::BOUND_EXPRESSION);
-		auto &b_exp = (BoundExpression &)*op.children[0];
-		if (b_exp.expr->return_type.id() == LogicalTypeId::MAP) {
+		auto &b_exp = BoundExpression::GetExpression(*op.children[0]);
+		if (b_exp->return_type.id() == LogicalTypeId::MAP) {
 			function_name = "map_extract";
 		} else {
 			function_name = "array_extract";
@@ -105,14 +105,14 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		D_ASSERT(op.children.size() == 2);
 		D_ASSERT(op.children[0]->expression_class == ExpressionClass::BOUND_EXPRESSION);
 		D_ASSERT(op.children[1]->expression_class == ExpressionClass::BOUND_EXPRESSION);
-		auto &extract_exp = (BoundExpression &)*op.children[0];
-		auto &name_exp = (BoundExpression &)*op.children[1];
-		auto extract_expr_type = extract_exp.expr->return_type.id();
+		auto &extract_exp = BoundExpression::GetExpression(*op.children[0]);
+		auto &name_exp = BoundExpression::GetExpression(*op.children[1]);
+		auto extract_expr_type = extract_exp->return_type.id();
 		if (extract_expr_type != LogicalTypeId::STRUCT && extract_expr_type != LogicalTypeId::UNION &&
 		    extract_expr_type != LogicalTypeId::SQLNULL) {
 			return BindResult(StringUtil::Format(
 			    "Cannot extract field %s from expression \"%s\" because it is not a struct or a union",
-			    name_exp.ToString(), extract_exp.ToString()));
+			    name_exp->ToString(), extract_exp->ToString()));
 		}
 		function_name = extract_expr_type == LogicalTypeId::UNION ? "union_extract" : "struct_extract";
 		break;

@@ -109,9 +109,8 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	// extract the children and types
 	vector<unique_ptr<Expression>> children;
 	for (idx_t i = 0; i < function.children.size(); i++) {
-		auto &child = (BoundExpression &)*function.children[i];
-		D_ASSERT(child.expr);
-		children.push_back(std::move(child.expr));
+		auto &child = BoundExpression::GetExpression(*function.children[i]);
+		children.push_back(std::move(child));
 	}
 
 	FunctionBinder function_binder(context);
@@ -141,18 +140,17 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function,
 	}
 
 	// get the logical type of the children of the list
-	auto &list_child = function.children[0]->Cast<BoundExpression>();
-
-	if (list_child.expr->return_type.id() != LogicalTypeId::LIST &&
-	    list_child.expr->return_type.id() != LogicalTypeId::SQLNULL &&
-	    list_child.expr->return_type.id() != LogicalTypeId::UNKNOWN) {
+	auto &list_child = BoundExpression::GetExpression(*function.children[0]);
+	if (list_child->return_type.id() != LogicalTypeId::LIST &&
+	    list_child->return_type.id() != LogicalTypeId::SQLNULL &&
+	    list_child->return_type.id() != LogicalTypeId::UNKNOWN) {
 		throw BinderException(" Invalid LIST argument to " + function.function_name + "!");
 	}
 
-	LogicalType list_child_type = list_child.expr->return_type.id();
-	if (list_child.expr->return_type.id() != LogicalTypeId::SQLNULL &&
-	    list_child.expr->return_type.id() != LogicalTypeId::UNKNOWN) {
-		list_child_type = ListType::GetChildType(list_child.expr->return_type);
+	LogicalType list_child_type = list_child->return_type.id();
+	if (list_child->return_type.id() != LogicalTypeId::SQLNULL &&
+	    list_child->return_type.id() != LogicalTypeId::UNKNOWN) {
+		list_child_type = ListType::GetChildType(list_child->return_type);
 	}
 
 	// bind the lambda parameter
@@ -164,12 +162,11 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function,
 	} else {
 		// successfully bound: replace the node with a BoundExpression
 		auto alias = function.children[1]->alias;
-		function.children[1] = make_uniq<BoundExpression>(std::move(bind_lambda_result.expression));
-		auto &be = function.children[1]->Cast<BoundExpression>();
-		be.alias = alias;
+		bind_lambda_result.expression->alias = alias;
 		if (!alias.empty()) {
-			be.expr->alias = alias;
+			bind_lambda_result.expression->alias = alias;
 		}
+		function.children[1] = make_uniq<BoundExpression>(std::move(bind_lambda_result.expression));
 	}
 
 	if (!error.empty()) {
@@ -183,9 +180,8 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function,
 	// extract the children and types
 	vector<unique_ptr<Expression>> children;
 	for (idx_t i = 0; i < function.children.size(); i++) {
-		auto &child = (BoundExpression &)*function.children[i];
-		D_ASSERT(child.expr);
-		children.push_back(std::move(child.expr));
+		auto &child = BoundExpression::GetExpression(*function.children[i]);
+		children.push_back(std::move(child));
 	}
 
 	// capture the (lambda) columns

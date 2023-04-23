@@ -138,8 +138,8 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 				if (!success) {
 					throw BinderException(error);
 				}
-				auto &bound_expr = aggr.children[i]->Cast<BoundExpression>();
-				ExtractCorrelatedExpressions(binder, *bound_expr.expr);
+				auto &bound_expr = BoundExpression::GetExpression(*aggr.children[i]);
+				ExtractCorrelatedExpressions(binder, *bound_expr);
 			}
 			if (aggr.filter) {
 				bool success = aggregate_binder.BindCorrelatedColumns(aggr.filter);
@@ -147,8 +147,8 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 				if (!success) {
 					throw BinderException(error);
 				}
-				auto &bound_expr = aggr.filter->Cast<BoundExpression>();
-				ExtractCorrelatedExpressions(binder, *bound_expr.expr);
+				auto &bound_expr = BoundExpression::GetExpression(*aggr.filter);
+				ExtractCorrelatedExpressions(binder, *bound_expr);
 			}
 			if (aggr.order_bys && !aggr.order_bys->orders.empty()) {
 				for (auto &order : aggr.order_bys->orders) {
@@ -156,8 +156,8 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 					if (!success) {
 						throw BinderException(error);
 					}
-					auto &bound_expr = order.expression->Cast<BoundExpression>();
-					ExtractCorrelatedExpressions(binder, *bound_expr.expr);
+					auto &bound_expr = BoundExpression::GetExpression(*order.expression);
+					ExtractCorrelatedExpressions(binder, *bound_expr);
 				}
 			}
 		} else {
@@ -172,8 +172,8 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	}
 
 	if (aggr.filter) {
-		auto &child = aggr.filter->Cast<BoundExpression>();
-		bound_filter = BoundCastExpression::AddCastToType(context, std::move(child.expr), LogicalType::BOOLEAN);
+		auto &child = BoundExpression::GetExpression(*aggr.filter);
+		bound_filter = BoundCastExpression::AddCastToType(context, std::move(child), LogicalType::BOOLEAN);
 	}
 
 	// all children bound successfully
@@ -184,19 +184,19 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 
 	if (ordered_set_agg) {
 		for (auto &order : aggr.order_bys->orders) {
-			auto &child = order.expression->Cast<BoundExpression>();
-			types.push_back(child.expr->return_type);
-			arguments.push_back(child.expr->return_type);
-			children.push_back(std::move(child.expr));
+			auto &child = BoundExpression::GetExpression(*order.expression);
+			types.push_back(child->return_type);
+			arguments.push_back(child->return_type);
+			children.push_back(std::move(child));
 		}
 		aggr.order_bys->orders.clear();
 	}
 
 	for (idx_t i = 0; i < aggr.children.size(); i++) {
-		auto &child = aggr.children[i]->Cast<BoundExpression>();
-		types.push_back(child.expr->return_type);
-		arguments.push_back(child.expr->return_type);
-		children.push_back(std::move(child.expr));
+		auto &child = BoundExpression::GetExpression(*aggr.children[i]);
+		types.push_back(child->return_type);
+		arguments.push_back(child->return_type);
+		children.push_back(std::move(child));
 	}
 
 	// bind the aggregate
@@ -214,13 +214,13 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		order_bys = make_uniq<BoundOrderModifier>();
 		auto &config = DBConfig::GetConfig(context);
 		for (auto &order : aggr.order_bys->orders) {
-			auto &order_expr = (BoundExpression &)*order.expression;
+			auto &order_expr = BoundExpression::GetExpression(*order.expression);
 			const auto sense =
 			    (order.type == OrderType::ORDER_DEFAULT) ? config.options.default_order_type : order.type;
 			const auto null_order = (order.null_order == OrderByNullType::ORDER_DEFAULT)
 			                            ? config.options.default_null_order
 			                            : order.null_order;
-			order_bys->orders.emplace_back(sense, null_order, std::move(order_expr.expr));
+			order_bys->orders.emplace_back(sense, null_order, std::move(order_expr));
 		}
 	}
 

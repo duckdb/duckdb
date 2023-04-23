@@ -120,28 +120,28 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 		return BindResult(error);
 	}
 	// the children have been successfully resolved
-	auto &left = (BoundExpression &)*expr.left;
-	auto &right = (BoundExpression &)*expr.right;
-	auto left_sql_type = left.expr->return_type;
-	auto right_sql_type = right.expr->return_type;
+	auto &left = BoundExpression::GetExpression(*expr.left);
+	auto &right = BoundExpression::GetExpression(*expr.right);
+	auto left_sql_type = left->return_type;
+	auto right_sql_type = right->return_type;
 	// cast the input types to the same type
 	// now obtain the result type of the input types
 	auto input_type = BoundComparisonExpression::BindComparison(left_sql_type, right_sql_type);
 	// add casts (if necessary)
-	left.expr = BoundCastExpression::AddCastToType(context, std::move(left.expr), input_type,
+	left = BoundCastExpression::AddCastToType(context, std::move(left), input_type,
 	                                               input_type.id() == LogicalTypeId::ENUM);
-	right.expr = BoundCastExpression::AddCastToType(context, std::move(right.expr), input_type,
+	right = BoundCastExpression::AddCastToType(context, std::move(right), input_type,
 	                                                input_type.id() == LogicalTypeId::ENUM);
 
 	if (input_type.id() == LogicalTypeId::VARCHAR) {
 		// handle collation
 		auto collation = StringType::GetCollation(input_type);
-		left.expr = PushCollation(context, std::move(left.expr), collation, expr.type == ExpressionType::COMPARE_EQUAL);
-		right.expr =
-		    PushCollation(context, std::move(right.expr), collation, expr.type == ExpressionType::COMPARE_EQUAL);
+		left = PushCollation(context, std::move(left), collation, expr.type == ExpressionType::COMPARE_EQUAL);
+		right =
+		    PushCollation(context, std::move(right), collation, expr.type == ExpressionType::COMPARE_EQUAL);
 	}
 	// now create the bound comparison expression
-	return BindResult(make_uniq<BoundComparisonExpression>(expr.type, std::move(left.expr), std::move(right.expr)));
+	return BindResult(make_uniq<BoundComparisonExpression>(expr.type, std::move(left), std::move(right)));
 }
 
 } // namespace duckdb
