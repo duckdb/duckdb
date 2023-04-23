@@ -1,3 +1,4 @@
+#include "duckdb/main/query_result.hpp"
 #include "duckdb_python/pybind_wrapper.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb_python/pytype.hpp"
@@ -11,7 +12,6 @@
 #include "duckdb_python/arrow_array_stream.hpp"
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/function/function.hpp"
-#include "duckdb/main/query_result.hpp"
 
 namespace duckdb {
 
