@@ -773,7 +773,7 @@ struct ExtraTypeInfo {
 
 	ExtraTypeInfoType type;
 	string alias;
-	TypeCatalogEntry *catalog_entry = nullptr;
+	optional_ptr<TypeCatalogEntry> catalog_entry;
 
 public:
 	bool Equals(ExtraTypeInfo *other_p) const {
@@ -843,21 +843,6 @@ bool LogicalType::HasAlias() const {
 		return true;
 	}
 	return false;
-}
-
-void LogicalType::SetCatalog(LogicalType &type, TypeCatalogEntry *catalog_entry) {
-	auto info = type.AuxInfo();
-	if (!info) {
-		return;
-	}
-	((ExtraTypeInfo &)*info).catalog_entry = catalog_entry;
-}
-TypeCatalogEntry *LogicalType::GetCatalog(const LogicalType &type) {
-	auto info = type.AuxInfo();
-	if (!info) {
-		return nullptr;
-	}
-	return ((ExtraTypeInfo &)*info).catalog_entry;
 }
 
 ExtraTypeInfoType LogicalType::GetExtraTypeInfoType(const ExtraTypeInfo &type) {
@@ -1536,17 +1521,20 @@ idx_t EnumType::GetSize(const LogicalType &type) {
 	return ((EnumTypeInfo &)*info).GetDictSize();
 }
 
-void EnumType::SetCatalog(LogicalType &type, TypeCatalogEntry *catalog_entry) {
-	D_ASSERT(type.id() == LogicalTypeId::ENUM);
+void EnumType::SetCatalog(LogicalType &type, optional_ptr<TypeCatalogEntry> catalog_entry) {
 	auto info = type.AuxInfo();
-	D_ASSERT(info);
-	((EnumTypeInfo &)*info).catalog_entry = catalog_entry;
+	if (!info) {
+		return;
+	}
+	((ExtraTypeInfo &)*info).catalog_entry = catalog_entry;
 }
-TypeCatalogEntry *EnumType::GetCatalog(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::ENUM);
+
+optional_ptr<TypeCatalogEntry> EnumType::GetCatalog(const LogicalType &type) {
 	auto info = type.AuxInfo();
-	D_ASSERT(info);
-	return ((EnumTypeInfo &)*info).catalog_entry;
+	if (!info) {
+		return nullptr;
+	}
+	return ((ExtraTypeInfo &)*info).catalog_entry;
 }
 
 string EnumType::GetSchemaName(const LogicalType &type) {

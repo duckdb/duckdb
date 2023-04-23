@@ -243,7 +243,7 @@ DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::DatabaseInstance 
 	alias_info->type = target_type;
 
 	auto &entry = catalog.CreateType(client_context, *alias_info)->Cast<TypeCatalogEntry>();
-	LogicalType::SetCatalog(target_type, &entry);
+	EnumType::SetCatalog(target_type, &entry);
 
 	// Function add point
 	ScalarFunction add_point_func("add_point", {target_type, target_type}, target_type, AddPointFunction);

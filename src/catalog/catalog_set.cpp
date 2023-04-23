@@ -543,7 +543,7 @@ void CatalogSet::UpdateTimestamp(CatalogEntry &entry, transaction_t timestamp) {
 }
 
 void CatalogSet::AdjustUserDependency(CatalogEntry &entry, ColumnDefinition &column, bool remove) {
-	CatalogEntry *user_type_catalog_p = (CatalogEntry *)LogicalType::GetCatalog(column.Type());
+	auto user_type_catalog_p = EnumType::GetCatalog(column.Type());
 	if (!user_type_catalog_p) {
 		return;
 	}

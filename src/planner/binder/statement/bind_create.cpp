@@ -266,7 +266,7 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 			                                                        OnEntryNotFound::RETURN_NULL);
 		}
 
-		LogicalType::SetCatalog(type, enum_type_catalog.get());
+		EnumType::SetCatalog(type, enum_type_catalog.get());
 	}
 }
 
@@ -639,7 +639,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			auto inner_type = Catalog::GetType(context, schema.catalog.GetName(), schema.name,
 			                                   UserType::GetTypeName(create_type_info.type));
 			// clear to nullptr, we don't need this
-			LogicalType::SetCatalog(inner_type, nullptr);
+			EnumType::SetCatalog(inner_type, nullptr);
 			inner_type.SetAlias(create_type_info.name);
 			create_type_info.type = inner_type;
 		}

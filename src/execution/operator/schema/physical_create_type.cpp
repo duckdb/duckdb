@@ -90,7 +90,7 @@ void PhysicalCreateType::GetData(ExecutionContext &context, DataChunk &chunk, Gl
 	auto catalog_entry = catalog.CreateType(context.client, *info);
 	D_ASSERT(catalog_entry->type == CatalogType::TYPE_ENTRY);
 	auto &catalog_type = catalog_entry->Cast<TypeCatalogEntry>();
-	LogicalType::SetCatalog(info->type, &catalog_type);
+	EnumType::SetCatalog(info->type, &catalog_type);
 	state.finished = true;
 }
 

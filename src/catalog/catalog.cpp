@@ -655,7 +655,7 @@ LogicalType Catalog::GetType(ClientContext &context, const string &schema, const
 		return LogicalType::INVALID;
 	}
 	auto result_type = type_entry->user_type;
-	LogicalType::SetCatalog(result_type, type_entry.get());
+	EnumType::SetCatalog(result_type, type_entry.get());
 	return result_type;
 }
 
@@ -663,7 +663,7 @@ LogicalType Catalog::GetType(ClientContext &context, const string &catalog_name,
                              const string &name) {
 	auto &type_entry = Catalog::GetEntry<TypeCatalogEntry>(context, catalog_name, schema, name);
 	auto result_type = type_entry.user_type;
-	LogicalType::SetCatalog(result_type, &type_entry);
+	EnumType::SetCatalog(result_type, &type_entry);
 	return result_type;
 }
 

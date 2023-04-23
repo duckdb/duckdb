@@ -293,7 +293,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		}
 		BindLogicalType(context, column.TypeMutable(), &result->schema.catalog);
 		// We add a catalog dependency
-		auto type_dependency = LogicalType::GetCatalog(column.Type());
+		auto type_dependency = EnumType::GetCatalog(column.Type());
 		if (type_dependency) {
 			// Only if the USER comes from a create type
 			result->dependencies.AddDependency(*type_dependency);
