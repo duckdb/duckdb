@@ -2,6 +2,9 @@
 # description: Test parquet files UNION_BY_NAME reading
 # group: [parquet]
 
+statement ok
+SET default_null_order='nulls_first';
+
 require parquet
 
 statement ok

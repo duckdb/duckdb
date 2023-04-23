@@ -64,14 +64,6 @@ static LogicalType ResolveWindowExpressionType(ExpressionType window_type, const
 	}
 }
 
-static inline OrderType ResolveOrderType(const DBConfig &config, OrderType type) {
-	return (type == OrderType::ORDER_DEFAULT) ? config.options.default_order_type : type;
-}
-
-static inline OrderByNullType ResolveNullOrder(const DBConfig &config, OrderByNullType null_order) {
-	return (null_order == OrderByNullType::ORDER_DEFAULT) ? config.options.default_null_order : null_order;
-}
-
 static unique_ptr<Expression> GetExpression(unique_ptr<ParsedExpression> &expr) {
 	if (!expr) {
 		return nullptr;
@@ -231,12 +223,12 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	LogicalType start_type = LogicalType::BIGINT;
 	if (window.start == WindowBoundary::EXPR_PRECEDING_RANGE) {
 		D_ASSERT(window.orders.size() == 1);
-		range_sense = ResolveOrderType(config, window.orders[0].type);
+		range_sense = config.ResolveOrder(window.orders[0].type);
 		const auto name = (range_sense == OrderType::ASCENDING) ? "-" : "+";
 		start_type = BindRangeExpression(context, name, window.start_expr, window.orders[0].expression);
 	} else if (window.start == WindowBoundary::EXPR_FOLLOWING_RANGE) {
 		D_ASSERT(window.orders.size() == 1);
-		range_sense = ResolveOrderType(config, window.orders[0].type);
+		range_sense = config.ResolveOrder(window.orders[0].type);
 		const auto name = (range_sense == OrderType::ASCENDING) ? "+" : "-";
 		start_type = BindRangeExpression(context, name, window.start_expr, window.orders[0].expression);
 	}
@@ -244,12 +236,12 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	LogicalType end_type = LogicalType::BIGINT;
 	if (window.end == WindowBoundary::EXPR_PRECEDING_RANGE) {
 		D_ASSERT(window.orders.size() == 1);
-		range_sense = ResolveOrderType(config, window.orders[0].type);
+		range_sense = config.ResolveOrder(window.orders[0].type);
 		const auto name = (range_sense == OrderType::ASCENDING) ? "-" : "+";
 		end_type = BindRangeExpression(context, name, window.end_expr, window.orders[0].expression);
 	} else if (window.end == WindowBoundary::EXPR_FOLLOWING_RANGE) {
 		D_ASSERT(window.orders.size() == 1);
-		range_sense = ResolveOrderType(config, window.orders[0].type);
+		range_sense = config.ResolveOrder(window.orders[0].type);
 		const auto name = (range_sense == OrderType::ASCENDING) ? "+" : "-";
 		end_type = BindRangeExpression(context, name, window.end_expr, window.orders[0].expression);
 	}
@@ -276,8 +268,8 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	}
 
 	for (auto &order : window.orders) {
-		auto type = ResolveOrderType(config, order.type);
-		auto null_order = ResolveNullOrder(config, order.null_order);
+		auto type = config.ResolveOrder(order.type);
+		auto null_order = config.ResolveNullOrder(type, order.null_order);
 		auto expression = GetExpression(order.expression);
 		result->orders.emplace_back(type, null_order, std::move(expression));
 	}
