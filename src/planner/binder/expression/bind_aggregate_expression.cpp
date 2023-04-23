@@ -60,13 +60,13 @@ static Value NegatePercentileValue(const Value &v, const bool desc) {
 static void NegatePercentileFractions(ClientContext &context, unique_ptr<ParsedExpression> &fractions, bool desc) {
 	D_ASSERT(fractions.get());
 	D_ASSERT(fractions->expression_class == ExpressionClass::BOUND_EXPRESSION);
-	auto &bound = fractions->Cast<BoundExpression>();
+	auto &bound = BoundExpression::GetExpression(*fractions);
 
-	if (!bound.expr->IsFoldable()) {
+	if (!bound->IsFoldable()) {
 		return;
 	}
 
-	Value value = ExpressionExecutor::EvaluateScalar(context, *bound.expr);
+	Value value = ExpressionExecutor::EvaluateScalar(context, *bound);
 	if (value.type().id() == LogicalTypeId::LIST) {
 		vector<Value> values;
 		for (const auto &element_val : ListValue::GetChildren(value)) {
@@ -75,9 +75,9 @@ static void NegatePercentileFractions(ClientContext &context, unique_ptr<ParsedE
 		if (values.empty()) {
 			throw BinderException("Empty list in percentile not allowed");
 		}
-		bound.expr = make_uniq<BoundConstantExpression>(Value::LIST(values));
+		bound = make_uniq<BoundConstantExpression>(Value::LIST(values));
 	} else {
-		bound.expr = make_uniq<BoundConstantExpression>(NegatePercentileValue(value, desc));
+		bound = make_uniq<BoundConstantExpression>(NegatePercentileValue(value, desc));
 	}
 }
 
