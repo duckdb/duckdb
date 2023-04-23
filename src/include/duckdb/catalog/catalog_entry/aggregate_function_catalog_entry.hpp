@@ -23,8 +23,7 @@ public:
 
 public:
 	AggregateFunctionCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateAggregateFunctionInfo &info)
-	    : StandardEntry(CatalogType::AGGREGATE_FUNCTION_ENTRY, schema, catalog, info.name),
-	      functions(info.functions) {
+	    : StandardEntry(CatalogType::AGGREGATE_FUNCTION_ENTRY, schema, catalog, info.name), functions(info.functions) {
 	}
 
 	//! The aggregate functions

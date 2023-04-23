@@ -37,9 +37,9 @@ public:
 	DUCKDB_API void ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) override;
 	DUCKDB_API void ScanSchemas(std::function<void(SchemaCatalogEntry &)> callback);
 
-	DUCKDB_API optional_ptr<SchemaCatalogEntry> GetSchema(CatalogTransaction transaction, const string &schema_name,
-	                                         OnEntryNotFound if_not_found,
-	                                         QueryErrorContext error_context = QueryErrorContext()) override;
+	DUCKDB_API optional_ptr<SchemaCatalogEntry>
+	GetSchema(CatalogTransaction transaction, const string &schema_name, OnEntryNotFound if_not_found,
+	          QueryErrorContext error_context = QueryErrorContext()) override;
 
 	DUCKDB_API unique_ptr<PhysicalOperator> PlanCreateTableAs(ClientContext &context, LogicalCreateTable &op,
 	                                                          unique_ptr<PhysicalOperator> plan) override;

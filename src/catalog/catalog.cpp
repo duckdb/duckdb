@@ -112,7 +112,7 @@ optional_ptr<CatalogEntry> Catalog::CreateTable(ClientContext &context, unique_p
 }
 
 optional_ptr<CatalogEntry> Catalog::CreateTable(CatalogTransaction transaction, SchemaCatalogEntry &schema,
-                                   BoundCreateTableInfo &info) {
+                                                BoundCreateTableInfo &info) {
 	return schema.CreateTable(transaction, info);
 }
 
@@ -133,7 +133,8 @@ optional_ptr<CatalogEntry> Catalog::CreateView(ClientContext &context, CreateVie
 	return CreateView(GetCatalogTransaction(context), info);
 }
 
-optional_ptr<CatalogEntry> Catalog::CreateView(CatalogTransaction transaction, SchemaCatalogEntry &schema, CreateViewInfo &info) {
+optional_ptr<CatalogEntry> Catalog::CreateView(CatalogTransaction transaction, SchemaCatalogEntry &schema,
+                                               CreateViewInfo &info) {
 	return schema.CreateView(transaction, info);
 }
 
@@ -150,7 +151,7 @@ optional_ptr<CatalogEntry> Catalog::CreateSequence(ClientContext &context, Creat
 }
 
 optional_ptr<CatalogEntry> Catalog::CreateSequence(CatalogTransaction transaction, SchemaCatalogEntry &schema,
-                                      CreateSequenceInfo &info) {
+                                                   CreateSequenceInfo &info) {
 	return schema.CreateSequence(transaction, info);
 }
 
@@ -166,7 +167,8 @@ optional_ptr<CatalogEntry> Catalog::CreateType(ClientContext &context, CreateTyp
 	return CreateType(GetCatalogTransaction(context), info);
 }
 
-optional_ptr<CatalogEntry> Catalog::CreateType(CatalogTransaction transaction, SchemaCatalogEntry &schema, CreateTypeInfo &info) {
+optional_ptr<CatalogEntry> Catalog::CreateType(CatalogTransaction transaction, SchemaCatalogEntry &schema,
+                                               CreateTypeInfo &info) {
 	return schema.CreateType(transaction, info);
 }
 
@@ -183,7 +185,7 @@ optional_ptr<CatalogEntry> Catalog::CreateTableFunction(ClientContext &context, 
 }
 
 optional_ptr<CatalogEntry> Catalog::CreateTableFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
-                                           CreateTableFunctionInfo &info) {
+                                                        CreateTableFunctionInfo &info) {
 	return schema.CreateTableFunction(transaction, info);
 }
 
@@ -200,14 +202,15 @@ optional_ptr<CatalogEntry> Catalog::CreateCopyFunction(ClientContext &context, C
 }
 
 optional_ptr<CatalogEntry> Catalog::CreateCopyFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
-                                          CreateCopyFunctionInfo &info) {
+                                                       CreateCopyFunctionInfo &info) {
 	return schema.CreateCopyFunction(transaction, info);
 }
 
 //===--------------------------------------------------------------------===//
 // Pragma Function
 //===--------------------------------------------------------------------===//
-optional_ptr<CatalogEntry> Catalog::CreatePragmaFunction(CatalogTransaction transaction, CreatePragmaFunctionInfo &info) {
+optional_ptr<CatalogEntry> Catalog::CreatePragmaFunction(CatalogTransaction transaction,
+                                                         CreatePragmaFunctionInfo &info) {
 	auto &schema = GetSchema(transaction, info.schema);
 	return CreatePragmaFunction(transaction, schema, info);
 }
@@ -217,7 +220,7 @@ optional_ptr<CatalogEntry> Catalog::CreatePragmaFunction(ClientContext &context,
 }
 
 optional_ptr<CatalogEntry> Catalog::CreatePragmaFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
-                                            CreatePragmaFunctionInfo &info) {
+                                                         CreatePragmaFunctionInfo &info) {
 	return schema.CreatePragmaFunction(transaction, info);
 }
 
@@ -234,7 +237,7 @@ optional_ptr<CatalogEntry> Catalog::CreateFunction(ClientContext &context, Creat
 }
 
 optional_ptr<CatalogEntry> Catalog::CreateFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
-                                      CreateFunctionInfo &info) {
+                                                   CreateFunctionInfo &info) {
 	return schema.CreateFunction(transaction, info);
 }
 
@@ -256,7 +259,7 @@ optional_ptr<CatalogEntry> Catalog::CreateCollation(ClientContext &context, Crea
 }
 
 optional_ptr<CatalogEntry> Catalog::CreateCollation(CatalogTransaction transaction, SchemaCatalogEntry &schema,
-                                       CreateCollationInfo &info) {
+                                                    CreateCollationInfo &info) {
 	return schema.CreateCollation(transaction, info);
 }
 
@@ -314,23 +317,22 @@ void Catalog::DropEntry(ClientContext &context, DropInfo &info) {
 	lookup.schema->DropEntry(context, info);
 }
 
-
 SchemaCatalogEntry &Catalog::GetSchema(ClientContext &context, const string &name, QueryErrorContext error_context) {
 	return *Catalog::GetSchema(context, name, OnEntryNotFound::THROW_EXCEPTION, error_context);
 }
 
-optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(ClientContext &context, const string &schema_name, OnEntryNotFound if_not_found,
-                                       QueryErrorContext error_context) {
+optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(ClientContext &context, const string &schema_name,
+                                                    OnEntryNotFound if_not_found, QueryErrorContext error_context) {
 	return GetSchema(GetCatalogTransaction(context), schema_name, if_not_found, error_context);
 }
 
-
 SchemaCatalogEntry &Catalog::GetSchema(ClientContext &context, const string &catalog_name, const string &schema_name,
-	                                                QueryErrorContext error_context) {
+                                       QueryErrorContext error_context) {
 	return *Catalog::GetSchema(context, catalog_name, schema_name, OnEntryNotFound::THROW_EXCEPTION, error_context);
 }
 
-SchemaCatalogEntry &Catalog::GetSchema(CatalogTransaction transaction, const string &name, QueryErrorContext error_context) {
+SchemaCatalogEntry &Catalog::GetSchema(CatalogTransaction transaction, const string &name,
+                                       QueryErrorContext error_context) {
 	return *GetSchema(transaction, name, OnEntryNotFound::THROW_EXCEPTION, error_context);
 }
 
@@ -520,7 +522,8 @@ CatalogEntryLookup Catalog::LookupEntryInternal(CatalogTransaction transaction, 
 }
 
 CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type, const string &schema,
-                                        const string &name, OnEntryNotFound if_not_found, QueryErrorContext error_context) {
+                                        const string &name, OnEntryNotFound if_not_found,
+                                        QueryErrorContext error_context) {
 	reference_set_t<SchemaCatalogEntry> schemas;
 	if (IsInvalidSchema(schema)) {
 		// try all schemas for this catalog
@@ -557,7 +560,8 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type
 }
 
 CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, vector<CatalogLookup> &lookups, CatalogType type,
-                                        const string &name, OnEntryNotFound if_not_found, QueryErrorContext error_context) {
+                                        const string &name, OnEntryNotFound if_not_found,
+                                        QueryErrorContext error_context) {
 	reference_set_t<SchemaCatalogEntry> schemas;
 	for (auto &lookup : lookups) {
 		auto transaction = lookup.catalog.GetCatalogTransaction(context);
@@ -588,19 +592,20 @@ CatalogEntry &Catalog::GetEntry(ClientContext &context, const string &schema, co
 	throw CatalogException("CatalogElement \"%s.%s\" does not exist!", schema, name);
 }
 
-optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, CatalogType type, const string &schema_name, const string &name,
-                                OnEntryNotFound if_not_found, QueryErrorContext error_context) {
+optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, CatalogType type, const string &schema_name,
+                                             const string &name, OnEntryNotFound if_not_found,
+                                             QueryErrorContext error_context) {
 	return LookupEntry(context, type, schema_name, name, if_not_found, error_context).entry.get();
 }
 
-CatalogEntry &Catalog::GetEntry(ClientContext &context, CatalogType type, const string &schema,
-								  const string &name, QueryErrorContext error_context) {
+CatalogEntry &Catalog::GetEntry(ClientContext &context, CatalogType type, const string &schema, const string &name,
+                                QueryErrorContext error_context) {
 	return *Catalog::GetEntry(context, type, schema, name, OnEntryNotFound::THROW_EXCEPTION, error_context);
-
 }
 
-optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, CatalogType type, const string &catalog, const string &schema,
-                                const string &name, OnEntryNotFound if_not_found, QueryErrorContext error_context) {
+optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, CatalogType type, const string &catalog,
+                                             const string &schema, const string &name, OnEntryNotFound if_not_found,
+                                             QueryErrorContext error_context) {
 	auto entries = GetCatalogEntries(context, catalog, schema);
 	vector<CatalogLookup> lookups;
 	lookups.reserve(entries.size());
@@ -623,14 +628,14 @@ optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, CatalogType
 	return result.entry.get();
 }
 
-CatalogEntry &Catalog::GetEntry(ClientContext &context, CatalogType type, const string &catalog,
-										 const string &schema, const string &name,
-										 QueryErrorContext error_context) {
+CatalogEntry &Catalog::GetEntry(ClientContext &context, CatalogType type, const string &catalog, const string &schema,
+                                const string &name, QueryErrorContext error_context) {
 	return *Catalog::GetEntry(context, type, catalog, schema, name, OnEntryNotFound::THROW_EXCEPTION, error_context);
 }
 
-optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(ClientContext &context, const string &catalog_name, const string &schema_name,
-                                       OnEntryNotFound if_not_found, QueryErrorContext error_context) {
+optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(ClientContext &context, const string &catalog_name,
+                                                    const string &schema_name, OnEntryNotFound if_not_found,
+                                                    QueryErrorContext error_context) {
 	auto entries = GetCatalogEntries(context, catalog_name, schema_name);
 	for (idx_t i = 0; i < entries.size(); i++) {
 		auto on_not_found = i + 1 == entries.size() ? if_not_found : OnEntryNotFound::RETURN_NULL;
@@ -643,7 +648,8 @@ optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(ClientContext &context, cons
 	return nullptr;
 }
 
-LogicalType Catalog::GetType(ClientContext &context, const string &schema, const string &name, OnEntryNotFound if_not_found) {
+LogicalType Catalog::GetType(ClientContext &context, const string &schema, const string &name,
+                             OnEntryNotFound if_not_found) {
 	auto type_entry = GetEntry<TypeCatalogEntry>(context, schema, name, if_not_found);
 	if (!type_entry) {
 		return LogicalType::INVALID;
@@ -714,17 +720,18 @@ vector<reference<SchemaCatalogEntry>> Catalog::GetAllSchemas(ClientContext &cont
 		auto new_schemas = catalog.GetSchemas(context);
 		result.insert(result.end(), new_schemas.begin(), new_schemas.end());
 	}
-	sort(result.begin(), result.end(), [&](reference<SchemaCatalogEntry> left_p, reference<SchemaCatalogEntry> right_p) {
-		auto &left = left_p.get();
-		auto &right = right_p.get();
-		if (left.catalog.GetName() < right.catalog.GetName()) {
-			return true;
-		}
-		if (left.catalog.GetName() == right.catalog.GetName()) {
-			return left.name < right.name;
-		}
-		return false;
-	});
+	sort(result.begin(), result.end(),
+	     [&](reference<SchemaCatalogEntry> left_p, reference<SchemaCatalogEntry> right_p) {
+		     auto &left = left_p.get();
+		     auto &right = right_p.get();
+		     if (left.catalog.GetName() < right.catalog.GetName()) {
+			     return true;
+		     }
+		     if (left.catalog.GetName() == right.catalog.GetName()) {
+			     return left.name < right.name;
+		     }
+		     return false;
+	     });
 
 	return result;
 }

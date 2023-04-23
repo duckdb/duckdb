@@ -89,8 +89,7 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 				if (info.indexes.empty()) {
 					AddDataTableIndex(*storage, columns, unique.keys, constraint_type);
 				} else {
-					AddDataTableIndex(*storage, columns, unique.keys, constraint_type,
-					                  &info.indexes[indexes_idx++]);
+					AddDataTableIndex(*storage, columns, unique.keys, constraint_type, &info.indexes[indexes_idx++]);
 				}
 			} else if (constraint->type == ConstraintType::FOREIGN_KEY) {
 				// foreign key constraint: create a foreign key index
@@ -611,8 +610,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 	auto new_storage =
 	    make_shared<DataTable>(context, *storage, columns.LogicalToPhysical(LogicalIndex(change_idx)).index,
 	                           info.target_type, std::move(storage_oids), *bound_expression);
-	auto result =
-	    make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
+	auto result = make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
 	return std::move(result);
 }
 

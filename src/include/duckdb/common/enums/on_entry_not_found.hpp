@@ -12,9 +12,6 @@
 
 namespace duckdb {
 
-enum class OnEntryNotFound : uint8_t {
-	THROW_EXCEPTION = 0,
-	RETURN_NULL = 1
-};
+enum class OnEntryNotFound : uint8_t { THROW_EXCEPTION = 0, RETURN_NULL = 1 };
 
 } // namespace duckdb

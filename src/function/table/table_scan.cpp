@@ -234,7 +234,7 @@ static void IndexScanFunction(ClientContext &context, TableFunctionInput &data_p
 
 	if (!state.finished) {
 		bind_data.table.GetStorage().Fetch(transaction, output, state.column_ids, state.row_ids,
-		                                    bind_data.result_ids.size(), state.fetch_state);
+		                                   bind_data.result_ids.size(), state.fetch_state);
 		state.finished = true;
 	}
 	if (output.size() == 0) {
@@ -471,7 +471,8 @@ TableFunction TableScanFunction::GetFunction() {
 	return scan_function;
 }
 
-optional_ptr<TableCatalogEntry> TableScanFunction::GetTableEntry(const TableFunction &function, const optional_ptr<FunctionData> bind_data_p) {
+optional_ptr<TableCatalogEntry> TableScanFunction::GetTableEntry(const TableFunction &function,
+                                                                 const optional_ptr<FunctionData> bind_data_p) {
 	if (function.function != TableScanFunc || !bind_data_p) {
 		return nullptr;
 	}

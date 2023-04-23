@@ -100,15 +100,16 @@ void DuckCatalog::DropSchema(ClientContext &context, DropInfo &info) {
 }
 
 void DuckCatalog::ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) {
-	schemas->Scan(GetCatalogTransaction(context), [&](CatalogEntry &entry) { callback(entry.Cast<SchemaCatalogEntry>()); });
+	schemas->Scan(GetCatalogTransaction(context),
+	              [&](CatalogEntry &entry) { callback(entry.Cast<SchemaCatalogEntry>()); });
 }
 
 void DuckCatalog::ScanSchemas(std::function<void(SchemaCatalogEntry &)> callback) {
 	schemas->Scan([&](CatalogEntry &entry) { callback(entry.Cast<SchemaCatalogEntry>()); });
 }
 
-optional_ptr<SchemaCatalogEntry> DuckCatalog::GetSchema(CatalogTransaction transaction, const string &schema_name, OnEntryNotFound if_not_found,
-                                           QueryErrorContext error_context) {
+optional_ptr<SchemaCatalogEntry> DuckCatalog::GetSchema(CatalogTransaction transaction, const string &schema_name,
+                                                        OnEntryNotFound if_not_found, QueryErrorContext error_context) {
 	D_ASSERT(!schema_name.empty());
 	auto entry = schemas->GetEntry(transaction, schema_name);
 	if (!entry) {

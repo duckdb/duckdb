@@ -22,8 +22,9 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	                              function.function_name, OnEntryNotFound::RETURN_NULL, error_context);
 	if (!func) {
 		// function was not found - check if we this is a table function
-		auto table_func = Catalog::GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, function.catalog,
-		                                    function.schema, function.function_name, OnEntryNotFound::RETURN_NULL, error_context);
+		auto table_func =
+		    Catalog::GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, function.catalog, function.schema,
+		                      function.function_name, OnEntryNotFound::RETURN_NULL, error_context);
 		if (table_func) {
 			throw BinderException(binder.FormatError(
 			    function,
@@ -87,8 +88,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	}
 }
 
-BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFunctionCatalogEntry &func,
-                                          idx_t depth) {
+BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFunctionCatalogEntry &func, idx_t depth) {
 
 	// bind the children of the function expression
 	string error;
@@ -122,8 +122,8 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	return BindResult(std::move(result));
 }
 
-BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function,
-                                                ScalarFunctionCatalogEntry &func, idx_t depth) {
+BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, ScalarFunctionCatalogEntry &func,
+                                                idx_t depth) {
 
 	// bind the children of the function expression
 	string error;
@@ -141,8 +141,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function,
 
 	// get the logical type of the children of the list
 	auto &list_child = BoundExpression::GetExpression(*function.children[0]);
-	if (list_child->return_type.id() != LogicalTypeId::LIST &&
-	    list_child->return_type.id() != LogicalTypeId::SQLNULL &&
+	if (list_child->return_type.id() != LogicalTypeId::LIST && list_child->return_type.id() != LogicalTypeId::SQLNULL &&
 	    list_child->return_type.id() != LogicalTypeId::UNKNOWN) {
 		throw BinderException(" Invalid LIST argument to " + function.function_name + "!");
 	}
@@ -230,8 +229,8 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function,
 	return BindResult(std::move(result));
 }
 
-BindResult ExpressionBinder::BindAggregate(FunctionExpression &expr,
-                                           AggregateFunctionCatalogEntry &function, idx_t depth) {
+BindResult ExpressionBinder::BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry &function,
+                                           idx_t depth) {
 	return BindResult(binder.FormatError(expr, UnsupportedAggregateMessage()));
 }
 

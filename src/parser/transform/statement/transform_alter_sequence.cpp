@@ -61,7 +61,8 @@ unique_ptr<AlterStatement> Transformer::TransformAlterSequence(duckdb_libpgquery
 				throw InternalException("Wrong argument for %s. Expected either <schema>.<name> or <name>", opt_name);
 			}
 			auto info = make_uniq<ChangeOwnershipInfo>(CatalogType::SEQUENCE_ENTRY, sequence_catalog, sequence_schema,
-			                                           sequence_name, owner_schema, owner_name, TransformOnEntryNotFound(stmt->missing_ok));
+			                                           sequence_name, owner_schema, owner_name,
+			                                           TransformOnEntryNotFound(stmt->missing_ok));
 			result->info = std::move(info);
 		} else {
 			throw NotImplementedException("ALTER SEQUENCE option not supported yet!");

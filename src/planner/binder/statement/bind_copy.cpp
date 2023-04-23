@@ -193,7 +193,8 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	}
 	// lookup the table to copy into
 	BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
-	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, stmt.info->catalog, stmt.info->schema, stmt.info->table);
+	auto &table =
+	    Catalog::GetEntry<TableCatalogEntry>(context, stmt.info->catalog, stmt.info->schema, stmt.info->table);
 	vector<string> expected_names;
 	if (!bound_insert.column_index_map.empty()) {
 		expected_names.resize(bound_insert.expected_types.size());

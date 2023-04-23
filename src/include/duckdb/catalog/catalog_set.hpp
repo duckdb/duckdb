@@ -134,7 +134,8 @@ private:
 	//! Given a root entry, gets the entry valid for this transaction
 	CatalogEntry &GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry &current);
 	CatalogEntry &GetCommittedEntry(CatalogEntry &current);
-	optional_ptr<CatalogEntry> GetEntryInternal(CatalogTransaction transaction, const string &name, EntryIndex *entry_index);
+	optional_ptr<CatalogEntry> GetEntryInternal(CatalogTransaction transaction, const string &name,
+	                                            EntryIndex *entry_index);
 	optional_ptr<CatalogEntry> GetEntryInternal(CatalogTransaction transaction, EntryIndex &entry_index);
 	//! Drops an entry from the catalog set; must hold the catalog_lock to safely call this
 	void DropEntryInternal(CatalogTransaction transaction, EntryIndex entry_index, CatalogEntry &entry, bool cascade);
@@ -148,7 +149,8 @@ private:
 	//! Create all default entries
 	void CreateDefaultEntries(CatalogTransaction transaction, unique_lock<mutex> &lock);
 	//! Attempt to create a default entry with the specified name. Returns the entry if successful, nullptr otherwise.
-	optional_ptr<CatalogEntry> CreateDefaultEntry(CatalogTransaction transaction, const string &name, unique_lock<mutex> &lock);
+	optional_ptr<CatalogEntry> CreateDefaultEntry(CatalogTransaction transaction, const string &name,
+	                                              unique_lock<mutex> &lock);
 
 	EntryIndex PutEntry(idx_t entry_index, unique_ptr<CatalogEntry> entry);
 	void PutEntry(EntryIndex index, unique_ptr<CatalogEntry> entry);

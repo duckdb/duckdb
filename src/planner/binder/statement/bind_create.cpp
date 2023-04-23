@@ -136,8 +136,8 @@ static void QualifyFunctionNames(ClientContext &context, unique_ptr<ParsedExpres
 	switch (expr->GetExpressionClass()) {
 	case ExpressionClass::FUNCTION: {
 		auto &func = expr->Cast<FunctionExpression>();
-		auto function = Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, func.catalog,
-		                                                   func.schema, func.function_name, OnEntryNotFound::RETURN_NULL);
+		auto function = Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, func.catalog, func.schema,
+		                                  func.function_name, OnEntryNotFound::RETURN_NULL);
 		if (function) {
 			func.catalog = function->GetCatalog().GetName();
 			func.schema = function->GetSchema().name;
@@ -207,7 +207,8 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	return BindCreateSchema(info);
 }
 
-void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional_ptr<Catalog> catalog, const string &schema) {
+void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional_ptr<Catalog> catalog,
+                             const string &schema) {
 	if (type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::MAP) {
 		auto child_type = ListType::GetChildType(type);
 		BindLogicalType(context, child_type, catalog, schema);
@@ -253,15 +254,16 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 		auto &enum_type_name = EnumType::GetTypeName(type);
 		optional_ptr<TypeCatalogEntry> enum_type_catalog;
 		if (catalog) {
-			enum_type_catalog = catalog->GetEntry<TypeCatalogEntry>(context, schema, enum_type_name, OnEntryNotFound::RETURN_NULL);
+			enum_type_catalog =
+			    catalog->GetEntry<TypeCatalogEntry>(context, schema, enum_type_name, OnEntryNotFound::RETURN_NULL);
 			if (!enum_type_catalog) {
 				// look in the system catalog if the type was not found
-				enum_type_catalog =
-				    Catalog::GetEntry<TypeCatalogEntry>(context, SYSTEM_CATALOG, schema, enum_type_name, OnEntryNotFound::RETURN_NULL);
+				enum_type_catalog = Catalog::GetEntry<TypeCatalogEntry>(context, SYSTEM_CATALOG, schema, enum_type_name,
+				                                                        OnEntryNotFound::RETURN_NULL);
 			}
 		} else {
-			enum_type_catalog =
-			    Catalog::GetEntry<TypeCatalogEntry>(context, INVALID_CATALOG, schema, enum_type_name, OnEntryNotFound::RETURN_NULL);
+			enum_type_catalog = Catalog::GetEntry<TypeCatalogEntry>(context, INVALID_CATALOG, schema, enum_type_name,
+			                                                        OnEntryNotFound::RETURN_NULL);
 		}
 
 		LogicalType::SetCatalog(type, enum_type_catalog.get());
@@ -549,8 +551,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				auto &pk_table_entry_ptr =
 				    Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, fk.info.schema, fk.info.table);
 				fk_schemas.insert(pk_table_entry_ptr.schema);
-				FindMatchingPrimaryKeyColumns(pk_table_entry_ptr.GetColumns(), pk_table_entry_ptr.GetConstraints(),
-				                              fk);
+				FindMatchingPrimaryKeyColumns(pk_table_entry_ptr.GetColumns(), pk_table_entry_ptr.GetConstraints(), fk);
 				FindForeignKeyIndexes(pk_table_entry_ptr.GetColumns(), fk.pk_columns, fk.info.pk_keys);
 				CheckForeignKeyTypes(pk_table_entry_ptr.GetColumns(), create_info.columns, fk);
 				auto &storage = pk_table_entry_ptr.GetStorage();

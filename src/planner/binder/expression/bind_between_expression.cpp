@@ -54,8 +54,8 @@ BindResult ExpressionBinder::BindExpression(BetweenExpression &expr, idx_t depth
 	} else {
 		// expression has side effects: we cannot duplicate it
 		// create a bound_between directly
-		return BindResult(make_uniq<BoundBetweenExpression>(std::move(input), std::move(lower),
-		                                                    std::move(upper), true, true));
+		return BindResult(
+		    make_uniq<BoundBetweenExpression>(std::move(input), std::move(lower), std::move(upper), true, true));
 	}
 }
 

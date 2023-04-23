@@ -90,7 +90,9 @@ unique_ptr<GlobalTableFunctionState> DuckDBFunctionsInit(ClientContext &context,
 	};
 
 	std::sort(result->entries.begin(), result->entries.end(),
-	          [&](reference<CatalogEntry> a, reference<CatalogEntry> b) { return (int32_t)a.get().type < (int32_t)b.get().type; });
+	          [&](reference<CatalogEntry> a, reference<CatalogEntry> b) {
+		          return (int32_t)a.get().type < (int32_t)b.get().type;
+	          });
 	return std::move(result);
 }
 
@@ -489,13 +491,13 @@ void DuckDBFunctionsFunction(ClientContext &context, TableFunctionInput &data_p,
 			    entry, data.offset_in_entry, output, count);
 			break;
 		case CatalogType::TABLE_MACRO_ENTRY:
-			finished = ExtractFunctionData<TableMacroCatalogEntry, TableMacroExtractor>(
-			    entry, data.offset_in_entry, output, count);
+			finished = ExtractFunctionData<TableMacroCatalogEntry, TableMacroExtractor>(entry, data.offset_in_entry,
+			                                                                            output, count);
 			break;
 
 		case CatalogType::MACRO_ENTRY:
-			finished = ExtractFunctionData<ScalarMacroCatalogEntry, MacroExtractor>(
-			    entry, data.offset_in_entry, output, count);
+			finished = ExtractFunctionData<ScalarMacroCatalogEntry, MacroExtractor>(entry, data.offset_in_entry, output,
+			                                                                        count);
 			break;
 		case CatalogType::TABLE_FUNCTION_ENTRY:
 			finished = ExtractFunctionData<TableFunctionCatalogEntry, TableFunctionExtractor>(

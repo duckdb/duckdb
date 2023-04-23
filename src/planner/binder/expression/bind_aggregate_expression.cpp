@@ -81,8 +81,7 @@ static void NegatePercentileFractions(ClientContext &context, unique_ptr<ParsedE
 	}
 }
 
-BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry &func,
-                                           idx_t depth) {
+BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry &func, idx_t depth) {
 	// first bind the child of the aggregate expression (if any)
 	this->bound_aggregate = true;
 	unique_ptr<Expression> bound_filter;

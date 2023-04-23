@@ -5,12 +5,13 @@
 namespace duckdb {
 
 CatalogEntry::CatalogEntry(CatalogType type, string name_p, idx_t oid)
-    : oid(oid), type(type), set(nullptr),
-      name(std::move(name_p)), deleted(false), temporary(false), internal(false), parent(nullptr) {
+    : oid(oid), type(type), set(nullptr), name(std::move(name_p)), deleted(false), temporary(false), internal(false),
+      parent(nullptr) {
 }
 
-CatalogEntry::CatalogEntry(CatalogType type, Catalog &catalog, string name_p) :
- 	CatalogEntry(type, std::move(name_p), catalog.ModifyCatalog()) {}
+CatalogEntry::CatalogEntry(CatalogType type, Catalog &catalog, string name_p)
+    : CatalogEntry(type, std::move(name_p), catalog.ModifyCatalog()) {
+}
 
 CatalogEntry::~CatalogEntry() {
 }
@@ -44,15 +45,14 @@ Catalog &CatalogEntry::GetCatalog() {
 
 SchemaCatalogEntry &CatalogEntry::GetSchema() {
 	throw InternalException("CatalogEntry::GetSchema called on catalog entry without schema");
-
 }
 
 InCatalogEntry::InCatalogEntry(CatalogType type, Catalog &catalog, string name)
-	: CatalogEntry(type, catalog, name), catalog(catalog) {
+    : CatalogEntry(type, catalog, name), catalog(catalog) {
 }
 
-InCatalogEntry::~InCatalogEntry() {}
-
+InCatalogEntry::~InCatalogEntry() {
+}
 
 void InCatalogEntry::Verify(Catalog &catalog_p) {
 	D_ASSERT(&catalog_p == &catalog);

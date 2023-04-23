@@ -44,8 +44,8 @@ void ExpressionBinder::ReplaceMacroParametersRecursive(unique_ptr<ParsedExpressi
 	    *expr, [&](unique_ptr<ParsedExpression> &child) { ReplaceMacroParametersRecursive(child); });
 }
 
-BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func,
-                                       idx_t depth, unique_ptr<ParsedExpression> &expr) {
+BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func, idx_t depth,
+                                       unique_ptr<ParsedExpression> &expr) {
 	// recast function so we can access the scalar member function->expression
 	auto &macro_def = macro_func.function->Cast<ScalarMacroFunction>();
 

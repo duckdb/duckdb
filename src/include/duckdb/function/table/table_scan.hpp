@@ -42,7 +42,8 @@ struct TableScanFunction {
 	static void RegisterFunction(BuiltinFunctions &set);
 	static TableFunction GetFunction();
 	static TableFunction GetIndexScanFunction();
-	static optional_ptr<TableCatalogEntry> GetTableEntry(const TableFunction &function, const optional_ptr<FunctionData> bind_data);
+	static optional_ptr<TableCatalogEntry> GetTableEntry(const TableFunction &function,
+	                                                     const optional_ptr<FunctionData> bind_data);
 };
 
 } // namespace duckdb

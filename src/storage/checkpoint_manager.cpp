@@ -343,7 +343,8 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetaBlockReader &reader
 
 	// Create index in the catalog
 	auto &schema_catalog = catalog.GetSchema(context, info->schema);
-	auto &table_catalog = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, info->schema, info->table->table_name).Cast<DuckTableEntry>();
+	auto &table_catalog = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, info->schema, info->table->table_name)
+	                          .Cast<DuckTableEntry>();
 	auto &index_catalog = schema_catalog.CreateIndex(context, *info, table_catalog)->Cast<DuckIndexEntry>();
 	index_catalog.info = table_catalog.GetStorage().info;
 	// Here we just gotta read the root node

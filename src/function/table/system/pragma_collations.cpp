@@ -29,7 +29,7 @@ unique_ptr<GlobalTableFunctionState> PragmaCollateInit(ClientContext &context, T
 	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto schema : schemas) {
 		schema.get().Scan(context, CatalogType::COLLATION_ENTRY,
-		             [&](CatalogEntry &entry) { result->entries.push_back(entry.name); });
+		                  [&](CatalogEntry &entry) { result->entries.push_back(entry.name); });
 	}
 	return std::move(result);
 }
