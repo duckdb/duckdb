@@ -351,9 +351,9 @@ void CatalogSet::CleanupEntry(CatalogEntry &catalog_entry) {
 		if (parent->deleted && !parent->child && !parent->parent) {
 			auto mapping_entry = mapping.find(parent->name);
 			D_ASSERT(mapping_entry != mapping.end());
-			auto entry = mapping_entry->second->index.GetEntry().get();
+			auto &entry = mapping_entry->second->index.GetEntry();
 			D_ASSERT(entry);
-			if (entry == parent) {
+			if (entry.get() == parent.get()) {
 				mapping.erase(mapping_entry);
 			}
 		}

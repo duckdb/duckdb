@@ -12,6 +12,7 @@
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include <memory>
 
 namespace duckdb {
@@ -33,7 +34,7 @@ public:
 	//! The type of this catalog entry
 	CatalogType type;
 	//! Reference to the catalog set this entry is stored in
-	CatalogSet *set;
+	optional_ptr<CatalogSet> set;
 	//! The name of the entry
 	string name;
 	//! Whether or not the object is deleted
@@ -47,7 +48,7 @@ public:
 	//! Child entry
 	unique_ptr<CatalogEntry> child;
 	//! Parent entry (the node that dependents_map this node)
-	CatalogEntry *parent;
+	optional_ptr<CatalogEntry> parent;
 
 public:
 	virtual unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo &info);
