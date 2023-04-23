@@ -139,7 +139,7 @@ jobs:
        shell: bash
        run: |
          apt-get update -y -qq
-         apt-get install -y -qq gcc-aarch64-linux-gnu g++-aarch64-linux-gnu 
+         apt-get install -y -qq gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
      - name: Install unixODBC
        shell: bash
@@ -272,7 +272,7 @@ jobs:
       run: |
         mkdir -p build/release
         cd build/release
-        cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release ../.. 
+        cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release ../..
         cmake --build . --config Release
 
     - uses: actions/download-artifact@v3

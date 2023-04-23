@@ -244,83 +244,57 @@ static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunct
 	return make_uniq<ListSortBindData>(order, null_order, bound_function.return_type, child_type, context);
 }
 
-static OrderByNullType GetNullOrder(ClientContext &context, vector<unique_ptr<Expression>> &arguments, idx_t idx) {
-
-	if (!arguments[idx]->IsFoldable()) {
-		throw InvalidInputException("Null sorting order must be a constant");
+template <class T>
+static T GetOrder(ClientContext &context, Expression &expr) {
+	if (!expr.IsFoldable()) {
+		throw InvalidInputException("Sorting order must be a constant");
 	}
-	Value null_order_value = ExpressionExecutor::EvaluateScalar(context, *arguments[idx]);
-	auto null_order_name = StringUtil::Upper(null_order_value.ToString());
-	const auto null_order_arg = EnumSerializer::StringToEnum<OrderByNullType>(null_order_name.c_str());
-	switch (null_order_arg) {
-	case OrderByNullType::NULLS_FIRST:
-	case OrderByNullType::NULLS_LAST:
-		return null_order_arg;
-	case OrderByNullType::ORDER_DEFAULT:
-		return DBConfig::GetConfig(context).options.default_null_order;
-	default:
-		throw InvalidInputException("Null sorting order must be either NULLS FIRST, NULLS LAST or DEFAULT");
-	}
+	Value order_value = ExpressionExecutor::EvaluateScalar(context, expr);
+	auto order_name = StringUtil::Upper(order_value.ToString());
+	return EnumSerializer::StringToEnum<T>(order_name.c_str());
 }
 
 static unique_ptr<FunctionData> ListNormalSortBind(ClientContext &context, ScalarFunction &bound_function,
                                                    vector<unique_ptr<Expression>> &arguments) {
-
-	D_ASSERT(!bound_function.arguments.empty() && bound_function.arguments.size() <= 3);
 	D_ASSERT(!arguments.empty() && arguments.size() <= 3);
-
-	// set default values
-	auto &config = DBConfig::GetConfig(context);
-	auto order = config.options.default_order_type;
-	auto null_order = config.options.default_null_order;
+	auto order = OrderType::ORDER_DEFAULT;
+	auto null_order = OrderByNullType::ORDER_DEFAULT;
 
 	// get the sorting order
 	if (arguments.size() >= 2) {
-
-		if (!arguments[1]->IsFoldable()) {
-			throw InvalidInputException("Sorting order must be a constant");
-		}
-		Value order_value = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
-
-		const auto order_name = StringUtil::Upper(order_value.ToString());
-		const auto order_arg = EnumSerializer::StringToEnum<OrderType>(order_name.c_str());
-		switch (order_arg) {
-		case OrderType::ASCENDING:
-		case OrderType::DESCENDING:
-			order = order_arg;
-			break;
-		case OrderType::ORDER_DEFAULT:
-			break;
-		default:
-			throw InvalidInputException("Sorting order must be either ASC, DESC or DEFAULT");
-		}
+		order = GetOrder<OrderType>(context, *arguments[1]);
 	}
-
 	// get the null sorting order
 	if (arguments.size() == 3) {
-		null_order = GetNullOrder(context, arguments, 2);
+		null_order = GetOrder<OrderByNullType>(context, *arguments[2]);
 	}
-
+	auto &config = DBConfig::GetConfig(context);
+	order = config.ResolveOrder(order);
+	null_order = config.ResolveNullOrder(order, null_order);
 	return ListSortBind(context, bound_function, arguments, order, null_order);
 }
 
 static unique_ptr<FunctionData> ListReverseSortBind(ClientContext &context, ScalarFunction &bound_function,
                                                     vector<unique_ptr<Expression>> &arguments) {
+	auto order = OrderType::ORDER_DEFAULT;
+	auto null_order = OrderByNullType::ORDER_DEFAULT;
 
-	D_ASSERT(bound_function.arguments.size() == 1 || bound_function.arguments.size() == 2);
-	D_ASSERT(arguments.size() == 1 || arguments.size() == 2);
-
-	// set (reverse) default values
-	auto &config = DBConfig::GetConfig(context);
-	auto order =
-	    (config.options.default_order_type == OrderType::ASCENDING) ? OrderType::DESCENDING : OrderType::ASCENDING;
-	auto null_order = config.options.default_null_order;
-
-	// get the null sorting order
 	if (arguments.size() == 2) {
-		null_order = GetNullOrder(context, arguments, 1);
+		null_order = GetOrder<OrderByNullType>(context, *arguments[1]);
 	}
-
+	auto &config = DBConfig::GetConfig(context);
+	order = config.ResolveOrder(order);
+	switch (order) {
+	case OrderType::ASCENDING:
+		order = OrderType::DESCENDING;
+		break;
+	case OrderType::DESCENDING:
+		order = OrderType::ASCENDING;
+		break;
+	default:
+		throw InternalException("Unexpected order type in list reverse sort");
+	}
+	null_order = config.ResolveNullOrder(order, null_order);
 	return ListSortBind(context, bound_function, arguments, order, null_order);
 }
 

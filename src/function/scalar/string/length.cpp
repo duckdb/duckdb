@@ -141,7 +141,7 @@ void LengthFun::RegisterFunction(BuiltinFunctions &set) {
 struct UnicodeOperator {
 	template <class TA, class TR>
 	static inline TR Operation(const TA &input) {
-		auto str = reinterpret_cast<const utf8proc_uint8_t *>(input.GetDataUnsafe());
+		auto str = reinterpret_cast<const utf8proc_uint8_t *>(input.GetData());
 		auto len = input.GetSize();
 		utf8proc_int32_t codepoint;
 		(void)utf8proc_iterate(str, len, &codepoint);

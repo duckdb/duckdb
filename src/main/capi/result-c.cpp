@@ -21,7 +21,7 @@ struct CStringConverter {
 	static DST Convert(SRC input) {
 		auto result = (char *)duckdb_malloc(input.GetSize() + 1);
 		assert(result);
-		memcpy((void *)result, input.GetDataUnsafe(), input.GetSize());
+		memcpy((void *)result, input.GetData(), input.GetSize());
 		auto write_arr = (char *)result;
 		write_arr[input.GetSize()] = '\0';
 		return result;
@@ -40,7 +40,7 @@ struct CBlobConverter {
 		result.data = (char *)duckdb_malloc(input.GetSize());
 		result.size = input.GetSize();
 		assert(result.data);
-		memcpy((void *)result.data, input.GetDataUnsafe(), input.GetSize());
+		memcpy((void *)result.data, input.GetData(), input.GetSize());
 		return result;
 	}
 

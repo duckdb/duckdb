@@ -40,10 +40,11 @@ public:
 	}
 
 protected:
-	BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,
+	BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
 	                          bool root_expression = false) override;
 
-	BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function, idx_t depth) override;
+	BindResult BindAggregate(FunctionExpression &expr, optional_ptr<AggregateFunctionCatalogEntry> function,
+	                         idx_t depth) override;
 
 	bool inside_window;
 	bool bound_aggregate = false;
@@ -53,7 +54,7 @@ protected:
 	case_insensitive_map_t<idx_t> alias_map;
 
 protected:
-	BindResult BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth);
+	BindResult BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth);
 	BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth) override;
 	BindResult BindWindow(WindowExpression &expr, idx_t depth);
 

@@ -18,14 +18,23 @@ PartitionGlobalHashGroup::PartitionGlobalHashGroup(BufferManager &buffer_manager
 	global_sort = make_uniq<GlobalSortState>(buffer_manager, orders, payload_layout);
 	global_sort->external = external;
 
+	//	Set up a comparator for the partition subset
 	partition_layout = global_sort->sort_layout.GetPrefixComparisonLayout(partitions.size());
+}
+
+int PartitionGlobalHashGroup::ComparePartitions(const SBIterator &left, const SBIterator &right) const {
+	int part_cmp = 0;
+	if (partition_layout.all_constant) {
+		part_cmp = FastMemcmp(left.entry_ptr, right.entry_ptr, partition_layout.comparison_size);
+	} else {
+		part_cmp = Comparators::CompareTuple(left.scan, right.scan, left.entry_ptr, right.entry_ptr, partition_layout,
+		                                     left.external);
+	}
+	return part_cmp;
 }
 
 void PartitionGlobalHashGroup::ComputeMasks(ValidityMask &partition_mask, ValidityMask &order_mask) {
 	D_ASSERT(count > 0);
-
-	//	Set up a comparator for the partition subset
-	const auto partition_size = partition_layout.comparison_size;
 
 	SBIterator prev(*global_sort, ExpressionType::COMPARE_LESSTHAN);
 	SBIterator curr(*global_sort, ExpressionType::COMPARE_LESSTHAN);
@@ -34,13 +43,8 @@ void PartitionGlobalHashGroup::ComputeMasks(ValidityMask &partition_mask, Validi
 	order_mask.SetValidUnsafe(0);
 	for (++curr; curr.GetIndex() < count; ++curr) {
 		//	Compare the partition subset first because if that differs, then so does the full ordering
-		int part_cmp = 0;
-		if (partition_layout.all_constant) {
-			part_cmp = FastMemcmp(prev.entry_ptr, curr.entry_ptr, partition_size);
-		} else {
-			part_cmp = Comparators::CompareTuple(prev.scan, curr.scan, prev.entry_ptr, curr.entry_ptr, partition_layout,
-			                                     prev.external);
-		}
+		const auto part_cmp = ComparePartitions(prev, curr);
+		;
 
 		if (part_cmp) {
 			partition_mask.SetValidUnsafe(curr.GetIndex());
@@ -52,31 +56,40 @@ void PartitionGlobalHashGroup::ComputeMasks(ValidityMask &partition_mask, Validi
 	}
 }
 
-PartitionGlobalSinkState::PartitionGlobalSinkState(ClientContext &context,
-                                                   const vector<unique_ptr<Expression>> &partitions_p,
-                                                   const vector<BoundOrderByNode> &orders_p, const Types &payload_types,
-                                                   const vector<unique_ptr<BaseStatistics>> &partitions_stats,
-                                                   idx_t estimated_cardinality)
-    : context(context), buffer_manager(BufferManager::GetBufferManager(context)), allocator(Allocator::Get(context)),
-      payload_types(payload_types), memory_per_thread(0), count(0) {
+void PartitionGlobalSinkState::GenerateOrderings(Orders &partitions, Orders &orders,
+                                                 const vector<unique_ptr<Expression>> &partition_bys,
+                                                 const Orders &order_bys,
+                                                 const vector<unique_ptr<BaseStatistics>> &partition_stats) {
 
 	// we sort by both 1) partition by expression list and 2) order by expressions
-	const auto partition_cols = partitions_p.size();
+	const auto partition_cols = partition_bys.size();
 	for (idx_t prt_idx = 0; prt_idx < partition_cols; prt_idx++) {
-		auto &pexpr = partitions_p[prt_idx];
+		auto &pexpr = partition_bys[prt_idx];
 
-		if (partitions_stats.empty() || !partitions_stats[prt_idx]) {
+		if (partition_stats.empty() || !partition_stats[prt_idx]) {
 			orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, pexpr->Copy(), nullptr);
 		} else {
 			orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, pexpr->Copy(),
-			                    partitions_stats[prt_idx]->ToUnique());
+			                    partition_stats[prt_idx]->ToUnique());
 		}
 		partitions.emplace_back(orders.back().Copy());
 	}
 
-	for (const auto &order : orders_p) {
+	for (const auto &order : order_bys) {
 		orders.emplace_back(order.Copy());
 	}
+}
+
+PartitionGlobalSinkState::PartitionGlobalSinkState(ClientContext &context,
+                                                   const vector<unique_ptr<Expression>> &partition_bys,
+                                                   const vector<BoundOrderByNode> &order_bys,
+                                                   const Types &payload_types,
+                                                   const vector<unique_ptr<BaseStatistics>> &partition_stats,
+                                                   idx_t estimated_cardinality)
+    : context(context), buffer_manager(BufferManager::GetBufferManager(context)), allocator(Allocator::Get(context)),
+      payload_types(payload_types), memory_per_thread(0), count(0) {
+
+	GenerateOrderings(partitions, orders, partition_bys, order_bys, partition_stats);
 
 	memory_per_thread = PhysicalOperator::GetMaxThreadMemory(context);
 	external = ClientConfig::GetConfig(context).force_external;
@@ -337,7 +350,8 @@ void PartitionLocalSinkState::Combine() {
 	gstate.CombineLocalPartition(local_partition, local_append);
 }
 
-PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &sink, GroupDataPtr group_data)
+PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &sink, GroupDataPtr group_data,
+                                                     hash_t hash_bin)
     : sink(sink), group_data(std::move(group_data)), stage(PartitionSortStage::INIT), total_tasks(0), tasks_assigned(0),
       tasks_completed(0) {
 
@@ -348,6 +362,8 @@ PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &s
 
 	hash_group = sink.hash_groups[group_idx].get();
 	global_sort = sink.hash_groups[group_idx]->global_sort.get();
+
+	sink.bin_groups[hash_bin] = group_idx;
 }
 
 void PartitionLocalMergeState::Prepare() {
@@ -445,10 +461,13 @@ bool PartitionGlobalMergeState::TryPrepareNextStage() {
 
 PartitionGlobalMergeStates::PartitionGlobalMergeStates(PartitionGlobalSinkState &sink) {
 	// Schedule all the sorts for maximum thread utilisation
-	for (auto &group_data : sink.grouping_data->GetPartitions()) {
+	auto &partitions = sink.grouping_data->GetPartitions();
+	sink.bin_groups.resize(partitions.size(), partitions.size());
+	for (hash_t hash_bin = 0; hash_bin < partitions.size(); ++hash_bin) {
+		auto &group_data = partitions[hash_bin];
 		// Prepare for merge sort phase
 		if (group_data->Count()) {
-			auto state = make_uniq<PartitionGlobalMergeState>(sink, std::move(group_data));
+			auto state = make_uniq<PartitionGlobalMergeState>(sink, std::move(group_data), hash_bin);
 			states.emplace_back(std::move(state));
 		}
 	}
@@ -540,105 +559,6 @@ void PartitionMergeEvent::Schedule() {
 		merge_tasks.emplace_back(make_uniq<PartitionMergeTask>(shared_from_this(), context, merge_states));
 	}
 	SetTasks(std::move(merge_tasks));
-}
-
-PartitionLocalSourceState::PartitionLocalSourceState(PartitionGlobalSinkState &gstate_p) : gstate(gstate_p) {
-	const auto &input_types = gstate.payload_types;
-	layout.Initialize(input_types);
-	input_chunk.Initialize(gstate.allocator, input_types);
-}
-
-void PartitionLocalSourceState::MaterializeSortedData() {
-	auto &global_sort_state = *hash_group->global_sort;
-	if (global_sort_state.sorted_blocks.empty()) {
-		return;
-	}
-
-	// scan the sorted row data
-	D_ASSERT(global_sort_state.sorted_blocks.size() == 1);
-	auto &sb = *global_sort_state.sorted_blocks[0];
-
-	// Free up some memory before allocating more
-	sb.radix_sorting_data.clear();
-	sb.blob_sorting_data = nullptr;
-
-	// Move the sorting row blocks into our RDCs
-	auto &buffer_manager = global_sort_state.buffer_manager;
-	auto &sd = *sb.payload_data;
-
-	// Data blocks are required
-	D_ASSERT(!sd.data_blocks.empty());
-	auto &block = sd.data_blocks[0];
-	rows = make_uniq<RowDataCollection>(buffer_manager, block->capacity, block->entry_size);
-	rows->blocks = std::move(sd.data_blocks);
-	rows->count = std::accumulate(rows->blocks.begin(), rows->blocks.end(), idx_t(0),
-	                              [&](idx_t c, const unique_ptr<RowDataBlock> &b) { return c + b->count; });
-
-	// Heap blocks are optional, but we want both for iteration.
-	if (!sd.heap_blocks.empty()) {
-		auto &block = sd.heap_blocks[0];
-		heap = make_uniq<RowDataCollection>(buffer_manager, block->capacity, block->entry_size);
-		heap->blocks = std::move(sd.heap_blocks);
-		hash_group.reset();
-	} else {
-		heap = make_uniq<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
-	}
-	heap->count = std::accumulate(heap->blocks.begin(), heap->blocks.end(), idx_t(0),
-	                              [&](idx_t c, const unique_ptr<RowDataBlock> &b) { return c + b->count; });
-}
-
-idx_t PartitionLocalSourceState::GeneratePartition(const idx_t hash_bin_p) {
-	//	Get rid of any stale data
-	hash_bin = hash_bin_p;
-
-	// There are three types of partitions:
-	// 1. No partition (no sorting)
-	// 2. One partition (sorting, but no hashing)
-	// 3. Multiple partitions (sorting and hashing)
-
-	//	How big is the partition?
-	idx_t count = 0;
-	if (hash_bin < gstate.hash_groups.size() && gstate.hash_groups[hash_bin]) {
-		count = gstate.hash_groups[hash_bin]->count;
-	} else if (gstate.rows && !hash_bin) {
-		count = gstate.count;
-	} else {
-		return count;
-	}
-
-	//	Initialise masks to false
-	const auto bit_count = ValidityMask::ValidityMaskSize(count);
-	partition_bits.clear();
-	partition_bits.resize(bit_count, 0);
-	partition_mask.Initialize(partition_bits.data());
-
-	order_bits.clear();
-	order_bits.resize(bit_count, 0);
-	order_mask.Initialize(order_bits.data());
-
-	// Scan the sorted data into new Collections
-	auto external = gstate.external;
-	if (gstate.rows && !hash_bin) {
-		// Simple mask
-		partition_mask.SetValidUnsafe(0);
-		order_mask.SetValidUnsafe(0);
-		//	No partition - align the heap blocks with the row blocks
-		rows = gstate.rows->CloneEmpty(gstate.rows->keep_pinned);
-		heap = gstate.strings->CloneEmpty(gstate.strings->keep_pinned);
-		RowDataCollectionScanner::AlignHeapBlocks(*rows, *heap, *gstate.rows, *gstate.strings, layout);
-		external = true;
-	} else if (hash_bin < gstate.hash_groups.size() && gstate.hash_groups[hash_bin]) {
-		// Overwrite the collections with the sorted data
-		hash_group = std::move(gstate.hash_groups[hash_bin]);
-		hash_group->ComputeMasks(partition_mask, order_mask);
-		MaterializeSortedData();
-	} else {
-		return count;
-	}
-
-	scanner = make_uniq<RowDataCollectionScanner>(*rows, *heap, layout, external, false);
-
-	return count;
 }
 
 } // namespace duckdb

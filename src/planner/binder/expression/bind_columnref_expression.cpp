@@ -340,7 +340,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 	// a generated column returns a generated expression, a struct on a column returns a struct extract
 	if (expr->type != ExpressionType::COLUMN_REF) {
 		auto alias = expr->alias;
-		auto result = BindExpression(&expr, depth);
+		auto result = BindExpression(expr, depth);
 		if (result.expression) {
 			result.expression->alias = std::move(alias);
 		}

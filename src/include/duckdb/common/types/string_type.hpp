@@ -68,9 +68,11 @@ public:
 		return GetSize() <= INLINE_LENGTH;
 	}
 
-	//! this is unsafe since the string will not be terminated at the end
-	const char *GetDataUnsafe() const {
+	const char *GetData() const {
 		return IsInlined() ? (const char *)value.inlined.inlined : value.pointer.ptr;
+	}
+	const char *GetDataUnsafe() const {
+		return GetData();
 	}
 
 	char *GetDataWriteable() const {
@@ -86,7 +88,7 @@ public:
 	}
 
 	string GetString() const {
-		return string(GetDataUnsafe(), GetSize());
+		return string(GetData(), GetSize());
 	}
 
 	explicit operator string() const {
@@ -108,7 +110,7 @@ public:
 		} else {
 			// copy the data into the prefix
 #ifndef DUCKDB_DEBUG_NO_INLINE
-			auto dataptr = (char *)GetDataUnsafe();
+			auto dataptr = (char *)GetData();
 			memcpy(value.pointer.prefix, dataptr, PREFIX_LENGTH);
 #else
 			memset(value.pointer.prefix, 0, PREFIX_BYTES);
@@ -124,7 +126,7 @@ public:
 #ifdef DUCKDB_DEBUG_NO_INLINE
 			if (a.GetSize() != b.GetSize())
 				return false;
-			return (memcmp(a.GetDataUnsafe(), b.GetDataUnsafe(), a.GetSize()) == 0);
+			return (memcmp(a.GetData(), b.GetData(), a.GetSize()) == 0);
 #endif
 			uint64_t A = Load<uint64_t>((const_data_ptr_t)&a);
 			uint64_t B = Load<uint64_t>((const_data_ptr_t)&b);
@@ -177,7 +179,7 @@ public:
 			if (A != B)
 				return bswap(A) > bswap(B);
 #endif
-			auto memcmp_res = memcmp(left.GetDataUnsafe(), right.GetDataUnsafe(), min_length);
+			auto memcmp_res = memcmp(left.GetData(), right.GetData(), min_length);
 			return memcmp_res > 0 || (memcmp_res == 0 && left_length > right_length);
 		}
 	};

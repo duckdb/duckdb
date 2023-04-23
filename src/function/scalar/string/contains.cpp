@@ -133,9 +133,9 @@ idx_t ContainsFun::Find(const unsigned char *haystack, idx_t haystack_size, cons
 }
 
 idx_t ContainsFun::Find(const string_t &haystack_s, const string_t &needle_s) {
-	auto haystack = (const unsigned char *)haystack_s.GetDataUnsafe();
+	auto haystack = (const unsigned char *)haystack_s.GetData();
 	auto haystack_size = haystack_s.GetSize();
-	auto needle = (const unsigned char *)needle_s.GetDataUnsafe();
+	auto needle = (const unsigned char *)needle_s.GetData();
 	auto needle_size = needle_s.GetSize();
 	if (needle_size == 0) {
 		// empty needle: always true

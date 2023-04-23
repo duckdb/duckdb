@@ -116,7 +116,7 @@ static void ConstructValue(const_data_ptr_t data, idx_t size, data_t target[]) {
 }
 
 void StringStats::Update(BaseStatistics &stats, const string_t &value) {
-	auto data = (const_data_ptr_t)value.GetDataUnsafe();
+	auto data = (const_data_ptr_t)value.GetData();
 	auto size = value.GetSize();
 
 	//! we can only fit 8 bytes, so we might need to trim our string
@@ -238,7 +238,7 @@ void StringStats::Verify(const BaseStatistics &stats, Vector &vector, const Sele
 			continue;
 		}
 		auto value = data[index];
-		auto data = value.GetDataUnsafe();
+		auto data = value.GetData();
 		auto len = value.GetSize();
 		// LCOV_EXCL_START
 		if (string_data.has_max_string_length && len > string_data.max_string_length) {

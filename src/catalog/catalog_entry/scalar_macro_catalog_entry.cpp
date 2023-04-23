@@ -21,7 +21,7 @@ ScalarMacroCatalogEntry::ScalarMacroCatalogEntry(Catalog *catalog, SchemaCatalog
 
 void ScalarMacroCatalogEntry::Serialize(Serializer &main_serializer) const {
 	D_ASSERT(!internal);
-	auto &scalar_function = (ScalarMacroFunction &)*function;
+	auto &scalar_function = function->Cast<ScalarMacroFunction>();
 	FieldWriter writer(main_serializer);
 	writer.WriteString(schema->name);
 	writer.WriteString(name);
@@ -66,7 +66,7 @@ void TableMacroCatalogEntry::Serialize(Serializer &main_serializer) const {
 	D_ASSERT(!internal);
 	FieldWriter writer(main_serializer);
 
-	auto &table_function = (TableMacroFunction &)*function;
+	auto &table_function = function->Cast<TableMacroFunction>();
 	writer.WriteString(schema->name);
 	writer.WriteString(name);
 	writer.WriteSerializable(*table_function.query_node);

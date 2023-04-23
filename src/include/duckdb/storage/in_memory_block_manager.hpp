@@ -20,6 +20,9 @@ public:
 	using BlockManager::BlockManager;
 
 	// LCOV_EXCL_START
+	unique_ptr<Block> ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) override {
+		throw InternalException("Cannot perform IO in in-memory database!");
+	}
 	unique_ptr<Block> CreateBlock(block_id_t block_id, FileBuffer *source_buffer) override {
 		throw InternalException("Cannot perform IO in in-memory database!");
 	}
