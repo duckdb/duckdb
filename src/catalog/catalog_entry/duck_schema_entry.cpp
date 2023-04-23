@@ -280,7 +280,7 @@ void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
 }
 
 CatalogEntry *DuckSchemaEntry::GetEntry(CatalogTransaction transaction, CatalogType type, const string &name) {
-	return GetCatalogSet(type).GetEntry(transaction, name);
+	return GetCatalogSet(type).GetEntry(transaction, name).get();
 }
 
 SimilarCatalogEntry DuckSchemaEntry::GetSimilarEntry(CatalogTransaction transaction, CatalogType type,

@@ -93,8 +93,8 @@ public:
 	void CleanupEntry(CatalogEntry &catalog_entry);
 
 	//! Returns the entry with the specified name
-	DUCKDB_API CatalogEntry *GetEntry(CatalogTransaction transaction, const string &name);
-	DUCKDB_API CatalogEntry *GetEntry(ClientContext &context, const string &name);
+	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(CatalogTransaction transaction, const string &name);
+	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(ClientContext &context, const string &name);
 
 	//! Gets the entry that is most similar to the given name (i.e. smallest levenshtein distance), or empty string if
 	//! none is found. The returned pair consists of the entry name and the distance (smaller means closer).
@@ -134,12 +134,11 @@ private:
 	//! Given a root entry, gets the entry valid for this transaction
 	CatalogEntry &GetEntryForTransaction(CatalogTransaction transaction, CatalogEntry &current);
 	CatalogEntry &GetCommittedEntry(CatalogEntry &current);
-	bool GetEntryInternal(CatalogTransaction transaction, const string &name, EntryIndex *entry_index,
-	                      CatalogEntry *&entry);
-	bool GetEntryInternal(CatalogTransaction transaction, EntryIndex &entry_index, CatalogEntry *&entry);
+	optional_ptr<CatalogEntry> GetEntryInternal(CatalogTransaction transaction, const string &name, EntryIndex *entry_index);
+	optional_ptr<CatalogEntry> GetEntryInternal(CatalogTransaction transaction, EntryIndex &entry_index);
 	//! Drops an entry from the catalog set; must hold the catalog_lock to safely call this
 	void DropEntryInternal(CatalogTransaction transaction, EntryIndex entry_index, CatalogEntry &entry, bool cascade);
-	CatalogEntry *CreateEntryInternal(CatalogTransaction transaction, unique_ptr<CatalogEntry> entry);
+	optional_ptr<CatalogEntry> CreateEntryInternal(CatalogTransaction transaction, unique_ptr<CatalogEntry> entry);
 	optional_ptr<MappingValue> GetMapping(CatalogTransaction transaction, const string &name, bool get_latest = false);
 	void PutMapping(CatalogTransaction transaction, const string &name, EntryIndex entry_index);
 	void DeleteMapping(CatalogTransaction transaction, const string &name);
@@ -149,7 +148,7 @@ private:
 	//! Create all default entries
 	void CreateDefaultEntries(CatalogTransaction transaction, unique_lock<mutex> &lock);
 	//! Attempt to create a default entry with the specified name. Returns the entry if successful, nullptr otherwise.
-	CatalogEntry *CreateDefaultEntry(CatalogTransaction transaction, const string &name, unique_lock<mutex> &lock);
+	optional_ptr<CatalogEntry> CreateDefaultEntry(CatalogTransaction transaction, const string &name, unique_lock<mutex> &lock);
 
 	EntryIndex PutEntry(idx_t entry_index, unique_ptr<CatalogEntry> entry);
 	void PutEntry(EntryIndex index, unique_ptr<CatalogEntry> entry);

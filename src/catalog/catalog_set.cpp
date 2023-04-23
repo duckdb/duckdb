@@ -154,40 +154,38 @@ bool CatalogSet::CreateEntry(ClientContext &context, const string &name, unique_
 	return CreateEntry(catalog.GetCatalogTransaction(context), name, std::move(value), dependencies);
 }
 
-bool CatalogSet::GetEntryInternal(CatalogTransaction transaction, EntryIndex &entry_index,
-                                  CatalogEntry *&catalog_entry) {
-	catalog_entry = entry_index.GetEntry().get();
+optional_ptr<CatalogEntry> CatalogSet::GetEntryInternal(CatalogTransaction transaction, EntryIndex &entry_index) {
+	auto &catalog_entry = *entry_index.GetEntry();
 	// if it does: we have to retrieve the entry and to check version numbers
-	if (HasConflict(transaction, catalog_entry->timestamp)) {
+	if (HasConflict(transaction, catalog_entry.timestamp)) {
 		// current version has been written to by a currently active
 		// transaction
-		throw TransactionException("Catalog write-write conflict on alter with \"%s\"", catalog_entry->name);
+		throw TransactionException("Catalog write-write conflict on alter with \"%s\"", catalog_entry.name);
 	}
 	// there is a current version that has been committed by this transaction
-	if (catalog_entry->deleted) {
+	if (catalog_entry.deleted) {
 		// if the entry was already deleted, it now does not exist anymore
 		// so we return that we could not find it
-		return false;
+		return nullptr;
 	}
-	return true;
+	return &catalog_entry;
 }
 
-bool CatalogSet::GetEntryInternal(CatalogTransaction transaction, const string &name, EntryIndex *entry_index,
-                                  CatalogEntry *&catalog_entry) {
+optional_ptr<CatalogEntry> CatalogSet::GetEntryInternal(CatalogTransaction transaction, const string &name, EntryIndex *entry_index) {
 	auto mapping_value = GetMapping(transaction, name);
 	if (mapping_value == nullptr || mapping_value->deleted) {
 		// the entry does not exist, check if we can create a default entry
-		return false;
+		return nullptr;
 	}
 	if (entry_index) {
 		*entry_index = mapping_value->index.Copy();
 	}
-	return GetEntryInternal(transaction, mapping_value->index, catalog_entry);
+	return GetEntryInternal(transaction, mapping_value->index);
 }
 
 bool CatalogSet::AlterOwnership(CatalogTransaction transaction, ChangeOwnershipInfo &info) {
-	CatalogEntry *entry;
-	if (!GetEntryInternal(transaction, info.name, nullptr, entry)) {
+	auto entry = GetEntryInternal(transaction, info.name, nullptr);
+	if (!entry) {
 		return false;
 	}
 
@@ -202,8 +200,8 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 
 	// first check if the entry exists in the unordered set
 	EntryIndex entry_index;
-	CatalogEntry *entry;
-	if (!GetEntryInternal(transaction, name, &entry_index, entry)) {
+	auto entry = GetEntryInternal(transaction, name, &entry_index);
+	if (!entry) {
 		return false;
 	}
 	if (!alter_info.allow_internal && entry->internal) {
@@ -315,8 +313,8 @@ bool CatalogSet::DropEntry(CatalogTransaction transaction, const string &name, b
 	lock_guard<mutex> write_lock(catalog.GetWriteLock());
 	// we can only delete an entry that exists
 	EntryIndex entry_index;
-	CatalogEntry *entry;
-	if (!GetEntryInternal(transaction, name, &entry_index, entry)) {
+	auto entry = GetEntryInternal(transaction, name, &entry_index);
+	if (!entry) {
 		return false;
 	}
 	if (entry->internal && !allow_drop_internal) {
@@ -466,7 +464,7 @@ SimilarCatalogEntry CatalogSet::SimilarEntry(CatalogTransaction transaction, con
 	return result;
 }
 
-CatalogEntry *CatalogSet::CreateEntryInternal(CatalogTransaction transaction, unique_ptr<CatalogEntry> entry) {
+optional_ptr<CatalogEntry> CatalogSet::CreateEntryInternal(CatalogTransaction transaction, unique_ptr<CatalogEntry> entry) {
 	if (mapping.find(entry->name) != mapping.end()) {
 		return nullptr;
 	}
@@ -482,7 +480,7 @@ CatalogEntry *CatalogSet::CreateEntryInternal(CatalogTransaction transaction, un
 	return catalog_entry;
 }
 
-CatalogEntry *CatalogSet::CreateDefaultEntry(CatalogTransaction transaction, const string &name,
+optional_ptr<CatalogEntry> CatalogSet::CreateDefaultEntry(CatalogTransaction transaction, const string &name,
                                              unique_lock<mutex> &lock) {
 	// no entry found with this name, check for defaults
 	if (!defaults || defaults->created_all_entries) {
@@ -515,7 +513,7 @@ CatalogEntry *CatalogSet::CreateDefaultEntry(CatalogTransaction transaction, con
 	return GetEntry(transaction, name);
 }
 
-CatalogEntry *CatalogSet::GetEntry(CatalogTransaction transaction, const string &name) {
+optional_ptr<CatalogEntry> CatalogSet::GetEntry(CatalogTransaction transaction, const string &name) {
 	unique_lock<mutex> lock(catalog_lock);
 	auto mapping_value = GetMapping(transaction, name);
 	if (mapping_value != nullptr && !mapping_value->deleted) {
@@ -532,7 +530,7 @@ CatalogEntry *CatalogSet::GetEntry(CatalogTransaction transaction, const string 
 	return CreateDefaultEntry(transaction, name, lock);
 }
 
-CatalogEntry *CatalogSet::GetEntry(ClientContext &context, const string &name) {
+optional_ptr<CatalogEntry> CatalogSet::GetEntry(ClientContext &context, const string &name) {
 	return GetEntry(catalog.GetCatalogTransaction(context), name);
 }
 

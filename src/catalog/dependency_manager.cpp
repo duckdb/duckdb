@@ -18,7 +18,6 @@ void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &
 	// check for each object in the sources if they were not deleted yet
 	for (auto &dep : dependencies.set) {
 		auto &dependency = dep.get();
-		CatalogEntry *catalog_entry;
 		if (dependency.catalog != object.catalog) {
 			throw DependencyException(
 			    "Error adding dependency for object \"%s\" - dependency \"%s\" is in catalog "
@@ -28,7 +27,8 @@ void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &
 		if (!dependency.set) {
 			throw InternalException("Dependency has no set");
 		}
-		if (!dependency.set->GetEntryInternal(transaction, dependency.name, nullptr, catalog_entry)) {
+		auto catalog_entry = dependency.set->GetEntryInternal(transaction, dependency.name, nullptr);
+		if (!catalog_entry) {
 			throw InternalException("Dependency has already been deleted?");
 		}
 	}
@@ -58,9 +58,8 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 		if (mapping_value == nullptr) {
 			continue;
 		}
-		CatalogEntry *dependency_entry;
-
-		if (!catalog_set.GetEntryInternal(transaction, mapping_value->index, dependency_entry)) {
+		auto dependency_entry = catalog_set.GetEntryInternal(transaction, mapping_value->index);
+		if (!dependency_entry) {
 			// the dependent object was already deleted, no conflict
 			continue;
 		}
@@ -89,8 +88,8 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 		// look up the entry in the catalog set
 		auto &entry = dep.entry.get();
 		auto &catalog_set = *entry.set;
-		CatalogEntry *dependency_entry;
-		if (!catalog_set.GetEntryInternal(transaction, entry.name, nullptr, dependency_entry)) {
+		auto dependency_entry = catalog_set.GetEntryInternal(transaction, entry.name, nullptr);
+		if (!dependency_entry) {
 			// the dependent object was already deleted, no conflict
 			continue;
 		}
