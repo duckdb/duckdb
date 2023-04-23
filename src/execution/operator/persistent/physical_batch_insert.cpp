@@ -269,7 +269,7 @@ unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContex
 	if (info) {
 		// CREATE TABLE AS
 		D_ASSERT(!insert_table);
-		auto &catalog = *schema->catalog;
+		auto &catalog = schema->catalog;
 		table = (TableCatalogEntry *)catalog.CreateTable(catalog.GetCatalogTransaction(context), *schema.get_mutable(),
 		                                                 *info).get();
 	} else {

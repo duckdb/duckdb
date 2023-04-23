@@ -121,9 +121,9 @@ void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 		// return values:
 		idx_t col = 0;
 		// database_name, VARCHAR
-		output.SetValue(col++, count, table.catalog->GetName());
+		output.SetValue(col++, count, table.catalog.GetName());
 		// database_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(table.catalog->GetOid()));
+		output.SetValue(col++, count, Value::BIGINT(table.catalog.GetOid()));
 		// schema_name, LogicalType::VARCHAR
 		output.SetValue(col++, count, Value(table.schema.name));
 		// schema_oid, LogicalType::BIGINT

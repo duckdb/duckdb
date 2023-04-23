@@ -92,7 +92,7 @@ static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &res
 	auto &context = state.GetContext();
 	if (info.sequence) {
 		auto &sequence = *info.sequence;
-		auto &transaction = DuckTransaction::Get(context, *sequence.catalog);
+		auto &transaction = DuckTransaction::Get(context, sequence.catalog);
 		// sequence to use is hard coded
 		// increment the sequence
 		result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -107,7 +107,7 @@ static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &res
 			// fetch the sequence from the catalog
 			auto &sequence = BindSequence(context, value.GetString());
 			// finally get the next value from the sequence
-			auto &transaction = DuckTransaction::Get(context, *sequence.catalog);
+			auto &transaction = DuckTransaction::Get(context, sequence.catalog);
 			return OP::Operation(transaction, sequence);
 		});
 	}

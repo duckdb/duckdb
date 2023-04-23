@@ -178,9 +178,9 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 
 			idx_t col = 0;
 			// database_name, LogicalType::VARCHAR
-			output.SetValue(col++, count, Value(table.schema.catalog->GetName()));
+			output.SetValue(col++, count, Value(table.schema.catalog.GetName()));
 			// database_oid, LogicalType::BIGINT
-			output.SetValue(col++, count, Value::BIGINT(table.schema.catalog->GetOid()));
+			output.SetValue(col++, count, Value::BIGINT(table.schema.catalog.GetOid()));
 			// schema_name, LogicalType::VARCHAR
 			output.SetValue(col++, count, Value(table.schema.name));
 			// schema_oid, LogicalType::BIGINT
@@ -205,7 +205,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 					const auto &bound_foreign_key = bound_constraint.Cast<BoundForeignKeyConstraint>();
 					const auto &info = bound_foreign_key.info;
 					// find the other table
-					auto table_entry = Catalog::GetEntry<TableCatalogEntry>(context, table.catalog->GetName(),
+					auto table_entry = Catalog::GetEntry<TableCatalogEntry>(context, table.catalog.GetName(),
 					                                                        info.schema, info.table, OnEntryNotFound::RETURN_NULL);
 					if (!table_entry) {
 						throw InternalException("dukdb_constraints: entry %s.%s referenced in foreign key not found",

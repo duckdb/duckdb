@@ -12,12 +12,12 @@
 namespace duckdb {
 
 SchemaCatalogEntry::SchemaCatalogEntry(Catalog &catalog, string name_p, bool internal)
-    : CatalogEntry(CatalogType::SCHEMA_ENTRY, &catalog, std::move(name_p)) {
+    : InCatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, std::move(name_p)) {
 	this->internal = internal;
 }
 
 CatalogTransaction SchemaCatalogEntry::GetCatalogTransaction(ClientContext &context) {
-	return CatalogTransaction(*catalog, context);
+	return CatalogTransaction(catalog, context);
 }
 
 SimilarCatalogEntry SchemaCatalogEntry::GetSimilarEntry(CatalogTransaction transaction, CatalogType type,

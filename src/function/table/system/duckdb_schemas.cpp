@@ -65,9 +65,9 @@ void DuckDBSchemasFunction(ClientContext &context, TableFunctionInput &data_p, D
 		// "oid", PhysicalType::BIGINT
 		output.SetValue(col++, count, Value::BIGINT(entry.oid));
 		// database_name, VARCHAR
-		output.SetValue(col++, count, entry.catalog->GetName());
+		output.SetValue(col++, count, entry.catalog.GetName());
 		// database_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(entry.catalog->GetOid()));
+		output.SetValue(col++, count, Value::BIGINT(entry.catalog.GetOid()));
 		// "schema_name", PhysicalType::VARCHAR
 		output.SetValue(col++, count, Value(entry.name));
 		// "internal", PhysicalType::BOOLEAN

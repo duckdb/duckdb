@@ -40,7 +40,7 @@ struct CreateTypeInfo;
 struct DropInfo;
 
 //! A schema in the catalog
-class SchemaCatalogEntry : public CatalogEntry {
+class SchemaCatalogEntry : public InCatalogEntry {
 public:
 	static constexpr const CatalogType Type = CatalogType::SCHEMA_ENTRY;
 	static constexpr const char *Name = "schema";

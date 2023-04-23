@@ -342,7 +342,7 @@ SimilarCatalogEntry Catalog::SimilarEntryInSchemas(ClientContext &context, const
 	SimilarCatalogEntry result;
 	for (auto schema_ref : schemas) {
 		auto &schema = schema_ref.get();
-		auto transaction = schema.catalog->GetCatalogTransaction(context);
+		auto transaction = schema.catalog.GetCatalogTransaction(context);
 		auto entry = schema.GetSimilarEntry(transaction, type, entry_name);
 		if (!entry.Found()) {
 			// no similar entry found
@@ -492,7 +492,7 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 	if (unseen_entry.Found() && unseen_entry.distance < entry.distance) {
 		// the closest matching entry requires qualification as it is not in the default search path
 		// check how to minimally qualify this entry
-		auto catalog_name = unseen_entry.schema->catalog->GetName();
+		auto catalog_name = unseen_entry.schema->catalog.GetName();
 		auto schema_name = unseen_entry.schema->name;
 		bool qualify_database;
 		bool qualify_schema;
@@ -717,10 +717,10 @@ vector<reference<SchemaCatalogEntry>> Catalog::GetAllSchemas(ClientContext &cont
 	sort(result.begin(), result.end(), [&](reference<SchemaCatalogEntry> left_p, reference<SchemaCatalogEntry> right_p) {
 		auto &left = left_p.get();
 		auto &right = right_p.get();
-		if (left.catalog->GetName() < right.catalog->GetName()) {
+		if (left.catalog.GetName() < right.catalog.GetName()) {
 			return true;
 		}
-		if (left.catalog->GetName() == right.catalog->GetName()) {
+		if (left.catalog.GetName() == right.catalog.GetName()) {
 			return left.name < right.name;
 		}
 		return false;

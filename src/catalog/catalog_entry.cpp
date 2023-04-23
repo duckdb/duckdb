@@ -4,10 +4,13 @@
 
 namespace duckdb {
 
-CatalogEntry::CatalogEntry(CatalogType type, Catalog *catalog_p, string name_p)
-    : oid(catalog_p ? catalog_p->ModifyCatalog() : 0), type(type), catalog(catalog_p), set(nullptr),
+CatalogEntry::CatalogEntry(CatalogType type, string name_p, idx_t oid)
+    : oid(oid), type(type), set(nullptr),
       name(std::move(name_p)), deleted(false), temporary(false), internal(false), parent(nullptr) {
 }
+
+CatalogEntry::CatalogEntry(CatalogType type, Catalog &catalog, string name_p) :
+ 	CatalogEntry(type, std::move(name_p), catalog.ModifyCatalog()) {}
 
 CatalogEntry::~CatalogEntry() {
 }
@@ -33,7 +36,25 @@ string CatalogEntry::ToSQL() const {
 // LCOV_EXCL_STOP
 
 void CatalogEntry::Verify(Catalog &catalog_p) {
-	D_ASSERT(&catalog_p == catalog);
 }
 
+Catalog &CatalogEntry::GetCatalog() {
+	throw InternalException("CatalogEntry::GetCatalog called on catalog entry without catalog");
+}
+
+SchemaCatalogEntry &CatalogEntry::GetSchema() {
+	throw InternalException("CatalogEntry::GetSchema called on catalog entry without schema");
+
+}
+
+InCatalogEntry::InCatalogEntry(CatalogType type, Catalog &catalog, string name)
+	: CatalogEntry(type, catalog, name), catalog(catalog) {
+}
+
+InCatalogEntry::~InCatalogEntry() {}
+
+
+void InCatalogEntry::Verify(Catalog &catalog_p) {
+	D_ASSERT(&catalog_p == &catalog);
+}
 } // namespace duckdb

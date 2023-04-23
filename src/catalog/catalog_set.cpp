@@ -106,7 +106,7 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 		// first create a dummy deleted entry for this entry
 		// so transactions started before the commit of this transaction don't
 		// see it yet
-		auto dummy_node = make_uniq<CatalogEntry>(CatalogType::INVALID, value->catalog, name);
+		auto dummy_node = make_uniq<InCatalogEntry>(CatalogType::INVALID, value->GetCatalog(), name);
 		dummy_node->timestamp = 0;
 		dummy_node->deleted = true;
 		dummy_node->set = this;
@@ -279,8 +279,9 @@ void CatalogSet::DropEntryDependencies(CatalogTransaction transaction, EntryInde
 	entry_index.GetEntry()->deleted = true;
 
 	// check any dependencies of this object
-	D_ASSERT(entry.catalog->IsDuckCatalog());
-	((DuckCatalog &)*entry.catalog).GetDependencyManager().DropObject(transaction, entry, cascade);
+	D_ASSERT(entry.GetCatalog().IsDuckCatalog());
+	auto &duck_catalog = entry.GetCatalog().Cast<DuckCatalog>();
+	duck_catalog.GetDependencyManager().DropObject(transaction, entry, cascade);
 
 	// dropper destructor is called here
 	// the destructor makes sure to return the value to the previous state
@@ -294,7 +295,7 @@ void CatalogSet::DropEntryInternal(CatalogTransaction transaction, EntryIndex en
 	// create a new entry and replace the currently stored one
 	// set the timestamp to the timestamp of the current transaction
 	// and point it at the dummy node
-	auto value = make_uniq<CatalogEntry>(CatalogType::DELETED_ENTRY, entry.catalog, entry.name);
+	auto value = make_uniq<InCatalogEntry>(CatalogType::DELETED_ENTRY, entry.GetCatalog(), entry.name);
 	value->timestamp = transaction.transaction_id;
 	value->set = this;
 	value->deleted = true;
@@ -342,8 +343,8 @@ void CatalogSet::CleanupEntry(CatalogEntry &catalog_entry) {
 		lock_guard<mutex> lock(catalog_lock);
 		if (!catalog_entry.deleted) {
 			// delete the entry from the dependency manager, if it is not deleted yet
-			D_ASSERT(catalog_entry.catalog->IsDuckCatalog());
-			catalog_entry.catalog->Cast<DuckCatalog>().GetDependencyManager().EraseObject(catalog_entry);
+			D_ASSERT(catalog_entry.GetCatalog().IsDuckCatalog());
+			catalog_entry.GetCatalog().Cast<DuckCatalog>().GetDependencyManager().EraseObject(catalog_entry);
 		}
 		auto parent = catalog_entry.parent;
 		parent->child = std::move(catalog_entry.child);

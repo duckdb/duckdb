@@ -88,9 +88,9 @@ void DuckDBIndexesFunction(ClientContext &context, TableFunctionInput &data_p, D
 
 		idx_t col = 0;
 		// database_name, VARCHAR
-		output.SetValue(col++, count, index.catalog->GetName());
+		output.SetValue(col++, count, index.catalog.GetName());
 		// database_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(index.catalog->GetOid()));
+		output.SetValue(col++, count, Value::BIGINT(index.catalog.GetOid()));
 		// schema_name, VARCHAR
 		output.SetValue(col++, count, Value(index.schema.name));
 		// schema_oid, BIGINT
@@ -101,7 +101,7 @@ void DuckDBIndexesFunction(ClientContext &context, TableFunctionInput &data_p, D
 		output.SetValue(col++, count, Value::BIGINT(index.oid));
 		// find the table in the catalog
 		auto &table_entry =
-		    index.schema.catalog->GetEntry<TableCatalogEntry>(context, index.GetSchemaName(), index.GetTableName());
+		    index.schema.catalog.GetEntry<TableCatalogEntry>(context, index.GetSchemaName(), index.GetTableName());
 		// table_name, VARCHAR
 		output.SetValue(col++, count, Value(table_entry.name));
 		// table_oid, BIGINT

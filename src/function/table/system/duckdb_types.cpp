@@ -83,9 +83,9 @@ void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		// return values:
 		idx_t col = 0;
 		// database_name, VARCHAR
-		output.SetValue(col++, count, type_entry.catalog->GetName());
+		output.SetValue(col++, count, type_entry.catalog.GetName());
 		// database_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(type_entry.catalog->GetOid()));
+		output.SetValue(col++, count, Value::BIGINT(type_entry.catalog.GetOid()));
 		// schema_name, LogicalType::VARCHAR
 		output.SetValue(col++, count, Value(type_entry.schema.name));
 		// schema_oid, LogicalType::BIGINT

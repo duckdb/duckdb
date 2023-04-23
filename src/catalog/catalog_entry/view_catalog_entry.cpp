@@ -91,7 +91,7 @@ unique_ptr<CatalogEntry> ViewCatalogEntry::Copy(ClientContext &context) const {
 	create_info.temporary = temporary;
 	create_info.sql = sql;
 
-	return make_uniq<ViewCatalogEntry>(*catalog, schema, create_info);
+	return make_uniq<ViewCatalogEntry>(catalog, schema, create_info);
 }
 
 } // namespace duckdb

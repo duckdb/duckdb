@@ -19,19 +19,19 @@ struct AlterInfo;
 class Catalog;
 class CatalogSet;
 class ClientContext;
+class SchemaCatalogEntry;
 
 //! Abstract base class of an entry in the catalog
 class CatalogEntry {
 public:
-	CatalogEntry(CatalogType type, Catalog *catalog, string name);
+	CatalogEntry(CatalogType type, Catalog &catalog, string name);
+	CatalogEntry(CatalogType type, string name, idx_t oid);
 	virtual ~CatalogEntry();
 
 	//! The oid of the entry
 	idx_t oid;
 	//! The type of this catalog entry
 	CatalogType type;
-	//! Reference to the catalog this entry belongs to
-	Catalog *catalog;
 	//! Reference to the catalog set this entry is stored in
 	CatalogSet *set;
 	//! The name of the entry
@@ -62,6 +62,9 @@ public:
 	//! Convert the catalog entry to a SQL string that can be used to re-construct the catalog entry
 	virtual string ToSQL() const;
 
+	virtual Catalog &GetCatalog();
+	virtual SchemaCatalogEntry &GetSchema();
+
 	virtual void Verify(Catalog &catalog);
 
 public:
@@ -76,4 +79,21 @@ public:
 		return (const TARGET &)*this;
 	}
 };
+
+class InCatalogEntry : public CatalogEntry {
+public:
+	InCatalogEntry(CatalogType type, Catalog &catalog, string name);
+	~InCatalogEntry() override;
+
+	//! The catalog the entry belongs to
+	Catalog &catalog;
+
+public:
+	Catalog &GetCatalog() override {
+		return catalog;
+	}
+
+	void Verify(Catalog &catalog) override;
+};
+
 } // namespace duckdb

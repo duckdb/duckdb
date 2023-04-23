@@ -21,7 +21,7 @@ namespace duckdb {
 
 static bool CanPlanIndexJoin(ClientContext &context, TableScanBindData &bind_data, PhysicalTableScan &scan) {
 	auto &table = bind_data.table;
-	auto &transaction = DuckTransaction::Get(context, *table.catalog);
+	auto &transaction = DuckTransaction::Get(context, table.catalog);
 	auto &local_storage = LocalStorage::Get(transaction);
 	if (local_storage.Find(table.GetStorage())) {
 		// transaction local appends: skip index join

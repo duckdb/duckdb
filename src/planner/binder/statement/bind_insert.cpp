@@ -401,7 +401,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, stmt.catalog, stmt.schema, stmt.table);
 	if (!table.temporary) {
 		// inserting into a non-temporary table: alters underlying database
-		properties.modified_databases.insert(table.catalog->GetName());
+		properties.modified_databases.insert(table.catalog.GetName());
 	}
 
 	auto insert = make_uniq<LogicalInsert>(table, GenerateTableIndex());

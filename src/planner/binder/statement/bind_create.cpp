@@ -51,7 +51,7 @@ void Binder::BindSchemaOrCatalog(ClientContext &context, string &catalog, string
 			// check if there is a schema
 			auto schema_obj = Catalog::GetSchema(context, INVALID_CATALOG, schema, OnEntryNotFound::RETURN_NULL);
 			if (schema_obj) {
-				auto &attached = schema_obj->catalog->GetAttached();
+				auto &attached = schema_obj->catalog.GetAttached();
 				throw BinderException(
 				    "Ambiguous reference to catalog or schema \"%s\" - use a fully qualified path like \"%s.%s\"",
 				    schema, attached.GetName(), schema);
@@ -99,14 +99,14 @@ SchemaCatalogEntry &Binder::BindSchema(CreateInfo &info) {
 	D_ASSERT(schema_obj.type == CatalogType::SCHEMA_ENTRY);
 	info.schema = schema_obj.name;
 	if (!info.temporary) {
-		properties.modified_databases.insert(schema_obj.catalog->GetName());
+		properties.modified_databases.insert(schema_obj.catalog.GetName());
 	}
 	return schema_obj;
 }
 
 SchemaCatalogEntry &Binder::BindCreateSchema(CreateInfo &info) {
 	auto &schema = BindSchema(info);
-	if (schema.catalog->IsSystemCatalog()) {
+	if (schema.catalog.IsSystemCatalog()) {
 		throw BinderException("Cannot create entry in system catalog");
 	}
 	return schema;
@@ -139,9 +139,8 @@ static void QualifyFunctionNames(ClientContext &context, unique_ptr<ParsedExpres
 		auto function = Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, func.catalog,
 		                                                   func.schema, func.function_name, OnEntryNotFound::RETURN_NULL);
 		if (function) {
-			auto &standard = function->Cast<StandardEntry>();
-			func.catalog = function->catalog->GetName();
-			func.schema = standard.schema.name;
+			func.catalog = function->GetCatalog().GetName();
+			func.schema = function->GetSchema().name;
 		}
 		break;
 	}
@@ -208,7 +207,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	return BindCreateSchema(info);
 }
 
-void Binder::BindLogicalType(ClientContext &context, LogicalType &type, Catalog *catalog, const string &schema) {
+void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional_ptr<Catalog> catalog, const string &schema) {
 	if (type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::MAP) {
 		auto child_type = ListType::GetChildType(type);
 		BindLogicalType(context, child_type, catalog, schema);
@@ -502,7 +501,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		break;
 	}
 	case CatalogType::INDEX_ENTRY: {
-		auto &base = (CreateIndexInfo &)*stmt.info;
+		auto &base = stmt.info->Cast<CreateIndexInfo>();
 
 		// visit the table reference
 		auto bound_table = Bind(*base.table);
@@ -520,11 +519,11 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			throw BinderException("Cannot create index on a view!");
 		}
 
-		result.plan = table.catalog->BindCreateIndex(*this, stmt, table, std::move(plan));
+		result.plan = table.catalog.BindCreateIndex(*this, stmt, table, std::move(plan));
 		break;
 	}
 	case CatalogType::TABLE_ENTRY: {
-		auto &create_info = (CreateTableInfo &)*stmt.info;
+		auto &create_info = stmt.info->Cast<CreateTableInfo>();
 		// If there is a foreign key constraint, resolve primary key column's index from primary key column's name
 		reference_set_t<SchemaCatalogEntry> fk_schemas;
 		for (idx_t i = 0; i < create_info.constraints.size(); i++) {
@@ -636,7 +635,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			// 2: create a type alias with a custom type.
 			// eg. CREATE TYPE a AS INT; CREATE TYPE b AS a;
 			// We set b to be an alias for the underlying type of a
-			auto inner_type = Catalog::GetType(context, schema.catalog->GetName(), schema.name,
+			auto inner_type = Catalog::GetType(context, schema.catalog.GetName(), schema.name,
 			                                   UserType::GetTypeName(create_type_info.type));
 			// clear to nullptr, we don't need this
 			LogicalType::SetCatalog(inner_type, nullptr);

@@ -14,15 +14,21 @@ namespace duckdb {
 class SchemaCatalogEntry;
 
 //! A StandardEntry is a catalog entry that is a member of a schema
-class StandardEntry : public CatalogEntry {
+class StandardEntry : public InCatalogEntry {
 public:
 	StandardEntry(CatalogType type, SchemaCatalogEntry &schema, Catalog &catalog, string name)
-	    : CatalogEntry(type, &catalog, name), schema(schema) {
+	    : InCatalogEntry(type, catalog, name), schema(schema) {
 	}
 	~StandardEntry() override {
 	}
 
 	//! The schema the entry belongs to
 	SchemaCatalogEntry &schema;
+
+public:
+	SchemaCatalogEntry &GetSchema() override {
+		return schema;
+	}
 };
+
 } // namespace duckdb
