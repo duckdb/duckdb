@@ -9,8 +9,8 @@
 //
 //
 //---------------------------------------------------------------------------
-#ifndef Cascade_H
-#define Cascade_H
+#ifndef CASCADE_H
+#define CASCADE_H
 
 class Cascade {
 public:
@@ -21,3 +21,5 @@ private:
         ClientContext &context;
         CardinalityEstimator cardinality_estimator;
 }
+
+#endif
