@@ -148,7 +148,8 @@ void PandasScanFunction::PandasScanFunc(ClientContext &context, TableFunctionInp
 	auto &state = data_p.local_state->Cast<PandasScanLocalState>();
 
 	if (state.start >= state.end) {
-		if (!PandasScanParallelStateNext(context, data_p.bind_data.get(), data_p.local_state.get(), data_p.global_state.get())) {
+		if (!PandasScanParallelStateNext(context, data_p.bind_data.get(), data_p.local_state.get(),
+		                                 data_p.global_state.get())) {
 			return;
 		}
 	}
