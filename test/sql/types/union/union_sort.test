@@ -3,6 +3,9 @@
 # group: [union]
 
 statement ok
+SET default_null_order='nulls_first';
+
+statement ok
 CREATE TABLE tbl (a UNION(a INT, b INT));
 
 statement ok

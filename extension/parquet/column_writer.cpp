@@ -1342,7 +1342,7 @@ public:
 				}
 				stats.Update(ptr[r]);
 				temp_writer.Write<uint32_t>(ptr[r].GetSize());
-				temp_writer.WriteData((const_data_ptr_t)ptr[r].GetDataUnsafe(), ptr[r].GetSize());
+				temp_writer.WriteData((const_data_ptr_t)ptr[r].GetData(), ptr[r].GetSize());
 			}
 		}
 	}
@@ -1401,7 +1401,7 @@ public:
 			stats.Update(value);
 			// write this string value to the dictionary
 			temp_writer->Write<uint32_t>(value.GetSize());
-			temp_writer->WriteData((const_data_ptr_t)(value.GetDataUnsafe()), value.GetSize());
+			temp_writer->WriteData((const_data_ptr_t)(value.GetData()), value.GetSize());
 		}
 		// flush the dictionary page and add it to the to-be-written pages
 		WriteDictionary(state, std::move(temp_writer), values.size());
@@ -1528,7 +1528,7 @@ public:
 			stats.Update(string_values[r]);
 			// write this string value to the dictionary
 			temp_writer->Write<uint32_t>(string_values[r].GetSize());
-			temp_writer->WriteData((const_data_ptr_t)string_values[r].GetDataUnsafe(), string_values[r].GetSize());
+			temp_writer->WriteData((const_data_ptr_t)string_values[r].GetData(), string_values[r].GetSize());
 		}
 		// flush the dictionary page and add it to the to-be-written pages
 		WriteDictionary(state, std::move(temp_writer), enum_count);

@@ -18,7 +18,7 @@ template <>
 Key Key::CreateKey(ArenaAllocator &allocator, const LogicalType &type, string_t value) {
 	idx_t len = value.GetSize() + 1;
 	auto data = allocator.Allocate(len);
-	memcpy(data, value.GetDataUnsafe(), len - 1);
+	memcpy(data, value.GetData(), len - 1);
 
 	// FIXME: rethink this
 	if (type == LogicalType::BLOB || type == LogicalType::VARCHAR) {
@@ -43,7 +43,7 @@ template <>
 void Key::CreateKey(ArenaAllocator &allocator, const LogicalType &type, Key &key, string_t value) {
 	key.len = value.GetSize() + 1;
 	key.data = allocator.Allocate(key.len);
-	memcpy(key.data, value.GetDataUnsafe(), key.len - 1);
+	memcpy(key.data, value.GetData(), key.len - 1);
 
 	// FIXME: rethink this
 	if (type == LogicalType::BLOB || type == LogicalType::VARCHAR) {

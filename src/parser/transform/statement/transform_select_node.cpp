@@ -8,6 +8,38 @@
 
 namespace duckdb {
 
+void Transformer::TransformModifiers(duckdb_libpgquery::PGSelectStmt &stmt, QueryNode &node) {
+	// transform the common properties
+	// both the set operations and the regular select can have an ORDER BY/LIMIT attached to them
+	vector<OrderByNode> orders;
+	TransformOrderBy(stmt.sortClause, orders);
+	if (!orders.empty()) {
+		auto order_modifier = make_uniq<OrderModifier>();
+		order_modifier->orders = std::move(orders);
+		node.modifiers.push_back(std::move(order_modifier));
+	}
+	if (stmt.limitCount || stmt.limitOffset) {
+		if (stmt.limitCount && stmt.limitCount->type == duckdb_libpgquery::T_PGLimitPercent) {
+			auto limit_percent_modifier = make_uniq<LimitPercentModifier>();
+			auto expr_node = reinterpret_cast<duckdb_libpgquery::PGLimitPercent *>(stmt.limitCount)->limit_percent;
+			limit_percent_modifier->limit = TransformExpression(expr_node);
+			if (stmt.limitOffset) {
+				limit_percent_modifier->offset = TransformExpression(stmt.limitOffset);
+			}
+			node.modifiers.push_back(std::move(limit_percent_modifier));
+		} else {
+			auto limit_modifier = make_uniq<LimitModifier>();
+			if (stmt.limitCount) {
+				limit_modifier->limit = TransformExpression(stmt.limitCount);
+			}
+			if (stmt.limitOffset) {
+				limit_modifier->offset = TransformExpression(stmt.limitOffset);
+			}
+			node.modifiers.push_back(std::move(limit_modifier));
+		}
+	}
+}
+
 unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PGSelectStmt *stmt) {
 	D_ASSERT(stmt->type == duckdb_libpgquery::T_PGSelectStmt);
 	auto stack_checker = StackCheck();
@@ -119,35 +151,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 	default:
 		throw NotImplementedException("Statement type %d not implemented!", stmt->op);
 	}
-	// transform the common properties
-	// both the set operations and the regular select can have an ORDER BY/LIMIT attached to them
-	vector<OrderByNode> orders;
-	TransformOrderBy(stmt->sortClause, orders);
-	if (!orders.empty()) {
-		auto order_modifier = make_uniq<OrderModifier>();
-		order_modifier->orders = std::move(orders);
-		node->modifiers.push_back(std::move(order_modifier));
-	}
-	if (stmt->limitCount || stmt->limitOffset) {
-		if (stmt->limitCount && stmt->limitCount->type == duckdb_libpgquery::T_PGLimitPercent) {
-			auto limit_percent_modifier = make_uniq<LimitPercentModifier>();
-			auto expr_node = reinterpret_cast<duckdb_libpgquery::PGLimitPercent *>(stmt->limitCount)->limit_percent;
-			limit_percent_modifier->limit = TransformExpression(expr_node);
-			if (stmt->limitOffset) {
-				limit_percent_modifier->offset = TransformExpression(stmt->limitOffset);
-			}
-			node->modifiers.push_back(std::move(limit_percent_modifier));
-		} else {
-			auto limit_modifier = make_uniq<LimitModifier>();
-			if (stmt->limitCount) {
-				limit_modifier->limit = TransformExpression(stmt->limitCount);
-			}
-			if (stmt->limitOffset) {
-				limit_modifier->offset = TransformExpression(stmt->limitOffset);
-			}
-			node->modifiers.push_back(std::move(limit_modifier));
-		}
-	}
+	TransformModifiers(*stmt, *node);
 	return node;
 }
 

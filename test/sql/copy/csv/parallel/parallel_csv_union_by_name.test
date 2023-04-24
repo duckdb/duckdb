@@ -3,6 +3,9 @@
 # group: [parallel]
 
 statement ok
+SET default_null_order='nulls_first';
+
+statement ok
 PRAGMA verify_parallelism
 
 query IIII

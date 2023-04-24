@@ -26,7 +26,7 @@ public:
 	}
 	void Add(const char *data);
 	void Add(string_t string) {
-		MD5Update((const_data_ptr_t)string.GetDataUnsafe(), string.GetSize());
+		MD5Update((const_data_ptr_t)string.GetData(), string.GetSize());
 	}
 	void Add(const string &data) {
 		MD5Update((const_data_ptr_t)data.c_str(), data.size());

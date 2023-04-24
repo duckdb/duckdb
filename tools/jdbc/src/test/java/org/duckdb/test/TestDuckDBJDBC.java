@@ -21,7 +21,7 @@ import java.sql.Statement;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
-import java.time.Duration;
+import java.time.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -29,9 +29,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
 import java.util.TimeZone;
-import java.time.LocalDateTime;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.UUID;
 import javax.sql.rowset.RowSetProvider;
 import javax.sql.rowset.CachedRowSet;
@@ -632,11 +629,7 @@ public class TestDuckDBJDBC {
 		ResultSet rs = stmt.executeQuery("SELECT * FROM a");
 		assertFalse(rs.next());
 
-		try {
-			rs.getObject(1);
-			fail();
-		} catch (ArrayIndexOutOfBoundsException e) {
-		}
+		assertEquals(assertThrows(() -> rs.getObject(1), SQLException.class), "No row in context");
 
 		rs.close();
 		stmt.close();
@@ -1833,7 +1826,26 @@ public class TestDuckDBJDBC {
 
 		conn.close();
 	}
-	
+
+	public static void test_time_tz() throws Exception {
+		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+			 Statement s = conn.createStatement()) {
+			s.executeUpdate("create table t (i time with time zone)");
+			try (ResultSet rs = conn.getMetaData().getColumns(null, "%", "t", "i");) {
+				rs.next();
+
+				assertEquals(rs.getString("TYPE_NAME"), "TIME WITH TIME ZONE");
+				assertEquals(rs.getInt("DATA_TYPE"), Types.JAVA_OBJECT);
+			}
+
+			s.execute("INSERT INTO t VALUES ('01:01:00');");
+			try (ResultSet rs = s.executeQuery("SELECT * FROM t")) {
+				rs.next();
+				assertEquals(rs.getObject(1), OffsetTime.of(LocalTime.of(1, 1), ZoneOffset.UTC));
+			}
+		}
+	}
+
 	public static void test_get_tables_with_current_catalog() throws Exception {
 		ResultSet resultSet = null;
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
@@ -2349,9 +2361,17 @@ public class TestDuckDBJDBC {
 	}
 
 	public static void test_set_catalog() throws Exception {
-		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
-		conn.setCatalog("we do not have this feature yet, sorry"); // Should be no-op until implemented
-		conn.close();
+		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
+
+			assertThrows(() -> conn.setCatalog("other"), SQLException.class);
+
+			try (Statement stmt = conn.createStatement()) {
+				stmt.execute("ATTACH ':memory:' AS other;");
+			}
+
+			conn.setCatalog("other");
+			assertEquals(conn.getCatalog(), "other");
+		}
 	}
 
 	public static void test_get_table_types_bug1258() throws Exception {
@@ -2582,6 +2602,9 @@ public class TestDuckDBJDBC {
 		}
 
 		assertEquals(conn.getSchema(), "alternate_schema");
+
+		conn.setSchema("main");
+		assertEquals(conn.getSchema(), "main");
 
 		conn.close();
 

@@ -267,7 +267,7 @@ void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string
 	auto ptr = handle.Ptr() + state.head->offset;
 	Store<uint32_t>(string.GetSize(), ptr);
 	ptr += sizeof(uint32_t);
-	memcpy(ptr, string.GetDataUnsafe(), string.GetSize());
+	memcpy(ptr, string.GetData(), string.GetSize());
 	state.head->offset += total_length;
 }
 

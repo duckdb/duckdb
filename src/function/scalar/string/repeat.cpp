@@ -10,7 +10,7 @@ namespace duckdb {
 
 static string_t RepeatScalarFunction(const string_t &str, const int64_t cnt, vector<char> &result) {
 	// Get information about the repeated string
-	auto input_str = str.GetDataUnsafe();
+	auto input_str = str.GetData();
 	auto size_str = str.GetSize();
 
 	//  Reuse the buffer

@@ -58,6 +58,7 @@ enum class PhysicalOperatorType : uint8_t {
 	DELIM_JOIN,
 	INDEX_JOIN,
 	POSITIONAL_JOIN,
+	ASOF_JOIN,
 	// -----------------------------
 	// SetOps
 	// -----------------------------
