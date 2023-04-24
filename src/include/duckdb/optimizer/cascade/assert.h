@@ -22,8 +22,6 @@
 #ifndef assert_H
 #define assert_H
 
-#include "duckdb/optimizer/cascade/config.h"
-
 // retail assert; available in all builds
 #define GPOS_RTL_ASSERT(x)                                                 \
 	((x) ? ((void) 0)                                                      \
