@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
 class SchemaCatalogEntry;

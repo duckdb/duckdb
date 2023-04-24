@@ -13,6 +13,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/enums/on_entry_not_found.hpp"
 
 namespace duckdb {
 class AttachedDatabase;

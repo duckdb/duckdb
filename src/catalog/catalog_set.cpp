@@ -12,6 +12,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/catalog/mapping_value.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -547,7 +548,7 @@ void CatalogSet::AdjustUserDependency(CatalogEntry &entry, ColumnDefinition &col
 	if (!user_type_catalog_p) {
 		return;
 	}
-	auto &user_type_catalog = *user_type_catalog_p;
+	auto &user_type_catalog = user_type_catalog_p->Cast<CatalogEntry>();
 	auto &dependency_manager = catalog.GetDependencyManager();
 	if (remove) {
 		dependency_manager.dependents_map[user_type_catalog].erase(*entry.parent);
