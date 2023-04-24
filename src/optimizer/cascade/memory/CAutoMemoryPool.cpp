@@ -14,7 +14,7 @@
 
 #include "duckdb/optimizer/cascade/memory/CAutoMemoryPool.h"
 
-#include "gpos/assert.h"
+#include "duckdb/optimizer/cascade/assert.h"
 #include "gpos/error/CErrorContext.h"
 #include "gpos/error/CErrorHandler.h"
 #include "gpos/memory/CMemoryPoolManager.h"
