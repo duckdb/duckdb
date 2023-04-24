@@ -12,8 +12,7 @@ public:
 	string analyzed_plan;
 };
 
-SinkResultType PhysicalExplainAnalyze::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-                                            DataChunk &input) const {
+SinkResultType PhysicalExplainAnalyze::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	return SinkResultType::NEED_MORE_INPUT;
 }
 

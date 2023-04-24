@@ -43,16 +43,15 @@ unique_ptr<GlobalSinkState> PhysicalLimitPercent::GetGlobalSinkState(ClientConte
 	return make_uniq<LimitPercentGlobalState>(context, *this);
 }
 
-SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-                                          DataChunk &input) const {
-	D_ASSERT(input.size() > 0);
-	auto &state = gstate.Cast<LimitPercentGlobalState>();
+SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+	D_ASSERT(chunk.size() > 0);
+	auto &state = input.global_state.Cast<LimitPercentGlobalState>();
 	auto &limit_percent = state.limit_percent;
 	auto &offset = state.offset;
 
 	// get the next chunk from the child
 	if (!state.is_limit_percent_delimited) {
-		Value val = PhysicalLimit::GetDelimiter(context, input, limit_expression.get());
+		Value val = PhysicalLimit::GetDelimiter(context, chunk, limit_expression.get());
 		if (!val.IsNull()) {
 			limit_percent = val.GetValue<double>();
 		}
@@ -62,7 +61,7 @@ SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, GlobalSinkS
 		state.is_limit_percent_delimited = true;
 	}
 	if (!state.is_offset_delimited) {
-		Value val = PhysicalLimit::GetDelimiter(context, input, offset_expression.get());
+		Value val = PhysicalLimit::GetDelimiter(context, chunk, offset_expression.get());
 		if (!val.IsNull()) {
 			offset = val.GetValue<idx_t>();
 		}
@@ -72,11 +71,11 @@ SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, GlobalSinkS
 		state.is_offset_delimited = true;
 	}
 
-	if (!PhysicalLimit::HandleOffset(input, state.current_offset, offset, DConstants::INVALID_INDEX)) {
+	if (!PhysicalLimit::HandleOffset(chunk, state.current_offset, offset, DConstants::INVALID_INDEX)) {
 		return SinkResultType::NEED_MORE_INPUT;
 	}
 
-	state.data.Append(input);
+	state.data.Append(chunk);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 

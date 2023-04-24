@@ -184,8 +184,7 @@ SourceResultType PhysicalExport::GetData(ExecutionContext &context, DataChunk &c
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-SinkResultType PhysicalExport::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-                                    DataChunk &input) const {
+SinkResultType PhysicalExport::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	// nop
 	return SinkResultType::NEED_MORE_INPUT;
 }

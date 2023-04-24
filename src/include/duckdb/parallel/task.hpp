@@ -23,15 +23,6 @@ enum class TaskExecutionMode : uint8_t { PROCESS_ALL, PROCESS_PARTIAL };
 
 enum class TaskExecutionResult : uint8_t { TASK_FINISHED, TASK_NOT_FINISHED, TASK_ERROR, TASK_BLOCKED};
 
-//! Types of interrupts TODO rename
-enum class InterruptResultType {
-	//! Default value when no interrupt has occured
-	NO_INTERRUPT,
-
-	//! A callback will be made to the scheduler with the specified uuid
-	CALLBACK,
-};
-
 //! State that is passed to the asynchronous callback that signals task can be rescheduled
 struct InterruptCallbackState {
 	weak_ptr<Task> current_task;
@@ -41,22 +32,15 @@ struct InterruptCallbackState {
 //! State of an interrupt, allows the interrupting code to specify how the interrupt should be handled
 struct InterruptState {
 	InterruptState(ClientContext& context);
-	InterruptResultType result = InterruptResultType::NO_INTERRUPT;
 
 	void Reset() {
-		result = InterruptResultType::NO_INTERRUPT;
 		allow_async = true;
 	}
 
-	void SetInterruptCallback() {
-		result = InterruptResultType::CALLBACK;
-	}
-
-	//! Get the state required
+	//! Generate the InterruptCallbackState required for the callback to signal that the operator is ready to
+	//! produce/consume tuples again.
 	InterruptCallbackState GetCallbackState();
-
-	//! Make the interrupt callback, signals that the task from which the callback state was generated is ready to be
-	//! rescheduled
+	//! Signal that the operator is ready to produce/consume tuples.
 	static void Callback(InterruptCallbackState callback_state);
 
 	weak_ptr<Task> current_task;

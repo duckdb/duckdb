@@ -69,10 +69,9 @@ unique_ptr<LocalSinkState> PhysicalOrder::GetLocalSinkState(ExecutionContext &co
 	return make_uniq<OrderLocalSinkState>(context.client, *this);
 }
 
-SinkResultType PhysicalOrder::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
-                                   DataChunk &input) const {
-	auto &gstate = gstate_p.Cast<OrderGlobalSinkState>();
-	auto &lstate = lstate_p.Cast<OrderLocalSinkState>();
+SinkResultType PhysicalOrder::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+	auto &gstate = input.global_state.Cast<OrderGlobalSinkState>();
+	auto &lstate = input.local_state.Cast<OrderLocalSinkState>();
 
 	auto &global_sort_state = gstate.global_sort_state;
 	auto &local_sort_state = lstate.local_sort_state;
@@ -85,14 +84,14 @@ SinkResultType PhysicalOrder::Sink(ExecutionContext &context, GlobalSinkState &g
 	// Obtain sorting columns
 	auto &keys = lstate.keys;
 	keys.Reset();
-	lstate.key_executor.Execute(input, keys);
+	lstate.key_executor.Execute(chunk, keys);
 
 	auto &payload = lstate.payload;
-	payload.ReferenceColumns(input, projections);
+	payload.ReferenceColumns(chunk, projections);
 
 	// Sink the data into the local sort state
 	keys.Verify();
-	input.Verify();
+	chunk.Verify();
 	local_sort_state.SinkChunk(keys, payload);
 
 	// When sorting data reaches a certain size, we sort it

@@ -34,9 +34,8 @@ unique_ptr<GlobalSinkState> PhysicalReservoirSample::GetGlobalSinkState(ClientCo
 	return make_uniq<SampleGlobalSinkState>(Allocator::Get(context), *options);
 }
 
-SinkResultType PhysicalReservoirSample::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-                                             DataChunk &input) const {
-	auto &gstate = state.Cast<SampleGlobalSinkState>();
+SinkResultType PhysicalReservoirSample::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+	auto &gstate = input.global_state.Cast<SampleGlobalSinkState>();
 	if (!gstate.sample) {
 		return SinkResultType::FINISHED;
 	}
@@ -44,7 +43,7 @@ SinkResultType PhysicalReservoirSample::Sink(ExecutionContext &context, GlobalSi
 	// the algorithm is adopted from the paper Weighted random sampling with a reservoir by Pavlos S. Efraimidis et al.
 	// note that the original algorithm is about weighted sampling; this is a simplified approach for uniform sampling
 	lock_guard<mutex> glock(gstate.lock);
-	gstate.sample->AddToReservoir(input);
+	gstate.sample->AddToReservoir(chunk);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 

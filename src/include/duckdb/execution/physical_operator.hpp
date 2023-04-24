@@ -28,9 +28,9 @@ class PipelineBuildState;
 class MetaPipeline;
 
 struct OperatorSinkInput {
-	GlobalSinkState &gstate;
-	LocalSinkState &lstate;
-	InterruptState &istate;
+	GlobalSinkState &global_state;
+	LocalSinkState &local_state;
+	InterruptState &interrupt_state;
 };
 
 struct OperatorSourceInput {
@@ -115,16 +115,6 @@ public:
 	virtual unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
 	                                                         GlobalSourceState &gstate) const;
 	virtual unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const;
-
-//	//! Regular GetData returns a single Chunk from the source.
-//	virtual void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-//	                     LocalSourceState &lstate) const;
-//	//! Interruptable variant of GetData, this is what is actually called by the pipeline executor
-//
-//	//! TODO: Return enum to indicate blocking
-//	virtual void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-//	                     LocalSourceState &lstate, InterruptState& istate) const;
-
 	virtual SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const;
 
 	virtual idx_t GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
@@ -155,11 +145,7 @@ public:
 
 	//! The sink method is called constantly with new input, as long as new input is available. Note that this method
 	//! CAN be called in parallel, proper locking is needed when accessing data inside the GlobalSinkState.
-	virtual SinkResultType Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-	                            DataChunk &input) const;
-	//! Interruptable variant of Sink
-	virtual SinkResultType Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-	                            DataChunk &input, InterruptState& istate) const;
+	virtual SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput& input) const;
 	// The combine is called when a single thread has completed execution of its part of the pipeline, it is the final
 	// time that a specific LocalSinkState is accessible. This method can be called in parallel while other Sink() or
 	// Combine() calls are active on the same GlobalSinkState.

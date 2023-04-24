@@ -435,11 +435,10 @@ unique_ptr<GlobalSinkState> PhysicalTopN::GetGlobalSinkState(ClientContext &cont
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-SinkResultType PhysicalTopN::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-                                  DataChunk &input) const {
+SinkResultType PhysicalTopN::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	// append to the local sink state
-	auto &sink = lstate.Cast<TopNLocalState>();
-	sink.heap.Sink(input);
+	auto &sink = input.local_state.Cast<TopNLocalState>();
+	sink.heap.Sink(chunk);
 	sink.heap.Reduce();
 	return SinkResultType::NEED_MORE_INPUT;
 }

@@ -125,7 +125,6 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 
 			// SOURCE INTERRUPT
 			if(res == SourceResultType::BLOCKED) {
-				throw InternalException("Should currently not happen : for testing");
 				return PipelineExecuteResult::INTERRUPTED;
 			}
 			if (source_chunk.size() == 0) {
@@ -140,7 +139,6 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 
 		// SINK INTERRUPT
 		if(result == OperatorResultType::BLOCKED) {
-			D_ASSERT(interrupt_state.result != InterruptResultType::NO_INTERRUPT);
 			remaining_sink_chunk = true;
 			return PipelineExecuteResult::INTERRUPTED;
 		}
@@ -196,11 +194,12 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t
 		auto &sink_chunk = final_chunk;
 		if (sink_chunk.size() > 0) {
 			StartOperator(pipeline.sink);
+
 			D_ASSERT(pipeline.sink);
 			D_ASSERT(pipeline.sink->sink_state);
-
 			interrupt_state.Reset();
-			auto sink_result = pipeline.sink->Sink(context, *pipeline.sink->sink_state, *local_sink_state, sink_chunk, interrupt_state);
+			OperatorSinkInput sink_input { *pipeline.sink->sink_state, *local_sink_state, interrupt_state };
+			auto sink_result = pipeline.sink->Sink(context, sink_chunk, sink_input);
 
 			EndOperator(pipeline.sink, nullptr);
 
@@ -339,7 +338,7 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 			auto operator_idx = current_idx - 1;
 			auto current_operator = pipeline.operators[operator_idx];
 
-			// if current_idx > source_idx, we pass the previous' operators output through the Execute of the current
+			// if current_idx > source_idx, we pass the previous operators' output through the Execute of the current
 			// operator
 			StartOperator(current_operator);
 			auto result = current_operator->Execute(context, prev_chunk, current_chunk, *current_operator->op_state,

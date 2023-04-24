@@ -108,12 +108,11 @@ unique_ptr<LocalSinkState> PhysicalPiecewiseMergeJoin::GetLocalSinkState(Executi
 	return make_uniq<MergeJoinLocalState>(context.client, *this, 1);
 }
 
-SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, GlobalSinkState &gstate_p,
-                                                LocalSinkState &lstate_p, DataChunk &input) const {
-	auto &gstate = gstate_p.Cast<MergeJoinGlobalState>();
-	auto &lstate = lstate_p.Cast<MergeJoinLocalState>();
+SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+	auto &gstate = input.global_state.Cast<MergeJoinGlobalState>();
+	auto &lstate = input.local_state.Cast<MergeJoinLocalState>();
 
-	gstate.Sink(input, lstate);
+	gstate.Sink(chunk, lstate);
 
 	return SinkResultType::NEED_MORE_INPUT;
 }

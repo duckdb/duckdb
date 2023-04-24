@@ -283,10 +283,9 @@ unique_ptr<LocalSinkState> PhysicalBatchInsert::GetLocalSinkState(ExecutionConte
 	return make_uniq<BatchInsertLocalState>(context.client, insert_types, bound_defaults);
 }
 
-SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
-                                         DataChunk &chunk) const {
-	auto &gstate = state.Cast<BatchInsertGlobalState>();
-	auto &lstate = lstate_p.Cast<BatchInsertLocalState>();
+SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+	auto &gstate = input.global_state.Cast<BatchInsertGlobalState>();
+	auto &lstate = input.local_state.Cast<BatchInsertLocalState>();
 
 	auto table = gstate.table;
 	PhysicalInsert::ResolveDefaults(table, chunk, column_index_map, lstate.default_executor, lstate.insert_chunk);

@@ -108,8 +108,7 @@ public:
 
 public:
 	// Sink interface
-	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-	                    DataChunk &input) const override;
+	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 	void Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          GlobalSinkState &gstate) const override;
@@ -147,11 +146,9 @@ private:
 	//! Combine the distinct aggregates
 	void CombineDistinct(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const;
 	//! Sink the distinct aggregates for a single grouping
-	void SinkDistinctGrouping(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-	                          DataChunk &input, idx_t grouping_idx) const;
+	void SinkDistinctGrouping(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input, idx_t grouping_idx) const;
 	//! Sink the distinct aggregates
-	void SinkDistinct(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-	                  DataChunk &input) const;
+	void SinkDistinct(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const;
 	//! Create groups in the main ht for groups that would otherwise get filtered out completely
 	SinkResultType SinkGroupsOnly(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
 	                              DataChunk &input) const;

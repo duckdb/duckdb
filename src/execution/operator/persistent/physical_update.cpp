@@ -56,16 +56,15 @@ public:
 	ExpressionExecutor default_executor;
 };
 
-SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-                                    DataChunk &chunk) const {
-	auto &gstate = state.Cast<UpdateGlobalState>();
-	auto &ustate = lstate.Cast<UpdateLocalState>();
+SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+	auto &gstate = input.global_state.Cast<UpdateGlobalState>();
+	auto &lstate = input.local_state.Cast<UpdateLocalState>();
 
-	DataChunk &update_chunk = ustate.update_chunk;
-	DataChunk &mock_chunk = ustate.mock_chunk;
+	DataChunk &update_chunk = lstate.update_chunk;
+	DataChunk &mock_chunk = lstate.mock_chunk;
 
 	chunk.Flatten();
-	ustate.default_executor.SetChunk(chunk);
+	lstate.default_executor.SetChunk(chunk);
 
 	// update data in the base table
 	// the row ids are given to us as the last column of the child chunk
@@ -76,7 +75,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, GlobalSinkState &
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		if (expressions[i]->type == ExpressionType::VALUE_DEFAULT) {
 			// default expression, set to the default value of the column
-			ustate.default_executor.ExecuteExpression(columns[i].index, update_chunk.data[i]);
+			lstate.default_executor.ExecuteExpression(columns[i].index, update_chunk.data[i]);
 		} else {
 			D_ASSERT(expressions[i]->type == ExpressionType::BOUND_REF);
 			// index into child chunk

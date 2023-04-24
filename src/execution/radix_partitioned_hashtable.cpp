@@ -129,19 +129,18 @@ void RadixPartitionedHashTable::PopulateGroupChunk(DataChunk &group_chunk, DataC
 	group_chunk.Verify();
 }
 
-void RadixPartitionedHashTable::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-                                     DataChunk &groups_input, DataChunk &payload_input,
+void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input, DataChunk &payload_input,
                                      const vector<idx_t> &filter) const {
-	auto &llstate = lstate.Cast<RadixHTLocalState>();
-	auto &gstate = state.Cast<RadixHTGlobalState>();
+	auto &llstate = input.local_state.Cast<RadixHTLocalState>();
+	auto &gstate = input.global_state.Cast<RadixHTGlobalState>();
 	D_ASSERT(!gstate.is_finalized);
 
 	DataChunk &group_chunk = llstate.group_chunk;
-	PopulateGroupChunk(group_chunk, groups_input);
+	PopulateGroupChunk(group_chunk, chunk);
 
 	// if we have non-combinable aggregates (e.g. string_agg) we cannot keep parallel hash
 	// tables
-	if (ForceSingleHT(state)) {
+	if (ForceSingleHT(input.global_state)) {
 		lock_guard<mutex> glock(gstate.lock);
 		gstate.is_empty = gstate.is_empty && group_chunk.size() == 0;
 		if (gstate.finalized_hts.empty()) {

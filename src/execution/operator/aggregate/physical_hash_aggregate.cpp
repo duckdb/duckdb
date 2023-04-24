@@ -250,10 +250,9 @@ unique_ptr<LocalSinkState> PhysicalHashAggregate::GetLocalSinkState(ExecutionCon
 	return make_uniq<HashAggregateLocalState>(*this, context);
 }
 
-void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, GlobalSinkState &state,
-                                                 LocalSinkState &lstate, DataChunk &input, idx_t grouping_idx) const {
-	auto &sink = lstate.Cast<HashAggregateLocalState>();
-	auto &global_sink = state.Cast<HashAggregateGlobalState>();
+void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input, idx_t grouping_idx) const {
+	auto &sink = input.local_state.Cast<HashAggregateLocalState>();
+	auto &global_sink = input.global_state.Cast<HashAggregateGlobalState>();
 
 	auto &grouping_gstate = global_sink.grouping_states[grouping_idx];
 	auto &grouping_lstate = sink.grouping_states[grouping_idx];
@@ -279,6 +278,8 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Glob
 		auto &radix_table = *distinct_data->radix_tables[table_idx];
 		auto &radix_global_sink = *distinct_state->radix_states[table_idx];
 		auto &radix_local_sink = *grouping_lstate.distinct_states[table_idx];
+		InterruptState interrupt_state(context.client);
+		OperatorSinkInput sink_input {radix_global_sink, radix_local_sink, interrupt_state};
 
 		if (aggregate.filter) {
 			DataChunk filter_chunk;
@@ -288,10 +289,10 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Glob
 			// Add the filter Vector (BOOL)
 			auto it = filter_indexes.find(aggregate.filter.get());
 			D_ASSERT(it != filter_indexes.end());
-			D_ASSERT(it->second < input.data.size());
+			D_ASSERT(it->second < chunk.data.size());
 			auto &filter_bound_ref = aggregate.filter->Cast<BoundReferenceExpression>();
-			filter_chunk.data[filter_bound_ref.index].Reference(input.data[it->second]);
-			filter_chunk.SetCardinality(input.size());
+			filter_chunk.data[filter_bound_ref.index].Reference(chunk.data[it->second]);
+			filter_chunk.SetCardinality(chunk.size());
 
 			// We cant use the AggregateFilterData::ApplyFilter method, because the chunk we need to
 			// apply the filter to also has the groups, and the filtered_data.filtered_payload does not have those.
@@ -305,43 +306,41 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Glob
 			// Because the 'input' chunk needs to be re-used after this, we need to create
 			// a duplicate of it, that we can apply the filter to
 			DataChunk filtered_input;
-			filtered_input.InitializeEmpty(input.GetTypes());
+			filtered_input.InitializeEmpty(chunk.GetTypes());
 
 			for (idx_t group_idx = 0; group_idx < grouped_aggregate_data.groups.size(); group_idx++) {
 				auto &group = grouped_aggregate_data.groups[group_idx];
 				auto &bound_ref = group->Cast<BoundReferenceExpression>();
-				filtered_input.data[bound_ref.index].Reference(input.data[bound_ref.index]);
+				filtered_input.data[bound_ref.index].Reference(chunk.data[bound_ref.index]);
 			}
 			for (idx_t child_idx = 0; child_idx < aggregate.children.size(); child_idx++) {
 				auto &child = aggregate.children[child_idx];
 				auto &bound_ref = child->Cast<BoundReferenceExpression>();
 
-				filtered_input.data[bound_ref.index].Reference(input.data[bound_ref.index]);
+				filtered_input.data[bound_ref.index].Reference(chunk.data[bound_ref.index]);
 			}
 			filtered_input.Slice(sel_vec, count);
 			filtered_input.SetCardinality(count);
 
-			radix_table.Sink(context, radix_global_sink, radix_local_sink, filtered_input, empty_chunk, empty_filter);
+			radix_table.Sink(context, filtered_input, sink_input, empty_chunk, empty_filter);
 		} else {
-			radix_table.Sink(context, radix_global_sink, radix_local_sink, input, empty_chunk, empty_filter);
+			radix_table.Sink(context, chunk, sink_input, empty_chunk, empty_filter);
 		}
 	}
 }
 
-void PhysicalHashAggregate::SinkDistinct(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-                                         DataChunk &input) const {
+void PhysicalHashAggregate::SinkDistinct(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	for (idx_t i = 0; i < groupings.size(); i++) {
-		SinkDistinctGrouping(context, state, lstate, input, i);
+		SinkDistinctGrouping(context, chunk, input, i);
 	}
 }
 
-SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-                                           DataChunk &input) const {
-	auto &llstate = lstate.Cast<HashAggregateLocalState>();
-	auto &gstate = state.Cast<HashAggregateGlobalState>();
+SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+	auto &llstate = input.local_state.Cast<HashAggregateLocalState>();
+	auto &gstate = input.global_state.Cast<HashAggregateGlobalState>();
 
 	if (distinct_collection_info) {
-		SinkDistinct(context, state, lstate, input);
+		SinkDistinct(context, chunk, input);
 	}
 
 	if (CanSkipRegularSink()) {
@@ -359,8 +358,8 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSink
 		for (auto &child_expr : aggr.children) {
 			D_ASSERT(child_expr->type == ExpressionType::BOUND_REF);
 			auto &bound_ref_expr = child_expr->Cast<BoundReferenceExpression>();
-			D_ASSERT(bound_ref_expr.index < input.data.size());
-			aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[bound_ref_expr.index]);
+			D_ASSERT(bound_ref_expr.index < chunk.data.size());
+			aggregate_input_chunk.data[aggregate_input_idx++].Reference(chunk.data[bound_ref_expr.index]);
 		}
 	}
 	// Populate the filter vectors
@@ -369,23 +368,25 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSink
 		if (aggr.filter) {
 			auto it = filter_indexes.find(aggr.filter.get());
 			D_ASSERT(it != filter_indexes.end());
-			D_ASSERT(it->second < input.data.size());
-			aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[it->second]);
+			D_ASSERT(it->second < chunk.data.size());
+			aggregate_input_chunk.data[aggregate_input_idx++].Reference(chunk.data[it->second]);
 		}
 	}
 
-	aggregate_input_chunk.SetCardinality(input.size());
+	aggregate_input_chunk.SetCardinality(chunk.size());
 	aggregate_input_chunk.Verify();
 
 	// For every grouping set there is one radix_table
 	for (idx_t i = 0; i < groupings.size(); i++) {
 		auto &grouping_gstate = gstate.grouping_states[i];
 		auto &grouping_lstate = llstate.grouping_states[i];
+		InterruptState istate(context.client);
+		OperatorSinkInput sink_input{*grouping_gstate.table_state, *grouping_lstate.table_state, istate};
+
 
 		auto &grouping = groupings[i];
 		auto &table = grouping.table_data;
-		table.Sink(context, *grouping_gstate.table_state, *grouping_lstate.table_state, input, aggregate_input_chunk,
-		           non_distinct_filter);
+		table.Sink(context, chunk, sink_input, aggregate_input_chunk, non_distinct_filter);
 	}
 
 	return SinkResultType::NEED_MORE_INPUT;
@@ -607,8 +608,8 @@ public:
 				aggregate_input_chunk.SetCardinality(output_chunk);
 
 				// Sink it into the main ht
-				grouping_data.table_data.Sink(temp_exec_context, table_state, *temp_local_state, group_chunk,
-				                              aggregate_input_chunk, {i});
+				OperatorSinkInput sink_input {table_state, *temp_local_state, interrupt_state};
+				grouping_data.table_data.Sink(temp_exec_context, group_chunk, sink_input, aggregate_input_chunk, {i});
 			}
 		}
 		grouping_data.table_data.Combine(temp_exec_context, table_state, *temp_local_state);

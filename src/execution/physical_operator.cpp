@@ -121,35 +121,8 @@ double PhysicalOperator::GetProgress(ClientContext &context, GlobalSourceState &
 // Sink
 //===--------------------------------------------------------------------===//
 // LCOV_EXCL_START
-SinkResultType PhysicalOperator::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-                                      DataChunk &input) const {
+SinkResultType PhysicalOperator::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput& input) const {
 	throw InternalException("Calling Sink on a node that is not a sink!");
-}
-
-// Default Async implementation is to just call the
-SinkResultType PhysicalOperator::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-                                      DataChunk &input, InterruptState& istate) const {
-
-#ifdef DUCKDB_TEST_FORCE_ASYNC_OPERATORSs
-	// This flag provides all Operators in duckdb with a (bogus) async variant. The first call will block, any next calls
-	// will just be sync
-	if (!lstate.did_async && istate.allow_async) {
-		lstate.did_async = true;
-
-		auto callback_state = istate.GetCallbackState();
-		std::thread rewake_thread([callback_state] {
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
-			InterruptState::Callback(callback_state);
-		});
-
-		rewake_thread.detach();
-		return SinkResultType::BLOCKED;
-	} else {
-		return Sink(context, gstate, lstate, input);
-	}
-#else
-	return Sink(context, gstate, lstate, input);
-#endif
 }
 
 // LCOV_EXCL_STOP

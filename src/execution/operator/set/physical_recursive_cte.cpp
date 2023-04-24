@@ -61,16 +61,15 @@ idx_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, RecursiveCTEState &state) 
 	return new_group_count;
 }
 
-SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-                                          DataChunk &input) const {
-	auto &gstate = state.Cast<RecursiveCTEState>();
+SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+	auto &gstate = input.global_state.Cast<RecursiveCTEState>();
 	if (!union_all) {
-		idx_t match_count = ProbeHT(input, gstate);
+		idx_t match_count = ProbeHT(chunk, gstate);
 		if (match_count > 0) {
-			gstate.intermediate_table.Append(input);
+			gstate.intermediate_table.Append(chunk);
 		}
 	} else {
-		gstate.intermediate_table.Append(input);
+		gstate.intermediate_table.Append(chunk);
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }

@@ -352,10 +352,9 @@ void PhysicalInsert::OnConflictHandling(TableCatalogEntry *table, ExecutionConte
 	lstate.insert_chunk.SetCardinality(new_size);
 }
 
-SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
-                                    DataChunk &chunk) const {
-	auto &gstate = state.Cast<InsertGlobalState>();
-	auto &lstate = lstate_p.Cast<InsertLocalState>();
+SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+	auto &gstate = input.global_state.Cast<InsertGlobalState>();
+	auto &lstate = input.local_state.Cast<InsertLocalState>();
 
 	auto table = gstate.table;
 	auto &storage = table->GetStorage();

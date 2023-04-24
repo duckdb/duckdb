@@ -134,12 +134,11 @@ unique_ptr<LocalSinkState> PhysicalIEJoin::GetLocalSinkState(ExecutionContext &c
 	return make_uniq<IEJoinLocalState>(context.client, *this, sink_child);
 }
 
-SinkResultType PhysicalIEJoin::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
-                                    DataChunk &input) const {
-	auto &gstate = gstate_p.Cast<IEJoinGlobalState>();
-	auto &lstate = lstate_p.Cast<IEJoinLocalState>();
+SinkResultType PhysicalIEJoin::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+	auto &gstate = input.global_state.Cast<IEJoinGlobalState>();
+	auto &lstate = input.local_state.Cast<IEJoinLocalState>();
 
-	gstate.Sink(input, lstate);
+	gstate.Sink(chunk, lstate);
 
 	return SinkResultType::NEED_MORE_INPUT;
 }

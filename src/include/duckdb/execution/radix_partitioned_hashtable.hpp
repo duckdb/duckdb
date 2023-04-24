@@ -41,7 +41,7 @@ public:
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const;
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const;
 
-	void Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate, DataChunk &input,
+	void Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input,
 	          DataChunk &aggregate_input_chunk, const vector<idx_t> &filter) const;
 	void Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const;
 	bool Finalize(ClientContext &context, GlobalSinkState &gstate_p) const;

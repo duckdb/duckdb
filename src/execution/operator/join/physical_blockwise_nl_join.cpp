@@ -49,11 +49,10 @@ unique_ptr<LocalSinkState> PhysicalBlockwiseNLJoin::GetLocalSinkState(ExecutionC
 	return make_uniq<BlockwiseNLJoinLocalState>();
 }
 
-SinkResultType PhysicalBlockwiseNLJoin::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-                                             DataChunk &input) const {
-	auto &gstate = state.Cast<BlockwiseNLJoinGlobalState>();
+SinkResultType PhysicalBlockwiseNLJoin::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+	auto &gstate = input.global_state.Cast<BlockwiseNLJoinGlobalState>();
 	lock_guard<mutex> nl_lock(gstate.lock);
-	gstate.right_chunks.Append(input);
+	gstate.right_chunks.Append(chunk);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 

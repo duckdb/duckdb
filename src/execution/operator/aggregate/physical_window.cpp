@@ -1035,11 +1035,10 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-SinkResultType PhysicalWindow::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
-                                    DataChunk &input) const {
-	auto &lstate = lstate_p.Cast<WindowLocalSinkState>();
+SinkResultType PhysicalWindow::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+	auto &lstate = input.local_state.Cast<WindowLocalSinkState>();
 
-	lstate.Sink(input);
+	lstate.Sink(chunk);
 
 	return SinkResultType::NEED_MORE_INPUT;
 }

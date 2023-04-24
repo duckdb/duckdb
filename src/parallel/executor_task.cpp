@@ -28,7 +28,6 @@ void ExecutorTask::Reschedule() {
 InterruptState::InterruptState(ClientContext &context) : context(context) {}
 
 InterruptCallbackState InterruptState::GetCallbackState() {
-	result = InterruptResultType::CALLBACK;
 	return {current_task, context.db};
 }
 

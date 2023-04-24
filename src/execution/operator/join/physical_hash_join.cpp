@@ -185,30 +185,29 @@ unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ExecutionContext 
 	return make_uniq<HashJoinLocalSinkState>(*this, context.client);
 }
 
-SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
-                                      DataChunk &input) const {
-	auto &gstate = gstate_p.Cast<HashJoinGlobalSinkState>();
-	auto &lstate = lstate_p.Cast<HashJoinLocalSinkState>();
+SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+	auto &gstate = input.global_state.Cast<HashJoinGlobalSinkState>();
+	auto &lstate = input.local_state.Cast<HashJoinLocalSinkState>();
 
 	// resolve the join keys for the right chunk
 	lstate.join_keys.Reset();
-	lstate.build_executor.Execute(input, lstate.join_keys);
+	lstate.build_executor.Execute(chunk, lstate.join_keys);
 	// build the HT
 	auto &ht = *lstate.hash_table;
 	if (!right_projection_map.empty()) {
 		// there is a projection map: fill the build chunk with the projected columns
 		lstate.build_chunk.Reset();
-		lstate.build_chunk.SetCardinality(input);
+		lstate.build_chunk.SetCardinality(chunk);
 		for (idx_t i = 0; i < right_projection_map.size(); i++) {
-			lstate.build_chunk.data[i].Reference(input.data[right_projection_map[i]]);
+			lstate.build_chunk.data[i].Reference(chunk.data[right_projection_map[i]]);
 		}
 		ht.Build(lstate.join_keys, lstate.build_chunk);
 	} else if (!build_types.empty()) {
 		// there is not a projected map: place the entire right chunk in the HT
-		ht.Build(lstate.join_keys, input);
+		ht.Build(lstate.join_keys, chunk);
 	} else {
 		// there are only keys: place an empty chunk in the payload
-		lstate.build_chunk.SetCardinality(input.size());
+		lstate.build_chunk.SetCardinality(chunk.size());
 		ht.Build(lstate.join_keys, lstate.build_chunk);
 	}
 

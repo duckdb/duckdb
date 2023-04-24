@@ -26,16 +26,15 @@ unique_ptr<GlobalSinkState> PhysicalCreateType::GetGlobalSinkState(ClientContext
 	return make_uniq<CreateTypeGlobalState>(context);
 }
 
-SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
-                                        DataChunk &input) const {
-	auto &gstate = gstate_p.Cast<CreateTypeGlobalState>();
-	idx_t total_row_count = gstate.size + input.size();
+SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+	auto &gstate = input.global_state.Cast<CreateTypeGlobalState>();
+	idx_t total_row_count = gstate.size + chunk.size();
 	if (total_row_count > NumericLimits<uint32_t>::Maximum()) {
 		throw InvalidInputException("Attempted to create ENUM of size %llu, which exceeds the maximum size of %llu",
 		                            total_row_count, NumericLimits<uint32_t>::Maximum());
 	}
 	UnifiedVectorFormat sdata;
-	input.data[0].ToUnifiedFormat(input.size(), sdata);
+	chunk.data[0].ToUnifiedFormat(chunk.size(), sdata);
 
 	if (total_row_count > gstate.capacity) {
 		// We must resize our result vector
@@ -46,7 +45,7 @@ SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, GlobalSinkSta
 	auto src_ptr = (string_t *)sdata.data;
 	auto result_ptr = FlatVector::GetData<string_t>(gstate.result);
 	// Input vector has NULL value, we just throw an exception
-	for (idx_t i = 0; i < input.size(); i++) {
+	for (idx_t i = 0; i < chunk.size(); i++) {
 		idx_t idx = sdata.sel->get_index(i);
 		if (!sdata.validity.RowIsValid(idx)) {
 			throw InvalidInputException("Attempted to create ENUM type with NULL value!");

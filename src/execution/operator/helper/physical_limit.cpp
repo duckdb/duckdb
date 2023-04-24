@@ -92,25 +92,24 @@ bool PhysicalLimit::ComputeOffset(ExecutionContext &context, DataChunk &input, i
 	return true;
 }
 
-SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-                                   DataChunk &input) const {
+SinkResultType PhysicalLimit::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 
-	D_ASSERT(input.size() > 0);
-	auto &state = lstate.Cast<LimitLocalState>();
+	D_ASSERT(chunk.size() > 0);
+	auto &state = input.local_state.Cast<LimitLocalState>();
 	auto &limit = state.limit;
 	auto &offset = state.offset;
 
 	idx_t max_element;
-	if (!ComputeOffset(context, input, limit, offset, state.current_offset, max_element, limit_expression.get(),
+	if (!ComputeOffset(context, chunk, limit, offset, state.current_offset, max_element, limit_expression.get(),
 	                   offset_expression.get())) {
 		return SinkResultType::FINISHED;
 	}
 	auto max_cardinality = max_element - state.current_offset;
-	if (max_cardinality < input.size()) {
-		input.SetCardinality(max_cardinality);
+	if (max_cardinality < chunk.size()) {
+		chunk.SetCardinality(max_cardinality);
 	}
-	state.data.Append(input, lstate.batch_index);
-	state.current_offset += input.size();
+	state.data.Append(chunk, input.local_state.batch_index);
+	state.current_offset += chunk.size();
 	if (state.current_offset == max_element) {
 		return SinkResultType::FINISHED;
 	}

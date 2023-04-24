@@ -167,14 +167,13 @@ vector<LogicalType> PhysicalNestedLoopJoin::GetJoinTypes() const {
 	return result;
 }
 
-SinkResultType PhysicalNestedLoopJoin::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-                                            DataChunk &input) const {
-	auto &gstate = state.Cast<NestedLoopJoinGlobalState>();
-	auto &nlj_state = lstate.Cast<NestedLoopJoinLocalState>();
+SinkResultType PhysicalNestedLoopJoin::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+	auto &gstate = input.global_state.Cast<NestedLoopJoinGlobalState>();
+	auto &nlj_state = input.local_state.Cast<NestedLoopJoinLocalState>();
 
 	// resolve the join expression of the right side
 	nlj_state.right_condition.Reset();
-	nlj_state.rhs_executor.Execute(input, nlj_state.right_condition);
+	nlj_state.rhs_executor.Execute(chunk, nlj_state.right_condition);
 
 	// if we have not seen any NULL values yet, and we are performing a MARK join, check if there are NULL values in
 	// this chunk
@@ -186,7 +185,7 @@ SinkResultType PhysicalNestedLoopJoin::Sink(ExecutionContext &context, GlobalSin
 
 	// append the payload data and the conditions
 	lock_guard<mutex> nj_guard(gstate.nj_lock);
-	gstate.right_payload_data.Append(input);
+	gstate.right_payload_data.Append(chunk);
 	gstate.right_condition_data.Append(nlj_state.right_condition);
 	return SinkResultType::NEED_MORE_INPUT;
 }
