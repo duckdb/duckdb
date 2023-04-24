@@ -10,8 +10,8 @@
 #define GPMD_CMDName_H
 
 #include "duckdb/optimizer/cascade/base.h"
-#include "duckdb/optimizer/cascad/common/CDynamicPtrArray.h"
-#include "duckdb/optimizer/cascad/string/CWStringConst.h"
+#include "duckdb/optimizer/cascade/common/CDynamicPtrArray.h"
+#include "duckdb/optimizer/cascade/string/CWStringConst.h"
 
 namespace gpmd
 {
