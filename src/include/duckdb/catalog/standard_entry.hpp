@@ -26,7 +26,7 @@ public:
 	SchemaCatalogEntry &schema;
 
 public:
-	SchemaCatalogEntry &GetSchema() override {
+	SchemaCatalogEntry &ParentSchema() override {
 		return schema;
 	}
 };

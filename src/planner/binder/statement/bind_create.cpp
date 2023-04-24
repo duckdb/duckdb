@@ -139,8 +139,8 @@ static void QualifyFunctionNames(ClientContext &context, unique_ptr<ParsedExpres
 		auto function = Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, func.catalog, func.schema,
 		                                  func.function_name, OnEntryNotFound::RETURN_NULL);
 		if (function) {
-			func.catalog = function->GetCatalog().GetName();
-			func.schema = function->GetSchema().name;
+			func.catalog = function->ParentCatalog().GetName();
+			func.schema = function->ParentSchema().name;
 		}
 		break;
 	}

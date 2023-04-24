@@ -39,12 +39,12 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		if (!entry) {
 			break;
 		}
-		stmt.info->catalog = entry->GetCatalog().GetName();
+		stmt.info->catalog = entry->ParentCatalog().GetName();
 		if (!entry->temporary) {
 			// we can only drop temporary tables in read-only mode
 			properties.modified_databases.insert(stmt.info->catalog);
 		}
-		stmt.info->schema = entry->GetSchema().name;
+		stmt.info->schema = entry->ParentSchema().name;
 		break;
 	}
 	case CatalogType::DATABASE_ENTRY: {

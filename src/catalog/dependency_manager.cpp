@@ -18,11 +18,11 @@ void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &
 	// check for each object in the sources if they were not deleted yet
 	for (auto &dep : dependencies.set) {
 		auto &dependency = dep.get();
-		if (&dependency.GetCatalog() != &object.GetCatalog()) {
+		if (&dependency.ParentCatalog() != &object.ParentCatalog()) {
 			throw DependencyException(
 			    "Error adding dependency for object \"%s\" - dependency \"%s\" is in catalog "
 			    "\"%s\", which does not match the catalog \"%s\".\nCross catalog dependencies are not supported.",
-			    object.name, dependency.name, dependency.GetCatalog().GetName(), object.GetCatalog().GetName());
+			    object.name, dependency.name, dependency.ParentCatalog().GetName(), object.ParentCatalog().GetName());
 		}
 		if (!dependency.set) {
 			throw InternalException("Dependency has no set");

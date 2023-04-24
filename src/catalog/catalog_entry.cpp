@@ -39,12 +39,12 @@ string CatalogEntry::ToSQL() const {
 void CatalogEntry::Verify(Catalog &catalog_p) {
 }
 
-Catalog &CatalogEntry::GetCatalog() {
-	throw InternalException("CatalogEntry::GetCatalog called on catalog entry without catalog");
+Catalog &CatalogEntry::ParentCatalog() {
+	throw InternalException("CatalogEntry::ParentCatalog called on catalog entry without catalog");
 }
 
-SchemaCatalogEntry &CatalogEntry::GetSchema() {
-	throw InternalException("CatalogEntry::GetSchema called on catalog entry without schema");
+SchemaCatalogEntry &CatalogEntry::ParentSchema() {
+	throw InternalException("CatalogEntry::ParentSchema called on catalog entry without schema");
 }
 
 InCatalogEntry::InCatalogEntry(CatalogType type, Catalog &catalog, string name)

@@ -63,8 +63,8 @@ public:
 	//! Convert the catalog entry to a SQL string that can be used to re-construct the catalog entry
 	virtual string ToSQL() const;
 
-	virtual Catalog &GetCatalog();
-	virtual SchemaCatalogEntry &GetSchema();
+	virtual Catalog &ParentCatalog();
+	virtual SchemaCatalogEntry &ParentSchema();
 
 	virtual void Verify(Catalog &catalog);
 
@@ -90,7 +90,7 @@ public:
 	Catalog &catalog;
 
 public:
-	Catalog &GetCatalog() override {
+	Catalog &ParentCatalog() override {
 		return catalog;
 	}
 

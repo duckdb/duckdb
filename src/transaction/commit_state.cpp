@@ -229,7 +229,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 		auto catalog_entry = Load<CatalogEntry *>(data);
 		D_ASSERT(catalog_entry->parent);
 
-		auto &catalog = catalog_entry->GetCatalog();
+		auto &catalog = catalog_entry->ParentCatalog();
 		D_ASSERT(catalog.IsDuckCatalog());
 
 		// Grab a write lock on the catalog
