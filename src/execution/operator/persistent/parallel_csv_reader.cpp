@@ -236,10 +236,13 @@ bool ParallelCSVReader::BufferRemainder() {
 	return true;
 }
 
-void VerifyLineLength(idx_t line_size, idx_t max_line_size) {
-	if (line_size > max_line_size) {
+void ParallelCSVReader::VerifyLineLength(idx_t line_size) {
+	if (line_size > options.maximum_line_size) {
 		// FIXME: this should also output the correct estimated linenumber where it broke
-		throw InvalidInputException("Maximum line size of %llu bytes exceeded!", max_line_size);
+		throw InvalidInputException("Error in file \"%s\" on line %s: Maximum line size of %llu bytes exceeded!",
+		                            options.file_path,
+		                            GetLineNumberStr(linenr, linenr_estimated, line_info, buffer->batch_index).c_str(),
+		                            options.maximum_line_size);
 	}
 }
 
@@ -366,7 +369,7 @@ add_row : {
 		parse_chunk.Reset();
 		return success;
 	} else {
-		VerifyLineLength(position_buffer - line_start, options.maximum_line_size);
+		VerifyLineLength(position_buffer - line_start);
 		line_start = position_buffer;
 		finished_chunk = AddRow(insert_chunk, column, error_message, buffer->batch_index);
 	}
@@ -556,7 +559,7 @@ final_state : {
 					reached_remainder_state = false;
 					return success;
 				} else {
-					VerifyLineLength(position_buffer - line_start, options.maximum_line_size);
+					VerifyLineLength(position_buffer - line_start);
 					line_start = position_buffer;
 					AddRow(insert_chunk, column, error_message, buffer->batch_index);
 					verification_positions.end_of_last_line = position_buffer;

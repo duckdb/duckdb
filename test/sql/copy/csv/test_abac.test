@@ -104,7 +104,7 @@ CREATE TABLE abac_tbl (a VARCHAR);
 statement error
 COPY abac_tbl FROM 'test/sql/copy/csv/data/abac/simple_unterminated_quote.csv' (QUOTE '"', AUTO_DETECT FALSE);
 ----
-line 1
+line 0
 
 statement ok
 DROP TABLE abac_tbl
@@ -163,7 +163,7 @@ CREATE TABLE abac_tbl (a VARCHAR);
 statement error
 COPY abac_tbl FROM 'test/sql/copy/csv/data/abac/unterminated_quote_escape.csv' (QUOTE '"', ESCAPE '"', AUTO_DETECT FALSE);
 ----
-line 1
+line 0
 
 statement ok
 DROP TABLE abac_tbl
@@ -175,7 +175,7 @@ CREATE TABLE abac_tbl (a VARCHAR);
 statement error
 COPY abac_tbl FROM 'test/sql/copy/csv/data/abac/unterminated_escape.csv' (QUOTE '"', ESCAPE '''', AUTO_DETECT FALSE);
 ----
-1
+0
 
 statement ok
 DROP TABLE abac_tbl

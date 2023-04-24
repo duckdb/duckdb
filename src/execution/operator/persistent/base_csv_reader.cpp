@@ -31,7 +31,7 @@ string BaseCSVReader::GetLineNumberStr(idx_t linenr, bool linenr_estimated, Line
 	if (line_info) {
 		while (true) {
 			if (line_info->CanItGetLine(buffer_idx)) {
-				return to_string(line_info->GetLine(buffer_idx, linenr + 1));
+				return to_string(line_info->GetLine(buffer_idx, linenr));
 			}
 		}
 	}

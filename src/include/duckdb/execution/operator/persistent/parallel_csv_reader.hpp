@@ -150,6 +150,8 @@ private:
 
 	//! Parses a CSV file with a one-byte delimiter, escape and quote character
 	bool TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message, bool try_add_line = false);
+	//! Verifies that the line length did not go over a pre-defined limit.
+	void VerifyLineLength(idx_t line_size);
 	//! Position of the first read line and last read line for verification purposes
 	VerificationPositions verification_positions;
 	//! First Position of First Buffer
