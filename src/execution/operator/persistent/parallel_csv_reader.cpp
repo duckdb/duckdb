@@ -238,7 +238,6 @@ bool ParallelCSVReader::BufferRemainder() {
 
 void ParallelCSVReader::VerifyLineLength(idx_t line_size) {
 	if (line_size > options.maximum_line_size) {
-		// FIXME: this should also output the correct estimated linenumber where it broke
 		throw InvalidInputException("Error in file \"%s\" on line %s: Maximum line size of %llu bytes exceeded!",
 		                            options.file_path,
 		                            GetLineNumberStr(linenr, linenr_estimated, line_info, buffer->batch_index).c_str(),
