@@ -10,8 +10,9 @@
 
 #include "duckdb.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb_python/pandas/pandas_bind.hpp"
 
-#include "duckdb_python/pybind_wrapper.hpp"
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
 
 namespace duckdb {
 
@@ -49,6 +50,8 @@ public:
 
 	// Helper function that transform pandas df names to make them work with our binder
 	static py::object PandasReplaceCopiedNames(const py::object &original_df);
+
+	static void PandasBackendScanSwitch(PandasColumnBindData &bind_data, idx_t count, idx_t offset, Vector &out);
 };
 
 } // namespace duckdb

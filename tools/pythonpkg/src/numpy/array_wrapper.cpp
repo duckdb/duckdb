@@ -1,4 +1,4 @@
-#include "duckdb_python/array_wrapper.hpp"
+#include "duckdb_python/numpy/array_wrapper.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/time.hpp"
@@ -7,7 +7,7 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/python_objects.hpp"
-#include "duckdb_python/pyconnection.hpp"
+#include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb/common/types/uuid.hpp"
 

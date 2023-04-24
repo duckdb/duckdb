@@ -1,7 +1,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb_python/pybind_wrapper.hpp"
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb/main/external_dependencies.hpp"
 
 namespace duckdb {

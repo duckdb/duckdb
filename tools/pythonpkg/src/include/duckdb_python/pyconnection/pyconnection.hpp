@@ -7,18 +7,18 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
-#include "arrow_array_stream.hpp"
+#include "duckdb_python/arrow/arrow_array_stream.hpp"
 #include "duckdb.hpp"
-#include "duckdb_python/pybind_wrapper.hpp"
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb_python/import_cache/python_import_cache.hpp"
-#include "duckdb_python/registered_py_object.hpp"
-#include "duckdb_python/pandas_type.hpp"
+#include "duckdb_python/numpy/numpy_type.hpp"
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pytype.hpp"
 #include "duckdb_python/path_like.hpp"
 #include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
 #include "duckdb_python/pyfilesystem.hpp"
+#include "duckdb_python/pybind11/registered_py_object.hpp"
 
 namespace duckdb {
 
@@ -96,7 +96,7 @@ public:
 
 	shared_ptr<DuckDBPyConnection> Execute(const string &query, py::object params = py::list(), bool many = false);
 
-	shared_ptr<DuckDBPyConnection> Append(const string &name, const DataFrame &value);
+	shared_ptr<DuckDBPyConnection> Append(const string &name, const PandasDataFrame &value);
 
 	shared_ptr<DuckDBPyConnection> RegisterPythonObject(const string &name, const py::object &python_object);
 
@@ -115,7 +115,7 @@ public:
 
 	unique_ptr<DuckDBPyRelation> TableFunction(const string &fname, py::object params = py::list());
 
-	unique_ptr<DuckDBPyRelation> FromDF(const DataFrame &value);
+	unique_ptr<DuckDBPyRelation> FromDF(const PandasDataFrame &value);
 
 	unique_ptr<DuckDBPyRelation> FromParquet(const string &file_glob, bool binary_as_string, bool file_row_number,
 	                                         bool filename, bool hive_partitioning, bool union_by_name,
@@ -162,8 +162,8 @@ public:
 	py::list FetchAll();
 
 	py::dict FetchNumpy();
-	DataFrame FetchDF(bool date_as_object);
-	DataFrame FetchDFChunk(const idx_t vectors_per_chunk = 1, bool date_as_object = false) const;
+	PandasDataFrame FetchDF(bool date_as_object);
+	PandasDataFrame FetchDFChunk(const idx_t vectors_per_chunk = 1, bool date_as_object = false) const;
 
 	duckdb::pyarrow::Table FetchArrow(idx_t rows_per_batch);
 	PolarsDataFrame FetchPolars(idx_t rows_per_batch);
@@ -199,12 +199,13 @@ public:
 private:
 	PathLike GetPathLike(const py::object &object);
 	unique_lock<std::mutex> AcquireConnectionLock();
+	void RegisterArrowObject(const py::object &arrow_object, const string &name);
 
 	static PythonEnvironmentType environment;
 	static void DetectEnvironment();
 };
 
-template <class T>
+template <typename T>
 static bool ModuleIsLoaded() {
 	auto dict = pybind11::module_::import("sys").attr("modules");
 	return dict.contains(py::str(T::Name));

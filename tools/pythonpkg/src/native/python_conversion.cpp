@@ -1,8 +1,8 @@
 #include "duckdb_python/python_conversion.hpp"
-#include "duckdb_python/pybind_wrapper.hpp"
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
 
 #include "duckdb_python/pyrelation.hpp"
-#include "duckdb_python/pyconnection.hpp"
+#include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
 
 #include "datetime.h" //From Python
@@ -252,7 +252,7 @@ PythonObjectType GetPythonObjectType(py::handle &ele) {
 
 	if (ele.is_none()) {
 		return PythonObjectType::None;
-	} else if (import_cache.pandas().libs.NAType.IsInstance(ele)) {
+	} else if (py::isinstance(ele, import_cache.pandas().libs.NAType())) {
 		return PythonObjectType::None;
 	} else if (py::isinstance<py::bool_>(ele)) {
 		return PythonObjectType::Bool;

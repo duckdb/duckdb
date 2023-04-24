@@ -1,7 +1,6 @@
 import duckdb
-from pandas import DataFrame
-import pandas as pd
 import pytest
+from conftest import NumpyPandas, ArrowPandas
 
 def is_dunder_method(method_name: str) -> bool:
     if (len(method_name) < 4):
@@ -11,9 +10,10 @@ def is_dunder_method(method_name: str) -> bool:
 # This file contains tests for DuckDBPyConnection methods,
 # wrapped by the 'duckdb' module, to execute with the 'default_connection'
 class TestDuckDBConnection(object):
-    def test_append(self):
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_append(self, pandas):
         duckdb.execute("Create table integers (i integer)")
-        df_in = pd.DataFrame({'numbers': [1,2,3,4,5],})
+        df_in = pandas.DataFrame({'numbers': [1,2,3,4,5],})
         duckdb.append('integers',df_in)
         assert duckdb.execute('select count(*) from integers').fetchone()[0] == 5
         # cleanup
@@ -167,9 +167,6 @@ class TestDuckDBConnection(object):
     def test_from_parquet(self):
         assert None != duckdb.from_parquet
 
-    def test_from_parquet(self):
-        assert None != duckdb.from_parquet
-
     def test_from_query(self):
         assert None != duckdb.from_query
 
@@ -205,12 +202,13 @@ class TestDuckDBConnection(object):
         con.sql("create table tbl as select * from relation")
         assert con.table('tbl').fetchall() == [([5, 4, 3],)]
 
-    def test_relation_out_of_scope(self):
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_relation_out_of_scope(self, pandas):
         def temporary_scope():
             # Create a connection, we will return this
             con = duckdb.connect()
             # Create a dataframe
-            df = pd.DataFrame({'a': [1,2,3]})
+            df = pandas.DataFrame({'a': [1,2,3]})
             # The dataframe has to be registered as well
             # making sure it does not go out of scope
             con.register("df", df)
