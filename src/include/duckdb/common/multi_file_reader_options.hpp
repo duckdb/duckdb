@@ -47,6 +47,25 @@ struct MultiFileReaderOptions {
 		}
 		return true;
 	}
+
+	static bool	Verify(const string& initial_file_col_name, const string& file){
+		vector<string> v = StringUtil::Split(file, "=");
+		if (v.size() != 2){
+			return false;
+		}
+		if (initial_file_col_name != v.front()){
+			return false;
+		}
+		
+	}
+	static bool AutoDetectHivePartitioning2(const vector<string> &files) {
+
+		if (files.empty()) {
+			return false;
+		}
+		
+		return true;
+	}
 };
 
 } // namespace duckdb
