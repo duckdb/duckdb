@@ -8,12 +8,12 @@
 #ifndef CQueryContext_H
 #define CQueryContext_H
 
-#include "gpos/base.h"
+#include "duckdb/optimizer/cascade/base.h"
 
-#include "gpopt/base/CReqdPropPlan.h"
-#include "gpopt/base/CReqdPropRelational.h"
-#include "gpopt/operators/CExpressionPreprocessor.h"
-#include "gpopt/search/CGroupExpression.h"
+#include "duckdb/optimizer/cascade/base/CReqdPropPlan.h"
+#include "duckdb/optimizer/cascade/base/CReqdPropRelational.h"
+#include "duckdb/optimizer/cascade/operators/CExpressionPreprocessor.h"
+#include "duckdb/optimizer/cascade/search/CGroupExpression.h"
 
 
 namespace gpopt
