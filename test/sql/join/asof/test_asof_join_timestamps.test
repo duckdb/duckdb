@@ -75,7 +75,6 @@ FROM probe0 p ASOF LEFT JOIN events0 e
 ON p.begin >= e.begin
 ORDER BY p.begin ASC
 ----
-NULL	NULL
 2023-03-21 12:00:00	NULL
 2023-03-21 13:00:00	0
 2023-03-21 14:00:00	1
@@ -87,6 +86,7 @@ NULL	NULL
 2023-03-21 20:00:00	3
 2023-03-21 21:00:00	3
 infinity	9
+NULL	NULL
 
 # LEFT USING inequality only
 query II nosort left_inequality
@@ -95,7 +95,6 @@ FROM probe0 p ASOF LEFT JOIN events0 e
 USING (begin)
 ORDER BY p.begin ASC
 ----
-NULL	NULL
 2023-03-21 12:00:00	NULL
 2023-03-21 13:00:00	0
 2023-03-21 14:00:00	1
@@ -107,6 +106,7 @@ NULL	NULL
 2023-03-21 20:00:00	3
 2023-03-21 21:00:00	3
 infinity	9
+NULL	NULL
 
 # RIGHT ON inequality only
 query II nosort 
@@ -115,7 +115,6 @@ FROM probe0 p ASOF RIGHT JOIN events0 e
 ON p.begin >= e.begin
 ORDER BY ALL
 ----
-NULL	-1
 2023-03-21 13:00:00	0
 2023-03-21 14:00:00	1
 2023-03-21 15:00:00	2
@@ -126,6 +125,7 @@ NULL	-1
 2023-03-21 20:00:00	3
 2023-03-21 21:00:00	3
 infinity	9
+NULL	-1
 
 # RIGHT USING inequality only
 query II nosort
@@ -134,7 +134,6 @@ FROM probe0 p ASOF RIGHT JOIN events0 e
 USING (begin)
 ORDER BY ALL
 ----
-NULL	-1
 2023-03-21 13:00:00	0
 2023-03-21 14:00:00	1
 2023-03-21 15:00:00	2
@@ -145,3 +144,4 @@ NULL	-1
 2023-03-21 20:00:00	3
 2023-03-21 21:00:00	3
 infinity	9
+NULL	-1

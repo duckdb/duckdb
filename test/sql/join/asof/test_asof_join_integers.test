@@ -104,8 +104,6 @@ FROM probe0 p ASOF RIGHT JOIN events0 e
 ON p.begin >= e.begin
 ORDER BY ALL
 ----
-NULL	-1
-NULL	9
 1	0
 2	0
 3	1
@@ -115,6 +113,8 @@ NULL	9
 7	2
 8	3
 9	3
+NULL	-1
+NULL	9
 
 # RIGHT USING inequality only
 query II
@@ -123,8 +123,6 @@ FROM probe0 p ASOF RIGHT JOIN events0 e
 USING (begin)
 ORDER BY ALL
 ----
-NULL	-1
-NULL	9
 1	0
 2	0
 3	1
@@ -134,3 +132,5 @@ NULL	9
 7	2
 8	3
 9	3
+NULL	-1
+NULL	9
