@@ -8,10 +8,17 @@
 
 #pragma once
 
-#include "duckdb_python/pybind_wrapper.hpp"
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb.hpp"
 
 namespace duckdb {
+
+struct RegisteredArray {
+	explicit RegisteredArray(py::array numpy_array) : numpy_array(std::move(numpy_array)) {
+	}
+	py::array numpy_array;
+};
+
 struct RawArrayWrapper {
 
 	explicit RawArrayWrapper(const LogicalType &type);
@@ -28,6 +35,7 @@ public:
 	void Resize(idx_t new_capacity);
 	void Append(idx_t current_offset, Vector &input, idx_t count);
 };
+
 struct ArrayWrapper {
 	explicit ArrayWrapper(const LogicalType &type);
 

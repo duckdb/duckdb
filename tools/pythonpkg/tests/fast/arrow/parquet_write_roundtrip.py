@@ -4,11 +4,7 @@ import tempfile
 import numpy
 import pandas
 import datetime
-try:
-    import pyarrow as pa
-    can_run = True
-except:
-    can_run = False
+pa = pytest.importorskip("pyarrow")
 
 def parquet_types_test(type_list):
     temp = tempfile.NamedTemporaryFile()
@@ -43,8 +39,6 @@ def parquet_types_test(type_list):
 
 class TestParquetRoundtrip(object):
     def test_roundtrip_numeric(self, duckdb_cursor):
-        if not can_run:
-            return
         type_list = [
             ([-2**7, 0, 2**7-1], numpy.int8, 'TINYINT'),
             ([-2**15, 0, 2**15-1], numpy.int16, 'SMALLINT'),
@@ -60,8 +54,6 @@ class TestParquetRoundtrip(object):
         parquet_types_test(type_list)
 
     def test_roundtrip_timestamp(self, duckdb_cursor):
-        if not can_run:
-            return
         date_time_list = [
             datetime.datetime(2018, 3, 10, 11, 17, 54),
             datetime.datetime(1900, 12, 12, 23, 48, 42),
@@ -78,8 +70,6 @@ class TestParquetRoundtrip(object):
         parquet_types_test(type_list)
 
     def test_roundtrip_varchar(self, duckdb_cursor):
-        if not can_run:
-            return
         varchar_list = [
             'hello',
             'this is a very long string',
@@ -90,4 +80,3 @@ class TestParquetRoundtrip(object):
             (varchar_list, object, 'VARCHAR')
         ]
         parquet_types_test(type_list)
-
