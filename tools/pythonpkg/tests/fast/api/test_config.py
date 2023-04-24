@@ -2,28 +2,33 @@
 
 import duckdb
 import numpy
-import pandas
+import pytest
+from conftest import NumpyPandas, ArrowPandas
 
 class TestDBConfig(object):
-    def test_default_order(self, duckdb_cursor):
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_default_order(self, duckdb_cursor, pandas):
         df = pandas.DataFrame({'a': [1,2,3]})
         con = duckdb.connect(':memory:', config={'default_order': 'desc'})
         result = con.execute('select * from df order by a').fetchall()
         assert result == [(3,), (2,), (1,)]
 
-    def test_null_order(self, duckdb_cursor):
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_null_order(self, duckdb_cursor, pandas):
         df = pandas.DataFrame({'a': [1,2,3,None]})
         con = duckdb.connect(':memory:', config={'default_null_order': 'nulls_last'})
         result = con.execute('select * from df order by a').fetchall()
         assert result == [(1,), (2,), (3,), (None,)]
 
-    def test_multiple_options(self, duckdb_cursor):
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_multiple_options(self, duckdb_cursor, pandas):
         df = pandas.DataFrame({'a': [1,2,3,None]})
         con = duckdb.connect(':memory:', config={'default_null_order': 'nulls_last', 'default_order': 'desc'})
         result = con.execute('select * from df order by a').fetchall()
         assert result == [(3,), (2,), (1,), (None,)]
 
-    def test_external_access(self, duckdb_cursor):
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_external_access(self, duckdb_cursor, pandas):
         df = pandas.DataFrame({'a': [1,2,3]})
         # this works (replacement scan)
         con_regular = duckdb.connect(':memory:', config={})
@@ -53,5 +58,3 @@ class TestDBConfig(object):
         except:
             success = False
         assert success==False
-
-

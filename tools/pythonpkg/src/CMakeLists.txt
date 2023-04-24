@@ -6,6 +6,10 @@ include_directories(${pybind11_INCLUDE_DIR})
 include_directories(${PYTHON_INCLUDE_DIRS})
 
 add_subdirectory(pyrelation)
+add_subdirectory(pybind11)
+add_subdirectory(numpy)
+add_subdirectory(native)
+add_subdirectory(jupyter)
 add_subdirectory(typing)
 add_subdirectory(pyconnection)
 add_subdirectory(common)
@@ -13,7 +17,6 @@ add_subdirectory(pandas)
 
 add_library(
   python_src OBJECT
-  array_wrapper.cpp
   path_like.cpp
   python_udf.cpp
   pyconnection.cpp
@@ -21,11 +24,8 @@ add_library(
   pyrelation.cpp
   dataframe.cpp
   pyresult.cpp
-  map.cpp
-  vector_conversion.cpp
-  python_objects.cpp
-  pybind_wrapper.cpp
-  arrow_array_stream.cpp)
+  pyfilesystem.cpp
+  map.cpp)
 
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:python_src>

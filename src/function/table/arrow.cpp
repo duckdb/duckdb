@@ -19,6 +19,7 @@ LogicalType ArrowTableFunction::GetArrowLogicalType(
 	if (arrow_convert_data.find(col_idx) == arrow_convert_data.end()) {
 		arrow_convert_data[col_idx] = make_uniq<ArrowConvertData>();
 	}
+	auto &convert_data = *arrow_convert_data[col_idx];
 	if (format == "n") {
 		return LogicalType::SQLNULL;
 	} else if (format == "b") {
@@ -52,10 +53,10 @@ LogicalType ArrowTableFunction::GetArrowLogicalType(
 		}
 		return LogicalType::DECIMAL(width, scale);
 	} else if (format == "u") {
-		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::NORMAL, 0);
+		convert_data.variable_sz_type.emplace_back(ArrowVariableSizeType::NORMAL, 0);
 		return LogicalType::VARCHAR;
 	} else if (format == "U") {
-		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::SUPER_SIZE, 0);
+		convert_data.variable_sz_type.emplace_back(ArrowVariableSizeType::SUPER_SIZE, 0);
 		return LogicalType::VARCHAR;
 	} else if (format == "tsn:") {
 		return LogicalTypeId::TIMESTAMP_NS;
@@ -66,56 +67,56 @@ LogicalType ArrowTableFunction::GetArrowLogicalType(
 	} else if (format == "tss:") {
 		return LogicalTypeId::TIMESTAMP_SEC;
 	} else if (format == "tdD") {
-		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::DAYS);
+		convert_data.date_time_precision.emplace_back(ArrowDateTimeType::DAYS);
 		return LogicalType::DATE;
 	} else if (format == "tdm") {
-		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::MILLISECONDS);
+		convert_data.date_time_precision.emplace_back(ArrowDateTimeType::MILLISECONDS);
 		return LogicalType::DATE;
 	} else if (format == "tts") {
-		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::SECONDS);
+		convert_data.date_time_precision.emplace_back(ArrowDateTimeType::SECONDS);
 		return LogicalType::TIME;
 	} else if (format == "ttm") {
-		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::MILLISECONDS);
+		convert_data.date_time_precision.emplace_back(ArrowDateTimeType::MILLISECONDS);
 		return LogicalType::TIME;
 	} else if (format == "ttu") {
-		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::MICROSECONDS);
+		convert_data.date_time_precision.emplace_back(ArrowDateTimeType::MICROSECONDS);
 		return LogicalType::TIME;
 	} else if (format == "ttn") {
-		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::NANOSECONDS);
+		convert_data.date_time_precision.emplace_back(ArrowDateTimeType::NANOSECONDS);
 		return LogicalType::TIME;
 	} else if (format == "tDs") {
-		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::SECONDS);
+		convert_data.date_time_precision.emplace_back(ArrowDateTimeType::SECONDS);
 		return LogicalType::INTERVAL;
 	} else if (format == "tDm") {
-		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::MILLISECONDS);
+		convert_data.date_time_precision.emplace_back(ArrowDateTimeType::MILLISECONDS);
 		return LogicalType::INTERVAL;
 	} else if (format == "tDu") {
-		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::MICROSECONDS);
+		convert_data.date_time_precision.emplace_back(ArrowDateTimeType::MICROSECONDS);
 		return LogicalType::INTERVAL;
 	} else if (format == "tDn") {
-		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::NANOSECONDS);
+		convert_data.date_time_precision.emplace_back(ArrowDateTimeType::NANOSECONDS);
 		return LogicalType::INTERVAL;
 	} else if (format == "tiD") {
-		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::DAYS);
+		convert_data.date_time_precision.emplace_back(ArrowDateTimeType::DAYS);
 		return LogicalType::INTERVAL;
 	} else if (format == "tiM") {
-		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::MONTHS);
+		convert_data.date_time_precision.emplace_back(ArrowDateTimeType::MONTHS);
 		return LogicalType::INTERVAL;
 	} else if (format == "tin") {
-		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::MONTH_DAY_NANO);
+		convert_data.date_time_precision.emplace_back(ArrowDateTimeType::MONTH_DAY_NANO);
 		return LogicalType::INTERVAL;
 	} else if (format == "+l") {
-		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::NORMAL, 0);
+		convert_data.variable_sz_type.emplace_back(ArrowVariableSizeType::NORMAL, 0);
 		auto child_type = GetArrowLogicalType(*schema.children[0], arrow_convert_data, col_idx);
 		return LogicalType::LIST(child_type);
 	} else if (format == "+L") {
-		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::SUPER_SIZE, 0);
+		convert_data.variable_sz_type.emplace_back(ArrowVariableSizeType::SUPER_SIZE, 0);
 		auto child_type = GetArrowLogicalType(*schema.children[0], arrow_convert_data, col_idx);
 		return LogicalType::LIST(child_type);
 	} else if (format[0] == '+' && format[1] == 'w') {
 		std::string parameters = format.substr(format.find(':') + 1);
 		idx_t fixed_size = std::stoi(parameters);
-		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::FIXED_SIZE, fixed_size);
+		convert_data.variable_sz_type.emplace_back(ArrowVariableSizeType::FIXED_SIZE, fixed_size);
 		auto child_type = GetArrowLogicalType(*schema.children[0], arrow_convert_data, col_idx);
 		return LogicalType::LIST(child_type);
 	} else if (format == "+s") {
@@ -127,7 +128,7 @@ LogicalType ArrowTableFunction::GetArrowLogicalType(
 		return LogicalType::STRUCT(child_types);
 
 	} else if (format == "+m") {
-		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::NORMAL, 0);
+		convert_data.variable_sz_type.emplace_back(ArrowVariableSizeType::NORMAL, 0);
 
 		auto &arrow_struct_type = *schema.children[0];
 		D_ASSERT(arrow_struct_type.n_children == 2);
@@ -135,26 +136,26 @@ LogicalType ArrowTableFunction::GetArrowLogicalType(
 		auto value_type = GetArrowLogicalType(*arrow_struct_type.children[1], arrow_convert_data, col_idx);
 		return LogicalType::MAP(key_type, value_type);
 	} else if (format == "z") {
-		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::NORMAL, 0);
+		convert_data.variable_sz_type.emplace_back(ArrowVariableSizeType::NORMAL, 0);
 		return LogicalType::BLOB;
 	} else if (format == "Z") {
-		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::SUPER_SIZE, 0);
+		convert_data.variable_sz_type.emplace_back(ArrowVariableSizeType::SUPER_SIZE, 0);
 		return LogicalType::BLOB;
 	} else if (format[0] == 'w') {
 		std::string parameters = format.substr(format.find(':') + 1);
 		idx_t fixed_size = std::stoi(parameters);
-		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::FIXED_SIZE, fixed_size);
+		convert_data.variable_sz_type.emplace_back(ArrowVariableSizeType::FIXED_SIZE, fixed_size);
 		return LogicalType::BLOB;
 	} else if (format[0] == 't' && format[1] == 's') {
 		// Timestamp with Timezone
 		if (format[2] == 'n') {
-			arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::NANOSECONDS);
+			convert_data.date_time_precision.emplace_back(ArrowDateTimeType::NANOSECONDS);
 		} else if (format[2] == 'u') {
-			arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::MICROSECONDS);
+			convert_data.date_time_precision.emplace_back(ArrowDateTimeType::MICROSECONDS);
 		} else if (format[2] == 'm') {
-			arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::MILLISECONDS);
+			convert_data.date_time_precision.emplace_back(ArrowDateTimeType::MILLISECONDS);
 		} else if (format[2] == 's') {
-			arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::SECONDS);
+			convert_data.date_time_precision.emplace_back(ArrowDateTimeType::SECONDS);
 		} else {
 			throw NotImplementedException(" Timestamptz precision of not accepted");
 		}

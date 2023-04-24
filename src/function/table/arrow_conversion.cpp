@@ -5,9 +5,19 @@
 #include "duckdb/common/types/arrow_aux_data.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 
+namespace {
+using duckdb::idx_t;
+struct ArrowConvertDataIndices {
+	//! The index that refers to 'variable_sz_type' in ArrowConvertData
+	idx_t variable_sized_index;
+	//! The index that refers to 'date_time_precision' in ArrowConvertData
+	idx_t datetime_precision_index;
+};
+} // namespace
+
 namespace duckdb {
 
-void ShiftRight(unsigned char *ar, int size, int shift) {
+static void ShiftRight(unsigned char *ar, int size, int shift) {
 	int carry = 0;
 	while (shift--) {
 		for (int i = size - 1; i >= 0; --i) {
@@ -18,8 +28,8 @@ void ShiftRight(unsigned char *ar, int size, int shift) {
 	}
 }
 
-void GetValidityMask(ValidityMask &mask, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
-                     int64_t nested_offset = -1, bool add_null = false) {
+static void GetValidityMask(ValidityMask &mask, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
+                            int64_t nested_offset = -1, bool add_null = false) {
 	// In certains we don't need to or cannot copy arrow's validity mask to duckdb.
 	//
 	// The conditions where we do want to copy arrow's mask to duckdb are:
@@ -68,22 +78,23 @@ void GetValidityMask(ValidityMask &mask, ArrowArray &array, ArrowScanLocalState 
 	}
 }
 
-void SetValidityMask(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
-                     int64_t nested_offset, bool add_null = false) {
+static void SetValidityMask(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
+                            int64_t nested_offset, bool add_null = false) {
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
 	auto &mask = FlatVector::Validity(vector);
 	GetValidityMask(mask, array, scan_state, size, nested_offset, add_null);
 }
 
-void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
-                         std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx,
-                         std::pair<idx_t, idx_t> &arrow_convert_idx, int64_t nested_offset = -1,
-                         ValidityMask *parent_mask = nullptr);
+static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
+                                std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
+                                idx_t col_idx, ArrowConvertDataIndices &arrow_convert_idx, int64_t nested_offset = -1,
+                                ValidityMask *parent_mask = nullptr);
 
-void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
-                       std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx,
-                       std::pair<idx_t, idx_t> &arrow_convert_idx, int64_t nested_offset, ValidityMask *parent_mask) {
-	auto original_type = arrow_convert_data[col_idx]->variable_sz_type[arrow_convert_idx.first++];
+static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
+                              std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
+                              idx_t col_idx, ArrowConvertDataIndices &arrow_convert_idx, int64_t nested_offset,
+                              ValidityMask *parent_mask) {
+	auto original_type = arrow_convert_data[col_idx]->variable_sz_type[arrow_convert_idx.variable_sized_index++];
 	idx_t list_size = 0;
 	SetValidityMask(vector, array, scan_state, size, nested_offset);
 	idx_t start_offset = 0;
@@ -157,10 +168,10 @@ void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowScanLocalState &s
 	}
 }
 
-void ArrowToDuckDBBlob(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
-                       std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx,
-                       std::pair<idx_t, idx_t> &arrow_convert_idx, int64_t nested_offset) {
-	auto original_type = arrow_convert_data[col_idx]->variable_sz_type[arrow_convert_idx.first++];
+static void ArrowToDuckDBBlob(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
+                              std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
+                              idx_t col_idx, ArrowConvertDataIndices &arrow_convert_idx, int64_t nested_offset) {
+	auto original_type = arrow_convert_data[col_idx]->variable_sz_type[arrow_convert_idx.variable_sized_index++];
 	SetValidityMask(vector, array, scan_state, size, nested_offset);
 	if (original_type.first == ArrowVariableSizeType::FIXED_SIZE) {
 		//! Have to check validity mask before setting this up
@@ -195,7 +206,7 @@ void ArrowToDuckDBBlob(Vector &vector, ArrowArray &array, ArrowScanLocalState &s
 	} else {
 		//! Check if last offset is higher than max uint32
 		if (((uint64_t *)array.buffers[1])[array.length] > NumericLimits<uint32_t>::Maximum()) { // LCOV_EXCL_START
-			throw std::runtime_error("DuckDB does not support Blobs over 4GB");
+			throw ConversionException("DuckDB does not support Blobs over 4GB");
 		} // LCOV_EXCL_STOP
 		auto offsets = (uint64_t *)array.buffers[1] + array.offset + scan_state.chunk_offset;
 		if (nested_offset != -1) {
@@ -213,7 +224,7 @@ void ArrowToDuckDBBlob(Vector &vector, ArrowArray &array, ArrowScanLocalState &s
 	}
 }
 
-void ArrowToDuckDBMapVerify(Vector &vector, idx_t count) {
+static void ArrowToDuckDBMapVerify(Vector &vector, idx_t count) {
 	auto valid_check = CheckMapValidity(vector, count);
 	switch (valid_check) {
 	case MapInvalidReason::VALID:
@@ -246,7 +257,8 @@ static void SetVectorString(Vector &vector, idx_t size, char *cdata, T *offsets)
 	}
 }
 
-void DirectConversion(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, int64_t nested_offset) {
+static void DirectConversion(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state,
+                             int64_t nested_offset) {
 	auto internal_type = GetTypeIdSize(vector.GetType().InternalType());
 	auto data_ptr = (data_ptr_t)array.buffers[1] + internal_type * (scan_state.chunk_offset + array.offset);
 	if (nested_offset != -1) {
@@ -256,8 +268,8 @@ void DirectConversion(Vector &vector, ArrowArray &array, ArrowScanLocalState &sc
 }
 
 template <class T>
-void TimeConversion(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, int64_t nested_offset,
-                    idx_t size, int64_t conversion) {
+static void TimeConversion(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, int64_t nested_offset,
+                           idx_t size, int64_t conversion) {
 	auto tgt_ptr = (dtime_t *)FlatVector::GetData(vector);
 	auto &validity_mask = FlatVector::Validity(vector);
 	auto src_ptr = (T *)array.buffers[1] + scan_state.chunk_offset + array.offset;
@@ -274,8 +286,8 @@ void TimeConversion(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan
 	}
 }
 
-void TimestampTZConversion(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, int64_t nested_offset,
-                           idx_t size, int64_t conversion) {
+static void TimestampTZConversion(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state,
+                                  int64_t nested_offset, idx_t size, int64_t conversion) {
 	auto tgt_ptr = (timestamp_t *)FlatVector::GetData(vector);
 	auto &validity_mask = FlatVector::Validity(vector);
 	auto src_ptr = (int64_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
@@ -292,8 +304,8 @@ void TimestampTZConversion(Vector &vector, ArrowArray &array, ArrowScanLocalStat
 	}
 }
 
-void IntervalConversionUs(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, int64_t nested_offset,
-                          idx_t size, int64_t conversion) {
+static void IntervalConversionUs(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state,
+                                 int64_t nested_offset, idx_t size, int64_t conversion) {
 	auto tgt_ptr = (interval_t *)FlatVector::GetData(vector);
 	auto src_ptr = (int64_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
 	if (nested_offset != -1) {
@@ -308,8 +320,8 @@ void IntervalConversionUs(Vector &vector, ArrowArray &array, ArrowScanLocalState
 	}
 }
 
-void IntervalConversionMonths(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, int64_t nested_offset,
-                              idx_t size) {
+static void IntervalConversionMonths(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state,
+                                     int64_t nested_offset, idx_t size) {
 	auto tgt_ptr = (interval_t *)FlatVector::GetData(vector);
 	auto src_ptr = (int32_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
 	if (nested_offset != -1) {
@@ -322,8 +334,8 @@ void IntervalConversionMonths(Vector &vector, ArrowArray &array, ArrowScanLocalS
 	}
 }
 
-void IntervalConversionMonthDayNanos(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state,
-                                     int64_t nested_offset, idx_t size) {
+static void IntervalConversionMonthDayNanos(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state,
+                                            int64_t nested_offset, idx_t size) {
 	auto tgt_ptr = (interval_t *)FlatVector::GetData(vector);
 	auto src_ptr = (ArrowInterval *)array.buffers[1] + scan_state.chunk_offset + array.offset;
 	if (nested_offset != -1) {
@@ -336,9 +348,10 @@ void IntervalConversionMonthDayNanos(Vector &vector, ArrowArray &array, ArrowSca
 	}
 }
 
-void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
-                         std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx,
-                         std::pair<idx_t, idx_t> &arrow_convert_idx, int64_t nested_offset, ValidityMask *parent_mask) {
+static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
+                                std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
+                                idx_t col_idx, ArrowConvertDataIndices &arrow_convert_idx, int64_t nested_offset,
+                                ValidityMask *parent_mask) {
 	switch (vector.GetType().id()) {
 	case LogicalTypeId::SQLNULL:
 		vector.Reference(Value());
@@ -390,11 +403,11 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState 
 		break;
 	}
 	case LogicalTypeId::VARCHAR: {
-		auto original_type = arrow_convert_data[col_idx]->variable_sz_type[arrow_convert_idx.first++];
+		auto original_type = arrow_convert_data[col_idx]->variable_sz_type[arrow_convert_idx.variable_sized_index++];
 		auto cdata = (char *)array.buffers[2];
 		if (original_type.first == ArrowVariableSizeType::SUPER_SIZE) {
 			if (((uint64_t *)array.buffers[1])[array.length] > NumericLimits<uint32_t>::Maximum()) { // LCOV_EXCL_START
-				throw std::runtime_error("DuckDB does not support Strings over 4GB");
+				throw ConversionException("DuckDB does not support Strings over 4GB");
 			} // LCOV_EXCL_STOP
 			auto offsets = (uint64_t *)array.buffers[1] + array.offset + scan_state.chunk_offset;
 			if (nested_offset != -1) {
@@ -411,7 +424,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState 
 		break;
 	}
 	case LogicalTypeId::DATE: {
-		auto precision = arrow_convert_data[col_idx]->date_time_precision[arrow_convert_idx.second++];
+		auto precision = arrow_convert_data[col_idx]->date_time_precision[arrow_convert_idx.datetime_precision_index++];
 		switch (precision) {
 		case ArrowDateTimeType::DAYS: {
 			DirectConversion(vector, array, scan_state, nested_offset);
@@ -430,12 +443,12 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState 
 			break;
 		}
 		default:
-			throw std::runtime_error("Unsupported precision for Date Type ");
+			throw NotImplementedException("Unsupported precision for Date Type ");
 		}
 		break;
 	}
 	case LogicalTypeId::TIME: {
-		auto precision = arrow_convert_data[col_idx]->date_time_precision[arrow_convert_idx.second++];
+		auto precision = arrow_convert_data[col_idx]->date_time_precision[arrow_convert_idx.datetime_precision_index++];
 		switch (precision) {
 		case ArrowDateTimeType::SECONDS: {
 			TimeConversion<int32_t>(vector, array, scan_state, nested_offset, size, 1000000);
@@ -461,12 +474,12 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState 
 			break;
 		}
 		default:
-			throw std::runtime_error("Unsupported precision for Time Type ");
+			throw NotImplementedException("Unsupported precision for Time Type ");
 		}
 		break;
 	}
 	case LogicalTypeId::TIMESTAMP_TZ: {
-		auto precision = arrow_convert_data[col_idx]->date_time_precision[arrow_convert_idx.second++];
+		auto precision = arrow_convert_data[col_idx]->date_time_precision[arrow_convert_idx.datetime_precision_index++];
 		switch (precision) {
 		case ArrowDateTimeType::SECONDS: {
 			TimestampTZConversion(vector, array, scan_state, nested_offset, size, 1000000);
@@ -492,12 +505,12 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState 
 			break;
 		}
 		default:
-			throw std::runtime_error("Unsupported precision for TimestampTZ Type ");
+			throw NotImplementedException("Unsupported precision for TimestampTZ Type ");
 		}
 		break;
 	}
 	case LogicalTypeId::INTERVAL: {
-		auto precision = arrow_convert_data[col_idx]->date_time_precision[arrow_convert_idx.second++];
+		auto precision = arrow_convert_data[col_idx]->date_time_precision[arrow_convert_idx.datetime_precision_index++];
 		switch (precision) {
 		case ArrowDateTimeType::SECONDS: {
 			IntervalConversionUs(vector, array, scan_state, nested_offset, size, 1000000);
@@ -534,7 +547,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState 
 			break;
 		}
 		default:
-			throw std::runtime_error("Unsupported precision for Interval/Duration Type ");
+			throw NotImplementedException("Unsupported precision for Interval/Duration Type ");
 		}
 		break;
 	}
@@ -585,8 +598,8 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState 
 			break;
 		}
 		default:
-			throw std::runtime_error("Unsupported physical type for Decimal: " +
-			                         TypeIdToString(vector.GetType().InternalType()));
+			throw NotImplementedException("Unsupported physical type for Decimal: %s",
+			                              TypeIdToString(vector.GetType().InternalType()));
 		}
 		break;
 	}
@@ -626,7 +639,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState 
 		break;
 	}
 	default:
-		throw std::runtime_error("Unsupported type " + vector.GetType().ToString());
+		throw NotImplementedException("Unsupported type %s", vector.GetType().ToString());
 	}
 }
 
@@ -644,7 +657,7 @@ static void SetSelectionVectorLoopWithChecks(SelectionVector &sel, data_ptr_t in
 	auto indices = (T *)indices_p;
 	for (idx_t row = 0; row < size; row++) {
 		if (indices[row] > NumericLimits<uint32_t>::Maximum()) {
-			throw std::runtime_error("DuckDB only supports indices that fit on an uint32");
+			throw ConversionException("DuckDB only supports indices that fit on an uint32");
 		}
 		sel.set_index(row, indices[row]);
 	}
@@ -664,8 +677,8 @@ static void SetMaskedSelectionVectorLoop(SelectionVector &sel, data_ptr_t indice
 	}
 }
 
-void SetSelectionVector(SelectionVector &sel, data_ptr_t indices_p, LogicalType &logical_type, idx_t size,
-                        ValidityMask *mask = nullptr, idx_t last_element_pos = 0) {
+static void SetSelectionVector(SelectionVector &sel, data_ptr_t indices_p, LogicalType &logical_type, idx_t size,
+                               ValidityMask *mask = nullptr, idx_t last_element_pos = 0) {
 	sel.Initialize(size);
 
 	if (mask) {
@@ -685,7 +698,7 @@ void SetSelectionVector(SelectionVector &sel, data_ptr_t indices_p, LogicalType 
 		case LogicalTypeId::UINTEGER:
 			if (last_element_pos > NumericLimits<uint32_t>::Maximum()) {
 				//! Its guaranteed that our indices will point to the last element, so just throw an error
-				throw std::runtime_error("DuckDB only supports indices that fit on an uint32");
+				throw ConversionException("DuckDB only supports indices that fit on an uint32");
 			}
 			SetMaskedSelectionVectorLoop<uint32_t>(sel, indices_p, size, *mask, last_element_pos);
 			break;
@@ -695,20 +708,20 @@ void SetSelectionVector(SelectionVector &sel, data_ptr_t indices_p, LogicalType 
 		case LogicalTypeId::UBIGINT:
 			if (last_element_pos > NumericLimits<uint32_t>::Maximum()) {
 				//! Its guaranteed that our indices will point to the last element, so just throw an error
-				throw std::runtime_error("DuckDB only supports indices that fit on an uint32");
+				throw ConversionException("DuckDB only supports indices that fit on an uint32");
 			}
 			SetMaskedSelectionVectorLoop<uint64_t>(sel, indices_p, size, *mask, last_element_pos);
 			break;
 		case LogicalTypeId::BIGINT:
 			if (last_element_pos > NumericLimits<uint32_t>::Maximum()) {
 				//! Its guaranteed that our indices will point to the last element, so just throw an error
-				throw std::runtime_error("DuckDB only supports indices that fit on an uint32");
+				throw ConversionException("DuckDB only supports indices that fit on an uint32");
 			}
 			SetMaskedSelectionVectorLoop<int64_t>(sel, indices_p, size, *mask, last_element_pos);
 			break;
 
 		default:
-			throw std::runtime_error("(Arrow) Unsupported type for selection vectors " + logical_type.ToString());
+			throw NotImplementedException("(Arrow) Unsupported type for selection vectors %s", logical_type.ToString());
 		}
 
 	} else {
@@ -748,17 +761,18 @@ void SetSelectionVector(SelectionVector &sel, data_ptr_t indices_p, LogicalType 
 			}
 			break;
 		default:
-			throw std::runtime_error("(Arrow) Unsupported type for selection vectors " + logical_type.ToString());
+			throw ConversionException("(Arrow) Unsupported type for selection vectors %s", logical_type.ToString());
 		}
 	}
 }
 
-void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
-                                   std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
-                                   idx_t col_idx, std::pair<idx_t, idx_t> &arrow_convert_idx) {
+static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state,
+                                          idx_t size,
+                                          std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
+                                          idx_t col_idx, ArrowConvertDataIndices &arrow_convert_idx) {
 	SelectionVector sel;
 	auto &dict_vectors = scan_state.arrow_dictionary_vectors;
-	if (dict_vectors.find(col_idx) == dict_vectors.end()) {
+	if (!dict_vectors.count(col_idx)) {
 		//! We need to set the dictionary data for this column
 		auto base_vector = make_uniq<Vector>(vector.GetType(), array.dictionary->length);
 		SetValidityMask(*base_vector, *array.dictionary, scan_state, array.dictionary->length, 0, array.null_count > 0);
@@ -791,10 +805,11 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state,
 		auto arrow_array_idx = arrow_scan_is_projected ? idx : col_idx;
 
 		if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
+			// This column is skipped by the projection pushdown
 			continue;
 		}
 
-		std::pair<idx_t, idx_t> arrow_convert_idx {0, 0};
+		ArrowConvertDataIndices arrow_convert_idx {0, 0};
 		auto &array = *scan_state.chunk->arrow_array.children[arrow_array_idx];
 		if (!array.release) {
 			throw InvalidInputException("arrow_scan: released array passed");
@@ -802,6 +817,7 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state,
 		if (array.length != scan_state.chunk->arrow_array.length) {
 			throw InvalidInputException("arrow_scan: array length mismatch");
 		}
+		// Make sure this Vector keeps the Arrow chunk alive in case we can zero-copy the data
 		output.data[idx].GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(scan_state.chunk));
 		if (array.dictionary) {
 			ColumnArrowToDuckDBDictionary(output.data[idx], array, scan_state, output.size(), arrow_convert_data,

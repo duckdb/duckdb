@@ -1,17 +1,18 @@
 #include "duckdb/main/query_result.hpp"
-#include "duckdb_python/pybind_wrapper.hpp"
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb_python/pytype.hpp"
-#include "duckdb_python/pyconnection.hpp"
-#include "duckdb_python/vector_conversion.hpp"
+#include "duckdb_python/pyconnection/pyconnection.hpp"
+#include "duckdb_python/pandas/pandas_scan.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/arrow/arrow_appender.hpp"
 #include "duckdb/common/arrow/result_arrow_wrapper.hpp"
-#include "duckdb_python/arrow_array_stream.hpp"
+#include "duckdb_python/arrow/arrow_array_stream.hpp"
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/function/function.hpp"
+#include "duckdb_python/numpy/numpy_scan.hpp"
 
 namespace duckdb {
 
@@ -319,7 +320,7 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 
 		// Cast the resulting native python to DuckDB, using the return type
 		// result.Resize(input.size());
-		VectorConversion::ScanPandasObjectColumn(python_results.data(), input.size(), 0, result);
+		NumpyScan::ScanObjectColumn(python_results.data(), input.size(), 0, result);
 		if (input.AllConstant()) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
