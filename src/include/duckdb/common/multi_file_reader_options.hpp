@@ -32,8 +32,7 @@ struct MultiFileReaderOptions {
 		if (files.empty()) {
 			return false;
 		}
-		static const string regex_string = "[\\/\\\\]([^\\/\\?\\\\]+)=([^\\/\\n\\?\\\\]+)";
-		duckdb_re2::RE2 regex(regex_string);
+		duckdb_re2::RE2 regex("[\\/\\\\]([^\\/\\?\\\\]+)=([^\\/\\n\\?\\\\]+)");
 		const auto partitions = HivePartitioning::Parse(files.front(), regex);
 		for (auto &f : files) {
 			auto scheme = HivePartitioning::Parse(f, regex);
