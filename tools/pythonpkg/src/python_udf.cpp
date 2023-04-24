@@ -235,7 +235,7 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 		if (state.HasContext()) {
 			auto &context = state.GetContext();
 			auto client_properties = context.GetClientProperties();
-			timezone_config = client_properties.GetTimeZone();
+			timezone_config = client_properties.time_zone;
 		}
 		auto pyarrow_table = ConvertDataChunkToPyArrowTable(input, timezone_config);
 		py::tuple column_list = pyarrow_table.attr("columns");
