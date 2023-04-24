@@ -39,7 +39,6 @@ public:
 	enum ELeakCheck
 	{
 		ElcNone,  // no leak checking -- to be deprecated
-
 		ElcExc,	   // check for leaks unless an exception is pending (default)
 		ElcStrict  // always check for leaks
 	};
