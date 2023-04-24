@@ -315,13 +315,8 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkSt
 		lock_guard<mutex> l(gstate.lock);
 		// no collection yet: create a new one
 		lstate.CreateNewCollection(table, insert_types);
-<<<<<<< HEAD
-		lstate.writer = gstate.table->GetStorage().CreateOptimisticWriter(context.client);
-	} else if (lstate.current_index != batch_index) {
-=======
 		lstate.writer = &table.GetStorage().CreateOptimisticWriter(context.client);
-	} else if (lstate.current_index != lstate.batch_index) {
->>>>>>> master
+	} else if (lstate.current_index != batch_index) {
 		// batch index has changed: move the old collection to the global state and create a new collection
 		TransactionData tdata(0, 0);
 		lstate.current_collection->FinalizeAppend(tdata, lstate.current_append_state);
