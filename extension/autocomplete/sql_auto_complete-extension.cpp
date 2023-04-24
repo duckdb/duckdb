@@ -403,7 +403,7 @@ static void LoadInternal(DatabaseInstance &db) {
 	TableFunction auto_complete_fun("sql_auto_complete", {LogicalType::VARCHAR}, SQLAutoCompleteFunction,
 	                                SQLAutoCompleteBind, SQLAutoCompleteInit);
 	CreateTableFunctionInfo auto_complete_info(auto_complete_fun);
-	catalog.CreateTableFunction(context, &auto_complete_info);
+	catalog.CreateTableFunction(context, auto_complete_info);
 
 	con.Commit();
 }

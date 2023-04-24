@@ -130,7 +130,7 @@ static void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, Da
 		if (output.size() > 0) {
 			return;
 		}
-		if (!TableScanParallelStateNext(context, data_p.bind_data, data_p.local_state, data_p.global_state)) {
+		if (!TableScanParallelStateNext(context, data_p.bind_data.get(), data_p.local_state.get(), data_p.global_state.get())) {
 			return;
 		}
 	} while (true);

@@ -313,7 +313,7 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, TableFunction
 
 	//! Out of tuples in this chunk
 	if (state.chunk_offset >= (idx_t)state.chunk->arrow_array.length) {
-		if (!ArrowScanParallelStateNext(context, data_p.bind_data, state, global_state)) {
+		if (!ArrowScanParallelStateNext(context, data_p.bind_data.get(), state, global_state)) {
 			return;
 		}
 	}
