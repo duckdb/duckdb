@@ -44,7 +44,7 @@ public:
 	                                           shared_ptr<DuckDBPyConnection> conn = nullptr);
 	static shared_ptr<DuckDBPyType> Type(const string &type_str, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static shared_ptr<DuckDBPyConnection> Append(const string &name, PandasDataFrame value,
+	static shared_ptr<DuckDBPyConnection> Append(const string &name, PandasDataFrame value, bool by_name,
 	                                             shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static shared_ptr<DuckDBPyConnection> RegisterPythonObject(const string &name, py::object python_object,

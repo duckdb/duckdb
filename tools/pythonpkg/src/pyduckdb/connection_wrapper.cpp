@@ -97,9 +97,9 @@ shared_ptr<DuckDBPyConnection> PyConnectionWrapper::Execute(const string &query,
 	return conn->Execute(query, params, many);
 }
 
-shared_ptr<DuckDBPyConnection> PyConnectionWrapper::Append(const string &name, PandasDataFrame value,
+shared_ptr<DuckDBPyConnection> PyConnectionWrapper::Append(const string &name, PandasDataFrame value, bool by_name,
                                                            shared_ptr<DuckDBPyConnection> conn) {
-	return conn->Append(name, value);
+	return conn->Append(name, value, by_name);
 }
 
 shared_ptr<DuckDBPyConnection> PyConnectionWrapper::RegisterPythonObject(const string &name, py::object python_object,
