@@ -252,7 +252,7 @@ SourceResultType PhysicalCopyToFile::GetData(ExecutionContext &context, DataChun
 	chunk.SetValue(0, 0, Value::BIGINT(g.rows_copied));
 	state.finished = true;
 
-	return SourceResultType::FINISHED;
+	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 } // namespace duckdb

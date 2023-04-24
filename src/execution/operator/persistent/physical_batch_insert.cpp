@@ -411,7 +411,7 @@ SourceResultType PhysicalBatchInsert::GetData(ExecutionContext &context, DataChu
 	chunk.SetValue(0, 0, Value::BIGINT(insert_gstate.insert_count));
 	state.finished = true;
 
-	return SourceResultType::FINISHED;
+	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 } // namespace duckdb

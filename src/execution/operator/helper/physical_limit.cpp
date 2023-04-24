@@ -163,7 +163,7 @@ SourceResultType PhysicalLimit::GetData(ExecutionContext &context, DataChunk &ch
 		}
 	}
 
-	return SourceResultType::HAVE_MORE_OUTPUT;
+	return chunk.size() > 0 ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED;
 }
 
 bool PhysicalLimit::HandleOffset(DataChunk &input, idx_t &current_offset, idx_t offset, idx_t limit) {
