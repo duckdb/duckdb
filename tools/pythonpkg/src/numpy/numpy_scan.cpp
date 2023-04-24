@@ -133,7 +133,7 @@ static void SetInvalidRecursive(Vector &out, idx_t index) {
 
 //! 'count' is the amount of rows in the 'out' vector
 //! 'offset' is the current row number within this vector
-void NumpyScan::ScanObject(PyObject *object, idx_t offset, Vector &out) {
+void ScanNumpyObject(PyObject *object, idx_t offset, Vector &out) {
 
 	// handle None
 	if (object == Py_None) {
@@ -180,7 +180,7 @@ void NumpyScan::ScanObjectColumn(PyObject **col, idx_t count, idx_t offset, Vect
 		PythonGILWrapper gil; // We're creating python objects here, so we need the GIL
 		for (idx_t i = 0; i < count; i++) {
 			idx_t source_idx = offset + i;
-			NumpyScan::ScanObject(col[source_idx], i, out);
+			ScanNumpyObject(col[source_idx], i, out);
 		}
 	}
 	VerifyTypeConstraints(out, count);
