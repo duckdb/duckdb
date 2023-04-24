@@ -48,7 +48,7 @@ SchemaCatalogEntry &CatalogEntry::ParentSchema() {
 }
 
 InCatalogEntry::InCatalogEntry(CatalogType type, Catalog &catalog, string name)
-    : CatalogEntry(type, catalog, name), catalog(catalog) {
+    : CatalogEntry(type, catalog, std::move(name)), catalog(catalog) {
 }
 
 InCatalogEntry::~InCatalogEntry() {

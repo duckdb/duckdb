@@ -326,7 +326,7 @@ CatalogSet &DuckSchemaEntry::GetCatalogSet(CatalogType type) {
 }
 
 void DuckSchemaEntry::Verify(Catalog &catalog) {
-	CatalogEntry::Verify(catalog);
+	InCatalogEntry::Verify(catalog);
 
 	tables.Verify(catalog);
 	indexes.Verify(catalog);

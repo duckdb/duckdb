@@ -179,7 +179,7 @@ static idx_t DataFrameScanMaxThreads(ClientContext &context, const FunctionData 
 
 static duckdb::unique_ptr<GlobalTableFunctionState> DataFrameScanInitGlobal(ClientContext &context,
                                                                             TableFunctionInitInput &input) {
-	auto result = make_uniq<DataFrameGlobalState>(DataFrameScanMaxThreads(context, input.bind_data));
+	auto result = make_uniq<DataFrameGlobalState>(DataFrameScanMaxThreads(context, input.bind_data.get()));
 	result->position = 0;
 	return std::move(result);
 }
@@ -212,7 +212,7 @@ static unique_ptr<LocalTableFunctionState> DataFrameScanInitLocal(ExecutionConte
 	auto result = make_uniq<DataFrameLocalState>();
 
 	result->column_ids = input.column_ids;
-	DataFrameScanParallelStateNext(context.client, input.bind_data, *result, gstate);
+	DataFrameScanParallelStateNext(context.client, input.bind_data.get(), *result, gstate);
 	return std::move(result);
 }
 
@@ -230,7 +230,7 @@ static void DataFrameScanFunc(ClientContext &context, TableFunctionInput &data, 
 	auto &operator_data = data.local_state->Cast<DataFrameLocalState>();
 	auto &gstate = data.global_state->Cast<DataFrameGlobalState>();
 	if (operator_data.position >= operator_data.count) {
-		if (!DataFrameScanParallelStateNext(context, data.bind_data, operator_data, gstate)) {
+		if (!DataFrameScanParallelStateNext(context, data.bind_data.get(), operator_data, gstate)) {
 			return;
 		}
 	}
