@@ -107,6 +107,7 @@ static LikeString LikeMatchExists(duckdb_re2::RE2 &pattern) {
 
 unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                     bool &changes_made, bool is_root) {
+	std::cout << "running regex opt" << std::endl;
 	auto &root = bindings[0].get().Cast<BoundFunctionExpression>();
 	auto &constant_expr = bindings[2].get().Cast<BoundConstantExpression>();
 	D_ASSERT(root.children.size() == 2);
@@ -140,6 +141,7 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		auto contains = make_uniq<BoundFunctionExpression>(root.return_type, ContainsFun::GetFunction(),
 		                                                   std::move(root.children), nullptr);
 		contains->children[1] = std::move(parameter);
+		std::cout << "applying regex opt to contains opt" << std::endl;
 		return std::move(contains);
 	}
 	LikeString like_string;
@@ -159,6 +161,7 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 	    make_uniq<BoundFunctionExpression>(root.return_type, LikeFun::GetFunction(), std::move(root.children), nullptr);
 	auto parameter = make_uniq<BoundConstantExpression>(Value(std::move(like_string.like_string)));
 	like_expression->children[1] = std::move(parameter);
+	std::cout << "applying regex opt to like opt" << std::endl;
 	return std::move(like_expression);
 }
 

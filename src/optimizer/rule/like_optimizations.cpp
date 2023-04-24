@@ -6,6 +6,8 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
+#include "iostream"
+
 namespace duckdb {
 
 LikeOptimizationRule::LikeOptimizationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
@@ -119,6 +121,7 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<r
 	auto &patt_str = StringValue::Get(constant_value);
 
 	bool is_not_like = root.function.name == "!~~";
+
 	if (PatternIsConstant(patt_str)) {
 		// Pattern is constant
 		return make_uniq<BoundComparisonExpression>(is_not_like ? ExpressionType::COMPARE_NOTEQUAL

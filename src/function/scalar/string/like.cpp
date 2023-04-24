@@ -4,6 +4,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 #include "duckdb/execution/expression_executor.hpp"
+#include "iostream"
 
 namespace duckdb {
 
@@ -523,6 +524,7 @@ void LikeFun::RegisterFunction(BuiltinFunctions &set) {
 }
 
 ScalarFunction LikeFun::GetFunction() {
+	std::cout << "Like Fun GetFunction called" << std::endl;
 	return ScalarFunction("~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                      RegularLikeFunction<LikeOperator, false>, LikeBindFunction);
 }
