@@ -2,6 +2,9 @@
 # description: Test the Deliminator optimizer
 # group: [optimizer]
 
+statement ok
+SET default_null_order='nulls_first';
+
 require tpch
 
 statement ok

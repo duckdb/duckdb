@@ -1,4 +1,4 @@
-if(NOT WIN32 AND NOT CLANG_TIDY)
+if(NOT CLANG_TIDY)
   add_subdirectory(adbc)
 endif()
 

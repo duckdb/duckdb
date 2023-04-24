@@ -215,11 +215,8 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, optional_pt
 		auto &config = DBConfig::GetConfig(context);
 		for (auto &order : aggr.order_bys->orders) {
 			auto &order_expr = (BoundExpression &)*order.expression;
-			const auto sense =
-			    (order.type == OrderType::ORDER_DEFAULT) ? config.options.default_order_type : order.type;
-			const auto null_order = (order.null_order == OrderByNullType::ORDER_DEFAULT)
-			                            ? config.options.default_null_order
-			                            : order.null_order;
+			const auto sense = config.ResolveOrder(order.type);
+			const auto null_order = config.ResolveNullOrder(sense, order.null_order);
 			order_bys->orders.emplace_back(sense, null_order, std::move(order_expr.expr));
 		}
 	}
