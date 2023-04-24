@@ -58,6 +58,13 @@ struct MultiFileReaderOptions {
 		}
 		
 	}
+	static std::map<string,string> Split(const vector<string>& files){
+		std::map<string,string> m;
+		for (auto& f : files){
+			
+		}
+		return m;
+	}
 	static bool AutoDetectHivePartitioning2(const vector<string> &files) {
 
 		if (files.empty()) {
