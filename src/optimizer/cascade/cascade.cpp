@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/cascade/Cascade.h"
 
 #include "duckdb/optimizer/cascade/search/CSearchStageArray.h"
+#include "duckdb/optimizer/cascade/memory/CAutoMemoryPool.h"
 
 #define AUTO_MEM_POOL(amp) CAutoMemoryPool amp(CAutoMemoryPool::ElcExc)
 
