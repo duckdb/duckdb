@@ -9,7 +9,7 @@
 #ifndef GPOS_CStackObject_H
 #define GPOS_CStackObject_H
 
-#include "gpos/types.h"
+#include "duckdb/optimizer/cascade/types.h"
 
 namespace gpos
 {
