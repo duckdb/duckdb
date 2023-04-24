@@ -144,7 +144,7 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 	PutEntry(std::move(entry_index), std::move(value));
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
-		auto &dtransaction = (DuckTransaction &)*transaction.transaction;
+		auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
 		dtransaction.PushCatalogEntry(*value_ptr->child);
 	}
 	return true;
@@ -259,7 +259,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
-		auto &dtransaction = (DuckTransaction &)*transaction.transaction;
+		auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
 		dtransaction.PushCatalogEntry(*new_entry->child, serialized_alter.data.get(), serialized_alter.size);
 	}
 
@@ -306,7 +306,7 @@ void CatalogSet::DropEntryInternal(CatalogTransaction transaction, EntryIndex en
 
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
-		auto &dtransaction = (DuckTransaction &)*transaction.transaction;
+		auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
 		dtransaction.PushCatalogEntry(*value_ptr->child);
 	}
 }

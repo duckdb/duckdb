@@ -1138,7 +1138,7 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 		if (!node) {
 			// no updates made yet by this transaction: initially the update info to empty
 			if (transaction.transaction) {
-				auto &dtransaction = (DuckTransaction &)*transaction.transaction;
+				auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
 				node = dtransaction.CreateUpdateInfo(type_size, count);
 			} else {
 				node = CreateEmptyUpdateInfo(transaction, type_size, count, update_info_data);
