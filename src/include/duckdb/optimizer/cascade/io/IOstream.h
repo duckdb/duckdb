@@ -8,7 +8,7 @@
 #ifndef GPOS_IOstream_H
 #define GPOS_IOstream_H
 
-#include "gpos/types.h"
+#include "duckdb/optimizer/cascade/types.h"
 
 
 namespace gpos
