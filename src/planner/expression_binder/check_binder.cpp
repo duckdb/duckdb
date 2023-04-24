@@ -12,8 +12,8 @@ CheckBinder::CheckBinder(Binder &binder, ClientContext &context, string table_p,
 	target_type = LogicalType::INTEGER;
 }
 
-BindResult CheckBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = **expr_ptr;
+BindResult CheckBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
+	auto &expr = *expr_ptr;
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::WINDOW:
 		return BindResult("window functions are not allowed in check constraints");
@@ -39,7 +39,7 @@ BindResult ExpressionBinder::BindQualifiedColumnName(ColumnRefExpression &colref
 	for (idx_t i = struct_start; i + 1 < colref.column_names.size(); i++) {
 		result = CreateStructExtract(std::move(result), colref.column_names[i]);
 	}
-	return BindExpression(&result, 0);
+	return BindExpression(result, 0);
 }
 
 BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
@@ -66,7 +66,7 @@ BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
 	auto &col = columns.GetColumn(colref.column_names[0]);
 	if (col.Generated()) {
 		auto bound_expression = col.GeneratedExpression().Copy();
-		return BindExpression(&bound_expression, 0, false);
+		return BindExpression(bound_expression, 0, false);
 	}
 	bound_columns.insert(col.Physical());
 	D_ASSERT(col.StorageOid() != DConstants::INVALID_INDEX);

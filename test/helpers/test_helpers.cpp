@@ -20,6 +20,9 @@ using namespace std;
 #define TESTING_DIRECTORY_NAME "duckdb_unittest_tempdir"
 
 namespace duckdb {
+static string custom_test_directory;
+static int debug_initialize_value = -1;
+static bool single_threaded = false;
 
 bool NO_FAIL(QueryResult &result) {
 	if (result.HasError()) {
@@ -58,6 +61,9 @@ void TestChangeDirectory(string path) {
 }
 
 void DeleteDatabase(string path) {
+	if (!custom_test_directory.empty()) {
+		return;
+	}
 	TestDeleteFile(path);
 	TestDeleteFile(path + ".wal");
 }
@@ -67,12 +73,38 @@ void TestCreateDirectory(string path) {
 	fs->CreateDirectory(path);
 }
 
+void SetTestDirectory(string path) {
+	custom_test_directory = path;
+}
+
+void SetDebugInitialize(int value) {
+	debug_initialize_value = value;
+}
+
+void SetSingleThreaded() {
+	single_threaded = true;
+}
+
+string GetTestDirectory() {
+	if (custom_test_directory.empty()) {
+		return TESTING_DIRECTORY_NAME;
+	}
+	return custom_test_directory;
+}
+
 string TestDirectoryPath() {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	if (!fs->DirectoryExists(TESTING_DIRECTORY_NAME)) {
-		fs->CreateDirectory(TESTING_DIRECTORY_NAME);
+	auto test_directory = GetTestDirectory();
+	if (!fs->DirectoryExists(test_directory)) {
+		fs->CreateDirectory(test_directory);
 	}
-	string path = StringUtil::Format(TESTING_DIRECTORY_NAME "/%d", getpid());
+	string path;
+	if (custom_test_directory.empty()) {
+		// add the PID to the test directory - but only if it was not specified explicitly by the user
+		path = StringUtil::Format(test_directory + "/%d", getpid());
+	} else {
+		path = test_directory;
+	}
 	if (!fs->DirectoryExists(path)) {
 		fs->CreateDirectory(path);
 	}
@@ -97,6 +129,22 @@ unique_ptr<DBConfig> GetTestConfig() {
 	auto result = make_uniq<DBConfig>();
 	result->options.checkpoint_wal_size = 0;
 	result->options.allow_unsigned_extensions = true;
+	if (single_threaded) {
+		result->options.maximum_threads = 1;
+	}
+	switch (debug_initialize_value) {
+	case -1:
+		break;
+	case 0:
+		result->options.debug_initialize = DebugInitialize::DEBUG_ZERO_INITIALIZE;
+		break;
+	case 0xFF:
+		result->options.debug_initialize = DebugInitialize::DEBUG_ONE_INITIALIZE;
+		break;
+	default:
+		fprintf(stderr, "Invalid value for debug_initialize_value\n");
+		exit(1);
+	}
 	return result;
 }
 

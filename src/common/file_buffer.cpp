@@ -97,4 +97,12 @@ void FileBuffer::Clear() {
 	memset(internal_buffer, 0, internal_size);
 }
 
+void FileBuffer::Initialize(DebugInitialize initialize) {
+	if (initialize == DebugInitialize::NO_INITIALIZE) {
+		return;
+	}
+	uint8_t value = initialize == DebugInitialize::DEBUG_ZERO_INITIALIZE ? 0 : 0xFF;
+	memset(internal_buffer, value, internal_size);
+}
+
 } // namespace duckdb
