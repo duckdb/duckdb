@@ -46,6 +46,8 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 	public static DuckDBColumnType TypeNameToType(String type_name) {
 		if (type_name.startsWith("DECIMAL")) {
 			return DuckDBColumnType.DECIMAL;
+		} else if (type_name.equals("TIME WITH TIME ZONE")) {
+			return DuckDBColumnType.TIME_WITH_TIME_ZONE;
 		} else if (type_name.equals("TIMESTAMP WITH TIME ZONE")) {
 			return DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE;
 		} else if (type_name.endsWith("[]")) {

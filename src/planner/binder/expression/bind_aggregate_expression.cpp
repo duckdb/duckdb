@@ -60,7 +60,7 @@ static Value NegatePercentileValue(const Value &v, const bool desc) {
 static void NegatePercentileFractions(ClientContext &context, unique_ptr<ParsedExpression> &fractions, bool desc) {
 	D_ASSERT(fractions.get());
 	D_ASSERT(fractions->expression_class == ExpressionClass::BOUND_EXPRESSION);
-	auto &bound = (BoundExpression &)*fractions;
+	auto &bound = fractions->Cast<BoundExpression>();
 
 	if (!bound.expr->IsFoldable()) {
 		return;
@@ -81,7 +81,8 @@ static void NegatePercentileFractions(ClientContext &context, unique_ptr<ParsedE
 	}
 }
 
-BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry *func, idx_t depth) {
+BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, optional_ptr<AggregateFunctionCatalogEntry> func,
+                                           idx_t depth) {
 	// first bind the child of the aggregate expression (if any)
 	this->bound_aggregate = true;
 	unique_ptr<Expression> bound_filter;
@@ -137,7 +138,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 				if (!success) {
 					throw BinderException(error);
 				}
-				auto &bound_expr = (BoundExpression &)*aggr.children[i];
+				auto &bound_expr = aggr.children[i]->Cast<BoundExpression>();
 				ExtractCorrelatedExpressions(binder, *bound_expr.expr);
 			}
 			if (aggr.filter) {
@@ -146,7 +147,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 				if (!success) {
 					throw BinderException(error);
 				}
-				auto &bound_expr = (BoundExpression &)*aggr.filter;
+				auto &bound_expr = aggr.filter->Cast<BoundExpression>();
 				ExtractCorrelatedExpressions(binder, *bound_expr.expr);
 			}
 			if (aggr.order_bys && !aggr.order_bys->orders.empty()) {
@@ -155,7 +156,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 					if (!success) {
 						throw BinderException(error);
 					}
-					auto &bound_expr = (BoundExpression &)*order.expression;
+					auto &bound_expr = order.expression->Cast<BoundExpression>();
 					ExtractCorrelatedExpressions(binder, *bound_expr.expr);
 				}
 			}
@@ -214,11 +215,8 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		auto &config = DBConfig::GetConfig(context);
 		for (auto &order : aggr.order_bys->orders) {
 			auto &order_expr = (BoundExpression &)*order.expression;
-			const auto sense =
-			    (order.type == OrderType::ORDER_DEFAULT) ? config.options.default_order_type : order.type;
-			const auto null_order = (order.null_order == OrderByNullType::ORDER_DEFAULT)
-			                            ? config.options.default_null_order
-			                            : order.null_order;
+			const auto sense = config.ResolveOrder(order.type);
+			const auto null_order = config.ResolveNullOrder(sense, order.null_order);
 			order_bys->orders.emplace_back(sense, null_order, std::move(order_expr.expr));
 		}
 	}

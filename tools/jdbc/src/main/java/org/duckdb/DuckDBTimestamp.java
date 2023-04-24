@@ -3,7 +3,9 @@ package org.duckdb;
 import java.sql.Timestamp;
 import java.time.ZoneOffset;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.time.OffsetTime;
 import java.time.temporal.ChronoUnit;
 
 public class DuckDBTimestamp {
@@ -38,18 +40,27 @@ public class DuckDBTimestamp {
 
 	public static Timestamp toSqlTimestamp(long timeMicros) {
 		return Timestamp.valueOf(
-			LocalDateTime.ofEpochSecond(micros2seconds(timeMicros)
-				, nanosPartMicros(timeMicros), ZoneOffset.UTC));
+				LocalDateTime.ofEpochSecond(micros2seconds(timeMicros)
+						, nanosPartMicros(timeMicros), ZoneOffset.UTC));
 	}
 
 	public static Timestamp toSqlTimestampNanos(long timeNanos) {
 		return Timestamp.valueOf(
-			LocalDateTime.ofEpochSecond(nanos2seconds(timeNanos)
-				, nanosPartNanos(timeNanos), ZoneOffset.UTC));
+				LocalDateTime.ofEpochSecond(nanos2seconds(timeNanos)
+						, nanosPartNanos(timeNanos), ZoneOffset.UTC));
 	}
+
 	public static LocalDateTime toLocalDateTime(long timeMicros) {
 		return LocalDateTime.ofEpochSecond(micros2seconds(timeMicros)
 				, nanosPartMicros(timeMicros), ZoneOffset.UTC);
+	}
+
+	public static OffsetTime toOffsetTime(long timeMicros) {
+		return OffsetTime.of(toLocalTime(timeMicros), ZoneOffset.UTC);
+	}
+
+	private static LocalTime toLocalTime(long timeMicros) {
+		return LocalTime.ofSecondOfDay(micros2seconds(timeMicros));
 	}
 
 	public static OffsetDateTime toOffsetDateTime(long timeMicros) {

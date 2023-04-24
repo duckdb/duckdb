@@ -1,8 +1,8 @@
-#include "duckdb_python/pybind_wrapper.hpp"
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb_python/pytype.hpp"
-#include "duckdb_python/pyconnection.hpp"
-#include "duckdb_python/vector_conversion.hpp"
+#include "duckdb_python/pyconnection/pyconnection.hpp"
+#include "duckdb_python/numpy/numpy_scan.hpp"
 #include "duckdb/function/function.hpp"
 
 namespace duckdb {
@@ -167,7 +167,7 @@ static scalar_function_t CreateFunction(PyObject *function, PythonExceptionHandl
 
 		// Cast the resulting native python to DuckDB, using the return type
 		// result.Resize(input.size());
-		VectorConversion::ScanPandasObjectColumn(python_results.data(), input.size(), 0, result);
+		NumpyScan::ScanObjectColumn(python_results.data(), input.size(), 0, result);
 		if (input.AllConstant()) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}

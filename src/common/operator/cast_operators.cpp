@@ -1097,7 +1097,7 @@ static inline bool TrySimpleIntegerCast(const char *buf, idx_t len, T &result, b
 
 template <>
 bool TryCast::Operation(string_t input, bool &result, bool strict) {
-	auto input_data = input.GetDataUnsafe();
+	auto input_data = input.GetData();
 	auto input_size = input.GetSize();
 
 	switch (input_size) {
@@ -1141,36 +1141,36 @@ bool TryCast::Operation(string_t input, bool &result, bool strict) {
 }
 template <>
 bool TryCast::Operation(string_t input, int8_t &result, bool strict) {
-	return TrySimpleIntegerCast<int8_t>(input.GetDataUnsafe(), input.GetSize(), result, strict);
+	return TrySimpleIntegerCast<int8_t>(input.GetData(), input.GetSize(), result, strict);
 }
 template <>
 bool TryCast::Operation(string_t input, int16_t &result, bool strict) {
-	return TrySimpleIntegerCast<int16_t>(input.GetDataUnsafe(), input.GetSize(), result, strict);
+	return TrySimpleIntegerCast<int16_t>(input.GetData(), input.GetSize(), result, strict);
 }
 template <>
 bool TryCast::Operation(string_t input, int32_t &result, bool strict) {
-	return TrySimpleIntegerCast<int32_t>(input.GetDataUnsafe(), input.GetSize(), result, strict);
+	return TrySimpleIntegerCast<int32_t>(input.GetData(), input.GetSize(), result, strict);
 }
 template <>
 bool TryCast::Operation(string_t input, int64_t &result, bool strict) {
-	return TrySimpleIntegerCast<int64_t>(input.GetDataUnsafe(), input.GetSize(), result, strict);
+	return TrySimpleIntegerCast<int64_t>(input.GetData(), input.GetSize(), result, strict);
 }
 
 template <>
 bool TryCast::Operation(string_t input, uint8_t &result, bool strict) {
-	return TrySimpleIntegerCast<uint8_t, false>(input.GetDataUnsafe(), input.GetSize(), result, strict);
+	return TrySimpleIntegerCast<uint8_t, false>(input.GetData(), input.GetSize(), result, strict);
 }
 template <>
 bool TryCast::Operation(string_t input, uint16_t &result, bool strict) {
-	return TrySimpleIntegerCast<uint16_t, false>(input.GetDataUnsafe(), input.GetSize(), result, strict);
+	return TrySimpleIntegerCast<uint16_t, false>(input.GetData(), input.GetSize(), result, strict);
 }
 template <>
 bool TryCast::Operation(string_t input, uint32_t &result, bool strict) {
-	return TrySimpleIntegerCast<uint32_t, false>(input.GetDataUnsafe(), input.GetSize(), result, strict);
+	return TrySimpleIntegerCast<uint32_t, false>(input.GetData(), input.GetSize(), result, strict);
 }
 template <>
 bool TryCast::Operation(string_t input, uint64_t &result, bool strict) {
-	return TrySimpleIntegerCast<uint64_t, false>(input.GetDataUnsafe(), input.GetSize(), result, strict);
+	return TrySimpleIntegerCast<uint64_t, false>(input.GetData(), input.GetSize(), result, strict);
 }
 
 template <class T, char decimal_separator = '.'>
@@ -1213,17 +1213,17 @@ static bool TryDoubleCast(const char *buf, idx_t len, T &result, bool strict) {
 
 template <>
 bool TryCast::Operation(string_t input, float &result, bool strict) {
-	return TryDoubleCast<float>(input.GetDataUnsafe(), input.GetSize(), result, strict);
+	return TryDoubleCast<float>(input.GetData(), input.GetSize(), result, strict);
 }
 
 template <>
 bool TryCast::Operation(string_t input, double &result, bool strict) {
-	return TryDoubleCast<double>(input.GetDataUnsafe(), input.GetSize(), result, strict);
+	return TryDoubleCast<double>(input.GetData(), input.GetSize(), result, strict);
 }
 
 template <>
 bool TryCastErrorMessageCommaSeparated::Operation(string_t input, float &result, string *error_message, bool strict) {
-	if (!TryDoubleCast<float, ','>(input.GetDataUnsafe(), input.GetSize(), result, strict)) {
+	if (!TryDoubleCast<float, ','>(input.GetData(), input.GetSize(), result, strict)) {
 		HandleCastError::AssignError(StringUtil::Format("Could not cast string to float: \"%s\"", input.GetString()),
 		                             error_message);
 		return false;
@@ -1233,7 +1233,7 @@ bool TryCastErrorMessageCommaSeparated::Operation(string_t input, float &result,
 
 template <>
 bool TryCastErrorMessageCommaSeparated::Operation(string_t input, double &result, string *error_message, bool strict) {
-	if (!TryDoubleCast<double, ','>(input.GetDataUnsafe(), input.GetSize(), result, strict)) {
+	if (!TryDoubleCast<double, ','>(input.GetData(), input.GetSize(), result, strict)) {
 		HandleCastError::AssignError(StringUtil::Format("Could not cast string to double: \"%s\"", input.GetString()),
 		                             error_message);
 		return false;
@@ -1518,12 +1518,12 @@ template <>
 bool TryCast::Operation(string_t input, date_t &result, bool strict) {
 	idx_t pos;
 	bool special = false;
-	return Date::TryConvertDate(input.GetDataUnsafe(), input.GetSize(), pos, result, special, strict);
+	return Date::TryConvertDate(input.GetData(), input.GetSize(), pos, result, special, strict);
 }
 
 template <>
 date_t Cast::Operation(string_t input) {
-	return Date::FromCString(input.GetDataUnsafe(), input.GetSize());
+	return Date::FromCString(input.GetData(), input.GetSize());
 }
 
 //===--------------------------------------------------------------------===//
@@ -1541,12 +1541,12 @@ bool TryCastErrorMessage::Operation(string_t input, dtime_t &result, string *err
 template <>
 bool TryCast::Operation(string_t input, dtime_t &result, bool strict) {
 	idx_t pos;
-	return Time::TryConvertTime(input.GetDataUnsafe(), input.GetSize(), pos, result, strict);
+	return Time::TryConvertTime(input.GetData(), input.GetSize(), pos, result, strict);
 }
 
 template <>
 dtime_t Cast::Operation(string_t input) {
-	return Time::FromCString(input.GetDataUnsafe(), input.GetSize());
+	return Time::FromCString(input.GetData(), input.GetSize());
 }
 
 //===--------------------------------------------------------------------===//
@@ -1554,7 +1554,7 @@ dtime_t Cast::Operation(string_t input) {
 //===--------------------------------------------------------------------===//
 template <>
 bool TryCastErrorMessage::Operation(string_t input, timestamp_t &result, string *error_message, bool strict) {
-	auto cast_result = Timestamp::TryConvertTimestamp(input.GetDataUnsafe(), input.GetSize(), result);
+	auto cast_result = Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), result);
 	if (cast_result == TimestampCastResult::SUCCESS) {
 		return true;
 	}
@@ -1568,13 +1568,12 @@ bool TryCastErrorMessage::Operation(string_t input, timestamp_t &result, string 
 
 template <>
 bool TryCast::Operation(string_t input, timestamp_t &result, bool strict) {
-	return Timestamp::TryConvertTimestamp(input.GetDataUnsafe(), input.GetSize(), result) ==
-	       TimestampCastResult::SUCCESS;
+	return Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), result) == TimestampCastResult::SUCCESS;
 }
 
 template <>
 timestamp_t Cast::Operation(string_t input) {
-	return Timestamp::FromCString(input.GetDataUnsafe(), input.GetSize());
+	return Timestamp::FromCString(input.GetData(), input.GetSize());
 }
 
 //===--------------------------------------------------------------------===//
@@ -1582,7 +1581,7 @@ timestamp_t Cast::Operation(string_t input) {
 //===--------------------------------------------------------------------===//
 template <>
 bool TryCastErrorMessage::Operation(string_t input, interval_t &result, string *error_message, bool strict) {
-	return Interval::FromCString(input.GetDataUnsafe(), input.GetSize(), result, error_message, strict);
+	return Interval::FromCString(input.GetData(), input.GetSize(), result, error_message, strict);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1715,8 +1714,8 @@ struct HugeIntegerCastOperation {
 template <>
 bool TryCast::Operation(string_t input, hugeint_t &result, bool strict) {
 	HugeIntCastData data;
-	if (!TryIntegerCast<HugeIntCastData, true, true, HugeIntegerCastOperation>(input.GetDataUnsafe(), input.GetSize(),
-	                                                                           data, strict)) {
+	if (!TryIntegerCast<HugeIntCastData, true, true, HugeIntegerCastOperation>(input.GetData(), input.GetSize(), data,
+	                                                                           strict)) {
 		return false;
 	}
 	result = data.hugeint;
@@ -1916,7 +1915,7 @@ bool TryDecimalStringCast(string_t input, T &result, string *error_message, uint
 	state.round_set = false;
 	state.should_round = false;
 	if (!TryIntegerCast<DecimalCastData<T>, true, true, DecimalCastOperation, false, decimal_separator>(
-	        input.GetDataUnsafe(), input.GetSize(), state, false)) {
+	        input.GetData(), input.GetSize(), state, false)) {
 		string error = StringUtil::Format("Could not convert string \"%s\" to DECIMAL(%d,%d)", input.GetString(),
 		                                  (int)width, (int)scale);
 		HandleCastError::AssignError(error, error_message);

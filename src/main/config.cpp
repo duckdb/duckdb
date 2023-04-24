@@ -54,6 +54,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL(DebugCheckpointAbort),
                                                  DUCKDB_LOCAL(DebugForceExternal),
                                                  DUCKDB_LOCAL(DebugForceNoCrossProduct),
+                                                 DUCKDB_LOCAL(DebugAsOfIEJoin),
                                                  DUCKDB_GLOBAL(DebugWindowMode),
                                                  DUCKDB_GLOBAL_LOCAL(DefaultCollationSetting),
                                                  DUCKDB_GLOBAL(DefaultOrderSetting),
@@ -357,6 +358,31 @@ bool DBConfig::operator==(const DBConfig &other) {
 
 bool DBConfig::operator!=(const DBConfig &other) {
 	return !(other.options == options);
+}
+
+OrderType DBConfig::ResolveOrder(OrderType order_type) const {
+	if (order_type != OrderType::ORDER_DEFAULT) {
+		return order_type;
+	}
+	return options.default_order_type;
+}
+
+OrderByNullType DBConfig::ResolveNullOrder(OrderType order_type, OrderByNullType null_type) const {
+	if (null_type != OrderByNullType::ORDER_DEFAULT) {
+		return null_type;
+	}
+	switch (options.default_null_order) {
+	case DefaultOrderByNullType::NULLS_FIRST:
+		return OrderByNullType::NULLS_FIRST;
+	case DefaultOrderByNullType::NULLS_LAST:
+		return OrderByNullType::NULLS_LAST;
+	case DefaultOrderByNullType::NULLS_FIRST_ON_ASC_LAST_ON_DESC:
+		return order_type == OrderType::ASCENDING ? OrderByNullType::NULLS_FIRST : OrderByNullType::NULLS_LAST;
+	case DefaultOrderByNullType::NULLS_LAST_ON_ASC_FIRST_ON_DESC:
+		return order_type == OrderType::ASCENDING ? OrderByNullType::NULLS_LAST : OrderByNullType::NULLS_FIRST;
+	default:
+		throw InternalException("Unknown null order setting");
+	}
 }
 
 } // namespace duckdb

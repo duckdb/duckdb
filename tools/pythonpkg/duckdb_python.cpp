@@ -1,19 +1,19 @@
-#include "duckdb_python/pybind_wrapper.hpp"
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
 
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/parser.hpp"
 
 #include "duckdb_python/python_objects.hpp"
-#include "duckdb_python/pyconnection.hpp"
+#include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyresult.hpp"
+#include "duckdb_python/pybind11/exceptions.hpp"
 #include "duckdb_python/typing.hpp"
-#include "duckdb_python/exceptions.hpp"
 #include "duckdb_python/connection_wrapper.hpp"
-#include "duckdb_python/conversions/pyconnection_default.hpp"
+#include "duckdb_python/pybind11/conversions/pyconnection_default.hpp"
 #include "duckdb/function/function.hpp"
-#include "duckdb_python/exception_handling_enum.hpp"
+#include "duckdb_python/pybind11/conversions/exception_handling_enum.hpp"
 
 #include "duckdb.hpp"
 

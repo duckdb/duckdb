@@ -268,7 +268,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		auto filter = make_uniq<LogicalFilter>(std::move(ref.condition));
 		// visit the expressions in the filter
 		for (auto &expression : filter->expressions) {
-			PlanSubqueries(&expression, &root);
+			PlanSubqueries(expression, root);
 		}
 		filter->AddChild(std::move(root));
 		return std::move(filter);
@@ -288,7 +288,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		if (child->type == LogicalOperatorType::LOGICAL_FILTER) {
 			auto &filter = child->Cast<LogicalFilter>();
 			for (auto &expr : filter.expressions) {
-				PlanSubqueries(&expr, &filter.children[0]);
+				PlanSubqueries(expr, filter.children[0]);
 			}
 		}
 	}
@@ -302,8 +302,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		// and the expressions on the RHS with the RHS as root node
 		auto &comp_join = join->Cast<LogicalComparisonJoin>();
 		for (idx_t i = 0; i < comp_join.conditions.size(); i++) {
-			PlanSubqueries(&comp_join.conditions[i].left, &comp_join.children[0]);
-			PlanSubqueries(&comp_join.conditions[i].right, &comp_join.children[1]);
+			PlanSubqueries(comp_join.conditions[i].left, comp_join.children[0]);
+			PlanSubqueries(comp_join.conditions[i].right, comp_join.children[1]);
 		}
 		break;
 	}

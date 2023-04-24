@@ -138,7 +138,7 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 			case LogicalTypeId::VARCHAR: {
 				auto arg_data = FlatVector::GetData<string_t>(col);
 				auto string_view =
-				    duckdb_fmt::basic_string_view<char>(arg_data[arg_idx].GetDataUnsafe(), arg_data[arg_idx].GetSize());
+				    duckdb_fmt::basic_string_view<char>(arg_data[arg_idx].GetData(), arg_data[arg_idx].GetSize());
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(string_view));
 				break;
 			}
