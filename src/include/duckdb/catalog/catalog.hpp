@@ -122,6 +122,9 @@ public:
 	DUCKDB_API optional_ptr<CatalogEntry> CreateTableFunction(CatalogTransaction transaction,
 	                                                          CreateTableFunctionInfo &info);
 	DUCKDB_API optional_ptr<CatalogEntry> CreateTableFunction(ClientContext &context, CreateTableFunctionInfo &info);
+	// Kept for backwards compatibility
+	DUCKDB_API optional_ptr<CatalogEntry> CreateTableFunction(ClientContext &context,
+	                                                          optional_ptr<CreateTableFunctionInfo> info);
 	//! Create a copy function in the catalog
 	DUCKDB_API optional_ptr<CatalogEntry> CreateCopyFunction(CatalogTransaction transaction,
 	                                                         CreateCopyFunctionInfo &info);

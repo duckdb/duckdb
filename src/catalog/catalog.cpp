@@ -189,6 +189,11 @@ optional_ptr<CatalogEntry> Catalog::CreateTableFunction(CatalogTransaction trans
 	return schema.CreateTableFunction(transaction, info);
 }
 
+optional_ptr<CatalogEntry> Catalog::CreateTableFunction(ClientContext &context,
+                                                        optional_ptr<CreateTableFunctionInfo> info) {
+	return CreateTableFunction(context, *info);
+}
+
 //===--------------------------------------------------------------------===//
 // Copy Function
 //===--------------------------------------------------------------------===//
