@@ -28,6 +28,11 @@ void ExecutorTask::Reschedule() {
 InterruptState::InterruptState(ClientContext &context) : context(context) {}
 
 InterruptCallbackState InterruptState::GetCallbackState() {
+#ifdef DEBUG
+	if (!current_task.lock()) {
+		throw InternalException("GetCallbackState called on interrupt state without current_task pointer");
+	}
+#endif
 	return {current_task, context.db};
 }
 
