@@ -11,6 +11,7 @@
 #include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
+#include "duckdb/storage/optimistic_data_writer.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
@@ -19,35 +20,6 @@ class Transaction;
 class WriteAheadLog;
 struct LocalAppendState;
 struct TableAppendState;
-
-class OptimisticDataWriter {
-public:
-	OptimisticDataWriter(DataTable &table);
-	OptimisticDataWriter(DataTable &table, OptimisticDataWriter &parent);
-	~OptimisticDataWriter();
-
-	void CheckFlushToDisk(RowGroupCollection &row_groups);
-	//! Flushes a specific row group to disk
-	void FlushToDisk(RowGroup *row_group);
-	//! Flushes the final row group to disk (if any)
-	void FlushToDisk(RowGroupCollection &row_groups, bool force = false);
-	//! Final flush: flush the partial block manager to disk
-	void FinalFlush();
-
-	void Rollback();
-
-private:
-	//! Prepare a write to disk
-	bool PrepareWrite();
-
-private:
-	//! The table
-	DataTable &table;
-	//! The partial block manager (if we created one yet)
-	unique_ptr<PartialBlockManager> partial_manager;
-	//! The set of blocks that have been pre-emptively written to disk
-	unordered_set<block_id_t> written_blocks;
-};
 
 class LocalTableStorage : public std::enable_shared_from_this<LocalTableStorage> {
 public:
