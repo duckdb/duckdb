@@ -16,6 +16,8 @@
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/execution/physical_operator_states.hpp"
+#include "duckdb/common/enums/order_preservation_type.hpp"
 
 namespace duckdb {
 class Event;
@@ -24,70 +26,6 @@ class PhysicalOperator;
 class Pipeline;
 class PipelineBuildState;
 class MetaPipeline;
-
-struct SourcePartitionInfo {
-	//! The current batch index
-	//! This is only set in case RequiresBatchIndex() is true, and the source has support for it (SupportsBatchIndex())
-	//! Otherwise this is left on INVALID_INDEX
-	//! The batch index is a globally unique, increasing index that should be used to maintain insertion order
-	//! //! in conjunction with parallelism
-	optional_idx batch_index;
-	//! The minimum batch index that any thread is currently actively reading
-	optional_idx min_batch_index;
-};
-
-// LCOV_EXCL_START
-class OperatorState {
-public:
-	virtual ~OperatorState() {
-	}
-
-	virtual void Finalize(PhysicalOperator *op, ExecutionContext &context) {
-	}
-};
-
-class GlobalOperatorState {
-public:
-	virtual ~GlobalOperatorState() {
-	}
-};
-
-class GlobalSinkState {
-public:
-	GlobalSinkState() : state(SinkFinalizeType::READY) {
-	}
-	virtual ~GlobalSinkState() {
-	}
-
-	SinkFinalizeType state;
-};
-
-class LocalSinkState {
-public:
-	virtual ~LocalSinkState() {
-	}
-
-	//! Source partition info
-	SourcePartitionInfo partition_info;
-};
-
-class GlobalSourceState {
-public:
-	virtual ~GlobalSourceState() {
-	}
-
-	virtual idx_t MaxThreads() {
-		return 1;
-	}
-};
-
-class LocalSourceState {
-public:
-	virtual ~LocalSourceState() {
-	}
-};
-
-// LCOV_EXCL_STOP
 
 //! PhysicalOperator is the base class of the physical operators present in the
 //! execution plan
@@ -125,7 +63,7 @@ public:
 	}
 	virtual string ToString() const;
 	void Print() const;
-	virtual vector<PhysicalOperator *> GetChildren() const;
+	virtual vector<const_reference<PhysicalOperator>> GetChildren() const;
 
 	//! Return a vector of the types that will be returned by this operator
 	const vector<LogicalType> &GetTypes() const {
@@ -137,12 +75,6 @@ public:
 	}
 
 	virtual void Verify();
-
-	//! Whether or not the operator depends on the order of the input chunks
-	//! If this is set to true, we cannot do things like caching intermediate vectors
-	virtual bool IsOrderDependent() const {
-		return false;
-	}
 
 public:
 	// Operator interface
@@ -159,6 +91,11 @@ public:
 
 	virtual bool RequiresFinalExecute() const {
 		return false;
+	}
+
+	//! The influence the operator has on order (insertion order means no influence)
+	virtual OrderPreservationType OperatorOrder() const {
+		return OrderPreservationType::INSERTION_ORDER;
 	}
 
 public:
@@ -183,8 +120,9 @@ public:
 		return false;
 	}
 
-	virtual bool IsOrderPreserving() const {
-		return true;
+	//! The type of order emitted by the operator (as a source)
+	virtual OrderPreservationType SourceOrder() const {
+		return OrderPreservationType::INSERTION_ORDER;
 	}
 
 	//! Returns the current progress percentage, or a negative value if progress bars are not supported
@@ -225,13 +163,35 @@ public:
 		return false;
 	}
 
+	//! Whether or not the sink operator depends on the order of the input chunks
+	//! If this is set to true, we cannot do things like caching intermediate vectors
+	virtual bool SinkOrderDependent() const {
+		return false;
+	}
+
 public:
 	// Pipeline construction
-	virtual vector<const PhysicalOperator *> GetSources() const;
+	virtual vector<const_reference<PhysicalOperator>> GetSources() const;
 	bool AllSourcesSupportBatchIndex() const;
-	virtual bool AllOperatorsPreserveOrder() const;
 
 	virtual void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline);
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (TARGET::TYPE != PhysicalOperatorType::INVALID && type != TARGET::TYPE) {
+			throw InternalException("Failed to cast physical operator to type - physical operator type mismatch");
+		}
+		return (TARGET &)*this;
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (TARGET::TYPE != PhysicalOperatorType::INVALID && type != TARGET::TYPE) {
+			throw InternalException("Failed to cast physical operator to type - physical operator type mismatch");
+		}
+		return (const TARGET &)*this;
+	}
 };
 
 //! Contains state for the CachingPhysicalOperator
@@ -240,7 +200,7 @@ public:
 	~CachingOperatorState() override {
 	}
 
-	virtual void Finalize(PhysicalOperator *op, ExecutionContext &context) override {
+	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
 	}
 
 	unique_ptr<DataChunk> cached_chunk;

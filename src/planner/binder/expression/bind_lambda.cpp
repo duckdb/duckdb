@@ -34,7 +34,7 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 	if (expr.lhs->expression_class == ExpressionClass::COLUMN_REF) {
 		expr.params.push_back(std::move(expr.lhs));
 	} else {
-		auto &func_expr = (FunctionExpression &)*expr.lhs;
+		auto &func_expr = expr.lhs->Cast<FunctionExpression>();
 		for (idx_t i = 0; i < func_expr.children.size(); i++) {
 			expr.params.push_back(std::move(func_expr.children[i]));
 		}
@@ -52,7 +52,7 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 			throw BinderException("Parameter must be a column name.");
 		}
 
-		auto column_ref = (ColumnRefExpression &)*expr.params[i];
+		auto column_ref = expr.params[i]->Cast<ColumnRefExpression>();
 		if (column_ref.IsQualified()) {
 			throw BinderException("Invalid parameter name '%s': must be unqualified", column_ref.ToString());
 		}
@@ -78,13 +78,13 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 
 	// bind the parameter expressions
 	for (idx_t i = 0; i < expr.params.size(); i++) {
-		auto result = BindExpression(&expr.params[i], depth, false);
+		auto result = BindExpression(expr.params[i], depth, false);
 		if (result.HasError()) {
 			throw InternalException("Error during lambda binding: %s", result.error);
 		}
 	}
 
-	auto result = BindExpression(&expr.expr, depth, false);
+	auto result = BindExpression(expr.expr, depth, false);
 	lambda_bindings->pop_back();
 
 	// successfully bound a subtree of nested lambdas, set this to nullptr in case other parts of the

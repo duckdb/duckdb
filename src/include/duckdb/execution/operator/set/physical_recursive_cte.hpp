@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 
 namespace duckdb {
@@ -16,6 +16,9 @@ namespace duckdb {
 class RecursiveCTEState;
 
 class PhysicalRecursiveCTE : public PhysicalOperator {
+public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::RECURSIVE_CTE;
+
 public:
 	PhysicalRecursiveCTE(vector<LogicalType> types, bool union_all, unique_ptr<PhysicalOperator> top,
 	                     unique_ptr<PhysicalOperator> bottom, idx_t estimated_cardinality);
@@ -29,6 +32,10 @@ public:
 	// Source interface
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
+
+	bool IsSource() const override {
+		return true;
+	}
 
 public:
 	// Sink interface
@@ -44,7 +51,7 @@ public:
 public:
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
 
-	vector<const PhysicalOperator *> GetSources() const override;
+	vector<const_reference<PhysicalOperator>> GetSources() const override;
 
 private:
 	//! Probe Hash Table and eliminate duplicate rows

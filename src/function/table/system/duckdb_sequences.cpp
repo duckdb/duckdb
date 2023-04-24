@@ -77,7 +77,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBSequencesInit(ClientContext &context,
 }
 
 void DuckDBSequencesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (DuckDBSequencesData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<DuckDBSequencesData>();
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;
@@ -88,7 +88,7 @@ void DuckDBSequencesFunction(ClientContext &context, TableFunctionInput &data_p,
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset++];
 
-		auto &seq = (SequenceCatalogEntry &)*entry;
+		auto &seq = entry->Cast<SequenceCatalogEntry>();
 		// return values:
 		idx_t col = 0;
 		// database_name, VARCHAR

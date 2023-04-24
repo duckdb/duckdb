@@ -18,6 +18,9 @@ namespace duckdb {
 //! Represents a Table producing function
 class TableFunctionRef : public TableRef {
 public:
+	static constexpr const TableReferenceType TYPE = TableReferenceType::TABLE_FUNCTION;
+
+public:
 	DUCKDB_API TableFunctionRef();
 
 	unique_ptr<ParsedExpression> function;

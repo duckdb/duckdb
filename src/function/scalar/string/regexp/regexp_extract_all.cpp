@@ -13,7 +13,7 @@ using regexp_util::TryParseConstantPattern;
 
 unique_ptr<FunctionLocalState>
 RegexpExtractAll::InitLocalState(ExpressionState &state, const BoundFunctionExpression &expr, FunctionData *bind_data) {
-	auto &info = (RegexpBaseBindData &)*bind_data;
+	auto &info = bind_data->Cast<RegexpBaseBindData>();
 	if (info.constant_pattern) {
 		return make_uniq<RegexLocalState>(info, true);
 	}
@@ -86,7 +86,7 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, int32_
 		idx_t child_idx = current_list_size;
 		if (match_group.empty()) {
 			// This group was not matched
-			list_content[child_idx] = string_t(string.GetDataUnsafe(), 0);
+			list_content[child_idx] = string_t(string.GetData(), 0);
 			if (match_group.begin() == nullptr) {
 				// This group is optional
 				child_validity.SetInvalid(child_idx);
@@ -94,9 +94,9 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, int32_
 		} else {
 			// Every group is a substring of the original, we can find out the offset using the pointer
 			// the 'match_group' address is guaranteed to be bigger than that of the source
-			D_ASSERT((const char *)match_group.begin() >= string.GetDataUnsafe());
-			idx_t offset = match_group.begin() - string.GetDataUnsafe();
-			list_content[child_idx] = string_t(string.GetDataUnsafe() + offset, match_group.size());
+			D_ASSERT((const char *)match_group.begin() >= string.GetData());
+			idx_t offset = match_group.begin() - string.GetData();
+			list_content[child_idx] = string_t(string.GetData() + offset, match_group.size());
 		}
 		current_list_size++;
 		if (startpos > input.size()) {
@@ -126,7 +126,7 @@ int32_t GetGroupIndex(DataChunk &args, idx_t row, int32_t &result) {
 duckdb_re2::RE2 &GetPattern(const RegexpBaseBindData &info, ExpressionState &state,
                             unique_ptr<duckdb_re2::RE2> &pattern_p) {
 	if (info.constant_pattern) {
-		auto &lstate = (RegexLocalState &)*ExecuteFunctionState::GetFunctionState(state);
+		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
 		return lstate.constant_pattern;
 	}
 	D_ASSERT(pattern_p);
@@ -136,7 +136,7 @@ duckdb_re2::RE2 &GetPattern(const RegexpBaseBindData &info, ExpressionState &sta
 RegexStringPieceArgs &GetGroupsBuffer(const RegexpBaseBindData &info, ExpressionState &state,
                                       unique_ptr<RegexStringPieceArgs> &groups_p) {
 	if (info.constant_pattern) {
-		auto &lstate = (RegexLocalState &)*ExecuteFunctionState::GetFunctionState(state);
+		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
 		return lstate.group_buffer;
 	}
 	D_ASSERT(groups_p);
@@ -144,8 +144,8 @@ RegexStringPieceArgs &GetGroupsBuffer(const RegexpBaseBindData &info, Expression
 }
 
 void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	const auto &info = (RegexpBaseBindData &)*func_expr.bind_info;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	const auto &info = func_expr.bind_info->Cast<RegexpBaseBindData>();
 
 	auto &strings = args.data[0];
 	auto &patterns = args.data[1];

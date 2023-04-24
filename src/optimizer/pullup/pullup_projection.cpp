@@ -21,7 +21,7 @@ static void ReplaceExpressionBinding(vector<unique_ptr<Expression>> &proj_expres
                                      idx_t proj_table_idx) {
 	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
 		bool found_proj_col = false;
-		BoundColumnRefExpression &colref = (BoundColumnRefExpression &)expr;
+		BoundColumnRefExpression &colref = expr.Cast<BoundColumnRefExpression>();
 		// find the corresponding column index in the projection expressions
 		for (idx_t proj_idx = 0; proj_idx < proj_expressions.size(); proj_idx++) {
 			auto proj_expr = proj_expressions[proj_idx].get();
@@ -79,7 +79,7 @@ unique_ptr<LogicalOperator> FilterPullup::PullupProjection(unique_ptr<LogicalOpe
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_PROJECTION);
 	op->children[0] = Rewrite(std::move(op->children[0]));
 	if (!filters_expr_pullup.empty()) {
-		auto &proj = (LogicalProjection &)*op;
+		auto &proj = op->Cast<LogicalProjection>();
 		// INTERSECT, EXCEPT, and DISTINCT
 		if (!can_add_column) {
 			// special treatment for operators that cannot add columns, e.g., INTERSECT, EXCEPT, and DISTINCT

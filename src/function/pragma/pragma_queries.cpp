@@ -145,7 +145,7 @@ string PragmaImportDatabase(ClientContext &context, const FunctionParameters &pa
 			query.clear();
 			for (auto &statement_p : copy_statements) {
 				D_ASSERT(statement_p->type == StatementType::COPY_STATEMENT);
-				auto &statement = (CopyStatement &)*statement_p;
+				auto &statement = statement_p->Cast<CopyStatement>();
 				auto &info = *statement.info;
 				auto file_name = fs.ExtractName(info.file_path);
 				info.file_path = fs.JoinPath(parameters.values[0].ToString(), file_name);

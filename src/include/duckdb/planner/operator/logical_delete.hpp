@@ -15,9 +15,12 @@ class TableCatalogEntry;
 
 class LogicalDelete : public LogicalOperator {
 public:
-	explicit LogicalDelete(TableCatalogEntry *table, idx_t table_index);
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_DELETE;
 
-	TableCatalogEntry *table;
+public:
+	explicit LogicalDelete(TableCatalogEntry &table, idx_t table_index);
+
+	TableCatalogEntry &table;
 	idx_t table_index;
 	bool return_chunk;
 

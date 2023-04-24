@@ -36,14 +36,14 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	unique_ptr<TableFilterSet> table_filters;
 	op.info->column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
 
-	auto &bind_data = (TableScanBindData &)*op.bind_data;
+	auto &bind_data = op.bind_data->Cast<TableScanBindData>();
 	bind_data.is_create_index = true;
 
 	auto table_scan =
 	    make_uniq<PhysicalTableScan>(op.info->scan_types, op.function, std::move(op.bind_data), op.info->column_ids,
 	                                 op.info->names, std::move(table_filters), op.estimated_cardinality);
 
-	dependencies.AddDependency(&op.table);
+	dependencies.AddDependency(op.table);
 	op.info->column_ids.pop_back();
 
 	D_ASSERT(op.info->scan_types.size() - 1 <= op.info->names.size());

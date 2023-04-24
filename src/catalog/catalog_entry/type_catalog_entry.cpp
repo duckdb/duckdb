@@ -18,7 +18,7 @@ TypeCatalogEntry::TypeCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
 	this->internal = info->internal;
 }
 
-void TypeCatalogEntry::Serialize(Serializer &serializer) {
+void TypeCatalogEntry::Serialize(Serializer &serializer) const {
 	D_ASSERT(!internal);
 	FieldWriter writer(serializer);
 	writer.WriteString(schema->name);
@@ -45,7 +45,7 @@ unique_ptr<CreateTypeInfo> TypeCatalogEntry::Deserialize(Deserializer &source) {
 	return info;
 }
 
-string TypeCatalogEntry::ToSQL() {
+string TypeCatalogEntry::ToSQL() const {
 	std::stringstream ss;
 	switch (user_type.id()) {
 	case (LogicalTypeId::ENUM): {

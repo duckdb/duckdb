@@ -81,7 +81,9 @@ string DuckDB::Platform() {
 		postfix = "_gcc4";
 	}
 #endif
-
+#ifdef __MINGW32__
+	postfix = "_mingw";
+#endif
 	return os + "_" + arch + postfix;
 }
 

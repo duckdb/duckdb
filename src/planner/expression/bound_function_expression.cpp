@@ -43,14 +43,14 @@ bool BoundFunctionExpression::Equals(const BaseExpression *other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundFunctionExpression *)other_p;
-	if (other->function != function) {
+	auto &other = other_p->Cast<BoundFunctionExpression>();
+	if (other.function != function) {
 		return false;
 	}
-	if (!ExpressionUtil::ListEquals(children, other->children)) {
+	if (!ExpressionUtil::ListEquals(children, other.children)) {
 		return false;
 	}
-	if (!FunctionData::Equals(bind_info.get(), other->bind_info.get())) {
+	if (!FunctionData::Equals(bind_info.get(), other.bind_info.get())) {
 		return false;
 	}
 	return true;

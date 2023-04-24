@@ -12,15 +12,15 @@ AlterBinder::AlterBinder(Binder &binder, ClientContext &context, TableCatalogEnt
 	this->target_type = std::move(target_type);
 }
 
-BindResult AlterBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = **expr_ptr;
+BindResult AlterBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
+	auto &expr = *expr_ptr;
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::WINDOW:
 		return BindResult("window functions are not allowed in alter statement");
 	case ExpressionClass::SUBQUERY:
 		return BindResult("cannot use subquery in alter statement");
 	case ExpressionClass::COLUMN_REF:
-		return BindColumn((ColumnRefExpression &)expr);
+		return BindColumn(expr.Cast<ColumnRefExpression>());
 	default:
 		return ExpressionBinder::BindExpression(expr_ptr, depth);
 	}

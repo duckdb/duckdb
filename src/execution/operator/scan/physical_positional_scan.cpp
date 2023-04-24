@@ -139,7 +139,7 @@ public:
 
 unique_ptr<LocalSourceState> PhysicalPositionalScan::GetLocalSourceState(ExecutionContext &context,
                                                                          GlobalSourceState &gstate) const {
-	return make_uniq<PositionalScanLocalSourceState>(context, (PositionalScanGlobalSourceState &)gstate, *this);
+	return make_uniq<PositionalScanLocalSourceState>(context, gstate.Cast<PositionalScanGlobalSourceState>(), *this);
 }
 
 unique_ptr<GlobalSourceState> PhysicalPositionalScan::GetGlobalSourceState(ClientContext &context) const {
@@ -148,7 +148,7 @@ unique_ptr<GlobalSourceState> PhysicalPositionalScan::GetGlobalSourceState(Clien
 
 void PhysicalPositionalScan::GetData(ExecutionContext &context, DataChunk &output, GlobalSourceState &gstate_p,
                                      LocalSourceState &lstate_p) const {
-	auto &lstate = (PositionalScanLocalSourceState &)lstate_p;
+	auto &lstate = lstate_p.Cast<PositionalScanLocalSourceState>();
 
 	// Find the longest source block
 	idx_t count = 0;
@@ -171,7 +171,7 @@ void PhysicalPositionalScan::GetData(ExecutionContext &context, DataChunk &outpu
 }
 
 double PhysicalPositionalScan::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
-	auto &gstate = (PositionalScanGlobalSourceState &)gstate_p;
+	auto &gstate = gstate_p.Cast<PositionalScanGlobalSourceState>();
 
 	double result = child_tables[0]->GetProgress(context, *gstate.global_states[0]);
 	for (size_t t = 1; t < child_tables.size(); ++t) {
@@ -186,7 +186,7 @@ bool PhysicalPositionalScan::Equals(const PhysicalOperator &other_p) const {
 		return false;
 	}
 
-	auto &other = (PhysicalPositionalScan &)other_p;
+	auto &other = other_p.Cast<PhysicalPositionalScan>();
 	if (child_tables.size() != other.child_tables.size()) {
 		return false;
 	}

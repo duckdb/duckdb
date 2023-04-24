@@ -26,8 +26,8 @@ bool BoundReferenceExpression::Equals(const BaseExpression *other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundReferenceExpression *)other_p;
-	return other->index == index;
+	auto &other = other_p->Cast<BoundReferenceExpression>();
+	return other.index == index;
 }
 
 hash_t BoundReferenceExpression::Hash() const {

@@ -95,7 +95,7 @@ struct ICUCalendarSub : public ICUDateFunc {
 		auto &startdate_arg = args.data[1];
 		auto &enddate_arg = args.data[2];
 
-		auto &func_expr = (BoundFunctionExpression &)state.expr;
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = (BindData &)*func_expr.bind_info;
 		CalendarPtr calendar(info.calendar->clone());
 
@@ -217,7 +217,7 @@ struct ICUCalendarDiff : public ICUDateFunc {
 		auto &startdate_arg = args.data[1];
 		auto &enddate_arg = args.data[2];
 
-		auto &func_expr = (BoundFunctionExpression &)state.expr;
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = (BindData &)*func_expr.bind_info;
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();

@@ -22,8 +22,8 @@ public:
 	shared_ptr<DataTableInfo> info;
 
 public:
-	string GetSchemaName() override;
-	string GetTableName() override;
+	string GetSchemaName() const override;
+	string GetTableName() const override;
 };
 
 } // namespace duckdb

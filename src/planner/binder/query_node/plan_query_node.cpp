@@ -22,7 +22,7 @@ unique_ptr<LogicalOperator> Binder::VisitQueryNode(BoundQueryNode &node, unique_
 		case ResultModifierType::ORDER_MODIFIER: {
 			auto &bound = (BoundOrderModifier &)*mod;
 			if (root->type == LogicalOperatorType::LOGICAL_DISTINCT) {
-				auto &distinct = (LogicalDistinct &)*root;
+				auto &distinct = root->Cast<LogicalDistinct>();
 				if (distinct.distinct_type == DistinctType::DISTINCT_ON) {
 					auto order_by = make_uniq<BoundOrderModifier>();
 					for (auto &order_node : bound.orders) {

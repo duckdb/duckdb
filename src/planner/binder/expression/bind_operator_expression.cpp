@@ -21,8 +21,21 @@ static LogicalType ResolveInType(OperatorExpression &op, vector<BoundExpression 
 	}
 	// get the maximum type from the children
 	LogicalType max_type = children[0]->expr->return_type;
+	bool any_varchar = children[0]->expr->return_type == LogicalType::VARCHAR;
+	bool any_enum = children[0]->expr->return_type.id() == LogicalTypeId::ENUM;
 	for (idx_t i = 1; i < children.size(); i++) {
 		max_type = LogicalType::MaxLogicalType(max_type, children[i]->expr->return_type);
+		if (children[i]->expr->return_type == LogicalType::VARCHAR) {
+			any_varchar = true;
+		}
+		if (children[i]->expr->return_type.id() == LogicalTypeId::ENUM) {
+			any_enum = true;
+		}
+	}
+	if (any_varchar && any_enum) {
+		// For the coalesce function, we must be sure we always upcast the parameters to VARCHAR, if there are at least
+		// one enum and one varchar
+		max_type = LogicalType::VARCHAR;
 	}
 
 	// cast all children to the same type
@@ -114,8 +127,8 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		break;
 	}
 	if (!function_name.empty()) {
-		auto function = make_uniq<FunctionExpression>(function_name, std::move(op.children));
-		return BindExpression(*function, depth, nullptr);
+		auto function = make_uniq_base<ParsedExpression, FunctionExpression>(function_name, std::move(op.children));
+		return BindExpression(function, depth, false);
 	}
 
 	vector<BoundExpression *> children;

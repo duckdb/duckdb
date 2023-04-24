@@ -21,13 +21,14 @@ BoundStatement Binder::Bind(VacuumStatement &stmt) {
 			throw InvalidInputException("Can only vacuum/analyze base tables!");
 		}
 		auto ref = unique_ptr_cast<BoundTableRef, BoundBaseTableRef>(std::move(bound_table));
-		stmt.info->table = ref->table;
+		auto &table = ref->table;
+		stmt.info->table = &table;
 
 		auto &columns = stmt.info->columns;
 		vector<unique_ptr<Expression>> select_list;
 		if (columns.empty()) {
 			// Empty means ALL columns should be vacuumed/analyzed
-			auto &get = (LogicalGet &)*ref->get;
+			auto &get = ref->get->Cast<LogicalGet>();
 			columns.insert(columns.end(), get.names.begin(), get.names.end());
 		}
 
@@ -38,16 +39,16 @@ BoundStatement Binder::Bind(VacuumStatement &stmt) {
 				throw BinderException("Vacuum the same column twice(same name in column name list)");
 			}
 			column_name_set.insert(col_name);
-			if (!ref->table->ColumnExists(col_name)) {
+			if (!table.ColumnExists(col_name)) {
 				throw BinderException("Column with name \"%s\" does not exist", col_name);
 			}
-			auto &col = ref->table->GetColumn(col_name);
+			auto &col = table.GetColumn(col_name);
 			// ignore generated column
 			if (col.Generated()) {
 				continue;
 			}
 			non_generated_column_names.push_back(col_name);
-			ColumnRefExpression colref(col_name, ref->table->name);
+			ColumnRefExpression colref(col_name, table.name);
 			auto result = bind_context.BindColumn(colref, 0);
 			if (result.HasError()) {
 				throw BinderException(result.error);
@@ -59,13 +60,13 @@ BoundStatement Binder::Bind(VacuumStatement &stmt) {
 			auto table_scan = CreatePlan(*ref);
 			D_ASSERT(table_scan->type == LogicalOperatorType::LOGICAL_GET);
 
-			auto &get = (LogicalGet &)*table_scan;
+			auto &get = table_scan->Cast<LogicalGet>();
 
 			D_ASSERT(select_list.size() == get.column_ids.size());
 			D_ASSERT(stmt.info->columns.size() == get.column_ids.size());
 			for (idx_t i = 0; i < get.column_ids.size(); i++) {
 				stmt.info->column_id_map[i] =
-				    ref->table->GetColumns().LogicalToPhysical(LogicalIndex(get.column_ids[i])).index;
+				    table.GetColumns().LogicalToPhysical(LogicalIndex(get.column_ids[i])).index;
 			}
 
 			auto projection = make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(select_list));

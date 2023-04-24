@@ -139,8 +139,8 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 			D_ASSERT(!order.orders.empty());
 			auto &order_binders = order_binder.GetBinders();
 			if (order.orders.size() == 1 && order.orders[0].expression->type == ExpressionType::STAR) {
-				auto star = (StarExpression *)order.orders[0].expression.get();
-				if (star->exclude_list.empty() && star->replace_list.empty() && !star->expr) {
+				auto &star = order.orders[0].expression->Cast<StarExpression>();
+				if (star.exclude_list.empty() && star.replace_list.empty() && !star.expr) {
 					// ORDER BY ALL
 					// replace the order list with the all elements in the SELECT list
 					auto order_type = order.orders[0].type;
@@ -158,11 +158,8 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 				vector<unique_ptr<ParsedExpression>> order_list;
 				order_binders[0]->ExpandStarExpression(std::move(order_node.expression), order_list);
 
-				auto type =
-				    order_node.type == OrderType::ORDER_DEFAULT ? config.options.default_order_type : order_node.type;
-				auto null_order = order_node.null_order == OrderByNullType::ORDER_DEFAULT
-				                      ? config.options.default_null_order
-				                      : order_node.null_order;
+				auto type = config.ResolveOrder(order_node.type);
+				auto null_order = config.ResolveNullOrder(type, order_node.null_order);
 				for (auto &order_expr : order_list) {
 					auto bound_expr = BindOrderExpression(order_binder, std::move(order_expr));
 					if (!bound_expr) {
@@ -191,15 +188,14 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 	}
 }
 
-static void AssignReturnType(unique_ptr<Expression> &expr, const vector<LogicalType> &sql_types,
-                             idx_t projection_index) {
+static void AssignReturnType(unique_ptr<Expression> &expr, const vector<LogicalType> &sql_types) {
 	if (!expr) {
 		return;
 	}
 	if (expr->type != ExpressionType::BOUND_COLUMN_REF) {
 		return;
 	}
-	auto &bound_colref = (BoundColumnRefExpression &)*expr;
+	auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
 	bound_colref.return_type = sql_types[bound_colref.binding.column_index];
 }
 
@@ -212,7 +208,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 			// set types of distinct targets
 			for (auto &expr : distinct.target_distincts) {
 				D_ASSERT(expr->type == ExpressionType::BOUND_COLUMN_REF);
-				auto &bound_colref = (BoundColumnRefExpression &)*expr;
+				auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
 				if (bound_colref.binding.column_index == DConstants::INVALID_INDEX) {
 					throw BinderException("Ambiguous name in DISTINCT ON!");
 				}
@@ -220,7 +216,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 				bound_colref.return_type = sql_types[bound_colref.binding.column_index];
 			}
 			for (auto &target_distinct : distinct.target_distincts) {
-				auto &bound_colref = (BoundColumnRefExpression &)*target_distinct;
+				auto &bound_colref = target_distinct->Cast<BoundColumnRefExpression>();
 				const auto &sql_type = sql_types[bound_colref.binding.column_index];
 				if (sql_type.id() == LogicalTypeId::VARCHAR) {
 					target_distinct = ExpressionBinder::PushCollation(context, std::move(target_distinct),
@@ -231,14 +227,14 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 		}
 		case ResultModifierType::LIMIT_MODIFIER: {
 			auto &limit = (BoundLimitModifier &)*bound_mod;
-			AssignReturnType(limit.limit, sql_types, projection_index);
-			AssignReturnType(limit.offset, sql_types, projection_index);
+			AssignReturnType(limit.limit, sql_types);
+			AssignReturnType(limit.offset, sql_types);
 			break;
 		}
 		case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
 			auto &limit = (BoundLimitPercentModifier &)*bound_mod;
-			AssignReturnType(limit.limit, sql_types, projection_index);
-			AssignReturnType(limit.offset, sql_types, projection_index);
+			AssignReturnType(limit.limit, sql_types);
+			AssignReturnType(limit.offset, sql_types);
 			break;
 		}
 		case ResultModifierType::ORDER_MODIFIER: {
@@ -246,7 +242,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 			for (auto &order_node : order.orders) {
 				auto &expr = order_node.expression;
 				D_ASSERT(expr->type == ExpressionType::BOUND_COLUMN_REF);
-				auto &bound_colref = (BoundColumnRefExpression &)*expr;
+				auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
 				if (bound_colref.binding.column_index == DConstants::INVALID_INDEX) {
 					throw BinderException("Ambiguous name in ORDER BY!");
 				}
@@ -277,14 +273,14 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 	// expand any expressions in the upper AND recursively
 	if (expr->type == ExpressionType::CONJUNCTION_AND) {
-		auto &conj = (ConjunctionExpression &)*expr;
+		auto &conj = expr->Cast<ConjunctionExpression>();
 		for (auto &child : conj.children) {
 			BindWhereStarExpression(child);
 		}
 		return;
 	}
 	if (expr->type == ExpressionType::STAR) {
-		auto &star = (StarExpression &)*expr;
+		auto &star = expr->Cast<StarExpression>();
 		if (!star.columns) {
 			throw ParserException("STAR expression is not allowed in the WHERE clause. Use COLUMNS(*) instead.");
 		}
@@ -330,7 +326,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 
 	// create a mapping of (alias -> index) and a mapping of (Expression -> index) for the SELECT list
 	case_insensitive_map_t<idx_t> alias_map;
-	expression_map_t<idx_t> projection_map;
+	parsed_expression_map_t<idx_t> projection_map;
 	for (idx_t i = 0; i < statement.select_list.size(); i++) {
 		auto &expr = statement.select_list[i];
 		result->names.push_back(expr->GetName());
@@ -339,7 +335,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 			alias_map[expr->alias] = i;
 			result->names[i] = expr->alias;
 		}
-		projection_map[expr.get()] = i;
+		projection_map[*expr] = i;
 		result->original_expressions.push_back(expr->Copy());
 	}
 	result->column_count = statement.select_list.size();
@@ -392,7 +388,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 			// hence we convert "a" -> "test.a" in the unbound expression
 			unbound_groups[i] = std::move(group_binder.unbound_expression);
 			ExpressionBinder::QualifyColumnNames(*this, unbound_groups[i]);
-			info.map[unbound_groups[i].get()] = i;
+			info.map[*unbound_groups[i]] = i;
 		}
 	}
 	result->groups.grouping_sets = std::move(statement.groups.grouping_sets);

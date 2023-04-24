@@ -61,7 +61,7 @@ struct IcuBindData : public FunctionData {
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (IcuBindData &)other_p;
+		auto &other = other_p.Cast<IcuBindData>();
 		return language == other.language && country == other.country;
 	}
 };
@@ -69,7 +69,7 @@ struct IcuBindData : public FunctionData {
 static int32_t ICUGetSortKey(icu::Collator &collator, string_t input, duckdb::unique_ptr<char[]> &buffer,
                              int32_t &buffer_size) {
 	int32_t string_size =
-	    collator.getSortKey(icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetDataUnsafe(), input.GetSize())),
+	    collator.getSortKey(icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetData(), input.GetSize())),
 	                        (uint8_t *)buffer.get(), buffer_size);
 	if (string_size > buffer_size) {
 		// have to resize the buffer
@@ -77,7 +77,7 @@ static int32_t ICUGetSortKey(icu::Collator &collator, string_t input, duckdb::un
 		buffer = duckdb::unique_ptr<char[]>(new char[buffer_size]);
 
 		string_size =
-		    collator.getSortKey(icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetDataUnsafe(), input.GetSize())),
+		    collator.getSortKey(icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetData(), input.GetSize())),
 		                        (uint8_t *)buffer.get(), buffer_size);
 	}
 	return string_size;
@@ -86,8 +86,8 @@ static int32_t ICUGetSortKey(icu::Collator &collator, string_t input, duckdb::un
 static void ICUCollateFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	const char HEX_TABLE[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	auto &info = (IcuBindData &)*func_expr.bind_info;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &info = func_expr.bind_info->Cast<IcuBindData>();
 	auto &collator = *info.collator;
 
 	duckdb::unique_ptr<char[]> buffer;

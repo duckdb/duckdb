@@ -20,32 +20,6 @@ static void AppendColumnSegment(SRC *source_data, Vector &result, idx_t count) {
 	}
 }
 
-static void AppendStringSegment(SEXP coldata, Vector &result, idx_t row_idx, idx_t count) {
-	auto result_data = FlatVector::GetData<string_t>(result);
-	auto &result_mask = FlatVector::Validity(result);
-	for (idx_t i = 0; i < count; i++) {
-		SEXP val = STRING_ELT(coldata, row_idx + i);
-		if (val == NA_STRING) {
-			result_mask.SetInvalid(i);
-		} else {
-			result_data[i] = string_t((char *)CHAR(val));
-		}
-	}
-}
-
-static void AppendBLOBSegment(SEXP coldata, Vector &result, idx_t row_idx, idx_t count) {
-	auto result_data = FlatVector::GetData<string_t>(result);
-	auto &result_mask = FlatVector::Validity(result);
-	for (idx_t i = 0; i < count; i++) {
-		SEXP val = VECTOR_ELT(coldata, row_idx + i);
-		if (val == R_NilValue) {
-			result_mask.SetInvalid(i);
-		} else {
-			result_data[i] = string_t((char *)RAW(val), Rf_xlength(val));
-		}
-	}
-}
-
 static bool get_bool_param(named_parameter_map_t &named_parameters, string name, bool dflt = false) {
 	bool res = dflt;
 	auto entry = named_parameters.find(name);
@@ -138,9 +112,9 @@ static duckdb::unique_ptr<FunctionData> DataFrameScanBind(ClientContext &context
 			break;
 		}
 		case RType::STRING:
+			coldata_ptr = (data_ptr_t)DATAPTR_RO(coldata);
 			if (experimental) {
 				duckdb_col_type = RStringsType::Get();
-				coldata_ptr = (data_ptr_t)DATAPTR_RO(coldata);
 			} else {
 				duckdb_col_type = LogicalType::VARCHAR;
 			}
@@ -180,6 +154,7 @@ static duckdb::unique_ptr<FunctionData> DataFrameScanBind(ClientContext &context
 			duckdb_col_type = LogicalType::DATE;
 			break;
 		case RType::BLOB:
+			coldata_ptr = (data_ptr_t)DATAPTR_RO(coldata);
 			duckdb_col_type = LogicalType::BLOB;
 			break;
 		default:
@@ -211,7 +186,7 @@ static duckdb::unique_ptr<GlobalTableFunctionState> DataFrameScanInitGlobal(Clie
 
 static bool DataFrameScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
                                            DataFrameLocalState &local_state, DataFrameGlobalState &global_state) {
-	auto &bind_data = (const DataFrameScanBindData &)*bind_data_p;
+	auto &bind_data = bind_data_p->Cast<DataFrameScanBindData>();
 
 	lock_guard<mutex> parallel_lock(global_state.lock);
 	if (global_state.position >= bind_data.row_count) {
@@ -230,10 +205,10 @@ static bool DataFrameScanParallelStateNext(ClientContext &context, const Functio
 	return true;
 }
 
-static duckdb::unique_ptr<LocalTableFunctionState> DataFrameScanInitLocal(ExecutionContext &context,
-                                                                          TableFunctionInitInput &input,
-                                                                          GlobalTableFunctionState *global_state) {
-	auto &gstate = (DataFrameGlobalState &)*global_state;
+static unique_ptr<LocalTableFunctionState> DataFrameScanInitLocal(ExecutionContext &context,
+                                                                  TableFunctionInitInput &input,
+                                                                  GlobalTableFunctionState *global_state) {
+	auto &gstate = global_state->Cast<DataFrameGlobalState>();
 	auto result = make_uniq<DataFrameLocalState>();
 
 	result->column_ids = input.column_ids;
@@ -251,9 +226,9 @@ struct DedupPointerEnumType {
 };
 
 static void DataFrameScanFunc(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
-	auto &bind_data = (DataFrameScanBindData &)*data.bind_data;
-	auto &operator_data = (DataFrameLocalState &)*data.local_state;
-	auto &gstate = (DataFrameGlobalState &)*data.global_state;
+	auto &bind_data = data.bind_data->Cast<DataFrameScanBindData>();
+	auto &operator_data = data.local_state->Cast<DataFrameLocalState>();
+	auto &gstate = data.global_state->Cast<DataFrameGlobalState>();
 	if (operator_data.position >= operator_data.count) {
 		if (!DataFrameScanParallelStateNext(context, data.bind_data, operator_data, gstate)) {
 			return;
@@ -299,12 +274,13 @@ static void DataFrameScanFunc(ClientContext &context, TableFunctionInput &data, 
 			break;
 		}
 		case RType::STRING: {
+			auto data_ptr = (SEXP *)coldata_ptr + sexp_offset;
+
 			if (bind_data.experimental) {
-				auto data_ptr = (SEXP *)coldata_ptr + sexp_offset;
 				D_ASSERT(v.GetType().id() == LogicalTypeId::POINTER);
 				AppendColumnSegment<SEXP, uintptr_t, DedupPointerEnumType>(data_ptr, v, this_count);
 			} else {
-				AppendStringSegment(((data_frame)bind_data.df)[(R_xlen_t)src_df_col_idx], v, sexp_offset, this_count);
+				AppendColumnSegment<SEXP, string_t, RStringSexpType>(data_ptr, v, this_count);
 			}
 
 			break;
@@ -396,7 +372,8 @@ static void DataFrameScanFunc(ClientContext &context, TableFunctionInput &data, 
 			break;
 		}
 		case RType::BLOB: {
-			AppendBLOBSegment(((data_frame)bind_data.df)[(R_xlen_t)src_df_col_idx], v, sexp_offset, this_count);
+			auto data_ptr = (SEXP *)coldata_ptr + sexp_offset;
+			AppendColumnSegment<SEXP, string_t, RRawSexpType>(data_ptr, v, this_count);
 			break;
 		}
 		case RType::LIST_OF_NULLS:
@@ -409,9 +386,8 @@ static void DataFrameScanFunc(ClientContext &context, TableFunctionInput &data, 
 	operator_data.position += this_count;
 }
 
-static duckdb::unique_ptr<NodeStatistics> DataFrameScanCardinality(ClientContext &context,
-                                                                   const FunctionData *bind_data_p) {
-	auto &bind_data = (DataFrameScanBindData &)*bind_data_p;
+static unique_ptr<NodeStatistics> DataFrameScanCardinality(ClientContext &context, const FunctionData *bind_data_p) {
+	auto &bind_data = bind_data_p->Cast<DataFrameScanBindData>();
 	return make_uniq<NodeStatistics>(bind_data.row_count, bind_data.row_count);
 }
 

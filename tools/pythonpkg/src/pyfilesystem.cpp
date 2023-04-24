@@ -1,12 +1,12 @@
 #include "duckdb_python/pyfilesystem.hpp"
 
 #include "duckdb/common/string_util.hpp"
-#include "duckdb_python/pybind_wrapper.hpp"
-#include "duckdb_python/python_object_container.hpp"
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
+#include "duckdb_python/pybind11/gil_wrapper.hpp"
 
 namespace duckdb {
 
-PythonFileHandle::PythonFileHandle(FileSystem &file_system, const string &path, const py::object handle)
+PythonFileHandle::PythonFileHandle(FileSystem &file_system, const string &path, const py::object &handle)
     : FileHandle(file_system, path), handle(handle) {
 }
 PythonFileHandle::~PythonFileHandle() {
@@ -104,12 +104,12 @@ bool PythonFilesystem::Exists(const string &filename, const char *func_name) con
 vector<string> PythonFilesystem::Glob(const string &path, FileOpener *opener) {
 	PythonGILWrapper gil;
 
-	if (!path.size()) {
+	if (path.empty()) {
 		return {path};
 	}
 	auto returner = py::list(filesystem.attr("glob")(path));
 
-	std::vector<string> results;
+	vector<string> results;
 	auto unstrip_protocol = filesystem.attr("unstrip_protocol");
 	for (auto item : returner) {
 		results.push_back(py::str(unstrip_protocol(py::str(item))));

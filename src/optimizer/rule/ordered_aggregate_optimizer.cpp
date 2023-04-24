@@ -11,16 +11,16 @@ OrderedAggregateOptimizer::OrderedAggregateOptimizer(ExpressionRewriter &rewrite
 	root->expr_class = ExpressionClass::BOUND_AGGREGATE;
 }
 
-unique_ptr<Expression> OrderedAggregateOptimizer::Apply(LogicalOperator &op, vector<Expression *> &bindings,
+unique_ptr<Expression> OrderedAggregateOptimizer::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                         bool &changes_made, bool is_root) {
-	auto aggr = (BoundAggregateExpression *)bindings[0];
-	if (!aggr->order_bys) {
+	auto &aggr = bindings[0].get().Cast<BoundAggregateExpression>();
+	if (!aggr.order_bys) {
 		// no ORDER BYs defined
 		return nullptr;
 	}
-	if (aggr->function.order_dependent == AggregateOrderDependent::NOT_ORDER_DEPENDENT) {
+	if (aggr.function.order_dependent == AggregateOrderDependent::NOT_ORDER_DEPENDENT) {
 		// not an order dependent aggregate but we have an ORDER BY clause - remove it
-		aggr->order_bys.reset();
+		aggr.order_bys.reset();
 		changes_made = true;
 		return nullptr;
 	}

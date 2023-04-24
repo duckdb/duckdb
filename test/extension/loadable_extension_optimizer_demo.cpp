@@ -1,11 +1,11 @@
 #define DUCKDB_EXTENSION_MAIN
 #include "duckdb.hpp"
-#include "duckdb/optimizer/optimizer_extension.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 
 using namespace duckdb;
 
@@ -30,7 +30,7 @@ public:
 
 	static bool HasParquetScan(LogicalOperator &op) {
 		if (op.type == LogicalOperatorType::LOGICAL_GET) {
-			auto &get = (LogicalGet &)op;
+			auto &get = op.Cast<LogicalGet>();
 			return get.function.name == "parquet_scan";
 		}
 		for (auto &child : op.children) {

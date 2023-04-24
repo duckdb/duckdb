@@ -19,7 +19,7 @@ BoundStatement Binder::Bind(ExtensionStatement &stmt) {
 	// create the plan as a scan of the given table function
 	result.plan = BindTableFunction(parse_result.function, std::move(parse_result.parameters));
 	D_ASSERT(result.plan->type == LogicalOperatorType::LOGICAL_GET);
-	auto &get = (LogicalGet &)*result.plan;
+	auto &get = result.plan->Cast<LogicalGet>();
 	result.names = get.names;
 	result.types = get.returned_types;
 	get.column_ids.clear();

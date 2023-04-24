@@ -1,7 +1,7 @@
 #include "duckdb/execution/operator/schema/physical_create_type.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 
 namespace duckdb {
 
@@ -28,7 +28,7 @@ unique_ptr<GlobalSinkState> PhysicalCreateType::GetGlobalSinkState(ClientContext
 
 SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
                                         DataChunk &input) const {
-	auto &gstate = (CreateTypeGlobalState &)gstate_p;
+	auto &gstate = gstate_p.Cast<CreateTypeGlobalState>();
 	idx_t total_row_count = gstate.size + input.size();
 	if (total_row_count > NumericLimits<uint32_t>::Maximum()) {
 		throw InvalidInputException("Attempted to create ENUM of size %llu, which exceeds the maximum size of %llu",
@@ -52,7 +52,7 @@ SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, GlobalSinkSta
 			throw InvalidInputException("Attempted to create ENUM type with NULL value!");
 		}
 		result_ptr[gstate.size++] =
-		    StringVector::AddStringOrBlob(gstate.result, src_ptr[idx].GetDataUnsafe(), src_ptr[idx].GetSize());
+		    StringVector::AddStringOrBlob(gstate.result, src_ptr[idx].GetData(), src_ptr[idx].GetSize());
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -74,14 +74,14 @@ unique_ptr<GlobalSourceState> PhysicalCreateType::GetGlobalSourceState(ClientCon
 
 void PhysicalCreateType::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                                  LocalSourceState &lstate) const {
-	auto &state = (CreateTypeSourceState &)gstate;
+	auto &state = gstate.Cast<CreateTypeSourceState>();
 	if (state.finished) {
 		return;
 	}
 
 	if (IsSink()) {
 		D_ASSERT(info->type == LogicalType::INVALID);
-		auto &g_sink_state = (CreateTypeGlobalState &)*sink_state;
+		auto &g_sink_state = sink_state->Cast<CreateTypeGlobalState>();
 		info->type = LogicalType::ENUM(info->name, g_sink_state.result, g_sink_state.size);
 	}
 

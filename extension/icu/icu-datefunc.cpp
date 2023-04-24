@@ -65,24 +65,36 @@ timestamp_t ICUDateFunc::GetTimeUnsafe(icu::Calendar *calendar, uint64_t micros)
 	return timestamp_t(millis * Interval::MICROS_PER_MSEC + micros);
 }
 
-timestamp_t ICUDateFunc::GetTime(icu::Calendar *calendar, uint64_t micros) {
+bool ICUDateFunc::TryGetTime(icu::Calendar *calendar, uint64_t micros, timestamp_t &result) {
 	// Extract the new time
 	UErrorCode status = U_ZERO_ERROR;
 	auto millis = int64_t(calendar->getTime(status));
 	if (U_FAILURE(status)) {
-		throw Exception("Unable to get ICU calendar time.");
+		return false;
 	}
 
 	// UDate is a double, so it can't overflow (it just loses accuracy), but converting back to µs can.
-	millis = MultiplyOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(millis, Interval::MICROS_PER_MSEC);
-	millis = AddOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(millis, micros);
+	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(millis, Interval::MICROS_PER_MSEC, millis)) {
+		return false;
+	}
+	if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(millis, micros, millis)) {
+		return false;
+	}
 
 	// Now make sure the value is in range
-	date_t d;
-	dtime_t t;
-	Timestamp::Convert(timestamp_t(millis), d, t);
+	result = timestamp_t(millis);
+	date_t out_date = Timestamp::GetDate(result);
+	int64_t days_micros;
+	return TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(out_date.days, Interval::MICROS_PER_DAY,
+	                                                                 days_micros);
+}
 
-	return timestamp_t(millis);
+timestamp_t ICUDateFunc::GetTime(icu::Calendar *calendar, uint64_t micros) {
+	timestamp_t result;
+	if (!TryGetTime(calendar, micros, result)) {
+		throw ConversionException("Unable to convert ICU date to timestamp");
+	}
+	return result;
 }
 
 uint64_t ICUDateFunc::SetTime(icu::Calendar *calendar, timestamp_t date) {

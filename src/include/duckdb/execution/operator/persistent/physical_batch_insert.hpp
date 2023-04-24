@@ -14,24 +14,27 @@ namespace duckdb {
 
 class PhysicalBatchInsert : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::BATCH_INSERT;
+
+public:
 	//! INSERT INTO
-	PhysicalBatchInsert(vector<LogicalType> types, TableCatalogEntry *table,
+	PhysicalBatchInsert(vector<LogicalType> types, TableCatalogEntry &table,
 	                    physical_index_vector_t<idx_t> column_index_map, vector<unique_ptr<Expression>> bound_defaults,
 	                    idx_t estimated_cardinality);
 	//! CREATE TABLE AS
-	PhysicalBatchInsert(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<BoundCreateTableInfo> info,
+	PhysicalBatchInsert(LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info,
 	                    idx_t estimated_cardinality);
 
 	//! The map from insert column index to table column index
 	physical_index_vector_t<idx_t> column_index_map;
 	//! The table to insert into
-	TableCatalogEntry *insert_table;
+	optional_ptr<TableCatalogEntry> insert_table;
 	//! The insert types
 	vector<LogicalType> insert_types;
 	//! The default expressions of the columns for which no value is provided
 	vector<unique_ptr<Expression>> bound_defaults;
 	//! Table schema, in case of CREATE TABLE AS
-	SchemaCatalogEntry *schema;
+	optional_ptr<SchemaCatalogEntry> schema;
 	//! Create table info, in case of CREATE TABLE AS
 	unique_ptr<BoundCreateTableInfo> info;
 	// Which action to perform on conflict
@@ -42,6 +45,10 @@ public:
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
+
+	bool IsSource() const override {
+		return true;
+	}
 
 public:
 	// Sink interface

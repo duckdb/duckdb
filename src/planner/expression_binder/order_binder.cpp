@@ -13,12 +13,12 @@
 namespace duckdb {
 
 OrderBinder::OrderBinder(vector<Binder *> binders, idx_t projection_index, case_insensitive_map_t<idx_t> &alias_map,
-                         expression_map_t<idx_t> &projection_map, idx_t max_count)
+                         parsed_expression_map_t<idx_t> &projection_map, idx_t max_count)
     : binders(std::move(binders)), projection_index(projection_index), max_count(max_count), extra_list(nullptr),
       alias_map(alias_map), projection_map(projection_map) {
 }
 OrderBinder::OrderBinder(vector<Binder *> binders, idx_t projection_index, SelectNode &node,
-                         case_insensitive_map_t<idx_t> &alias_map, expression_map_t<idx_t> &projection_map)
+                         case_insensitive_map_t<idx_t> &alias_map, parsed_expression_map_t<idx_t> &projection_map)
     : binders(std::move(binders)), projection_index(projection_index), alias_map(alias_map),
       projection_map(projection_map) {
 	this->max_count = node.select_list.size();
@@ -73,13 +73,13 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 	case ExpressionClass::CONSTANT: {
 		// ORDER BY constant
 		// is the ORDER BY expression a constant integer? (e.g. ORDER BY 1)
-		auto &constant = (ConstantExpression &)*expr;
+		auto &constant = expr->Cast<ConstantExpression>();
 		return BindConstant(*expr, constant.value);
 	}
 	case ExpressionClass::COLUMN_REF: {
 		// COLUMN REF expression
 		// check if we can bind it to an alias in the select list
-		auto &colref = (ColumnRefExpression &)*expr;
+		auto &colref = expr->Cast<ColumnRefExpression>();
 		// if there is an explicit table name we can't bind to an alias
 		if (colref.IsQualified()) {
 			break;
@@ -93,7 +93,7 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		break;
 	}
 	case ExpressionClass::POSITIONAL_REFERENCE: {
-		auto &posref = (PositionalReferenceExpression &)*expr;
+		auto &posref = expr->Cast<PositionalReferenceExpression>();
 		if (posref.index < 1 || posref.index > max_count) {
 			throw BinderException("ORDER term out of range - should be between 1 and %lld", (idx_t)max_count);
 		}
@@ -111,7 +111,7 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		ExpressionBinder::QualifyColumnNames(*binder, expr);
 	}
 	// first check if the ORDER BY clause already points to an entry in the projection list
-	auto entry = projection_map.find(expr.get());
+	auto entry = projection_map.find(*expr);
 	if (entry != projection_map.end()) {
 		if (entry->second == DConstants::INVALID_INDEX) {
 			throw BinderException("Ambiguous reference to column");

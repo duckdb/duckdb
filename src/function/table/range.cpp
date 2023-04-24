@@ -91,7 +91,7 @@ static unique_ptr<GlobalTableFunctionState> RangeFunctionInit(ClientContext &con
 }
 
 static void RangeFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &bind_data = (RangeFunctionBindData &)*data_p.bind_data;
+	auto &bind_data = data_p.bind_data->Cast<RangeFunctionBindData>();
 	auto &state = (RangeFunctionState &)*data_p.global_state;
 
 	auto increment = bind_data.increment;
@@ -112,7 +112,7 @@ static void RangeFunction(ClientContext &context, TableFunctionInput &data_p, Da
 }
 
 unique_ptr<NodeStatistics> RangeCardinality(ClientContext &context, const FunctionData *bind_data_p) {
-	auto &bind_data = (RangeFunctionBindData &)*bind_data_p;
+	auto &bind_data = bind_data_p->Cast<RangeFunctionBindData>();
 	idx_t cardinality = Hugeint::Cast<idx_t>((bind_data.end - bind_data.start) / bind_data.increment);
 	return make_uniq<NodeStatistics>(cardinality, cardinality);
 }
@@ -134,7 +134,7 @@ public:
 		       other.inclusive_bound == inclusive_bound && other.greater_than_check == greater_than_check;
 	}
 
-	bool Finished(timestamp_t current_value) {
+	bool Finished(timestamp_t current_value) const {
 		if (greater_than_check) {
 			if (inclusive_bound) {
 				return current_value > end;
@@ -207,12 +207,12 @@ struct RangeDateTimeState : public GlobalTableFunctionState {
 };
 
 static unique_ptr<GlobalTableFunctionState> RangeDateTimeInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto &bind_data = (RangeDateTimeBindData &)*input.bind_data;
+	auto &bind_data = input.bind_data->Cast<RangeDateTimeBindData>();
 	return make_uniq<RangeDateTimeState>(bind_data.start);
 }
 
 static void RangeDateTimeFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &bind_data = (RangeDateTimeBindData &)*data_p.bind_data;
+	auto &bind_data = data_p.bind_data->Cast<RangeDateTimeBindData>();
 	auto &state = (RangeDateTimeState &)*data_p.global_state;
 	if (state.finished) {
 		return;

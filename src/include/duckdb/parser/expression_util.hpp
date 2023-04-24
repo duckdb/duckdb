@@ -28,7 +28,7 @@ public:
 private:
 	template <class T>
 	static bool ExpressionListEquals(const vector<unique_ptr<T>> &a, const vector<unique_ptr<T>> &b);
-	template <class T>
+	template <class T, class EXPRESSION_MAP>
 	static bool ExpressionSetEquals(const vector<unique_ptr<T>> &a, const vector<unique_ptr<T>> &b);
 };
 

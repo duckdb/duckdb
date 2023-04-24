@@ -8,7 +8,7 @@ namespace duckdb {
 
 static unique_ptr<Expression> ReplaceProjectionBindings(LogicalProjection &proj, unique_ptr<Expression> expr) {
 	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &colref = (BoundColumnRefExpression &)*expr;
+		auto &colref = expr->Cast<BoundColumnRefExpression>();
 		D_ASSERT(colref.binding.table_index == proj.table_index);
 		D_ASSERT(colref.binding.column_index < proj.expressions.size());
 		D_ASSERT(colref.depth == 0);
@@ -22,7 +22,7 @@ static unique_ptr<Expression> ReplaceProjectionBindings(LogicalProjection &proj,
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownProjection(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_PROJECTION);
-	auto &proj = (LogicalProjection &)*op;
+	auto &proj = op->Cast<LogicalProjection>();
 	// push filter through logical projection
 	// all the BoundColumnRefExpressions in the filter should refer to the LogicalProjection
 	// we can rewrite them by replacing those references with the expression of the LogicalProjection node

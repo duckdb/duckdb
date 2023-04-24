@@ -72,7 +72,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBIndexesInit(ClientContext &context, T
 }
 
 void DuckDBIndexesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (DuckDBIndexesData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<DuckDBIndexesData>();
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;
@@ -83,7 +83,7 @@ void DuckDBIndexesFunction(ClientContext &context, TableFunctionInput &data_p, D
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset++];
 
-		auto &index = (IndexCatalogEntry &)*entry;
+		auto &index = entry->Cast<IndexCatalogEntry>();
 		// return values:
 
 		idx_t col = 0;

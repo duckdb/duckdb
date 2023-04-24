@@ -18,8 +18,8 @@ bool BoundConstantExpression::Equals(const BaseExpression *other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundConstantExpression *)other_p;
-	return value.type() == other->value.type() && !ValueOperations::DistinctFrom(value, other->value);
+	auto &other = other_p->Cast<BoundConstantExpression>();
+	return value.type() == other.value.type() && !ValueOperations::DistinctFrom(value, other.value);
 }
 
 hash_t BoundConstantExpression::Hash() const {

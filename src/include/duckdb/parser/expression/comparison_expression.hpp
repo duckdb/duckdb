@@ -15,6 +15,9 @@ namespace duckdb {
 //! and has two children.
 class ComparisonExpression : public ParsedExpression {
 public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::COMPARISON;
+
+public:
 	DUCKDB_API ComparisonExpression(ExpressionType type, unique_ptr<ParsedExpression> left,
 	                                unique_ptr<ParsedExpression> right);
 

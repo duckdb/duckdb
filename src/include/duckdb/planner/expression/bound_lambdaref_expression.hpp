@@ -22,6 +22,9 @@ class FieldWriter;
 //! which refers to the physical chunk of the lambda parameter during execution.
 class BoundLambdaRefExpression : public Expression {
 public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_LAMBDA_REF;
+
+public:
 	BoundLambdaRefExpression(LogicalType type, ColumnBinding binding, idx_t lambda_index, idx_t depth = 0);
 	BoundLambdaRefExpression(string alias, LogicalType type, ColumnBinding binding, idx_t lambda_index,
 	                         idx_t depth = 0);

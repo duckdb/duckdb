@@ -33,7 +33,7 @@ struct BitstringAggBindData : public FunctionData {
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (BitstringAggBindData &)other_p;
+		auto &other = other_p.Cast<BitstringAggBindData>();
 		if (min.IsNull() && other.min.IsNull() && max.IsNull() && other.max.IsNull()) {
 			return true;
 		}
@@ -134,7 +134,7 @@ struct BitStringAggOperation {
 		} else { // non-inlined string, need to allocate space for it
 			auto len = input.GetSize();
 			auto ptr = new char[len];
-			memcpy(ptr, input.GetDataUnsafe(), len);
+			memcpy(ptr, input.GetData(), len);
 			state->value = string_t(ptr, len);
 		}
 	}
@@ -149,9 +149,9 @@ struct BitStringAggOperation {
 	}
 
 	template <class STATE>
-	static void Destroy(STATE *state) {
+	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
 		if (state->is_set && !state->value.IsInlined()) {
-			delete[] state->value.GetDataUnsafe();
+			delete[] state->value.GetData();
 		}
 	}
 

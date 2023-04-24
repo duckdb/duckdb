@@ -48,15 +48,14 @@ void Index::Delete(DataChunk &entries, Vector &row_identifiers) {
 	Delete(state, entries, row_identifiers);
 }
 
-bool Index::MergeIndexes(Index *other_index) {
-
+bool Index::MergeIndexes(Index &other_index) {
 	IndexLock state;
 	InitializeLock(state);
 
 	switch (this->type) {
 	case IndexType::ART: {
-		auto art = (ART *)this;
-		return art->MergeIndexes(state, other_index);
+		auto &art = Cast<ART>();
+		return art.MergeIndexes(state, other_index);
 	}
 	default:
 		throw InternalException("Unimplemented index type for merge");
@@ -69,7 +68,7 @@ void Index::ExecuteExpressions(DataChunk &input, DataChunk &result) {
 
 unique_ptr<Expression> Index::BindExpression(unique_ptr<Expression> expr) {
 	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &bound_colref = (BoundColumnRefExpression &)*expr;
+		auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
 		return make_uniq<BoundReferenceExpression>(expr->return_type, column_ids[bound_colref.binding.column_index]);
 	}
 	ExpressionIterator::EnumerateChildren(

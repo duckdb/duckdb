@@ -20,7 +20,7 @@ unique_ptr<GlobalSourceState> PhysicalCreateView::GetGlobalSourceState(ClientCon
 
 void PhysicalCreateView::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                                  LocalSourceState &lstate) const {
-	auto &state = (CreateViewSourceState &)gstate;
+	auto &state = gstate.Cast<CreateViewSourceState>();
 	if (state.finished) {
 		return;
 	}

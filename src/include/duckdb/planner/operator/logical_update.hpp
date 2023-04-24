@@ -15,10 +15,13 @@ class TableCatalogEntry;
 
 class LogicalUpdate : public LogicalOperator {
 public:
-	explicit LogicalUpdate(TableCatalogEntry *table);
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_UPDATE;
+
+public:
+	explicit LogicalUpdate(TableCatalogEntry &table);
 
 	//! The base table to update
-	TableCatalogEntry *table;
+	TableCatalogEntry &table;
 	//! table catalog index
 	idx_t table_index;
 	//! if returning option is used, return the update chunk

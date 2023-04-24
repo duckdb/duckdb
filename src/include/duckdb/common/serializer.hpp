@@ -120,7 +120,7 @@ public:
 	};
 
 	//! Gets the catalog for the deserializer
-	virtual Catalog *GetCatalog() {
+	virtual optional_ptr<Catalog> GetCatalog() {
 		return nullptr;
 	};
 

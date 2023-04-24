@@ -133,7 +133,7 @@ static void parallel_query(Connection *conn, bool *correct, size_t threadnr) {
 	correct[threadnr] = true;
 	for (size_t i = 0; i < 100; i++) {
 		auto result = conn->Query("SELECT * FROM integers ORDER BY i");
-		if (!CHECK_COLUMN(result, 0, {Value(), 1, 2, 3})) {
+		if (!CHECK_COLUMN(result, 0, {1, 2, 3, Value()})) {
 			correct[threadnr] = false;
 		}
 	}
@@ -162,7 +162,7 @@ static void parallel_query_with_new_connection(DuckDB *db, bool *correct, size_t
 	for (size_t i = 0; i < 100; i++) {
 		auto conn = make_uniq<Connection>(*db);
 		auto result = conn->Query("SELECT * FROM integers ORDER BY i");
-		if (!CHECK_COLUMN(result, 0, {Value(), 1, 2, 3})) {
+		if (!CHECK_COLUMN(result, 0, {1, 2, 3, Value()})) {
 			correct[threadnr] = false;
 		}
 	}
@@ -182,14 +182,14 @@ TEST_CASE("Test making and dropping connections in parallel to a single database
 	}
 	for (size_t i = 0; i < 100; i++) {
 		auto result = conn->Query("SELECT * FROM integers ORDER BY i");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, Value()}));
 	}
 	for (size_t i = 0; i < 20; i++) {
 		threads[i].join();
 		REQUIRE(correct[i]);
 	}
 	auto result = conn->Query("SELECT * FROM integers ORDER BY i");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, Value()}));
 }
 
 TEST_CASE("Test multiple result sets", "[api]") {
@@ -517,7 +517,7 @@ TEST_CASE("Test large number of connections to a single database", "[api]") {
 	auto context = make_uniq<ClientContext>((*db).instance);
 	auto &connection_manager = ConnectionManager::Get(*context);
 
-	vector<duckdb::unique_ptr<Connection>> connections;
+	duckdb::vector<duckdb::unique_ptr<Connection>> connections;
 	size_t createdConnections = 5000;
 	size_t remainingConnections = 500;
 	size_t toRemove = createdConnections - remainingConnections;

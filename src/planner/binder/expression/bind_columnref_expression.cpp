@@ -17,6 +17,44 @@
 
 namespace duckdb {
 
+string GetSQLValueFunctionName(const string &column_name) {
+	auto lcase = StringUtil::Lower(column_name);
+	if (lcase == "current_catalog") {
+		return "current_catalog";
+	} else if (lcase == "current_date") {
+		return "current_date";
+	} else if (lcase == "current_schema") {
+		return "current_schema";
+	} else if (lcase == "current_role") {
+		return "current_role";
+	} else if (lcase == "current_time") {
+		return "get_current_time";
+	} else if (lcase == "current_timestamp") {
+		return "get_current_timestamp";
+	} else if (lcase == "current_user") {
+		return "current_user";
+	} else if (lcase == "localtime") {
+		return "current_localtime";
+	} else if (lcase == "localtimestamp") {
+		return "current_localtimestamp";
+	} else if (lcase == "session_user") {
+		return "session_user";
+	} else if (lcase == "user") {
+		return "user";
+	}
+	return string();
+}
+
+unique_ptr<ParsedExpression> ExpressionBinder::GetSQLValueFunction(const string &column_name) {
+	auto value_function = GetSQLValueFunctionName(column_name);
+	if (value_function.empty()) {
+		return nullptr;
+	}
+
+	vector<unique_ptr<ParsedExpression>> children;
+	return make_uniq<FunctionExpression>(value_function, std::move(children));
+}
+
 unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &column_name, string &error_message) {
 	auto using_binding = binder.bind_context.GetUsingBinding(column_name);
 	if (using_binding) {
@@ -70,6 +108,11 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 	}
 	// see if it's a column
 	if (table_name.empty()) {
+		// column was not found - check if it is a SQL value function
+		auto value_function = GetSQLValueFunction(column_name);
+		if (value_function) {
+			return value_function;
+		}
 		// it's not, find candidates and error
 		auto similar_bindings = binder.bind_context.GetSimilarBindings(column_name);
 		string candidate_str = StringUtil::CandidatesMessage(similar_bindings, "Candidate bindings");
@@ -83,7 +126,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr) {
 	switch (expr->type) {
 	case ExpressionType::COLUMN_REF: {
-		auto &colref = (ColumnRefExpression &)*expr;
+		auto &colref = expr->Cast<ColumnRefExpression>();
 		string error_message;
 		auto new_expr = QualifyColumnName(colref, error_message);
 		if (new_expr) {
@@ -96,7 +139,7 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr) {
 		break;
 	}
 	case ExpressionType::POSITIONAL_REFERENCE: {
-		auto &ref = (PositionalReferenceExpression &)*expr;
+		auto &ref = expr->Cast<PositionalReferenceExpression>();
 		if (ref.alias.empty()) {
 			string table_name, column_name;
 			auto error = binder.bind_context.BindColumn(ref, table_name, column_name);
@@ -124,7 +167,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructExtract(unique_ptr<Pa
 	// we need to transform the struct extract if it is inside a lambda expression
 	// because we cannot bind to an existing table, so we remove the dummy table also
 	if (lambda_bindings && base->type == ExpressionType::COLUMN_REF) {
-		auto &lambda_column_ref = (ColumnRefExpression &)*base;
+		auto &lambda_column_ref = base->Cast<ColumnRefExpression>();
 		D_ASSERT(!lambda_column_ref.column_names.empty());
 
 		if (lambda_column_ref.column_names[0].find(DummyBinding::DUMMY_NAME) != string::npos) {
@@ -297,14 +340,14 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 	// a generated column returns a generated expression, a struct on a column returns a struct extract
 	if (expr->type != ExpressionType::COLUMN_REF) {
 		auto alias = expr->alias;
-		auto result = BindExpression(&expr, depth);
+		auto result = BindExpression(expr, depth);
 		if (result.expression) {
 			result.expression->alias = std::move(alias);
 		}
 		return result;
 	}
 
-	auto &colref = (ColumnRefExpression &)*expr;
+	auto &colref = expr->Cast<ColumnRefExpression>();
 	D_ASSERT(colref.IsQualified());
 	auto &table_name = colref.GetTableName();
 

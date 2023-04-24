@@ -77,7 +77,7 @@ unique_ptr<ParsedExpression> SubqueryExpression::Deserialize(ExpressionType type
 void SubqueryExpression::FormatSerialize(FormatSerializer &serializer) const {
 	ParsedExpression::FormatSerialize(serializer);
 	serializer.WriteProperty("subquery_type", subquery_type);
-	serializer.WriteProperty("subquery", *subquery.get());
+	serializer.WriteProperty("subquery", *subquery);
 	serializer.WriteOptionalProperty("child", child);
 	serializer.WriteProperty("comparison_type", comparison_type);
 }

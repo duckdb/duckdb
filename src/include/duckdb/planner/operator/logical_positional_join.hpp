@@ -17,6 +17,9 @@ class LogicalPositionalJoin : public LogicalUnconditionalJoin {
 	LogicalPositionalJoin() : LogicalUnconditionalJoin(LogicalOperatorType::LOGICAL_POSITIONAL_JOIN) {};
 
 public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_POSITIONAL_JOIN;
+
+public:
 	LogicalPositionalJoin(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right);
 
 public:

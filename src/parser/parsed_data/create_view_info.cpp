@@ -85,7 +85,7 @@ unique_ptr<CreateViewInfo> CreateViewInfo::FromCreateView(ClientContext &context
 		    "Failed to create view from SQL string - \"%s\" - statement did not contain a single CREATE VIEW statement",
 		    sql);
 	}
-	auto &create_statement = (CreateStatement &)*parser.statements[0];
+	auto &create_statement = parser.statements[0]->Cast<CreateStatement>();
 	if (create_statement.info->type != CatalogType::VIEW_ENTRY) {
 		throw BinderException(
 		    "Failed to create view from SQL string - \"%s\" - view did not contain a CREATE VIEW statement", sql);

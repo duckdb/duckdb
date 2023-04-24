@@ -1002,19 +1002,17 @@ BlockPointer ART::Serialize(MetaBlockWriter &writer) {
 //===--------------------------------------------------------------------===//
 // Merging
 //===--------------------------------------------------------------------===//
-
-bool ART::MergeIndexes(IndexLock &state, Index *other_index) {
-
-	auto other_art = (ART *)other_index;
+bool ART::MergeIndexes(IndexLock &state, Index &other_index) {
+	auto &other_art = other_index.Cast<ART>();
 
 	if (!this->tree) {
-		IncreaseMemorySize(other_art->memory_size);
-		tree = other_art->tree;
-		other_art->tree = nullptr;
+		IncreaseMemorySize(other_art.memory_size);
+		tree = other_art.tree;
+		other_art.tree = nullptr;
 		return true;
 	}
 
-	return Node::MergeARTs(this, other_art);
+	return Node::MergeARTs(this, &other_art);
 }
 
 //===--------------------------------------------------------------------===//

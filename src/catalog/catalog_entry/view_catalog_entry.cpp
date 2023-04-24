@@ -43,7 +43,7 @@ unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, Al
 	}
 }
 
-void ViewCatalogEntry::Serialize(Serializer &serializer) {
+void ViewCatalogEntry::Serialize(Serializer &serializer) const {
 	D_ASSERT(!internal);
 	FieldWriter writer(serializer);
 	writer.WriteString(schema->name);
@@ -70,7 +70,7 @@ unique_ptr<CreateViewInfo> ViewCatalogEntry::Deserialize(Deserializer &source, C
 	return info;
 }
 
-string ViewCatalogEntry::ToSQL() {
+string ViewCatalogEntry::ToSQL() const {
 	if (sql.empty()) {
 		//! Return empty sql with view name so pragma view_tables don't complain
 		return sql;
@@ -78,7 +78,7 @@ string ViewCatalogEntry::ToSQL() {
 	return sql + "\n;";
 }
 
-unique_ptr<CatalogEntry> ViewCatalogEntry::Copy(ClientContext &context) {
+unique_ptr<CatalogEntry> ViewCatalogEntry::Copy(ClientContext &context) const {
 	D_ASSERT(!internal);
 	auto create_info = make_uniq<CreateViewInfo>(schema, name);
 	create_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());

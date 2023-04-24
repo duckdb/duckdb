@@ -36,22 +36,22 @@
 
 namespace duckdb {
 
-void FindForeignKeyInformation(CatalogEntry *entry, AlterForeignKeyType alter_fk_type,
+void FindForeignKeyInformation(CatalogEntry &entry, AlterForeignKeyType alter_fk_type,
                                vector<unique_ptr<AlterForeignKeyInfo>> &fk_arrays) {
-	if (entry->type != CatalogType::TABLE_ENTRY) {
+	if (entry.type != CatalogType::TABLE_ENTRY) {
 		return;
 	}
-	auto *table_entry = (TableCatalogEntry *)entry;
-	auto &constraints = table_entry->GetConstraints();
+	auto &table_entry = entry.Cast<TableCatalogEntry>();
+	auto &constraints = table_entry.GetConstraints();
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto &cond = constraints[i];
 		if (cond->type != ConstraintType::FOREIGN_KEY) {
 			continue;
 		}
-		auto &fk = (ForeignKeyConstraint &)*cond;
+		auto &fk = cond->Cast<ForeignKeyConstraint>();
 		if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
-			AlterEntryData alter_data(entry->catalog->GetName(), fk.info.schema, fk.info.table, false);
-			fk_arrays.push_back(make_uniq<AlterForeignKeyInfo>(std::move(alter_data), entry->name, fk.pk_columns,
+			AlterEntryData alter_data(entry.catalog->GetName(), fk.info.schema, fk.info.table, false);
+			fk_arrays.push_back(make_uniq<AlterForeignKeyInfo>(std::move(alter_data), entry.name, fk.pk_columns,
 			                                                   fk.fk_columns, fk.info.pk_keys, fk.info.fk_keys,
 			                                                   alter_fk_type));
 		} else if (fk.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE &&
@@ -64,10 +64,10 @@ void FindForeignKeyInformation(CatalogEntry *entry, AlterForeignKeyType alter_fk
 
 DuckSchemaEntry::DuckSchemaEntry(Catalog *catalog, string name_p, bool is_internal)
     : SchemaCatalogEntry(catalog, std::move(name_p), is_internal),
-      tables(*catalog, make_uniq<DefaultViewGenerator>(*catalog, this)), indexes(*catalog), table_functions(*catalog),
+      tables(*catalog, make_uniq<DefaultViewGenerator>(*catalog, *this)), indexes(*catalog), table_functions(*catalog),
       copy_functions(*catalog), pragma_functions(*catalog),
-      functions(*catalog, make_uniq<DefaultFunctionGenerator>(*catalog, this)), sequences(*catalog),
-      collations(*catalog), types(*catalog, make_uniq<DefaultTypeGenerator>(*catalog, this)) {
+      functions(*catalog, make_uniq<DefaultFunctionGenerator>(*catalog, *this)), sequences(*catalog),
+      collations(*catalog), types(*catalog, make_uniq<DefaultTypeGenerator>(*catalog, *this)) {
 }
 
 CatalogEntry *DuckSchemaEntry::AddEntryInternal(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
@@ -78,7 +78,7 @@ CatalogEntry *DuckSchemaEntry::AddEntryInternal(CatalogTransaction transaction, 
 
 	// first find the set for this entry
 	auto &set = GetCatalogSet(entry_type);
-	dependencies.AddDependency(this);
+	dependencies.AddDependency(*this);
 	if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 		// CREATE OR REPLACE: first try to drop the entry
 		auto old_entry = set.GetEntry(transaction, entry_name);
@@ -114,7 +114,7 @@ CatalogEntry *DuckSchemaEntry::CreateTable(CatalogTransaction transaction, Bound
 
 	// add a foreign key constraint in main key table if there is a foreign key constraint
 	vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;
-	FindForeignKeyInformation(entry, AlterForeignKeyType::AFT_ADD, fk_arrays);
+	FindForeignKeyInformation(*entry, AlterForeignKeyType::AFT_ADD, fk_arrays);
 	for (idx_t i = 0; i < fk_arrays.size(); i++) {
 		// alter primary key table
 		AlterForeignKeyInfo *fk_info = fk_arrays[i].get();
@@ -122,7 +122,7 @@ CatalogEntry *DuckSchemaEntry::CreateTable(CatalogTransaction transaction, Bound
 
 		// make a dependency between this table and referenced table
 		auto &set = GetCatalogSet(CatalogType::TABLE_ENTRY);
-		info->dependencies.AddDependency(set.GetEntry(transaction, fk_info->name));
+		info->dependencies.AddDependency(*set.GetEntry(transaction, fk_info->name));
 	}
 	return entry;
 }
@@ -194,7 +194,7 @@ CatalogEntry *DuckSchemaEntry::CreateView(CatalogTransaction transaction, Create
 
 CatalogEntry *DuckSchemaEntry::CreateIndex(ClientContext &context, CreateIndexInfo *info, TableCatalogEntry *table) {
 	DependencyList dependencies;
-	dependencies.AddDependency(table);
+	dependencies.AddDependency(*table);
 	auto index = make_uniq<DuckIndexEntry>(catalog, this, info);
 	return AddEntryInternal(GetCatalogTransaction(context), std::move(index), info->on_conflict, dependencies);
 }
@@ -266,7 +266,7 @@ void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo *info) {
 
 	// if there is a foreign key constraint, get that information
 	vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;
-	FindForeignKeyInformation(existing_entry, AlterForeignKeyType::AFT_DELETE, fk_arrays);
+	FindForeignKeyInformation(*existing_entry, AlterForeignKeyType::AFT_DELETE, fk_arrays);
 
 	if (!set.DropEntry(transaction, info->name, info->cascade, info->allow_drop_internal)) {
 		throw InternalException("Could not drop element because of an internal error");

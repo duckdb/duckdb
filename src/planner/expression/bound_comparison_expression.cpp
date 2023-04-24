@@ -18,14 +18,13 @@ bool BoundComparisonExpression::Equals(const BaseExpression *other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundComparisonExpression *)other_p;
-	if (!Expression::Equals(left.get(), other->left.get())) {
+	auto &other = other_p->Cast<BoundComparisonExpression>();
+	if (!Expression::Equals(left.get(), other.left.get())) {
 		return false;
 	}
-	if (!Expression::Equals(right.get(), other->right.get())) {
+	if (!Expression::Equals(right.get(), other.right.get())) {
 		return false;
 	}
-
 	return true;
 }
 

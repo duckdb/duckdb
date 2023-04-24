@@ -163,7 +163,7 @@ static void HeapScatterStringVector(Vector &v, idx_t vcount, const SelectionVect
 				Store<uint32_t>(string_entry.GetSize(), key_locations[i]);
 				key_locations[i] += sizeof(uint32_t);
 				// store the string
-				memcpy(key_locations[i], string_entry.GetDataUnsafe(), string_entry.GetSize());
+				memcpy(key_locations[i], string_entry.GetData(), string_entry.GetSize());
 				key_locations[i] += string_entry.GetSize();
 			}
 		}
@@ -181,7 +181,7 @@ static void HeapScatterStringVector(Vector &v, idx_t vcount, const SelectionVect
 				Store<uint32_t>(string_entry.GetSize(), key_locations[i]);
 				key_locations[i] += sizeof(uint32_t);
 				// store the string
-				memcpy(key_locations[i], string_entry.GetDataUnsafe(), string_entry.GetSize());
+				memcpy(key_locations[i], string_entry.GetData(), string_entry.GetSize());
 				key_locations[i] += string_entry.GetSize();
 			} else {
 				// set the validitymask

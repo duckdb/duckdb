@@ -19,7 +19,7 @@ statement ok
 PRAGMA force_bitpacking_mode='constant'
 
 statement ok
-CREATE TABLE test_bitpacked AS SELECT (i/119000::INT64)::INT64 AS i FROM range(0, 120000000) tbl(i);
+CREATE TABLE test_bitpacked AS SELECT (i//119000::INT64)::INT64 AS i FROM range(0, 120000000) tbl(i);
 
 statement ok
 checkpoint
@@ -118,7 +118,7 @@ statement ok
 PRAGMA force_bitpacking_mode='delta_for'
 
 statement ok
-CREATE TABLE test_bitpacked AS SELECT i/2::INT64 AS i FROM range(0, 120000000) tbl(i);
+CREATE TABLE test_bitpacked AS SELECT i//2::INT64 AS i FROM range(0, 120000000) tbl(i);
 
 statement ok
 checkpoint

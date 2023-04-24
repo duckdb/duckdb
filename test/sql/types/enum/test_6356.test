@@ -1,0 +1,72 @@
+# name: test/sql/types/enum/test_6356.test
+# description: Test Coalesce/Enum bug described on 6356
+# group: [enum]
+
+statement ok
+PRAGMA enable_verification
+
+
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+create table a (a string, b mood);
+
+statement ok
+insert into a values (NULL, 'happy');
+
+statement ok
+insert into a values ('woof', NULL);
+
+statement ok
+insert into a values (NULL, NULL);
+
+statement ok
+insert into a values ('quack', 'ok');
+
+statement ok
+insert into a values ('moo', 'sad');
+
+query I
+select coalesce(a, b) from a;
+----
+happy
+woof
+NULL
+quack
+moo
+
+statement ok
+CREATE TYPE onomatopoeia AS ENUM ('woof', 'quack', 'moo');
+
+statement ok
+create table b (a onomatopoeia, b mood);
+
+statement ok
+insert into b values (NULL, 'happy');
+
+statement ok
+insert into b values ('woof', NULL);
+
+statement ok
+insert into b values (NULL, NULL);
+
+statement ok
+insert into b values ('quack', 'ok');
+
+statement ok
+insert into b values ('moo', 'sad');
+
+query I
+select coalesce(a, b) from b;
+----
+happy
+woof
+NULL
+quack
+moo
+
+query II
+select * from a where b in ('sad','woof', NULL)
+----
+moo	sad

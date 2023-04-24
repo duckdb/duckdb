@@ -3,6 +3,9 @@
 # group: [struct]
 
 statement ok
+SET default_null_order='nulls_first';
+
+statement ok
 PRAGMA enable_verification
 
 statement ok
@@ -82,13 +85,13 @@ SELECT e, STRUCT_EXTRACT(STRUCT_PACK(xx := e, yy := g), 'xx') as s FROM struct_d
 NULL	NULL
 
 query II
-SELECT e, STRUCT_EXTRACT(STRUCT_PACK(xx := e/2), 'xx') as s FROM struct_data WHERE e > 4
+SELECT e, STRUCT_EXTRACT(STRUCT_PACK(xx := e//2), 'xx') as s FROM struct_data WHERE e > 4
 ----
 5	2
 6	3
 
 query II
-SELECT e, STRUCT_EXTRACT(STRUCT_PACK(xx := e/2), 'xx')*2 as s FROM struct_data WHERE e > 4
+SELECT e, STRUCT_EXTRACT(STRUCT_PACK(xx := e//2), 'xx')*2 as s FROM struct_data WHERE e > 4
 ----
 5	4
 6	6

@@ -8,7 +8,7 @@ using Filter = FilterPushdown::Filter;
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownFilter(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_FILTER);
-	auto &filter = (LogicalFilter &)*op;
+	auto &filter = op->Cast<LogicalFilter>();
 	if (!filter.projection_map.empty()) {
 		return FinishPushdown(std::move(op));
 	}

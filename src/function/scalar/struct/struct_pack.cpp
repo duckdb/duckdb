@@ -10,8 +10,8 @@ namespace duckdb {
 
 static void StructPackFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 #ifdef DEBUG
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	auto &info = (VariableReturnBindData &)*func_expr.bind_info;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &info = func_expr.bind_info->Cast<VariableReturnBindData>();
 	// this should never happen if the binder below is sane
 	D_ASSERT(args.ColumnCount() == StructType::GetChildTypes(info.stype).size());
 #endif

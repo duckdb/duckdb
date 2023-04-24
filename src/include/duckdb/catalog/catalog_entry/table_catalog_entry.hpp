@@ -69,19 +69,18 @@ public:
 	DUCKDB_API ColumnList &GetColumnsMutable();
 	//! Returns the underlying storage of the table
 	virtual DataTable &GetStorage();
-	virtual DataTable *GetStoragePtr();
 	//! Returns a list of the bound constraints of the table
 	virtual const vector<unique_ptr<BoundConstraint>> &GetBoundConstraints();
 
 	//! Returns a list of the constraints of the table
 	DUCKDB_API const vector<unique_ptr<Constraint>> &GetConstraints();
-	DUCKDB_API string ToSQL() override;
+	DUCKDB_API string ToSQL() const override;
 
 	//! Get statistics of a column (physical or virtual) within the table
 	virtual unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id) = 0;
 
 	//! Serialize the meta information of the TableCatalogEntry a serializer
-	virtual void Serialize(Serializer &serializer);
+	virtual void Serialize(Serializer &serializer) const;
 	//! Deserializes to a CreateTableInfo
 	static unique_ptr<CreateTableInfo> Deserialize(Deserializer &source, ClientContext &context);
 
@@ -94,7 +93,7 @@ public:
 	//! Returns the scan function that can be used to scan the given table
 	virtual TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) = 0;
 
-	virtual bool IsDuckTable() {
+	virtual bool IsDuckTable() const {
 		return false;
 	}
 

@@ -58,6 +58,9 @@ struct ClientData {
 	//! The file search path
 	string file_search_path;
 
+	//! The Max Line Length Size of Last Query Executed on a CSV File. (Only used for testing)
+	idx_t max_line_length = 0;
+
 public:
 	DUCKDB_API static ClientData &Get(ClientContext &context);
 };

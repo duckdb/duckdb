@@ -1,10 +1,9 @@
 # simple DB API testcase
 
 import numpy
-import pandas
 import pytest
 import duckdb
-
+from conftest import NumpyPandas, ArrowPandas
 
 def assert_result_equal(result):
     assert result == [(0,), (1,), (2,), (3,), (4,), (5,), (6,), (7,), (8,), (9,), (None,)], "Incorrect result returned"
@@ -86,13 +85,14 @@ class TestSimpleDBAPI(object):
         arr.mask = [False, False, True]
         numpy.testing.assert_array_equal(result['t'], arr, "Incorrect result returned")
 
-    def test_pandas_selection(self, duckdb_cursor):
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_pandas_selection(self, duckdb_cursor, pandas):
         duckdb_cursor.execute('SELECT * FROM integers')
         result = duckdb_cursor.fetchdf()
         arr = numpy.ma.masked_array(numpy.arange(11))
         arr.mask = [False] * 10 + [True]
         arr = {'i': arr}
-        arr = pandas.DataFrame.from_dict(arr)
+        arr = pandas.DataFrame(arr)
         pandas.testing.assert_frame_equal(result, arr)
 
         duckdb_cursor.execute('SELECT * FROM timestamps')

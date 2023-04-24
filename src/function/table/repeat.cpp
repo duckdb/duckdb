@@ -32,7 +32,7 @@ static unique_ptr<GlobalTableFunctionState> RepeatInit(ClientContext &context, T
 
 static void RepeatFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &bind_data = (const RepeatFunctionData &)*data_p.bind_data;
-	auto &state = (RepeatOperatorData &)*data_p.global_state;
+	auto &state = data_p.global_state->Cast<RepeatOperatorData>();
 
 	idx_t remaining = MinValue<idx_t>(bind_data.target_count - state.current_count, STANDARD_VECTOR_SIZE);
 	output.data[0].Reference(bind_data.value);

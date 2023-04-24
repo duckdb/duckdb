@@ -13,7 +13,7 @@ namespace duckdb {
 
 static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	auto stmt_copy = stmt.Copy();
-	auto &copy = (CopyStatement &)*stmt_copy;
+	auto &copy = stmt_copy->Cast<CopyStatement>();
 	auto &info = *copy.info;
 
 	// Bind the select statement of the original to resolve the types
@@ -25,7 +25,7 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	select_stmt->node = std::move(copy.select_statement);
 	auto subquery_ref = make_uniq<SubqueryRef>(std::move(select_stmt));
 	copy.select_statement = make_uniq_base<QueryNode, SelectNode>();
-	auto &new_select_node = (SelectNode &)*copy.select_statement;
+	auto &new_select_node = copy.select_statement->Cast<SelectNode>();
 	new_select_node.from_table = std::move(subquery_ref);
 
 	// Create new select list
@@ -56,8 +56,8 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	}
 
 	// Now create the struct_pack/to_json to create a JSON object per row
-	auto &select_node = (SelectNode &)*copy.select_statement;
-	vector<duckdb::unique_ptr<ParsedExpression>> struct_pack_child;
+	auto &select_node = copy.select_statement->Cast<SelectNode>();
+	vector<unique_ptr<ParsedExpression>> struct_pack_child;
 	struct_pack_child.emplace_back(make_uniq<FunctionExpression>("struct_pack", std::move(select_list)));
 	select_node.select_list.emplace_back(make_uniq<FunctionExpression>("to_json", std::move(struct_pack_child)));
 

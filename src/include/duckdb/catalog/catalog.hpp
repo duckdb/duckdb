@@ -12,7 +12,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/parser/query_error_context.hpp"
 #include "duckdb/catalog/catalog_transaction.hpp"
-#include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 
@@ -146,31 +146,31 @@ public:
 	DUCKDB_API CatalogEntry *CreateIndex(ClientContext &context, CreateIndexInfo *info);
 
 	//! Creates a table in the catalog.
-	DUCKDB_API CatalogEntry *CreateTable(CatalogTransaction transaction, SchemaCatalogEntry *schema,
+	DUCKDB_API CatalogEntry *CreateTable(CatalogTransaction transaction, SchemaCatalogEntry &schema,
 	                                     BoundCreateTableInfo *info);
 	//! Create a table function in the catalog
-	DUCKDB_API CatalogEntry *CreateTableFunction(CatalogTransaction transaction, SchemaCatalogEntry *schema,
+	DUCKDB_API CatalogEntry *CreateTableFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
 	                                             CreateTableFunctionInfo *info);
 	//! Create a copy function in the catalog
-	DUCKDB_API CatalogEntry *CreateCopyFunction(CatalogTransaction transaction, SchemaCatalogEntry *schema,
+	DUCKDB_API CatalogEntry *CreateCopyFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
 	                                            CreateCopyFunctionInfo *info);
 	//! Create a pragma function in the catalog
-	DUCKDB_API CatalogEntry *CreatePragmaFunction(CatalogTransaction transaction, SchemaCatalogEntry *schema,
+	DUCKDB_API CatalogEntry *CreatePragmaFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
 	                                              CreatePragmaFunctionInfo *info);
 	//! Create a scalar or aggregate function in the catalog
-	DUCKDB_API CatalogEntry *CreateFunction(CatalogTransaction transaction, SchemaCatalogEntry *schema,
+	DUCKDB_API CatalogEntry *CreateFunction(CatalogTransaction transaction, SchemaCatalogEntry &schema,
 	                                        CreateFunctionInfo *info);
 	//! Creates a view in the catalog
-	DUCKDB_API CatalogEntry *CreateView(CatalogTransaction transaction, SchemaCatalogEntry *schema,
+	DUCKDB_API CatalogEntry *CreateView(CatalogTransaction transaction, SchemaCatalogEntry &schema,
 	                                    CreateViewInfo *info);
 	//! Creates a table in the catalog.
-	DUCKDB_API CatalogEntry *CreateSequence(CatalogTransaction transaction, SchemaCatalogEntry *schema,
+	DUCKDB_API CatalogEntry *CreateSequence(CatalogTransaction transaction, SchemaCatalogEntry &schema,
 	                                        CreateSequenceInfo *info);
 	//! Creates a enum in the catalog.
-	DUCKDB_API CatalogEntry *CreateType(CatalogTransaction transaction, SchemaCatalogEntry *schema,
+	DUCKDB_API CatalogEntry *CreateType(CatalogTransaction transaction, SchemaCatalogEntry &schema,
 	                                    CreateTypeInfo *info);
 	//! Creates a collation in the catalog
-	DUCKDB_API CatalogEntry *CreateCollation(CatalogTransaction transaction, SchemaCatalogEntry *schema,
+	DUCKDB_API CatalogEntry *CreateCollation(CatalogTransaction transaction, SchemaCatalogEntry &schema,
 	                                         CreateCollationInfo *info);
 
 	//! Drops an entry from the catalog
@@ -279,14 +279,27 @@ private:
 	//! Return an exception with did-you-mean suggestion.
 	static CatalogException CreateMissingEntryException(ClientContext &context, const string &entry_name,
 	                                                    CatalogType type,
-	                                                    const unordered_set<SchemaCatalogEntry *> &schemas,
+	                                                    const reference_set_t<SchemaCatalogEntry> &schemas,
 	                                                    QueryErrorContext error_context);
 
 	//! Return the close entry name, the distance and the belonging schema.
 	static SimilarCatalogEntry SimilarEntryInSchemas(ClientContext &context, const string &entry_name, CatalogType type,
-	                                                 const unordered_set<SchemaCatalogEntry *> &schemas);
+	                                                 const reference_set_t<SchemaCatalogEntry> &schemas);
 
 	virtual void DropSchema(ClientContext &context, DropInfo *info) = 0;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return (TARGET &)*this;
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return (const TARGET &)*this;
+	}
 };
 
 } // namespace duckdb

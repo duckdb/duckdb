@@ -10,7 +10,6 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/constants.hpp"
-#include "duckdb/common/single_thread_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 
 #include <limits>
@@ -43,7 +42,7 @@ enum class ExtraTypeInfoType : uint8_t {
 struct string_t;
 
 template <class T>
-using child_list_t = std::vector<std::pair<std::string, T>>;
+using child_list_t = vector<std::pair<std::string, T>>;
 //! FIXME: this should be a single_thread_ptr
 template <class T>
 using buffer_ptr = shared_ptr<T>;
@@ -387,7 +386,7 @@ public:
 	DUCKDB_API static LogicalType DECIMAL(int width, int scale);                 // NOLINT
 	DUCKDB_API static LogicalType VARCHAR_COLLATION(string collation);           // NOLINT
 	DUCKDB_API static LogicalType LIST(const LogicalType &child);                       // NOLINT
-	DUCKDB_API static LogicalType STRUCT(const child_list_t<LogicalType> &children);    // NOLINT
+	DUCKDB_API static LogicalType STRUCT(child_list_t<LogicalType> children);    // NOLINT
 	DUCKDB_API static LogicalType AGGREGATE_STATE(aggregate_state_t state_type);    // NOLINT
 	DUCKDB_API static LogicalType MAP(const LogicalType &child);				// NOLINT
 	DUCKDB_API static LogicalType MAP( child_list_t<LogicalType> children);       // NOLINT

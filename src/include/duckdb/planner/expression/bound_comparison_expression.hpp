@@ -14,6 +14,9 @@ namespace duckdb {
 
 class BoundComparisonExpression : public Expression {
 public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_COMPARISON;
+
+public:
 	BoundComparisonExpression(ExpressionType type, unique_ptr<Expression> left, unique_ptr<Expression> right);
 
 	unique_ptr<Expression> left;

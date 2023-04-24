@@ -213,7 +213,7 @@ struct MacroExtractor {
 		vector<Value> results;
 		for (auto &param : entry.function->parameters) {
 			D_ASSERT(param->type == ExpressionType::COLUMN_REF);
-			auto &colref = (ColumnRefExpression &)*param;
+			auto &colref = param->Cast<ColumnRefExpression>();
 			results.emplace_back(colref.GetColumnName());
 		}
 		for (auto &param_entry : entry.function->default_parameters) {
@@ -239,7 +239,7 @@ struct MacroExtractor {
 
 	static Value GetMacroDefinition(ScalarMacroCatalogEntry &entry, idx_t offset) {
 		D_ASSERT(entry.function->type == MacroType::SCALAR_MACRO);
-		auto &func = (ScalarMacroFunction &)*entry.function;
+		auto &func = entry.function->Cast<ScalarMacroFunction>();
 		return func.expression->ToString();
 	}
 
@@ -269,7 +269,7 @@ struct TableMacroExtractor {
 		vector<Value> results;
 		for (auto &param : entry.function->parameters) {
 			D_ASSERT(param->type == ExpressionType::COLUMN_REF);
-			auto &colref = (ColumnRefExpression &)*param;
+			auto &colref = param->Cast<ColumnRefExpression>();
 			results.emplace_back(colref.GetColumnName());
 		}
 		for (auto &param_entry : entry.function->default_parameters) {
@@ -295,7 +295,7 @@ struct TableMacroExtractor {
 
 	static Value GetMacroDefinition(TableMacroCatalogEntry &entry, idx_t offset) {
 		if (entry.function->type == MacroType::SCALAR_MACRO) {
-			auto &func = (ScalarMacroFunction &)*entry.function;
+			auto &func = entry.function->Cast<ScalarMacroFunction>();
 			return func.expression->ToString();
 		}
 		return Value();

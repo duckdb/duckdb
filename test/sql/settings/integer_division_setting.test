@@ -1,0 +1,42 @@
+# name: test/sql/settings/integer_division_setting.test
+# description: Test integer division setting
+# group: [settings]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT 1/2
+----
+0.5
+
+query I
+SELECT 1//2
+----
+0
+
+statement ok
+SET integer_division=true
+
+query I
+SELECT 1/2
+----
+0
+
+query I
+SELECT 1//2
+----
+0
+
+statement ok
+SET integer_division=false
+
+query I
+SELECT 1/2
+----
+0.5
+
+query I
+SELECT 1//2
+----
+0

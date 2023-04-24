@@ -19,6 +19,7 @@
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/function/table/read_csv.hpp"
 
 namespace duckdb {
 
@@ -34,7 +35,7 @@ bool Binder::BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &e
 	unique_ptr<QueryNode> subquery_node;
 	if (expressions.size() == 1 && expressions[0]->type == ExpressionType::SUBQUERY) {
 		// general case: argument is a subquery, bind it as part of the node
-		auto &se = (SubqueryExpression &)*expressions[0];
+		auto &se = expressions[0]->Cast<SubqueryExpression>();
 		subquery_node = std::move(se.subquery->node);
 	} else {
 		// special case: non-subquery parameter to table-in table-out function
@@ -67,9 +68,9 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 		// hack to make named parameters work
 		if (child->type == ExpressionType::COMPARE_EQUAL) {
 			// comparison, check if the LHS is a columnref
-			auto &comp = (ComparisonExpression &)*child;
+			auto &comp = child->Cast<ComparisonExpression>();
 			if (comp.left->type == ExpressionType::COLUMN_REF) {
-				auto &colref = (ColumnRefExpression &)*comp.left;
+				auto &colref = comp.left->Cast<ColumnRefExpression>();
 				if (!colref.IsQualified()) {
 					parameter_name = colref.GetColumnName();
 					child = std::move(comp.right);
@@ -82,7 +83,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 				return false;
 			}
 			auto binder = Binder::CreateBinder(this->context, this, true);
-			auto &se = (SubqueryExpression &)*child;
+			auto &se = child->Cast<SubqueryExpression>();
 			auto node = binder->BindNode(*se.subquery->node);
 			subquery = make_uniq<BoundSubqueryRef>(std::move(binder), std::move(node));
 			seen_subquery = true;
@@ -143,6 +144,14 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 			auto arrow_bind = (PyTableFunctionData *)bind_data.get();
 			arrow_bind->external_dependency = std::move(external_dependency);
 		}
+		if (table_function.name == "read_csv" || table_function.name == "read_csv_auto") {
+			auto &csv_bind = bind_data->Cast<ReadCSVData>();
+			if (csv_bind.single_threaded) {
+				table_function.extra_info = "(Single-Threaded)";
+			} else {
+				table_function.extra_info = "(Multi-Threaded)";
+			}
+		}
 	}
 	if (return_types.size() != return_names.size()) {
 		throw InternalException(
@@ -194,19 +203,19 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	QueryErrorContext error_context(root_statement, ref.query_location);
 
 	D_ASSERT(ref.function->type == ExpressionType::FUNCTION);
-	auto fexpr = (FunctionExpression *)ref.function.get();
+	auto &fexpr = ref.function->Cast<FunctionExpression>();
 
 	TableFunctionCatalogEntry *function = nullptr;
 
 	// fetch the function from the catalog
-	auto func_catalog = Catalog::GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, fexpr->catalog, fexpr->schema,
-	                                      fexpr->function_name, false, error_context);
+	auto func_catalog = Catalog::GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, fexpr.catalog, fexpr.schema,
+	                                      fexpr.function_name, false, error_context);
 
 	if (func_catalog->type == CatalogType::TABLE_FUNCTION_ENTRY) {
 		function = (TableFunctionCatalogEntry *)func_catalog;
 	} else if (func_catalog->type == CatalogType::TABLE_MACRO_ENTRY) {
 		auto macro_func = (TableMacroCatalogEntry *)func_catalog;
-		auto query_node = BindTableMacro(*fexpr, macro_func, 0);
+		auto query_node = BindTableMacro(fexpr, macro_func, 0);
 		D_ASSERT(query_node);
 
 		auto binder = Binder::CreateBinder(context, this);
@@ -232,7 +241,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	named_parameter_map_t named_parameters;
 	unique_ptr<BoundSubqueryRef> subquery;
 	string error;
-	if (!BindTableFunctionParameters(*function, fexpr->children, arguments, parameters, named_parameters, subquery,
+	if (!BindTableFunctionParameters(*function, fexpr.children, arguments, parameters, named_parameters, subquery,
 	                                 error)) {
 		throw BinderException(FormatError(ref, error));
 	}
@@ -264,7 +273,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		input_table_types = subquery->subquery->types;
 		input_table_names = subquery->subquery->names;
 	}
-	auto get = BindTableFunctionInternal(table_function, ref.alias.empty() ? fexpr->function_name : ref.alias,
+	auto get = BindTableFunctionInternal(table_function, ref.alias.empty() ? fexpr.function_name : ref.alias,
 	                                     std::move(parameters), std::move(named_parameters),
 	                                     std::move(input_table_types), std::move(input_table_names),
 	                                     ref.column_name_alias, std::move(ref.external_dependency));

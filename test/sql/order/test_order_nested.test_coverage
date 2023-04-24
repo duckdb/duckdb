@@ -2,7 +2,13 @@
 # description: Test ORDER BY keyword (nested types)
 # group: [order]
 
+statement ok
+SET default_null_order='nulls_first';
+
 require skip_reload
+
+statement ok
+SET default_null_order='nulls_first';
 
 statement ok
 PRAGMA enable_verification

@@ -53,5 +53,22 @@ public:
 
 	virtual void FormatSerialize(FormatSerializer &serializer) const;
 	static unique_ptr<TableRef> FormatDeserialize(FormatDeserializer &deserializer);
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast constraint to type - constraint type mismatch");
+		}
+		return (TARGET &)*this;
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast constraint to type - constraint type mismatch");
+		}
+		return (const TARGET &)*this;
+	}
 };
 } // namespace duckdb

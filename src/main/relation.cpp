@@ -124,7 +124,7 @@ shared_ptr<Relation> Relation::Join(const shared_ptr<Relation> &other, const str
 			if (expr->type != ExpressionType::COLUMN_REF) {
 				throw ParserException("Expected a single expression as join condition");
 			}
-			auto &colref = (ColumnRefExpression &)*expr;
+			auto &colref = expr->Cast<ColumnRefExpression>();
 			if (colref.IsQualified()) {
 				throw ParserException("Expected unqualified column for column in USING clause");
 			}

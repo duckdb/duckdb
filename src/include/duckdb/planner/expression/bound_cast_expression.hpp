@@ -15,6 +15,9 @@ namespace duckdb {
 
 class BoundCastExpression : public Expression {
 public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_CAST;
+
+public:
 	BoundCastExpression(unique_ptr<Expression> child, LogicalType target_type, BoundCastInfo bound_cast,
 	                    bool try_cast = false);
 

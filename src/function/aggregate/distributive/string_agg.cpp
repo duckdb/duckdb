@@ -25,7 +25,7 @@ struct StringAggBindData : public FunctionData {
 		return make_uniq<StringAggBindData>(sep);
 	}
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (StringAggBindData &)other_p;
+		auto &other = other_p.Cast<StringAggBindData>();
 		return sep == other.sep;
 	}
 };
@@ -48,7 +48,7 @@ struct StringAggFunction {
 	}
 
 	template <class STATE>
-	static void Destroy(STATE *state) {
+	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
 		if (state->dataptr) {
 			delete[] state->dataptr;
 		}
@@ -89,8 +89,8 @@ struct StringAggFunction {
 	}
 
 	static inline void PerformOperation(StringAggState *state, string_t str, FunctionData *data_p) {
-		auto &data = (StringAggBindData &)*data_p;
-		PerformOperation(state, str.GetDataUnsafe(), data.sep.c_str(), str.GetSize(), data.sep.size());
+		auto &data = data_p->Cast<StringAggBindData>();
+		PerformOperation(state, str.GetData(), data.sep.c_str(), str.GetSize(), data.sep.size());
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>

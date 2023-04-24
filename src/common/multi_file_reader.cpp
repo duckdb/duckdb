@@ -342,7 +342,7 @@ HivePartitioningIndex HivePartitioningIndex::Deserialize(Deserializer &source) {
 	return HivePartitioningIndex(std::move(value), index);
 }
 
-void MultiFileReaderOptions::AddBatchInfo(BindInfo &bind_info) {
+void MultiFileReaderOptions::AddBatchInfo(BindInfo &bind_info) const {
 	bind_info.InsertOption("filename", Value::BOOLEAN(filename));
 	bind_info.InsertOption("hive_partitioning", Value::BOOLEAN(hive_partitioning));
 	bind_info.InsertOption("union_by_name", Value::BOOLEAN(union_by_name));

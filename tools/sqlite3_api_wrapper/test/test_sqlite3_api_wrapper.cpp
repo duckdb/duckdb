@@ -140,7 +140,7 @@ TEST_CASE("Basic prepared statement usage", "[sqlite3wrapper]") {
 	REQUIRE(sqlite3_clear_bindings(stmt.stmt) == SQLITE_OK);
 	REQUIRE(sqlite3_step(stmt.stmt) == SQLITE_DONE);
 
-	REQUIRE(db.Execute("SELECT * FROM test ORDER BY 1"));
+	REQUIRE(db.Execute("SELECT * FROM test ORDER BY 1 NULLS FIRST"));
 
 	REQUIRE(db.CheckColumn(0, {"NULL", "NULL", "NULL", "NULL", "2"}));
 	REQUIRE(db.CheckColumn(1, {"NULL", "NULL", "NULL", "NULL", "1000"}));

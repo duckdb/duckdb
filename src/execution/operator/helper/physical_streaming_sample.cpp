@@ -23,7 +23,7 @@ public:
 
 void PhysicalStreamingSample::SystemSample(DataChunk &input, DataChunk &result, OperatorState &state_p) const {
 	// system sampling: we throw one dice per chunk
-	auto &state = (StreamingSampleOperatorState &)state_p;
+	auto &state = state_p.Cast<StreamingSampleOperatorState>();
 	double rand = state.random.NextRandom();
 	if (rand <= percentage) {
 		// rand is smaller than sample_size: output chunk
@@ -34,7 +34,7 @@ void PhysicalStreamingSample::SystemSample(DataChunk &input, DataChunk &result, 
 void PhysicalStreamingSample::BernoulliSample(DataChunk &input, DataChunk &result, OperatorState &state_p) const {
 	// bernoulli sampling: we throw one dice per tuple
 	// then slice the result chunk
-	auto &state = (StreamingSampleOperatorState &)state_p;
+	auto &state = state_p.Cast<StreamingSampleOperatorState>();
 	idx_t result_count = 0;
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
 	for (idx_t i = 0; i < input.size(); i++) {

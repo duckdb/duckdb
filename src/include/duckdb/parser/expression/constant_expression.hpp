@@ -16,6 +16,9 @@ namespace duckdb {
 //! ConstantExpression represents a constant value in the query
 class ConstantExpression : public ParsedExpression {
 public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::CONSTANT;
+
+public:
 	DUCKDB_API explicit ConstantExpression(Value val);
 
 	//! The constant value referenced

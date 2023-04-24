@@ -124,7 +124,7 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 	}
 
 	static bool CastFromNaive(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-		auto &cast_data = (CastData &)*parameters.cast_data;
+		auto &cast_data = parameters.cast_data->Cast<CastData>();
 		auto info = (BindData *)cast_data.info.get();
 		CalendarPtr calendar(info->calendar->clone());
 
@@ -187,7 +187,7 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 	}
 
 	static bool CastToNaive(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-		auto &cast_data = (CastData &)*parameters.cast_data;
+		auto &cast_data = parameters.cast_data->Cast<CastData>();
 		auto info = (BindData *)cast_data.info.get();
 		CalendarPtr calendar(info->calendar->clone());
 
@@ -246,7 +246,7 @@ struct ICULocalTimestampFunc : public ICUDateFunc {
 	}
 
 	static timestamp_t GetLocalTimestamp(ExpressionState &state) {
-		auto &func_expr = (BoundFunctionExpression &)state.expr;
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = (BindDataNow &)*func_expr.bind_info;
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
@@ -295,7 +295,7 @@ struct ICULocalTimeFunc : public ICUDateFunc {
 struct ICUTimeZoneFunc : public ICUDateFunc {
 	template <typename OP>
 	static void Execute(DataChunk &input, ExpressionState &state, Vector &result) {
-		auto &func_expr = (BoundFunctionExpression &)state.expr;
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = (BindData &)*func_expr.bind_info;
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
