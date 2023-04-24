@@ -10,6 +10,7 @@
 
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/hive_partitioning.hpp"
+#include "re2/re2.h"
 
 namespace duckdb {
 class Serializer;
@@ -31,9 +32,11 @@ struct MultiFileReaderOptions {
 		if (files.empty()) {
 			return false;
 		}
-		const auto partitions = HivePartitioning::Parse(files.front());
+		static const string regex_string = "[\\/\\\\]([^\\/\\?\\\\]+)=([^\\/\\n\\?\\\\]+)";
+		duckdb_re2::RE2 regex(regex_string);
+		const auto partitions = HivePartitioning::Parse(files.front(), regex);
 		for (auto &f : files) {
-			auto scheme = HivePartitioning::Parse(f);
+			auto scheme = HivePartitioning::Parse(f, regex);
 			if (scheme.size() != partitions.size()) {
 				return false;
 			}
