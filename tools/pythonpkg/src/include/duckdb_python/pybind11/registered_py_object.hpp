@@ -1,13 +1,13 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb_python/registered_py_object.hpp
+// duckdb_python/pybind11/registered_py_object.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
-#include "duckdb_python/pybind_wrapper.hpp"
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
 
 namespace duckdb {
 

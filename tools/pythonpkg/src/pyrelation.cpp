@@ -1,11 +1,10 @@
 #include "duckdb_python/pyrelation.hpp"
+#include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pytype.hpp"
-#include "duckdb_python/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb_python/vector_conversion.hpp"
-#include "duckdb_python/pandas_type.hpp"
+#include "duckdb_python/numpy/numpy_type.hpp"
 #include "duckdb/main/relation/query_relation.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/main/relation/view_relation.hpp"
@@ -416,7 +415,7 @@ void DuckDBPyRelation::ExecuteOrThrow(bool stream_result) {
 	result = make_uniq<DuckDBPyResult>(std::move(query_result));
 }
 
-DataFrame DuckDBPyRelation::FetchDF(bool date_as_object) {
+PandasDataFrame DuckDBPyRelation::FetchDF(bool date_as_object) {
 	if (!result) {
 		if (!rel) {
 			return py::none();
@@ -532,7 +531,7 @@ py::dict DuckDBPyRelation::FetchNumpyInternal(bool stream, idx_t vectors_per_chu
 }
 
 //! Should this also keep track of when the result is empty and set result->result_closed accordingly?
-DataFrame DuckDBPyRelation::FetchDFChunk(idx_t vectors_per_chunk, bool date_as_object) {
+PandasDataFrame DuckDBPyRelation::FetchDFChunk(idx_t vectors_per_chunk, bool date_as_object) {
 	if (!result) {
 		if (!rel) {
 			return py::none();

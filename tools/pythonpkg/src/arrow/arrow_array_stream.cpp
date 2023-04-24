@@ -1,4 +1,4 @@
-#include "include/duckdb_python/arrow_array_stream.hpp"
+#include "duckdb_python/arrow/arrow_array_stream.hpp"
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/common.hpp"
@@ -8,7 +8,7 @@
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 
-#include "duckdb_python/pyconnection.hpp"
+#include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyresult.hpp"
 
@@ -44,7 +44,8 @@ PyArrowObjectType GetArrowType(const py::handle &obj) {
 }
 
 py::object PythonTableArrowArrayStreamFactory::ProduceScanner(py::object &arrow_scanner, py::handle &arrow_obj_handle,
-                                                              ArrowStreamParameters &parameters, ClientConfig &config) {
+                                                              ArrowStreamParameters &parameters,
+                                                              const ClientConfig &config) {
 	auto filters = parameters.filters;
 	auto &column_list = parameters.projected_columns.columns;
 	bool has_filter = filters && !filters->filters.empty();
@@ -294,7 +295,7 @@ py::object TransformFilterRecursive(TableFilter *filter, const string &column_na
 
 py::object PythonTableArrowArrayStreamFactory::TransformFilter(TableFilterSet &filter_collection,
                                                                std::unordered_map<idx_t, string> &columns,
-                                                               ClientConfig &config) {
+                                                               const ClientConfig &config) {
 	auto filters_map = &filter_collection.filters;
 	auto it = filters_map->begin();
 	D_ASSERT(columns.find(it->first) != columns.end());
