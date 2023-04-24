@@ -14,11 +14,11 @@
 #ifndef CAutoMemoryPool_H
 #define CAutoMemoryPool_H
 
-#include "gpos/assert.h"
-#include "gpos/common/CStackObject.h"
-#include "gpos/memory/CMemoryPool.h"
-#include "gpos/memory/CMemoryPoolManager.h"
-#include "gpos/types.h"
+#include "duckdb/optimizer/cascade/assert.h"
+#include "duckdb/optimizer/cascade/common/CStackObject.h"
+#include "duckdb/optimizer/cascade/memory/CMemoryPool.h"
+#include "duckdb/optimizer/cascade/memory/CMemoryPoolManager.h"
+#include "duckdb/optimizer/cascade/types.h"
 
 namespace gpos
 {
