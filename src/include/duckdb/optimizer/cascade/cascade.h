@@ -1,6 +1,6 @@
 //---------------------------------------------------------------------------
 //	@filename:
-//		Cascade.h
+//		cascade.h
 //
 //	@doc:
 //		Entry point to Cascade optimizer
