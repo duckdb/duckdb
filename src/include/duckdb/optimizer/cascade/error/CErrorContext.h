@@ -8,13 +8,13 @@
 #ifndef CErrorContext_H
 #define CErrorContext_H
 
-#include "gpos/common/CStackDescriptor.h"
+#include "duckdb/optimizer/cascade/common/CStackDescriptor.h"
 #include "duckdb/optimizer/cascade/error/CException.h"
-#include "gpos/error/CMiniDumper.h"
-#include "gpos/error/CSerializable.h"
-#include "gpos/error/IErrorContext.h"
-#include "gpos/io/ioutils.h"
-#include "gpos/string/CWStringStatic.h"
+#include "duckdb/optimizer/cascade/error/CMiniDumper.h"
+#include "duckdb/optimizer/cascade/error/CSerializable.h"
+#include "duckdb/optimizer/cascade/error/IErrorContext.h"
+#include "duckdb/optimizer/cascade/io/ioutils.h"
+#include "duckdb/optimizer/cascade/string/CWStringStatic.h"
 
 #define GPOS_ERROR_MESSAGE_BUFFER_SIZE (4 * 1024)
 
