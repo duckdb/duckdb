@@ -25,7 +25,8 @@ struct CTableFunctionInfo : public TableFunctionInfo {
 };
 
 struct CTableBindData : public TableFunctionData {
-	CTableBindData(CTableFunctionInfo &info) : info(info) {}
+	CTableBindData(CTableFunctionInfo &info) : info(info) {
+	}
 	~CTableBindData() {
 		if (bind_data && delete_callback) {
 			delete_callback(bind_data);
@@ -85,14 +86,14 @@ struct CTableLocalInitData : public LocalTableFunctionState {
 
 struct CTableInternalInitInfo {
 	CTableInternalInitInfo(const CTableBindData &bind_data, CTableInitData &init_data,
-	                       const vector<column_t> &column_ids, TableFilterSet *filters)
+	                       const vector<column_t> &column_ids, optional_ptr<TableFilterSet> filters)
 	    : bind_data(bind_data), init_data(init_data), column_ids(column_ids), filters(filters), success(true) {
 	}
 
 	const CTableBindData &bind_data;
 	CTableInitData &init_data;
 	const vector<column_t> &column_ids;
-	TableFilterSet *filters;
+	optional_ptr<TableFilterSet> filters;
 	bool success;
 	string error;
 };

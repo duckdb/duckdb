@@ -70,8 +70,8 @@ static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ExecutionContext &
 		auto storage_idx = GetStorageIndex(bind_data.table, col);
 		col = storage_idx;
 	}
-	result->scan_state.Initialize(std::move(column_ids), input.filters);
-	TableScanParallelStateNext(context.client, input.bind_data, result.get(), gstate);
+	result->scan_state.Initialize(std::move(column_ids), input.filters.get());
+	TableScanParallelStateNext(context.client, input.bind_data.get(), result.get(), gstate);
 	if (input.CanRemoveFilterColumns()) {
 		auto &tsgs = gstate->Cast<TableScanGlobalState>();
 		result->all_columns.Initialize(context.client, tsgs.scanned_types);
@@ -83,7 +83,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 
 	D_ASSERT(input.bind_data);
 	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
-	auto result = make_uniq<TableScanGlobalState>(context, input.bind_data);
+	auto result = make_uniq<TableScanGlobalState>(context, input.bind_data.get());
 	bind_data.table.GetStorage().InitializeParallelScan(context, result->state);
 	if (input.CanRemoveFilterColumns()) {
 		result->projection_ids = input.projection_ids;
@@ -130,7 +130,8 @@ static void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, Da
 		if (output.size() > 0) {
 			return;
 		}
-		if (!TableScanParallelStateNext(context, data_p.bind_data.get(), data_p.local_state.get(), data_p.global_state.get())) {
+		if (!TableScanParallelStateNext(context, data_p.bind_data.get(), data_p.local_state.get(),
+		                                data_p.global_state.get())) {
 			return;
 		}
 	} while (true);
@@ -219,7 +220,7 @@ static unique_ptr<GlobalTableFunctionState> IndexScanInitGlobal(ClientContext &c
 	auto result = make_uniq<IndexScanGlobalState>(row_id_data);
 	auto &local_storage = LocalStorage::Get(context, bind_data.table.catalog);
 	result->column_ids = input.column_ids;
-	result->local_storage_state.Initialize(input.column_ids, input.filters);
+	result->local_storage_state.Initialize(input.column_ids, input.filters.get());
 	local_storage.InitializeScan(bind_data.table.GetStorage(), result->local_storage_state.local_state, input.filters);
 
 	result->finished = false;

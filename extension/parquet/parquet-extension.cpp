@@ -372,11 +372,11 @@ public:
 		}
 
 		result->column_ids = input.column_ids;
-		result->filters = input.filters;
+		result->filters = input.filters.get();
 		result->row_group_index = 0;
 		result->file_index = 0;
 		result->batch_index = 0;
-		result->max_threads = ParquetScanMaxThreads(context, input.bind_data);
+		result->max_threads = ParquetScanMaxThreads(context, input.bind_data.get());
 		if (input.CanRemoveFilterColumns()) {
 			result->projection_ids = input.projection_ids;
 			const auto table_types = bind_data.types;

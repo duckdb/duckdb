@@ -95,15 +95,15 @@ struct TableFunctionBindInput {
 };
 
 struct TableFunctionInitInput {
-	TableFunctionInitInput(const FunctionData *bind_data_p, const vector<column_t> &column_ids_p,
-	                       const vector<idx_t> &projection_ids_p, TableFilterSet *filters_p)
+	TableFunctionInitInput(optional_ptr<const FunctionData> bind_data_p, const vector<column_t> &column_ids_p,
+	                       const vector<idx_t> &projection_ids_p, optional_ptr<TableFilterSet> filters_p)
 	    : bind_data(bind_data_p), column_ids(column_ids_p), projection_ids(projection_ids_p), filters(filters_p) {
 	}
 
-	const FunctionData *bind_data;
+	optional_ptr<const FunctionData> bind_data;
 	const vector<column_t> &column_ids;
 	const vector<idx_t> projection_ids;
-	TableFilterSet *filters;
+	optional_ptr<TableFilterSet> filters;
 
 	bool CanRemoveFilterColumns() const {
 		if (projection_ids.empty()) {
@@ -121,7 +121,8 @@ struct TableFunctionInitInput {
 
 struct TableFunctionInput {
 public:
-	TableFunctionInput(optional_ptr<const FunctionData> bind_data_p, optional_ptr<LocalTableFunctionState> local_state_p,
+	TableFunctionInput(optional_ptr<const FunctionData> bind_data_p,
+	                   optional_ptr<LocalTableFunctionState> local_state_p,
 	                   optional_ptr<GlobalTableFunctionState> global_state_p)
 	    : bind_data(bind_data_p), local_state(local_state_p), global_state(global_state_p) {
 	}
@@ -139,21 +140,21 @@ public:
 	explicit BindInfo(ScanType type_p) : type(type_p) {};
 	unordered_map<string, Value> options;
 	ScanType type;
-	void InsertOption(string name, Value value) {
+	void InsertOption(const string &name, Value value) {
 		if (options.find(name) != options.end()) {
 			throw InternalException("This option already exists");
 		}
-		options[name] = value;
+		options[name] = std::move(value);
 	}
 	template <class T>
-	T GetOption(string name) {
+	T GetOption(const string &name) {
 		if (options.find(name) == options.end()) {
 			throw InternalException("This option does not exist");
 		}
 		return options[name].GetValue<T>();
 	}
 	template <class T>
-	vector<T> GetOptionList(string name) {
+	vector<T> GetOptionList(const string &name) {
 		if (options.find(name) == options.end()) {
 			throw InternalException("This option does not exist");
 		}
