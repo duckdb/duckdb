@@ -375,8 +375,8 @@ unique_ptr<GlobalTableFunctionState> SQLAutoCompleteInit(ClientContext &context,
 }
 
 void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &bind_data = (SQLAutoCompleteFunctionData &)*data_p.bind_data;
-	auto &data = (SQLAutoCompleteData &)*data_p.global_state;
+	auto &bind_data = data_p.bind_data->Cast<SQLAutoCompleteFunctionData>();
+	auto &data = data_p.global_state->Cast<SQLAutoCompleteData>();
 	if (data.offset >= bind_data.suggestions.size()) {
 		// finished returning values
 		return;
