@@ -439,13 +439,14 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const string &query, 
 	return shared_from_this();
 }
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Append(const string &name, const PandasDataFrame &value, bool by_name) {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Append(const string &name, const PandasDataFrame &value,
+                                                          bool by_name) {
 	RegisterPythonObject("__append_df", value);
 	string columns = "";
 	if (by_name) {
 		auto df_columns = value.attr("columns");
 		vector<string> column_names;
-		for (auto& column : df_columns) {
+		for (auto &column : df_columns) {
 			column_names.push_back(std::string(py::str(column)));
 		}
 		columns = StringUtil::Format("(%s)", StringUtil::Join(column_names, ","));

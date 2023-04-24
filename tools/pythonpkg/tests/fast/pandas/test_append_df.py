@@ -29,3 +29,4 @@ class TestAppendDF(object):
         con.append('tbl', df_in, by_name=True)
         res = con.table('tbl').fetchall()
         assert res == [(4, False, 'duck'), (2, True, 'db')]
+    
