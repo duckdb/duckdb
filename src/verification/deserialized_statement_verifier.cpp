@@ -10,18 +10,10 @@ DeserializedStatementVerifier::DeserializedStatementVerifier(unique_ptr<SQLState
 
 unique_ptr<StatementVerifier> DeserializedStatementVerifier::Create(const SQLStatement &statement) {
 	auto &select_stmt = statement.Cast<SelectStatement>();
-	/*BufferedSerializer serializer;
+	BufferedSerializer serializer;
 	select_stmt.Serialize(serializer);
 	BufferedDeserializer source(serializer);
-	 */
-
-	BinarySerializer serializer;
-	select_stmt.FormatSerialize(serializer);
-
-	BufferedDeserializer buffer(serializer.GetRootBlobData(), serializer.GetRootBlobSize());
-	BinaryDeserializer deserializer(buffer);
-
-	return make_uniq<DeserializedStatementVerifier>(SelectStatement::FormatDeserialize(deserializer));
+	return make_uniq<DeserializedStatementVerifier>(SelectStatement::Deserialize(source));
 }
 
 } // namespace duckdb
