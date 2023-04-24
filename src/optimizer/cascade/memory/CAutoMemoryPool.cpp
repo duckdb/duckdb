@@ -15,7 +15,7 @@
 #include "duckdb/optimizer/cascade/memory/CAutoMemoryPool.h"
 
 #include "duckdb/optimizer/cascade/assert.h"
-#include "gpos/error/CErrorContext.h"
+#include "duckdb/optimizer/error/CErrorContext.h"
 #include "gpos/error/CErrorHandler.h"
 #include "gpos/memory/CMemoryPoolManager.h"
 #include "gpos/task/CAutoSuspendAbort.h"
