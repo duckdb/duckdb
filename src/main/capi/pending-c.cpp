@@ -22,12 +22,10 @@ duckdb_state duckdb_pending_prepared_internal(duckdb_prepared_statement prepared
 	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
 	auto result = new PendingStatementWrapper();
 	result->allow_streaming = allow_streaming;
-	if (TransformNamedParameters(*wrapper) == DuckDBError) {
-		return DuckDBError;
-	}
 
 	try {
-		result->statement = wrapper->statement->PendingQuery(wrapper->values, wrapper->named_values, allow_streaming);
+		duckdb::vector<Value> empty;
+		result->statement = wrapper->statement->PendingQuery(empty, wrapper->values, allow_streaming);
 	} catch (const duckdb::Exception &ex) {
 		result->statement = make_uniq<PendingQueryResult>(duckdb::PreservedError(ex));
 	} catch (std::exception &ex) {

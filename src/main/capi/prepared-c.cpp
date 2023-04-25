@@ -16,41 +16,9 @@ using duckdb::MaterializedQueryResult;
 using duckdb::optional_ptr;
 using duckdb::PreparedStatementWrapper;
 using duckdb::QueryResultType;
+using duckdb::StringUtil;
 using duckdb::timestamp_t;
 using duckdb::Value;
-
-namespace duckdb {
-
-duckdb_state TransformNamedParameters(PreparedStatementWrapper &prepared) {
-	if (prepared.name_to_index.empty()) {
-		return DuckDBSuccess;
-	}
-	if (prepared.values.size() != prepared.name_to_index.size()) {
-		// mixed named/unnamed is not supported yet
-		return DuckDBError;
-	}
-	if (!prepared.named_values.empty()) {
-		// already transformed
-		return DuckDBSuccess;
-	}
-	for (auto &pair : prepared.name_to_index) {
-		auto &name = pair.first;
-		auto index = pair.second;
-		if (index <= 0) {
-			return DuckDBError;
-		}
-		index--;
-		// D_ASSERT(index < prepared.values.size());
-		if (prepared.values.size() < index) {
-			return DuckDBError;
-		}
-		prepared.named_values[name] = std::move(prepared.values[index]);
-	}
-	prepared.values.clear();
-	return DuckDBSuccess;
-}
-
-} // namespace duckdb
 
 idx_t duckdb_extract_statements(duckdb_connection connection, const char *query,
                                 duckdb_extracted_statements *out_extracted_statements) {
@@ -121,21 +89,30 @@ idx_t duckdb_nparams(duckdb_prepared_statement prepared_statement) {
 	return wrapper->statement->n_param;
 }
 
-const char *duckdb_parameter_name(duckdb_prepared_statement prepared_statement, idx_t index) {
+static duckdb::string duckdb_parameter_name_internal(duckdb_prepared_statement prepared_statement, idx_t index) {
 	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
-		return NULL;
+		return duckdb::string();
 	}
 	if (index > wrapper->statement->n_param) {
-		return NULL;
+		return duckdb::string();
 	}
 	for (auto &item : wrapper->statement->named_param_map) {
 		if (item.second == index) {
-			return strdup(item.first.c_str());
+			// This is a named parameter
+			return item.first;
 		}
 	}
-	auto number_string = std::to_string(index);
-	return strdup(number_string.c_str());
+	// No parameter was found with this index
+	return duckdb::string();
+}
+
+const char *duckdb_parameter_name(duckdb_prepared_statement prepared_statement, idx_t index) {
+	auto identifier = duckdb_parameter_name_internal(prepared_statement, index);
+	if (identifier == duckdb::string()) {
+		return NULL;
+	}
+	return strdup(identifier.c_str());
 }
 
 duckdb_type duckdb_param_type(duckdb_prepared_statement prepared_statement, idx_t param_idx) {
@@ -156,8 +133,6 @@ duckdb_state duckdb_clear_bindings(duckdb_prepared_statement prepared_statement)
 		return DuckDBError;
 	}
 	wrapper->values.clear();
-	wrapper->named_values.clear();
-	// TODO: also clear the name_to_index map?
 	return DuckDBSuccess;
 }
 
@@ -169,10 +144,8 @@ static duckdb_state duckdb_bind_value(duckdb_prepared_statement prepared_stateme
 	if (param_idx <= 0 || param_idx > wrapper->statement->n_param) {
 		return DuckDBError;
 	}
-	if (param_idx > wrapper->values.size()) {
-		wrapper->values.resize(param_idx);
-	}
-	wrapper->values[param_idx - 1] = val;
+	auto identifier = duckdb_parameter_name_internal(prepared_statement, param_idx);
+	wrapper->values[identifier] = val;
 	return DuckDBSuccess;
 }
 
@@ -187,8 +160,6 @@ duckdb_state duckdb_bind_parameter_index(duckdb_prepared_statement prepared_stat
 		return DuckDBError;
 	}
 	*param_idx_out = statement->named_param_map.at(name);
-	// Register that this value was provided with a name
-	wrapper->name_to_index[name] = *param_idx_out;
 	return DuckDBSuccess;
 }
 
@@ -304,11 +275,9 @@ duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statemen
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
 		return DuckDBError;
 	}
-	if (TransformNamedParameters(*wrapper) == DuckDBError) {
-		return DuckDBError;
-	}
 
-	auto result = wrapper->statement->Execute(wrapper->values, wrapper->named_values, false);
+	duckdb::vector<Value> empty;
+	auto result = wrapper->statement->Execute(empty, wrapper->values, false);
 	return duckdb_translate_result(std::move(result), out_result);
 }
 

@@ -17,9 +17,11 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(stmt != nullptr);
 
-	status = duckdb_bind_boolean(stmt, 1, 1);
+	status = duckdb_bind_boolean(stmt, 1, true);
 	REQUIRE(status == DuckDBSuccess);
-	status = duckdb_bind_boolean(stmt, 2, 1);
+
+	// Parameter index 2 is out of bounds
+	status = duckdb_bind_boolean(stmt, 2, true);
 	REQUIRE(status == DuckDBError);
 
 	status = duckdb_execute_prepared(stmt, &res);
