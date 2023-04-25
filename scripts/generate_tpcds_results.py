@@ -15,7 +15,7 @@ parser.add_argument('--query-dir', dest='query_dir',
 parser.add_argument('--answer-dir', dest='answer_dir',
                      action='store', help='The directory where to store the answers', default='extension/tpcds/dsdgen/answers/sf${SF}')
 parser.add_argument('--duckdb-path', dest='duckdb_path',
-                     action='store', help='The path to the DuckDB executable', default='build/release/duckdb')
+                     action='store', help='The path to the DuckDB executable', default='build/reldebug/duckdb')
 parser.add_argument('--skip-load', dest='skip_load',
                      action='store_const', const=True, help='Whether or not to skip loading', default=False)
 parser.add_argument('--query-list', dest='query_list',
@@ -25,7 +25,7 @@ parser.add_argument('--nthreads', dest='nthreads',
 
 args = parser.parse_args()
 
-con = psycopg2.connect()
+con = psycopg2.connect(database='postgres')
 c = con.cursor()
 if not args.skip_load:
     tpcds_dir = f'tpcds_sf{args.sf}'
