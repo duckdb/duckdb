@@ -273,10 +273,10 @@ test_that("we throw an error when attempting to union all relations that are not
 })
 
 test_that("A union with different column types throws an error", {
-     test_df_a1 <- rel_from_df(con, data.frame(a=c(1)))
-     test_df_a2 <- rel_from_df(con, data.frame(a=c('1')))
-     rel <- rel_union_all(test_df_a1, test_df_a2)
-     expect_error(rapi_rel_to_df(rel), "Invalid Error: Result mismatch in query!")
+     test_df_a1 <- duckdb:::rel_from_df(con, data.frame(a=c(1)))
+     test_df_a2 <- duckdb:::rel_from_df(con, data.frame(a=c('1')))
+     rel <- duckdb:::rel_union_all(test_df_a1, test_df_a2)
+     expect_error(duckdb:::rapi_rel_to_df(rel), "Invalid Error: Result mismatch in query!")
 })
 
 test_that("Set Intersect returns set intersection", {
@@ -288,6 +288,21 @@ test_that("Set Intersect returns set intersection", {
     dim(rel_df)
     expected_result <- data.frame(a=c(1), b=c(3))
     expect_equal(rel_df, expected_result)
+})
+
+test_that("Set intersect casts columns to the richer type", {
+   # df1 is Integer
+   df1 <- data.frame(x = 1:4)
+   # df2 has Double
+   df2 <- data.frame(x = 4)
+   expect_equal(class(df1$x), "integer")
+   expect_equal(class(df2$x), "numeric")
+   out <- rel_set_intersect(
+     rel_from_df(con, df1),
+     rel_from_df(con, df2)
+   )
+   out_df <- rapi_rel_to_df(out)
+   expect_equal(class(out_df$x), "numeric")
 })
 
 test_that("Set Diff returns the set difference", {
