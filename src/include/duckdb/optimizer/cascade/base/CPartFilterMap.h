@@ -1,6 +1,6 @@
 //---------------------------------------------------------------------------
 //	@filename:
-//		CPartFilter.h
+//		CPartFilterMap.h
 //
 //	@doc:
 //		Partitioned table filter map used in required and derived properties
