@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/atomic.hpp"
 #include <memory>
 
 namespace duckdb {
@@ -23,27 +24,35 @@ enum class TaskExecutionMode : uint8_t { PROCESS_ALL, PROCESS_PARTIAL };
 
 enum class TaskExecutionResult : uint8_t { TASK_FINISHED, TASK_NOT_FINISHED, TASK_ERROR, TASK_BLOCKED};
 
-//! State that is passed to the asynchronous callback that signals task can be rescheduled
-struct InterruptCallbackState {
-	weak_ptr<Task> current_task;
-};
+//! TODO: this shit should be moved?
+//! InterruptMode specifies how operators should block/unblock, note that this will happen transparently to the operator,
+//! as the operator only needs to return a BLOCKED result and call the callback using the InterruptState.
+//! NO_INTERRUPTS: No blocking mode is specified, an error will be thrown when the operator blocks. Should only be used
+//!				 when manually calling operators of which is known they will never block.
+//! TASK:		 A weak pointer to a task is provided. On the callback, this task will be signalled.
+//! BLOCKING:	 The caller has blocked awaiting
+enum class InterruptMode : uint8_t { NO_INTERRUPTS, TASK, BLOCKING};
 
-//! State of an interrupt, allows the interrupting code to specify how the interrupt should be handled
-struct InterruptState {
+//! State required to make the callback after some async operation within an operator source / sink.
+class InterruptState {
+public:
+	//! Default interrupt state will be set to InterruptMode::NO_INTERRUPTS and throw an error on use of Callback()
 	InterruptState();
+	//! Register the task to be interrupted and set mode to InterruptMode::TASK
+	InterruptState(weak_ptr<Task> task);
+	//! Register atomic done marker and set mode to InterruptMode::BLOCKING
+	InterruptState(weak_ptr<atomic<bool>> done_marker);
 
-	void Reset() {
-		allow_async = true;
-	}
+	//! Perform the callback to indicate the Interrupt is over
+	DUCKDB_API void Callback() const;
 
-	//! Generate the InterruptCallbackState required for the callback to signal that the operator is ready to
-	//! produce/consume tuples again.
-	InterruptCallbackState GetCallbackState();
-	//! Signal that the operator is ready to produce/consume tuples.
-	static void Callback(InterruptCallbackState callback_state);
-
+protected:
+	//! Current interrupt mode
+	InterruptMode mode;
+	//! Task ptr for InterruptMode::TASK
 	weak_ptr<Task> current_task;
-	bool allow_async = true;
+	//! Marker ptr for InterruptMode::BLOCKING
+	weak_ptr<atomic<bool>> done_marker;
 };
 
 //! Generic parallel task

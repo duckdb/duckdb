@@ -34,9 +34,7 @@ public:
 			pipeline_executor = make_uniq<PipelineExecutor>(pipeline.GetClientContext(), pipeline);
 		}
 
-		// to allow interruption of this task by te execution, we need to pass the current task to the interrupt state.
-		auto& interrupt_state = pipeline_executor->GetInterruptState();
-		interrupt_state.current_task = shared_from_this();
+		pipeline_executor->SetTaskForInterrupts(shared_from_this());
 
 		if (mode == TaskExecutionMode::PROCESS_PARTIAL) {
 			auto res = pipeline_executor->Execute(PARTIAL_CHUNK_COUNT);

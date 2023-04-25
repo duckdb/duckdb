@@ -124,7 +124,7 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 		} else if (!exhausted_source) {
 			// Regular fetch from source into pipeline
 			source_chunk.Reset();
-			auto res = FetchFromSource(source_chunk, true);
+			auto res = FetchFromSource(source_chunk);
 
 			// SOURCE INTERRUPT
 			if(res == SourceResultType::BLOCKED) {
@@ -200,7 +200,6 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t
 
 			D_ASSERT(pipeline.sink);
 			D_ASSERT(pipeline.sink->sink_state);
-			interrupt_state.Reset();
 			OperatorSinkInput sink_input { *pipeline.sink->sink_state, *local_sink_state, interrupt_state };
 
 			auto sink_result = Sink(sink_chunk, sink_input);
@@ -252,9 +251,27 @@ void PipelineExecutor::ExecutePull(DataChunk &result) {
 			if (in_process_operators.empty()) {
 				source_chunk.Reset();
 
-				// TODO: here we currently force having a sync and an async implementation initially, we may want to
-				//		 switch to a busy wait for the async variant so both are fine?
-				auto res = FetchFromSource(source_chunk, false);
+				// NOTE: we need to do blocking GetData, so we switch to Blocking I/O mode here.
+				// Set interrupt mode to blocking, passing the done marker
+				auto done_marker = make_shared<atomic<bool>>(false);
+				interrupt_state = InterruptState(done_marker);
+				SourceResultType source_result;
+
+				// Repeatedly try to fetch from the source until it doesn't block. Note that it may block multiple times!
+				while(true) {
+					source_result = FetchFromSource(source_chunk);
+
+					// No interrupt happened, all good.
+					if (source_result != SourceResultType::BLOCKED){
+						break;
+					}
+
+					// Busy wait for async callback from source operator TODO: backoff?
+					while(!*done_marker) {};
+
+					// Source made callback, reset marker and try again
+					*done_marker = false;
+				}
 
 				if (source_chunk.size() == 0) {
 //					D_ASSERT(res == SourceResultType::FINISHED);
@@ -384,15 +401,19 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 	return in_process_operators.empty() ? OperatorResultType::NEED_MORE_INPUT : OperatorResultType::HAVE_MORE_OUTPUT;
 }
 
+void PipelineExecutor::SetTaskForInterrupts(weak_ptr<Task> current_task) {
+	interrupt_state = InterruptState(std::move(current_task));
+}
+
 SourceResultType PipelineExecutor::GetData(DataChunk &chunk, OperatorSourceInput &input) {
 	//! Testing feature to enable async source on every operator
-	if (context.client.config.force_async_pipelines && !debug_blocked_source && input.interrupt_state.allow_async) {
+	if (context.client.config.force_async_pipelines && !debug_blocked_source) {
 		debug_blocked_source = true;
 
-		auto callback_state = input.interrupt_state.GetCallbackState();
+		auto callback_state = input.interrupt_state;
 		std::thread rewake_thread([callback_state] {
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
-			InterruptState::Callback(callback_state);
+			callback_state.Callback();
 		});
 		rewake_thread.detach();
 
@@ -404,13 +425,13 @@ SourceResultType PipelineExecutor::GetData(DataChunk &chunk, OperatorSourceInput
 
 SinkResultType PipelineExecutor::Sink(DataChunk &chunk, OperatorSinkInput &input) {
 	//! Testing feature to enable async sink on every operator
-	if (context.client.config.force_async_pipelines && !debug_blocked_sink && input.interrupt_state.allow_async) {
+	if (context.client.config.force_async_pipelines && !debug_blocked_sink) {
 		debug_blocked_sink = true;
 
-		auto callback_state = input.interrupt_state.GetCallbackState();
+		auto callback_state = input.interrupt_state;
 		std::thread rewake_thread([callback_state] {
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
-			InterruptState::Callback(callback_state);
+			callback_state.Callback();
 		});
 		rewake_thread.detach();
 
@@ -420,10 +441,9 @@ SinkResultType PipelineExecutor::Sink(DataChunk &chunk, OperatorSinkInput &input
 	return pipeline.sink->Sink(context, chunk, input);
 }
 
-SourceResultType PipelineExecutor::FetchFromSource(DataChunk &result, bool allow_async) {
+SourceResultType PipelineExecutor::FetchFromSource(DataChunk &result) {
 	StartOperator(pipeline.source);
 
-	interrupt_state.allow_async = allow_async;
 	OperatorSourceInput source_input = { *pipeline.source_state, *local_source_state, interrupt_state };
 	auto res = GetData(result, source_input);
 	D_ASSERT(res != SourceResultType::BLOCKED || result.size() == 0);

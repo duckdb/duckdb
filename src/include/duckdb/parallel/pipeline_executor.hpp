@@ -58,10 +58,8 @@ public:
 	//! This flushes profiler states
 	void PullFinalize();
 
-	//! Allows the PipelineTask to propagate the interrupt up to the scheduler
-	InterruptState& GetInterruptState() {
-		return interrupt_state;
-	}
+	//! Registers the task in the interrupt_state to ensure Source/Sink interrupts will block the correct Task
+	void SetTaskForInterrupts(weak_ptr<Task> current_task);
 
 private:
 	//! The pipeline to process
@@ -80,6 +78,8 @@ private:
 	unique_ptr<LocalSourceState> local_source_state;
 	//! The local sink state (if any)
 	unique_ptr<LocalSinkState> local_sink_state;
+	//! The interrupt state, holding required information for sink/source operators to block
+	InterruptState interrupt_state;
 
 	//! The final chunk used for moving data into the sink
 	DataChunk final_chunk;
@@ -93,9 +93,6 @@ private:
 	int32_t finished_processing_idx = -1;
 	//! Whether or not this pipeline requires keeping track of the batch index of the source
 	bool requires_batch_index = false;
-	//! State for the most recent operator interrupt will be stored here, this allows determining from the PipelineTask
-	//! how to deschedule it.
-	InterruptState interrupt_state;
 
 	//! This flag is set when the pipeline gets interrupted by the Sink. It means that before continuing the pipeline
 	//! we need to resink the last chunk
@@ -117,7 +114,7 @@ private:
 
 	//! Reset the operator index to the first operator
 	void GoToSource(idx_t &current_idx, idx_t initial_idx);
-	SourceResultType FetchFromSource(DataChunk &result, bool allow_async);
+	SourceResultType FetchFromSource(DataChunk &result);
 
 	void FinishProcessing(int32_t operator_idx = -1);
 	bool IsFinished();

@@ -395,8 +395,8 @@ public:
 			while (true) {
 				output_chunk.Reset();
 
-				InterruptState istate;
-				OperatorSourceInput source_input { *global_source_state, *local_source_state, istate };
+				InterruptState interrupt_state;
+				OperatorSourceInput source_input { *global_source_state, *local_source_state, interrupt_state };
 				auto res = radix_table_p->GetData(temp_exec_context, output_chunk, *distinct_state.radix_states[table_idx], source_input);
 				if (res == SourceResultType::FINISHED) {
 					D_ASSERT(output_chunk.size() == 0);
