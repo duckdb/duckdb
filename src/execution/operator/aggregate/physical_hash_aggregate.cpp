@@ -278,7 +278,7 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Data
 		auto &radix_table = *distinct_data->radix_tables[table_idx];
 		auto &radix_global_sink = *distinct_state->radix_states[table_idx];
 		auto &radix_local_sink = *grouping_lstate.distinct_states[table_idx];
-		InterruptState interrupt_state(context.client);
+		InterruptState interrupt_state;
 		OperatorSinkInput sink_input {radix_global_sink, radix_local_sink, interrupt_state};
 
 		if (aggregate.filter) {
@@ -380,9 +380,8 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, DataChunk 
 	for (idx_t i = 0; i < groupings.size(); i++) {
 		auto &grouping_gstate = gstate.grouping_states[i];
 		auto &grouping_lstate = llstate.grouping_states[i];
-		InterruptState istate(context.client);
+		InterruptState istate;
 		OperatorSinkInput sink_input{*grouping_gstate.table_state, *grouping_lstate.table_state, istate};
-
 
 		auto &grouping = groupings[i];
 		auto &table = grouping.table_data;
@@ -581,7 +580,7 @@ public:
 				group_chunk.Reset();
 				aggregate_input_chunk.Reset();
 
-				InterruptState interrupt_state(context);
+				InterruptState interrupt_state;
 				interrupt_state.allow_async = false;
 				OperatorSourceInput source_input {*global_source, *local_source, interrupt_state};
 				auto res = radix_table_p->GetData(temp_exec_context, output_chunk, *state.radix_states[table_idx], source_input);
@@ -886,12 +885,8 @@ SourceResultType PhysicalHashAggregate::GetData(ExecutionContext &context, DataC
 		auto &radix_table = grouping.table_data;
 		auto &grouping_gstate = sink_gstate.grouping_states[radix_idx];
 
-		InterruptState interrupt_state(context.client);
-		OperatorSourceInput source_input {
-		    *gstate.radix_states[radix_idx],
-		    *lstate.radix_states[radix_idx],
-		    interrupt_state
-		};
+		InterruptState interrupt_state;
+		OperatorSourceInput source_input { *gstate.radix_states[radix_idx], *lstate.radix_states[radix_idx], interrupt_state };
 		auto res = radix_table.GetData(context, chunk, *grouping_gstate.table_state, source_input);
 		if (chunk.size() != 0) {
 			return SourceResultType::HAVE_MORE_OUTPUT;

@@ -26,12 +26,11 @@ enum class TaskExecutionResult : uint8_t { TASK_FINISHED, TASK_NOT_FINISHED, TAS
 //! State that is passed to the asynchronous callback that signals task can be rescheduled
 struct InterruptCallbackState {
 	weak_ptr<Task> current_task;
-	weak_ptr<DatabaseInstance> db; // TODO: remove?
 };
 
 //! State of an interrupt, allows the interrupting code to specify how the interrupt should be handled
 struct InterruptState {
-	InterruptState(ClientContext& context);
+	InterruptState();
 
 	void Reset() {
 		allow_async = true;
@@ -44,7 +43,6 @@ struct InterruptState {
 	static void Callback(InterruptCallbackState callback_state);
 
 	weak_ptr<Task> current_task;
-	ClientContext& context;
 	bool allow_async = true;
 };
 

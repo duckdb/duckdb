@@ -8,7 +8,7 @@
 namespace duckdb {
 
 PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_p)
-    : pipeline(pipeline_p), thread(context_p), context(context_p, thread, &pipeline_p), interrupt_state(context_p) {
+    : pipeline(pipeline_p), thread(context_p), context(context_p, thread, &pipeline_p) {
 	D_ASSERT(pipeline.source_state);
 	local_source_state = pipeline.source->GetLocalSourceState(context, *pipeline.source_state);
 	if (pipeline.sink) {

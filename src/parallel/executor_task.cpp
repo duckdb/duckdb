@@ -25,7 +25,7 @@ void ExecutorTask::Reschedule() {
 	executor.RescheduleTask(shared_from_this());
 };
 
-InterruptState::InterruptState(ClientContext &context) : context(context) {}
+InterruptState::InterruptState() {}
 
 InterruptCallbackState InterruptState::GetCallbackState() {
 #ifdef DEBUG
@@ -33,15 +33,14 @@ InterruptCallbackState InterruptState::GetCallbackState() {
 		throw InternalException("GetCallbackState called on interrupt state without current_task pointer");
 	}
 #endif
-	return {current_task, context.db};
+	return {current_task};
 }
 
 void InterruptState::Callback(InterruptCallbackState callback_state) {
 	//! Check if db and task are still alive and kicking
-	auto db = callback_state.db.lock();
 	auto task = callback_state.current_task.lock();
 
-	if (!db || !task) {
+	if (!task) {
 		return;
 	}
 
