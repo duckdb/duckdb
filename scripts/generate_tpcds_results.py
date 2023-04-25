@@ -74,7 +74,7 @@ def run_query(q):
     with open(os.path.join(args.query_dir, q), 'r') as f:
         sql_query = f.read()
     answer_path = os.path.join(os.getcwd(), answer_dir, q.replace('.sql', '.csv'))
-    c.execute('DROP TABLE IF EXISTS query_result')
+    c.execute(f'DROP TABLE IF EXISTS "query_result{q}"')
     c.execute(f'CREATE TABLE "query_result{q}" AS ' + sql_query)
     c.execute(f"COPY \"query_result{q}\" TO '{answer_path}' (FORMAT CSV, DELIMITER '|', HEADER, NULL 'NULL')")
 
