@@ -284,7 +284,14 @@ public:
 		next_buffer = shared_ptr<CSVBuffer>(
 		    current_buffer->Next(*file_handle, buffer_size, current_csv_position, file_number).release());
 		running_threads = MaxThreads();
-        line_info.current_batches.push_back({});
+        auto file_count = files_path_p.size();
+        line_info.current_batches.resize(file_count);
+
+        tuple_start.resize(file_count);
+        tuple_end.resize(file_count);
+        tuple_end_to_batch.resize(file_count);
+        batch_to_tuple_end.resize(file_count);
+
 	}
 	ParallelCSVGlobalState() : line_info(&main_mutex, &batch_to_tuple_end, &tuple_start, &tuple_end) {
 		running_threads = MaxThreads();
@@ -443,9 +450,6 @@ void ParallelCSVGlobalState::Verify() {
 }
 
 void LineInfo::Verify(idx_t file_idx, idx_t batch_idx, idx_t cur_first_pos) {
-    if (file_idx >= tuple_start->size()){
-        return;
-    }
     auto &tuple_start_set = (*tuple_start)[file_idx];
     auto &processed_batches = (*batch_to_tuple_end)[file_idx];
     auto &tuple_end_vec = (*tuple_end)[file_idx];
@@ -490,8 +494,6 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 			current_file_path = bind_data.files[file_index++];
 			file_handle = ReadCSV::OpenCSV(current_file_path, bind_data.options.compression, context);
 			current_csv_position = 0;
-            batch_index = 0;
-            line_info.current_batches.push_back({});
 			file_number++;
 			current_buffer =
 			    make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position, file_number);
@@ -554,14 +556,6 @@ void ParallelCSVGlobalState::UpdateVerification(VerificationPositions positions,
 	if (positions.beginning_of_first_line < positions.end_of_last_line) {
 		if (positions.end_of_last_line > max_tuple_end) {
 			max_tuple_end = positions.end_of_last_line;
-		}
-		while (file_number_p >= tuple_start.size()) {
-			vector<idx_t> empty_tuple_end;
-			set<idx_t> empty_set;
-			tuple_start.emplace_back(empty_set);
-			tuple_end.emplace_back(empty_tuple_end);
-			tuple_end_to_batch.push_back({});
-            batch_to_tuple_end.push_back({});
 		}
 		tuple_end_to_batch[file_number_p][positions.end_of_last_line] = batch_idx;
         batch_to_tuple_end[file_number_p][batch_idx] = tuple_end[file_number_p].size();
