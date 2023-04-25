@@ -29,7 +29,8 @@ InsertStatement::InsertStatement()
 InsertStatement::InsertStatement(const InsertStatement &other)
     : SQLStatement(other), select_statement(unique_ptr_cast<SQLStatement, SelectStatement>(
                                other.select_statement ? other.select_statement->Copy() : nullptr)),
-      columns(other.columns), table(other.table), schema(other.schema), catalog(other.catalog) {
+      columns(other.columns), table(other.table), schema(other.schema), catalog(other.catalog),
+      default_values(other.default_values) {
 	cte_map = other.cte_map.Copy();
 	for (auto &expr : other.returning_list) {
 		returning_list.emplace_back(expr->Copy());
@@ -93,11 +94,14 @@ string InsertStatement::ToString() const {
 	result += " ";
 	auto values_list = GetValuesList();
 	if (values_list) {
+		D_ASSERT(!default_values);
 		values_list->alias = string();
 		result += values_list->ToString();
 	} else if (select_statement) {
+		D_ASSERT(!default_values);
 		result += select_statement->ToString();
 	} else {
+		D_ASSERT(default_values);
 		result += "DEFAULT VALUES";
 	}
 	if (!or_replace_shorthand_set && on_conflict_info) {

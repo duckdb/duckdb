@@ -72,6 +72,9 @@ public:
 	//! CTEs
 	CommonTableExpressionMap cte_map;
 
+	//! Whether or not this a DEFAULT VALUES
+	bool default_values = false;
+
 protected:
 	InsertStatement(const InsertStatement &other);
 

@@ -410,7 +410,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	AddCTEMap(stmt.cte_map);
 
 	vector<LogicalIndex> named_column_map;
-	if (!stmt.columns.empty() || !stmt.select_statement) {
+	if (!stmt.columns.empty() || stmt.default_values) {
 		// insertion statement specifies column list
 
 		// create a mapping of (list index) -> (column index)
@@ -449,7 +449,10 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 	// bind the default values
 	BindDefaultValues(table.GetColumns(), insert->bound_defaults);
-
+	if (!stmt.select_statement && !stmt.default_values) {
+		result.plan = std::move(insert);
+		return result;
+	}
 	// Exclude the generated columns from this amount
 	idx_t expected_columns = stmt.columns.empty() ? table.GetColumns().PhysicalColumnCount() : stmt.columns.size();
 

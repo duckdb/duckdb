@@ -45,6 +45,8 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGNo
 	}
 	if (stmt->selectStmt) {
 		result->select_statement = TransformSelect(stmt->selectStmt, false);
+	} else {
+		result->default_values = true;
 	}
 
 	auto qname = TransformQualifiedName(stmt->relation);
