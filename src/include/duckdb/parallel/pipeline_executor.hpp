@@ -105,6 +105,10 @@ private:
 	bool started_flushing = false;
 	bool done_flushing = false;
 
+	//! Debugging state for force_async_pipelines
+	bool debug_blocked_sink = false;
+	bool debug_blocked_source = false;
+
 	idx_t flushing_idx;
 
 private:
@@ -117,6 +121,10 @@ private:
 
 	void FinishProcessing(int32_t operator_idx = -1);
 	bool IsFinished();
+
+	//! Wrappers for sink/source calls to respective operators
+	SourceResultType GetData(DataChunk &chunk, OperatorSourceInput &input);
+	SinkResultType Sink(DataChunk &chunk, OperatorSinkInput &input);
 
 	OperatorResultType ExecutePushInternal(DataChunk &input, idx_t initial_idx = 0);
 	//! Pushes a chunk through the pipeline and returns a single result chunk

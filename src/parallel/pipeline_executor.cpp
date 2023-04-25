@@ -2,6 +2,9 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/limits.hpp"
 
+#include <thread>
+#include <chrono>
+
 namespace duckdb {
 
 PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_p)
@@ -96,7 +99,7 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 		}
 
 		// The reasoning we now also need this is because before in this loop we would always go through FetchFromSource
-		// which now
+		// which now can be interrupted (ambiguity of this sentence is also a TODO...)
 		// TODO: move up? remove call in FetchFromSource?
 		if (context.client.interrupted) {
 			throw InterruptException();
@@ -199,7 +202,8 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t
 			D_ASSERT(pipeline.sink->sink_state);
 			interrupt_state.Reset();
 			OperatorSinkInput sink_input { *pipeline.sink->sink_state, *local_sink_state, interrupt_state };
-			auto sink_result = pipeline.sink->Sink(context, sink_chunk, sink_input);
+
+			auto sink_result = Sink(sink_chunk, sink_input);
 
 			EndOperator(pipeline.sink, nullptr);
 
@@ -380,13 +384,48 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 	return in_process_operators.empty() ? OperatorResultType::NEED_MORE_INPUT : OperatorResultType::HAVE_MORE_OUTPUT;
 }
 
+SourceResultType PipelineExecutor::GetData(DataChunk &chunk, OperatorSourceInput &input) {
+	//! Testing feature to enable async source on every operator
+	if (context.client.config.force_async_pipelines && !debug_blocked_source && input.interrupt_state.allow_async) {
+		debug_blocked_source = true;
+
+		auto callback_state = input.interrupt_state.GetCallbackState();
+		std::thread rewake_thread([callback_state] {
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			InterruptState::Callback(callback_state);
+		});
+		rewake_thread.detach();
+
+		return SourceResultType::BLOCKED;
+	}
+
+	return pipeline.source->GetData(context, chunk, input);
+}
+
+SinkResultType PipelineExecutor::Sink(DataChunk &chunk, OperatorSinkInput &input) {
+	//! Testing feature to enable async sink on every operator
+	if (context.client.config.force_async_pipelines && !debug_blocked_sink && input.interrupt_state.allow_async) {
+		debug_blocked_sink = true;
+
+		auto callback_state = input.interrupt_state.GetCallbackState();
+		std::thread rewake_thread([callback_state] {
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			InterruptState::Callback(callback_state);
+		});
+		rewake_thread.detach();
+
+		return SinkResultType::BLOCKED;
+	}
+
+	return pipeline.sink->Sink(context, chunk, input);
+}
+
 SourceResultType PipelineExecutor::FetchFromSource(DataChunk &result, bool allow_async) {
 	StartOperator(pipeline.source);
 
-	interrupt_state.Reset(); // TODO Do we need to reset this every time? or can we actually guarantee its reset here?
 	interrupt_state.allow_async = allow_async;
 	OperatorSourceInput source_input = { *pipeline.source_state, *local_source_state, interrupt_state };
-	auto res = pipeline.source->GetData(context, result, source_input);
+	auto res = GetData(result, source_input);
 	D_ASSERT(res != SourceResultType::BLOCKED || result.size() == 0);
 	D_ASSERT(res != SourceResultType::FINISHED || result.size() == 0);
 
@@ -399,7 +438,6 @@ SourceResultType PipelineExecutor::FetchFromSource(DataChunk &result, bool allow
 		local_sink_state->batch_index = next_batch_index;
 	}
 
-	// TODO: how to handle the profiler when a pipeline was interrupted?
 	EndOperator(pipeline.source, &result);
 
 	return res;
