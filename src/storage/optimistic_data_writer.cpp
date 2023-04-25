@@ -1,6 +1,7 @@
 #include "duckdb/storage/optimistic_data_writer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
+#include "duckdb/storage/table/column_checkpoint_state.hpp"
 
 namespace duckdb {
 

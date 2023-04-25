@@ -11,7 +11,7 @@ CREATE TABLE integers AS SELECT * FROM range(10000000) tbl(i);
 ----
 10000000
 
- check the block count and median number of rows per row group
+# check the block count and median number of rows per row group
 query I
 SELECT COUNT(DISTINCT block_id) FROM pragma_storage_info('integers');
 ----
@@ -39,7 +39,7 @@ SELECT * FROM integers_parquet LIMIT 5
 4
 
 query I
-SELECT * FROM integers_parquetLIMIT 5 OFFSET 773654
+SELECT * FROM integers_parquet LIMIT 5 OFFSET 773654
 ----
 773654
 773655
