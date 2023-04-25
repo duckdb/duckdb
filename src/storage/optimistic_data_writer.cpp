@@ -95,4 +95,4 @@ void OptimisticDataWriter::Rollback() {
 	}
 }
 
-}
+} // namespace duckdb

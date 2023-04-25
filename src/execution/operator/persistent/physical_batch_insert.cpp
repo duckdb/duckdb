@@ -207,7 +207,8 @@ public:
 		}
 	}
 
-	void AddCollection(ClientContext &context, idx_t batch_index, idx_t min_batch_index, unique_ptr<RowGroupCollection> current_collection,
+	void AddCollection(ClientContext &context, idx_t batch_index, idx_t min_batch_index,
+	                   unique_ptr<RowGroupCollection> current_collection,
 	                   optional_ptr<OptimisticDataWriter> writer = nullptr,
 	                   optional_ptr<bool> written_to_disk = nullptr) {
 		optional_idx merged_batch_index;

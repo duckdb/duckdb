@@ -6,29 +6,48 @@ load __TEST_DIR__/insert_odd_sized_batches.db
 
 require parquet
 
-#query I
-#CREATE TABLE integers AS SELECT * FROM range(10000000) tbl(i);
-#----
-#10000000
+query I
+CREATE TABLE integers AS SELECT * FROM range(10000000) tbl(i);
+----
+10000000
 
-# check the block count and median number of rows per row group
-#query I
-#SELECT COUNT(DISTINCT block_id) FROM pragma_storage_info('integers');
-#----
-#2
+ check the block count and median number of rows per row group
+query I
+SELECT COUNT(DISTINCT block_id) FROM pragma_storage_info('integers');
+----
+2
 
-#query I
-#SELECT MEDIAN(count) FROM pragma_storage_info('integers');
-#----
-#122880
-#
-#statement ok
-#COPY integers TO 'integers.parquet' (ROW_GROUP_SIZE 77777)
+query I
+SELECT MEDIAN(count) FROM pragma_storage_info('integers');
+----
+122880
+
+statement ok
+COPY integers TO 'integers.parquet' (ROW_GROUP_SIZE 77777)
 
 # verify that reading while preserving insertion order creates the same size table
 statement ok
 CREATE TABLE integers_parquet AS FROM 'integers.parquet';
 
+query I
+SELECT * FROM integers_parquet LIMIT 5
+----
+0
+1
+2
+3
+4
+
+query I
+SELECT * FROM integers_parquetLIMIT 5 OFFSET 773654
+----
+773654
+773655
+773656
+773657
+773658
+
+# FIXME: block count is different because empty blocks are not re-used correctly
 #query I
 #SELECT COUNT(DISTINCT block_id) FROM pragma_storage_info('integers_parquet');
 #----
@@ -48,7 +67,7 @@ SET preserve_insertion_order=false
 statement ok
 CREATE TABLE integers_parquet_no_order AS FROM '__TEST_DIR__/integers.parquet'
 
-# FIXME: block count is different because empty blocks are not re-used correctly somehow
+# FIXME: block count is different because empty blocks are not re-used correctly
 #query I
 #SELECT COUNT(DISTINCT block_id) FROM pragma_storage_info('integers_parquet_no_order');
 #----
