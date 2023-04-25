@@ -402,7 +402,7 @@ public:
 					D_ASSERT(output_chunk.size() == 0);
 					break;
 				} else if (res == SourceResultType::BLOCKED) {
-					throw InternalException("Unexpected interrupt in radix table scan");
+					throw InternalException("Unexpected interrupt from radix table GetData in UngroupedDistinctAggregateFinalizeTask");
 				}
 
 				// We dont need to resolve the filter, we already did this in Sink

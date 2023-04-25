@@ -26,6 +26,7 @@ class PhysicalOperator;
 class Pipeline;
 class PipelineBuildState;
 class MetaPipeline;
+class InterruptState;
 
 struct OperatorSinkInput {
 	GlobalSinkState &global_state;

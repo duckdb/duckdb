@@ -76,33 +76,6 @@ unique_ptr<GlobalSourceState> PhysicalOperator::GetGlobalSourceState(ClientConte
 }
 
 // LCOV_EXCL_START
-//void PhysicalOperator::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-//                               LocalSourceState &lstate) const {
-//	throw InternalException("Calling GetData on a node that is not a source!");
-//}
-//
-//void PhysicalOperator::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-//             LocalSourceState &lstate, InterruptState& istate) const {
-//#ifdef DUCKDB_TEST_FORCE_ASYNC_OPERATORS
-//	// This flag provides all Operators in duckdb with a (bogus) async variant. The first call will block, any next calls
-//	// will just be sync
-//	if (!lstate.did_async) {
-//		lstate.did_async = true;
-//
-//		auto callback_state = istate.GetCallbackState(context.client);
-//		std::thread rewake_thread([callback_state] {
-//			std::this_thread::sleep_for(std::chrono::milliseconds(1));
-//			InterruptState::Callback(callback_state);
-//		});
-//		rewake_thread.detach();
-//	} else {
-//		return GetData(context, chunk, gstate, lstate);
-//	}
-//#else
-//	return GetData(context, chunk, gstate, lstate);
-//#endif
-//}
-
 SourceResultType PhysicalOperator::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
 	throw InternalException("Calling GetData on a node that is not a source!");
 }

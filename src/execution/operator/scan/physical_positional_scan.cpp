@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/transaction/transaction.hpp"
 
@@ -68,7 +69,7 @@ public:
 				OperatorSourceInput source_input { global_state, *local_state, interrupt_state };
 				auto source_result = table.GetData(context, source, source_input);
 				if (source_result == SourceResultType::BLOCKED) {
-					throw NotImplementedException("cannot have sync source in pos scan");
+					throw NotImplementedException("Unexpected interrupt from table Source in PositionalTableScanner refill");
 				}
 			}
 			source_offset = 0;

@@ -4,6 +4,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parallel/thread_context.hpp"
@@ -588,6 +589,8 @@ public:
 				if (res == SourceResultType::FINISHED) {
 					D_ASSERT(output_chunk.size() == 0);
 					break;
+				} else if (res == SourceResultType::BLOCKED) {
+					throw InternalException("Unexpected interrupt from radix table GetData in HashDistinctAggregateFinalizeTask");
 				}
 
 				auto &grouped_aggregate_data = *data.grouped_aggregate_data[table_idx];

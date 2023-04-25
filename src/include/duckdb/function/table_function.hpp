@@ -11,7 +11,6 @@
 #include "duckdb/common/enums/operator_result_type.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/function/function.hpp"
-#include "duckdb/parallel/task.hpp"
 #include "duckdb/planner/bind_context.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
@@ -24,6 +23,7 @@ class BaseStatistics;
 class DependencyList;
 class LogicalGet;
 class TableFilterSet;
+class InterruptState;
 
 struct TableFunctionInfo {
 	DUCKDB_API virtual ~TableFunctionInfo();
