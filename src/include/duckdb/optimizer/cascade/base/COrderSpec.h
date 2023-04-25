@@ -9,11 +9,11 @@
 #ifndef GPOPT_COrderSpec_H
 #define GPOPT_COrderSpec_H
 
-#include "gpos/base.h"
+#include "duckdb/optimizer/cascade/base.h"
 
-#include "gpopt/base/CColRef.h"
-#include "gpopt/base/CPropSpec.h"
-#include "naucrates/md/IMDId.h"
+#include "duckdb/optimizer/cascade/base/CColRef.h"
+#include "duckdb/optimizer/cascade/base/CPropSpec.h"
+#include "duckdb/optimizer/cascade/md/IMDId.h"
 
 
 namespace gpopt
