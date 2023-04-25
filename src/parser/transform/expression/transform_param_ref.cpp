@@ -8,8 +8,8 @@ string GetParameterIdentifier(duckdb_libpgquery::PGParamRef *node) {
 	if (node->name) {
 		return node->name;
 	}
-	if (node->number <= 0) {
-		throw ParserException("Parameter numbers have to start at 1");
+	if (node->number < 0) {
+		throw ParserException("Parameter numbers cannot be negative");
 	}
 	return StringUtil::Format("%d", node->number);
 }
@@ -30,9 +30,24 @@ unique_ptr<ParsedExpression> Transformer::TransformParamRef(duckdb_libpgquery::P
 	auto identifier = GetParameterIdentifier(node);
 	idx_t known_param_index = FindParameterIndexIfKnown(identifier);
 
+	// Parameters come in three different types:
+	// auto-increment: '?', has no name, and number is 0
+	// positional: '$<number>', has no name, but does have a number
+	// named: '$<name>', has a name, but the number is 0
+
 	if (known_param_index == DConstants::INVALID_INDEX) {
 		// We have not seen this parameter before
-		expr->parameter_nr = ParamCount() + 1;
+		if (node->number != 0) {
+			// Preserve the parameter number
+			expr->parameter_nr = node->number;
+		} else {
+			expr->parameter_nr = ParamCount() + 1;
+			if (!node->name) {
+				// This is an auto-increment parameter, update the identifier now that we know the index
+				identifier = StringUtil::Format("%d", expr->parameter_nr);
+			}
+		}
+
 		D_ASSERT(!named_param_map.count(identifier));
 		// Add it to the named parameter map so we can find it next time it's referenced
 		SetNamedParam(identifier, expr->parameter_nr);

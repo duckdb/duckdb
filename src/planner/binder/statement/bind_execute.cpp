@@ -27,12 +27,15 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 
 	reference<vector<unique_ptr<ParsedExpression>>> provided_values(stmt.values);
 	vector<unique_ptr<ParsedExpression>> mapped_named_values;
-	if (named_param_map.empty()) {
-		if (!stmt.named_values.empty()) {
-			throw InvalidInputException("The prepared statement doesn't expect any named parameters, but the execute "
-			                            "statement does contain name = value pairs");
+
+	if (named_param_map.size() != stmt.named_values.size()) {
+		// Lookup the parameter index from the vector index
+		for (idx_t i = 0; i < stmt.values.size(); i++) {
+			stmt.named_values[StringUtil::Format("%d", i + 1)] = std::move(stmt.values[i]);
 		}
-	} else {
+	}
+
+	if (!stmt.named_values.empty()) {
 		mapped_named_values = PreparedStatement::PrepareParameters(stmt.named_values, named_param_map);
 		provided_values = mapped_named_values;
 	}

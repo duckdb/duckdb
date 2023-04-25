@@ -79,13 +79,13 @@ class TestDuckDBQuery(object):
     def test_named_param_excessive(self):
         con = duckdb.connect()
 
-        with pytest.raises(duckdb.InvalidInputException, match="Invalid Input Error: Expected parameter 'name3', but it was not found in the provided values"):
+        with pytest.raises(duckdb.InvalidInputException, match="Values were not provided for the following prepared statement parameters: name3"):
             con.execute("select $name1, $name2, $name3", {'name1': 5, 'name2': 3, 'not_a_named_param': 5})
 
     def test_named_param_not_named(self):
         con = duckdb.connect()
 
-        with pytest.raises(duckdb.InvalidInputException, match="Expected parameter '2', but it was not found in the provided values"):
+        with pytest.raises(duckdb.InvalidInputException, match="Values were not provided for the following prepared statement parameters: 2, 1"):
             con.execute("select $1, $1, $2", {'name1': 5, 'name2': 3})
 
     def test_named_param_mixed(self):
