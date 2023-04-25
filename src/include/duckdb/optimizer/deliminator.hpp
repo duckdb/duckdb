@@ -16,7 +16,7 @@
 namespace duckdb {
 
 class Optimizer;
-class DeliminatorPlanUpdater;
+struct DelimCandidate;
 
 //! The Deliminator optimizer traverses the logical operator tree and removes any redundant DelimGets/DelimJoins
 class Deliminator {
@@ -28,16 +28,16 @@ public:
 
 private:
 	//! Find Joins with a DelimGet that can be removed
-	void FindCandidates(unique_ptr<LogicalOperator> *op_ptr, vector<unique_ptr<LogicalOperator> *> &candidates);
-	//! Try to remove a Join with a DelimGet, returns true if it was successful
-	bool RemoveCandidate(unique_ptr<LogicalOperator> *plan, unique_ptr<LogicalOperator> *candidate,
-	                     DeliminatorPlanUpdater &updater);
-	//! Try to remove an inequality Join with a DelimGet, returns true if it was successful
-	bool RemoveInequalityCandidate(unique_ptr<LogicalOperator> *plan, unique_ptr<LogicalOperator> *candidate,
-	                               DeliminatorPlanUpdater &updater);
+	void FindCandidates(unique_ptr<LogicalOperator> &op, vector<DelimCandidate> &candidates);
+	void FindJoinWithDelimGet(unique_ptr<LogicalOperator> &op, DelimCandidate &candidate);
+
+	bool RemoveJoinWithDelimGet(unique_ptr<LogicalOperator> &join);
+	//! Removes duplicate groups from aggregations (after removing a join with a delim get)
+	void RemoveDuplicateGroups(LogicalOperator &op, const ColumnBindingReplacer &replacer);
 
 private:
 	ClientContext &context;
+	optional_ptr<LogicalOperator> root;
 };
 
 } // namespace duckdb

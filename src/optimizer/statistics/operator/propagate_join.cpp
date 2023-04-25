@@ -126,10 +126,13 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 			UpdateFilterStatistics(*condition.left, *condition.right, condition.comparison);
 			auto updated_stats_left = PropagateExpression(condition.left);
 			auto updated_stats_right = PropagateExpression(condition.right);
+
+			// Try to push lhs stats down rhs and vice versa
 			if (stats_left && stats_right && updated_stats_left && updated_stats_right) {
 				CreateFilterFromJoinStats(join.children[0], condition.left, *stats_left, *updated_stats_left);
 				CreateFilterFromJoinStats(join.children[1], condition.right, *stats_right, *updated_stats_right);
 			}
+
 			// Update join_stats when is already part of the join
 			if (join.join_stats.size() == 2) {
 				join.join_stats[0] = std::move(updated_stats_left);

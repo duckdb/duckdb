@@ -137,7 +137,7 @@ private:
 	statistics_map_t statistics_map;
 	unordered_set<idx_t> compression_table_indices;
 	unordered_set<idx_t> decompression_table_indices;
-	LogicalOperator *root;
+	optional_ptr<LogicalOperator> root;
 };
 
 } // namespace duckdb

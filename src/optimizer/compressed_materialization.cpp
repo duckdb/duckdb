@@ -260,7 +260,7 @@ void CompressedMaterialization::CreateDecompressProjection(unique_ptr<LogicalOpe
 	op = std::move(decompress_projection);
 
 	// Check if we're placing a projection on top of the root
-	if (op->children[0].get() == root) {
+	if (op->children[0].get() == root.get()) {
 		root = op.get();
 		return;
 	}
@@ -544,18 +544,22 @@ void CompressedMaterialization::RemoveRedundantExpressions(LogicalProjection &de
 					}
 				}
 				bool found = false;
+				const auto current_binding_temp = current_binding;
 				for (idx_t expr_idx = 0; expr_idx < current_op->expressions.size(); expr_idx++) {
 					const auto &expr = current_op->expressions[expr_idx];
 					if (expr->type != ExpressionType::BOUND_COLUMN_REF) {
 						continue;
 					}
 					const auto &colref = expr->Cast<BoundColumnRefExpression>();
-					if (colref.binding == current_binding) {
+					if (colref.binding == current_binding_temp) {
+						if (found) {
+							can_remove_current = false; // Duplicate projection, don't remove (de)compression (for now)
+							break;
+						}
 						current_col_idx = expr_idx;
 						current_binding = current_bindings[current_col_idx];
 						expressions_in_between.emplace_back(expr.get());
 						found = true;
-						break;
 					}
 				}
 				if (!found) { // Projected out
