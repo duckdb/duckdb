@@ -32,7 +32,6 @@
 #define GPOPT_FENABLED_XFORM(x) !GPOS_FTRACE(GPOPT_DISABLE_XFORM_TF(x))
 #define GPOPT_FDISABLED_XFORM(x) GPOS_FTRACE(GPOPT_DISABLE_XFORM_TF(x))
 
-
 namespace gpopt
 {
 using namespace gpos;
