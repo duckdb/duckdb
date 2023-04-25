@@ -34,17 +34,17 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 	case CatalogType::TABLE_ENTRY:
 	case CatalogType::TYPE_ENTRY: {
 		BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
-		auto entry = (StandardEntry *)Catalog::GetEntry(context, stmt.info->type, stmt.info->catalog, stmt.info->schema,
-		                                                stmt.info->name, true);
+		auto entry = Catalog::GetEntry(context, stmt.info->type, stmt.info->catalog, stmt.info->schema, stmt.info->name,
+		                               OnEntryNotFound::RETURN_NULL);
 		if (!entry) {
 			break;
 		}
-		stmt.info->catalog = entry->catalog->GetName();
+		stmt.info->catalog = entry->ParentCatalog().GetName();
 		if (!entry->temporary) {
 			// we can only drop temporary tables in read-only mode
 			properties.modified_databases.insert(stmt.info->catalog);
 		}
-		stmt.info->schema = entry->schema->name;
+		stmt.info->schema = entry->ParentSchema().name;
 		break;
 	}
 	case CatalogType::DATABASE_ENTRY: {

@@ -11,16 +11,16 @@
 
 namespace duckdb {
 
-SequenceCatalogEntry::SequenceCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateSequenceInfo *info)
-    : StandardEntry(CatalogType::SEQUENCE_ENTRY, schema, catalog, info->name), usage_count(info->usage_count),
-      counter(info->start_value), increment(info->increment), start_value(info->start_value),
-      min_value(info->min_value), max_value(info->max_value), cycle(info->cycle) {
-	this->temporary = info->temporary;
+SequenceCatalogEntry::SequenceCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateSequenceInfo &info)
+    : StandardEntry(CatalogType::SEQUENCE_ENTRY, schema, catalog, info.name), usage_count(info.usage_count),
+      counter(info.start_value), increment(info.increment), start_value(info.start_value), min_value(info.min_value),
+      max_value(info.max_value), cycle(info.cycle) {
+	this->temporary = info.temporary;
 }
 
 void SequenceCatalogEntry::Serialize(Serializer &serializer) const {
 	FieldWriter writer(serializer);
-	writer.WriteString(schema->name);
+	writer.WriteString(schema.name);
 	writer.WriteString(name);
 	writer.WriteField<uint64_t>(usage_count);
 	writer.WriteField<int64_t>(increment);

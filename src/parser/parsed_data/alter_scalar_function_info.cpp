@@ -10,7 +10,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 AlterScalarFunctionInfo::AlterScalarFunctionInfo(AlterScalarFunctionType type, AlterEntryData data)
     : AlterInfo(AlterType::ALTER_SCALAR_FUNCTION, std::move(data.catalog), std::move(data.schema), std::move(data.name),
-                data.if_exists),
+                data.if_not_found),
       alter_scalar_function_type(type) {
 }
 AlterScalarFunctionInfo::~AlterScalarFunctionInfo() {
@@ -25,7 +25,7 @@ void AlterScalarFunctionInfo::Serialize(FieldWriter &writer) const {
 	writer.WriteString(catalog);
 	writer.WriteString(schema);
 	writer.WriteString(name);
-	writer.WriteField(if_exists);
+	writer.WriteField(if_not_found);
 }
 
 unique_ptr<AlterInfo> AlterScalarFunctionInfo::Deserialize(FieldReader &reader) {

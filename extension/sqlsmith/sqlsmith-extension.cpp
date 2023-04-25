@@ -132,11 +132,11 @@ void SQLSmithExtension::Load(DuckDB &db) {
 	sqlsmith_func.named_parameters["complete_log"] = LogicalType::VARCHAR;
 	sqlsmith_func.named_parameters["log"] = LogicalType::VARCHAR;
 	CreateTableFunctionInfo sqlsmith_info(sqlsmith_func);
-	catalog.CreateTableFunction(*con.context, &sqlsmith_info);
+	catalog.CreateTableFunction(*con.context, sqlsmith_info);
 
 	TableFunction reduce_sql_function("reduce_sql_statement", {LogicalType::VARCHAR}, ReduceSQLFunction, ReduceSQLBind);
 	CreateTableFunctionInfo reduce_sql_info(reduce_sql_function);
-	catalog.CreateTableFunction(*con.context, &reduce_sql_info);
+	catalog.CreateTableFunction(*con.context, reduce_sql_info);
 
 	con.Commit();
 }

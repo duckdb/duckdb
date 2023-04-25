@@ -271,8 +271,8 @@ unique_ptr<GlobalTableFunctionState> ArrowTableFunction::ArrowScanInitGlobal(Cli
                                                                              TableFunctionInitInput &input) {
 	auto &bind_data = (const ArrowScanFunctionData &)*input.bind_data;
 	auto result = make_uniq<ArrowScanGlobalState>();
-	result->stream = ProduceArrowScan(bind_data, input.column_ids, input.filters);
-	result->max_threads = ArrowScanMaxThreads(context, input.bind_data);
+	result->stream = ProduceArrowScan(bind_data, input.column_ids, input.filters.get());
+	result->max_threads = ArrowScanMaxThreads(context, input.bind_data.get());
 	if (input.CanRemoveFilterColumns()) {
 		result->projection_ids = input.projection_ids;
 		for (const auto &col_idx : input.column_ids) {
@@ -293,12 +293,12 @@ unique_ptr<LocalTableFunctionState> ArrowTableFunction::ArrowScanInitLocal(Execu
 	auto current_chunk = make_uniq<ArrowArrayWrapper>();
 	auto result = make_uniq<ArrowScanLocalState>(std::move(current_chunk));
 	result->column_ids = input.column_ids;
-	result->filters = input.filters;
+	result->filters = input.filters.get();
 	if (input.CanRemoveFilterColumns()) {
 		auto &asgs = global_state_p->Cast<ArrowScanGlobalState>();
 		result->all_columns.Initialize(context.client, asgs.scanned_types);
 	}
-	if (!ArrowScanParallelStateNext(context.client, input.bind_data, *result, global_state)) {
+	if (!ArrowScanParallelStateNext(context.client, input.bind_data.get(), *result, global_state)) {
 		return nullptr;
 	}
 	return std::move(result);
@@ -314,7 +314,7 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, TableFunction
 
 	//! Out of tuples in this chunk
 	if (state.chunk_offset >= (idx_t)state.chunk->arrow_array.length) {
-		if (!ArrowScanParallelStateNext(context, data_p.bind_data, state, global_state)) {
+		if (!ArrowScanParallelStateNext(context, data_p.bind_data.get(), state, global_state)) {
 			return;
 		}
 	}

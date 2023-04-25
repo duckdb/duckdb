@@ -40,7 +40,7 @@ void PhysicalDrop::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSo
 	}
 	case CatalogType::SCHEMA_ENTRY: {
 		auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
-		catalog.DropEntry(context.client, info.get());
+		catalog.DropEntry(context.client, *info);
 		auto qualified_name = QualifiedName::Parse(info->name);
 
 		// Check if the dropped schema was set as the current schema
@@ -58,7 +58,7 @@ void PhysicalDrop::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSo
 	}
 	default: {
 		auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
-		catalog.DropEntry(context.client, info.get());
+		catalog.DropEntry(context.client, *info);
 		break;
 	}
 	}

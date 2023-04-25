@@ -95,7 +95,7 @@ unique_ptr<GlobalTableFunctionState> PandasScanFunction::PandasScanInitGlobal(Cl
 	if (PyGILState_Check()) {
 		throw InvalidInputException("PandasScan called but GIL was already held!");
 	}
-	return make_uniq<PandasScanGlobalState>(PandasScanMaxThreads(context, input.bind_data));
+	return make_uniq<PandasScanGlobalState>(PandasScanMaxThreads(context, input.bind_data.get()));
 }
 
 unique_ptr<LocalTableFunctionState> PandasScanFunction::PandasScanInitLocal(ExecutionContext &context,
@@ -103,7 +103,7 @@ unique_ptr<LocalTableFunctionState> PandasScanFunction::PandasScanInitLocal(Exec
                                                                             GlobalTableFunctionState *gstate) {
 	auto result = make_uniq<PandasScanLocalState>(0, 0);
 	result->column_ids = input.column_ids;
-	PandasScanParallelStateNext(context.client, input.bind_data, result.get(), gstate);
+	PandasScanParallelStateNext(context.client, input.bind_data.get(), result.get(), gstate);
 	return std::move(result);
 }
 
@@ -167,7 +167,8 @@ void PandasScanFunction::PandasScanFunc(ClientContext &context, TableFunctionInp
 	auto &state = data_p.local_state->Cast<PandasScanLocalState>();
 
 	if (state.start >= state.end) {
-		if (!PandasScanParallelStateNext(context, data_p.bind_data, data_p.local_state, data_p.global_state)) {
+		if (!PandasScanParallelStateNext(context, data_p.bind_data.get(), data_p.local_state.get(),
+		                                 data_p.global_state.get())) {
 			return;
 		}
 	}

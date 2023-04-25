@@ -268,7 +268,7 @@ struct ICULocalTimestampFunc : public ICUDateFunc {
 
 		CreateScalarFunctionInfo func_info(set);
 		auto &catalog = Catalog::GetSystemCatalog(context);
-		catalog.AddFunction(context, &func_info);
+		catalog.AddFunction(context, func_info);
 	}
 };
 
@@ -288,7 +288,7 @@ struct ICULocalTimeFunc : public ICUDateFunc {
 
 		CreateScalarFunctionInfo func_info(set);
 		auto &catalog = Catalog::GetSystemCatalog(context);
-		catalog.AddFunction(context, &func_info);
+		catalog.AddFunction(context, func_info);
 	}
 };
 
@@ -335,7 +335,7 @@ struct ICUTimeZoneFunc : public ICUDateFunc {
 
 		CreateScalarFunctionInfo func_info(set);
 		auto &catalog = Catalog::GetSystemCatalog(context);
-		catalog.AddFunction(context, &func_info);
+		catalog.AddFunction(context, func_info);
 	}
 };
 
@@ -348,7 +348,7 @@ void RegisterICUTimeZoneFunctions(ClientContext &context) {
 	auto &catalog = Catalog::GetSystemCatalog(context);
 	TableFunction tz_names("pg_timezone_names", {}, ICUTimeZoneFunction, ICUTimeZoneBind, ICUTimeZoneInit);
 	CreateTableFunctionInfo tz_names_info(std::move(tz_names));
-	catalog.CreateTableFunction(context, &tz_names_info);
+	catalog.CreateTableFunction(context, tz_names_info);
 
 	//	Scalar functions
 	ICUTimeZoneFunc::AddFunction("timezone", context);
