@@ -10,9 +10,9 @@
 namespace duckdb {
 
 StandardColumnData::StandardColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-                                       idx_t start_row, LogicalType type, ColumnData *parent)
+                                       idx_t start_row, LogicalType type, optional_ptr<ColumnData> parent)
     : ColumnData(block_manager, info, column_index, start_row, std::move(type), parent),
-      validity(block_manager, info, 0, start_row, this) {
+      validity(block_manager, info, 0, start_row, *this) {
 }
 
 void StandardColumnData::SetStart(idx_t new_start) {
@@ -199,7 +199,7 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_g
 	return base_state;
 }
 
-void StandardColumnData::CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start,
+void StandardColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start,
                                         idx_t count, Vector &scan_vector) {
 	ColumnData::CheckpointScan(segment, state, row_group_start, count, scan_vector);
 

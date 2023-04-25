@@ -100,8 +100,10 @@ void LocalTableStorage::CheckFlushToDisk() {
 
 void LocalTableStorage::FlushToDisk() {
 	optimistic_writer.FlushToDisk(*row_groups);
-	partial_manager->FlushPartialBlocks();
-	partial_manager.reset();
+	if (partial_manager) {
+		partial_manager->FlushPartialBlocks();
+		partial_manager.reset();
+	}
 }
 
 PreservedError LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source,
@@ -196,8 +198,10 @@ void LocalTableStorage::Rollback() {
 		writer->Rollback();
 	}
 	optimistic_writers.clear();
-	partial_manager->Clear();
-	partial_manager.reset();
+	if (partial_manager) {
+		partial_manager->Clear();
+		partial_manager.reset();
+	}
 }
 
 //===--------------------------------------------------------------------===//

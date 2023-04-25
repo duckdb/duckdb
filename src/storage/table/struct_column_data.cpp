@@ -8,9 +8,9 @@
 namespace duckdb {
 
 StructColumnData::StructColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-                                   idx_t start_row, LogicalType type_p, ColumnData *parent)
+                                   idx_t start_row, LogicalType type_p, optional_ptr<ColumnData> parent)
     : ColumnData(block_manager, info, column_index, start_row, std::move(type_p), parent),
-      validity(block_manager, info, 0, start_row, this) {
+      validity(block_manager, info, 0, start_row, *this) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 	auto &child_types = StructType::GetChildTypes(type);
 	D_ASSERT(child_types.size() > 0);
