@@ -172,7 +172,7 @@ public:
 	void BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &table, InsertStatement &stmt);
 
 	static void BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema);
-	static void BindLogicalType(ClientContext &context, LogicalType &type, Catalog *catalog = nullptr,
+	static void BindLogicalType(ClientContext &context, LogicalType &type, optional_ptr<Catalog> catalog = nullptr,
 	                            const string &schema = INVALID_SCHEMA);
 
 	bool HasMatchingBinding(const string &table_name, const string &column_name, string &error_message);
@@ -259,7 +259,7 @@ private:
 	                             const string &alias, idx_t update_table_index,
 	                             unique_ptr<LogicalOperator> child_operator, BoundStatement result);
 
-	unique_ptr<QueryNode> BindTableMacro(FunctionExpression &function, TableMacroCatalogEntry *macro_func, idx_t depth);
+	unique_ptr<QueryNode> BindTableMacro(FunctionExpression &function, TableMacroCatalogEntry &macro_func, idx_t depth);
 
 	unique_ptr<BoundQueryNode> BindNode(SelectNode &node);
 	unique_ptr<BoundQueryNode> BindNode(SetOperationNode &node);

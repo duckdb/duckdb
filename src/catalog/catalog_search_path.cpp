@@ -131,10 +131,10 @@ void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, bool is_set_sc
 		throw CatalogException("SET schema can set only 1 schema. This has %d", new_paths.size());
 	}
 	for (auto &path : new_paths) {
-		if (!Catalog::GetSchema(context, path.catalog, path.schema, true)) {
+		if (!Catalog::GetSchema(context, path.catalog, path.schema, OnEntryNotFound::RETURN_NULL)) {
 			if (path.catalog.empty()) {
 				// only schema supplied - check if this is a database instead
-				auto schema = Catalog::GetSchema(context, path.schema, DEFAULT_SCHEMA, true);
+				auto schema = Catalog::GetSchema(context, path.schema, DEFAULT_SCHEMA, OnEntryNotFound::RETURN_NULL);
 				if (schema) {
 					path.catalog = std::move(path.schema);
 					path.schema = schema->name;

@@ -229,12 +229,11 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 		auto catalog_entry = Load<CatalogEntry *>(data);
 		D_ASSERT(catalog_entry->parent);
 
-		auto &catalog = catalog_entry->catalog;
-		D_ASSERT(catalog);
-		D_ASSERT(catalog->IsDuckCatalog());
+		auto &catalog = catalog_entry->ParentCatalog();
+		D_ASSERT(catalog.IsDuckCatalog());
 
 		// Grab a write lock on the catalog
-		auto &duck_catalog = catalog->Cast<DuckCatalog>();
+		auto &duck_catalog = catalog.Cast<DuckCatalog>();
 		lock_guard<mutex> write_lock(duck_catalog.GetWriteLock());
 		catalog_entry->set->UpdateTimestamp(*catalog_entry->parent, commit_id);
 		if (catalog_entry->name != catalog_entry->parent->name) {

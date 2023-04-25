@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTableInfo &info)
+TableCatalogEntry::TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info)
     : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info.table), columns(std::move(info.columns)),
       constraints(std::move(info.constraints)) {
 	this->temporary = info.temporary;
@@ -55,7 +55,7 @@ void TableCatalogEntry::Serialize(Serializer &serializer) const {
 	D_ASSERT(!internal);
 
 	FieldWriter writer(serializer);
-	writer.WriteString(schema->name);
+	writer.WriteString(schema.name);
 	writer.WriteString(name);
 	columns.Serialize(writer);
 	writer.WriteSerializableList(constraints);
@@ -165,8 +165,8 @@ string TableCatalogEntry::ToSQL() const {
 
 	ss << "CREATE TABLE ";
 
-	if (schema->name != DEFAULT_SCHEMA) {
-		ss << KeywordHelper::WriteOptionallyQuoted(schema->name) << ".";
+	if (schema.name != DEFAULT_SCHEMA) {
+		ss << KeywordHelper::WriteOptionallyQuoted(schema.name) << ".";
 	}
 
 	ss << KeywordHelper::WriteOptionallyQuoted(name);

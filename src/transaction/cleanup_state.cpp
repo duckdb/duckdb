@@ -24,7 +24,7 @@ void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 		auto catalog_entry = Load<CatalogEntry *>(data);
 		D_ASSERT(catalog_entry);
 		D_ASSERT(catalog_entry->set);
-		catalog_entry->set->CleanupEntry(catalog_entry);
+		catalog_entry->set->CleanupEntry(*catalog_entry);
 		break;
 	}
 	case UndoFlags::DELETE_TUPLE: {

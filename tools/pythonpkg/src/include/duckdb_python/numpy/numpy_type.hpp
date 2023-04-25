@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb_python/pandas_type.hpp
+// duckdb_python/numpy/numpy_type.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,14 +9,13 @@
 #pragma once
 
 #include "duckdb/common/types.hpp"
-#include "duckdb_python/pybind_wrapper.hpp"
-#include "duckdb_python/dataframe.hpp"
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
 
 namespace duckdb {
 // Pandas has two different sets of types
 // NumPy dtypes (e.g., bool, int8,...)
 // Pandas Specific Types (e.g., categorical, datetime_tz,...)
-enum class PandasType : uint8_t {
+enum class NumpyNullableType : uint8_t {
 	//! NumPy dtypes
 	BOOL,      //! bool_, bool8
 	INT_8,     //! byte, int8
@@ -36,7 +35,7 @@ enum class PandasType : uint8_t {
 	TIMEDELTA, //! timedelta64[D], timedelta64
 
 	//! ------------------------------------------------------------
-	//! Pandas Specific Types
+	//! Extension Types
 	//! ------------------------------------------------------------
 	CATEGORY,    //! category
 	DATETIME_TZ, //! datetime64[ns, TZ]
@@ -52,16 +51,7 @@ enum class NumpyObjectType : uint8_t {
 	DICT,      //! dict of numpy arrays of shape (n,)
 };
 
-PandasType ConvertPandasType(const py::object &col_type);
-LogicalType PandasToLogicalType(const PandasType &col_type);
+NumpyNullableType ConvertNumpyType(const py::handle &col_type);
+LogicalType NumpyToLogicalType(const NumpyNullableType &col_type);
 
 } // namespace duckdb
-
-namespace pybind11 {
-namespace detail {
-template <>
-struct handle_type_name<duckdb::DataFrame> {
-	static constexpr auto name = _("pandas.DataFrame");
-};
-} // namespace detail
-} // namespace pybind11

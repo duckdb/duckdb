@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -86,10 +87,10 @@ void PhysicalCreateType::GetData(ExecutionContext &context, DataChunk &chunk, Gl
 	}
 
 	auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
-	auto catalog_entry = catalog.CreateType(context.client, info.get());
+	auto catalog_entry = catalog.CreateType(context.client, *info);
 	D_ASSERT(catalog_entry->type == CatalogType::TYPE_ENTRY);
-	auto catalog_type = (TypeCatalogEntry *)catalog_entry;
-	LogicalType::SetCatalog(info->type, catalog_type);
+	auto &catalog_type = catalog_entry->Cast<TypeCatalogEntry>();
+	EnumType::SetCatalog(info->type, &catalog_type);
 	state.finished = true;
 }
 

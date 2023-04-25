@@ -60,13 +60,13 @@ static Value NegatePercentileValue(const Value &v, const bool desc) {
 static void NegatePercentileFractions(ClientContext &context, unique_ptr<ParsedExpression> &fractions, bool desc) {
 	D_ASSERT(fractions.get());
 	D_ASSERT(fractions->expression_class == ExpressionClass::BOUND_EXPRESSION);
-	auto &bound = fractions->Cast<BoundExpression>();
+	auto &bound = BoundExpression::GetExpression(*fractions);
 
-	if (!bound.expr->IsFoldable()) {
+	if (!bound->IsFoldable()) {
 		return;
 	}
 
-	Value value = ExpressionExecutor::EvaluateScalar(context, *bound.expr);
+	Value value = ExpressionExecutor::EvaluateScalar(context, *bound);
 	if (value.type().id() == LogicalTypeId::LIST) {
 		vector<Value> values;
 		for (const auto &element_val : ListValue::GetChildren(value)) {
@@ -75,14 +75,13 @@ static void NegatePercentileFractions(ClientContext &context, unique_ptr<ParsedE
 		if (values.empty()) {
 			throw BinderException("Empty list in percentile not allowed");
 		}
-		bound.expr = make_uniq<BoundConstantExpression>(Value::LIST(values));
+		bound = make_uniq<BoundConstantExpression>(Value::LIST(values));
 	} else {
-		bound.expr = make_uniq<BoundConstantExpression>(NegatePercentileValue(value, desc));
+		bound = make_uniq<BoundConstantExpression>(NegatePercentileValue(value, desc));
 	}
 }
 
-BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, optional_ptr<AggregateFunctionCatalogEntry> func,
-                                           idx_t depth) {
+BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry &func, idx_t depth) {
 	// first bind the child of the aggregate expression (if any)
 	this->bound_aggregate = true;
 	unique_ptr<Expression> bound_filter;
@@ -138,8 +137,8 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, optional_pt
 				if (!success) {
 					throw BinderException(error);
 				}
-				auto &bound_expr = aggr.children[i]->Cast<BoundExpression>();
-				ExtractCorrelatedExpressions(binder, *bound_expr.expr);
+				auto &bound_expr = BoundExpression::GetExpression(*aggr.children[i]);
+				ExtractCorrelatedExpressions(binder, *bound_expr);
 			}
 			if (aggr.filter) {
 				bool success = aggregate_binder.BindCorrelatedColumns(aggr.filter);
@@ -147,8 +146,8 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, optional_pt
 				if (!success) {
 					throw BinderException(error);
 				}
-				auto &bound_expr = aggr.filter->Cast<BoundExpression>();
-				ExtractCorrelatedExpressions(binder, *bound_expr.expr);
+				auto &bound_expr = BoundExpression::GetExpression(*aggr.filter);
+				ExtractCorrelatedExpressions(binder, *bound_expr);
 			}
 			if (aggr.order_bys && !aggr.order_bys->orders.empty()) {
 				for (auto &order : aggr.order_bys->orders) {
@@ -156,8 +155,8 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, optional_pt
 					if (!success) {
 						throw BinderException(error);
 					}
-					auto &bound_expr = order.expression->Cast<BoundExpression>();
-					ExtractCorrelatedExpressions(binder, *bound_expr.expr);
+					auto &bound_expr = BoundExpression::GetExpression(*order.expression);
+					ExtractCorrelatedExpressions(binder, *bound_expr);
 				}
 			}
 		} else {
@@ -172,8 +171,8 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, optional_pt
 	}
 
 	if (aggr.filter) {
-		auto &child = (BoundExpression &)*aggr.filter;
-		bound_filter = BoundCastExpression::AddCastToType(context, std::move(child.expr), LogicalType::BOOLEAN);
+		auto &child = BoundExpression::GetExpression(*aggr.filter);
+		bound_filter = BoundCastExpression::AddCastToType(context, std::move(child), LogicalType::BOOLEAN);
 	}
 
 	// all children bound successfully
@@ -184,29 +183,29 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, optional_pt
 
 	if (ordered_set_agg) {
 		for (auto &order : aggr.order_bys->orders) {
-			auto &child = (BoundExpression &)*order.expression;
-			types.push_back(child.expr->return_type);
-			arguments.push_back(child.expr->return_type);
-			children.push_back(std::move(child.expr));
+			auto &child = BoundExpression::GetExpression(*order.expression);
+			types.push_back(child->return_type);
+			arguments.push_back(child->return_type);
+			children.push_back(std::move(child));
 		}
 		aggr.order_bys->orders.clear();
 	}
 
 	for (idx_t i = 0; i < aggr.children.size(); i++) {
-		auto &child = (BoundExpression &)*aggr.children[i];
-		types.push_back(child.expr->return_type);
-		arguments.push_back(child.expr->return_type);
-		children.push_back(std::move(child.expr));
+		auto &child = BoundExpression::GetExpression(*aggr.children[i]);
+		types.push_back(child->return_type);
+		arguments.push_back(child->return_type);
+		children.push_back(std::move(child));
 	}
 
 	// bind the aggregate
 	FunctionBinder function_binder(context);
-	idx_t best_function = function_binder.BindFunction(func->name, func->functions, types, error);
+	idx_t best_function = function_binder.BindFunction(func.name, func.functions, types, error);
 	if (best_function == DConstants::INVALID_INDEX) {
 		throw BinderException(binder.FormatError(aggr, error));
 	}
 	// found a matching function!
-	auto bound_function = func->functions.GetFunctionByOffset(best_function);
+	auto bound_function = func.functions.GetFunctionByOffset(best_function);
 
 	// Bind any sort columns, unless the aggregate is order-insensitive
 	unique_ptr<BoundOrderModifier> order_bys;
@@ -214,10 +213,10 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, optional_pt
 		order_bys = make_uniq<BoundOrderModifier>();
 		auto &config = DBConfig::GetConfig(context);
 		for (auto &order : aggr.order_bys->orders) {
-			auto &order_expr = (BoundExpression &)*order.expression;
+			auto &order_expr = BoundExpression::GetExpression(*order.expression);
 			const auto sense = config.ResolveOrder(order.type);
 			const auto null_order = config.ResolveNullOrder(sense, order.null_order);
-			order_bys->orders.emplace_back(sense, null_order, std::move(order_expr.expr));
+			order_bys->orders.emplace_back(sense, null_order, std::move(order_expr));
 		}
 	}
 

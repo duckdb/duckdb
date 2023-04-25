@@ -2,16 +2,12 @@ import duckdb
 import os
 import pytest
 import tempfile
-try:
-    import pyarrow as pa
-    import pyarrow.parquet as pq
-    import pyarrow.dataset as ds
-    import numpy as np
-    import pandas as pd
-    import re
-    can_run = True
-except:
-    can_run = False
+pa = pytest.importorskip("pyarrow")
+pq = pytest.importorskip("pyarrow.parquet")
+ds = pytest.importorskip("pyarrow.dataset")
+np = pytest.importorskip("numpy")
+re = pytest.importorskip("re")
+from conftest import NumpyPandas, ArrowPandas
 
 ## DuckDB connection used in this test
 duckdb_conn = duckdb.connect()
@@ -119,8 +115,6 @@ def string_check_or_pushdown(tbl_name):
 
 class TestArrowFilterPushdown(object):
     def test_filter_pushdown_numeric(self,duckdb_cursor):
-        if not can_run:
-            return
 
         numeric_types = ['TINYINT', 'SMALLINT', 'INTEGER', 'BIGINT', 'UTINYINT', 'USMALLINT', 'UINTEGER', 'UBIGINT',
         'FLOAT', 'DOUBLE', 'HUGEINT']
@@ -130,8 +124,6 @@ class TestArrowFilterPushdown(object):
             numeric_check_or_pushdown(tbl_name)
 
     def test_filter_pushdown_decimal(self,duckdb_cursor):
-        if not can_run:
-            return
         numeric_types = {'DECIMAL(4,1)': 'test_decimal_4_1', 'DECIMAL(9,1)': 'test_decimal_9_1',
                          'DECIMAL(18,4)': 'test_decimal_18_4','DECIMAL(30,12)': 'test_decimal_30_12'}
         for data_type in numeric_types:
@@ -140,8 +132,6 @@ class TestArrowFilterPushdown(object):
             numeric_check_or_pushdown(tbl_name)
 
     def test_filter_pushdown_varchar(self,duckdb_cursor):
-        if not can_run:
-            return
         duckdb_conn.execute("CREATE TABLE test_varchar (a  VARCHAR, b VARCHAR, c VARCHAR)")
         duckdb_conn.execute("INSERT INTO  test_varchar VALUES ('1','1','1'),('10','10','10'),('100','10','100'),(NULL,NULL,NULL)")
         duck_tbl = duckdb_conn.table("test_varchar")
@@ -175,8 +165,6 @@ class TestArrowFilterPushdown(object):
 
 
     def test_filter_pushdown_bool(self,duckdb_cursor):
-        if not can_run:
-            return
         duckdb_conn.execute("CREATE TABLE test_bool (a  BOOL, b BOOL)")
         duckdb_conn.execute("INSERT INTO  test_bool VALUES (TRUE,TRUE),(TRUE,FALSE),(FALSE,TRUE),(NULL,NULL)")
         duck_tbl = duckdb_conn.table("test_bool")
@@ -197,8 +185,6 @@ class TestArrowFilterPushdown(object):
         assert duckdb_conn.execute("SELECT count(*) from testarrow where a = True or b =True").fetchone()[0] == 3
 
     def test_filter_pushdown_time(self,duckdb_cursor):
-        if not can_run:
-            return
         duckdb_conn.execute("CREATE TABLE test_time (a  TIME, b TIME, c TIME)")
         duckdb_conn.execute("INSERT INTO  test_time VALUES ('00:01:00','00:01:00','00:01:00'),('00:10:00','00:10:00','00:10:00'),('01:00:00','00:10:00','01:00:00'),(NULL,NULL,NULL)")
         duck_tbl = duckdb_conn.table("test_time")
@@ -228,8 +214,6 @@ class TestArrowFilterPushdown(object):
         assert duckdb_conn.execute("SELECT count(*) from testarrow where a = '01:00:00' or b ='00:01:00'").fetchone()[0] == 2
 
     def test_filter_pushdown_timestamp(self,duckdb_cursor):
-        if not can_run:
-            return
         duckdb_conn.execute("CREATE TABLE test_timestamp (a  TIMESTAMP, b TIMESTAMP, c TIMESTAMP)")
         duckdb_conn.execute("INSERT INTO  test_timestamp VALUES ('2008-01-01 00:00:01','2008-01-01 00:00:01','2008-01-01 00:00:01'),('2010-01-01 10:00:01','2010-01-01 10:00:01','2010-01-01 10:00:01'),('2020-03-01 10:00:01','2010-01-01 10:00:01','2020-03-01 10:00:01'),(NULL,NULL,NULL)")
         duck_tbl = duckdb_conn.table("test_timestamp")
@@ -260,8 +244,6 @@ class TestArrowFilterPushdown(object):
         assert duckdb_conn.execute("SELECT count(*) from testarrow where a = '2020-03-01 10:00:01' or b ='2008-01-01 00:00:01'").fetchone()[0] == 2
 
     def test_filter_pushdown_timestamp_TZ(self,duckdb_cursor):
-        if not can_run:
-            return
         duckdb_conn.execute("CREATE TABLE test_timestamptz (a  TIMESTAMPTZ, b TIMESTAMPTZ, c TIMESTAMPTZ)")
         duckdb_conn.execute("INSERT INTO  test_timestamptz VALUES ('2008-01-01 00:00:01','2008-01-01 00:00:01','2008-01-01 00:00:01'),('2010-01-01 10:00:01','2010-01-01 10:00:01','2010-01-01 10:00:01'),('2020-03-01 10:00:01','2010-01-01 10:00:01','2020-03-01 10:00:01'),(NULL,NULL,NULL)")
         duck_tbl = duckdb_conn.table("test_timestamptz")
@@ -293,8 +275,6 @@ class TestArrowFilterPushdown(object):
 
 
     def test_filter_pushdown_date(self,duckdb_cursor):
-        if not can_run:
-            return
         duckdb_conn.execute("CREATE TABLE test_date (a  DATE, b DATE, c DATE)")
         duckdb_conn.execute("INSERT INTO  test_date VALUES ('2000-01-01','2000-01-01','2000-01-01'),('2000-10-01','2000-10-01','2000-10-01'),('2010-01-01','2000-10-01','2010-01-01'),(NULL,NULL,NULL)")
         duck_tbl = duckdb_conn.table("test_date")
@@ -323,10 +303,9 @@ class TestArrowFilterPushdown(object):
         # Try Or
         assert duckdb_conn.execute("SELECT count(*) from testarrow where a = '2010-01-01' or b ='2000-01-01'").fetchone()[0] == 2
 
-    def test_filter_pushdown_blob(self,duckdb_cursor):
-        if not can_run:
-            return
-        df = pd.DataFrame({'a': [bytes([1]), bytes([2]), bytes([3]), None], 'b': [bytes([1]), bytes([2]), bytes([3]), None],'c': [bytes([1]), bytes([2]), bytes([3]), None]})
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_filter_pushdown_blob(self, pandas):
+        df = pandas.DataFrame({'a': [bytes([1]), bytes([2]), bytes([3]), None], 'b': [bytes([1]), bytes([2]), bytes([3]), None],'c': [bytes([1]), bytes([2]), bytes([3]), None]})
         arrow_table = pa.Table.from_pandas(df)
 
         # Try ==
@@ -353,8 +332,6 @@ class TestArrowFilterPushdown(object):
 
 
     def test_filter_pushdown_no_projection(self,duckdb_cursor):
-        if not can_run:
-            return
         duckdb_conn.execute("CREATE TABLE test_int (a  INTEGER, b INTEGER, c INTEGER)")
         duckdb_conn.execute("INSERT INTO  test_int VALUES (1,1,1),(10,10,10),(100,10,100),(NULL,NULL,NULL)")
         duck_tbl = duckdb_conn.table("test_int")
@@ -365,16 +342,15 @@ class TestArrowFilterPushdown(object):
         duckdb_conn.register("testarrowdataset",arrow_dataset)
         assert duckdb_conn.execute("SELECT * FROM  testarrowdataset VALUES where a =1").fetchall() == [(1, 1, 1)]
 
-    def test_filter_pushdown_2145(self,duckdb_cursor):
-        if not can_run:
-            return
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_filter_pushdown_2145(self,duckdb_cursor, pandas):
 
-        date1 = pd.date_range("2018-01-01", "2018-12-31", freq="B")
-        df1 = pd.DataFrame(np.random.randn(date1.shape[0], 5), columns=list("ABCDE"))
+        date1 = pandas.date_range("2018-01-01", "2018-12-31", freq="B")
+        df1 = pandas.DataFrame(np.random.randn(date1.shape[0], 5), columns=list("ABCDE"))
         df1["date"] = date1
 
-        date2 = pd.date_range("2019-01-01", "2019-12-31", freq="B")
-        df2 = pd.DataFrame(np.random.randn(date2.shape[0], 5), columns=list("ABCDE"))
+        date2 = pandas.date_range("2019-01-01", "2019-12-31", freq="B")
+        df2 = pandas.DataFrame(np.random.randn(date2.shape[0], 5), columns=list("ABCDE"))
         df2["date"] = date2
 
         pq.write_table(pa.table(df1), "data1.parquet")
@@ -387,14 +363,12 @@ class TestArrowFilterPushdown(object):
 
         output_df = duckdb.arrow(table).filter("date > '2019-01-01'").df()
         expected_df = duckdb.from_parquet("data*.parquet").filter("date > '2019-01-01'").df()
-        pd.testing.assert_frame_equal(expected_df, output_df)
+        pandas.testing.assert_frame_equal(expected_df, output_df)
 
         os.remove("data1.parquet")
         os.remove("data2.parquet")
 
     def test_filter_column_removal(self,duckdb_cursor):
-        if not can_run:
-            return
         duckdb_conn.execute("CREATE TABLE test AS SELECT range i, range j FROM range(5)")
         duck_test_table = duckdb_conn.table("test")
         arrow_test_table = duck_test_table.arrow()

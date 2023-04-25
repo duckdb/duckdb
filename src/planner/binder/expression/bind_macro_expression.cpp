@@ -44,17 +44,17 @@ void ExpressionBinder::ReplaceMacroParametersRecursive(unique_ptr<ParsedExpressi
 	    *expr, [&](unique_ptr<ParsedExpression> &child) { ReplaceMacroParametersRecursive(child); });
 }
 
-BindResult ExpressionBinder::BindMacro(FunctionExpression &function, optional_ptr<ScalarMacroCatalogEntry> macro_func,
-                                       idx_t depth, unique_ptr<ParsedExpression> &expr) {
+BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func, idx_t depth,
+                                       unique_ptr<ParsedExpression> &expr) {
 	// recast function so we can access the scalar member function->expression
-	auto &macro_def = macro_func->function->Cast<ScalarMacroFunction>();
+	auto &macro_def = macro_func.function->Cast<ScalarMacroFunction>();
 
 	// validate the arguments and separate positional and default arguments
 	vector<unique_ptr<ParsedExpression>> positionals;
 	unordered_map<string, unique_ptr<ParsedExpression>> defaults;
 
 	string error =
-	    MacroFunction::ValidateArguments(*macro_func->function, macro_func->name, function, positionals, defaults);
+	    MacroFunction::ValidateArguments(*macro_func.function, macro_func.name, function, positionals, defaults);
 	if (!error.empty()) {
 		throw BinderException(binder.FormatError(*expr, error));
 	}
@@ -75,7 +75,7 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, optional_pt
 		// now push the defaults into the positionals
 		positionals.push_back(std::move(defaults[it->first]));
 	}
-	auto new_macro_binding = make_uniq<DummyBinding>(types, names, macro_func->name);
+	auto new_macro_binding = make_uniq<DummyBinding>(types, names, macro_func.name);
 	new_macro_binding->arguments = &positionals;
 	macro_binding = new_macro_binding.get();
 
