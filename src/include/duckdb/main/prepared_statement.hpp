@@ -106,7 +106,7 @@ public:
 				excess_values.push_back(name);
 			}
 		}
-		return StringUtil::Format("Some of the provided named values don't have a matching parameter: %s",
+		return StringUtil::Format("Parameter argument/count mismatch, identifiers of the excess parameters: %s",
 		                          StringUtil::Join(excess_values, ", "));
 	}
 

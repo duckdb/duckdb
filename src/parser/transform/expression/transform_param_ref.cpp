@@ -43,14 +43,14 @@ unique_ptr<ParsedExpression> Transformer::TransformParamRef(duckdb_libpgquery::P
 		} else {
 			expr->parameter_nr = ParamCount() + 1;
 			if (!node->name) {
-				// This is an auto-increment parameter, update the identifier now that we know the index
 				identifier = StringUtil::Format("%d", expr->parameter_nr);
 			}
 		}
 
-		D_ASSERT(!named_param_map.count(identifier));
-		// Add it to the named parameter map so we can find it next time it's referenced
-		SetNamedParam(identifier, expr->parameter_nr);
+		if (!named_param_map.count(identifier)) {
+			// Add it to the named parameter map so we can find it next time it's referenced
+			SetNamedParam(identifier, expr->parameter_nr);
+		}
 	} else {
 		expr->parameter_nr = known_param_index;
 	}

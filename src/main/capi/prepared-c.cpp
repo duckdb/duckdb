@@ -98,9 +98,11 @@ static duckdb::string duckdb_parameter_name_internal(duckdb_prepared_statement p
 		return duckdb::string();
 	}
 	for (auto &item : wrapper->statement->named_param_map) {
-		if (item.second == index) {
-			// This is a named parameter
-			return item.first;
+		auto &identifier = item.first;
+		auto &param_idx = item.second;
+		if (param_idx == index) {
+			// Found the matching parameter
+			return identifier;
 		}
 	}
 	// No parameter was found with this index
