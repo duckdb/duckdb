@@ -96,7 +96,8 @@ unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(vector<Value> &un
                                                                case_insensitive_map_t<Value> &named_values,
                                                                bool allow_stream_result) {
 	if (!success) {
-		throw InvalidInputException("Attempting to execute an unsuccessfully prepared statement!");
+		auto exception = InvalidInputException("Attempting to execute an unsuccessfully prepared statement!");
+		return make_uniq<PendingQueryResult>(PreservedError(exception));
 	}
 	D_ASSERT(data);
 	PendingQueryParameters parameters;
@@ -109,7 +110,11 @@ unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(vector<Value> &un
 		}
 	}
 	if (!named_values.empty()) {
-		mapped_named_values = PrepareParameters(named_values, named_param_map);
+		try {
+			mapped_named_values = PrepareParameters(named_values, named_param_map);
+		} catch (const Exception &ex) {
+			return make_uniq<PendingQueryResult>(PreservedError(ex));
+		}
 		prepared_parameters = mapped_named_values;
 	}
 
