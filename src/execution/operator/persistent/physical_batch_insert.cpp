@@ -350,7 +350,6 @@ void PhysicalBatchInsert::Combine(ExecutionContext &context, GlobalSinkState &gs
 		return;
 	}
 	lstate.FlushToDisk();
-	lstate.writer->FinalFlush();
 
 	TransactionData tdata(0, 0);
 	lstate.current_collection->FinalizeAppend(tdata, lstate.current_append_state);
@@ -399,7 +398,6 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 	for (auto &merger : mergers) {
 		final_collections.push_back(merger->Flush(writer));
 	}
-	writer.FinalFlush();
 
 	// finally, merge the row groups into the local storage
 	for (auto &collection : final_collections) {

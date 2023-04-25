@@ -15,7 +15,9 @@
 namespace duckdb {
 
 LocalTableStorage::LocalTableStorage(DataTable &table)
-    : table_ref(table), allocator(Allocator::Get(table.db)), deleted_rows(0), optimistic_writer(table) {
+    : table_ref(table), allocator(Allocator::Get(table.db)), deleted_rows(0),
+      partial_manager(make_shared<PartialBlockManager>(table.info->table_io_manager->GetBlockManagerForRowData())),
+      optimistic_writer(table, partial_manager) {
 	auto types = table.GetTypes();
 	row_groups = make_shared<RowGroupCollection>(table.info, TableIOManager::Get(table).GetBlockManagerForRowData(),
 	                                             types, MAX_ROW_ID, 0);
@@ -98,7 +100,8 @@ void LocalTableStorage::CheckFlushToDisk() {
 
 void LocalTableStorage::FlushToDisk() {
 	optimistic_writer.FlushToDisk(*row_groups);
-	optimistic_writer.FinalFlush();
+	partial_manager->FlushPartialBlocks();
+	partial_manager.reset();
 }
 
 PreservedError LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source,
@@ -182,7 +185,7 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 }
 
 OptimisticDataWriter &LocalTableStorage::CreateOptimisticWriter() {
-	auto writer = make_uniq<OptimisticDataWriter>(table_ref.get());
+	auto writer = make_uniq<OptimisticDataWriter>(table_ref.get(), partial_manager);
 	optimistic_writers.push_back(std::move(writer));
 	return *optimistic_writers.back();
 }
@@ -193,6 +196,8 @@ void LocalTableStorage::Rollback() {
 		writer->Rollback();
 	}
 	optimistic_writers.clear();
+	partial_manager->Clear();
+	partial_manager.reset();
 }
 
 //===--------------------------------------------------------------------===//

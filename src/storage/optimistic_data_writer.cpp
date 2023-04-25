@@ -5,12 +5,15 @@
 
 namespace duckdb {
 
-OptimisticDataWriter::OptimisticDataWriter(DataTable &table) : table(table) {
+OptimisticDataWriter::OptimisticDataWriter(DataTable &table, shared_ptr<PartialBlockManager> partial_manager_p)
+    : table(table), partial_manager(std::move(partial_manager_p)), written_anything(false) {
+	if (!partial_manager) {
+		throw InternalException("Cannot create an optimistic data writer without a partial block manager");
+	}
 }
 
 OptimisticDataWriter::OptimisticDataWriter(DataTable &table, OptimisticDataWriter &parent)
-    : table(table), partial_manager(std::move(parent.partial_manager)),
-      written_blocks(std::move(parent.written_blocks)) {
+    : table(table), partial_manager(parent.partial_manager), written_blocks(std::move(parent.written_blocks)) {
 	if (partial_manager) {
 		partial_manager->FlushPartialBlocks();
 	}
@@ -25,11 +28,7 @@ bool OptimisticDataWriter::PrepareWrite() {
 		return false;
 	}
 	// we should! write the second-to-last row group to disk
-	// allocate the partial block-manager if none is allocated yet
-	if (!partial_manager) {
-		auto &block_manager = table.info->table_io_manager->GetBlockManagerForRowData();
-		partial_manager = make_uniq<PartialBlockManager>(block_manager);
-	}
+	written_anything = true;
 	return true;
 }
 
@@ -61,9 +60,9 @@ void OptimisticDataWriter::FlushToDisk(RowGroup *row_group) {
 }
 
 void OptimisticDataWriter::FlushToDisk(RowGroupCollection &row_groups, bool force) {
-	if (!partial_manager) {
+	if (!written_anything) {
 		if (!force) {
-			// no partial manager - nothing to flush
+			// nothing has been written yet - return
 			return;
 		}
 		if (!PrepareWrite()) {
@@ -74,20 +73,7 @@ void OptimisticDataWriter::FlushToDisk(RowGroupCollection &row_groups, bool forc
 	FlushToDisk(row_groups.GetRowGroup(-1));
 }
 
-void OptimisticDataWriter::FinalFlush() {
-	if (!partial_manager) {
-		return;
-	}
-	// then flush the partial manager
-	partial_manager->FlushPartialBlocks();
-	partial_manager.reset();
-}
-
 void OptimisticDataWriter::Rollback() {
-	if (partial_manager) {
-		partial_manager->Clear();
-		partial_manager.reset();
-	}
 	if (!written_blocks.empty()) {
 		auto &block_manager = table.info->table_io_manager->GetBlockManagerForRowData();
 		for (auto block_id : written_blocks) {

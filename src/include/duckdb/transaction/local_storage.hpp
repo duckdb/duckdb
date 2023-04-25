@@ -44,6 +44,8 @@ public:
 	TableIndexList indexes;
 	//! The number of deleted rows
 	idx_t deleted_rows;
+	//! The partial block manager
+	shared_ptr<PartialBlockManager> partial_manager;
 	//! The main optimistic data writer
 	OptimisticDataWriter optimistic_writer;
 	//! The set of all optimistic data writers associated with this table
