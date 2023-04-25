@@ -454,7 +454,8 @@ in_quotes:
 			// still in quoted state at the end of the file or at the end of a buffer when running multithreaded, error:
 			throw InvalidInputException(
 			    "Error in file \"%s\" on line %s: unterminated quotes. (%s)", options.file_path,
-			    GetLineNumberStr(linenr, linenr_estimated, line_info, buffer->local_batch_index).c_str(), options.ToString());
+			    GetLineNumberStr(linenr, linenr_estimated, line_info, buffer->local_batch_index).c_str(),
+			    options.ToString());
 		} else {
 			goto final_state;
 		}
@@ -510,13 +511,15 @@ handle_escape : {
 	if (position_buffer >= buffer_size && buffer->buffer->IsCSVFileLastBuffer()) {
 		error_message = StringUtil::Format(
 		    "Error in file \"%s\" on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE. (%s)", options.file_path,
-		    GetLineNumberStr(linenr, linenr_estimated, line_info, buffer->local_batch_index).c_str(), options.ToString());
+		    GetLineNumberStr(linenr, linenr_estimated, line_info, buffer->local_batch_index).c_str(),
+		    options.ToString());
 		return false;
 	}
 	if ((*buffer)[position_buffer] != options.quote[0] && (*buffer)[position_buffer] != options.escape[0]) {
 		error_message = StringUtil::Format(
 		    "Error in file \"%s\" on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE. (%s)", options.file_path,
-		    GetLineNumberStr(linenr, linenr_estimated, line_info, buffer->local_batch_index).c_str(), options.ToString());
+		    GetLineNumberStr(linenr, linenr_estimated, line_info, buffer->local_batch_index).c_str(),
+		    options.ToString());
 		return false;
 	}
 	// escape was followed by quote or escape, go back to quoted state

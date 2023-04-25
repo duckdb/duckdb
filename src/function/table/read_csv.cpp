@@ -362,7 +362,7 @@ private:
 	idx_t buffer_size;
 	//! Current batch index
 	idx_t batch_index = 0;
-    idx_t local_batch_index = 0;
+	idx_t local_batch_index = 0;
 
 	//! Forces parallelism for small CSV Files, should only be used for testing.
 	bool force_parallelism = false;
@@ -493,7 +493,7 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 			file_handle = ReadCSV::OpenCSV(current_file_path, bind_data.options.compression, context);
 			current_csv_position = 0;
 			file_number++;
-            local_batch_index = 0;
+			local_batch_index = 0;
 			current_buffer =
 			    make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position, file_number);
 			next_buffer = shared_ptr<CSVBuffer>(
