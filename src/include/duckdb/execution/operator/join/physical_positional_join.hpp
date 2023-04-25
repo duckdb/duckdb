@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 
 namespace duckdb {
 
@@ -48,6 +48,6 @@ public:
 
 public:
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
-	vector<const PhysicalOperator *> GetSources() const override;
+	vector<const_reference<PhysicalOperator>> GetSources() const override;
 };
 } // namespace duckdb

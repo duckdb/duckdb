@@ -33,8 +33,8 @@ public:
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                           GlobalOperatorState &gstate, OperatorState &state) const override;
 
-	bool IsOrderDependent() const override {
-		return true;
+	OrderPreservationType OperatorOrder() const override {
+		return OrderPreservationType::FIXED_ORDER;
 	}
 
 	string ParamsToString() const override;

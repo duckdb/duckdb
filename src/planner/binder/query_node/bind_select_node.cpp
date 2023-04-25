@@ -158,11 +158,8 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 				vector<unique_ptr<ParsedExpression>> order_list;
 				order_binders[0]->ExpandStarExpression(std::move(order_node.expression), order_list);
 
-				auto type =
-				    order_node.type == OrderType::ORDER_DEFAULT ? config.options.default_order_type : order_node.type;
-				auto null_order = order_node.null_order == OrderByNullType::ORDER_DEFAULT
-				                      ? config.options.default_null_order
-				                      : order_node.null_order;
+				auto type = config.ResolveOrder(order_node.type);
+				auto null_order = config.ResolveNullOrder(type, order_node.null_order);
 				for (auto &order_expr : order_list) {
 					auto bound_expr = BindOrderExpression(order_binder, std::move(order_expr));
 					if (!bound_expr) {
@@ -329,7 +326,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 
 	// create a mapping of (alias -> index) and a mapping of (Expression -> index) for the SELECT list
 	case_insensitive_map_t<idx_t> alias_map;
-	expression_map_t<idx_t> projection_map;
+	parsed_expression_map_t<idx_t> projection_map;
 	for (idx_t i = 0; i < statement.select_list.size(); i++) {
 		auto &expr = statement.select_list[i];
 		result->names.push_back(expr->GetName());
@@ -338,7 +335,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 			alias_map[expr->alias] = i;
 			result->names[i] = expr->alias;
 		}
-		projection_map[expr.get()] = i;
+		projection_map[*expr] = i;
 		result->original_expressions.push_back(expr->Copy());
 	}
 	result->column_count = statement.select_list.size();
@@ -391,7 +388,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 			// hence we convert "a" -> "test.a" in the unbound expression
 			unbound_groups[i] = std::move(group_binder.unbound_expression);
 			ExpressionBinder::QualifyColumnNames(*this, unbound_groups[i]);
-			info.map[unbound_groups[i].get()] = i;
+			info.map[*unbound_groups[i]] = i;
 		}
 	}
 	result->groups.grouping_sets = std::move(statement.groups.grouping_sets);

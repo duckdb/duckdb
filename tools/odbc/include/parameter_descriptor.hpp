@@ -17,7 +17,7 @@ public:
 	void ResetParams(SQLSMALLINT count);
 	void ResetCurrentAPD();
 
-	SQLRETURN GetParamValues(std::vector<Value> &values);
+	SQLRETURN GetParamValues(vector<Value> &values);
 	void SetParamProcessedPtr(SQLULEN *value_ptr);
 	SQLULEN *GetParamProcessedPtr();
 	void SetArrayStatusPtr(SQLUSMALLINT *value_ptr);
@@ -69,7 +69,7 @@ private:
 	idx_t cur_paramset_idx;
 	idx_t cur_param_idx;
 	// duckdb Values for the parameters
-	std::vector<Value> values;
+	vector<Value> values;
 };
 } // namespace duckdb
 #endif

@@ -48,7 +48,7 @@ struct StringAggFunction {
 	}
 
 	template <class STATE>
-	static void Destroy(STATE *state) {
+	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
 		if (state->dataptr) {
 			delete[] state->dataptr;
 		}
@@ -90,7 +90,7 @@ struct StringAggFunction {
 
 	static inline void PerformOperation(StringAggState *state, string_t str, FunctionData *data_p) {
 		auto &data = data_p->Cast<StringAggBindData>();
-		PerformOperation(state, str.GetDataUnsafe(), data.sep.c_str(), str.GetSize(), data.sep.size());
+		PerformOperation(state, str.GetData(), data.sep.c_str(), str.GetSize(), data.sep.size());
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>

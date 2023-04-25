@@ -843,7 +843,7 @@ public:
 			auto &grouping_gstate = ht_state.grouping_states[sidx];
 			count += grouping.table_data.Size(*grouping_gstate.table_state);
 		}
-		return MaxValue<idx_t>(1, count / RowGroup::ROW_GROUP_SIZE);
+		return MaxValue<idx_t>(1, count / STANDARD_VECTOR_SIZE);
 	}
 };
 

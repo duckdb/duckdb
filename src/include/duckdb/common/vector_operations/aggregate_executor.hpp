@@ -353,10 +353,10 @@ public:
 	}
 
 	template <class STATE_TYPE, class OP>
-	static void Destroy(Vector &states, idx_t count) {
+	static void Destroy(Vector &states, AggregateInputData &aggr_input_data, idx_t count) {
 		auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 		for (idx_t i = 0; i < count; i++) {
-			OP::template Destroy<STATE_TYPE>(sdata[i]);
+			OP::template Destroy<STATE_TYPE>(aggr_input_data, sdata[i]);
 		}
 	}
 };

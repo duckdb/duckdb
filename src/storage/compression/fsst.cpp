@@ -80,7 +80,7 @@ struct FSSTAnalyzeState : public AnalyzeState {
 	idx_t count;
 
 	StringHeap fsst_string_heap;
-	std::vector<string_t> fsst_strings;
+	vector<string_t> fsst_strings;
 	size_t fsst_string_total_size;
 
 	RandomEngine random_engine;
@@ -151,18 +151,18 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 
 	size_t output_buffer_size = 7 + 2 * state.fsst_string_total_size; // size as specified in fsst.h
 
-	std::vector<size_t> fsst_string_sizes;
-	std::vector<unsigned char *> fsst_string_ptrs;
+	vector<size_t> fsst_string_sizes;
+	vector<unsigned char *> fsst_string_ptrs;
 	for (auto &str : state.fsst_strings) {
 		fsst_string_sizes.push_back(str.GetSize());
-		fsst_string_ptrs.push_back((unsigned char *)str.GetDataUnsafe());
+		fsst_string_ptrs.push_back((unsigned char *)str.GetData());
 	}
 
 	state.fsst_encoder = duckdb_fsst_create(string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0], 0);
 
 	// TODO: do we really need to encode to get a size estimate?
-	auto compressed_ptrs = std::vector<unsigned char *>(string_count, nullptr);
-	auto compressed_sizes = std::vector<size_t>(string_count, 0);
+	auto compressed_ptrs = vector<unsigned char *>(string_count, nullptr);
+	auto compressed_sizes = vector<size_t>(string_count, 0);
 	unique_ptr<unsigned char[]> compressed_buffer(new unsigned char[output_buffer_size]);
 
 	auto res =
@@ -199,10 +199,8 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 
 class FSSTCompressionState : public CompressionState {
 public:
-	explicit FSSTCompressionState(ColumnDataCheckpointer &checkpointer) : checkpointer(checkpointer) {
-		auto &db = checkpointer.GetDatabase();
-		auto &config = DBConfig::GetConfig(db);
-		function = config.GetCompressionFunction(CompressionType::COMPRESSION_FSST, PhysicalType::VARCHAR);
+	explicit FSSTCompressionState(ColumnDataCheckpointer &checkpointer)
+	    : checkpointer(checkpointer), function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_FSST)) {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
 	}
 
@@ -372,7 +370,7 @@ public:
 	}
 
 	ColumnDataCheckpointer &checkpointer;
-	CompressionFunction *function;
+	CompressionFunction &function;
 
 	// State regarding current segment
 	unique_ptr<ColumnSegment> current_segment;
@@ -381,7 +379,7 @@ public:
 	data_ptr_t current_end_ptr;
 
 	// Buffers and map for current segment
-	std::vector<uint32_t> index_buffer;
+	vector<uint32_t> index_buffer;
 
 	size_t max_compressed_string_length;
 	bitpacking_width_t current_width;
@@ -433,7 +431,7 @@ void FSSTStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t
 		total_count++;
 		total_size += data[idx].GetSize();
 		sizes_in.push_back(data[idx].GetSize());
-		strings_in.push_back((unsigned char *)data[idx].GetDataUnsafe());
+		strings_in.push_back((unsigned char *)data[idx].GetData());
 	}
 
 	// Only Nulls or empty strings in this vector, nothing to compress
@@ -671,7 +669,7 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 		    segment, dict, result, base_ptr, delta_decode_buffer[offsets.unused_delta_decoded_values], string_length);
 
 		result_data[result_idx] = FSSTPrimitives::DecompressValue(
-		    (void *)&decoder, result, (unsigned char *)compressed_string.GetDataUnsafe(), compressed_string.GetSize());
+		    (void *)&decoder, result, (unsigned char *)compressed_string.GetData(), compressed_string.GetSize());
 	} else {
 		// There's no fsst symtable, this only happens for empty strings or nulls, we can just emit an empty string
 		result_data[result_idx] = string_t(nullptr, 0);

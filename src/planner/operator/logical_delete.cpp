@@ -4,13 +4,13 @@
 
 namespace duckdb {
 
-LogicalDelete::LogicalDelete(TableCatalogEntry *table, idx_t table_index)
+LogicalDelete::LogicalDelete(TableCatalogEntry &table, idx_t table_index)
     : LogicalOperator(LogicalOperatorType::LOGICAL_DELETE), table(table), table_index(table_index),
       return_chunk(false) {
 }
 
 void LogicalDelete::Serialize(FieldWriter &writer) const {
-	table->Serialize(writer.GetSerializer());
+	table.Serialize(writer.GetSerializer());
 	writer.WriteField(table_index);
 	writer.WriteField(return_chunk);
 }
@@ -19,7 +19,7 @@ unique_ptr<LogicalOperator> LogicalDelete::Deserialize(LogicalDeserializationSta
 	auto &context = state.gstate.context;
 	auto info = TableCatalogEntry::Deserialize(reader.GetSource(), context);
 
-	auto table_catalog_entry =
+	auto &table_catalog_entry =
 	    Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, info->schema, info->table);
 
 	auto table_index = reader.ReadRequired<idx_t>();
@@ -38,14 +38,14 @@ vector<idx_t> LogicalDelete::GetTableIndex() const {
 
 vector<ColumnBinding> LogicalDelete::GetColumnBindings() {
 	if (return_chunk) {
-		return GenerateColumnBindings(table_index, table->GetTypes().size());
+		return GenerateColumnBindings(table_index, table.GetTypes().size());
 	}
 	return {ColumnBinding(0, 0)};
 }
 
 void LogicalDelete::ResolveTypes() {
 	if (return_chunk) {
-		types = table->GetTypes();
+		types = table.GetTypes();
 	} else {
 		types.emplace_back(LogicalType::BIGINT);
 	}

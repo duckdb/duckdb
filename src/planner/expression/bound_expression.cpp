@@ -2,8 +2,17 @@
 
 namespace duckdb {
 
-BoundExpression::BoundExpression(unique_ptr<Expression> expr)
-    : ParsedExpression(ExpressionType::INVALID, ExpressionClass::BOUND_EXPRESSION), expr(std::move(expr)) {
+BoundExpression::BoundExpression(unique_ptr<Expression> expr_p)
+    : ParsedExpression(ExpressionType::INVALID, ExpressionClass::BOUND_EXPRESSION), expr(std::move(expr_p)) {
+	this->alias = expr->alias;
+}
+
+unique_ptr<Expression> &BoundExpression::GetExpression(ParsedExpression &expr) {
+	auto &bound_expr = expr.Cast<BoundExpression>();
+	if (!bound_expr.expr) {
+		throw InternalException("BoundExpression::GetExpression called on empty bound expression");
+	}
+	return bound_expr.expr;
 }
 
 string BoundExpression::ToString() const {

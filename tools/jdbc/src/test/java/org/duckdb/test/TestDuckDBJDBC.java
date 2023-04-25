@@ -3,6 +3,7 @@ package org.duckdb.test;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -20,7 +21,7 @@ import java.sql.Statement;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
-import java.time.Duration;
+import java.time.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -28,9 +29,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
 import java.util.TimeZone;
-import java.time.LocalDateTime;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.UUID;
 import javax.sql.rowset.RowSetProvider;
 import javax.sql.rowset.CachedRowSet;
@@ -42,6 +40,7 @@ import org.duckdb.DuckDBResultSet;
 import org.duckdb.DuckDBTimestamp;
 import org.duckdb.DuckDBColumnType;
 import org.duckdb.DuckDBResultSetMetaData;
+import org.duckdb.DuckDBNative;
 import org.duckdb.JsonNode;
 
 public class TestDuckDBJDBC {
@@ -191,16 +190,10 @@ public class TestDuckDBJDBC {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
 
-		stmt = conn.createStatement();
-		stmt.execute("CREATE TABLE t (id INT, b INTEGER[])");
-		stmt.execute("INSERT INTO t VALUES (1, [2, 3])");
-
-		try {
-			ResultSet rs = stmt.executeQuery("SELECT * FROM t");
+		assertThrows(() -> {
+			ResultSet rs = stmt.executeQuery("SELECT");
 			rs.next();
-			fail();
-		} catch (SQLException e) {
-		}
+		}, SQLException.class);
 	}
 
 	public static void test_autocommit_off() throws Exception {
@@ -540,6 +533,20 @@ public class TestDuckDBJDBC {
 		}
 	}
 
+	public static void test_union_metadata() throws Exception {
+		try (
+				Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+				Statement stmt = conn.createStatement();
+				ResultSet rs = stmt.executeQuery("SELECT union_value(str := 'three') as union")
+		) {
+			ResultSetMetaData meta = rs.getMetaData();
+			assertEquals(meta.getColumnCount(), 1);
+			assertEquals(meta.getColumnName(1), "union");
+			assertEquals(meta.getColumnTypeName(1), "UNION(str VARCHAR)");
+			assertEquals(meta.getColumnType(1), Types.JAVA_OBJECT);
+		}
+	}
+
 	public static void test_result() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
@@ -622,11 +629,7 @@ public class TestDuckDBJDBC {
 		ResultSet rs = stmt.executeQuery("SELECT * FROM a");
 		assertFalse(rs.next());
 
-		try {
-			rs.getObject(1);
-			fail();
-		} catch (ArrayIndexOutOfBoundsException e) {
-		}
+		assertEquals(assertThrows(() -> rs.getObject(1), SQLException.class), "No row in context");
 
 		rs.close();
 		stmt.close();
@@ -1823,7 +1826,26 @@ public class TestDuckDBJDBC {
 
 		conn.close();
 	}
-	
+
+	public static void test_time_tz() throws Exception {
+		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+			 Statement s = conn.createStatement()) {
+			s.executeUpdate("create table t (i time with time zone)");
+			try (ResultSet rs = conn.getMetaData().getColumns(null, "%", "t", "i");) {
+				rs.next();
+
+				assertEquals(rs.getString("TYPE_NAME"), "TIME WITH TIME ZONE");
+				assertEquals(rs.getInt("DATA_TYPE"), Types.JAVA_OBJECT);
+			}
+
+			s.execute("INSERT INTO t VALUES ('01:01:00');");
+			try (ResultSet rs = s.executeQuery("SELECT * FROM t")) {
+				rs.next();
+				assertEquals(rs.getObject(1), OffsetTime.of(LocalTime.of(1, 1), ZoneOffset.UTC));
+			}
+		}
+	}
+
 	public static void test_get_tables_with_current_catalog() throws Exception {
 		ResultSet resultSet = null;
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
@@ -2339,9 +2361,17 @@ public class TestDuckDBJDBC {
 	}
 
 	public static void test_set_catalog() throws Exception {
-		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
-		conn.setCatalog("we do not have this feature yet, sorry"); // Should be no-op until implemented
-		conn.close();
+		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
+
+			assertThrows(() -> conn.setCatalog("other"), SQLException.class);
+
+			try (Statement stmt = conn.createStatement()) {
+				stmt.execute("ATTACH ':memory:' AS other;");
+			}
+
+			conn.setCatalog("other");
+			assertEquals(conn.getCatalog(), "other");
+		}
 	}
 
 	public static void test_get_table_types_bug1258() throws Exception {
@@ -2572,6 +2602,9 @@ public class TestDuckDBJDBC {
 		}
 
 		assertEquals(conn.getSchema(), "alternate_schema");
+
+		conn.setSchema("main");
+		assertEquals(conn.getSchema(), "main");
 
 		conn.close();
 
@@ -3120,7 +3153,83 @@ public class TestDuckDBJDBC {
 			}
 			
 			assertTrue(supportsCatalogsInIndexDefinitions, "supportsCatalogsInIndexDefinitions should return true.");
-		} 
+		}
+	}
+
+	public static void test_structs() throws Exception {
+		try (Connection connection = DriverManager.getConnection("jdbc:duckdb:");
+			 PreparedStatement statement = connection.prepareStatement("select {\"a\": 1}")) {
+			ResultSet resultSet = statement.executeQuery();
+			assertTrue(resultSet.next());
+			assertEquals(resultSet.getObject(1), "{'a': 1}");
+		}
+	}
+
+	public static void test_union() throws Exception {
+		try (Connection connection = DriverManager.getConnection("jdbc:duckdb:");
+			 Statement statement = connection.createStatement()) {
+			statement.execute("CREATE TABLE tbl1(u UNION(num INT, str VARCHAR));");
+			statement.execute("INSERT INTO tbl1 values (1) , ('two') , (union_value(str := 'three'));");
+
+			ResultSet rs = statement.executeQuery("select * from tbl1");
+			assertTrue(rs.next());
+			assertEquals(rs.getObject(1), "1");
+			assertTrue(rs.next());
+			assertEquals(rs.getObject(1), "two");
+			assertTrue(rs.next());
+			assertEquals(rs.getObject(1), "three");
+		}
+	}
+
+	public static void test_list() throws Exception {
+		try (Connection connection = DriverManager.getConnection("jdbc:duckdb:");
+			 PreparedStatement statement = connection.prepareStatement("select [1]")) {
+			ResultSet rs = statement.executeQuery();
+			assertTrue(rs.next());
+			assertEquals(rs.getObject(1), "[1]");
+		}
+	}
+
+	public static void test_map() throws Exception {
+		try (Connection connection = DriverManager.getConnection("jdbc:duckdb:");
+			 PreparedStatement statement = connection.prepareStatement("select map([100, 5], ['a', 'b'])")) {
+			ResultSet rs = statement.executeQuery();
+			assertTrue(rs.next());
+			assertEquals(rs.getObject(1), "{100=a, 5=b}");
+		}
+	}
+
+	public static void test_extension_type() throws Exception {
+		try (Connection connection = DriverManager.getConnection("jdbc:duckdb:");
+				Statement stmt = connection.createStatement()) {
+
+			DuckDBNative.duckdb_jdbc_create_extension_type((DuckDBConnection) connection);
+
+			ResultSet rs = stmt.executeQuery("SELECT {\"hello\": 'foo', \"world\": 'bar'}::test_type");
+		}
+	}
+
+	public static void test_extension_type_metadata() throws Exception {
+		try (
+				Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+				Statement stmt = conn.createStatement();
+		) {
+			DuckDBNative.duckdb_jdbc_create_extension_type((DuckDBConnection) conn);
+
+			stmt.execute("CREATE TABLE test (foo test_type);");
+			stmt.execute("INSERT INTO test VALUES ({\"hello\": 'foo', \"world\": 'bar'});");
+
+			try (ResultSet rs = stmt.executeQuery("SELECT * FROM test")) {
+				ResultSetMetaData meta = rs.getMetaData();
+				assertEquals(meta.getColumnCount(), 1);
+				assertEquals(meta.getColumnName(1), "foo");
+				assertEquals(meta.getColumnTypeName(1), "test_type");
+				assertEquals(meta.getColumnType(1), Types.JAVA_OBJECT);
+
+				assertTrue(rs.next());
+				assertEquals(rs.getObject(1), "{'hello': foo, 'world': bar}");
+			}
+		}
 	}
 
 	public static void main(String[] args) throws Exception {

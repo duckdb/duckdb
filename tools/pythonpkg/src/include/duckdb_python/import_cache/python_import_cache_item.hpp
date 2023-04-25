@@ -8,10 +8,9 @@
 
 #pragma once
 
-#include "duckdb_python/pybind_wrapper.hpp"
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb_python/python_object_container.hpp"
 
 namespace duckdb {
 
@@ -19,7 +18,7 @@ struct PythonImportCache;
 
 struct PythonImportCacheItem {
 public:
-	PythonImportCacheItem() : load_attempted(false), object(nullptr) {
+	PythonImportCacheItem() : load_succeeded(false), object(nullptr) {
 	}
 	virtual ~PythonImportCacheItem() {
 	}
@@ -27,9 +26,8 @@ public:
 	}
 
 public:
-	bool LoadAttempted() const;
+	bool LoadSucceeded() const;
 	bool IsLoaded() const;
-	bool IsInstance(py::handle object) const;
 	py::handle operator()(void) const;
 	void LoadModule(const string &name, PythonImportCache &cache);
 	void LoadAttribute(const string &name, PythonImportCache &cache, PythonImportCacheItem &source);
@@ -44,7 +42,7 @@ private:
 
 private:
 	//! Whether or not we attempted to load the module
-	bool load_attempted;
+	bool load_succeeded;
 	//! The stored item
 	PyObject *object;
 };

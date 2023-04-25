@@ -38,12 +38,15 @@ public:
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
 
+	bool IsSource() const override {
+		return true;
+	}
 	bool ParallelSource() const override {
 		return true;
 	}
 
-	bool IsOrderPreserving() const override {
-		return true;
+	OrderPreservationType SourceOrder() const override {
+		return OrderPreservationType::NO_ORDER;
 	}
 
 public:
@@ -65,7 +68,7 @@ public:
 		return !is_order_dependent;
 	}
 
-	bool IsOrderDependent() const override {
+	bool SinkOrderDependent() const override {
 		return is_order_dependent;
 	}
 

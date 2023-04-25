@@ -1,0 +1,540 @@
+# name: test/sql/function/timestamp/test_try_strptime.test
+# description: Test try_strptime function
+# group: [timestamp]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT try_strptime('21 June, 2018', '%d %B, %Y')
+----
+2018-06-21 00:00:00
+
+query I
+SELECT try_strptime('21/10/2018', '%d/%m/%Y')
+----
+2018-10-21 00:00:00
+
+query I
+SELECT try_strptime('2018-20-10', '%Y-%d-%m')
+----
+2018-10-20 00:00:00
+
+query I
+SELECT try_strptime('20182010', '%Y%d%m')
+----
+2018-10-20 00:00:00
+
+query I
+SELECT try_strptime('Mon 30, June 2003, 12:03:10 AM', '%a %d, %B %Y, %I:%M:%S %p')
+----
+2003-06-30 00:03:10
+
+query I
+SELECT try_strptime('Mon 30, June 2003, 12:03:10 PM', '%a %d, %B %Y, %I:%M:%S %p')
+----
+2003-06-30 12:03:10
+
+query I
+SELECT try_strptime('Mon 30, December 2003, 7:3:5 PM', '%a %d, %B %Y, %I:%M:%S %p')
+----
+2003-12-30 19:03:05
+
+query I
+SELECT try_strptime('Tuesday 30, December 2003, 7:3:5 PM', '%A %d, %B %Y, %I:%M:%S %p')
+----
+2003-12-30 19:03:05
+
+query I
+SELECT try_strptime('Mon 30, December 30, 7:3:5 PM', '%a %d, %B %y, %I:%M:%S %p')
+----
+2030-12-30 19:03:05
+
+# for try_strptime there is no difference between %- and %
+query I
+SELECT try_strptime('Mon 30, June 2003, 12:03:10 AM', '%a %-d, %B %Y, %-I:%-M:%-S %p')
+----
+2003-06-30 00:03:10
+
+# lowercase also works
+query I
+SELECT try_strptime('mon', '%a')
+----
+1900-01-01 00:00:00
+
+query I
+SELECT try_strptime('tuesday', '%A')
+----
+1900-01-01 00:00:00
+
+query I
+SELECT try_strptime('jun', '%b')
+----
+1900-06-01 00:00:00
+
+# First Sunday of Monday weeks is Jan 7
+query I
+SELECT try_strptime('1', '%W')
+----
+1900-01-07 00:00:00
+
+# First Sunday of Sunday weeks is Jan 7
+query I
+SELECT try_strptime('1', '%U')
+----
+1900-01-07 00:00:00
+
+query II
+SELECT try_strptime('30', '%U'), strftime('1900-07-29'::DATE, '%U')
+----
+1900-07-29 00:00:00	30
+
+query II
+SELECT try_strptime('30', '%W'), strftime('1900-07-29'::DATE, '%W')
+----
+1900-07-29 00:00:00	30
+
+# Ignored
+query I
+SELECT try_strptime('6', '%w')
+----
+1900-01-01 00:00:00
+
+# Thursday after 1st Sunday
+query II
+SELECT try_strptime('1-4', '%U-%w'), strftime('1900-01-11'::DATE, '%U-%w')
+----
+1900-01-11 00:00:00	01-4
+
+
+# Thursday after 1st Monday
+query II
+SELECT try_strptime('1-4', '%W-%w'), strftime('1900-01-04'::DATE, '%W-%w')
+----
+1900-01-04 00:00:00	01-4
+
+# day of year
+query II
+SELECT try_strptime('30', '%j'), strftime('1900-01-30'::DATE, '%-j')
+----
+1900-01-30 00:00:00	30
+
+# day of year AND month
+query I
+SELECT try_strptime('1992-01-30 30', '%Y-%m-%d %j')
+----
+1992-01-30 00:00:00
+
+# Year-Sunday Week-Weekday
+query II
+SELECT try_strptime('2021-19-4', '%Y-%U-%w'), strftime('2021-05-13'::DATE, '%Y-%U-%w')
+----
+2021-05-13 00:00:00	2021-19-4
+
+# Year-Monday Week-Weekday
+query II
+SELECT try_strptime('2021-19-4', '%Y-%W-%w'), strftime('2021-05-13'::DATE, '%Y-%U-%w')
+----
+2021-05-13 00:00:00	2021-19-4
+
+# Year, Sunday Week 0, Friday
+query II
+SELECT try_strptime('2021-0-5', '%Y-%U-%w'), strftime('2021-01-01'::DATE, '%Y-%U-%w')
+----
+2021-01-01 00:00:00	2021-00-5
+
+# Year, Monday Week 0, Friday
+query II
+SELECT try_strptime('2021-0-5', '%Y-%W-%w'), strftime('2021-01-01'::DATE, '%Y-%W-%w')
+----
+2021-01-01 00:00:00	2021-00-5
+
+# Year-Sunday Week-Weekday Mismatch should defer to the day
+query I
+SELECT try_strptime('2021-05-12 19-4', '%Y-%m-%d %U-%w')
+----
+2021-05-12 00:00:00
+
+# Year-Monday Week-Weekday Mismatch should defer to the day
+query I
+SELECT try_strptime('2021-05-12 19-4', '%Y-%m-%d %W-%w')
+----
+2021-05-12 00:00:00
+
+# Round trip Sunday weeks
+query III
+SELECT * FROM (
+    SELECT dt, strftime(dt, '%Y-%U-%w') AS ft, try_strptime(strftime(dt, '%Y-%U-%w'), '%Y-%U-%w') AS rt
+    FROM (SELECT '2021-01-01'::DATE + (INTERVAL (d) DAY) AS dt FROM range(365) tbl(d)) days
+) diffs
+WHERE rt <> dt
+----
+
+# Round trip Monday weeks
+query III
+SELECT * FROM (
+    SELECT dt, strftime(dt, '%Y-%W-%w') AS ft, try_strptime(strftime(dt, '%Y-%W-%w'), '%Y-%W-%w') AS rt
+    FROM (SELECT '2021-01-01'::DATE + (INTERVAL (d) DAY) AS dt FROM range(365) tbl(d)) days
+) diffs
+WHERE rt <> dt
+----
+
+# empty specifier and string
+statement error
+SELECT try_strptime('', '')
+
+statement error
+SELECT try_strptime(NULL, '')
+
+query I
+SELECT try_strptime('', NULL)
+----
+NULL
+
+# Spaces match multiple spaces (Issue #3418)
+query I
+SELECT try_strptime('Jun 30 2003  2:03:10AM', '%b %d %Y %-I:%M:%S%p');
+----
+2003-06-30 02:03:10
+
+# UTC offset - produces TIMESTAMPTZ
+query I
+select try_strptime('2020-12-31 21:25:58.745232', '%Y-%m-%d %H:%M:%S.%f');
+----
+2020-12-31 21:25:58.745232
+
+query I
+select try_strptime('2020-12-31 21:25:58.745232', '%Y-%m-%d %H:%M:%S.%f');
+----
+2020-12-31 21:25:58.745232
+
+query I
+select try_strptime('2020-12-31 21:25:58.745232+00', '%Y-%m-%d %H:%M:%S.%f%z');
+----
+2020-12-31 21:25:58.745232+00
+
+query I
+select try_strptime('2020-12-31 21:25:58.745232+0000', '%Y-%m-%d %H:%M:%S.%f%z');
+----
+2020-12-31 21:25:58.745232+00
+
+query I
+select try_strptime('2020-12-31 21:25:58.745232+02', '%Y-%m-%d %H:%M:%S.%f%z');
+----
+2020-12-31 19:25:58.745232+00
+
+query I
+select try_strptime('2020-12-31 21:25:58.745232-02', '%Y-%m-%d %H:%M:%S.%f%z');
+----
+2020-12-31 23:25:58.745232+00
+
+query I
+select try_strptime('2020-12-31 21:25:58.745232+0215', '%Y-%m-%d %H:%M:%S.%f%z');
+----
+2020-12-31 19:10:58.745232+00
+
+query I
+select try_strptime('2020-12-31 21:25:58.745232-0215', '%Y-%m-%d %H:%M:%S.%f%z');
+----
+2020-12-31 23:40:58.745232+00
+
+# on the boundaries
+query I
+select try_strptime('2020-12-31 03:25:58.745232+04', '%Y-%m-%d %H:%M:%S.%f%z');
+----
+2020-12-30 23:25:58.745232+00
+
+query I
+select try_strptime('2020-12-30 23:25:58.745232-04', '%Y-%m-%d %H:%M:%S.%f%z');
+----
+2020-12-31 03:25:58.745232+00
+
+# Don't swallow non-spaces
+query I
+SELECT try_strptime('Mon Oct 17 2022 22:00:00 GMT+0000 (GMT)', '%a %b %d %Y %X GMT%z (%Z)') as fixed;
+----
+2022-10-17 22:00:00+00
+
+query I
+SELECT try_strptime('Mon Oct 17 2022 22:00:00 GMT+0000 (GMT', '%a %b %d %Y %X GMT%z (%Z') as working;
+----
+2022-10-17 22:00:00+00
+
+query I
+SELECT try_strptime('Mon Oct 17 2022 22:00:00 GMT+0000 (GMT)', '%a %b %d %Y %X GMT%z (%Z') as broken;
+----
+NULL
+
+#
+# Multiple patterns
+#
+query I
+SELECT try_strptime('10/28/1910', ['%d-%m-%Y', '%m-%d-%Y', '%d/%m/%Y', '%m/%d/%Y'])
+----
+1910-10-28 00:00:00
+
+query I
+SELECT try_strptime('10.28.1910', ['%d-%m-%Y', '%m-%d-%Y', '%d/%m/%Y', '%m/%d/%Y'])
+----
+NULL
+
+#
+# Most errors for strptime produce NULLs
+#
+
+# incorrect usage
+query I
+select try_strptime('2020-12-31 21:25:58.745232+0', '%Y-%m-%d %H:%M:%S.%f%z');
+----
+NULL
+
+query I
+select try_strptime('2020-12-31 21:25:58.745232+0X', '%Y-%m-%d %H:%M:%S.%f%z');
+----
+NULL
+
+query I
+select try_strptime('2020-12-31 21:25:58.745232+X0', '%Y-%m-%d %H:%M:%S.%f%z');
+----
+NULL
+
+query I
+select try_strptime('2020-12-31 21:25:58.745232+000', '%Y-%m-%d %H:%M:%S.%f%z');
+----
+NULL
+
+query I
+select try_strptime('2020-12-31 21:25:58.745232X00', '%Y-%m-%d %H:%M:%S.%f%z');
+----
+NULL
+
+# different errors
+# month out of range
+query I
+SELECT try_strptime('2018-20-10', '%Y-%m-%d')
+----
+NULL
+
+# day out of range
+query I
+SELECT try_strptime('2018-10-100', '%Y-%m-%d')
+----
+NULL
+
+# year without century out of range
+query I
+SELECT try_strptime('969-10-10', '%y-%m-%d')
+----
+NULL
+
+# literal part does not match
+query I
+SELECT try_strptime('2000/10/10', '%Y-%m-%d')
+----
+NULL
+
+# incorrect date
+query I
+SELECT try_strptime('2001-02-30', '%Y-%m-%d')
+----
+NULL
+
+# incorrect date
+query I
+SELECT try_strptime('2000-10-hello', '%Y-%m-%d')
+----
+NULL
+
+# incorrect hour
+query I
+SELECT try_strptime('2000-10-01 24:00:00', '%Y-%m-%d %H:%M:%S')
+----
+NULL
+
+# incorrect hour with 12 hour clock
+query I
+SELECT try_strptime('2000-10-01 00:00:00 AM', '%Y-%m-%d %I:%M:%S %p')
+----
+NULL
+
+query I
+SELECT try_strptime('2000-10-01 13:00:00 AM', '%Y-%m-%d %I:%M:%S %p')
+----
+NULL
+
+# incorrect minute
+query I
+SELECT try_strptime('2000-10-01 23:60:00', '%Y-%m-%d %H:%M:%S')
+----
+NULL
+
+# incorrect seconds
+query I
+SELECT try_strptime('2000-10-01 23:59:60', '%Y-%m-%d %H:%M:%S')
+----
+NULL
+
+# incorrect microseconds
+query I
+SELECT try_strptime('2000-10-01 23:59:59.10000000', '%Y-%m-%d %H:%M:%S.%f')
+----
+NULL
+
+# huge number
+query I
+SELECT try_strptime('2000-10-01 23:59:59.1000000000000000000000000000', '%Y-%m-%d %H:%M:%S.%f')
+----
+NULL
+
+# empty string
+query I
+SELECT try_strptime('', '%Y-%m-%d %H:%M:%S.%f')
+----
+NULL
+
+# empty string with am/pm
+query I
+SELECT try_strptime('', '%p')
+----
+NULL
+
+query I
+SELECT try_strptime('a', '%p')
+----
+NULL
+
+# incorrect am/pm
+query I
+SELECT try_strptime('mp', '%p')
+----
+NULL
+
+query I
+SELECT try_strptime('pp', '%p')
+----
+NULL
+
+query I
+SELECT try_strptime('zm', '%p')
+----
+NULL
+
+# incorrect abbreviated weekday name
+query I
+SELECT try_strptime('moa', '%a')
+----
+NULL
+
+# incorrect weekday name
+query I
+SELECT try_strptime('moaday', '%A')
+----
+NULL
+
+query I
+SELECT try_strptime('mondayy', '%A')
+----
+NULL
+
+# incorrect abbreviated month name
+query I
+SELECT try_strptime('juk', '%b')
+----
+NULL
+
+# incorrect weekday name
+query I
+SELECT try_strptime('juke', '%B')
+----
+NULL
+
+query I
+SELECT try_strptime('junee', '%B')
+----
+NULL
+
+# day of year out of range
+query I
+SELECT try_strptime('500', '%j')
+----
+NULL
+
+query I
+SELECT try_strptime('500', '%-j')
+----
+NULL
+
+query I
+SELECT try_strptime('0', '%j')
+----
+NULL
+
+query I
+SELECT try_strptime('0', '%-j')
+----
+NULL
+
+# week numbers out of range
+query I
+SELECT try_strptime('60', '%U')
+----
+NULL
+
+query I
+SELECT try_strptime('60', '%W')
+----
+NULL
+
+# weekday out of range
+query I
+SELECT try_strptime('9', '%w')
+----
+NULL
+
+# Multiple offset types
+query I
+SELECT try_strptime('20 19', '%U %W')
+----
+NULL
+
+query I
+SELECT try_strptime('20 19', '%U %j')
+----
+NULL
+
+query I
+SELECT try_strptime('20 19', '%W %j')
+----
+NULL
+
+# AM/PM out of range
+query I
+SELECT try_strptime('Mon 30, December 30, 20:3:5 PM', '%a %d, %B %y, %H:%M:%S %p')
+----
+NULL
+
+# microseconds out of range
+query I
+SELECT try_strptime('9999999', '%f')
+----
+NULL
+
+# millisecond out of range
+query I
+SELECT try_strptime('9999', '%g')
+----
+NULL
+
+# Invalid format strings are still errors
+# unrecognized specifier
+statement error
+SELECT try_strptime('21/10/2018', '%-q/%m/%Y')
+----
+Invalid Input Error: Failed to parse format specifier
+
+# Non-constant format strings are still errors
+statement error
+SELECT try_strptime('2000/10/10', random()::varchar)
+----
+Invalid Input Error: strptime format must be a constant
+

@@ -6,6 +6,7 @@ using duckdb::Decimal;
 using duckdb::OdbcHandleDesc;
 using duckdb::ParameterDescriptor;
 using duckdb::Value;
+using duckdb::vector;
 
 ParameterDescriptor::ParameterDescriptor(OdbcHandleStmt *stmt_ptr)
     : stmt(stmt_ptr), paramset_idx(0), cur_paramset_idx(0), cur_param_idx(0) {
@@ -58,7 +59,7 @@ void ParameterDescriptor::ResetCurrentAPD() {
 	cur_apd = apd.get();
 }
 
-SQLRETURN ParameterDescriptor::GetParamValues(std::vector<Value> &values) {
+SQLRETURN ParameterDescriptor::GetParamValues(vector<Value> &values) {
 	values.clear();
 	if (ipd->records.empty()) {
 		return SQL_SUCCESS;

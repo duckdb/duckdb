@@ -1,11 +1,10 @@
-#include "duckdb/execution/physical_plan_generator.hpp"
-#include "duckdb/planner/operator/logical_explain.hpp"
-#include "duckdb/execution/operator/helper/physical_explain_analyze.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
-#include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
-
 #include "duckdb/common/tree_renderer.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/execution/operator/helper/physical_explain_analyze.hpp"
+#include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/planner/operator/logical_explain.hpp"
 
 namespace duckdb {
 
@@ -56,10 +55,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExplain &o
 	collection->Append(chunk);
 
 	// create a chunk scan to output the result
-	auto chunk_scan =
-	    make_uniq<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::COLUMN_DATA_SCAN, op.estimated_cardinality);
-	chunk_scan->owned_collection = std::move(collection);
-	chunk_scan->collection = chunk_scan->owned_collection.get();
+	auto chunk_scan = make_uniq<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::COLUMN_DATA_SCAN,
+	                                                    op.estimated_cardinality, std::move(collection));
 	return std::move(chunk_scan);
 }
 

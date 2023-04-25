@@ -4,11 +4,11 @@
 
 namespace duckdb {
 
-unique_ptr<BoundTableRef> Binder::Bind(SubqueryRef &ref, CommonTableExpressionInfo *cte) {
+unique_ptr<BoundTableRef> Binder::Bind(SubqueryRef &ref, optional_ptr<CommonTableExpressionInfo> cte) {
 	auto binder = Binder::CreateBinder(context, this);
 	binder->can_contain_nulls = true;
 	if (cte) {
-		binder->bound_ctes.insert(cte);
+		binder->bound_ctes.insert(*cte);
 	}
 	binder->alias = ref.alias.empty() ? "unnamed_subquery" : ref.alias;
 	auto subquery = binder->BindNode(*ref.subquery->node);

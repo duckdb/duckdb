@@ -38,7 +38,7 @@ def reset_db():
 	try_remove(os.path.join(args.psqlodbcdir, 'contrib_regression'))
 	try_remove(os.path.join(args.psqlodbcdir, 'contrib_regression.wal'))
 
-	command = odbc_reset + ' < sampletables.sql'
+	command = odbc_reset + f' < {args.psqlodbcdir}/sampletables.sql'
 	syscall(command, 'Failed to reset db')
 
 def print_trace_and_exit():

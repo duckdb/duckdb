@@ -57,12 +57,8 @@ public:
 	};
 
 	explicit PatasCompressionState(ColumnDataCheckpointer &checkpointer, PatasAnalyzeState<T> *analyze_state)
-	    : checkpointer(checkpointer) {
-
-		auto &db = checkpointer.GetDatabase();
-		auto &type = checkpointer.GetType();
-		auto &config = DBConfig::GetConfig(db);
-		function = config.GetCompressionFunction(CompressionType::COMPRESSION_PATAS, type.InternalType());
+	    : checkpointer(checkpointer),
+	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_PATAS)) {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
 
 		state.data_ptr = (void *)this;
@@ -71,7 +67,7 @@ public:
 	}
 
 	ColumnDataCheckpointer &checkpointer;
-	CompressionFunction *function;
+	CompressionFunction &function;
 	unique_ptr<ColumnSegment> current_segment;
 	BufferHandle handle;
 	idx_t group_idx = 0;

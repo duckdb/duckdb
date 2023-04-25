@@ -41,7 +41,7 @@ void ArgMinMaxStateBase::CreateValue(Vector *&value) {
 template <>
 void ArgMinMaxStateBase::DestroyValue(string_t &value) {
 	if (!value.IsInlined()) {
-		delete[] value.GetDataUnsafe();
+		delete[] value.GetData();
 	}
 }
 
@@ -62,7 +62,7 @@ void ArgMinMaxStateBase::AssignValue(string_t &target, string_t new_value, bool 
 		// non-inlined string, need to allocate space for it
 		auto len = new_value.GetSize();
 		auto ptr = new char[len];
-		memcpy(ptr, new_value.GetDataUnsafe(), len);
+		memcpy(ptr, new_value.GetData(), len);
 
 		target = string_t(ptr, len);
 	}
@@ -98,7 +98,7 @@ struct ArgMinMaxState : public ArgMinMaxStateBase {
 template <class COMPARATOR>
 struct ArgMinMaxBase {
 	template <class STATE>
-	static void Destroy(STATE *state) {
+	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
 		state->~STATE();
 	}
 

@@ -343,14 +343,14 @@ public:
 		auto &bind_data = (ParquetReadBindData &)*input.bind_data;
 		auto result = make_uniq<ParquetReadGlobalState>();
 
-		result->file_opening = std::vector<bool>(bind_data.files.size(), false);
+		result->file_opening = vector<bool>(bind_data.files.size(), false);
 		result->file_mutexes = unique_ptr<mutex[]>(new mutex[bind_data.files.size()]);
 		if (bind_data.files.empty()) {
 			result->initial_reader = nullptr;
 		} else {
 			result->readers = std::move(bind_data.union_readers);
 			if (result->readers.size() != bind_data.files.size()) {
-				result->readers = std::vector<shared_ptr<ParquetReader>>(bind_data.files.size(), nullptr);
+				result->readers = vector<shared_ptr<ParquetReader>>(bind_data.files.size(), nullptr);
 			}
 			if (bind_data.initial_reader) {
 				result->initial_reader = std::move(bind_data.initial_reader);
@@ -372,11 +372,11 @@ public:
 		}
 
 		result->column_ids = input.column_ids;
-		result->filters = input.filters;
+		result->filters = input.filters.get();
 		result->row_group_index = 0;
 		result->file_index = 0;
 		result->batch_index = 0;
-		result->max_threads = ParquetScanMaxThreads(context, input.bind_data);
+		result->max_threads = ParquetScanMaxThreads(context, input.bind_data.get());
 		if (input.CanRemoveFilterColumns()) {
 			result->projection_ids = input.projection_ids;
 			const auto table_types = bind_data.types;
@@ -721,15 +721,16 @@ void ParquetExtension::Load(DuckDB &db) {
 	auto &context = *con.context;
 	auto &catalog = Catalog::GetSystemCatalog(context);
 
-	if (catalog.GetEntry<TableFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "parquet_scan", true)) {
+	if (catalog.GetEntry<TableFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "parquet_scan",
+	                                                OnEntryNotFound::RETURN_NULL)) {
 		throw InvalidInputException("Parquet extension is either already loaded or built-in");
 	}
 
-	catalog.CreateCopyFunction(context, &info);
-	catalog.CreateTableFunction(context, &cinfo);
-	catalog.CreateTableFunction(context, &pq_scan);
-	catalog.CreateTableFunction(context, &meta_cinfo);
-	catalog.CreateTableFunction(context, &schema_cinfo);
+	catalog.CreateCopyFunction(context, info);
+	catalog.CreateTableFunction(context, cinfo);
+	catalog.CreateTableFunction(context, pq_scan);
+	catalog.CreateTableFunction(context, meta_cinfo);
+	catalog.CreateTableFunction(context, schema_cinfo);
 	con.Commit();
 
 	auto &config = DBConfig::GetConfig(*db.instance);

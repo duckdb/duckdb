@@ -24,7 +24,7 @@ public:
 public:
 	PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
 	                  vector<JoinCondition> cond, JoinType join_type, const vector<idx_t> &left_projection_map,
-	                  vector<idx_t> right_projection_map, vector<column_t> column_ids, Index *index, bool lhs_first,
+	                  vector<idx_t> right_projection_map, vector<column_t> column_ids, Index &index, bool lhs_first,
 	                  idx_t estimated_cardinality);
 
 	//! Columns from RHS used in the query
@@ -44,7 +44,7 @@ public:
 	//! The types of all conditions
 	vector<LogicalType> build_types;
 	//! Index used for join
-	Index *index;
+	Index &index;
 
 	vector<JoinCondition> conditions;
 
@@ -55,6 +55,9 @@ public:
 public:
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
 
+	OrderPreservationType OperatorOrder() const override {
+		return OrderPreservationType::NO_ORDER;
+	}
 	bool ParallelOperator() const override {
 		return true;
 	}
@@ -63,13 +66,9 @@ protected:
 	OperatorResultType ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                                   GlobalOperatorState &gstate, OperatorState &state) const override;
 
-	bool IsOrderPreserving() const override {
-		return false;
-	}
-
 public:
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
-	vector<const PhysicalOperator *> GetSources() const override;
+	vector<const_reference<PhysicalOperator>> GetSources() const override;
 
 private:
 	void GetRHSMatches(ExecutionContext &context, DataChunk &input, OperatorState &state_p) const;

@@ -130,16 +130,15 @@ struct DictionaryCompressionStorage {
 // scanning the whole dictionary at once and then scanning the selection buffer for each emitted vector. Secondly, it
 // allows for efficient bitpacking compression as the selection values should remain relatively small.
 struct DictionaryCompressionCompressState : public DictionaryCompressionState {
-	explicit DictionaryCompressionCompressState(ColumnDataCheckpointer &checkpointer)
-	    : checkpointer(checkpointer), heap(BufferAllocator::Get(checkpointer.GetDatabase())) {
-		auto &db = checkpointer.GetDatabase();
-		auto &config = DBConfig::GetConfig(db);
-		function = config.GetCompressionFunction(CompressionType::COMPRESSION_DICTIONARY, PhysicalType::VARCHAR);
+	explicit DictionaryCompressionCompressState(ColumnDataCheckpointer &checkpointer_p)
+	    : checkpointer(checkpointer_p),
+	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_DICTIONARY)),
+	      heap(BufferAllocator::Get(checkpointer.GetDatabase())) {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
 	}
 
 	ColumnDataCheckpointer &checkpointer;
-	CompressionFunction *function;
+	CompressionFunction &function;
 
 	// State regarding current segment
 	unique_ptr<ColumnSegment> current_segment;
@@ -150,8 +149,8 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 	// Buffers and map for current segment
 	StringHeap heap;
 	string_map_t<uint32_t> current_string_map;
-	std::vector<uint32_t> index_buffer;
-	std::vector<uint32_t> selection_buffer;
+	vector<uint32_t> index_buffer;
+	vector<uint32_t> selection_buffer;
 
 	bitpacking_width_t current_width = 0;
 	bitpacking_width_t next_width = 0;
@@ -209,7 +208,7 @@ public:
 		// Copy string to dict
 		current_dictionary.size += str.GetSize();
 		auto dict_pos = current_end_ptr - current_dictionary.size;
-		memcpy(dict_pos, str.GetDataUnsafe(), str.GetSize());
+		memcpy(dict_pos, str.GetData(), str.GetSize());
 		current_dictionary.Verify();
 		D_ASSERT(current_dictionary.end == Storage::BLOCK_SIZE);
 

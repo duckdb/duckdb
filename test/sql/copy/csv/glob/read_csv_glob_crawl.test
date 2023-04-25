@@ -1,5 +1,5 @@
 # name: test/sql/copy/csv/glob/read_csv_glob_crawl.test
-# description: Test crawling CSVs
+# description: Test glob **
 # group: [glob]
 
 # files from: 'test/sql/copy/csv/data/glob/crawl/'
@@ -172,22 +172,149 @@ FROM read_csv_auto('test/sql/copy/csv/data/glob/crawl/hidden/**');
 42	42
 42	42
 
-# tests without previous directories
-query I
-select count(*) > 0 from glob('**');
-----
-true
-
-query I
-select count(*) from glob('**/samename/*');
-----
-8
-
 # symlink test: symlinks will not be searched
 query I
 FROM read_csv_auto('test/sql/copy/csv/data/glob/crawl/.symbolic_link/**');
 ----
 -42
+
+
+
+#  additional tests
+statement ok
+CREATE TABLE t0 AS SELECT (i%2) AS c_2, (i%3) AS c_3, (i*i) AS c_pow FROM RANGE(0,10) tbl(i);
+
+statement ok
+COPY t0 TO '__TEST_DIR__/partitioned0' (PARTITION_BY(c_2,c_3));
+
+query I
+from glob('__TEST_DIR__/partitioned0/*');
+----
+
+query I
+select count(*) from glob('__TEST_DIR__/partitioned0/*');
+----
+0
+
+query I
+select count(*) from glob('__TEST_DIR__/partitioned0/*/*/*');
+----
+6
+
+query I
+select count(*) from glob('__TEST_DIR__/partitioned0/*/*/**')
+----
+6
+
+query I
+select count(*) from glob('__TEST_DIR__/partitioned0/*/*/*/**')
+----
+0
+
+query I
+select count(*) from glob('__TEST_DIR__/partitioned0/**');
+----
+6
+
+query I
+select count(*) from glob('__TEST_DIR__/partitioned0/**/*');
+----
+6
+
+query I
+select count(*) from glob('__TEST_DIR__/partitioned0/*/**');
+----
+6
+
+query I
+select count(*) from glob('__TEST_DIR__/partitioned0/**/data_0.csv');
+----
+6
+
+query I
+select count(*) from glob('__TEST_DIR__/partitioned0/**/*/data_0.csv')
+----
+6
+
+query I
+select count(*) from glob('__TEST_DIR__/partitioned0/**/c_3=0/data_0.csv')
+----
+2
+
+query I
+select count(*) from glob('__TEST_DIR__/partitioned0/c_2=0/**/data_0.csv')
+----
+3
+
+
+
+#   put a file with a different name in the partitioned0 directory
+statement ok
+COPY t0 TO '__TEST_DIR__/partitioned0/data_1.csv';
+
+query I
+select count(*) from glob('__TEST_DIR__/partitioned0/*');
+----
+1
+
+query I
+select count(*) from glob('__TEST_DIR__/partitioned0/*');
+----
+1
+
+query I
+select count(*) from glob('__TEST_DIR__/partitioned0/*/*/*');
+----
+6
+
+query I
+select count(*) from glob('__TEST_DIR__/partitioned0/*/*/**')
+----
+6
+
+query I
+select count(*) from glob('__TEST_DIR__/partitioned0/*/*/*/**')
+----
+0
+
+query I
+select count(*) from glob('__TEST_DIR__/partitioned0/**');
+----
+7
+
+query I
+select count(*) from glob('__TEST_DIR__/partitioned0/**/*');
+----
+7
+
+query I
+select count(*) from glob('__TEST_DIR__/partitioned0/*/**');
+----
+6
+
+query I
+select count(*) from glob('__TEST_DIR__/partitioned0/**/data_0.csv');
+----
+6
+
+query I
+select count(*) from glob('__TEST_DIR__/partitioned0/**/*/data_0.csv')
+----
+6
+
+query I
+select count(*) from glob('__TEST_DIR__/partitioned0/**/c_3=0/data_0.csv')
+----
+2
+
+query I
+select count(*) from glob('__TEST_DIR__/partitioned0/c_2=0/**/data_0.csv')
+----
+3
+
+
+
+
 
 require notwindows
 

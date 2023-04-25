@@ -20,19 +20,12 @@
 namespace duckdb {
 
 class FormatDeserializer {
+	friend Vector;
+
 protected:
 	bool deserialize_enum_from_string = false;
 
 public:
-	// We fake return-type overloading using templates and enable_if
-	/*
-	template<typename T>
-	T ReadProperty(const char* tag) {
-	    SetTag(tag);
-	    return std::move<T>(Read<T>());
-	}
-	 */
-
 	// Read into an existing value
 	template <typename T>
 	inline void ReadProperty(const char *tag, T &ret) {
@@ -53,8 +46,11 @@ public:
 		SetTag(tag);
 		auto present = OnOptionalBegin();
 		if (present) {
-			return Read<T>();
+			auto item = Read<T>();
+			OnOptionalEnd();
+			return item;
 		} else {
+			OnOptionalEnd();
 			return std::forward<T>(default_value);
 		}
 	}
@@ -66,8 +62,10 @@ public:
 		auto present = OnOptionalBegin();
 		if (present) {
 			ret = Read<T>();
+			OnOptionalEnd();
 		} else {
 			ret = std::forward<T>(default_value);
+			OnOptionalEnd();
 		}
 	}
 
@@ -78,8 +76,11 @@ public:
 		SetTag(tag);
 		auto present = OnOptionalBegin();
 		if (present) {
-			return Read<T>();
+			auto item = Read<T>();
+			OnOptionalEnd();
+			return item;
 		} else {
+			OnOptionalEnd();
 			return T();
 		}
 	}
@@ -92,16 +93,28 @@ public:
 		auto present = OnOptionalBegin();
 		if (present) {
 			ret = Read<T>();
+			OnOptionalEnd();
 		} else {
 			ret = T();
+			OnOptionalEnd();
 		}
+	}
+
+	// Special case:
+	// Read into an existing data_ptr_t
+	inline void ReadProperty(const char *tag, data_ptr_t ret, idx_t count) {
+		SetTag(tag);
+		ReadDataPtr(ret, count);
 	}
 
 private:
 	// Deserialize anything implementing a FormatDeserialize method
 	template <typename T = void>
 	inline typename std::enable_if<has_deserialize<T>::value, T>::type Read() {
-		return T::FormatDeserialize(*this);
+		OnObjectBegin();
+		auto val = T::FormatDeserialize(*this);
+		OnObjectEnd();
+		return val;
 	}
 
 	// Structural Types
@@ -109,14 +122,20 @@ private:
 	template <class T = void>
 	inline typename std::enable_if<is_unique_ptr<T>::value, T>::type Read() {
 		using ELEMENT_TYPE = typename is_unique_ptr<T>::ELEMENT_TYPE;
-		return std::move(ELEMENT_TYPE::FormatDeserialize(*this));
+		OnObjectBegin();
+		auto val = ELEMENT_TYPE::FormatDeserialize(*this);
+		OnObjectEnd();
+		return val;
 	}
 
 	// Deserialize shared_ptr
 	template <typename T = void>
 	inline typename std::enable_if<is_shared_ptr<T>::value, T>::type Read() {
 		using ELEMENT_TYPE = typename is_shared_ptr<T>::ELEMENT_TYPE;
-		return std::move(ELEMENT_TYPE::FormatDeserialize(*this));
+		OnObjectBegin();
+		auto val = ELEMENT_TYPE::FormatDeserialize(*this);
+		OnObjectEnd();
+		return val;
 	}
 
 	// Deserialize a vector
@@ -124,10 +143,11 @@ private:
 	inline typename std::enable_if<is_vector<T>::value, T>::type Read() {
 		using ELEMENT_TYPE = typename is_vector<T>::ELEMENT_TYPE;
 		T vec;
-		auto size = ReadUnsignedInt32();
+		auto size = OnListBegin();
 		for (idx_t i = 0; i < size; i++) {
 			vec.push_back(Read<ELEMENT_TYPE>());
 		}
+		OnListEnd();
 
 		return vec;
 	}
@@ -137,12 +157,21 @@ private:
 	inline typename std::enable_if<is_unordered_map<T>::value, T>::type Read() {
 		using KEY_TYPE = typename is_unordered_map<T>::KEY_TYPE;
 		using VALUE_TYPE = typename is_unordered_map<T>::VALUE_TYPE;
-		auto size = ReadUnsignedInt32();
-		T map;
-		for (idx_t i = 0; i < size; i++) {
-			map[Read<KEY_TYPE>()] = Read<VALUE_TYPE>();
-		}
 
+		T map;
+		auto size = OnMapBegin();
+		for (idx_t i = 0; i < size; i++) {
+			OnMapEntryBegin();
+			OnMapKeyBegin();
+			auto key = Read<KEY_TYPE>();
+			OnMapKeyEnd();
+			OnMapValueBegin();
+			auto value = Read<VALUE_TYPE>();
+			OnMapValueEnd();
+			OnMapEntryEnd();
+			map[std::move(key)] = std::move(value);
+		}
+		OnMapEnd();
 		return map;
 	}
 
@@ -150,12 +179,12 @@ private:
 	template <typename T = void>
 	inline typename std::enable_if<is_unordered_set<T>::value, T>::type Read() {
 		using ELEMENT_TYPE = typename is_unordered_set<T>::ELEMENT_TYPE;
-		auto size = ReadUnsignedInt32();
+		auto size = OnListBegin();
 		T set;
 		for (idx_t i = 0; i < size; i++) {
 			set.insert(Read<ELEMENT_TYPE>());
 		}
-
+		OnListEnd();
 		return set;
 	}
 
@@ -163,12 +192,12 @@ private:
 	template <typename T = void>
 	inline typename std::enable_if<is_set<T>::value, T>::type Read() {
 		using ELEMENT_TYPE = typename is_set<T>::ELEMENT_TYPE;
-		auto size = ReadUnsignedInt32();
+		auto size = OnListBegin();
 		T set;
 		for (idx_t i = 0; i < size; i++) {
 			set.insert(Read<ELEMENT_TYPE>());
 		}
-
+		OnListEnd();
 		return set;
 	}
 
@@ -275,6 +304,12 @@ private:
 		return ReadInterval();
 	}
 
+	// Deserialize a interval_t
+	template <typename T = void>
+	inline typename std::enable_if<std::is_same<T, hugeint_t>::value, T>::type Read() {
+		return ReadHugeInt();
+	}
+
 protected:
 	virtual void SetTag(const char *tag) {
 		(void)tag;
@@ -327,10 +362,12 @@ protected:
 	virtual uint32_t ReadUnsignedInt32() = 0;
 	virtual int64_t ReadSignedInt64() = 0;
 	virtual uint64_t ReadUnsignedInt64() = 0;
+	virtual hugeint_t ReadHugeInt() = 0;
 	virtual float ReadFloat() = 0;
 	virtual double ReadDouble() = 0;
 	virtual string ReadString() = 0;
 	virtual interval_t ReadInterval() = 0;
+	virtual void ReadDataPtr(data_ptr_t &ptr, idx_t count) = 0;
 };
 
 } // namespace duckdb

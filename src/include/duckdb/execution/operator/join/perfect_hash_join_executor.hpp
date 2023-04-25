@@ -33,7 +33,7 @@ struct PerfectHashJoinStats {
 
 //! PhysicalHashJoin represents a hash loop join between two tables
 class PerfectHashJoinExecutor {
-	using PerfectHashTable = std::vector<Vector>;
+	using PerfectHashTable = vector<Vector>;
 
 public:
 	explicit PerfectHashJoinExecutor(const PhysicalHashJoin &join, JoinHashTable &ht, PerfectHashJoinStats pjoin_stats);
@@ -58,7 +58,7 @@ private:
 	template <typename T>
 	bool TemplatedFillSelectionVectorBuild(Vector &source, SelectionVector &sel_vec, SelectionVector &seq_sel_vec,
 	                                       idx_t count);
-	bool FullScanHashTable(JoinHTScanState &state, LogicalType &key_type);
+	bool FullScanHashTable(LogicalType &key_type);
 
 private:
 	const PhysicalHashJoin &join;

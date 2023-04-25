@@ -15,7 +15,7 @@
 using namespace duckdb;
 using namespace std;
 
-static void test_helper(string sql, vector<string> fixtures = vector<string>()) {
+static void test_helper(string sql, duckdb::vector<string> fixtures = duckdb::vector<string>()) {
 	DuckDB db;
 	Connection con(db);
 

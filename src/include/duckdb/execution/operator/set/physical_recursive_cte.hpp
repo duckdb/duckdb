@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 
 namespace duckdb {
@@ -33,6 +33,10 @@ public:
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
 
+	bool IsSource() const override {
+		return true;
+	}
+
 public:
 	// Sink interface
 	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
@@ -47,7 +51,7 @@ public:
 public:
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
 
-	vector<const PhysicalOperator *> GetSources() const override;
+	vector<const_reference<PhysicalOperator>> GetSources() const override;
 
 private:
 	//! Probe Hash Table and eliminate duplicate rows

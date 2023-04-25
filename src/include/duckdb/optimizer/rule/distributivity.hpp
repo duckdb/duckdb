@@ -18,7 +18,7 @@ class DistributivityRule : public Rule {
 public:
 	explicit DistributivityRule(ExpressionRewriter &rewriter);
 
-	unique_ptr<Expression> Apply(LogicalOperator &op, vector<Expression *> &bindings, bool &changes_made,
+	unique_ptr<Expression> Apply(LogicalOperator &op, vector<reference<Expression>> &bindings, bool &changes_made,
 	                             bool is_root) override;
 
 private:

@@ -5,6 +5,7 @@ add_library_unity(
   constant_or_null.cpp
   current_setting.cpp
   hash.cpp
+  error.cpp
   least.cpp
   stats.cpp
   typeof.cpp)
