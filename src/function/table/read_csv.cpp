@@ -362,6 +362,7 @@ private:
 	idx_t buffer_size;
 	//! Current batch index
 	idx_t batch_index = 0;
+    idx_t local_batch_index = 0;
 
 	//! Forces parallelism for small CSV Files, should only be used for testing.
 	bool force_parallelism = false;
@@ -492,6 +493,7 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 			file_handle = ReadCSV::OpenCSV(current_file_path, bind_data.options.compression, context);
 			current_csv_position = 0;
 			file_number++;
+            local_batch_index = 0;
 			current_buffer =
 			    make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position, file_number);
 			next_buffer = shared_ptr<CSVBuffer>(
@@ -503,9 +505,9 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 		}
 	}
 	// set up the current buffer
-	line_info.current_batches.back().insert(batch_index);
+	line_info.current_batches.back().insert(local_batch_index);
 	auto result = make_uniq<CSVBufferRead>(current_buffer, next_buffer, next_byte, next_byte + bytes_per_local_state,
-	                                       batch_index++);
+	                                       batch_index++, local_batch_index++);
 	// move the byte index of the CSV reader to the next buffer
 	next_byte += bytes_per_local_state;
 	if (next_byte >= current_buffer->GetBufferSize()) {
@@ -563,7 +565,7 @@ void ParallelCSVGlobalState::UpdateVerification(VerificationPositions positions,
 }
 
 void ParallelCSVGlobalState::UpdateLinesRead(CSVBufferRead &buffer_read, idx_t file_idx) {
-	auto batch_idx = buffer_read.batch_index;
+	auto batch_idx = buffer_read.local_batch_index;
 	auto lines_read = buffer_read.lines_read;
 	lock_guard<mutex> parallel_lock(main_mutex);
 	line_info.current_batches[file_idx].erase(batch_idx);
@@ -671,7 +673,7 @@ static void ParallelReadCSVFunction(ClientContext &context, TableFunctionInput &
 			if (verification_updates.beginning_of_first_line != verification_updates.end_of_last_line) {
 				csv_global_state.UpdateVerification(verification_updates,
 				                                    csv_local_state.csv_reader->buffer->buffer->GetFileNumber(),
-				                                    csv_local_state.csv_reader->buffer->batch_index);
+				                                    csv_local_state.csv_reader->buffer->local_batch_index);
 			}
 			csv_global_state.UpdateLinesRead(*csv_local_state.csv_reader->buffer, csv_local_state.csv_reader->file_idx);
 			auto has_next = csv_global_state.Next(context, bind_data, csv_local_state.csv_reader);

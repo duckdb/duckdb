@@ -341,7 +341,7 @@ normal : {
 add_value : {
 	/* state: Add value to string vector */
 	AddValue(buffer->GetValue(start_buffer, position_buffer, offset), column, escape_positions, has_quotes,
-	         buffer->batch_index);
+	         buffer->local_batch_index);
 	// increase position by 1 and move start to the new position
 	offset = 0;
 	has_quotes = false;
@@ -358,12 +358,12 @@ add_row : {
 	bool carriage_return = (*buffer)[position_buffer] == '\r';
 
 	AddValue(buffer->GetValue(start_buffer, position_buffer, offset), column, escape_positions, has_quotes,
-	         buffer->batch_index);
+	         buffer->local_batch_index);
 	if (try_add_line) {
 		bool success = column == insert_chunk.ColumnCount();
 		if (success) {
-			AddRow(insert_chunk, column, error_message, buffer->batch_index);
-			success = Flush(insert_chunk, buffer->batch_index, true);
+			AddRow(insert_chunk, column, error_message, buffer->local_batch_index);
+			success = Flush(insert_chunk, buffer->local_batch_index, true);
 		}
 		reached_remainder_state = false;
 		parse_chunk.Reset();
@@ -371,7 +371,7 @@ add_row : {
 	} else {
 		VerifyLineLength(position_buffer - line_start);
 		line_start = position_buffer;
-		finished_chunk = AddRow(insert_chunk, column, error_message, buffer->batch_index);
+		finished_chunk = AddRow(insert_chunk, column, error_message, buffer->local_batch_index);
 	}
 	// increase position by 1 and move start to the new position
 	offset = 0;
@@ -454,7 +454,7 @@ in_quotes:
 			// still in quoted state at the end of the file or at the end of a buffer when running multithreaded, error:
 			throw InvalidInputException(
 			    "Error in file \"%s\" on line %s: unterminated quotes. (%s)", options.file_path,
-			    GetLineNumberStr(linenr, linenr_estimated, line_info, buffer->batch_index).c_str(), options.ToString());
+			    GetLineNumberStr(linenr, linenr_estimated, line_info, buffer->local_batch_index).c_str(), options.ToString());
 		} else {
 			goto final_state;
 		}
@@ -495,7 +495,7 @@ unquote : {
 		error_message = StringUtil::Format(
 		    "Error in file \"%s\" on line %s: quote should be followed by end of value, end of "
 		    "row or another quote. (%s). ",
-		    options.file_path, GetLineNumberStr(linenr, linenr_estimated, line_info, buffer->batch_index).c_str(),
+		    options.file_path, GetLineNumberStr(linenr, linenr_estimated, line_info, buffer->local_batch_index).c_str(),
 		    options.ToString());
 		return false;
 	}
@@ -510,13 +510,13 @@ handle_escape : {
 	if (position_buffer >= buffer_size && buffer->buffer->IsCSVFileLastBuffer()) {
 		error_message = StringUtil::Format(
 		    "Error in file \"%s\" on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE. (%s)", options.file_path,
-		    GetLineNumberStr(linenr, linenr_estimated, line_info, buffer->batch_index).c_str(), options.ToString());
+		    GetLineNumberStr(linenr, linenr_estimated, line_info, buffer->local_batch_index).c_str(), options.ToString());
 		return false;
 	}
 	if ((*buffer)[position_buffer] != options.quote[0] && (*buffer)[position_buffer] != options.escape[0]) {
 		error_message = StringUtil::Format(
 		    "Error in file \"%s\" on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE. (%s)", options.file_path,
-		    GetLineNumberStr(linenr, linenr_estimated, line_info, buffer->batch_index).c_str(), options.ToString());
+		    GetLineNumberStr(linenr, linenr_estimated, line_info, buffer->local_batch_index).c_str(), options.ToString());
 		return false;
 	}
 	// escape was followed by quote or escape, go back to quoted state
@@ -548,12 +548,12 @@ final_state : {
 			// remaining values to be added to the chunk
 			auto str_value = buffer->GetValue(start_buffer, position_buffer, offset);
 			if (!AllNewLine(str_value, insert_chunk.data.size()) || offset == 0) {
-				AddValue(str_value, column, escape_positions, has_quotes, buffer->batch_index);
+				AddValue(str_value, column, escape_positions, has_quotes, buffer->local_batch_index);
 				if (try_add_line) {
 					bool success = column == return_types.size();
 					if (success) {
-						AddRow(insert_chunk, column, error_message, buffer->batch_index);
-						success = Flush(insert_chunk, buffer->batch_index);
+						AddRow(insert_chunk, column, error_message, buffer->local_batch_index);
+						success = Flush(insert_chunk, buffer->local_batch_index);
 					}
 					parse_chunk.Reset();
 					reached_remainder_state = false;
@@ -561,7 +561,7 @@ final_state : {
 				} else {
 					VerifyLineLength(position_buffer - line_start);
 					line_start = position_buffer;
-					AddRow(insert_chunk, column, error_message, buffer->batch_index);
+					AddRow(insert_chunk, column, error_message, buffer->local_batch_index);
 					verification_positions.end_of_last_line = position_buffer;
 				}
 			}
@@ -569,7 +569,7 @@ final_state : {
 	}
 	// flush the parsed chunk and finalize parsing
 	if (mode == ParserMode::PARSING) {
-		Flush(insert_chunk, buffer->batch_index);
+		Flush(insert_chunk, buffer->local_batch_index);
 		buffer->lines_read += insert_chunk.size();
 	}
 	if (position_buffer - verification_positions.end_of_last_line > options.buffer_size) {
