@@ -301,8 +301,17 @@ static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vecto
 			fk.pk_columns = pk_names;
 			return;
 		}
-		if (fk.pk_columns != pk_names) {
-			// Name mismatch
+		if (fk.pk_columns.size() != pk_names.size()) {
+			continue;
+		}
+		bool equals = true;
+		for (idx_t i = 0; i < fk.pk_columns.size(); i++) {
+			if (!StringUtil::CIEquals(fk.pk_columns[i], pk_names[i])) {
+				equals = false;
+				break;
+			}
+		}
+		if (!equals) {
 			continue;
 		}
 		// found match
