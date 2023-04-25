@@ -12,10 +12,10 @@
 #include "duckdb/optimizer/cascade/common/CList.h"
 #include "duckdb/optimizer/cascade/common/CSyncHashtable.h"
 
-#include "gpopt/base/CColRefSet.h"
-#include "gpopt/metadata/CColumnDescriptor.h"
-#include "naucrates/md/IMDId.h"
-#include "naucrates/md/IMDType.h"
+#include "duckdb/optimizer/cascade/base/CColRefSet.h"
+#include "duckdb/optimizer/cascade/metadata/CColumnDescriptor.h"
+#include "duckdb/optimizer/cascade/md/IMDId.h"
+#include "duckdb/optimizer/cascade/md/IMDType.h"
 
 namespace gpopt
 {
