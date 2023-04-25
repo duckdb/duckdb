@@ -51,6 +51,11 @@ void append_key(append_info info, int64_t value) {
 	append_info->appender.Append<int64_t>(value);
 }
 
+void append_integer_decimal(append_info info, int32_t val) {
+	auto append_info = (tpcds_append_information *)info;
+	append_info->appender.Append<int32_t>(val * 100);
+}
+
 void append_integer(append_info info, int32_t value) {
 	auto append_info = (tpcds_append_information *)info;
 	append_info->appender.Append<int32_t>(value);
