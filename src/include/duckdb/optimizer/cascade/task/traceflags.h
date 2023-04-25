@@ -11,7 +11,6 @@
 #ifndef GPOS_traceflags_H
 #define GPOS_traceflags_H
 
-
 namespace gpos
 {
 enum ETraceFlag
