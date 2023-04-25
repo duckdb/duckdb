@@ -100,7 +100,8 @@ struct VerificationPositions {
 class ParallelCSVReader : public BaseCSVReader {
 public:
 	ParallelCSVReader(ClientContext &context, BufferedCSVReaderOptions options, unique_ptr<CSVBufferRead> buffer,
-	                  idx_t first_pos_first_buffer, const vector<LogicalType> &requested_types, LineInfo *line_info, idx_t file_idx_p);
+	                  idx_t first_pos_first_buffer, const vector<LogicalType> &requested_types, LineInfo *line_info,
+	                  idx_t file_idx_p);
 	~ParallelCSVReader();
 
 	//! Current Position (Relative to the Buffer)
@@ -120,12 +121,13 @@ public:
 
 	unique_ptr<CSVBufferRead> buffer;
 
-    idx_t file_idx;
+	idx_t file_idx;
 
 	VerificationPositions GetVerificationPositions();
 
-//! Position of the first read line and last read line for verification purposes
-VerificationPositions verification_positions;
+	//! Position of the first read line and last read line for verification purposes
+	VerificationPositions verification_positions;
+
 public:
 	void SetBufferRead(unique_ptr<CSVBufferRead> buffer);
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
@@ -157,7 +159,7 @@ private:
 	//! Verifies that the line length did not go over a pre-defined limit.
 	void VerifyLineLength(idx_t line_size);
 
-    //! First Position of First Buffer
+	//! First Position of First Buffer
 	idx_t first_pos_first_buffer = 0;
 };
 

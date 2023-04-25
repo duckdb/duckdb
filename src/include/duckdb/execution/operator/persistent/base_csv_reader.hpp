@@ -102,8 +102,7 @@ protected:
 
 	void VerifyUTF8(idx_t col_idx);
 	void VerifyUTF8(idx_t col_idx, idx_t row_idx, DataChunk &chunk, int64_t offset = 0);
-    string GetLineNumberStr(idx_t linenr, bool linenr_estimated, LineInfo *line_info = nullptr,
-	                               idx_t buffer_idx = 0);
+	string GetLineNumberStr(idx_t linenr, bool linenr_estimated, LineInfo *line_info = nullptr, idx_t buffer_idx = 0);
 
 	//! Sets the newline delimiter
 	void SetNewLineDelimiter(bool carry = false, bool carry_followed_by_nl = false);
