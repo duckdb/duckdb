@@ -15,8 +15,9 @@ StandardColumnData::StandardColumnData(BlockManager &block_manager, DataTableInf
       validity(block_manager, info, 0, start_row, this) {
 }
 
-StandardColumnData::StandardColumnData(ColumnData &original, idx_t start_row, ColumnData *parent)
-    : ColumnData(original, start_row, parent), validity(((StandardColumnData &)original).validity, start_row, this) {
+void StandardColumnData::SetStart(idx_t new_start) {
+	ColumnData::SetStart(new_start);
+	validity.SetStart(new_start);
 }
 
 bool StandardColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {

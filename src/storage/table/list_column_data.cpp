@@ -17,10 +17,10 @@ ListColumnData::ListColumnData(BlockManager &block_manager, DataTableInfo &info,
 	child_column = ColumnData::CreateColumnUnique(block_manager, info, 1, start_row, child_type, this);
 }
 
-ListColumnData::ListColumnData(ColumnData &original, idx_t start_row, ColumnData *parent)
-    : ColumnData(original, start_row, parent), validity(((ListColumnData &)original).validity, start_row, this) {
-	auto &list_data = (ListColumnData &)original;
-	child_column = ColumnData::CreateColumnUnique(*list_data.child_column, start_row, this);
+void ListColumnData::SetStart(idx_t new_start) {
+	ColumnData::SetStart(new_start);
+	child_column->SetStart(new_start);
+	validity.SetStart(new_start);
 }
 
 bool ListColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {

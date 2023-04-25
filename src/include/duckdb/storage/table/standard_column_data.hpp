@@ -18,12 +18,12 @@ class StandardColumnData : public ColumnData {
 public:
 	StandardColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
 	                   LogicalType type, ColumnData *parent = nullptr);
-	StandardColumnData(ColumnData &original, idx_t start_row, ColumnData *parent = nullptr);
 
 	//! The validity column data
 	ValidityColumnData validity;
 
 public:
+	void SetStart(idx_t new_start) override;
 	bool CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
 
 	void InitializeScan(ColumnScanState &state) override;

@@ -29,24 +29,17 @@ ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t c
 	}
 }
 
-ColumnData::ColumnData(ColumnData &other, idx_t start, ColumnData *parent)
-    : start(start), count(other.count), block_manager(other.block_manager), info(other.info),
-      column_index(other.column_index), type(std::move(other.type)), parent(parent),
-      version(parent ? parent->version + 1 : 0) {
-	if (other.updates) {
-		updates = make_uniq<UpdateSegment>(*other.updates, *this);
-	}
-	if (other.stats) {
-		stats = make_uniq<SegmentStatistics>(other.stats->statistics.Copy());
-	}
-	idx_t offset = 0;
-	for (auto &segment : other.data.Segments()) {
-		this->data.AppendSegment(ColumnSegment::CreateSegment(segment, start + offset));
-		offset += segment.count;
-	}
+ColumnData::~ColumnData() {
 }
 
-ColumnData::~ColumnData() {
+void ColumnData::SetStart(idx_t new_start) {
+	this->start = new_start;
+	idx_t offset = 0;
+	for (auto &segment : data.Segments()) {
+		segment.start = start + offset;
+		offset += segment.count;
+	}
+	data.Reinitialize();
 }
 
 DatabaseInstance &ColumnData::GetDatabase() const {
@@ -576,26 +569,10 @@ static RET CreateColumnInternal(BlockManager &block_manager, DataTableInfo &info
 	return OP::template Create<StandardColumnData>(block_manager, info, column_index, start_row, type, parent);
 }
 
-template <class RET, class OP>
-static RET CreateColumnInternal(ColumnData &other, idx_t start_row, ColumnData *parent) {
-	if (other.type.InternalType() == PhysicalType::STRUCT) {
-		return OP::template Create<StructColumnData>(other, start_row, parent);
-	} else if (other.type.InternalType() == PhysicalType::LIST) {
-		return OP::template Create<ListColumnData>(other, start_row, parent);
-	} else if (other.type.id() == LogicalTypeId::VALIDITY) {
-		return OP::template Create<ValidityColumnData>(other, start_row, parent);
-	}
-	return OP::template Create<StandardColumnData>(other, start_row, parent);
-}
-
 shared_ptr<ColumnData> ColumnData::CreateColumn(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
                                                 idx_t start_row, const LogicalType &type, ColumnData *parent) {
 	return CreateColumnInternal<shared_ptr<ColumnData>, SharedConstructor>(block_manager, info, column_index, start_row,
 	                                                                       type, parent);
-}
-
-shared_ptr<ColumnData> ColumnData::CreateColumn(ColumnData &other, idx_t start_row, ColumnData *parent) {
-	return CreateColumnInternal<shared_ptr<ColumnData>, SharedConstructor>(other, start_row, parent);
 }
 
 unique_ptr<ColumnData> ColumnData::CreateColumnUnique(BlockManager &block_manager, DataTableInfo &info,
@@ -603,10 +580,6 @@ unique_ptr<ColumnData> ColumnData::CreateColumnUnique(BlockManager &block_manage
                                                       ColumnData *parent) {
 	return CreateColumnInternal<unique_ptr<ColumnData>, UniqueConstructor>(block_manager, info, column_index, start_row,
 	                                                                       type, parent);
-}
-
-unique_ptr<ColumnData> ColumnData::CreateColumnUnique(ColumnData &other, idx_t start_row, ColumnData *parent) {
-	return CreateColumnInternal<unique_ptr<ColumnData>, UniqueConstructor>(other, start_row, parent);
 }
 
 } // namespace duckdb

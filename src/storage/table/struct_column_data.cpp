@@ -23,12 +23,11 @@ StructColumnData::StructColumnData(BlockManager &block_manager, DataTableInfo &i
 	}
 }
 
-StructColumnData::StructColumnData(ColumnData &original, idx_t start_row, ColumnData *parent)
-    : ColumnData(original, start_row, parent), validity(((StructColumnData &)original).validity, start_row, this) {
-	auto &struct_data = (StructColumnData &)original;
-	for (auto &child_col : struct_data.sub_columns) {
-		sub_columns.push_back(ColumnData::CreateColumnUnique(*child_col, start_row, this));
+void StructColumnData::SetStart(idx_t new_start) {
+	for(auto &sub_column : sub_columns) {
+		sub_column->SetStart(new_start);
 	}
+	validity.SetStart(new_start);
 }
 
 bool StructColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
