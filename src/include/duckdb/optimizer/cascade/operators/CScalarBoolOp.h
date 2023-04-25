@@ -8,10 +8,10 @@
 #ifndef GPOPT_CScalarBoolOp_H
 #define GPOPT_CScalarBoolOp_H
 
-#include "gpos/base.h"
+#include "duckdb/optimizer/cascade/base.h"
 
-#include "gpopt/base/CDrvdProp.h"
-#include "gpopt/operators/CScalar.h"
+#include "duckdb/optimizer/cascade/base/CDrvdProp.h"
+#include "duckdb/optimizer/cascade/operators/CScalar.h"
 
 namespace gpopt
 {
@@ -132,7 +132,4 @@ public:
 
 }  // namespace gpopt
 
-
-#endif	// !GPOPT_CScalarBoolOp_H
-
-// EOF
+#endif
