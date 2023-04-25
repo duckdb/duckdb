@@ -17,6 +17,7 @@
 #include "utf8proc.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/main/error_manager.hpp"
+#include "duckdb/execution/operator/persistent/parallel_csv_reader.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -26,12 +27,14 @@
 namespace duckdb {
 
 string BaseCSVReader::GetLineNumberStr(idx_t linenr, bool linenr_estimated, LineInfo *line_info, idx_t buffer_idx) {
-	//! If an error happens during auto detect it is an estimated line
+	// If an error happens during auto-detect it is an estimated line
 	string estimated = (linenr_estimated ? string(" (estimated)") : string(""));
 	if (line_info) {
+        // This must be a parallel read
+        auto parallel_reader = (ParallelCSVReader*) this;
 		while (true) {
-			if (line_info->CanItGetLine(buffer_idx)) {
-				return to_string(line_info->GetLine(buffer_idx, linenr));
+			if (line_info->CanItGetLine(parallel_reader->file_idx, buffer_idx)) {
+				return to_string(line_info->GetLine(buffer_idx, linenr,parallel_reader->file_idx, parallel_reader->verification_positions.beginning_of_first_line + parallel_reader->buffer->buffer->GetCSVGlobalStart(),false));
 			}
 		}
 	}
@@ -540,12 +543,14 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 
 			idx_t error_line;
 			if (line_info) {
-				while (true) {
-					if (line_info->CanItGetLine(buffer_idx)) {
-						error_line = line_info->GetLine(buffer_idx, line_error);
-						break;
-					}
-				}
+                // This must be a parallel read
+                auto parallel_reader = (ParallelCSVReader*) this;
+                while (true) {
+                    if (line_info->CanItGetLine(parallel_reader->file_idx, buffer_idx)) {
+                        error_line = line_info->GetLine(buffer_idx, line_error,parallel_reader->file_idx, parallel_reader->verification_positions.beginning_of_first_line + parallel_reader->buffer->buffer->GetCSVGlobalStart(),false);
+                        break;
+                    }
+                }
 			} else {
 				error_line = linenr - (parse_chunk.size() - line_error);
 			}

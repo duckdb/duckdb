@@ -11,13 +11,12 @@ PRAGMA verify_parallelism
 statement ok
 SET threads=4
 
-# This is not the exact line, but that's a tough one since the parallel csv reader tries to figure out where lines start
 statement error
 SELECT * FROM read_csv('data/csv/missing_column.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True)
 ----
-line 8
+line 6
 
-loop i 0 1
+loop i 0 100
 
 statement error
 SELECT * FROM read_csv('data/csv/wrongtype.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True)

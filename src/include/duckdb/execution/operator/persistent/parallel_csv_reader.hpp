@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/persistent/buffered_csv_reader.hpp
+// duckdb/execution/operator/persistent/parallel_csv_reader.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -100,7 +100,7 @@ struct VerificationPositions {
 class ParallelCSVReader : public BaseCSVReader {
 public:
 	ParallelCSVReader(ClientContext &context, BufferedCSVReaderOptions options, unique_ptr<CSVBufferRead> buffer,
-	                  idx_t first_pos_first_buffer, const vector<LogicalType> &requested_types, LineInfo *line_info);
+	                  idx_t first_pos_first_buffer, const vector<LogicalType> &requested_types, LineInfo *line_info, idx_t file_idx_p);
 	~ParallelCSVReader();
 
 	//! Current Position (Relative to the Buffer)
@@ -120,8 +120,12 @@ public:
 
 	unique_ptr<CSVBufferRead> buffer;
 
+    idx_t file_idx;
+
 	VerificationPositions GetVerificationPositions();
 
+//! Position of the first read line and last read line for verification purposes
+VerificationPositions verification_positions;
 public:
 	void SetBufferRead(unique_ptr<CSVBufferRead> buffer);
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
@@ -152,9 +156,8 @@ private:
 	bool TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message, bool try_add_line = false);
 	//! Verifies that the line length did not go over a pre-defined limit.
 	void VerifyLineLength(idx_t line_size);
-	//! Position of the first read line and last read line for verification purposes
-	VerificationPositions verification_positions;
-	//! First Position of First Buffer
+
+    //! First Position of First Buffer
 	idx_t first_pos_first_buffer = 0;
 };
 
