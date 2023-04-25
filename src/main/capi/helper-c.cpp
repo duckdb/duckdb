@@ -187,10 +187,9 @@ idx_t duckdb_vector_size() {
 	return STANDARD_VECTOR_SIZE;
 }
 
-bool duckdb_string_is_inlined(duckdb_string_t *string_p) {
-	if (!string_p) {
-		return false;
-	}
-	auto &string = *(duckdb::string_t *)(string_p);
+bool duckdb_string_is_inlined(duckdb_string_t string_p) {
+	static_assert(sizeof(duckdb_string_t) == sizeof(duckdb::string_t),
+	              "duckdb_string_t should have the same memory layout as duckdb::string_t");
+	auto &string = *(duckdb::string_t *)(&string_p);
 	return string.IsInlined();
 }

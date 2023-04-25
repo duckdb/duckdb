@@ -775,7 +775,7 @@ Whether or not the duckdb_string_t value is inlined.
 This means that the data of the string does not have a separate allocation.
 
 */
-DUCKDB_API bool duckdb_string_is_inlined(duckdb_string_t *string);
+DUCKDB_API bool duckdb_string_is_inlined(duckdb_string_t string);
 
 //===--------------------------------------------------------------------===//
 // Date/Time/Timestamp Helpers

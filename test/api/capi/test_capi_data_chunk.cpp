@@ -253,7 +253,7 @@ TEST_CASE("Test DataChunk varchar result fetch in C API", "[capi]") {
 			auto tuple = string_data[i];
 			auto length = tuple.value.inlined.length;
 			REQUIRE(length == expected_length);
-			if (duckdb_string_is_inlined(&tuple)) {
+			if (duckdb_string_is_inlined(tuple)) {
 				// The data is small enough to fit in the string_t, it does not have a separate allocation
 				for (idx_t string_index = 0; string_index < length; string_index++) {
 					REQUIRE(tuple.value.inlined.inlined[string_index] == expected_character);
