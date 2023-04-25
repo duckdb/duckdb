@@ -586,19 +586,29 @@ test_that("semi joins for eq_na_matches works", {
    expect_equal(res, data.frame(x=c(2, 2)))
 })
 
+test_that("rel_project does not automatically quote upper-case column names", {
+  df <- data.frame(B = 1)
+  rel <- rel_from_df(con, df)
+  ref <- expr_reference(names(df))
+  exprs <- list(ref)
+  proj <- rel_project(rel, exprs)
+  ans <- rapi_rel_to_altrep(proj)
+  expect_equal(df, ans)
+})
+
 test_that("rel_to_sql works for row_number", {
     invisible(DBI::dbExecute(con, "CREATE MACRO \"==\"(a, b) AS a = b"))
     df1 <- data.frame(a = 1)
-    rel1 <- duckdb:::rel_from_df(con, df1)
-    rel2 <- duckdb:::rel_project(
+    rel1 <- rel_from_df(con, df1)
+    rel2 <- rel_project(
       rel1,
       list({
-        tmp_expr <- duckdb:::expr_window(duckdb:::expr_function("row_number", list()), list(), list(), offset_expr = NULL, default_expr = NULL)
-        duckdb:::expr_set_alias(tmp_expr, "___row_number")
+        tmp_expr <- expr_window(expr_function("row_number", list()), list(), list(), offset_expr = NULL, default_expr = NULL)
+        expr_set_alias(tmp_expr, "___row_number")
         tmp_expr
       })
     )
-    sql <- duckdb:::rel_to_sql(rel2)
+    sql <- rel_to_sql(rel2)
     sub_str_sql <- substr(sql, 0, 44)
     expect_equal(sub_str_sql, "SELECT row_number() OVER () AS ___row_number")
 })

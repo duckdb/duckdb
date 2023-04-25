@@ -28,7 +28,7 @@ void DuckCatalog::Initialize(bool load_builtin) {
 	CreateSchemaInfo info;
 	info.schema = DEFAULT_SCHEMA;
 	info.internal = true;
-	CreateSchema(data, &info);
+	CreateSchema(data, info);
 
 	if (load_builtin) {
 		// initialize default functions
@@ -46,29 +46,29 @@ bool DuckCatalog::IsDuckCatalog() {
 //===--------------------------------------------------------------------===//
 // Schema
 //===--------------------------------------------------------------------===//
-CatalogEntry *DuckCatalog::CreateSchemaInternal(CatalogTransaction transaction, CreateSchemaInfo *info) {
+optional_ptr<CatalogEntry> DuckCatalog::CreateSchemaInternal(CatalogTransaction transaction, CreateSchemaInfo &info) {
 	DependencyList dependencies;
-	auto entry = make_uniq<DuckSchemaEntry>(this, info->schema, info->internal);
+	auto entry = make_uniq<DuckSchemaEntry>(*this, info.schema, info.internal);
 	auto result = entry.get();
-	if (!schemas->CreateEntry(transaction, info->schema, std::move(entry), dependencies)) {
+	if (!schemas->CreateEntry(transaction, info.schema, std::move(entry), dependencies)) {
 		return nullptr;
 	}
 	return (CatalogEntry *)result;
 }
 
-CatalogEntry *DuckCatalog::CreateSchema(CatalogTransaction transaction, CreateSchemaInfo *info) {
-	D_ASSERT(!info->schema.empty());
+optional_ptr<CatalogEntry> DuckCatalog::CreateSchema(CatalogTransaction transaction, CreateSchemaInfo &info) {
+	D_ASSERT(!info.schema.empty());
 	auto result = CreateSchemaInternal(transaction, info);
 	if (!result) {
-		switch (info->on_conflict) {
+		switch (info.on_conflict) {
 		case OnCreateConflict::ERROR_ON_CONFLICT:
-			throw CatalogException("Schema with name %s already exists!", info->schema);
+			throw CatalogException("Schema with name %s already exists!", info.schema);
 		case OnCreateConflict::REPLACE_ON_CONFLICT: {
 			DropInfo drop_info;
 			drop_info.type = CatalogType::SCHEMA_ENTRY;
-			drop_info.catalog = info->catalog;
-			drop_info.name = info->schema;
-			DropSchema(transaction, &drop_info);
+			drop_info.catalog = info.catalog;
+			drop_info.name = info.schema;
+			DropSchema(transaction, drop_info);
 			result = CreateSchemaInternal(transaction, info);
 			if (!result) {
 				throw InternalException("Failed to create schema entry in CREATE_OR_REPLACE");
@@ -85,36 +85,40 @@ CatalogEntry *DuckCatalog::CreateSchema(CatalogTransaction transaction, CreateSc
 	return result;
 }
 
-void DuckCatalog::DropSchema(CatalogTransaction transaction, DropInfo *info) {
-	D_ASSERT(!info->name.empty());
+void DuckCatalog::DropSchema(CatalogTransaction transaction, DropInfo &info) {
+	D_ASSERT(!info.name.empty());
 	ModifyCatalog();
-	if (!schemas->DropEntry(transaction, info->name, info->cascade)) {
-		if (!info->if_exists) {
-			throw CatalogException("Schema with name \"%s\" does not exist!", info->name);
+	if (!schemas->DropEntry(transaction, info.name, info.cascade)) {
+		if (info.if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+			throw CatalogException("Schema with name \"%s\" does not exist!", info.name);
 		}
 	}
 }
 
-void DuckCatalog::DropSchema(ClientContext &context, DropInfo *info) {
+void DuckCatalog::DropSchema(ClientContext &context, DropInfo &info) {
 	DropSchema(GetCatalogTransaction(context), info);
 }
 
-void DuckCatalog::ScanSchemas(ClientContext &context, std::function<void(CatalogEntry *)> callback) {
-	schemas->Scan(GetCatalogTransaction(context), [&](CatalogEntry *entry) { callback(entry); });
+void DuckCatalog::ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) {
+	schemas->Scan(GetCatalogTransaction(context),
+	              [&](CatalogEntry &entry) { callback(entry.Cast<SchemaCatalogEntry>()); });
 }
 
-void DuckCatalog::ScanSchemas(std::function<void(CatalogEntry *)> callback) {
-	schemas->Scan([&](CatalogEntry *entry) { callback(entry); });
+void DuckCatalog::ScanSchemas(std::function<void(SchemaCatalogEntry &)> callback) {
+	schemas->Scan([&](CatalogEntry &entry) { callback(entry.Cast<SchemaCatalogEntry>()); });
 }
 
-SchemaCatalogEntry *DuckCatalog::GetSchema(CatalogTransaction transaction, const string &schema_name, bool if_exists,
-                                           QueryErrorContext error_context) {
+optional_ptr<SchemaCatalogEntry> DuckCatalog::GetSchema(CatalogTransaction transaction, const string &schema_name,
+                                                        OnEntryNotFound if_not_found, QueryErrorContext error_context) {
 	D_ASSERT(!schema_name.empty());
 	auto entry = schemas->GetEntry(transaction, schema_name);
-	if (!entry && !if_exists) {
-		throw CatalogException(error_context.FormatError("Schema with name %s does not exist!", schema_name));
+	if (!entry) {
+		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+			throw CatalogException(error_context.FormatError("Schema with name %s does not exist!", schema_name));
+		}
+		return nullptr;
 	}
-	return (SchemaCatalogEntry *)entry;
+	return &entry->Cast<SchemaCatalogEntry>();
 }
 
 DatabaseSize DuckCatalog::GetDatabaseSize(ClientContext &context) {

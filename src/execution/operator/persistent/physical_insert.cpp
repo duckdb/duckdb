@@ -109,9 +109,9 @@ unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &co
 	if (info) {
 		// CREATE TABLE AS
 		D_ASSERT(!insert_table);
-		auto &catalog = *schema->catalog;
-		table = (TableCatalogEntry *)catalog.CreateTable(catalog.GetCatalogTransaction(context), *schema.get_mutable(),
-		                                                 info.get());
+		auto &catalog = schema->catalog;
+		table = &catalog.CreateTable(catalog.GetCatalogTransaction(context), *schema.get_mutable(), *info)
+		             ->Cast<TableCatalogEntry>();
 	} else {
 		D_ASSERT(insert_table);
 		D_ASSERT(insert_table->IsDuckTable());
@@ -313,7 +313,7 @@ void PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionConte
 		// then we scan the existing table for the conflicting tuples, using the rowids
 		scan_chunk.Initialize(context.client, types_to_fetch);
 		auto fetch_state = make_uniq<ColumnFetchState>();
-		auto &transaction = DuckTransaction::Get(context.client, *table.catalog);
+		auto &transaction = DuckTransaction::Get(context.client, table.catalog);
 		data_table.Fetch(transaction, scan_chunk, columns_to_fetch, row_ids, conflicts.Count(), *fetch_state);
 	}
 
@@ -424,7 +424,7 @@ void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 		auto &table = gstate.table;
 		auto &storage = table.GetStorage();
 		storage.InitializeLocalAppend(gstate.append_state, context.client);
-		auto &transaction = DuckTransaction::Get(context.client, *table.catalog);
+		auto &transaction = DuckTransaction::Get(context.client, table.catalog);
 		lstate.local_collection->Scan(transaction, [&](DataChunk &insert_chunk) {
 			storage.LocalAppend(gstate.append_state, table, context.client, insert_chunk);
 			return true;

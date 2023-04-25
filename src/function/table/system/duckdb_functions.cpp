@@ -21,7 +21,7 @@ struct DuckDBFunctionsData : public GlobalTableFunctionState {
 	DuckDBFunctionsData() : offset(0), offset_in_entry(0) {
 	}
 
-	vector<CatalogEntry *> entries;
+	vector<reference<CatalogEntry>> entries;
 	idx_t offset;
 	idx_t offset_in_entry;
 };
@@ -73,24 +73,26 @@ static unique_ptr<FunctionData> DuckDBFunctionsBind(ClientContext &context, Tabl
 static void ExtractFunctionsFromSchema(ClientContext &context, SchemaCatalogEntry &schema,
                                        DuckDBFunctionsData &result) {
 	schema.Scan(context, CatalogType::SCALAR_FUNCTION_ENTRY,
-	            [&](CatalogEntry *entry) { result.entries.push_back(entry); });
+	            [&](CatalogEntry &entry) { result.entries.push_back(entry); });
 	schema.Scan(context, CatalogType::TABLE_FUNCTION_ENTRY,
-	            [&](CatalogEntry *entry) { result.entries.push_back(entry); });
+	            [&](CatalogEntry &entry) { result.entries.push_back(entry); });
 	schema.Scan(context, CatalogType::PRAGMA_FUNCTION_ENTRY,
-	            [&](CatalogEntry *entry) { result.entries.push_back(entry); });
+	            [&](CatalogEntry &entry) { result.entries.push_back(entry); });
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBFunctionsInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_uniq<DuckDBFunctionsData>();
 
-	// scan all the schemas for tables and collect themand collect them
+	// scan all the schemas for tables and collect them and collect them
 	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto &schema : schemas) {
-		ExtractFunctionsFromSchema(context, *schema, *result);
+		ExtractFunctionsFromSchema(context, schema.get(), *result);
 	};
 
 	std::sort(result->entries.begin(), result->entries.end(),
-	          [&](CatalogEntry *a, CatalogEntry *b) { return (int)a->type < (int)b->type; });
+	          [&](reference<CatalogEntry> a, reference<CatalogEntry> b) {
+		          return (int32_t)a.get().type < (int32_t)b.get().type;
+	          });
 	return std::move(result);
 }
 
@@ -420,18 +422,18 @@ struct PragmaFunctionExtractor {
 };
 
 template <class T, class OP>
-bool ExtractFunctionData(StandardEntry *entry, idx_t function_idx, DataChunk &output, idx_t output_offset) {
-	auto &function = (T &)*entry;
+bool ExtractFunctionData(CatalogEntry &entry, idx_t function_idx, DataChunk &output, idx_t output_offset) {
+	auto &function = entry.Cast<T>();
 	idx_t col = 0;
 
 	// database_name, LogicalType::VARCHAR
-	output.SetValue(col++, output_offset, Value(entry->schema->catalog->GetName()));
+	output.SetValue(col++, output_offset, Value(function.schema.catalog.GetName()));
 
 	// schema_name, LogicalType::VARCHAR
-	output.SetValue(col++, output_offset, Value(entry->schema->name));
+	output.SetValue(col++, output_offset, Value(function.schema.name));
 
 	// function_name, LogicalType::VARCHAR
-	output.SetValue(col++, output_offset, Value(entry->name));
+	output.SetValue(col++, output_offset, Value(function.name));
 
 	// function_type, LogicalType::VARCHAR
 	output.SetValue(col++, output_offset, Value(OP::GetFunctionType()));
@@ -458,10 +460,10 @@ bool ExtractFunctionData(StandardEntry *entry, idx_t function_idx, DataChunk &ou
 	output.SetValue(col++, output_offset, OP::HasSideEffects(function, function_idx));
 
 	// internal, LogicalType::BOOLEAN
-	output.SetValue(col++, output_offset, Value::BOOLEAN(entry->internal));
+	output.SetValue(col++, output_offset, Value::BOOLEAN(function.internal));
 
 	// function_oid, LogicalType::BIGINT
-	output.SetValue(col++, output_offset, Value::BIGINT(entry->oid));
+	output.SetValue(col++, output_offset, Value::BIGINT(function.oid));
 
 	return function_idx + 1 == OP::FunctionCount(function);
 }
@@ -476,35 +478,34 @@ void DuckDBFunctionsFunction(ClientContext &context, TableFunctionInput &data_p,
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
-		auto &entry = data.entries[data.offset];
-		auto standard_entry = (StandardEntry *)entry;
+		auto &entry = data.entries[data.offset].get();
 		bool finished;
 
-		switch (entry->type) {
+		switch (entry.type) {
 		case CatalogType::SCALAR_FUNCTION_ENTRY:
 			finished = ExtractFunctionData<ScalarFunctionCatalogEntry, ScalarFunctionExtractor>(
-			    standard_entry, data.offset_in_entry, output, count);
+			    entry, data.offset_in_entry, output, count);
 			break;
 		case CatalogType::AGGREGATE_FUNCTION_ENTRY:
 			finished = ExtractFunctionData<AggregateFunctionCatalogEntry, AggregateFunctionExtractor>(
-			    standard_entry, data.offset_in_entry, output, count);
+			    entry, data.offset_in_entry, output, count);
 			break;
 		case CatalogType::TABLE_MACRO_ENTRY:
-			finished = ExtractFunctionData<TableMacroCatalogEntry, TableMacroExtractor>(
-			    standard_entry, data.offset_in_entry, output, count);
+			finished = ExtractFunctionData<TableMacroCatalogEntry, TableMacroExtractor>(entry, data.offset_in_entry,
+			                                                                            output, count);
 			break;
 
 		case CatalogType::MACRO_ENTRY:
-			finished = ExtractFunctionData<ScalarMacroCatalogEntry, MacroExtractor>(
-			    standard_entry, data.offset_in_entry, output, count);
+			finished = ExtractFunctionData<ScalarMacroCatalogEntry, MacroExtractor>(entry, data.offset_in_entry, output,
+			                                                                        count);
 			break;
 		case CatalogType::TABLE_FUNCTION_ENTRY:
 			finished = ExtractFunctionData<TableFunctionCatalogEntry, TableFunctionExtractor>(
-			    standard_entry, data.offset_in_entry, output, count);
+			    entry, data.offset_in_entry, output, count);
 			break;
 		case CatalogType::PRAGMA_FUNCTION_ENTRY:
 			finished = ExtractFunctionData<PragmaFunctionCatalogEntry, PragmaFunctionExtractor>(
-			    standard_entry, data.offset_in_entry, output, count);
+			    entry, data.offset_in_entry, output, count);
 			break;
 		default:
 			throw InternalException("FIXME: unrecognized function type in duckdb_functions");

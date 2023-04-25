@@ -49,9 +49,9 @@ void Binder::BindSchemaOrCatalog(ClientContext &context, string &catalog, string
 		if (database) {
 			// we have a database with this name
 			// check if there is a schema
-			auto schema_obj = Catalog::GetSchema(context, INVALID_CATALOG, schema, true);
+			auto schema_obj = Catalog::GetSchema(context, INVALID_CATALOG, schema, OnEntryNotFound::RETURN_NULL);
 			if (schema_obj) {
-				auto &attached = schema_obj->catalog->GetAttached();
+				auto &attached = schema_obj->catalog.GetAttached();
 				throw BinderException(
 				    "Ambiguous reference to catalog or schema \"%s\" - use a fully qualified path like \"%s.%s\"",
 				    schema, attached.GetName(), schema);
@@ -95,18 +95,18 @@ SchemaCatalogEntry &Binder::BindSchema(CreateInfo &info) {
 		}
 	}
 	// fetch the schema in which we want to create the object
-	auto schema_obj = Catalog::GetSchema(context, info.catalog, info.schema);
-	D_ASSERT(schema_obj->type == CatalogType::SCHEMA_ENTRY);
-	info.schema = schema_obj->name;
+	auto &schema_obj = Catalog::GetSchema(context, info.catalog, info.schema);
+	D_ASSERT(schema_obj.type == CatalogType::SCHEMA_ENTRY);
+	info.schema = schema_obj.name;
 	if (!info.temporary) {
-		properties.modified_databases.insert(schema_obj->catalog->GetName());
+		properties.modified_databases.insert(schema_obj.catalog.GetName());
 	}
-	return *schema_obj;
+	return schema_obj;
 }
 
 SchemaCatalogEntry &Binder::BindCreateSchema(CreateInfo &info) {
 	auto &schema = BindSchema(info);
-	if (schema.catalog->IsSystemCatalog()) {
+	if (schema.catalog.IsSystemCatalog()) {
 		throw BinderException("Cannot create entry in system catalog");
 	}
 	return schema;
@@ -136,11 +136,11 @@ static void QualifyFunctionNames(ClientContext &context, unique_ptr<ParsedExpres
 	switch (expr->GetExpressionClass()) {
 	case ExpressionClass::FUNCTION: {
 		auto &func = expr->Cast<FunctionExpression>();
-		auto function = (StandardEntry *)Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, func.catalog,
-		                                                   func.schema, func.function_name, true);
+		auto function = Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, func.catalog, func.schema,
+		                                  func.function_name, OnEntryNotFound::RETURN_NULL);
 		if (function) {
-			func.catalog = function->catalog->GetName();
-			func.schema = function->schema->name;
+			func.catalog = function->ParentCatalog().GetName();
+			func.schema = function->ParentSchema().name;
 		}
 		break;
 	}
@@ -160,7 +160,7 @@ static void QualifyFunctionNames(ClientContext &context, unique_ptr<ParsedExpres
 }
 
 SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
-	auto &base = (CreateMacroInfo &)info;
+	auto &base = info.Cast<CreateMacroInfo>();
 	auto &scalar_function = base.function->Cast<ScalarMacroFunction>();
 
 	if (scalar_function.expression->HasParameter()) {
@@ -207,7 +207,8 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	return BindCreateSchema(info);
 }
 
-void Binder::BindLogicalType(ClientContext &context, LogicalType &type, Catalog *catalog, const string &schema) {
+void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional_ptr<Catalog> catalog,
+                             const string &schema) {
 	if (type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::MAP) {
 		auto child_type = ListType::GetChildType(type);
 		BindLogicalType(context, child_type, catalog, schema);
@@ -241,7 +242,7 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, Catalog 
 	} else if (type.id() == LogicalTypeId::USER) {
 		auto &user_type_name = UserType::GetTypeName(type);
 		if (catalog) {
-			type = catalog->GetType(context, schema, user_type_name, true);
+			type = catalog->GetType(context, schema, user_type_name, OnEntryNotFound::RETURN_NULL);
 			if (type.id() == LogicalTypeId::INVALID) {
 				// look in the system catalog if the type was not found
 				type = Catalog::GetType(context, SYSTEM_CATALOG, schema, user_type_name);
@@ -251,20 +252,21 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, Catalog 
 		}
 	} else if (type.id() == LogicalTypeId::ENUM) {
 		auto &enum_type_name = EnumType::GetTypeName(type);
-		TypeCatalogEntry *enum_type_catalog;
+		optional_ptr<TypeCatalogEntry> enum_type_catalog;
 		if (catalog) {
-			enum_type_catalog = catalog->GetEntry<TypeCatalogEntry>(context, schema, enum_type_name, true);
+			enum_type_catalog =
+			    catalog->GetEntry<TypeCatalogEntry>(context, schema, enum_type_name, OnEntryNotFound::RETURN_NULL);
 			if (!enum_type_catalog) {
 				// look in the system catalog if the type was not found
-				enum_type_catalog =
-				    Catalog::GetEntry<TypeCatalogEntry>(context, SYSTEM_CATALOG, schema, enum_type_name, true);
+				enum_type_catalog = Catalog::GetEntry<TypeCatalogEntry>(context, SYSTEM_CATALOG, schema, enum_type_name,
+				                                                        OnEntryNotFound::RETURN_NULL);
 			}
 		} else {
-			enum_type_catalog =
-			    Catalog::GetEntry<TypeCatalogEntry>(context, INVALID_CATALOG, schema, enum_type_name, true);
+			enum_type_catalog = Catalog::GetEntry<TypeCatalogEntry>(context, INVALID_CATALOG, schema, enum_type_name,
+			                                                        OnEntryNotFound::RETURN_NULL);
 		}
 
-		LogicalType::SetCatalog(type, enum_type_catalog);
+		EnumType::SetCatalog(type, enum_type_catalog.get());
 	}
 }
 
@@ -501,7 +503,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		break;
 	}
 	case CatalogType::INDEX_ENTRY: {
-		auto &base = (CreateIndexInfo &)*stmt.info;
+		auto &base = stmt.info->Cast<CreateIndexInfo>();
 
 		// visit the table reference
 		auto bound_table = Bind(*base.table);
@@ -519,11 +521,11 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			throw BinderException("Cannot create index on a view!");
 		}
 
-		result.plan = table.catalog->BindCreateIndex(*this, stmt, table, std::move(plan));
+		result.plan = table.catalog.BindCreateIndex(*this, stmt, table, std::move(plan));
 		break;
 	}
 	case CatalogType::TABLE_ENTRY: {
-		auto &create_info = (CreateTableInfo &)*stmt.info;
+		auto &create_info = stmt.info->Cast<CreateTableInfo>();
 		// If there is a foreign key constraint, resolve primary key column's index from primary key column's name
 		reference_set_t<SchemaCatalogEntry> fk_schemas;
 		for (idx_t i = 0; i < create_info.constraints.size(); i++) {
@@ -546,21 +548,20 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				CheckForeignKeyTypes(create_info.columns, create_info.columns, fk);
 			} else {
 				// have to resolve referenced table
-				auto pk_table_entry_ptr =
+				auto &pk_table_entry_ptr =
 				    Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, fk.info.schema, fk.info.table);
-				fk_schemas.insert(*pk_table_entry_ptr->schema);
-				FindMatchingPrimaryKeyColumns(pk_table_entry_ptr->GetColumns(), pk_table_entry_ptr->GetConstraints(),
-				                              fk);
-				FindForeignKeyIndexes(pk_table_entry_ptr->GetColumns(), fk.pk_columns, fk.info.pk_keys);
-				CheckForeignKeyTypes(pk_table_entry_ptr->GetColumns(), create_info.columns, fk);
-				auto &storage = pk_table_entry_ptr->GetStorage();
+				fk_schemas.insert(pk_table_entry_ptr.schema);
+				FindMatchingPrimaryKeyColumns(pk_table_entry_ptr.GetColumns(), pk_table_entry_ptr.GetConstraints(), fk);
+				FindForeignKeyIndexes(pk_table_entry_ptr.GetColumns(), fk.pk_columns, fk.info.pk_keys);
+				CheckForeignKeyTypes(pk_table_entry_ptr.GetColumns(), create_info.columns, fk);
+				auto &storage = pk_table_entry_ptr.GetStorage();
 				auto index = storage.info->indexes.FindForeignKeyIndex(fk.info.pk_keys,
 				                                                       ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE);
 				if (!index) {
 					auto fk_column_names = StringUtil::Join(fk.pk_columns, ",");
 					throw BinderException("Failed to create foreign key on %s(%s): no UNIQUE or PRIMARY KEY constraint "
 					                      "present on these columns",
-					                      pk_table_entry_ptr->name, fk_column_names);
+					                      pk_table_entry_ptr.name, fk_column_names);
 				}
 			}
 			D_ASSERT(fk.info.pk_keys.size() == fk.info.fk_keys.size());
@@ -635,10 +636,10 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			// 2: create a type alias with a custom type.
 			// eg. CREATE TYPE a AS INT; CREATE TYPE b AS a;
 			// We set b to be an alias for the underlying type of a
-			auto inner_type = Catalog::GetType(context, schema.catalog->GetName(), schema.name,
+			auto inner_type = Catalog::GetType(context, schema.catalog.GetName(), schema.name,
 			                                   UserType::GetTypeName(create_type_info.type));
 			// clear to nullptr, we don't need this
-			LogicalType::SetCatalog(inner_type, nullptr);
+			EnumType::SetCatalog(inner_type, nullptr);
 			inner_type.SetAlias(create_type_info.name);
 			create_type_info.type = inner_type;
 		}

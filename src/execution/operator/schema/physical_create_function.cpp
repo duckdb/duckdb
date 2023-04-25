@@ -27,7 +27,7 @@ void PhysicalCreateFunction::GetData(ExecutionContext &context, DataChunk &chunk
 		return;
 	}
 	auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
-	catalog.CreateFunction(context.client, info.get());
+	catalog.CreateFunction(context.client, *info);
 	state.finished = true;
 }
 

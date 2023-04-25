@@ -320,6 +320,8 @@ private:
 	//! Returns true if an expression is only a star (i.e. "*", without any other decorators)
 	bool ExpressionIsEmptyStar(ParsedExpression &expr);
 
+	OnEntryNotFound TransformOnEntryNotFound(bool missing_ok);
+
 private:
 	//! Current stack depth
 	idx_t stack_depth;

@@ -9,15 +9,15 @@ namespace duckdb {
 
 BoundStatement Binder::Bind(PragmaStatement &stmt) {
 	// bind the pragma function
-	auto entry =
-	    Catalog::GetEntry<PragmaFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, stmt.info->name, false);
+	auto &entry =
+	    Catalog::GetEntry<PragmaFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, stmt.info->name);
 	string error;
 	FunctionBinder function_binder(context);
-	idx_t bound_idx = function_binder.BindFunction(entry->name, entry->functions, *stmt.info, error);
+	idx_t bound_idx = function_binder.BindFunction(entry.name, entry.functions, *stmt.info, error);
 	if (bound_idx == DConstants::INVALID_INDEX) {
 		throw BinderException(FormatError(stmt.stmt_location, error));
 	}
-	auto bound_function = entry->functions.GetFunctionByOffset(bound_idx);
+	auto bound_function = entry.functions.GetFunctionByOffset(bound_idx);
 	if (!bound_function.function) {
 		throw BinderException("PRAGMA function does not have a function specified");
 	}

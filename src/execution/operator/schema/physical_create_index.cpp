@@ -139,17 +139,18 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		state.global_index->buffer_manager.IncreaseUsedMemory(state.global_index->memory_size);
 	}
 
-	auto &schema = *table.schema;
-	auto index_entry = (DuckIndexEntry *)schema.CreateIndex(context, info.get(), &table);
+	auto &schema = table.schema;
+	auto index_entry = schema.CreateIndex(context, *info, table).get();
 	if (!index_entry) {
 		// index already exists, but error ignored because of IF NOT EXISTS
 		return SinkFinalizeType::READY;
 	}
+	auto &index = index_entry->Cast<DuckIndexEntry>();
 
-	index_entry->index = state.global_index.get();
-	index_entry->info = storage.info;
+	index.index = state.global_index.get();
+	index.info = storage.info;
 	for (auto &parsed_expr : info->parsed_expressions) {
-		index_entry->parsed_expressions.push_back(parsed_expr->Copy());
+		index.parsed_expressions.push_back(parsed_expr->Copy());
 	}
 
 	storage.info->indexes.AddIndex(std::move(state.global_index));

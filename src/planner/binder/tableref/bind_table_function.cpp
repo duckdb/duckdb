@@ -185,7 +185,7 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 	}
 	// now add the table function to the bind context so its columns can be bound
 	bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->column_ids,
-	                              get->GetTable());
+	                              get->GetTable().get());
 	return std::move(get);
 }
 
@@ -205,16 +205,12 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	D_ASSERT(ref.function->type == ExpressionType::FUNCTION);
 	auto &fexpr = ref.function->Cast<FunctionExpression>();
 
-	TableFunctionCatalogEntry *function = nullptr;
-
 	// fetch the function from the catalog
-	auto func_catalog = Catalog::GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, fexpr.catalog, fexpr.schema,
-	                                      fexpr.function_name, false, error_context);
+	auto &func_catalog = Catalog::GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, fexpr.catalog, fexpr.schema,
+	                                       fexpr.function_name, error_context);
 
-	if (func_catalog->type == CatalogType::TABLE_FUNCTION_ENTRY) {
-		function = (TableFunctionCatalogEntry *)func_catalog;
-	} else if (func_catalog->type == CatalogType::TABLE_MACRO_ENTRY) {
-		auto macro_func = (TableMacroCatalogEntry *)func_catalog;
+	if (func_catalog.type == CatalogType::TABLE_MACRO_ENTRY) {
+		auto &macro_func = func_catalog.Cast<TableMacroCatalogEntry>();
 		auto query_node = BindTableMacro(fexpr, macro_func, 0);
 		D_ASSERT(query_node);
 
@@ -234,6 +230,8 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		MoveCorrelatedExpressions(*result->binder);
 		return std::move(result);
 	}
+	D_ASSERT(func_catalog.type == CatalogType::TABLE_FUNCTION_ENTRY);
+	auto &function = func_catalog.Cast<TableFunctionCatalogEntry>();
 
 	// evaluate the input parameters to the function
 	vector<LogicalType> arguments;
@@ -241,18 +239,18 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	named_parameter_map_t named_parameters;
 	unique_ptr<BoundSubqueryRef> subquery;
 	string error;
-	if (!BindTableFunctionParameters(*function, fexpr.children, arguments, parameters, named_parameters, subquery,
+	if (!BindTableFunctionParameters(function, fexpr.children, arguments, parameters, named_parameters, subquery,
 	                                 error)) {
 		throw BinderException(FormatError(ref, error));
 	}
 
 	// select the function based on the input parameters
 	FunctionBinder function_binder(context);
-	idx_t best_function_idx = function_binder.BindFunction(function->name, function->functions, arguments, error);
+	idx_t best_function_idx = function_binder.BindFunction(function.name, function.functions, arguments, error);
 	if (best_function_idx == DConstants::INVALID_INDEX) {
 		throw BinderException(FormatError(ref, error));
 	}
-	auto table_function = function->functions.GetFunctionByOffset(best_function_idx);
+	auto table_function = function.functions.GetFunctionByOffset(best_function_idx);
 
 	// now check the named parameters
 	BindNamedParameters(table_function.named_parameters, named_parameters, error_context, table_function.name);

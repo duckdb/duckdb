@@ -84,9 +84,9 @@ void DSDGenWrapper::DSDGen(double scale, ClientContext &context, string schema, 
 		auto table_def = GetTDefByNumber(table_id);
 		auto table_name = table_def.name + suffix;
 		assert(table_def.name);
-		auto table_entry = catalog.GetEntry<TableCatalogEntry>(context, schema, table_name);
+		auto &table_entry = catalog.GetEntry<TableCatalogEntry>(context, schema, table_name);
 
-		auto append = make_uniq<tpcds_append_information>(context, table_entry);
+		auto append = make_uniq<tpcds_append_information>(context, &table_entry);
 		append->table_def = table_def;
 		append_info[table_id] = std::move(append);
 	}
