@@ -24,3 +24,6 @@ create table a (i int primary key);
 
 statement ok
 create table b (i int references A (i));
+
+statement ok
+create table c (i int primary key, j int references C (i));
