@@ -99,6 +99,9 @@ private:
 	//! we need to resink the last chunk
 	bool remaining_sink_chunk = false;
 
+	bool exhausted_source = false;
+	bool interrupted_while_flushing = false;
+
 	//! Flushing state
 	bool started_flushing = false;
 	bool done_flushing = false;
