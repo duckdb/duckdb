@@ -145,8 +145,7 @@ public:
 			auto &name = pair.first;
 			auto entry = named.find(name);
 			if (entry == named.end()) {
-				throw InvalidInputException("Expected parameter '%s', but it was not found in the provided values",
-				                            name);
+				throw InvalidInputException(MissingValuesException(named_params, named));
 			}
 			auto &named_value = entry->second;
 

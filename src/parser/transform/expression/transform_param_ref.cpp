@@ -4,41 +4,44 @@
 
 namespace duckdb {
 
+string GetParameterIdentifier(duckdb_libpgquery::PGParamRef *node) {
+	if (node->name) {
+		return node->name;
+	}
+	if (node->number <= 0) {
+		throw ParserException("Parameter numbers have to start at 1");
+	}
+	return StringUtil::Format("%d", node->number);
+}
+
+idx_t Transformer::FindParameterIndexIfKnown(const string &name) {
+	idx_t index = DConstants::INVALID_INDEX;
+	// This is a named parameter, try to find an entry for it
+	if (GetNamedParam(name, index)) {
+		return index;
+	}
+	return index;
+}
+
 unique_ptr<ParsedExpression> Transformer::TransformParamRef(duckdb_libpgquery::PGParamRef *node) {
 	D_ASSERT(node);
 	auto expr = make_uniq<ParameterExpression>();
-	if (node->number < 0) {
-		throw ParserException("Parameter numbers cannot be negative");
+
+	auto identifier = GetParameterIdentifier(node);
+	idx_t known_param_index = FindParameterIndexIfKnown(identifier);
+
+	if (known_param_index == DConstants::INVALID_INDEX) {
+		// We have not seen this parameter before
+		expr->parameter_nr = ParamCount() + 1;
+		D_ASSERT(!named_param_map.count(identifier));
+		// Add it to the named parameter map so we can find it next time it's referenced
+		SetNamedParam(identifier, expr->parameter_nr);
+	} else {
+		expr->parameter_nr = known_param_index;
 	}
 
-	if (node->name) {
-		// This is a named parameter, try to find an entry for it
-		D_ASSERT(node->number == 0);
-		int32_t index;
-		if (GetNamedParam(node->name, index)) {
-			// We've seen this named parameter before and assigned it an index!
-			node->number = index;
-		}
-	}
-	if (node->number == 0) {
-		expr->parameter_nr = ParamCount() + 1;
-		if (node->name && !HasNamedParameters() && ParamCount() != 0) {
-			// This parameter is named, but there were other parameter before it, and they were not named
-			throw NotImplementedException("Mixing positional and named parameters is not supported yet");
-		}
-		if (node->name) {
-			D_ASSERT(!named_param_map.count(node->name));
-			// Add it to the named parameter map so we can find it next time it's referenced
-			SetNamedParam(node->name, expr->parameter_nr);
-		}
-	} else {
-		if (!node->name && HasNamedParameters()) {
-			// This parameter does not have a name, but the named param map is not empty
-			throw NotImplementedException("Mixing positional and named parameters is not supported yet");
-		}
-		expr->parameter_nr = node->number;
-	}
-	SetParamCount(MaxValue<idx_t>(ParamCount(), expr->parameter_nr));
+	idx_t new_param_count = MaxValue<idx_t>(ParamCount(), expr->parameter_nr);
+	SetParamCount(new_param_count);
 	return std::move(expr);
 }
 

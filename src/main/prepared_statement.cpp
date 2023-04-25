@@ -6,9 +6,9 @@
 namespace duckdb {
 
 PreparedStatement::PreparedStatement(shared_ptr<ClientContext> context, shared_ptr<PreparedStatementData> data_p,
-                                     string query, idx_t n_param, case_insensitive_map_t<idx_t> named_param_pam_p)
+                                     string query, idx_t n_param, case_insensitive_map_t<idx_t> named_param_map_p)
     : context(std::move(context)), data(std::move(data_p)), query(std::move(query)), success(true), n_param(n_param),
-      named_param_map(std::move(named_param_pam_p)) {
+      named_param_map(std::move(named_param_map_p)) {
 	D_ASSERT(data || !success);
 }
 
@@ -100,21 +100,23 @@ unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(vector<Value> &un
 	}
 	D_ASSERT(data);
 	PendingQueryParameters parameters;
-	// FIXME: if this goes out of scope before the parameters are no longer needed, we have a problem
 	reference<vector<Value>> prepared_parameters(unnamed_values);
 	vector<Value> mapped_named_values;
-	if (named_param_map.empty()) {
-		if (!named_values.empty()) {
-			throw InvalidInputException("The prepared statement doesn't expect any named parameters, but the execute "
-			                            "statement does contain name = value pairs");
+	if (named_param_map.size() != named_values.size()) {
+		// Lookup the parameter index from the vector index
+		for (idx_t i = 0; i < unnamed_values.size(); i++) {
+			named_values[StringUtil::Format("%d", i + 1)] = std::move(unnamed_values[i]);
 		}
-	} else {
+	}
+	if (!named_values.empty()) {
 		mapped_named_values = PrepareParameters(named_values, named_param_map);
 		prepared_parameters = mapped_named_values;
 	}
+
 	parameters.parameters = &prepared_parameters.get();
 	parameters.allow_stream_result = allow_stream_result && data->properties.allow_stream_result;
 	auto result = context->PendingQuery(query, data, parameters);
+	// The result should not contain any reference to the 'vector<Value> parameters.parameters'
 	return result;
 }
 

@@ -61,7 +61,7 @@ class TestDuckDBQuery(object):
     def test_named_param_not_dict(self):
         con = duckdb.connect()
 
-        with pytest.raises(duckdb.InvalidInputException, match="Invalid Input Error: The prepared statement expects named parameters, but none were provided"):
+        with pytest.raises(duckdb.InvalidInputException, match="Values were not provided for the following prepared statement parameters: name3, name2, name1"):
             con.execute("select $name1, $name2, $name3", ['name1', 'name2', 'name3'])
 
     def test_named_param_basic(self):
@@ -85,13 +85,13 @@ class TestDuckDBQuery(object):
     def test_named_param_not_named(self):
         con = duckdb.connect()
 
-        with pytest.raises(duckdb.InvalidInputException, match="Invalid Input Error: The prepared statement doesn't expect any named parameters, but the execute statement does contain name = value pairs"):
+        with pytest.raises(duckdb.InvalidInputException, match="Expected parameter '2', but it was not found in the provided values"):
             con.execute("select $1, $1, $2", {'name1': 5, 'name2': 3})
 
     def test_named_param_mixed(self):
         con = duckdb.connect()
 
-        with pytest.raises(duckdb.NotImplementedException, match="Mixing positional and named parameters is not supported yet"):
+        with pytest.raises(duckdb.InvalidInputException, match="Values were not provided for the following prepared statement parameters: 2, 1"):
             con.execute("select $name1, $1, $2", {'name1': 5, 'name2': 3})
 
     def test_named_param_strings_with_dollarsign(self):

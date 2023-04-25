@@ -104,12 +104,13 @@ void Transformer::SetParamCount(idx_t new_count) {
 	auto &root = RootTransformer();
 	root.prepared_statement_parameter_index = new_count;
 }
-void Transformer::SetNamedParam(const string &name, int32_t index) {
+void Transformer::SetNamedParam(const string &name, idx_t index) {
 	auto &root = RootTransformer();
 	D_ASSERT(!root.named_param_map.count(name));
 	root.named_param_map[name] = index;
 }
-bool Transformer::GetNamedParam(const string &name, int32_t &index) {
+
+bool Transformer::GetNamedParam(const string &name, idx_t &index) {
 	auto &root = RootTransformer();
 	auto entry = root.named_param_map.find(name);
 	if (entry == root.named_param_map.end()) {
@@ -118,6 +119,7 @@ bool Transformer::GetNamedParam(const string &name, int32_t &index) {
 	index = entry->second;
 	return true;
 }
+
 bool Transformer::HasNamedParameters() const {
 	auto &root = RootTransformer();
 	return !root.named_param_map.empty();

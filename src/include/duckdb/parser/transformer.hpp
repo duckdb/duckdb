@@ -81,8 +81,8 @@ private:
 	Transformer &RootTransformer();
 	const Transformer &RootTransformer() const;
 	void SetParamCount(idx_t new_count);
-	void SetNamedParam(const string &name, int32_t index);
-	bool GetNamedParam(const string &name, int32_t &index);
+	void SetNamedParam(const string &name, idx_t index);
+	bool GetNamedParam(const string &name, idx_t &index);
 	bool HasNamedParameters() const;
 
 	void AddPivotEntry(string enum_name, unique_ptr<SelectNode> source, unique_ptr<ParsedExpression> column);
@@ -225,6 +225,7 @@ private:
 	unique_ptr<ParsedExpression> TransformResTarget(duckdb_libpgquery::PGResTarget *root);
 	unique_ptr<ParsedExpression> TransformNullTest(duckdb_libpgquery::PGNullTest *root);
 	unique_ptr<ParsedExpression> TransformParamRef(duckdb_libpgquery::PGParamRef *node);
+	idx_t FindParameterIndexIfKnown(const string &name);
 	unique_ptr<ParsedExpression> TransformNamedArg(duckdb_libpgquery::PGNamedArgExpr *root);
 
 	unique_ptr<ParsedExpression> TransformSQLValueFunction(duckdb_libpgquery::PGSQLValueFunction *node);
