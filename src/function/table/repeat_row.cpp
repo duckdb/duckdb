@@ -5,7 +5,8 @@
 namespace duckdb {
 
 struct RepeatRowFunctionData : public TableFunctionData {
-	RepeatRowFunctionData(vector<Value> values, idx_t target_count) : values(std::move(values)), target_count(target_count) {
+	RepeatRowFunctionData(vector<Value> values, idx_t target_count)
+	    : values(std::move(values)), target_count(target_count) {
 	}
 
 	const vector<Value> values;
@@ -19,9 +20,9 @@ struct RepeatRowOperatorData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> RepeatRowBind(ClientContext &context, TableFunctionBindInput &input,
-                                           vector<LogicalType> &return_types, vector<string> &names) {
+                                              vector<LogicalType> &return_types, vector<string> &names) {
 	auto &inputs = input.inputs;
-	for(idx_t input_idx = 0; input_idx < inputs.size(); input_idx++) {
+	for (idx_t input_idx = 0; input_idx < inputs.size(); input_idx++) {
 		return_types.push_back(inputs[input_idx].type());
 		names.push_back("column" + std::to_string(input_idx));
 	}
@@ -37,9 +38,9 @@ static void RepeatRowFunction(ClientContext &context, TableFunctionInput &data_p
 	auto &state = data_p.global_state->Cast<RepeatRowOperatorData>();
 
 	idx_t remaining = MinValue<idx_t>(bind_data.target_count - state.current_count, STANDARD_VECTOR_SIZE);
-        for(idx_t val_idx = 0; val_idx < bind_data.values.size(); val_idx++) {
-          output.data[val_idx].Reference(bind_data.values[val_idx]);
-        }
+	for (idx_t val_idx = 0; val_idx < bind_data.values.size(); val_idx++) {
+		output.data[val_idx].Reference(bind_data.values[val_idx]);
+	}
 	output.SetCardinality(remaining);
 	state.current_count += remaining;
 }
@@ -51,8 +52,8 @@ static unique_ptr<NodeStatistics> RepeatRowCardinality(ClientContext &context, c
 
 void RepeatRowTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction repeat_row("repeat_row", {}, RepeatRowFunction, RepeatRowBind, RepeatRowInit);
-        repeat_row.varargs = LogicalType::ANY;
-        repeat_row.named_parameters["num_rows"] = LogicalType::BIGINT;
+	repeat_row.varargs = LogicalType::ANY;
+	repeat_row.named_parameters["num_rows"] = LogicalType::BIGINT;
 	repeat_row.cardinality = RepeatRowCardinality;
 	set.AddFunction(repeat_row);
 }

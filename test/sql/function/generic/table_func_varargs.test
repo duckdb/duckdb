@@ -1,4 +1,4 @@
-# name: test/sql/function/generic/table_func_vargs.test
+# name: test/sql/function/generic/table_func_varargs.test
 # description: VarArgs with a Table Function
 # group: [generic]
 
