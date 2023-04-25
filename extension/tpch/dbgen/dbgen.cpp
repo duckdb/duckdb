@@ -94,7 +94,7 @@ static void append_line(order_t *o, tpch_append_information *info) {
 		// l_linenumber
 		append_value(append_info, o->l[i].lcnt);
 		// l_quantity
-		append_value(append_info, o->l[i].quantity);
+		append_decimal(append_info, o->l[i].quantity);
 		// l_extendedprice
 		append_decimal(append_info, o->l[i].eprice);
 		// l_discount
@@ -408,7 +408,7 @@ const char *LineitemInfo::Columns[] = {"l_orderkey",    "l_partkey",       "l_su
                                        "l_receiptdate", "l_shipinstruct",  "l_shipmode", "l_comment"};
 const LogicalType LineitemInfo::Types[] = {
     LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER),
-    LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType::DECIMAL(15, 2),
+    LogicalType(LogicalTypeId::INTEGER), LogicalType::DECIMAL(15, 2),         LogicalType::DECIMAL(15, 2),
     LogicalType::DECIMAL(15, 2),         LogicalType::DECIMAL(15, 2),         LogicalType(LogicalTypeId::VARCHAR),
     LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DATE),    LogicalType(LogicalTypeId::DATE),
     LogicalType(LogicalTypeId::DATE),    LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR),
