@@ -397,14 +397,11 @@ void DataTable::VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk,
 		dst_keys_ptr = &bfk.info.fk_keys;
 	}
 
-	auto table_entry_ptr =
+	auto &table_entry_ptr =
 	    Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, bfk.info.schema, bfk.info.table);
-	if (table_entry_ptr == nullptr) {
-		throw InternalException("Can't find table \"%s\" in foreign key constraint", bfk.info.table);
-	}
 	// make the data chunk to check
 	vector<LogicalType> types;
-	for (auto &col : table_entry_ptr->GetColumns().Physical()) {
+	for (auto &col : table_entry_ptr.GetColumns().Physical()) {
 		types.emplace_back(col.Type());
 	}
 	DataChunk dst_chunk;
@@ -413,7 +410,7 @@ void DataTable::VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk,
 		dst_chunk.data[(*dst_keys_ptr)[i].index].Reference(chunk.data[(*src_keys_ptr)[i].index]);
 	}
 	dst_chunk.SetCardinality(chunk.size());
-	auto &data_table = table_entry_ptr->GetStorage();
+	auto &data_table = table_entry_ptr.GetStorage();
 
 	idx_t count = dst_chunk.size();
 	if (count <= 0) {

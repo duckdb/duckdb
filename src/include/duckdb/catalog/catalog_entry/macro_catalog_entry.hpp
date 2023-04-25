@@ -18,7 +18,7 @@ namespace duckdb {
 //! A macro function in the catalog
 class MacroCatalogEntry : public StandardEntry {
 public:
-	MacroCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateMacroInfo *info);
+	MacroCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateMacroInfo &info);
 
 	//! The macro function
 	unique_ptr<MacroFunction> function;
@@ -28,7 +28,7 @@ public:
 	virtual void Serialize(Serializer &serializer) const = 0;
 
 	string ToSQL() const override {
-		return function->ToSQL(schema->name, name);
+		return function->ToSQL(schema.name, name);
 	}
 };
 

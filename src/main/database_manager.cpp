@@ -27,7 +27,7 @@ optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &conte
 	if (StringUtil::Lower(name) == TEMP_CATALOG) {
 		return context.client_data->temporary_objects.get();
 	}
-	return (AttachedDatabase *)databases->GetEntry(context, name);
+	return (AttachedDatabase *)databases->GetEntry(context, name).get();
 }
 
 void DatabaseManager::AddDatabase(ClientContext &context, unique_ptr<AttachedDatabase> db_instance) {
@@ -42,9 +42,9 @@ void DatabaseManager::AddDatabase(ClientContext &context, unique_ptr<AttachedDat
 	}
 }
 
-void DatabaseManager::DetachDatabase(ClientContext &context, const string &name, bool if_exists) {
+void DatabaseManager::DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found) {
 	if (!databases->DropEntry(context, name, false, true)) {
-		if (!if_exists) {
+		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
 			throw BinderException("Failed to detach database with name \"%s\": database not found", name);
 		}
 	}
@@ -52,17 +52,18 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 
 optional_ptr<AttachedDatabase> DatabaseManager::GetDatabaseFromPath(ClientContext &context, const string &path) {
 	auto databases = GetDatabases(context);
-	for (auto db : databases) {
-		if (db->IsSystem()) {
+	for (auto &db_ref : databases) {
+		auto &db = db_ref.get();
+		if (db.IsSystem()) {
 			continue;
 		}
-		auto &catalog = Catalog::GetCatalog(*db);
+		auto &catalog = Catalog::GetCatalog(db);
 		if (catalog.InMemory()) {
 			continue;
 		}
 		auto db_path = catalog.GetDBPath();
 		if (StringUtil::CIEquals(path, db_path)) {
-			return db;
+			return &db;
 		}
 	}
 	return nullptr;
@@ -81,11 +82,11 @@ const string &DatabaseManager::GetDefaultDatabase(ClientContext &context) {
 	return default_entry.catalog;
 }
 
-vector<optional_ptr<AttachedDatabase>> DatabaseManager::GetDatabases(ClientContext &context) {
-	vector<optional_ptr<AttachedDatabase>> result;
-	databases->Scan(context, [&](CatalogEntry *entry) { result.push_back((AttachedDatabase *)entry); });
-	result.push_back(system.get());
-	result.push_back(context.client_data->temporary_objects.get());
+vector<reference<AttachedDatabase>> DatabaseManager::GetDatabases(ClientContext &context) {
+	vector<reference<AttachedDatabase>> result;
+	databases->Scan(context, [&](CatalogEntry &entry) { result.push_back(entry.Cast<AttachedDatabase>()); });
+	result.push_back(*system);
+	result.push_back(*context.client_data->temporary_objects);
 	return result;
 }
 

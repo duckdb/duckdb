@@ -29,7 +29,7 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 
 	if (!table.temporary) {
 		// delete from persistent table: not read only!
-		properties.modified_databases.insert(table.catalog->GetName());
+		properties.modified_databases.insert(table.catalog.GetName());
 	}
 
 	// Add CTEs as bindable
@@ -62,7 +62,7 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 		WhereBinder binder(*this, context);
 		condition = binder.Bind(stmt.condition);
 
-		PlanSubqueries(&condition, &root);
+		PlanSubqueries(condition, root);
 		auto filter = make_uniq<LogicalFilter>(std::move(condition));
 		filter->AddChild(std::move(root));
 		root = std::move(filter);

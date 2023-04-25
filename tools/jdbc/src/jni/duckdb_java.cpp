@@ -785,6 +785,7 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 		case LogicalTypeId::DOUBLE:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(double));
 			break;
+		case LogicalTypeId::TIME_TZ:
 		case LogicalTypeId::TIMESTAMP_SEC:
 		case LogicalTypeId::TIMESTAMP_MS:
 		case LogicalTypeId::TIMESTAMP:
@@ -1104,7 +1105,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1create_1extens
 
 	auto &catalog_name = DatabaseManager::GetDefaultDatabase(*connection->context);
 	auto &catalog = Catalog::GetCatalog(*connection->context, catalog_name);
-	catalog.CreateType(*connection->context, &info);
+	catalog.CreateType(*connection->context, info);
 
 	connection->Commit();
 }

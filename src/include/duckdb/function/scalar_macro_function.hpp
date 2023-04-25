@@ -20,6 +20,9 @@ namespace duckdb {
 
 class ScalarMacroFunction : public MacroFunction {
 public:
+	static constexpr const MacroType TYPE = MacroType::SCALAR_MACRO;
+
+public:
 	ScalarMacroFunction(unique_ptr<ParsedExpression> expression);
 
 	ScalarMacroFunction(void);

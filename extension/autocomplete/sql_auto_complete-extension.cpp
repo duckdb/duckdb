@@ -98,28 +98,31 @@ static vector<AutoCompleteCandidate> SuggestKeyword(ClientContext &context) {
 	return result;
 }
 
-static vector<CatalogEntry *> GetAllTables(ClientContext &context, bool for_table_names) {
-	vector<CatalogEntry *> result;
+static vector<reference<CatalogEntry>> GetAllTables(ClientContext &context, bool for_table_names) {
+	vector<reference<CatalogEntry>> result;
 	// scan all the schemas for tables and collect them and collect them
 	// for column names we avoid adding internal entries, because it pollutes the auto-complete too much
 	// for table names this is generally fine, however
 	auto schemas = Catalog::GetAllSchemas(context);
-	for (auto &schema : schemas) {
-		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
-			if (!entry->internal || for_table_names) {
+	for (auto &schema_ref : schemas) {
+		auto &schema = schema_ref.get();
+		schema.Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+			if (!entry.internal || for_table_names) {
 				result.push_back(entry);
 			}
 		});
 	};
 	if (for_table_names) {
-		for (auto &schema : schemas) {
-			schema->Scan(context, CatalogType::TABLE_FUNCTION_ENTRY,
-			             [&](CatalogEntry *entry) { result.push_back(entry); });
+		for (auto &schema_ref : schemas) {
+			auto &schema = schema_ref.get();
+			schema.Scan(context, CatalogType::TABLE_FUNCTION_ENTRY,
+			            [&](CatalogEntry &entry) { result.push_back(entry); });
 		};
 	} else {
-		for (auto &schema : schemas) {
-			schema->Scan(context, CatalogType::SCALAR_FUNCTION_ENTRY,
-			             [&](CatalogEntry *entry) { result.push_back(entry); });
+		for (auto &schema_ref : schemas) {
+			auto &schema = schema_ref.get();
+			schema.Scan(context, CatalogType::SCALAR_FUNCTION_ENTRY,
+			            [&](CatalogEntry &entry) { result.push_back(entry); });
 		};
 	}
 	return result;
@@ -128,10 +131,11 @@ static vector<CatalogEntry *> GetAllTables(ClientContext &context, bool for_tabl
 static vector<AutoCompleteCandidate> SuggestTableName(ClientContext &context) {
 	vector<AutoCompleteCandidate> suggestions;
 	auto all_entries = GetAllTables(context, true);
-	for (auto &entry : all_entries) {
+	for (auto &entry_ref : all_entries) {
+		auto &entry = entry_ref.get();
 		// prioritize user-defined entries (views & tables)
-		int32_t bonus = (entry->internal || entry->type == CatalogType::TABLE_FUNCTION_ENTRY) ? 0 : 1;
-		suggestions.emplace_back(entry->name, bonus);
+		int32_t bonus = (entry.internal || entry.type == CatalogType::TABLE_FUNCTION_ENTRY) ? 0 : 1;
+		suggestions.emplace_back(entry.name, bonus);
 	}
 	return suggestions;
 }
@@ -139,22 +143,23 @@ static vector<AutoCompleteCandidate> SuggestTableName(ClientContext &context) {
 static vector<AutoCompleteCandidate> SuggestColumnName(ClientContext &context) {
 	vector<AutoCompleteCandidate> suggestions;
 	auto all_entries = GetAllTables(context, false);
-	for (auto &entry : all_entries) {
-		if (entry->type == CatalogType::TABLE_ENTRY) {
-			auto &table = entry->Cast<TableCatalogEntry>();
+	for (auto &entry_ref : all_entries) {
+		auto &entry = entry_ref.get();
+		if (entry.type == CatalogType::TABLE_ENTRY) {
+			auto &table = entry.Cast<TableCatalogEntry>();
 			for (auto &col : table.GetColumns().Logical()) {
 				suggestions.emplace_back(col.GetName(), 1);
 			}
-		} else if (entry->type == CatalogType::VIEW_ENTRY) {
-			auto &view = entry->Cast<ViewCatalogEntry>();
+		} else if (entry.type == CatalogType::VIEW_ENTRY) {
+			auto &view = entry.Cast<ViewCatalogEntry>();
 			for (auto &col : view.aliases) {
 				suggestions.emplace_back(col, 1);
 			}
 		} else {
-			if (StringUtil::CharacterIsOperator(entry->name[0])) {
+			if (StringUtil::CharacterIsOperator(entry.name[0])) {
 				continue;
 			}
-			suggestions.emplace_back(entry->name);
+			suggestions.emplace_back(entry.name);
 		};
 	}
 	return suggestions;
@@ -370,8 +375,8 @@ unique_ptr<GlobalTableFunctionState> SQLAutoCompleteInit(ClientContext &context,
 }
 
 void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &bind_data = (SQLAutoCompleteFunctionData &)*data_p.bind_data;
-	auto &data = (SQLAutoCompleteData &)*data_p.global_state;
+	auto &bind_data = data_p.bind_data->Cast<SQLAutoCompleteFunctionData>();
+	auto &data = data_p.global_state->Cast<SQLAutoCompleteData>();
 	if (data.offset >= bind_data.suggestions.size()) {
 		// finished returning values
 		return;
@@ -403,7 +408,7 @@ static void LoadInternal(DatabaseInstance &db) {
 	TableFunction auto_complete_fun("sql_auto_complete", {LogicalType::VARCHAR}, SQLAutoCompleteFunction,
 	                                SQLAutoCompleteBind, SQLAutoCompleteInit);
 	CreateTableFunctionInfo auto_complete_info(auto_complete_fun);
-	catalog.CreateTableFunction(context, &auto_complete_info);
+	catalog.CreateTableFunction(context, auto_complete_info);
 
 	con.Commit();
 }

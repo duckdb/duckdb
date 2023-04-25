@@ -64,21 +64,13 @@ static LogicalType ResolveWindowExpressionType(ExpressionType window_type, const
 	}
 }
 
-static inline OrderType ResolveOrderType(const DBConfig &config, OrderType type) {
-	return (type == OrderType::ORDER_DEFAULT) ? config.options.default_order_type : type;
-}
-
-static inline OrderByNullType ResolveNullOrder(const DBConfig &config, OrderByNullType null_order) {
-	return (null_order == OrderByNullType::ORDER_DEFAULT) ? config.options.default_null_order : null_order;
-}
-
 static unique_ptr<Expression> GetExpression(unique_ptr<ParsedExpression> &expr) {
 	if (!expr) {
 		return nullptr;
 	}
 	D_ASSERT(expr.get());
 	D_ASSERT(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
-	return std::move(((BoundExpression &)*expr).expr);
+	return std::move(BoundExpression::GetExpression(*expr));
 }
 
 static unique_ptr<Expression> CastWindowExpression(unique_ptr<ParsedExpression> &expr, const LogicalType &type) {
@@ -88,10 +80,10 @@ static unique_ptr<Expression> CastWindowExpression(unique_ptr<ParsedExpression> 
 	D_ASSERT(expr.get());
 	D_ASSERT(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
 
-	auto &bound = (BoundExpression &)*expr;
-	bound.expr = BoundCastExpression::AddDefaultCastToType(std::move(bound.expr), type);
+	auto &bound = BoundExpression::GetExpression(*expr);
+	bound = BoundCastExpression::AddDefaultCastToType(std::move(bound), type);
 
-	return std::move(bound.expr);
+	return std::move(bound);
 }
 
 static LogicalType BindRangeExpression(ClientContext &context, const string &name, unique_ptr<ParsedExpression> &expr,
@@ -101,13 +93,13 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 
 	D_ASSERT(order_expr.get());
 	D_ASSERT(order_expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
-	auto &bound_order = (BoundExpression &)*order_expr;
-	children.emplace_back(bound_order.expr->Copy());
+	auto &bound_order = BoundExpression::GetExpression(*order_expr);
+	children.emplace_back(bound_order->Copy());
 
 	D_ASSERT(expr.get());
 	D_ASSERT(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
-	auto &bound = (BoundExpression &)*expr;
-	children.emplace_back(std::move(bound.expr));
+	auto &bound = BoundExpression::GetExpression(*expr);
+	children.emplace_back(std::move(bound));
 
 	string error;
 	FunctionBinder function_binder(context);
@@ -115,8 +107,8 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 	if (!function) {
 		throw BinderException(error);
 	}
-	bound.expr = std::move(function);
-	return bound.expr->return_type;
+	bound = std::move(function);
+	return bound->return_type;
 }
 
 BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
@@ -165,26 +157,26 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	for (auto &child : window.children) {
 		D_ASSERT(child.get());
 		D_ASSERT(child->expression_class == ExpressionClass::BOUND_EXPRESSION);
-		auto &bound = (BoundExpression &)*child;
+		auto &bound = BoundExpression::GetExpression(*child);
 		// Add casts for positional arguments
 		const auto argno = children.size();
 		switch (window.type) {
 		case ExpressionType::WINDOW_NTILE:
 			// ntile(bigint)
 			if (argno == 0) {
-				bound.expr = BoundCastExpression::AddCastToType(context, std::move(bound.expr), LogicalType::BIGINT);
+				bound = BoundCastExpression::AddCastToType(context, std::move(bound), LogicalType::BIGINT);
 			}
 			break;
 		case ExpressionType::WINDOW_NTH_VALUE:
 			// nth_value(<expr>, index)
 			if (argno == 1) {
-				bound.expr = BoundCastExpression::AddCastToType(context, std::move(bound.expr), LogicalType::BIGINT);
+				bound = BoundCastExpression::AddCastToType(context, std::move(bound), LogicalType::BIGINT);
 			}
 		default:
 			break;
 		}
-		types.push_back(bound.expr->return_type);
-		children.push_back(std::move(bound.expr));
+		types.push_back(bound->return_type);
+		children.push_back(std::move(bound));
 	}
 	//  Determine the function type.
 	LogicalType sql_type;
@@ -192,19 +184,19 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	unique_ptr<FunctionData> bind_info;
 	if (window.type == ExpressionType::WINDOW_AGGREGATE) {
 		//  Look up the aggregate function in the catalog
-		auto func = Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, window.catalog, window.schema,
-		                                                             window.function_name, false, error_context);
-		D_ASSERT(func->type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
+		auto &func = Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, window.catalog, window.schema,
+		                                                              window.function_name, error_context);
+		D_ASSERT(func.type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
 
 		// bind the aggregate
 		string error;
 		FunctionBinder function_binder(context);
-		auto best_function = function_binder.BindFunction(func->name, func->functions, types, error);
+		auto best_function = function_binder.BindFunction(func.name, func.functions, types, error);
 		if (best_function == DConstants::INVALID_INDEX) {
 			throw BinderException(binder.FormatError(window, error));
 		}
 		// found a matching function! bind it as an aggregate
-		auto bound_function = func->functions.GetFunctionByOffset(best_function);
+		auto bound_function = func.functions.GetFunctionByOffset(best_function);
 		auto bound_aggregate = function_binder.BindAggregateFunction(bound_function, std::move(children));
 		// create the aggregate
 		aggregate = make_uniq<AggregateFunction>(bound_aggregate->function);
@@ -231,12 +223,12 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	LogicalType start_type = LogicalType::BIGINT;
 	if (window.start == WindowBoundary::EXPR_PRECEDING_RANGE) {
 		D_ASSERT(window.orders.size() == 1);
-		range_sense = ResolveOrderType(config, window.orders[0].type);
+		range_sense = config.ResolveOrder(window.orders[0].type);
 		const auto name = (range_sense == OrderType::ASCENDING) ? "-" : "+";
 		start_type = BindRangeExpression(context, name, window.start_expr, window.orders[0].expression);
 	} else if (window.start == WindowBoundary::EXPR_FOLLOWING_RANGE) {
 		D_ASSERT(window.orders.size() == 1);
-		range_sense = ResolveOrderType(config, window.orders[0].type);
+		range_sense = config.ResolveOrder(window.orders[0].type);
 		const auto name = (range_sense == OrderType::ASCENDING) ? "+" : "-";
 		start_type = BindRangeExpression(context, name, window.start_expr, window.orders[0].expression);
 	}
@@ -244,12 +236,12 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	LogicalType end_type = LogicalType::BIGINT;
 	if (window.end == WindowBoundary::EXPR_PRECEDING_RANGE) {
 		D_ASSERT(window.orders.size() == 1);
-		range_sense = ResolveOrderType(config, window.orders[0].type);
+		range_sense = config.ResolveOrder(window.orders[0].type);
 		const auto name = (range_sense == OrderType::ASCENDING) ? "-" : "+";
 		end_type = BindRangeExpression(context, name, window.end_expr, window.orders[0].expression);
 	} else if (window.end == WindowBoundary::EXPR_FOLLOWING_RANGE) {
 		D_ASSERT(window.orders.size() == 1);
-		range_sense = ResolveOrderType(config, window.orders[0].type);
+		range_sense = config.ResolveOrder(window.orders[0].type);
 		const auto name = (range_sense == OrderType::ASCENDING) ? "+" : "-";
 		end_type = BindRangeExpression(context, name, window.end_expr, window.orders[0].expression);
 	}
@@ -261,8 +253,8 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		auto &order_expr = window.orders[0].expression;
 		D_ASSERT(order_expr.get());
 		D_ASSERT(order_expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
-		auto &bound_order = (BoundExpression &)*order_expr;
-		auto order_type = bound_order.expr->return_type;
+		auto &bound_order = BoundExpression::GetExpression(*order_expr);
+		auto order_type = bound_order->return_type;
 		if (window.start_expr) {
 			order_type = LogicalType::MaxLogicalType(order_type, start_type);
 		}
@@ -271,13 +263,13 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		}
 
 		// Cast all three to match
-		bound_order.expr = BoundCastExpression::AddCastToType(context, std::move(bound_order.expr), order_type);
+		bound_order = BoundCastExpression::AddCastToType(context, std::move(bound_order), order_type);
 		start_type = end_type = order_type;
 	}
 
 	for (auto &order : window.orders) {
-		auto type = ResolveOrderType(config, order.type);
-		auto null_order = ResolveNullOrder(config, order.null_order);
+		auto type = config.ResolveOrder(order.type);
+		auto null_order = config.ResolveNullOrder(type, order.null_order);
 		auto expression = GetExpression(order.expression);
 		result->orders.emplace_back(type, null_order, std::move(expression));
 	}

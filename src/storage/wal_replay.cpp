@@ -205,7 +205,7 @@ void ReplayState::ReplayCreateTable() {
 	auto binder = Binder::CreateBinder(context);
 	auto bound_info = binder->BindCreateTableInfo(std::move(info));
 
-	catalog.CreateTable(context, bound_info.get());
+	catalog.CreateTable(context, *bound_info);
 }
 
 void ReplayState::ReplayDropTable() {
@@ -218,7 +218,7 @@ void ReplayState::ReplayDropTable() {
 		return;
 	}
 
-	catalog.DropEntry(context, &info);
+	catalog.DropEntry(context, info);
 }
 
 void ReplayState::ReplayAlter() {
@@ -226,7 +226,7 @@ void ReplayState::ReplayAlter() {
 	if (deserialize_only) {
 		return;
 	}
-	catalog.Alter(context, info.get());
+	catalog.Alter(context, *info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -238,7 +238,7 @@ void ReplayState::ReplayCreateView() {
 		return;
 	}
 
-	catalog.CreateView(context, entry.get());
+	catalog.CreateView(context, *entry);
 }
 
 void ReplayState::ReplayDropView() {
@@ -249,7 +249,7 @@ void ReplayState::ReplayDropView() {
 	if (deserialize_only) {
 		return;
 	}
-	catalog.DropEntry(context, &info);
+	catalog.DropEntry(context, info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -262,7 +262,7 @@ void ReplayState::ReplayCreateSchema() {
 		return;
 	}
 
-	catalog.CreateSchema(context, &info);
+	catalog.CreateSchema(context, info);
 }
 
 void ReplayState::ReplayDropSchema() {
@@ -274,7 +274,7 @@ void ReplayState::ReplayDropSchema() {
 		return;
 	}
 
-	catalog.DropEntry(context, &info);
+	catalog.DropEntry(context, info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -285,7 +285,7 @@ void ReplayState::ReplayCreateType() {
 	if (Catalog::TypeExists(context, info->catalog, info->schema, info->name)) {
 		return;
 	}
-	catalog.CreateType(context, info.get());
+	catalog.CreateType(context, *info);
 }
 
 void ReplayState::ReplayDropType() {
@@ -298,7 +298,7 @@ void ReplayState::ReplayDropType() {
 		return;
 	}
 
-	catalog.DropEntry(context, &info);
+	catalog.DropEntry(context, info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -310,7 +310,7 @@ void ReplayState::ReplayCreateSequence() {
 		return;
 	}
 
-	catalog.CreateSequence(context, entry.get());
+	catalog.CreateSequence(context, *entry);
 }
 
 void ReplayState::ReplayDropSequence() {
@@ -322,7 +322,7 @@ void ReplayState::ReplayDropSequence() {
 		return;
 	}
 
-	catalog.DropEntry(context, &info);
+	catalog.DropEntry(context, info);
 }
 
 void ReplayState::ReplaySequenceValue() {
@@ -335,10 +335,10 @@ void ReplayState::ReplaySequenceValue() {
 	}
 
 	// fetch the sequence from the catalog
-	auto seq = catalog.GetEntry<SequenceCatalogEntry>(context, schema, name);
-	if (usage_count > seq->usage_count) {
-		seq->usage_count = usage_count;
-		seq->counter = counter;
+	auto &seq = catalog.GetEntry<SequenceCatalogEntry>(context, schema, name);
+	if (usage_count > seq.usage_count) {
+		seq.usage_count = usage_count;
+		seq.counter = counter;
 	}
 }
 
@@ -351,7 +351,7 @@ void ReplayState::ReplayCreateMacro() {
 		return;
 	}
 
-	catalog.CreateFunction(context, entry.get());
+	catalog.CreateFunction(context, *entry);
 }
 
 void ReplayState::ReplayDropMacro() {
@@ -363,7 +363,7 @@ void ReplayState::ReplayDropMacro() {
 		return;
 	}
 
-	catalog.DropEntry(context, &info);
+	catalog.DropEntry(context, info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -375,7 +375,7 @@ void ReplayState::ReplayCreateTableMacro() {
 		return;
 	}
 
-	catalog.CreateFunction(context, entry.get());
+	catalog.CreateFunction(context, *entry);
 }
 
 void ReplayState::ReplayDropTableMacro() {
@@ -387,22 +387,21 @@ void ReplayState::ReplayDropTableMacro() {
 		return;
 	}
 
-	catalog.DropEntry(context, &info);
+	catalog.DropEntry(context, info);
 }
 
 //===--------------------------------------------------------------------===//
 // Replay Index
 //===--------------------------------------------------------------------===//
 void ReplayState::ReplayCreateIndex() {
-
 	auto info = IndexCatalogEntry::Deserialize(source, context);
 	if (deserialize_only) {
 		return;
 	}
 
 	// get the physical table to which we'll add the index
-	auto table = catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->table->table_name);
-	auto &data_table = table->GetStorage();
+	auto &table = catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->table->table_name);
+	auto &data_table = table.GetStorage();
 
 	// bind the parsed expressions
 	if (info->expressions.empty()) {
@@ -411,7 +410,7 @@ void ReplayState::ReplayCreateIndex() {
 		}
 	}
 	auto binder = Binder::CreateBinder(context);
-	auto expressions = binder->BindCreateIndexExpressions(*table, *info);
+	auto expressions = binder->BindCreateIndexExpressions(table, *info);
 
 	// create the empty index
 	unique_ptr<Index> index;
@@ -426,11 +425,11 @@ void ReplayState::ReplayCreateIndex() {
 	}
 
 	// add the index to the catalog
-	auto index_entry = (DuckIndexEntry *)catalog.CreateIndex(context, info.get());
-	index_entry->index = index.get();
-	index_entry->info = data_table.info;
+	auto &index_entry = catalog.CreateIndex(context, *info)->Cast<DuckIndexEntry>();
+	index_entry.index = index.get();
+	index_entry.info = data_table.info;
 	for (auto &parsed_expr : info->parsed_expressions) {
-		index_entry->parsed_expressions.push_back(parsed_expr->Copy());
+		index_entry.parsed_expressions.push_back(parsed_expr->Copy());
 	}
 
 	// physically add the index to the data table storage
@@ -438,7 +437,6 @@ void ReplayState::ReplayCreateIndex() {
 }
 
 void ReplayState::ReplayDropIndex() {
-
 	DropInfo info;
 	info.type = CatalogType::INDEX_ENTRY;
 	info.schema = source.Read<string>();
@@ -447,7 +445,7 @@ void ReplayState::ReplayDropIndex() {
 		return;
 	}
 
-	catalog.DropEntry(context, &info);
+	catalog.DropEntry(context, info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -459,7 +457,7 @@ void ReplayState::ReplayUseTable() {
 	if (deserialize_only) {
 		return;
 	}
-	current_table = catalog.GetEntry<TableCatalogEntry>(context, schema_name, table_name);
+	current_table = &catalog.GetEntry<TableCatalogEntry>(context, schema_name, table_name);
 }
 
 void ReplayState::ReplayInsert() {

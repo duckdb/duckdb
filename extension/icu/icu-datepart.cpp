@@ -436,7 +436,7 @@ struct ICUDatePart : public ICUDateFunc {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetUnaryPartCodeFunction<timestamp_t, int64_t>(LogicalType::TIMESTAMP_TZ));
 		CreateScalarFunctionInfo func_info(set);
-		catalog.AddFunction(context, &func_info);
+		catalog.AddFunction(context, func_info);
 	}
 
 	template <typename INPUT_TYPE, typename RESULT_TYPE>
@@ -461,7 +461,7 @@ struct ICUDatePart : public ICUDateFunc {
 		set.AddFunction(GetBinaryPartCodeFunction<timestamp_t, int64_t>(LogicalType::TIMESTAMP_TZ));
 		set.AddFunction(GetStructFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
 		CreateScalarFunctionInfo func_info(set);
-		catalog.AddFunction(context, &func_info);
+		catalog.AddFunction(context, func_info);
 	}
 
 	static duckdb::unique_ptr<FunctionData> BindLastDate(ClientContext &context, ScalarFunction &bound_function,
@@ -480,7 +480,7 @@ struct ICUDatePart : public ICUDateFunc {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetLastDayFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
 		CreateScalarFunctionInfo func_info(set);
-		catalog.AddFunction(context, &func_info);
+		catalog.AddFunction(context, func_info);
 	}
 };
 

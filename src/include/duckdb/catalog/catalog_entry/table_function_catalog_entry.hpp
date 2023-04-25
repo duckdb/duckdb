@@ -22,12 +22,12 @@ public:
 	static constexpr const char *Name = "table function";
 
 public:
-	TableFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTableFunctionInfo *info);
+	TableFunctionCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableFunctionInfo &info);
 
 	//! The table function
 	TableFunctionSet functions;
 
 public:
-	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info) override;
+	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo &info) override;
 };
 } // namespace duckdb

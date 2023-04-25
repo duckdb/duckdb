@@ -17,8 +17,8 @@ restart
 query II
 SELECT * FROM test ORDER BY a
 ----
-NULL	NULL
 1	3
+NULL	NULL
 
 statement ok
 INSERT INTO test VALUES (2, 2)
@@ -26,18 +26,18 @@ INSERT INTO test VALUES (2, 2)
 query II
 SELECT * FROM test ORDER BY a
 ----
-NULL	NULL
 1	3
 2	2
+NULL	NULL
 
 restart
 
 query II
 SELECT * FROM test ORDER BY a
 ----
-NULL	NULL
 1	3
 2	2
+NULL	NULL
 
 statement ok
 INSERT INTO test VALUES (3, 3)
@@ -48,20 +48,20 @@ UPDATE test SET b=4 WHERE a=1
 query II
 SELECT * FROM test ORDER BY a
 ----
-NULL	NULL
 1	4
 2	2
 3	3
+NULL	NULL
 
 restart
 
 query II
 SELECT * FROM test ORDER BY a
 ----
-NULL	NULL
 1	4
 2	2
 3	3
+NULL	NULL
 
 statement ok
 UPDATE test SET a=4, b=4 WHERE a=1
@@ -69,20 +69,20 @@ UPDATE test SET a=4, b=4 WHERE a=1
 query II
 SELECT * FROM test ORDER BY a
 ----
-NULL	NULL
 2	2
 3	3
 4	4
+NULL	NULL
 
 restart
 
 query II
 SELECT * FROM test ORDER BY a
 ----
-NULL	NULL
 2	2
 3	3
 4	4
+NULL	NULL
 
 statement ok
 UPDATE test SET b=5, a=6 WHERE a=4
@@ -93,18 +93,18 @@ DELETE FROM test WHERE a=2
 query II
 SELECT * FROM test ORDER BY a
 ----
-NULL	NULL
 3	3
 6	5
+NULL	NULL
 
 restart
 
 query II
 SELECT * FROM test ORDER BY a
 ----
-NULL	NULL
 3	3
 6	5
+NULL	NULL
 
 statement ok
 UPDATE test SET b=7 WHERE a=3
@@ -112,15 +112,15 @@ UPDATE test SET b=7 WHERE a=3
 query II
 SELECT * FROM test ORDER BY a
 ----
-NULL	NULL
 3	7
 6	5
+NULL	NULL
 
 restart
 
 query II
 SELECT * FROM test ORDER BY a
 ----
-NULL	NULL
 3	7
 6	5
+NULL	NULL

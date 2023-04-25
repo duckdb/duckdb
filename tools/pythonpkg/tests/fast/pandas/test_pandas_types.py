@@ -14,7 +14,7 @@ def round_trip(data,pandas_type):
     print (df_in)
     assert df_out.equals(df_in)
 
-class TestPandasTypes(object):
+class TestNumpyNullableTypes(object):
     def test_pandas_numeric(self):
         base_df = pd.DataFrame(
             {'a':range(10)}

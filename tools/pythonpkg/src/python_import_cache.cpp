@@ -20,15 +20,6 @@ bool PythonImportCacheItem::IsLoaded() const {
 	return type.ptr() != nullptr;
 }
 
-bool PythonImportCacheItem::IsInstance(py::handle object) const {
-	auto type = (*this)();
-	if (!IsLoaded()) {
-		// Type was not imported
-		return false;
-	}
-	return py::isinstance(object, type);
-}
-
 PyObject *PythonImportCacheItem::AddCache(PythonImportCache &cache, py::object object) {
 	return cache.AddCache(std::move(object));
 }
@@ -40,7 +31,6 @@ void PythonImportCacheItem::LoadModule(const string &name, PythonImportCache &ca
 		load_succeeded = true;
 	} catch (py::error_already_set &e) {
 		if (IsRequired()) {
-			PyErr_PrintEx(1);
 			throw InvalidInputException(
 			    "Required module '%s' failed to import, due to the following Python exception:\n%s", name, e.what());
 		}
@@ -53,6 +43,9 @@ void PythonImportCacheItem::LoadAttribute(const string &name, PythonImportCache 
 	auto source_object = source();
 	if (py::hasattr(source_object, name.c_str())) {
 		object = AddCache(cache, std::move(source_object.attr(name.c_str())));
+	} else {
+		object = nullptr;
+		return;
 	}
 	LoadSubtypes(cache);
 }

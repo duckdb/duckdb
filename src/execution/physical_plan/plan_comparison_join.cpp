@@ -20,10 +20,10 @@
 namespace duckdb {
 
 static bool CanPlanIndexJoin(ClientContext &context, TableScanBindData &bind_data, PhysicalTableScan &scan) {
-	auto table = bind_data.table;
-	auto &transaction = DuckTransaction::Get(context, *table->catalog);
+	auto &table = bind_data.table;
+	auto &transaction = DuckTransaction::Get(context, table.catalog);
 	auto &local_storage = LocalStorage::Get(transaction);
-	if (local_storage.Find(table->GetStorage())) {
+	if (local_storage.Find(table.GetStorage())) {
 		// transaction local appends: skip index join
 		return false;
 	}
@@ -137,7 +137,7 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 
 static optional_ptr<Index> CanUseIndexJoin(TableScanBindData &tbl, Expression &expr) {
 	optional_ptr<Index> result;
-	tbl.table->GetStorage().info->indexes.Scan([&](Index &index) {
+	tbl.table.GetStorage().info->indexes.Scan([&](Index &index) {
 		if (index.unbound_expressions.size() != 1) {
 			return false;
 		}

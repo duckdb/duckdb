@@ -184,6 +184,7 @@ private:
 	//! Transform a Postgres duckdb_libpgquery::T_PGSelectStmt node into a QueryNode
 	unique_ptr<QueryNode> TransformSelectNode(duckdb_libpgquery::PGSelectStmt *node);
 	unique_ptr<QueryNode> TransformSelectInternal(duckdb_libpgquery::PGSelectStmt *node);
+	void TransformModifiers(duckdb_libpgquery::PGSelectStmt &stmt, QueryNode &node);
 
 	//===--------------------------------------------------------------------===//
 	// Expression Transform
@@ -318,6 +319,8 @@ private:
 	unique_ptr<SampleOptions> TransformSampleOptions(duckdb_libpgquery::PGNode *options);
 	//! Returns true if an expression is only a star (i.e. "*", without any other decorators)
 	bool ExpressionIsEmptyStar(ParsedExpression &expr);
+
+	OnEntryNotFound TransformOnEntryNotFound(bool missing_ok);
 
 private:
 	//! Current stack depth
