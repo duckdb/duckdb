@@ -73,7 +73,7 @@ class TestDuckDBQuery(object):
     def test_named_param_not_exhaustive(self):
         con = duckdb.connect()
 
-        with pytest.raises(duckdb.InvalidInputException, match="Invalid Input Error: Prepared statement needs 3 parameters, 2 given"):
+        with pytest.raises(duckdb.InvalidInputException, match="Invalid Input Error: Values were not provided for the following prepared statement parameters: name3"):
             con.execute("select $name1, $name2, $name3", {'name1': 5, 'name2': 3})
 
     def test_named_param_excessive(self):

@@ -121,6 +121,23 @@ idx_t duckdb_nparams(duckdb_prepared_statement prepared_statement) {
 	return wrapper->statement->n_param;
 }
 
+const char *duckdb_parameter_name(duckdb_prepared_statement prepared_statement, idx_t index) {
+	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
+	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
+		return NULL;
+	}
+	if (index > wrapper->statement->n_param) {
+		return NULL;
+	}
+	for (auto &item : wrapper->statement->named_param_map) {
+		if (item.second == index) {
+			return strdup(item.first.c_str());
+		}
+	}
+	auto number_string = std::to_string(index);
+	return strdup(number_string.c_str());
+}
+
 duckdb_type duckdb_param_type(duckdb_prepared_statement prepared_statement, idx_t param_idx) {
 	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {

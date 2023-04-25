@@ -394,13 +394,13 @@ unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(const string &query,
 
 	// For every entry of the argument list, execute the prepared statement with said arguments
 	for (pybind11::handle single_query_params : params_set) {
-		if (prep->n_param != py::len(single_query_params)) {
-			throw InvalidInputException("Prepared statement needs %d parameters, %d given", prep->n_param,
-			                            py::len(single_query_params));
-		}
 		vector<Value> unnamed_values;
 		case_insensitive_map_t<Value> named_values;
 		if (py::isinstance<py::list>(single_query_params) || py::isinstance<py::tuple>(single_query_params)) {
+			if (prep->n_param != py::len(single_query_params)) {
+				throw InvalidInputException("Prepared statement needs %d parameters, %d given", prep->n_param,
+				                            py::len(single_query_params));
+			}
 			unnamed_values = DuckDBPyConnection::TransformPythonParamList(single_query_params);
 		} else if (py::isinstance<py::dict>(single_query_params)) {
 			auto dict = py::cast<py::dict>(single_query_params);
