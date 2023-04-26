@@ -7,7 +7,8 @@ const vector<LogicalType> CompressedMaterializationFunctions::IntegralTypes() {
 }
 
 const vector<LogicalType> CompressedMaterializationFunctions::StringTypes() {
-	return {LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT, LogicalTypeId::HUGEINT};
+	return {LogicalType::UTINYINT, LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT,
+	        LogicalTypeId::HUGEINT};
 }
 
 unique_ptr<FunctionData> CompressedMaterializationFunctions::Bind(ClientContext &context,

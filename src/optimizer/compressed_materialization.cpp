@@ -404,18 +404,25 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetStringCompress(uniq
 	arguments.emplace_back(std::move(input));
 	auto compress_expr =
 	    make_uniq<BoundFunctionExpression>(cast_type, compress_function, std::move(arguments), nullptr);
-	auto compress_stats = BaseStatistics::CreateEmpty(cast_type);
-	compress_stats.CopyBase(stats);
 	if (cast_type.id() == LogicalTypeId::USMALLINT) {
 		auto min = StringStats::Min(stats);
 		auto max = StringStats::Max(stats);
 		uint16_t min_val = max_string_length == 0 || min.length() == 0 ? 0 : *(uint8_t *)min.c_str();
 		uint16_t max_val = max_string_length == 0 || max.length() == 0 ? 0 : *(uint8_t *)max.c_str();
+		max_val += 1;
+		if (max_val < NumericLimits<uint8_t>::Maximum()) {
+			cast_type = LogicalType::UTINYINT;
+		}
+		auto compress_stats = BaseStatistics::CreateEmpty(cast_type);
+		compress_stats.CopyBase(stats);
 		NumericStats::SetMin(compress_stats, Value(min_val).DefaultCastAs(cast_type));
-		NumericStats::SetMax(compress_stats, Value(max_val + 1).DefaultCastAs(cast_type));
+		NumericStats::SetMax(compress_stats, Value(max_val).DefaultCastAs(cast_type));
+		return make_uniq<CompressExpression>(std::move(compress_expr), compress_stats.ToUnique());
+	} else {
+		auto compress_stats = BaseStatistics::CreateEmpty(cast_type);
+		compress_stats.CopyBase(stats);
+		return make_uniq<CompressExpression>(std::move(compress_expr), compress_stats.ToUnique());
 	}
-
-	return make_uniq<CompressExpression>(std::move(compress_expr), compress_stats.ToUnique());
 }
 
 unique_ptr<Expression> CompressedMaterialization::GetDecompressExpression(unique_ptr<Expression> input,

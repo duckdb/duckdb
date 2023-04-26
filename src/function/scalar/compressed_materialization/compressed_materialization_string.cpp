@@ -22,13 +22,23 @@ static inline RESULT_TYPE StringCompress(const string_t &input) {
 	return BSwap<RESULT_TYPE>(result);
 }
 
-template <>
-inline uint16_t StringCompress(const string_t &input) {
-	if (sizeof(uint16_t) <= string_t::INLINE_LENGTH) {
+template <class RESULT_TYPE>
+static inline RESULT_TYPE MiniStringCompress(const string_t &input) {
+	if (sizeof(RESULT_TYPE) <= string_t::INLINE_LENGTH) {
 		return input.GetSize() + *input.GetPrefixWriteable();
 	} else {
 		return input.GetSize() + *(uint8_t *)input.GetDataUnsafe();
 	}
+}
+
+template <>
+inline uint8_t StringCompress(const string_t &input) {
+	return MiniStringCompress<uint8_t>(input);
+}
+
+template <>
+inline uint16_t StringCompress(const string_t &input) {
+	return MiniStringCompress<uint16_t>(input);
 }
 
 template <class RESULT_TYPE>
@@ -77,10 +87,10 @@ static inline string_t StringDecompress(const INPUT_TYPE &input, Vector &result_
 	}
 }
 
-template <>
-inline string_t StringDecompress(const uint16_t &input, Vector &result_v) {
-	if (sizeof(uint16_t) <= string_t::INLINE_LENGTH) {
-		const auto min = MinValue<uint16_t>(1, input);
+template <class INPUT_TYPE>
+static inline string_t MiniStringDecompress(const INPUT_TYPE &input, Vector &result_v) {
+	if (sizeof(INPUT_TYPE) <= string_t::INLINE_LENGTH) {
+		const auto min = MinValue<INPUT_TYPE>(1, input);
 		string_t result(min);
 		memset(result.GetPrefixWriteable(), '\0', string_t::INLINE_BYTES);
 		*result.GetPrefixWriteable() = input - min;
@@ -89,6 +99,16 @@ inline string_t StringDecompress(const uint16_t &input, Vector &result_v) {
 		char c = input - 1;
 		return StringVector::AddString(result_v, &c, 1);
 	}
+}
+
+template <>
+inline string_t StringDecompress(const uint8_t &input, Vector &result_v) {
+	return MiniStringDecompress<uint16_t>(input, result_v);
+}
+
+template <>
+inline string_t StringDecompress(const uint16_t &input, Vector &result_v) {
+	return MiniStringDecompress<uint16_t>(input, result_v);
 }
 
 template <class INPUT_TYPE>
@@ -105,6 +125,8 @@ static scalar_function_t GetStringDecompressFunction(const LogicalType &input_ty
 
 static scalar_function_t GetStringDecompressFunctionSwitch(const LogicalType &input_type) {
 	switch (input_type.id()) {
+	case LogicalTypeId::UTINYINT:
+		return GetStringDecompressFunction<uint8_t>(input_type);
 	case LogicalTypeId::USMALLINT:
 		return GetStringDecompressFunction<uint16_t>(input_type);
 	case LogicalTypeId::UINTEGER:

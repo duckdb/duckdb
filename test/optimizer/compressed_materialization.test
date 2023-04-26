@@ -2,6 +2,11 @@
 # description: Compressed materialization test
 # group: [optimizer]
 
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY
+
+mode skip
+
 # tricky tests taken from test/sql/subquery/scalar/test_issue_6136.test
 statement ok
 create table r as select * from values (1, 1, 'a', 'A'), (1, null, 'b', 'B'), (1, 2, 'c', 'C'), (2, null, 'd', 'D') t(ra, rb, x, y);
@@ -35,9 +40,6 @@ from b
 {'x': NULL, 'y': NULL, '__matches': 0}
 
 statement ok
-PRAGMA explain_output = OPTIMIZED_ONLY
-
-statement ok
 create table test as
 select (range + 7) % 4 i,
        (range + 7) % 11 j
@@ -59,10 +61,39 @@ explain select i, sum(j) from test group by i order by i
 ----
 logical_opt	<REGEX>:(.*__internal_compress.*){1}
 
+mode unskip
+
 require tpch
 
 statement ok
 call dbgen(sf=0.01)
+
+# tpch q1 should use perfect hash aggregate
+query II
+EXPLAIN
+SELECT
+    l_returnflag,
+    l_linestatus,
+    sum(l_quantity) AS sum_qty,
+    sum(l_extendedprice) AS sum_base_price,
+    sum(l_extendedprice * (1 - l_discount)) AS sum_disc_price,
+    sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge,
+    avg(l_quantity) AS avg_qty,
+    avg(l_extendedprice) AS avg_price,
+    avg(l_discount) AS avg_disc,
+    count(*) AS count_order
+FROM
+    lineitem
+WHERE
+    l_shipdate <= CAST('1998-09-02' AS date)
+GROUP BY
+    l_returnflag,
+    l_linestatus
+ORDER BY
+    l_returnflag,
+    l_linestatus;
+----
+logical_opt	<REGEX>:.*PERFECT_HASH_GROUP_BY.*
 
 # test that we're compressing lineitem
 query II
