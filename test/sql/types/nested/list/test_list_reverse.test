@@ -31,9 +31,31 @@ SELECT LIST_REVERSE (LIST_REVERSE(ARRAY[1, 3, 3, 42, 117, 69, NULL]))
 [1, 3, 3, 42, 117, 69, NULL]
 
 query I
+SELECT LIST_REVERSE (ARRAY[[1, 2], [3, 4]])
+----
+[[3, 4], [1, 2]]
+
+query I
+SELECT LIST_REVERSE (ARRAY[ARRAY[1, 2], ARRAY[3, 4]])
+----
+[[3, 4], [1, 2]]
+
+query I
 SELECT LIST_REVERSE(NULL)
 ----
 NULL
+
+query I
+prepare q1 as select list_reverse(?);
+execute q1([5,4,3]);
+----
+[3, 4, 5]
+
+query I
+create table tbl as select range(5000) as list;
+select list_sort((list), 'desc') == list_reverse(list) from tbl;
+----
+true
 
 statement error
 SELECT LIST_REVERSE()

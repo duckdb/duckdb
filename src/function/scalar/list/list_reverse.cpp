@@ -26,9 +26,9 @@ static void ListReverseFunction(DataChunk &args, ExpressionState &state, Vector 
 	UnifiedVectorFormat input_list_child_data;
 	input_list_child.ToUnifiedFormat(input_list_list_size, input_list_child_data);
 
+	ListVector::Reserve(result, input_list_list_size);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_entries = FlatVector::GetData<list_entry_t>(result);
-	auto &result_validity = FlatVector::Validity(result);
 
 	// create a reverse selection vector
 	SelectionVector rev(input_list_list_size);
@@ -40,19 +40,15 @@ static void ListReverseFunction(DataChunk &args, ExpressionState &state, Vector 
 	for (idx_t i = 0; i < count; i++) {
 		auto input_list_list_index = input_list_data.sel->get_index(i);
 
-		if (!input_list_data.validity.RowIsValid(input_list_list_index)) {
-			result_validity.SetInvalid(i);
-			continue;
-		}
 		result_entries[i].offset = offset;
 		result_entries[i].length = 0;
-		if (input_list_data.validity.RowIsValid(input_list_list_index)) {
-			const auto &input_list_entry = input_list_entries[input_list_list_index];
-			result_entries[i].length += input_list_entry.length;
 
-			ListVector::Append(result, input_list_child, rev, input_list_entry.offset + input_list_entry.length,
-			                   input_list_entry.offset);
-		}
+		D_ASSERT(input_list_data.validity.RowIsValid(input_list_list_index));
+		const auto &input_list_entry = input_list_entries[input_list_list_index];
+		result_entries[i].length += input_list_entry.length;
+
+		ListVector::Append(result, input_list_child, rev, input_list_entry.offset + input_list_entry.length,
+		                   input_list_entry.offset);
 
 		offset += result_entries[i].length;
 	}
@@ -73,9 +69,8 @@ static unique_ptr<FunctionData> ListReverseBind(ClientContext &context, ScalarFu
 	}
 	// if the input is a NULL, we should just return a NULL
 	else if (input_list.id() == LogicalTypeId::SQLNULL) {
-		auto return_type = input_list;
-		bound_function.arguments[0] = return_type;
-		bound_function.return_type = return_type;
+		bound_function.arguments[0] = input_list;
+		bound_function.return_type = input_list;
 	} else {
 		D_ASSERT(input_list.id() == LogicalTypeId::LIST);
 
@@ -93,7 +88,7 @@ static unique_ptr<FunctionData> ListReverseBind(ClientContext &context, ScalarFu
 
 static unique_ptr<BaseStatistics> ListReverseStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
-	D_ASSERT(child_stats.size() == 2);
+	D_ASSERT(child_stats.size() == 1);
 
 	auto &left_stats = child_stats[0];
 
