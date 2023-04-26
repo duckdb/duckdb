@@ -116,6 +116,9 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 		}
 		case Type::BYTE_ARRAY:
 		case Type::FIXED_LEN_BYTE_ARRAY:
+			if (stats.size() > GetTypeIdSize(type.InternalType())) {
+				throw InternalException("Incorrect stats size for type %s", type.ToString());
+			}
 			switch (type.InternalType()) {
 			case PhysicalType::INT16:
 				return Value::DECIMAL(
