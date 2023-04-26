@@ -102,6 +102,10 @@ struct RowGroupBatchEntry {
 
 	unique_ptr<RowGroupCollection> collection;
 	RowGroupBatchType type;
+#ifdef DEBUG
+	//! The set of merged batch indexes if any (for verification purpose)
+	vector<idx_t> batch_indexes;
+#endif
 };
 
 class BatchInsertGlobalState : public GlobalSinkState {
@@ -113,42 +117,6 @@ public:
 	DuckTableEntry &table;
 	idx_t insert_count;
 	map<idx_t, RowGroupBatchEntry> collections;
-
-	void GetMergeCount(idx_t min_batch_index, idx_t &merge_count) {
-		idx_t extra_count = 0;
-		for (auto &entry : collections) {
-			if (entry.first >= min_batch_index) {
-				break;
-			}
-			if (entry.second.type == RowGroupBatchType::FLUSHED) {
-				// already flushed: cannot flush anything here
-				extra_count = 0;
-				continue;
-			}
-			extra_count += entry.second.collection->GetTotalRows();
-		}
-		merge_count += extra_count;
-	}
-	void GetMergeCollections(idx_t min_batch_index, vector<unique_ptr<RowGroupCollection>> &result, idx_t batch_index,
-	                         unique_ptr<RowGroupCollection> current_collection) {
-		while (!collections.empty()) {
-			auto minimum_entry = collections.begin();
-			if (minimum_entry->first >= min_batch_index) {
-				break;
-			}
-			if (current_collection && minimum_entry->first > batch_index) {
-				result.push_back(std::move(current_collection));
-			}
-			if (!minimum_entry->second.collection) {
-				throw InternalException("GetMergeCollections - empty entry in collection set");
-			}
-			result.push_back(std::move(minimum_entry->second.collection));
-			collections.erase(minimum_entry);
-		}
-		if (current_collection) {
-			result.push_back(std::move(current_collection));
-		}
-	}
 
 	void FindMergeCollections(idx_t min_batch_index, optional_idx &merged_batch_index,
 	                          vector<unique_ptr<RowGroupCollection>> &result) {
@@ -186,6 +154,9 @@ public:
 				if (index == merged_batch_index.GetIndex()) {
 					// this is the entry we are flushing - mark it as flushed
 					entry->second.type = RowGroupBatchType::FLUSHED;
+#ifdef DEBUG
+					entry->second.batch_indexes = batch_indexes;
+#endif
 				} else {
 					// erase any other entries
 					collections.erase(entry);
@@ -211,6 +182,15 @@ public:
 			                        "batch indexes are not uniquely distributed over threads",
 			                        batch_index);
 		}
+#ifdef DEBUG
+		for(auto &collection : collections) {
+			if (!collection.second.batch_indexes.empty()) {
+				if (batch_index >= collection.second.batch_indexes.front() && batch_index <= collection.second.batch_indexes.back()) {
+					throw InternalException("Batch index is in the middle of the set of batch indexes that have already been merged");
+				}
+			}
+		}
+#endif
 	}
 
 	void AddCollection(ClientContext &context, idx_t batch_index, idx_t min_batch_index,
@@ -320,7 +300,10 @@ void PhysicalBatchInsert::NextBatch(ExecutionContext &context, GlobalSinkState &
 
 	auto &table = gstate.table;
 	auto batch_index = lstate.partition_info.batch_index.GetIndex();
-	if (lstate.current_index != batch_index) {
+	if (lstate.current_collection) {
+		if (lstate.current_index == batch_index) {
+			throw InternalException("NextBatch called with the same batch index?");
+		}
 		// batch index has changed: move the old collection to the global state and create a new collection
 		TransactionData tdata(0, 0);
 		lstate.current_collection->FinalizeAppend(tdata, lstate.current_append_state);
