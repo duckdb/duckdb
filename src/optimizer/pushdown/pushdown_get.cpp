@@ -4,7 +4,6 @@
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 
@@ -14,7 +13,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 
 	if (get.table_filters.filters.empty()) {
 		// we already pushed filters into this GET
-		return op;
+		return FinishPushdown(std::move(op));
 	}
 
 	if (get.function.pushdown_complex_filter || get.function.filter_pushdown) {

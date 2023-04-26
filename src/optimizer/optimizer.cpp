@@ -105,17 +105,17 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 		plan = ic_rewriter.Rewrite(std::move(plan));
 	});
 
+	// removes any redundant DelimGets/DelimJoins
+	RunOptimizer(OptimizerType::DELIMINATOR, [&]() {
+		Deliminator deliminator(context);
+		plan = deliminator.Optimize(std::move(plan));
+	});
+
 	// then we perform the join ordering optimization
 	// this also rewrites cross products + filters into joins and performs filter pushdowns
 	RunOptimizer(OptimizerType::JOIN_ORDER, [&]() {
 		JoinOrderOptimizer optimizer(context);
 		plan = optimizer.Optimize(std::move(plan));
-	});
-
-	// removes any redundant DelimGets/DelimJoins
-	RunOptimizer(OptimizerType::DELIMINATOR, [&]() {
-		Deliminator deliminator(context);
-		plan = deliminator.Optimize(std::move(plan));
 	});
 
 	// rewrites UNNESTs in DelimJoins by moving them to the projection

@@ -47,10 +47,6 @@ unique_ptr<LogicalOperator> Deliminator::Optimize(unique_ptr<LogicalOperator> op
 				cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 			}
 			delim_join.type = LogicalOperatorType::LOGICAL_COMPARISON_JOIN;
-			// Sub-plans with DelimGets are not re-orderable (yet), however, we removed all DelimGet of this DelimJoin
-			// The DelimGets are on the RHS of the DelimJoin, so we can call the JoinOrderOptimizer on the RHS now
-			JoinOrderOptimizer optimizer(context);
-			delim_join.children[1] = optimizer.Optimize(std::move(delim_join.children[1]));
 		}
 	}
 
