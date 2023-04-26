@@ -116,8 +116,7 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		                                                   std::move(root.children), nullptr);
 		contains->children[1] = std::move(parameter);
 		return std::move(contains);
-	}
-	else if (pattern.Regexp()->op() != duckdb_re2::kRegexpConcat) {
+	} else if (pattern.Regexp()->op() != duckdb_re2::kRegexpConcat) {
 		return nullptr;
 	}
 	LikeString like_string;
