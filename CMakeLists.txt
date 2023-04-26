@@ -289,6 +289,7 @@ if(NOT CLANG_TIDY AND OS_NAME STREQUAL "linux")
   set(JEMALLOC_DEFAULT_BUILD TRUE)
 endif()
 
+option(BUILD_NATIVE_ARCH "Build for NATIVE architecture using all compiler optimizations." FALSE)
 option(BUILD_ICU_EXTENSION "Build the ICU extension." FALSE)
 option(BUILD_PARQUET_EXTENSION "Build the Parquet extension." FALSE)
 option(BUILD_TPCH_EXTENSION "Build the TPC-H extension." FALSE)
@@ -411,10 +412,21 @@ if(NOT MSVC)
   if(TREAT_WARNINGS_AS_ERRORS)
     set(CXX_EXTRA "${CXX_EXTRA} -Werror")
   endif()
-  set(CMAKE_CXX_FLAGS_DEBUG
-      "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -DDEBUG -Wall ${M32_FLAG} ${CXX_EXTRA}")
-  set(CMAKE_CXX_FLAGS_RELEASE
-      "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG ${M32_FLAG} ${CXX_EXTRA}")
+  
+  if(BUILD_NATIVE_ARCH AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    message(WARNING "Will optimize for this very architecture using -march-native.")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=native -frecord-gcc-switches")
+    set(CMAKE_CXX_FLAGS_DEBUG
+          "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -march=native -frecord-gcc-switches -DDEBUG -Wall ${M32_FLAG} ${CXX_EXTRA}")
+    set(CMAKE_CXX_FLAGS_RELEASE
+          "${CMAKE_CXX_FLAGS_RELEASE} -O3 -march=native -frecord-gcc-switches -DNDEBUG ${M32_FLAG} ${CXX_EXTRA}")
+  else()
+    set(CMAKE_CXX_FLAGS_DEBUG
+          "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -DDEBUG -Wall ${M32_FLAG} ${CXX_EXTRA}")
+    set(CMAKE_CXX_FLAGS_RELEASE
+          "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG ${M32_FLAG} ${CXX_EXTRA}")
+  endif()
+  
   set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -g")
 
   set(CXX_EXTRA_DEBUG
