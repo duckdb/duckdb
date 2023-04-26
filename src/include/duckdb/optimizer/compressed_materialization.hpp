@@ -126,10 +126,11 @@ private:
 	//! Finds compress/decompress projections and removes redundant compress/decompress expressions
 	void RemoveRedundantExpressions(unique_ptr<LogicalOperator> &op);
 	//! Finds a potentially redundant decompress projection corresponding to the given compress projection
-	LogicalOperator *FindDecompression(LogicalOperator &compression, vector<LogicalOperator *> &operators_in_between);
+	optional_ptr<LogicalOperator> FindDecompression(LogicalOperator &compression,
+	                                                vector<reference<LogicalOperator>> &operators_in_between);
 	//! Removes redundant compress/decompress expressions in projections
 	void RemoveRedundantExpressions(LogicalProjection &decompression, LogicalProjection &compression,
-	                                const vector<LogicalOperator *> &operators_in_between);
+	                                const vector<reference<LogicalOperator>> &operators_in_between);
 
 private:
 	ClientContext &context;

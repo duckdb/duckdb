@@ -24,6 +24,27 @@ public:
 	idx_t delim_get_count;
 };
 
+static bool IsEqualityJoinCondition(const JoinCondition &cond) {
+	switch (cond.comparison) {
+	case ExpressionType::COMPARE_EQUAL:
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool JoinHasInequality(LogicalComparisonJoin &comparison_join) {
+	bool has_inequality = false;
+	for (const auto &cond : comparison_join.conditions) {
+		if (!IsEqualityJoinCondition(cond)) {
+			has_inequality = true;
+			break;
+		}
+	}
+	return has_inequality;
+}
+
 unique_ptr<LogicalOperator> Deliminator::Optimize(unique_ptr<LogicalOperator> op) {
 	root = op;
 
@@ -34,17 +55,20 @@ unique_ptr<LogicalOperator> Deliminator::Optimize(unique_ptr<LogicalOperator> op
 		auto &delim_join = candidate.delim_join;
 
 		bool all_removed = true;
+		bool all_equality_conditions = true;
 		for (auto &join : candidate.joins) {
-			all_removed = RemoveJoinWithDelimGet(join) && all_removed;
+			all_removed =
+			    RemoveJoinWithDelimGet(delim_join, candidate.delim_get_count, join, all_equality_conditions) &&
+			    all_removed;
 		}
-
-		// TODO: special handling for inequality joins!
 
 		// Change type if there are no more duplicate-eliminated columns
 		if (candidate.joins.size() == candidate.delim_get_count && all_removed) {
 			delim_join.duplicate_eliminated_columns.clear();
-			for (auto &cond : delim_join.conditions) {
-				cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+			if (all_equality_conditions) {
+				for (auto &cond : delim_join.conditions) {
+					cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+				}
 			}
 			delim_join.type = LogicalOperatorType::LOGICAL_COMPARISON_JOIN;
 		}
@@ -108,29 +132,8 @@ static bool ChildJoinTypeCanBeDeliminated(JoinType &join_type) {
 	}
 }
 
-static bool IsEqualityJoinCondition(JoinCondition &cond) {
-	switch (cond.comparison) {
-	case ExpressionType::COMPARE_EQUAL:
-	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-		return true;
-	default:
-		return false;
-	}
-}
-
-static bool InequalityDelimJoinCanBeEliminated(JoinType &join_type) {
-	switch (join_type) {
-	case JoinType::ANTI:
-	case JoinType::MARK:
-	case JoinType::SEMI:
-	case JoinType::SINGLE:
-		return true;
-	default:
-		return false;
-	}
-}
-
-bool Deliminator::RemoveJoinWithDelimGet(unique_ptr<LogicalOperator> &join) {
+bool Deliminator::RemoveJoinWithDelimGet(LogicalDelimJoin &delim_join, const idx_t delim_get_count,
+                                         unique_ptr<LogicalOperator> &join, bool &all_equality_conditions) {
 	auto &comparison_join = join->Cast<LogicalComparisonJoin>();
 	if (!ChildJoinTypeCanBeDeliminated(comparison_join.join_type)) {
 		return false;
@@ -158,9 +161,7 @@ bool Deliminator::RemoveJoinWithDelimGet(unique_ptr<LogicalOperator> &join) {
 	ColumnBindingReplacer replacer;
 	auto &replacement_bindings = replacer.replacement_bindings;
 	for (auto &cond : comparison_join.conditions) {
-		if (!IsEqualityJoinCondition(cond)) {
-			return false;
-		}
+		all_equality_conditions = all_equality_conditions && IsEqualityJoinCondition(cond);
 		auto &delim_side = delim_idx == 0 ? *cond.left : *cond.right;
 		auto &other_side = delim_idx == 0 ? *cond.right : *cond.left;
 		if (delim_side.type != ExpressionType::BOUND_COLUMN_REF ||
@@ -179,6 +180,11 @@ bool Deliminator::RemoveJoinWithDelimGet(unique_ptr<LogicalOperator> &join) {
 		}
 	}
 
+	if (!all_equality_conditions &&
+	    !RemoveInequalityJoinWithDelimGet(delim_join, delim_get_count, join, replacement_bindings)) {
+		return false;
+	}
+
 	unique_ptr<LogicalOperator> replacement_op = std::move(comparison_join.children[1 - delim_idx]);
 	if (!filter_expressions.empty()) { // Create filter if necessary
 		auto new_filter = make_uniq<LogicalFilter>();
@@ -191,6 +197,137 @@ bool Deliminator::RemoveJoinWithDelimGet(unique_ptr<LogicalOperator> &join) {
 
 	// TODO: Maybe go from delim join instead to save work
 	replacer.VisitOperator(*root);
+	return true;
+}
+
+static bool InequalityDelimJoinCanBeEliminated(JoinType &join_type) {
+	switch (join_type) {
+	case JoinType::ANTI:
+	case JoinType::MARK:
+	case JoinType::SEMI:
+	case JoinType::SINGLE:
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool FindAndReplaceBindings(vector<ColumnBinding> &traced_bindings, const vector<unique_ptr<Expression>> &expressions,
+                            const vector<ColumnBinding> &current_bindings) {
+	for (auto &binding : traced_bindings) {
+		idx_t current_idx;
+		for (current_idx = 0; current_idx < expressions.size(); current_idx++) {
+			if (binding == current_bindings[current_idx]) {
+				break;
+			}
+		}
+
+		if (current_idx == expressions.size()) {
+			return false; // Didn't find
+		}
+		if (expressions[current_idx]->type != ExpressionType::BOUND_COLUMN_REF) {
+			return false; // Can't deal with non colref
+		}
+
+		auto &colref = expressions[current_idx]->Cast<BoundColumnRefExpression>();
+		binding = colref.binding;
+	}
+	return true;
+}
+
+bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalDelimJoin &delim_join, const idx_t delim_get_count,
+                                                   unique_ptr<LogicalOperator> &join,
+                                                   const vector<ReplacementBinding> &replacement_bindings) {
+	if (delim_get_count != 1) {
+		return false;
+	}
+
+	if (!InequalityDelimJoinCanBeEliminated(delim_join.join_type)) {
+		return false;
+	}
+
+	auto &comparison_join = join->Cast<LogicalComparisonJoin>();
+	auto &delim_conditions = delim_join.conditions;
+	const auto &join_conditions = comparison_join.conditions;
+	if (delim_conditions.size() != join_conditions.size()) {
+		return false; // Different number of conditions, can't replace
+	}
+
+	// TODO: we cannot perform the optimization here because our pure inequality joins don't implement
+	//  JoinType::SINGLE yet
+	if (delim_join.join_type == JoinType::SINGLE) {
+		bool has_one_equality = false;
+		for (auto &cond : join_conditions) {
+			has_one_equality = has_one_equality || IsEqualityJoinCondition(cond);
+		}
+		if (!has_one_equality) {
+			return false;
+		}
+	}
+
+	// We only support colref's
+	vector<ColumnBinding> traced_bindings;
+	for (const auto &cond : delim_conditions) {
+		if (cond.right->type != ExpressionType::BOUND_COLUMN_REF) {
+			return false;
+		}
+		auto &colref = cond.right->Cast<BoundColumnRefExpression>();
+		traced_bindings.emplace_back(colref.binding);
+	}
+
+	// Now we trace down the bindings to the join (for now, we only trace it through a few operators)
+	reference<LogicalOperator> current_op = *delim_join.children[1];
+	while (&current_op.get() != join.get()) {
+		if (current_op.get().children.size() != 1) {
+			return false;
+		}
+
+		const auto current_bindings = current_op.get().GetColumnBindings();
+		switch (current_op.get().type) {
+		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
+			auto &aggr = current_op.get().Cast<LogicalAggregate>();
+			if (!FindAndReplaceBindings(traced_bindings, aggr.groups, current_bindings)) {
+				return false;
+			}
+		}
+		case LogicalOperatorType::LOGICAL_PROJECTION: {
+			if (!FindAndReplaceBindings(traced_bindings, current_op.get().expressions, current_bindings)) {
+				return false;
+			}
+		}
+		case LogicalOperatorType::LOGICAL_LIMIT:
+		case LogicalOperatorType::LOGICAL_FILTER:
+			break; // These don't change bindings
+		default:
+			return false;
+		}
+
+		current_op = *current_op.get().children[0];
+	}
+
+	// Get the index (left or right) of the DelimGet side of the join
+	const idx_t delim_idx = OperatorIsDelimGet(*join->children[0]) ? 0 : 1;
+
+	for (idx_t cond_idx = 0; cond_idx < delim_conditions.size(); cond_idx++) {
+		auto &delim_condition = delim_conditions[cond_idx];
+		const auto &traced_binding = traced_bindings[cond_idx];
+
+		bool found = false;
+		for (auto &join_condition : join_conditions) {
+			auto &delim_side = delim_idx == 0 ? *join_condition.left : *join_condition.right;
+			auto &colref = delim_side.Cast<BoundColumnRefExpression>();
+			if (colref.binding == traced_binding) {
+				delim_condition.comparison = FlipComparisonExpression(join_condition.comparison);
+				found = true;
+				break;
+			}
+		}
+
+		if (!found) {
+			return false;
+		}
+	}
+
 	return true;
 }
 

@@ -21,20 +21,23 @@ struct DelimCandidate;
 //! The Deliminator optimizer traverses the logical operator tree and removes any redundant DelimGets/DelimJoins
 class Deliminator {
 public:
-	explicit Deliminator(ClientContext &context) : context(context) {
+	Deliminator() {
 	}
 	//! Perform DelimJoin elimination
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
 
 private:
-	//! Find Joins with a DelimGet that can be removed
+	//! Finds DelimJoins and their corresponding DelimGets
 	void FindCandidates(unique_ptr<LogicalOperator> &op, vector<DelimCandidate> &candidates);
 	void FindJoinWithDelimGet(unique_ptr<LogicalOperator> &op, DelimCandidate &candidate);
-
-	bool RemoveJoinWithDelimGet(unique_ptr<LogicalOperator> &join);
+	//! Remove joins with a DelimGet
+	bool RemoveJoinWithDelimGet(LogicalDelimJoin &delim_join, const idx_t delim_get_count,
+	                            unique_ptr<LogicalOperator> &join, bool &all_equality_conditions);
+	bool RemoveInequalityJoinWithDelimGet(LogicalDelimJoin &delim_join, const idx_t delim_get_count,
+	                                      unique_ptr<LogicalOperator> &join,
+	                                      const vector<ReplacementBinding> &replacement_bindings);
 
 private:
-	ClientContext &context;
 	optional_ptr<LogicalOperator> root;
 };
 

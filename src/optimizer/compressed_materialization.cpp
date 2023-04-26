@@ -82,6 +82,13 @@ unique_ptr<LogicalOperator> CompressedMaterialization::Compress(unique_ptr<Logic
 }
 
 void CompressedMaterialization::Compress(unique_ptr<LogicalOperator> &op) {
+	// Let's not mess with the TopN optimizer
+	if (op->type == LogicalOperatorType::LOGICAL_LIMIT &&
+	    op->children[0]->type == LogicalOperatorType::LOGICAL_ORDER_BY) {
+		Compress(op->children[0]->children[0]);
+		return;
+	}
+
 	for (auto &child : op->children) {
 		Compress(child);
 	}
@@ -482,7 +489,7 @@ void CompressedMaterialization::RemoveRedundantExpressions(unique_ptr<LogicalOpe
 		return; // Nope
 	}
 
-	vector<LogicalOperator *> operators_in_between;
+	vector<reference<LogicalOperator>> operators_in_between;
 	auto decompression_ptr = FindDecompression(*op, operators_in_between);
 	if (!decompression_ptr) {
 		return;
@@ -495,23 +502,23 @@ void CompressedMaterialization::RemoveRedundantExpressions(unique_ptr<LogicalOpe
 	// NOTE: we don't have to update statistics_map here because this is the last step of this optimizer
 }
 
-LogicalOperator *CompressedMaterialization::FindDecompression(LogicalOperator &compression,
-                                                              vector<LogicalOperator *> &operators_in_between) {
-	auto decompression_ptr = compression.children[0].get();
+optional_ptr<LogicalOperator>
+CompressedMaterialization::FindDecompression(LogicalOperator &compression,
+                                             vector<reference<LogicalOperator>> &operators_in_between) {
+	reference<LogicalOperator> current_op = *compression.children[0];
 	while (true) {
-		const auto &current_child = *decompression_ptr;
-		if (current_child.type == LogicalOperatorType::LOGICAL_PROJECTION) {
-			const auto &projection = current_child.Cast<LogicalProjection>();
+		if (current_op.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
+			const auto &projection = current_op.get().Cast<LogicalProjection>();
 			if (decompression_table_indices.find(projection.table_index) != decompression_table_indices.end()) {
 				std::reverse(operators_in_between.begin(), operators_in_between.end()); // Reverse so it's bottom-up
-				return decompression_ptr;
+				return &current_op.get();
 			}
-		} else if (current_child.children.size() != 1) {
+		} else if (current_op.get().children.size() != 1) {
 			return nullptr; // Cannot find corresponding decompression
 		}
-		D_ASSERT(current_child.children.size() == 1);
-		operators_in_between.emplace_back(decompression_ptr);
-		decompression_ptr = current_child.children[0].get();
+		D_ASSERT(current_op.get().children.size() == 1);
+		operators_in_between.emplace_back(current_op);
+		current_op = *current_op.get().children[0];
 	}
 }
 
@@ -527,9 +534,10 @@ bool UsesBinding(const Expression &expression, const ColumnBinding &binding) {
 	}
 }
 
-void CompressedMaterialization::RemoveRedundantExpressions(LogicalProjection &decompression,
-                                                           LogicalProjection &compression,
-                                                           const vector<LogicalOperator *> &operators_in_between) {
+void CompressedMaterialization::RemoveRedundantExpressions(
+    LogicalProjection &decompression, LogicalProjection &compression,
+    const vector<reference<LogicalOperator>> &operators_in_between) {
+
 	auto &decompress_exprs = decompression.expressions;
 	auto &compress_exprs = compression.expressions;
 	const auto decompress_bindings = decompression.GetColumnBindings();
@@ -545,10 +553,10 @@ void CompressedMaterialization::RemoveRedundantExpressions(LogicalProjection &de
 		auto current_binding = decompress_bindings[current_col_idx];
 		vector<Expression *> expressions_in_between;
 		for (auto current_op : operators_in_between) {
-			const auto current_bindings = current_op->GetColumnBindings();
-			switch (current_op->type) {
+			const auto current_bindings = current_op.get().GetColumnBindings();
+			switch (current_op.get().type) {
 			case LogicalOperatorType::LOGICAL_PROJECTION: {
-				for (const auto &expr : current_op->expressions) {
+				for (const auto &expr : current_op.get().expressions) {
 					if (expr->type != ExpressionType::BOUND_COLUMN_REF && UsesBinding(*expr, current_binding)) {
 						can_remove_current = false;
 						break;
@@ -556,8 +564,8 @@ void CompressedMaterialization::RemoveRedundantExpressions(LogicalProjection &de
 				}
 				bool found = false;
 				const auto current_binding_temp = current_binding;
-				for (idx_t expr_idx = 0; expr_idx < current_op->expressions.size(); expr_idx++) {
-					const auto &expr = current_op->expressions[expr_idx];
+				for (idx_t expr_idx = 0; expr_idx < current_op.get().expressions.size(); expr_idx++) {
+					const auto &expr = current_op.get().expressions[expr_idx];
 					if (expr->type != ExpressionType::BOUND_COLUMN_REF) {
 						continue;
 					}
@@ -579,7 +587,7 @@ void CompressedMaterialization::RemoveRedundantExpressions(LogicalProjection &de
 				break;
 			}
 			case LogicalOperatorType::LOGICAL_FILTER: {
-				for (auto &expr : current_op->expressions) {
+				for (auto &expr : current_op.get().expressions) {
 					if (UsesBinding(*expr, current_binding)) {
 						can_remove_current = false;
 						break;
