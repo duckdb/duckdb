@@ -6,6 +6,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/common/hive_partitioning.hpp"
+#include "duckdb/common/types.hpp"
 
 namespace duckdb {
 
@@ -13,6 +14,7 @@ void MultiFileReader::AddParameters(TableFunction &table_function) {
 	table_function.named_parameters["filename"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["hive_types"] = LogicalType::ANY;
 }
 
 vector<string> MultiFileReader::GetFileList(ClientContext &context, const Value &input, const string &name,
@@ -54,6 +56,21 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 		options.hive_partitioning = BooleanValue::Get(val);
 	} else if (loption == "union_by_name") {
 		options.union_by_name = BooleanValue::Get(val);
+	} else if (loption == "hive_types") {
+		if (val.type().id() != LogicalTypeId::STRUCT) {
+			throw InvalidInputException("'hive_types' only accepts a STRUCT(name : VARCHAR, ...), not %s", val.type().ToString());
+		}
+		// verify that they all the children of the struct value are VARCHAR
+		auto children = StructValue::GetChildren(val);
+		for (auto& child : children) {
+			if (child.type().id() != LogicalType::VARCHAR) {
+				throw InvalidInputException("one of the children... uhhh... is not a VARCHAR: %s", child.type().ToString());
+			}
+			// for every child of the struct, perform TransformStringToLogicalType to get the logical type
+			auto actual_type = TransformStringToLogicalType(child.type().ToString());
+
+		}
+		// options.hive_types = StructValue::GetChildren(val);	//case insensitive map?
 	} else {
 		return false;
 	}
