@@ -1,76 +1,76 @@
 w_substr|sm_type|web_name|30 days|31-60 days|61-90 days|91-120 days|>120 days
-Conventional childr|EXPRESS|site_0|300|279|329|296|0
+NULL|EXPRESS|site_0|266|293|315|321|0
+NULL|EXPRESS|site_1|298|312|304|308|0
+NULL|EXPRESS|site_2|301|304|316|313|0
+NULL|EXPRESS|site_3|288|261|243|251|0
+NULL|EXPRESS|site_4|230|277|291|272|0
+NULL|LIBRARY|site_0|192|177|175|181|0
+NULL|LIBRARY|site_1|222|212|214|219|0
+NULL|LIBRARY|site_2|260|230|238|235|0
+NULL|LIBRARY|site_3|217|248|247|269|0
+NULL|LIBRARY|site_4|205|211|221|188|0
+NULL|NEXT DAY|site_0|283|303|332|331|0
+NULL|NEXT DAY|site_1|286|304|287|321|0
+NULL|NEXT DAY|site_2|293|262|250|263|0
+NULL|NEXT DAY|site_3|255|276|244|269|0
+NULL|NEXT DAY|site_4|299|294|256|304|0
+NULL|OVERNIGHT|site_0|230|238|212|236|0
+NULL|OVERNIGHT|site_1|217|232|222|192|0
+NULL|OVERNIGHT|site_2|174|169|169|177|0
+NULL|OVERNIGHT|site_3|202|179|202|213|0
+NULL|OVERNIGHT|site_4|247|216|277|236|0
+NULL|REGULAR|site_0|198|213|217|208|0
+NULL|REGULAR|site_1|253|241|238|243|0
+NULL|REGULAR|site_2|241|238|223|230|0
+NULL|REGULAR|site_3|196|203|238|197|0
+NULL|REGULAR|site_4|194|173|168|183|0
+NULL|TWO DAY|site_0|204|231|209|222|0
+NULL|TWO DAY|site_1|191|193|188|167|0
+NULL|TWO DAY|site_2|188|243|217|205|0
+NULL|TWO DAY|site_3|249|254|204|248|0
+NULL|TWO DAY|site_4|230|245|263|242|0
+Conventional childr|EXPRESS|site_0|300|279|328|296|0
 Conventional childr|EXPRESS|site_1|249|289|248|264|0
 Conventional childr|EXPRESS|site_2|262|286|262|270|0
 Conventional childr|EXPRESS|site_3|319|283|279|302|0
-Conventional childr|EXPRESS|site_4|314|285|267|319|0
+Conventional childr|EXPRESS|site_4|314|285|267|318|0
 Conventional childr|LIBRARY|site_0|250|212|247|230|0
 Conventional childr|LIBRARY|site_1|224|238|237|232|0
 Conventional childr|LIBRARY|site_2|218|210|228|193|0
 Conventional childr|LIBRARY|site_3|166|189|176|196|0
-Conventional childr|LIBRARY|site_4|221|220|217|197|0
+Conventional childr|LIBRARY|site_4|221|220|217|196|0
 Conventional childr|NEXT DAY|site_0|252|233|266|258|0
-Conventional childr|NEXT DAY|site_1|262|263|252|272|0
+Conventional childr|NEXT DAY|site_1|262|262|252|272|0
 Conventional childr|NEXT DAY|site_2|308|259|320|285|0
 Conventional childr|NEXT DAY|site_3|256|304|284|330|0
-Conventional childr|NEXT DAY|site_4|271|309|280|298|0
-Conventional childr|OVERNIGHT|site_0|159|176|161|196|0
-Conventional childr|OVERNIGHT|site_1|216|192|252|182|0
-Conventional childr|OVERNIGHT|site_2|243|237|234|216|0
-Conventional childr|OVERNIGHT|site_3|236|252|209|238|0
-Conventional childr|OVERNIGHT|site_4|199|185|226|196|0
+Conventional childr|NEXT DAY|site_4|271|307|279|298|0
+Conventional childr|OVERNIGHT|site_0|159|176|160|196|0
+Conventional childr|OVERNIGHT|site_1|215|192|252|182|0
+Conventional childr|OVERNIGHT|site_2|243|235|233|216|0
+Conventional childr|OVERNIGHT|site_3|236|251|209|238|0
+Conventional childr|OVERNIGHT|site_4|198|185|226|196|0
 Conventional childr|REGULAR|site_0|268|257|255|220|0
 Conventional childr|REGULAR|site_1|216|203|195|221|0
 Conventional childr|REGULAR|site_2|178|187|156|184|0
 Conventional childr|REGULAR|site_3|211|198|196|218|0
 Conventional childr|REGULAR|site_4|236|226|229|252|0
-Conventional childr|TWO DAY|site_0|220|200|239|215|0
+Conventional childr|TWO DAY|site_0|219|200|239|215|0
 Conventional childr|TWO DAY|site_1|248|226|210|232|0
 Conventional childr|TWO DAY|site_2|245|219|256|245|0
-Conventional childr|TWO DAY|site_3|214|167|208|207|0
+Conventional childr|TWO DAY|site_3|214|167|207|207|0
 Conventional childr|TWO DAY|site_4|168|179|192|206|0
-Detailed, literary t|EXPRESS|site_0|266|293|315|321|0
-Detailed, literary t|EXPRESS|site_1|299|312|304|308|0
-Detailed, literary t|EXPRESS|site_2|301|304|316|313|0
-Detailed, literary t|EXPRESS|site_3|288|261|243|251|0
-Detailed, literary t|EXPRESS|site_4|231|277|291|272|0
-Detailed, literary t|LIBRARY|site_0|192|178|175|181|0
-Detailed, literary t|LIBRARY|site_1|222|212|214|219|0
-Detailed, literary t|LIBRARY|site_2|260|230|238|235|0
-Detailed, literary t|LIBRARY|site_3|217|248|247|270|0
-Detailed, literary t|LIBRARY|site_4|205|211|221|188|0
-Detailed, literary t|NEXT DAY|site_0|283|303|332|331|0
-Detailed, literary t|NEXT DAY|site_1|286|304|288|321|0
-Detailed, literary t|NEXT DAY|site_2|293|262|250|263|0
-Detailed, literary t|NEXT DAY|site_3|255|276|244|269|0
-Detailed, literary t|NEXT DAY|site_4|299|294|256|304|0
-Detailed, literary t|OVERNIGHT|site_0|230|238|212|236|0
-Detailed, literary t|OVERNIGHT|site_1|217|232|222|192|0
-Detailed, literary t|OVERNIGHT|site_2|174|170|169|177|0
-Detailed, literary t|OVERNIGHT|site_3|202|179|202|213|0
-Detailed, literary t|OVERNIGHT|site_4|248|216|277|237|0
-Detailed, literary t|REGULAR|site_0|198|213|217|208|0
-Detailed, literary t|REGULAR|site_1|254|241|238|243|0
-Detailed, literary t|REGULAR|site_2|241|238|223|231|0
-Detailed, literary t|REGULAR|site_3|196|203|238|197|0
-Detailed, literary t|REGULAR|site_4|194|173|168|183|0
-Detailed, literary t|TWO DAY|site_0|204|232|209|222|0
-Detailed, literary t|TWO DAY|site_1|191|193|188|167|0
-Detailed, literary t|TWO DAY|site_2|188|243|217|205|0
-Detailed, literary t|TWO DAY|site_3|249|254|205|248|0
-Detailed, literary t|TWO DAY|site_4|230|245|264|242|0
 Of course ot|EXPRESS|site_0|263|273|271|288|0
-Of course ot|EXPRESS|site_1|321|312|308|283|0
-Of course ot|EXPRESS|site_2|259|296|268|302|0
-Of course ot|EXPRESS|site_3|309|284|316|297|0
-Of course ot|EXPRESS|site_4|271|237|288|276|0
+Of course ot|EXPRESS|site_1|320|312|308|283|0
+Of course ot|EXPRESS|site_2|259|296|268|301|0
+Of course ot|EXPRESS|site_3|308|284|316|296|0
+Of course ot|EXPRESS|site_4|270|236|288|276|0
 Of course ot|LIBRARY|site_0|197|212|207|210|0
 Of course ot|LIBRARY|site_1|168|168|177|183|0
 Of course ot|LIBRARY|site_2|222|182|208|197|0
 Of course ot|LIBRARY|site_3|239|226|225|220|0
 Of course ot|LIBRARY|site_4|220|230|266|235|0
 Of course ot|NEXT DAY|site_0|286|273|301|300|0
-Of course ot|NEXT DAY|site_1|282|301|293|283|0
+Of course ot|NEXT DAY|site_1|282|301|292|283|0
 Of course ot|NEXT DAY|site_2|321|287|295|315|0
 Of course ot|NEXT DAY|site_3|252|272|254|294|0
 Of course ot|NEXT DAY|site_4|276|259|286|263|0
@@ -78,23 +78,23 @@ Of course ot|OVERNIGHT|site_0|232|255|269|216|0
 Of course ot|OVERNIGHT|site_1|246|228|226|243|0
 Of course ot|OVERNIGHT|site_2|218|196|225|192|0
 Of course ot|OVERNIGHT|site_3|186|168|163|194|0
-Of course ot|OVERNIGHT|site_4|186|211|201|200|0
-Of course ot|REGULAR|site_0|178|175|188|191|0
+Of course ot|OVERNIGHT|site_4|186|211|200|200|0
+Of course ot|REGULAR|site_0|178|175|188|190|0
 Of course ot|REGULAR|site_1|192|202|238|209|0
-Of course ot|REGULAR|site_2|250|272|218|239|0
+Of course ot|REGULAR|site_2|250|271|217|239|0
 Of course ot|REGULAR|site_3|229|216|226|265|0
-Of course ot|REGULAR|site_4|227|203|218|186|0
+Of course ot|REGULAR|site_4|226|203|218|186|0
 Of course ot|TWO DAY|site_0|215|233|263|238|0
-Of course ot|TWO DAY|site_1|207|212|199|210|0
+Of course ot|TWO DAY|site_1|207|212|198|210|0
 Of course ot|TWO DAY|site_2|165|206|165|163|0
 Of course ot|TWO DAY|site_3|214|204|206|207|0
-Of course ot|TWO DAY|site_4|223|216|224|250|0
+Of course ot|TWO DAY|site_4|223|216|223|249|0
 Social, royal laws m|EXPRESS|site_0|295|304|298|304|0
 Social, royal laws m|EXPRESS|site_1|308|301|312|290|0
-Social, royal laws m|EXPRESS|site_2|280|272|271|269|0
+Social, royal laws m|EXPRESS|site_2|280|272|270|269|0
 Social, royal laws m|EXPRESS|site_3|265|239|261|281|0
 Social, royal laws m|EXPRESS|site_4|283|306|308|267|0
-Social, royal laws m|LIBRARY|site_0|220|202|231|197|0
+Social, royal laws m|LIBRARY|site_0|220|202|229|197|0
 Social, royal laws m|LIBRARY|site_1|224|256|221|247|0
 Social, royal laws m|LIBRARY|site_2|249|244|252|218|0
 Social, royal laws m|LIBRARY|site_3|204|221|206|228|0
