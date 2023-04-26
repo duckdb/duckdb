@@ -148,7 +148,7 @@ public:
 			// not flushed - add to set of indexes to flush
 			total_count += entry.total_rows;
 		}
-		if (total_count >= LocalStorage::MERGE_THRESHOLD) {
+		if (total_count >= LocalStorage::MERGE_THRESHOLD * 5) {
 			merge = true;
 		}
 		if (merge && total_count > 0) {
