@@ -279,7 +279,8 @@ idx_t Pipeline::RegisterNewBatchIndex() {
 idx_t Pipeline::UpdateBatchIndex(idx_t old_index, idx_t new_index) {
 	lock_guard<mutex> l(batch_lock);
 	if (new_index < *batch_indexes.begin()) {
-		throw InternalException("Processing batch index %llu, but previous min batch index was %llu", new_index, *batch_indexes.begin());
+		throw InternalException("Processing batch index %llu, but previous min batch index was %llu", new_index,
+		                        *batch_indexes.begin());
 	}
 	auto entry = batch_indexes.find(old_index);
 	if (entry == batch_indexes.end()) {
