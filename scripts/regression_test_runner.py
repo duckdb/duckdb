@@ -77,11 +77,11 @@ def run_benchmark(runner, benchmark):
                 header = False
             else:
                 timings.append(row[2])
+        return float(statistics.median(timings))
     except:
         print("Failed to run benchmark " + benchmark)
         print(err)
         return 'Failed to run benchmark ' + benchmark
-    return float(statistics.median(timings))
 
 def run_benchmarks(runner, benchmark_list):
     results = {}
