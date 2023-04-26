@@ -330,9 +330,11 @@ void PipelineExecutor::FetchFromSource(DataChunk &result) {
 				    "Pipeline batch index - gotten lower batch index %llu (down from previous batch index of %llu)",
 				    next_batch_index, partition_info.batch_index.GetIndex());
 			}
-			partition_info.min_batch_index =
-			    pipeline.UpdateBatchIndex(partition_info.batch_index.GetIndex(), next_batch_index);
+			auto current_batch = partition_info.batch_index.GetIndex();
 			partition_info.batch_index = next_batch_index;
+			// call NextBatch before updating min_batch_index to provide the opportunity to flush the previous batch
+			pipeline.sink->NextBatch(context, *pipeline.sink->sink_state, *local_sink_state);
+			partition_info.min_batch_index = pipeline.UpdateBatchIndex(current_batch, next_batch_index);
 		}
 	}
 	EndOperator(*pipeline.source, &result);

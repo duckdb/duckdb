@@ -157,8 +157,8 @@ public:
 		idx_t total_count = 0;
 		for (auto &entry : collections) {
 			if (entry.first >= min_batch_index) {
-				// we have an entry AFTER the min_batch_index
-				merge = true;
+				// this entry is AFTER the min_batch_index
+				// we might still find new entries!
 				break;
 			}
 			if (entry.second.type == RowGroupBatchType::FLUSHED) {
@@ -183,7 +183,13 @@ public:
 				auto entry = collections.find(index);
 				D_ASSERT(entry->second.collection);
 				result.push_back(std::move(entry->second.collection));
-				collections.erase(entry);
+				if (index == merged_batch_index.GetIndex()) {
+					// this is the entry we are flushing - mark it as flushed
+					entry->second.type = RowGroupBatchType::FLUSHED;
+				} else {
+					// erase any other entries
+					collections.erase(entry);
+				}
 			}
 		}
 	}
@@ -211,6 +217,9 @@ public:
 	                   unique_ptr<RowGroupCollection> current_collection,
 	                   optional_ptr<OptimisticDataWriter> writer = nullptr,
 	                   optional_ptr<bool> written_to_disk = nullptr) {
+		if (batch_index < min_batch_index) {
+			throw InternalException("Batch index of the added collection (%llu) is smaller than the min batch index (%llu)", batch_index, min_batch_index);
+		}
 		optional_idx merged_batch_index;
 		vector<unique_ptr<RowGroupCollection>> merge_collections;
 		{
@@ -237,10 +246,11 @@ public:
 			// add the merged-together collection to the set of batch indexes
 			{
 				lock_guard<mutex> l(lock);
-				VerifyUniqueBatch(merged_batch_index.GetIndex());
-				collections.insert(
-				    make_pair(merged_batch_index.GetIndex(),
-				              RowGroupBatchEntry(std::move(final_collection), RowGroupBatchType::FLUSHED)));
+				auto entry = collections.find(merged_batch_index.GetIndex());
+				if (entry == collections.end()) {
+					throw InternalException("Merged batch index was no longer present in collection");
+				}
+				entry->second.collection = std::move(final_collection);
 			}
 		}
 	}
@@ -304,6 +314,24 @@ unique_ptr<LocalSinkState> PhysicalBatchInsert::GetLocalSinkState(ExecutionConte
 	return make_uniq<BatchInsertLocalState>(context.client, insert_types, bound_defaults);
 }
 
+void PhysicalBatchInsert::NextBatch(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p) const {
+	auto &gstate = state.Cast<BatchInsertGlobalState>();
+	auto &lstate = lstate_p.Cast<BatchInsertLocalState>();
+
+	auto &table = gstate.table;
+	auto batch_index = lstate.partition_info.batch_index.GetIndex();
+	if (lstate.current_index != batch_index) {
+		// batch index has changed: move the old collection to the global state and create a new collection
+		TransactionData tdata(0, 0);
+		lstate.current_collection->FinalizeAppend(tdata, lstate.current_append_state);
+		lstate.FlushToDisk();
+		gstate.AddCollection(context.client, lstate.current_index, lstate.partition_info.min_batch_index.GetIndex(),
+		                     std::move(lstate.current_collection), lstate.writer, &lstate.written_to_disk);
+		lstate.CreateNewCollection(table, insert_types);
+	}
+	lstate.current_index = batch_index;
+}
+
 SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
                                          DataChunk &chunk) const {
 	auto &gstate = state.Cast<BatchInsertGlobalState>();
@@ -319,13 +347,7 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkSt
 		lstate.CreateNewCollection(table, insert_types);
 		lstate.writer = &table.GetStorage().CreateOptimisticWriter(context.client);
 	} else if (lstate.current_index != batch_index) {
-		// batch index has changed: move the old collection to the global state and create a new collection
-		TransactionData tdata(0, 0);
-		lstate.current_collection->FinalizeAppend(tdata, lstate.current_append_state);
-		lstate.FlushToDisk();
-		gstate.AddCollection(context.client, lstate.current_index, lstate.partition_info.min_batch_index.GetIndex(),
-		                     std::move(lstate.current_collection), lstate.writer, &lstate.written_to_disk);
-		lstate.CreateNewCollection(table, insert_types);
+		throw InternalException("Current batch differs from batch - but NextBatch was not called!?");
 	}
 	lstate.current_index = batch_index;
 

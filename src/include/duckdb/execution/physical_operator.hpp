@@ -144,6 +144,9 @@ public:
 	//! If Finalize returns SinkResultType::FINISHED, the sink is marked as finished
 	virtual SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                                  GlobalSinkState &gstate) const;
+	//! For sinks with RequiresBatchIndex set to true, when a new batch starts being processed this method is called
+	//! This allows flushing of the current batch (e.g. to disk)
+	virtual void NextBatch(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p) const;
 
 	virtual unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const;
 	virtual unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const;
