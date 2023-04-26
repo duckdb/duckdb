@@ -292,16 +292,20 @@ static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vecto
 		} else {
 			pk_names = unique.columns;
 		}
-		if (pk_names.size() != fk.fk_columns.size()) {
-			// the number of referencing and referenced columns for foreign keys must be the same
-			continue;
-		}
 		if (find_primary_key) {
 			// found matching primary key
+			if (pk_names.size() != fk.fk_columns.size()) {
+				auto pk_name_str = StringUtil::Join(pk_names, ",");
+				auto fk_name_str = StringUtil::Join(fk.fk_columns, ",");
+				throw BinderException(
+				    "Failed to create foreign key: number of referencing (%s) and referenced columns (%s) differ",
+				    fk_name_str, pk_name_str);
+			}
 			fk.pk_columns = pk_names;
 			return;
 		}
-		if (fk.pk_columns.size() != pk_names.size()) {
+		if (pk_names.size() != fk.fk_columns.size()) {
+			// the number of referencing and referenced columns for foreign keys must be the same
 			continue;
 		}
 		bool equals = true;

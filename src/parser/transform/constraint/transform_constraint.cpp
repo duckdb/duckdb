@@ -108,7 +108,7 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 				pk_columns.emplace_back(reinterpret_cast<duckdb_libpgquery::PGValue *>(kc->data.ptr_value)->val.str);
 			}
 		}
-		if (pk_columns.size() != fk_columns.size()) {
+		if (!pk_columns.empty() && pk_columns.size() != fk_columns.size()) {
 			throw ParserException("The number of referencing and referenced columns for foreign keys must be the same");
 		}
 		return make_uniq<ForeignKeyConstraint>(pk_columns, fk_columns, std::move(fk_info));
