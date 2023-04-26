@@ -1,5 +1,6 @@
 package org.duckdb.test;
 
+import java.io.File;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -3230,6 +3231,36 @@ public class TestDuckDBJDBC {
 				assertEquals(rs.getObject(1), "{'hello': foo, 'world': bar}");
 			}
 		}
+	}
+	
+	public static void test_home_dir_resolution() throws Exception {
+		try (
+				Connection conn = DriverManager.getConnection("jdbc:duckdb:~/myduckdb");
+				Statement stmt = conn.createStatement();
+		) {
+			stmt.execute("CREATE TABLE test (id VARCHAR(40));");
+			stmt.execute("INSERT INTO test VALUES ('test');");
+		}
+		
+		File file = new File(DuckDBConnection.getHomeFolder(),"myduckdb");
+		file.deleteOnExit();
+		
+		assertTrue(file.exists() && file.canRead());
+	}
+	
+	public static void test_tmpdir_resolution() throws Exception {
+		try (
+				Connection conn = DriverManager.getConnection("jdbc:duckdb:${java.io.tmpdir}/myduckdb");
+				Statement stmt = conn.createStatement();
+		) {
+			stmt.execute("CREATE TABLE test (id VARCHAR(40));");
+			stmt.execute("INSERT INTO test VALUES ('test');");
+		}
+		
+		File file = new File(DuckDBConnection.getTempFolder(),"myduckdb");
+		file.deleteOnExit();
+		
+		assertTrue(file.exists() && file.canRead());
 	}
 
 	public static void main(String[] args) throws Exception {

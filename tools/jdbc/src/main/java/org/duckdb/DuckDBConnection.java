@@ -1,6 +1,8 @@
 package org.duckdb;
 
+import java.io.File;
 import java.lang.reflect.InvocationTargetException;
+import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.sql.Array;
@@ -23,8 +25,10 @@ import java.sql.Struct;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Executor;
+import java.util.regex.Matcher;
 
 public final class DuckDBConnection implements java.sql.Connection {
+    private static final String URL_SCHEME = "jdbc:duckdb:";
 
 	/** Name of the DuckDB default schema. */
 	public static final String DEFAULT_SCHEMA = "main";
@@ -34,12 +38,46 @@ public final class DuckDBConnection implements java.sql.Connection {
 	boolean transactionRunning;
 	final String url;
 	private final boolean readOnly;
+	
+	/** @return the actual $HOME folder of the user */
+    public static File getHomeFolder() {
+      return new File(System.getProperty("user.home"));
+    }
+    
+    /** @return the actual $TMPDIR folder */
+    public static File getTempFolder() {
+      return new File(System.getProperty("java.io.tmpdir"));
+    }
+
+    /**
+     * @param uriStr the String representation of an URI containing "~" or "${user.home}" 
+     *               or "$TMPDIR" or "${java.io.tmpdir}"
+     * @return the expanded URI, resolving "~" and "${user.home}" to the actual $HOME folder 
+     *               and "$TMPDIR" or "${java.io.tmpdir}" to the actual $TMPDIR
+     */
+    public static String resolveHomeUriStr(String uriStr) {
+      String homePathStr = getHomeFolder().getAbsolutePath();
+
+      String expandedURIStr = uriStr.replaceFirst("~", Matcher.quoteReplacement(homePathStr));
+      expandedURIStr =
+        expandedURIStr.replaceFirst("\\$\\{user.home\\}", Matcher.quoteReplacement(homePathStr));
+        
+      String tempPathStr = getTempFolder().getAbsolutePath();
+      expandedURIStr =
+        expandedURIStr.replaceFirst("\\$TMPDIR", Matcher.quoteReplacement(tempPathStr));
+      expandedURIStr =
+        expandedURIStr.replaceFirst("\\$\\{java.io.tmpdir\\}", Matcher.quoteReplacement(tempPathStr));
+
+      return expandedURIStr;
+    }
 
 	public static DuckDBConnection newConnection(String url, boolean readOnly, Properties properties) throws SQLException {
-		if (!url.startsWith("jdbc:duckdb")) {
-			throw new SQLException("DuckDB JDBC URL needs to start with 'jdbc:duckdb:'");
+		if (!url.toLowerCase().startsWith(URL_SCHEME)) {
+			throw new SQLException("DuckDB JDBC URL needs to start with '" + URL_SCHEME + "'");
 		}
-		String db_dir = url.substring("jdbc:duckdb:".length()).trim();
+		
+		String db_dir = url.substring(URL_SCHEME.length()).trim();
+        db_dir = resolveHomeUriStr(db_dir);
 		if (db_dir.length() == 0) {
 			db_dir = ":memory:";
 		}
