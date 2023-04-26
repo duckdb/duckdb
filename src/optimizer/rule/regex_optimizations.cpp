@@ -103,12 +103,6 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		return nullptr; // this should fail somewhere else
 	}
 
-	// if regexp had options, remove them so they don't end up in the like or contains operator
-	if (root.children.size() == 3) {
-		root.children.pop_back();
-		D_ASSERT(root.children.size() == 2);
-	}
-
 	if (pattern.Regexp()->op() == duckdb_re2::kRegexpLiteralString ||
 	    pattern.Regexp()->op() == duckdb_re2::kRegexpLiteral) {
 		string min;
@@ -136,6 +130,13 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 	if (!like_string.exists) {
 		return nullptr;
 	}
+
+	// if regexp had options, remove them the new Like Expression can be matched with.
+	if (root.children.size() == 3) {
+		root.children.pop_back();
+		D_ASSERT(root.children.size() == 2);
+	}
+
 	auto like_expression =
 	    make_uniq<BoundFunctionExpression>(root.return_type, LikeFun::GetFunction(), std::move(root.children), nullptr);
 	auto parameter = make_uniq<BoundConstantExpression>(Value(std::move(like_string.like_string)));
