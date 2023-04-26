@@ -1,4 +1,4 @@
-# name: test/sql/update/test_unaligned_update.test
+# name: test/sql/update/test_unaligned_update.test_slow
 # description: Unaligned updates
 # group: [update]
 

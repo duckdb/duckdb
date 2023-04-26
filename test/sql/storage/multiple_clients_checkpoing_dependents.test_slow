@@ -1,4 +1,4 @@
-# name: test/sql/storage/multiple_clients_checkpoing_dependents.test
+# name: test/sql/storage/multiple_clients_checkpoing_dependents.test_slow
 # description: Try to checkpoint within a transaction that depends on another transactions' changes
 # group: [storage]
 
