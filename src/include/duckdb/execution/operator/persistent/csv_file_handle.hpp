@@ -16,7 +16,8 @@ namespace duckdb {
 
 struct CSVFileHandle {
 public:
-	explicit CSVFileHandle(unique_ptr<FileHandle> file_handle_p) : file_handle(std::move(file_handle_p)) {
+	explicit CSVFileHandle(unique_ptr<FileHandle> file_handle_p, bool enable_reset = true)
+	    : file_handle(std::move(file_handle_p)), reset_enabled(enable_reset) {
 		can_seek = file_handle->CanSeek();
 		plain_file_source = file_handle->OnDiskFile() && can_seek;
 		file_size = file_handle->GetFileSize();
