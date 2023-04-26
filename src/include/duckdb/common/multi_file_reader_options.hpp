@@ -27,50 +27,62 @@ struct MultiFileReaderOptions {
 	DUCKDB_API static MultiFileReaderOptions Deserialize(Deserializer &source);
 	DUCKDB_API void AddBatchInfo(BindInfo &bind_info) const;
 
-	static bool AutoDetectHivePartitioning(const vector<string> &files) {
+	// static bool AutoDetectHivePartitioning(const vector<string> &files) {
 
+	// 	if (files.empty()) {
+	// 		return false;
+	// 	}
+	// 	duckdb_re2::RE2 regex("[\\/\\\\]([^\\/\\?\\\\]+)=([^\\/\\n\\?\\\\]+)");
+	// 	const auto partitions = HivePartitioning::Parse(files.front(), regex);
+	// 	for (auto &f : files) {
+	// 		auto scheme = HivePartitioning::Parse(f, regex);
+	// 		if (scheme.size() != partitions.size()) {
+	// 			return false;
+	// 		}
+	// 		for (auto &i : scheme) {
+	// 			if (partitions.find(i.first) == partitions.end()) {
+	// 				return false;
+	// 			}
+	// 		}
+	// 	}
+	// 	return true;	
+	// }
+
+	static bool AutoDetectHivePartitioning(const vector<string> &files) {
 		if (files.empty()) {
 			return false;
 		}
-		duckdb_re2::RE2 regex("[\\/\\\\]([^\\/\\?\\\\]+)=([^\\/\\n\\?\\\\]+)");
-		const auto partitions = HivePartitioning::Parse(files.front(), regex);
-		for (auto &f : files) {
-			auto scheme = HivePartitioning::Parse(f, regex);
-			if (scheme.size() != partitions.size()) {
+		std::unordered_set<string> uset;
+		{
+			//	front file
+			auto splits = StringUtil::Split(files.front(), "/");
+			if (splits.size() < 2) {
 				return false;
 			}
-			for (auto &i : scheme) {
-				if (partitions.find(i.first) == partitions.end()) {
-					return false;
+			for (auto it = splits.begin(); it != std::prev(splits.end()); it++) {
+				auto part = StringUtil::Split(*it, "=");
+				if (part.size() == 2) {
+					uset.insert(part.front());
 				}
 			}
 		}
-		return true;
-	}
-
-	static bool	Verify(const string& initial_file_col_name, const string& file){
-		vector<string> v = StringUtil::Split(file, "=");
-		if (v.size() != 2){
+		if (uset.empty()) {
 			return false;
 		}
-		if (initial_file_col_name != v.front()){
-			return false;
+		for (auto& file : files) {
+			auto splits = StringUtil::Split(file, "/");
+			if (splits.size() < uset.size() + 1) {
+				return false;
+			}
+			for (auto it = splits.begin(); it != std::prev(splits.end()); it++) {
+				auto part = StringUtil::Split(*it, "=");
+				if (part.size() == 2) {
+					if (uset.find(part.front()) == uset.end()) {
+						return false;
+					}
+				}
+			}
 		}
-		
-	}
-	static std::map<string,string> Split(const vector<string>& files){
-		std::map<string,string> m;
-		for (auto& f : files){
-			
-		}
-		return m;
-	}
-	static bool AutoDetectHivePartitioning2(const vector<string> &files) {
-
-		if (files.empty()) {
-			return false;
-		}
-		
 		return true;
 	}
 };
