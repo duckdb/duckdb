@@ -72,37 +72,44 @@ void CompressedMaterialization::UpdateBindingInfo(CompressedMaterializationInfo 
 	}
 }
 
-unique_ptr<LogicalOperator> CompressedMaterialization::Compress(unique_ptr<LogicalOperator> &&op) {
+unique_ptr<LogicalOperator> CompressedMaterialization::Compress(unique_ptr<LogicalOperator> op) {
 	root = op.get();
 	root->ResolveOperatorTypes();
 
-	Compress(op);
+	CompressInternal(op);
 	RemoveRedundantExpressions(op);
 
 	return op;
 }
 
-void CompressedMaterialization::Compress(unique_ptr<LogicalOperator> &op) {
+void CompressedMaterialization::CompressInternal(unique_ptr<LogicalOperator> &op) {
 	// Let's not mess with the TopN optimizer
 	if (op->type == LogicalOperatorType::LOGICAL_LIMIT &&
 	    op->children[0]->type == LogicalOperatorType::LOGICAL_ORDER_BY) {
 		auto &limit = op->Cast<LogicalLimit>();
 		if (limit.limit_val != NumericLimits<int64_t>::Maximum() || limit.offset) {
-			Compress(op->children[0]->children[0]);
+			CompressInternal(op->children[0]->children[0]);
 			return;
 		}
 	}
 
 	for (auto &child : op->children) {
-		Compress(child);
+		CompressInternal(child);
 	}
 
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 		CompressAggregate(op);
 		break;
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+		CompressAnyJoin(op);
+		break;
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 		CompressComparisonJoin(op);
+		break;
+	case LogicalOperatorType::LOGICAL_DISTINCT:
+		CompressDistinct(op);
 		break;
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 		CompressOrder(op);

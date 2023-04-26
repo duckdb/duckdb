@@ -1,4 +1,4 @@
-# name: test/optimizer/compressed_materialization.test
+# name: test/optimizer/compressed_materialization.test_slow
 # description: Compressed materialization test
 # group: [optimizer]
 
@@ -58,6 +58,11 @@ query II
 explain select i, sum(j) from test group by i order by i
 ----
 logical_opt	<REGEX>:(.*__internal_compress.*){1}
+
+query II
+explain select distinct i, j from test order by i, j
+----
+logical_opt	<REGEX>:(.*__internal_compress.*){2}
 
 require tpch
 

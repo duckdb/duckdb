@@ -77,15 +77,17 @@ class CompressedMaterialization {
 public:
 	explicit CompressedMaterialization(ClientContext &context, Binder &binder, statistics_map_t &&statistics_map);
 
-	unique_ptr<LogicalOperator> Compress(unique_ptr<LogicalOperator> &&op);
+	unique_ptr<LogicalOperator> Compress(unique_ptr<LogicalOperator> op);
 
 private:
 	//! Depth-first traversal of the plan
-	void Compress(unique_ptr<LogicalOperator> &op);
+	void CompressInternal(unique_ptr<LogicalOperator> &op);
 
 	//! Compress materializing operators
 	void CompressAggregate(unique_ptr<LogicalOperator> &op);
+	void CompressAnyJoin(unique_ptr<LogicalOperator> &op);
 	void CompressComparisonJoin(unique_ptr<LogicalOperator> &op);
+	void CompressDistinct(unique_ptr<LogicalOperator> &op);
 	void CompressOrder(unique_ptr<LogicalOperator> &op);
 
 	//! Update statistics after compressing
@@ -95,8 +97,6 @@ private:
 
 	//! Adds bindings referenced in expression to referenced_bindings
 	static void GetReferencedBindings(const Expression &expression, column_binding_set_t &referenced_bindings);
-	static void ComparisonJoinGetReferencedBindings(const JoinCondition &condition,
-	                                                column_binding_set_t &referenced_bindings);
 	//! Updates CMBindingInfo in the binding_map in info
 	void UpdateBindingInfo(CompressedMaterializationInfo &info, const ColumnBinding &binding, bool needs_decompression);
 

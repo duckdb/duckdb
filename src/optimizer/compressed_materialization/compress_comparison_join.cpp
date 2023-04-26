@@ -1,24 +1,9 @@
 #include "duckdb/optimizer/compressed_materialization.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_delim_join.hpp"
 
 namespace duckdb {
-
-void CompressedMaterialization::ComparisonJoinGetReferencedBindings(const JoinCondition &condition,
-                                                                    column_binding_set_t &referenced_bindings) {
-	if (condition.left->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		auto &colref = condition.left->Cast<BoundColumnRefExpression>();
-		referenced_bindings.insert(colref.binding);
-	} else {
-		GetReferencedBindings(*condition.left, referenced_bindings);
-	}
-	if (condition.right->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		auto &colref = condition.right->Cast<BoundColumnRefExpression>();
-		referenced_bindings.insert(colref.binding);
-	} else {
-		GetReferencedBindings(*condition.right, referenced_bindings);
-	}
-}
 
 static void PopulateBindingMap(CompressedMaterializationInfo &info, const vector<ColumnBinding> &bindings_out,
                                const vector<LogicalType> &types, LogicalOperator &op_in) {
@@ -48,7 +33,7 @@ void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperato
 	// But we can try to compress the expression directly
 	column_binding_set_t referenced_bindings;
 	for (const auto &condition : join.conditions) {
-		if (join.conditions.size() == 1) {
+		if (join.conditions.size() == 1 && join.type != LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 			// We only try to compress the join condition cols if there's one join condition
 			// Else it gets messy with the stats if one column shows up in multiple conditions
 			if (condition.left->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF &&
@@ -76,7 +61,15 @@ void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperato
 				}
 			}
 		}
-		ComparisonJoinGetReferencedBindings(condition, referenced_bindings);
+		GetReferencedBindings(*condition.left, referenced_bindings);
+		GetReferencedBindings(*condition.right, referenced_bindings);
+	}
+
+	if (join.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+		auto &delim_join = join.Cast<LogicalDelimJoin>();
+		for (auto &dec : delim_join.duplicate_eliminated_columns) {
+			GetReferencedBindings(*dec, referenced_bindings);
+		}
 	}
 
 	// Create info for compression
