@@ -229,15 +229,6 @@ void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 	}
 }
 
-// POTENTIALLY PROBLEMATIC
-void StandardBufferManager::IncreaseUsedMemory(idx_t size, bool unsafe) {
-	ReserveMemory(size);
-}
-
-void StandardBufferManager::DecreaseUsedMemory(idx_t size) {
-	FreeReservedMemory(size);
-}
-
 void StandardBufferManager::SetLimit(idx_t limit) {
 	buffer_pool.SetLimit(limit, InMemoryWarning());
 }
