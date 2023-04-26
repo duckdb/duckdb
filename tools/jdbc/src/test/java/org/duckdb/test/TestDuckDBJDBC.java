@@ -3232,6 +3232,15 @@ public class TestDuckDBJDBC {
 		}
 	}
 
+	public static void test_update_count() throws Exception {
+		try (Connection connection = DriverManager.getConnection("jdbc:duckdb:"); Statement s = connection.createStatement()) {
+			s.executeUpdate("create table t (i int)");
+			assertEquals(s.executeUpdate("insert into t values (1)"), 1);
+			assertFalse(s.execute("insert into t values (1)"));
+			assertEquals(s.getUpdateCount(), 1);
+		}
+	}
+
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();
