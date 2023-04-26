@@ -10,12 +10,23 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/likely.hpp"
+#include "duckdb/common/exception.hpp"
 #include <vector>
 
 namespace duckdb {
 
-// TODO: inline this, needs changes to 'exception.hpp' and other headers to avoid circular dependency
-void AssertIndexInBounds(idx_t index, idx_t size);
+namespace {
+struct __vector_utils {
+	static inline void AssertIndexInBounds(idx_t index, idx_t size) {
+		//#ifdef DEBUG
+		if (DUCKDB_UNLIKELY(index >= size)) {
+			throw InternalException("Attempted to access index %ld within vector of size %ld", index, size);
+		}
+		//#endif
+	}
+};
+} // namespace
 
 template <class _Tp, class _Allocator = std::allocator<_Tp>>
 class vector : public std::vector<_Tp, _Allocator> {
@@ -42,15 +53,11 @@ public:
 	}
 
 	typename original::reference operator[](typename original::size_type __n) {
-#ifdef DEBUG
-		AssertIndexInBounds(__n, original::size());
-#endif
+		__vector_utils::AssertIndexInBounds(__n, original::size());
 		return original::operator[](__n);
 	}
 	typename original::const_reference operator[](typename original::size_type __n) const {
-#ifdef DEBUG
-		AssertIndexInBounds(__n, original::size());
-#endif
+		__vector_utils::AssertIndexInBounds(__n, original::size());
 		return original::operator[](__n);
 	}
 };
