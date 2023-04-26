@@ -36,6 +36,21 @@ class UpdateSetInfo;
 struct ParserOptions;
 struct PivotColumn;
 
+// Parameters come in three different types:
+// auto-increment:
+//	token: '?'
+//	name: -
+//	number: 0
+// positional:
+//	token: '$<number>'
+//	name: -
+//	number: <number>
+// named:
+//	token: '$<name>'
+//	name: <name>
+//	number: 0
+enum class PreparedParamType : uint8_t { AUTO_INCREMENT, POSITIONAL, NAMED, INVALID };
+
 //! The transformer class is responsible for transforming the internal Postgres
 //! parser representation into the DuckDB representation
 class Transformer {
@@ -66,6 +81,8 @@ private:
 	idx_t prepared_statement_parameter_index = 0;
 	//! Map from named parameter to parameter index;
 	case_insensitive_map_t<idx_t> named_param_map;
+	//! Last parameter type
+	PreparedParamType last_param_type = PreparedParamType::INVALID;
 	//! Holds window expressions defined by name. We need those when transforming the expressions referring to them.
 	unordered_map<string, duckdb_libpgquery::PGWindowDef *> window_clauses;
 	//! The set of pivot entries to create
@@ -81,9 +98,8 @@ private:
 	Transformer &RootTransformer();
 	const Transformer &RootTransformer() const;
 	void SetParamCount(idx_t new_count);
-	void SetNamedParam(const string &name, idx_t index);
-	bool GetNamedParam(const string &name, idx_t &index);
-	bool HasNamedParameters() const;
+	void SetParam(const string &name, idx_t index, PreparedParamType type);
+	bool GetParam(const string &name, idx_t &index, PreparedParamType type);
 
 	void AddPivotEntry(string enum_name, unique_ptr<SelectNode> source, unique_ptr<ParsedExpression> column);
 	unique_ptr<SQLStatement> GenerateCreateEnumStmt(unique_ptr<CreatePivotEntry> entry);
@@ -225,7 +241,6 @@ private:
 	unique_ptr<ParsedExpression> TransformResTarget(duckdb_libpgquery::PGResTarget *root);
 	unique_ptr<ParsedExpression> TransformNullTest(duckdb_libpgquery::PGNullTest *root);
 	unique_ptr<ParsedExpression> TransformParamRef(duckdb_libpgquery::PGParamRef *node);
-	idx_t FindParameterIndexIfKnown(const string &name);
 	unique_ptr<ParsedExpression> TransformNamedArg(duckdb_libpgquery::PGNamedArgExpr *root);
 
 	unique_ptr<ParsedExpression> TransformSQLValueFunction(duckdb_libpgquery::PGSQLValueFunction *node);

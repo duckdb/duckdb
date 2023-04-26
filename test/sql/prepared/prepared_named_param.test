@@ -22,10 +22,7 @@ execute q01(4, 2, 0)
 ----
 Parameter argument/count mismatch, identifiers of the excess parameters: 3
 
-statement ok
-prepare q02 as select $1, $param, $2;
-
 statement error
-execute q01(4, param := 2, 0)
-----
-Not implemented Error: Mixing named parameters and positional parameters is not supported yet
+prepare q02 as select $1, $param, $2;
+---
+Not implemented Error: Mixing named and positional parameters is not supported yet
