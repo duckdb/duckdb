@@ -138,6 +138,15 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 		statistics_map = propagator.GetStatisticsMap();
 	});
 
+	// compress data based on statistics for materializing operators
+	RunOptimizer(OptimizerType::COMPRESSED_MATERIALIZATION, [&]() {
+		RemoveDuplicateGroups remove;
+		remove.VisitOperator(*plan);
+
+		CompressedMaterialization compressed_materialization(context, binder, std::move(statistics_map));
+		plan = compressed_materialization.Compress(std::move(plan));
+	});
+
 	// then we extract common subexpressions inside the different operators
 	RunOptimizer(OptimizerType::COMMON_SUBEXPRESSIONS, [&]() {
 		CommonSubExpressionOptimizer cse_optimizer(binder);
@@ -158,15 +167,6 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	RunOptimizer(OptimizerType::TOP_N, [&]() {
 		TopN topn;
 		plan = topn.Optimize(std::move(plan));
-	});
-
-	// compress data based on statistics for materializing operators
-	RunOptimizer(OptimizerType::COMPRESSED_MATERIALIZATION, [&]() {
-		RemoveDuplicateGroups remove;
-		remove.VisitOperator(*plan);
-
-		CompressedMaterialization compressed_materialization(context, binder, std::move(statistics_map));
-		plan = compressed_materialization.Compress(std::move(plan));
 	});
 
 	// apply simple expression heuristics to get an initial reordering
