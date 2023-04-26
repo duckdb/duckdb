@@ -102,6 +102,7 @@ public:
 	optional_ptr<OptimisticDataWriter> writer;
 	// Rows that have been updated by a DO UPDATE conflict
 	unordered_set<row_t> updated_rows;
+	idx_t update_count = 0;
 };
 
 unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &context) const {
@@ -217,10 +218,10 @@ void PhysicalInsert::CombineExistingAndInsertTuples(DataChunk &result, DataChunk
 	result.SetCardinality(input_chunk.size());
 }
 
-void PhysicalInsert::PerformOnConflictAction(ExecutionContext &context, DataChunk &chunk, TableCatalogEntry &table,
-                                             Vector &row_ids) const {
+idx_t PhysicalInsert::PerformOnConflictAction(ExecutionContext &context, DataChunk &chunk, TableCatalogEntry &table,
+                                              Vector &row_ids) const {
 	if (action_type == OnConflictAction::NOTHING) {
-		return;
+		return 0;
 	}
 
 	DataChunk update_chunk; // contains only the to-update columns
@@ -259,6 +260,7 @@ void PhysicalInsert::PerformOnConflictAction(ExecutionContext &context, DataChun
 	auto &data_table = table.GetStorage();
 	// Perform the update, using the results of the SET expressions
 	data_table.Update(table, context.client, row_ids, set_columns, update_chunk);
+	return update_chunk.size();
 }
 
 // TODO: should we use a hash table to keep track of this instead?
@@ -275,12 +277,12 @@ void PhysicalInsert::RegisterUpdatedRows(InsertLocalState &lstate, const Vector 
 	}
 }
 
-void PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionContext &context,
-                                        InsertLocalState &lstate) const {
+idx_t PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionContext &context,
+                                         InsertLocalState &lstate) const {
 	auto &data_table = table.GetStorage();
 	if (action_type == OnConflictAction::THROW) {
 		data_table.VerifyAppendConstraints(table, context.client, lstate.insert_chunk, nullptr);
-		return;
+		return 0;
 	}
 	// Check whether any conflicts arise, and if they all meet the conflict_target + condition
 	// If that's not the case - We throw the first error
@@ -291,8 +293,8 @@ void PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionConte
 	data_table.VerifyAppendConstraints(table, context.client, lstate.insert_chunk, &conflict_manager);
 	conflict_manager.Finalize();
 	if (conflict_manager.ConflictCount() == 0) {
-		// No conflicts found
-		return;
+		// No conflicts found, 0 updates performed
+		return 0;
 	}
 	auto &conflicts = conflict_manager.Conflicts();
 	auto &row_ids = conflict_manager.RowIds();
@@ -343,7 +345,7 @@ void PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionConte
 
 	RegisterUpdatedRows(lstate, row_ids, combined_chunk.size());
 
-	PerformOnConflictAction(context, combined_chunk, table, row_ids);
+	idx_t updated_tuples = PerformOnConflictAction(context, combined_chunk, table, row_ids);
 
 	// Remove the conflicting tuples from the insert chunk
 	SelectionVector sel_vec(lstate.insert_chunk.size());
@@ -351,6 +353,7 @@ void PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionConte
 	    SelectionVector::Inverted(conflicts.Selection(), sel_vec, conflicts.Count(), lstate.insert_chunk.size());
 	lstate.insert_chunk.Slice(sel_vec, new_size);
 	lstate.insert_chunk.SetCardinality(new_size);
+	return updated_tuples;
 }
 
 SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
@@ -368,13 +371,14 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 			gstate.initialized = true;
 		}
 
-		OnConflictHandling(table, context, lstate);
+		idx_t updated_tuples = OnConflictHandling(table, context, lstate);
 		storage.LocalAppend(gstate.append_state, table, context.client, lstate.insert_chunk, true);
 
 		if (return_chunk) {
 			gstate.return_collection.Append(lstate.insert_chunk);
 		}
-		gstate.insert_count += chunk.size();
+		gstate.insert_count += lstate.insert_chunk.size();
+		gstate.insert_count += updated_tuples;
 	} else {
 		D_ASSERT(!return_chunk);
 		// parallel append
@@ -388,7 +392,8 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 			lstate.local_collection->InitializeAppend(lstate.local_append_state);
 			lstate.writer = &gstate.table.GetStorage().CreateOptimisticWriter(context.client);
 		}
-		OnConflictHandling(table, context, lstate);
+		lstate.update_count += OnConflictHandling(table, context, lstate);
+
 		auto new_row_group = lstate.local_collection->Append(lstate.insert_chunk, lstate.local_append_state);
 		if (new_row_group) {
 			lstate.writer->CheckFlushToDisk(*lstate.local_collection);
@@ -421,6 +426,7 @@ void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 		// we have few rows - append to the local storage directly
 		lock_guard<mutex> lock(gstate.lock);
 		gstate.insert_count += append_count;
+		gstate.insert_count += lstate.update_count;
 		auto &table = gstate.table;
 		auto &storage = table.GetStorage();
 		storage.InitializeLocalAppend(gstate.append_state, context.client);
@@ -438,6 +444,7 @@ void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 
 		lock_guard<mutex> lock(gstate.lock);
 		gstate.insert_count += append_count;
+		gstate.insert_count += lstate.update_count;
 		gstate.table.GetStorage().LocalMerge(context.client, *lstate.local_collection);
 	}
 }
