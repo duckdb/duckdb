@@ -1086,27 +1086,54 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public Date getDate(int columnIndex, Calendar cal) throws SQLException {
-		throw new SQLFeatureNotSupportedException("getDate");
+	    return getDate(columnIndex);
 	}
 
 	public Date getDate(String columnLabel, Calendar cal) throws SQLException {
-		throw new SQLFeatureNotSupportedException("getDate");
+	    return getDate(findColumn(columnLabel), cal);
 	}
 
 	public Time getTime(int columnIndex, Calendar cal) throws SQLException {
-		throw new SQLFeatureNotSupportedException("getTime");
+	    return getTime(columnIndex);
 	}
 
 	public Time getTime(String columnLabel, Calendar cal) throws SQLException {
-		throw new SQLFeatureNotSupportedException("getTime");
+	    return getTime(findColumn(columnLabel), cal);
 	}
 
 	public Timestamp getTimestamp(int columnIndex, Calendar cal) throws SQLException {
-		throw new SQLFeatureNotSupportedException("getTimestamp");
+		if (cal == null) {
+			return getTimestamp(columnIndex);
+		}
+		if (check_and_null(columnIndex)) {
+			return null;
+		}
+		// Our raw data is already a proper count of units since the epoch
+		// So just construct the Timestamp.
+		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP)) {
+			long micros = getbuf(columnIndex, 8).getLong();
+			Timestamp result = new Timestamp(micros / 1_000);
+			result.setNanos(DuckDBTimestamp.nanosPartMicros(micros));
+			return result;
+		} 
+		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_MS)) {
+			return new Timestamp(getbuf(columnIndex, 8).getLong() * 1_000);
+		}
+		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_NS)) {
+			long nanos = getbuf(columnIndex, 8).getLong();
+			Timestamp result = new Timestamp(nanos / 1_000_000);
+			result.setNanos(DuckDBTimestamp.nanosPartNanos(nanos));
+			return result;
+		}
+		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_S)) {
+			return new Timestamp(getbuf(columnIndex, 8).getLong() * 1_000_000);
+		}
+		Object o = getObject(columnIndex);
+		return Timestamp.valueOf(o.toString());
 	}
 
 	public Timestamp getTimestamp(String columnLabel, Calendar cal) throws SQLException {
-		throw new SQLFeatureNotSupportedException("getTimestamp");
+	    return getTimestamp(findColumn(columnLabel), cal);
 	}
 
 	public URL getURL(int columnIndex) throws SQLException {

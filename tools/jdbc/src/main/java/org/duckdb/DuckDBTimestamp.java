@@ -94,7 +94,7 @@ public class DuckDBTimestamp {
 		return this.toLocalDateTime().toString();
 	}
 
-	private static long micros2seconds(long micros) {
+	public static long micros2seconds(long micros) {
 		if ((micros % 1000_000L) >= 0) {
 			return micros / 1000_000L;
 		} else {
@@ -102,7 +102,7 @@ public class DuckDBTimestamp {
 		}
 	}
 
-	private static int nanosPartMicros(long micros) {
+	public static int nanosPartMicros(long micros) {
 		if ((micros % 1000_000L) >= 0) {
 			return (int) ((micros % 1000_000L) * 1000);
 		}
@@ -111,7 +111,7 @@ public class DuckDBTimestamp {
 		}
 	}
 
-	private static long nanos2seconds(long nanos) {
+	public static long nanos2seconds(long nanos) {
 		if ((nanos % 1_000_000_000L) >= 0) {
 			return nanos / 1_000_000_000L;
 		} else {
@@ -119,7 +119,7 @@ public class DuckDBTimestamp {
 		}
 	}
 
-	private static int nanosPartNanos(long nanos) {
+	public static int nanosPartNanos(long nanos) {
 		if ((nanos % 1_000_000_000L) >= 0) {
 			return (int) ((nanos % 1_000_000_000L));
 		}

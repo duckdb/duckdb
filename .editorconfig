@@ -1,5 +1,5 @@
 # Unix-style newlines with a newline ending every file
-[*.{c,cpp,h,hpp}]
+[*.{c,cpp,h,hpp,java}]
 end_of_line = lf
 insert_final_newline = true
 indent_style = tab
