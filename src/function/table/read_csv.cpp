@@ -27,7 +27,7 @@ unique_ptr<CSVFileHandle> ReadCSV::OpenCSV(const string &file_path, FileCompress
 	if (file_handle->CanSeek()) {
 		file_handle->Reset();
 	}
-	return make_uniq<CSVFileHandle>(std::move(file_handle));
+	return make_uniq<CSVFileHandle>(std::move(file_handle), false);
 }
 
 void ReadCSVData::FinalizeRead(ClientContext &context) {
