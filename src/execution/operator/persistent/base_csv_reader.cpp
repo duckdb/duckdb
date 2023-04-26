@@ -268,8 +268,8 @@ void BaseCSVReader::AddValue(string_t str_val, idx_t &column, vector<idx_t> &esc
 	idx_t row_entry = parse_chunk.size();
 
 	// test against null string, but only if the value was not quoted
-	if ((!has_quotes || return_types[column].id() != LogicalTypeId::VARCHAR) && !options.force_not_null[column] &&
-	    Equals::Operation(str_val, string_t(options.null_str))) {
+	if ((!(has_quotes && !options.allow_quoted_nulls) || return_types[column].id() != LogicalTypeId::VARCHAR) &&
+	    !options.force_not_null[column] && Equals::Operation(str_val, string_t(options.null_str))) {
 		FlatVector::SetNull(parse_chunk.data[column], row_entry, true);
 	} else {
 		auto &v = parse_chunk.data[column];
