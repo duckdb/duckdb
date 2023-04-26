@@ -24,6 +24,7 @@ add_library_unity(
   optimizer.cpp
   expression_rewriter.cpp
   regex_range_filter.cpp
+  remove_duplicate_groups.cpp
   remove_unused_columns.cpp
   statistics_propagator.cpp
   topn_optimizer.cpp)

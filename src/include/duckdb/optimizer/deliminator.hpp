@@ -32,8 +32,6 @@ private:
 	void FindJoinWithDelimGet(unique_ptr<LogicalOperator> &op, DelimCandidate &candidate);
 
 	bool RemoveJoinWithDelimGet(unique_ptr<LogicalOperator> &join);
-	//! Removes duplicate groups from aggregations (after removing a join with a delim get)
-	void RemoveDuplicateGroups(LogicalOperator &op, const ColumnBindingReplacer &replacer);
 
 private:
 	ClientContext &context;

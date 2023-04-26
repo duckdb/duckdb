@@ -12,11 +12,11 @@
 
 namespace duckdb {
 
-struct ReplaceBinding {
+struct ReplacementBinding {
 public:
-	ReplaceBinding();
-	ReplaceBinding(ColumnBinding old_binding, ColumnBinding new_binding);
-	ReplaceBinding(ColumnBinding old_binding, ColumnBinding new_binding, LogicalType new_type);
+	ReplacementBinding();
+	ReplacementBinding(ColumnBinding old_binding, ColumnBinding new_binding);
+	ReplacementBinding(ColumnBinding old_binding, ColumnBinding new_binding, LogicalType new_type);
 
 public:
 	ColumnBinding old_binding;
@@ -39,12 +39,12 @@ public:
 
 public:
 	//! Contains all bindings that need to be updated
-	vector<ReplaceBinding> replace_bindings;
+	vector<ReplacementBinding> replacement_bindings;
 
 	//! Do not recurse further than this operator (optional)
 	LogicalOperator *stop_operator = nullptr;
 	//! Extra callback (optional)
-	std::function<void(BoundColumnRefExpression &, const ReplaceBinding &)> column_binding_callback = nullptr;
+	std::function<void(BoundColumnRefExpression &, const ReplacementBinding &)> column_binding_callback = nullptr;
 };
 
 } // namespace duckdb

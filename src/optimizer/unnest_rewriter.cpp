@@ -11,7 +11,8 @@
 
 namespace duckdb {
 
-static void ReplaceDelimGetBinding(BoundColumnRefExpression &bound_column_ref, const ReplaceBinding &replace_binding) {
+static void ReplaceDelimGetBinding(BoundColumnRefExpression &bound_column_ref,
+                                   const ReplacementBinding &replace_binding) {
 	// previously pointing to the LOGICAL_DELIM_GET
 	if (bound_column_ref.binding.table_index == replace_binding.old_binding.table_index &&
 	    replace_binding.old_binding.column_index == DConstants::INVALID_INDEX) {
@@ -159,8 +160,8 @@ void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> *plan_ptr, un
 		// store all shifted current bindings
 		idx_t tbl_idx = proj.table_index;
 		for (idx_t i = 0; i < proj.expressions.size(); i++) {
-			ReplaceBinding replace_binding(ColumnBinding(tbl_idx, i), ColumnBinding(tbl_idx, i + shift));
-			updater.replace_bindings.push_back(replace_binding);
+			ReplacementBinding replace_binding(ColumnBinding(tbl_idx, i), ColumnBinding(tbl_idx, i + shift));
+			updater.replacement_bindings.push_back(replace_binding);
 		}
 
 		curr_op = &curr_op->get()->children[0];
@@ -168,14 +169,14 @@ void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> *plan_ptr, un
 
 	// update all bindings by shifting them
 	updater.VisitOperator(*plan_ptr->get());
-	updater.replace_bindings.clear();
+	updater.replacement_bindings.clear();
 
 	// update all bindings coming from the LHS to RHS bindings
 	D_ASSERT(topmost_op.children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION);
 	auto &top_proj = topmost_op.children[0]->Cast<LogicalProjection>();
 	for (idx_t i = 0; i < lhs_bindings.size(); i++) {
-		ReplaceBinding replace_binding(lhs_bindings[i].binding, ColumnBinding(top_proj.table_index, i));
-		updater.replace_bindings.push_back(replace_binding);
+		ReplacementBinding replace_binding(lhs_bindings[i].binding, ColumnBinding(top_proj.table_index, i));
+		updater.replacement_bindings.push_back(replace_binding);
 	}
 
 	// temporarily remove the BOUND_UNNEST and the child of the LOGICAL_UNNEST from the plan
@@ -187,7 +188,7 @@ void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> *plan_ptr, un
 	unnest.children.clear();
 	// update the bindings of the plan
 	updater.VisitOperator(*plan_ptr->get());
-	updater.replace_bindings.clear();
+	updater.replacement_bindings.clear();
 	// add the child again
 	unnest.expressions.push_back(std::move(temp_bound_unnest));
 	unnest.children.push_back(std::move(temp_unnest_child));
@@ -243,7 +244,7 @@ void UnnestRewriter::UpdateBoundUnnestBindings(ColumnBindingReplacer &updater, u
 		for (idx_t child_col_idx = 0; child_col_idx < unnest_child_cols.size(); child_col_idx++) {
 			if (delim_columns[delim_col_idx].table_index == unnest_child_cols[child_col_idx].table_index) {
 				ColumnBinding old_binding(overwritten_tbl_idx, DConstants::INVALID_INDEX);
-				updater.replace_bindings.emplace_back(old_binding, delim_columns[delim_col_idx]);
+				updater.replacement_bindings.emplace_back(old_binding, delim_columns[delim_col_idx]);
 				break;
 			}
 		}
@@ -252,7 +253,7 @@ void UnnestRewriter::UpdateBoundUnnestBindings(ColumnBindingReplacer &updater, u
 	// update bindings
 	D_ASSERT(unnest.expressions.size() == 1);
 	updater.VisitExpression(&unnest.expressions[0]);
-	updater.replace_bindings.clear();
+	updater.replacement_bindings.clear();
 }
 
 void UnnestRewriter::GetDelimColumns(LogicalOperator &op) {

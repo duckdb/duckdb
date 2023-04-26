@@ -4,14 +4,14 @@
 
 namespace duckdb {
 
-ReplaceBinding::ReplaceBinding() : replace_type(false) {
+ReplacementBinding::ReplacementBinding() : replace_type(false) {
 }
 
-ReplaceBinding::ReplaceBinding(ColumnBinding old_binding, ColumnBinding new_binding)
+ReplacementBinding::ReplacementBinding(ColumnBinding old_binding, ColumnBinding new_binding)
     : old_binding(old_binding), new_binding(new_binding), replace_type(false) {
 }
 
-ReplaceBinding::ReplaceBinding(ColumnBinding old_binding, ColumnBinding new_binding, LogicalType new_type)
+ReplacementBinding::ReplacementBinding(ColumnBinding old_binding, ColumnBinding new_binding, LogicalType new_type)
     : old_binding(old_binding), new_binding(new_binding), replace_type(true), new_type(std::move(new_type)) {
 }
 
@@ -30,7 +30,7 @@ void ColumnBindingReplacer::VisitExpression(unique_ptr<Expression> *expression) 
 	auto &expr = *expression;
 	if (expr->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
 		auto &bound_column_ref = expr->Cast<BoundColumnRefExpression>();
-		for (const auto &replace_binding : replace_bindings) {
+		for (const auto &replace_binding : replacement_bindings) {
 			if (bound_column_ref.binding == replace_binding.old_binding) {
 				bound_column_ref.binding = replace_binding.new_binding;
 				if (replace_binding.replace_type) {

@@ -1,7 +1,6 @@
 #include "duckdb/optimizer/optimizer.hpp"
 
 #include "duckdb/execution/column_binding_resolver.hpp"
-#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/query_profiler.hpp"
@@ -16,6 +15,7 @@
 #include "duckdb/optimizer/in_clause_rewriter.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/optimizer/regex_range_filter.hpp"
+#include "duckdb/optimizer/remove_duplicate_groups.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/optimizer/rule/equal_or_null_simplification.hpp"
 #include "duckdb/optimizer/rule/in_clause_simplification.hpp"
@@ -101,8 +101,8 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	});
 
 	RunOptimizer(OptimizerType::IN_CLAUSE, [&]() {
-		InClauseRewriter rewriter(context, *this);
-		plan = rewriter.Rewrite(std::move(plan));
+		InClauseRewriter ic_rewriter(context, *this);
+		plan = ic_rewriter.Rewrite(std::move(plan));
 	});
 
 	// then we perform the join ordering optimization
@@ -162,6 +162,9 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 
 	// compress data based on statistics for materializing operators
 	RunOptimizer(OptimizerType::COMPRESSED_MATERIALIZATION, [&]() {
+		RemoveDuplicateGroups remove;
+		remove.VisitOperator(*plan);
+
 		CompressedMaterialization compressed_materialization(context, binder, std::move(statistics_map));
 		plan = compressed_materialization.Compress(std::move(plan));
 	});

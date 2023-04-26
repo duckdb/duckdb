@@ -179,12 +179,12 @@ void CompressedMaterialization::CreateCompressProjection(unique_ptr<LogicalOpera
 
 	// Initialize a ColumnBindingReplacer with the new bindings and types
 	ColumnBindingReplacer replacer;
-	auto &replace_bindings = replacer.replace_bindings;
+	auto &replacement_bindings = replacer.replacement_bindings;
 	for (idx_t col_idx = 0; col_idx < child_info.bindings_before.size(); col_idx++) {
 		const auto &old_binding = child_info.bindings_before[col_idx];
 		const auto &new_binding = child_info.bindings_after[col_idx];
 		const auto &new_type = new_types[col_idx];
-		replace_bindings.emplace_back(old_binding, new_binding, new_type);
+		replacement_bindings.emplace_back(old_binding, new_binding, new_type);
 
 		// Remove the old binding from the statistics map
 		statistics_map.erase(old_binding);
@@ -198,20 +198,20 @@ void CompressedMaterialization::CreateCompressProjection(unique_ptr<LogicalOpera
 
 	// Replace in/out exprs in the binding map too
 	auto &binding_map = info.binding_map;
-	for (auto &replace_binding : replace_bindings) {
-		auto it = binding_map.find(replace_binding.old_binding);
+	for (auto &replacement_binding : replacement_bindings) {
+		auto it = binding_map.find(replacement_binding.old_binding);
 		if (it == binding_map.end()) {
 			continue;
 		}
 		auto &binding_info = it->second;
-		if (binding_info.binding == replace_binding.old_binding) {
-			binding_info.binding = replace_binding.new_binding;
+		if (binding_info.binding == replacement_binding.old_binding) {
+			binding_info.binding = replacement_binding.new_binding;
 		}
 
-		if (it->first == replace_binding.old_binding) {
+		if (it->first == replacement_binding.old_binding) {
 			auto binding_info_local = std::move(binding_info);
 			binding_map.erase(it);
-			binding_map.emplace(replace_binding.new_binding, std::move(binding_info_local));
+			binding_map.emplace(replacement_binding.new_binding, std::move(binding_info_local));
 		}
 	}
 
@@ -272,12 +272,12 @@ void CompressedMaterialization::CreateDecompressProjection(unique_ptr<LogicalOpe
 
 	// Initialize a ColumnBindingReplacer with the new bindings and types
 	ColumnBindingReplacer replacer;
-	auto &replace_bindings = replacer.replace_bindings;
+	auto &replacement_bindings = replacer.replacement_bindings;
 	for (idx_t col_idx = 0; col_idx < bindings.size(); col_idx++) {
 		const auto &old_binding = bindings[col_idx];
 		const auto &new_binding = new_bindings[col_idx];
 		const auto &new_type = new_types[col_idx];
-		replace_bindings.emplace_back(old_binding, new_binding, new_type);
+		replacement_bindings.emplace_back(old_binding, new_binding, new_type);
 
 		if (statistics[col_idx]) {
 			statistics_map[new_binding] = statistics[col_idx]->ToUnique();
