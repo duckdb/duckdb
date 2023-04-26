@@ -79,4 +79,5 @@ jobs:
       if: always()
       shell: bash
       run: |
-        python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/micro.csv --verbose --threads=2
+        build/release/benchmark/benchmark_runner --list > alltests.list
+        python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=alltests.list --verbose --threads=2
