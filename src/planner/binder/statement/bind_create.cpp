@@ -301,8 +301,17 @@ static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vecto
 			fk.pk_columns = pk_names;
 			return;
 		}
-		if (fk.pk_columns != pk_names) {
-			// Name mismatch
+		if (fk.pk_columns.size() != pk_names.size()) {
+			continue;
+		}
+		bool equals = true;
+		for (idx_t i = 0; i < fk.pk_columns.size(); i++) {
+			if (!StringUtil::CIEquals(fk.pk_columns[i], pk_names[i])) {
+				equals = false;
+				break;
+			}
+		}
+		if (!equals) {
 			continue;
 		}
 		// found match
@@ -540,7 +549,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			D_ASSERT(fk.info.pk_keys.empty());
 			D_ASSERT(fk.info.fk_keys.empty());
 			FindForeignKeyIndexes(create_info.columns, fk.fk_columns, fk.info.fk_keys);
-			if (create_info.table == fk.info.table) {
+			if (StringUtil::CIEquals(create_info.table, fk.info.table)) {
 				// self-referential foreign key constraint
 				fk.info.type = ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE;
 				FindMatchingPrimaryKeyColumns(create_info.columns, create_info.constraints, fk);
