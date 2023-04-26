@@ -441,7 +441,7 @@ public class TestDuckDBJDBC {
 		// Metadata tests
 		assertEquals(Types.TIMESTAMP_WITH_TIMEZONE,
 				(meta.unwrap(DuckDBResultSetMetaData.class).type_to_int(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE)));
-		assertTrue(OffsetDateTime.class.toString().equals(meta.getColumnClassName(2)));
+		assertTrue(OffsetDateTime.class.getName().equals(meta.getColumnClassName(2)));
 
 		rs.close();
 		stmt.close();
@@ -1061,10 +1061,10 @@ public class TestDuckDBJDBC {
 
 		// Metadata tests
 		assertEquals(Types.DECIMAL, meta.type_to_int(DuckDBColumnType.DECIMAL));
-		assertTrue(BigDecimal.class.toString().equals(meta.getColumnClassName(1)));
-		assertTrue(BigDecimal.class.toString().equals(meta.getColumnClassName(2)));
-		assertTrue(BigDecimal.class.toString().equals(meta.getColumnClassName(3)));
-		assertTrue(BigDecimal.class.toString().equals(meta.getColumnClassName(4)));
+		assertTrue(BigDecimal.class.getName().equals(meta.getColumnClassName(1)));
+		assertTrue(BigDecimal.class.getName().equals(meta.getColumnClassName(2)));
+		assertTrue(BigDecimal.class.getName().equals(meta.getColumnClassName(3)));
+		assertTrue(BigDecimal.class.getName().equals(meta.getColumnClassName(4)));
 
 		assertEquals(3, meta.getPrecision(1));
 		assertEquals(0, meta.getScale(1));
@@ -3228,6 +3228,26 @@ public class TestDuckDBJDBC {
 
 				assertTrue(rs.next());
 				assertEquals(rs.getObject(1), "{'hello': foo, 'world': bar}");
+			}
+		}
+	}
+
+	public static void test_getColumnClassName() throws Exception {
+		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");Statement s = conn.createStatement();) {
+			try (ResultSet rs = s.executeQuery("select * from test_all_types()")) {
+				ResultSetMetaData rsmd = rs.getMetaData();
+				rs.next();
+				for (int i=1; i<=rsmd.getColumnCount(); i++) {
+					Object value = rs.getObject(i);
+					if (value == null) {
+						continue; // FIXME: when we add a complete test_all_types() test
+					}
+
+					assertEquals(
+						rsmd.getColumnClassName(i),
+						value.getClass().getName()
+					);
+				}
 			}
 		}
 	}
