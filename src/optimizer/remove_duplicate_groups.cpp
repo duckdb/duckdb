@@ -15,6 +15,10 @@ void RemoveDuplicateGroups::VisitOperator(LogicalOperator &op) {
 }
 
 void RemoveDuplicateGroups::VisitAggregate(LogicalAggregate &aggr) {
+	if (!aggr.grouping_functions.empty()) {
+		return;
+	}
+
 	auto &groups = aggr.groups;
 
 	column_binding_map_t<idx_t> duplicate_map;
@@ -62,24 +66,23 @@ void RemoveDuplicateGroups::VisitAggregate(LogicalAggregate &aggr) {
 
 		// Remove from grouping sets too
 		for (auto &grouping_set : aggr.grouping_sets) {
-			auto it = grouping_set.find(removed_idx);
-			if (it != grouping_set.end()) {
-				// Remove deleted group from grouping set
-				grouping_set.erase(it);
+			// Replace removed group with duplicate remaining group
+			if (grouping_set.erase(removed_idx) != 0) {
+				grouping_set.insert(remaining_idx);
+			}
 
-				// Reinsert groups in the set with group_idx - 1 (agg.grouping sets is an indirection into aggr.groups)
-				vector<idx_t> group_indices_to_reinsert;
-				for (auto &entry : grouping_set) {
-					if (entry > removed_idx) {
-						group_indices_to_reinsert.emplace_back(entry);
-					}
+			// Indices shifted: Reinsert groups in the set with group_idx - 1
+			vector<idx_t> group_indices_to_reinsert;
+			for (auto &entry : grouping_set) {
+				if (entry > removed_idx) {
+					group_indices_to_reinsert.emplace_back(entry);
 				}
-				for (const auto group_idx : group_indices_to_reinsert) {
-					grouping_set.erase(group_idx);
-				}
-				for (const auto group_idx : group_indices_to_reinsert) {
-					grouping_set.insert(group_idx - 1);
-				}
+			}
+			for (const auto group_idx : group_indices_to_reinsert) {
+				grouping_set.erase(group_idx);
+			}
+			for (const auto group_idx : group_indices_to_reinsert) {
+				grouping_set.insert(group_idx - 1);
 			}
 		}
 

@@ -277,6 +277,9 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 	if (bind_data.is_index_scan) {
 		return;
 	}
+	if (!get.table_filters.filters.empty()) {
+		return;
+	}
 	if (filters.empty()) {
 		// no indexes or no filters: skip the pushdown
 		return;

@@ -8,6 +8,17 @@ namespace duckdb {
 void CompressedMaterialization::CompressAggregate(unique_ptr<LogicalOperator> &op) {
 	auto &aggregate = op->Cast<LogicalAggregate>();
 	auto &groups = aggregate.groups;
+	column_binding_set_t group_binding_set;
+	for (const auto &group : groups) {
+		if (group->type != ExpressionType::BOUND_COLUMN_REF) {
+			continue;
+		}
+		auto &colref = group->Cast<BoundColumnRefExpression>();
+		if (group_binding_set.find(colref.binding) != group_binding_set.end()) {
+			return; // Duplicate group - don't compress
+		}
+		group_binding_set.insert(colref.binding);
+	}
 	auto &group_stats = aggregate.group_stats;
 
 	// No need to compress if there are no groups/stats
