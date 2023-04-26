@@ -45,7 +45,7 @@ struct MultiFileReaderOptions {
 	// 			}
 	// 		}
 	// 	}
-	// 	return true;	
+	// 	return true;
 	// }
 
 	static bool AutoDetectHivePartitioning(const vector<string> &files) {
@@ -53,9 +53,11 @@ struct MultiFileReaderOptions {
 			return false;
 		}
 		std::unordered_set<string> uset;
+		idx_t splits_size;
 		{
 			//	front file
 			auto splits = StringUtil::Split(files.front(), "/");
+			splits_size = splits.size();
 			if (splits.size() < 2) {
 				return false;
 			}
@@ -69,9 +71,9 @@ struct MultiFileReaderOptions {
 		if (uset.empty()) {
 			return false;
 		}
-		for (auto& file : files) {
+		for (auto &file : files) {
 			auto splits = StringUtil::Split(file, "/");
-			if (splits.size() < uset.size() + 1) {
+			if (splits.size() != splits_size) {
 				return false;
 			}
 			for (auto it = splits.begin(); it != std::prev(splits.end()); it++) {

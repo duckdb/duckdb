@@ -94,10 +94,11 @@ select alias(columns(*)) from read_csv_auto(['__TEST_DIR__/csv_partition_2/**', 
 ----
 Binder Error: Hive partition mismatch
 
-statement error
+query IIII
 select alias(columns(*)) from read_csv_auto(['__TEST_DIR__/csv_partition_2/**', '__TEST_DIR__/t.csv'], names=['a','b','c','d']) LIMIT 1;
 ----
-Binder Error: Hive partitioning was enabled automatically
+a	b	c	d
+
 
 
 
@@ -194,10 +195,10 @@ select alias(columns(*)) from read_parquet(['__TEST_DIR__/parquet_partition_2/**
 ----
 Binder Error: Hive partition mismatch
 
-statement error
+query IIII
 select alias(columns(*)) from read_parquet(['__TEST_DIR__/parquet_partition_2/**', '__TEST_DIR__/t.parquet']) LIMIT 1;
 ----
-Binder Error: Hive partitioning was enabled automatically
+year	month	val_1	val_2
 
 
 
