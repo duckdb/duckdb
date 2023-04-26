@@ -145,6 +145,15 @@ TEST_CASE("Test logical_simple with LOAD", "[serialization]") {
 	test_helper("LOAD foo");
 }
 
+// below test cases are oriented towards multi-databases
 TEST_CASE("Test create_table with catalog", "[serialization]") {
 	test_helper_multi_db("CREATE TABLE new_db.main.tbl(i INTEGER);");
+}
+
+TEST_CASE("Test logical_insert with catalog", "[serialization]") {
+	test_helper_multi_db("INSERT INTO new_db.main.tbl VALUES(1)", {"CREATE TABLE new_db.main.tbl (foo INTEGER)"});
+}
+
+TEST_CASE("Test logical_update with catalog", "[serialization]") {
+	test_helper_multi_db("UPDATE new_db.main.tbl SET foo=42", {"CREATE TABLE new_db.main.tbl (foo INTEGER)"});
 }
