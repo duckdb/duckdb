@@ -117,13 +117,10 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		contains->children[1] = std::move(parameter);
 		return std::move(contains);
 	}
-	LikeString like_string;
-	if (pattern.Regexp()->op() == duckdb_re2::kRegexpCharClass) {
-		// TODO: This is probably a regex match like regexp_matches(s, '[AS]')
-		// you can go through the runes in the re2 library and iteratively create a conjuction expression
-		// of contains(s, 'a') or contains(s, 's') to optimize the regex out.
+	else if (pattern.Regexp()->op() != duckdb_re2::kRegexpConcat) {
 		return nullptr;
 	}
+	LikeString like_string;
 	// check for a like string. If we can convert it to a like string, the like string
 	// optimizer will further optimize suffix and prefix things.
 	like_string = LikeMatchExists(pattern);
