@@ -67,7 +67,9 @@ unique_ptr<LogicalOperator> Deliminator::Optimize(unique_ptr<LogicalOperator> op
 			delim_join.duplicate_eliminated_columns.clear();
 			if (all_equality_conditions) {
 				for (auto &cond : delim_join.conditions) {
-					cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+					if (IsEqualityJoinCondition(cond)) {
+						cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+					}
 				}
 			}
 			delim_join.type = LogicalOperatorType::LOGICAL_COMPARISON_JOIN;
