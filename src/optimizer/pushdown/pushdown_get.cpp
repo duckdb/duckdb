@@ -11,7 +11,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_GET);
 	auto &get = op->Cast<LogicalGet>();
 
-	if (get.table_filters.filters.empty()) {
+	if (!get.table_filters.filters.empty()) {
 		// we already pushed filters into this GET
 		return FinishPushdown(std::move(op));
 	}

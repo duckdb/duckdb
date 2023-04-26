@@ -5,8 +5,6 @@
 statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY
 
-mode skip
-
 # tricky tests taken from test/sql/subquery/scalar/test_issue_6136.test
 statement ok
 create table r as select * from values (1, 1, 'a', 'A'), (1, null, 'b', 'B'), (1, 2, 'c', 'C'), (2, null, 'd', 'D') t(ra, rb, x, y);
@@ -61,12 +59,13 @@ explain select i, sum(j) from test group by i order by i
 ----
 logical_opt	<REGEX>:(.*__internal_compress.*){1}
 
-mode unskip
-
 require tpch
 
 statement ok
 call dbgen(sf=0.01)
+
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY
 
 # tpch q1 should use perfect hash aggregate
 query II
@@ -93,7 +92,10 @@ ORDER BY
     l_returnflag,
     l_linestatus;
 ----
-logical_opt	<REGEX>:.*PERFECT_HASH_GROUP_BY.*
+physical_plan	<REGEX>:.*PERFECT_HASH_GROUP_BY.*
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY
 
 # test that we're compressing lineitem
 query II

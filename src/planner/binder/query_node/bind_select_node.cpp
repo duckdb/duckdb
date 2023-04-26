@@ -4,23 +4,22 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
-#include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression_binder/column_alias_binder.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/planner/expression_binder/group_binder.hpp"
 #include "duckdb/planner/expression_binder/having_binder.hpp"
-#include "duckdb/planner/expression_binder/order_binder.hpp"
 #include "duckdb/planner/expression_binder/qualify_binder.hpp"
+#include "duckdb/planner/expression_binder/order_binder.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/parser/expression/conjunction_expression.hpp"
 
 namespace duckdb {
 
@@ -159,8 +158,11 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 				vector<unique_ptr<ParsedExpression>> order_list;
 				order_binders[0]->ExpandStarExpression(std::move(order_node.expression), order_list);
 
-				auto type = config.ResolveOrder(order_node.type);
-				auto null_order = config.ResolveNullOrder(type, order_node.null_order);
+				auto type =
+				    order_node.type == OrderType::ORDER_DEFAULT ? config.options.default_order_type : order_node.type;
+				auto null_order = order_node.null_order == OrderByNullType::ORDER_DEFAULT
+				                      ? config.options.default_null_order
+				                      : order_node.null_order;
 				for (auto &order_expr : order_list) {
 					auto bound_expr = BindOrderExpression(order_binder, std::move(order_expr));
 					if (!bound_expr) {
@@ -365,7 +367,6 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 		unbound_groups.resize(group_expressions.size());
 		GroupBinder group_binder(*this, context, statement, result->group_index, alias_map, info.alias_map);
 		for (idx_t i = 0; i < group_expressions.size(); i++) {
-			ExpressionBinder::QualifyColumnNames(*this, group_expressions[i]);
 
 			// we keep a copy of the unbound expression;
 			// we keep the unbound copy around to check for group references in the SELECT and HAVING clause
@@ -394,6 +395,13 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 		}
 	}
 	result->groups.grouping_sets = std::move(statement.groups.grouping_sets);
+
+	// bind the HAVING clause, if any
+	if (statement.having) {
+		HavingBinder having_binder(*this, context, *result, info, alias_map, statement.aggregate_handling);
+		ExpressionBinder::QualifyColumnNames(*this, statement.having);
+		result->having = having_binder.Bind(statement.having);
+	}
 
 	// bind the QUALIFY clause, if any
 	if (statement.qualify) {
@@ -462,7 +470,6 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 			select_binder.ResetBindings();
 		}
 	}
-
 	// push the GROUP BY ALL expressions into the group set
 	for (auto &group_by_all_index : group_by_all_indexes) {
 		auto &expr = result->select_list[group_by_all_index];
@@ -471,14 +478,6 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 		result->groups.group_expressions.push_back(std::move(expr));
 		expr = std::move(group_ref);
 	}
-
-	// bind the HAVING clause, if any
-	if (statement.having) {
-		HavingBinder having_binder(*this, context, *result, info, alias_map, statement.aggregate_handling);
-		ExpressionBinder::QualifyColumnNames(*this, statement.having);
-		result->having = having_binder.Bind(statement.having);
-	}
-
 	result->column_count = new_names.size();
 	result->names = std::move(new_names);
 	result->need_prune = result->select_list.size() > result->column_count;
@@ -515,20 +514,6 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 
 	// now that the SELECT list is bound, we set the types of DISTINCT/ORDER BY expressions
 	BindModifierTypes(*result, internal_sql_types, result->projection_index);
-
-#ifdef DEBUG
-	// Verify we have no duplicate group expressions
-	column_binding_set_t group_binding_set;
-	for (const auto &group_expr : result->groups.group_expressions) {
-		if (group_expr->type != ExpressionType::BOUND_COLUMN_REF) {
-			continue;
-		}
-		const auto &colref = group_expr->Cast<BoundColumnRefExpression>();
-		D_ASSERT(group_binding_set.find(colref.binding) == group_binding_set.end());
-		group_binding_set.insert(colref.binding);
-	}
-#endif
-
 	return std::move(result);
 }
 

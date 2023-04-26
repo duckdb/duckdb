@@ -7,6 +7,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
@@ -85,8 +86,11 @@ void CompressedMaterialization::Compress(unique_ptr<LogicalOperator> &op) {
 	// Let's not mess with the TopN optimizer
 	if (op->type == LogicalOperatorType::LOGICAL_LIMIT &&
 	    op->children[0]->type == LogicalOperatorType::LOGICAL_ORDER_BY) {
-		Compress(op->children[0]->children[0]);
-		return;
+		auto &limit = op->Cast<LogicalLimit>();
+		if (limit.limit_val != NumericLimits<int64_t>::Maximum() || limit.offset) {
+			Compress(op->children[0]->children[0]);
+			return;
+		}
 	}
 
 	for (auto &child : op->children) {
