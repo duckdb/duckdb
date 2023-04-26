@@ -8,14 +8,10 @@
 
 #pragma once
 
-#include "duckdb/parser/expression_map.hpp"
-#include "duckdb/planner/column_binding_map.hpp"
-#include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/planner/logical_operator_visitor.hpp"
+#include "duckdb/optimizer/column_binding_replacer.hpp"
 
 namespace duckdb {
 
-class Optimizer;
 struct DelimCandidate;
 
 //! The Deliminator optimizer traverses the logical operator tree and removes any redundant DelimGets/DelimJoins

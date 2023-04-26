@@ -1,5 +1,9 @@
 #include "duckdb/optimizer/remove_duplicate_groups.hpp"
 
+#include "duckdb/common/pair.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/operator/logical_aggregate.hpp"
+
 namespace duckdb {
 
 void RemoveDuplicateGroups::VisitOperator(LogicalOperator &op) {

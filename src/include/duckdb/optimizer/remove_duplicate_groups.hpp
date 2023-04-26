@@ -8,9 +8,12 @@
 
 #pragma once
 
+#include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 
 namespace duckdb {
+
+class BoundColumnRefExpression;
 
 //! The RemoveDuplicateGroups optimizer traverses the logical operator tree and removes any duplicate aggregate groups
 class RemoveDuplicateGroups : public LogicalOperatorVisitor {
