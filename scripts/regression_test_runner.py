@@ -61,7 +61,7 @@ def run_benchmark(runner, benchmark):
 ====================================================
 ''')
         print(out)
-        exit(1)
+        return 'Failed to run benchmark ' + benchmark
     if verbose:
         print(err)
     # read the input CSV
@@ -80,7 +80,7 @@ def run_benchmark(runner, benchmark):
     except:
         print("Failed to run benchmark " + benchmark)
         print(err)
-        exit(1)
+        return 'Failed to run benchmark ' + benchmark
     return float(statistics.median(timings))
 
 def run_benchmarks(runner, benchmark_list):
@@ -95,6 +95,7 @@ with open(benchmark_file, 'r') as f:
 
 multiply_percentage = 1.0 + regression_threshold_percentage
 other_results = []
+error_list = []
 for i in range(number_repetitions):
     regression_list = []
     if len(benchmark_list) == 0:
@@ -111,13 +112,17 @@ for i in range(number_repetitions):
     for benchmark in benchmark_list:
         old_res = old_results[benchmark]
         new_res = new_results[benchmark]
-        if (old_res + regression_threshold_seconds) * multiply_percentage < new_res:
+        if isinstance(old_res, str) or isinstance(new_res, str):
+            # benchmark failed to run - always a regression
+            error_list.append([benchmark, old_res, new_res])
+        elif (old_res + regression_threshold_seconds) * multiply_percentage < new_res:
             regression_list.append([benchmark, old_res, new_res])
         else:
             other_results.append([benchmark, old_res, new_res])
     benchmark_list = [x[0] for x in regression_list]
 
 exit_code = 0
+regression_list += error_list
 if len(regression_list) > 0:
     exit_code = 1
     print('''====================================================
