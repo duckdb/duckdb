@@ -134,6 +134,31 @@ abba
 a\.a
 
 query II
+explain analyze SELECT regexp_matches(s, 'aaa.'), s FROM TEST;
+----
+analyzed_plan	<REGEX>:.*regexp_matches\(s, 'aaa.'\).*
+
+query II
+explain analyze SELECT regexp_matches(s, 'aaa.', 's'), s FROM TEST;
+----
+analyzed_plan	<REGEX>:.*~~\(s, '%aaa_%'\).*
+
+query II
+explain analyze SELECT regexp_matches(s, '.aaa', 's'), s FROM TEST;
+----
+analyzed_plan	<REGEX>:.*~~\(s, '%_aaa%'\).*
+
+query II
+explain analyze SELECT regexp_matches(s, '^.aaa', 's'), s FROM TEST;
+----
+analyzed_plan	<REGEX>:.*~~\(s, '_aaa%'\).*
+
+query II
+explain analyze SELECT regexp_matches(s, '.aaa$', 's'), s FROM TEST;
+----
+analyzed_plan	<REGEX>:.*~~\(s, '%_aaa'\).*
+
+query II
 explain analyze select regexp_matches(s, '.*green.*', 's'), s, from test;
 ----
 analyzed_plan	<REGEX>:.*contains\(s, 'green'\).*
@@ -145,3 +170,28 @@ analyzed_plan	<REGEX>:.*~~\(s, '%special%requests%'\).*
 
 statement ok
 DELETE from test;
+
+# Test matching newlines with and without 's' option
+
+# inserts 'aaa\naaa'
+statement ok
+insert into test values (concat('aaa', chr(10), 'aaa'));
+
+query I
+select count(s) from test where regexp_matches(s, 'aaa');
+----
+1
+
+# no matches since 's' option not passed
+query I
+select count(s) from test where regexp_matches(s, 'aaa.');
+----
+0
+
+# 's' option passed, so we match the string aaa\naaa
+query I
+select count(s) from test where regexp_matches(s, 'aaa.', 's');
+----
+1
+
+

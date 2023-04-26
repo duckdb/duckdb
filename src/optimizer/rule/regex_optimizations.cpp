@@ -34,7 +34,13 @@ static LikeString LikeMatchExists(duckdb_re2::RE2 &pattern) {
 	while (cur_sub_index < num_subs) {
 		switch (subs[cur_sub_index]->op()) {
 		case duckdb_re2::kRegexpAnyChar:
+			if (cur_sub_index == 0) {
+				ret.like_string += "%";
+			}
 			ret.like_string += "_";
+			if (cur_sub_index + 1 == num_subs) {
+				ret.like_string += "%";
+			}
 			break;
 		case duckdb_re2::kRegexpStar:
 			// .* is a Star operator is a anyChar operator as a child.
