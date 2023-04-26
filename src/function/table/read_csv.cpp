@@ -285,9 +285,10 @@ public:
 		next_buffer = shared_ptr<CSVBuffer>(
 		    current_buffer->Next(*file_handle, buffer_size, current_csv_position, file_number).release());
 		running_threads = MaxThreads();
+
+		// Initialize all the book-keeping variables
 		auto file_count = files_path_p.size();
 		line_info.current_batches.resize(file_count);
-
 		tuple_start.resize(file_count);
 		tuple_end.resize(file_count);
 		tuple_end_to_batch.resize(file_count);
@@ -623,7 +624,7 @@ static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext 
 	return make_uniq<ParallelCSVGlobalState>(
 	    context, std::move(file_handle), bind_data.files, context.db->NumberOfThreads(), bind_data.options.buffer_size,
 	    bind_data.options.skip_rows, ClientConfig::GetConfig(context).verify_parallelism, input.column_ids,
-	    bind_data.options.header);
+	    bind_data.options.header && bind_data.options.has_header);
 }
 
 //===--------------------------------------------------------------------===//
