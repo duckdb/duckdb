@@ -17,7 +17,7 @@
 
 #include <iostream>
 
-#include "gpos/assert.h"
+#include "duckdb/optimizer/cascade/assert.h"
 
 #define GPOS_SIZEOF(x) ((gpos::ULONG) sizeof(x))
 #define GPOS_ARRAY_SIZE(x) (GPOS_SIZEOF(x) / GPOS_SIZEOF(x[0]))

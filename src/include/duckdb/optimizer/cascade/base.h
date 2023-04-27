@@ -9,13 +9,13 @@
 #ifndef GPOS_base_H
 #define GPOS_base_H
 
-#include "gpos/assert.h"
-#include "gpos/error/CErrorHandler.h"
-#include "gpos/error/CException.h"
-#include "gpos/error/IErrorContext.h"
-#include "gpos/error/ILogger.h"
-#include "gpos/memory/CMemoryPool.h"
-#include "gpos/task/ITask.h"
-#include "gpos/types.h"
+#include "duckdb/optimizer/cascade/assert.h"
+#include "duckdb/optimizer/cascade/error/CErrorHandler.h"
+#include "duckdb/optimizer/cascade/error/CException.h"
+#include "duckdb/optimizer/cascade/error/IErrorContext.h"
+#include "duckdb/optimizer/cascade/error/ILogger.h"
+#include "duckdb/optimizer/cascade/memory/CMemoryPool.h"
+#include "duckdb/optimizer/cascade/task/ITask.h"
+#include "duckdb/optimizer/cascade/types.h"
 
 #endif
