@@ -69,7 +69,7 @@ public class DuckDBTimestamp {
 	}
 
 	public static Timestamp fromSecondInstant(long seconds) {
-		return fromMilliInstant(seconds * 1_000_000);
+		return fromMilliInstant(seconds * 1_000);
 	}
 
 	public static Timestamp fromMilliInstant(long millis) {
