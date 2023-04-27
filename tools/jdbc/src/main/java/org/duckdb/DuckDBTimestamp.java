@@ -2,6 +2,7 @@ package org.duckdb;
 
 import java.sql.Timestamp;
 import java.time.ZoneOffset;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
@@ -67,6 +68,22 @@ public class DuckDBTimestamp {
 		return OffsetDateTime.of(toLocalDateTime(timeMicros), ZoneOffset.UTC);
 	}
 
+	public static Timestamp fromSecondInstant(long seconds) {
+		return fromMilliInstant(seconds * 1_000_000);
+	}
+
+	public static Timestamp fromMilliInstant(long millis) {
+		return new Timestamp(millis);
+	}
+
+	public static Timestamp fromMicroInstant(long micros) {
+		return Timestamp.from(Instant.ofEpochSecond(micros / 1_000_000, nanosPartMicros(micros)));
+	}
+
+	public static Timestamp fromNanoInstant(long nanos) {
+		return Timestamp.from(Instant.ofEpochSecond(nanos / 1_000_000_000, nanosPartNanos(nanos)));
+	}
+
 	public Timestamp toSqlTimestamp() {
 		return Timestamp.valueOf(this.toLocalDateTime());
 	}
@@ -94,7 +111,7 @@ public class DuckDBTimestamp {
 		return this.toLocalDateTime().toString();
 	}
 
-	public static long micros2seconds(long micros) {
+	private static long micros2seconds(long micros) {
 		if ((micros % 1000_000L) >= 0) {
 			return micros / 1000_000L;
 		} else {
@@ -102,7 +119,7 @@ public class DuckDBTimestamp {
 		}
 	}
 
-	public static int nanosPartMicros(long micros) {
+	private static int nanosPartMicros(long micros) {
 		if ((micros % 1000_000L) >= 0) {
 			return (int) ((micros % 1000_000L) * 1000);
 		}
@@ -111,7 +128,7 @@ public class DuckDBTimestamp {
 		}
 	}
 
-	public static long nanos2seconds(long nanos) {
+	private static long nanos2seconds(long nanos) {
 		if ((nanos % 1_000_000_000L) >= 0) {
 			return nanos / 1_000_000_000L;
 		} else {
@@ -119,7 +136,7 @@ public class DuckDBTimestamp {
 		}
 	}
 
-	public static int nanosPartNanos(long nanos) {
+	private static int nanosPartNanos(long nanos) {
 		if ((nanos % 1_000_000_000L) >= 0) {
 			return (int) ((nanos % 1_000_000_000L));
 		}

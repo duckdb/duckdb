@@ -1102,31 +1102,22 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public Timestamp getTimestamp(int columnIndex, Calendar cal) throws SQLException {
-		if (cal == null) {
-			return getTimestamp(columnIndex);
-		}
 		if (check_and_null(columnIndex)) {
 			return null;
 		}
 		// Our raw data is already a proper count of units since the epoch
-		// So just construct the Timestamp.
+		// So just construct the SQL Timestamp.
 		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP)) {
-			long micros = getbuf(columnIndex, 8).getLong();
-			Timestamp result = new Timestamp(micros / 1_000);
-			result.setNanos(DuckDBTimestamp.nanosPartMicros(micros));
-			return result;
-		} 
+			return DuckDBTimestamp.fromMicroInstant(getbuf(columnIndex, 8).getLong());
+		}
 		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_MS)) {
-			return new Timestamp(getbuf(columnIndex, 8).getLong() * 1_000);
+			return DuckDBTimestamp.fromMilliInstant(getbuf(columnIndex, 8).getLong());
 		}
 		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_NS)) {
-			long nanos = getbuf(columnIndex, 8).getLong();
-			Timestamp result = new Timestamp(nanos / 1_000_000);
-			result.setNanos(DuckDBTimestamp.nanosPartNanos(nanos));
-			return result;
+			return DuckDBTimestamp.fromNanoInstant(getbuf(columnIndex, 8).getLong());
 		}
 		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_S)) {
-			return new Timestamp(getbuf(columnIndex, 8).getLong() * 1_000_000);
+			return DuckDBTimestamp.fromSecondInstant(getbuf(columnIndex, 8).getLong());
 		}
 		Object o = getObject(columnIndex);
 		return Timestamp.valueOf(o.toString());
