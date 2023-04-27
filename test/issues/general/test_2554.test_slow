@@ -1,4 +1,4 @@
-# name: test/issues/general/test_2554.test
+# name: test/issues/general/test_2554.test_slow
 # description: Issue 2554: a recursive CTE SQL works in Sqlite reports a within error in duckdb
 # group: [general]
 
