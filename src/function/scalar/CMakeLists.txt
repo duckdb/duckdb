@@ -1,4 +1,3 @@
-add_subdirectory(blob)
 add_subdirectory(date)
 add_subdirectory(generic)
 add_subdirectory(list)

@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/blob_functions.hpp"
+#include "scalar/blob_functions.hpp"
 #include "duckdb/common/types/blob.hpp"
 
 namespace duckdb {
@@ -34,12 +34,12 @@ static void Base64DecodeFunction(DataChunk &args, ExpressionState &state, Vector
 	UnaryExecutor::ExecuteString<string_t, string_t, Base64DecodeOperator>(args.data[0], result, args.size());
 }
 
-void Base64Fun::RegisterFunction(BuiltinFunctions &set) {
-	// base64 encode
-	ScalarFunction to_base64({LogicalType::BLOB}, LogicalType::VARCHAR, Base64EncodeFunction);
-	set.AddFunction({"base64", "to_base64"}, to_base64); // to_base64 is a mysql alias
+ScalarFunction ToBase64Fun::GetFunction() {
+	return ScalarFunction({LogicalType::BLOB}, LogicalType::VARCHAR, Base64EncodeFunction);
+}
 
-	set.AddFunction(ScalarFunction("from_base64", {LogicalType::VARCHAR}, LogicalType::BLOB, Base64DecodeFunction));
+ScalarFunction FromBase64Fun::GetFunction() {
+	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::BLOB, Base64DecodeFunction);
 }
 
 } // namespace duckdb
