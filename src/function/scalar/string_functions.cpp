@@ -1,7 +1,6 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar/blob_functions.hpp"
 #include "duckdb/function/scalar/uuid_functions.hpp"
-#include "duckdb/function/scalar/bit_functions.hpp"
 
 namespace duckdb {
 
@@ -47,12 +46,6 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<Base64Fun>();
 	Register<EncodeFun>();
 	Register<HexFun>();
-
-	// bit functions
-	Register<GetBitFun>();
-	Register<SetBitFun>();
-	Register<BitPositionFun>();
-	Register<BitStringFun>();
 
 	// uuid functions
 	Register<UUIDFun>();

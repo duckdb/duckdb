@@ -1,5 +1,5 @@
+#include "scalar/bit_functions.hpp"
 #include "duckdb/common/types/bit.hpp"
-#include "duckdb/function/scalar/bit_functions.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 
 namespace duckdb {
@@ -7,7 +7,6 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // BitStringFunction
 //===--------------------------------------------------------------------===//
-
 static void BitStringFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<string_t, int32_t, string_t>(
 	    args.data[0], args.data[1], result, args.size(), [&](string_t input, int32_t n) {
@@ -28,10 +27,8 @@ static void BitStringFunction(DataChunk &args, ExpressionState &state, Vector &r
 	    });
 }
 
-void BitStringFun::RegisterFunction(BuiltinFunctions &set) {
-	// bitstring creates a new bitstring from varchar with a fixed-length
-	set.AddFunction(
-	    ScalarFunction("bitstring", {LogicalType::VARCHAR, LogicalType::INTEGER}, LogicalType::BIT, BitStringFunction));
+ScalarFunction BitStringFun::GetFunction() {
+	return ScalarFunction({LogicalType::VARCHAR, LogicalType::INTEGER}, LogicalType::BIT, BitStringFunction);
 }
 
 //===--------------------------------------------------------------------===//
@@ -48,9 +45,9 @@ struct GetBitOperator {
 	}
 };
 
-void GetBitFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("get_bit", {LogicalType::BIT, LogicalType::INTEGER}, LogicalType::INTEGER,
-	                               ScalarFunction::BinaryFunction<string_t, int32_t, int32_t, GetBitOperator>));
+ScalarFunction GetBitFun::GetFunction() {
+	return ScalarFunction({LogicalType::BIT, LogicalType::INTEGER}, LogicalType::INTEGER,
+	                               ScalarFunction::BinaryFunction<string_t, int32_t, int32_t, GetBitOperator>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -74,9 +71,9 @@ static void SetBitOperation(DataChunk &args, ExpressionState &state, Vector &res
 	    });
 }
 
-void SetBitFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("set_bit", {LogicalType::BIT, LogicalType::INTEGER, LogicalType::INTEGER},
-	                               LogicalType::BIT, SetBitOperation));
+ScalarFunction SetBitFun::GetFunction() {
+	return ScalarFunction({LogicalType::BIT, LogicalType::INTEGER, LogicalType::INTEGER},
+	                               LogicalType::BIT, SetBitOperation);
 }
 
 //===--------------------------------------------------------------------===//
@@ -92,9 +89,9 @@ struct BitPositionOperator {
 	}
 };
 
-void BitPositionFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("bit_position", {LogicalType::BIT, LogicalType::BIT}, LogicalType::INTEGER,
-	                               ScalarFunction::BinaryFunction<string_t, string_t, int32_t, BitPositionOperator>));
+ScalarFunction BitPositionFun::GetFunction() {
+	return ScalarFunction({LogicalType::BIT, LogicalType::BIT}, LogicalType::INTEGER,
+	                               ScalarFunction::BinaryFunction<string_t, string_t, int32_t, BitPositionOperator>);
 }
 
 } // namespace duckdb

@@ -90,6 +90,7 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath) {
 }
 
 void SQLLogicTestRunner::Reconnect() {
+	ExtensionHelper::LoadExtension(*db, "core_functions");
 	con = make_uniq<Connection>(*db);
 	if (original_sqlite_test) {
 		con->Query("SET integer_division=true");

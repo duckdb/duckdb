@@ -6,6 +6,13 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 
+#if defined(BUILD_CORE_FUNCTIONS_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
+#define CORE_FUNCTIONS_STATICALLY_LOADED true
+#include "core_functions_extension.hpp"
+#else
+#define CORE_FUNCTIONS_STATICALLY_LOADED false
+#endif
+
 #if defined(BUILD_ICU_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
 #define ICU_STATICALLY_LOADED true
 #include "icu-extension.hpp"
@@ -96,6 +103,7 @@ namespace duckdb {
 // Default Extensions
 //===--------------------------------------------------------------------===//
 static DefaultExtension internal_extensions[] = {
+    {"core_functions", "Provides the core function library of DuckDB", CORE_FUNCTIONS_STATICALLY_LOADED},
     {"icu", "Adds support for time zones and collations using the ICU library", ICU_STATICALLY_LOADED},
     {"parquet", "Adds support for reading and writing parquet files", PARQUET_STATICALLY_LOADED},
     {"tpch", "Adds TPC-H data generation and query support", TPCH_STATICALLY_LOADED},
@@ -143,7 +151,7 @@ bool ExtensionHelper::AllowAutoInstall(const string &extension) {
 //===--------------------------------------------------------------------===//
 void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
 	unordered_set<string> extensions {"parquet", "icu",   "tpch",     "tpcds", "fts",      "httpfs",      "visualizer",
-	                                  "json",    "excel", "sqlsmith", "inet",  "jemalloc", "autocomplete"};
+	                                  "json",    "excel", "sqlsmith", "inet",  "jemalloc", "autocomplete", "core_functions"};
 	for (auto &ext : extensions) {
 		LoadExtensionInternal(db, ext, true);
 	}
@@ -182,6 +190,13 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 		db.LoadExtension<ParquetExtension>();
 #else
 		// parquet extension required but not build: skip this test
+		return ExtensionLoadResult::NOT_LOADED;
+#endif
+	} else if (extension == "core_functions") {
+#if CORE_FUNCTIONS_STATICALLY_LOADED
+		db.LoadExtension<CoreFunctionsExtension>();
+#else
+		// core functions extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "icu") {

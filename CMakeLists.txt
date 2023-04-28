@@ -291,6 +291,7 @@ if(NOT CLANG_TIDY AND OS_NAME STREQUAL "linux")
   set(JEMALLOC_DEFAULT_BUILD TRUE)
 endif()
 
+option(BUILD_CORE_FUNCTIONS_EXTENSION "Build the core functions extension." TRUE)
 option(BUILD_ICU_EXTENSION "Build the ICU extension." FALSE)
 option(BUILD_PARQUET_EXTENSION "Build the Parquet extension." FALSE)
 option(BUILD_TPCH_EXTENSION "Build the TPC-H extension." FALSE)
@@ -348,6 +349,7 @@ if(BUILD_PYTHON
    OR BUILD_NODE
    OR CONFIGURE_R
    OR JDBC_DRIVER)
+  set(BUILD_CORE_FUNCTIONS_EXTENSION TRUE)
   set(BUILD_ICU_EXTENSION TRUE)
   set(BUILD_VISUALIZER_EXTENSION TRUE)
   set(BUILD_PARQUET_EXTENSION TRUE)
@@ -637,6 +639,11 @@ function(add_extension_definitions)
     add_definitions(-DBUILD_AUTOCOMPLETE_EXTENSION=${BUILD_AUTOCOMPLETE_EXTENSION})
   endif()
 
+  if(${BUILD_CORE_FUNCTIONS_EXTENSION})
+    include_directories(${PROJECT_SOURCE_DIR}/extension/core_functions/include)
+    add_definitions(-DBUILD_CORE_FUNCTIONS_EXTENSION=${BUILD_CORE_FUNCTIONS_EXTENSION})
+  endif()
+
   # Include paths for any registered out-of-tree extensions
   foreach(OOTE_NAME IN LISTS DUCKDB_OOT_EXTENSION_NAMES)
     string(TOUPPER ${OOTE_NAME} OOTE_NAME_UPPERCASE)
@@ -761,6 +768,10 @@ function(link_extension_libraries LIBRARY)
 
   if(${BUILD_AUTOCOMPLETE_EXTENSION})
     target_link_libraries(${LIBRARY} autocomplete_extension)
+  endif()
+
+  if(${BUILD_CORE_FUNCTIONS_EXTENSION})
+    target_link_libraries(${LIBRARY} core_functions_extension)
   endif()
 
   # Now link against any registered out-of-tree extensions
