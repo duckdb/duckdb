@@ -30,11 +30,15 @@ public:
 	}
 
 	~StreamingWindowState() override {
+		D_ASSERT(aggregate_dtors.size() == aggregate_bind_data.size());
+		D_ASSERT(aggregate_dtors.size() == aggregate_states.size());
 		for (size_t i = 0; i < aggregate_dtors.size(); ++i) {
-			auto dtor = aggregate_dtors[i];
+			auto dtor = aggregate_dtors.get(i);
 			if (dtor) {
-				AggregateInputData aggr_input_data(aggregate_bind_data[i], Allocator::DefaultAllocator());
-				state_ptr = aggregate_states[i].data();
+				auto &bind_data = aggregate_bind_data.get(i);
+				AggregateInputData aggr_input_data(bind_data, Allocator::DefaultAllocator());
+				auto &aggregate_state = aggregate_states.get(i);
+				state_ptr = aggregate_state.data();
 				dtor(statev, aggr_input_data, 1);
 			}
 		}

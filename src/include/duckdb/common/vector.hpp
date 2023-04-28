@@ -52,13 +52,27 @@ public:
 	vector(original &&other) : original(std::move(other)) {
 	}
 
-	typename original::reference operator[](typename original::size_type __n) {
-		__vector_utils::AssertIndexInBounds(__n, original::size());
+	template <bool UNSAFE = true>
+	inline typename original::reference get(typename original::size_type __n) {
+		if (!UNSAFE) {
+			__vector_utils::AssertIndexInBounds(__n, original::size());
+		}
 		return original::operator[](__n);
 	}
-	typename original::const_reference operator[](typename original::size_type __n) const {
-		__vector_utils::AssertIndexInBounds(__n, original::size());
+
+	template <bool UNSAFE = true>
+	inline typename original::const_reference get(typename original::size_type __n) const {
+		if (!UNSAFE) {
+			__vector_utils::AssertIndexInBounds(__n, original::size());
+		}
 		return original::operator[](__n);
+	}
+
+	typename original::reference operator[](typename original::size_type __n) {
+		return get<false>(__n);
+	}
+	typename original::const_reference operator[](typename original::size_type __n) const {
+		return get<false>(__n);
 	}
 };
 
