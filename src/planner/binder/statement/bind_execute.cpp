@@ -25,16 +25,21 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 	auto prepared = entry->second;
 	auto &named_param_map = prepared->unbound_statement->named_param_map;
 
-	vector<reference<unique_ptr<ParsedExpression>>> mapped_named_values;
+	case_insensitive_map_t<reference<unique_ptr<ParsedExpression>>> intermediate;
+	for (auto &pair : stmt.named_values) {
+		intermediate.emplace(pair);
+	}
 
+	// Add the unnamed values to the intermediate if they are present
 	if (named_param_map.size() != stmt.named_values.size()) {
 		// Lookup the parameter index from the vector index
 		for (idx_t i = 0; i < stmt.values.size(); i++) {
-			stmt.named_values[StringUtil::Format("%d", i + 1)] = std::move(stmt.values[i]);
+			intermediate.emplace(std::make_pair(StringUtil::Format("%d", i + 1),
+			                                    reference<unique_ptr<ParsedExpression>>(stmt.values[i])));
 		}
 	}
 
-	mapped_named_values = PreparedStatement::PrepareParameters(stmt.values, stmt.named_values, named_param_map);
+	auto mapped_named_values = PreparedStatement::PrepareParameters(stmt.values, intermediate, named_param_map);
 
 	// bind any supplied parameters
 	vector<Value> bind_values;

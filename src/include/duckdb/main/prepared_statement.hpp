@@ -127,7 +127,7 @@ public:
 
 	template <class PAYLOAD>
 	static vector<reference<PAYLOAD>> PrepareParameters(vector<PAYLOAD> &unnamed,
-	                                                    case_insensitive_map_t<PAYLOAD> &named,
+	                                                    case_insensitive_map_t<reference<PAYLOAD>> &named,
 	                                                    const case_insensitive_map_t<idx_t> &named_params) {
 		vector<reference<PAYLOAD>> result;
 		if (named.empty()) {

@@ -102,15 +102,21 @@ unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(vector<Value> &un
 	D_ASSERT(data);
 	PendingQueryParameters parameters;
 	auto &params = parameters.parameters;
+
+	case_insensitive_map_t<reference<Value>> intermediate;
+	for (auto &pair : named_values) {
+		intermediate.emplace(pair);
+	}
+
 	if (named_param_map.size() != named_values.size()) {
 		// Lookup the parameter index from the vector index
 		for (idx_t i = 0; i < unnamed_values.size(); i++) {
-			named_values[StringUtil::Format("%d", i + 1)] = std::move(unnamed_values[i]);
+			intermediate.emplace(std::make_pair(StringUtil::Format("%d", i + 1), reference<Value>(unnamed_values[i])));
 		}
 	}
-	if (!named_values.empty()) {
+	if (!intermediate.empty()) {
 		try {
-			params = PrepareParameters(unnamed_values, named_values, named_param_map);
+			params = PrepareParameters(unnamed_values, intermediate, named_param_map);
 		} catch (const Exception &ex) {
 			return make_uniq<PendingQueryResult>(PreservedError(ex));
 		}
