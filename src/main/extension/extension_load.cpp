@@ -181,7 +181,6 @@ void ExtensionHelper::LoadExternalExtension(ClientContext &context, const string
 	LoadExternalExtension(DatabaseInstance::GetDatabase(context), FileSystem::GetFileOpener(context), extension);
 }
 
-
 string ExtensionHelper::ExtractExtensionPrefixFromPath(const string &path) {
 	auto first_colon = path.find(':');
 	if (first_colon == string::npos || first_colon < 2) { // needs to be at least two characters because windows c: ...
