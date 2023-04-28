@@ -22,7 +22,7 @@ void GroupedAggregateData::InitializeGroupby(vector<unique_ptr<Expression>> grou
 	for (auto &expr : expressions) {
 		D_ASSERT(expr->expression_class == ExpressionClass::BOUND_AGGREGATE);
 		D_ASSERT(expr->IsAggregate());
-		auto &aggr = (BoundAggregateExpression &)*expr;
+		auto &aggr = expr->Cast<BoundAggregateExpression>();
 		bindings.push_back(&aggr);
 
 		aggregate_return_types.push_back(aggr.return_type);
@@ -45,7 +45,7 @@ void GroupedAggregateData::InitializeGroupby(vector<unique_ptr<Expression>> grou
 
 void GroupedAggregateData::InitializeDistinct(const unique_ptr<Expression> &aggregate,
                                               const vector<unique_ptr<Expression>> *groups_p) {
-	auto &aggr = (BoundAggregateExpression &)*aggregate;
+	auto &aggr = aggregate->Cast<BoundAggregateExpression>();
 	D_ASSERT(aggr.IsDistinct());
 
 	// Add the (empty in ungrouped case) groups of the aggregates

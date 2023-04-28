@@ -8,7 +8,7 @@ struct DuckDBDatabasesData : public GlobalTableFunctionState {
 	DuckDBDatabasesData() : offset(0) {
 	}
 
-	vector<AttachedDatabase *> entries;
+	vector<reference<AttachedDatabase>> entries;
 	idx_t offset;
 };
 
@@ -42,7 +42,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBDatabasesInit(ClientContext &context,
 }
 
 void DuckDBDatabasesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (DuckDBDatabasesData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<DuckDBDatabasesData>();
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;
@@ -53,7 +53,7 @@ void DuckDBDatabasesFunction(ClientContext &context, TableFunctionInput &data_p,
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset++];
 
-		auto &attached = (AttachedDatabase &)*entry;
+		auto &attached = entry.get().Cast<AttachedDatabase>();
 		// return values:
 
 		idx_t col = 0;

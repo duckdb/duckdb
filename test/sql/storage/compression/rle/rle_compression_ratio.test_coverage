@@ -13,7 +13,7 @@ PRAGMA force_compression='rle'
 # Compressed size: 1 x 64bit + 1x 16bit (sizeof rle_count_t)
 # Ratio: (5*64) / (64 + 16) = 4
 statement ok
-CREATE TABLE test_rle AS SELECT (i/5)::INT64 FROM range(0, 2500000) tbl(i);
+CREATE TABLE test_rle AS SELECT (i//5)::INT64 FROM range(0, 2500000) tbl(i);
 
 statement ok
 checkpoint
@@ -22,7 +22,7 @@ statement ok
 PRAGMA force_compression='uncompressed'
 
 statement ok
-CREATE TABLE test_uncompressed AS SELECT (i/10)::INT64 FROM range(0, 2500000) tbl(i);
+CREATE TABLE test_uncompressed AS SELECT (i//10)::INT64 FROM range(0, 2500000) tbl(i);
 
 statement ok
 checkpoint
@@ -30,7 +30,7 @@ checkpoint
 # This query keeps a pretty wide margin in compression ratio un purpose to account for possible implementation changes
 # that influence compression ratio.
 query II
-select (uncompressed::FLOAT / rle::FLOAT) > 2.5, (uncompressed::FLOAT / rle::FLOAT) < 4.5  FROM (
+select (uncompressed::FLOAT // rle::FLOAT) > 2.5, (uncompressed::FLOAT // rle::FLOAT) < 4.5  FROM (
     select
         (select count(distinct block_id) from pragma_storage_info('test_rle') where segment_type not in('VARCHAR', 'VALIDITY')) as rle,
         (select count(distinct block_id) from pragma_storage_info('test_uncompressed') where segment_type not in('VARCHAR', 'VALIDITY')) as uncompressed
@@ -51,7 +51,7 @@ statement ok
 PRAGMA force_compression='uncompressed';
 
 statement ok
-CREATE TABLE test_uncompressed AS SELECT ((i/10)%100)::${type} FROM range(0, 2500000) tbl(i);
+CREATE TABLE test_uncompressed AS SELECT ((i//10)%100)::${type} FROM range(0, 2500000) tbl(i);
 
 statement ok
 checkpoint
@@ -60,14 +60,14 @@ statement ok
 PRAGMA force_compression='rle'
 
 statement ok
-CREATE TABLE test_rle AS SELECT ((i/10)%100)::${type} FROM range(0, 2500000) tbl(i);
+CREATE TABLE test_rle AS SELECT ((i//10)%100)::${type} FROM range(0, 2500000) tbl(i);
 
 statement ok
 checkpoint
 
 # assert compression ratio >2 wich should be achieved for even the smallest types for this data
 query II
-select (uncompressed::FLOAT / rle::FLOAT) > 2, CAST(1 as ${type}) FROM (
+select (uncompressed::FLOAT // rle::FLOAT) > 2, CAST(1 as ${type}) FROM (
     select
         (select count(distinct block_id) from pragma_storage_info('test_rle') where segment_type not in('VARCHAR', 'VALIDITY')) as rle,
         (select count(distinct block_id) from pragma_storage_info('test_uncompressed') where segment_type not in('VARCHAR', 'VALIDITY')) as uncompressed

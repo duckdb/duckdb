@@ -16,7 +16,7 @@ TEST_CASE("Vectorized UDF functions using arguments", "[coverage][.]") {
 
 	string func_name, table_name, col_type;
 	// The types supported by the templated CreateVectorizedFunction
-	const vector<LogicalTypeId> all_sql_types = {
+	const duckdb::vector<LogicalTypeId> all_sql_types = {
 	    LogicalTypeId::BOOLEAN, LogicalTypeId::TINYINT, LogicalTypeId::SMALLINT, LogicalTypeId::DATE,
 	    LogicalTypeId::TIME,    LogicalTypeId::INTEGER, LogicalTypeId::BIGINT,   LogicalTypeId::TIMESTAMP,
 	    LogicalTypeId::FLOAT,   LogicalTypeId::DOUBLE,  LogicalTypeId::VARCHAR};
@@ -272,8 +272,8 @@ TEST_CASE("Vectorized UDF functions using arguments", "[coverage][.]") {
 	}
 
 	SECTION("Cheking Vectorized UDF functions with several input columns") {
-		vector<LogicalType> sql_args = {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::INTEGER,
-		                                LogicalType::INTEGER};
+		duckdb::vector<LogicalType> sql_args = {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::INTEGER,
+		                                        LogicalType::INTEGER};
 		// UDF with 4 input ints, return the last one
 		con.CreateVectorizedFunction("udf_four_ints", sql_args, LogicalType::INTEGER,
 		                             &udf_several_constant_input<int, 4>);

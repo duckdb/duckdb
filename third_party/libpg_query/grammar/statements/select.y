@@ -336,12 +336,12 @@ simple_select:
 					res->pivot = n;
 					$$ = (PGNode *)res;
 				}
-			| unpivot_keyword table_ref ON target_list_opt_comma INTO NAME_P name VALUE_P name
+			| unpivot_keyword table_ref ON target_list_opt_comma INTO NAME_P name value_or_values name_list_opt_comma_opt_bracket
 				{
 					PGSelectStmt *res = makeNode(PGSelectStmt);
 					PGPivotStmt *n = makeNode(PGPivotStmt);
 					n->source = $2;
-					n->unpivots = list_make1(makeString($9));
+					n->unpivots = $9;
 					PGPivot *piv = makeNode(PGPivot);
 					piv->unpivot_columns = list_make1(makeString($7));
 					piv->pivot_value = $4;
@@ -365,6 +365,10 @@ simple_select:
 					$$ = (PGNode *)res;
 				}
 		;
+
+value_or_values:
+		VALUE_P | VALUES
+	;
 
 pivot_keyword:
 		PIVOT | PIVOT_WIDER
@@ -2119,6 +2123,8 @@ a_expr:		c_expr									{ $$ = $1; }
 				{ $$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "*", $1, $3, @2); }
 			| a_expr '/' a_expr
 				{ $$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "/", $1, $3, @2); }
+			| a_expr INTEGER_DIVISION a_expr
+				{ $$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "//", $1, $3, @2); }
 			| a_expr '%' a_expr
 				{ $$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "%", $1, $3, @2); }
 			| a_expr '^' a_expr
@@ -2539,6 +2545,8 @@ b_expr:		c_expr
 				{ $$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "*", $1, $3, @2); }
 			| b_expr '/' b_expr
 				{ $$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "/", $1, $3, @2); }
+			| b_expr INTEGER_DIVISION b_expr
+				{ $$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "//", $1, $3, @2); }
 			| b_expr '%' b_expr
 				{ $$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "%", $1, $3, @2); }
 			| b_expr '^' b_expr
@@ -2847,66 +2855,6 @@ func_expr_common_subexpr:
 					$$ = (PGNode *) makeFuncCall(SystemFuncName("pg_collation_for"),
 											   list_make1($4),
 											   @1);
-				}
-			| CURRENT_DATE
-				{
-					$$ = makeSQLValueFunction(PG_SVFOP_CURRENT_DATE, -1, @1);
-				}
-			| CURRENT_TIME
-				{
-					$$ = makeSQLValueFunction(PG_SVFOP_CURRENT_TIME, -1, @1);
-				}
-			| CURRENT_TIME '(' Iconst ')'
-				{
-					$$ = makeSQLValueFunction(PG_SVFOP_CURRENT_TIME_N, $3, @1);
-				}
-			| CURRENT_TIMESTAMP
-				{
-					$$ = makeSQLValueFunction(PG_SVFOP_CURRENT_TIMESTAMP, -1, @1);
-				}
-			| CURRENT_TIMESTAMP '(' Iconst ')'
-				{
-					$$ = makeSQLValueFunction(PG_SVFOP_CURRENT_TIMESTAMP_N, $3, @1);
-				}
-			| LOCALTIME
-				{
-					$$ = makeSQLValueFunction(PG_SVFOP_LOCALTIME, -1, @1);
-				}
-			| LOCALTIME '(' Iconst ')'
-				{
-					$$ = makeSQLValueFunction(PG_SVFOP_LOCALTIME_N, $3, @1);
-				}
-			| LOCALTIMESTAMP
-				{
-					$$ = makeSQLValueFunction(PG_SVFOP_LOCALTIMESTAMP, -1, @1);
-				}
-			| LOCALTIMESTAMP '(' Iconst ')'
-				{
-					$$ = makeSQLValueFunction(PG_SVFOP_LOCALTIMESTAMP_N, $3, @1);
-				}
-			| CURRENT_ROLE
-				{
-					$$ = makeSQLValueFunction(PG_SVFOP_CURRENT_ROLE, -1, @1);
-				}
-			| CURRENT_USER
-				{
-					$$ = makeSQLValueFunction(PG_SVFOP_CURRENT_USER, -1, @1);
-				}
-			| SESSION_USER
-				{
-					$$ = makeSQLValueFunction(PG_SVFOP_SESSION_USER, -1, @1);
-				}
-			| USER
-				{
-					$$ = makeSQLValueFunction(PG_SVFOP_USER, -1, @1);
-				}
-			| CURRENT_CATALOG
-				{
-					$$ = makeSQLValueFunction(PG_SVFOP_CURRENT_CATALOG, -1, @1);
-				}
-			| CURRENT_SCHEMA
-				{
-					$$ = makeSQLValueFunction(PG_SVFOP_CURRENT_SCHEMA, -1, @1);
 				}
 			| CAST '(' a_expr AS Typename ')'
 				{ $$ = makeTypeCast($3, $5, 0, @1); }
@@ -3295,6 +3243,7 @@ MathOp:		 '+'									{ $$ = "+"; }
 			| '-'									{ $$ = "-"; }
 			| '*'									{ $$ = "*"; }
 			| '/'									{ $$ = "/"; }
+			| INTEGER_DIVISION						{ $$ = "//"; }
 			| '%'									{ $$ = "%"; }
 			| '^'									{ $$ = "^"; }
 			| POWER_OF								{ $$ = "**"; }

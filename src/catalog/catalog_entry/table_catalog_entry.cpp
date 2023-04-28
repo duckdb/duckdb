@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTableInfo &info)
+TableCatalogEntry::TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info)
     : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info.table), columns(std::move(info.columns)),
       constraints(std::move(info.constraints)) {
 	this->temporary = info.temporary;
@@ -51,11 +51,11 @@ vector<LogicalType> TableCatalogEntry::GetTypes() {
 	return types;
 }
 
-void TableCatalogEntry::Serialize(Serializer &serializer) {
+void TableCatalogEntry::Serialize(Serializer &serializer) const {
 	D_ASSERT(!internal);
 
 	FieldWriter writer(serializer);
-	writer.WriteString(schema->name);
+	writer.WriteString(schema.name);
 	writer.WriteString(name);
 	columns.Serialize(writer);
 	writer.WriteSerializableList(constraints);
@@ -88,10 +88,10 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 	vector<string> extra_constraints;
 	for (auto &constraint : constraints) {
 		if (constraint->type == ConstraintType::NOT_NULL) {
-			auto &not_null = (NotNullConstraint &)*constraint;
+			auto &not_null = constraint->Cast<NotNullConstraint>();
 			not_null_columns.insert(not_null.index);
 		} else if (constraint->type == ConstraintType::UNIQUE) {
-			auto &pk = (UniqueConstraint &)*constraint;
+			auto &pk = constraint->Cast<UniqueConstraint>();
 			vector<string> constraint_columns = pk.columns;
 			if (pk.index.index != DConstants::INVALID_INDEX) {
 				// no columns specified: single column constraint
@@ -111,7 +111,7 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 				extra_constraints.push_back(constraint->ToString());
 			}
 		} else if (constraint->type == ConstraintType::FOREIGN_KEY) {
-			auto &fk = (ForeignKeyConstraint &)*constraint;
+			auto &fk = constraint->Cast<ForeignKeyConstraint>();
 			if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE ||
 			    fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
 				extra_constraints.push_back(constraint->ToString());
@@ -160,13 +160,13 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 	return ss.str();
 }
 
-string TableCatalogEntry::ToSQL() {
+string TableCatalogEntry::ToSQL() const {
 	std::stringstream ss;
 
 	ss << "CREATE TABLE ";
 
-	if (schema->name != DEFAULT_SCHEMA) {
-		ss << KeywordHelper::WriteOptionallyQuoted(schema->name) << ".";
+	if (schema.name != DEFAULT_SCHEMA) {
+		ss << KeywordHelper::WriteOptionallyQuoted(schema.name) << ".";
 	}
 
 	ss << KeywordHelper::WriteOptionallyQuoted(name);
@@ -194,10 +194,6 @@ const vector<unique_ptr<Constraint>> &TableCatalogEntry::GetConstraints() {
 
 DataTable &TableCatalogEntry::GetStorage() {
 	throw InternalException("Calling GetStorage on a TableCatalogEntry that is not a DuckTableEntry");
-}
-
-DataTable *TableCatalogEntry::GetStoragePtr() {
-	throw InternalException("Calling GetStoragePtr on a TableCatalogEntry that is not a DuckTableEntry");
 }
 
 const vector<unique_ptr<BoundConstraint>> &TableCatalogEntry::GetBoundConstraints() {

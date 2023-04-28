@@ -14,6 +14,9 @@ namespace duckdb {
 //! Represents a cross product
 class EmptyTableRef : public TableRef {
 public:
+	static constexpr const TableReferenceType TYPE = TableReferenceType::EMPTY;
+
+public:
 	EmptyTableRef() : TableRef(TableReferenceType::EMPTY) {
 	}
 

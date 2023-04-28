@@ -34,16 +34,33 @@ public:
 	virtual ~MacroFunction() {
 	}
 
-	void CopyProperties(MacroFunction &other);
+	void CopyProperties(MacroFunction &other) const;
 
-	virtual unique_ptr<MacroFunction> Copy() = 0;
+	virtual unique_ptr<MacroFunction> Copy() const = 0;
 
 	static string ValidateArguments(MacroFunction &macro_function, const string &name,
 	                                FunctionExpression &function_expr,
 	                                vector<unique_ptr<ParsedExpression>> &positionals,
 	                                unordered_map<string, unique_ptr<ParsedExpression>> &defaults);
 
-	virtual string ToSQL(const string &schema, const string &name);
+	virtual string ToSQL(const string &schema, const string &name) const;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast macro to type - macro type mismatch");
+		}
+		return (TARGET &)*this;
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast macro to type - macro type mismatch");
+		}
+		return (const TARGET &)*this;
+	}
 };
 
 } // namespace duckdb

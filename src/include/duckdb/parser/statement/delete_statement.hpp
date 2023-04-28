@@ -17,6 +17,9 @@ namespace duckdb {
 
 class DeleteStatement : public SQLStatement {
 public:
+	static constexpr const StatementType TYPE = StatementType::DELETE_STATEMENT;
+
+public:
 	DeleteStatement();
 
 	unique_ptr<ParsedExpression> condition;

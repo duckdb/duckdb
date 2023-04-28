@@ -3,12 +3,10 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/pair.hpp"
-#include "duckdb/common/to_string.hpp"
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/execution/operator/scan/physical_positional_scan.hpp"
 #include "duckdb/parallel/pipeline.hpp"
-
 #include "utf8proc_wrapper.hpp"
 
 #include <sstream>
@@ -394,10 +392,10 @@ void TreeChildrenIterator::Iterate(const PhysicalOperator &op,
 		callback(*child);
 	}
 	if (op.type == PhysicalOperatorType::DELIM_JOIN) {
-		auto &delim = (PhysicalDelimJoin &)op;
+		auto &delim = op.Cast<PhysicalDelimJoin>();
 		callback(*delim.join);
 	} else if ((op.type == PhysicalOperatorType::POSITIONAL_SCAN)) {
-		auto &pscan = (PhysicalPositionalScan &)op;
+		auto &pscan = op.Cast<PhysicalPositionalScan>();
 		for (auto &table : pscan.child_tables) {
 			callback(*table);
 		}
@@ -405,10 +403,10 @@ void TreeChildrenIterator::Iterate(const PhysicalOperator &op,
 }
 
 struct PipelineRenderNode {
-	explicit PipelineRenderNode(PhysicalOperator &op) : op(op) {
+	explicit PipelineRenderNode(const PhysicalOperator &op) : op(op) {
 	}
 
-	PhysicalOperator &op;
+	const PhysicalOperator &op;
 	unique_ptr<PipelineRenderNode> child;
 };
 
@@ -544,7 +542,7 @@ unique_ptr<RenderTree> TreeRenderer::CreateTree(const Pipeline &op) {
 	D_ASSERT(!operators.empty());
 	unique_ptr<PipelineRenderNode> node;
 	for (auto &op : operators) {
-		auto new_node = make_uniq<PipelineRenderNode>(*op);
+		auto new_node = make_uniq<PipelineRenderNode>(op.get());
 		new_node->child = std::move(node);
 		node = std::move(new_node);
 	}

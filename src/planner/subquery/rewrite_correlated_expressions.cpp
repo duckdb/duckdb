@@ -70,7 +70,7 @@ void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelated
 void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelatedExpressions(Expression &child) {
 	if (child.type == ExpressionType::BOUND_COLUMN_REF) {
 		// bound column reference
-		auto &bound_colref = (BoundColumnRefExpression &)child;
+		auto &bound_colref = child.Cast<BoundColumnRefExpression>();
 		if (bound_colref.depth == 0) {
 			// not a correlated column, ignore
 			return;
@@ -87,7 +87,7 @@ void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelated
 	} else if (child.type == ExpressionType::SUBQUERY) {
 		// we encountered another subquery: rewrite recursively
 		D_ASSERT(child.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY);
-		auto &bound_subquery = (BoundSubqueryExpression &)child;
+		auto &bound_subquery = child.Cast<BoundSubqueryExpression>();
 		RewriteCorrelatedRecursive rewrite(bound_subquery, base_binding, correlated_map);
 		rewrite.RewriteCorrelatedSubquery(bound_subquery);
 	}

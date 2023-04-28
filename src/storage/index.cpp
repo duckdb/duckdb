@@ -10,10 +10,10 @@ namespace duckdb {
 
 Index::Index(AttachedDatabase &db, IndexType type, TableIOManager &table_io_manager,
              const vector<column_t> &column_ids_p, const vector<unique_ptr<Expression>> &unbound_expressions,
-             IndexConstraintType constraint_type_p, bool track_memory)
+             IndexConstraintType constraint_type_p)
 
     : type(type), table_io_manager(table_io_manager), column_ids(column_ids_p), constraint_type(constraint_type_p),
-      db(db), buffer_manager(BufferManager::GetBufferManager(db)), memory_size(0), track_memory(track_memory) {
+      db(db), buffer_manager(BufferManager::GetBufferManager(db)) {
 
 	for (auto &expr : unbound_expressions) {
 		types.push_back(expr->return_type.InternalType());
@@ -48,18 +48,29 @@ void Index::Delete(DataChunk &entries, Vector &row_identifiers) {
 	Delete(state, entries, row_identifiers);
 }
 
-bool Index::MergeIndexes(Index *other_index) {
+bool Index::MergeIndexes(Index &other_index) {
 
 	IndexLock state;
 	InitializeLock(state);
 
 	switch (this->type) {
-	case IndexType::ART: {
-		auto art = (ART *)this;
-		return art->MergeIndexes(state, other_index);
-	}
+	case IndexType::ART:
+		return Cast<ART>().MergeIndexes(state, other_index);
 	default:
 		throw InternalException("Unimplemented index type for merge");
+	}
+}
+
+void Index::Vacuum() {
+
+	IndexLock state;
+	InitializeLock(state);
+
+	switch (this->type) {
+	case IndexType::ART:
+		return Cast<ART>().Vacuum(state);
+	default:
+		throw InternalException("Unimplemented index type for vacuum");
 	}
 }
 
@@ -69,7 +80,7 @@ void Index::ExecuteExpressions(DataChunk &input, DataChunk &result) {
 
 unique_ptr<Expression> Index::BindExpression(unique_ptr<Expression> expr) {
 	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &bound_colref = (BoundColumnRefExpression &)*expr;
+		auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
 		return make_uniq<BoundReferenceExpression>(expr->return_type, column_ids[bound_colref.binding.column_index]);
 	}
 	ExpressionIterator::EnumerateChildren(

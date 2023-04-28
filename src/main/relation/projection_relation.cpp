@@ -37,7 +37,7 @@ unique_ptr<QueryNode> ProjectionRelation::GetQueryNode() {
 		result = std::move(select);
 	}
 	D_ASSERT(result->type == QueryNodeType::SELECT_NODE);
-	auto &select_node = (SelectNode &)*result;
+	auto &select_node = result->Cast<SelectNode>();
 	select_node.aggregate_handling = AggregateHandling::NO_AGGREGATES_ALLOWED;
 	select_node.select_list.clear();
 	for (auto &expr : expressions) {

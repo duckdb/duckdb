@@ -23,7 +23,7 @@ bool ConstantExpression::Equal(const ConstantExpression *a, const ConstantExpres
 }
 
 hash_t ConstantExpression::Hash() const {
-	return ParsedExpression::Hash();
+	return value.Hash();
 }
 
 unique_ptr<ParsedExpression> ConstantExpression::Copy() const {

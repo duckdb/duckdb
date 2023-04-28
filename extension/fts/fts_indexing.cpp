@@ -21,7 +21,7 @@ string drop_fts_index_query(ClientContext &context, const FunctionParameters &pa
 	}
 	string fts_schema = fts_schema_name(qname.schema, qname.name);
 
-	if (!Catalog::GetSchema(context, INVALID_CATALOG, fts_schema, true)) {
+	if (!Catalog::GetSchema(context, INVALID_CATALOG, fts_schema, OnEntryNotFound::RETURN_NULL)) {
 		throw CatalogException(
 		    "a FTS index does not exist on table '%s.%s'. Create one with 'PRAGMA create_fts_index()'.", qname.schema,
 		    qname.name);
@@ -285,7 +285,7 @@ string create_fts_index_query(ClientContext &context, const FunctionParameters &
 	}
 
 	// throw error if an index already exists on this table
-	if (Catalog::GetSchema(context, INVALID_CATALOG, fts_schema, true) && !overwrite) {
+	if (Catalog::GetSchema(context, INVALID_CATALOG, fts_schema, OnEntryNotFound::RETURN_NULL) && !overwrite) {
 		throw CatalogException("a FTS index already exists on table '%s.%s'. Supply 'overwite=1' to overwrite, or "
 		                       "drop the existing index with 'PRAGMA drop_fts_index()' before creating a new one.",
 		                       qname.schema, qname.name);
@@ -294,21 +294,21 @@ string create_fts_index_query(ClientContext &context, const FunctionParameters &
 	// positional parameters
 	auto doc_id = StringValue::Get(parameters.values[1]);
 	// check all specified columns
-	auto table = Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, qname.schema, qname.name);
+	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, qname.schema, qname.name);
 	vector<string> doc_values;
 	for (idx_t i = 2; i < parameters.values.size(); i++) {
 		string col_name = StringValue::Get(parameters.values[i]);
 		if (col_name == "*") {
 			// star found - get all columns
 			doc_values.clear();
-			for (auto &cd : table->GetColumns().Logical()) {
+			for (auto &cd : table.GetColumns().Logical()) {
 				if (cd.Type() == LogicalType::VARCHAR) {
 					doc_values.push_back(cd.Name());
 				}
 			}
 			break;
 		}
-		if (!table->ColumnExists(col_name)) {
+		if (!table.ColumnExists(col_name)) {
 			// we check this here because else we we end up with an error halfway the indexing script
 			throw CatalogException("Table '%s.%s' does not have a column named '%s'!", qname.schema, qname.name,
 			                       col_name);

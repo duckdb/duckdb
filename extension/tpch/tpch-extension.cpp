@@ -169,22 +169,22 @@ void TPCHExtension::Load(DuckDB &db) {
 	CreateTableFunctionInfo dbgen_info(dbgen_func);
 
 	// create the dbgen function
-	catalog.CreateTableFunction(*con.context, &dbgen_info);
+	catalog.CreateTableFunction(*con.context, dbgen_info);
 
 	// create the TPCH pragma that allows us to run the query
 	auto tpch_func = PragmaFunction::PragmaCall("tpch", PragmaTpchQuery, {LogicalType::BIGINT});
 	CreatePragmaFunctionInfo info(tpch_func);
-	catalog.CreatePragmaFunction(*con.context, &info);
+	catalog.CreatePragmaFunction(*con.context, info);
 
 	// create the TPCH_QUERIES function that returns the query
 	TableFunction tpch_query_func("tpch_queries", {}, TPCHQueryFunction, TPCHQueryBind, TPCHInit);
 	CreateTableFunctionInfo tpch_query_info(tpch_query_func);
-	catalog.CreateTableFunction(*con.context, &tpch_query_info);
+	catalog.CreateTableFunction(*con.context, tpch_query_info);
 
 	// create the TPCH_ANSWERS that returns the query result
 	TableFunction tpch_query_answer_func("tpch_answers", {}, TPCHQueryAnswerFunction, TPCHQueryAnswerBind, TPCHInit);
 	CreateTableFunctionInfo tpch_query_asnwer_info(tpch_query_answer_func);
-	catalog.CreateTableFunction(*con.context, &tpch_query_asnwer_info);
+	catalog.CreateTableFunction(*con.context, tpch_query_asnwer_info);
 
 	con.Commit();
 }

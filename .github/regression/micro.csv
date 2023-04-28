@@ -14,3 +14,5 @@ benchmark/micro/catalog/add_column_empty.benchmark
 benchmark/micro/groupby-parallel/many_groups_large_values_small.benchmark
 benchmark/tpch/csv/lineitem_csv_auto_detect.benchmark
 benchmark/tpch/parquet/write_lineitem_parquet.benchmark
+benchmark/tpch/pivot/lineitem_pivot_returnflag.benchmark
+benchmark/tpch/pivot/lineitem_pivot_shipdate.benchmark

@@ -127,6 +127,10 @@ public:
 
 		date_t ToDate();
 		timestamp_t ToTimestamp();
+
+		bool TryToDate(date_t &result);
+		bool TryToTimestamp(timestamp_t &result);
+
 		DUCKDB_API string FormatError(string_t input, const string &format_specifier);
 	};
 

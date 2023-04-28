@@ -18,6 +18,9 @@ namespace duckdb {
 //! It assumes that all functions have a common partitioning and ordering
 class PhysicalWindow : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::WINDOW;
+
+public:
 	PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality,
 	               PhysicalOperatorType type = PhysicalOperatorType::WINDOW);
 
@@ -35,12 +38,15 @@ public:
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
 
+	bool IsSource() const override {
+		return true;
+	}
 	bool ParallelSource() const override {
 		return true;
 	}
 
-	bool IsOrderPreserving() const override {
-		return true;
+	OrderPreservationType SourceOrder() const override {
+		return OrderPreservationType::NO_ORDER;
 	}
 
 public:
@@ -62,7 +68,7 @@ public:
 		return !is_order_dependent;
 	}
 
-	bool IsOrderDependent() const override {
+	bool SinkOrderDependent() const override {
 		return is_order_dependent;
 	}
 

@@ -20,11 +20,6 @@ CREATE VIEW glob_view AS SELECT * FROM read_csv_auto('__TEST_DIR__/projection_pu
 statement ok
 CREATE VIEW list_view AS SELECT * FROM read_csv_auto(['__TEST_DIR__/projection_pushdown_f1.csv', '__TEST_DIR__/projection_pushdown_f2.csv', '__TEST_DIR__/projection_pushdown_f3.csv'])
 
-#foreach parallel_csv true false
-#
-#statement ok
-#SET experimental_parallel_csv=${parallel_csv}
-
 foreach tbl glob_view list_view
 
 query I
@@ -54,5 +49,3 @@ SELECT COUNT(*) FROM ${tbl}
 3
 
 endloop
-
-#endloop

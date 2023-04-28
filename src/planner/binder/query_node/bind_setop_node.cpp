@@ -13,10 +13,10 @@
 namespace duckdb {
 
 static void GatherAliases(BoundQueryNode &node, case_insensitive_map_t<idx_t> &aliases,
-                          expression_map_t<idx_t> &expressions, const vector<idx_t> &reorder_idx) {
+                          parsed_expression_map_t<idx_t> &expressions, const vector<idx_t> &reorder_idx) {
 	if (node.type == QueryNodeType::SET_OPERATION_NODE) {
 		// setop, recurse
-		auto &setop = (BoundSetOperationNode &)node;
+		auto &setop = node.Cast<BoundSetOperationNode>();
 
 		// create new reorder index
 		if (setop.setop_type == SetOperationType::UNION_BY_NAME) {
@@ -41,7 +41,7 @@ static void GatherAliases(BoundQueryNode &node, case_insensitive_map_t<idx_t> &a
 	} else {
 		// query node
 		D_ASSERT(node.type == QueryNodeType::SELECT_NODE);
-		auto &select = (BoundSelectNode &)node;
+		auto &select = node.Cast<BoundSelectNode>();
 		// fill the alias lists
 		for (idx_t i = 0; i < select.names.size(); i++) {
 			auto &name = select.names[i];
@@ -66,16 +66,16 @@ static void GatherAliases(BoundQueryNode &node, case_insensitive_map_t<idx_t> &a
 				aliases[name] = index;
 			}
 			// now check if the node is already in the set of expressions
-			auto expr_entry = expressions.find(expr.get());
+			auto expr_entry = expressions.find(*expr);
 			if (expr_entry != expressions.end()) {
 				// the node is in there
 				// repeat the same as with the alias: if there is an ambiguity we insert "-1"
 				if (expr_entry->second != index) {
-					expressions[expr.get()] = DConstants::INVALID_INDEX;
+					expressions[*expr] = DConstants::INVALID_INDEX;
 				}
 			} else {
 				// not in there yet, just place it in there
-				expressions[expr.get()] = index;
+				expressions[*expr] = index;
 			}
 		}
 	}
@@ -240,7 +240,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 		// we recursively visit the children of this node to extract aliases and expressions that can be referenced
 		// in the ORDER BY
 		case_insensitive_map_t<idx_t> alias_map;
-		expression_map_t<idx_t> expression_map;
+		parsed_expression_map_t<idx_t> expression_map;
 
 		if (result->setop_type == SetOperationType::UNION_BY_NAME) {
 			GatherAliases(*result->left, alias_map, expression_map, result->left_reorder_idx);

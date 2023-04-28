@@ -15,7 +15,7 @@ class NewOperator : public LogicalOperator {
 
 public:
 	explicit NewOperator(double_t value)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_DUMMY_SCAN, vector<duckdb::unique_ptr<Expression>>()),
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_DUMMY_SCAN, duckdb::vector<duckdb::unique_ptr<Expression>>()),
 	      value(value) {
 	}
 

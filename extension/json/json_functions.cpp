@@ -7,6 +7,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 
 namespace duckdb {
 
@@ -18,7 +19,7 @@ static void CheckPath(const Value &path_val, string &path, size_t &len) {
 	}
 	auto path_str = path_str_val.GetValueUnsafe<string_t>();
 	len = path_str.GetSize();
-	auto ptr = path_str.GetDataUnsafe();
+	auto ptr = path_str.GetData();
 	// Empty strings and invalid $ paths yield an error
 	if (len == 0) {
 		throw InvalidInputException("Empty JSON path");
@@ -115,7 +116,7 @@ unique_ptr<FunctionLocalState> JSONFunctionLocalState::Init(ExpressionState &sta
 }
 
 JSONFunctionLocalState &JSONFunctionLocalState::ResetAndGet(ExpressionState &state) {
-	auto &lstate = (JSONFunctionLocalState &)*ExecuteFunctionState::GetFunctionState(state);
+	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<JSONFunctionLocalState>();
 	lstate.json_allocator.Reset();
 	return lstate;
 }
@@ -147,7 +148,14 @@ vector<CreateScalarFunctionInfo> JSONFunctions::GetScalarFunctions() {
 	functions.push_back(GetTypeFunction());
 	functions.push_back(GetValidFunction());
 	functions.push_back(GetSerializeSqlFunction());
+	functions.push_back(GetDeserializeSqlFunction());
 
+	return functions;
+}
+
+vector<CreatePragmaFunctionInfo> JSONFunctions::GetPragmaFunctions() {
+	vector<CreatePragmaFunctionInfo> functions;
+	functions.push_back(GetExecuteJsonSerializedSqlPragmaFunction());
 	return functions;
 }
 
@@ -163,6 +171,7 @@ vector<CreateTableFunctionInfo> JSONFunctions::GetTableFunctions() {
 	functions.push_back(GetReadNDJSONFunction());
 	functions.push_back(GetReadJSONAutoFunction());
 	functions.push_back(GetReadNDJSONAutoFunction());
+	functions.push_back(GetExecuteJsonSerializedSqlFunction());
 
 	return functions;
 }
@@ -197,14 +206,14 @@ static duckdb::unique_ptr<FunctionLocalState> InitJSONCastLocalState(CastLocalSt
 }
 
 static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	auto &lstate = (JSONFunctionLocalState &)*parameters.local_state;
+	auto &lstate = parameters.local_state->Cast<JSONFunctionLocalState>();
 	lstate.json_allocator.Reset();
 	auto alc = lstate.json_allocator.GetYYJSONAllocator();
 
 	bool success = true;
 	UnaryExecutor::ExecuteWithNulls<string_t, string_t>(
 	    source, result, count, [&](string_t input, ValidityMask &mask, idx_t idx) {
-		    auto data = (char *)(input.GetDataUnsafe());
+		    auto data = (char *)(input.GetData());
 		    auto length = input.GetSize();
 		    yyjson_read_err error;
 

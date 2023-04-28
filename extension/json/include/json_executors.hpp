@@ -33,7 +33,7 @@ public:
 	template <class T>
 	static void BinaryExecute(DataChunk &args, ExpressionState &state, Vector &result,
 	                          std::function<T(yyjson_val *, yyjson_alc *, Vector &)> fun) {
-		auto &func_expr = (BoundFunctionExpression &)state.expr;
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		const auto &info = (JSONReadFunctionData &)*func_expr.bind_info;
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 		auto alc = lstate.json_allocator.GetYYJSONAllocator();
@@ -80,7 +80,7 @@ public:
 	template <class T>
 	static void ExecuteMany(DataChunk &args, ExpressionState &state, Vector &result,
 	                        std::function<T(yyjson_val *, yyjson_alc *, Vector &)> fun) {
-		auto &func_expr = (BoundFunctionExpression &)state.expr;
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		const auto &info = (JSONReadManyFunctionData &)*func_expr.bind_info;
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 		auto alc = lstate.json_allocator.GetYYJSONAllocator();

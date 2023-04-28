@@ -55,7 +55,7 @@ unique_ptr<ParsedExpression> Transformer::TransformArrayAccess(duckdb_libpgquery
 			if (function->type != ExpressionType::FUNCTION) {
 				throw ParserException("%s.%s() call must be a function", result->ToString(), function->ToString());
 			}
-			auto &f = (FunctionExpression &)*function;
+			auto &f = function->Cast<FunctionExpression>();
 			f.children.insert(f.children.begin(), std::move(result));
 			result = std::move(function);
 			break;

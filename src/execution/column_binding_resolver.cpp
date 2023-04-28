@@ -23,7 +23,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
 		// special case: comparison join
-		auto &comp_join = (LogicalComparisonJoin &)op;
+		auto &comp_join = op.Cast<LogicalComparisonJoin>();
 		// first get the bindings of the LHS and resolve the LHS expressions
 		VisitOperator(*comp_join.children[0]);
 		for (auto &cond : comp_join.conditions) {
@@ -31,7 +31,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		}
 		if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 			// visit the duplicate eliminated columns on the LHS, if any
-			auto &delim_join = (LogicalDelimJoin &)op;
+			auto &delim_join = op.Cast<LogicalDelimJoin>();
 			for (auto &expr : delim_join.duplicate_eliminated_columns) {
 				VisitExpression(&expr);
 			}
@@ -51,7 +51,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		// this operator
 		VisitOperatorChildren(op);
 		bindings = op.GetColumnBindings();
-		auto &any_join = (LogicalAnyJoin &)op;
+		auto &any_join = op.Cast<LogicalAnyJoin>();
 		if (any_join.join_type == JoinType::SEMI || any_join.join_type == JoinType::ANTI) {
 			auto right_bindings = op.children[1]->GetColumnBindings();
 			bindings.insert(bindings.end(), right_bindings.begin(), right_bindings.end());
@@ -62,7 +62,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_CREATE_INDEX: {
 		// CREATE INDEX statement, add the columns of the table with table index 0 to the binding set
 		// afterwards bind the expressions of the CREATE INDEX statement
-		auto &create_index = (LogicalCreateIndex &)op;
+		auto &create_index = op.Cast<LogicalCreateIndex>();
 		bindings = LogicalOperator::GenerateColumnBindings(0, create_index.table.GetColumns().LogicalColumnCount());
 		VisitOperatorExpressions(op);
 		return;
@@ -76,11 +76,11 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_INSERT: {
 		//! We want to execute the normal path, but also add a dummy 'excluded' binding if there is a
 		// ON CONFLICT DO UPDATE clause
-		auto &insert_op = (LogicalInsert &)op;
+		auto &insert_op = op.Cast<LogicalInsert>();
 		if (insert_op.action_type != OnConflictAction::THROW) {
 			// Get the bindings from the children
 			VisitOperatorChildren(op);
-			auto column_count = insert_op.table->GetColumns().PhysicalColumnCount();
+			auto column_count = insert_op.table.GetColumns().PhysicalColumnCount();
 			auto dummy_bindings = LogicalOperator::GenerateColumnBindings(insert_op.excluded_table_index, column_count);
 			// Now insert our dummy bindings at the start of the bindings,
 			// so the first 'column_count' indices of the chunk are reserved for our 'excluded' columns

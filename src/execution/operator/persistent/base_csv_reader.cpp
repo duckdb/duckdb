@@ -42,6 +42,9 @@ BaseCSVReader::~BaseCSVReader() {
 unique_ptr<CSVFileHandle> BaseCSVReader::OpenCSV(const BufferedCSVReaderOptions &options_p) {
 	auto file_handle = fs.OpenFile(options_p.file_path.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK,
 	                               options_p.compression, this->opener);
+	if (file_handle->CanSeek()) {
+		file_handle->Reset();
+	}
 	return make_uniq<CSVFileHandle>(std::move(file_handle));
 }
 
@@ -265,8 +268,8 @@ void BaseCSVReader::AddValue(string_t str_val, idx_t &column, vector<idx_t> &esc
 	idx_t row_entry = parse_chunk.size();
 
 	// test against null string, but only if the value was not quoted
-	if ((!has_quotes || return_types[column].id() != LogicalTypeId::VARCHAR) && !options.force_not_null[column] &&
-	    Equals::Operation(str_val, string_t(options.null_str))) {
+	if ((!(has_quotes && !options.allow_quoted_nulls) || return_types[column].id() != LogicalTypeId::VARCHAR) &&
+	    !options.force_not_null[column] && Equals::Operation(str_val, string_t(options.null_str))) {
 		FlatVector::SetNull(parse_chunk.data[column], row_entry, true);
 	} else {
 		auto &v = parse_chunk.data[column];
@@ -378,7 +381,7 @@ void BaseCSVReader::VerifyUTF8(idx_t col_idx, idx_t row_idx, DataChunk &chunk, i
 
 	auto parse_data = FlatVector::GetData<string_t>(chunk.data[col_idx]);
 	auto s = parse_data[row_idx];
-	auto utf_type = Utf8Proc::Analyze(s.GetDataUnsafe(), s.GetSize());
+	auto utf_type = Utf8Proc::Analyze(s.GetData(), s.GetSize());
 	if (utf_type == UnicodeType::INVALID) {
 		string col_name = to_string(col_idx);
 		if (col_idx < names.size()) {

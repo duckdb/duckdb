@@ -23,21 +23,21 @@ unique_ptr<SQLStatement> Transformer::TransformPragma(duckdb_libpgquery::PGNode 
 			auto expr = TransformExpression(node);
 
 			if (expr->type == ExpressionType::COMPARE_EQUAL) {
-				auto &comp = (ComparisonExpression &)*expr;
+				auto &comp = expr->Cast<ComparisonExpression>();
 				if (comp.right->type != ExpressionType::VALUE_CONSTANT) {
 					throw ParserException("Named parameter requires a constant on the RHS");
 				}
 				if (comp.left->type != ExpressionType::COLUMN_REF) {
 					throw ParserException("Named parameter requires a column reference on the LHS");
 				}
-				auto &columnref = (ColumnRefExpression &)*comp.left;
-				auto &constant = (ConstantExpression &)*comp.right;
+				auto &columnref = comp.left->Cast<ColumnRefExpression>();
+				auto &constant = comp.right->Cast<ConstantExpression>();
 				info.named_parameters[columnref.GetName()] = constant.value;
 			} else if (node->type == duckdb_libpgquery::T_PGAConst) {
 				auto constant = TransformConstant((duckdb_libpgquery::PGAConst *)node);
-				info.parameters.push_back(((ConstantExpression &)*constant).value);
+				info.parameters.push_back((constant->Cast<ConstantExpression>()).value);
 			} else if (expr->type == ExpressionType::COLUMN_REF) {
-				auto &colref = (ColumnRefExpression &)*expr;
+				auto &colref = expr->Cast<ColumnRefExpression>();
 				if (!colref.IsQualified()) {
 					info.parameters.emplace_back(colref.GetColumnName());
 				} else {

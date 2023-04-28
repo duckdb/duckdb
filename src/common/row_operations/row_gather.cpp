@@ -6,8 +6,9 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/constant_operators.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
-#include "duckdb/common/types/row_data_collection.hpp"
-#include "duckdb/common/types/row_layout.hpp"
+#include "duckdb/common/types/row/row_data_collection.hpp"
+#include "duckdb/common/types/row/row_layout.hpp"
+#include "duckdb/common/types/row/tuple_data_layout.hpp"
 
 namespace duckdb {
 
@@ -193,7 +194,8 @@ static void TemplatedFullScanLoop(Vector &rows, Vector &col, idx_t count, idx_t 
 	}
 }
 
-void RowOperations::FullScanColumn(const RowLayout &layout, Vector &rows, Vector &col, idx_t count, idx_t col_no) {
+void RowOperations::FullScanColumn(const TupleDataLayout &layout, Vector &rows, Vector &col, idx_t count,
+                                   idx_t col_no) {
 	const auto col_offset = layout.GetOffsets()[col_no];
 	col.SetVectorType(VectorType::FLAT_VECTOR);
 	switch (col.GetType().InternalType()) {

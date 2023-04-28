@@ -9,7 +9,7 @@ namespace duckdb {
 unique_ptr<LogicalOperator> FilterPullup::PullupFilter(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_FILTER);
 
-	auto &filter = (LogicalFilter &)*op;
+	auto &filter = op->Cast<LogicalFilter>();
 	if (can_pullup && filter.projection_map.empty()) {
 		unique_ptr<LogicalOperator> child = std::move(op->children[0]);
 		child = Rewrite(std::move(child));

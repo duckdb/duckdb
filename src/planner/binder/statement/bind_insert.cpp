@@ -9,6 +9,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/planner/operator/logical_dummy_scan.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression_binder/returning_binder.hpp"
@@ -54,7 +55,7 @@ void ReplaceDefaultExpression(unique_ptr<ParsedExpression> &expr, const ColumnDe
 void QualifyColumnReferences(unique_ptr<ParsedExpression> &expr, const string &table_name) {
 	// To avoid ambiguity with 'excluded', we explicitly qualify all column references
 	if (expr->type == ExpressionType::COLUMN_REF) {
-		auto &column_ref = (ColumnRefExpression &)*expr;
+		auto &column_ref = expr->Cast<ColumnRefExpression>();
 		if (column_ref.IsQualified()) {
 			return;
 		}
@@ -68,7 +69,7 @@ void QualifyColumnReferences(unique_ptr<ParsedExpression> &expr, const string &t
 // Replace binding.table_index with 'dest' if it's 'source'
 void ReplaceColumnBindings(Expression &expr, idx_t source, idx_t dest) {
 	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &bound_columnref = (BoundColumnRefExpression &)expr;
+		auto &bound_columnref = expr.Cast<BoundColumnRefExpression>();
 		if (bound_columnref.binding.table_index == source) {
 			bound_columnref.binding.table_index = dest;
 		}
@@ -200,7 +201,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 		throw BinderException("Can only update base table!");
 	}
 
-	auto &table_ref = (BaseTableRef &)*stmt.table_ref;
+	auto &table_ref = stmt.table_ref->Cast<BaseTableRef>();
 	const string &table_alias = !table_ref.alias.empty() ? table_ref.alias : table_ref.table_name;
 
 	auto &on_conflict = *stmt.on_conflict_info;
@@ -303,7 +304,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 
 	auto bindings = insert.children[0]->GetColumnBindings();
 	idx_t projection_index = DConstants::INVALID_INDEX;
-	std::vector<unique_ptr<LogicalOperator>> *insert_child_operators;
+	vector<unique_ptr<LogicalOperator>> *insert_child_operators;
 	insert_child_operators = &insert.children;
 	while (projection_index == DConstants::INVALID_INDEX) {
 		if (insert_child_operators->empty()) {
@@ -352,8 +353,8 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 		// Get the column_ids we need to fetch later on from the conflicting tuples
 		// of the original table, to execute the expressions
 		D_ASSERT(original_binding->binding_type == BindingType::TABLE);
-		auto table_binding = (TableBinding *)original_binding;
-		insert.columns_to_fetch = table_binding->GetBoundColumnIds();
+		auto &table_binding = (TableBinding &)*original_binding;
+		insert.columns_to_fetch = table_binding.GetBoundColumnIds();
 		return;
 	}
 
@@ -378,8 +379,8 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 	// Get the column_ids we need to fetch later on from the conflicting tuples
 	// of the original table, to execute the expressions
 	D_ASSERT(original_binding->binding_type == BindingType::TABLE);
-	auto table_binding = (TableBinding *)original_binding;
-	insert.columns_to_fetch = table_binding->GetBoundColumnIds();
+	auto &table_binding = (TableBinding &)*original_binding;
+	insert.columns_to_fetch = table_binding.GetBoundColumnIds();
 
 	// Replace the column bindings to refer to the child operator
 	for (auto &expr : insert.expressions) {
@@ -398,11 +399,10 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	result.types = {LogicalType::BIGINT};
 
 	BindSchemaOrCatalog(stmt.catalog, stmt.schema);
-	auto table = Catalog::GetEntry<TableCatalogEntry>(context, stmt.catalog, stmt.schema, stmt.table);
-	D_ASSERT(table);
-	if (!table->temporary) {
+	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, stmt.catalog, stmt.schema, stmt.table);
+	if (!table.temporary) {
 		// inserting into a non-temporary table: alters underlying database
-		properties.modified_databases.insert(table->catalog->GetName());
+		properties.modified_databases.insert(table.catalog.GetName());
 	}
 
 	auto insert = make_uniq<LogicalInsert>(table, GenerateTableIndex());
@@ -410,25 +410,25 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	AddCTEMap(stmt.cte_map);
 
 	vector<LogicalIndex> named_column_map;
-	if (!stmt.columns.empty()) {
+	if (!stmt.columns.empty() || stmt.default_values) {
 		// insertion statement specifies column list
 
 		// create a mapping of (list index) -> (column index)
 		case_insensitive_map_t<idx_t> column_name_map;
 		for (idx_t i = 0; i < stmt.columns.size(); i++) {
 			column_name_map[stmt.columns[i]] = i;
-			auto column_index = table->GetColumnIndex(stmt.columns[i]);
+			auto column_index = table.GetColumnIndex(stmt.columns[i]);
 			if (column_index.index == COLUMN_IDENTIFIER_ROW_ID) {
 				throw BinderException("Cannot explicitly insert values into rowid column");
 			}
-			auto &col = table->GetColumn(column_index);
+			auto &col = table.GetColumn(column_index);
 			if (col.Generated()) {
 				throw BinderException("Cannot insert into a generated column");
 			}
 			insert->expected_types.push_back(col.Type());
 			named_column_map.push_back(column_index);
 		}
-		for (auto &col : table->GetColumns().Physical()) {
+		for (auto &col : table.GetColumns().Physical()) {
 			auto entry = column_name_map.find(col.Name());
 			if (entry == column_name_map.end()) {
 				// column not specified, set index to DConstants::INVALID_INDEX
@@ -441,32 +441,31 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	} else {
 		// No columns specified, assume insertion into all columns
 		// Intentionally don't populate 'column_index_map' as an indication of this
-		for (auto &col : table->GetColumns().Physical()) {
+		for (auto &col : table.GetColumns().Physical()) {
 			named_column_map.push_back(col.Logical());
 			insert->expected_types.push_back(col.Type());
 		}
 	}
 
 	// bind the default values
-	BindDefaultValues(table->GetColumns(), insert->bound_defaults);
-	if (!stmt.select_statement) {
+	BindDefaultValues(table.GetColumns(), insert->bound_defaults);
+	if (!stmt.select_statement && !stmt.default_values) {
 		result.plan = std::move(insert);
 		return result;
 	}
-
 	// Exclude the generated columns from this amount
-	idx_t expected_columns = stmt.columns.empty() ? table->GetColumns().PhysicalColumnCount() : stmt.columns.size();
+	idx_t expected_columns = stmt.columns.empty() ? table.GetColumns().PhysicalColumnCount() : stmt.columns.size();
 
 	// special case: check if we are inserting from a VALUES statement
 	auto values_list = stmt.GetValuesList();
 	if (values_list) {
-		auto &expr_list = (ExpressionListRef &)*values_list;
+		auto &expr_list = values_list->Cast<ExpressionListRef>();
 		expr_list.expected_types.resize(expected_columns);
 		expr_list.expected_names.resize(expected_columns);
 
 		D_ASSERT(expr_list.values.size() > 0);
 		CheckInsertColumnCountMismatch(expected_columns, expr_list.values[0].size(), !stmt.columns.empty(),
-		                               table->name.c_str());
+		                               table.name.c_str());
 
 		// VALUES list!
 		for (idx_t col_idx = 0; col_idx < expected_columns; col_idx++) {
@@ -474,7 +473,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 			auto &table_col_idx = named_column_map[col_idx];
 
 			// set the expected types as the types for the INSERT statement
-			auto &column = table->GetColumn(table_col_idx);
+			auto &column = table.GetColumn(table_col_idx);
 			expr_list.expected_types[col_idx] = column.Type();
 			expr_list.expected_names[col_idx] = column.Name();
 
@@ -489,17 +488,22 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	}
 
 	// parse select statement and add to logical plan
-	auto select_binder = Binder::CreateBinder(context, this);
-	auto root_select = select_binder->Bind(*stmt.select_statement);
-	MoveCorrelatedExpressions(*select_binder);
+	unique_ptr<LogicalOperator> root;
+	if (stmt.select_statement) {
+		auto select_binder = Binder::CreateBinder(context, this);
+		auto root_select = select_binder->Bind(*stmt.select_statement);
+		MoveCorrelatedExpressions(*select_binder);
 
-	CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), !stmt.columns.empty(),
-	                               table->name.c_str());
+		CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), !stmt.columns.empty(),
+		                               table.name.c_str());
 
-	auto root = CastLogicalOperatorToTypes(root_select.types, insert->expected_types, std::move(root_select.plan));
+		root = CastLogicalOperatorToTypes(root_select.types, insert->expected_types, std::move(root_select.plan));
+	} else {
+		root = make_uniq<LogicalDummyScan>(GenerateTableIndex());
+	}
 	insert->AddChild(std::move(root));
 
-	BindOnConflictClause(*insert, *table, stmt);
+	BindOnConflictClause(*insert, table, stmt);
 
 	if (!stmt.returning_list.empty()) {
 		insert->return_chunk = true;

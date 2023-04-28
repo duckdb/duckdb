@@ -12,10 +12,10 @@ bool Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpressi
                                 bool in_columns) {
 	bool has_star = false;
 	if (expr->GetExpressionClass() == ExpressionClass::STAR) {
-		auto current_star = (StarExpression *)expr.get();
-		if (!current_star->columns) {
+		auto &current_star = expr->Cast<StarExpression>();
+		if (!current_star.columns) {
 			if (is_root) {
-				*star = current_star;
+				*star = &current_star;
 				return true;
 			}
 			if (!in_columns) {
@@ -23,12 +23,12 @@ bool Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpressi
 				    "STAR expression is only allowed as the root element of an expression. Use COLUMNS(*) instead.");
 			}
 			// star expression inside a COLUMNS - convert to a constant list
-			if (!current_star->replace_list.empty()) {
+			if (!current_star.replace_list.empty()) {
 				throw BinderException(
 				    "STAR expression with REPLACE list is only allowed as the root element of COLUMNS");
 			}
 			vector<unique_ptr<ParsedExpression>> star_list;
-			bind_context.GenerateAllColumnExpressions(*current_star, star_list);
+			bind_context.GenerateAllColumnExpressions(current_star, star_list);
 
 			vector<Value> values;
 			values.reserve(star_list.size());
@@ -46,13 +46,13 @@ bool Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpressi
 		in_columns = true;
 		if (*star) {
 			// we can have multiple
-			if (!StarExpression::Equal(*star, current_star)) {
+			if (!StarExpression::Equal(*star, &current_star)) {
 				throw BinderException(
 				    FormatError(*expr, "Multiple different STAR/COLUMNS in the same expression are not supported"));
 			}
 			return true;
 		}
-		*star = current_star;
+		*star = &current_star;
 		has_star = true;
 	}
 	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child_expr) {
@@ -118,7 +118,7 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 			}
 			vector<unique_ptr<ParsedExpression>> new_list;
 			for (idx_t i = 0; i < star_list.size(); i++) {
-				auto &colref = (ColumnRefExpression &)*star_list[i];
+				auto &colref = star_list[i]->Cast<ColumnRefExpression>();
 				if (!RE2::PartialMatch(colref.GetColumnName(), regex)) {
 					continue;
 				}

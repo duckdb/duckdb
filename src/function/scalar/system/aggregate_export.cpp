@@ -28,8 +28,8 @@ struct ExportAggregateBindData : public FunctionData {
 	}
 
 	static ExportAggregateBindData &GetFrom(ExpressionState &state) {
-		auto &func_expr = (BoundFunctionExpression &)state.expr;
-		return (ExportAggregateBindData &)*func_expr.bind_info;
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+		return func_expr.bind_info->Cast<ExportAggregateBindData>();
 	}
 };
 
@@ -91,7 +91,7 @@ static void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, V
 
 		if (state_data.validity.RowIsValid(state_idx)) {
 			D_ASSERT(state_entry->GetSize() == bind_data.state_size);
-			memcpy((void *)target_ptr, state_entry->GetDataUnsafe(), bind_data.state_size);
+			memcpy((void *)target_ptr, state_entry->GetData(), bind_data.state_size);
 		} else {
 			// create a dummy state because finalize does not understand NULLs in its input
 			// we put the NULL back in explicitly below
@@ -145,13 +145,11 @@ static void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Ve
 			continue;
 		}
 		if (state0_data.validity.RowIsValid(state0_idx) && !state1_data.validity.RowIsValid(state1_idx)) {
-			result_ptr[i] =
-			    StringVector::AddStringOrBlob(result, (const char *)state0.GetDataUnsafe(), bind_data.state_size);
+			result_ptr[i] = StringVector::AddStringOrBlob(result, (const char *)state0.GetData(), bind_data.state_size);
 			continue;
 		}
 		if (!state0_data.validity.RowIsValid(state0_idx) && state1_data.validity.RowIsValid(state1_idx)) {
-			result_ptr[i] =
-			    StringVector::AddStringOrBlob(result, (const char *)state1.GetDataUnsafe(), bind_data.state_size);
+			result_ptr[i] = StringVector::AddStringOrBlob(result, (const char *)state1.GetData(), bind_data.state_size);
 			continue;
 		}
 
@@ -161,8 +159,8 @@ static void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Ve
 			                  state0.GetSize(), state1.GetSize());
 		}
 
-		memcpy(local_state.state_buffer0.get(), state0.GetDataUnsafe(), bind_data.state_size);
-		memcpy(local_state.state_buffer1.get(), state1.GetDataUnsafe(), bind_data.state_size);
+		memcpy(local_state.state_buffer0.get(), state0.GetData(), bind_data.state_size);
+		memcpy(local_state.state_buffer1.get(), state1.GetData(), bind_data.state_size);
 
 		AggregateInputData aggr_input_data(nullptr, Allocator::DefaultAllocator());
 		bind_data.aggr.combine(local_state.state_vector0, local_state.state_vector1, aggr_input_data, 1);
@@ -199,22 +197,22 @@ static unique_ptr<FunctionData> BindAggregateState(ClientContext &context, Scala
 	auto state_type = AggregateStateType::GetStateType(arg_return_type);
 
 	// now we can look up the function in the catalog again and bind it
-	auto func = Catalog::GetSystemCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA,
-	                                                        state_type.function_name);
-	if (func->type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
+	auto &func = Catalog::GetSystemCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY,
+	                                                         DEFAULT_SCHEMA, state_type.function_name);
+	if (func.type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 		throw InternalException("Could not find aggregate %s", state_type.function_name);
 	}
-	auto aggr = (AggregateFunctionCatalogEntry *)func;
+	auto &aggr = func.Cast<AggregateFunctionCatalogEntry>();
 
 	string error;
 
 	FunctionBinder function_binder(context);
 	idx_t best_function =
-	    function_binder.BindFunction(aggr->name, aggr->functions, state_type.bound_argument_types, error);
+	    function_binder.BindFunction(aggr.name, aggr.functions, state_type.bound_argument_types, error);
 	if (best_function == DConstants::INVALID_INDEX) {
 		throw InternalException("Could not re-bind exported aggregate %s: %s", state_type.function_name, error);
 	}
-	auto bound_aggr = aggr->functions.GetFunctionByOffset(best_function);
+	auto bound_aggr = aggr.functions.GetFunctionByOffset(best_function);
 	if (bound_aggr.bind) {
 		// FIXME: this is really hacky
 		// but the aggregate state export needs a rework around how it handles more complex aggregates anyway

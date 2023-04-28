@@ -20,6 +20,9 @@ class OrderGlobalSinkState;
 //! Physically re-orders the input data
 class PhysicalOrder : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::ORDER_BY;
+
+public:
 	PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders, vector<idx_t> projections,
 	              idx_t estimated_cardinality);
 
@@ -38,7 +41,7 @@ public:
 	                    LocalSourceState &lstate) const override;
 
 	bool IsSource() const override {
-		return false;
+		return true;
 	}
 
 	bool ParallelSource() const override {
@@ -47,6 +50,10 @@ public:
 
 	bool SupportsBatchIndex() const override {
 		return true;
+	}
+
+	OrderPreservationType SourceOrder() const override {
+		return OrderPreservationType::FIXED_ORDER;
 	}
 
 public:
@@ -64,6 +71,9 @@ public:
 	}
 	bool ParallelSink() const override {
 		return true;
+	}
+	bool SinkOrderDependent() const override {
+		return false;
 	}
 
 public:

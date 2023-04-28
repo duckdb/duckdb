@@ -4,22 +4,22 @@
 
 namespace duckdb {
 
-IndexCatalogEntry::IndexCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateIndexInfo *info)
-    : StandardEntry(CatalogType::INDEX_ENTRY, schema, catalog, info->index_name), index(nullptr), sql(info->sql) {
-	this->temporary = info->temporary;
+IndexCatalogEntry::IndexCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info)
+    : StandardEntry(CatalogType::INDEX_ENTRY, schema, catalog, info.index_name), index(nullptr), sql(info.sql) {
+	this->temporary = info.temporary;
 }
 
-string IndexCatalogEntry::ToSQL() {
+string IndexCatalogEntry::ToSQL() const {
 	if (sql.empty()) {
 		return sql;
 	}
 	if (sql[sql.size() - 1] != ';') {
-		sql += ";";
+		return sql + ";";
 	}
 	return sql;
 }
 
-void IndexCatalogEntry::Serialize(Serializer &serializer) {
+void IndexCatalogEntry::Serialize(Serializer &serializer) const {
 	// here we serialize the index metadata in the following order:
 	// schema name, table name, index name, sql, index type, index constraint type, expression list, parsed expressions,
 	// column IDs

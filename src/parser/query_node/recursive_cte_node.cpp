@@ -23,15 +23,15 @@ bool RecursiveCTENode::Equals(const QueryNode *other_p) const {
 	if (this == other_p) {
 		return true;
 	}
-	auto other = (RecursiveCTENode *)other_p;
+	auto &other = other_p->Cast<RecursiveCTENode>();
 
-	if (other->union_all != union_all) {
+	if (other.union_all != union_all) {
 		return false;
 	}
-	if (!left->Equals(other->left.get())) {
+	if (!left->Equals(other.left.get())) {
 		return false;
 	}
-	if (!right->Equals(other->right.get())) {
+	if (!right->Equals(other.right.get())) {
 		return false;
 	}
 	return true;

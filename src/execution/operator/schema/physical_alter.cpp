@@ -21,12 +21,12 @@ unique_ptr<GlobalSourceState> PhysicalAlter::GetGlobalSourceState(ClientContext 
 
 void PhysicalAlter::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                             LocalSourceState &lstate) const {
-	auto &state = (AlterSourceState &)gstate;
+	auto &state = gstate.Cast<AlterSourceState>();
 	if (state.finished) {
 		return;
 	}
 	auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
-	catalog.Alter(context.client, info.get());
+	catalog.Alter(context.client, *info);
 	state.finished = true;
 }
 

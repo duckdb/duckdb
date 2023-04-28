@@ -34,8 +34,8 @@ bool BoundLambdaRefExpression::Equals(const BaseExpression *other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundLambdaRefExpression *)other_p;
-	return other->binding == binding && other->lambda_index == lambda_index && other->depth == depth;
+	auto &other = other_p->Cast<BoundLambdaRefExpression>();
+	return other.binding == binding && other.lambda_index == lambda_index && other.depth == depth;
 }
 
 string BoundLambdaRefExpression::ToString() const {

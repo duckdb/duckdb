@@ -25,12 +25,12 @@ unique_ptr<GlobalSourceState> PhysicalDetach::GetGlobalSourceState(ClientContext
 
 void PhysicalDetach::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                              LocalSourceState &lstate) const {
-	auto &state = (DetachSourceState &)gstate;
+	auto &state = gstate.Cast<DetachSourceState>();
 	if (state.finished) {
 		return;
 	}
 	auto &db_manager = DatabaseManager::Get(context.client);
-	db_manager.DetachDatabase(context.client, info->name, info->if_exists);
+	db_manager.DetachDatabase(context.client, info->name, info->if_not_found);
 	state.finished = true;
 }
 

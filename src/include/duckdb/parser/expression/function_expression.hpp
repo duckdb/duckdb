@@ -16,6 +16,9 @@ namespace duckdb {
 //! Represents a function call
 class FunctionExpression : public ParsedExpression {
 public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::FUNCTION;
+
+public:
 	DUCKDB_API FunctionExpression(string catalog_name, string schema_name, const string &function_name,
 	                              vector<unique_ptr<ParsedExpression>> children,
 	                              unique_ptr<ParsedExpression> filter = nullptr,

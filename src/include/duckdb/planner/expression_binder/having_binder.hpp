@@ -21,11 +21,11 @@ public:
 	             case_insensitive_map_t<idx_t> &alias_map, AggregateHandling aggregate_handling);
 
 protected:
-	BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,
+	BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
 	                          bool root_expression = false) override;
 
 private:
-	BindResult BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression);
+	BindResult BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression);
 
 	ColumnAliasBinder column_alias_binder;
 	AggregateHandling aggregate_handling;

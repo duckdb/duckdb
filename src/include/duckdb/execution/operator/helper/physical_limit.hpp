@@ -16,6 +16,9 @@ namespace duckdb {
 //! PhyisicalLimit represents the LIMIT operator
 class PhysicalLimit : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::LIMIT;
+
+public:
 	PhysicalLimit(vector<LogicalType> types, idx_t limit, idx_t offset, unique_ptr<Expression> limit_expression,
 	              unique_ptr<Expression> offset_expression, idx_t estimated_cardinality);
 
@@ -25,7 +28,7 @@ public:
 	unique_ptr<Expression> offset_expression;
 
 public:
-	bool IsOrderDependent() const override {
+	bool SinkOrderDependent() const override {
 		return true;
 	}
 
@@ -34,6 +37,10 @@ public:
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
+
+	bool IsSource() const override {
+		return true;
+	}
 
 public:
 	// Sink Interface

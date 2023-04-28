@@ -37,13 +37,13 @@ public:
 	void ReadData(data_ptr_t buffer, idx_t read_size) override;
 
 	ClientContext &GetContext() override;
-	Catalog *GetCatalog() override;
-	void SetCatalog(Catalog *catalog_p);
-	void SetContext(ClientContext *context_p);
+	optional_ptr<Catalog> GetCatalog() override;
+	void SetCatalog(Catalog &catalog_p);
+	void SetContext(ClientContext &context_p);
 
 private:
 	void ReadNewBlock(block_id_t id);
-	Catalog *catalog = nullptr;
-	ClientContext *context = nullptr;
+	optional_ptr<ClientContext> context;
+	optional_ptr<Catalog> catalog;
 };
 } // namespace duckdb

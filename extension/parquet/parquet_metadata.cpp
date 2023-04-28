@@ -1,12 +1,14 @@
 #include "parquet_metadata.hpp"
+
 #include "parquet_statistics.hpp"
+
 #include <sstream>
 
 #ifndef DUCKDB_AMALGAMATION
-#include "duckdb/common/types/blob.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/types/blob.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/main/config.hpp"
 #endif
 
 namespace duckdb {
@@ -418,7 +420,7 @@ unique_ptr<FunctionData> ParquetMetaDataBind(ClientContext &context, TableFuncti
 
 template <bool SCHEMA>
 unique_ptr<GlobalTableFunctionState> ParquetMetaDataInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto &bind_data = (ParquetMetaDataBindData &)*input.bind_data;
+	auto &bind_data = input.bind_data->Cast<ParquetMetaDataBindData>();
 	D_ASSERT(!bind_data.files.empty());
 
 	auto result = make_uniq<ParquetMetaDataOperatorData>(context, bind_data.return_types);
@@ -433,8 +435,8 @@ unique_ptr<GlobalTableFunctionState> ParquetMetaDataInit(ClientContext &context,
 
 template <bool SCHEMA>
 void ParquetMetaDataImplementation(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (ParquetMetaDataOperatorData &)*data_p.global_state;
-	auto &bind_data = (ParquetMetaDataBindData &)*data_p.bind_data;
+	auto &data = data_p.global_state->Cast<ParquetMetaDataOperatorData>();
+	auto &bind_data = data_p.bind_data->Cast<ParquetMetaDataBindData>();
 
 	while (true) {
 		if (!data.collection.Scan(data.scan_state, output)) {

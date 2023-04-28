@@ -22,6 +22,9 @@ struct StringParquetValueConversion {
 
 class StringColumnReader : public TemplatedColumnReader<string_t, StringParquetValueConversion> {
 public:
+	static constexpr const PhysicalType TYPE = PhysicalType::VARCHAR;
+
+public:
 	StringColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p,
 	                   idx_t max_define_p, idx_t max_repeat_p);
 

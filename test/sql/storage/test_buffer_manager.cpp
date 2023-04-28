@@ -320,7 +320,7 @@ TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
 	// Create 40 blocks, but don't hold the pin
 	// They will be added to the eviction queue and the buffers will be re-used
 	idx_t block_count = 40;
-	vector<shared_ptr<BlockHandle>> blocks;
+	duckdb::vector<shared_ptr<BlockHandle>> blocks;
 	blocks.reserve(block_count);
 	for (idx_t i = 0; i < block_count; i++) {
 		blocks.emplace_back();

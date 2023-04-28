@@ -46,6 +46,9 @@ protected:
 
 class InsertStatement : public SQLStatement {
 public:
+	static constexpr const StatementType TYPE = StatementType::INSERT_STATEMENT;
+
+public:
 	InsertStatement();
 
 	//! The select statement to insert from
@@ -69,6 +72,9 @@ public:
 	//! CTEs
 	CommonTableExpressionMap cte_map;
 
+	//! Whether or not this a DEFAULT VALUES
+	bool default_values = false;
+
 protected:
 	InsertStatement(const InsertStatement &other);
 
@@ -79,7 +85,7 @@ public:
 
 	//! If the INSERT statement is inserted DIRECTLY from a values list (i.e. INSERT INTO tbl VALUES (...)) this returns
 	//! the expression list Otherwise, this returns NULL
-	ExpressionListRef *GetValuesList() const;
+	optional_ptr<ExpressionListRef> GetValuesList() const;
 };
 
 } // namespace duckdb

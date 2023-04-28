@@ -325,6 +325,11 @@ static void WriteCSVSink(ExecutionContext &context, FunctionData &bind_data, Glo
 			// use the timestamp format to cast the chunk
 			csv_data.options.write_date_format[LogicalTypeId::TIMESTAMP].ConvertTimestampVector(
 			    input.data[col_idx], cast_chunk.data[col_idx], input.size());
+		} else if (options.has_format[LogicalTypeId::TIMESTAMP_TZ] &&
+		           csv_data.sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP_TZ) {
+			// use the timestamp format to cast the chunk
+			csv_data.options.write_date_format[LogicalTypeId::TIMESTAMP_TZ].ConvertTimestampVector(
+			    input.data[col_idx], cast_chunk.data[col_idx], input.size());
 		} else {
 			// non varchar column, perform the cast
 			VectorOperations::Cast(context.client, input.data[col_idx], cast_chunk.data[col_idx], input.size());
@@ -352,7 +357,7 @@ static void WriteCSVSink(ExecutionContext &context, FunctionData &bind_data, Glo
 			// FIXME: we could gain some performance here by checking for certain types if they ever require quotes
 			// (e.g. integers only require quotes if the delimiter is a number, decimals only require quotes if the
 			// delimiter is a number or "." character)
-			WriteQuotedString(writer, csv_data, str_value.GetDataUnsafe(), str_value.GetSize(),
+			WriteQuotedString(writer, csv_data, str_value.GetData(), str_value.GetSize(),
 			                  csv_data.options.force_quote[col_idx]);
 		}
 		writer.WriteBufferData(csv_data.newline);

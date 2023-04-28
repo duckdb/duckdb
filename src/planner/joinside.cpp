@@ -82,7 +82,7 @@ JoinSide JoinSide::GetJoinSide(idx_t table_binding, const unordered_set<idx_t> &
 JoinSide JoinSide::GetJoinSide(Expression &expression, const unordered_set<idx_t> &left_bindings,
                                const unordered_set<idx_t> &right_bindings) {
 	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &colref = (BoundColumnRefExpression &)expression;
+		auto &colref = expression.Cast<BoundColumnRefExpression>();
 		if (colref.depth > 0) {
 			throw Exception("Non-inner join on correlated columns not supported");
 		}
@@ -91,7 +91,7 @@ JoinSide JoinSide::GetJoinSide(Expression &expression, const unordered_set<idx_t
 	D_ASSERT(expression.type != ExpressionType::BOUND_REF);
 	if (expression.type == ExpressionType::SUBQUERY) {
 		D_ASSERT(expression.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY);
-		auto &subquery = (BoundSubqueryExpression &)expression;
+		auto &subquery = expression.Cast<BoundSubqueryExpression>();
 		JoinSide side = JoinSide::NONE;
 		if (subquery.child) {
 			side = GetJoinSide(*subquery.child, left_bindings, right_bindings);

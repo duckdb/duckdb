@@ -45,7 +45,7 @@ unique_ptr<GlobalSinkState> PhysicalVacuum::GetGlobalSinkState(ClientContext &co
 
 SinkResultType PhysicalVacuum::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
                                     DataChunk &input) const {
-	auto &lstate = (VacuumLocalSinkState &)lstate_p;
+	auto &lstate = lstate_p.Cast<VacuumLocalSinkState>();
 	D_ASSERT(lstate.column_distinct_stats.size() == info->column_id_map.size());
 
 	for (idx_t col_idx = 0; col_idx < input.data.size(); col_idx++) {
@@ -59,8 +59,8 @@ SinkResultType PhysicalVacuum::Sink(ExecutionContext &context, GlobalSinkState &
 }
 
 void PhysicalVacuum::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {
-	auto &gstate = (VacuumGlobalSinkState &)gstate_p;
-	auto &lstate = (VacuumLocalSinkState &)lstate_p;
+	auto &gstate = gstate_p.Cast<VacuumGlobalSinkState>();
+	auto &lstate = lstate_p.Cast<VacuumLocalSinkState>();
 
 	lock_guard<mutex> lock(gstate.stats_lock);
 	D_ASSERT(gstate.column_distinct_stats.size() == lstate.column_distinct_stats.size());
@@ -71,7 +71,7 @@ void PhysicalVacuum::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 
 SinkFinalizeType PhysicalVacuum::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                           GlobalSinkState &gstate) const {
-	auto &sink = (VacuumGlobalSinkState &)gstate;
+	auto &sink = gstate.Cast<VacuumGlobalSinkState>();
 
 	auto table = info->table;
 	for (idx_t col_idx = 0; col_idx < sink.column_distinct_stats.size(); col_idx++) {

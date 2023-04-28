@@ -3827,11 +3827,11 @@ void ColumnMetaData::__set_type(const Type::type val) {
   this->type = val;
 }
 
-void ColumnMetaData::__set_encodings(const std::vector<Encoding::type> & val) {
+void ColumnMetaData::__set_encodings(const duckdb::vector<Encoding::type> & val) {
   this->encodings = val;
 }
 
-void ColumnMetaData::__set_path_in_schema(const std::vector<std::string> & val) {
+void ColumnMetaData::__set_path_in_schema(const duckdb::vector<std::string> & val) {
   this->path_in_schema = val;
 }
 
@@ -3851,7 +3851,7 @@ void ColumnMetaData::__set_total_compressed_size(const int64_t val) {
   this->total_compressed_size = val;
 }
 
-void ColumnMetaData::__set_key_value_metadata(const std::vector<KeyValue> & val) {
+void ColumnMetaData::__set_key_value_metadata(const duckdb::vector<KeyValue> & val) {
   this->key_value_metadata = val;
 __isset.key_value_metadata = true;
 }
@@ -3875,7 +3875,7 @@ void ColumnMetaData::__set_statistics(const Statistics& val) {
 __isset.statistics = true;
 }
 
-void ColumnMetaData::__set_encoding_stats(const std::vector<PageEncodingStats> & val) {
+void ColumnMetaData::__set_encoding_stats(const duckdb::vector<PageEncodingStats> & val) {
   this->encoding_stats = val;
 __isset.encoding_stats = true;
 }
@@ -4113,7 +4113,7 @@ uint32_t ColumnMetaData::write(::duckdb_apache::thrift::protocol::TProtocol* opr
   xfer += oprot->writeFieldBegin("encodings", ::duckdb_apache::thrift::protocol::T_LIST, 2);
   {
     xfer += oprot->writeListBegin(::duckdb_apache::thrift::protocol::T_I32, static_cast<uint32_t>(this->encodings.size()));
-    std::vector<Encoding::type> ::const_iterator _iter90;
+    duckdb::vector<Encoding::type> ::const_iterator _iter90;
     for (_iter90 = this->encodings.begin(); _iter90 != this->encodings.end(); ++_iter90)
     {
       xfer += oprot->writeI32((int32_t)(*_iter90));
@@ -4125,7 +4125,7 @@ uint32_t ColumnMetaData::write(::duckdb_apache::thrift::protocol::TProtocol* opr
   xfer += oprot->writeFieldBegin("path_in_schema", ::duckdb_apache::thrift::protocol::T_LIST, 3);
   {
     xfer += oprot->writeListBegin(::duckdb_apache::thrift::protocol::T_STRING, static_cast<uint32_t>(this->path_in_schema.size()));
-    std::vector<std::string> ::const_iterator _iter91;
+    duckdb::vector<std::string> ::const_iterator _iter91;
     for (_iter91 = this->path_in_schema.begin(); _iter91 != this->path_in_schema.end(); ++_iter91)
     {
       xfer += oprot->writeString((*_iter91));
@@ -4154,7 +4154,7 @@ uint32_t ColumnMetaData::write(::duckdb_apache::thrift::protocol::TProtocol* opr
     xfer += oprot->writeFieldBegin("key_value_metadata", ::duckdb_apache::thrift::protocol::T_LIST, 8);
     {
       xfer += oprot->writeListBegin(::duckdb_apache::thrift::protocol::T_STRUCT, static_cast<uint32_t>(this->key_value_metadata.size()));
-      std::vector<KeyValue> ::const_iterator _iter92;
+      duckdb::vector<KeyValue> ::const_iterator _iter92;
       for (_iter92 = this->key_value_metadata.begin(); _iter92 != this->key_value_metadata.end(); ++_iter92)
       {
         xfer += (*_iter92).write(oprot);
@@ -4186,7 +4186,7 @@ uint32_t ColumnMetaData::write(::duckdb_apache::thrift::protocol::TProtocol* opr
     xfer += oprot->writeFieldBegin("encoding_stats", ::duckdb_apache::thrift::protocol::T_LIST, 13);
     {
       xfer += oprot->writeListBegin(::duckdb_apache::thrift::protocol::T_STRUCT, static_cast<uint32_t>(this->encoding_stats.size()));
-      std::vector<PageEncodingStats> ::const_iterator _iter93;
+      duckdb::vector<PageEncodingStats> ::const_iterator _iter93;
       for (_iter93 = this->encoding_stats.begin(); _iter93 != this->encoding_stats.end(); ++_iter93)
       {
         xfer += (*_iter93).write(oprot);
@@ -4343,7 +4343,7 @@ EncryptionWithColumnKey::~EncryptionWithColumnKey() throw() {
 }
 
 
-void EncryptionWithColumnKey::__set_path_in_schema(const std::vector<std::string> & val) {
+void EncryptionWithColumnKey::__set_path_in_schema(const duckdb::vector<std::string> & val) {
   this->path_in_schema = val;
 }
 
@@ -4430,7 +4430,7 @@ uint32_t EncryptionWithColumnKey::write(::duckdb_apache::thrift::protocol::TProt
   xfer += oprot->writeFieldBegin("path_in_schema", ::duckdb_apache::thrift::protocol::T_LIST, 1);
   {
     xfer += oprot->writeListBegin(::duckdb_apache::thrift::protocol::T_STRING, static_cast<uint32_t>(this->path_in_schema.size()));
-    std::vector<std::string> ::const_iterator _iter103;
+    duckdb::vector<std::string> ::const_iterator _iter103;
     for (_iter103 = this->path_in_schema.begin(); _iter103 != this->path_in_schema.end(); ++_iter103)
     {
       xfer += oprot->writeString((*_iter103));
@@ -4867,7 +4867,7 @@ RowGroup::~RowGroup() throw() {
 }
 
 
-void RowGroup::__set_columns(const std::vector<ColumnChunk> & val) {
+void RowGroup::__set_columns(const duckdb::vector<ColumnChunk> & val) {
   this->columns = val;
 }
 
@@ -4879,7 +4879,7 @@ void RowGroup::__set_num_rows(const int64_t val) {
   this->num_rows = val;
 }
 
-void RowGroup::__set_sorting_columns(const std::vector<SortingColumn> & val) {
+void RowGroup::__set_sorting_columns(const duckdb::vector<SortingColumn> & val) {
   this->sorting_columns = val;
 __isset.sorting_columns = true;
 }
@@ -5035,7 +5035,7 @@ uint32_t RowGroup::write(::duckdb_apache::thrift::protocol::TProtocol* oprot) co
   xfer += oprot->writeFieldBegin("columns", ::duckdb_apache::thrift::protocol::T_LIST, 1);
   {
     xfer += oprot->writeListBegin(::duckdb_apache::thrift::protocol::T_STRUCT, static_cast<uint32_t>(this->columns.size()));
-    std::vector<ColumnChunk> ::const_iterator _iter120;
+    duckdb::vector<ColumnChunk> ::const_iterator _iter120;
     for (_iter120 = this->columns.begin(); _iter120 != this->columns.end(); ++_iter120)
     {
       xfer += (*_iter120).write(oprot);
@@ -5056,7 +5056,7 @@ uint32_t RowGroup::write(::duckdb_apache::thrift::protocol::TProtocol* oprot) co
     xfer += oprot->writeFieldBegin("sorting_columns", ::duckdb_apache::thrift::protocol::T_LIST, 4);
     {
       xfer += oprot->writeListBegin(::duckdb_apache::thrift::protocol::T_STRUCT, static_cast<uint32_t>(this->sorting_columns.size()));
-      std::vector<SortingColumn> ::const_iterator _iter121;
+      duckdb::vector<SortingColumn> ::const_iterator _iter121;
       for (_iter121 = this->sorting_columns.begin(); _iter121 != this->sorting_columns.end(); ++_iter121)
       {
         xfer += (*_iter121).write(oprot);
@@ -5436,7 +5436,7 @@ OffsetIndex::~OffsetIndex() throw() {
 }
 
 
-void OffsetIndex::__set_page_locations(const std::vector<PageLocation> & val) {
+void OffsetIndex::__set_page_locations(const duckdb::vector<PageLocation> & val) {
   this->page_locations = val;
 }
 std::ostream& operator<<(std::ostream& out, const OffsetIndex& obj)
@@ -5510,7 +5510,7 @@ uint32_t OffsetIndex::write(::duckdb_apache::thrift::protocol::TProtocol* oprot)
   xfer += oprot->writeFieldBegin("page_locations", ::duckdb_apache::thrift::protocol::T_LIST, 1);
   {
     xfer += oprot->writeListBegin(::duckdb_apache::thrift::protocol::T_STRUCT, static_cast<uint32_t>(this->page_locations.size()));
-    std::vector<PageLocation> ::const_iterator _iter135;
+    duckdb::vector<PageLocation> ::const_iterator _iter135;
     for (_iter135 = this->page_locations.begin(); _iter135 != this->page_locations.end(); ++_iter135)
     {
       xfer += (*_iter135).write(oprot);
@@ -5548,15 +5548,15 @@ ColumnIndex::~ColumnIndex() throw() {
 }
 
 
-void ColumnIndex::__set_null_pages(const std::vector<bool> & val) {
+void ColumnIndex::__set_null_pages(const duckdb::vector<bool> & val) {
   this->null_pages = val;
 }
 
-void ColumnIndex::__set_min_values(const std::vector<std::string> & val) {
+void ColumnIndex::__set_min_values(const duckdb::vector<std::string> & val) {
   this->min_values = val;
 }
 
-void ColumnIndex::__set_max_values(const std::vector<std::string> & val) {
+void ColumnIndex::__set_max_values(const duckdb::vector<std::string> & val) {
   this->max_values = val;
 }
 
@@ -5564,7 +5564,7 @@ void ColumnIndex::__set_boundary_order(const BoundaryOrder::type val) {
   this->boundary_order = val;
 }
 
-void ColumnIndex::__set_null_counts(const std::vector<int64_t> & val) {
+void ColumnIndex::__set_null_counts(const duckdb::vector<int64_t> & val) {
   this->null_counts = val;
 __isset.null_counts = true;
 }
@@ -5718,7 +5718,7 @@ uint32_t ColumnIndex::write(::duckdb_apache::thrift::protocol::TProtocol* oprot)
   xfer += oprot->writeFieldBegin("null_pages", ::duckdb_apache::thrift::protocol::T_LIST, 1);
   {
     xfer += oprot->writeListBegin(::duckdb_apache::thrift::protocol::T_BOOL, static_cast<uint32_t>(this->null_pages.size()));
-    std::vector<bool> ::const_iterator _iter159;
+    duckdb::vector<bool> ::const_iterator _iter159;
     for (_iter159 = this->null_pages.begin(); _iter159 != this->null_pages.end(); ++_iter159)
     {
       xfer += oprot->writeBool((*_iter159));
@@ -5730,7 +5730,7 @@ uint32_t ColumnIndex::write(::duckdb_apache::thrift::protocol::TProtocol* oprot)
   xfer += oprot->writeFieldBegin("min_values", ::duckdb_apache::thrift::protocol::T_LIST, 2);
   {
     xfer += oprot->writeListBegin(::duckdb_apache::thrift::protocol::T_STRING, static_cast<uint32_t>(this->min_values.size()));
-    std::vector<std::string> ::const_iterator _iter160;
+    duckdb::vector<std::string> ::const_iterator _iter160;
     for (_iter160 = this->min_values.begin(); _iter160 != this->min_values.end(); ++_iter160)
     {
       xfer += oprot->writeBinary((*_iter160));
@@ -5742,7 +5742,7 @@ uint32_t ColumnIndex::write(::duckdb_apache::thrift::protocol::TProtocol* oprot)
   xfer += oprot->writeFieldBegin("max_values", ::duckdb_apache::thrift::protocol::T_LIST, 3);
   {
     xfer += oprot->writeListBegin(::duckdb_apache::thrift::protocol::T_STRING, static_cast<uint32_t>(this->max_values.size()));
-    std::vector<std::string> ::const_iterator _iter161;
+    duckdb::vector<std::string> ::const_iterator _iter161;
     for (_iter161 = this->max_values.begin(); _iter161 != this->max_values.end(); ++_iter161)
     {
       xfer += oprot->writeBinary((*_iter161));
@@ -5759,7 +5759,7 @@ uint32_t ColumnIndex::write(::duckdb_apache::thrift::protocol::TProtocol* oprot)
     xfer += oprot->writeFieldBegin("null_counts", ::duckdb_apache::thrift::protocol::T_LIST, 5);
     {
       xfer += oprot->writeListBegin(::duckdb_apache::thrift::protocol::T_I64, static_cast<uint32_t>(this->null_counts.size()));
-      std::vector<int64_t> ::const_iterator _iter162;
+      duckdb::vector<int64_t> ::const_iterator _iter162;
       for (_iter162 = this->null_counts.begin(); _iter162 != this->null_counts.end(); ++_iter162)
       {
         xfer += oprot->writeI64((*_iter162));
@@ -6212,7 +6212,7 @@ void FileMetaData::__set_version(const int32_t val) {
   this->version = val;
 }
 
-void FileMetaData::__set_schema(const std::vector<SchemaElement> & val) {
+void FileMetaData::__set_schema(const duckdb::vector<SchemaElement> & val) {
   this->schema = val;
 }
 
@@ -6220,11 +6220,11 @@ void FileMetaData::__set_num_rows(const int64_t val) {
   this->num_rows = val;
 }
 
-void FileMetaData::__set_row_groups(const std::vector<RowGroup> & val) {
+void FileMetaData::__set_row_groups(const duckdb::vector<RowGroup> & val) {
   this->row_groups = val;
 }
 
-void FileMetaData::__set_key_value_metadata(const std::vector<KeyValue> & val) {
+void FileMetaData::__set_key_value_metadata(const duckdb::vector<KeyValue> & val) {
   this->key_value_metadata = val;
 __isset.key_value_metadata = true;
 }
@@ -6234,7 +6234,7 @@ void FileMetaData::__set_created_by(const std::string& val) {
 __isset.created_by = true;
 }
 
-void FileMetaData::__set_column_orders(const std::vector<ColumnOrder> & val) {
+void FileMetaData::__set_column_orders(const duckdb::vector<ColumnOrder> & val) {
   this->column_orders = val;
 __isset.column_orders = true;
 }
@@ -6432,7 +6432,7 @@ uint32_t FileMetaData::write(::duckdb_apache::thrift::protocol::TProtocol* oprot
   xfer += oprot->writeFieldBegin("schema", ::duckdb_apache::thrift::protocol::T_LIST, 2);
   {
     xfer += oprot->writeListBegin(::duckdb_apache::thrift::protocol::T_STRUCT, static_cast<uint32_t>(this->schema.size()));
-    std::vector<SchemaElement> ::const_iterator _iter191;
+    duckdb::vector<SchemaElement> ::const_iterator _iter191;
     for (_iter191 = this->schema.begin(); _iter191 != this->schema.end(); ++_iter191)
     {
       xfer += (*_iter191).write(oprot);
@@ -6448,7 +6448,7 @@ uint32_t FileMetaData::write(::duckdb_apache::thrift::protocol::TProtocol* oprot
   xfer += oprot->writeFieldBegin("row_groups", ::duckdb_apache::thrift::protocol::T_LIST, 4);
   {
     xfer += oprot->writeListBegin(::duckdb_apache::thrift::protocol::T_STRUCT, static_cast<uint32_t>(this->row_groups.size()));
-    std::vector<RowGroup> ::const_iterator _iter192;
+    duckdb::vector<RowGroup> ::const_iterator _iter192;
     for (_iter192 = this->row_groups.begin(); _iter192 != this->row_groups.end(); ++_iter192)
     {
       xfer += (*_iter192).write(oprot);
@@ -6461,7 +6461,7 @@ uint32_t FileMetaData::write(::duckdb_apache::thrift::protocol::TProtocol* oprot
     xfer += oprot->writeFieldBegin("key_value_metadata", ::duckdb_apache::thrift::protocol::T_LIST, 5);
     {
       xfer += oprot->writeListBegin(::duckdb_apache::thrift::protocol::T_STRUCT, static_cast<uint32_t>(this->key_value_metadata.size()));
-      std::vector<KeyValue> ::const_iterator _iter193;
+      duckdb::vector<KeyValue> ::const_iterator _iter193;
       for (_iter193 = this->key_value_metadata.begin(); _iter193 != this->key_value_metadata.end(); ++_iter193)
       {
         xfer += (*_iter193).write(oprot);
@@ -6479,7 +6479,7 @@ uint32_t FileMetaData::write(::duckdb_apache::thrift::protocol::TProtocol* oprot
     xfer += oprot->writeFieldBegin("column_orders", ::duckdb_apache::thrift::protocol::T_LIST, 7);
     {
       xfer += oprot->writeListBegin(::duckdb_apache::thrift::protocol::T_STRUCT, static_cast<uint32_t>(this->column_orders.size()));
-      std::vector<ColumnOrder> ::const_iterator _iter194;
+      duckdb::vector<ColumnOrder> ::const_iterator _iter194;
       for (_iter194 = this->column_orders.begin(); _iter194 != this->column_orders.end(); ++_iter194)
       {
         xfer += (*_iter194).write(oprot);

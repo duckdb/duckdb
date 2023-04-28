@@ -24,8 +24,8 @@ bool BoundConjunctionExpression::Equals(const BaseExpression *other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundConjunctionExpression *)other_p;
-	return ExpressionUtil::SetEquals(children, other->children);
+	auto &other = other_p->Cast<BoundConjunctionExpression>();
+	return ExpressionUtil::SetEquals(children, other.children);
 }
 
 bool BoundConjunctionExpression::PropagatesNullValues() const {

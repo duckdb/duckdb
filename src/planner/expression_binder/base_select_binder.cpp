@@ -23,8 +23,8 @@ BaseSelectBinder::BaseSelectBinder(Binder &binder, ClientContext &context, Bound
     : BaseSelectBinder(binder, context, node, info, case_insensitive_map_t<idx_t>()) {
 }
 
-BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {
-	auto &expr = **expr_ptr;
+BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
+	auto &expr = *expr_ptr;
 	// check if the expression binds to one of the groups
 	auto group_index = TryBindGroup(expr, depth);
 	if (group_index != DConstants::INVALID_INDEX) {
@@ -36,7 +36,7 @@ BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> *expr_p
 	case ExpressionClass::DEFAULT:
 		return BindResult("SELECT clause cannot contain DEFAULT clause");
 	case ExpressionClass::WINDOW:
-		return BindWindow((WindowExpression &)expr, depth);
+		return BindWindow(expr.Cast<WindowExpression>(), depth);
 	default:
 		return ExpressionBinder::BindExpression(expr_ptr, depth, root_expression);
 	}
@@ -45,7 +45,7 @@ BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> *expr_p
 idx_t BaseSelectBinder::TryBindGroup(ParsedExpression &expr, idx_t depth) {
 	// first check the group alias map, if expr is a ColumnRefExpression
 	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto &colref = (ColumnRefExpression &)expr;
+		auto &colref = expr.Cast<ColumnRefExpression>();
 		if (!colref.IsQualified()) {
 			auto alias_entry = info.alias_map.find(colref.column_names[0]);
 			if (alias_entry != info.alias_map.end()) {
@@ -56,20 +56,20 @@ idx_t BaseSelectBinder::TryBindGroup(ParsedExpression &expr, idx_t depth) {
 	}
 	// no alias reference found
 	// check the list of group columns for a match
-	auto entry = info.map.find(&expr);
+	auto entry = info.map.find(expr);
 	if (entry != info.map.end()) {
 		return entry->second;
 	}
 #ifdef DEBUG
 	for (auto entry : info.map) {
-		D_ASSERT(!entry.first->Equals(&expr));
-		D_ASSERT(!expr.Equals(entry.first));
+		D_ASSERT(!entry.first.get().Equals(&expr));
+		D_ASSERT(!expr.Equals(&entry.first.get()));
 	}
 #endif
 	return DConstants::INVALID_INDEX;
 }
 
-BindResult BaseSelectBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth) {
+BindResult BaseSelectBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth) {
 	// first try to bind the column reference regularly
 	auto result = ExpressionBinder::BindExpression(expr_ptr, depth);
 	if (!result.HasError()) {
@@ -77,7 +77,7 @@ BindResult BaseSelectBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_pt
 	}
 	// binding failed
 	// check in the alias map
-	auto &colref = (ColumnRefExpression &)**expr_ptr;
+	auto &colref = (expr_ptr.get())->Cast<ColumnRefExpression>();
 	if (!colref.IsQualified()) {
 		auto alias_entry = alias_map.find(colref.column_names[0]);
 		if (alias_entry != alias_map.end()) {
@@ -100,7 +100,7 @@ BindResult BaseSelectBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_pt
 			}
 			auto result = BindResult(node.select_list[index]->Copy());
 			if (result.expression->type == ExpressionType::BOUND_COLUMN_REF) {
-				auto &result_expr = (BoundColumnRefExpression &)*result.expression;
+				auto &result_expr = result.expression->Cast<BoundColumnRefExpression>();
 				result_expr.depth = depth;
 			}
 			return result;

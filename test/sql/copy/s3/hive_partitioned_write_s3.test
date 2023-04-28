@@ -26,7 +26,7 @@ statement ok
 CREATE TABLE test as SELECT i%2 as part_col, (i+1)%5 as value_col, i as value2_col from range(0,10) tbl(i);
 
 statement ok
-COPY test TO 's3://test-bucket/partitioned1' (FORMAT PARQUET, PARTITION_BY (part_col), ALLOW_OVERWRITE TRUE);
+COPY test TO 's3://test-bucket/partitioned1' (FORMAT PARQUET, PARTITION_BY (part_col), OVERWRITE_OR_IGNORE TRUE);
 
 query III
 SELECT part_col, value_col, value2_col FROM 's3://test-bucket/partitioned1/part_col=0/*.parquet' ORDER BY value2_col;
@@ -48,7 +48,7 @@ SELECT part_col, value_col, value2_col FROM 's3://test-bucket/partitioned1/part_
 
 # Want a modified version of the partition_col? (for example to do custom string conversion?) No problem:
 statement ok
-COPY (SELECT * EXCLUDE (part_col), 'prefix-'::VARCHAR || part_col::VARCHAR as part_col FROM test) TO 's3://test-bucket/partitioned2' (FORMAT PARQUET, PARTITION_BY (part_col), ALLOW_OVERWRITE TRUE);
+COPY (SELECT * EXCLUDE (part_col), 'prefix-'::VARCHAR || part_col::VARCHAR as part_col FROM test) TO 's3://test-bucket/partitioned2' (FORMAT PARQUET, PARTITION_BY (part_col), OVERWRITE_OR_IGNORE TRUE);
 
 query III
 SELECT part_col, value_col, value2_col FROM 's3://test-bucket/partitioned2/part_col=prefix-0/*.parquet' ORDER BY value2_col;
@@ -70,7 +70,7 @@ prefix-1	0	9
 
 # Test partitioning by all
 statement ok
-COPY test TO 's3://test-bucket/partitioned3' (FORMAT PARQUET, PARTITION_BY '*', ALLOW_OVERWRITE TRUE);
+COPY test TO 's3://test-bucket/partitioned3' (FORMAT PARQUET, PARTITION_BY '*', OVERWRITE_OR_IGNORE TRUE);
 
 query I
 SELECT min(value2_col) as min_val
@@ -91,7 +91,7 @@ ORDER BY min_val
 
 # single col as param is also fine
 statement ok
-COPY test TO 's3://test-bucket/partitioned4' (FORMAT PARQUET, PARTITION_BY part_col, ALLOW_OVERWRITE TRUE);
+COPY test TO 's3://test-bucket/partitioned4' (FORMAT PARQUET, PARTITION_BY part_col, OVERWRITE_OR_IGNORE TRUE);
 
 query III
 SELECT part_col, value_col, value2_col FROM parquet_scan('s3://test-bucket/partitioned4/*/*.parquet', HIVE_PARTITIONING=1) WHERE part_col=0 ORDER BY value2_col;
@@ -103,21 +103,21 @@ SELECT part_col, value_col, value2_col FROM parquet_scan('s3://test-bucket/parti
 0	4	8
 
 
-# a file already exist and, ALLOW_OVERWRITE is not set, throw error
+# a file already exist and, OVERWRITE_OR_IGNORE is not set, throw error
 statement error
 COPY test TO 's3://test-bucket/partitioned4' (FORMAT PARQUET, PARTITION_BY part_col);
 ----
 IO Error: Directory
 
-# a file already exist and, ALLOW_OVERWRITE is set to false, throw error
+# a file already exist and, OVERWRITE_OR_IGNORE is set to false, throw error
 statement error
-COPY test TO 's3://test-bucket/partitioned4' (FORMAT PARQUET, PARTITION_BY part_col, ALLOW_OVERWRITE FALSE);
+COPY test TO 's3://test-bucket/partitioned4' (FORMAT PARQUET, PARTITION_BY part_col, OVERWRITE_OR_IGNORE FALSE);
 ----
 IO Error: Directory
 
 # Trailing slash ist auch gut!
 statement ok
-COPY test TO 's3://test-bucket/partitioned5/' (FORMAT PARQUET, PARTITION_BY part_col, ALLOW_OVERWRITE TRUE);
+COPY test TO 's3://test-bucket/partitioned5/' (FORMAT PARQUET, PARTITION_BY part_col, OVERWRITE_OR_IGNORE TRUE);
 
 query III
 SELECT part_col, value_col, value2_col FROM 's3://test-bucket/partitioned5/part_col=0/*.parquet' ORDER BY value2_col;
@@ -143,7 +143,7 @@ Not implemented Error: Can't combine PER_THREAD_OUTPUT and PARTITION_BY for COPY
 
 # partitioning csv files is also a thing
 statement ok
-COPY test TO 's3://test-bucket/partitioned7' (FORMAT CSV, HEADER TRUE, PARTITION_BY part_col, ALLOW_OVERWRITE TRUE);
+COPY test TO 's3://test-bucket/partitioned7' (FORMAT CSV, HEADER TRUE, PARTITION_BY part_col, OVERWRITE_OR_IGNORE TRUE);
 
 query III
 SELECT part_col, value_col, value2_col FROM 's3://test-bucket/partitioned7/part_col=0/*.csv' ORDER BY value2_col;

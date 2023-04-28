@@ -204,7 +204,7 @@ static unique_ptr<FunctionData> TestVectorTypesBind(ClientContext &context, Tabl
 }
 
 unique_ptr<GlobalTableFunctionState> TestVectorTypesInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto &bind_data = (TestVectorBindData &)*input.bind_data;
+	auto &bind_data = input.bind_data->Cast<TestVectorBindData>();
 
 	auto result = make_uniq<TestVectorTypesData>();
 

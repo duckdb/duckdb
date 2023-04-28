@@ -41,7 +41,7 @@ unique_ptr<Expression> AddCastToTypeInternal(unique_ptr<Expression> expr, const 
                                              bool try_cast) {
 	D_ASSERT(expr);
 	if (expr->expression_class == ExpressionClass::BOUND_PARAMETER) {
-		auto &parameter = (BoundParameterExpression &)*expr;
+		auto &parameter = expr->Cast<BoundParameterExpression>();
 		if (!target_type.IsValid()) {
 			// invalidate the parameter
 			parameter.parameter_data->return_type = LogicalType::INVALID;
@@ -71,7 +71,7 @@ unique_ptr<Expression> AddCastToTypeInternal(unique_ptr<Expression> expr, const 
 		return expr;
 	} else if (expr->expression_class == ExpressionClass::BOUND_DEFAULT) {
 		D_ASSERT(target_type.IsValid());
-		auto &def = (BoundDefaultExpression &)*expr;
+		auto &def = expr->Cast<BoundDefaultExpression>();
 		def.return_type = target_type;
 	}
 	if (!target_type.IsValid()) {
@@ -173,11 +173,11 @@ bool BoundCastExpression::Equals(const BaseExpression *other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundCastExpression *)other_p;
-	if (!Expression::Equals(child.get(), other->child.get())) {
+	auto &other = other_p->Cast<BoundCastExpression>();
+	if (!Expression::Equals(child.get(), other.child.get())) {
 		return false;
 	}
-	if (try_cast != other->try_cast) {
+	if (try_cast != other.try_cast) {
 		return false;
 	}
 	return true;

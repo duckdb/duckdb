@@ -18,7 +18,7 @@ struct RandomLocalState : public FunctionLocalState {
 
 static void RandomFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 0);
-	auto &lstate = (RandomLocalState &)*ExecuteFunctionState::GetFunctionState(state);
+	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RandomLocalState>();
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<double>(result);
@@ -43,7 +43,7 @@ void RandomFun::RegisterFunction(BuiltinFunctions &set) {
 
 static void GenerateUUIDFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 0);
-	auto &lstate = (RandomLocalState &)*ExecuteFunctionState::GetFunctionState(state);
+	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RandomLocalState>();
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<hugeint_t>(result);

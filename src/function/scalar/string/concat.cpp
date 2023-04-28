@@ -66,7 +66,7 @@ static void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &resu
 			}
 			// append the constant vector to each of the strings
 			auto input_data = ConstantVector::GetData<string_t>(input);
-			auto input_ptr = input_data->GetDataUnsafe();
+			auto input_ptr = input_data->GetData();
 			auto input_len = input_data->GetSize();
 			for (idx_t i = 0; i < args.size(); i++) {
 				memcpy(result_data[i].GetDataWriteable() + result_lengths[i], input_ptr, input_len);
@@ -83,7 +83,7 @@ static void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &resu
 				if (!idata.validity.RowIsValid(idx)) {
 					continue;
 				}
-				auto input_ptr = input_data[idx].GetDataUnsafe();
+				auto input_ptr = input_data[idx].GetData();
 				auto input_len = input_data[idx].GetSize();
 				memcpy(result_data[i].GetDataWriteable() + result_lengths[i], input_ptr, input_len);
 				result_lengths[i] += input_len;
@@ -98,8 +98,8 @@ static void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &resu
 static void ConcatOperator(DataChunk &args, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<string_t, string_t, string_t>(
 	    args.data[0], args.data[1], result, args.size(), [&](string_t a, string_t b) {
-		    auto a_data = a.GetDataUnsafe();
-		    auto b_data = b.GetDataUnsafe();
+		    auto a_data = a.GetData();
+		    auto b_data = b.GetData();
 		    auto a_length = a.GetSize();
 		    auto b_length = b.GetSize();
 
@@ -167,11 +167,11 @@ static void TemplatedConcatWS(DataChunk &args, string_t *sep_data, const Selecti
 			}
 			if (has_results[ridx]) {
 				auto sep_size = sep_data[sep_idx].GetSize();
-				auto sep_ptr = sep_data[sep_idx].GetDataUnsafe();
+				auto sep_ptr = sep_data[sep_idx].GetData();
 				memcpy(result_data[ridx].GetDataWriteable() + result_lengths[ridx], sep_ptr, sep_size);
 				result_lengths[ridx] += sep_size;
 			}
-			auto input_ptr = input_data[idx].GetDataUnsafe();
+			auto input_ptr = input_data[idx].GetData();
 			auto input_len = input_data[idx].GetSize();
 			memcpy(result_data[ridx].GetDataWriteable() + result_lengths[ridx], input_ptr, input_len);
 			result_lengths[ridx] += input_len;

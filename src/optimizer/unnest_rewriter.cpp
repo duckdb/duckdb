@@ -22,7 +22,7 @@ void UnnestRewriterPlanUpdater::VisitExpression(unique_ptr<Expression> *expressi
 
 	if (expr->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
 
-		auto &bound_column_ref = (BoundColumnRefExpression &)*expr;
+		auto &bound_column_ref = expr->Cast<BoundColumnRefExpression>();
 		for (idx_t i = 0; i < replace_bindings.size(); i++) {
 			if (bound_column_ref.binding == replace_bindings[i].old_binding) {
 				bound_column_ref.binding = replace_bindings[i].new_binding;
@@ -79,7 +79,7 @@ void UnnestRewriter::FindCandidates(unique_ptr<LogicalOperator> *op_ptr,
 	}
 
 	// found a delim join
-	auto &delim_join = (LogicalDelimJoin &)*op->children[0];
+	auto &delim_join = op->children[0]->Cast<LogicalDelimJoin>();
 	// only support INNER delim joins
 	if (delim_join.join_type != JoinType::INNER) {
 		return;
@@ -144,9 +144,9 @@ bool UnnestRewriter::RewriteCandidate(unique_ptr<LogicalOperator> *candidate) {
 	// store the table index of the child of the LOGICAL_UNNEST
 	// then update the plan by making the lhs_proj the child of the LOGICAL_UNNEST
 	D_ASSERT(curr_op->get()->type == LogicalOperatorType::LOGICAL_UNNEST);
-	auto &unnest = (LogicalUnnest &)*curr_op->get();
+	auto &unnest = curr_op->get()->Cast<LogicalUnnest>();
 	D_ASSERT(unnest.children[0]->type == LogicalOperatorType::LOGICAL_DELIM_GET);
-	overwritten_tbl_idx = ((LogicalDelimGet &)*unnest.children[0]).table_index;
+	overwritten_tbl_idx = unnest.children[0]->Cast<LogicalDelimGet>().table_index;
 	unnest.children[0] = std::move(lhs_op);
 
 	// replace the LOGICAL_DELIM_JOIN with its RHS child operator
@@ -166,7 +166,7 @@ void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> *plan_ptr, un
 
 		path_to_unnest.push_back(curr_op);
 		D_ASSERT(curr_op->get()->type == LogicalOperatorType::LOGICAL_PROJECTION);
-		auto &proj = (LogicalProjection &)*curr_op->get();
+		auto &proj = curr_op->get()->Cast<LogicalProjection>();
 
 		// pop the two last expressions from all projections (delim_idx and UNNEST column)
 		D_ASSERT(proj.expressions.size() > 2);
@@ -189,7 +189,7 @@ void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> *plan_ptr, un
 
 	// update all bindings coming from the LHS to RHS bindings
 	D_ASSERT(topmost_op.children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION);
-	auto &top_proj = (LogicalProjection &)*topmost_op.children[0];
+	auto &top_proj = topmost_op.children[0]->Cast<LogicalProjection>();
 	for (idx_t i = 0; i < lhs_bindings.size(); i++) {
 		ReplaceBinding replace_binding(lhs_bindings[i].binding, ColumnBinding(top_proj.table_index, i));
 		updater.replace_bindings.push_back(replace_binding);
@@ -197,7 +197,7 @@ void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> *plan_ptr, un
 
 	// temporarily remove the BOUND_UNNEST and the child of the LOGICAL_UNNEST from the plan
 	D_ASSERT(curr_op->get()->type == LogicalOperatorType::LOGICAL_UNNEST);
-	auto &unnest = (LogicalUnnest &)*curr_op->get();
+	auto &unnest = curr_op->get()->Cast<LogicalUnnest>();
 	auto temp_bound_unnest = std::move(unnest.expressions[0]);
 	auto temp_unnest_child = std::move(unnest.children[0]);
 	unnest.expressions.clear();
@@ -213,7 +213,7 @@ void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> *plan_ptr, un
 	for (idx_t i = path_to_unnest.size(); i > 0; i--) {
 
 		D_ASSERT(path_to_unnest[i - 1]->get()->type == LogicalOperatorType::LOGICAL_PROJECTION);
-		auto &proj = (LogicalProjection &)*path_to_unnest[i - 1]->get();
+		auto &proj = path_to_unnest[i - 1]->get()->Cast<LogicalProjection>();
 
 		// temporarily store the existing expressions
 		vector<unique_ptr<Expression>> existing_expressions;
@@ -254,7 +254,7 @@ void UnnestRewriter::UpdateBoundUnnestBindings(UnnestRewriterPlanUpdater &update
 
 	// found the LOGICAL_UNNEST
 	D_ASSERT(curr_op->get()->type == LogicalOperatorType::LOGICAL_UNNEST);
-	auto &unnest = (LogicalUnnest &)*curr_op->get();
+	auto &unnest = curr_op->get()->Cast<LogicalUnnest>();
 
 	auto unnest_child_cols = unnest.children[0]->GetColumnBindings();
 	for (idx_t delim_col_idx = 0; delim_col_idx < delim_columns.size(); delim_col_idx++) {
@@ -276,11 +276,11 @@ void UnnestRewriter::UpdateBoundUnnestBindings(UnnestRewriterPlanUpdater &update
 void UnnestRewriter::GetDelimColumns(LogicalOperator &op) {
 
 	D_ASSERT(op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
-	auto &delim_join = (LogicalDelimJoin &)op;
+	auto &delim_join = op.Cast<LogicalDelimJoin>();
 	for (idx_t i = 0; i < delim_join.duplicate_eliminated_columns.size(); i++) {
 		auto &expr = *delim_join.duplicate_eliminated_columns[i];
 		D_ASSERT(expr.type == ExpressionType::BOUND_COLUMN_REF);
-		auto &bound_colref_expr = (BoundColumnRefExpression &)expr;
+		auto &bound_colref_expr = expr.Cast<BoundColumnRefExpression>();
 		delim_columns.push_back(bound_colref_expr.binding);
 	}
 }
@@ -294,7 +294,7 @@ void UnnestRewriter::GetLHSExpressions(LogicalOperator &op) {
 	bool set_alias = false;
 	// we can easily extract the alias for LOGICAL_PROJECTION(s)
 	if (op.type == LogicalOperatorType::LOGICAL_PROJECTION) {
-		auto &proj = (LogicalProjection &)op;
+		auto &proj = op.Cast<LogicalProjection>();
 		if (proj.expressions.size() == op.types.size()) {
 			set_alias = true;
 		}
@@ -303,7 +303,7 @@ void UnnestRewriter::GetLHSExpressions(LogicalOperator &op) {
 	for (idx_t i = 0; i < op.types.size(); i++) {
 		lhs_bindings.emplace_back(col_bindings[i], op.types[i]);
 		if (set_alias) {
-			auto &proj = (LogicalProjection &)op;
+			auto &proj = op.Cast<LogicalProjection>();
 			lhs_bindings.back().alias = proj.expressions[i]->alias;
 		}
 	}

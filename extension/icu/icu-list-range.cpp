@@ -127,7 +127,7 @@ struct ICUListRange : public ICUDateFunc {
 		D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 		D_ASSERT(args.ColumnCount() == 3);
 
-		auto &func_expr = (BoundFunctionExpression &)state.expr;
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &bind_info = (BindData &)*func_expr.bind_info;
 		CalendarPtr calendar_ptr(bind_info.calendar->clone());
 		auto calendar = calendar_ptr.get();
@@ -188,7 +188,7 @@ struct ICUListRange : public ICUDateFunc {
 		                                 LogicalType::LIST(LogicalType::TIMESTAMP_TZ), ICUListRangeFunction<false>,
 		                                 Bind));
 		CreateScalarFunctionInfo range_func_info(range);
-		catalog.AddFunction(context, &range_func_info);
+		catalog.AddFunction(context, range_func_info);
 
 		// generate_series: similar to range, but inclusive instead of exclusive bounds on the RHS
 		ScalarFunctionSet generate_series("generate_series");
@@ -196,7 +196,7 @@ struct ICUListRange : public ICUDateFunc {
 		    ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL},
 		                   LogicalType::LIST(LogicalType::TIMESTAMP_TZ), ICUListRangeFunction<true>, Bind));
 		CreateScalarFunctionInfo generate_series_func_info(generate_series);
-		catalog.AddFunction(context, &generate_series_func_info);
+		catalog.AddFunction(context, generate_series_func_info);
 	}
 };
 

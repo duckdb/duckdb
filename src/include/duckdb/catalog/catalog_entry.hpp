@@ -12,7 +12,7 @@
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/atomic.hpp"
-
+#include "duckdb/common/optional_ptr.hpp"
 #include <memory>
 
 namespace duckdb {
@@ -20,21 +20,21 @@ struct AlterInfo;
 class Catalog;
 class CatalogSet;
 class ClientContext;
+class SchemaCatalogEntry;
 
 //! Abstract base class of an entry in the catalog
 class CatalogEntry {
 public:
-	CatalogEntry(CatalogType type, Catalog *catalog, string name);
+	CatalogEntry(CatalogType type, Catalog &catalog, string name);
+	CatalogEntry(CatalogType type, string name, idx_t oid);
 	virtual ~CatalogEntry();
 
 	//! The oid of the entry
 	idx_t oid;
 	//! The type of this catalog entry
 	CatalogType type;
-	//! Reference to the catalog this entry belongs to
-	Catalog *catalog;
 	//! Reference to the catalog set this entry is stored in
-	CatalogSet *set;
+	optional_ptr<CatalogSet> set;
 	//! The name of the entry
 	string name;
 	//! Whether or not the object is deleted
@@ -48,21 +48,53 @@ public:
 	//! Child entry
 	unique_ptr<CatalogEntry> child;
 	//! Parent entry (the node that dependents_map this node)
-	CatalogEntry *parent;
+	optional_ptr<CatalogEntry> parent;
 
 public:
-	virtual unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info);
-	virtual void UndoAlter(ClientContext &context, AlterInfo *info);
+	virtual unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo &info);
+	virtual void UndoAlter(ClientContext &context, AlterInfo &info);
 
-	virtual unique_ptr<CatalogEntry> Copy(ClientContext &context);
+	virtual unique_ptr<CatalogEntry> Copy(ClientContext &context) const;
 
 	//! Sets the CatalogEntry as the new root entry (i.e. the newest entry)
 	// this is called on a rollback to an AlterEntry
 	virtual void SetAsRoot();
 
 	//! Convert the catalog entry to a SQL string that can be used to re-construct the catalog entry
-	virtual string ToSQL();
+	virtual string ToSQL() const;
+
+	virtual Catalog &ParentCatalog();
+	virtual SchemaCatalogEntry &ParentSchema();
 
 	virtual void Verify(Catalog &catalog);
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return (TARGET &)*this;
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return (const TARGET &)*this;
+	}
 };
+
+class InCatalogEntry : public CatalogEntry {
+public:
+	InCatalogEntry(CatalogType type, Catalog &catalog, string name);
+	~InCatalogEntry() override;
+
+	//! The catalog the entry belongs to
+	Catalog &catalog;
+
+public:
+	Catalog &ParentCatalog() override {
+		return catalog;
+	}
+
+	void Verify(Catalog &catalog) override;
+};
+
 } // namespace duckdb

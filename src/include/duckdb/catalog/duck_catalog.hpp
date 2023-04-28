@@ -33,13 +33,13 @@ public:
 	}
 
 public:
-	DUCKDB_API CatalogEntry *CreateSchema(CatalogTransaction transaction, CreateSchemaInfo *info) override;
-	DUCKDB_API void ScanSchemas(ClientContext &context, std::function<void(CatalogEntry *)> callback) override;
-	DUCKDB_API void ScanSchemas(std::function<void(CatalogEntry *)> callback);
+	DUCKDB_API optional_ptr<CatalogEntry> CreateSchema(CatalogTransaction transaction, CreateSchemaInfo &info) override;
+	DUCKDB_API void ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) override;
+	DUCKDB_API void ScanSchemas(std::function<void(SchemaCatalogEntry &)> callback);
 
-	DUCKDB_API SchemaCatalogEntry *GetSchema(CatalogTransaction transaction, const string &schema_name,
-	                                         bool if_exists = false,
-	                                         QueryErrorContext error_context = QueryErrorContext()) override;
+	DUCKDB_API optional_ptr<SchemaCatalogEntry>
+	GetSchema(CatalogTransaction transaction, const string &schema_name, OnEntryNotFound if_not_found,
+	          QueryErrorContext error_context = QueryErrorContext()) override;
 
 	DUCKDB_API unique_ptr<PhysicalOperator> PlanCreateTableAs(ClientContext &context, LogicalCreateTable &op,
 	                                                          unique_ptr<PhysicalOperator> plan) override;
@@ -59,9 +59,9 @@ public:
 	DUCKDB_API string GetDBPath() override;
 
 private:
-	DUCKDB_API void DropSchema(CatalogTransaction transaction, DropInfo *info);
-	DUCKDB_API void DropSchema(ClientContext &context, DropInfo *info) override;
-	CatalogEntry *CreateSchemaInternal(CatalogTransaction transaction, CreateSchemaInfo *info);
+	DUCKDB_API void DropSchema(CatalogTransaction transaction, DropInfo &info);
+	DUCKDB_API void DropSchema(ClientContext &context, DropInfo &info) override;
+	optional_ptr<CatalogEntry> CreateSchemaInternal(CatalogTransaction transaction, CreateSchemaInfo &info);
 	void Verify() override;
 
 private:

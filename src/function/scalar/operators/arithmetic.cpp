@@ -122,7 +122,7 @@ struct DecimalArithmeticBindData : public FunctionData {
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto other = (DecimalArithmeticBindData &)other_p;
+		auto other = other_p.Cast<DecimalArithmeticBindData>();
 		return other.check_overflow == check_overflow;
 	}
 
@@ -167,8 +167,8 @@ static unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, 
 	} else {
 		// no potential overflow: replace with non-overflowing operator
 		if (input.bind_data) {
-			auto bind_data = (DecimalArithmeticBindData *)input.bind_data;
-			bind_data->check_overflow = false;
+			auto &bind_data = input.bind_data->Cast<DecimalArithmeticBindData>();
+			bind_data.check_overflow = false;
 		}
 		expr.function.function = GetScalarIntegerFunction<BASEOP>(expr.return_type.InternalType());
 	}
@@ -456,7 +456,7 @@ struct DecimalNegateBindData : public FunctionData {
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto other = (DecimalNegateBindData &)other_p;
+		auto other = other_p.Cast<DecimalNegateBindData>();
 		return other.bound_type == bound_type;
 	}
 
@@ -907,23 +907,29 @@ static scalar_function_t GetBinaryFunctionIgnoreZero(const LogicalType &type) {
 }
 
 void DivideFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunctionSet functions("/");
+	ScalarFunctionSet fp_divide("/");
+	fp_divide.AddFunction(ScalarFunction({LogicalType::FLOAT, LogicalType::FLOAT}, LogicalType::FLOAT,
+	                                     GetBinaryFunctionIgnoreZero<DivideOperator>(LogicalType::FLOAT)));
+	fp_divide.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                                     GetBinaryFunctionIgnoreZero<DivideOperator>(LogicalType::DOUBLE)));
+	fp_divide.AddFunction(
+	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
+	                   BinaryScalarFunctionIgnoreZero<interval_t, int64_t, interval_t, DivideOperator>));
+	set.AddFunction(fp_divide);
+
+	ScalarFunctionSet full_divide("//");
 	for (auto &type : LogicalType::Numeric()) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			continue;
 		} else {
-			functions.AddFunction(
+			full_divide.AddFunction(
 			    ScalarFunction({type, type}, type, GetBinaryFunctionIgnoreZero<DivideOperator>(type)));
 		}
 	}
-	functions.AddFunction(
-	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
-	                   BinaryScalarFunctionIgnoreZero<interval_t, int64_t, interval_t, DivideOperator>));
+	set.AddFunction(full_divide);
 
-	set.AddFunction(functions);
-
-	functions.name = "divide";
-	set.AddFunction(functions);
+	full_divide.name = "divide";
+	set.AddFunction(full_divide);
 }
 
 //===--------------------------------------------------------------------===//

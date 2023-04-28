@@ -13,15 +13,24 @@
 
 namespace duckdb {
 
-void Transformer::TransformWindowDef(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr) {
+void Transformer::TransformWindowDef(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr,
+                                     const char *window_name) {
 	D_ASSERT(window_spec);
 	D_ASSERT(expr);
 
 	// next: partitioning/ordering expressions
 	if (window_spec->partitionClause) {
+		if (window_name && !expr->partitions.empty()) {
+			throw ParserException("Cannot override PARTITION BY clause of window \"%s\"", window_name);
+		}
 		TransformExpressionList(*window_spec->partitionClause, expr->partitions);
 	}
-	TransformOrderBy(window_spec->orderClause, expr->orders);
+	if (window_spec->orderClause) {
+		if (window_name && !expr->orders.empty()) {
+			throw ParserException("Cannot override ORDER BY clause of window \"%s\"", window_name);
+		}
+		TransformOrderBy(window_spec->orderClause, expr->orders);
+	}
 }
 
 void Transformer::TransformWindowFrame(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr) {
@@ -72,7 +81,7 @@ bool Transformer::ExpressionIsEmptyStar(ParsedExpression &expr) {
 	if (expr.expression_class != ExpressionClass::STAR) {
 		return false;
 	}
-	auto &star = (StarExpression &)expr;
+	auto &star = expr.Cast<StarExpression>();
 	if (!star.columns && star.exclude_list.empty() && star.replace_list.empty()) {
 		return true;
 	}
@@ -198,6 +207,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			D_ASSERT(window_spec);
 		}
 		auto window_ref = window_spec;
+		auto window_name = window_ref->refname;
 		if (window_ref->refname) {
 			auto it = window_clauses.find(StringUtil::Lower(string(window_spec->refname)));
 			if (it == window_clauses.end()) {
@@ -208,6 +218,9 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		}
 		in_window_definition = true;
 		TransformWindowDef(window_ref, expr.get());
+		if (window_ref != window_spec) {
+			TransformWindowDef(window_spec, expr.get(), window_name);
+		}
 		TransformWindowFrame(window_spec, expr.get());
 		in_window_definition = false;
 		expr->query_location = root->location;
@@ -299,9 +312,9 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			                                               std::move(filter_expr), std::move(order_bys),
 			                                               root->agg_distinct, false, root->export_state);
 			lowercase_name = "list_sort";
-			order_bys.reset();
-			filter_expr.reset();
-			children.clear();
+			order_bys.reset();   // NOLINT
+			filter_expr.reset(); // NOLINT
+			children.clear();    // NOLINT
 			children.emplace_back(std::move(unordered));
 			children.emplace_back(std::move(sense));
 			children.emplace_back(std::move(nulls));
@@ -316,48 +329,8 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 	return std::move(function);
 }
 
-static string SQLValueOpToString(duckdb_libpgquery::PGSQLValueFunctionOp op) {
-	switch (op) {
-	case duckdb_libpgquery::PG_SVFOP_CURRENT_DATE:
-		return "current_date";
-	case duckdb_libpgquery::PG_SVFOP_CURRENT_TIME:
-		return "get_current_time";
-	case duckdb_libpgquery::PG_SVFOP_CURRENT_TIME_N:
-		return "current_time_n";
-	case duckdb_libpgquery::PG_SVFOP_CURRENT_TIMESTAMP:
-		return "get_current_timestamp";
-	case duckdb_libpgquery::PG_SVFOP_CURRENT_TIMESTAMP_N:
-		return "current_timestamp_n";
-	case duckdb_libpgquery::PG_SVFOP_LOCALTIME:
-		return "current_localtime";
-	case duckdb_libpgquery::PG_SVFOP_LOCALTIME_N:
-		return "current_localtime_n";
-	case duckdb_libpgquery::PG_SVFOP_LOCALTIMESTAMP:
-		return "current_localtimestamp";
-	case duckdb_libpgquery::PG_SVFOP_LOCALTIMESTAMP_N:
-		return "current_localtimestamp_n";
-	case duckdb_libpgquery::PG_SVFOP_CURRENT_ROLE:
-		return "current_role";
-	case duckdb_libpgquery::PG_SVFOP_CURRENT_USER:
-		return "current_user";
-	case duckdb_libpgquery::PG_SVFOP_USER:
-		return "user";
-	case duckdb_libpgquery::PG_SVFOP_SESSION_USER:
-		return "session_user";
-	case duckdb_libpgquery::PG_SVFOP_CURRENT_CATALOG:
-		return "current_catalog";
-	case duckdb_libpgquery::PG_SVFOP_CURRENT_SCHEMA:
-		return "current_schema";
-	default:
-		throw InternalException("Could not find named SQL value function specification " + to_string((int)op));
-	}
-}
-
 unique_ptr<ParsedExpression> Transformer::TransformSQLValueFunction(duckdb_libpgquery::PGSQLValueFunction *node) {
-	D_ASSERT(node);
-	vector<unique_ptr<ParsedExpression>> children;
-	auto fname = SQLValueOpToString(node->op);
-	return make_uniq<FunctionExpression>(fname, std::move(children));
+	throw InternalException("SQL value functions should not be emitted by the parser");
 }
 
 } // namespace duckdb

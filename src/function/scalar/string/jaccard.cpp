@@ -9,7 +9,7 @@ namespace duckdb {
 static inline map<char, idx_t> GetSet(const string_t &str) {
 	auto map_of_chars = map<char, idx_t> {};
 	idx_t str_len = str.GetSize();
-	auto s = str.GetDataUnsafe();
+	auto s = str.GetData();
 
 	for (idx_t pos = 0; pos < str_len; pos++) {
 		map_of_chars.insert(std::make_pair(s[pos], 1));

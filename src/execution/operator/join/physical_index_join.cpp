@@ -13,6 +13,7 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/execution/index/art/art_key.hpp"
 
 namespace duckdb {
 
@@ -48,19 +49,19 @@ public:
 	ExpressionExecutor probe_executor;
 
 	ArenaAllocator arena_allocator;
-	vector<Key> keys;
+	vector<ARTKey> keys;
 	unique_ptr<ColumnFetchState> fetch_state;
 
 public:
-	void Finalize(PhysicalOperator *op, ExecutionContext &context) override {
-		context.thread.profiler.Flush(op, &probe_executor, "probe_executor", 0);
+	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
+		context.thread.profiler.Flush(op, probe_executor, "probe_executor", 0);
 	}
 };
 
 PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                      unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
                                      const vector<idx_t> &left_projection_map_p, vector<idx_t> right_projection_map_p,
-                                     vector<column_t> column_ids_p, Index *index_p, bool lhs_first,
+                                     vector<column_t> column_ids_p, Index &index_p, bool lhs_first,
                                      idx_t estimated_cardinality)
     : CachingPhysicalOperator(PhysicalOperatorType::INDEX_JOIN, std::move(op.types), estimated_cardinality),
       left_projection_map(left_projection_map_p), right_projection_map(std::move(right_projection_map_p)),
@@ -74,7 +75,7 @@ PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOpe
 		condition_types.push_back(condition.left->return_type);
 	}
 	//! Only add to fetch_ids columns that are not indexed
-	for (auto &index_id : index->column_ids) {
+	for (auto &index_id : index.column_ids) {
 		index_ids.insert(index_id);
 	}
 
@@ -109,11 +110,11 @@ unique_ptr<OperatorState> PhysicalIndexJoin::GetOperatorState(ExecutionContext &
 void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                OperatorState &state_p) const {
 	auto &phy_tbl_scan = (PhysicalTableScan &)*children[1];
-	auto &bind_tbl = (TableScanBindData &)*phy_tbl_scan.bind_data;
-	auto &transaction = DuckTransaction::Get(context.client, *bind_tbl.table->catalog);
-	auto &state = (IndexJoinOperatorState &)state_p;
+	auto &bind_tbl = phy_tbl_scan.bind_data->Cast<TableScanBindData>();
+	auto &transaction = DuckTransaction::Get(context.client, bind_tbl.table.catalog);
+	auto &state = state_p.Cast<IndexJoinOperatorState>();
 
-	auto &tbl = bind_tbl.table->GetStorage();
+	auto &tbl = bind_tbl.table.GetStorage();
 	idx_t output_sel_idx = 0;
 	vector<row_t> fetch_rows;
 
@@ -164,8 +165,9 @@ void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &input, Data
 
 void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, DataChunk &input, OperatorState &state_p) const {
 
-	auto &state = (IndexJoinOperatorState &)state_p;
-	auto &art = (ART &)*index;
+	auto &state = state_p.Cast<IndexJoinOperatorState>();
+	auto &art = index.Cast<ART>();
+	;
 
 	// generate the keys for this chunk
 	state.arena_allocator.Reset();
@@ -176,11 +178,11 @@ void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, DataChunk &inpu
 		if (!state.keys[i].Empty()) {
 			if (fetch_types.empty()) {
 				IndexLock lock;
-				index->InitializeLock(lock);
+				index.InitializeLock(lock);
 				art.SearchEqualJoinNoFetch(state.keys[i], state.result_sizes[i]);
 			} else {
 				IndexLock lock;
-				index->InitializeLock(lock);
+				index.InitializeLock(lock);
 				art.SearchEqual(state.keys[i], (idx_t)-1, state.rhs_rows[i]);
 				state.result_sizes[i] = state.rhs_rows[i].size();
 			}
@@ -197,7 +199,7 @@ void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, DataChunk &inpu
 
 OperatorResultType PhysicalIndexJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                       GlobalOperatorState &gstate, OperatorState &state_p) const {
-	auto &state = (IndexJoinOperatorState &)state_p;
+	auto &state = state_p.Cast<IndexJoinOperatorState>();
 
 	state.result_size = 0;
 	if (state.first_fetch) {
@@ -228,11 +230,11 @@ void PhysicalIndexJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pip
 	// index join: we only continue into the LHS
 	// the right side is probed by the index join
 	// so we don't need to do anything in the pipeline with this child
-	meta_pipeline.GetState().AddPipelineOperator(current, this);
+	meta_pipeline.GetState().AddPipelineOperator(current, *this);
 	children[0]->BuildPipelines(current, meta_pipeline);
 }
 
-vector<const PhysicalOperator *> PhysicalIndexJoin::GetSources() const {
+vector<const_reference<PhysicalOperator>> PhysicalIndexJoin::GetSources() const {
 	return children[0]->GetSources();
 }
 

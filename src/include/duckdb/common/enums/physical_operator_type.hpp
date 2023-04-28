@@ -33,6 +33,8 @@ enum class PhysicalOperatorType : uint8_t {
 	RESERVOIR_SAMPLE,
 	STREAMING_SAMPLE,
 	STREAMING_WINDOW,
+	PIVOT,
+
 	// -----------------------------
 	// Scans
 	// -----------------------------
@@ -56,6 +58,7 @@ enum class PhysicalOperatorType : uint8_t {
 	DELIM_JOIN,
 	INDEX_JOIN,
 	POSITIONAL_JOIN,
+	ASOF_JOIN,
 	// -----------------------------
 	// SetOps
 	// -----------------------------

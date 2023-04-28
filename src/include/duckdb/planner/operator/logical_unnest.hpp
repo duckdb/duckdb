@@ -15,6 +15,9 @@ namespace duckdb {
 //! LogicalUnnest represents the logical UNNEST operator.
 class LogicalUnnest : public LogicalOperator {
 public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_UNNEST;
+
+public:
 	explicit LogicalUnnest(idx_t unnest_index)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_UNNEST), unnest_index(unnest_index) {
 	}

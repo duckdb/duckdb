@@ -22,12 +22,12 @@ unique_ptr<GlobalSourceState> PhysicalCreateFunction::GetGlobalSourceState(Clien
 
 void PhysicalCreateFunction::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                                      LocalSourceState &lstate) const {
-	auto &state = (CreateFunctionSourceState &)gstate;
+	auto &state = gstate.Cast<CreateFunctionSourceState>();
 	if (state.finished) {
 		return;
 	}
 	auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
-	catalog.CreateFunction(context.client, info.get());
+	catalog.CreateFunction(context.client, *info);
 	state.finished = true;
 }
 

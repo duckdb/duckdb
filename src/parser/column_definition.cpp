@@ -145,7 +145,7 @@ bool ColumnDefinition::Generated() const {
 
 static void VerifyColumnRefs(ParsedExpression &expr) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto &column_ref = (ColumnRefExpression &)expr;
+		auto &column_ref = expr.Cast<ColumnRefExpression>();
 		if (column_ref.IsQualified()) {
 			throw ParserException(
 			    "Qualified (tbl.name) column references are not allowed inside of generated column expressions");
@@ -157,7 +157,7 @@ static void VerifyColumnRefs(ParsedExpression &expr) {
 
 static void InnerGetListOfDependencies(ParsedExpression &expr, vector<string> &dependencies) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto columnref = (ColumnRefExpression &)expr;
+		auto columnref = expr.Cast<ColumnRefExpression>();
 		auto &name = columnref.GetColumnName();
 		dependencies.push_back(name);
 	}
@@ -206,7 +206,7 @@ void ColumnDefinition::ChangeGeneratedExpressionType(const LogicalType &type) {
 	generated_expression = make_uniq_base<ParsedExpression, CastExpression>(type, std::move(generated_expression));
 	// Every generated expression should be wrapped in a cast on creation
 	// D_ASSERT(generated_expression->type == ExpressionType::OPERATOR_CAST);
-	// auto &cast_expr = (CastExpression &)*generated_expression;
+	// auto &cast_expr = generated_expression->Cast<CastExpression>();
 	// auto base_expr = std::move(cast_expr.child);
 	// generated_expression = make_uniq_base<ParsedExpression, CastExpression>(type, std::move(base_expr));
 }

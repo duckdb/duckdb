@@ -17,6 +17,9 @@ class DataTable;
 //! Physically update data in a table
 class PhysicalUpdate : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::UPDATE;
+
+public:
 	PhysicalUpdate(vector<LogicalType> types, TableCatalogEntry &tableref, DataTable &table,
 	               vector<PhysicalIndex> columns, vector<unique_ptr<Expression>> expressions,
 	               vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality, bool return_chunk);
@@ -35,6 +38,10 @@ public:
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
+
+	bool IsSource() const override {
+		return true;
+	}
 
 public:
 	// Sink interface

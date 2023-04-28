@@ -137,7 +137,7 @@ public:
 	}
 
 	static void QuackFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-		auto &bind_data = (QuackBindData &)*data_p.bind_data;
+		auto &bind_data = data_p.bind_data->Cast<QuackBindData>();
 		auto &data = (QuackGlobalData &)*data_p.global_state;
 		if (data.offset >= bind_data.number_of_quacks) {
 			// finished returning values
@@ -228,7 +228,7 @@ DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::DatabaseInstance 
 	con.CreateScalarFunction<int32_t, string_t>("hello", {LogicalType(LogicalTypeId::VARCHAR)},
 	                                            LogicalType(LogicalTypeId::INTEGER), &hello_fun);
 
-	catalog.CreateFunction(client_context, &hello_alias_info);
+	catalog.CreateFunction(client_context, hello_alias_info);
 
 	// Add alias POINT type
 	string alias_name = "POINT";
@@ -242,23 +242,23 @@ DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::DatabaseInstance 
 	target_type.SetAlias(alias_name);
 	alias_info->type = target_type;
 
-	auto entry = (TypeCatalogEntry *)catalog.CreateType(client_context, alias_info.get());
-	LogicalType::SetCatalog(target_type, entry);
+	auto &entry = catalog.CreateType(client_context, *alias_info)->Cast<TypeCatalogEntry>();
+	EnumType::SetCatalog(target_type, &entry);
 
 	// Function add point
 	ScalarFunction add_point_func("add_point", {target_type, target_type}, target_type, AddPointFunction);
 	CreateScalarFunctionInfo add_point_info(add_point_func);
-	catalog.CreateFunction(client_context, &add_point_info);
+	catalog.CreateFunction(client_context, add_point_info);
 
 	// Function sub point
 	ScalarFunction sub_point_func("sub_point", {target_type, target_type}, target_type, SubPointFunction);
 	CreateScalarFunctionInfo sub_point_info(sub_point_func);
-	catalog.CreateFunction(client_context, &sub_point_info);
+	catalog.CreateFunction(client_context, sub_point_info);
 
 	// Quack function
 	QuackFunction quack_function;
 	CreateTableFunctionInfo quack_info(quack_function);
-	catalog.CreateTableFunction(client_context, &quack_info);
+	catalog.CreateTableFunction(client_context, quack_info);
 
 	con.Commit();
 

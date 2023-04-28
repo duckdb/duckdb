@@ -44,6 +44,7 @@ public:
 
 	void Initialize();
 
+	Catalog &ParentCatalog() override;
 	StorageManager &GetStorageManager();
 	Catalog &GetCatalog();
 	TransactionManager &GetTransactionManager();
@@ -65,6 +66,7 @@ private:
 	unique_ptr<Catalog> catalog;
 	unique_ptr<TransactionManager> transaction_manager;
 	AttachedDatabaseType type;
+	optional_ptr<Catalog> parent_catalog;
 };
 
 } // namespace duckdb
