@@ -43,11 +43,6 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 	if (!catalog) {
 		throw InternalException("AttachedDatabase - attach function did not return a catalog");
 	}
-	auto is_duckdb_derived = dynamic_cast<DuckCatalog *>(catalog.get()) != nullptr;
-	if (is_duckdb_derived) {
-		storage =
-		    make_unique<SingleFileStorageManager>(*this, std::move(info.path), access_mode == AccessMode::READ_ONLY);
-	}
 	transaction_manager =
 	    storage_extension.create_transaction_manager(storage_extension.storage_info.get(), *this, *catalog);
 	if (!transaction_manager) {
