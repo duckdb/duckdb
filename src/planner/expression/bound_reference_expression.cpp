@@ -1,9 +1,10 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
-#include "duckdb/common/serializer.hpp"
-#include "duckdb/common/types/hash.hpp"
-#include "duckdb/common/to_string.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/to_string.hpp"
+#include "duckdb/common/types/hash.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -16,6 +17,11 @@ BoundReferenceExpression::BoundReferenceExpression(LogicalType type, idx_t index
 }
 
 string BoundReferenceExpression::ToString() const {
+#ifdef DEBUG
+	if (DBConfigOptions::debug_print_bindings) {
+		return "#" + to_string(index);
+	}
+#endif
 	if (!alias.empty()) {
 		return alias;
 	}
