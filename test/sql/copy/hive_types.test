@@ -1,0 +1,21 @@
+# name: test/sql/copy/format_uuid.test
+# description: basic tests for the hive partitioned write
+# group: [copy]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+#	create a tables with names [data,ref,something]
+# query I
+# FROM read_parquet('__TEST_DIR__/hive_type_partition/*.parquet', hive_partitioning=1, hive_types={'date':'DATE', 'ref':'SMALLINT'});
+
+COPY '../file.csv' TO '../partition' (FORMAT PARUET) partition_by('date','dist');
+query II
+FROM read_csv_auto('../file.csv', hive_partitioning=1, hive_types={'date':'DATE', 'dist':'SMALLINT'});
+----
+
+
+select * exclude(date), date::DATE date, dist::smallint dist,  from read_parquet('../partition/**/*.parquet', hive_partitioning=1);
+select * exclude(date), date::DATE date, dist::smallint dist,  from read_csv_auto('../partition/**/*.csv', hive_partitioning=1) order by id;

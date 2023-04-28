@@ -57,6 +57,11 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 	} else if (loption == "union_by_name") {
 		options.union_by_name = BooleanValue::Get(val);
 	} else if (loption == "hive_types") {
+		// using 'hive_types' implies 'hive_partitioning'
+		options.hive_partitioning = true;
+		// options.hive_partitioning_auto_detect = false;
+		options.hive_types_auto_detect = false;
+
 		if (val.type().id() != LogicalTypeId::STRUCT) {
 			throw InvalidInputException("'hive_types' only accepts a STRUCT(name : VARCHAR, ...), not %s", val.type().ToString());
 		}
