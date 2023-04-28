@@ -126,6 +126,14 @@ void UndoBuffer::Cleanup() {
 	CleanupState state;
 	UndoBuffer::IteratorState iterator_state;
 	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CleanupEntry(type, data); });
+
+	// possibly vacuum indexes
+	for (const auto &table : state.indexed_tables) {
+		table.second->info->indexes.Scan([&](Index &index) {
+			index.Vacuum();
+			return false;
+		});
+	}
 }
 
 void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, optional_ptr<WriteAheadLog> log,
