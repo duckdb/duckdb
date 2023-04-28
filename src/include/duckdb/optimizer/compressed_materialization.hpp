@@ -77,7 +77,7 @@ class CompressedMaterialization {
 public:
 	explicit CompressedMaterialization(ClientContext &context, Binder &binder, statistics_map_t &&statistics_map);
 
-	unique_ptr<LogicalOperator> Compress(unique_ptr<LogicalOperator> op);
+	void Compress(unique_ptr<LogicalOperator> &op);
 
 private:
 	//! Depth-first traversal of the plan

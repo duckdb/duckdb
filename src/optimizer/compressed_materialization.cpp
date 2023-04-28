@@ -73,14 +73,12 @@ void CompressedMaterialization::UpdateBindingInfo(CompressedMaterializationInfo 
 	}
 }
 
-unique_ptr<LogicalOperator> CompressedMaterialization::Compress(unique_ptr<LogicalOperator> op) {
+void CompressedMaterialization::Compress(unique_ptr<LogicalOperator> &op) {
 	root = op.get();
 	root->ResolveOperatorTypes();
 
 	CompressInternal(op);
-	RemoveRedundantExpressions(op);
-
-	return op;
+	//	RemoveRedundantExpressions(op);
 }
 
 void CompressedMaterialization::CompressInternal(unique_ptr<LogicalOperator> &op) {

@@ -7,14 +7,14 @@ namespace duckdb {
 
 static void PopulateBindingMap(CompressedMaterializationInfo &info, const vector<ColumnBinding> &bindings_out,
                                const vector<LogicalType> &types, LogicalOperator &op_in) {
-	const auto rhs_bindings_in = op_in.GetColumnBindings();
-	for (const auto &rhs_binding : rhs_bindings_in) {
+	const auto bindings_in = op_in.GetColumnBindings();
+	for (const auto &binding : bindings_in) {
 		// Joins do not change bindings, input binding is output binding
 		for (idx_t col_idx_out = 0; col_idx_out < bindings_out.size(); col_idx_out++) {
 			const auto &binding_out = bindings_out[col_idx_out];
-			if (binding_out == rhs_binding) {
+			if (binding_out == binding) {
 				// This one is projected out, add it to map
-				info.binding_map.emplace(rhs_binding, CMBindingInfo(binding_out, types[col_idx_out]));
+				info.binding_map.emplace(binding, CMBindingInfo(binding_out, types[col_idx_out]));
 			}
 		}
 	}
