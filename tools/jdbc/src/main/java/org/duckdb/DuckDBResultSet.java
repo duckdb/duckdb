@@ -26,6 +26,7 @@ import java.sql.SQLXML;
 import java.sql.Statement;
 import java.sql.Time;
 import java.sql.Timestamp;
+import java.sql.Types;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.OffsetTime;
@@ -163,7 +164,8 @@ public class DuckDBResultSet implements ResultSet {
 		if (was_null) {
 			return null;
 		}
-		switch (meta.column_types[columnIndex - 1]) {
+		DuckDBColumnType switch_no = current_chunk[columnIndex - 1].duckdb_type;
+		switch (switch_no) {
 		case BOOLEAN:
 			return getBoolean(columnIndex);
 		case TINYINT:
@@ -209,6 +211,8 @@ public class DuckDBResultSet implements ResultSet {
 			return getBlob(columnIndex);
 		case UUID:
 			return getUuid(columnIndex);
+		case LIST:
+			return getArray(columnIndex);
 		default:
 			return getLazyString(columnIndex);
 		}
@@ -249,7 +253,7 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	private boolean isType(int columnIndex, DuckDBColumnType... types) {
-		return Arrays.stream(types).anyMatch(type -> meta.column_types[columnIndex - 1] == type);
+		return Arrays.stream(types).anyMatch(type -> current_chunk[columnIndex - 1].duckdb_type == type);
 	}
 
 	public String getString(int columnIndex) throws SQLException {
@@ -319,14 +323,7 @@ public class DuckDBResultSet implements ResultSet {
 		if (check_and_null(columnIndex)) {
 			return 0;
 		}
-		if (isType(columnIndex, DuckDBColumnType.INTEGER)) {
-			return getbuf(columnIndex, 4).getInt();
-		}
-		Object o = getObject(columnIndex);
-		if (o instanceof Number) {
-			return ((Number) o).intValue();
-		}
-		return Integer.parseInt(o.toString());
+		return current_chunk[columnIndex - 1].getInt(chunk_idx - 1);
 	}
 
 	private short getUint8(int columnIndex) throws SQLException {
@@ -1066,6 +1063,9 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public Array getArray(int columnIndex) throws SQLException {
+		if (isType(columnIndex, DuckDBColumnType.LIST)) {
+			return new DuckDBArray((DuckDBVector) current_chunk[columnIndex-1].varlen_data[chunk_idx - 1]);
+		}
 		throw new SQLFeatureNotSupportedException("getArray");
 	}
 
@@ -1078,11 +1078,11 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public Clob getClob(String columnLabel) throws SQLException {
-		throw new SQLFeatureNotSupportedException("getClob");
+		return getClob(findColumn(columnLabel));
 	}
 
 	public Array getArray(String columnLabel) throws SQLException {
-		throw new SQLFeatureNotSupportedException("getArray");
+		return getArray(findColumn(columnLabel));
 	}
 
 	public Date getDate(int columnIndex, Calendar cal) throws SQLException {

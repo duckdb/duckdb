@@ -3214,7 +3214,7 @@ public class TestDuckDBJDBC {
 			 PreparedStatement statement = connection.prepareStatement("select [1]")) {
 			ResultSet rs = statement.executeQuery();
 			assertTrue(rs.next());
-			assertEquals(rs.getObject(1), "[1]");
+			assertEquals(Arrays.toString((Object[])rs.getArray(1).getArray()), "[1]");
 		}
 	}
 
@@ -3286,6 +3286,34 @@ public class TestDuckDBJDBC {
 			assertEquals(s.executeUpdate("insert into t values (1)"), 1);
 			assertFalse(s.execute("insert into t values (1)"));
 			assertEquals(s.getUpdateCount(), 1);
+		}
+	}
+
+	public static void test_get_int() throws Exception {
+		try (Connection connection = DriverManager.getConnection("jdbc:duckdb:"); Statement s = connection.createStatement()) {
+			try (PreparedStatement p = connection.prepareStatement("select * from generate_series(?, ?)")) {
+				p.setInt(1, 0);
+				p.setInt(2, 1);
+
+				try (ResultSet rs = p.executeQuery()) {
+					int i = 0;
+					while (rs.next()) {
+						assertEquals(rs.getInt(1), i++);
+					}
+				}
+			}
+		}
+	}
+
+	public static void test_execute_update() throws Exception {
+		try (Connection connection = DriverManager.getConnection("jdbc:duckdb:"); Statement s = connection.createStatement()) {
+			s.executeUpdate("drop table if exists t");
+			s.executeUpdate("create table t (i int)");
+		
+			try (PreparedStatement p = connection.prepareStatement("insert into t (i) select ?")) {
+				p.setInt(1, 1);
+				p.executeUpdate();
+			}
 		}
 	}
 

@@ -62,6 +62,7 @@ static jclass J_DuckVector;
 static jmethodID J_DuckVector_init;
 static jfieldID J_DuckVector_constlen;
 static jfieldID J_DuckVector_varlen;
+static jmethodID J_DuckVector_getObject;
 
 static jclass J_ByteBuffer;
 
@@ -184,6 +185,8 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 	J_DuckVector_init = env->GetMethodID(J_DuckVector, "<init>", "(Ljava/lang/String;I[Z)V");
 	J_DuckVector_constlen = env->GetFieldID(J_DuckVector, "constlen_data", "Ljava/nio/ByteBuffer;");
 	J_DuckVector_varlen = env->GetFieldID(J_DuckVector, "varlen_data", "[Ljava/lang/Object;");
+	J_DuckVector_getObject = env->GetMethodID(J_DuckVector, "getObject", "(I)Ljava/lang/Object;");
+	D_ASSERT(J_DuckVector_getObject);
 
 	tmpLocalRef = env->FindClass("java/nio/ByteBuffer");
 	J_ByteBuffer = (jclass)env->NewGlobalRef(tmpLocalRef);
@@ -690,6 +693,8 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1meta(JNIEnv
 	                      name_array, type_array, type_detail_array, return_type);
 }
 
+jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_count);
+
 JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(JNIEnv *env, jclass,
                                                                                 jobject res_ref_buf,
                                                                                 jobject conn_ref_buf) {
@@ -713,6 +718,24 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 
 	for (idx_t col_idx = 0; col_idx < res_ref->chunk->ColumnCount(); col_idx++) {
 		auto &vec = res_ref->chunk->data[col_idx];
+
+		auto jvec = ProcessVector(env, conn_ref, vec, row_count);
+
+		env->SetObjectArrayElement(vec_array, col_idx, jvec);
+	}
+
+	return vec_array;
+}
+
+jobject ProcessValue(JNIEnv *env, Connection *conn_ref, const Value &child_value) {
+	auto vector = new Vector(child_value); // TODO: DuckVector should own this
+	int n_elements = 1;
+	vector->Flatten(n_elements);
+	auto jobj = ProcessVector(env, conn_ref, *vector, n_elements);
+	return env->CallObjectMethod(jobj, J_DuckVector_getObject, 0);
+}
+
+jobject ProcessVector(JNIEnv *env, Connection* conn_ref, Vector &vec, idx_t row_count) {
 		auto type_str = env->NewStringUTF(vec.GetType().ToString().c_str());
 		// construct nullmask
 		auto null_array = env->NewBooleanArray(row_count);
@@ -819,6 +842,22 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 		case LogicalTypeId::UUID:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(hugeint_t));
 			break;
+		case LogicalTypeId::LIST:
+			varlen_data = env->NewObjectArray(row_count, J_DuckVector, nullptr);
+			for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
+				if (FlatVector::IsNull(vec, row_idx)) {
+					continue;
+				}
+				auto lst = vec.GetValue(row_idx);
+				auto &children = ListValue::GetChildren(lst);
+				auto vector = new Vector(ListType::GetChildType(vec.GetType()));
+				for (idx_t i = 0; i < children.size(); i++) {
+					vector->SetValue(i, children[i]);
+				}
+				auto j_obj = ProcessVector(env, conn_ref, *vector, children.size());
+				env->SetObjectArrayElement(varlen_data, row_idx, j_obj);
+			}
+			break;
 		default: {
 			Vector string_vec(LogicalType::VARCHAR);
 			VectorOperations::Cast(*conn_ref->context, vec, string_vec, row_count);
@@ -841,10 +880,7 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 		env->SetObjectField(jvec, J_DuckVector_constlen, constlen_data);
 		env->SetObjectField(jvec, J_DuckVector_varlen, varlen_data);
 
-		env->SetObjectArrayElement(vec_array, col_idx, jvec);
-	}
-
-	return vec_array;
+	return jvec;
 }
 
 JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch_1size(JNIEnv *, jclass) {
