@@ -1,0 +1,130 @@
+# name: test/sql/table_function/range_correlated.test
+# description: Test range function with references to correlated columns in arguments
+# group: [table_function]
+
+
+# one correlated column with one row
+query II
+SELECT s, u FROM (SELECT 10) AS _(u), generate_series(u) __(s)
+----
+1   10
+2   10
+3   10
+4   10
+5   10
+6   10
+7   10
+8   10
+9   10
+10  10
+
+# two correlated columns with one row each (generate_series)
+query III
+SELECT s, l, i FROM (SELECT 10) AS _(l), (SELECT 3) AS _(i), generate_series(l,40,i) __(s)
+----
+10  10  3
+13  10  3
+16  10  3
+19  10  3
+22  10  3
+25  10  3
+28  10  3
+31  10  3
+34  10  3
+37  10  3
+40  10  3
+
+# two correlated columns with one row each (range)
+query III
+SELECT s, l, i FROM (SELECT 10) AS _(l), (SELECT 3) AS _(i), range(l,40,i) __(s)
+----
+10  10  3
+13  10  3
+16  10  3
+19  10  3
+22  10  3
+25  10  3
+28  10  3
+31  10  3
+34  10  3
+37  10  3
+
+
+# two correlated columns with two rows each
+query II
+SELECT * FROM (VALUES (10),(20)) AS _(l), (VALUES (2),(3)) AS __(i), generate_series(l,30,i) AS ___(s);
+----
+10  2   10
+10  2   12
+10  2   14
+10  2   16
+10  2   18
+10  2   20
+10  2   22
+10  2   24
+10  2   28
+10  2   30
+10  3   10
+10  3   13
+10  3   16
+10  3   19
+10  3   22
+10  3   25
+10  3   28
+20  2   20
+20  2   22
+20  2   24
+20  2   26
+20  2   28
+20  2   30
+20  3   20
+20  3   23
+20  3   26
+20  3   29
+
+# nested ranges
+query II
+SELECT COUNT(*) FROM range(0,10) AS _(r1), range(r1,10) __(r2);
+----
+55
+
+# large result
+query II
+SELECT COUNT(*) FROM (SELECT 100000) AS _(u), generate_series(u) __(s);
+----
+100001
+
+# date
+query I
+SELECT s::DATE FROM (SELECT DATE '1992-01-01') AS _(l), range(l, DATE '1992-10-01', INTERVAL (1) MONTH) __(s)
+----
+1992-01-01
+1992-02-01
+1992-03-01
+1992-04-01
+1992-05-01
+1992-06-01
+1992-07-01
+1992-08-01
+1992-09-01
+
+
+# too many arguments
+statement error
+SELECT * FROM generate_series(1,10,1,5);
+
+# too few arguments (timestamps)
+statement error
+SELECT * FROM generate_series(SELECT DATE '1992-01-01');
+
+# wrong types (integers)
+statement error
+SELECT * FROM (SELECT 'foo') AS _(l), generate_series(l,10);
+
+# mixed types
+statement error
+SELECT * FROM (SELECT 10) AS _(l), generate_series(l, DATE '1992-01-01');
+
+# wrong types (timestamps)
+statement error
+SELECT * FROM (SELECT DATE '1992-01-01') AS _(i), generate_series(DATE '1992-01-01', DATE '1992-10-01, i);

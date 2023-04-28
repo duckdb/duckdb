@@ -24,6 +24,8 @@ enum class PhysicalOperatorType : uint8_t {
 	TOP_N,
 	WINDOW,
 	UNNEST,
+	RANGE,
+	TIME_RANGE,
 	UNGROUPED_AGGREGATE,
 	HASH_GROUP_BY,
 	PERFECT_HASH_GROUP_BY,
