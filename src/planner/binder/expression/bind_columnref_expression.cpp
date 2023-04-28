@@ -388,4 +388,8 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 	return result;
 }
 
+bool ExpressionBinder::QualifyColumnAlias(const ColumnRefExpression &colref){
+	return false;
+}
+
 } // namespace duckdb
