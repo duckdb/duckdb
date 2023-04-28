@@ -1156,7 +1156,7 @@ ParserOptions ClientContext::GetParserOptions() const {
 
 ClientProperties ClientContext::GetClientProperties() const {
 	ClientProperties properties;
-	properties.timezone = ClientConfig::GetConfig(*this).ExtractTimezone();
+	properties.time_zone = ClientConfig::GetConfig(*this).ExtractTimezone();
 	return properties;
 }
 
