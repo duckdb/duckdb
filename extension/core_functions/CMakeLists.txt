@@ -5,8 +5,8 @@ project(CoreFunctionsExtension)
 include_directories(include)
 add_subdirectory(scalar)
 
-set(CORE_FUNCTIONS_SOURCES
-    core_functions_extension.cpp function_list.cpp ${ALL_OBJECT_FILES})
+set(CORE_FUNCTIONS_SOURCES core_functions_extension.cpp function_list.cpp
+                           ${ALL_OBJECT_FILES})
 
 add_library(core_functions_extension STATIC ${CORE_FUNCTIONS_SOURCES})
 set(PARAMETERS "-warnings")

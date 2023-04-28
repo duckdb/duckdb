@@ -18,7 +18,7 @@ void CoreFunctionsExtension::Load(DuckDB &ddb) {
 	auto &catalog = Catalog::GetSystemCatalog(db);
 	CatalogTransaction transaction(db, 1, 0);
 	auto functions = StaticFunctionDefinition::GetFunctionList();
-	for(idx_t i = 0; functions[i].name; i++) {
+	for (idx_t i = 0; functions[i].name; i++) {
 		auto &function = functions[i];
 		if (function.get_function) {
 			auto scalar_function = function.get_function();

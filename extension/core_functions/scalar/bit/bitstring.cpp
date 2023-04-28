@@ -47,7 +47,7 @@ struct GetBitOperator {
 
 ScalarFunction GetBitFun::GetFunction() {
 	return ScalarFunction({LogicalType::BIT, LogicalType::INTEGER}, LogicalType::INTEGER,
-	                               ScalarFunction::BinaryFunction<string_t, int32_t, int32_t, GetBitOperator>);
+	                      ScalarFunction::BinaryFunction<string_t, int32_t, int32_t, GetBitOperator>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -72,8 +72,8 @@ static void SetBitOperation(DataChunk &args, ExpressionState &state, Vector &res
 }
 
 ScalarFunction SetBitFun::GetFunction() {
-	return ScalarFunction({LogicalType::BIT, LogicalType::INTEGER, LogicalType::INTEGER},
-	                               LogicalType::BIT, SetBitOperation);
+	return ScalarFunction({LogicalType::BIT, LogicalType::INTEGER, LogicalType::INTEGER}, LogicalType::BIT,
+	                      SetBitOperation);
 }
 
 //===--------------------------------------------------------------------===//
@@ -91,7 +91,7 @@ struct BitPositionOperator {
 
 ScalarFunction BitPositionFun::GetFunction() {
 	return ScalarFunction({LogicalType::BIT, LogicalType::BIT}, LogicalType::INTEGER,
-	                               ScalarFunction::BinaryFunction<string_t, string_t, int32_t, BitPositionOperator>);
+	                      ScalarFunction::BinaryFunction<string_t, string_t, int32_t, BitPositionOperator>);
 }
 
 } // namespace duckdb
