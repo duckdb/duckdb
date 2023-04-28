@@ -25,6 +25,9 @@ void CoreFunctionsExtension::Load(DuckDB &ddb) {
 			scalar_function.name = function.name;
 			CreateScalarFunctionInfo info(scalar_function);
 			info.internal = true;
+			info.description = function.description;
+			info.parameter_names = StringUtil::Split(function.parameters, ",");
+			info.example = function.example;
 			catalog.CreateFunction(transaction, info);
 		} else {
 			throw InternalException("Do not know how to register function of this type");
