@@ -97,3 +97,53 @@ query I
 SELECT unregister('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c');
 ----
 true
+
+require parquet
+
+# Register also works with parquet files
+
+query II
+explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
+----
+analyzed_plan	<REGEX>:.*GET: 1.*
+
+query I
+SELECT register('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet');
+----
+true
+
+query II
+explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
+----
+analyzed_plan	<REGEX>:.*GET: 0.*
+
+query I
+SELECT count(*) FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
+----
+1000
+
+query II
+explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
+----
+analyzed_plan	<REGEX>:.*GET: 0.*
+
+query I
+SELECT count(*) FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
+----
+1000
+
+query I
+SELECT unregister('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet');
+----
+true
+
+query I
+SELECT count(*) FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
+----
+1000
+
+# This also guarantees we are returning to the previous configuration
+query II
+explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
+----
+analyzed_plan	<REGEX>:.*GET: 1.*

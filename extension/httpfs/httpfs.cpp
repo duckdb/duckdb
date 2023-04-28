@@ -621,7 +621,7 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 		//! It's a bingo
 		lock_guard<mutex> lock(state->cached_files_mutex);
 		state->cached_files[path] = client_context->client_data->registered_url[path];
-		length = state->cached_files[path].capacity;
+		length = state->cached_files[path].length;
 
 	} else if (length == 0 || http_params.force_download) {
 		lock_guard<mutex> lock(state->cached_files_mutex);
@@ -632,6 +632,7 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 			hfs.GetRequest(*this, path, {});
 			cached_file.finished = true;
 		}
+		cached_file.length = length;
 	}
 
 	if (!res->headers["Last-Modified"].empty()) {

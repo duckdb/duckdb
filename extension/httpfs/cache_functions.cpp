@@ -20,7 +20,6 @@ void RegisterCacheFunction(duckdb::DataChunk &args, duckdb::ExpressionState &sta
 	if (client_config.set_variables.find("force_download") != client_config.set_variables.end()) {
 		force_download = client_config.set_variables["force_download"];
 	}
-	client_config.set_variables["force_download"] = true_value;
 
 	for (idx_t i = 0; i < args.size(); i++) {
 		auto url = url_vector.GetValue(i).GetValue<string>();
@@ -33,15 +32,16 @@ void RegisterCacheFunction(duckdb::DataChunk &args, duckdb::ExpressionState &sta
 			throw InvalidInputException("Getting to S3 in a bit");
 		} else if (url.rfind("https://", 0) == 0 || url.rfind("http://", 0) == 0) {
 			// this is an HTTP URL
+			client_config.set_variables["force_download"] = true_value;
 			auto fh = fs.OpenFile(url.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK,
 			                      FileCompressionType::AUTO_DETECT, FileSystem::GetFileOpener(context));
 			auto hfh = (HTTPFileHandle *)fh.get();
 			url_cache[url] = hfh->state->cached_files[url];
+			client_config.set_variables["force_download"] = force_download;
 		} else {
 			throw InvalidInputException("File System can't handle this URL");
 		}
 	}
-	client_config.set_variables["force_download"] = force_download;
 	// TODO; should we just return false for URLs we can't register instead of throwing errors?
 	result.SetVectorType(duckdb::VectorType::CONSTANT_VECTOR);
 	result.SetValue(0, true);
@@ -67,7 +67,7 @@ void UnregisterCacheFunction(duckdb::DataChunk &args, duckdb::ExpressionState &s
 		if (url_cache.find(url) == url_cache.end()) {
 			throw InvalidInputException("The URL: %s is not yet cached, nothing to remove.", url);
 		}
-		url_cache.erase("url");
+		url_cache.erase(url);
 	}
 	// TODO; should we just return false for URLs we can't register instead of throwing errors?
 	result.SetVectorType(duckdb::VectorType::CONSTANT_VECTOR);

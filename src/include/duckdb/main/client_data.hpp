@@ -32,6 +32,8 @@ struct CachedFile {
 	shared_ptr<char> data;
 	//! Data capacity
 	uint64_t capacity = 0;
+	//! Data length
+	uint64_t length = 0;
 	//! If we finished downloading the file
 	bool finished = false;
 };
