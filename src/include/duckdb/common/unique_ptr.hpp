@@ -16,21 +16,25 @@ static void AssertNotNull(const bool null) {
 
 namespace duckdb {
 
-template <class _Tp, class _Dp = std::default_delete<_Tp>>
-class unique_ptr : public std::unique_ptr<_Tp, _Dp> {
+template <class _Tp, bool UNSAFE = false>
+class unique_ptr : public std::unique_ptr<_Tp, std::default_delete<_Tp>> {
 public:
-	using original = std::unique_ptr<_Tp, _Dp>;
+	using original = std::unique_ptr<_Tp, std::default_delete<_Tp>>;
 	using original::original;
 
 	typename std::add_lvalue_reference<_Tp>::type operator*() const {
 		const auto ptr = original::get();
-		AssertNotNull(!ptr);
+		if (!UNSAFE) {
+			AssertNotNull(!ptr);
+		}
 		return *ptr;
 	}
 
 	typename original::pointer operator->() const {
 		const auto ptr = original::get();
-		AssertNotNull(!ptr);
+		if (!UNSAFE) {
+			AssertNotNull(!ptr);
+		}
 		return ptr;
 	}
 
@@ -44,15 +48,17 @@ public:
 	}
 };
 
-template <class _Tp, class _Dp>
-class unique_ptr<_Tp[], _Dp> : public std::unique_ptr<_Tp[], _Dp> {
+template <class _Tp, bool UNSAFE>
+class unique_ptr<_Tp[], UNSAFE> : public std::unique_ptr<_Tp[], std::default_delete<_Tp>> {
 public:
-	using original = std::unique_ptr<_Tp[], _Dp>;
+	using original = std::unique_ptr<_Tp[], std::default_delete<_Tp>>;
 	using original::original;
 
 	typename std::add_lvalue_reference<_Tp>::type operator[](size_t __i) const {
 		const auto ptr = original::get();
-		AssertNotNull(!ptr);
+		if (!UNSAFE) {
+			AssertNotNull(!ptr);
+		}
 		return ptr[__i];
 	}
 };
