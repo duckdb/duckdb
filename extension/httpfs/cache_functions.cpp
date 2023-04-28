@@ -26,11 +26,8 @@ void RegisterCacheFunction(duckdb::DataChunk &args, duckdb::ExpressionState &sta
 		if (url_cache.find(url) != url_cache.end()) {
 			throw InvalidInputException("The URL: %s is already cached", url);
 		}
-		CachedFile cached_file;
-		if (url.rfind("s3://", 0) == 0) {
-			// This is an S3 URL
-			throw InvalidInputException("Getting to S3 in a bit");
-		} else if (url.rfind("https://", 0) == 0 || url.rfind("http://", 0) == 0) {
+
+		if (url.rfind("s3://", 0) == 0 || url.rfind("https://", 0) == 0 || url.rfind("http://", 0) == 0) {
 			// this is an HTTP URL
 			client_config.set_variables["force_download"] = true_value;
 			auto fh = fs.OpenFile(url.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK,
@@ -69,7 +66,7 @@ void UnregisterCacheFunction(duckdb::DataChunk &args, duckdb::ExpressionState &s
 		}
 		url_cache.erase(url);
 	}
-	// TODO; should we just return false for URLs we can't register instead of throwing errors?
+	// TODO; should we just return false for URLs we can't unregister instead of throwing errors?
 	result.SetVectorType(duckdb::VectorType::CONSTANT_VECTOR);
 	result.SetValue(0, true);
 }
