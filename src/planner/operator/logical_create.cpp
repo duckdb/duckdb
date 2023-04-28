@@ -11,7 +11,7 @@ unique_ptr<LogicalOperator> LogicalCreate::Deserialize(LogicalDeserializationSta
 	auto info = CreateInfo::Deserialize(reader.GetSource());
 
 	auto schema_catalog_entry =
-	    Catalog::GetSchema(context, INVALID_CATALOG, info->schema, OnEntryNotFound::RETURN_NULL);
+	    Catalog::GetSchema(context, info->catalog, info->schema, OnEntryNotFound::RETURN_NULL);
 	return make_uniq<LogicalCreate>(state.type, std::move(info), schema_catalog_entry);
 }
 
