@@ -291,11 +291,13 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalDelimJoin &delim_join,
 			if (!FindAndReplaceBindings(traced_bindings, aggr.groups, current_bindings)) {
 				return false;
 			}
+			break;
 		}
 		case LogicalOperatorType::LOGICAL_PROJECTION: {
 			if (!FindAndReplaceBindings(traced_bindings, current_op.get().expressions, current_bindings)) {
 				return false;
 			}
+			break;
 		}
 		case LogicalOperatorType::LOGICAL_LIMIT:
 		case LogicalOperatorType::LOGICAL_FILTER:

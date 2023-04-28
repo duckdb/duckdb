@@ -16,6 +16,7 @@ namespace duckdb {
 class BoundColumnRefExpression;
 
 //! The RemoveDuplicateGroups optimizer traverses the logical operator tree and removes any duplicate aggregate groups
+//! Duplicate groups may be introduced when joins columns are removed, e.g., by Deliminator or RemoveUnusedColumns
 class RemoveDuplicateGroups : public LogicalOperatorVisitor {
 public:
 	RemoveDuplicateGroups() {

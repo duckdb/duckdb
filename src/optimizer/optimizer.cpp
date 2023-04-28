@@ -73,11 +73,17 @@ void Optimizer::Verify(LogicalOperator &op) {
 }
 
 unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan_p) {
-	if (plan_p->type == LogicalOperatorType::LOGICAL_TRANSACTION) {
+	Verify(*plan_p);
+
+	switch (plan_p->type) {
+	case LogicalOperatorType::LOGICAL_TRANSACTION:
+	case LogicalOperatorType::LOGICAL_SET:
+	case LogicalOperatorType::LOGICAL_PRAGMA:
 		return std::move(plan_p);
+	default:
+		break;
 	}
 
-	Verify(*plan_p);
 	this->plan = std::move(plan_p);
 	// first we perform expression rewrites using the ExpressionRewriter
 	// this does not change the logical plan structure, but only simplifies the expression trees
@@ -130,6 +136,23 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 		unused.VisitOperator(*plan);
 	});
 
+	// Remove duplicate groups from aggregates
+	RunOptimizer(OptimizerType::DUPLICATE_GROUPS, [&]() {
+		RemoveDuplicateGroups remove;
+		remove.VisitOperator(*plan);
+	});
+
+	// then we extract common subexpressions inside the different operators
+	RunOptimizer(OptimizerType::COMMON_SUBEXPRESSIONS, [&]() {
+		CommonSubExpressionOptimizer cse_optimizer(binder);
+		cse_optimizer.VisitOperator(*plan);
+	});
+
+	RunOptimizer(OptimizerType::COLUMN_LIFETIME, [&]() {
+		ColumnLifetimeAnalyzer column_lifetime(true);
+		column_lifetime.VisitOperator(*plan);
+	});
+
 	// perform statistics propagation
 	column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map;
 	RunOptimizer(OptimizerType::STATISTICS_PROPAGATION, [&]() {
@@ -140,27 +163,13 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 
 	// compress data based on statistics for materializing operators
 	RunOptimizer(OptimizerType::COMPRESSED_MATERIALIZATION, [&]() {
-		RemoveDuplicateGroups remove;
-		remove.VisitOperator(*plan);
-
 		CompressedMaterialization compressed_materialization(context, binder, std::move(statistics_map));
 		plan = compressed_materialization.Compress(std::move(plan));
-	});
-
-	// then we extract common subexpressions inside the different operators
-	RunOptimizer(OptimizerType::COMMON_SUBEXPRESSIONS, [&]() {
-		CommonSubExpressionOptimizer cse_optimizer(binder);
-		cse_optimizer.VisitOperator(*plan);
 	});
 
 	RunOptimizer(OptimizerType::COMMON_AGGREGATE, [&]() {
 		CommonAggregateOptimizer common_aggregate;
 		common_aggregate.VisitOperator(*plan);
-	});
-
-	RunOptimizer(OptimizerType::COLUMN_LIFETIME, [&]() {
-		ColumnLifetimeAnalyzer column_lifetime(true);
-		column_lifetime.VisitOperator(*plan);
 	});
 
 	// transform ORDER BY + LIMIT to TopN

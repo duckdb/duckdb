@@ -66,7 +66,10 @@ void RemoveDuplicateGroups::VisitAggregate(LogicalAggregate &aggr) {
 		// Store expression and remove it from groups
 		stored_expressions.emplace_back(std::move(groups[removed_idx]));
 		groups.erase(groups.begin() + removed_idx);
-		aggr.group_stats.erase(aggr.group_stats.begin() + removed_idx);
+
+		// This optimizer should run before statistics propagation, so this should be empty
+		// If it runs after, then group_stats should be updated too
+		D_ASSERT(aggr.group_stats.empty());
 
 		// Remove from grouping sets too
 		for (auto &grouping_set : aggr.grouping_sets) {

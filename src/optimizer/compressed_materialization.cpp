@@ -3,6 +3,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/operators.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
+#include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -83,14 +84,9 @@ unique_ptr<LogicalOperator> CompressedMaterialization::Compress(unique_ptr<Logic
 }
 
 void CompressedMaterialization::CompressInternal(unique_ptr<LogicalOperator> &op) {
-	// Let's not mess with the TopN optimizer
-	if (op->type == LogicalOperatorType::LOGICAL_LIMIT &&
-	    op->children[0]->type == LogicalOperatorType::LOGICAL_ORDER_BY) {
-		auto &limit = op->Cast<LogicalLimit>();
-		if (limit.limit_val != NumericLimits<int64_t>::Maximum() || limit.offset) {
-			CompressInternal(op->children[0]->children[0]);
-			return;
-		}
+	if (TopN::CanOptimize(*op)) { // Let's not mess with the TopN optimizer
+		CompressInternal(op->children[0]->children[0]);
+		return;
 	}
 
 	for (auto &child : op->children) {

@@ -26,6 +26,7 @@ static DefaultOptimizerType internal_optimizer_types[] = {
     {"column_lifetime", OptimizerType::COLUMN_LIFETIME},
     {"top_n", OptimizerType::TOP_N},
     {"compressed_materialization", OptimizerType::COMPRESSED_MATERIALIZATION},
+    {"duplicate_groups", OptimizerType::DUPLICATE_GROUPS},
     {"reorder_filter", OptimizerType::REORDER_FILTER},
     {"extension", OptimizerType::EXTENSION},
     {nullptr, OptimizerType::INVALID}};
