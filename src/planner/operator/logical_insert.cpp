@@ -1,6 +1,8 @@
+#include "duckdb/planner/operator/logical_insert.hpp"
+
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/field_writer.hpp"
-#include "duckdb/planner/operator/logical_insert.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 
 namespace duckdb {
@@ -76,6 +78,15 @@ void LogicalInsert::ResolveTypes() {
 	} else {
 		types.emplace_back(LogicalType::BIGINT);
 	}
+}
+
+string LogicalInsert::GetName() const {
+#ifdef DEBUG
+	if (DBConfigOptions::debug_print_bindings) {
+		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", table_index);
+	}
+#endif
+	return LogicalOperator::GetName();
 }
 
 } // namespace duckdb
