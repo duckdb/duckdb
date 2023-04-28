@@ -1,6 +1,8 @@
 #include "duckdb/planner/operator/logical_aggregate.hpp"
-#include "duckdb/common/string_util.hpp"
+
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -115,6 +117,16 @@ vector<idx_t> LogicalAggregate::GetTableIndex() const {
 		result.push_back(groupings_index);
 	}
 	return result;
+}
+
+string LogicalAggregate::GetName() const {
+#ifdef DEBUG
+	if (DBConfigOptions::debug_print_bindings) {
+		return LogicalOperator::GetName() +
+		       StringUtil::Format(" #%llu, #%llu, #%llu", group_index, aggregate_index, groupings_index);
+	}
+#endif
+	return LogicalOperator::GetName();
 }
 
 } // namespace duckdb

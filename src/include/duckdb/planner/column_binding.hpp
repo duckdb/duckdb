@@ -9,6 +9,8 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/to_string.hpp"
+
 #include <functional>
 
 namespace duckdb {
@@ -21,6 +23,10 @@ struct ColumnBinding {
 	ColumnBinding() : table_index(DConstants::INVALID_INDEX), column_index(DConstants::INVALID_INDEX) {
 	}
 	ColumnBinding(idx_t table, idx_t column) : table_index(table), column_index(column) {
+	}
+
+	string ToString() const {
+		return "#[" + to_string(table_index) + "." + to_string(column_index) + "]";
 	}
 
 	bool operator==(const ColumnBinding &rhs) const {
