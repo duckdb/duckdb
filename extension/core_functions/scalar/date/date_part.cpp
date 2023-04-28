@@ -1204,9 +1204,9 @@ static void DatePartFunction(DataChunk &args, ExpressionState &state, Vector &re
 	    });
 }
 
-ScalarFunctionSet GetGenericDatePartFunction(scalar_function_t date_func,
-                                scalar_function_t ts_func, scalar_function_t interval_func,
-                                function_statistics_t date_stats, function_statistics_t ts_stats) {
+ScalarFunctionSet GetGenericDatePartFunction(scalar_function_t date_func, scalar_function_t ts_func,
+                                             scalar_function_t interval_func, function_statistics_t date_stats,
+                                             function_statistics_t ts_stats) {
 	ScalarFunctionSet operator_set;
 	operator_set.AddFunction(
 	    ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, std::move(date_func), nullptr, nullptr, date_stats));
@@ -1218,16 +1218,16 @@ ScalarFunctionSet GetGenericDatePartFunction(scalar_function_t date_func,
 
 template <class OP>
 static ScalarFunctionSet GetDatePartFunction() {
-	return GetGenericDatePartFunction(DatePart::UnaryFunction<date_t, int64_t, OP>,
-	                           DatePart::UnaryFunction<timestamp_t, int64_t, OP>,
-	                           ScalarFunction::UnaryFunction<interval_t, int64_t, OP>,
-	                           OP::template PropagateStatistics<date_t>, OP::template PropagateStatistics<timestamp_t>);
+	return GetGenericDatePartFunction(
+	    DatePart::UnaryFunction<date_t, int64_t, OP>, DatePart::UnaryFunction<timestamp_t, int64_t, OP>,
+	    ScalarFunction::UnaryFunction<interval_t, int64_t, OP>, OP::template PropagateStatistics<date_t>,
+	    OP::template PropagateStatistics<timestamp_t>);
 }
 
-ScalarFunctionSet GetGenericTimePartFunction(scalar_function_t date_func,
-                                scalar_function_t ts_func, scalar_function_t interval_func, scalar_function_t time_func,
-                                function_statistics_t date_stats, function_statistics_t ts_stats,
-                                function_statistics_t time_stats) {
+ScalarFunctionSet GetGenericTimePartFunction(scalar_function_t date_func, scalar_function_t ts_func,
+                                             scalar_function_t interval_func, scalar_function_t time_func,
+                                             function_statistics_t date_stats, function_statistics_t ts_stats,
+                                             function_statistics_t time_stats) {
 	ScalarFunctionSet operator_set;
 	operator_set.AddFunction(
 	    ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, std::move(date_func), nullptr, nullptr, date_stats));
@@ -1470,110 +1470,110 @@ struct StructDatePart {
 	}
 };
 
-ScalarFunctionSet YearFun::GetFunctions()  {
+ScalarFunctionSet YearFun::GetFunctions() {
 	return GetGenericDatePartFunction(LastYearFunction<date_t>, LastYearFunction<timestamp_t>,
-	                           ScalarFunction::UnaryFunction<interval_t, int64_t, DatePart::YearOperator>,
-	                           DatePart::YearOperator::PropagateStatistics<date_t>,
-	                           DatePart::YearOperator::PropagateStatistics<timestamp_t>);
+	                                  ScalarFunction::UnaryFunction<interval_t, int64_t, DatePart::YearOperator>,
+	                                  DatePart::YearOperator::PropagateStatistics<date_t>,
+	                                  DatePart::YearOperator::PropagateStatistics<timestamp_t>);
 };
 
-ScalarFunctionSet MonthFun::GetFunctions()  {
+ScalarFunctionSet MonthFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::MonthOperator>();
 };
 
-ScalarFunctionSet DayFun::GetFunctions()  {
+ScalarFunctionSet DayFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::DayOperator>();
 };
 
-ScalarFunctionSet DecadeFun::GetFunctions()  {
+ScalarFunctionSet DecadeFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::DecadeOperator>();
 };
 
-ScalarFunctionSet CenturyFun::GetFunctions()  {
+ScalarFunctionSet CenturyFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::CenturyOperator>();
 };
 
-ScalarFunctionSet MillenniumFun::GetFunctions()  {
+ScalarFunctionSet MillenniumFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::MillenniumOperator>();
 };
 
-ScalarFunctionSet QuarterFun::GetFunctions()  {
+ScalarFunctionSet QuarterFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::QuarterOperator>();
 };
 
-ScalarFunctionSet DayOfWeekFun::GetFunctions()  {
+ScalarFunctionSet DayOfWeekFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::DayOfWeekOperator>();
 };
 
-ScalarFunctionSet ISODayOfWeekFun::GetFunctions()  {
+ScalarFunctionSet ISODayOfWeekFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::ISODayOfWeekOperator>();
 };
 
-ScalarFunctionSet DayOfYearFun::GetFunctions()  {
+ScalarFunctionSet DayOfYearFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::DayOfYearOperator>();
 };
 
-ScalarFunctionSet WeekFun::GetFunctions()  {
+ScalarFunctionSet WeekFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::WeekOperator>();
 };
 
-ScalarFunctionSet ISOYearFun::GetFunctions()  {
+ScalarFunctionSet ISOYearFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::ISOYearOperator>();
 };
 
-ScalarFunctionSet EraFun::GetFunctions()  {
+ScalarFunctionSet EraFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::EraOperator>();
 };
 
-ScalarFunctionSet TimezoneFun::GetFunctions()  {
+ScalarFunctionSet TimezoneFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::TimezoneOperator>();
 };
 
-ScalarFunctionSet TimezoneHourFun::GetFunctions()  {
+ScalarFunctionSet TimezoneHourFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::TimezoneHourOperator>();
 };
 
-ScalarFunctionSet TimezoneMinuteFun::GetFunctions()  {
+ScalarFunctionSet TimezoneMinuteFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::TimezoneMinuteOperator>();
 };
 
-ScalarFunctionSet EpochFun::GetFunctions()  {
+ScalarFunctionSet EpochFun::GetFunctions() {
 	return GetTimePartFunction<DatePart::EpochOperator>();
 };
 
-ScalarFunctionSet MicrosecondsFun::GetFunctions()  {
+ScalarFunctionSet MicrosecondsFun::GetFunctions() {
 	return GetTimePartFunction<DatePart::MicrosecondsOperator>();
 };
 
-ScalarFunctionSet MillisecondsFun::GetFunctions()  {
+ScalarFunctionSet MillisecondsFun::GetFunctions() {
 	return GetTimePartFunction<DatePart::MillisecondsOperator>();
 };
 
-ScalarFunctionSet SecondsFun::GetFunctions()  {
+ScalarFunctionSet SecondsFun::GetFunctions() {
 	return GetTimePartFunction<DatePart::SecondsOperator>();
 };
 
-ScalarFunctionSet MinutesFun::GetFunctions()  {
+ScalarFunctionSet MinutesFun::GetFunctions() {
 	return GetTimePartFunction<DatePart::MinutesOperator>();
 };
 
-ScalarFunctionSet HoursFun::GetFunctions()  {
+ScalarFunctionSet HoursFun::GetFunctions() {
 	return GetTimePartFunction<DatePart::HoursOperator>();
 };
 
-ScalarFunctionSet YearWeekFun::GetFunctions()  {
+ScalarFunctionSet YearWeekFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::YearWeekOperator>();
 };
 
-ScalarFunctionSet DayOfMonthFun::GetFunctions()  {
+ScalarFunctionSet DayOfMonthFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::DayOperator>();
 };
 
-ScalarFunctionSet WeekDayFun::GetFunctions()  {
+ScalarFunctionSet WeekDayFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::DayOfWeekOperator>();
 };
 
-ScalarFunctionSet WeekOfYearFun::GetFunctions()  {
+ScalarFunctionSet WeekOfYearFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::WeekOperator>();
 };
 

@@ -1,25 +1,96 @@
 #include "function_list.hpp"
 #include "scalar/bit_functions.hpp"
 #include "scalar/blob_functions.hpp"
+#include "scalar/date_functions.hpp"
 
 namespace duckdb {
 
 #define DUCKDB_SCALAR_FUNCTION(_PARAM)                                                                                 \
 	{ _PARAM::Name, _PARAM::Parameters, _PARAM::Description, _PARAM::Example, _PARAM::GetFunction, nullptr }
+#define DUCKDB_SCALAR_FUNCTION_SET(_PARAM)                                                                             \
+	{ _PARAM::Name, _PARAM::Parameters, _PARAM::Description, _PARAM::Example, nullptr, _PARAM::GetFunctions }
 #define DUCKDB_SCALAR_FUNCTION_ALIAS(_PARAM)                                                                           \
 	{                                                                                                                  \
 		_PARAM::Name, _PARAM::ALIAS::Parameters, _PARAM::ALIAS::Description, _PARAM::ALIAS::Example,                   \
 		    _PARAM::ALIAS::GetFunction, nullptr                                                                        \
 	}
+#define DUCKDB_SCALAR_FUNCTION_SET_ALIAS(_PARAM)                                                                       \
+	{                                                                                                                  \
+		_PARAM::Name, _PARAM::ALIAS::Parameters, _PARAM::ALIAS::Description, _PARAM::ALIAS::Example, nullptr,          \
+		    _PARAM::ALIAS::GetFunctions                                                                                \
+	}
 #define FINAL_FUNCTION                                                                                                 \
 	{ nullptr, nullptr, nullptr, nullptr, nullptr, nullptr }
 
 static StaticFunctionDefinition internal_functions[] = {
-    DUCKDB_SCALAR_FUNCTION(GetBitFun),      DUCKDB_SCALAR_FUNCTION(SetBitFun),
-    DUCKDB_SCALAR_FUNCTION(BitPositionFun), DUCKDB_SCALAR_FUNCTION(BitStringFun),
-    DUCKDB_SCALAR_FUNCTION(ToBase64Fun),    DUCKDB_SCALAR_FUNCTION_ALIAS(Base64Fun),
-    DUCKDB_SCALAR_FUNCTION(FromBase64Fun),  DUCKDB_SCALAR_FUNCTION(EncodeFun),
-    DUCKDB_SCALAR_FUNCTION(DecodeFun),      FINAL_FUNCTION};
+	DUCKDB_SCALAR_FUNCTION_SET(AgeFun),
+	DUCKDB_SCALAR_FUNCTION_ALIAS(Base64Fun),
+	DUCKDB_SCALAR_FUNCTION(BitPositionFun),
+	DUCKDB_SCALAR_FUNCTION(BitStringFun),
+	DUCKDB_SCALAR_FUNCTION_SET(CenturyFun),
+	DUCKDB_SCALAR_FUNCTION(CurrentDateFun),
+	DUCKDB_SCALAR_FUNCTION_SET(DateDiffFun),
+	DUCKDB_SCALAR_FUNCTION_SET(DatePartFun),
+	DUCKDB_SCALAR_FUNCTION_SET(DateSubFun),
+	DUCKDB_SCALAR_FUNCTION_SET(DateTruncFun),
+	DUCKDB_SCALAR_FUNCTION_SET(DayFun),
+	DUCKDB_SCALAR_FUNCTION_SET(DayNameFun),
+	DUCKDB_SCALAR_FUNCTION_SET(DayOfMonthFun),
+	DUCKDB_SCALAR_FUNCTION_SET(DayOfWeekFun),
+	DUCKDB_SCALAR_FUNCTION_SET(DayOfYearFun),
+	DUCKDB_SCALAR_FUNCTION_SET(DecadeFun),
+	DUCKDB_SCALAR_FUNCTION(DecodeFun),
+	DUCKDB_SCALAR_FUNCTION(EncodeFun),
+	DUCKDB_SCALAR_FUNCTION_SET(EpochFun),
+	DUCKDB_SCALAR_FUNCTION(EpochMsFun),
+	DUCKDB_SCALAR_FUNCTION_SET(EraFun),
+	DUCKDB_SCALAR_FUNCTION(FromBase64Fun),
+	DUCKDB_SCALAR_FUNCTION(GetBitFun),
+	DUCKDB_SCALAR_FUNCTION(CurrentTimeFun),
+	DUCKDB_SCALAR_FUNCTION(CurrentTimestampFun),
+	DUCKDB_SCALAR_FUNCTION_SET(HoursFun),
+	DUCKDB_SCALAR_FUNCTION_SET(ISODayOfWeekFun),
+	DUCKDB_SCALAR_FUNCTION_SET(ISOYearFun),
+	DUCKDB_SCALAR_FUNCTION_SET(LastDayFun),
+	DUCKDB_SCALAR_FUNCTION_SET(MakeDateFun),
+	DUCKDB_SCALAR_FUNCTION(MakeTimeFun),
+	DUCKDB_SCALAR_FUNCTION(MakeTimestampFun),
+	DUCKDB_SCALAR_FUNCTION_SET(MicrosecondsFun),
+	DUCKDB_SCALAR_FUNCTION_SET(MillenniumFun),
+	DUCKDB_SCALAR_FUNCTION_SET(MillisecondsFun),
+	DUCKDB_SCALAR_FUNCTION_SET(MinutesFun),
+	DUCKDB_SCALAR_FUNCTION_SET(MonthFun),
+	DUCKDB_SCALAR_FUNCTION_SET(MonthNameFun),
+	DUCKDB_SCALAR_FUNCTION_ALIAS(NowFun),
+	DUCKDB_SCALAR_FUNCTION_SET(QuarterFun),
+	DUCKDB_SCALAR_FUNCTION_SET(SecondsFun),
+	DUCKDB_SCALAR_FUNCTION(SetBitFun),
+	DUCKDB_SCALAR_FUNCTION_SET(StrfTimeFun),
+	DUCKDB_SCALAR_FUNCTION_SET(StrpTimeFun),
+	DUCKDB_SCALAR_FUNCTION_SET(TimeBucketFun),
+	DUCKDB_SCALAR_FUNCTION_SET(TimezoneFun),
+	DUCKDB_SCALAR_FUNCTION_SET(TimezoneHourFun),
+	DUCKDB_SCALAR_FUNCTION_SET(TimezoneMinuteFun),
+	DUCKDB_SCALAR_FUNCTION(ToBase64Fun),
+	DUCKDB_SCALAR_FUNCTION(ToDaysFun),
+	DUCKDB_SCALAR_FUNCTION(ToHoursFun),
+	DUCKDB_SCALAR_FUNCTION(ToMicrosecondsFun),
+	DUCKDB_SCALAR_FUNCTION(ToMillisecondsFun),
+	DUCKDB_SCALAR_FUNCTION(ToMinutesFun),
+	DUCKDB_SCALAR_FUNCTION(ToMonthsFun),
+	DUCKDB_SCALAR_FUNCTION(ToSecondsFun),
+	DUCKDB_SCALAR_FUNCTION(ToTimestampFun),
+	DUCKDB_SCALAR_FUNCTION(ToYearsFun),
+	DUCKDB_SCALAR_FUNCTION_ALIAS(TodayFun),
+	DUCKDB_SCALAR_FUNCTION_ALIAS(TransactionTimestampFun),
+	DUCKDB_SCALAR_FUNCTION_SET(TryStrpTimeFun),
+	DUCKDB_SCALAR_FUNCTION_SET(WeekFun),
+	DUCKDB_SCALAR_FUNCTION_SET(WeekDayFun),
+	DUCKDB_SCALAR_FUNCTION_SET(WeekOfYearFun),
+	DUCKDB_SCALAR_FUNCTION_SET(YearFun),
+	DUCKDB_SCALAR_FUNCTION_SET(YearWeekFun),
+	FINAL_FUNCTION
+};
 
 StaticFunctionDefinition *StaticFunctionDefinition::GetFunctionList() {
 	return internal_functions;

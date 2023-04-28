@@ -20,10 +20,16 @@ void CoreFunctionsExtension::Load(DuckDB &ddb) {
 	auto functions = StaticFunctionDefinition::GetFunctionList();
 	for (idx_t i = 0; functions[i].name; i++) {
 		auto &function = functions[i];
-		if (function.get_function) {
-			auto scalar_function = function.get_function();
-			scalar_function.name = function.name;
-			CreateScalarFunctionInfo info(scalar_function);
+		if (function.get_function || function.get_function_set) {
+			// scalar function
+			ScalarFunctionSet result;
+			if (function.get_function) {
+				result.AddFunction(function.get_function());
+			} else {
+				result = function.get_function_set();
+			}
+			result.name = function.name;
+			CreateScalarFunctionInfo info(result);
 			info.internal = true;
 			info.description = function.description;
 			info.parameter_names = StringUtil::Split(function.parameters, ",");

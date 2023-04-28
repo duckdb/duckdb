@@ -1397,12 +1397,12 @@ ScalarFunctionSet StrpTimeFun::GetFunctions() {
 
 	const auto list_type = LogicalType::LIST(LogicalType::VARCHAR);
 	auto fun = ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::TIMESTAMP,
-							  StrpTimeFunction::Parse, StrpTimeBindFunction);
+	                          StrpTimeFunction::Parse, StrpTimeBindFunction);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	strptime.AddFunction(fun);
 
 	fun = ScalarFunction({LogicalType::VARCHAR, list_type}, LogicalType::TIMESTAMP, StrpTimeFunction::Parse,
-						 StrpTimeBindFunction);
+	                     StrpTimeBindFunction);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	strptime.AddFunction(fun);
 	return strptime;
@@ -1413,7 +1413,7 @@ ScalarFunctionSet TryStrpTimeFun::GetFunctions() {
 
 	const auto list_type = LogicalType::LIST(LogicalType::VARCHAR);
 	auto fun = ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::TIMESTAMP,
-	                     StrpTimeFunction::TryParse, StrpTimeBindFunction);
+	                          StrpTimeFunction::TryParse, StrpTimeBindFunction);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	try_strptime.AddFunction(fun);
 

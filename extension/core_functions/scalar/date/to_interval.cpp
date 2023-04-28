@@ -109,42 +109,42 @@ struct ToMicroSecondsOperator {
 
 ScalarFunction ToYearsFun::GetFunction() {
 	return ScalarFunction({LogicalType::INTEGER}, LogicalType::INTERVAL,
-	                               ScalarFunction::UnaryFunction<int32_t, interval_t, ToYearsOperator>);
+	                      ScalarFunction::UnaryFunction<int32_t, interval_t, ToYearsOperator>);
 }
 
 ScalarFunction ToMonthsFun::GetFunction() {
 	return ScalarFunction({LogicalType::INTEGER}, LogicalType::INTERVAL,
-	                               ScalarFunction::UnaryFunction<int32_t, interval_t, ToMonthsOperator>);
+	                      ScalarFunction::UnaryFunction<int32_t, interval_t, ToMonthsOperator>);
 }
 
 ScalarFunction ToDaysFun::GetFunction() {
 	return ScalarFunction({LogicalType::INTEGER}, LogicalType::INTERVAL,
-	                               ScalarFunction::UnaryFunction<int32_t, interval_t, ToDaysOperator>);
+	                      ScalarFunction::UnaryFunction<int32_t, interval_t, ToDaysOperator>);
 }
 
 ScalarFunction ToHoursFun::GetFunction() {
 	return ScalarFunction({LogicalType::BIGINT}, LogicalType::INTERVAL,
-	                               ScalarFunction::UnaryFunction<int64_t, interval_t, ToHoursOperator>);
+	                      ScalarFunction::UnaryFunction<int64_t, interval_t, ToHoursOperator>);
 }
 
 ScalarFunction ToMinutesFun::GetFunction() {
 	return ScalarFunction({LogicalType::BIGINT}, LogicalType::INTERVAL,
-	                               ScalarFunction::UnaryFunction<int64_t, interval_t, ToMinutesOperator>);
+	                      ScalarFunction::UnaryFunction<int64_t, interval_t, ToMinutesOperator>);
 }
 
 ScalarFunction ToSecondsFun::GetFunction() {
 	return ScalarFunction({LogicalType::BIGINT}, LogicalType::INTERVAL,
-	                               ScalarFunction::UnaryFunction<int64_t, interval_t, ToSecondsOperator>);
+	                      ScalarFunction::UnaryFunction<int64_t, interval_t, ToSecondsOperator>);
 }
 
 ScalarFunction ToMillisecondsFun::GetFunction() {
 	return ScalarFunction({LogicalType::BIGINT}, LogicalType::INTERVAL,
-	                               ScalarFunction::UnaryFunction<int64_t, interval_t, ToMilliSecondsOperator>);
+	                      ScalarFunction::UnaryFunction<int64_t, interval_t, ToMilliSecondsOperator>);
 }
 
 ScalarFunction ToMicrosecondsFun::GetFunction() {
 	return ScalarFunction({LogicalType::BIGINT}, LogicalType::INTERVAL,
-	                               ScalarFunction::UnaryFunction<int64_t, interval_t, ToMicroSecondsOperator>);
+	                      ScalarFunction::UnaryFunction<int64_t, interval_t, ToMicroSecondsOperator>);
 }
 
 } // namespace duckdb

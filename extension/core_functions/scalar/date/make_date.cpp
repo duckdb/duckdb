@@ -92,14 +92,14 @@ ScalarFunctionSet MakeDateFun::GetFunctions() {
 }
 
 ScalarFunction MakeTimeFun::GetFunction() {
-	return ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::DOUBLE},
-	                                     LogicalType::TIME, ExecuteMakeTime<int64_t>);
+	return ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::DOUBLE}, LogicalType::TIME,
+	                      ExecuteMakeTime<int64_t>);
 }
 
 ScalarFunction MakeTimestampFun::GetFunction() {
-	return ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,
-	                                           LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::DOUBLE},
-	                                          LogicalType::TIMESTAMP, ExecuteMakeTimestamp<int64_t>);
+	return ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,
+	                       LogicalType::BIGINT, LogicalType::DOUBLE},
+	                      LogicalType::TIMESTAMP, ExecuteMakeTimestamp<int64_t>);
 }
 
 } // namespace duckdb
