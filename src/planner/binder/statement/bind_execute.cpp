@@ -6,6 +6,7 @@
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
 
@@ -25,10 +26,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 	auto prepared = entry->second;
 	auto &named_param_map = prepared->unbound_statement->named_param_map;
 
-	case_insensitive_map_t<reference<unique_ptr<ParsedExpression>>> intermediate;
-	for (auto &pair : stmt.named_values) {
-		intermediate.emplace(pair);
-	}
+	auto intermediate = make_reference(stmt.named_values);
 
 	// Add the unnamed values to the intermediate if they are present
 	if (named_param_map.size() != stmt.named_values.size()) {
@@ -53,10 +51,8 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 		bind_values.push_back(std::move(value));
 	}
 	unique_ptr<LogicalOperator> rebound_plan;
-	vector<reference<Value>> bind_value_references;
-	for (auto &val : bind_values) {
-		bind_value_references.push_back(val);
-	}
+	auto bind_value_references = make_reference(bind_values);
+
 	if (prepared->RequireRebind(context, bind_value_references)) {
 		// catalog was modified or statement does not have clear types: rebind the statement before running the execute
 		Planner prepared_planner(context);

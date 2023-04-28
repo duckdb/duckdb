@@ -103,10 +103,7 @@ unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(vector<Value> &un
 	PendingQueryParameters parameters;
 	auto &params = parameters.parameters;
 
-	case_insensitive_map_t<reference<Value>> intermediate;
-	for (auto &pair : named_values) {
-		intermediate.emplace(pair);
-	}
+	auto intermediate = make_reference(named_values);
 
 	if (named_param_map.size() != named_values.size()) {
 		// Lookup the parameter index from the vector index

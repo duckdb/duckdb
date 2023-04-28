@@ -129,12 +129,8 @@ public:
 	static vector<reference<PAYLOAD>> PrepareParameters(vector<PAYLOAD> &unnamed,
 	                                                    case_insensitive_map_t<reference<PAYLOAD>> &named,
 	                                                    const case_insensitive_map_t<idx_t> &named_params) {
-		vector<reference<PAYLOAD>> result;
 		if (named.empty()) {
-			for (auto &val : unnamed) {
-				result.push_back(val);
-			}
-			return result;
+			return make_reference(unnamed);
 		}
 		if (named_params.size() != named.size()) {
 			// Mismatch in expected and provided parameters/values
@@ -162,9 +158,11 @@ public:
 			indices[param_idx - 1] = intermediate.size();
 			intermediate.push_back(named_value);
 		}
-		// Then put them into the result in the right order
 		D_ASSERT(named_params.size() == indices.size());
 		D_ASSERT(named_params.size() == intermediate.size());
+
+		// Then put them into the result in the right order
+		vector<reference<PAYLOAD>> result;
 		for (auto &index : indices) {
 			result.push_back(intermediate[index]);
 		}

@@ -600,9 +600,7 @@ unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<P
 unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
                                                vector<Value> &values, bool allow_stream_result) {
 	PendingQueryParameters parameters;
-	for (auto &val : values) {
-		parameters.parameters.push_back(val);
-	}
+	parameters.parameters = make_reference(values);
 	parameters.allow_stream_result = allow_stream_result;
 	return Execute(query, prepared, parameters);
 }
