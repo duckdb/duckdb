@@ -30,3 +30,36 @@ class TestAppendDF(object):
         res = con.table('tbl').fetchall()
         assert res == [(4, False, 'duck'), (2, True, 'db')]
     
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_append_by_name_no_exact_match(self, pandas):
+        con = duckdb.connect()
+        con.execute("create table tbl (a integer, b bool)")
+        df_in = pandas.DataFrame({
+            'c': ['a', 'b'],
+            'b': [True, False],
+            'a': [42, 1337]
+        })
+        # Too many columns raises an error, because the columns cant be found in the targeted table
+        with pytest.raises(duckdb.BinderException, match='Table "tbl" does not have a column with name "c"'):
+            con.append('tbl', df_in, by_name=True)
+
+        df_in = pandas.DataFrame({
+            'b': [False, False, False]
+        })
+
+        # Not matching all columns is not a problem, as they will be filled with NULL instead
+        con.append('tbl', df_in, by_name=True)
+        res = con.table('tbl').fetchall()
+        # 'a' got filled by NULL automatically because it wasn't inserted into
+        assert res == [(None, False), (None, False), (None, False)]
+
+        # Empty the table
+        con.execute("create or replace table tbl (a integer, b bool)")
+
+        df_in = pandas.DataFrame({
+            'a': [1,2,3]
+        })
+        con.append('tbl', df_in, by_name=True)
+        res = con.table('tbl').fetchall()
+        # Also works for missing columns *after* the supplied ones
+        assert res == [(1, None), (2, None), (3, None)]
