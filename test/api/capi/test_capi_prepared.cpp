@@ -303,6 +303,21 @@ TEST_CASE("Test prepared statements with named parameters in C API", "[capi]") {
 	status = duckdb_bind_parameter_index(stmt, &parameter_index, "my_val");
 	REQUIRE(status == DuckDBSuccess);
 
+	idx_t param_count = duckdb_nparams(stmt);
+	duckdb::vector<string> names;
+	for (idx_t i = 0; i < param_count; i++) {
+		auto name = duckdb_parameter_name(stmt, i + 1);
+		names.push_back(std::string(name));
+		duckdb_free((void *)name);
+	}
+	duckdb::vector<string> expected_names = {"my_val"};
+	REQUIRE(names.size() == expected_names.size());
+	for (idx_t i = 0; i < expected_names.size(); i++) {
+		auto &name = names[i];
+		auto &expected_name = expected_names[i];
+		REQUIRE(name == expected_name);
+	}
+
 	status = duckdb_bind_boolean(stmt, parameter_index, 1);
 	REQUIRE(status == DuckDBSuccess);
 	status = duckdb_bind_boolean(stmt, parameter_index + 1, 1);
