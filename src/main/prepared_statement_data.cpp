@@ -18,7 +18,7 @@ void PreparedStatementData::CheckParameterCount(idx_t parameter_count) {
 	}
 }
 
-bool PreparedStatementData::RequireRebind(ClientContext &context, const vector<Value> &values) {
+bool PreparedStatementData::RequireRebind(ClientContext &context, const vector<reference<Value>> &values) {
 	CheckParameterCount(values.size());
 	if (!unbound_statement) {
 		// no unbound statement!? cannot rebind?
@@ -34,7 +34,7 @@ bool PreparedStatementData::RequireRebind(ClientContext &context, const vector<V
 	}
 	for (auto &it : value_map) {
 		const idx_t i = it.first - 1;
-		if (values[i].type() != it.second->return_type) {
+		if (values[i].get().type() != it.second->return_type) {
 			return true;
 		}
 	}

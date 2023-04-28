@@ -101,8 +101,7 @@ unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(vector<Value> &un
 	}
 	D_ASSERT(data);
 	PendingQueryParameters parameters;
-	reference<vector<Value>> prepared_parameters(unnamed_values);
-	vector<Value> mapped_named_values;
+	auto &params = parameters.parameters;
 	if (named_param_map.size() != named_values.size()) {
 		// Lookup the parameter index from the vector index
 		for (idx_t i = 0; i < unnamed_values.size(); i++) {
@@ -111,14 +110,12 @@ unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(vector<Value> &un
 	}
 	if (!named_values.empty()) {
 		try {
-			mapped_named_values = PrepareParameters(named_values, named_param_map);
+			params = PrepareParameters(unnamed_values, named_values, named_param_map);
 		} catch (const Exception &ex) {
 			return make_uniq<PendingQueryResult>(PreservedError(ex));
 		}
-		prepared_parameters = mapped_named_values;
 	}
 
-	parameters.parameters = &prepared_parameters.get();
 	parameters.allow_stream_result = allow_stream_result && data->properties.allow_stream_result;
 	auto result = context->PendingQuery(query, data, parameters);
 	// The result should not contain any reference to the 'vector<Value> parameters.parameters'

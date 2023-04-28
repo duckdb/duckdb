@@ -49,7 +49,7 @@ public:
 public:
 	void CheckParameterCount(idx_t parameter_count);
 	//! Whether or not the prepared statement data requires the query to rebound for the given parameters
-	bool RequireRebind(ClientContext &context, const vector<Value> &values);
+	bool RequireRebind(ClientContext &context, const vector<reference<Value>> &values);
 	//! Bind a set of values to the prepared statement data
 	DUCKDB_API void Bind(vector<Value> values);
 	//! Get the expected SQL Type of the bound parameter

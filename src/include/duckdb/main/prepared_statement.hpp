@@ -126,10 +126,15 @@ public:
 	}
 
 	template <class PAYLOAD>
-	static vector<PAYLOAD> PrepareParameters(case_insensitive_map_t<PAYLOAD> &named,
-	                                         const case_insensitive_map_t<idx_t> &named_params) {
+	static vector<reference<PAYLOAD>> PrepareParameters(vector<PAYLOAD> &unnamed,
+	                                                    case_insensitive_map_t<PAYLOAD> &named,
+	                                                    const case_insensitive_map_t<idx_t> &named_params) {
+		vector<reference<PAYLOAD>> result;
 		if (named.empty()) {
-			throw InvalidInputException("The prepared statement expects named parameters, but none were provided");
+			for (auto &val : unnamed) {
+				result.push_back(val);
+			}
+			return result;
 		}
 		if (named_params.size() != named.size()) {
 			// Mismatch in expected and provided parameters/values
@@ -140,7 +145,10 @@ public:
 				throw InvalidInputException(ExcessValuesException(named_params, named));
 			}
 		}
-		vector<PAYLOAD> result(named_params.size());
+		vector<idx_t> indices(named_params.size());
+		vector<reference<PAYLOAD>> intermediate;
+
+		// First populate the intermediate with all the items
 		for (auto &pair : named_params) {
 			auto &name = pair.first;
 			auto entry = named.find(name);
@@ -148,12 +156,19 @@ public:
 				throw InvalidInputException(MissingValuesException(named_params, named));
 			}
 			auto &named_value = entry->second;
-
 			auto &param_idx = pair.second;
 			D_ASSERT(param_idx > 0);
-			D_ASSERT(param_idx - 1 < result.size());
-			result[param_idx - 1] = std::move(named_value);
+			D_ASSERT(param_idx - 1 < named_params.size());
+			indices[param_idx - 1] = intermediate.size();
+			intermediate.push_back(named_value);
 		}
+		// Then put them into the result in the right order
+		D_ASSERT(named_params.size() == indices.size());
+		D_ASSERT(named_params.size() == intermediate.size());
+		for (auto &index : indices) {
+			result.push_back(intermediate[index]);
+		}
+
 		return result;
 	}
 

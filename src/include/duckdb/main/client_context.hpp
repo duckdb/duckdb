@@ -46,7 +46,7 @@ struct ClientData;
 
 struct PendingQueryParameters {
 	//! Prepared statement parameters (if any)
-	vector<Value> *parameters = nullptr;
+	vector<reference<Value>> parameters;
 	//! Whether or not a stream result should be allowed
 	bool allow_stream_result = false;
 };
@@ -219,9 +219,9 @@ private:
 	                                                        PendingQueryParameters parameters);
 
 	//! Internally prepare a SQL statement. Caller must hold the context_lock.
-	shared_ptr<PreparedStatementData> CreatePreparedStatement(ClientContextLock &lock, const string &query,
-	                                                          unique_ptr<SQLStatement> statement,
-	                                                          vector<Value> *values = nullptr);
+	shared_ptr<PreparedStatementData>
+	CreatePreparedStatement(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
+	                        vector<reference<Value>> values = vector<reference<Value>>());
 	unique_ptr<PendingQueryResult> PendingStatementInternal(ClientContextLock &lock, const string &query,
 	                                                        unique_ptr<SQLStatement> statement,
 	                                                        PendingQueryParameters parameters);

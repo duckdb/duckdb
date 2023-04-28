@@ -310,7 +310,7 @@ static bool IsExplainAnalyze(SQLStatement *statement) {
 
 shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &query,
                                                                          unique_ptr<SQLStatement> statement,
-                                                                         vector<Value> *values) {
+                                                                         vector<reference<Value>> values) {
 	StatementType statement_type = statement->type;
 	auto result = make_shared<PreparedStatementData>(statement_type);
 
@@ -318,10 +318,8 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	profiler.StartQuery(query, IsExplainAnalyze(statement.get()), true);
 	profiler.StartPhase("planner");
 	Planner planner(*this);
-	if (values) {
-		for (auto &value : *values) {
-			planner.parameter_data.emplace_back(value);
-		}
+	for (auto &value : values) {
+		planner.parameter_data.emplace_back(value);
 	}
 	planner.CreatePlan(std::move(statement));
 	D_ASSERT(planner.plan || !planner.properties.bound_all_parameters);
@@ -394,7 +392,11 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 	}
 
 	// bind the bound values before execution
-	statement.Bind(parameters.parameters ? *parameters.parameters : vector<Value>());
+	vector<Value> owned_values;
+	for (auto &val : parameters.parameters) {
+		owned_values.emplace_back(val);
+	}
+	statement.Bind(std::move(owned_values));
 
 	active_query->executor = make_uniq<Executor>(*this);
 	auto &executor = *active_query->executor;
@@ -598,7 +600,9 @@ unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<P
 unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
                                                vector<Value> &values, bool allow_stream_result) {
 	PendingQueryParameters parameters;
-	parameters.parameters = &values;
+	for (auto &val : values) {
+		parameters.parameters.push_back(val);
+	}
 	parameters.allow_stream_result = allow_stream_result;
 	return Execute(query, prepared, parameters);
 }
@@ -608,7 +612,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientCon
                                                                        PendingQueryParameters parameters) {
 	// prepare the query for execution
 	auto prepared = CreatePreparedStatement(lock, query, std::move(statement), parameters.parameters);
-	if (prepared->properties.parameter_count > 0 && !parameters.parameters) {
+	if (prepared->properties.parameter_count > 0 && parameters.parameters.empty()) {
 		string error_message = StringUtil::Format("Expected %lld parameters, but none were supplied",
 		                                          prepared->properties.parameter_count);
 		return make_uniq<PendingQueryResult>(PreservedError(error_message));
@@ -723,7 +727,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		if (statement) {
 			result = PendingStatementInternal(lock, query, std::move(statement), parameters);
 		} else {
-			if (prepared->RequireRebind(*this, *parameters.parameters)) {
+			if (prepared->RequireRebind(*this, parameters.parameters)) {
 				// catalog was modified: rebind the statement before execution
 				auto new_prepared =
 				    CreatePreparedStatement(lock, query, prepared->unbound_statement->Copy(), parameters.parameters);

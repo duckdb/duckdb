@@ -25,8 +25,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 	auto prepared = entry->second;
 	auto &named_param_map = prepared->unbound_statement->named_param_map;
 
-	reference<vector<unique_ptr<ParsedExpression>>> provided_values(stmt.values);
-	vector<unique_ptr<ParsedExpression>> mapped_named_values;
+	vector<reference<unique_ptr<ParsedExpression>>> mapped_named_values;
 
 	if (named_param_map.size() != stmt.named_values.size()) {
 		// Lookup the parameter index from the vector index
@@ -35,23 +34,25 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 		}
 	}
 
-	if (!stmt.named_values.empty()) {
-		mapped_named_values = PreparedStatement::PrepareParameters(stmt.named_values, named_param_map);
-		provided_values = mapped_named_values;
-	}
+	mapped_named_values = PreparedStatement::PrepareParameters(stmt.values, stmt.named_values, named_param_map);
+
 	// bind any supplied parameters
 	vector<Value> bind_values;
 	auto constant_binder = Binder::CreateBinder(context);
 	constant_binder->SetCanContainNulls(true);
-	for (idx_t i = 0; i < provided_values.get().size(); i++) {
+	for (idx_t i = 0; i < mapped_named_values.size(); i++) {
 		ConstantBinder cbinder(*constant_binder, context, "EXECUTE statement");
-		auto bound_expr = cbinder.Bind(provided_values.get()[i]);
+		auto bound_expr = cbinder.Bind(mapped_named_values[i]);
 
 		Value value = ExpressionExecutor::EvaluateScalar(context, *bound_expr, true);
 		bind_values.push_back(std::move(value));
 	}
 	unique_ptr<LogicalOperator> rebound_plan;
-	if (prepared->RequireRebind(context, bind_values)) {
+	vector<reference<Value>> bind_value_references;
+	for (auto &val : bind_values) {
+		bind_value_references.push_back(val);
+	}
+	if (prepared->RequireRebind(context, bind_value_references)) {
 		// catalog was modified or statement does not have clear types: rebind the statement before running the execute
 		Planner prepared_planner(context);
 		for (idx_t i = 0; i < bind_values.size(); i++) {
