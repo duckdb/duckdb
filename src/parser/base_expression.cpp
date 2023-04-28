@@ -1,5 +1,6 @@
 #include "duckdb/parser/base_expression.hpp"
 
+#include "duckdb/main/config.hpp"
 #include "duckdb/common/printer.hpp"
 
 namespace duckdb {
@@ -9,6 +10,11 @@ void BaseExpression::Print() const {
 }
 
 string BaseExpression::GetName() const {
+#ifdef DEBUG
+	if (DBConfigOptions::debug_print_bindings) {
+		return ToString();
+	}
+#endif
 	return !alias.empty() ? alias : ToString();
 }
 
