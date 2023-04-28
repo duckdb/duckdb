@@ -1086,27 +1086,45 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public Date getDate(int columnIndex, Calendar cal) throws SQLException {
-		throw new SQLFeatureNotSupportedException("getDate");
+	    return getDate(columnIndex);
 	}
 
 	public Date getDate(String columnLabel, Calendar cal) throws SQLException {
-		throw new SQLFeatureNotSupportedException("getDate");
+	    return getDate(findColumn(columnLabel), cal);
 	}
 
 	public Time getTime(int columnIndex, Calendar cal) throws SQLException {
-		throw new SQLFeatureNotSupportedException("getTime");
+	    return getTime(columnIndex);
 	}
 
 	public Time getTime(String columnLabel, Calendar cal) throws SQLException {
-		throw new SQLFeatureNotSupportedException("getTime");
+	    return getTime(findColumn(columnLabel), cal);
 	}
 
 	public Timestamp getTimestamp(int columnIndex, Calendar cal) throws SQLException {
-		throw new SQLFeatureNotSupportedException("getTimestamp");
+		if (check_and_null(columnIndex)) {
+			return null;
+		}
+		// Our raw data is already a proper count of units since the epoch
+		// So just construct the SQL Timestamp.
+		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP)) {
+			return DuckDBTimestamp.fromMicroInstant(getbuf(columnIndex, 8).getLong());
+		}
+		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_MS)) {
+			return DuckDBTimestamp.fromMilliInstant(getbuf(columnIndex, 8).getLong());
+		}
+		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_NS)) {
+			return DuckDBTimestamp.fromNanoInstant(getbuf(columnIndex, 8).getLong());
+		}
+		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_S)) {
+			return DuckDBTimestamp.fromSecondInstant(getbuf(columnIndex, 8).getLong());
+		}
+		Object o = getObject(columnIndex);
+		return Timestamp.valueOf(o.toString());
 	}
 
 	public Timestamp getTimestamp(String columnLabel, Calendar cal) throws SQLException {
-		throw new SQLFeatureNotSupportedException("getTimestamp");
+	    return getTimestamp(findColumn(columnLabel), cal);
 	}
 
 	public URL getURL(int columnIndex) throws SQLException {
