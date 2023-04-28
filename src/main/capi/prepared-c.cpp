@@ -158,10 +158,11 @@ duckdb_state duckdb_bind_parameter_index(duckdb_prepared_statement prepared_stat
 		return DuckDBError;
 	}
 	auto &statement = wrapper->statement;
-	if (!statement->named_param_map.count(name)) {
+	auto entry = statement->named_param_map.find(name);
+	if (entry == statement->named_param_map.end()) {
 		return DuckDBError;
 	}
-	*param_idx_out = statement->named_param_map.at(name);
+	*param_idx_out = entry->second;
 	return DuckDBSuccess;
 }
 
