@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/date_functions.hpp"
+#include "scalar/date_functions.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/subtract.hpp"
@@ -424,7 +424,7 @@ static void DateDiffFunction(DataChunk &args, ExpressionState &state, Vector &re
 	}
 }
 
-void DateDiffFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunctionSet DateDiffFun::GetFunctions() {
 	ScalarFunctionSet date_diff("date_diff");
 	date_diff.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE, LogicalType::DATE},
 	                                     LogicalType::BIGINT, DateDiffFunction<date_t>));
@@ -432,10 +432,7 @@ void DateDiffFun::RegisterFunction(BuiltinFunctions &set) {
 	                                     LogicalType::BIGINT, DateDiffFunction<timestamp_t>));
 	date_diff.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIME, LogicalType::TIME},
 	                                     LogicalType::BIGINT, DateDiffFunction<dtime_t>));
-	set.AddFunction(date_diff);
-
-	date_diff.name = "datediff";
-	set.AddFunction(date_diff);
+	return date_diff;
 }
 
 } // namespace duckdb

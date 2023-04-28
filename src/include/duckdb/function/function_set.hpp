@@ -63,6 +63,7 @@ public:
 
 class ScalarFunctionSet : public FunctionSet<ScalarFunction> {
 public:
+	DUCKDB_API explicit ScalarFunctionSet();
 	DUCKDB_API explicit ScalarFunctionSet(string name);
 
 	DUCKDB_API ScalarFunction GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments);

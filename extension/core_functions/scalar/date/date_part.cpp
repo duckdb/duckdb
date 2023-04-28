@@ -1,3 +1,4 @@
+#include "scalar/date_functions.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/exception.hpp"
@@ -6,7 +7,6 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/function/scalar/date_functions.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
@@ -1204,31 +1204,31 @@ static void DatePartFunction(DataChunk &args, ExpressionState &state, Vector &re
 	    });
 }
 
-void AddGenericDatePartOperator(BuiltinFunctions &set, const string &name, scalar_function_t date_func,
+ScalarFunctionSet GetGenericDatePartFunction(scalar_function_t date_func,
                                 scalar_function_t ts_func, scalar_function_t interval_func,
                                 function_statistics_t date_stats, function_statistics_t ts_stats) {
-	ScalarFunctionSet operator_set(name);
+	ScalarFunctionSet operator_set;
 	operator_set.AddFunction(
 	    ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, std::move(date_func), nullptr, nullptr, date_stats));
 	operator_set.AddFunction(
 	    ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, std::move(ts_func), nullptr, nullptr, ts_stats));
 	operator_set.AddFunction(ScalarFunction({LogicalType::INTERVAL}, LogicalType::BIGINT, std::move(interval_func)));
-	set.AddFunction(operator_set);
+	return operator_set;
 }
 
 template <class OP>
-static void AddDatePartOperator(BuiltinFunctions &set, string name) {
-	AddGenericDatePartOperator(set, name, DatePart::UnaryFunction<date_t, int64_t, OP>,
+static ScalarFunctionSet GetDatePartFunction() {
+	return GetGenericDatePartFunction(DatePart::UnaryFunction<date_t, int64_t, OP>,
 	                           DatePart::UnaryFunction<timestamp_t, int64_t, OP>,
 	                           ScalarFunction::UnaryFunction<interval_t, int64_t, OP>,
 	                           OP::template PropagateStatistics<date_t>, OP::template PropagateStatistics<timestamp_t>);
 }
 
-void AddGenericTimePartOperator(BuiltinFunctions &set, const string &name, scalar_function_t date_func,
+ScalarFunctionSet GetGenericTimePartFunction(scalar_function_t date_func,
                                 scalar_function_t ts_func, scalar_function_t interval_func, scalar_function_t time_func,
                                 function_statistics_t date_stats, function_statistics_t ts_stats,
                                 function_statistics_t time_stats) {
-	ScalarFunctionSet operator_set(name);
+	ScalarFunctionSet operator_set;
 	operator_set.AddFunction(
 	    ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, std::move(date_func), nullptr, nullptr, date_stats));
 	operator_set.AddFunction(
@@ -1236,13 +1236,13 @@ void AddGenericTimePartOperator(BuiltinFunctions &set, const string &name, scala
 	operator_set.AddFunction(ScalarFunction({LogicalType::INTERVAL}, LogicalType::BIGINT, std::move(interval_func)));
 	operator_set.AddFunction(
 	    ScalarFunction({LogicalType::TIME}, LogicalType::BIGINT, std::move(time_func), nullptr, nullptr, time_stats));
-	set.AddFunction(operator_set);
+	return operator_set;
 }
 
 template <class OP>
-static void AddTimePartOperator(BuiltinFunctions &set, string name) {
-	AddGenericTimePartOperator(
-	    set, name, DatePart::UnaryFunction<date_t, int64_t, OP>, DatePart::UnaryFunction<timestamp_t, int64_t, OP>,
+static ScalarFunctionSet GetTimePartFunction() {
+	return GetGenericTimePartFunction(
+	    DatePart::UnaryFunction<date_t, int64_t, OP>, DatePart::UnaryFunction<timestamp_t, int64_t, OP>,
 	    ScalarFunction::UnaryFunction<interval_t, int64_t, OP>, ScalarFunction::UnaryFunction<dtime_t, int64_t, OP>,
 	    OP::template PropagateStatistics<date_t>, OP::template PropagateStatistics<timestamp_t>,
 	    OP::template PropagateStatistics<dtime_t>);
@@ -1470,68 +1470,142 @@ struct StructDatePart {
 	}
 };
 
-void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
-	// register the individual operators
-	AddGenericDatePartOperator(set, "year", LastYearFunction<date_t>, LastYearFunction<timestamp_t>,
+ScalarFunctionSet YearFun::GetFunctions()  {
+	return GetGenericDatePartFunction(LastYearFunction<date_t>, LastYearFunction<timestamp_t>,
 	                           ScalarFunction::UnaryFunction<interval_t, int64_t, DatePart::YearOperator>,
 	                           DatePart::YearOperator::PropagateStatistics<date_t>,
 	                           DatePart::YearOperator::PropagateStatistics<timestamp_t>);
-	AddDatePartOperator<DatePart::MonthOperator>(set, "month");
-	AddDatePartOperator<DatePart::DayOperator>(set, "day");
-	AddDatePartOperator<DatePart::DecadeOperator>(set, "decade");
-	AddDatePartOperator<DatePart::CenturyOperator>(set, "century");
-	AddDatePartOperator<DatePart::MillenniumOperator>(set, "millennium");
-	AddDatePartOperator<DatePart::QuarterOperator>(set, "quarter");
-	AddDatePartOperator<DatePart::DayOfWeekOperator>(set, "dayofweek");
-	AddDatePartOperator<DatePart::ISODayOfWeekOperator>(set, "isodow");
-	AddDatePartOperator<DatePart::DayOfYearOperator>(set, "dayofyear");
-	AddDatePartOperator<DatePart::WeekOperator>(set, "week");
-	AddDatePartOperator<DatePart::ISOYearOperator>(set, "isoyear");
-	AddDatePartOperator<DatePart::EraOperator>(set, "era");
-	AddDatePartOperator<DatePart::TimezoneOperator>(set, "timezone");
-	AddDatePartOperator<DatePart::TimezoneHourOperator>(set, "timezone_hour");
-	AddDatePartOperator<DatePart::TimezoneMinuteOperator>(set, "timezone_minute");
-	AddTimePartOperator<DatePart::EpochOperator>(set, "epoch");
-	AddTimePartOperator<DatePart::MicrosecondsOperator>(set, "microsecond");
-	AddTimePartOperator<DatePart::MillisecondsOperator>(set, "millisecond");
-	AddTimePartOperator<DatePart::SecondsOperator>(set, "second");
-	AddTimePartOperator<DatePart::MinutesOperator>(set, "minute");
-	AddTimePartOperator<DatePart::HoursOperator>(set, "hour");
+};
 
-	//  register combinations
-	AddDatePartOperator<DatePart::YearWeekOperator>(set, "yearweek");
+ScalarFunctionSet MonthFun::GetFunctions()  {
+	return GetDatePartFunction<DatePart::MonthOperator>();
+};
 
-	//  register various aliases
-	AddDatePartOperator<DatePart::DayOperator>(set, "dayofmonth");
-	AddDatePartOperator<DatePart::DayOfWeekOperator>(set, "weekday");
-	AddDatePartOperator<DatePart::WeekOperator>(set, "weekofyear"); //  Note that WeekOperator is ISO-8601, not US
+ScalarFunctionSet DayFun::GetFunctions()  {
+	return GetDatePartFunction<DatePart::DayOperator>();
+};
 
-	//  register the last_day function
-	ScalarFunctionSet last_day("last_day");
+ScalarFunctionSet DecadeFun::GetFunctions()  {
+	return GetDatePartFunction<DatePart::DecadeOperator>();
+};
+
+ScalarFunctionSet CenturyFun::GetFunctions()  {
+	return GetDatePartFunction<DatePart::CenturyOperator>();
+};
+
+ScalarFunctionSet MillenniumFun::GetFunctions()  {
+	return GetDatePartFunction<DatePart::MillenniumOperator>();
+};
+
+ScalarFunctionSet QuarterFun::GetFunctions()  {
+	return GetDatePartFunction<DatePart::QuarterOperator>();
+};
+
+ScalarFunctionSet DayOfWeekFun::GetFunctions()  {
+	return GetDatePartFunction<DatePart::DayOfWeekOperator>();
+};
+
+ScalarFunctionSet ISODayOfWeekFun::GetFunctions()  {
+	return GetDatePartFunction<DatePart::ISODayOfWeekOperator>();
+};
+
+ScalarFunctionSet DayOfYearFun::GetFunctions()  {
+	return GetDatePartFunction<DatePart::DayOfYearOperator>();
+};
+
+ScalarFunctionSet WeekFun::GetFunctions()  {
+	return GetDatePartFunction<DatePart::WeekOperator>();
+};
+
+ScalarFunctionSet ISOYearFun::GetFunctions()  {
+	return GetDatePartFunction<DatePart::ISOYearOperator>();
+};
+
+ScalarFunctionSet EraFun::GetFunctions()  {
+	return GetDatePartFunction<DatePart::EraOperator>();
+};
+
+ScalarFunctionSet TimezoneFun::GetFunctions()  {
+	return GetDatePartFunction<DatePart::TimezoneOperator>();
+};
+
+ScalarFunctionSet TimezoneHourFun::GetFunctions()  {
+	return GetDatePartFunction<DatePart::TimezoneHourOperator>();
+};
+
+ScalarFunctionSet TimezoneMinuteFun::GetFunctions()  {
+	return GetDatePartFunction<DatePart::TimezoneMinuteOperator>();
+};
+
+ScalarFunctionSet EpochFun::GetFunctions()  {
+	return GetTimePartFunction<DatePart::EpochOperator>();
+};
+
+ScalarFunctionSet MicrosecondsFun::GetFunctions()  {
+	return GetTimePartFunction<DatePart::MicrosecondsOperator>();
+};
+
+ScalarFunctionSet MillisecondsFun::GetFunctions()  {
+	return GetTimePartFunction<DatePart::MillisecondsOperator>();
+};
+
+ScalarFunctionSet SecondsFun::GetFunctions()  {
+	return GetTimePartFunction<DatePart::SecondsOperator>();
+};
+
+ScalarFunctionSet MinutesFun::GetFunctions()  {
+	return GetTimePartFunction<DatePart::MinutesOperator>();
+};
+
+ScalarFunctionSet HoursFun::GetFunctions()  {
+	return GetTimePartFunction<DatePart::HoursOperator>();
+};
+
+ScalarFunctionSet YearWeekFun::GetFunctions()  {
+	return GetDatePartFunction<DatePart::YearWeekOperator>();
+};
+
+ScalarFunctionSet DayOfMonthFun::GetFunctions()  {
+	return GetDatePartFunction<DatePart::DayOperator>();
+};
+
+ScalarFunctionSet WeekDayFun::GetFunctions()  {
+	return GetDatePartFunction<DatePart::DayOfWeekOperator>();
+};
+
+ScalarFunctionSet WeekOfYearFun::GetFunctions()  {
+	return GetDatePartFunction<DatePart::WeekOperator>();
+};
+
+ScalarFunctionSet LastDayFun::GetFunctions() {
+	ScalarFunctionSet last_day;
 	last_day.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::DATE,
 	                                    DatePart::UnaryFunction<date_t, date_t, LastDayOperator>));
 	last_day.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::DATE,
 	                                    DatePart::UnaryFunction<timestamp_t, date_t, LastDayOperator>));
-	set.AddFunction(last_day);
+	return last_day;
+}
 
-	//  register the monthname function
-	ScalarFunctionSet monthname("monthname");
+ScalarFunctionSet MonthNameFun::GetFunctions() {
+	ScalarFunctionSet monthname;
 	monthname.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::VARCHAR,
 	                                     DatePart::UnaryFunction<date_t, string_t, MonthNameOperator>));
 	monthname.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::VARCHAR,
 	                                     DatePart::UnaryFunction<timestamp_t, string_t, MonthNameOperator>));
-	set.AddFunction(monthname);
+	return monthname;
+}
 
-	//  register the dayname function
-	ScalarFunctionSet dayname("dayname");
+ScalarFunctionSet DayNameFun::GetFunctions() {
+	ScalarFunctionSet dayname;
 	dayname.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::VARCHAR,
 	                                   DatePart::UnaryFunction<date_t, string_t, DayNameOperator>));
 	dayname.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::VARCHAR,
 	                                   DatePart::UnaryFunction<timestamp_t, string_t, DayNameOperator>));
-	set.AddFunction(dayname);
+	return dayname;
+}
 
-	// finally the actual date_part function
-	ScalarFunctionSet date_part("date_part");
+ScalarFunctionSet DatePartFun::GetFunctions() {
+	ScalarFunctionSet date_part;
 	date_part.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE}, LogicalType::BIGINT, DatePartFunction<date_t>));
 	date_part.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::BIGINT,
@@ -1547,9 +1621,7 @@ void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	date_part.AddFunction(StructDatePart::GetFunction<dtime_t>(LogicalType::TIME));
 	date_part.AddFunction(StructDatePart::GetFunction<interval_t>(LogicalType::INTERVAL));
 
-	set.AddFunction(date_part);
-	date_part.name = "datepart";
-	set.AddFunction(date_part);
+	return date_part;
 }
 
 } // namespace duckdb

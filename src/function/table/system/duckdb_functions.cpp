@@ -425,7 +425,8 @@ bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &ou
 
 	// parameters, LogicalType::LIST(LogicalType::VARCHAR)
 	auto parameters = OP::GetParameters(function, function_idx);
-	for(idx_t param_idx = 0; param_idx < function.parameter_names.size() && param_idx < parameters.size(); param_idx++) {
+	for (idx_t param_idx = 0; param_idx < function.parameter_names.size() && param_idx < parameters.size();
+	     param_idx++) {
 		parameters[param_idx] = Value(function.parameter_names[param_idx]);
 	}
 	output.SetValue(col++, output_offset, Value::LIST(LogicalType::VARCHAR, std::move(parameters)));

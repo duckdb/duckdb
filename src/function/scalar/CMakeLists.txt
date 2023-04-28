@@ -1,4 +1,3 @@
-add_subdirectory(date)
 add_subdirectory(generic)
 add_subdirectory(list)
 add_subdirectory(map)
@@ -13,7 +12,6 @@ add_subdirectory(enum)
 add_library_unity(
   duckdb_func_scalar
   OBJECT
-  date_functions.cpp
   generic_functions.cpp
   string_functions.cpp
   nested_functions.cpp

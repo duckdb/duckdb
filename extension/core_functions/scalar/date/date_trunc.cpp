@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/date_functions.hpp"
+#include "scalar/date_functions.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -6,7 +6,6 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
@@ -717,7 +716,7 @@ static unique_ptr<FunctionData> DateTruncBind(ClientContext &context, ScalarFunc
 	return nullptr;
 }
 
-void DateTruncFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunctionSet DateTruncFun::GetFunctions() {
 	ScalarFunctionSet date_trunc("date_trunc");
 	date_trunc.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::TIMESTAMP,
 	                                      DateTruncFunction<timestamp_t, timestamp_t>, DateTruncBind));
@@ -725,9 +724,7 @@ void DateTruncFun::RegisterFunction(BuiltinFunctions &set) {
 	                                      DateTruncFunction<date_t, timestamp_t>, DateTruncBind));
 	date_trunc.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::INTERVAL}, LogicalType::INTERVAL,
 	                                      DateTruncFunction<interval_t, interval_t>));
-	set.AddFunction(date_trunc);
-	date_trunc.name = "datetrunc";
-	set.AddFunction(date_trunc);
+	return date_trunc;
 }
 
 } // namespace duckdb

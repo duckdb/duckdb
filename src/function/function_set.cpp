@@ -3,6 +3,9 @@
 
 namespace duckdb {
 
+ScalarFunctionSet::ScalarFunctionSet() : FunctionSet("") {
+}
+
 ScalarFunctionSet::ScalarFunctionSet(string name) : FunctionSet(std::move(name)) {
 }
 

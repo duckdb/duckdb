@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/date_functions.hpp"
+#include "scalar/date_functions.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -33,22 +33,22 @@ static void CurrentTimestampFunction(DataChunk &input, ExpressionState &state, V
 	result.Reference(val);
 }
 
-void CurrentTimeFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunction current_time("get_current_time", {}, LogicalType::TIME, CurrentTimeFunction);
+ScalarFunction CurrentTimeFun::GetFunction() {
+	ScalarFunction current_time({}, LogicalType::TIME, CurrentTimeFunction);
 	current_time.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
-	set.AddFunction(current_time);
+	return current_time;
 }
 
-void CurrentDateFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunction CurrentDateFun::GetFunction() {
 	ScalarFunction current_date({}, LogicalType::DATE, CurrentDateFunction);
 	current_date.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
-	set.AddFunction({"today", "current_date"}, current_date);
+	return current_date;
 }
 
-void CurrentTimestampFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunction CurrentTimestampFun::GetFunction() {
 	ScalarFunction current_timestamp({}, LogicalType::TIMESTAMP_TZ, CurrentTimestampFunction);
 	current_timestamp.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
-	set.AddFunction({"now", "get_current_timestamp", "transaction_timestamp"}, current_timestamp);
+	return current_timestamp;
 }
 
 } // namespace duckdb

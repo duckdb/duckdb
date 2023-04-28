@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/date_functions.hpp"
+#include "scalar/date_functions.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -33,14 +33,13 @@ static void EpochMillisFunction(DataChunk &input, ExpressionState &state, Vector
 	UnaryExecutor::Execute<int64_t, timestamp_t, EpochMillisOperator>(input.data[0], result, input.size());
 }
 
-void EpochFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunctionSet epoch("epoch_ms");
-	epoch.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP, EpochMillisFunction));
-	set.AddFunction(epoch);
+ScalarFunction EpochMsFun::GetFunction() {
+	return ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP, EpochMillisFunction);
+}
+
+ScalarFunction ToTimestampFun::GetFunction() {
 	// to_timestamp is an alias from Postgres that converts the time in seconds to a timestamp
-	ScalarFunctionSet to_timestamp("to_timestamp");
-	to_timestamp.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP, EpochSecFunction));
-	set.AddFunction(to_timestamp);
+	return ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP, EpochSecFunction);
 }
 
 } // namespace duckdb

@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/date_functions.hpp"
+#include "scalar/date_functions.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -79,7 +79,7 @@ static void ExecuteMakeTimestamp(DataChunk &input, ExpressionState &state, Vecto
 	SenaryExecutor::Execute<T, T, T, T, T, double, timestamp_t>(input, result, func);
 }
 
-void MakeDateFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunctionSet MakeDateFun::GetFunctions() {
 	ScalarFunctionSet make_date("make_date");
 	make_date.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT},
 	                                     LogicalType::DATE, ExecuteMakeDate<int64_t>));
@@ -88,18 +88,18 @@ void MakeDateFun::RegisterFunction(BuiltinFunctions &set) {
 	    {"year", LogicalType::BIGINT}, {"month", LogicalType::BIGINT}, {"day", LogicalType::BIGINT}};
 	make_date.AddFunction(
 	    ScalarFunction({LogicalType::STRUCT(make_date_children)}, LogicalType::DATE, ExecuteStructMakeDate<int64_t>));
-	set.AddFunction(make_date);
+	return make_date;
+}
 
-	ScalarFunctionSet make_time("make_time");
-	make_time.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::DOUBLE},
-	                                     LogicalType::TIME, ExecuteMakeTime<int64_t>));
-	set.AddFunction(make_time);
+ScalarFunction MakeTimeFun::GetFunction() {
+	return ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::DOUBLE},
+	                                     LogicalType::TIME, ExecuteMakeTime<int64_t>);
+}
 
-	ScalarFunctionSet make_timestamp("make_timestamp");
-	make_timestamp.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,
+ScalarFunction MakeTimestampFun::GetFunction() {
+	return ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,
 	                                           LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::DOUBLE},
-	                                          LogicalType::TIMESTAMP, ExecuteMakeTimestamp<int64_t>));
-	set.AddFunction(make_timestamp);
+	                                          LogicalType::TIMESTAMP, ExecuteMakeTimestamp<int64_t>);
 }
 
 } // namespace duckdb

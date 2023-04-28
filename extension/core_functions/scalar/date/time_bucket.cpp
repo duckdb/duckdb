@@ -9,7 +9,7 @@
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/function/scalar/date_functions.hpp"
+#include "scalar/date_functions.hpp"
 
 namespace duckdb {
 
@@ -350,8 +350,8 @@ static void TimeBucketOriginFunction(DataChunk &args, ExpressionState &state, Ve
 	}
 }
 
-void TimeBucketFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunctionSet time_bucket("time_bucket");
+ScalarFunctionSet TimeBucketFun::GetFunctions() {
+	ScalarFunctionSet time_bucket;
 	time_bucket.AddFunction(
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::DATE}, LogicalType::DATE, TimeBucketFunction<date_t>));
 	time_bucket.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP}, LogicalType::TIMESTAMP,
@@ -364,8 +364,7 @@ void TimeBucketFun::RegisterFunction(BuiltinFunctions &set) {
 	                                       LogicalType::DATE, TimeBucketOriginFunction<date_t>));
 	time_bucket.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP, LogicalType::TIMESTAMP},
 	                                       LogicalType::TIMESTAMP, TimeBucketOriginFunction<timestamp_t>));
-
-	set.AddFunction(time_bucket);
+	return time_bucket;
 }
 
 } // namespace duckdb

@@ -8,9 +8,9 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/function/scalar/date_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
+#include "scalar/date_functions.hpp"
 
 #include <cctype>
 #include <utility>
@@ -703,22 +703,18 @@ static void StrfTimeFunctionTimestamp(DataChunk &args, ExpressionState &state, V
 	info.format.ConvertTimestampVector(args.data[REVERSED ? 1 : 0], result, args.size());
 }
 
-void StrfTimeFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunctionSet strftime("strftime");
+ScalarFunctionSet StrfTimeFun::GetFunctions() {
+	ScalarFunctionSet strftime;
 
 	strftime.AddFunction(ScalarFunction({LogicalType::DATE, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                                    StrfTimeFunctionDate<false>, StrfTimeBindFunction<false>));
-
 	strftime.AddFunction(ScalarFunction({LogicalType::TIMESTAMP, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                                    StrfTimeFunctionTimestamp<false>, StrfTimeBindFunction<false>));
-
 	strftime.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE}, LogicalType::VARCHAR,
 	                                    StrfTimeFunctionDate<true>, StrfTimeBindFunction<true>));
-
 	strftime.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::VARCHAR,
 	                                    StrfTimeFunctionTimestamp<true>, StrfTimeBindFunction<true>));
-
-	set.AddFunction(strftime);
+	return strftime;
 }
 
 void StrpTimeFormat::AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) {
@@ -1396,25 +1392,27 @@ struct StrpTimeFunction {
 	}
 };
 
-void StrpTimeFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunctionSet strptime("strptime");
+ScalarFunctionSet StrpTimeFun::GetFunctions() {
+	ScalarFunctionSet strptime;
 
 	const auto list_type = LogicalType::LIST(LogicalType::VARCHAR);
 	auto fun = ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::TIMESTAMP,
-	                          StrpTimeFunction::Parse, StrpTimeBindFunction);
+							  StrpTimeFunction::Parse, StrpTimeBindFunction);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	strptime.AddFunction(fun);
 
 	fun = ScalarFunction({LogicalType::VARCHAR, list_type}, LogicalType::TIMESTAMP, StrpTimeFunction::Parse,
-	                     StrpTimeBindFunction);
+						 StrpTimeBindFunction);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	strptime.AddFunction(fun);
+	return strptime;
+}
 
-	set.AddFunction(strptime);
+ScalarFunctionSet TryStrpTimeFun::GetFunctions() {
+	ScalarFunctionSet try_strptime;
 
-	ScalarFunctionSet try_strptime("try_strptime");
-
-	fun = ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::TIMESTAMP,
+	const auto list_type = LogicalType::LIST(LogicalType::VARCHAR);
+	auto fun = ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::TIMESTAMP,
 	                     StrpTimeFunction::TryParse, StrpTimeBindFunction);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	try_strptime.AddFunction(fun);
@@ -1424,7 +1422,7 @@ void StrpTimeFun::RegisterFunction(BuiltinFunctions &set) {
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	try_strptime.AddFunction(fun);
 
-	set.AddFunction(try_strptime);
+	return try_strptime;
 }
 
 } // namespace duckdb

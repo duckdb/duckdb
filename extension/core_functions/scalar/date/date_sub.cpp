@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/date_functions.hpp"
+#include "scalar/date_functions.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/subtract.hpp"
@@ -438,7 +438,7 @@ static void DateSubFunction(DataChunk &args, ExpressionState &state, Vector &res
 	}
 }
 
-void DateSubFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunctionSet DateSubFun::GetFunctions() {
 	ScalarFunctionSet date_sub("date_sub");
 	date_sub.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE, LogicalType::DATE},
 	                                    LogicalType::BIGINT, DateSubFunction<date_t>));
@@ -446,10 +446,7 @@ void DateSubFun::RegisterFunction(BuiltinFunctions &set) {
 	                                    LogicalType::BIGINT, DateSubFunction<timestamp_t>));
 	date_sub.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIME, LogicalType::TIME},
 	                                    LogicalType::BIGINT, DateSubFunction<dtime_t>));
-	set.AddFunction(date_sub);
-
-	date_sub.name = "datesub";
-	set.AddFunction(date_sub);
+	return date_sub;
 }
 
 } // namespace duckdb

@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/date_functions.hpp"
+#include "scalar/date_functions.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -38,12 +38,12 @@ static void AgeFunction(DataChunk &input, ExpressionState &state, Vector &result
 	    });
 }
 
-void AgeFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunctionSet AgeFun::GetFunctions() {
 	ScalarFunctionSet age("age");
 	age.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::INTERVAL, AgeFunctionStandard));
 	age.AddFunction(
 	    ScalarFunction({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP}, LogicalType::INTERVAL, AgeFunction));
-	set.AddFunction(age);
+	return age;
 }
 
 } // namespace duckdb
