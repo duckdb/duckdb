@@ -13,6 +13,7 @@ void MultiFileReader::AddParameters(TableFunction &table_function) {
 	table_function.named_parameters["filename"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["ignore_missing"] = LogicalType::BOOLEAN;
 }
 
 vector<string> MultiFileReader::GetFileList(ClientContext &context, const Value &input, const string &name,
@@ -54,6 +55,8 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 		options.hive_partitioning = BooleanValue::Get(val);
 	} else if (loption == "union_by_name") {
 		options.union_by_name = BooleanValue::Get(val);
+	} else if (loption == "ignore_missing") {
+		options.ignore_missing = BooleanValue::Get(val);
 	} else {
 		return false;
 	}
@@ -294,6 +297,7 @@ void MultiFileReaderOptions::Serialize(Serializer &serializer) const {
 	writer.WriteField<bool>(filename);
 	writer.WriteField<bool>(hive_partitioning);
 	writer.WriteField<bool>(union_by_name);
+	writer.WriteField<bool>(ignore_missing);
 	writer.Finalize();
 }
 
@@ -303,6 +307,7 @@ MultiFileReaderOptions MultiFileReaderOptions::Deserialize(Deserializer &source)
 	result.filename = reader.ReadRequired<bool>();
 	result.hive_partitioning = reader.ReadRequired<bool>();
 	result.union_by_name = reader.ReadRequired<bool>();
+	result.ignore_missing = reader.ReadRequired<bool>();
 	reader.Finalize();
 	return result;
 }
@@ -346,6 +351,7 @@ void MultiFileReaderOptions::AddBatchInfo(BindInfo &bind_info) const {
 	bind_info.InsertOption("filename", Value::BOOLEAN(filename));
 	bind_info.InsertOption("hive_partitioning", Value::BOOLEAN(hive_partitioning));
 	bind_info.InsertOption("union_by_name", Value::BOOLEAN(union_by_name));
+	bind_info.InsertOption("ignore_missing", Value::BOOLEAN(ignore_missing));
 }
 
 void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vector<LogicalType> &sql_types,

@@ -19,6 +19,7 @@ struct MultiFileReaderOptions {
 	bool filename = false;
 	bool hive_partitioning = false;
 	bool union_by_name = false;
+	bool ignore_missing = false;
 
 	DUCKDB_API void Serialize(Serializer &serializer) const;
 	DUCKDB_API static MultiFileReaderOptions Deserialize(Deserializer &source);
