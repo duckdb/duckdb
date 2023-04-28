@@ -55,6 +55,9 @@ public:
 	idx_t ModifyCatalog() {
 		return catalog_version++;
 	}
+	bool HasDefaultDatabase() {
+		return !default_database.empty();
+	}
 
 private:
 	//! The system database is a special database that holds system entries (e.g. functions)

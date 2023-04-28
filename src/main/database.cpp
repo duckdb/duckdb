@@ -199,52 +199,31 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	// check if we are opening a standard DuckDB database or an extension database
 	auto database_type = ExtractDatabaseType(config.options.database_path);
-	if (!database_type.empty()) {
-		// we are opening an extension database, run storage_init
-		ExtensionHelper::StorageInit(database_type, config);
-	}
-	AttachInfo info;
-	info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path);
-	info.path = config.options.database_path;
-
-	auto attached_database = CreateAttachedDatabase(info, database_type, config.options.access_mode);
-	auto initial_database = attached_database.get();
-	{
-		Connection con(*this);
-		con.BeginTransaction();
-		db_manager->AddDatabase(*con.context, std::move(attached_database));
-		con.Commit();
-	}
 
 	// initialize the system catalog
 	db_manager->InitializeSystemCatalog();
-	// initialize the database
-	initial_database->Initialize();
 
 	if (!database_type.empty()) {
 		// if we are opening an extension database - load the extension
 		ExtensionHelper::LoadExternalExtension(*this, nullptr, database_type);
 	}
 
-	if (!config.options.unrecognized_options.empty()) {
-		// check if all unrecognized options can be handled by the loaded extension(s)
-		for (auto &unrecognized_option : config.options.unrecognized_options) {
-			auto entry = config.extension_parameters.find(unrecognized_option.first);
-			if (entry == config.extension_parameters.end()) {
-				throw InvalidInputException("Unrecognized configuration property \"%s\"", unrecognized_option.first);
-			}
+	if (!db_manager->HasDefaultDatabase()) {
+		AttachInfo info;
+		info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path);
+		info.path = config.options.database_path;
+
+		auto attached_database = CreateAttachedDatabase(info, database_type, config.options.access_mode);
+		auto initial_database = attached_database.get();
+		{
+			Connection con(*this);
+			con.BeginTransaction();
+			db_manager->AddDatabase(*con.context, std::move(attached_database));
+			con.Commit();
 		}
 
-		// if so - set the options
-		Connection con(*this);
-		con.BeginTransaction();
-		for (auto &unrecognized_option : config.options.unrecognized_options) {
-			auto entry = config.extension_parameters.find(unrecognized_option.first);
-			D_ASSERT(entry != config.extension_parameters.end());
-			PhysicalSet::SetExtensionVariable(*con.context, entry->second, unrecognized_option.first, SetScope::GLOBAL,
-			                                  unrecognized_option.second);
-		}
-		con.Commit();
+		// initialize the database
+		initial_database->Initialize();
 	}
 
 	// only increase thread count after storage init because we get races on catalog otherwise
