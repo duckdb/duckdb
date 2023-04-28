@@ -74,6 +74,28 @@ public:
 	typename original::const_reference operator[](typename original::size_type __n) const {
 		return get<false>(__n);
 	}
+
+	typename original::reference front() {
+		return get<false>(0);
+	}
+
+	typename original::const_reference front() const {
+		return get<false>(0);
+	}
+
+	typename original::reference back() {
+		if (original::empty()) {
+			throw InternalException("'back' called on an empty vector!");
+		}
+		return get<false>(original::size() - 1);
+	}
+
+	typename original::const_reference back() const {
+		if (original::empty()) {
+			throw InternalException("'back' called on an empty vector!");
+		}
+		return get<false>(original::size() - 1);
+	}
 };
 
 } // namespace duckdb
