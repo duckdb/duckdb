@@ -15,8 +15,8 @@ CreateViewInfo::CreateViewInfo(string catalog_p, string schema_p, string view_na
       view_name(std::move(view_name_p)) {
 }
 
-CreateViewInfo::CreateViewInfo(SchemaCatalogEntry *schema, string view_name)
-    : CreateViewInfo(schema->catalog->GetName(), schema->name, std::move(view_name)) {
+CreateViewInfo::CreateViewInfo(SchemaCatalogEntry &schema, string view_name)
+    : CreateViewInfo(schema.catalog.GetName(), schema.name, std::move(view_name)) {
 }
 
 unique_ptr<CreateInfo> CreateViewInfo::Copy() const {

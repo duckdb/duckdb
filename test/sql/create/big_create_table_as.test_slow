@@ -1,4 +1,4 @@
-# name: test/sql/create/big_create_table_as.test
+# name: test/sql/create/big_create_table_as.test_slow
 # description: Test large CREATE TABLE AS statements
 # group: [create]
 

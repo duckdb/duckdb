@@ -13,6 +13,7 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/execution/index/art/art_key.hpp"
 
 namespace duckdb {
 
@@ -48,7 +49,7 @@ public:
 	ExpressionExecutor probe_executor;
 
 	ArenaAllocator arena_allocator;
-	vector<Key> keys;
+	vector<ARTKey> keys;
 	unique_ptr<ColumnFetchState> fetch_state;
 
 public:
@@ -110,10 +111,10 @@ void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &input, Data
                                OperatorState &state_p) const {
 	auto &phy_tbl_scan = (PhysicalTableScan &)*children[1];
 	auto &bind_tbl = phy_tbl_scan.bind_data->Cast<TableScanBindData>();
-	auto &transaction = DuckTransaction::Get(context.client, *bind_tbl.table->catalog);
+	auto &transaction = DuckTransaction::Get(context.client, bind_tbl.table.catalog);
 	auto &state = state_p.Cast<IndexJoinOperatorState>();
 
-	auto &tbl = bind_tbl.table->GetStorage();
+	auto &tbl = bind_tbl.table.GetStorage();
 	idx_t output_sel_idx = 0;
 	vector<row_t> fetch_rows;
 

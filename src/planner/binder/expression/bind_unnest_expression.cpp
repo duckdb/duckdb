@@ -57,8 +57,8 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 			if (!error.empty()) {
 				return BindResult(error);
 			}
-			auto &const_child = (BoundExpression &)*function.children[i];
-			auto value = ExpressionExecutor::EvaluateScalar(context, *const_child.expr, true);
+			auto &const_child = BoundExpression::GetExpression(*function.children[i]);
+			auto value = ExpressionExecutor::EvaluateScalar(context, *const_child, true);
 			if (alias == "recursive") {
 				auto recursive = value.GetValue<bool>();
 				if (recursive) {
@@ -90,11 +90,11 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 		if (!BindCorrelatedColumns(function.children[0])) {
 			return BindResult(error);
 		}
-		auto bound_expr = (BoundExpression *)function.children[0].get();
-		ExtractCorrelatedExpressions(binder, *bound_expr->expr);
+		auto &bound_expr = BoundExpression::GetExpression(*function.children[0]);
+		ExtractCorrelatedExpressions(binder, *bound_expr);
 	}
-	auto &child = (BoundExpression &)*function.children[0];
-	auto &child_type = child.expr->return_type;
+	auto &child = BoundExpression::GetExpression(*function.children[0]);
+	auto &child_type = child->return_type;
 	unnest_level--;
 
 	if (unnest_level > 0) {
@@ -116,7 +116,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 	idx_t list_unnests;
 	idx_t struct_unnests = 0;
 
-	auto unnest_expr = std::move(child.expr);
+	auto unnest_expr = std::move(child);
 	if (child_type.id() == LogicalTypeId::SQLNULL) {
 		list_unnests = 1;
 	} else {

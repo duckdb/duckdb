@@ -10,8 +10,10 @@
 
 #include "duckdb/transaction/undo_buffer.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/unordered_map.hpp"
 
 namespace duckdb {
+
 class DataTable;
 
 struct DeleteInfo;
@@ -21,6 +23,9 @@ class CleanupState {
 public:
 	CleanupState();
 	~CleanupState();
+
+	// all tables with indexes that possibly need a vacuum (after e.g. a delete)
+	unordered_map<string, optional_ptr<DataTable>> indexed_tables;
 
 public:
 	void CleanupEntry(UndoFlags type, data_ptr_t data);

@@ -318,8 +318,8 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterUDF(const string &n
 		info.name = name;
 		info.allow_drop_internal = true;
 		info.cascade = false;
-		info.if_exists = false;
-		catalog.DropEntry(context, &info);
+		info.if_not_found = OnEntryNotFound::THROW_EXCEPTION;
+		catalog.DropEntry(context, info);
 	});
 	registered_functions.erase(entry);
 
@@ -345,7 +345,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterScalarUDF(const strin
 	    CreateScalarUDF(name, udf, parameters_p, return_type_p, varargs, null_handling, exception_handling);
 	CreateScalarFunctionInfo info(scalar_function);
 
-	context.RegisterFunction(&info);
+	context.RegisterFunction(info);
 
 	registered_functions[name] = make_uniq<PythonDependencies>(udf);
 
@@ -369,7 +369,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterVectorizedUDF(const s
 	CreateScalarFunctionInfo info(scalar_function);
 
 	context.transaction.BeginTransaction();
-	catalog.CreateFunction(context, &info);
+	catalog.CreateFunction(context, info);
 	context.transaction.Commit();
 
 	registered_functions[name] = make_uniq<PythonDependencies>(udf);

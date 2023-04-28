@@ -6,16 +6,16 @@
 
 namespace duckdb {
 
-MacroCatalogEntry::MacroCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateMacroInfo *info)
+MacroCatalogEntry::MacroCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateMacroInfo &info)
     : StandardEntry(
-          (info->function->type == MacroType::SCALAR_MACRO ? CatalogType::MACRO_ENTRY : CatalogType::TABLE_MACRO_ENTRY),
-          schema, catalog, info->name),
-      function(std::move(info->function)) {
-	this->temporary = info->temporary;
-	this->internal = info->internal;
+          (info.function->type == MacroType::SCALAR_MACRO ? CatalogType::MACRO_ENTRY : CatalogType::TABLE_MACRO_ENTRY),
+          schema, catalog, info.name),
+      function(std::move(info.function)) {
+	this->temporary = info.temporary;
+	this->internal = info.internal;
 }
 
-ScalarMacroCatalogEntry::ScalarMacroCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateMacroInfo *info)
+ScalarMacroCatalogEntry::ScalarMacroCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateMacroInfo &info)
     : MacroCatalogEntry(catalog, schema, info) {
 }
 
@@ -23,7 +23,7 @@ void ScalarMacroCatalogEntry::Serialize(Serializer &main_serializer) const {
 	D_ASSERT(!internal);
 	auto &scalar_function = function->Cast<ScalarMacroFunction>();
 	FieldWriter writer(main_serializer);
-	writer.WriteString(schema->name);
+	writer.WriteString(schema.name);
 	writer.WriteString(name);
 	writer.WriteSerializable(*scalar_function.expression);
 	// writer.WriteSerializableList(function->parameters);
@@ -58,7 +58,7 @@ unique_ptr<CreateMacroInfo> ScalarMacroCatalogEntry::Deserialize(Deserializer &m
 	return info;
 }
 
-TableMacroCatalogEntry::TableMacroCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateMacroInfo *info)
+TableMacroCatalogEntry::TableMacroCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateMacroInfo &info)
     : MacroCatalogEntry(catalog, schema, info) {
 }
 
@@ -67,7 +67,7 @@ void TableMacroCatalogEntry::Serialize(Serializer &main_serializer) const {
 	FieldWriter writer(main_serializer);
 
 	auto &table_function = function->Cast<TableMacroFunction>();
-	writer.WriteString(schema->name);
+	writer.WriteString(schema.name);
 	writer.WriteString(name);
 	writer.WriteSerializable(*table_function.query_node);
 	writer.WriteSerializableList(function->parameters);

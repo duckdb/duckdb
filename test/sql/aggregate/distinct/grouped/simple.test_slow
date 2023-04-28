@@ -1,4 +1,4 @@
-# name: test/sql/aggregate/distinct/grouped/simple.test
+# name: test/sql/aggregate/distinct/grouped/simple.test_slow
 # description: Test aggregation/group by statements
 # group: [grouped]
 

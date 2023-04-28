@@ -43,13 +43,8 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(LogicalDeserializationSta
 
 	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
 
-	auto table_catalog_entry = catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->table);
-
-	if (!table_catalog_entry) {
-		throw InternalException("Cant find catalog entry for table %s", info->table);
-	}
-
-	auto result = make_uniq<LogicalInsert>(*table_catalog_entry, table_index);
+	auto &table_catalog_entry = catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->table);
+	auto result = make_uniq<LogicalInsert>(table_catalog_entry, table_index);
 	result->type = state.type;
 	result->return_chunk = return_chunk;
 	result->insert_values = std::move(insert_values);

@@ -1,4 +1,4 @@
-# name: test/sql/join/asof/test_asof_join_missing.test
+# name: test/sql/join/asof/test_asof_join_missing.test_slow
 # description: Test As-Of join with missing matches
 # group: [asof]
 
