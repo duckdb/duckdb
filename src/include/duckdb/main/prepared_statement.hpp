@@ -99,12 +99,16 @@ public:
 	static string ExcessValuesException(const case_insensitive_map_t<idx_t> &parameters,
 	                                    case_insensitive_map_t<PAYLOAD> &values) {
 		// Too many values
-		vector<string> excess_values;
+		set<string> excess_set;
 		for (auto &pair : values) {
 			auto &name = pair.first;
 			if (!parameters.count(name)) {
-				excess_values.push_back(name);
+				excess_set.insert(name);
 			}
+		}
+		vector<string> excess_values;
+		for (auto &val : excess_set) {
+			excess_values.push_back(val);
 		}
 		return StringUtil::Format("Parameter argument/count mismatch, identifiers of the excess parameters: %s",
 		                          StringUtil::Join(excess_values, ", "));
@@ -114,12 +118,16 @@ public:
 	static string MissingValuesException(const case_insensitive_map_t<idx_t> &parameters,
 	                                     case_insensitive_map_t<PAYLOAD> &values) {
 		// Missing values
-		vector<string> missing_values;
+		set<string> missing_set;
 		for (auto &pair : parameters) {
 			auto &name = pair.first;
 			if (!values.count(name)) {
-				missing_values.push_back(name);
+				missing_set.insert(name);
 			}
+		}
+		vector<string> missing_values;
+		for (auto &val : missing_set) {
+			missing_values.push_back(val);
 		}
 		return StringUtil::Format("Values were not provided for the following prepared statement parameters: %s",
 		                          StringUtil::Join(missing_values, ", "));

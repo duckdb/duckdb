@@ -310,7 +310,7 @@ static bool IsExplainAnalyze(SQLStatement *statement) {
 
 shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &query,
                                                                          unique_ptr<SQLStatement> statement,
-                                                                         vector<reference<Value>> values) {
+                                                                         const vector<reference<Value>> &values) {
 	StatementType statement_type = statement->type;
 	auto result = make_shared<PreparedStatementData>(statement_type);
 
@@ -370,7 +370,7 @@ double ClientContext::GetProgress() {
 
 unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientContextLock &lock,
                                                                        shared_ptr<PreparedStatementData> statement_p,
-                                                                       PendingQueryParameters parameters) {
+                                                                       const PendingQueryParameters &parameters) {
 	D_ASSERT(active_query);
 	auto &statement = *statement_p;
 	if (ValidChecker::IsInvalidated(ActiveTransaction()) && statement.properties.requires_valid_transaction) {
@@ -582,13 +582,13 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQueryPreparedInternal(Clien
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query,
                                                            shared_ptr<PreparedStatementData> &prepared,
-                                                           PendingQueryParameters parameters) {
+                                                           const PendingQueryParameters &parameters) {
 	auto lock = LockContext();
 	return PendingQueryPreparedInternal(*lock, query, prepared, parameters);
 }
 
 unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
-                                               PendingQueryParameters parameters) {
+                                               const PendingQueryParameters &parameters) {
 	auto lock = LockContext();
 	auto pending = PendingQueryPreparedInternal(*lock, query, prepared, parameters);
 	if (pending->HasError()) {
@@ -607,7 +607,7 @@ unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<P
 
 unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientContextLock &lock, const string &query,
                                                                        unique_ptr<SQLStatement> statement,
-                                                                       PendingQueryParameters parameters) {
+                                                                       const PendingQueryParameters &parameters) {
 	// prepare the query for execution
 	auto prepared = CreatePreparedStatement(lock, query, std::move(statement), parameters.parameters);
 	if (prepared->properties.parameter_count > 0 && parameters.parameters.empty()) {
@@ -643,7 +643,7 @@ bool ClientContext::IsActiveResult(ClientContextLock &lock, BaseQueryResult *res
 
 unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatementInternal(
     ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-    shared_ptr<PreparedStatementData> &prepared, PendingQueryParameters parameters) {
+    shared_ptr<PreparedStatementData> &prepared, const PendingQueryParameters &parameters) {
 	// check if we are on AutoCommit. In this case we should start a transaction.
 	if (statement && config.AnyVerification()) {
 		// query verification is enabled
@@ -700,7 +700,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 
 unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatement(
     ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-    shared_ptr<PreparedStatementData> &prepared, PendingQueryParameters parameters) {
+    shared_ptr<PreparedStatementData> &prepared, const PendingQueryParameters &parameters) {
 	unique_ptr<PendingQueryResult> result;
 
 	try {
@@ -887,7 +887,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStateme
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContextLock &lock,
                                                                    unique_ptr<SQLStatement> statement,
-                                                                   PendingQueryParameters parameters, bool verify) {
+                                                                   const PendingQueryParameters &parameters,
+                                                                   bool verify) {
 	auto query = statement->query;
 	shared_ptr<PreparedStatementData> prepared;
 	if (verify) {

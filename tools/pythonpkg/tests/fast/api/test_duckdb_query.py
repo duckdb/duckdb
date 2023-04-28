@@ -61,7 +61,7 @@ class TestDuckDBQuery(object):
     def test_named_param_not_dict(self):
         con = duckdb.connect()
 
-        with pytest.raises(duckdb.InvalidInputException, match="Values were not provided for the following prepared statement parameters: name3, name2, name1"):
+        with pytest.raises(duckdb.InvalidInputException, match="Values were not provided for the following prepared statement parameters: name1, name2, name3"):
             con.execute("select $name1, $name2, $name3", ['name1', 'name2', 'name3'])
 
     def test_named_param_basic(self):
@@ -85,7 +85,7 @@ class TestDuckDBQuery(object):
     def test_named_param_not_named(self):
         con = duckdb.connect()
 
-        with pytest.raises(duckdb.InvalidInputException, match="Values were not provided for the following prepared statement parameters: 2, 1"):
+        with pytest.raises(duckdb.InvalidInputException, match="Values were not provided for the following prepared statement parameters: 1, 2"):
             con.execute("select $1, $1, $2", {'name1': 5, 'name2': 3})
 
     def test_named_param_mixed(self):
