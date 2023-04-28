@@ -12,7 +12,6 @@ namespace duckdb {
 typedef void (*ext_init_fun_t)(DatabaseInstance &);
 typedef const char *(*ext_version_fun_t)(void);
 typedef void (*ext_storage_init_t)(DBConfig &);
-typedef bool (*extension_will_create_default_database_t)(void);
 
 template <class T>
 static T LoadFunctionFromDLL(void *dll, const string &function_name, const string &filename) {
