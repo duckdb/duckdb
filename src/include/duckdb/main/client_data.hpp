@@ -27,8 +27,17 @@ class PreparedStatementData;
 class SchemaCatalogEntry;
 struct RandomEngine;
 
+struct CachedFile {
+	//! Cached Data
+	shared_ptr<char> data;
+	//! Data capacity
+	uint64_t capacity = 0;
+	//! If we finished downloading the file
+	bool finished = false;
+};
+
 struct ClientData {
-	ClientData(ClientContext &context);
+	explicit ClientData(ClientContext &context);
 	~ClientData();
 
 	//! Query profiler
@@ -54,6 +63,10 @@ struct ClientData {
 
 	//! HTTP State in this query
 	unique_ptr<HTTPState> http_state;
+
+	//! Registered HTTP/S3 files
+	// TODO: we probably want to buffer-manager these
+	unordered_map<string, CachedFile> registered_url;
 
 	//! The file search path
 	string file_search_path;

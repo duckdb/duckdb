@@ -15,15 +15,6 @@
 
 namespace duckdb {
 
-struct CachedFile {
-	//! Cached Data
-	shared_ptr<char> data;
-	//! Data capacity
-	uint64_t capacity = 0;
-	//! If we finished downloading the file
-	bool finished = false;
-};
-
 class HTTPState {
 public:
 	atomic<idx_t> head_count {0};

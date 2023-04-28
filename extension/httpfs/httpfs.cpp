@@ -615,7 +615,15 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 			throw IOException("Invalid Content-Length header received: %s", res->headers["Content-Length"]);
 		}
 	}
-	if (length == 0 || http_params.force_download) {
+	auto client_context = FileOpener::TryGetClientContext(opener);
+
+	if (client_context->client_data->registered_url.find(path) != client_context->client_data->registered_url.end()) {
+		//! It's a bingo
+		lock_guard<mutex> lock(state->cached_files_mutex);
+		state->cached_files[path] = client_context->client_data->registered_url[path];
+		length = state->cached_files[path].capacity;
+
+	} else if (length == 0 || http_params.force_download) {
 		lock_guard<mutex> lock(state->cached_files_mutex);
 		auto &cached_file = state->cached_files[path];
 

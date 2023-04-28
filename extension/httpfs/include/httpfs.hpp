@@ -54,7 +54,7 @@ public:
 	// We keep an http client stored for connection reuse with keep-alive headers
 	duckdb::unique_ptr<duckdb_httplib_openssl::Client> http_client;
 
-	const HTTPParams http_params;
+	HTTPParams http_params;
 
 	// File handle info
 	uint8_t flags;

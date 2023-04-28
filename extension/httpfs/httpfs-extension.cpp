@@ -58,6 +58,12 @@ static void LoadInternal(DatabaseInstance &instance) {
 
 void HTTPFsExtension::Load(DuckDB &db) {
 	LoadInternal(*db.instance);
+	Connection con(db);
+	con.BeginTransaction();
+	auto &catalog = Catalog::GetSystemCatalog(*con.context);
+	RegisterCache::RegisterFunction(con, catalog);
+	UnregisterCache::RegisterFunction(con, catalog);
+	con.Commit();
 }
 std::string HTTPFsExtension::Name() {
 	return "httpfs";
