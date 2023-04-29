@@ -3,6 +3,7 @@ add_subdirectory(blob)
 add_subdirectory(date)
 add_subdirectory(enum)
 add_subdirectory(generic)
+add_subdirectory(list)
 
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES}

@@ -1,7 +1,8 @@
+#include "scalar/list_functions.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
 
 namespace duckdb {
 
@@ -127,10 +128,9 @@ static unique_ptr<BaseStatistics> ListFlattenStats(ClientContext &context, Funct
 	return child_copy.ToUnique();
 }
 
-void ListFlattenFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunction fun({LogicalType::LIST(LogicalType::LIST(LogicalType::ANY))}, LogicalType::LIST(LogicalType::ANY),
+ScalarFunction ListFlattenFun::GetFunction() {
+	return ScalarFunction({LogicalType::LIST(LogicalType::LIST(LogicalType::ANY))}, LogicalType::LIST(LogicalType::ANY),
 	                   ListFlattenFunction, ListFlattenBind, nullptr, ListFlattenStats);
-	set.AddFunction({"flatten"}, fun);
 }
 
 } // namespace duckdb

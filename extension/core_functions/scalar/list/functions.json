@@ -1,0 +1,10 @@
+[
+    {
+        "name": "flatten",
+        "parameters": "nested_list",
+        "description": "Flatten a nested list by one level",
+        "example": "flatten([[1, 2, 3], [4, 5]])",
+        "struct": "ListFlattenFun",
+        "type": "scalar_function"
+    }
+]

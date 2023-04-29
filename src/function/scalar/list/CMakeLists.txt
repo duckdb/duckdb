@@ -1,5 +1,5 @@
 add_library_unity(
-  duckdb_func_list
+  duckdb_func_list_nested
   OBJECT
   list_lambdas.cpp
   list_concat.cpp
@@ -9,8 +9,7 @@ add_library_unity(
   list_extract.cpp
   list_sort.cpp
   list_value.cpp
-  range.cpp
-  flatten.cpp)
+  range.cpp)
 set(ALL_OBJECT_FILES
-    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_list>
+    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_list_nested>
     PARENT_SCOPE)

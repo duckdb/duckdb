@@ -4,6 +4,7 @@
 #include "scalar/date_functions.hpp"
 #include "scalar/enum_functions.hpp"
 #include "scalar/generic_functions.hpp"
+#include "scalar/list_functions.hpp"
 
 namespace duckdb {
 
@@ -59,6 +60,7 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION(EpochMsFun),
 	DUCKDB_SCALAR_FUNCTION_SET(EraFun),
 	DUCKDB_SCALAR_FUNCTION(ErrorFun),
+	DUCKDB_SCALAR_FUNCTION(ListFlattenFun),
 	DUCKDB_SCALAR_FUNCTION(FromBase64Fun),
 	DUCKDB_SCALAR_FUNCTION(GetBitFun),
 	DUCKDB_SCALAR_FUNCTION(CurrentTimeFun),
