@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/generic_functions.hpp"
+#include "scalar/generic_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
@@ -43,12 +43,12 @@ static unique_ptr<BaseStatistics> StatsPropagateStats(ClientContext &context, Fu
 	return nullptr;
 }
 
-void StatsFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunction stats("stats", {LogicalType::ANY}, LogicalType::VARCHAR, StatsFunction, StatsBind, nullptr,
+ScalarFunction StatsFun::GetFunction() {
+	ScalarFunction stats({LogicalType::ANY}, LogicalType::VARCHAR, StatsFunction, StatsBind, nullptr,
 	                     StatsPropagateStats);
 	stats.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	stats.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
-	set.AddFunction(stats);
+	return stats;
 }
 
 } // namespace duckdb

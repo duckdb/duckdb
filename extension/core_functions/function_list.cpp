@@ -3,6 +3,7 @@
 #include "scalar/blob_functions.hpp"
 #include "scalar/date_functions.hpp"
 #include "scalar/enum_functions.hpp"
+#include "scalar/generic_functions.hpp"
 
 namespace duckdb {
 
@@ -25,11 +26,17 @@ namespace duckdb {
 
 static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(AgeFun),
+	DUCKDB_SCALAR_FUNCTION(AliasFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(Base64Fun),
 	DUCKDB_SCALAR_FUNCTION(BitPositionFun),
 	DUCKDB_SCALAR_FUNCTION(BitStringFun),
 	DUCKDB_SCALAR_FUNCTION_SET(CenturyFun),
+	DUCKDB_SCALAR_FUNCTION(CurrentDatabaseFun),
 	DUCKDB_SCALAR_FUNCTION(CurrentDateFun),
+	DUCKDB_SCALAR_FUNCTION(CurrentQueryFun),
+	DUCKDB_SCALAR_FUNCTION(CurrentSchemaFun),
+	DUCKDB_SCALAR_FUNCTION(CurrentSchemasFun),
+	DUCKDB_SCALAR_FUNCTION(CurrentSettingFun),
 	DUCKDB_SCALAR_FUNCTION_SET(DateDiffFun),
 	DUCKDB_SCALAR_FUNCTION_SET(DatePartFun),
 	DUCKDB_SCALAR_FUNCTION_SET(DateSubFun),
@@ -51,14 +58,18 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(EpochFun),
 	DUCKDB_SCALAR_FUNCTION(EpochMsFun),
 	DUCKDB_SCALAR_FUNCTION_SET(EraFun),
+	DUCKDB_SCALAR_FUNCTION(ErrorFun),
 	DUCKDB_SCALAR_FUNCTION(FromBase64Fun),
 	DUCKDB_SCALAR_FUNCTION(GetBitFun),
 	DUCKDB_SCALAR_FUNCTION(CurrentTimeFun),
 	DUCKDB_SCALAR_FUNCTION(CurrentTimestampFun),
+	DUCKDB_SCALAR_FUNCTION_SET(GreatestFun),
+	DUCKDB_SCALAR_FUNCTION(HashFun),
 	DUCKDB_SCALAR_FUNCTION_SET(HoursFun),
 	DUCKDB_SCALAR_FUNCTION_SET(ISODayOfWeekFun),
 	DUCKDB_SCALAR_FUNCTION_SET(ISOYearFun),
 	DUCKDB_SCALAR_FUNCTION_SET(LastDayFun),
+	DUCKDB_SCALAR_FUNCTION_SET(LeastFun),
 	DUCKDB_SCALAR_FUNCTION_SET(MakeDateFun),
 	DUCKDB_SCALAR_FUNCTION(MakeTimeFun),
 	DUCKDB_SCALAR_FUNCTION(MakeTimestampFun),
@@ -72,6 +83,7 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(QuarterFun),
 	DUCKDB_SCALAR_FUNCTION_SET(SecondsFun),
 	DUCKDB_SCALAR_FUNCTION(SetBitFun),
+	DUCKDB_SCALAR_FUNCTION(StatsFun),
 	DUCKDB_SCALAR_FUNCTION_SET(StrfTimeFun),
 	DUCKDB_SCALAR_FUNCTION_SET(StrpTimeFun),
 	DUCKDB_SCALAR_FUNCTION_SET(TimeBucketFun),
@@ -91,6 +103,9 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_ALIAS(TodayFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(TransactionTimestampFun),
 	DUCKDB_SCALAR_FUNCTION_SET(TryStrpTimeFun),
+	DUCKDB_SCALAR_FUNCTION(CurrentTransactionIdFun),
+	DUCKDB_SCALAR_FUNCTION(TypeOfFun),
+	DUCKDB_SCALAR_FUNCTION(VersionFun),
 	DUCKDB_SCALAR_FUNCTION_SET(WeekFun),
 	DUCKDB_SCALAR_FUNCTION_SET(WeekDayFun),
 	DUCKDB_SCALAR_FUNCTION_SET(WeekOfYearFun),

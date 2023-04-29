@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/generic_functions.hpp"
+#include "scalar/generic_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
@@ -9,10 +9,10 @@ static void AliasFunction(DataChunk &args, ExpressionState &state, Vector &resul
 	result.Reference(v);
 }
 
-void AliasFun::RegisterFunction(BuiltinFunctions &set) {
-	auto fun = ScalarFunction("alias", {LogicalType::ANY}, LogicalType::VARCHAR, AliasFunction);
+ScalarFunction AliasFun::GetFunction() {
+	auto fun = ScalarFunction({LogicalType::ANY}, LogicalType::VARCHAR, AliasFunction);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	set.AddFunction(fun);
+	return fun;
 }
 
 } // namespace duckdb

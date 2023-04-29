@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/generic_functions.hpp"
+#include "scalar/generic_functions.hpp"
 
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -58,11 +58,11 @@ unique_ptr<FunctionData> CurrentSettingBind(ClientContext &context, ScalarFuncti
 	return make_uniq<CurrentSettingBindData>(val);
 }
 
-void CurrentSettingFun::RegisterFunction(BuiltinFunctions &set) {
-	auto fun = ScalarFunction("current_setting", {LogicalType::VARCHAR}, LogicalType::ANY, CurrentSettingFunction,
+ScalarFunction CurrentSettingFun::GetFunction() {
+	auto fun = ScalarFunction({LogicalType::VARCHAR}, LogicalType::ANY, CurrentSettingFunction,
 	                          CurrentSettingBind);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	set.AddFunction(fun);
+	return fun;
 }
 
 } // namespace duckdb

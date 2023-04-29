@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/generic_functions.hpp"
+#include "scalar/generic_functions.hpp"
 #include <iostream>
 
 namespace duckdb {
@@ -10,12 +10,12 @@ struct ErrorOperator {
 	}
 };
 
-void ErrorFun::RegisterFunction(BuiltinFunctions &set) {
-	auto fun = ScalarFunction("error", {LogicalType::VARCHAR}, LogicalType::BOOLEAN,
+ScalarFunction ErrorFun::GetFunction() {
+	auto fun = ScalarFunction({LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                          ScalarFunction::UnaryFunction<string_t, bool, ErrorOperator>);
 	// Set the function with side effects to avoid the optimization.
 	fun.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
-	set.AddFunction(fun);
+	return fun;
 }
 
 } // namespace duckdb

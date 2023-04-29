@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/generic_functions.hpp"
+#include "scalar/generic_functions.hpp"
 
 namespace duckdb {
 
@@ -7,10 +7,10 @@ static void TypeOfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	result.Reference(v);
 }
 
-void TypeOfFun::RegisterFunction(BuiltinFunctions &set) {
-	auto fun = ScalarFunction("typeof", {LogicalType::ANY}, LogicalType::VARCHAR, TypeOfFunction);
+ScalarFunction TypeOfFun::GetFunction() {
+	auto fun = ScalarFunction({LogicalType::ANY}, LogicalType::VARCHAR, TypeOfFunction);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	set.AddFunction(fun);
+	return fun;
 }
 
 } // namespace duckdb

@@ -64,20 +64,31 @@ static void VersionFunction(DataChunk &input, ExpressionState &state, Vector &re
 	result.Reference(val);
 }
 
-void SystemFun::RegisterFunction(BuiltinFunctions &set) {
-	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
-
-	ScalarFunction current_query("current_query", {}, LogicalType::VARCHAR, CurrentQueryFunction);
+ScalarFunction CurrentQueryFun::GetFunction() {
+	ScalarFunction current_query({}, LogicalType::VARCHAR, CurrentQueryFunction);
 	current_query.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
-	set.AddFunction(current_query);
-	set.AddFunction(ScalarFunction("current_schema", {}, LogicalType::VARCHAR, CurrentSchemaFunction));
-	set.AddFunction(ScalarFunction("current_database", {}, LogicalType::VARCHAR, CurrentDatabaseFunction));
-	set.AddFunction(
-	    ScalarFunction("current_schemas", {LogicalType::BOOLEAN}, varchar_list_type, CurrentSchemasFunction));
-	set.AddFunction(ScalarFunction("txid_current", {}, LogicalType::BIGINT, TransactionIdCurrent));
-	set.AddFunction(ScalarFunction("version", {}, LogicalType::VARCHAR, VersionFunction));
-	set.AddFunction(ExportAggregateFunction::GetCombine());
-	set.AddFunction(ExportAggregateFunction::GetFinalize());
+	return current_query;
+}
+
+ScalarFunction CurrentSchemaFun::GetFunction() {
+	return ScalarFunction({}, LogicalType::VARCHAR, CurrentSchemaFunction);
+}
+
+ScalarFunction CurrentDatabaseFun::GetFunction() {
+	return ScalarFunction({}, LogicalType::VARCHAR, CurrentDatabaseFunction);
+}
+
+ScalarFunction CurrentSchemasFun::GetFunction() {
+	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
+	return ScalarFunction({LogicalType::BOOLEAN}, varchar_list_type, CurrentSchemasFunction);
+}
+
+ScalarFunction CurrentTransactionIdFun::GetFunction() {
+	return ScalarFunction({}, LogicalType::BIGINT, TransactionIdCurrent);
+}
+
+ScalarFunction VersionFun::GetFunction() {
+	return ScalarFunction({}, LogicalType::VARCHAR, VersionFunction);
 }
 
 } // namespace duckdb

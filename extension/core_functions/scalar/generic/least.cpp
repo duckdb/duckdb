@@ -1,5 +1,5 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/function/scalar/generic_functions.hpp"
+#include "scalar/generic_functions.hpp"
 
 namespace duckdb {
 
@@ -101,8 +101,8 @@ ScalarFunction GetLeastGreatestFunction(const LogicalType &type) {
 }
 
 template <class OP>
-static void RegisterLeastGreatest(BuiltinFunctions &set, const string &fun_name) {
-	ScalarFunctionSet fun_set(fun_name);
+static ScalarFunctionSet GetLeastGreatestFunctions() {
+	ScalarFunctionSet fun_set;
 	fun_set.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::BIGINT, LeastGreatestFunction<int64_t, OP>,
 	                                   nullptr, nullptr, nullptr, nullptr, LogicalType::BIGINT,
 	                                   FunctionSideEffects::NO_SIDE_EFFECTS, FunctionNullHandling::SPECIAL_HANDLING));
@@ -123,16 +123,15 @@ static void RegisterLeastGreatest(BuiltinFunctions &set, const string &fun_name)
 
 	fun_set.AddFunction(GetLeastGreatestFunction<timestamp_t, OP>(LogicalType::TIMESTAMP_TZ));
 	fun_set.AddFunction(GetLeastGreatestFunction<time_t, OP>(LogicalType::TIME_TZ));
-
-	set.AddFunction(fun_set);
+	return fun_set;
 }
 
-void LeastFun::RegisterFunction(BuiltinFunctions &set) {
-	RegisterLeastGreatest<duckdb::LessThan>(set, "least");
+ScalarFunctionSet LeastFun::GetFunctions() {
+	return GetLeastGreatestFunctions<duckdb::LessThan>();
 }
 
-void GreatestFun::RegisterFunction(BuiltinFunctions &set) {
-	RegisterLeastGreatest<duckdb::GreaterThan>(set, "greatest");
+ScalarFunctionSet GreatestFun::GetFunctions() {
+	return GetLeastGreatestFunctions<duckdb::GreaterThan>();
 }
 
 } // namespace duckdb

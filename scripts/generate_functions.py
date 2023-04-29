@@ -2,7 +2,7 @@ import os
 import re
 import json
 
-scalar_functions = ['bit', 'blob', 'date', 'enum']
+scalar_functions = ['bit', 'blob', 'date', 'enum', 'generic']
 
 header = '''//===----------------------------------------------------------------------===//
 //                         DuckDB
@@ -39,6 +39,8 @@ for scalar in scalar_functions:
     for entry in parsed_json:
         function_text = ''
         struct_type = entry['struct']
+        if entry['struct'] in function_type_set:
+            raise Exception("Duplicate entry " + entry['struct'])
         if 'alias' in entry:
             aliased_type = function_type_set[entry['alias']]
             if aliased_type == 'scalar_function':
