@@ -4,7 +4,6 @@
 namespace duckdb {
 
 void BuiltinFunctions::RegisterStringFunctions() {
-	Register<ReverseFun>();
 	Register<LowerFun>();
 	Register<UpperFun>();
 	Register<StripAccentsFun>();
@@ -18,7 +17,6 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<PrefixFun>();
 	Register<SuffixFun>();
 	Register<NFCNormalizeFun>();
-	Register<StringSplitFun>();
 
 	// uuid functions
 	Register<UUIDFun>();

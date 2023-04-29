@@ -325,6 +325,54 @@ struct RtrimFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct StringSplitFun {
+	static constexpr const char *Name = "string_split";
+	static constexpr const char *Parameters = "string,separator";
+	static constexpr const char *Description = "Splits the string along the separator";
+	static constexpr const char *Example = "string_split('hello-world', '-')";
+
+	static ScalarFunction GetFunction();
+};
+
+struct StrSplitFun {
+	using ALIAS = StringSplitFun;
+
+	static constexpr const char *Name = "str_split";
+};
+
+struct StringToArrayFun {
+	using ALIAS = StringSplitFun;
+
+	static constexpr const char *Name = "string_to_array";
+};
+
+struct SplitFun {
+	using ALIAS = StringSplitFun;
+
+	static constexpr const char *Name = "split";
+};
+
+struct StringSplitRegexFun {
+	static constexpr const char *Name = "string_split_regex";
+	static constexpr const char *Parameters = "string,separator";
+	static constexpr const char *Description = "Splits the string along the regex";
+	static constexpr const char *Example = "string_split_regex('hello␣world; 42', ';?␣')";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct StrSplitRegexFun {
+	using ALIAS = StringSplitRegexFun;
+
+	static constexpr const char *Name = "str_split_regex";
+};
+
+struct RegexpSplitToArrayFun {
+	using ALIAS = StringSplitRegexFun;
+
+	static constexpr const char *Name = "regexp_split_to_array";
+};
+
 struct TranslateFun {
 	static constexpr const char *Name = "translate";
 	static constexpr const char *Parameters = "string,from,to";

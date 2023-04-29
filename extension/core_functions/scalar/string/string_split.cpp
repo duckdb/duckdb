@@ -3,7 +3,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "scalar/string_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
@@ -171,15 +171,17 @@ static void StringSplitRegexFunction(DataChunk &args, ExpressionState &state, Ve
 	}
 }
 
-void StringSplitFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunction StringSplitFun::GetFunction() {
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
 
-	auto regular_fun =
-	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, varchar_list_type, StringSplitFunction);
-	regular_fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	set.AddFunction({"string_split", "str_split", "string_to_array", "split"}, regular_fun);
+	ScalarFunction string_split({LogicalType::VARCHAR, LogicalType::VARCHAR}, varchar_list_type, StringSplitFunction);
+	string_split.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	return string_split;
+}
 
-	ScalarFunctionSet regexp_split("string_split_regex");
+ScalarFunctionSet StringSplitRegexFun::GetFunctions() {
+	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
+	ScalarFunctionSet regexp_split;
 	ScalarFunction regex_fun({LogicalType::VARCHAR, LogicalType::VARCHAR}, varchar_list_type, StringSplitRegexFunction,
 	                         RegexpMatchesBind, nullptr, nullptr, RegexInitLocalState, LogicalType::INVALID,
 	                         FunctionSideEffects::NO_SIDE_EFFECTS, FunctionNullHandling::SPECIAL_HANDLING);
@@ -187,10 +189,7 @@ void StringSplitFun::RegisterFunction(BuiltinFunctions &set) {
 	// regexp options
 	regex_fun.arguments.emplace_back(LogicalType::VARCHAR);
 	regexp_split.AddFunction(regex_fun);
-	for (auto &name : {"string_split_regex", "str_split_regex", "regexp_split_to_array"}) {
-		regexp_split.name = name;
-		set.AddFunction(regexp_split);
-	}
+	return regexp_split;
 }
 
 } // namespace duckdb

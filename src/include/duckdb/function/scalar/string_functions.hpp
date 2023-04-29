@@ -121,10 +121,6 @@ struct ContainsFun {
 	                  idx_t needle_size);
 };
 
-struct StringSplitFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct RegexpFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
