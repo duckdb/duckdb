@@ -187,6 +187,13 @@
         "type": "scalar_function"
     },
     {
+        "name": "reverse",
+        "parameters": "string",
+        "description": "Reverses the string",
+        "example": "reverse('hello')",
+        "type": "scalar_function"
+    },
+    {
         "name": "right",
         "parameters": "string,count",
         "description": "Extract the right-most count characters",

@@ -17,6 +17,7 @@ add_library_unity(
   printf.cpp
   repeat.cpp
   replace.cpp
+  reverse.cpp
   starts_with.cpp
   translate.cpp
   trim.cpp

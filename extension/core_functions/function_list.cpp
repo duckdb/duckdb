@@ -153,6 +153,7 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(ListRangeFun),
 	DUCKDB_SCALAR_FUNCTION(RepeatFun),
 	DUCKDB_SCALAR_FUNCTION(ReplaceFun),
+	DUCKDB_SCALAR_FUNCTION(ReverseFun),
 	DUCKDB_SCALAR_FUNCTION(RightFun),
 	DUCKDB_SCALAR_FUNCTION(RightGraphemeFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(RowFun),

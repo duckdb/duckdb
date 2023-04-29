@@ -280,6 +280,15 @@ struct ReplaceFun {
 	static ScalarFunction GetFunction();
 };
 
+struct ReverseFun {
+	static constexpr const char *Name = "reverse";
+	static constexpr const char *Parameters = "string";
+	static constexpr const char *Description = "Reverses the string";
+	static constexpr const char *Example = "reverse('hello')";
+
+	static ScalarFunction GetFunction();
+};
+
 struct RightFun {
 	static constexpr const char *Name = "right";
 	static constexpr const char *Parameters = "string,count";

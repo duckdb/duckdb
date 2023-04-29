@@ -18,10 +18,6 @@ class RE2;
 
 namespace duckdb {
 
-struct ReverseFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct LowerFun {
 	static uint8_t ascii_to_lower_map[];
 
