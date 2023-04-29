@@ -1,3 +1,4 @@
+#include "scalar/string_functions.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -5,7 +6,6 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/unicode_bar.hpp"
 #include "duckdb/common/vector_operations/generic_executor.hpp"
-#include "duckdb/function/scalar/string_functions.hpp"
 
 namespace duckdb {
 
@@ -81,13 +81,13 @@ static void BarFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	}
 }
 
-void BarFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunctionSet bar("bar");
+ScalarFunctionSet BarFun::GetFunctions() {
+	ScalarFunctionSet bar;
 	bar.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE},
 	                               LogicalType::VARCHAR, BarFunction));
 	bar.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE},
 	                               LogicalType::VARCHAR, BarFunction));
-	set.AddFunction(bar);
+	return bar;
 }
 
 } // namespace duckdb

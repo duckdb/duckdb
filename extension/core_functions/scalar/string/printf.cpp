@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "scalar/string_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/limits.hpp"
 #include "fmt/format.h"
@@ -152,20 +152,20 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	}
 }
 
-void PrintfFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunction PrintfFun::GetFunction() {
 	// duckdb_fmt::printf_context, duckdb_fmt::vsprintf
-	ScalarFunction printf_fun =
-	    ScalarFunction("printf", {LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                   PrintfFunction<FMTPrintf, duckdb_fmt::printf_context>, BindPrintfFunction);
+	ScalarFunction printf_fun({LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                          PrintfFunction<FMTPrintf, duckdb_fmt::printf_context>, BindPrintfFunction);
 	printf_fun.varargs = LogicalType::ANY;
-	set.AddFunction(printf_fun);
+	return printf_fun;
+}
 
+ScalarFunction FormatFun::GetFunction() {
 	// duckdb_fmt::format_context, duckdb_fmt::vformat
-	ScalarFunction format_fun =
-	    ScalarFunction("format", {LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                   PrintfFunction<FMTFormat, duckdb_fmt::format_context>, BindPrintfFunction);
+	ScalarFunction format_fun({LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                          PrintfFunction<FMTFormat, duckdb_fmt::format_context>, BindPrintfFunction);
 	format_fun.varargs = LogicalType::ANY;
-	set.AddFunction(format_fun);
+	return format_fun;
 }
 
 } // namespace duckdb

@@ -37,4 +37,4 @@ struct RowFun {
 	static constexpr const char *Name = "row";
 };
 
-}
+} // namespace duckdb

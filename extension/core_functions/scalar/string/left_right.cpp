@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "scalar/string_functions.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/limits.hpp"
 
@@ -50,11 +50,14 @@ static void LeftFunction(DataChunk &args, ExpressionState &state, Vector &result
 	    [&](string_t str, int64_t pos) { return LeftScalarFunction<OP>(result, str, pos); });
 }
 
-void LeftFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("left", {LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
-	                               LeftFunction<LeftRightUnicode>));
-	set.AddFunction(ScalarFunction("left_grapheme", {LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
-	                               LeftFunction<LeftRightGrapheme>));
+ScalarFunction LeftFun::GetFunction() {
+	return ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
+	                      LeftFunction<LeftRightUnicode>);
+}
+
+ScalarFunction LeftGraphemeFun::GetFunction() {
+	return ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
+	                      LeftFunction<LeftRightGrapheme>);
 }
 
 template <class OP>
@@ -83,11 +86,14 @@ static void RightFunction(DataChunk &args, ExpressionState &state, Vector &resul
 	    [&](string_t str, int64_t pos) { return RightScalarFunction<OP>(result, str, pos); });
 }
 
-void RightFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("right", {LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
-	                               RightFunction<LeftRightUnicode>));
-	set.AddFunction(ScalarFunction("right_grapheme", {LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
-	                               RightFunction<LeftRightGrapheme>));
+ScalarFunction RightFun::GetFunction() {
+	return ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
+	                      RightFunction<LeftRightUnicode>);
+}
+
+ScalarFunction RightGraphemeFun::GetFunction() {
+	return ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
+	                      RightFunction<LeftRightGrapheme>);
 }
 
 } // namespace duckdb

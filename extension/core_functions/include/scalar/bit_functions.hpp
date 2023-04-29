@@ -49,4 +49,4 @@ struct BitStringFun {
 	static ScalarFunction GetFunction();
 };
 
-}
+} // namespace duckdb

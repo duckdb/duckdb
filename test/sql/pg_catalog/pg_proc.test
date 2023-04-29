@@ -30,4 +30,4 @@ true	DOUBLE	[DOUBLE, DOUBLE]	[col0, col1]
 query IIII
 select provariadic, prorettype, proargtypes, proargnames FROM pg_proc WHERE proname='printf';
 ----
-ANY	VARCHAR	[VARCHAR]	[col0]
+ANY	VARCHAR	[VARCHAR]	[format]

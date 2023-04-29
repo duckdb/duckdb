@@ -55,4 +55,4 @@ struct Base64Fun {
 	static constexpr const char *Name = "base64";
 };
 
-}
+} // namespace duckdb

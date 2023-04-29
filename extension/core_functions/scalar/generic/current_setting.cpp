@@ -59,8 +59,7 @@ unique_ptr<FunctionData> CurrentSettingBind(ClientContext &context, ScalarFuncti
 }
 
 ScalarFunction CurrentSettingFun::GetFunction() {
-	auto fun = ScalarFunction({LogicalType::VARCHAR}, LogicalType::ANY, CurrentSettingFunction,
-	                          CurrentSettingBind);
+	auto fun = ScalarFunction({LogicalType::VARCHAR}, LogicalType::ANY, CurrentSettingFunction, CurrentSettingBind);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return fun;
 }

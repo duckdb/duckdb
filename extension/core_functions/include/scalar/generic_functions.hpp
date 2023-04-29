@@ -139,4 +139,4 @@ struct VersionFun {
 	static ScalarFunction GetFunction();
 };
 
-}
+} // namespace duckdb

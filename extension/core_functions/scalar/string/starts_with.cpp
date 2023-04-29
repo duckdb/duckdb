@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "scalar/string_functions.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -35,13 +35,9 @@ struct StartsWithOperator {
 	}
 };
 
-void StartsWithFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunction starts_with =
-	    ScalarFunction("starts_with", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                   ScalarFunction::BinaryFunction<string_t, string_t, bool, StartsWithOperator>);
-	set.AddFunction(starts_with);
-	starts_with.name = "^@";
-	set.AddFunction(starts_with);
+ScalarFunction StartsWithOperatorFun::GetFunction() {
+	return ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
+	                      ScalarFunction::BinaryFunction<string_t, string_t, bool, StartsWithOperator>);
 }
 
 } // namespace duckdb

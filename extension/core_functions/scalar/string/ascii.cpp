@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "scalar/string_functions.hpp"
 #include "utf8proc.hpp"
 #include "utf8proc_wrapper.hpp"
 
@@ -16,10 +16,9 @@ struct AsciiOperator {
 	}
 };
 
-void ASCII::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunction ascii("ascii", {LogicalType::VARCHAR}, LogicalType::INTEGER,
-	                     ScalarFunction::UnaryFunction<string_t, int32_t, AsciiOperator>);
-	set.AddFunction(ascii);
+ScalarFunction ASCIIFun::GetFunction() {
+	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::INTEGER,
+	                      ScalarFunction::UnaryFunction<string_t, int32_t, AsciiOperator>);
 }
 
 } // namespace duckdb

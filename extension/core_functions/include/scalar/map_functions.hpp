@@ -82,4 +82,4 @@ struct MapValuesFun {
 	static ScalarFunction GetFunction();
 };
 
-}
+} // namespace duckdb

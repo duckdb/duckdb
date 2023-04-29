@@ -58,4 +58,4 @@ struct EnumRangeBoundaryFun {
 	static ScalarFunction GetFunction();
 };
 
-}
+} // namespace duckdb

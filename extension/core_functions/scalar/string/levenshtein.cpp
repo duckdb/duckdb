@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "scalar/string_functions.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/string_util.hpp"
 
@@ -77,17 +77,8 @@ static void LevenshteinFunction(DataChunk &args, ExpressionState &state, Vector 
 	    [&](string_t str, string_t tgt) { return LevenshteinScalarFunction(result, str, tgt); });
 }
 
-void LevenshteinFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunctionSet levenshtein("levenshtein");
-	levenshtein.AddFunction(ScalarFunction("levenshtein", {LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                                       LogicalType::BIGINT,
-	                                       LevenshteinFunction)); // Pointer to function implementation
-	set.AddFunction(levenshtein);
-
-	ScalarFunctionSet editdist3("editdist3");
-	editdist3.AddFunction(ScalarFunction("levenshtein", {LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                                     LogicalType::BIGINT, LevenshteinFunction));
-	set.AddFunction(editdist3);
+ScalarFunction LevenshteinFun::GetFunction() {
+	return ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BIGINT, LevenshteinFunction);
 }
 
 } // namespace duckdb

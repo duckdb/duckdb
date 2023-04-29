@@ -131,37 +131,33 @@ unique_ptr<FunctionData> BindEnumRangeBoundaryFunction(ClientContext &context, S
 }
 
 ScalarFunction EnumFirstFun::GetFunction() {
-	auto fun =
-	    ScalarFunction({LogicalType::ANY}, LogicalType::VARCHAR, EnumFirstFunction, BindEnumFunction);
+	auto fun = ScalarFunction({LogicalType::ANY}, LogicalType::VARCHAR, EnumFirstFunction, BindEnumFunction);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return fun;
 }
 
 ScalarFunction EnumLastFun::GetFunction() {
-	auto fun =
-	    ScalarFunction({LogicalType::ANY}, LogicalType::VARCHAR, EnumLastFunction, BindEnumFunction);
+	auto fun = ScalarFunction({LogicalType::ANY}, LogicalType::VARCHAR, EnumLastFunction, BindEnumFunction);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return fun;
 }
 
 ScalarFunction EnumCodeFun::GetFunction() {
-	auto fun =
-	    ScalarFunction({LogicalType::ANY}, LogicalType::ANY, EnumCodeFunction, BindEnumCodeFunction);
+	auto fun = ScalarFunction({LogicalType::ANY}, LogicalType::ANY, EnumCodeFunction, BindEnumCodeFunction);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return fun;
 }
 
 ScalarFunction EnumRangeFun::GetFunction() {
-	auto fun = ScalarFunction({LogicalType::ANY}, LogicalType::LIST(LogicalType::VARCHAR),
-	                          EnumRangeFunction, BindEnumFunction);
+	auto fun = ScalarFunction({LogicalType::ANY}, LogicalType::LIST(LogicalType::VARCHAR), EnumRangeFunction,
+	                          BindEnumFunction);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return fun;
 }
 
 ScalarFunction EnumRangeBoundaryFun::GetFunction() {
-	auto fun = ScalarFunction({LogicalType::ANY, LogicalType::ANY},
-	                          LogicalType::LIST(LogicalType::VARCHAR), EnumRangeBoundaryFunction,
-	                          BindEnumRangeBoundaryFunction);
+	auto fun = ScalarFunction({LogicalType::ANY, LogicalType::ANY}, LogicalType::LIST(LogicalType::VARCHAR),
+	                          EnumRangeBoundaryFunction, BindEnumRangeBoundaryFunction);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return fun;
 }

@@ -99,8 +99,8 @@ static unique_ptr<FunctionData> UnionExtractBind(ClientContext &context, ScalarF
 
 ScalarFunction UnionExtractFun::GetFunction() {
 	// the arguments and return types are actually set in the binder function
-	return ScalarFunction({LogicalTypeId::UNION, LogicalType::VARCHAR}, LogicalType::ANY,
-	                          UnionExtractFunction, UnionExtractBind, nullptr, nullptr);
+	return ScalarFunction({LogicalTypeId::UNION, LogicalType::VARCHAR}, LogicalType::ANY, UnionExtractFunction,
+	                      UnionExtractBind, nullptr, nullptr);
 }
 
 } // namespace duckdb

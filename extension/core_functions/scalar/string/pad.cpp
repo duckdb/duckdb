@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "scalar/string_functions.hpp"
 
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
@@ -130,20 +130,14 @@ static void PadFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	    });
 }
 
-void LpadFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("lpad",                                      // name of the function
-	                               {LogicalType::VARCHAR, LogicalType::INTEGER, // argument list
-	                                LogicalType::VARCHAR},
-	                               LogicalType::VARCHAR,           // return type
-	                               PadFunction<LeftPadOperator>)); // pointer to function implementation
+ScalarFunction LpadFun::GetFunction() {
+	return ScalarFunction({LogicalType::VARCHAR, LogicalType::INTEGER, LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                      PadFunction<LeftPadOperator>);
 }
 
-void RpadFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("rpad",                                      // name of the function
-	                               {LogicalType::VARCHAR, LogicalType::INTEGER, // argument list
-	                                LogicalType::VARCHAR},
-	                               LogicalType::VARCHAR,            // return type
-	                               PadFunction<RightPadOperator>)); // pointer to function implementation
+ScalarFunction RpadFun::GetFunction() {
+	return ScalarFunction({LogicalType::VARCHAR, LogicalType::INTEGER, LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                      PadFunction<RightPadOperator>);
 }
 
 } // namespace duckdb

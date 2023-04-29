@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "scalar/string_functions.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 #include <ctype.h>
@@ -38,17 +38,8 @@ static void MismatchesFunction(DataChunk &args, ExpressionState &state, Vector &
 	    [&](string_t str, string_t tgt) { return MismatchesScalarFunction(result, str, tgt); });
 }
 
-void MismatchesFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunctionSet mismatches("mismatches");
-	mismatches.AddFunction(ScalarFunction("mismatches", {LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                                      LogicalType::BIGINT,
-	                                      MismatchesFunction)); // Pointer to function implementation
-	set.AddFunction(mismatches);
-
-	ScalarFunctionSet hamming("hamming");
-	hamming.AddFunction(ScalarFunction("mismatches", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                                   MismatchesFunction)); // Pointer to function implementation
-	set.AddFunction(hamming);
+ScalarFunction HammingFun::GetFunction() {
+	return ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BIGINT, MismatchesFunction);
 }
 
 } // namespace duckdb

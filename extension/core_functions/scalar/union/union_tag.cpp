@@ -51,8 +51,8 @@ static void UnionTagFunction(DataChunk &args, ExpressionState &state, Vector &re
 }
 
 ScalarFunction UnionTagFun::GetFunction() {
-	return ScalarFunction({LogicalTypeId::UNION}, LogicalTypeId::ANY, UnionTagFunction, UnionTagBind,
-	                          nullptr, nullptr); // TODO: Statistics?
+	return ScalarFunction({LogicalTypeId::UNION}, LogicalTypeId::ANY, UnionTagFunction, UnionTagBind, nullptr,
+	                      nullptr); // TODO: Statistics?
 }
 
 } // namespace duckdb

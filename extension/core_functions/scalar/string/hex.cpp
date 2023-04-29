@@ -4,7 +4,8 @@
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "scalar/string_functions.hpp"
 
 namespace duckdb {
 
@@ -332,10 +333,8 @@ static void FromHexFunction(DataChunk &args, ExpressionState &state, Vector &res
 	UnaryExecutor::ExecuteString<string_t, string_t, FromHexOperator>(input, result, count);
 }
 
-void HexFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunctionSet to_hex("to_hex");
-	ScalarFunctionSet from_hex("from_hex");
-
+ScalarFunctionSet HexFun::GetFunctions() {
+	ScalarFunctionSet to_hex;
 	to_hex.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, ToHexFunction<string_t, HexStrOperator>));
 
@@ -347,20 +346,16 @@ void HexFun::RegisterFunction(BuiltinFunctions &set) {
 
 	to_hex.AddFunction(
 	    ScalarFunction({LogicalType::HUGEINT}, LogicalType::VARCHAR, ToHexFunction<hugeint_t, HexHugeIntOperator>));
+	return to_hex;
+}
 
-	from_hex.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BLOB, FromHexFunction));
+ScalarFunction UnhexFun::GetFunction() {
+	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::BLOB, FromHexFunction);
+}
 
-	set.AddFunction(to_hex);
-	set.AddFunction(from_hex);
+ScalarFunctionSet BinFun::GetFunctions() {
+	ScalarFunctionSet to_binary;
 
-	// mysql
-	to_hex.name = "hex";
-	from_hex.name = "unhex";
-	set.AddFunction(to_hex);
-	set.AddFunction(from_hex);
-
-	ScalarFunctionSet to_binary("to_binary");
-	ScalarFunctionSet from_binary("from_binary");
 	to_binary.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, ToBinaryFunction<string_t, BinaryStrOperator>));
 	to_binary.AddFunction(ScalarFunction({LogicalType::UBIGINT}, LogicalType::VARCHAR,
@@ -369,16 +364,11 @@ void HexFun::RegisterFunction(BuiltinFunctions &set) {
 	    ScalarFunction({LogicalType::BIGINT}, LogicalType::VARCHAR, ToBinaryFunction<int64_t, BinaryIntegralOperator>));
 	to_binary.AddFunction(ScalarFunction({LogicalType::HUGEINT}, LogicalType::VARCHAR,
 	                                     ToBinaryFunction<hugeint_t, BinaryHugeIntOperator>));
+	return to_binary;
+}
 
-	from_binary.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BLOB, FromBinaryFunction));
-
-	set.AddFunction(to_binary);
-	set.AddFunction(from_binary);
-
-	to_binary.name = "bin";
-	from_binary.name = "unbin";
-	set.AddFunction(to_binary);
-	set.AddFunction(from_binary);
+ScalarFunction UnbinFun::GetFunction() {
+	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::BLOB, FromBinaryFunction);
 }
 
 } // namespace duckdb

@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "scalar/string_functions.hpp"
 #include "utf8proc.hpp"
 #include "utf8proc_wrapper.hpp"
 
@@ -35,15 +35,14 @@ static void ChrFunction(DataChunk &args, ExpressionState &state, Vector &result)
 }
 #endif
 
-void CHR::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunction chr("chr", {LogicalType::INTEGER}, LogicalType::VARCHAR,
+ScalarFunction ChrFun::GetFunction() {
+	return ScalarFunction("chr", {LogicalType::INTEGER}, LogicalType::VARCHAR,
 #ifdef DUCKDB_DEBUG_NO_INLINE
-	                   ChrFunction
+	                      ChrFunction
 #else
-	                   ScalarFunction::UnaryFunction<int32_t, string_t, ChrOperator>
+	                      ScalarFunction::UnaryFunction<int32_t, string_t, ChrOperator>
 #endif
 	);
-	set.AddFunction(chr);
 }
 
 } // namespace duckdb

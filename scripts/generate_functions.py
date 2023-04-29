@@ -2,7 +2,7 @@ import os
 import re
 import json
 
-scalar_functions = ['bit', 'blob', 'date', 'enum', 'generic', 'list', 'map', 'struct', 'union']
+scalar_functions = ['bit', 'blob', 'date', 'enum', 'generic', 'list', 'map', 'string', 'struct', 'union']
 
 header = '''//===----------------------------------------------------------------------===//
 //                         DuckDB
@@ -21,7 +21,7 @@ namespace duckdb {
 
 '''
 
-footer = '''}
+footer = '''} // namespace duckdb
 '''
 
 def normalize_path_separators(x):
@@ -29,6 +29,9 @@ def normalize_path_separators(x):
 
 def get_struct_name(function_name):
     return function_name.replace('_', ' ').title().replace(' ', '') + 'Fun'
+
+def sanitize_string(text):
+    return text.replace('"', '\\"')
 
 function_type_set = {}
 all_function_list = []
@@ -66,7 +69,7 @@ for scalar in scalar_functions:
 	{FUNCTION}
 };
 
-'''.replace('{STRUCT}', struct_name).replace('{NAME}', entry['name']).replace('{PARAMETERS}', entry['parameters'] if 'parameters' in entry else '').replace('{DESCRIPTION}', entry['description']).replace('{EXAMPLE}', entry['example']).replace('{FUNCTION}', function_text)
+'''.replace('{STRUCT}', struct_name).replace('{NAME}', entry['name']).replace('{PARAMETERS}', entry['parameters'] if 'parameters' in entry else '').replace('{DESCRIPTION}', sanitize_string(entry['description'])).replace('{EXAMPLE}', sanitize_string(entry['example'])).replace('{FUNCTION}', function_text)
         if 'aliases' in entry:
             for alias in entry['aliases']:
                 alias_struct_name = get_struct_name(alias)

@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "scalar/string_functions.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/crypto/md5.hpp"
@@ -67,26 +67,20 @@ static void MD5NumberLowerFunction(DataChunk &args, ExpressionState &state, Vect
 	UnaryExecutor::Execute<string_t, uint64_t, MD5Number64Operator<true>>(input, result, args.size());
 }
 
-void MD5Fun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("md5",                  // name of the function
-	                               {LogicalType::VARCHAR}, // argument list
-	                               LogicalType::VARCHAR,   // return type
-	                               MD5Function));          // pointer to function implementation
+ScalarFunction MD5Fun::GetFunction() {
+	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, MD5Function);
+}
 
-	set.AddFunction(ScalarFunction("md5_number",           // name of the function
-	                               {LogicalType::VARCHAR}, // argument list
-	                               LogicalType::HUGEINT,   // return type
-	                               MD5NumberFunction));    // pointer to function implementation
+ScalarFunction MD5NumberFun::GetFunction() {
+	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::HUGEINT, MD5NumberFunction);
+}
 
-	set.AddFunction(ScalarFunction("md5_number_upper",       // name of the function
-	                               {LogicalType::VARCHAR},   // argument list
-	                               LogicalType::UBIGINT,     // return type
-	                               MD5NumberUpperFunction)); // pointer to function implementation
+ScalarFunction MD5NumberUpperFun::GetFunction() {
+	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::UBIGINT, MD5NumberUpperFunction);
+}
 
-	set.AddFunction(ScalarFunction("md5_number_lower",       // name of the function
-	                               {LogicalType::VARCHAR},   // argument list
-	                               LogicalType::UBIGINT,     // return type
-	                               MD5NumberLowerFunction)); // pointer to function implementation
+ScalarFunction MD5NumberLowerFun::GetFunction() {
+	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::UBIGINT, MD5NumberLowerFunction);
 }
 
 } // namespace duckdb

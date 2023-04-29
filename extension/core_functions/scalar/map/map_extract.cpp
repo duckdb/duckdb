@@ -143,8 +143,7 @@ static unique_ptr<FunctionData> MapExtractBind(ClientContext &context, ScalarFun
 }
 
 ScalarFunction MapExtractFun::GetFunction() {
-	ScalarFunction fun({LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, MapExtractFunction,
-	                   MapExtractBind);
+	ScalarFunction fun({LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, MapExtractFunction, MapExtractBind);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return fun;

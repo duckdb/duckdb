@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "scalar/string_functions.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
@@ -33,11 +33,8 @@ static void RepeatFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	    });
 }
 
-void RepeatFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("repeat",                                    // name of the function
-	                               {LogicalType::VARCHAR, LogicalType::BIGINT}, // argument list
-	                               LogicalType::VARCHAR,                        // return type
-	                               RepeatFunction));                            // pointer to function implementation
+ScalarFunction RepeatFun::GetFunction() {
+	return ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, RepeatFunction);
 }
 
 } // namespace duckdb

@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "scalar/string_functions.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/map.hpp"
 
@@ -58,11 +58,8 @@ static void JaccardFunction(DataChunk &args, ExpressionState &state, Vector &res
 	    [&](string_t str, string_t tgt) { return JaccardScalarFunction(result, str, tgt); });
 }
 
-void JaccardFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunctionSet jaccard("jaccard");
-	jaccard.AddFunction(ScalarFunction("jaccard", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::DOUBLE,
-	                                   JaccardFunction)); // Pointer to function implementation
-	set.AddFunction(jaccard);
+ScalarFunction JaccardFun::GetFunction() {
+	return ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::DOUBLE, JaccardFunction);
 }
 
 } // namespace duckdb

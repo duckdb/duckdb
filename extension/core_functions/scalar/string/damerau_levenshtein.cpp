@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "scalar/string_functions.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/vector.hpp"
 
@@ -96,11 +96,9 @@ static void DamerauLevenshteinFunction(DataChunk &args, ExpressionState &state, 
 	    [&](string_t source, string_t target) { return DamerauLevenshteinScalarFunction(result, source, target); });
 }
 
-void DamerauLevenshteinFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunctionSet damerau_levenshtein("damerau_levenshtein");
-	damerau_levenshtein.AddFunction(ScalarFunction("damerau_levenshtein", {LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                                               LogicalType::BIGINT, DamerauLevenshteinFunction));
-	set.AddFunction(damerau_levenshtein);
+ScalarFunction DamerauLevenshteinFun::GetFunction() {
+	return ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BIGINT,
+	                      DamerauLevenshteinFunction);
 }
 
 } // namespace duckdb

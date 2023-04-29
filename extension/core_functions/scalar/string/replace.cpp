@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "scalar/string_functions.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -76,12 +76,9 @@ static void ReplaceFunction(DataChunk &args, ExpressionState &state, Vector &res
 	    });
 }
 
-void ReplaceFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("replace",             // name of the function
-	                               {LogicalType::VARCHAR, // argument list
-	                                LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                               LogicalType::VARCHAR, // return type
-	                               ReplaceFunction));    // pointer to function implementation
+ScalarFunction ReplaceFun::GetFunction() {
+	return ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                      ReplaceFunction);
 }
 
 } // namespace duckdb

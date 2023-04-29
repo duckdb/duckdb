@@ -217,4 +217,4 @@ struct ListRangeFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
-}
+} // namespace duckdb

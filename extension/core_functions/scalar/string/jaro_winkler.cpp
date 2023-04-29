@@ -1,6 +1,6 @@
 #include "jaro_winkler.hpp"
 
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "scalar/string_functions.hpp"
 
 namespace duckdb {
 
@@ -60,11 +60,12 @@ static void JaroWinklerFunction(DataChunk &args, ExpressionState &state, Vector 
 	                                                                                     JaroWinklerScalarFunction);
 }
 
-void JaroWinklerFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("jaro_similarity", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::DOUBLE,
-	                               JaroFunction));
-	set.AddFunction(ScalarFunction("jaro_winkler_similarity", {LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                               LogicalType::DOUBLE, JaroWinklerFunction));
+ScalarFunction JaroSimilarityFun::GetFunction() {
+	return ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::DOUBLE, JaroFunction);
+}
+
+ScalarFunction JaroWinklerSimilarityFun::GetFunction() {
+	return ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::DOUBLE, JaroWinklerFunction);
 }
 
 } // namespace duckdb

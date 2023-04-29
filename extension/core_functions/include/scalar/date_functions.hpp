@@ -523,4 +523,4 @@ struct YearWeekFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
-}
+} // namespace duckdb

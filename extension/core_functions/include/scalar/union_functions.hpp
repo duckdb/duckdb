@@ -40,4 +40,4 @@ struct UnionValueFun {
 	static ScalarFunction GetFunction();
 };
 
-}
+} // namespace duckdb

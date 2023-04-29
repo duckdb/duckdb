@@ -379,8 +379,8 @@ static unique_ptr<FunctionData> ListFilterBind(ClientContext &context, ScalarFun
 }
 
 ScalarFunction ListTransformFun::GetFunction() {
-	ScalarFunction fun({LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA},
-	                   LogicalType::LIST(LogicalType::ANY), ListTransformFunction, ListTransformBind, nullptr, nullptr);
+	ScalarFunction fun({LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA}, LogicalType::LIST(LogicalType::ANY),
+	                   ListTransformFunction, ListTransformBind, nullptr, nullptr);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	fun.serialize = ListLambdaBindData::Serialize;
 	fun.deserialize = ListLambdaBindData::Deserialize;
@@ -388,8 +388,8 @@ ScalarFunction ListTransformFun::GetFunction() {
 }
 
 ScalarFunction ListFilterFun::GetFunction() {
-	ScalarFunction fun({LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA},
-					   LogicalType::LIST(LogicalType::ANY), ListFilterFunction, ListFilterBind, nullptr, nullptr);
+	ScalarFunction fun({LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA}, LogicalType::LIST(LogicalType::ANY),
+	                   ListFilterFunction, ListFilterBind, nullptr, nullptr);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	fun.serialize = ListLambdaBindData::Serialize;
 	fun.deserialize = ListLambdaBindData::Deserialize;

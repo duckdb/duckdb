@@ -1,9 +1,9 @@
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "scalar/string_functions.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-
+#include "duckdb/function/scalar/string_functions.hpp"
 #include "utf8proc.hpp"
 
 namespace duckdb {
@@ -49,17 +49,10 @@ static unique_ptr<BaseStatistics> InStrPropagateStats(ClientContext &context, Fu
 	return nullptr;
 }
 
-void InstrFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunction instr("instr",                                      // name of the function
-	                     {LogicalType::VARCHAR, LogicalType::VARCHAR}, // argument list
-	                     LogicalType::BIGINT,                          // return type
-	                     ScalarFunction::BinaryFunction<string_t, string_t, int64_t, InstrOperator>, nullptr, nullptr,
-	                     InStrPropagateStats);
-	set.AddFunction(instr);
-	instr.name = "strpos";
-	set.AddFunction(instr);
-	instr.name = "position";
-	set.AddFunction(instr);
+ScalarFunction InstrFun::GetFunction() {
+	return ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BIGINT,
+	                      ScalarFunction::BinaryFunction<string_t, string_t, int64_t, InstrOperator>, nullptr, nullptr,
+	                      InStrPropagateStats);
 }
 
 } // namespace duckdb

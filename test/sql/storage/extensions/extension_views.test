@@ -1,6 +1,6 @@
 # name: test/sql/storage/extensions/extension_views.test
 # description: Store views that rely on extension functions
-# group: [storage]
+# group: [extensions]
 
 # load the DB from disk
 load __TEST_DIR__/views_with_extensions.db

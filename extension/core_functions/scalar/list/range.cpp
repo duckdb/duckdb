@@ -243,16 +243,16 @@ ScalarFunctionSet ListRangeFun::GetFunctions() {
 	// the arguments and return types are actually set in the binder function
 	ScalarFunctionSet range_set;
 	range_set.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::LIST(LogicalType::BIGINT),
-										 ListRangeFunction<NumericRangeInfo, false>));
+	                                     ListRangeFunction<NumericRangeInfo, false>));
 	range_set.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT},
-										 LogicalType::LIST(LogicalType::BIGINT),
-										 ListRangeFunction<NumericRangeInfo, false>));
+	                                     LogicalType::LIST(LogicalType::BIGINT),
+	                                     ListRangeFunction<NumericRangeInfo, false>));
 	range_set.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT},
-										 LogicalType::LIST(LogicalType::BIGINT),
-										 ListRangeFunction<NumericRangeInfo, false>));
+	                                     LogicalType::LIST(LogicalType::BIGINT),
+	                                     ListRangeFunction<NumericRangeInfo, false>));
 	range_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP, LogicalType::INTERVAL},
-										 LogicalType::LIST(LogicalType::TIMESTAMP),
-										 ListRangeFunction<TimestampRangeInfo, false>));
+	                                     LogicalType::LIST(LogicalType::TIMESTAMP),
+	                                     ListRangeFunction<TimestampRangeInfo, false>));
 	return range_set;
 }
 

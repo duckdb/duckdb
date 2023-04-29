@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "scalar/string_functions.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -125,25 +125,30 @@ static void BinaryTrimFunction(DataChunk &input, ExpressionState &state, Vector 
 	    });
 }
 
-void TrimFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunctionSet ltrim("ltrim");
-	ScalarFunctionSet rtrim("rtrim");
-	ScalarFunctionSet trim("trim");
-
-	ltrim.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, UnaryTrimFunction<true, false>));
-	rtrim.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, UnaryTrimFunction<false, true>));
+ScalarFunctionSet TrimFun::GetFunctions() {
+	ScalarFunctionSet trim;
 	trim.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, UnaryTrimFunction<true, true>));
 
-	ltrim.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                                 BinaryTrimFunction<true, false>));
-	rtrim.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                                 BinaryTrimFunction<false, true>));
 	trim.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                                BinaryTrimFunction<true, true>));
+	return trim;
+}
 
-	set.AddFunction(ltrim);
-	set.AddFunction(rtrim);
-	set.AddFunction(trim);
+ScalarFunctionSet LtrimFun::GetFunctions() {
+	ScalarFunctionSet ltrim;
+	ltrim.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, UnaryTrimFunction<true, false>));
+	ltrim.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                                 BinaryTrimFunction<true, false>));
+	return ltrim;
+}
+
+ScalarFunctionSet RtrimFun::GetFunctions() {
+	ScalarFunctionSet rtrim;
+	rtrim.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, UnaryTrimFunction<false, true>));
+
+	rtrim.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                                 BinaryTrimFunction<false, true>));
+	return rtrim;
 }
 
 } // namespace duckdb
