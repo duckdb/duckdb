@@ -6,5 +6,18 @@
         "example": "flatten([[1, 2, 3], [4, 5]])",
         "struct": "ListFlattenFun",
         "type": "scalar_function"
+    },
+    {
+        "name": "list_value",
+        "parameters": "any,...",
+        "description": "Create a LIST containing the argument values.",
+        "example": "list_value(4, 5, 6)",
+        "struct": "ListValueFun",
+        "type": "scalar_function"
+    },
+    {
+        "struct": "ListPackFun",
+        "name": "list_pack",
+        "alias": "ListValueFun"
     }
 ]

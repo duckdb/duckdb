@@ -1,7 +1,7 @@
+#include "scalar/list_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
@@ -57,15 +57,13 @@ unique_ptr<BaseStatistics> ListValueStats(ClientContext &context, FunctionStatis
 	return list_stats.ToUnique();
 }
 
-void ListValueFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunction ListValueFun::GetFunction() {
 	// the arguments and return types are actually set in the binder function
 	ScalarFunction fun("list_value", {}, LogicalTypeId::LIST, ListValueFunction, ListValueBind, nullptr,
-	                   ListValueStats);
+					   ListValueStats);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	set.AddFunction(fun);
-	fun.name = "list_pack";
-	set.AddFunction(fun);
+	return fun;
 }
 
 } // namespace duckdb

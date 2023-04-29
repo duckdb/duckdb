@@ -22,4 +22,19 @@ struct ListFlattenFun {
 	static ScalarFunction GetFunction();
 };
 
+struct ListValueFun {
+	static constexpr const char *Name = "list_value";
+	static constexpr const char *Parameters = "any,...";
+	static constexpr const char *Description = "Create a LIST containing the argument values.";
+	static constexpr const char *Example = "list_value(4, 5, 6)";
+
+	static ScalarFunction GetFunction();
+};
+
+struct ListPackFun {
+	using ALIAS = ListValueFun;
+
+	static constexpr const char *Name = "list_pack";
+};
+
 }

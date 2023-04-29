@@ -111,10 +111,6 @@ struct StructInsertFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct ListValueFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct ListRangeFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
