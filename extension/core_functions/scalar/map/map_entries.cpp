@@ -1,7 +1,7 @@
+#include "scalar/map_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/pair.hpp"
 
@@ -50,12 +50,12 @@ static unique_ptr<FunctionData> MapEntriesBind(ClientContext &context, ScalarFun
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
-void MapEntriesFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunction MapEntriesFun::GetFunction() {
 	//! the arguments and return types are actually set in the binder function
-	ScalarFunction fun("map_entries", {}, LogicalTypeId::LIST, MapEntriesFunction, MapEntriesBind);
+	ScalarFunction fun({}, LogicalTypeId::LIST, MapEntriesFunction, MapEntriesBind);
 	fun.null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING;
 	fun.varargs = LogicalType::ANY;
-	set.AddFunction(fun);
+	return fun;
 }
 
 } // namespace duckdb

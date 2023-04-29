@@ -1,9 +1,10 @@
+#include "scalar/map_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
 
 namespace duckdb {
 
@@ -79,19 +80,19 @@ static unique_ptr<FunctionData> MapValuesBind(ClientContext &context, ScalarFunc
 	return MapKeyValueBind(context, bound_function, arguments, MapType::ValueType);
 }
 
-void MapKeysFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunction MapKeysFun::GetFunction() {
 	//! the arguments and return types are actually set in the binder function
-	ScalarFunction fun("map_keys", {}, LogicalTypeId::LIST, MapKeysFunction, MapKeysBind);
+	ScalarFunction fun({}, LogicalTypeId::LIST, MapKeysFunction, MapKeysBind);
 	fun.null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING;
 	fun.varargs = LogicalType::ANY;
-	set.AddFunction(fun);
+	return fun;
 }
 
-void MapValuesFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunction fun("map_values", {}, LogicalTypeId::LIST, MapValuesFunction, MapValuesBind);
+ScalarFunction MapValuesFun::GetFunction() {
+	ScalarFunction fun({}, LogicalTypeId::LIST, MapValuesFunction, MapValuesBind);
 	fun.null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING;
 	fun.varargs = LogicalType::ANY;
-	set.AddFunction(fun);
+	return fun;
 }
 
 } // namespace duckdb

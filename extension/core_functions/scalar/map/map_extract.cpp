@@ -1,10 +1,28 @@
+#include "scalar/map_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
 
 namespace duckdb {
+
+struct MapKeyArgFunctor {
+	// MAP is a LIST(STRUCT(K,V))
+	// meaning the MAP itself is a List, but the child vector that we're interested in (the keys)
+	// are a level deeper than the initial child vector
+
+	static Vector &GetList(Vector &map) {
+		return map;
+	}
+	static idx_t GetListSize(Vector &map) {
+		return ListVector::GetListSize(map);
+	}
+	static Vector &GetEntry(Vector &map) {
+		return MapVector::GetKeys(map);
+	}
+};
+
 void FillResult(Vector &map, Vector &offsets, Vector &result, idx_t count) {
 	UnifiedVectorFormat map_data;
 	map.ToUnifiedFormat(count, map_data);
@@ -124,14 +142,12 @@ static unique_ptr<FunctionData> MapExtractBind(ClientContext &context, ScalarFun
 	return make_uniq<VariableReturnBindData>(value_type);
 }
 
-void MapExtractFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunction fun("map_extract", {LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, MapExtractFunction,
+ScalarFunction MapExtractFun::GetFunction() {
+	ScalarFunction fun({LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, MapExtractFunction,
 	                   MapExtractBind);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	set.AddFunction(fun);
-	fun.name = "element_at";
-	set.AddFunction(fun);
+	return fun;
 }
 
 } // namespace duckdb

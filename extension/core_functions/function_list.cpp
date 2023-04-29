@@ -5,6 +5,7 @@
 #include "scalar/enum_functions.hpp"
 #include "scalar/generic_functions.hpp"
 #include "scalar/list_functions.hpp"
+#include "scalar/map_functions.hpp"
 
 namespace duckdb {
 
@@ -43,6 +44,7 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_ALIAS(Base64Fun),
 	DUCKDB_SCALAR_FUNCTION(BitPositionFun),
 	DUCKDB_SCALAR_FUNCTION(BitStringFun),
+	DUCKDB_SCALAR_FUNCTION(CardinalityFun),
 	DUCKDB_SCALAR_FUNCTION_SET(CenturyFun),
 	DUCKDB_SCALAR_FUNCTION(CurrentDatabaseFun),
 	DUCKDB_SCALAR_FUNCTION(CurrentDateFun),
@@ -62,6 +64,7 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(DayOfYearFun),
 	DUCKDB_SCALAR_FUNCTION_SET(DecadeFun),
 	DUCKDB_SCALAR_FUNCTION(DecodeFun),
+	DUCKDB_SCALAR_FUNCTION_ALIAS(ElementAtFun),
 	DUCKDB_SCALAR_FUNCTION(EncodeFun),
 	DUCKDB_SCALAR_FUNCTION(EnumCodeFun),
 	DUCKDB_SCALAR_FUNCTION(EnumFirstFun),
@@ -101,6 +104,12 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(MakeDateFun),
 	DUCKDB_SCALAR_FUNCTION(MakeTimeFun),
 	DUCKDB_SCALAR_FUNCTION(MakeTimestampFun),
+	DUCKDB_SCALAR_FUNCTION(MapFun),
+	DUCKDB_SCALAR_FUNCTION(MapEntriesFun),
+	DUCKDB_SCALAR_FUNCTION(MapExtractFun),
+	DUCKDB_SCALAR_FUNCTION(MapFromEntriesFun),
+	DUCKDB_SCALAR_FUNCTION(MapKeysFun),
+	DUCKDB_SCALAR_FUNCTION(MapValuesFun),
 	DUCKDB_SCALAR_FUNCTION_SET(MicrosecondsFun),
 	DUCKDB_SCALAR_FUNCTION_SET(MillenniumFun),
 	DUCKDB_SCALAR_FUNCTION_SET(MillisecondsFun),

@@ -1,10 +1,11 @@
+#include "scalar/map_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/value_map.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
 
 namespace duckdb {
 
@@ -234,12 +235,12 @@ static unique_ptr<FunctionData> MapBind(ClientContext &context, ScalarFunction &
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
-void MapFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunction MapFun::GetFunction() {
 	//! the arguments and return types are actually set in the binder function
-	ScalarFunction fun("map", {}, LogicalTypeId::MAP, MapFunction, MapBind);
+	ScalarFunction fun({}, LogicalTypeId::MAP, MapFunction, MapBind);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	set.AddFunction(fun);
+	return fun;
 }
 
 } // namespace duckdb

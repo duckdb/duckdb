@@ -1,6 +1,5 @@
 add_subdirectory(generic)
 add_subdirectory(list)
-add_subdirectory(map)
 add_subdirectory(math)
 add_subdirectory(operators)
 add_subdirectory(sequence)

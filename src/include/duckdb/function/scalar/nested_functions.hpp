@@ -33,22 +33,6 @@ struct ListArgFunctor {
 	}
 };
 
-struct MapKeyArgFunctor {
-	// MAP is a LIST(STRUCT(K,V))
-	// meaning the MAP itself is a List, but the child vector that we're interested in (the keys)
-	// are a level deeper than the initial child vector
-
-	static Vector &GetList(Vector &map) {
-		return map;
-	}
-	static idx_t GetListSize(Vector &map) {
-		return ListVector::GetListSize(map);
-	}
-	static Vector &GetEntry(Vector &map) {
-		return MapVector::GetKeys(map);
-	}
-};
-
 struct ContainsFunctor {
 	static inline bool Initialize() {
 		return false;
@@ -107,30 +91,6 @@ struct StructInsertFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct MapFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct MapFromEntriesFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct MapEntriesFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct MapValuesFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct MapKeysFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct MapExtractFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct UnionValueFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
@@ -159,10 +119,6 @@ struct ListContainsFun {
 
 struct ListPositionFun {
 	static ScalarFunction GetFunction();
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct CardinalityFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
