@@ -155,16 +155,6 @@ struct ListExtractFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct ListTransformFun {
-	static ScalarFunction GetFunction();
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct ListFilterFun {
-	static ScalarFunction GetFunction();
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct ListConcatFun {
 	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);

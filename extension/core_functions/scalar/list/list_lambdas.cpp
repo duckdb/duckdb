@@ -1,3 +1,4 @@
+#include "scalar/list_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
@@ -377,38 +378,22 @@ static unique_ptr<FunctionData> ListFilterBind(ClientContext &context, ScalarFun
 	return ListLambdaBind<1>(context, bound_function, arguments);
 }
 
-void ListTransformFun::RegisterFunction(BuiltinFunctions &set) {
-
-	ScalarFunction fun("list_transform", {LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA},
+ScalarFunction ListTransformFun::GetFunction() {
+	ScalarFunction fun({LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA},
 	                   LogicalType::LIST(LogicalType::ANY), ListTransformFunction, ListTransformBind, nullptr, nullptr);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	fun.serialize = ListLambdaBindData::Serialize;
 	fun.deserialize = ListLambdaBindData::Deserialize;
-	set.AddFunction(fun);
-
-	fun.name = "array_transform";
-	set.AddFunction(fun);
-	fun.name = "list_apply";
-	set.AddFunction(fun);
-	fun.name = "array_apply";
-	set.AddFunction(fun);
-	fun.name = "apply";
-	set.AddFunction(fun);
+	return fun;
 }
 
-void ListFilterFun::RegisterFunction(BuiltinFunctions &set) {
-
-	ScalarFunction fun("list_filter", {LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA},
-	                   LogicalType::LIST(LogicalType::ANY), ListFilterFunction, ListFilterBind, nullptr, nullptr);
+ScalarFunction ListFilterFun::GetFunction() {
+	ScalarFunction fun({LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA},
+					   LogicalType::LIST(LogicalType::ANY), ListFilterFunction, ListFilterBind, nullptr, nullptr);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	fun.serialize = ListLambdaBindData::Serialize;
 	fun.deserialize = ListLambdaBindData::Deserialize;
-	set.AddFunction(fun);
-
-	fun.name = "array_filter";
-	set.AddFunction(fun);
-	fun.name = "filter";
-	set.AddFunction(fun);
+	return fun;
 }
 
 } // namespace duckdb

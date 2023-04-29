@@ -49,6 +49,24 @@ struct ListReverseSortFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct ListTransformFun {
+	static constexpr const char *Name = "list_transform";
+	static constexpr const char *Parameters = "list,lambda";
+	static constexpr const char *Description = "Returns a list that is the result of applying the lambda function to each element of the input list. See the Lambda Functions section for more details.";
+	static constexpr const char *Example = "list_transform([1, 2, 3], x -> x + 1)";
+
+	static ScalarFunction GetFunction();
+};
+
+struct ListFilterFun {
+	static constexpr const char *Name = "list_filter";
+	static constexpr const char *Parameters = "list,lambda";
+	static constexpr const char *Description = "Constructs a list from those elements of the input list for which the lambda function returns true.";
+	static constexpr const char *Example = "list_filter([3, 4, 5], x -> x > 4)";
+
+	static ScalarFunction GetFunction();
+};
+
 struct ListPackFun {
 	using ALIAS = ListValueFun;
 
@@ -65,6 +83,42 @@ struct ArrayReverseSortFun {
 	using ALIAS = ListReverseSortFun;
 
 	static constexpr const char *Name = "array_reverse_sort";
+};
+
+struct ArrayTransformFun {
+	using ALIAS = ListTransformFun;
+
+	static constexpr const char *Name = "array_transform";
+};
+
+struct ListApplyFun {
+	using ALIAS = ListTransformFun;
+
+	static constexpr const char *Name = "list_apply";
+};
+
+struct ArrayApplyFun {
+	using ALIAS = ListTransformFun;
+
+	static constexpr const char *Name = "array_apply";
+};
+
+struct ApplyFun {
+	using ALIAS = ListTransformFun;
+
+	static constexpr const char *Name = "apply";
+};
+
+struct ArrayFilterFun {
+	using ALIAS = ListFilterFun;
+
+	static constexpr const char *Name = "array_filter";
+};
+
+struct FilterFun {
+	using ALIAS = ListFilterFun;
+
+	static constexpr const char *Name = "filter";
 };
 
 }
