@@ -19,11 +19,11 @@ namespace duckdb {
 namespace {
 struct __vector_utils {
 	static inline void AssertIndexInBounds(idx_t index, idx_t size) {
-		#ifndef DUCKDB_CLANG_TIDY
+#ifndef DUCKDB_CLANG_TIDY
 		if (DUCKDB_UNLIKELY(index >= size)) {
 			throw InternalException("Attempted to access index %ld within vector of size %ld", index, size);
 		}
-		#endif
+#endif
 	}
 };
 } // namespace
