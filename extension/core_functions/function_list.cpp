@@ -2,6 +2,7 @@
 #include "scalar/bit_functions.hpp"
 #include "scalar/blob_functions.hpp"
 #include "scalar/date_functions.hpp"
+#include "scalar/enum_functions.hpp"
 
 namespace duckdb {
 
@@ -42,6 +43,11 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(DecadeFun),
 	DUCKDB_SCALAR_FUNCTION(DecodeFun),
 	DUCKDB_SCALAR_FUNCTION(EncodeFun),
+	DUCKDB_SCALAR_FUNCTION(EnumCodeFun),
+	DUCKDB_SCALAR_FUNCTION(EnumFirstFun),
+	DUCKDB_SCALAR_FUNCTION(EnumLastFun),
+	DUCKDB_SCALAR_FUNCTION(EnumRangeFun),
+	DUCKDB_SCALAR_FUNCTION(EnumRangeBoundaryFun),
 	DUCKDB_SCALAR_FUNCTION_SET(EpochFun),
 	DUCKDB_SCALAR_FUNCTION(EpochMsFun),
 	DUCKDB_SCALAR_FUNCTION_SET(EraFun),

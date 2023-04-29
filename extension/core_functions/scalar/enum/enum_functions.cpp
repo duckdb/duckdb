@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/enum_functions.hpp"
+#include "scalar/enum_functions.hpp"
 
 namespace duckdb {
 
@@ -130,40 +130,40 @@ unique_ptr<FunctionData> BindEnumRangeBoundaryFunction(ClientContext &context, S
 	return nullptr;
 }
 
-void EnumFirst::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunction EnumFirstFun::GetFunction() {
 	auto fun =
-	    ScalarFunction("enum_first", {LogicalType::ANY}, LogicalType::VARCHAR, EnumFirstFunction, BindEnumFunction);
+	    ScalarFunction({LogicalType::ANY}, LogicalType::VARCHAR, EnumFirstFunction, BindEnumFunction);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	set.AddFunction(fun);
+	return fun;
 }
 
-void EnumLast::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunction EnumLastFun::GetFunction() {
 	auto fun =
-	    ScalarFunction("enum_last", {LogicalType::ANY}, LogicalType::VARCHAR, EnumLastFunction, BindEnumFunction);
+	    ScalarFunction({LogicalType::ANY}, LogicalType::VARCHAR, EnumLastFunction, BindEnumFunction);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	set.AddFunction(fun);
+	return fun;
 }
 
-void EnumCode::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunction EnumCodeFun::GetFunction() {
 	auto fun =
-	    ScalarFunction("enum_code", {LogicalType::ANY}, LogicalType::ANY, EnumCodeFunction, BindEnumCodeFunction);
+	    ScalarFunction({LogicalType::ANY}, LogicalType::ANY, EnumCodeFunction, BindEnumCodeFunction);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	set.AddFunction(fun);
+	return fun;
 }
 
-void EnumRange::RegisterFunction(BuiltinFunctions &set) {
-	auto fun = ScalarFunction("enum_range", {LogicalType::ANY}, LogicalType::LIST(LogicalType::VARCHAR),
+ScalarFunction EnumRangeFun::GetFunction() {
+	auto fun = ScalarFunction({LogicalType::ANY}, LogicalType::LIST(LogicalType::VARCHAR),
 	                          EnumRangeFunction, BindEnumFunction);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	set.AddFunction(fun);
+	return fun;
 }
 
-void EnumRangeBoundary::RegisterFunction(BuiltinFunctions &set) {
-	auto fun = ScalarFunction("enum_range_boundary", {LogicalType::ANY, LogicalType::ANY},
+ScalarFunction EnumRangeBoundaryFun::GetFunction() {
+	auto fun = ScalarFunction({LogicalType::ANY, LogicalType::ANY},
 	                          LogicalType::LIST(LogicalType::VARCHAR), EnumRangeBoundaryFunction,
 	                          BindEnumRangeBoundaryFunction);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	set.AddFunction(fun);
+	return fun;
 }
 
 } // namespace duckdb

@@ -2,7 +2,7 @@ import os
 import re
 import json
 
-scalar_functions = ['bit', 'blob', 'date']
+scalar_functions = ['bit', 'blob', 'date', 'enum']
 
 header = '''//===----------------------------------------------------------------------===//
 //                         DuckDB
