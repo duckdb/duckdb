@@ -6,6 +6,7 @@ add_subdirectory(generic)
 add_subdirectory(list)
 add_subdirectory(map)
 add_subdirectory(struct)
+add_subdirectory(union)
 
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES}

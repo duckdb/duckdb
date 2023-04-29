@@ -7,6 +7,7 @@
 #include "scalar/list_functions.hpp"
 #include "scalar/map_functions.hpp"
 #include "scalar/struct_functions.hpp"
+#include "scalar/union_functions.hpp"
 
 namespace duckdb {
 
@@ -147,6 +148,9 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(TryStrpTimeFun),
 	DUCKDB_SCALAR_FUNCTION(CurrentTransactionIdFun),
 	DUCKDB_SCALAR_FUNCTION(TypeOfFun),
+	DUCKDB_SCALAR_FUNCTION(UnionExtractFun),
+	DUCKDB_SCALAR_FUNCTION(UnionTagFun),
+	DUCKDB_SCALAR_FUNCTION(UnionValueFun),
 	DUCKDB_SCALAR_FUNCTION(VersionFun),
 	DUCKDB_SCALAR_FUNCTION_SET(WeekFun),
 	DUCKDB_SCALAR_FUNCTION_SET(WeekDayFun),

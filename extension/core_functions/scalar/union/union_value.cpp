@@ -1,3 +1,4 @@
+#include "scalar/union_functions.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
@@ -106,18 +107,13 @@ static unique_ptr<FunctionData> UnionValueBind(ClientContext &context, ScalarFun
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
-void UnionValueFun::RegisterFunction(BuiltinFunctions &set) {
-
-	auto fun =
-	    ScalarFunction("union_value", {}, LogicalTypeId::UNION, UnionValueFunction, UnionValueBind, nullptr, nullptr);
+ScalarFunction UnionValueFun::GetFunction() {
+	ScalarFunction fun("union_value", {}, LogicalTypeId::UNION, UnionValueFunction, UnionValueBind, nullptr, nullptr);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	fun.serialize = VariableReturnBindData::Serialize;
 	fun.deserialize = VariableReturnBindData::Deserialize;
-
-	ScalarFunctionSet union_value("union_value");
-	union_value.AddFunction(fun);
-	set.AddFunction(union_value);
+	return fun;
 }
 
 } // namespace duckdb

@@ -1,6 +1,6 @@
+#include "scalar/union_functions.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 
@@ -97,14 +97,10 @@ static unique_ptr<FunctionData> UnionExtractBind(ClientContext &context, ScalarF
 	return make_uniq<UnionExtractBindData>(key, key_index, return_type);
 }
 
-void UnionExtractFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunction UnionExtractFun::GetFunction() {
 	// the arguments and return types are actually set in the binder function
-	auto fun = ScalarFunction("union_extract", {LogicalTypeId::UNION, LogicalType::VARCHAR}, LogicalType::ANY,
+	return ScalarFunction({LogicalTypeId::UNION, LogicalType::VARCHAR}, LogicalType::ANY,
 	                          UnionExtractFunction, UnionExtractBind, nullptr, nullptr);
-
-	ScalarFunctionSet extract("union_extract");
-	extract.AddFunction(fun);
-	set.AddFunction(extract);
 }
 
 } // namespace duckdb

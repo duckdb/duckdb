@@ -1,6 +1,6 @@
+#include "scalar/union_functions.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 
@@ -50,13 +50,9 @@ static void UnionTagFunction(DataChunk &args, ExpressionState &state, Vector &re
 	result.Reinterpret(UnionVector::GetTags(args.data[0]));
 }
 
-void UnionTagFun::RegisterFunction(BuiltinFunctions &set) {
-	auto fun = ScalarFunction("union_tag", {LogicalTypeId::UNION}, LogicalTypeId::ANY, UnionTagFunction, UnionTagBind,
+ScalarFunction UnionTagFun::GetFunction() {
+	return ScalarFunction({LogicalTypeId::UNION}, LogicalTypeId::ANY, UnionTagFunction, UnionTagBind,
 	                          nullptr, nullptr); // TODO: Statistics?
-
-	ScalarFunctionSet union_tag("union_tag");
-	union_tag.AddFunction(fun);
-	set.AddFunction(union_tag);
 }
 
 } // namespace duckdb

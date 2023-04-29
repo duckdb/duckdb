@@ -83,18 +83,6 @@ struct HistogramAggState {
 	MAP_TYPE *hist;
 };
 
-struct UnionValueFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct UnionExtractFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct UnionTagFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct ListExtractFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
