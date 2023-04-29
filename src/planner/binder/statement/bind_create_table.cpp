@@ -41,7 +41,6 @@ static void BindCheckConstraint(Binder &binder, BoundCreateTableInfo &info, cons
 	// check constraint: bind the expression
 	CheckBinder check_binder(binder, binder.context, base.table, base.columns, bound_constraint->bound_columns);
 	auto &check = cond->Cast<CheckConstraint>();
-	;
 	// create a copy of the unbound expression because the binding destroys the constraint
 	auto unbound_expression = check.expression->Copy();
 	// now bind the constraint and create a new BoundCheckConstraint

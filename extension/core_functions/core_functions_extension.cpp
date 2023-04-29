@@ -13,10 +13,7 @@
 
 namespace duckdb {
 
-void CoreFunctionsExtension::Load(DuckDB &ddb) {
-	auto &db = *ddb.instance;
-	auto &catalog = Catalog::GetSystemCatalog(db);
-	CatalogTransaction transaction(db, 1, 0);
+void CoreFunctionsExtension::RegisterFunctions(Catalog &catalog, CatalogTransaction transaction) {
 	auto functions = StaticFunctionDefinition::GetFunctionList();
 	for (idx_t i = 0; functions[i].name; i++) {
 		auto &function = functions[i];
@@ -39,6 +36,13 @@ void CoreFunctionsExtension::Load(DuckDB &ddb) {
 			throw InternalException("Do not know how to register function of this type");
 		}
 	}
+}
+
+void CoreFunctionsExtension::Load(DuckDB &ddb) {
+	auto &db = *ddb.instance;
+	auto &catalog = Catalog::GetSystemCatalog(db);
+	CatalogTransaction transaction(db, 1, 1);
+	RegisterFunctions(catalog, transaction);
 }
 
 std::string CoreFunctionsExtension::Name() {

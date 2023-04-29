@@ -14,6 +14,7 @@ namespace duckdb {
 
 class CoreFunctionsExtension : public Extension {
 public:
+	static void RegisterFunctions(Catalog &catalog, CatalogTransaction transaction);
 	void Load(DuckDB &db) override;
 	std::string Name() override;
 };
