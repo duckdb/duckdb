@@ -1,3 +1,4 @@
+#include "scalar/struct_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
@@ -96,14 +97,14 @@ unique_ptr<BaseStatistics> StructInsertStats(ClientContext &context, FunctionSta
 	return new_struct_stats.ToUnique();
 }
 
-void StructInsertFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunction StructInsertFun::GetFunction() {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun("struct_insert", {}, LogicalTypeId::STRUCT, StructInsertFunction, StructInsertBind, nullptr,
+	ScalarFunction fun({}, LogicalTypeId::STRUCT, StructInsertFunction, StructInsertBind, nullptr,
 	                   StructInsertStats);
 	fun.varargs = LogicalType::ANY;
 	fun.serialize = VariableReturnBindData::Serialize;
 	fun.deserialize = VariableReturnBindData::Deserialize;
-	set.AddFunction(fun);
+	return fun;
 }
 
 } // namespace duckdb

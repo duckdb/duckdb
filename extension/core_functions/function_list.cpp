@@ -6,6 +6,7 @@
 #include "scalar/generic_functions.hpp"
 #include "scalar/list_functions.hpp"
 #include "scalar/map_functions.hpp"
+#include "scalar/struct_functions.hpp"
 
 namespace duckdb {
 
@@ -119,11 +120,14 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_ALIAS(NowFun),
 	DUCKDB_SCALAR_FUNCTION_SET(QuarterFun),
 	DUCKDB_SCALAR_FUNCTION_SET(ListRangeFun),
+	DUCKDB_SCALAR_FUNCTION_ALIAS(RowFun),
 	DUCKDB_SCALAR_FUNCTION_SET(SecondsFun),
 	DUCKDB_SCALAR_FUNCTION(SetBitFun),
 	DUCKDB_SCALAR_FUNCTION(StatsFun),
 	DUCKDB_SCALAR_FUNCTION_SET(StrfTimeFun),
 	DUCKDB_SCALAR_FUNCTION_SET(StrpTimeFun),
+	DUCKDB_SCALAR_FUNCTION(StructInsertFun),
+	DUCKDB_SCALAR_FUNCTION(StructPackFun),
 	DUCKDB_SCALAR_FUNCTION_SET(TimeBucketFun),
 	DUCKDB_SCALAR_FUNCTION_SET(TimezoneFun),
 	DUCKDB_SCALAR_FUNCTION_SET(TimezoneHourFun),

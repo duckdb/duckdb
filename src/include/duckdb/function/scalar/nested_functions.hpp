@@ -83,14 +83,6 @@ struct HistogramAggState {
 	MAP_TYPE *hist;
 };
 
-struct StructPackFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct StructInsertFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct UnionValueFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
