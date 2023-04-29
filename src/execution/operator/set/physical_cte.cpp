@@ -27,6 +27,11 @@ PhysicalCTE::~PhysicalCTE() {
 // Sink
 //===--------------------------------------------------------------------===//
 
+unique_ptr<GlobalSinkState> PhysicalCTE::GetGlobalSinkState(ClientContext &context) const {
+	working_table->Reset();
+	return make_uniq<GlobalSinkState>();
+}
+
 SinkResultType PhysicalCTE::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
                                  DataChunk &input) const {
 	working_table->Append(input);
