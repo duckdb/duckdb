@@ -29,11 +29,7 @@
         "parameters": "blob",
         "description": "Convert a blob to a base64 encoded string.",
         "example": "base64('A'::blob)",
-        "type": "scalar_function"
-    },
-    {
-        "struct": "Base64Fun",
-        "name": "base64",
-        "alias": "ToBase64Fun"
+        "type": "scalar_function",
+        "aliases": ["base64"]
     }
 ]

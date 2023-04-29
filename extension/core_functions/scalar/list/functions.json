@@ -13,7 +13,8 @@
         "description": "Create a LIST containing the argument values.",
         "example": "list_value(4, 5, 6)",
         "struct": "ListValueFun",
-        "type": "scalar_function"
+        "type": "scalar_function",
+        "aliases": ["list_pack"]
     },
     {
         "name": "list_sort",
@@ -21,7 +22,8 @@
         "description": "Sorts the elements of the list.",
         "example": "list_sort([3, 6, 1, 2])",
         "struct": "ListSortFun",
-        "type": "scalar_function_set"
+        "type": "scalar_function_set",
+        "aliases": ["array_sort"]
     },
     {
         "name": "list_reverse_sort",
@@ -29,7 +31,8 @@
         "description": "Sorts the elements of the list in reverse order.",
         "example": "list_reverse_sort([3, 6, 1, 2])",
         "struct": "ListReverseSortFun",
-        "type": "scalar_function_set"
+        "type": "scalar_function_set",
+        "aliases": ["array_reverse_sort"]
     },
     {
         "name": "list_transform",
@@ -37,7 +40,8 @@
         "description": "Returns a list that is the result of applying the lambda function to each element of the input list. See the Lambda Functions section for more details.",
         "example": "list_transform([1, 2, 3], x -> x + 1)",
         "struct": "ListTransformFun",
-        "type": "scalar_function"
+        "type": "scalar_function",
+        "aliases": ["array_transform", "list_apply", "array_apply", "apply"]
     },
     {
         "name": "list_filter",
@@ -45,51 +49,7 @@
         "description": "Constructs a list from those elements of the input list for which the lambda function returns true.",
         "example": "list_filter([3, 4, 5], x -> x > 4)",
         "struct": "ListFilterFun",
-        "type": "scalar_function"
-    },
-    {
-        "struct": "ListPackFun",
-        "name": "list_pack",
-        "alias": "ListValueFun"
-    },
-    {
-        "struct": "ArraySortFun",
-        "name": "array_sort",
-        "alias": "ListSortFun"
-    },
-    {
-        "struct": "ArrayReverseSortFun",
-        "name": "array_reverse_sort",
-        "alias": "ListReverseSortFun"
-    },
-    {
-        "struct": "ArrayTransformFun",
-        "name": "array_transform",
-        "alias": "ListTransformFun"
-    },
-    {
-        "struct": "ListApplyFun",
-        "name": "list_apply",
-        "alias": "ListTransformFun"
-    },
-    {
-        "struct": "ArrayApplyFun",
-        "name": "array_apply",
-        "alias": "ListTransformFun"
-    },
-    {
-        "struct": "ApplyFun",
-        "name": "apply",
-        "alias": "ListTransformFun"
-    },
-    {
-        "struct": "ArrayFilterFun",
-        "name": "array_filter",
-        "alias": "ListFilterFun"
-    },
-    {
-        "struct": "FilterFun",
-        "name": "filter",
-        "alias": "ListFilterFun"
+        "type": "scalar_function",
+        "aliases": ["array_filter", "filter"]
     }
 ]

@@ -40,6 +40,12 @@ struct CurrentDateFun {
 	static ScalarFunction GetFunction();
 };
 
+struct TodayFun {
+	using ALIAS = CurrentDateFun;
+
+	static constexpr const char *Name = "today";
+};
+
 struct DateDiffFun {
 	static constexpr const char *Name = "date_diff";
 	static constexpr const char *Parameters = "part,startdate,enddate";
@@ -47,6 +53,12 @@ struct DateDiffFun {
 	static constexpr const char *Example = "date_diff('hour', TIMESTAMPTZ '1992-09-30 23:59:59', TIMESTAMPTZ '1992-10-01 01:58:00')";
 
 	static ScalarFunctionSet GetFunctions();
+};
+
+struct DatediffFun {
+	using ALIAS = DateDiffFun;
+
+	static constexpr const char *Name = "datediff";
 };
 
 struct DatePartFun {
@@ -173,6 +185,18 @@ struct CurrentTimestampFun {
 	static constexpr const char *Example = "get_current_timestamp()";
 
 	static ScalarFunction GetFunction();
+};
+
+struct NowFun {
+	using ALIAS = CurrentTimestampFun;
+
+	static constexpr const char *Name = "now";
+};
+
+struct TransactionTimestampFun {
+	using ALIAS = CurrentTimestampFun;
+
+	static constexpr const char *Name = "transaction_timestamp";
 };
 
 struct HoursFun {
@@ -497,30 +521,6 @@ struct YearWeekFun {
 	static constexpr const char *Example = "yearweek(timestamp '2021-08-03 11:59:44.123456')";
 
 	static ScalarFunctionSet GetFunctions();
-};
-
-struct DateDiffFunAlias {
-	using ALIAS = DateDiffFun;
-
-	static constexpr const char *Name = "datediff";
-};
-
-struct NowFun {
-	using ALIAS = CurrentTimestampFun;
-
-	static constexpr const char *Name = "now";
-};
-
-struct TodayFun {
-	using ALIAS = CurrentDateFun;
-
-	static constexpr const char *Name = "today";
-};
-
-struct TransactionTimestampFun {
-	using ALIAS = CurrentTimestampFun;
-
-	static constexpr const char *Name = "transaction_timestamp";
 };
 
 }

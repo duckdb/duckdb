@@ -31,6 +31,12 @@ struct ListValueFun {
 	static ScalarFunction GetFunction();
 };
 
+struct ListPackFun {
+	using ALIAS = ListValueFun;
+
+	static constexpr const char *Name = "list_pack";
+};
+
 struct ListSortFun {
 	static constexpr const char *Name = "list_sort";
 	static constexpr const char *Parameters = "list";
@@ -38,6 +44,12 @@ struct ListSortFun {
 	static constexpr const char *Example = "list_sort([3, 6, 1, 2])";
 
 	static ScalarFunctionSet GetFunctions();
+};
+
+struct ArraySortFun {
+	using ALIAS = ListSortFun;
+
+	static constexpr const char *Name = "array_sort";
 };
 
 struct ListReverseSortFun {
@@ -49,6 +61,12 @@ struct ListReverseSortFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct ArrayReverseSortFun {
+	using ALIAS = ListReverseSortFun;
+
+	static constexpr const char *Name = "array_reverse_sort";
+};
+
 struct ListTransformFun {
 	static constexpr const char *Name = "list_transform";
 	static constexpr const char *Parameters = "list,lambda";
@@ -56,33 +74,6 @@ struct ListTransformFun {
 	static constexpr const char *Example = "list_transform([1, 2, 3], x -> x + 1)";
 
 	static ScalarFunction GetFunction();
-};
-
-struct ListFilterFun {
-	static constexpr const char *Name = "list_filter";
-	static constexpr const char *Parameters = "list,lambda";
-	static constexpr const char *Description = "Constructs a list from those elements of the input list for which the lambda function returns true.";
-	static constexpr const char *Example = "list_filter([3, 4, 5], x -> x > 4)";
-
-	static ScalarFunction GetFunction();
-};
-
-struct ListPackFun {
-	using ALIAS = ListValueFun;
-
-	static constexpr const char *Name = "list_pack";
-};
-
-struct ArraySortFun {
-	using ALIAS = ListSortFun;
-
-	static constexpr const char *Name = "array_sort";
-};
-
-struct ArrayReverseSortFun {
-	using ALIAS = ListReverseSortFun;
-
-	static constexpr const char *Name = "array_reverse_sort";
 };
 
 struct ArrayTransformFun {
@@ -107,6 +98,15 @@ struct ApplyFun {
 	using ALIAS = ListTransformFun;
 
 	static constexpr const char *Name = "apply";
+};
+
+struct ListFilterFun {
+	static constexpr const char *Name = "list_filter";
+	static constexpr const char *Parameters = "list,lambda";
+	static constexpr const char *Description = "Constructs a list from those elements of the input list for which the lambda function returns true.";
+	static constexpr const char *Example = "list_filter([3, 4, 5], x -> x > 4)";
+
+	static ScalarFunction GetFunction();
 };
 
 struct ArrayFilterFun {
