@@ -1,6 +1,7 @@
 #include "scalar/string_functions.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 
 #include <ctype.h>
 #include <algorithm>

@@ -5,6 +5,7 @@
 #include "duckdb/function/scalar/regexp.hpp"
 #include "scalar/string_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 
 namespace duckdb {
 
