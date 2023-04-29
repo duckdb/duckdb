@@ -3,7 +3,6 @@
 namespace duckdb {
 
 void BuiltinFunctions::RegisterNestedFunctions() {
-	Register<ArraySliceFun>();
 	Register<StructPackFun>();
 	Register<StructExtractFun>();
 	Register<StructInsertFun>();

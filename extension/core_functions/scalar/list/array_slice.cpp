@@ -1,6 +1,6 @@
+#include "scalar/list_functions.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
@@ -8,16 +8,6 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
-
-template <typename INPUT_TYPE, typename INDEX_TYPE>
-INDEX_TYPE ValueOffset(const INPUT_TYPE &value) {
-	return 0;
-}
-
-template <>
-int64_t ValueOffset(const list_entry_t &value) {
-	return value.offset;
-}
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
 INDEX_TYPE ValueLength(const INPUT_TYPE &value) {
@@ -190,13 +180,13 @@ static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFun
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
-void ArraySliceFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunction ListSliceFun::GetFunction() {
 	// the arguments and return types are actually set in the binder function
 	ScalarFunction fun({LogicalType::ANY, LogicalType::BIGINT, LogicalType::BIGINT}, LogicalType::ANY,
 	                   ArraySliceFunction, ArraySliceBind);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	set.AddFunction({"array_slice", "list_slice"}, fun);
+	return fun;
 }
 
 } // namespace duckdb

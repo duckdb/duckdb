@@ -1,6 +1,7 @@
 add_library_unity(
   duckdb_func_list
   OBJECT
+  array_slice.cpp
   flatten.cpp
   list_lambdas.cpp
   list_value.cpp

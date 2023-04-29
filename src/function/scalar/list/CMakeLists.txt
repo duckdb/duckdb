@@ -4,7 +4,6 @@ add_library_unity(
   list_concat.cpp
   contains_or_position.cpp
   list_aggregates.cpp
-  array_slice.cpp
   list_extract.cpp
   range.cpp)
 set(ALL_OBJECT_FILES

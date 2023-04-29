@@ -37,6 +37,21 @@ struct ListPackFun {
 	static constexpr const char *Name = "list_pack";
 };
 
+struct ListSliceFun {
+	static constexpr const char *Name = "list_slice";
+	static constexpr const char *Parameters = "list,begin,end";
+	static constexpr const char *Description = "Extract a sublist using slice conventions. NULLs are interpreted as the bounds of the LIST. Negative values are accepted.";
+	static constexpr const char *Example = "list_slice(l, 2, NULL)";
+
+	static ScalarFunction GetFunction();
+};
+
+struct ArraySliceFun {
+	using ALIAS = ListSliceFun;
+
+	static constexpr const char *Name = "array_slice";
+};
+
 struct ListSortFun {
 	static constexpr const char *Name = "list_sort";
 	static constexpr const char *Parameters = "list";
