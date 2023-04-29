@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/operators.hpp"
+#include "scalar/operators_functions.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/bit.hpp"
@@ -99,14 +99,14 @@ static void BitwiseANDOperation(DataChunk &args, ExpressionState &state, Vector 
 	    });
 }
 
-void BitwiseAndFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunctionSet functions("&");
+ScalarFunctionSet BitwiseAndFun::GetFunctions() {
+	ScalarFunctionSet functions;
 	for (auto &type : LogicalType::Integral()) {
 		functions.AddFunction(
 		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseANDOperator>(type)));
 	}
 	functions.AddFunction(ScalarFunction({LogicalType::BIT, LogicalType::BIT}, LogicalType::BIT, BitwiseANDOperation));
-	set.AddFunction(functions);
+	return functions;
 }
 
 //===--------------------------------------------------------------------===//
@@ -129,14 +129,14 @@ static void BitwiseOROperation(DataChunk &args, ExpressionState &state, Vector &
 	    });
 }
 
-void BitwiseOrFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunctionSet functions("|");
+ScalarFunctionSet BitwiseOrFun::GetFunctions() {
+	ScalarFunctionSet functions;
 	for (auto &type : LogicalType::Integral()) {
 		functions.AddFunction(
 		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseOROperator>(type)));
 	}
 	functions.AddFunction(ScalarFunction({LogicalType::BIT, LogicalType::BIT}, LogicalType::BIT, BitwiseOROperation));
-	set.AddFunction(functions);
+	return functions;
 }
 
 //===--------------------------------------------------------------------===//
@@ -159,14 +159,14 @@ static void BitwiseXOROperation(DataChunk &args, ExpressionState &state, Vector 
 	    });
 }
 
-void BitwiseXorFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunctionSet functions("xor");
+ScalarFunctionSet BitwiseXorFun::GetFunctions() {
+	ScalarFunctionSet functions;
 	for (auto &type : LogicalType::Integral()) {
 		functions.AddFunction(
 		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseXOROperator>(type)));
 	}
 	functions.AddFunction(ScalarFunction({LogicalType::BIT, LogicalType::BIT}, LogicalType::BIT, BitwiseXOROperation));
-	set.AddFunction(functions);
+	return functions;
 }
 
 //===--------------------------------------------------------------------===//
@@ -188,13 +188,13 @@ static void BitwiseNOTOperation(DataChunk &args, ExpressionState &state, Vector 
 	});
 }
 
-void BitwiseNotFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunctionSet functions("~");
+ScalarFunctionSet BitwiseNotFun::GetFunctions() {
+	ScalarFunctionSet functions;
 	for (auto &type : LogicalType::Integral()) {
 		functions.AddFunction(ScalarFunction({type}, type, GetScalarIntegerUnaryFunction<BitwiseNotOperator>(type)));
 	}
 	functions.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIT, BitwiseNOTOperation));
-	set.AddFunction(functions);
+	return functions;
 }
 
 //===--------------------------------------------------------------------===//
@@ -250,15 +250,15 @@ static void BitwiseShiftLeftOperation(DataChunk &args, ExpressionState &state, V
 	    });
 }
 
-void LeftShiftFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunctionSet functions("<<");
+ScalarFunctionSet LeftShiftFun::GetFunctions() {
+	ScalarFunctionSet functions;
 	for (auto &type : LogicalType::Integral()) {
 		functions.AddFunction(
 		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseShiftLeftOperator>(type)));
 	}
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::BIT, LogicalType::INTEGER}, LogicalType::BIT, BitwiseShiftLeftOperation));
-	set.AddFunction(functions);
+	return functions;
 }
 
 //===--------------------------------------------------------------------===//
@@ -293,15 +293,15 @@ static void BitwiseShiftRightOperation(DataChunk &args, ExpressionState &state, 
 	    });
 }
 
-void RightShiftFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunctionSet functions(">>");
+ScalarFunctionSet RightShiftFun::GetFunctions() {
+	ScalarFunctionSet functions;
 	for (auto &type : LogicalType::Integral()) {
 		functions.AddFunction(
 		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseShiftRightOperator>(type)));
 	}
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::BIT, LogicalType::INTEGER}, LogicalType::BIT, BitwiseShiftRightOperation));
-	set.AddFunction(functions);
+	return functions;
 }
 
 } // namespace duckdb

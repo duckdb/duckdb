@@ -6,6 +6,7 @@
 #include "scalar/generic_functions.hpp"
 #include "scalar/list_functions.hpp"
 #include "scalar/map_functions.hpp"
+#include "scalar/operators_functions.hpp"
 #include "scalar/string_functions.hpp"
 #include "scalar/struct_functions.hpp"
 #include "scalar/union_functions.hpp"
@@ -30,6 +31,9 @@ namespace duckdb {
 	{ nullptr, nullptr, nullptr, nullptr, nullptr, nullptr }
 
 static StaticFunctionDefinition internal_functions[] = {
+	DUCKDB_SCALAR_FUNCTION_SET(BitwiseAndFun),
+	DUCKDB_SCALAR_FUNCTION_SET(LeftShiftFun),
+	DUCKDB_SCALAR_FUNCTION_SET(RightShiftFun),
 	DUCKDB_SCALAR_FUNCTION(StartsWithOperatorFun),
 	DUCKDB_SCALAR_FUNCTION_SET(AgeFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(AggregateFun),
@@ -208,8 +212,11 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(WeekFun),
 	DUCKDB_SCALAR_FUNCTION_SET(WeekDayFun),
 	DUCKDB_SCALAR_FUNCTION_SET(WeekOfYearFun),
+	DUCKDB_SCALAR_FUNCTION_SET(BitwiseXorFun),
 	DUCKDB_SCALAR_FUNCTION_SET(YearFun),
 	DUCKDB_SCALAR_FUNCTION_SET(YearWeekFun),
+	DUCKDB_SCALAR_FUNCTION_SET(BitwiseOrFun),
+	DUCKDB_SCALAR_FUNCTION_SET(BitwiseNotFun),
 	FINAL_FUNCTION
 };
 
