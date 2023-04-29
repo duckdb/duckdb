@@ -1,6 +1,7 @@
 #include "duckdb/planner/operator/logical_delete.hpp"
-#include "duckdb/parser/parsed_data/create_table_info.hpp"
+
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
 
 namespace duckdb {
 
@@ -19,8 +20,7 @@ unique_ptr<LogicalOperator> LogicalDelete::Deserialize(LogicalDeserializationSta
 	auto &context = state.gstate.context;
 	auto info = TableCatalogEntry::Deserialize(reader.GetSource(), context);
 
-	auto &table_catalog_entry =
-	    Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, info->schema, info->table);
+	auto &table_catalog_entry = Catalog::GetEntry<TableCatalogEntry>(context, info->catalog, info->schema, info->table);
 
 	auto table_index = reader.ReadRequired<idx_t>();
 	auto result = make_uniq<LogicalDelete>(table_catalog_entry, table_index);
