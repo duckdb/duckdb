@@ -78,5 +78,20 @@
         "example": "list_filter([3, 4, 5], x -> x > 4)",
         "type": "scalar_function",
         "aliases": ["array_filter", "filter"]
+    },
+    {
+        "name": "generate_series",
+        "parameters": "start,stop,step",
+        "description": "Create a list of values between start and stop - the stop parameter is inclusive",
+        "example": "generate_series(2, 5, 3)",
+        "type": "scalar_function_set"
+    },
+    {
+        "name": "range",
+        "parameters": "start,stop,step",
+        "description": "Create a list of values between start and stop - the stop parameter is exclusive",
+        "example": "range(2, 5, 3)",
+        "type": "scalar_function_set",
+        "struct": "ListRangeFun"
     }
 ]

@@ -1,5 +1,5 @@
+#include "scalar/list_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -239,23 +239,25 @@ static void ListRangeFunction(DataChunk &args, ExpressionState &state, Vector &r
 	result.Verify(args.size());
 }
 
-void ListRangeFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunctionSet ListRangeFun::GetFunctions() {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunctionSet range_set("range");
+	ScalarFunctionSet range_set;
 	range_set.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::LIST(LogicalType::BIGINT),
-	                                     ListRangeFunction<NumericRangeInfo, false>));
+										 ListRangeFunction<NumericRangeInfo, false>));
 	range_set.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT},
-	                                     LogicalType::LIST(LogicalType::BIGINT),
-	                                     ListRangeFunction<NumericRangeInfo, false>));
+										 LogicalType::LIST(LogicalType::BIGINT),
+										 ListRangeFunction<NumericRangeInfo, false>));
 	range_set.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT},
-	                                     LogicalType::LIST(LogicalType::BIGINT),
-	                                     ListRangeFunction<NumericRangeInfo, false>));
+										 LogicalType::LIST(LogicalType::BIGINT),
+										 ListRangeFunction<NumericRangeInfo, false>));
 	range_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP, LogicalType::INTERVAL},
-	                                     LogicalType::LIST(LogicalType::TIMESTAMP),
-	                                     ListRangeFunction<TimestampRangeInfo, false>));
-	set.AddFunction(range_set);
+										 LogicalType::LIST(LogicalType::TIMESTAMP),
+										 ListRangeFunction<TimestampRangeInfo, false>));
+	return range_set;
+}
 
-	ScalarFunctionSet generate_series("generate_series");
+ScalarFunctionSet GenerateSeriesFun::GetFunctions() {
+	ScalarFunctionSet generate_series;
 	generate_series.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::LIST(LogicalType::BIGINT),
 	                                           ListRangeFunction<NumericRangeInfo, true>));
 	generate_series.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT},
@@ -267,7 +269,7 @@ void ListRangeFun::RegisterFunction(BuiltinFunctions &set) {
 	generate_series.AddFunction(ScalarFunction({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP, LogicalType::INTERVAL},
 	                                           LogicalType::LIST(LogicalType::TIMESTAMP),
 	                                           ListRangeFunction<TimestampRangeInfo, true>));
-	set.AddFunction(generate_series);
+	return generate_series;
 }
 
 } // namespace duckdb

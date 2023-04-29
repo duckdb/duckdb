@@ -10,7 +10,6 @@ void BuiltinFunctions::RegisterNestedFunctions() {
 	Register<ListContainsFun>();
 	Register<ListPositionFun>();
 	Register<ListExtractFun>();
-	Register<ListRangeFun>();
 	Register<MapFun>();
 	Register<MapFromEntriesFun>();
 	Register<MapEntriesFun>();

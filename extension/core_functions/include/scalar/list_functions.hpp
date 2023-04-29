@@ -199,4 +199,22 @@ struct FilterFun {
 	static constexpr const char *Name = "filter";
 };
 
+struct GenerateSeriesFun {
+	static constexpr const char *Name = "generate_series";
+	static constexpr const char *Parameters = "start,stop,step";
+	static constexpr const char *Description = "Create a list of values between start and stop - the stop parameter is inclusive";
+	static constexpr const char *Example = "generate_series(2, 5, 3)";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct ListRangeFun {
+	static constexpr const char *Name = "range";
+	static constexpr const char *Parameters = "start,stop,step";
+	static constexpr const char *Description = "Create a list of values between start and stop - the stop parameter is exclusive";
+	static constexpr const char *Example = "range(2, 5, 3)";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 }

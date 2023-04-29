@@ -3,8 +3,7 @@ add_library_unity(
   OBJECT
   list_concat.cpp
   contains_or_position.cpp
-  list_extract.cpp
-  range.cpp)
+  list_extract.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_list_nested>
     PARENT_SCOPE)
