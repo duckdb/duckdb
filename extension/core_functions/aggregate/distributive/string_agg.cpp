@@ -1,4 +1,4 @@
-#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "aggregate/distributive_functions.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -151,8 +151,8 @@ unique_ptr<FunctionData> StringAggDeserialize(ClientContext &context, FieldReade
 	return make_uniq<StringAggBindData>(std::move(sep));
 }
 
-void StringAggFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet string_agg("string_agg");
+AggregateFunctionSet StringAggFun::GetFunctions() {
+	AggregateFunctionSet string_agg;
 	AggregateFunction string_agg_param(
 	    {LogicalType::VARCHAR}, LogicalType::VARCHAR, AggregateFunction::StateSize<StringAggState>,
 	    AggregateFunction::StateInitialize<StringAggState, StringAggFunction>,
@@ -166,9 +166,7 @@ void StringAggFun::RegisterFunction(BuiltinFunctions &set) {
 	string_agg.AddFunction(string_agg_param);
 	string_agg_param.arguments.emplace_back(LogicalType::VARCHAR);
 	string_agg.AddFunction(string_agg_param);
-	set.AddFunction(string_agg);
-	string_agg.name = "group_concat";
-	set.AddFunction(string_agg);
+	return string_agg;
 }
 
 } // namespace duckdb

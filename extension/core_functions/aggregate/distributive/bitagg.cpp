@@ -1,4 +1,4 @@
-#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "aggregate/distributive_functions.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -189,8 +189,8 @@ struct BitStringXorOperation : public BitStringBitwiseOperation {
 	}
 };
 
-void BitAndFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet bit_and("bit_and");
+AggregateFunctionSet BitAndFun::GetFunctions() {
+	AggregateFunctionSet bit_and;
 	for (auto &type : LogicalType::Integral()) {
 		bit_and.AddFunction(GetBitfieldUnaryAggregate<BitAndOperation>(type));
 	}
@@ -198,29 +198,29 @@ void BitAndFun::RegisterFunction(BuiltinFunctions &set) {
 	bit_and.AddFunction(
 	    AggregateFunction::UnaryAggregateDestructor<BitState<string_t>, string_t, string_t, BitStringAndOperation>(
 	        LogicalType::BIT, LogicalType::BIT));
-	set.AddFunction(bit_and);
+	return bit_and;
 }
 
-void BitOrFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet bit_or("bit_or");
+AggregateFunctionSet BitOrFun::GetFunctions() {
+	AggregateFunctionSet bit_or;
 	for (auto &type : LogicalType::Integral()) {
 		bit_or.AddFunction(GetBitfieldUnaryAggregate<BitOrOperation>(type));
 	}
 	bit_or.AddFunction(
 	    AggregateFunction::UnaryAggregateDestructor<BitState<string_t>, string_t, string_t, BitStringOrOperation>(
 	        LogicalType::BIT, LogicalType::BIT));
-	set.AddFunction(bit_or);
+	return bit_or;
 }
 
-void BitXorFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet bit_xor("bit_xor");
+AggregateFunctionSet BitXorFun::GetFunctions() {
+	AggregateFunctionSet bit_xor;
 	for (auto &type : LogicalType::Integral()) {
 		bit_xor.AddFunction(GetBitfieldUnaryAggregate<BitXorOperation>(type));
 	}
 	bit_xor.AddFunction(
 	    AggregateFunction::UnaryAggregateDestructor<BitState<string_t>, string_t, string_t, BitStringXorOperation>(
 	        LogicalType::BIT, LogicalType::BIT));
-	set.AddFunction(bit_xor);
+	return bit_xor;
 }
 
 } // namespace duckdb

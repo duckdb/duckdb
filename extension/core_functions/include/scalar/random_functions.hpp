@@ -34,7 +34,8 @@ struct SetseedFun {
 struct UUIDFun {
 	static constexpr const char *Name = "uuid";
 	static constexpr const char *Parameters = "";
-	static constexpr const char *Description = "Return a random uuid similar to this: eeccb8c5-9943-b2bb-bb5e-222f4e14b687";
+	static constexpr const char *Description =
+	    "Return a random uuid similar to this: eeccb8c5-9943-b2bb-bb5e-222f4e14b687";
 	static constexpr const char *Example = "uuid()";
 
 	static ScalarFunction GetFunction();

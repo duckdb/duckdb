@@ -7,23 +7,23 @@
 namespace duckdb {
 
 AggregateFunction StdDevSampFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<StddevState, double, double, STDDevSampOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE);
+	return AggregateFunction::UnaryAggregate<StddevState, double, double, STDDevSampOperation>(LogicalType::DOUBLE,
+	                                                                                           LogicalType::DOUBLE);
 }
 
 AggregateFunction StdDevPopFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<StddevState, double, double, STDDevPopOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE);
+	return AggregateFunction::UnaryAggregate<StddevState, double, double, STDDevPopOperation>(LogicalType::DOUBLE,
+	                                                                                          LogicalType::DOUBLE);
 }
 
 AggregateFunction VarPopFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<StddevState, double, double, VarPopOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE);
+	return AggregateFunction::UnaryAggregate<StddevState, double, double, VarPopOperation>(LogicalType::DOUBLE,
+	                                                                                       LogicalType::DOUBLE);
 }
 
 AggregateFunction VarSampFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<StddevState, double, double, VarSampOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE);
+	return AggregateFunction::UnaryAggregate<StddevState, double, double, VarSampOperation>(LogicalType::DOUBLE,
+	                                                                                        LogicalType::DOUBLE);
 }
 
 AggregateFunction StandardErrorOfTheMeanFun::GetFunction() {

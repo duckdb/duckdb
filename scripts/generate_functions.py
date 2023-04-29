@@ -2,7 +2,7 @@ import os
 import re
 import json
 
-aggregate_functions = ['algebraic']
+aggregate_functions = ['algebraic', 'distributive']
 scalar_functions = ['bit', 'blob', 'date', 'enum', 'generic', 'list', 'map', 'math', 'operators', 'random', 'string', 'struct', 'union']
 
 header = '''//===----------------------------------------------------------------------===//

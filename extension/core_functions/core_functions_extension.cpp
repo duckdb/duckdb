@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-template<class T>
+template <class T>
 void FillExtraInfo(StaticFunctionDefinition &function, T &info) {
 	info.internal = true;
 	info.description = function.description;

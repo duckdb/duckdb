@@ -1,23 +1,22 @@
+#include "aggregate/distributive_functions.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 namespace duckdb {
 
-struct KurtosisState {
-	idx_t n;
+struct SkewState {
+	size_t n;
 	double sum;
 	double sum_sqr;
 	double sum_cub;
-	double sum_four;
 };
 
-struct KurtosisOperation {
+struct SkewnessOperation {
 	template <class STATE>
 	static void Initialize(STATE *state) {
 		state->n = 0;
-		state->sum = state->sum_sqr = state->sum_cub = state->sum_four = 0.0;
+		state->sum = state->sum_sqr = state->sum_cub = 0;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
@@ -34,7 +33,6 @@ struct KurtosisOperation {
 		state->sum += data[idx];
 		state->sum_sqr += pow(data[idx], 2);
 		state->sum_cub += pow(data[idx], 3);
-		state->sum_four += pow(data[idx], 4);
 	}
 
 	template <class STATE, class OP>
@@ -42,41 +40,37 @@ struct KurtosisOperation {
 		if (source.n == 0) {
 			return;
 		}
+
 		target->n += source.n;
 		target->sum += source.sum;
 		target->sum_sqr += source.sum_sqr;
 		target->sum_cub += source.sum_cub;
-		target->sum_four += source.sum_four;
 	}
 
 	template <class TARGET_TYPE, class STATE>
 	static void Finalize(Vector &result, AggregateInputData &, STATE *state, TARGET_TYPE *target, ValidityMask &mask,
 	                     idx_t idx) {
-		auto n = (double)state->n;
-		if (n <= 3) {
+		if (state->n <= 2) {
 			mask.SetInvalid(idx);
 			return;
 		}
+		double n = state->n;
 		double temp = 1 / n;
-		//! This is necessary due to linux 32 bits
-		long double temp_aux = 1 / n;
-		if (state->sum_sqr - state->sum * state->sum * temp == 0 ||
-		    state->sum_sqr - state->sum * state->sum * temp_aux == 0) {
+		auto p = std::pow(temp * (state->sum_sqr - state->sum * state->sum * temp), 3);
+		if (p < 0) {
+			p = 0; // Shouldn't be below 0 but floating points are weird
+		}
+		double div = std::sqrt(p);
+		if (div == 0) {
 			mask.SetInvalid(idx);
 			return;
 		}
-		double m4 =
-		    temp * (state->sum_four - 4 * state->sum_cub * state->sum * temp +
-		            6 * state->sum_sqr * state->sum * state->sum * temp * temp - 3 * pow(state->sum, 4) * pow(temp, 3));
-
-		double m2 = temp * (state->sum_sqr - state->sum * state->sum * temp);
-		if (m2 <= 0 || ((n - 2) * (n - 3)) == 0) { // m2 shouldn't be below 0 but floating points are weird
-			mask.SetInvalid(idx);
-			return;
-		}
-		target[idx] = (n - 1) * ((n + 1) * m4 / (m2 * m2) - 3 * (n - 1)) / ((n - 2) * (n - 3));
+		double temp1 = std::sqrt(n * (n - 1)) / (n - 2);
+		target[idx] = temp1 * temp *
+		              (state->sum_cub - 3 * state->sum_sqr * state->sum * temp + 2 * pow(state->sum, 3) * temp * temp) /
+		              div;
 		if (!Value::DoubleIsFinite(target[idx])) {
-			throw OutOfRangeException("Kurtosis is out of range!");
+			throw OutOfRangeException("SKEW is out of range!");
 		}
 	}
 
@@ -85,11 +79,9 @@ struct KurtosisOperation {
 	}
 };
 
-void KurtosisFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet function_set("kurtosis");
-	function_set.AddFunction(AggregateFunction::UnaryAggregate<KurtosisState, double, double, KurtosisOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE));
-	set.AddFunction(function_set);
+AggregateFunction SkewnessFun::GetFunction() {
+	return AggregateFunction::UnaryAggregate<SkewState, double, double, SkewnessOperation>(
+	    LogicalType::DOUBLE, LogicalType::DOUBLE);
 }
 
 } // namespace duckdb

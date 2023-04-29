@@ -1,6 +1,6 @@
+#include "aggregate/distributive_functions.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/function/function_set.hpp"
 
@@ -94,7 +94,6 @@ struct BoolOrFunFunction {
 AggregateFunction BoolOrFun::GetFunction() {
 	auto fun = AggregateFunction::UnaryAggregate<BoolState, bool, bool, BoolOrFunFunction>(
 	    LogicalType(LogicalTypeId::BOOLEAN), LogicalType::BOOLEAN);
-	fun.name = "bool_or";
 	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return fun;
 }
@@ -102,23 +101,8 @@ AggregateFunction BoolOrFun::GetFunction() {
 AggregateFunction BoolAndFun::GetFunction() {
 	auto fun = AggregateFunction::UnaryAggregate<BoolState, bool, bool, BoolAndFunFunction>(
 	    LogicalType(LogicalTypeId::BOOLEAN), LogicalType::BOOLEAN);
-	fun.name = "bool_and";
 	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return fun;
-}
-
-void BoolOrFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunction bool_or_function = BoolOrFun::GetFunction();
-	AggregateFunctionSet bool_or("bool_or");
-	bool_or.AddFunction(bool_or_function);
-	set.AddFunction(bool_or);
-}
-
-void BoolAndFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunction bool_and_function = BoolAndFun::GetFunction();
-	AggregateFunctionSet bool_and("bool_and");
-	bool_and.AddFunction(bool_and_function);
-	set.AddFunction(bool_and);
 }
 
 } // namespace duckdb

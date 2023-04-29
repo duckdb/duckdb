@@ -1,6 +1,6 @@
+#include "aggregate/distributive_functions.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/function/function_set.hpp"
 
@@ -54,17 +54,8 @@ struct ProductFunction {
 };
 
 AggregateFunction ProductFun::GetFunction() {
-	auto fun = AggregateFunction::UnaryAggregate<ProductState, double, double, ProductFunction>(
+	return AggregateFunction::UnaryAggregate<ProductState, double, double, ProductFunction>(
 	    LogicalType(LogicalTypeId::DOUBLE), LogicalType::DOUBLE);
-	fun.name = "product";
-	return fun;
-}
-
-void ProductFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunction product_function = ProductFun::GetFunction();
-	AggregateFunctionSet product("product");
-	product.AddFunction(product_function);
-	set.AddFunction(product);
 }
 
 } // namespace duckdb

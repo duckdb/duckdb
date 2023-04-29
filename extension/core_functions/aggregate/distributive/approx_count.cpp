@@ -1,8 +1,8 @@
+#include "aggregate/distributive_functions.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/hyperloglog.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
@@ -127,7 +127,7 @@ AggregateFunction GetApproxCountDistinctFunction(const LogicalType &input_type) 
 	return fun;
 }
 
-void ApproxCountDistinctFun::RegisterFunction(BuiltinFunctions &set) {
+AggregateFunctionSet ApproxCountDistinctFun::GetFunctions() {
 	AggregateFunctionSet approx_count("approx_count_distinct");
 	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::UTINYINT));
 	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::USMALLINT));
@@ -142,7 +142,7 @@ void ApproxCountDistinctFun::RegisterFunction(BuiltinFunctions &set) {
 	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::VARCHAR));
 	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::TIMESTAMP));
 	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::TIMESTAMP_TZ));
-	set.AddFunction(approx_count);
+	return approx_count;
 }
 
 } // namespace duckdb

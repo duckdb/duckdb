@@ -1,6 +1,6 @@
+#include "aggregate/distributive_functions.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
@@ -336,32 +336,16 @@ static void AddArgMinMaxFunctions(AggregateFunctionSet &fun) {
 	AddVectorArgMinMaxFunctionBy<VECTOR_OP, Vector *>(fun, LogicalType::ANY);
 }
 
-void ArgMinFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet fun("argmin");
+AggregateFunctionSet ArgMinFun::GetFunctions() {
+	AggregateFunctionSet fun;
 	AddArgMinMaxFunctions<LessThan>(fun);
-	set.AddFunction(fun);
-
-	//! Add min_by alias
-	fun.name = "min_by";
-	set.AddFunction(fun);
-
-	//! Add arg_min alias
-	fun.name = "arg_min";
-	set.AddFunction(fun);
+	return fun;
 }
 
-void ArgMaxFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet fun("argmax");
+AggregateFunctionSet ArgMaxFun::GetFunctions() {
+	AggregateFunctionSet fun;
 	AddArgMinMaxFunctions<GreaterThan>(fun);
-	set.AddFunction(fun);
-
-	//! Add max_by alias
-	fun.name = "max_by";
-	set.AddFunction(fun);
-
-	//! Add arg_max alias
-	fun.name = "arg_max";
-	set.AddFunction(fun);
+	return fun;
 }
 
 } // namespace duckdb

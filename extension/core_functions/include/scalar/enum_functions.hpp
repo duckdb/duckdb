@@ -52,7 +52,10 @@ struct EnumRangeFun {
 struct EnumRangeBoundaryFun {
 	static constexpr const char *Name = "enum_range_boundary";
 	static constexpr const char *Parameters = "start,end";
-	static constexpr const char *Description = "Returns the range between the two given enum values as an array. The values must be of the same enum type. When the first parameter is NULL, the result starts with the first value of the enum type. When the second parameter is NULL, the result ends with the last value of the enum type.";
+	static constexpr const char *Description =
+	    "Returns the range between the two given enum values as an array. The values must be of the same enum type. "
+	    "When the first parameter is NULL, the result starts with the first value of the enum type. When the second "
+	    "parameter is NULL, the result ends with the last value of the enum type.";
 	static constexpr const char *Example = "enum_range_boundary(NULL, 'happy'::mood)";
 
 	static ScalarFunction GetFunction();

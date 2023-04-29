@@ -1,4 +1,4 @@
-#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "aggregate/distributive_functions.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
@@ -224,7 +224,7 @@ static void BindBitString(AggregateFunctionSet &bitstring_agg, const LogicalType
 	bitstring_agg.AddFunction(function);
 }
 
-void BitStringAggFun::GetBitStringAggregate(const LogicalType &type, AggregateFunctionSet &bitstring_agg) {
+void GetBitStringAggregate(const LogicalType &type, AggregateFunctionSet &bitstring_agg) {
 	switch (type.id()) {
 	case LogicalType::TINYINT: {
 		return BindBitString<int8_t>(bitstring_agg, type.id());
@@ -258,12 +258,12 @@ void BitStringAggFun::GetBitStringAggregate(const LogicalType &type, AggregateFu
 	}
 }
 
-void BitStringAggFun::RegisterFunction(BuiltinFunctions &set) {
+AggregateFunctionSet BitstringAggFun::GetFunctions() {
 	AggregateFunctionSet bitstring_agg("bitstring_agg");
 	for (auto &type : LogicalType::Integral()) {
 		GetBitStringAggregate(type, bitstring_agg);
 	}
-	set.AddFunction(bitstring_agg);
+	return bitstring_agg;
 }
 
 } // namespace duckdb

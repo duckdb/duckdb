@@ -1,4 +1,4 @@
-#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "aggregate/distributive_functions.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
@@ -560,16 +560,16 @@ static void AddMinMaxOperator(AggregateFunctionSet &set) {
 	                                  nullptr, BindMinMax<OP, OP_STRING, OP_VECTOR>));
 }
 
-void MinFun::RegisterFunction(BuiltinFunctions &set) {
+AggregateFunctionSet MinFun::GetFunctions() {
 	AggregateFunctionSet min("min");
 	AddMinMaxOperator<MinOperation, MinOperationString, MinOperationVector>(min);
-	set.AddFunction(min);
+	return min;
 }
 
-void MaxFun::RegisterFunction(BuiltinFunctions &set) {
+AggregateFunctionSet MaxFun::GetFunctions() {
 	AggregateFunctionSet max("max");
 	AddMinMaxOperator<MaxOperation, MaxOperationString, MaxOperationVector>(max);
-	set.AddFunction(max);
+	return max;
 }
 
 } // namespace duckdb

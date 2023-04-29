@@ -722,7 +722,7 @@ struct ExpOperator {
 
 ScalarFunction ExpFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               ScalarFunction::UnaryFunction<double, double, ExpOperator>);
+	                      ScalarFunction::UnaryFunction<double, double, ExpOperator>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -737,7 +737,7 @@ struct PowOperator {
 
 ScalarFunction PowOperatorFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                              ScalarFunction::BinaryFunction<double, double, double, PowOperator>);
+	                      ScalarFunction::BinaryFunction<double, double, double, PowOperator>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -755,7 +755,7 @@ struct SqrtOperator {
 
 ScalarFunction SqrtFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               ScalarFunction::UnaryFunction<double, double, SqrtOperator>);
+	                      ScalarFunction::UnaryFunction<double, double, SqrtOperator>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -770,7 +770,7 @@ struct CbRtOperator {
 
 ScalarFunction CbrtFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               ScalarFunction::UnaryFunction<double, double, CbRtOperator>);
+	                      ScalarFunction::UnaryFunction<double, double, CbRtOperator>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -792,7 +792,7 @@ struct LnOperator {
 
 ScalarFunction LnFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               ScalarFunction::UnaryFunction<double, double, LnOperator>);
+	                      ScalarFunction::UnaryFunction<double, double, LnOperator>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -813,7 +813,7 @@ struct Log10Operator {
 
 ScalarFunction Log10Fun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                                                 ScalarFunction::UnaryFunction<double, double, Log10Operator>);
+	                      ScalarFunction::UnaryFunction<double, double, Log10Operator>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -834,7 +834,7 @@ struct Log2Operator {
 
 ScalarFunction Log2Fun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               ScalarFunction::UnaryFunction<double, double, Log2Operator>);
+	                      ScalarFunction::UnaryFunction<double, double, Log2Operator>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -862,7 +862,7 @@ struct DegreesOperator {
 
 ScalarFunction DegreesFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               ScalarFunction::UnaryFunction<double, double, DegreesOperator>);
+	                      ScalarFunction::UnaryFunction<double, double, DegreesOperator>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -877,7 +877,7 @@ struct RadiansOperator {
 
 ScalarFunction RadiansFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               ScalarFunction::UnaryFunction<double, double, RadiansOperator>);
+	                      ScalarFunction::UnaryFunction<double, double, RadiansOperator>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -937,7 +937,6 @@ template <>
 bool IsInfiniteOperator::Operation(timestamp_t input) {
 	return !Value::IsFinite(input);
 }
-
 
 ScalarFunctionSet IsInfiniteFun::GetFunctions() {
 	ScalarFunctionSet funcs("isinf");
@@ -1005,7 +1004,7 @@ struct SinOperator {
 
 ScalarFunction SinFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                   ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<SinOperator>>);
+	                      ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<SinOperator>>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1019,9 +1018,8 @@ struct CosOperator {
 };
 
 ScalarFunction CosFun::GetFunction() {
-	return
-	    ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                   ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<CosOperator>>);
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                      ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<CosOperator>>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1035,8 +1033,8 @@ struct TanOperator {
 };
 
 ScalarFunction TanFun::GetFunction() {
-	 return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                   ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<TanOperator>>);
+	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                      ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<TanOperator>>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1054,7 +1052,7 @@ struct ASinOperator {
 
 ScalarFunction AsinFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                   ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<ASinOperator>>);
+	                      ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<ASinOperator>>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1069,7 +1067,7 @@ struct ATanOperator {
 
 ScalarFunction AtanFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               ScalarFunction::UnaryFunction<double, double, ATanOperator>);
+	                      ScalarFunction::UnaryFunction<double, double, ATanOperator>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1084,7 +1082,7 @@ struct ATan2 {
 
 ScalarFunction Atan2Fun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               ScalarFunction::BinaryFunction<double, double, double, ATan2>);
+	                      ScalarFunction::BinaryFunction<double, double, double, ATan2>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1099,7 +1097,7 @@ struct ACos {
 
 ScalarFunction AcosFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<ACos>>);
+	                      ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<ACos>>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1114,7 +1112,7 @@ struct CotOperator {
 
 ScalarFunction CotFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                   ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<CotOperator>>);
+	                      ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<CotOperator>>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1132,7 +1130,7 @@ struct GammaOperator {
 
 ScalarFunction GammaFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               ScalarFunction::UnaryFunction<double, double, GammaOperator>);
+	                      ScalarFunction::UnaryFunction<double, double, GammaOperator>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1150,7 +1148,7 @@ struct LogGammaOperator {
 
 ScalarFunction LogGammaFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               ScalarFunction::UnaryFunction<double, double, LogGammaOperator>);
+	                      ScalarFunction::UnaryFunction<double, double, LogGammaOperator>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1169,7 +1167,7 @@ struct FactorialOperator {
 
 ScalarFunction FactorialOperatorFun::GetFunction() {
 	return ScalarFunction({LogicalType::INTEGER}, LogicalType::HUGEINT,
-	                          ScalarFunction::UnaryFunction<int32_t, hugeint_t, FactorialOperator>);
+	                      ScalarFunction::UnaryFunction<int32_t, hugeint_t, FactorialOperator>);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1197,7 +1195,7 @@ struct EvenOperator {
 
 ScalarFunction EvenFun::GetFunction() {
 	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                               ScalarFunction::UnaryFunction<double, double, EvenOperator>);
+	                      ScalarFunction::UnaryFunction<double, double, EvenOperator>);
 }
 
 //===--------------------------------------------------------------------===//

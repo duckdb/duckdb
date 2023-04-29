@@ -1,4 +1,4 @@
-#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/sum_helpers.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/decimal.hpp"
@@ -69,6 +69,27 @@ struct HugeintSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd
 	}
 };
 
+AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
+	switch (type) {
+	case PhysicalType::INT32: {
+		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int32_t, hugeint_t, IntegerSumOperation>(
+		    LogicalType::INTEGER, LogicalType::HUGEINT);
+		function.name = "sum_no_overflow";
+		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+		return function;
+	}
+	case PhysicalType::INT64: {
+		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int64_t, hugeint_t, IntegerSumOperation>(
+		    LogicalType::BIGINT, LogicalType::HUGEINT);
+		function.name = "sum_no_overflow";
+		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+		return function;
+	}
+	default:
+		throw BinderException("Unsupported internal type for sum_no_overflow");
+	}
+}
+
 unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggregateExpression &expr,
                                              AggregateStatisticsInput &input) {
 	if (input.node_stats && input.node_stats->has_max_cardinality) {
@@ -99,12 +120,12 @@ unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggreg
 			return nullptr;
 		}
 		// total sum is guaranteed to fit in a single int64: use int64 sum instead of hugeint sum
-		expr.function = SumFun::GetSumAggregateNoOverflow(internal_type);
+		expr.function = GetSumAggregateNoOverflow(internal_type);
 	}
 	return nullptr;
 }
 
-AggregateFunction SumFun::GetSumAggregate(PhysicalType type) {
+AggregateFunction GetSumAggregate(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::INT16: {
 		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int16_t, hugeint_t, IntegerSumOperation>(
@@ -141,31 +162,10 @@ AggregateFunction SumFun::GetSumAggregate(PhysicalType type) {
 	}
 }
 
-AggregateFunction SumFun::GetSumAggregateNoOverflow(PhysicalType type) {
-	switch (type) {
-	case PhysicalType::INT32: {
-		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int32_t, hugeint_t, IntegerSumOperation>(
-		    LogicalType::INTEGER, LogicalType::HUGEINT);
-		function.name = "sum_no_overflow";
-		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
-		return function;
-	}
-	case PhysicalType::INT64: {
-		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int64_t, hugeint_t, IntegerSumOperation>(
-		    LogicalType::BIGINT, LogicalType::HUGEINT);
-		function.name = "sum_no_overflow";
-		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
-		return function;
-	}
-	default:
-		throw BinderException("Unsupported internal type for sum_no_overflow");
-	}
-}
-
 unique_ptr<FunctionData> BindDecimalSum(ClientContext &context, AggregateFunction &function,
                                         vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
-	function = SumFun::GetSumAggregate(decimal_type.InternalType());
+	function = GetSumAggregate(decimal_type.InternalType());
 	function.name = "sum";
 	function.arguments[0] = decimal_type;
 	function.return_type = LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, DecimalType::GetScale(decimal_type));
@@ -176,7 +176,7 @@ unique_ptr<FunctionData> BindDecimalSum(ClientContext &context, AggregateFunctio
 unique_ptr<FunctionData> BindDecimalSumNoOverflow(ClientContext &context, AggregateFunction &function,
                                                   vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
-	function = SumFun::GetSumAggregateNoOverflow(decimal_type.InternalType());
+	function = GetSumAggregateNoOverflow(decimal_type.InternalType());
 	function.name = "sum_no_overflow";
 	function.arguments[0] = decimal_type;
 	function.return_type = LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, DecimalType::GetScale(decimal_type));
@@ -184,41 +184,35 @@ unique_ptr<FunctionData> BindDecimalSumNoOverflow(ClientContext &context, Aggreg
 	return nullptr;
 }
 
-void SumFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet sum("sum");
+AggregateFunctionSet SumFun::GetFunctions() {
+	AggregateFunctionSet sum;
 	// decimal
 	sum.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
-	                                  nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
-	                                  BindDecimalSum));
+									  nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
+									  BindDecimalSum));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT16));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT32));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT64));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT128));
 	sum.AddFunction(AggregateFunction::UnaryAggregate<SumState<double>, double, double, NumericSumOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE));
+			LogicalType::DOUBLE, LogicalType::DOUBLE));
+	return sum;
+}
 
-	set.AddFunction(sum);
-
-	AggregateFunctionSet sum_no_overflow("sum_no_overflow");
+AggregateFunctionSet SumNoOverflowFun::GetFunctions() {
+	AggregateFunctionSet sum_no_overflow;
 	sum_no_overflow.AddFunction(GetSumAggregateNoOverflow(PhysicalType::INT32));
 	sum_no_overflow.AddFunction(GetSumAggregateNoOverflow(PhysicalType::INT64));
 	sum_no_overflow.AddFunction(
-	    AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                      FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, BindDecimalSumNoOverflow));
-	set.AddFunction(sum_no_overflow);
+			AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr,
+							  nullptr,
+							  FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, BindDecimalSumNoOverflow));
+	return sum_no_overflow;
+}
 
-	// fsum
-	AggregateFunctionSet fsum("fsum");
-	fsum.AddFunction(AggregateFunction::UnaryAggregate<KahanSumState, double, double, KahanSumOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE));
-
-	set.AddFunction(fsum);
-
-	fsum.name = "kahan_sum";
-	set.AddFunction(fsum);
-
-	fsum.name = "sumKahan";
-	set.AddFunction(fsum);
+AggregateFunction KahanSumFun::GetFunction() {
+	return AggregateFunction::UnaryAggregate<KahanSumState, double, double, KahanSumOperation>(
+	    LogicalType::DOUBLE, LogicalType::DOUBLE);
 }
 
 } // namespace duckdb

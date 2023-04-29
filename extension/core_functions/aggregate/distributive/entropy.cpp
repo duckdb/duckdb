@@ -1,6 +1,6 @@
+#include "aggregate/distributive_functions.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/function/function_set.hpp"
 #include <unordered_map>
@@ -161,7 +161,7 @@ AggregateFunction GetEntropyFunction(PhysicalType type) {
 	return fun;
 }
 
-void EntropyFun::RegisterFunction(BuiltinFunctions &set) {
+AggregateFunctionSet EntropyFun::GetFunctions() {
 	AggregateFunctionSet entropy("entropy");
 	entropy.AddFunction(GetEntropyFunction(PhysicalType::UINT16));
 	entropy.AddFunction(GetEntropyFunction(PhysicalType::UINT32));
@@ -174,7 +174,7 @@ void EntropyFun::RegisterFunction(BuiltinFunctions &set) {
 	entropy.AddFunction(GetEntropyFunction(PhysicalType::VARCHAR));
 	entropy.AddFunction(GetEntropyFunction<int64_t, double>(LogicalType::TIMESTAMP, LogicalType::DOUBLE));
 	entropy.AddFunction(GetEntropyFunction<int64_t, double>(LogicalType::TIMESTAMP_TZ, LogicalType::DOUBLE));
-	set.AddFunction(entropy);
+	return entropy;
 }
 
 } // namespace duckdb

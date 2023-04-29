@@ -181,20 +181,20 @@ AggregateFunctionSet AvgFun::GetFunctions() {
 	AggregateFunctionSet avg;
 
 	avg.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
-									  nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
-									  BindDecimalAvg));
+	                                  nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
+	                                  BindDecimalAvg));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT16));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT32));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT64));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT128));
 	avg.AddFunction(AggregateFunction::UnaryAggregate<AvgState<double>, double, double, NumericAverageOperation>(
-			LogicalType::DOUBLE, LogicalType::DOUBLE));
+	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 	return avg;
 }
 
 AggregateFunction FAvgFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<KahanAvgState, double, double, KahanAverageOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE);
+	return AggregateFunction::UnaryAggregate<KahanAvgState, double, double, KahanAverageOperation>(LogicalType::DOUBLE,
+	                                                                                               LogicalType::DOUBLE);
 }
 
 } // namespace duckdb
