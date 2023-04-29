@@ -60,7 +60,7 @@ struct RegrInterceptOperation {
 
 AggregateFunction RegrInterceptFun::GetFunction() {
 	return AggregateFunction::BinaryAggregate<RegrInterceptState, double, double, double, RegrInterceptOperation>(
-	        LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
+	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
 }
 
 } // namespace duckdb
