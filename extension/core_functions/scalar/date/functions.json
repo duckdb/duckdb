@@ -429,6 +429,11 @@
         "type": "scalar_function_set"
     },
     {
+        "struct": "DateDiffFunAlias",
+        "name": "datediff",
+        "alias": "DateDiffFun"
+    },
+    {
         "struct": "NowFun",
         "name": "now",
         "alias": "CurrentTimestampFun"

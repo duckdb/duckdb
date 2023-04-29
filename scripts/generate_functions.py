@@ -27,6 +27,7 @@ footer = '''}
 def normalize_path_separators(x):
     return os.path.sep.join(x.split('/'))
 
+function_type_set = {}
 all_function_list = []
 for scalar in scalar_functions:
     path = f'scalar/{scalar}'
@@ -39,7 +40,15 @@ for scalar in scalar_functions:
         function_text = ''
         struct_type = entry['struct']
         if 'alias' in entry:
-            all_function_list.append([entry['name'], f"DUCKDB_SCALAR_FUNCTION_ALIAS({struct_type})"])
+            aliased_type = function_type_set[entry['alias']]
+            if aliased_type == 'scalar_function':
+                all_function_list.append([entry['name'], f"DUCKDB_SCALAR_FUNCTION_ALIAS({struct_type})"])
+            elif aliased_type == 'scalar_function_set':
+                all_function_list.append([entry['name'], f"DUCKDB_SCALAR_FUNCTION_SET_ALIAS({struct_type})"])
+            else:
+                print("Unknown entry type " + aliased_type + ' for entry ' + entry['struct'])
+                exit(1)
+            function_type_set[entry['struct']] = aliased_type
             new_text += '''struct {STRUCT} {
 	using ALIAS = {ALIAS};
 
@@ -48,6 +57,7 @@ for scalar in scalar_functions:
 
 '''.replace('{STRUCT}', entry['struct']).replace('{NAME}', entry['name']).replace('{ALIAS}', entry['alias'])
             continue
+        function_type_set[entry['struct']] = entry['type']
         if entry['type'] == 'scalar_function':
             function_text = 'static ScalarFunction GetFunction();'
             all_function_list.append([entry['name'], f"DUCKDB_SCALAR_FUNCTION({struct_type})"])
@@ -55,7 +65,7 @@ for scalar in scalar_functions:
             function_text = 'static ScalarFunctionSet GetFunctions();'
             all_function_list.append([entry['name'], f"DUCKDB_SCALAR_FUNCTION_SET({struct_type})"])
         else:
-            print("Unknown entry type " + entry['type'])
+            print("Unknown entry type " + entry['type'] + ' for entry ' + entry['struct'])
             exit(1)
         new_text += '''struct {STRUCT} {
 	static constexpr const char *Name = "{NAME}";

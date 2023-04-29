@@ -499,6 +499,12 @@ struct YearWeekFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct DateDiffFunAlias {
+	using ALIAS = DateDiffFun;
+
+	static constexpr const char *Name = "datediff";
+};
+
 struct NowFun {
 	using ALIAS = CurrentTimestampFun;
 
