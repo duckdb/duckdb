@@ -50,20 +50,15 @@ struct AggregateState {
 	}
 	~AggregateState() {
 		D_ASSERT(destructors.size() == aggregates.size());
-		D_ASSERT(destructors.size() == bind_data.size());
 		for (idx_t i = 0; i < destructors.size(); i++) {
-			auto &destructor = destructors.get(i);
-			if (!destructor) {
+			if (!destructors[i]) {
 				continue;
 			}
-
-			auto &aggregate = aggregates.get(i);
-			Vector state_vector(Value::POINTER((uintptr_t)aggregate.get()));
+			Vector state_vector(Value::POINTER((uintptr_t)aggregates[i].get()));
 			state_vector.SetVectorType(VectorType::FLAT_VECTOR);
 
-			auto &data = bind_data.get(i);
-			AggregateInputData aggr_input_data(data, Allocator::DefaultAllocator());
-			destructor(state_vector, aggr_input_data, 1);
+			AggregateInputData aggr_input_data(bind_data[i], Allocator::DefaultAllocator());
+			destructors[i](state_vector, aggr_input_data, 1);
 		}
 	}
 
