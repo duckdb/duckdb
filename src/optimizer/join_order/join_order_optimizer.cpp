@@ -398,6 +398,8 @@ bool JoinOrderOptimizer::EmitCSG(JoinRelationSet &node) {
 	for (idx_t i = 0; i < neighbors.size() - 1; i++) {
 		D_ASSERT(neighbors[i] >= neighbors[i + 1]);
 	}
+
+	unordered_set<idx_t> new_exclusion_set = exclusion_set;
 	for (auto neighbor : neighbors) {
 		// since the GetNeighbors only returns the smallest element in a list, the entry might not be connected to
 		// (only!) this neighbor,  hence we have to do a connectedness check before we can emit it
@@ -408,7 +410,8 @@ bool JoinOrderOptimizer::EmitCSG(JoinRelationSet &node) {
 				return false;
 			}
 		}
-		if (!EnumerateCmpRecursive(node, neighbor_relation, exclusion_set)) {
+		new_exclusion_set.insert(neighbor);
+		if (!EnumerateCmpRecursive(node, neighbor_relation, new_exclusion_set)) {
 			return false;
 		}
 	}
@@ -416,7 +419,7 @@ bool JoinOrderOptimizer::EmitCSG(JoinRelationSet &node) {
 }
 
 bool JoinOrderOptimizer::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSet &right,
-                                               unordered_set<idx_t> exclusion_set) {
+                                               unordered_set<idx_t> &exclusion_set) {
 	// get the neighbors of the second relation under the exclusion set
 	auto neighbors = query_graph.GetNeighbors(right, exclusion_set);
 	if (neighbors.empty()) {
@@ -428,7 +431,11 @@ bool JoinOrderOptimizer::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelati
 		auto &neighbor = set_manager.GetJoinRelation(neighbors[i]);
 		// emit the combinations of this node and its neighbors
 		auto &combined_set = set_manager.Union(right, neighbor);
-		if (combined_set.count > right.count && plans.find(&combined_set) != plans.end()) {
+
+		if (combined_set.count <= right.count) {
+			exit(1);
+		}
+		if (plans.find(&combined_set) != plans.end()) {
 			auto connections = query_graph.GetConnections(left, combined_set);
 			if (!connections.empty()) {
 				if (!TryEmitPair(left, combined_set, connections)) {
@@ -496,7 +503,7 @@ bool JoinOrderOptimizer::SolveJoinOrderExactly() {
 		}
 		// initialize the set of exclusion_set as all the nodes with a number below this
 		unordered_set<idx_t> exclusion_set;
-		for (idx_t j = 0; j < i - 1; j++) {
+		for (idx_t j = 0; j < i; j++) {
 			exclusion_set.insert(j);
 		}
 		// then we recursively search for neighbors that do not belong to the banned entries
