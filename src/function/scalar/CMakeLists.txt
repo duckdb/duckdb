@@ -1,6 +1,5 @@
 add_subdirectory(generic)
 add_subdirectory(list)
-add_subdirectory(math)
 add_subdirectory(operators)
 add_subdirectory(sequence)
 add_subdirectory(string)
@@ -12,11 +11,9 @@ add_library_unity(
   generic_functions.cpp
   string_functions.cpp
   nested_functions.cpp
-  math_functions.cpp
   operators.cpp
   pragma_functions.cpp
-  sequence_functions.cpp
-  trigonometrics_functions.cpp)
+  sequence_functions.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_scalar>
     PARENT_SCOPE)

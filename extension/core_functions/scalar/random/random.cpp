@@ -1,10 +1,9 @@
-#include "duckdb/function/scalar/math_functions.hpp"
+#include "scalar/random_functions.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/random_engine.hpp"
-#include "duckdb/function/scalar/uuid_functions.hpp"
 #include "duckdb/common/types/uuid.hpp"
 
 namespace duckdb {
@@ -34,11 +33,11 @@ static unique_ptr<FunctionLocalState> RandomInitLocalState(ExpressionState &stat
 	return make_uniq<RandomLocalState>(random_engine.NextRandomInteger());
 }
 
-void RandomFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunction RandomFun::GetFunction() {
 	ScalarFunction random("random", {}, LogicalType::DOUBLE, RandomFunction, nullptr, nullptr, nullptr,
 	                      RandomInitLocalState);
 	random.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
-	set.AddFunction(random);
+	return random;
 }
 
 static void GenerateUUIDFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -53,12 +52,12 @@ static void GenerateUUIDFunction(DataChunk &args, ExpressionState &state, Vector
 	}
 }
 
-void UUIDFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunction UUIDFun::GetFunction() {
 	ScalarFunction uuid_function({}, LogicalType::UUID, GenerateUUIDFunction, nullptr, nullptr, nullptr,
 	                             RandomInitLocalState);
 	// generate a random uuid
 	uuid_function.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
-	set.AddFunction({"uuid", "gen_random_uuid"}, uuid_function);
+	return uuid_function;
 }
 
 } // namespace duckdb

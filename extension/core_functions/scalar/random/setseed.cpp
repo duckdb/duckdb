@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/math_functions.hpp"
+#include "scalar/random_functions.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -52,10 +52,10 @@ unique_ptr<FunctionData> SetSeedBind(ClientContext &context, ScalarFunction &bou
 	return make_uniq<SetseedBindData>(context);
 }
 
-void SetseedFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunction SetseedFun::GetFunction() {
 	ScalarFunction setseed("setseed", {LogicalType::DOUBLE}, LogicalType::SQLNULL, SetSeedFunction, SetSeedBind);
 	setseed.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
-	set.AddFunction(setseed);
+	return setseed;
 }
 
 } // namespace duckdb

@@ -99,12 +99,10 @@ void BuiltinFunctions::Initialize() {
 	RegisterRegressiveAggregates();
 
 	RegisterGenericFunctions();
-	RegisterMathFunctions();
 	RegisterOperators();
 	RegisterSequenceFunctions();
 	RegisterStringFunctions();
 	RegisterNestedFunctions();
-	RegisterTrigonometricsFunctions();
 
 	RegisterPragmaFunctions();
 

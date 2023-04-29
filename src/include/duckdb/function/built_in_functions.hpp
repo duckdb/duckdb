@@ -62,12 +62,10 @@ private:
 
 	// scalar functions
 	void RegisterGenericFunctions();
-	void RegisterMathFunctions();
 	void RegisterOperators();
 	void RegisterStringFunctions();
 	void RegisterNestedFunctions();
 	void RegisterSequenceFunctions();
-	void RegisterTrigonometricsFunctions();
 
 	// pragmas
 	void RegisterPragmaFunctions();

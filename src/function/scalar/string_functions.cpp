@@ -1,5 +1,4 @@
 #include "duckdb/function/scalar/string_functions.hpp"
-#include "duckdb/function/scalar/uuid_functions.hpp"
 
 namespace duckdb {
 
@@ -17,9 +16,6 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<PrefixFun>();
 	Register<SuffixFun>();
 	Register<NFCNormalizeFun>();
-
-	// uuid functions
-	Register<UUIDFun>();
 }
 
 } // namespace duckdb

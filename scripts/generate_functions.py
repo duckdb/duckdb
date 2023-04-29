@@ -2,7 +2,7 @@ import os
 import re
 import json
 
-scalar_functions = ['bit', 'blob', 'date', 'enum', 'generic', 'list', 'map', 'operators', 'string', 'struct', 'union']
+scalar_functions = ['bit', 'blob', 'date', 'enum', 'generic', 'list', 'map', 'math', 'operators', 'random', 'string', 'struct', 'union']
 
 header = '''//===----------------------------------------------------------------------===//
 //                         DuckDB
@@ -27,6 +27,9 @@ footer = '''} // namespace duckdb
 def normalize_path_separators(x):
     return os.path.sep.join(x.split('/'))
 
+def legal_struct_name(name):
+    return name.isalnum()
+
 def get_struct_name(function_name):
     return function_name.replace('_', ' ').title().replace(' ', '') + 'Fun'
 
@@ -48,6 +51,9 @@ for scalar in scalar_functions:
             struct_name = entry['struct']
         else:
             struct_name = get_struct_name(entry['name'])
+        if not legal_struct_name(struct_name):
+            print(f'Struct name {struct_name} is not a valid struct name!')
+            exit(1)
         if struct_name in function_type_set:
             raise Exception("Duplicate entry " + struct_name)
         function_type_set[struct_name] = entry['type']
@@ -70,9 +76,16 @@ for scalar in scalar_functions:
 };
 
 '''.replace('{STRUCT}', struct_name).replace('{NAME}', entry['name']).replace('{PARAMETERS}', entry['parameters'] if 'parameters' in entry else '').replace('{DESCRIPTION}', sanitize_string(entry['description'])).replace('{EXAMPLE}', sanitize_string(entry['example'])).replace('{FUNCTION}', function_text)
+        alias_count = 1
         if 'aliases' in entry:
             for alias in entry['aliases']:
                 alias_struct_name = get_struct_name(alias)
+                if not legal_struct_name(alias_struct_name):
+                    alias_struct_name = struct_name + 'Alias'
+                    if alias_count > 1:
+                        alias_struct_name += str(alias_count)
+                    alias_count += 1
+
                 aliased_type = entry['type']
                 if aliased_type == 'scalar_function':
                     all_function_list.append([alias, f"DUCKDB_SCALAR_FUNCTION_ALIAS({alias_struct_name})"])
