@@ -16,8 +16,34 @@
         "type": "scalar_function"
     },
     {
+        "name": "list_sort",
+        "parameters": "list",
+        "description": "Sorts the elements of the list.",
+        "example": "list_sort([3, 6, 1, 2])",
+        "struct": "ListSortFun",
+        "type": "scalar_function_set"
+    },
+    {
+        "name": "list_reverse_sort",
+        "parameters": "list",
+        "description": "Sorts the elements of the list in reverse order.",
+        "example": "list_reverse_sort([3, 6, 1, 2])",
+        "struct": "ListReverseSortFun",
+        "type": "scalar_function_set"
+    },
+    {
         "struct": "ListPackFun",
         "name": "list_pack",
         "alias": "ListValueFun"
+    },
+    {
+        "struct": "ArraySortFun",
+        "name": "array_sort",
+        "alias": "ListSortFun"
+    },
+    {
+        "struct": "ArrayReverseSortFun",
+        "name": "array_reverse_sort",
+        "alias": "ListReverseSortFun"
     }
 ]

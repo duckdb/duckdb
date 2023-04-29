@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/nested_functions.hpp"
+#include "scalar/list_functions.hpp"
 #include "duckdb/common/serializer/enum_serializer.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -298,10 +298,7 @@ static unique_ptr<FunctionData> ListReverseSortBind(ClientContext &context, Scal
 	return ListSortBind(context, bound_function, arguments, order, null_order);
 }
 
-void ListSortFun::RegisterFunction(BuiltinFunctions &set) {
-
-	// normal sort
-
+ScalarFunctionSet ListSortFun::GetFunctions() {
 	// one parameter: list
 	ScalarFunction sort({LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY), ListSortFunction,
 	                    ListNormalSortBind);
@@ -314,20 +311,14 @@ void ListSortFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction sort_orders({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR, LogicalType::VARCHAR},
 	                           LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListNormalSortBind);
 
-	ScalarFunctionSet list_sort("list_sort");
+	ScalarFunctionSet list_sort;
 	list_sort.AddFunction(sort);
 	list_sort.AddFunction(sort_order);
 	list_sort.AddFunction(sort_orders);
-	set.AddFunction(list_sort);
+	return list_sort;
+}
 
-	ScalarFunctionSet array_sort("array_sort");
-	array_sort.AddFunction(sort);
-	array_sort.AddFunction(sort_order);
-	array_sort.AddFunction(sort_orders);
-	set.AddFunction(array_sort);
-
-	// reverse sort
-
+ScalarFunctionSet ListReverseSortFun::GetFunctions() {
 	// one parameter: list
 	ScalarFunction sort_reverse({LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY),
 	                            ListSortFunction, ListReverseSortBind);
@@ -336,15 +327,10 @@ void ListSortFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction sort_reverse_null_order({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR},
 	                                       LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListReverseSortBind);
 
-	ScalarFunctionSet list_reverse_sort("list_reverse_sort");
+	ScalarFunctionSet list_reverse_sort;
 	list_reverse_sort.AddFunction(sort_reverse);
 	list_reverse_sort.AddFunction(sort_reverse_null_order);
-	set.AddFunction(list_reverse_sort);
-
-	ScalarFunctionSet array_reverse_sort("array_reverse_sort");
-	array_reverse_sort.AddFunction(sort_reverse);
-	array_reverse_sort.AddFunction(sort_reverse_null_order);
-	set.AddFunction(array_reverse_sort);
+	return list_reverse_sort;
 }
 
 } // namespace duckdb

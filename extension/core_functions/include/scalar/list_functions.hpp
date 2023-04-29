@@ -31,10 +31,40 @@ struct ListValueFun {
 	static ScalarFunction GetFunction();
 };
 
+struct ListSortFun {
+	static constexpr const char *Name = "list_sort";
+	static constexpr const char *Parameters = "list";
+	static constexpr const char *Description = "Sorts the elements of the list.";
+	static constexpr const char *Example = "list_sort([3, 6, 1, 2])";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct ListReverseSortFun {
+	static constexpr const char *Name = "list_reverse_sort";
+	static constexpr const char *Parameters = "list";
+	static constexpr const char *Description = "Sorts the elements of the list in reverse order.";
+	static constexpr const char *Example = "list_reverse_sort([3, 6, 1, 2])";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 struct ListPackFun {
 	using ALIAS = ListValueFun;
 
 	static constexpr const char *Name = "list_pack";
+};
+
+struct ArraySortFun {
+	using ALIAS = ListSortFun;
+
+	static constexpr const char *Name = "array_sort";
+};
+
+struct ArrayReverseSortFun {
+	using ALIAS = ListReverseSortFun;
+
+	static constexpr const char *Name = "array_reverse_sort";
 };
 
 }

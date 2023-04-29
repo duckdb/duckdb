@@ -28,6 +28,8 @@ namespace duckdb {
 static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(AgeFun),
 	DUCKDB_SCALAR_FUNCTION(AliasFun),
+	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(ArrayReverseSortFun),
+	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(ArraySortFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(Base64Fun),
 	DUCKDB_SCALAR_FUNCTION(BitPositionFun),
 	DUCKDB_SCALAR_FUNCTION(BitStringFun),
@@ -73,6 +75,8 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(LastDayFun),
 	DUCKDB_SCALAR_FUNCTION_SET(LeastFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ListPackFun),
+	DUCKDB_SCALAR_FUNCTION_SET(ListReverseSortFun),
+	DUCKDB_SCALAR_FUNCTION_SET(ListSortFun),
 	DUCKDB_SCALAR_FUNCTION(ListValueFun),
 	DUCKDB_SCALAR_FUNCTION_SET(MakeDateFun),
 	DUCKDB_SCALAR_FUNCTION(MakeTimeFun),

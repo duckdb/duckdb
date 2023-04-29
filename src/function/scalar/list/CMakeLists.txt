@@ -7,7 +7,6 @@ add_library_unity(
   list_aggregates.cpp
   array_slice.cpp
   list_extract.cpp
-  list_sort.cpp
   range.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_list_nested>
