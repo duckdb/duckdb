@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 2.8.12)
 project(CoreFunctionsExtension)
 
 include_directories(include)
+add_subdirectory(aggregate)
 add_subdirectory(scalar)
 
 set(CORE_FUNCTIONS_SOURCES core_functions_extension.cpp function_list.cpp

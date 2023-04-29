@@ -20,6 +20,9 @@ ScalarFunction ScalarFunctionSet::GetFunctionByArguments(ClientContext &context,
 	return GetFunctionByOffset(index);
 }
 
+AggregateFunctionSet::AggregateFunctionSet() : FunctionSet("") {
+}
+
 AggregateFunctionSet::AggregateFunctionSet(string name) : FunctionSet(std::move(name)) {
 }
 

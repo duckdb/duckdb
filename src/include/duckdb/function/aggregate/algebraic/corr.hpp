@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/function/aggregate_function.hpp"
-#include "duckdb/function/aggregate/algebraic_functions.hpp"
 #include "duckdb/function/aggregate/algebraic/covar.hpp"
 #include "duckdb/function/aggregate/algebraic/stddev.hpp"
 

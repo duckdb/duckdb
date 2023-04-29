@@ -1,4 +1,4 @@
-#include "duckdb/function/aggregate/algebraic_functions.hpp"
+#include "aggregate/algebraic_functions.hpp"
 #include "duckdb/function/aggregate/sum_helpers.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/exception.hpp"
@@ -177,27 +177,24 @@ unique_ptr<FunctionData> BindDecimalAvg(ClientContext &context, AggregateFunctio
 	    Hugeint::Cast<double>(Hugeint::POWERS_OF_TEN[DecimalType::GetScale(decimal_type)]));
 }
 
-void AvgFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet avg("avg");
+AggregateFunctionSet AvgFun::GetFunctions() {
+	AggregateFunctionSet avg;
 
 	avg.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
-	                                  nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
-	                                  BindDecimalAvg));
+									  nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
+									  BindDecimalAvg));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT16));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT32));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT64));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT128));
 	avg.AddFunction(AggregateFunction::UnaryAggregate<AvgState<double>, double, double, NumericAverageOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE));
-	set.AddFunction(avg);
+			LogicalType::DOUBLE, LogicalType::DOUBLE));
+	return avg;
+}
 
-	avg.name = "mean";
-	set.AddFunction(avg);
-
-	AggregateFunctionSet favg("favg");
-	favg.AddFunction(AggregateFunction::UnaryAggregate<KahanAvgState, double, double, KahanAverageOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE));
-	set.AddFunction(favg);
+AggregateFunction FAvgFun::GetFunction() {
+	return AggregateFunction::UnaryAggregate<KahanAvgState, double, double, KahanAverageOperation>(
+	    LogicalType::DOUBLE, LogicalType::DOUBLE);
 }
 
 } // namespace duckdb

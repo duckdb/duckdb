@@ -71,6 +71,7 @@ public:
 
 class AggregateFunctionSet : public FunctionSet<AggregateFunction> {
 public:
+	DUCKDB_API explicit AggregateFunctionSet();
 	DUCKDB_API explicit AggregateFunctionSet(string name);
 
 	DUCKDB_API AggregateFunction GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments);

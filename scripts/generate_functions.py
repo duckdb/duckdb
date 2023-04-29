@@ -2,6 +2,7 @@ import os
 import re
 import json
 
+aggregate_functions = ['algebraic']
 scalar_functions = ['bit', 'blob', 'date', 'enum', 'generic', 'list', 'map', 'math', 'operators', 'random', 'string', 'struct', 'union']
 
 header = '''//===----------------------------------------------------------------------===//
@@ -36,10 +37,13 @@ def get_struct_name(function_name):
 def sanitize_string(text):
     return text.replace('"', '\\"')
 
+all_function_types = []
+all_function_types += [f'aggregate/{x}' for x in aggregate_functions]
+all_function_types += [f'scalar/{x}' for x in scalar_functions]
+
 function_type_set = {}
 all_function_list = []
-for scalar in scalar_functions:
-    path = f'scalar/{scalar}'
+for path in all_function_types:
     header_path = normalize_path_separators(f'extension/core_functions/include/{path}_functions.hpp')
     json_path = normalize_path_separators(f'extension/core_functions/{path}/functions.json')
     with open(json_path, 'r') as f:
@@ -63,6 +67,12 @@ for scalar in scalar_functions:
         elif entry['type'] == 'scalar_function_set':
             function_text = 'static ScalarFunctionSet GetFunctions();'
             all_function_list.append([entry['name'], f"DUCKDB_SCALAR_FUNCTION_SET({struct_name})"])
+        elif entry['type'] == 'aggregate_function':
+            function_text = 'static AggregateFunction GetFunction();'
+            all_function_list.append([entry['name'], f"DUCKDB_AGGREGATE_FUNCTION({struct_name})"])
+        elif entry['type'] == 'aggregate_function_set':
+            function_text = 'static AggregateFunctionSet GetFunctions();'
+            all_function_list.append([entry['name'], f"DUCKDB_AGGREGATE_FUNCTION_SET({struct_name})"])
         else:
             print("Unknown entry type " + entry['type'] + ' for entry ' + struct_name)
             exit(1)
@@ -91,6 +101,10 @@ for scalar in scalar_functions:
                     all_function_list.append([alias, f"DUCKDB_SCALAR_FUNCTION_ALIAS({alias_struct_name})"])
                 elif aliased_type == 'scalar_function_set':
                     all_function_list.append([alias, f"DUCKDB_SCALAR_FUNCTION_SET_ALIAS({alias_struct_name})"])
+                elif aliased_type == 'aggregate_function':
+                    all_function_list.append([alias, f"DUCKDB_AGGREGATE_FUNCTION_ALIAS({alias_struct_name})"])
+                elif aliased_type == 'aggregate_function_set':
+                    all_function_list.append([alias, f"DUCKDB_AGGREGATE_FUNCTION_SET_ALIAS({alias_struct_name})"])
                 else:
                     print("Unknown entry type " + aliased_type + ' for entry ' + struct_name)
                     exit(1)

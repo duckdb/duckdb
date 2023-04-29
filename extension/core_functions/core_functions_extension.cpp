@@ -5,6 +5,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 
@@ -12,6 +13,14 @@
 #include "duckdb/catalog/catalog.hpp"
 
 namespace duckdb {
+
+template<class T>
+void FillExtraInfo(StaticFunctionDefinition &function, T &info) {
+	info.internal = true;
+	info.description = function.description;
+	info.parameter_names = StringUtil::Split(function.parameters, ",");
+	info.example = function.example;
+}
 
 void CoreFunctionsExtension::RegisterFunctions(Catalog &catalog, CatalogTransaction transaction) {
 	auto functions = StaticFunctionDefinition::GetFunctionList();
@@ -27,10 +36,19 @@ void CoreFunctionsExtension::RegisterFunctions(Catalog &catalog, CatalogTransact
 			}
 			result.name = function.name;
 			CreateScalarFunctionInfo info(result);
-			info.internal = true;
-			info.description = function.description;
-			info.parameter_names = StringUtil::Split(function.parameters, ",");
-			info.example = function.example;
+			FillExtraInfo(function, info);
+			catalog.CreateFunction(transaction, info);
+		} else if (function.get_aggregate_function || function.get_aggregate_function_set) {
+			// aggregate function
+			AggregateFunctionSet result;
+			if (function.get_aggregate_function) {
+				result.AddFunction(function.get_aggregate_function());
+			} else {
+				result = function.get_aggregate_function_set();
+			}
+			result.name = function.name;
+			CreateAggregateFunctionInfo info(result);
+			FillExtraInfo(function, info);
 			catalog.CreateFunction(transaction, info);
 		} else {
 			throw InternalException("Do not know how to register function of this type");
