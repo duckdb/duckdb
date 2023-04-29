@@ -2,6 +2,7 @@
 #include "aggregate/algebraic_functions.hpp"
 #include "aggregate/distributive_functions.hpp"
 #include "aggregate/holistic_functions.hpp"
+#include "aggregate/nested_functions.hpp"
 #include "scalar/bit_functions.hpp"
 #include "scalar/blob_functions.hpp"
 #include "scalar/date_functions.hpp"
@@ -63,6 +64,7 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_AGGREGATE_FUNCTION_SET(ArgMinFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET_ALIAS(ArgmaxFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET_ALIAS(ArgminFun),
+	DUCKDB_AGGREGATE_FUNCTION_ALIAS(ArrayAggFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayAggrFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayAggregateFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayApplyFun),
@@ -159,6 +161,7 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION(HammingFun),
 	DUCKDB_SCALAR_FUNCTION(HashFun),
 	DUCKDB_SCALAR_FUNCTION_SET(HexFun),
+	DUCKDB_AGGREGATE_FUNCTION_SET(HistogramFun),
 	DUCKDB_SCALAR_FUNCTION_SET(HoursFun),
 	DUCKDB_SCALAR_FUNCTION(InstrFun),
 	DUCKDB_SCALAR_FUNCTION_SET(IsFiniteFun),
@@ -179,6 +182,7 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION(LeftGraphemeFun),
 	DUCKDB_SCALAR_FUNCTION(LevenshteinFun),
 	DUCKDB_SCALAR_FUNCTION(LogGammaFun),
+	DUCKDB_AGGREGATE_FUNCTION(ListFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ListAggrFun),
 	DUCKDB_SCALAR_FUNCTION(ListAggregateFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ListApplyFun),

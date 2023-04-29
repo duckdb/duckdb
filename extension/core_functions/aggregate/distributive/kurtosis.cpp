@@ -86,8 +86,8 @@ struct KurtosisOperation {
 };
 
 AggregateFunction KurtosisFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<KurtosisState, double, double, KurtosisOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE);
+	return AggregateFunction::UnaryAggregate<KurtosisState, double, double, KurtosisOperation>(LogicalType::DOUBLE,
+	                                                                                           LogicalType::DOUBLE);
 }
 
 } // namespace duckdb

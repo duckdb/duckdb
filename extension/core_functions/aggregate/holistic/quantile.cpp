@@ -1376,10 +1376,10 @@ AggregateFunction GetQuantileDecimalAggregate(const vector<LogicalType> &argumen
 }
 
 const vector<LogicalType> QUANTILE_TYPES = {LogicalType::TINYINT,  LogicalType::SMALLINT,     LogicalType::INTEGER,
-									   LogicalType::BIGINT,   LogicalType::HUGEINT,      LogicalType::FLOAT,
-									   LogicalType::DOUBLE,   LogicalType::DATE,         LogicalType::TIMESTAMP,
-									   LogicalType::TIME,     LogicalType::TIMESTAMP_TZ, LogicalType::TIME_TZ,
-									   LogicalType::INTERVAL, LogicalType::VARCHAR};
+                                            LogicalType::BIGINT,   LogicalType::HUGEINT,      LogicalType::FLOAT,
+                                            LogicalType::DOUBLE,   LogicalType::DATE,         LogicalType::TIMESTAMP,
+                                            LogicalType::TIME,     LogicalType::TIMESTAMP_TZ, LogicalType::TIME_TZ,
+                                            LogicalType::INTERVAL, LogicalType::VARCHAR};
 
 AggregateFunctionSet MedianFun::GetFunctions() {
 	AggregateFunctionSet median("median");
@@ -1429,8 +1429,8 @@ AggregateFunctionSet MadFun::GetFunctions() {
 	                                  nullptr, nullptr, nullptr, BindMedianAbsoluteDeviationDecimal));
 
 	const vector<LogicalType> MAD_TYPES = {LogicalType::FLOAT,     LogicalType::DOUBLE, LogicalType::DATE,
-	                                  LogicalType::TIMESTAMP, LogicalType::TIME,   LogicalType::TIMESTAMP_TZ,
-	                                  LogicalType::TIME_TZ};
+	                                       LogicalType::TIMESTAMP, LogicalType::TIME,   LogicalType::TIMESTAMP_TZ,
+	                                       LogicalType::TIME_TZ};
 	for (const auto &type : MAD_TYPES) {
 		mad.AddFunction(GetMedianAbsoluteDeviationAggregateFunction(type));
 	}

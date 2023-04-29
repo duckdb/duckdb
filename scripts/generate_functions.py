@@ -2,7 +2,7 @@ import os
 import re
 import json
 
-aggregate_functions = ['algebraic', 'distributive', 'holistic']
+aggregate_functions = ['algebraic', 'distributive', 'holistic', 'nested']
 scalar_functions = ['bit', 'blob', 'date', 'enum', 'generic', 'list', 'map', 'math', 'operators', 'random', 'string', 'struct', 'union']
 
 header = '''//===----------------------------------------------------------------------===//
@@ -76,6 +76,9 @@ for path in all_function_types:
         else:
             print("Unknown entry type " + entry['type'] + ' for entry ' + struct_name)
             exit(1)
+        if 'extra_functions' in entry:
+            for func_text in entry['extra_functions']:
+                function_text += '\n	' + func_text
         new_text += '''struct {STRUCT} {
 	static constexpr const char *Name = "{NAME}";
 	static constexpr const char *Parameters = "{PARAMETERS}";

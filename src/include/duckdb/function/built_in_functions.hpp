@@ -55,7 +55,6 @@ private:
 
 	// aggregates
 	void RegisterDistributiveAggregates();
-	void RegisterNestedAggregates();
 	void RegisterRegressiveAggregates();
 
 	// scalar functions

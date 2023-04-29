@@ -1,5 +1,5 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
-#include "duckdb/function/aggregate/nested_functions.hpp"
+#include "aggregate/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -233,8 +233,8 @@ AggregateFunction GetHistogramFunction(const LogicalType &type) {
 	}
 }
 
-void HistogramFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet fun("histogram");
+AggregateFunctionSet HistogramFun::GetFunctions() {
+	AggregateFunctionSet fun;
 	fun.AddFunction(GetHistogramFunction<>(LogicalType::BOOLEAN));
 	fun.AddFunction(GetHistogramFunction<>(LogicalType::UTINYINT));
 	fun.AddFunction(GetHistogramFunction<>(LogicalType::USMALLINT));
@@ -255,7 +255,7 @@ void HistogramFun::RegisterFunction(BuiltinFunctions &set) {
 	fun.AddFunction(GetHistogramFunction<>(LogicalType::TIME));
 	fun.AddFunction(GetHistogramFunction<>(LogicalType::TIME_TZ));
 	fun.AddFunction(GetHistogramFunction<>(LogicalType::DATE));
-	set.AddFunction(fun);
+	return fun;
 }
 
 AggregateFunction HistogramFun::GetHistogramUnorderedMap(LogicalType &type) {

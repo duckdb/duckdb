@@ -93,7 +93,6 @@ void BuiltinFunctions::Initialize() {
 	RegisterArrowFunctions();
 
 	RegisterDistributiveAggregates();
-	RegisterNestedAggregates();
 	RegisterRegressiveAggregates();
 
 	RegisterGenericFunctions();

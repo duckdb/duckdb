@@ -188,14 +188,14 @@ AggregateFunctionSet SumFun::GetFunctions() {
 	AggregateFunctionSet sum;
 	// decimal
 	sum.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
-									  nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
-									  BindDecimalSum));
+	                                  nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
+	                                  BindDecimalSum));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT16));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT32));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT64));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT128));
 	sum.AddFunction(AggregateFunction::UnaryAggregate<SumState<double>, double, double, NumericSumOperation>(
-			LogicalType::DOUBLE, LogicalType::DOUBLE));
+	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 	return sum;
 }
 
@@ -204,15 +204,14 @@ AggregateFunctionSet SumNoOverflowFun::GetFunctions() {
 	sum_no_overflow.AddFunction(GetSumAggregateNoOverflow(PhysicalType::INT32));
 	sum_no_overflow.AddFunction(GetSumAggregateNoOverflow(PhysicalType::INT64));
 	sum_no_overflow.AddFunction(
-			AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr,
-							  nullptr,
-							  FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, BindDecimalSumNoOverflow));
+	    AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                      FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, BindDecimalSumNoOverflow));
 	return sum_no_overflow;
 }
 
 AggregateFunction KahanSumFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<KahanSumState, double, double, KahanSumOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE);
+	return AggregateFunction::UnaryAggregate<KahanSumState, double, double, KahanSumOperation>(LogicalType::DOUBLE,
+	                                                                                           LogicalType::DOUBLE);
 }
 
 } // namespace duckdb

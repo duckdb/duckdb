@@ -1,6 +1,6 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/list_segment.hpp"
-#include "duckdb/function/aggregate/nested_functions.hpp"
+#include "aggregate/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 namespace duckdb {
@@ -180,15 +180,11 @@ unique_ptr<FunctionData> ListBindFunction(ClientContext &context, AggregateFunct
 	return make_uniq<ListBindData>(function.return_type);
 }
 
-void ListFun::RegisterFunction(BuiltinFunctions &set) {
-	auto agg =
-	    AggregateFunction("list", {LogicalType::ANY}, LogicalTypeId::LIST, AggregateFunction::StateSize<ListAggState>,
+AggregateFunction ListFun::GetFunction() {
+	return AggregateFunction({LogicalType::ANY}, LogicalTypeId::LIST, AggregateFunction::StateSize<ListAggState>,
 	                      AggregateFunction::StateInitialize<ListAggState, ListFunction>, ListUpdateFunction,
 	                      ListCombineFunction, ListFinalize, nullptr, ListBindFunction,
 	                      AggregateFunction::StateDestroy<ListAggState, ListFunction>, nullptr, nullptr);
-	set.AddFunction(agg);
-	agg.name = "array_agg";
-	set.AddFunction(agg);
 }
 
 } // namespace duckdb
