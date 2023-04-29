@@ -4,7 +4,6 @@
         "parameters": "enum",
         "description": "Returns the first value of the input enum type.",
         "example": "enum_first(null::mood)",
-        "struct": "EnumFirstFun",
         "type": "scalar_function"
     },
     {
@@ -12,7 +11,6 @@
         "parameters": "enum",
         "description": "Returns the last value of the input enum type.",
         "example": "enum_last(null::mood)",
-        "struct": "EnumLastFun",
         "type": "scalar_function"
     },
     {
@@ -20,7 +18,6 @@
         "parameters": "enum",
         "description": "Returns the numeric value backing the given enum value",
         "example": "enum_code('happy'::mood)",
-        "struct": "EnumCodeFun",
         "type": "scalar_function"
     },
     {
@@ -28,7 +25,6 @@
         "parameters": "enum",
         "description": "Returns all values of the input enum type as an array.",
         "example": "enum_range(null::mood)",
-        "struct": "EnumRangeFun",
         "type": "scalar_function"
     },
     {
@@ -36,7 +32,6 @@
         "parameters": "start,end",
         "description": "Returns the range between the two given enum values as an array. The values must be of the same enum type. When the first parameter is NULL, the result starts with the first value of the enum type. When the second parameter is NULL, the result ends with the last value of the enum type.",
         "example": "enum_range_boundary(NULL, 'happy'::mood)",
-        "struct": "EnumRangeBoundaryFun",
         "type": "scalar_function"
     }
 ]

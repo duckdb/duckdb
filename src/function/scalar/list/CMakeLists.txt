@@ -3,7 +3,6 @@ add_library_unity(
   OBJECT
   list_concat.cpp
   contains_or_position.cpp
-  list_aggregates.cpp
   list_extract.cpp
   range.cpp)
 set(ALL_OBJECT_FILES

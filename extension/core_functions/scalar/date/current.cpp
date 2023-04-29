@@ -45,7 +45,7 @@ ScalarFunction CurrentDateFun::GetFunction() {
 	return current_date;
 }
 
-ScalarFunction CurrentTimestampFun::GetFunction() {
+ScalarFunction GetCurrentTimestampFun::GetFunction() {
 	ScalarFunction current_timestamp({}, LogicalType::TIMESTAMP_TZ, CurrentTimestampFunction);
 	current_timestamp.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
 	return current_timestamp;

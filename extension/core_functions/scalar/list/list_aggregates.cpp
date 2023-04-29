@@ -506,16 +506,4 @@ ScalarFunction ListUniqueFun::GetFunction() {
 	                      ListUniqueBind);
 }
 
-void ListAggregateFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"list_aggregate", "array_aggregate", "list_aggr", "array_aggr", "aggregate"}, GetFunction());
-}
-
-void ListDistinctFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"list_distinct", "array_distinct"}, GetFunction());
-}
-
-void ListUniqueFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"list_unique", "array_unique"}, GetFunction());
-}
-
 } // namespace duckdb

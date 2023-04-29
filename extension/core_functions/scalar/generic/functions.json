@@ -4,7 +4,6 @@
         "parameters": "expr",
         "description": "Returns the name of a given expression",
         "example": "alias(42 + 1)",
-        "struct": "AliasFun",
         "type": "scalar_function"
     },
     {
@@ -12,7 +11,6 @@
         "parameters": "setting_name",
         "description": "Return the current value of the configuration setting",
         "example": "current_setting('access_mode')",
-        "struct": "CurrentSettingFun",
         "type": "scalar_function"
     },
     {
@@ -20,7 +18,6 @@
         "parameters": "message",
         "description": "Throws the given error message",
         "example": "error('access_mode')",
-        "struct": "ErrorFun",
         "type": "scalar_function"
     },
     {
@@ -28,7 +25,6 @@
         "parameters": "param",
         "description": "Returns an integer with the hash of the value. Note that this is not a cryptographic hash.",
         "example": "hash('\uD83E\uDD86')",
-        "struct": "HashFun",
         "type": "scalar_function"
     },
     {
@@ -36,7 +32,6 @@
         "parameters": "arg1, arg2, ...",
         "description": "Returns the lowest value of the set of input parameters.",
         "example": "least(42, 84)",
-        "struct": "LeastFun",
         "type": "scalar_function_set"
     },
     {
@@ -44,7 +39,6 @@
         "parameters": "arg1, arg2, ...",
         "description": "Returns the highest value of the set of input parameters.",
         "example": "greatest(42, 84)",
-        "struct": "GreatestFun",
         "type": "scalar_function_set"
     },
     {
@@ -52,7 +46,6 @@
         "parameters": "expression",
         "description": "Returns a string with statistics about the expression. Expression can be a column, constant, or SQL expression.",
         "example": "stats(5)",
-        "struct": "StatsFun",
         "type": "scalar_function"
     },
     {
@@ -68,7 +61,6 @@
         "parameters": "",
         "description": "Returns the current query as a string",
         "example": "current_query()",
-        "struct": "CurrentQueryFun",
         "type": "scalar_function"
     },
     {
@@ -76,7 +68,6 @@
         "parameters": "",
         "description": "Return the name of the currently active schema. Default is main.",
         "example": "current_schema()",
-        "struct": "CurrentSchemaFun",
         "type": "scalar_function"
     },
     {
@@ -84,7 +75,6 @@
         "parameters": "include_implicit",
         "description": "Return list of schemas. Pass a parameter of True to include implicit schemas.",
         "example": "current_schemas(true)",
-        "struct": "CurrentSchemasFun",
         "type": "scalar_function"
     },
     {
@@ -92,7 +82,6 @@
         "parameters": "",
         "description": "Return the name of the currently active database.",
         "example": "current_database()",
-        "struct": "CurrentDatabaseFun",
         "type": "scalar_function"
     },
     {
@@ -108,7 +97,6 @@
         "parameters": "",
         "description": "Return the currently active version of DuckDB in this format: v0.3.2\t",
         "example": "version()",
-        "struct": "VersionFun",
         "type": "scalar_function"
     }
 ]

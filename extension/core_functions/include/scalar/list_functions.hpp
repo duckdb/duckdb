@@ -22,6 +22,69 @@ struct ListFlattenFun {
 	static ScalarFunction GetFunction();
 };
 
+struct ListAggregateFun {
+	static constexpr const char *Name = "list_aggregate";
+	static constexpr const char *Parameters = "list,name";
+	static constexpr const char *Description = "Executes the aggregate function name on the elements of list.";
+	static constexpr const char *Example = "list_aggregate([1, 2, NULL], 'min')";
+
+	static ScalarFunction GetFunction();
+};
+
+struct ArrayAggregateFun {
+	using ALIAS = ListAggregateFun;
+
+	static constexpr const char *Name = "array_aggregate";
+};
+
+struct ListAggrFun {
+	using ALIAS = ListAggregateFun;
+
+	static constexpr const char *Name = "list_aggr";
+};
+
+struct ArrayAggrFun {
+	using ALIAS = ListAggregateFun;
+
+	static constexpr const char *Name = "array_aggr";
+};
+
+struct AggregateFun {
+	using ALIAS = ListAggregateFun;
+
+	static constexpr const char *Name = "aggregate";
+};
+
+struct ListDistinctFun {
+	static constexpr const char *Name = "list_distinct";
+	static constexpr const char *Parameters = "list";
+	static constexpr const char *Description = "Removes all duplicates and NULLs from a list. Does not preserve the original order.";
+	static constexpr const char *Example = "list_distinct([1, 1, NULL, -3, 1, 5])";
+
+	static ScalarFunction GetFunction();
+};
+
+struct ArrayDistinctFun {
+	using ALIAS = ListDistinctFun;
+
+	static constexpr const char *Name = "array_distinct";
+};
+
+struct ListUniqueFun {
+	static constexpr const char *Name = "list_unique";
+	static constexpr const char *Parameters = "list";
+	static constexpr const char *Description = "Counts the unique elements of a list.";
+	static constexpr const char *Example = "list_unique([1, 1, NULL, -3, 1, 5])";
+
+	static ScalarFunction GetFunction();
+};
+
+struct ArrayUniqueFun {
+	using ALIAS = ListUniqueFun;
+
+	static constexpr const char *Name = "array_unique";
+};
+
 struct ListValueFun {
 	static constexpr const char *Name = "list_value";
 	static constexpr const char *Parameters = "any,...";

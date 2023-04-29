@@ -178,7 +178,7 @@ struct CurrentTimeFun {
 	static ScalarFunction GetFunction();
 };
 
-struct CurrentTimestampFun {
+struct GetCurrentTimestampFun {
 	static constexpr const char *Name = "get_current_timestamp";
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "Returns the current timestamp";
@@ -188,13 +188,13 @@ struct CurrentTimestampFun {
 };
 
 struct NowFun {
-	using ALIAS = CurrentTimestampFun;
+	using ALIAS = GetCurrentTimestampFun;
 
 	static constexpr const char *Name = "now";
 };
 
 struct TransactionTimestampFun {
-	using ALIAS = CurrentTimestampFun;
+	using ALIAS = GetCurrentTimestampFun;
 
 	static constexpr const char *Name = "transaction_timestamp";
 };

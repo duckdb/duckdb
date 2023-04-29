@@ -27,6 +27,9 @@ footer = '''}
 def normalize_path_separators(x):
     return os.path.sep.join(x.split('/'))
 
+def get_struct_name(function_name):
+    return function_name.replace('_', ' ').title().replace(' ', '') + 'Fun'
+
 function_type_set = {}
 all_function_list = []
 for scalar in scalar_functions:
@@ -38,18 +41,21 @@ for scalar in scalar_functions:
     new_text = header.replace('{HEADER}', path)
     for entry in parsed_json:
         function_text = ''
-        struct_type = entry['struct']
-        if entry['struct'] in function_type_set:
-            raise Exception("Duplicate entry " + entry['struct'])
-        function_type_set[entry['struct']] = entry['type']
+        if 'struct' in entry:
+            struct_name = entry['struct']
+        else:
+            struct_name = get_struct_name(entry['name'])
+        if struct_name in function_type_set:
+            raise Exception("Duplicate entry " + struct_name)
+        function_type_set[struct_name] = entry['type']
         if entry['type'] == 'scalar_function':
             function_text = 'static ScalarFunction GetFunction();'
-            all_function_list.append([entry['name'], f"DUCKDB_SCALAR_FUNCTION({struct_type})"])
+            all_function_list.append([entry['name'], f"DUCKDB_SCALAR_FUNCTION({struct_name})"])
         elif entry['type'] == 'scalar_function_set':
             function_text = 'static ScalarFunctionSet GetFunctions();'
-            all_function_list.append([entry['name'], f"DUCKDB_SCALAR_FUNCTION_SET({struct_type})"])
+            all_function_list.append([entry['name'], f"DUCKDB_SCALAR_FUNCTION_SET({struct_name})"])
         else:
-            print("Unknown entry type " + entry['type'] + ' for entry ' + entry['struct'])
+            print("Unknown entry type " + entry['type'] + ' for entry ' + struct_name)
             exit(1)
         new_text += '''struct {STRUCT} {
 	static constexpr const char *Name = "{NAME}";
@@ -60,17 +66,17 @@ for scalar in scalar_functions:
 	{FUNCTION}
 };
 
-'''.replace('{STRUCT}', entry['struct']).replace('{NAME}', entry['name']).replace('{PARAMETERS}', entry['parameters'] if 'parameters' in entry else '').replace('{DESCRIPTION}', entry['description']).replace('{EXAMPLE}', entry['example']).replace('{FUNCTION}', function_text)
+'''.replace('{STRUCT}', struct_name).replace('{NAME}', entry['name']).replace('{PARAMETERS}', entry['parameters'] if 'parameters' in entry else '').replace('{DESCRIPTION}', entry['description']).replace('{EXAMPLE}', entry['example']).replace('{FUNCTION}', function_text)
         if 'aliases' in entry:
             for alias in entry['aliases']:
-                alias_struct_name = alias.replace('_', ' ').title().replace(' ', '') + 'Fun'
+                alias_struct_name = get_struct_name(alias)
                 aliased_type = entry['type']
                 if aliased_type == 'scalar_function':
                     all_function_list.append([alias, f"DUCKDB_SCALAR_FUNCTION_ALIAS({alias_struct_name})"])
                 elif aliased_type == 'scalar_function_set':
                     all_function_list.append([alias, f"DUCKDB_SCALAR_FUNCTION_SET_ALIAS({alias_struct_name})"])
                 else:
-                    print("Unknown entry type " + aliased_type + ' for entry ' + entry['struct'])
+                    print("Unknown entry type " + aliased_type + ' for entry ' + struct_name)
                     exit(1)
                 function_type_set[alias_struct_name] = aliased_type
                 new_text += '''struct {STRUCT} {
@@ -79,7 +85,7 @@ for scalar in scalar_functions:
 	static constexpr const char *Name = "{NAME}";
 };
 
-'''.replace('{STRUCT}', alias_struct_name).replace('{NAME}', alias).replace('{ALIAS}', entry['struct'])
+'''.replace('{STRUCT}', alias_struct_name).replace('{NAME}', alias).replace('{ALIAS}', struct_name)
     new_text += footer
     with open(header_path, 'w+') as f:
         f.write(new_text)

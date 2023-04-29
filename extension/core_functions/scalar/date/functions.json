@@ -1,6 +1,5 @@
 [
     {
-        "struct": "AgeFun",
         "name": "age",
         "parameters": "timestamp,timestamp",
         "description": "Subtract arguments, resulting in the time difference between the two timestamps",
@@ -8,7 +7,6 @@
         "type": "scalar_function_set"
     },
     {
-        "struct": "CenturyFun",
         "name": "century",
         "parameters": "ts",
         "description": "Extract the century component from a date or timestamp",
@@ -16,7 +14,6 @@
         "type": "scalar_function_set"
     },
     {
-        "struct": "CurrentDateFun",
         "name": "current_date",
         "description": "Returns the current date",
         "example": "current_date()",
@@ -24,7 +21,6 @@
         "aliases": ["today"]
     },
     {
-        "struct": "DateDiffFun",
         "name": "date_diff",
         "parameters": "part,startdate,enddate",
         "description": "The number of partition boundaries between the timestamps",
@@ -33,7 +29,6 @@
         "aliases": ["datediff"]
     },
     {
-        "struct": "DatePartFun",
         "name": "date_part",
         "parameters": "ts",
         "description": "Get subfield (equivalent to extract)",
@@ -41,7 +36,6 @@
         "type": "scalar_function_set"
     },
     {
-        "struct": "DateSubFun",
         "name": "date_sub",
         "parameters": "part,startdate,enddate",
         "description": "The number of complete partitions between the timestamps",
@@ -49,7 +43,6 @@
         "type": "scalar_function_set"
     },
     {
-        "struct": "DateTruncFun",
         "name": "date_trunc",
         "parameters": "part,timestamp",
         "description": "Truncate to specified precision",
@@ -57,7 +50,6 @@
         "type": "scalar_function_set"
     },
     {
-        "struct": "DayFun",
         "name": "day",
         "parameters": "ts",
         "description": "Extract the day component from a date or timestamp",
@@ -97,7 +89,6 @@
         "type": "scalar_function_set"
     },
     {
-        "struct": "DecadeFun",
         "name": "decade",
         "parameters": "ts",
         "description": "Extract the decade component from a date or timestamp",
@@ -105,7 +96,6 @@
         "type": "scalar_function_set"
     },
     {
-        "struct": "EpochFun",
         "name": "epoch",
         "parameters": "ts",
         "description": "Extract the epoch component from a date or timestamp",
@@ -113,7 +103,6 @@
         "type": "scalar_function_set"
     },
     {
-        "struct": "EpochMsFun",
         "name": "epoch_ms",
         "parameters": "ms",
         "description": "Converts ms since epoch to a timestamp",
@@ -121,7 +110,6 @@
         "type": "scalar_function"
     },
     {
-        "struct": "EraFun",
         "name": "era",
         "parameters": "ts",
         "description": "Extract the era component from a date or timestamp",
@@ -136,7 +124,6 @@
         "type": "scalar_function"
     },
     {
-        "struct": "CurrentTimestampFun",
         "name": "get_current_timestamp",
         "description": "Returns the current timestamp",
         "example": "get_current_timestamp()",
@@ -168,7 +155,6 @@
         "type": "scalar_function_set"
     },
     {
-        "struct": "LastDayFun",
         "name": "last_day",
         "parameters": "ts",
         "description": "Returns the last day of the month",
@@ -176,7 +162,6 @@
         "type": "scalar_function_set"
     },
     {
-        "struct": "MakeDateFun",
         "name": "make_date",
         "parameters": "year,month,day",
         "description": "The date for the given parts",
@@ -184,7 +169,6 @@
         "type": "scalar_function_set"
     },
     {
-        "struct": "MakeTimeFun",
         "name": "make_time",
         "parameters": "hour,minute,seconds",
         "description": "The time for the given parts",
@@ -192,7 +176,6 @@
         "type": "scalar_function"
     },
     {
-        "struct": "MakeTimestampFun",
         "name": "make_timestamp",
         "parameters": "year,month,day,hour,minute,seconds",
         "description": "The timestamp for the given parts",
@@ -208,7 +191,6 @@
         "type": "scalar_function_set"
     },
     {
-        "struct": "MillenniumFun",
         "name": "millennium",
         "parameters": "ts",
         "description": "Extract the millennium component from a date or timestamp",
@@ -232,7 +214,6 @@
         "type": "scalar_function_set"
     },
     {
-        "struct": "MonthFun",
         "name": "month",
         "parameters": "ts",
         "description": "Extract the month component from a date or timestamp",
@@ -248,7 +229,6 @@
         "type": "scalar_function_set"
     },
     {
-        "struct": "QuarterFun",
         "name": "quarter",
         "parameters": "ts",
         "description": "Extract the quarter component from a date or timestamp",
@@ -280,7 +260,6 @@
         "type": "scalar_function_set"
     },
     {
-        "struct": "TimeBucketFun",
         "name": "time_bucket",
         "parameters": "bucket_width,timestamp,origin",
         "description": "Truncate timestamptz by the specified interval bucket_width. Buckets are aligned relative to origin timestamptz. origin defaults to 2000-01-03 00:00:00+00 for buckets that don\u2019t include a month or year interval, and to 2000-01-01 00:00:00+00 for month and year buckets.",
@@ -288,7 +267,6 @@
         "type": "scalar_function_set"
     },
     {
-        "struct": "TimezoneFun",
         "name": "timezone",
         "parameters": "ts",
         "description": "Extract the timezone component from a date or timestamp",
@@ -296,7 +274,6 @@
         "type": "scalar_function_set"
     },
     {
-        "struct": "TimezoneHourFun",
         "name": "timezone_hour",
         "parameters": "ts",
         "description": "Extract the timezone_hour component from a date or timestamp",
@@ -304,7 +281,6 @@
         "type": "scalar_function_set"
     },
     {
-        "struct": "TimezoneMinuteFun",
         "name": "timezone_minute",
         "parameters": "ts",
         "description": "Extract the timezone_minute component from a date or timestamp",
@@ -312,7 +288,6 @@
         "type": "scalar_function_set"
     },
     {
-        "struct": "ToDaysFun",
         "name": "to_days",
         "parameters": "integer",
         "description": "Construct a day interval",
@@ -320,7 +295,6 @@
         "type": "scalar_function"
     },
     {
-        "struct": "ToHoursFun",
         "name": "to_hours",
         "parameters": "integer",
         "description": "Construct a hour interval",
@@ -328,7 +302,6 @@
         "type": "scalar_function"
     },
     {
-        "struct": "ToMicrosecondsFun",
         "name": "to_microseconds",
         "parameters": "integer",
         "description": "Construct a microsecond interval",
@@ -336,7 +309,6 @@
         "type": "scalar_function"
     },
     {
-        "struct": "ToMillisecondsFun",
         "name": "to_milliseconds",
         "parameters": "integer",
         "description": "Construct a millisecond interval",
@@ -344,7 +316,6 @@
         "type": "scalar_function"
     },
     {
-        "struct": "ToMinutesFun",
         "name": "to_minutes",
         "parameters": "integer",
         "description": "Construct a minute interval",
@@ -352,7 +323,6 @@
         "type": "scalar_function"
     },
     {
-        "struct": "ToMonthsFun",
         "name": "to_months",
         "parameters": "integer",
         "description": "Construct a month interval",
@@ -360,7 +330,6 @@
         "type": "scalar_function"
     },
     {
-        "struct": "ToSecondsFun",
         "name": "to_seconds",
         "parameters": "integer",
         "description": "Construct a second interval",
@@ -368,7 +337,6 @@
         "type": "scalar_function"
     },
     {
-        "struct": "ToTimestampFun",
         "name": "to_timestamp",
         "parameters": "sec",
         "description": "Converts sec since epoch to a timestamp",
@@ -376,7 +344,6 @@
         "type": "scalar_function"
     },
     {
-        "struct": "ToYearsFun",
         "name": "to_years",
         "parameters": "integer",
         "description": "Construct a year interval",
@@ -392,7 +359,6 @@
         "type": "scalar_function_set"
     },
     {
-        "struct": "WeekFun",
         "name": "week",
         "parameters": "ts",
         "description": "Extract the week component from a date or timestamp",
@@ -416,7 +382,6 @@
         "type": "scalar_function_set"
     },
     {
-        "struct": "YearFun",
         "name": "year",
         "parameters": "ts",
         "description": "Extract the year component from a date or timestamp",

@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   array_slice.cpp
   flatten.cpp
+  list_aggregates.cpp
   list_lambdas.cpp
   list_value.cpp
   list_sort.cpp)
