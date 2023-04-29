@@ -25,8 +25,7 @@ struct DecodeFun {
 struct EncodeFun {
 	static constexpr const char *Name = "encode";
 	static constexpr const char *Parameters = "string";
-	static constexpr const char *Description =
-	    "Convert varchar to blob. Converts utf-8 characters into literal encoding.";
+	static constexpr const char *Description = "Convert varchar to blob. Converts utf-8 characters into literal encoding.";
 	static constexpr const char *Example = "encode('my_string_with_ü')";
 
 	static ScalarFunction GetFunction();

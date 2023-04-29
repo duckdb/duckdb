@@ -1,5 +1,5 @@
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/function/aggregate/holistic_functions.hpp"
+#include "aggregate/holistic_functions.hpp"
 #include "t_digest.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -350,8 +350,8 @@ AggregateFunction GetApproxQuantileListAggregate(const LogicalType &type) {
 	return fun;
 }
 
-void ApproximateQuantileFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet approx_quantile("approx_quantile");
+AggregateFunctionSet ApproxQuantileFun::GetFunctions() {
+	AggregateFunctionSet approx_quantile;
 	approx_quantile.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL, LogicalType::FLOAT}, LogicalTypeId::DECIMAL,
 	                                              nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
 	                                              BindApproxQuantileDecimal));
@@ -374,8 +374,7 @@ void ApproximateQuantileFun::RegisterFunction(BuiltinFunctions &set) {
 	approx_quantile.AddFunction(GetApproxQuantileListAggregate(LogicalTypeId::HUGEINT));
 	approx_quantile.AddFunction(GetApproxQuantileListAggregate(LogicalTypeId::FLOAT));
 	approx_quantile.AddFunction(GetApproxQuantileListAggregate(LogicalTypeId::DOUBLE));
-
-	set.AddFunction(approx_quantile);
+	return approx_quantile;
 }
 
 } // namespace duckdb

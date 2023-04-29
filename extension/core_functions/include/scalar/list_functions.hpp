@@ -58,8 +58,7 @@ struct AggregateFun {
 struct ListDistinctFun {
 	static constexpr const char *Name = "list_distinct";
 	static constexpr const char *Parameters = "list";
-	static constexpr const char *Description =
-	    "Removes all duplicates and NULLs from a list. Does not preserve the original order.";
+	static constexpr const char *Description = "Removes all duplicates and NULLs from a list. Does not preserve the original order.";
 	static constexpr const char *Example = "list_distinct([1, 1, NULL, -3, 1, 5])";
 
 	static ScalarFunction GetFunction();
@@ -104,8 +103,7 @@ struct ListPackFun {
 struct ListSliceFun {
 	static constexpr const char *Name = "list_slice";
 	static constexpr const char *Parameters = "list,begin,end";
-	static constexpr const char *Description = "Extract a sublist using slice conventions. NULLs are interpreted as "
-	                                           "the bounds of the LIST. Negative values are accepted.";
+	static constexpr const char *Description = "Extract a sublist using slice conventions. NULLs are interpreted as the bounds of the LIST. Negative values are accepted.";
 	static constexpr const char *Example = "list_slice(l, 2, NULL)";
 
 	static ScalarFunction GetFunction();
@@ -150,9 +148,7 @@ struct ArrayReverseSortFun {
 struct ListTransformFun {
 	static constexpr const char *Name = "list_transform";
 	static constexpr const char *Parameters = "list,lambda";
-	static constexpr const char *Description =
-	    "Returns a list that is the result of applying the lambda function to each element of the input list. See the "
-	    "Lambda Functions section for more details.";
+	static constexpr const char *Description = "Returns a list that is the result of applying the lambda function to each element of the input list. See the Lambda Functions section for more details.";
 	static constexpr const char *Example = "list_transform([1, 2, 3], x -> x + 1)";
 
 	static ScalarFunction GetFunction();
@@ -185,8 +181,7 @@ struct ApplyFun {
 struct ListFilterFun {
 	static constexpr const char *Name = "list_filter";
 	static constexpr const char *Parameters = "list,lambda";
-	static constexpr const char *Description =
-	    "Constructs a list from those elements of the input list for which the lambda function returns true.";
+	static constexpr const char *Description = "Constructs a list from those elements of the input list for which the lambda function returns true.";
 	static constexpr const char *Example = "list_filter([3, 4, 5], x -> x > 4)";
 
 	static ScalarFunction GetFunction();
@@ -207,8 +202,7 @@ struct FilterFun {
 struct GenerateSeriesFun {
 	static constexpr const char *Name = "generate_series";
 	static constexpr const char *Parameters = "start,stop,step";
-	static constexpr const char *Description =
-	    "Create a list of values between start and stop - the stop parameter is inclusive";
+	static constexpr const char *Description = "Create a list of values between start and stop - the stop parameter is inclusive";
 	static constexpr const char *Example = "generate_series(2, 5, 3)";
 
 	static ScalarFunctionSet GetFunctions();
@@ -217,8 +211,7 @@ struct GenerateSeriesFun {
 struct ListRangeFun {
 	static constexpr const char *Name = "range";
 	static constexpr const char *Parameters = "start,stop,step";
-	static constexpr const char *Description =
-	    "Create a list of values between start and stop - the stop parameter is exclusive";
+	static constexpr const char *Description = "Create a list of values between start and stop - the stop parameter is exclusive";
 	static constexpr const char *Example = "range(2, 5, 3)";
 
 	static ScalarFunctionSet GetFunctions();

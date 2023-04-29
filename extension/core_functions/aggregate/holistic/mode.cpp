@@ -5,7 +5,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/function/aggregate/holistic_functions.hpp"
+#include "aggregate/holistic_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/common/unordered_map.hpp"
 
@@ -318,11 +318,11 @@ unique_ptr<FunctionData> BindModeDecimal(ClientContext &context, AggregateFuncti
 	return nullptr;
 }
 
-void ModeFun::RegisterFunction(BuiltinFunctions &set) {
+AggregateFunctionSet ModeFun::GetFunctions() {
 	const vector<LogicalType> TEMPORAL = {LogicalType::DATE,         LogicalType::TIMESTAMP, LogicalType::TIME,
 	                                      LogicalType::TIMESTAMP_TZ, LogicalType::TIME_TZ,   LogicalType::INTERVAL};
 
-	AggregateFunctionSet mode("mode");
+	AggregateFunctionSet mode;
 	mode.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
 	                                   nullptr, nullptr, nullptr, BindModeDecimal));
 
@@ -337,7 +337,6 @@ void ModeFun::RegisterFunction(BuiltinFunctions &set) {
 	}
 
 	mode.AddFunction(GetModeAggregate(LogicalType::VARCHAR));
-
-	set.AddFunction(mode);
+	return mode;
 }
 } // namespace duckdb

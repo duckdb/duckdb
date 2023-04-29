@@ -1,5 +1,4 @@
 add_subdirectory(distributive)
-add_subdirectory(holistic)
 add_subdirectory(nested)
 add_subdirectory(regression)
 
@@ -7,7 +6,6 @@ add_library_unity(
   duckdb_func_aggr
   OBJECT
   distributive_functions.cpp
-  holistic_functions.cpp
   nested_functions.cpp
   regression_functions.cpp
   sorted_aggregate_function.cpp)

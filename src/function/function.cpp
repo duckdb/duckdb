@@ -94,7 +94,6 @@ void BuiltinFunctions::Initialize() {
 
 	RegisterDistributiveAggregates();
 	RegisterNestedAggregates();
-	RegisterHolisticAggregates();
 	RegisterRegressiveAggregates();
 
 	RegisterGenericFunctions();

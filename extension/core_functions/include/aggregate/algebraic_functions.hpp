@@ -58,8 +58,7 @@ struct CovarSampFun {
 struct FAvgFun {
 	static constexpr const char *Name = "favg";
 	static constexpr const char *Parameters = "x";
-	static constexpr const char *Description =
-	    "Calculates the average using a more accurate floating point summation (Kahan Sum)";
+	static constexpr const char *Description = "Calculates the average using a more accurate floating point summation (Kahan Sum)";
 	static constexpr const char *Example = "favg(A)";
 
 	static AggregateFunction GetFunction();

@@ -1,5 +1,5 @@
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/function/aggregate/holistic_functions.hpp"
+#include "aggregate/holistic_functions.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/abs.hpp"
@@ -1375,24 +1375,38 @@ AggregateFunction GetQuantileDecimalAggregate(const vector<LogicalType> &argumen
 	return fun;
 }
 
-void QuantileFun::RegisterFunction(BuiltinFunctions &set) {
-	const vector<LogicalType> QUANTILES = {LogicalType::TINYINT,  LogicalType::SMALLINT,     LogicalType::INTEGER,
-	                                       LogicalType::BIGINT,   LogicalType::HUGEINT,      LogicalType::FLOAT,
-	                                       LogicalType::DOUBLE,   LogicalType::DATE,         LogicalType::TIMESTAMP,
-	                                       LogicalType::TIME,     LogicalType::TIMESTAMP_TZ, LogicalType::TIME_TZ,
-	                                       LogicalType::INTERVAL, LogicalType::VARCHAR};
+const vector<LogicalType> QUANTILE_TYPES = {LogicalType::TINYINT,  LogicalType::SMALLINT,     LogicalType::INTEGER,
+									   LogicalType::BIGINT,   LogicalType::HUGEINT,      LogicalType::FLOAT,
+									   LogicalType::DOUBLE,   LogicalType::DATE,         LogicalType::TIMESTAMP,
+									   LogicalType::TIME,     LogicalType::TIMESTAMP_TZ, LogicalType::TIME_TZ,
+									   LogicalType::INTERVAL, LogicalType::VARCHAR};
 
+AggregateFunctionSet MedianFun::GetFunctions() {
 	AggregateFunctionSet median("median");
 	median.AddFunction(
 	    GetQuantileDecimalAggregate({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, BindMedianDecimal));
+	for (const auto &type : QUANTILE_TYPES) {
+		median.AddFunction(GetMedianAggregate(type));
+	}
+	return median;
+}
 
+AggregateFunctionSet QuantileDiscFun::GetFunctions() {
 	AggregateFunctionSet quantile_disc("quantile_disc");
 	quantile_disc.AddFunction(GetQuantileDecimalAggregate({LogicalTypeId::DECIMAL, LogicalType::DOUBLE},
 	                                                      LogicalTypeId::DECIMAL, BindDiscreteQuantileDecimal));
 	quantile_disc.AddFunction(
 	    GetQuantileDecimalAggregate({LogicalTypeId::DECIMAL, LogicalType::LIST(LogicalType::DOUBLE)},
 	                                LogicalType::LIST(LogicalTypeId::DECIMAL), BindDiscreteQuantileDecimalList));
+	for (const auto &type : QUANTILE_TYPES) {
+		quantile_disc.AddFunction(GetDiscreteQuantileAggregate(type));
+		quantile_disc.AddFunction(GetDiscreteQuantileListAggregate(type));
+	}
+	return quantile_disc;
+	// quantile
+}
 
+AggregateFunctionSet QuantileContFun::GetFunctions() {
 	AggregateFunctionSet quantile_cont("quantile_cont");
 	quantile_cont.AddFunction(GetQuantileDecimalAggregate({LogicalTypeId::DECIMAL, LogicalType::DOUBLE},
 	                                                      LogicalTypeId::DECIMAL, BindContinuousQuantileDecimal));
@@ -1400,34 +1414,27 @@ void QuantileFun::RegisterFunction(BuiltinFunctions &set) {
 	    GetQuantileDecimalAggregate({LogicalTypeId::DECIMAL, LogicalType::LIST(LogicalType::DOUBLE)},
 	                                LogicalType::LIST(LogicalTypeId::DECIMAL), BindContinuousQuantileDecimalList));
 
-	for (const auto &type : QUANTILES) {
-		median.AddFunction(GetMedianAggregate(type));
-		quantile_disc.AddFunction(GetDiscreteQuantileAggregate(type));
-		quantile_disc.AddFunction(GetDiscreteQuantileListAggregate(type));
+	for (const auto &type : QUANTILE_TYPES) {
 		if (CanInterpolate(type)) {
 			quantile_cont.AddFunction(GetContinuousQuantileAggregate(type));
 			quantile_cont.AddFunction(GetContinuousQuantileListAggregate(type));
 		}
 	}
+	return quantile_cont;
+}
 
-	set.AddFunction(median);
-	set.AddFunction(quantile_disc);
-	set.AddFunction(quantile_cont);
-
-	quantile_disc.name = "quantile";
-	set.AddFunction(quantile_disc);
-
+AggregateFunctionSet MadFun::GetFunctions() {
 	AggregateFunctionSet mad("mad");
 	mad.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
 	                                  nullptr, nullptr, nullptr, BindMedianAbsoluteDeviationDecimal));
 
-	const vector<LogicalType> MADS = {LogicalType::FLOAT,     LogicalType::DOUBLE, LogicalType::DATE,
+	const vector<LogicalType> MAD_TYPES = {LogicalType::FLOAT,     LogicalType::DOUBLE, LogicalType::DATE,
 	                                  LogicalType::TIMESTAMP, LogicalType::TIME,   LogicalType::TIMESTAMP_TZ,
 	                                  LogicalType::TIME_TZ};
-	for (const auto &type : MADS) {
+	for (const auto &type : MAD_TYPES) {
 		mad.AddFunction(GetMedianAbsoluteDeviationAggregateFunction(type));
 	}
-	set.AddFunction(mad);
+	return mad;
 }
 
 } // namespace duckdb

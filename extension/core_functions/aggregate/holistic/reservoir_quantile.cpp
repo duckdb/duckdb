@@ -1,6 +1,6 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
-#include "duckdb/function/aggregate/holistic_functions.hpp"
+#include "aggregate/holistic_functions.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/queue.hpp"
 #include "duckdb/common/field_writer.hpp"
@@ -452,8 +452,8 @@ static void GetReservoirQuantileDecimalFunction(AggregateFunctionSet &set, const
 	set.AddFunction(fun);
 }
 
-void ReservoirQuantileFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet reservoir_quantile("reservoir_quantile");
+AggregateFunctionSet ReservoirQuantileFun::GetFunctions() {
+	AggregateFunctionSet reservoir_quantile;
 
 	// DECIMAL
 	GetReservoirQuantileDecimalFunction(reservoir_quantile, {LogicalTypeId::DECIMAL, LogicalType::DOUBLE},
@@ -469,8 +469,7 @@ void ReservoirQuantileFun::RegisterFunction(BuiltinFunctions &set) {
 	DefineReservoirQuantile(reservoir_quantile, LogicalTypeId::HUGEINT);
 	DefineReservoirQuantile(reservoir_quantile, LogicalTypeId::FLOAT);
 	DefineReservoirQuantile(reservoir_quantile, LogicalTypeId::DOUBLE);
-
-	set.AddFunction(reservoir_quantile);
+	return reservoir_quantile;
 }
 
 } // namespace duckdb
