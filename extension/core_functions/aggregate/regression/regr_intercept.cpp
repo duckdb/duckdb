@@ -1,6 +1,6 @@
 //! AVG(y)-REGR_SLOPE(y,x)*AVG(x)
 
-#include "duckdb/function/aggregate/regression_functions.hpp"
+#include "aggregate/regression_functions.hpp"
 #include "duckdb/function/aggregate/regression/regr_slope.hpp"
 #include "duckdb/function/function_set.hpp"
 
@@ -58,12 +58,9 @@ struct RegrInterceptOperation {
 	}
 };
 
-void RegrInterceptFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet fun("regr_intercept");
-	fun.AddFunction(
-	    AggregateFunction::BinaryAggregate<RegrInterceptState, double, double, double, RegrInterceptOperation>(
-	        LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE));
-	set.AddFunction(fun);
+AggregateFunction RegrInterceptFun::GetFunction() {
+	return AggregateFunction::BinaryAggregate<RegrInterceptState, double, double, double, RegrInterceptOperation>(
+	        LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
 }
 
 } // namespace duckdb

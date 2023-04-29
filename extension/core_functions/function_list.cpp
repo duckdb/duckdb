@@ -3,6 +3,7 @@
 #include "aggregate/distributive_functions.hpp"
 #include "aggregate/holistic_functions.hpp"
 #include "aggregate/nested_functions.hpp"
+#include "aggregate/regression_functions.hpp"
 #include "scalar/bit_functions.hpp"
 #include "scalar/blob_functions.hpp"
 #include "scalar/date_functions.hpp"
@@ -246,6 +247,15 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION(RandomFun),
 	DUCKDB_SCALAR_FUNCTION_SET(ListRangeFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(RegexpSplitToArrayFun),
+	DUCKDB_AGGREGATE_FUNCTION(RegrAvgxFun),
+	DUCKDB_AGGREGATE_FUNCTION(RegrAvgyFun),
+	DUCKDB_AGGREGATE_FUNCTION(RegrCountFun),
+	DUCKDB_AGGREGATE_FUNCTION(RegrInterceptFun),
+	DUCKDB_AGGREGATE_FUNCTION(RegrR2Fun),
+	DUCKDB_AGGREGATE_FUNCTION(RegrSlopeFun),
+	DUCKDB_AGGREGATE_FUNCTION(RegrSXXFun),
+	DUCKDB_AGGREGATE_FUNCTION(RegrSXYFun),
+	DUCKDB_AGGREGATE_FUNCTION(RegrSYYFun),
 	DUCKDB_SCALAR_FUNCTION(RepeatFun),
 	DUCKDB_SCALAR_FUNCTION(ReplaceFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET(ReservoirQuantileFun),

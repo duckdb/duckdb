@@ -6,7 +6,7 @@
 
 #include "duckdb/function/aggregate/algebraic/corr.hpp"
 #include "duckdb/function/function_set.hpp"
-#include "duckdb/function/aggregate/regression_functions.hpp"
+#include "aggregate/regression_functions.hpp"
 
 namespace duckdb {
 struct RegrR2State {
@@ -69,10 +69,8 @@ struct RegrR2Operation {
 	}
 };
 
-void RegrR2Fun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet fun("regr_r2");
-	fun.AddFunction(AggregateFunction::BinaryAggregate<RegrR2State, double, double, double, RegrR2Operation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE));
-	set.AddFunction(fun);
+AggregateFunction RegrR2Fun::GetFunction() {
+	return AggregateFunction::BinaryAggregate<RegrR2State, double, double, double, RegrR2Operation>(
+	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
 }
 } // namespace duckdb

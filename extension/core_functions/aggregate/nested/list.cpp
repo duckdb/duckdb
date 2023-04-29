@@ -182,9 +182,9 @@ unique_ptr<FunctionData> ListBindFunction(ClientContext &context, AggregateFunct
 
 AggregateFunction ListFun::GetFunction() {
 	return AggregateFunction({LogicalType::ANY}, LogicalTypeId::LIST, AggregateFunction::StateSize<ListAggState>,
-	                      AggregateFunction::StateInitialize<ListAggState, ListFunction>, ListUpdateFunction,
-	                      ListCombineFunction, ListFinalize, nullptr, ListBindFunction,
-	                      AggregateFunction::StateDestroy<ListAggState, ListFunction>, nullptr, nullptr);
+	                         AggregateFunction::StateInitialize<ListAggState, ListFunction>, ListUpdateFunction,
+	                         ListCombineFunction, ListFinalize, nullptr, ListBindFunction,
+	                         AggregateFunction::StateDestroy<ListAggState, ListFunction>, nullptr, nullptr);
 }
 
 } // namespace duckdb

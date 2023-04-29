@@ -5,7 +5,7 @@
 
 #include "duckdb/function/aggregate/regression/regr_count.hpp"
 #include "duckdb/function/function_set.hpp"
-#include "duckdb/function/aggregate/regression_functions.hpp"
+#include "aggregate/regression_functions.hpp"
 
 namespace duckdb {
 
@@ -67,18 +67,14 @@ struct RegrSYYOperation : RegrBaseOperation {
 	}
 };
 
-void RegrSXXFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet fun("regr_sxx");
-	fun.AddFunction(AggregateFunction::BinaryAggregate<RegrSState, double, double, double, RegrSXXOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE));
-	set.AddFunction(fun);
+AggregateFunction RegrSXXFun::GetFunction() {
+	return AggregateFunction::BinaryAggregate<RegrSState, double, double, double, RegrSXXOperation>(
+	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
 }
 
-void RegrSYYFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet fun("regr_syy");
-	fun.AddFunction(AggregateFunction::BinaryAggregate<RegrSState, double, double, double, RegrSYYOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE));
-	set.AddFunction(fun);
+AggregateFunction RegrSYYFun::GetFunction() {
+	return AggregateFunction::BinaryAggregate<RegrSState, double, double, double, RegrSYYOperation>(
+	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
 }
 
 } // namespace duckdb

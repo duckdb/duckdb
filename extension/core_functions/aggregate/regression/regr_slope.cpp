@@ -8,15 +8,13 @@
 
 #include "duckdb/function/aggregate/regression/regr_slope.hpp"
 #include "duckdb/function/function_set.hpp"
-#include "duckdb/function/aggregate/regression_functions.hpp"
+#include "aggregate/regression_functions.hpp"
 
 namespace duckdb {
 
-void RegrSlopeFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet fun("regr_slope");
-	fun.AddFunction(AggregateFunction::BinaryAggregate<RegrSlopeState, double, double, double, RegrSlopeOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE));
-	set.AddFunction(fun);
+AggregateFunction RegrSlopeFun::GetFunction() {
+	return AggregateFunction::BinaryAggregate<RegrSlopeState, double, double, double, RegrSlopeOperation>(
+	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
 }
 
 } // namespace duckdb

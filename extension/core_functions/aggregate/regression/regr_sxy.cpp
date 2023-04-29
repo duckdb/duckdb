@@ -2,7 +2,7 @@
 
 #include "duckdb/function/aggregate/regression/regr_count.hpp"
 #include "duckdb/function/aggregate/algebraic/covar.hpp"
-#include "duckdb/function/aggregate/regression_functions.hpp"
+#include "aggregate/regression_functions.hpp"
 #include "duckdb/function/function_set.hpp"
 
 namespace duckdb {
@@ -48,11 +48,9 @@ struct RegrSXYOperation {
 	}
 };
 
-void RegrSXYFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet fun("regr_sxy");
-	fun.AddFunction(AggregateFunction::BinaryAggregate<RegrSXyState, double, double, double, RegrSXYOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE));
-	set.AddFunction(fun);
+AggregateFunction RegrSXYFun::GetFunction() {
+	return AggregateFunction::BinaryAggregate<RegrSXyState, double, double, double, RegrSXYOperation>(
+	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
 }
 
 } // namespace duckdb

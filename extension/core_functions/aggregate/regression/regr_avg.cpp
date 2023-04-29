@@ -1,6 +1,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/function/aggregate/regression_functions.hpp"
+#include "aggregate/regression_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/function/function_set.hpp"
 
@@ -53,18 +53,14 @@ struct RegrAvgYFunction : RegrAvgFunction {
 	}
 };
 
-void RegrAvgxFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet corr("regr_avgx");
-	corr.AddFunction(AggregateFunction::BinaryAggregate<RegrState, double, double, double, RegrAvgXFunction>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE));
-	set.AddFunction(corr);
+AggregateFunction RegrAvgxFun::GetFunction() {
+	return AggregateFunction::BinaryAggregate<RegrState, double, double, double, RegrAvgXFunction>(
+	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
 }
 
-void RegrAvgyFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet corr("regr_avgy");
-	corr.AddFunction(AggregateFunction::BinaryAggregate<RegrState, double, double, double, RegrAvgYFunction>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE));
-	set.AddFunction(corr);
+AggregateFunction RegrAvgyFun::GetFunction() {
+	return AggregateFunction::BinaryAggregate<RegrState, double, double, double, RegrAvgYFunction>(
+	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
 }
 
 } // namespace duckdb
