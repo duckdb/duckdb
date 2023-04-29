@@ -249,7 +249,7 @@ private:
 
 	unique_ptr<PendingQueryResult> PendingQueryPreparedInternal(ClientContextLock &lock, const string &query,
 	                                                            shared_ptr<PreparedStatementData> &prepared,
-	                                                            PendingQueryParameters parameters);
+	                                                            const PendingQueryParameters &parameters);
 
 	unique_ptr<PendingQueryResult> PendingQueryInternal(ClientContextLock &, const shared_ptr<Relation> &relation,
 	                                                    bool allow_stream_result);

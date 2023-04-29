@@ -569,7 +569,7 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(const string &query) {
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQueryPreparedInternal(ClientContextLock &lock, const string &query,
                                                                            shared_ptr<PreparedStatementData> &prepared,
-                                                                           PendingQueryParameters parameters) {
+                                                                           const PendingQueryParameters &parameters) {
 	try {
 		InitialCleanup(lock);
 	} catch (const Exception &ex) {

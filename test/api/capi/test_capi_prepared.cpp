@@ -311,8 +311,8 @@ TEST_CASE("Test prepared statements with named parameters in C API", "[capi]") {
 		duckdb_free((void *)name);
 	}
 
-	REQUIRE(duckdb_parameter_name(stmt, 0) == NULL);
-	REQUIRE(duckdb_parameter_name(stmt, 2) == NULL);
+	REQUIRE(duckdb_parameter_name(stmt, 0) == (const char *)NULL);
+	REQUIRE(duckdb_parameter_name(stmt, 2) == (const char *)NULL);
 
 	duckdb::vector<string> expected_names = {"my_val"};
 	REQUIRE(names.size() == expected_names.size());
