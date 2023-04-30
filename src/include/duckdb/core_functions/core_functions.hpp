@@ -13,7 +13,7 @@
 namespace duckdb {
 
 class Catalog;
-class CatalogTransaction;
+struct CatalogTransaction;
 
 struct CoreFunctions {
 	static void RegisterFunctions(Catalog &catalog, CatalogTransaction transaction);

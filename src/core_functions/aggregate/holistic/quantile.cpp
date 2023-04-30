@@ -1375,17 +1375,19 @@ AggregateFunction GetQuantileDecimalAggregate(const vector<LogicalType> &argumen
 	return fun;
 }
 
-const vector<LogicalType> QUANTILE_TYPES = {LogicalType::TINYINT,  LogicalType::SMALLINT,     LogicalType::INTEGER,
+vector<LogicalType> GetQuantileTypes() {
+	return  {LogicalType::TINYINT,  LogicalType::SMALLINT,     LogicalType::INTEGER,
                                             LogicalType::BIGINT,   LogicalType::HUGEINT,      LogicalType::FLOAT,
                                             LogicalType::DOUBLE,   LogicalType::DATE,         LogicalType::TIMESTAMP,
                                             LogicalType::TIME,     LogicalType::TIMESTAMP_TZ, LogicalType::TIME_TZ,
                                             LogicalType::INTERVAL, LogicalType::VARCHAR};
+}
 
 AggregateFunctionSet MedianFun::GetFunctions() {
 	AggregateFunctionSet median("median");
 	median.AddFunction(
 	    GetQuantileDecimalAggregate({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, BindMedianDecimal));
-	for (const auto &type : QUANTILE_TYPES) {
+	for (const auto &type : GetQuantileTypes()) {
 		median.AddFunction(GetMedianAggregate(type));
 	}
 	return median;
@@ -1398,7 +1400,7 @@ AggregateFunctionSet QuantileDiscFun::GetFunctions() {
 	quantile_disc.AddFunction(
 	    GetQuantileDecimalAggregate({LogicalTypeId::DECIMAL, LogicalType::LIST(LogicalType::DOUBLE)},
 	                                LogicalType::LIST(LogicalTypeId::DECIMAL), BindDiscreteQuantileDecimalList));
-	for (const auto &type : QUANTILE_TYPES) {
+	for (const auto &type : GetQuantileTypes()) {
 		quantile_disc.AddFunction(GetDiscreteQuantileAggregate(type));
 		quantile_disc.AddFunction(GetDiscreteQuantileListAggregate(type));
 	}
@@ -1414,7 +1416,7 @@ AggregateFunctionSet QuantileContFun::GetFunctions() {
 	    GetQuantileDecimalAggregate({LogicalTypeId::DECIMAL, LogicalType::LIST(LogicalType::DOUBLE)},
 	                                LogicalType::LIST(LogicalTypeId::DECIMAL), BindContinuousQuantileDecimalList));
 
-	for (const auto &type : QUANTILE_TYPES) {
+	for (const auto &type : GetQuantileTypes()) {
 		if (CanInterpolate(type)) {
 			quantile_cont.AddFunction(GetContinuousQuantileAggregate(type));
 			quantile_cont.AddFunction(GetContinuousQuantileListAggregate(type));
