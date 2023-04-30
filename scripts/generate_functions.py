@@ -44,8 +44,8 @@ all_function_types += [f'scalar/{x}' for x in scalar_functions]
 function_type_set = {}
 all_function_list = []
 for path in all_function_types:
-    header_path = normalize_path_separators(f'extension/core_functions/include/{path}_functions.hpp')
-    json_path = normalize_path_separators(f'extension/core_functions/{path}/functions.json')
+    header_path = normalize_path_separators(f'src/include/duckdb/core_functions/{path}_functions.hpp')
+    json_path = normalize_path_separators(f'src/core_functions/{path}/functions.json')
     with open(json_path, 'r') as f:
         parsed_json = json.load(f)
     new_text = header.replace('{HEADER}', path)
