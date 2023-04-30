@@ -7,12 +7,14 @@
 
 using namespace duckdb;
 
-int load_partsupp(DuckDB) {
-	string fname ("../../../data/partsupp.csv"); 
+int load_partsupp(DuckDB db, Connection con) {
+	string fname ("../../../data/partsupp.csv");
+	con.Query("CREATE TABLE partsupp (PS_PARTKEY int, PS_SUPPKEY int, PS_AVAILQTY int, PS_SUPPLYCOST float);");
 	vector<vector<string>> content; 
 	vector<string> row;
-	string line, word; 
+	string line, word;
 	
+	Appender appender(con, "partsupp"); 	
 	std::fstream file (fname, std::ios::in); 
 	if(file.is_open())
 	{
@@ -26,51 +28,38 @@ int load_partsupp(DuckDB) {
 		}
 	}
 
+	for(int i=0; i<content.size(); i++)
+	{
+	        int32_t key = std::stoi(content[i][0]); 	
+	        int32_t supp_key = std::stoi(content[i][1]); 
+		int32_t avail = std::stoi(content[i][2]); 
+		float cost = std::stof(content[i][3]);
+		//std::cout << typeid(content[i][4]).name() << std::endl; 	
+		string comment = content[i][4]; 	
+		appender.AppendRow(key, supp_key, avail, cost); 
+	}
+	appender.Close(); 
 
+	return 0; 
+}
 
+int load_test(DuckDB db, Connection con){
+	con.Query("CREATE TABLE people(id INTEGER, name VARCHAR)");
+	Appender appender(con, "people");
+	appender.BeginRow();
+	appender.Append<int32_t>(2);
+	appender.Append<string>("Hannes");
+	appender.EndRow();
+	appender.Flush(); 
 	return 0; 
 }
 int main() {
 	DuckDB db(nullptr);
-	string fname("../../../data/partsupp.csv"); 
-	vector<vector<string>> content; 
-	vector<string> row;
-	string line, word;
-
-	std::fstream file (fname, std::ios::in);
-	load_partsupp(db); 
-	if(file.is_open())
-	{
-		while(getline(file, line))
-		{
-			row.clear();
-
-			std::stringstream str(line);
-
-			while(getline(str, word, '|'))
-				row.push_back(word);
-			content.push_back(row);
-		}
-	}
-	else
-		std::cout<<"Could not open the file\n";
-	for(int i=0;i<9;i++)
-	{
-		for(int j=0;j<content[i].size();j++)
-		{
-			std::cout<<content[i][j]<<", ";
-		}
-		std::cout<<"\n";
-	}
 	Connection con(db);
-	con.Query("CREATE TABLE partsupp( PS_PARTKEY int not null, PS_SUPPKEY int not null, PS_AVAILQTY int not null, PS_SUPPLYCOST      float not null, PS_COMMENT varchar not null);");
+	//load_test(db, con); 
+	load_partsupp(db, con);
 	//initialize the appender
-	Appender appender(con, "partsupp"); 
 
-	//	con.Query("INSERT INTO partsupp SELECT * FROM read_csv(’../../../data/partsupp.csv’, delim = ‘|’, header=True, columns={’PS_PARTKEY’:’INT’, ‘PS_SUPPKEY’:’INT’, ‘PS_AVAILQTY’:’INT’, ‘PS_SUPPLYCOST’:’FLOAT’, ‘PS_COMMENT’:’VARCHAR’})");
-	con.Query("CREATE TABLE integers(i INTEGER)");
-	con.Query("INSERT INTO integers VALUES (3)");
-	con.Query("INSERT INTO integers VALUES (4)");
 	auto result = con.Query("SELECT * FROM partsupp limit 10;");
 	result->Print();
 }
