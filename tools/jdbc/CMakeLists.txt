@@ -64,6 +64,6 @@ add_custom_command(
   OUTPUT dummy_jdbc_target
   DEPENDS duckdb_jdbc
   COMMAND cp ${PROJECT_SOURCE_DIR}/build/libs/duckdb_jdbc-*.jar
-          $<TARGET_FILE_DIR:duckdb_java>/$<TARGET_FILE_NAME:duckdb_java>))
+          $<TARGET_FILE_DIR:duckdb_java>/$<TARGET_FILE_NAME:duckdb_java>)
 
 add_custom_target(jdbc ALL DEPENDS dummy_jdbc_target)
