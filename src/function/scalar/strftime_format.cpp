@@ -8,7 +8,6 @@
 
 namespace duckdb {
 
-
 idx_t StrfTimepecifierSize(StrTimeSpecifier specifier) {
 	switch (specifier) {
 	case StrTimeSpecifier::ABBREVIATED_WEEKDAY_NAME:
@@ -1092,7 +1091,6 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 	return true;
 }
 
-
 StrpTimeFormat::ParseResult StrpTimeFormat::Parse(const string &format_string, const string &text) {
 	StrpTimeFormat format;
 	format.format_specifier = format_string;
@@ -1181,4 +1179,4 @@ timestamp_t StrpTimeFormat::ParseTimestamp(string_t input) {
 	return result.ToTimestamp();
 }
 
-}
+} // namespace duckdb

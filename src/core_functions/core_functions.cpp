@@ -47,4 +47,4 @@ void CoreFunctions::RegisterFunctions(Catalog &catalog, CatalogTransaction trans
 	}
 }
 
-}
+} // namespace duckdb

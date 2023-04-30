@@ -426,8 +426,8 @@ struct MapVector {
 	DUCKDB_API static const Vector &GetValues(const Vector &vector);
 	DUCKDB_API static Vector &GetKeys(Vector &vector);
 	DUCKDB_API static Vector &GetValues(Vector &vector);
-	DUCKDB_API static MapInvalidReason CheckMapValidity(Vector &map, idx_t count,
-									  const SelectionVector &sel = *FlatVector::IncrementalSelectionVector());
+	DUCKDB_API static MapInvalidReason
+	CheckMapValidity(Vector &map, idx_t count, const SelectionVector &sel = *FlatVector::IncrementalSelectionVector());
 	DUCKDB_API static void MapConversionVerify(Vector &vector, idx_t count);
 };
 
@@ -472,8 +472,9 @@ struct UnionVector {
 	DUCKDB_API static void SetToMember(Vector &vector, union_tag_t tag, Vector &member_vector, idx_t count,
 	                                   bool keep_tags_for_null);
 
-	DUCKDB_API static UnionInvalidReason CheckUnionValidity(Vector &vector, idx_t count,
-										  const SelectionVector &sel = *FlatVector::IncrementalSelectionVector());
+	DUCKDB_API static UnionInvalidReason
+	CheckUnionValidity(Vector &vector, idx_t count,
+	                   const SelectionVector &sel = *FlatVector::IncrementalSelectionVector());
 };
 
 struct SequenceVector {

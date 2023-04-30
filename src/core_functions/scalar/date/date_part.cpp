@@ -1399,107 +1399,107 @@ ScalarFunctionSet YearFun::GetFunctions() {
 	                                  ScalarFunction::UnaryFunction<interval_t, int64_t, DatePart::YearOperator>,
 	                                  DatePart::YearOperator::PropagateStatistics<date_t>,
 	                                  DatePart::YearOperator::PropagateStatistics<timestamp_t>);
-};
+}
 
 ScalarFunctionSet MonthFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::MonthOperator>();
-};
+}
 
 ScalarFunctionSet DayFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::DayOperator>();
-};
+}
 
 ScalarFunctionSet DecadeFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::DecadeOperator>();
-};
+}
 
 ScalarFunctionSet CenturyFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::CenturyOperator>();
-};
+}
 
 ScalarFunctionSet MillenniumFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::MillenniumOperator>();
-};
+}
 
 ScalarFunctionSet QuarterFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::QuarterOperator>();
-};
+}
 
 ScalarFunctionSet DayOfWeekFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::DayOfWeekOperator>();
-};
+}
 
 ScalarFunctionSet ISODayOfWeekFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::ISODayOfWeekOperator>();
-};
+}
 
 ScalarFunctionSet DayOfYearFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::DayOfYearOperator>();
-};
+}
 
 ScalarFunctionSet WeekFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::WeekOperator>();
-};
+}
 
 ScalarFunctionSet ISOYearFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::ISOYearOperator>();
-};
+}
 
 ScalarFunctionSet EraFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::EraOperator>();
-};
+}
 
 ScalarFunctionSet TimezoneFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::TimezoneOperator>();
-};
+}
 
 ScalarFunctionSet TimezoneHourFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::TimezoneHourOperator>();
-};
+}
 
 ScalarFunctionSet TimezoneMinuteFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::TimezoneMinuteOperator>();
-};
+}
 
 ScalarFunctionSet EpochFun::GetFunctions() {
 	return GetTimePartFunction<DatePart::EpochOperator>();
-};
+}
 
 ScalarFunctionSet MicrosecondsFun::GetFunctions() {
 	return GetTimePartFunction<DatePart::MicrosecondsOperator>();
-};
+}
 
 ScalarFunctionSet MillisecondsFun::GetFunctions() {
 	return GetTimePartFunction<DatePart::MillisecondsOperator>();
-};
+}
 
 ScalarFunctionSet SecondsFun::GetFunctions() {
 	return GetTimePartFunction<DatePart::SecondsOperator>();
-};
+}
 
 ScalarFunctionSet MinutesFun::GetFunctions() {
 	return GetTimePartFunction<DatePart::MinutesOperator>();
-};
+}
 
 ScalarFunctionSet HoursFun::GetFunctions() {
 	return GetTimePartFunction<DatePart::HoursOperator>();
-};
+}
 
 ScalarFunctionSet YearWeekFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::YearWeekOperator>();
-};
+}
 
 ScalarFunctionSet DayOfMonthFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::DayOperator>();
-};
+}
 
 ScalarFunctionSet WeekDayFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::DayOfWeekOperator>();
-};
+}
 
 ScalarFunctionSet WeekOfYearFun::GetFunctions() {
 	return GetDatePartFunction<DatePart::WeekOperator>();
-};
+}
 
 ScalarFunctionSet LastDayFun::GetFunctions() {
 	ScalarFunctionSet last_day;

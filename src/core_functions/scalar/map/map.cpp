@@ -143,7 +143,7 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 		value_vector.Reference(ListVector::GetEntry(args.data[1]));
 	}
 
-	MapConversionVerify(result, args.size());
+	MapVector::MapConversionVerify(result, args.size());
 	result.Verify(args.size());
 }
 

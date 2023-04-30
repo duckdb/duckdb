@@ -12,7 +12,7 @@ static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vect
 
 	result.Reinterpret(args.data[0]);
 
-	MapConversionVerify(result, count);
+	MapVector::MapConversionVerify(result, count);
 	result.Verify(count);
 
 	if (args.AllConstant()) {

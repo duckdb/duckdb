@@ -78,4 +78,4 @@ DatePartSpecifier GetDatePartSpecifier(const string &specifier) {
 	return result;
 }
 
-}
+} // namespace duckdb
