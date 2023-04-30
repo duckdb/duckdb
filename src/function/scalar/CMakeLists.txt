@@ -10,6 +10,7 @@ add_library_unity(
   OBJECT
   generic_functions.cpp
   string_functions.cpp
+  strftime_format.cpp
   nested_functions.cpp
   operators.cpp
   pragma_functions.cpp

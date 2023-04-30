@@ -7,57 +7,6 @@
 
 namespace duckdb {
 
-UnionInvalidReason CheckUnionValidity(Vector &vector, idx_t count, const SelectionVector &sel) {
-	D_ASSERT(vector.GetType().id() == LogicalTypeId::UNION);
-	auto member_count = UnionType::GetMemberCount(vector.GetType());
-	if (member_count == 0) {
-		return UnionInvalidReason::NO_MEMBERS;
-	}
-
-	UnifiedVectorFormat union_vdata;
-	vector.ToUnifiedFormat(count, union_vdata);
-
-	UnifiedVectorFormat tags_vdata;
-	auto &tag_vector = UnionVector::GetTags(vector);
-	tag_vector.ToUnifiedFormat(count, tags_vdata);
-
-	// check that only one member is valid at a time
-	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-		auto union_mapped_row_idx = sel.get_index(row_idx);
-		if (!union_vdata.validity.RowIsValid(union_mapped_row_idx)) {
-			continue;
-		}
-
-		auto tag_mapped_row_idx = tags_vdata.sel->get_index(row_idx);
-		if (!tags_vdata.validity.RowIsValid(tag_mapped_row_idx)) {
-			continue;
-		}
-
-		auto tag = ((union_tag_t *)tags_vdata.data)[tag_mapped_row_idx];
-		if (tag >= member_count) {
-			return UnionInvalidReason::TAG_OUT_OF_RANGE;
-		}
-
-		bool found_valid = false;
-		for (idx_t member_idx = 0; member_idx < member_count; member_idx++) {
-
-			UnifiedVectorFormat member_vdata;
-			auto &member = UnionVector::GetMember(vector, member_idx);
-			member.ToUnifiedFormat(count, member_vdata);
-
-			auto mapped_row_idx = member_vdata.sel->get_index(row_idx);
-			if (member_vdata.validity.RowIsValid(mapped_row_idx)) {
-				if (found_valid) {
-					return UnionInvalidReason::VALIDITY_OVERLAP;
-				}
-				found_valid = true;
-			}
-		}
-	}
-
-	return UnionInvalidReason::VALID;
-}
-
 struct UnionValueBindData : public FunctionData {
 	UnionValueBindData() {
 	}

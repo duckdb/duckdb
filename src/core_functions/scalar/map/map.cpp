@@ -9,64 +9,6 @@
 
 namespace duckdb {
 
-MapInvalidReason CheckMapValidity(Vector &map, idx_t count, const SelectionVector &sel) {
-	D_ASSERT(map.GetType().id() == LogicalTypeId::MAP);
-	UnifiedVectorFormat map_vdata;
-
-	map.ToUnifiedFormat(count, map_vdata);
-	auto &map_validity = map_vdata.validity;
-
-	auto list_data = ListVector::GetData(map);
-	auto &keys = MapVector::GetKeys(map);
-	UnifiedVectorFormat key_vdata;
-	keys.ToUnifiedFormat(count, key_vdata);
-	auto &key_validity = key_vdata.validity;
-
-	for (idx_t row = 0; row < count; row++) {
-		auto mapped_row = sel.get_index(row);
-		auto row_idx = map_vdata.sel->get_index(mapped_row);
-		// map is allowed to be NULL
-		if (!map_validity.RowIsValid(row_idx)) {
-			continue;
-		}
-		row_idx = key_vdata.sel->get_index(row);
-		value_set_t unique_keys;
-		for (idx_t i = 0; i < list_data[row_idx].length; i++) {
-			auto index = list_data[row_idx].offset + i;
-			index = key_vdata.sel->get_index(index);
-			if (!key_validity.RowIsValid(index)) {
-				return MapInvalidReason::NULL_KEY;
-			}
-			auto value = keys.GetValue(index);
-			auto result = unique_keys.insert(value);
-			if (!result.second) {
-				return MapInvalidReason::DUPLICATE_KEY;
-			}
-		}
-	}
-	return MapInvalidReason::VALID;
-}
-
-void MapConversionVerify(Vector &vector, idx_t count) {
-	auto valid_check = CheckMapValidity(vector, count);
-	switch (valid_check) {
-	case MapInvalidReason::VALID:
-		break;
-	case MapInvalidReason::DUPLICATE_KEY: {
-		throw InvalidInputException("Map keys have to be unique");
-	}
-	case MapInvalidReason::NULL_KEY: {
-		throw InvalidInputException("Map keys can not be NULL");
-	}
-	case MapInvalidReason::NULL_KEY_LIST: {
-		throw InvalidInputException("The list of map keys is not allowed to be NULL");
-	}
-	default: {
-		throw InternalException("MapInvalidReason not implemented");
-	}
-	}
-}
-
 // Example:
 // source: [1,2,3], expansion_factor: 4
 // target (result): [1,2,3,1,2,3,1,2,3,1,2,3]
