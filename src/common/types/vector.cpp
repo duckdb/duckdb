@@ -1787,7 +1787,7 @@ MapInvalidReason MapVector::CheckMapValidity(Vector &map, idx_t count, const Sel
 }
 
 void MapVector::MapConversionVerify(Vector &vector, idx_t count) {
-	auto valid_check = CheckMapValidity(vector, count);
+	auto valid_check = MapVector::CheckMapValidity(vector, count);
 	switch (valid_check) {
 	case MapInvalidReason::VALID:
 		break;
