@@ -55,8 +55,6 @@ def file_is_lib(fname, libname):
     return False
 
 def get_libraries(binary_dir, libraries, extensions):
-    if 'core_functions' not in extensions:
-        extensions.append('core_functions')
     result_libs = []
     def find_library_recursive(search_dir, libname):
         flist = os.listdir(search_dir)
@@ -93,8 +91,6 @@ def get_libraries(binary_dir, libraries, extensions):
     return result_libs
 
 def includes(extensions):
-    if 'core_functions' not in extensions:
-        extensions.append('core_functions')
     scripts_dir = os.path.dirname(os.path.abspath(__file__))
     # add includes for duckdb and extensions
     includes = []
@@ -106,8 +102,6 @@ def includes(extensions):
     return includes
 
 def include_flags(extensions):
-    if 'core_functions' not in extensions:
-        extensions.append('core_functions')
     return ' ' + ' '.join(['-I' + x for x in includes(extensions)])
 
 def convert_backslashes(x):

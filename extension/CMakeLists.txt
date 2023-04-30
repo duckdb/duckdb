@@ -13,10 +13,6 @@ if(${WASM_LOADABLE_EXTENSIONS})
   return()
 endif()
 
-if(${BUILD_CORE_FUNCTIONS_EXTENSION})
-  add_subdirectory(core_functions)
-endif()
-
 if(${BUILD_ICU_EXTENSION})
   add_subdirectory(icu)
 endif()
