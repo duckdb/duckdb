@@ -28,8 +28,8 @@ ignored_directories = ['.eggs', '__pycache__', 'dbgen', os.path.join('tools', 'p
                        os.path.join('tools', 'rpkg', 'inst', 'include', 'cpp11'),
                        os.path.join('extension', 'tpcds', 'dsdgen'), os.path.join('extension', 'jemalloc', 'jemalloc'),
                        os.path.join('extension', 'json', 'yyjson'), os.path.join('extension', 'icu', 'third_party'),
-                       os.path.join('src', 'include', 'duckdb', 'core_functions', 'include', 'aggregate'),
-                       os.path.join('src', 'include', 'duckdb', 'core_functions', 'include', 'scalar')]
+                       os.path.join('src', 'include', 'duckdb', 'core_functions', 'include', 'aggregate_functions'),
+                       os.path.join('src', 'include', 'duckdb', 'core_functions', 'include', 'scalar_functions')]
 format_all = False
 check_only = True
 confirm = True

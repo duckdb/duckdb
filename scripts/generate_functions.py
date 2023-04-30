@@ -8,7 +8,7 @@ scalar_functions = ['bit', 'blob', 'date', 'enum', 'generic', 'list', 'map', 'ma
 header = '''//===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// {HEADER}_functions.hpp
+// duckdb/core_functions/{HEADER}_functions.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -38,8 +38,8 @@ def sanitize_string(text):
     return text.replace('"', '\\"')
 
 all_function_types = []
-all_function_types += [f'aggregate/{x}' for x in aggregate_functions]
-all_function_types += [f'scalar/{x}' for x in scalar_functions]
+all_function_types += [f'aggregate_functions/{x}' for x in aggregate_functions]
+all_function_types += [f'scalar_functions/{x}' for x in scalar_functions]
 
 function_type_set = {}
 all_function_list = []
@@ -123,7 +123,7 @@ for path in all_function_types:
     with open(header_path, 'w+') as f:
         f.write(new_text)
 
-function_list_file = normalize_path_separators('extension/core_functions/function_list.cpp')
+function_list_file = normalize_path_separators('src/core_functions/function_list.cpp')
 with open(function_list_file, 'r') as f:
     text = f.read()
 

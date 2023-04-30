@@ -1,7 +1,6 @@
 add_subdirectory(catalog_entry)
 add_subdirectory(default)
 
-add_extension_definitions()
 add_library_unity(
   duckdb_catalog
   OBJECT
