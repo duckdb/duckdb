@@ -14,8 +14,9 @@ temp_source = 'duckdb.cpp.tmp'
 
 skip_duckdb_includes = False
 
-src_dir = 'src'
+src_dirs = ['src', os.path.join('extension', 'core_functions')]
 include_dir = os.path.join('src', 'include')
+include_dirs = [include_dir, os.path.join('extension', 'core_functions', 'include')]
 
 # files included in the amalgamated "duckdb.hpp" file
 main_header_files = [os.path.join(include_dir, 'duckdb.hpp'),
@@ -80,9 +81,9 @@ if '--extended' in sys.argv:
 
 import package_build
 # include paths for where to search for include files during amalgamation
-include_paths = [include_dir] + package_build.third_party_includes()
+include_paths = include_dirs + package_build.third_party_includes()
 # paths of where to look for files to compile and include to the final amalgamation
-compile_directories = [src_dir] + package_build.third_party_sources()
+compile_directories = src_dirs + package_build.third_party_sources()
 
 # files always excluded
 always_excluded = normalize_path(['src/amalgamation/duckdb.cpp', 'src/amalgamation/duckdb.hpp', 'src/amalgamation/parquet-amalgamation.cpp', 'src/amalgamation/parquet-amalgamation.hpp'])
