@@ -9,8 +9,11 @@ PhysicalPivot::PhysicalPivot(vector<LogicalType> types_p, unique_ptr<PhysicalOpe
       bound_pivot(std::move(bound_pivot_p)) {
 	children.push_back(std::move(child));
 	for (idx_t p = 0; p < bound_pivot.pivot_values.size(); p++) {
-		// Insert the value only if it doesn't already exist in the map
-		(void)pivot_map.insert(std::make_pair(bound_pivot.pivot_values.get(p), bound_pivot.group_count + p));
+		auto entry = pivot_map.find(bound_pivot.pivot_values.get(p));
+		if (entry != pivot_map.end()) {
+			continue;
+		}
+		pivot_map[bound_pivot.pivot_values.get(p)] = bound_pivot.group_count + p;
 	}
 	// extract the empty aggregate expressions
 	for (auto &aggr_expr : bound_pivot.aggregates) {
