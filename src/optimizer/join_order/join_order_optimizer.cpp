@@ -481,7 +481,7 @@ bool JoinOrderOptimizer::EnumerateCSGRecursive(JoinRelationSet &node, unordered_
 	for (idx_t i = 0; i < neighbors.size(); i++) {
 		// Reset the exclusion set so that the algorithm considers all combinations
 		// of the exclusion_set with a subset of neighbors.
-		new_exclusion_set = exclusion_set;
+		// new_exclusion_set = exclusion_set;
 		new_exclusion_set.insert(neighbors[i]);
 		// updated the set of excluded entries with this neighbor
 		if (!EnumerateCSGRecursive(union_sets[i], new_exclusion_set)) {
