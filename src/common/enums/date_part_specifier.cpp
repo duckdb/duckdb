@@ -1,4 +1,5 @@
 #include "duckdb/common/enums/date_part_specifier.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
