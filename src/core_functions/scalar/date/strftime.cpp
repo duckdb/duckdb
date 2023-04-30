@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/strftime.hpp"
+#include "duckdb/core_functions/scalar/strftime.hpp"
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"

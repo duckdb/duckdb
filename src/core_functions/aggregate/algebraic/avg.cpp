@@ -1,5 +1,5 @@
 #include "duckdb/core_functions/aggregate/algebraic_functions.hpp"
-#include "duckdb/function/aggregate/sum_helpers.hpp"
+#include "duckdb/core_functions/aggregate/sum_helpers.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/function_set.hpp"

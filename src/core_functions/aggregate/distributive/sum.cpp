@@ -1,5 +1,5 @@
 #include "duckdb/core_functions/aggregate/distributive_functions.hpp"
-#include "duckdb/function/aggregate/sum_helpers.hpp"
+#include "duckdb/core_functions/aggregate/sum_helpers.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"

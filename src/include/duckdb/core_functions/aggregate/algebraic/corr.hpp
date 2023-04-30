@@ -9,8 +9,8 @@
 #pragma once
 
 #include "duckdb/function/aggregate_function.hpp"
-#include "duckdb/function/aggregate/algebraic/covar.hpp"
-#include "duckdb/function/aggregate/algebraic/stddev.hpp"
+#include "covar.hpp"
+#include "stddev.hpp"
 
 namespace duckdb {
 

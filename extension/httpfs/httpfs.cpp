@@ -5,7 +5,7 @@
 #include "duckdb/common/http_state.hpp"
 #include "duckdb/common/thread.hpp"
 #include "duckdb/common/types/hash.hpp"
-#include "duckdb/function/scalar/strftime.hpp"
+#include "duckdb/core_functions/scalar/strftime.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 
