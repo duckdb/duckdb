@@ -123,7 +123,7 @@ for path in all_function_types:
     with open(header_path, 'w+') as f:
         f.write(new_text)
 
-function_list_file = normalize_path_separators('extension/core_functions/function_list.cpp')
+function_list_file = normalize_path_separators('src/core_functions/function_list.cpp')
 with open(function_list_file, 'r') as f:
     text = f.read()
 
