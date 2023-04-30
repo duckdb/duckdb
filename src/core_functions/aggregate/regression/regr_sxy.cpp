@@ -1,7 +1,7 @@
 // Returns REGR_COUNT(expr1, expr2) * COVAR_POP(expr1, expr2) for non-null pairs.
 
-#include "duckdb/function/aggregate/regression/regr_count.hpp"
-#include "duckdb/function/aggregate/algebraic/covar.hpp"
+#include "duckdb/core_functions/aggregate/regression/regr_count.hpp"
+#include "duckdb/core_functions/aggregate/algebraic/covar.hpp"
 #include "duckdb/core_functions/aggregate/regression_functions.hpp"
 #include "duckdb/function/function_set.hpp"
 

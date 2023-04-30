@@ -7,7 +7,9 @@
 #include "duckdb/catalog/default/default_schemas.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/main/attached_database.hpp"
+#ifdef BUILD_CORE_FUNCTIONS_EXTENSION
 #include "duckdb/core_functions/core_functions.hpp"
+#endif
 
 namespace duckdb {
 
@@ -36,7 +38,9 @@ void DuckCatalog::Initialize(bool load_builtin) {
 		BuiltinFunctions builtin(data, *this);
 		builtin.Initialize();
 
+#ifdef BUILD_CORE_FUNCTIONS_EXTENSION
 		CoreFunctions::RegisterFunctions(*this, data);
+#endif
 	}
 
 	Verify();

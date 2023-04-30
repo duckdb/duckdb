@@ -2,7 +2,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/core_functions/aggregate/regression_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/function/aggregate/regression/regr_count.hpp"
+#include "duckdb/core_functions/aggregate/regression/regr_count.hpp"
 #include "duckdb/function/function_set.hpp"
 
 namespace duckdb {

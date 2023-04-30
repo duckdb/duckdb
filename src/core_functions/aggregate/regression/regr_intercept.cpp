@@ -1,7 +1,7 @@
 //! AVG(y)-REGR_SLOPE(y,x)*AVG(x)
 
 #include "duckdb/core_functions/aggregate/regression_functions.hpp"
-#include "duckdb/function/aggregate/regression/regr_slope.hpp"
+#include "duckdb/core_functions/aggregate/regression/regr_slope.hpp"
 #include "duckdb/function/function_set.hpp"
 
 namespace duckdb {

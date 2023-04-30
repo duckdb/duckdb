@@ -4,7 +4,7 @@
 // 1                    if var_pop(y) = 0 and var_pop(x) <> 0, else
 // power(corr(y,x), 2)
 
-#include "duckdb/function/aggregate/algebraic/corr.hpp"
+#include "duckdb/core_functions/aggregate/algebraic/corr.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/core_functions/aggregate/regression_functions.hpp"
 

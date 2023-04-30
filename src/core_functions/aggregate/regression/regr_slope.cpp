@@ -6,7 +6,7 @@
 //! Input : Any numeric type
 //! Output : Double
 
-#include "duckdb/function/aggregate/regression/regr_slope.hpp"
+#include "duckdb/core_functions/aggregate/regression/regr_slope.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/core_functions/aggregate/regression_functions.hpp"
 
