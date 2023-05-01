@@ -106,8 +106,8 @@ struct DBConfigOptions {
 	string collation = string();
 	//! The order type used when none is specified (default: ASC)
 	OrderType default_order_type = OrderType::ASCENDING;
-	//! Null ordering used when none is specified (default: NULLS FIRST)
-	OrderByNullType default_null_order = OrderByNullType::NULLS_FIRST;
+	//! Null ordering used when none is specified (default: NULLS LAST)
+	DefaultOrderByNullType default_null_order = DefaultOrderByNullType::NULLS_LAST;
 	//! enable COPY and related commands
 	bool enable_external_access = true;
 	//! Whether or not object cache is used
@@ -145,6 +145,8 @@ struct DBConfigOptions {
 	bool enable_fsst_vectors = false;
 	//! Start transactions immediately in all attached databases - instead of lazily when a database is referenced
 	bool immediate_transaction_mode = false;
+	//! Debug setting - how to initialize  blocks in the storage layer when allocating
+	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
 	//! The set of unrecognized (other) options
 	unordered_map<string, Value> unrecognized_options;
 
@@ -215,9 +217,9 @@ public:
 	DUCKDB_API static idx_t ParseMemoryLimit(const string &arg);
 
 	//! Return the list of possible compression functions for the specific physical type
-	DUCKDB_API vector<CompressionFunction *> GetCompressionFunctions(PhysicalType data_type);
+	DUCKDB_API vector<reference<CompressionFunction>> GetCompressionFunctions(PhysicalType data_type);
 	//! Return the compression function for the specified compression type/physical type combo
-	DUCKDB_API CompressionFunction *GetCompressionFunction(CompressionType type, PhysicalType data_type);
+	DUCKDB_API optional_ptr<CompressionFunction> GetCompressionFunction(CompressionType type, PhysicalType data_type);
 
 	bool operator==(const DBConfig &other);
 	bool operator!=(const DBConfig &other);
@@ -225,6 +227,9 @@ public:
 	DUCKDB_API CastFunctionSet &GetCastFunctions();
 	void SetDefaultMaxThreads();
 	void SetDefaultMaxMemory();
+
+	OrderType ResolveOrder(OrderType order_type) const;
+	OrderByNullType ResolveNullOrder(OrderType order_type, OrderByNullType null_type) const;
 
 private:
 	unique_ptr<CompressionFunctionSet> compression_functions;

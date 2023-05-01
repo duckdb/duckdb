@@ -18,8 +18,8 @@ static int64_t MismatchesScalarFunction(Vector &result, const string_t str, stri
 	}
 
 	idx_t mismatches = 0;
-	auto str_str = str.GetDataUnsafe();
-	auto tgt_str = tgt.GetDataUnsafe();
+	auto str_str = str.GetData();
+	auto tgt_str = tgt.GetData();
 
 	for (idx_t idx = 0; idx < str_len; ++idx) {
 		if (str_str[idx] != tgt_str[idx]) {

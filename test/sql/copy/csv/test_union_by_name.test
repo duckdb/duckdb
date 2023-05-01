@@ -2,6 +2,9 @@
 # description: UNION_BY_NAME test
 # group: [csv]
 
+statement ok
+SET default_null_order='nulls_first';
+
 # Setup
 
 statement ok

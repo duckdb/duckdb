@@ -78,7 +78,7 @@ struct LikeMatcher : public FunctionData {
 	}
 
 	bool Match(string_t &str) {
-		auto str_data = (const unsigned char *)str.GetDataUnsafe();
+		auto str_data = (const unsigned char *)str.GetData();
 		auto str_len = str.GetSize();
 		idx_t segment_idx = 0;
 		idx_t end_idx = segments.size() - 1;
@@ -213,11 +213,11 @@ bool LikeOperatorFunction(const char *s, idx_t slen, const char *pattern, idx_t 
 }
 
 bool LikeOperatorFunction(string_t &s, string_t &pat) {
-	return LikeOperatorFunction(s.GetDataUnsafe(), s.GetSize(), pat.GetDataUnsafe(), pat.GetSize());
+	return LikeOperatorFunction(s.GetData(), s.GetSize(), pat.GetData(), pat.GetSize());
 }
 
 bool LikeOperatorFunction(string_t &s, string_t &pat, char escape) {
-	return LikeOperatorFunction(s.GetDataUnsafe(), s.GetSize(), pat.GetDataUnsafe(), pat.GetSize(), escape);
+	return LikeOperatorFunction(s.GetData(), s.GetSize(), pat.GetData(), pat.GetSize(), escape);
 }
 
 bool LikeFun::Glob(const char *string, idx_t slen, const char *pattern, idx_t plen, bool allow_question_mark) {
@@ -362,15 +362,14 @@ static char GetEscapeChar(string_t escape) {
 	if (escape.GetSize() > 1) {
 		throw SyntaxException("Invalid escape string. Escape string must be empty or one character.");
 	}
-	return escape.GetSize() == 0 ? '\0' : *escape.GetDataUnsafe();
+	return escape.GetSize() == 0 ? '\0' : *escape.GetData();
 }
 
 struct LikeEscapeOperator {
 	template <class TA, class TB, class TC>
 	static inline bool Operation(TA str, TB pattern, TC escape) {
 		char escape_char = GetEscapeChar(escape);
-		return LikeOperatorFunction(str.GetDataUnsafe(), str.GetSize(), pattern.GetDataUnsafe(), pattern.GetSize(),
-		                            escape_char);
+		return LikeOperatorFunction(str.GetData(), str.GetSize(), pattern.GetData(), pattern.GetSize(), escape_char);
 	}
 };
 
@@ -389,9 +388,9 @@ struct LikeOperator {
 };
 
 bool ILikeOperatorFunction(string_t &str, string_t &pattern, char escape = '\0') {
-	auto str_data = str.GetDataUnsafe();
+	auto str_data = str.GetData();
 	auto str_size = str.GetSize();
-	auto pat_data = pattern.GetDataUnsafe();
+	auto pat_data = pattern.GetData();
 	auto pat_size = pattern.GetSize();
 
 	// lowercase both the str and the pattern
@@ -446,8 +445,8 @@ struct NotILikeOperator {
 struct ILikeOperatorASCII {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA str, TB pattern) {
-		return TemplatedLikeOperator<'%', '_', false, ASCIILCaseReader>(
-		    str.GetDataUnsafe(), str.GetSize(), pattern.GetDataUnsafe(), pattern.GetSize(), '\0');
+		return TemplatedLikeOperator<'%', '_', false, ASCIILCaseReader>(str.GetData(), str.GetSize(), pattern.GetData(),
+		                                                                pattern.GetSize(), '\0');
 	}
 };
 
@@ -461,7 +460,7 @@ struct NotILikeOperatorASCII {
 struct GlobOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA str, TB pattern) {
-		return LikeFun::Glob(str.GetDataUnsafe(), str.GetSize(), pattern.GetDataUnsafe(), pattern.GetSize());
+		return LikeFun::Glob(str.GetData(), str.GetSize(), pattern.GetData(), pattern.GetSize());
 	}
 };
 

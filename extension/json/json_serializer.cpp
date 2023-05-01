@@ -227,7 +227,7 @@ void JsonSerializer::WriteValue(const string_t value) {
 	if (skip_if_empty && value.GetSize() == 0) {
 		return;
 	}
-	auto val = yyjson_mut_strncpy(doc, value.GetDataUnsafe(), value.GetSize());
+	auto val = yyjson_mut_strncpy(doc, value.GetData(), value.GetSize());
 	PushValue(val);
 }
 

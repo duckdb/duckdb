@@ -6,6 +6,10 @@
 
 namespace duckdb {
 
+OnEntryNotFound Transformer::TransformOnEntryNotFound(bool missing_ok) {
+	return missing_ok ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
+}
+
 unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode *node) {
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGAlterTableStmt *>(node);
 	D_ASSERT(stmt);
@@ -21,7 +25,7 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 	// first we check the type of ALTER
 	for (auto c = stmt->cmds->head; c != nullptr; c = c->next) {
 		auto command = reinterpret_cast<duckdb_libpgquery::PGAlterTableCmd *>(lfirst(c));
-		AlterEntryData data(qname.catalog, qname.schema, qname.name, stmt->missing_ok);
+		AlterEntryData data(qname.catalog, qname.schema, qname.name, TransformOnEntryNotFound(stmt->missing_ok));
 		// TODO: Include more options for command->subtype
 		switch (command->subtype) {
 		case duckdb_libpgquery::PG_AT_AddColumn: {

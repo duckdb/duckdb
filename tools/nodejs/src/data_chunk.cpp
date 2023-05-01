@@ -151,7 +151,7 @@ Napi::Array EncodeDataChunk(Napi::Env env, duckdb::DataChunk &chunk, bool with_t
 					auto data = duckdb::FlatVector::GetData<duckdb::string_t>(*vec);
 
 					for (size_t i = 0; i < chunk.size(); ++i) {
-						auto buf = Napi::Buffer<char>::Copy(env, data[i].GetDataUnsafe(), data[i].GetSize());
+						auto buf = Napi::Buffer<char>::Copy(env, data[i].GetData(), data[i].GetSize());
 						array.Set(i, buf);
 					}
 					desc.Set("data", array);

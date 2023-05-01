@@ -28,7 +28,7 @@ unique_ptr<CSVFileHandle> ReadCSV::OpenCSV(const string &file_path, FileCompress
 	if (file_handle->CanSeek()) {
 		file_handle->Reset();
 	}
-	return make_uniq<CSVFileHandle>(std::move(file_handle));
+	return make_uniq<CSVFileHandle>(std::move(file_handle), false);
 }
 
 void ReadCSVData::FinalizeRead(ClientContext &context) {
@@ -259,6 +259,7 @@ public:
 	    : file_handle(std::move(file_handle_p)), system_threads(system_threads_p), buffer_size(buffer_size_p),
 	      force_parallelism(force_parallelism_p), column_ids(std::move(column_ids_p)),
 	      line_info(&main_mutex, &batch_to_tuple_end, &tuple_start, &tuple_end) {
+		file_handle->DisableReset();
 		current_file_path = files_path_p[0];
 		line_info.lines_read[0] = rows_to_skip;
 		if (has_header) {
@@ -954,6 +955,7 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["decimal_separator"] = LogicalType::VARCHAR;
 	table_function.named_parameters["parallel"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["null_padding"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["allow_quoted_nulls"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["column_types"] = LogicalType::ANY;
 	table_function.named_parameters["dtypes"] = LogicalType::ANY;
 	table_function.named_parameters["types"] = LogicalType::ANY;
@@ -1013,6 +1015,7 @@ void BufferedCSVReaderOptions::Serialize(FieldWriter &writer) const {
 	writer.WriteString(null_str);
 	writer.WriteField<FileCompressionType>(compression);
 	writer.WriteField<NewLineIdentifier>(new_line);
+	writer.WriteField<bool>(allow_quoted_nulls);
 	// read options
 	writer.WriteField<idx_t>(skip_rows);
 	writer.WriteField<bool>(skip_rows_set);
@@ -1048,6 +1051,7 @@ void BufferedCSVReaderOptions::Deserialize(FieldReader &reader) {
 	null_str = reader.ReadRequired<string>();
 	compression = reader.ReadRequired<FileCompressionType>();
 	new_line = reader.ReadRequired<NewLineIdentifier>();
+	allow_quoted_nulls = reader.ReadRequired<bool>();
 	// read options
 	skip_rows = reader.ReadRequired<idx_t>();
 	skip_rows_set = reader.ReadRequired<bool>();

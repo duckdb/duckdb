@@ -519,7 +519,7 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 				target_entry = source_entry;
 			} else {
 				D_ASSERT(heap_ptr != nullptr);
-				memcpy(heap_ptr, source_entry.GetDataUnsafe(), source_entry.GetSize());
+				memcpy(heap_ptr, source_entry.GetData(), source_entry.GetSize());
 				target_entry = string_t((const char *)heap_ptr, source_entry.GetSize());
 				heap_ptr += source_entry.GetSize();
 			}

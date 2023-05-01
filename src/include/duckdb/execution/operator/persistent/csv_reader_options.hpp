@@ -62,6 +62,8 @@ struct BufferedCSVReaderOptions {
 	//! Whether file is compressed or not, and if so which compression type
 	//! AUTO_DETECT (default; infer from file extension)
 	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
+	//! Option to convert quoted values to NULL values
+	bool allow_quoted_nulls = true;
 
 	//===--------------------------------------------------------------------===//
 	// CSVAutoOptions
@@ -128,7 +130,8 @@ struct BufferedCSVReaderOptions {
 	std::map<LogicalTypeId, StrfTimeFormat> write_date_format = {{LogicalTypeId::DATE, {}},
 	                                                             {LogicalTypeId::TIMESTAMP, {}}};
 	//! Whether or not a type format is specified
-	std::map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
+	std::map<LogicalTypeId, bool> has_format = {
+	    {LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}, {LogicalTypeId::TIMESTAMP_TZ, false}};
 
 	void Serialize(FieldWriter &writer) const;
 	void Deserialize(FieldReader &reader);

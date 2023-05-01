@@ -25,8 +25,8 @@ static idx_t DamerauLevenshteinDistance(const string_t &source, const string_t &
 		return source_len * COST_DELETION;
 	}
 
-	const auto source_str = source.GetDataUnsafe();
-	const auto target_str = target.GetDataUnsafe();
+	const auto source_str = source.GetData();
+	const auto target_str = target.GetData();
 
 	// larger than the largest possible value:
 	const auto inf = source_len * COST_DELETION + target_len * COST_INSERTION + 1;

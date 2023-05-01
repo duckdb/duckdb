@@ -30,7 +30,7 @@ void PhysicalDetach::GetData(ExecutionContext &context, DataChunk &chunk, Global
 		return;
 	}
 	auto &db_manager = DatabaseManager::Get(context.client);
-	db_manager.DetachDatabase(context.client, info->name, info->if_exists);
+	db_manager.DetachDatabase(context.client, info->name, info->if_not_found);
 	state.finished = true;
 }
 

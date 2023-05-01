@@ -357,10 +357,10 @@ bool Binder::HasMatchingBinding(const string &catalog_name, const string &schema
 		if (!catalog_entry) {
 			return false;
 		}
-		if (!catalog_name.empty() && catalog_entry->catalog->GetName() != catalog_name) {
+		if (!catalog_name.empty() && catalog_entry->catalog.GetName() != catalog_name) {
 			return false;
 		}
-		if (!schema_name.empty() && catalog_entry->schema->name != schema_name) {
+		if (!schema_name.empty() && catalog_entry->schema.name != schema_name) {
 			return false;
 		}
 		if (catalog_entry->name != table_name) {
@@ -438,7 +438,7 @@ void VerifyNotExcluded(ParsedExpression &expr) {
 	    expr, [&](const ParsedExpression &child) { VerifyNotExcluded((ParsedExpression &)child); });
 }
 
-BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry *table,
+BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry &table,
                                      const string &alias, idx_t update_table_index,
                                      unique_ptr<LogicalOperator> child_operator, BoundStatement result) {
 
@@ -449,7 +449,7 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 
 	vector<column_t> bound_columns;
 	idx_t column_count = 0;
-	for (auto &col : table->GetColumns().Logical()) {
+	for (auto &col : table.GetColumns().Logical()) {
 		names.push_back(col.Name());
 		types.push_back(col.Type());
 		if (!col.Generated()) {
@@ -458,8 +458,8 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 		column_count++;
 	}
 
-	binder->bind_context.AddBaseTable(update_table_index, alias.empty() ? table->name : alias, names, types,
-	                                  bound_columns, table, false);
+	binder->bind_context.AddBaseTable(update_table_index, alias.empty() ? table.name : alias, names, types,
+	                                  bound_columns, &table, false);
 	ReturningBinder returning_binder(*binder, context);
 
 	vector<unique_ptr<Expression>> projection_expressions;

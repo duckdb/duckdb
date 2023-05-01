@@ -7,8 +7,8 @@
 
 namespace duckdb {
 
-AlterInfo::AlterInfo(AlterType type, string catalog_p, string schema_p, string name_p, bool if_exists)
-    : type(type), if_exists(if_exists), catalog(std::move(catalog_p)), schema(std::move(schema_p)),
+AlterInfo::AlterInfo(AlterType type, string catalog_p, string schema_p, string name_p, OnEntryNotFound if_not_found)
+    : type(type), if_not_found(if_not_found), catalog(std::move(catalog_p)), schema(std::move(schema_p)),
       name(std::move(name_p)), allow_internal(false) {
 }
 
@@ -53,7 +53,7 @@ AlterEntryData AlterInfo::GetAlterEntryData() const {
 	data.catalog = catalog;
 	data.schema = schema;
 	data.name = name;
-	data.if_exists = if_exists;
+	data.if_not_found = if_not_found;
 	return data;
 }
 

@@ -70,12 +70,12 @@ void EXCELExtension::Load(DuckDB &db) {
 	ScalarFunction text_func("text", {LogicalType::DOUBLE, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                         NumberFormatFunction);
 	CreateScalarFunctionInfo text_info(text_func);
-	catalog.CreateFunction(*con.context, &text_info);
+	catalog.CreateFunction(*con.context, text_info);
 
 	ScalarFunction excel_text_func("excel_text", {LogicalType::DOUBLE, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                               NumberFormatFunction);
 	CreateScalarFunctionInfo excel_text_info(excel_text_func);
-	catalog.CreateFunction(*con.context, &excel_text_info);
+	catalog.CreateFunction(*con.context, excel_text_info);
 
 	con.Commit();
 }

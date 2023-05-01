@@ -142,7 +142,7 @@ Value DebugForceNoCrossProduct::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
-// Debug Ordered Aggregate Threshold
+// Ordered Aggregate Threshold
 //===--------------------------------------------------------------------===//
 
 void OrderedAggregateThreshold::ResetLocal(ClientContext &context) {
@@ -183,6 +183,21 @@ void DebugWindowMode::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 
 Value DebugWindowMode::GetSetting(ClientContext &context) {
 	return Value();
+}
+
+//===--------------------------------------------------------------------===//
+// Debug AsOf Join
+//===--------------------------------------------------------------------===//
+void DebugAsOfIEJoin::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).force_no_cross_product = ClientConfig().force_asof_iejoin;
+}
+
+void DebugAsOfIEJoin::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).force_asof_iejoin = input.GetValue<bool>();
+}
+
+Value DebugAsOfIEJoin::GetSetting(ClientContext &context) {
+	return Value::BOOLEAN(ClientConfig::GetConfig(context).force_asof_iejoin);
 }
 
 //===--------------------------------------------------------------------===//
@@ -253,14 +268,18 @@ void DefaultNullOrderSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, 
 	auto parameter = StringUtil::Lower(input.ToString());
 
 	if (parameter == "nulls_first" || parameter == "nulls first" || parameter == "null first" || parameter == "first") {
-		config.options.default_null_order = OrderByNullType::NULLS_FIRST;
+		config.options.default_null_order = DefaultOrderByNullType::NULLS_FIRST;
 	} else if (parameter == "nulls_last" || parameter == "nulls last" || parameter == "null last" ||
 	           parameter == "last") {
-		config.options.default_null_order = OrderByNullType::NULLS_LAST;
+		config.options.default_null_order = DefaultOrderByNullType::NULLS_LAST;
+	} else if (parameter == "nulls_first_on_asc_last_on_desc" || parameter == "sqlite" || parameter == "mysql") {
+		config.options.default_null_order = DefaultOrderByNullType::NULLS_FIRST_ON_ASC_LAST_ON_DESC;
+	} else if (parameter == "nulls_last_on_asc_first_on_desc" || parameter == "postgres") {
+		config.options.default_null_order = DefaultOrderByNullType::NULLS_LAST_ON_ASC_FIRST_ON_DESC;
 	} else {
-		throw ParserException(
-		    "Unrecognized parameter for option NULL_ORDER \"%s\", expected either NULLS FIRST or NULLS LAST",
-		    parameter);
+		throw ParserException("Unrecognized parameter for option NULL_ORDER \"%s\", expected either NULLS FIRST, NULLS "
+		                      "LAST, SQLite, MySQL or Postgres",
+		                      parameter);
 	}
 }
 
@@ -271,10 +290,14 @@ void DefaultNullOrderSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config
 Value DefaultNullOrderSetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	switch (config.options.default_null_order) {
-	case OrderByNullType::NULLS_FIRST:
+	case DefaultOrderByNullType::NULLS_FIRST:
 		return "nulls_first";
-	case OrderByNullType::NULLS_LAST:
+	case DefaultOrderByNullType::NULLS_LAST:
 		return "nulls_last";
+	case DefaultOrderByNullType::NULLS_FIRST_ON_ASC_LAST_ON_DESC:
+		return "nulls_first_on_asc_last_on_desc";
+	case DefaultOrderByNullType::NULLS_LAST_ON_ASC_FIRST_ON_DESC:
+		return "nulls_last_on_asc_first_on_desc";
 	default:
 		throw InternalException("Unknown null order setting");
 	}

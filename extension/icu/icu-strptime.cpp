@@ -222,9 +222,9 @@ struct ICUStrptime : public ICUDateFunc {
 	static void TailPatch(const string &name, ClientContext &context, const vector<LogicalType> &types) {
 		// Find the old function
 		auto &catalog = Catalog::GetSystemCatalog(context);
-		auto entry = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, name);
-		D_ASSERT(entry && entry->type == CatalogType::SCALAR_FUNCTION_ENTRY);
-		auto &func = entry->Cast<ScalarFunctionCatalogEntry>();
+		auto &entry = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, name);
+		D_ASSERT(entry.type == CatalogType::SCALAR_FUNCTION_ENTRY);
+		auto &func = entry.Cast<ScalarFunctionCatalogEntry>();
 		string error;
 
 		FunctionBinder function_binder(context);
@@ -255,7 +255,7 @@ struct ICUStrptime : public ICUDateFunc {
 		UnaryExecutor::ExecuteWithNulls<string_t, timestamp_t>(
 		    source, result, count, [&](string_t input, ValidityMask &mask, idx_t idx) {
 			    timestamp_t result;
-			    const auto str = input.GetDataUnsafe();
+			    const auto str = input.GetData();
 			    const auto len = input.GetSize();
 			    string_t tz(nullptr, 0);
 			    bool has_offset = false;
@@ -417,7 +417,7 @@ struct ICUStrftime : public ICUDateFunc {
 
 		CreateScalarFunctionInfo func_info(set);
 		auto &catalog = Catalog::GetSystemCatalog(context);
-		catalog.AddFunction(context, &func_info);
+		catalog.AddFunction(context, func_info);
 	}
 
 	static string_t CastOperation(icu::Calendar *calendar, timestamp_t input, Vector &result) {

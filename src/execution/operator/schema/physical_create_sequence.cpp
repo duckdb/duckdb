@@ -25,7 +25,7 @@ void PhysicalCreateSequence::GetData(ExecutionContext &context, DataChunk &chunk
 		return;
 	}
 	auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
-	catalog.CreateSequence(context.client, info.get());
+	catalog.CreateSequence(context.client, *info);
 	state.finished = true;
 }
 

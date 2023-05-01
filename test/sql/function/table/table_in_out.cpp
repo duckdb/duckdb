@@ -29,7 +29,7 @@ struct ThrottlingSum {
 
 	static OperatorResultType Function(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &input,
 	                                   DataChunk &output) {
-		auto &state = (ThrottlingSum::CustomFunctionData &)*data_p.bind_data;
+		auto &state = data_p.bind_data->CastNoConst<ThrottlingSum::CustomFunctionData>();
 
 		for (idx_t row_idx = 0; row_idx < input.size(); row_idx++) {
 			int sum = 0;
@@ -53,7 +53,7 @@ struct ThrottlingSum {
 
 	static OperatorFinalizeResultType Finalize(ExecutionContext &context, TableFunctionInput &data_p,
 	                                           DataChunk &output) {
-		auto &state = (ThrottlingSum::CustomFunctionData &)*data_p.bind_data;
+		auto &state = data_p.bind_data->CastNoConst<ThrottlingSum::CustomFunctionData>();
 
 		if (state.current_idx < state.row_sums.size()) {
 			output.SetCardinality(1);
@@ -74,7 +74,7 @@ struct ThrottlingSum {
 		caching_table_in_out.in_out_function = ThrottlingSum::Function;
 		caching_table_in_out.in_out_function_final = ThrottlingSum::Finalize;
 		CreateTableFunctionInfo caching_table_in_out_info(caching_table_in_out);
-		catalog.CreateTableFunction(*con.context, &caching_table_in_out_info);
+		catalog.CreateTableFunction(*con.context, caching_table_in_out_info);
 		con.Commit();
 	}
 };

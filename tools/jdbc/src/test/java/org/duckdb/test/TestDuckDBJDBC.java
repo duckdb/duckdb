@@ -21,17 +21,17 @@ import java.sql.Statement;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
-import java.time.Duration;
+import java.time.*;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Comparator;
+import java.util.GregorianCalendar;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.TimeZone;
-import java.time.LocalDateTime;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.UUID;
 import javax.sql.rowset.RowSetProvider;
 import javax.sql.rowset.CachedRowSet;
@@ -384,6 +384,12 @@ public class TestDuckDBJDBC {
 
 			assertEquals(expected.getTime(), actual.getTime());
 			assertEquals(expected.getNanos(), actual.getNanos());
+			
+			//	Verify calendar variants
+			Calendar cal = new GregorianCalendar(TimeZone.getTimeZone("America/Los_Angeles"), Locale.US);
+			Timestamp actual_cal = rs.getTimestamp(1, cal);
+			assertEquals(expected.getTime(), actual_cal.getTime());
+			assertEquals(expected.getNanos(), actual_cal.getNanos());
 
 			assertEquals(Types.TIMESTAMP, rs.getMetaData().getColumnType(1));
 			assertEquals(expectedTypeName, rs.getMetaData().getColumnTypeName(1));
@@ -444,7 +450,7 @@ public class TestDuckDBJDBC {
 		// Metadata tests
 		assertEquals(Types.TIMESTAMP_WITH_TIMEZONE,
 				(meta.unwrap(DuckDBResultSetMetaData.class).type_to_int(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE)));
-		assertTrue(OffsetDateTime.class.toString().equals(meta.getColumnClassName(2)));
+		assertTrue(OffsetDateTime.class.getName().equals(meta.getColumnClassName(2)));
 
 		rs.close();
 		stmt.close();
@@ -632,11 +638,7 @@ public class TestDuckDBJDBC {
 		ResultSet rs = stmt.executeQuery("SELECT * FROM a");
 		assertFalse(rs.next());
 
-		try {
-			rs.getObject(1);
-			fail();
-		} catch (ArrayIndexOutOfBoundsException e) {
-		}
+		assertEquals(assertThrows(() -> rs.getObject(1), SQLException.class), "No row in context");
 
 		rs.close();
 		stmt.close();
@@ -757,7 +759,7 @@ public class TestDuckDBJDBC {
 		Statement stmt = conn.createStatement();
 		stmt.execute("CREATE TABLE a (ts TIMESTAMP)");
 
-		// Generat tests without database
+		// Generate tests without database
 		Timestamp ts0 = Timestamp.valueOf("1970-01-01 00:00:00");
 		Timestamp ts1 = Timestamp.valueOf("2021-07-29 21:13:11");
 		Timestamp ts2 = Timestamp.valueOf("2021-07-29 21:13:11.123456");
@@ -1068,10 +1070,10 @@ public class TestDuckDBJDBC {
 
 		// Metadata tests
 		assertEquals(Types.DECIMAL, meta.type_to_int(DuckDBColumnType.DECIMAL));
-		assertTrue(BigDecimal.class.toString().equals(meta.getColumnClassName(1)));
-		assertTrue(BigDecimal.class.toString().equals(meta.getColumnClassName(2)));
-		assertTrue(BigDecimal.class.toString().equals(meta.getColumnClassName(3)));
-		assertTrue(BigDecimal.class.toString().equals(meta.getColumnClassName(4)));
+		assertTrue(BigDecimal.class.getName().equals(meta.getColumnClassName(1)));
+		assertTrue(BigDecimal.class.getName().equals(meta.getColumnClassName(2)));
+		assertTrue(BigDecimal.class.getName().equals(meta.getColumnClassName(3)));
+		assertTrue(BigDecimal.class.getName().equals(meta.getColumnClassName(4)));
 
 		assertEquals(3, meta.getPrecision(1));
 		assertEquals(0, meta.getScale(1));
@@ -1580,7 +1582,7 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
-	public static void test_exotic_types() throws Exception {
+	public static void test_temporal_types() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
 
@@ -1604,7 +1606,29 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
-	public static void test_exotic_nulls() throws Exception {
+	public static void test_calendar_types() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		//	Nail down the location for test portability.
+		Calendar cal = new GregorianCalendar(TimeZone.getTimeZone("America/Los_Angeles"), Locale.US);
+
+		ResultSet rs = stmt.executeQuery(
+				"SELECT '2019-11-26 21:11:43.123456'::timestamp ts, '2019-11-26'::date dt, '21:11:00'::time te");
+		assertTrue(rs.next());
+		assertEquals(rs.getTimestamp("ts", cal), Timestamp.from(Instant.ofEpochSecond(1574802703, 123456000)));
+
+		assertEquals(rs.getDate("dt", cal), Date.valueOf("2019-11-26"));
+
+		assertEquals(rs.getTime("te", cal), Time.valueOf("21:11:00"));
+
+		assertFalse(rs.next());
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
+
+	public static void test_temporal_nulls() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
 
@@ -1833,7 +1857,26 @@ public class TestDuckDBJDBC {
 
 		conn.close();
 	}
-	
+
+	public static void test_time_tz() throws Exception {
+		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+			 Statement s = conn.createStatement()) {
+			s.executeUpdate("create table t (i time with time zone)");
+			try (ResultSet rs = conn.getMetaData().getColumns(null, "%", "t", "i");) {
+				rs.next();
+
+				assertEquals(rs.getString("TYPE_NAME"), "TIME WITH TIME ZONE");
+				assertEquals(rs.getInt("DATA_TYPE"), Types.JAVA_OBJECT);
+			}
+
+			s.execute("INSERT INTO t VALUES ('01:01:00');");
+			try (ResultSet rs = s.executeQuery("SELECT * FROM t")) {
+				rs.next();
+				assertEquals(rs.getObject(1), OffsetTime.of(LocalTime.of(1, 1), ZoneOffset.UTC));
+			}
+		}
+	}
+
 	public static void test_get_tables_with_current_catalog() throws Exception {
 		ResultSet resultSet = null;
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
@@ -2349,9 +2392,17 @@ public class TestDuckDBJDBC {
 	}
 
 	public static void test_set_catalog() throws Exception {
-		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
-		conn.setCatalog("we do not have this feature yet, sorry"); // Should be no-op until implemented
-		conn.close();
+		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
+
+			assertThrows(() -> conn.setCatalog("other"), SQLException.class);
+
+			try (Statement stmt = conn.createStatement()) {
+				stmt.execute("ATTACH ':memory:' AS other;");
+			}
+
+			conn.setCatalog("other");
+			assertEquals(conn.getCatalog(), "other");
+		}
 	}
 
 	public static void test_get_table_types_bug1258() throws Exception {
@@ -2582,6 +2633,9 @@ public class TestDuckDBJDBC {
 		}
 
 		assertEquals(conn.getSchema(), "alternate_schema");
+
+		conn.setSchema("main");
+		assertEquals(conn.getSchema(), "main");
 
 		conn.close();
 
@@ -3206,6 +3260,35 @@ public class TestDuckDBJDBC {
 				assertTrue(rs.next());
 				assertEquals(rs.getObject(1), "{'hello': foo, 'world': bar}");
 			}
+		}
+	}
+
+	public static void test_getColumnClassName() throws Exception {
+		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");Statement s = conn.createStatement();) {
+			try (ResultSet rs = s.executeQuery("select * from test_all_types()")) {
+				ResultSetMetaData rsmd = rs.getMetaData();
+				rs.next();
+				for (int i=1; i<=rsmd.getColumnCount(); i++) {
+					Object value = rs.getObject(i);
+					if (value == null) {
+						continue; // FIXME: when we add a complete test_all_types() test
+					}
+
+					assertEquals(
+						rsmd.getColumnClassName(i),
+						value.getClass().getName()
+					);
+				}
+			}
+		}
+	}
+
+	public static void test_update_count() throws Exception {
+		try (Connection connection = DriverManager.getConnection("jdbc:duckdb:"); Statement s = connection.createStatement()) {
+			s.executeUpdate("create table t (i int)");
+			assertEquals(s.executeUpdate("insert into t values (1)"), 1);
+			assertFalse(s.execute("insert into t values (1)"));
+			assertEquals(s.getUpdateCount(), 1);
 		}
 	}
 

@@ -72,7 +72,10 @@ AdbcStatusCode DatabaseNew(struct AdbcDatabase *database, struct AdbcError *erro
 	CHECK_TRUE(database, error, "Missing database object");
 
 	database->private_data = nullptr;
-	auto wrapper = (DuckDBAdbcDatabaseWrapper *)malloc(sizeof(DuckDBAdbcDatabaseWrapper));
+	// you can't malloc a struct with a non-trivial C++ constructor
+	// and std::string has a non-trivial constructor. so we need
+	// to use new and delete rather than malloc and free.
+	auto wrapper = new DuckDBAdbcDatabaseWrapper;
 	CHECK_TRUE(wrapper, error, "Allocation error");
 
 	database->private_data = wrapper;
@@ -112,7 +115,7 @@ AdbcStatusCode DatabaseRelease(struct AdbcDatabase *database, struct AdbcError *
 
 		duckdb_close(&wrapper->database);
 		duckdb_destroy_config(&wrapper->config);
-		free(database->private_data);
+		delete wrapper;
 		database->private_data = nullptr;
 	}
 	return ADBC_STATUS_OK;
