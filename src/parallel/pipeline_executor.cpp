@@ -47,21 +47,21 @@ OperatorResultType PipelineExecutor::FlushCachingOperatorsPush() {
 
 	// Main flushing loop -> keep flushing each operator that needs flushing until it's done or an interrupt happens
 	while (flushing_idx < pipeline.operators.size()) {
-		if (!pipeline.operators[flushing_idx].RequiresFinalExecute()) {
+		if (!pipeline.operators[flushing_idx].get().RequiresFinalExecute()) {
 			flushing_idx++;
 			continue;
 		}
 
 		auto &curr_chunk =
 			flushing_idx + 1 >= intermediate_chunks.size() ? final_chunk : *intermediate_chunks[flushing_idx + 1];
-		auto current_operator = pipeline.operators[flushing_idx];
+		auto& current_operator = pipeline.operators[flushing_idx].get();
 
 
 		OperatorFinalizeResultType finalize_result;
 		OperatorResultType push_result;
 		if (!blocked_on_have_more_output) {
 			StartOperator(current_operator);
-			finalize_result = current_operator.FinalExecute(context, curr_chunk, *current_operator->op_state,
+			finalize_result = current_operator.FinalExecute(context, curr_chunk, *current_operator.op_state,
 																						*intermediate_states[flushing_idx]);
 			EndOperator(current_operator, &curr_chunk);
 
@@ -443,8 +443,8 @@ void PipelineExecutor::SetTaskForInterrupts(weak_ptr<Task> current_task) {
 
 SourceResultType PipelineExecutor::GetData(DataChunk &chunk, OperatorSourceInput &input) {
 	//! Testing feature to enable async source on every operator
-	if (context.client.config.force_async_pipelines && !debug_blocked_source) {
-		debug_blocked_source = true;
+	if (context.client.config.force_async_pipelines && debug_blocked_source_count < debug_blocked_target) {
+		debug_blocked_source_count++;
 
 		auto callback_state = input.interrupt_state;
 		std::thread rewake_thread([callback_state] {
@@ -461,8 +461,8 @@ SourceResultType PipelineExecutor::GetData(DataChunk &chunk, OperatorSourceInput
 
 SinkResultType PipelineExecutor::Sink(DataChunk &chunk, OperatorSinkInput &input) {
 	//! Testing feature to enable async sink on every operator
-	if (context.client.config.force_async_pipelines && !debug_blocked_sink) {
-		debug_blocked_sink = true;
+	if (context.client.config.force_async_pipelines && debug_blocked_sink_count < debug_blocked_target) {
+		debug_blocked_sink_count++;
 
 		auto callback_state = input.interrupt_state;
 		std::thread rewake_thread([callback_state] {

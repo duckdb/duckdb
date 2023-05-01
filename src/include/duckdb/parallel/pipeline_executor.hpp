@@ -112,8 +112,10 @@ private:
 	idx_t flushing_idx;
 
 	//! Debugging state for force_async_pipelines
-	bool debug_blocked_sink = false;
-	bool debug_blocked_source = false;
+	int debug_blocked_sink_count = 0;
+	int debug_blocked_source_count = 0;
+	//! Number of times each operator will block before actually producing results
+	int debug_blocked_target = 2;
 
 private:
 	void StartOperator(PhysicalOperator &op);
