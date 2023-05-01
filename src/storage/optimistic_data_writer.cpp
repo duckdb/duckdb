@@ -15,9 +15,6 @@ OptimisticDataWriter::OptimisticDataWriter(DataTable &table, shared_ptr<PartialB
 OptimisticDataWriter::OptimisticDataWriter(DataTable &table, OptimisticDataWriter &parent)
     : table(table), partial_manager(parent.partial_manager), written_blocks(std::move(parent.written_blocks)),
       written_anything(parent.written_anything) {
-	if (partial_manager) {
-		partial_manager->FlushPartialBlocks();
-	}
 }
 
 OptimisticDataWriter::~OptimisticDataWriter() {
