@@ -139,8 +139,9 @@ unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(AttachInfo
                                                                       AccessMode access_mode) {
 	unique_ptr<AttachedDatabase> attached_database;
 	if (!type.empty()) {
-		// find the storage extensionon database
-		auto entry = config.storage_extensions.find(type);
+		// find the storage extension
+		auto extension_name = ExtensionHelper::ApplyExtensionAlias(type);
+		auto entry = config.storage_extensions.find(extension_name);
 		if (entry == config.storage_extensions.end()) {
 			throw BinderException("Unrecognized storage type \"%s\"", type);
 		}
