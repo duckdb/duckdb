@@ -58,10 +58,12 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 	} else if (loption == "union_by_name") {
 		options.union_by_name = BooleanValue::Get(val);
 	} else if (loption == "hive_types") {
+		options.hive_types = true;
 		// using 'hive_types' implies 'hive_partitioning'
 		options.hive_partitioning = true;
-		// options.hive_partitioning_auto_detect = false;
-		options.hive_types_auto_detect = false;
+		// turn off the auto_detection
+		// options.hive_partitioning_auto_detect = false;	// not (yet) implemented, different PR
+		options.hive_types_auto_detect = false;	// not (yet) implemented
 
 		// auto structstring = val.type().ToString(); //del
 		
@@ -78,17 +80,17 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 			// for every child of the struct, perform TransformStringToLogicalType to get the logical type
 			auto initial_type = child;
 			auto transformed_type = TransformStringToLogicalType(initial_type.ToString(), context);
-			// Value def_val;
-			// string error;
-			// bool success = child.DefaultTryCastAs(LogicalType::SMALLINT, def_val, &error);
-			// auto cast_type = child;
-
 			auto& name = StructType::GetChildName(val.type(), i);
 			
 			// add the hivetype to the map
-			options.hive_types[name] = transformed_type;
+			if (options.hive_types_schema.find(name) != options.hive_types_schema.end()) {
+				throw InvalidInputException("\'HIVE_TYPES\' contains duplicate entries");
+			}
+			options.hive_types_schema[name] = transformed_type;
 		}
-		// options.hive_types = StructValue::GetChildren(val);	//case insensitive map?
+		if (options.hive_types_schema.empty()) {
+			throw InvalidInputException("\'HIVE_TYPES\' can not be empty");
+		}
 	} else {
 		return false;
 	}
