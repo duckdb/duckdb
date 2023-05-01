@@ -21,19 +21,19 @@ class ExtensionUtil {
 public:
 	//! Register a new scalar function - throw an exception if the function already exists
 	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, ScalarFunction function);
-	//! Register a new scalar function - throw an exception if the function already exists
+	//! Register a new scalar function set - throw an exception if the function already exists
 	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, ScalarFunctionSet function);
 	//! Register a new table function - throw an exception if the function already exists
 	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, TableFunction function);
-	//! Register a new scalar function - throw an exception if the function already exists
+	//! Register a new table function set - throw an exception if the function already exists
 	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, TableFunctionSet function);
 	//! Register a new pragma function - throw an exception if the function already exists
 	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, PragmaFunction function);
-	//! Register a new scalar function - throw an exception if the function already exists
+	//! Register a new pragma function set - throw an exception if the function already exists
 	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, PragmaFunctionSet function);
-	//! Register a new scalar function - throw an exception if the function already exists
+	//! Register a new copy function - throw an exception if the function already exists
 	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, CopyFunction function);
-	//! Register a new scalar function - throw an exception if the function already exists
+	//! Register a new macro function - throw an exception if the function already exists
 	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, CreateMacroInfo &info);
 
 	//! Registers a new type
