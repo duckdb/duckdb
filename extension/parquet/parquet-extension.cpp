@@ -294,7 +294,7 @@ public:
 		ParquetOptions parquet_options(context);
 		for (auto &kv : input.named_parameters) {
 			auto loption = StringUtil::Lower(kv.first);
-			if (MultiFileReader::ParseOption(kv.first, kv.second, parquet_options.file_options)) {
+			if (MultiFileReader::ParseOption(kv.first, kv.second, parquet_options.file_options, context)) {
 				continue;
 			}
 			if (loption == "binary_as_string") {

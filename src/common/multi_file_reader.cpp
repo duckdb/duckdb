@@ -49,7 +49,7 @@ vector<string> MultiFileReader::GetFileList(ClientContext &context, const Value 
 	return files;
 }
 
-bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFileReaderOptions &options) {
+bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFileReaderOptions &options, ClientContext &context) {
 	auto loption = StringUtil::Lower(key);
 	if (loption == "filename") {
 		options.filename = BooleanValue::Get(val);
@@ -77,16 +77,16 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 			}
 			// for every child of the struct, perform TransformStringToLogicalType to get the logical type
 			auto initial_type = child;
-			auto transformed_type = TransformStringToLogicalType(initial_type.ToString());
-			Value def_val;
-			string error;
-			bool success = child.DefaultTryCastAs(LogicalType::SMALLINT, def_val, &error);
-			auto cast_type = child;
+			auto transformed_type = TransformStringToLogicalType(initial_type.ToString(), context);
+			// Value def_val;
+			// string error;
+			// bool success = child.DefaultTryCastAs(LogicalType::SMALLINT, def_val, &error);
+			// auto cast_type = child;
 
 			auto& name = StructType::GetChildName(val.type(), i);
 			
 			// add the hivetype to the map
-			options.hive_types[name] = cast_type;
+			options.hive_types[name] = transformed_type;
 		}
 		// options.hive_types = StructValue::GetChildren(val);	//case insensitive map?
 	} else {

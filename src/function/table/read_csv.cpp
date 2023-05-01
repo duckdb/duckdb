@@ -72,7 +72,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 
 	bool explicitly_set_columns = false;
 	for (auto &kv : input.named_parameters) {
-		if (MultiFileReader::ParseOption(kv.first, kv.second, options.file_options)) {
+		if (MultiFileReader::ParseOption(kv.first, kv.second, options.file_options, context)) {
 			continue;
 		}
 		auto loption = StringUtil::Lower(kv.first);

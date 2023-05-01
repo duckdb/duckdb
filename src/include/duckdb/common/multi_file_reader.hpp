@@ -87,7 +87,7 @@ struct MultiFileReader {
 	DUCKDB_API static vector<string> GetFileList(ClientContext &context, const Value &input, const string &name,
 	                                             FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
 	//! Parse the named parameters of a multi-file reader
-	DUCKDB_API static bool ParseOption(const string &key, const Value &val, MultiFileReaderOptions &options);
+	DUCKDB_API static bool ParseOption(const string &key, const Value &val, MultiFileReaderOptions &options, ClientContext &context);
 	//! Perform complex filter pushdown into the multi-file reader, potentially filtering out files that should be read
 	//! If "true" the first file has been eliminated
 	DUCKDB_API static bool ComplexFilterPushdown(ClientContext &context, vector<string> &files,
