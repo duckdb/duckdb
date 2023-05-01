@@ -231,13 +231,6 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	// initialize the system catalog
 	db_manager->InitializeSystemCatalog();
 
-	bool extension_will_create_default_db =
-	    (database_type.empty()) ? false : ExtensionHelper::IsStorageExtension(database_type, config);
-
-	if (!extension_will_create_default_db) {
-		CreateDatabase("");
-	}
-
 	if (!database_type.empty()) {
 		// if we are opening an extension database - load the extension
 		ExtensionHelper::LoadExternalExtension(*this, nullptr, database_type);
