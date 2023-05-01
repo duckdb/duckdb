@@ -167,8 +167,8 @@ static unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, 
 	} else {
 		// no potential overflow: replace with non-overflowing operator
 		if (input.bind_data) {
-			auto bind_data = (DecimalArithmeticBindData *)input.bind_data;
-			bind_data->check_overflow = false;
+			auto &bind_data = input.bind_data->Cast<DecimalArithmeticBindData>();
+			bind_data.check_overflow = false;
 		}
 		expr.function.function = GetScalarIntegerFunction<BASEOP>(expr.return_type.InternalType());
 	}

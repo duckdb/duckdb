@@ -35,7 +35,7 @@ public:
 
 public:
 	//! Create a real TableCatalogEntry and initialize storage for it
-	SequenceCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateSequenceInfo *info);
+	SequenceCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateSequenceInfo &info);
 
 	//! Lock for getting a value on the sequence
 	mutex lock;

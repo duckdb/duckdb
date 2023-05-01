@@ -111,9 +111,9 @@ shared_ptr<DuckDBPyConnection> PyConnectionWrapper::RegisterScalarUDF(const stri
 	return conn->RegisterScalarUDF(name, udf, parameters_p, return_type_p, varargs, null_handling, exception_handling);
 }
 
-shared_ptr<DuckDBPyConnection> PyConnectionWrapper::Append(const string &name, PandasDataFrame value,
+shared_ptr<DuckDBPyConnection> PyConnectionWrapper::Append(const string &name, PandasDataFrame value, bool by_name,
                                                            shared_ptr<DuckDBPyConnection> conn) {
-	return conn->Append(name, value);
+	return conn->Append(name, value, by_name);
 }
 
 shared_ptr<DuckDBPyConnection> PyConnectionWrapper::RegisterPythonObject(const string &name, py::object python_object,

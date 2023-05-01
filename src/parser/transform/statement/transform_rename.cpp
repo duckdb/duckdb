@@ -13,7 +13,7 @@ unique_ptr<AlterStatement> Transformer::TransformRename(duckdb_libpgquery::PGNod
 	unique_ptr<AlterInfo> info;
 
 	AlterEntryData data;
-	data.if_exists = stmt->missing_ok;
+	data.if_not_found = TransformOnEntryNotFound(stmt->missing_ok);
 	data.catalog = stmt->relation->catalogname ? stmt->relation->catalogname : INVALID_CATALOG;
 	data.schema = stmt->relation->schemaname ? stmt->relation->schemaname : INVALID_SCHEMA;
 	if (stmt->relation->relname) {

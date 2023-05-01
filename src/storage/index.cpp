@@ -10,10 +10,10 @@ namespace duckdb {
 
 Index::Index(AttachedDatabase &db, IndexType type, TableIOManager &table_io_manager,
              const vector<column_t> &column_ids_p, const vector<unique_ptr<Expression>> &unbound_expressions,
-             IndexConstraintType constraint_type_p, bool track_memory)
+             IndexConstraintType constraint_type_p)
 
     : type(type), table_io_manager(table_io_manager), column_ids(column_ids_p), constraint_type(constraint_type_p),
-      db(db), buffer_manager(BufferManager::GetBufferManager(db)), memory_size(0), track_memory(track_memory) {
+      db(db), buffer_manager(BufferManager::GetBufferManager(db)) {
 
 	for (auto &expr : unbound_expressions) {
 		types.push_back(expr->return_type.InternalType());
@@ -49,16 +49,28 @@ void Index::Delete(DataChunk &entries, Vector &row_identifiers) {
 }
 
 bool Index::MergeIndexes(Index &other_index) {
+
 	IndexLock state;
 	InitializeLock(state);
 
 	switch (this->type) {
-	case IndexType::ART: {
-		auto &art = Cast<ART>();
-		return art.MergeIndexes(state, other_index);
-	}
+	case IndexType::ART:
+		return Cast<ART>().MergeIndexes(state, other_index);
 	default:
 		throw InternalException("Unimplemented index type for merge");
+	}
+}
+
+void Index::Vacuum() {
+
+	IndexLock state;
+	InitializeLock(state);
+
+	switch (this->type) {
+	case IndexType::ART:
+		return Cast<ART>().Vacuum(state);
+	default:
+		throw InternalException("Unimplemented index type for vacuum");
 	}
 }
 

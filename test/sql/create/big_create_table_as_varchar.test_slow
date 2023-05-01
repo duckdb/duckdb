@@ -1,4 +1,4 @@
-# name: test/sql/create/big_create_table_as_varchar.test
+# name: test/sql/create/big_create_table_as_varchar.test_slow
 # description: Test large CREATE TABLE AS with varchar columns
 # group: [create]
 

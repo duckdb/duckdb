@@ -70,16 +70,15 @@ void PragmaHandler::HandlePragmaStatements(ClientContextLock &lock, vector<uniqu
 
 bool PragmaHandler::HandlePragma(SQLStatement *statement, string &resulting_query) { // PragmaInfo &info
 	auto info = *(statement->Cast<PragmaStatement>()).info;
-	auto entry =
-	    Catalog::GetEntry<PragmaFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, info.name, false);
+	auto &entry = Catalog::GetEntry<PragmaFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, info.name);
 	string error;
 
 	FunctionBinder function_binder(context);
-	idx_t bound_idx = function_binder.BindFunction(entry->name, entry->functions, info, error);
+	idx_t bound_idx = function_binder.BindFunction(entry.name, entry.functions, info, error);
 	if (bound_idx == DConstants::INVALID_INDEX) {
 		throw BinderException(error);
 	}
-	auto bound_function = entry->functions.GetFunctionByOffset(bound_idx);
+	auto bound_function = entry.functions.GetFunctionByOffset(bound_idx);
 	if (bound_function.query) {
 		QueryErrorContext error_context(statement, statement->stmt_location);
 		Binder::BindNamedParameters(bound_function.named_parameters, info.named_parameters, error_context,

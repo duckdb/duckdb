@@ -15,10 +15,10 @@ CREATE TABLE tbl1 (
 statement error
 CREATE TABLE tbl2 (
 	a INTEGER,
-	b AS (a) REFERENCES tbl1.a,
+	b AS (a) REFERENCES tbl1(a),
 );
 ----
-the same
+generated
 
 #Creating a foreign key constraint on a generated column
 statement error

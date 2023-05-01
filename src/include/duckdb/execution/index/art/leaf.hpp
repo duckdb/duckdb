@@ -8,61 +8,85 @@
 
 #pragma once
 
+#include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/art/fixed_size_allocator.hpp"
 #include "duckdb/execution/index/art/node.hpp"
-#include "duckdb/storage/meta_block_reader.hpp"
+#include "duckdb/execution/index/art/prefix.hpp"
 
 namespace duckdb {
 
-class Leaf : public Node {
+// classes
+class Node;
+class ARTKey;
+class MetaBlockWriter;
+class MetaBlockReader;
+
+// structs
+struct BlockPointer;
+
+class Leaf {
 public:
-	explicit Leaf();
-	Leaf(Key &value, uint32_t depth, row_t row_id);
-	Leaf(Key &value, uint32_t depth, row_t *row_ids, idx_t num_elements);
-	Leaf(row_t *row_ids, idx_t num_elements, Prefix &prefix);
-	Leaf(row_t row_id, Prefix &prefix);
-	~Leaf();
-
-	//! Get the row ID at idx
-	row_t GetRowId(idx_t idx);
-	//! Get the maximum capacity of the leaf, must not match with its count
-	idx_t GetCapacity() const;
-	//! Returns whether a leaf holds exactly one inlined row ID or multiple row IDs
-	bool IsInlined() const;
-	//! Returns a pointer to all row IDs of the leaf
-	row_t *GetRowIds();
+	//! Number of row IDs
+	uint32_t count;
+	//! Compressed path (prefix)
+	Prefix prefix;
+	union {
+		//! The pointer to the head of the list of leaf segments
+		Node ptr;
+		//! Inlined row ID
+		row_t inlined;
+	} row_ids;
 
 public:
-	static Leaf *New();
-	static Leaf *New(Key &value, uint32_t depth, row_t row_id);
-	static Leaf *New(Key &value, uint32_t depth, row_t *row_ids, idx_t num_elements);
-	static Leaf *New(row_t *row_ids, idx_t num_elements, Prefix &prefix);
-	static Leaf *New(row_t row_id, Prefix &prefix);
+	//! Get a new leaf node, might cause a new buffer allocation, and initializes a leaf holding one
+	//! row ID and a prefix starting at depth
+	static Leaf &New(ART &art, Node &node, const ARTKey &key, const uint32_t depth, const row_t row_id);
+	//! Get a new leaf node, might cause a new buffer allocation, and initializes a leaf holding
+	//! n_row_ids row IDs and a prefix starting at depth
+	static Leaf &New(ART &art, Node &node, const ARTKey &key, const uint32_t depth, const row_t *row_ids,
+	                 const idx_t count);
+	//! Free the leaf
+	static void Free(ART &art, Node &node);
+	//! Get a reference to the leaf
+	static inline Leaf &Get(const ART &art, const Node ptr) {
+		return *Node::GetAllocator(art, NType::LEAF).Get<Leaf>(ptr);
+	}
 
-	//! Returns the memory size of the leaf
-	idx_t MemorySize(ART &art, const bool &recurse) override;
+	//! Initializes a merge by incrementing the buffer IDs of the leaf segments
+	void InitializeMerge(const ART &art, const idx_t buffer_count);
+	//! Merge leaves
+	void Merge(ART &art, Node &other);
+
 	//! Insert a row ID into a leaf
-	void Insert(ART &art, row_t row_id);
+	void Insert(ART &art, const row_t row_id);
 	//! Remove a row ID from a leaf
-	void Remove(ART &art, row_t row_id);
+	void Remove(ART &art, const row_t row_id);
+
+	//! Returns whether this leaf is inlined
+	inline bool IsInlined() const {
+		return count <= 1;
+	}
+	//! Get the row ID at the position
+	row_t GetRowId(const ART &art, const idx_t position) const;
+	//! Returns the position of a row ID, and an invalid index, if the leaf does not contain the row ID,
+	//! and sets the ptr to point to the segment containing the row ID
+	uint32_t FindRowId(const ART &art, Node &ptr, const row_t row_id) const;
 
 	//! Returns the string representation of a leaf
-	static string ToString(Node *node);
-	//! Merge two NLeaf nodes
-	static void Merge(ART &art, Node *&l_node, Node *&r_node);
+	string ToString(const ART &art) const;
 
-	//! Serialize a leaf
-	BlockPointer Serialize(duckdb::MetaBlockWriter &writer);
-	//! Deserialize a leaf
-	void Deserialize(ART &art, duckdb::MetaBlockReader &reader);
+	//! Serialize this leaf
+	BlockPointer Serialize(const ART &art, MetaBlockWriter &writer) const;
+	//! Deserialize this leaf
+	void Deserialize(ART &art, MetaBlockReader &reader);
 
-private:
-	union {
-		row_t inlined;
-		row_t *ptr;
-	} rowids;
+	//! Vacuum the leaf segments of a leaf, if not inlined
+	void Vacuum(ART &art);
 
 private:
-	row_t *Resize(row_t *current_row_ids, uint32_t current_count, idx_t new_capacity);
+	//! Moves the inlined row ID onto a leaf segment, does not change the size
+	//! so this will be a (temporarily) invalid leaf
+	void MoveInlinedToSegment(ART &art);
 };
 
 } // namespace duckdb

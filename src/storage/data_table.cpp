@@ -397,14 +397,11 @@ void DataTable::VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk,
 		dst_keys_ptr = &bfk.info.fk_keys;
 	}
 
-	auto table_entry_ptr =
+	auto &table_entry_ptr =
 	    Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, bfk.info.schema, bfk.info.table);
-	if (table_entry_ptr == nullptr) {
-		throw InternalException("Can't find table \"%s\" in foreign key constraint", bfk.info.table);
-	}
 	// make the data chunk to check
 	vector<LogicalType> types;
-	for (auto &col : table_entry_ptr->GetColumns().Physical()) {
+	for (auto &col : table_entry_ptr.GetColumns().Physical()) {
 		types.emplace_back(col.Type());
 	}
 	DataChunk dst_chunk;
@@ -413,7 +410,7 @@ void DataTable::VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk,
 		dst_chunk.data[(*dst_keys_ptr)[i].index].Reference(chunk.data[(*src_keys_ptr)[i].index]);
 	}
 	dst_chunk.SetCardinality(chunk.size());
-	auto &data_table = table_entry_ptr->GetStorage();
+	auto &data_table = table_entry_ptr.GetStorage();
 
 	idx_t count = dst_chunk.size();
 	if (count <= 0) {
@@ -1165,9 +1162,7 @@ void DataTable::WALAddIndex(ClientContext &context, unique_ptr<Index> index,
 
 	auto &allocator = Allocator::Get(db);
 
-	DataChunk result;
-	result.Initialize(allocator, index->logical_types);
-
+	// intermediate holds scanned chunks of the underlying data to create the index
 	DataChunk intermediate;
 	vector<LogicalType> intermediate_types;
 	auto column_ids = index->column_ids;
@@ -1178,6 +1173,10 @@ void DataTable::WALAddIndex(ClientContext &context, unique_ptr<Index> index,
 	}
 	intermediate_types.emplace_back(LogicalType::ROW_TYPE);
 	intermediate.Initialize(allocator, intermediate_types);
+
+	// holds the result of executing the index expression on the intermediate chunks
+	DataChunk result;
+	result.Initialize(allocator, index->logical_types);
 
 	// initialize an index scan
 	CreateIndexScanState state;
@@ -1212,6 +1211,7 @@ void DataTable::WALAddIndex(ClientContext &context, unique_ptr<Index> index,
 			}
 		}
 	}
+
 	info->indexes.AddIndex(std::move(index));
 }
 
