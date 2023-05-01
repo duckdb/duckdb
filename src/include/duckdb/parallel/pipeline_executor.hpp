@@ -95,22 +95,25 @@ private:
 	//! Whether or not this pipeline requires keeping track of the batch index of the source
 	bool requires_batch_index = false;
 
-	//! This flag is set when the pipeline gets interrupted by the Sink. It means that before continuing the pipeline
-	//! we need to resink the last chunk
+	//! This flag is set when the pipeline gets interrupted by the Sink -> the final_chunk should be re-sink-ed.
 	bool remaining_sink_chunk = false;
-
+	//! Source has been exhausted, we nee
 	bool exhausted_source = false;
-	bool interrupted_while_flushing = false;
-
-	//! Flushing state
+	//! Flushing of caching operators has started
 	bool started_flushing = false;
+	//! Flushing of caching operators is done
 	bool done_flushing = false;
+	//! Flag set when a sink interrupt occurs after the pipeline returns HAVE_MORE_OUTPUT -> re-push intermediate
+	//! chunk through pipeline after re-sinking the final chunk
+	bool blocked_on_have_more_output = false;
+	OperatorFinalizeResultType finalize_result_on_block;
+
+	//! Current operator being flushed
+	idx_t flushing_idx;
 
 	//! Debugging state for force_async_pipelines
 	bool debug_blocked_sink = false;
 	bool debug_blocked_source = false;
-
-	idx_t flushing_idx;
 
 private:
 	void StartOperator(PhysicalOperator *op);

@@ -17,9 +17,9 @@ namespace duckdb {
 //! InterruptMode specifies how operators should block/unblock, note that this will happen transparently to the operator,
 //! as the operator only needs to return a BLOCKED result and call the callback using the InterruptState.
 //! NO_INTERRUPTS: No blocking mode is specified, an error will be thrown when the operator blocks. Should only be used
-//!				 when manually calling operators of which is known they will never block.
-//! TASK:		 A weak pointer to a task is provided. On the callback, this task will be signalled.
-//! BLOCKING:	 The caller has blocked awaiting
+//!				   when manually calling operators of which is known they will never block.
+//! TASK:		   A weak pointer to a task is provided. On the callback, this task will be signalled.
+//! BLOCKING:	   The caller has blocked awaiting
 enum class InterruptMode : uint8_t { NO_INTERRUPTS, TASK, BLOCKING};
 
 //! State required to make the callback after some async operation within an operator source / sink.

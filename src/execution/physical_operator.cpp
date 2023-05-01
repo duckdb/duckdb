@@ -257,6 +257,7 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 	if (!state.can_cache_chunk) {
 		return child_result;
 	}
+	// TODO chunk size of 0 should not result in a cache being created!
 	if (chunk.size() < CACHE_THRESHOLD) {
 		// we have filtered out a significant amount of tuples
 		// add this chunk to the cache and continue

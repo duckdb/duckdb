@@ -38,66 +38,67 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 	InitializeChunk(final_chunk);
 }
 
-
-
+// TODO: Refactor this steaming pile of spaghet
 OperatorResultType PipelineExecutor::FlushCachingOperatorsPush() {
 	if (!started_flushing) {
 		started_flushing = true;
 		flushing_idx = IsFinished() ? idx_t(finished_processing_idx) : 0;
 	}
 
-	// Find next idx to flush
+	// Main flushing loop -> keep flushing each operator that needs flushing until it's done or an interrupt happens
 	while (flushing_idx < pipeline.operators.size()) {
-		if (pipeline.operators[flushing_idx]->RequiresFinalExecute()) {
+		if (!pipeline.operators[flushing_idx]->RequiresFinalExecute()) {
+			flushing_idx++;
+			continue;
+		}
+
+		auto &curr_chunk =
+			flushing_idx + 1 >= intermediate_chunks.size() ? final_chunk : *intermediate_chunks[flushing_idx + 1];
+		auto current_operator = pipeline.operators[flushing_idx];
+
+
+		OperatorFinalizeResultType finalize_result;
+		OperatorResultType push_result;
+		if (!blocked_on_have_more_output) {
+			StartOperator(current_operator);
+			finalize_result = current_operator->FinalExecute(context, curr_chunk, *current_operator->op_state,
+																						*intermediate_states[flushing_idx]);
+			EndOperator(current_operator, &curr_chunk);
+
+			push_result = ExecutePushInternal(curr_chunk, flushing_idx + 1);
+		} else {
+			// Reset flag and reflush the last chunk we were flushing.
+			blocked_on_have_more_output = false;
+			finalize_result = OperatorFinalizeResultType::HAVE_MORE_OUTPUT;
+
+			if (finalize_result_on_block == OperatorFinalizeResultType::FINISHED) {
+				// Here we
+				auto &curr_chunk =
+				    flushing_idx >= intermediate_chunks.size() ? final_chunk : *intermediate_chunks[flushing_idx];
+				push_result = ExecutePushInternal(curr_chunk, flushing_idx);
+			} else {
+				push_result = ExecutePushInternal(curr_chunk, flushing_idx + 1);
+			}
+		}
+
+		if (finalize_result == OperatorFinalizeResultType::FINISHED) {
+			flushing_idx++;
+		}
+
+		// Sink interrupted -> when continuing the pipeline we need to re-sink the final_chunk
+		if (push_result == OperatorResultType::BLOCKED) {
+			finalize_result_on_block = finalize_result;
+			return OperatorResultType::BLOCKED;
+		}
+
+		// Sink is done, no more flushing required!
+		if (push_result == OperatorResultType::FINISHED) {
 			break;
 		}
-		flushing_idx++;
 	}
 
-	// All operators are flushed
-	if (flushing_idx >= pipeline.operators.size()){
-		done_flushing = true;
-		return OperatorResultType::FINISHED;
-	}
-
-	auto &curr_chunk =
-		flushing_idx + 1 >= intermediate_chunks.size() ? final_chunk : *intermediate_chunks[flushing_idx + 1];
-	auto current_operator = pipeline.operators[flushing_idx];
-
-	OperatorFinalizeResultType finalize_result;
-
-	if (!interrupted_while_flushing) {
-		StartOperator(current_operator);
-		finalize_result = current_operator->FinalExecute(context, curr_chunk, *current_operator->op_state,
-																					*intermediate_states[flushing_idx]);
-		EndOperator(current_operator, &curr_chunk);
-	} else {
-		finalize_result = OperatorFinalizeResultType::HAVE_MORE_OUTPUT;
-	}
-
-	// Push chunk into pipeline
-	auto push_result = ExecutePushInternal(curr_chunk, flushing_idx + 1);
-
-	// We're done flushing this operator, we can move on to the next one next time;
-	if (finalize_result == OperatorFinalizeResultType::FINISHED) {
-		flushing_idx++;
-	}
-
-	// Sink interrupted -> when continuing the pipeline we need to re-sink the final_chunk
-	if (push_result == OperatorResultType::BLOCKED) {
-		interrupted_while_flushing = true;
-		return OperatorResultType::BLOCKED;
-	}
-
-	interrupted_while_flushing = false;
-
-	// Sink is done!
-	if (push_result == OperatorResultType::FINISHED) {
-		done_flushing = true;
-		return OperatorResultType::FINISHED;
-	}
-
-	return OperatorResultType::NEED_MORE_INPUT;
+	done_flushing = true;
+	return OperatorResultType::FINISHED;
 }
 
 PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
@@ -122,38 +123,42 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 		// 3.  Flushing operators:                              Flushing a cached chunk through the pipeline into sink
 		// 4a. Fetch had in process ops after Sink interrupt:   Retry pushing the last source chunk through the pipeline
 		// 4b. Flush had in process ops after Sink interrupt:   Retry flushing the pipeline
-
 		OperatorResultType result;
 		if (remaining_sink_chunk) {
-			// Resuming after Sink interrupt
+			// 2. Resuming after Sink interrupt
 			result = ExecutePushInternal(final_chunk);
 			remaining_sink_chunk = false;
 		} else if (!in_process_operators.empty()) {
 			if (started_flushing) {
-				do {
-					result = FlushCachingOperatorsPush();
-				} while (result == OperatorResultType::NEED_MORE_INPUT);
+				// 4b. Resume after sink interrupt happened with in process operators
+				result = FlushCachingOperatorsPush();
 			} else {
-				// 4b
+				// 4a. Resume after sink interrupt while fetching from source with in process operators
 				D_ASSERT(source_chunk.size() > 0);
 				result = ExecutePushInternal(source_chunk);
+				blocked_on_have_more_output = false;
 			}
 		} else if (exhausted_source && !done_flushing) {
-			// Flushing operators
-			do {
-				result = FlushCachingOperatorsPush();
-			} while (result == OperatorResultType::NEED_MORE_INPUT);
+			// 3. Flushing operators
+			result = FlushCachingOperatorsPush();
 		} else if (!exhausted_source) {
-			// Regular fetch from source into pipeline
-			source_chunk.Reset();
-			auto res = FetchFromSource(source_chunk);
+			// 1. Regular fetch from source into pipeline
+			SourceResultType source_result;
+			if (!blocked_on_have_more_output) {
+				source_chunk.Reset();
+				source_result = FetchFromSource(source_chunk);
+			} else {
+				blocked_on_have_more_output = false;
+				source_result = SourceResultType::HAVE_MORE_OUTPUT;
+			}
 
 			// SOURCE INTERRUPT
-			if(res == SourceResultType::BLOCKED) {
+			if(source_result == SourceResultType::BLOCKED) {
 				return PipelineExecuteResult::INTERRUPTED;
 			}
+
+			// TODO check source result type instead of source chunk size
 			if (source_chunk.size() == 0) {
-				D_ASSERT(res == SourceResultType::FINISHED);
 				exhausted_source = true;
 				continue;
 			}
@@ -233,6 +238,9 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t
 			EndOperator(pipeline.sink, nullptr);
 
 			if (sink_result == SinkResultType::BLOCKED) {
+				if (result == OperatorResultType::HAVE_MORE_OUTPUT) {
+					blocked_on_have_more_output = true;
+				}
 				return OperatorResultType::BLOCKED;
 			} else if (sink_result == SinkResultType::FINISHED) {
 				FinishProcessing();
