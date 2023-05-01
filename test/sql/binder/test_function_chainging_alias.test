@@ -1,7 +1,8 @@
 # name: test/sql/binder/test_function_chainging_alias.test
-# description: referencing an alias or a function chaining alias that exists earlier on 
-#              in the SELECT clause (Issue #7190)
+# description: referencing an alias or a function chaining alias that exists earlier on
 # group: [binder]
+
+#              in the SELECT clause (Issue #7190)
 
 statement ok
 PRAGMA enable_verification

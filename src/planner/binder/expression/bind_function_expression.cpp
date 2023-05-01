@@ -47,7 +47,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 			auto new_colref = QualifyColumnName(*colref, error);
 			bool is_col = error.empty() ? true : false;
 			bool is_col_alias = QualifyColumnAlias(*colref);
-			
+
 			if (is_col || is_col_alias) {
 				// we can! transform this into a function call on the column
 				// i.e. "x.lower()" becomes "lower(x)"
