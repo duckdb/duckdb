@@ -32,20 +32,13 @@ public:
 
 	static shared_ptr<DuckDBPyConnection>
 	RegisterScalarUDF(const string &name, const py::function &udf, const py::object &arguments = py::none(),
-	                  const shared_ptr<DuckDBPyType> &return_type = nullptr, bool varargs = false,
+	                  const shared_ptr<DuckDBPyType> &return_type = nullptr, bool vectorized = false,
 	                  FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
 	                  PythonExceptionHandling exception_handling = PythonExceptionHandling::FORWARD_ERROR,
 	                  shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static shared_ptr<DuckDBPyConnection> UnregisterUDF(const string &name,
 	                                                    shared_ptr<DuckDBPyConnection> conn = nullptr);
-
-	static shared_ptr<DuckDBPyConnection>
-	RegisterVectorizedUDF(const string &name, const py::function &udf, const py::object &arguments = py::none(),
-	                      const shared_ptr<DuckDBPyType> &return_type = nullptr, bool varargs = false,
-	                      FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
-	                      PythonExceptionHandling exception_handling = PythonExceptionHandling::FORWARD_ERROR,
-	                      shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static shared_ptr<DuckDBPyType> ArrayType(const shared_ptr<DuckDBPyType> &type,
 	                                          shared_ptr<DuckDBPyConnection> conn = nullptr);

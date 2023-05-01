@@ -19,7 +19,7 @@ class TestPyArrowUDF(object):
             return pa.lib.Table.from_pandas(df)
 
         con = duckdb.connect()
-        con.register_vectorized('plus_one', plus_one, [BIGINT], BIGINT)
+        con.register_scalar_udf('plus_one', plus_one, [BIGINT], BIGINT, vectorized=True)
         assert [(6,)] == con.sql('select plus_one(5)').fetchall()
 
         range_table = con.table_function('range', [5000])
@@ -40,7 +40,7 @@ class TestPyArrowUDF(object):
             return sorted_table
 
         con = duckdb.connect()
-        con.register_vectorized('sort_table', sort_table, [BIGINT], BIGINT)
+        con.register_scalar_udf('sort_table', sort_table, [BIGINT], BIGINT, vectorized=True)
         res = con.sql("select 100-i as original, sort_table(original) from range(100) tbl(i)").fetchall()
         assert res[0] == (100, 1)
 
@@ -54,7 +54,7 @@ class TestPyArrowUDF(object):
 
         con = duckdb.connect()
         # This function takes any number of arguments, returning the first column
-        con.register_vectorized('varargs', variable_args, None, BIGINT, varargs=True)
+        con.register_scalar_udf('varargs', variable_args, None, BIGINT, vectorized=True)
         res = con.sql("""select varargs(5, '3', '2', 1, 0.12345)""").fetchall()
         assert res == [(5,)]
     
@@ -66,7 +66,7 @@ class TestPyArrowUDF(object):
             return col
         con = duckdb.connect()
         # The return type of the function is set to BIGINT, but it takes a VARCHAR
-        con.register_vectorized('pyarrow_string_to_num', takes_string, [VARCHAR], BIGINT)
+        con.register_scalar_udf('pyarrow_string_to_num', takes_string, [VARCHAR], BIGINT, vectorized=True)
 
         # Succesful conversion
         res = con.sql("""select pyarrow_string_to_num('5')""").fetchall()
@@ -83,7 +83,7 @@ class TestPyArrowUDF(object):
 
         con = duckdb.connect()
         # Scalar functions only return a single value per tuple
-        con.register_vectorized('two_columns', returns_two_columns, [BIGINT], BIGINT)
+        con.register_scalar_udf('two_columns', returns_two_columns, [BIGINT], BIGINT, vectorized=True)
         with pytest.raises(duckdb.InvalidInputException, match='The returned table from a pyarrow scalar udf should only contain one column, found 2'):
             res = con.sql("""select two_columns(5)""").fetchall()
 
@@ -92,7 +92,7 @@ class TestPyArrowUDF(object):
             return None
 
         con = duckdb.connect()
-        con.register_vectorized('will_crash', returns_none, [BIGINT], BIGINT)
+        con.register_scalar_udf('will_crash', returns_none, [BIGINT], BIGINT, vectorized=True)
         with pytest.raises(duckdb.Error, match="""Invalid Error: TypeError: 'NoneType' object is not iterable"""):
             res = con.sql("""select will_crash(5)""").fetchall()
 
@@ -102,7 +102,7 @@ class TestPyArrowUDF(object):
             return pa.lib.Table.from_arrays([[]], names=['c0'])
 
         con = duckdb.connect()
-        con.register_vectorized('empty_result', return_empty, [BIGINT], BIGINT)
+        con.register_scalar_udf('empty_result', return_empty, [BIGINT], BIGINT, vectorized=True)
         with pytest.raises(duckdb.InvalidInputException, match='Returned pyarrow table should have 1 tuples, found 0'):
             res = con.sql("""select empty_result(5)""").fetchall()
 
@@ -112,7 +112,7 @@ class TestPyArrowUDF(object):
             return pa.lib.Table.from_arrays([[5,4,3,2,1]], names=['c0'])
 
         con = duckdb.connect()
-        con.register_vectorized('too_many_tuples', return_too_many, [BIGINT], BIGINT)
+        con.register_scalar_udf('too_many_tuples', return_too_many, [BIGINT], BIGINT, vectorized=True)
         with pytest.raises(duckdb.InvalidInputException, match='Returned pyarrow table should have 1 tuples, found 5'):
             res = con.sql("""select too_many_tuples(5)""").fetchall()
 
@@ -125,7 +125,7 @@ class TestPyArrowUDF(object):
         
         con = duckdb.connect()
         struct_type = con.struct_type({'a': BIGINT, 'b': VARCHAR, 'c': con.list_type(BIGINT)})
-        con.register_vectorized('return_struct', return_struct, [BIGINT], struct_type)
+        con.register_scalar_udf('return_struct', return_struct, [BIGINT], struct_type, vectorized=True)
         res = con.sql("""select return_struct(5)""").fetchall()
         assert res == [({'a': 5, 'b': 'test', 'c': [5, 3, 2]},)]
 
@@ -134,7 +134,7 @@ class TestPyArrowUDF(object):
             return col
         
         con = duckdb.connect()
-        con.register_vectorized('unmodified', return_unmodified, [BIGINT], BIGINT)
+        con.register_scalar_udf('unmodified', return_unmodified, [BIGINT], BIGINT, vectorized=True)
         res = con.sql("""
             select unmodified(i) from range(5000) tbl(i)
         """).fetchall()
@@ -150,7 +150,7 @@ class TestPyArrowUDF(object):
             return pa.lib.Table.from_pandas(df)
         
         con = duckdb.connect()
-        con.register_vectorized('inferred', func)
+        con.register_scalar_udf('inferred', func, vectorized=True)
         res = con.sql('select inferred(42)').fetchall()
         assert res == [(1764,)]
 
@@ -161,13 +161,13 @@ class TestPyArrowUDF(object):
             return pa.lib.Table.from_pandas(pd.DataFrame({'a': [5 for _ in range(length)]}))
         
         con = duckdb.connect()
-        con.register_vectorized('return_five', return_five, [BIGINT], BIGINT, null_handling='special')
+        con.register_scalar_udf('return_five', return_five, [BIGINT], BIGINT, null_handling='special', vectorized=True)
         res = con.sql('select return_five(NULL) from range(10)').fetchall()
         # without 'special' null handling these would all be NULL
         assert res == [(5,), (5,), (5,), (5,), (5,), (5,), (5,), (5,), (5,), (5,)]
 
         con = duckdb.connect()
-        con.register_vectorized('return_five', return_five, [BIGINT], BIGINT, null_handling='default')
+        con.register_scalar_udf('return_five', return_five, [BIGINT], BIGINT, null_handling='default', vectorized=True)
         res = con.sql('select return_five(NULL) from range(10)').fetchall()
         # without 'special' null handling these would all be NULL
         assert res == [(None,), (None,), (None,), (None,), (None,), (None,), (None,), (None,), (None,), (None,)]
@@ -175,7 +175,7 @@ class TestPyArrowUDF(object):
     def test_non_callable(self):
         con = duckdb.connect()
         with pytest.raises(TypeError):
-            con.register_vectorized('func', 5, [BIGINT], BIGINT)
+            con.register_scalar_udf('func', 5, [BIGINT], BIGINT, vectorized=True)
 
         class MyCallable:
             def __init__(self):
@@ -185,7 +185,7 @@ class TestPyArrowUDF(object):
                 return x
 
         my_callable = MyCallable()
-        con.register_vectorized('func', my_callable, [BIGINT], BIGINT)
+        con.register_scalar_udf('func', my_callable, [BIGINT], BIGINT, vectorized=True)
         res = con.sql('select func(5)').fetchall()
         assert res == [(5,)]
 
@@ -194,12 +194,12 @@ class TestPyArrowUDF(object):
             raise AttributeError("error")
         
         con = duckdb.connect()
-        con.register_vectorized('raises', raises_exception, [BIGINT], BIGINT)
+        con.register_scalar_udf('raises', raises_exception, [BIGINT], BIGINT, vectorized=True)
         with pytest.raises(duckdb.InvalidInputException, match=' Python exception occurred while executing the UDF: AttributeError: error'):
             res = con.sql('select raises(3)').fetchall()
         
-        con.unregister_function('raises')
-        con.register_vectorized('raises', raises_exception, [BIGINT], BIGINT, exception_handling='return_null')
+        con.unregister_udf('raises')
+        con.register_scalar_udf('raises', raises_exception, [BIGINT], BIGINT, exception_handling='return_null', vectorized=True)
         res = con.sql('select raises(3) from range(5)').fetchall()
         assert res == [(None,), (None,), (None,), (None,), (None,)]
 

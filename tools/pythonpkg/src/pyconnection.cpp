@@ -118,16 +118,12 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	    .def("filesystem_is_registered", &DuckDBPyConnection::FileSystemIsRegistered,
 	         "Check if a filesystem with the provided name is currently registered", py::arg("name"));
 
-	m.def("register_scalar", &DuckDBPyConnection::RegisterScalarUDF,
+	m.def("register_scalar_udf", &DuckDBPyConnection::RegisterScalarUDF,
 	      "Register a scalar UDF so it can be used in queries", py::arg("name"), py::arg("function"),
 	      py::arg("return_type") = py::none(), py::arg("parameters") = py::none(), py::kw_only(),
-	      py::arg("varargs") = false, py::arg("null_handling") = 0, py::arg("exception_handling") = 0);
+	      py::arg("vectorized") = false, py::arg("null_handling") = 0, py::arg("exception_handling") = 0);
 
-	m.def("register_vectorized", &DuckDBPyConnection::RegisterVectorizedUDF,
-	      "Register a (vectorized) scalar UDF so it can be used in queries", py::arg("name"), py::arg("function"),
-	      py::arg("return_type") = py::none(), py::arg("parameters") = py::none(), py::kw_only(),
-	      py::arg("varargs") = false, py::arg("null_handling") = 0, py::arg("exception_handling") = 0);
-	m.def("unregister_function", &DuckDBPyConnection::UnregisterUDF, "Remove a previously registered function",
+	m.def("unregister_udf", &DuckDBPyConnection::UnregisterUDF, "Remove a previously registered function",
 	      py::arg("name"));
 
 	DefineMethod({"sqltype", "dtype", "type"}, m, &DuckDBPyConnection::Type,
@@ -326,11 +322,10 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterUDF(const string &n
 	return shared_from_this();
 }
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::function &udf,
-                                                                     const py::object &parameters_p,
-                                                                     const shared_ptr<DuckDBPyType> &return_type_p,
-                                                                     bool varargs, FunctionNullHandling null_handling,
-                                                                     PythonExceptionHandling exception_handling) {
+shared_ptr<DuckDBPyConnection>
+DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::function &udf, const py::object &parameters_p,
+                                      const shared_ptr<DuckDBPyType> &return_type_p, bool vectorized,
+                                      FunctionNullHandling null_handling, PythonExceptionHandling exception_handling) {
 	if (!connection) {
 		throw ConnectionException("Connection already closed!");
 	}
@@ -342,35 +337,10 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterScalarUDF(const strin
 		                              name);
 	}
 	auto scalar_function =
-	    CreateScalarUDF(name, udf, parameters_p, return_type_p, varargs, null_handling, exception_handling);
+	    CreateScalarUDF(name, udf, parameters_p, return_type_p, vectorized, null_handling, exception_handling);
 	CreateScalarFunctionInfo info(scalar_function);
 
 	context.RegisterFunction(info);
-
-	registered_functions[name] = make_uniq<PythonDependencies>(udf);
-
-	return shared_from_this();
-}
-
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterVectorizedUDF(const string &name, const py::function &udf,
-                                                                         const py::object &parameters_p,
-                                                                         const shared_ptr<DuckDBPyType> &return_type_p,
-                                                                         bool varargs,
-                                                                         FunctionNullHandling null_handling,
-                                                                         PythonExceptionHandling exception_handling) {
-	if (!connection) {
-		throw ConnectionException("Connection already closed!");
-	}
-	auto &context = *connection->context;
-	auto &catalog = Catalog::GetSystemCatalog(context);
-
-	auto scalar_function =
-	    CreatePyArrowScalarUDF(name, udf, parameters_p, return_type_p, varargs, null_handling, exception_handling);
-	CreateScalarFunctionInfo info(scalar_function);
-
-	context.transaction.BeginTransaction();
-	catalog.CreateFunction(context, info);
-	context.transaction.Commit();
 
 	registered_functions[name] = make_uniq<PythonDependencies>(udf);
 
