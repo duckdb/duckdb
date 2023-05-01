@@ -184,7 +184,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		}
 	}
 	if (options.file_options.auto_detect_hive_partitioning) {
-		options.file_options.hive_partitioning = options.file_options.AutoDetectHivePartitioning(result->files);
+		options.file_options.hive_partitioning = MultiFileReaderOptions::AutoDetectHivePartitioning(result->files);
 	}
 
 	if (!options.auto_detect && return_types.empty()) {

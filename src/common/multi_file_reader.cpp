@@ -67,8 +67,6 @@ bool MultiFileReader::ComplexFilterPushdown(ClientContext &context, vector<strin
 	if (files.empty()) {
 		return false;
 	}
-	// bool hive_partitioning = options.auto_detect_hive_partitioning ? AutoDetectHivePartitioning::AutoDetect(files) :
-	// options.hive_partitioning;
 	if (!options.hive_partitioning && !options.filename) {
 		return false;
 	}
