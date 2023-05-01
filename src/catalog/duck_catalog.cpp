@@ -22,7 +22,7 @@ void DuckCatalog::Initialize(bool load_builtin) {
 	// first initialize the base system catalogs
 	// these are never written to the WAL
 	// we start these at 1 because deleted entries default to 0
-	CatalogTransaction data(GetDatabase(), 1, 1);
+	auto data = CatalogTransaction::GetSystemTransaction(GetDatabase());
 
 	// create the default schema
 	CreateSchemaInfo info;
