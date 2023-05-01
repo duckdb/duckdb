@@ -54,7 +54,7 @@ void ExtensionUtil::RegisterFunction(DatabaseInstance &db, PragmaFunctionSet fun
 	CreatePragmaFunctionInfo info(std::move(function_name), std::move(function));
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
-	system_catalog.CreateFunction(data, info);
+	system_catalog.CreatePragmaFunction(data, info);
 }
 
 void ExtensionUtil::RegisterFunction(DatabaseInstance &db, CopyFunction function) {
@@ -65,15 +65,6 @@ void ExtensionUtil::RegisterFunction(DatabaseInstance &db, CopyFunction function
 }
 
 void ExtensionUtil::RegisterFunction(DatabaseInstance &db, CreateMacroInfo &info) {
-	auto &system_catalog = Catalog::GetSystemCatalog(db);
-	auto data = CatalogTransaction::GetSystemTransaction(db);
-	system_catalog.CreateFunction(data, info);
-}
-
-void ExtensionUtil::ExtendFunction(DatabaseInstance &db, ScalarFunction function) {
-	D_ASSERT(!function.name.empty());
-	CreateScalarFunctionInfo info(std::move(function));
-	info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateFunction(data, info);

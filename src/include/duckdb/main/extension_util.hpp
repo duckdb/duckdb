@@ -13,7 +13,7 @@
 #include "duckdb/function/function_set.hpp"
 
 namespace duckdb {
-class CreateMacroInfo;
+struct CreateMacroInfo;
 class DatabaseInstance;
 
 //! The ExtensionUtil class contains methods that are useful for extensions
@@ -35,8 +35,6 @@ public:
 	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, CopyFunction function);
 	//! Register a new scalar function - throw an exception if the function already exists
 	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, CreateMacroInfo &info);
-	//! Extend an existing function with a new overload
-	DUCKDB_API static void ExtendFunction(DatabaseInstance &db, ScalarFunction function);
 
 	//! Registers a new type
 	DUCKDB_API static void RegisterType(DatabaseInstance &db, string type_name, LogicalType type);
