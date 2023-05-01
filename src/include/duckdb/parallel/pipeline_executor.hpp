@@ -27,7 +27,7 @@ enum class PipelineExecuteResult {
 	FINISHED,
 	//! Pipeline is not yet fully executed and can be called again immediately
 	NOT_FINISHED,
-	//! The pipeline was interrupted and wants to be descheduled
+	//! The pipeline was interrupted and should be descheduled
 	INTERRUPTED
 };
 

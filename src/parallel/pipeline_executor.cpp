@@ -259,10 +259,8 @@ void PipelineExecutor::ExecutePull(DataChunk &result) {
 			if (in_process_operators.empty()) {
 				source_chunk.Reset();
 
-				// NOTE: we need to do blocking GetData, so we switch to Blocking I/O mode here.
-				// Set interrupt mode to blocking, passing the done marker
-				auto done_marker = make_shared<atomic<bool>>(false);
-				interrupt_state = InterruptState(done_marker);
+				auto done_signal = make_shared<InterruptDoneSignalState>();
+				interrupt_state = InterruptState(done_signal);
 				SourceResultType source_result;
 
 				// Repeatedly try to fetch from the source until it doesn't block. Note that it may block multiple times
@@ -274,12 +272,8 @@ void PipelineExecutor::ExecutePull(DataChunk &result) {
 						break;
 					}
 
-					// Busy wait for async callback from source operator TODO: backoff / cv?
-					while (!*done_marker) {
-					};
-
-					// Source made callback, reset marker and try again
-					*done_marker = false;
+					// Busy wait for async callback from source operator
+					done_signal->Await();
 				}
 
 				if (source_result == SourceResultType::FINISHED) {

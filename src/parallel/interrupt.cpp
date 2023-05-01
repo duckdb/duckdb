@@ -2,14 +2,16 @@
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/mutex.hpp"
+#include <condition_variable>
 
 namespace duckdb {
 
 InterruptState::InterruptState() : mode(InterruptMode::NO_INTERRUPTS) {
 }
 InterruptState::InterruptState(weak_ptr<Task> task) : mode(InterruptMode::TASK), current_task(std::move(task)) {};
-InterruptState::InterruptState(weak_ptr<atomic<bool>> done_marker_p)
-    : mode(InterruptMode::BLOCKING), done_marker(std::move(done_marker_p)) {};
+InterruptState::InterruptState(weak_ptr<InterruptDoneSignalState> signal_state_p)
+    : mode(InterruptMode::BLOCKING), signal_state(std::move(signal_state_p)) {};
 
 void InterruptState::Callback() const {
 	if (mode == InterruptMode::TASK) {
@@ -21,16 +23,34 @@ void InterruptState::Callback() const {
 
 		task->Reschedule();
 	} else if (mode == InterruptMode::BLOCKING) {
-		auto marker = done_marker.lock();
+		auto signal_state_l = signal_state.lock();
 
-		if (!marker) {
+		if (!signal_state_l) {
 			return;
 		}
 
-		*marker = true;
+		// Signal the caller, who is currently blocked
+		signal_state_l->Signal();
 	} else {
 		throw InternalException("Callback made on InterruptState without valid interrupt mode specified");
 	}
+}
+
+void InterruptDoneSignalState::Signal() {
+	{
+		unique_lock<mutex> lck {lock};
+		done = true;
+	}
+	cv.notify_all();
+}
+
+void InterruptDoneSignalState::Await() {
+	while (!done) {
+		std::unique_lock<std::mutex> lck(lock);
+		cv.wait(lck, [&]() { return done; });
+	}
+	// Reset after signal received
+	done = false;
 }
 
 } // namespace duckdb

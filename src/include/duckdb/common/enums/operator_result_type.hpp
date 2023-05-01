@@ -22,8 +22,8 @@ namespace duckdb {
 //! FINISHED means the operator has finished the entire pipeline and no more processing is necessary.
 //! The operator will not be called again, and neither will any other operators in this pipeline.
 //! BLOCKED means the operator does not want to be called right now. e.g. because its currently doing async I/O. The
-//! operator has set the interrupt state and the caller is expected to handle it. Note that intermediate operators should
-//! currently not emit this state.
+//! operator has set the interrupt state and the caller is expected to handle it. Note that intermediate operators
+//! should currently not emit this state.
 enum class OperatorResultType : uint8_t { NEED_MORE_INPUT, HAVE_MORE_OUTPUT, FINISHED, BLOCKED };
 
 //! OperatorFinalizeResultType is used to indicate whether operators have finished flushing their cached results.
