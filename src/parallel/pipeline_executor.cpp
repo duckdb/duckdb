@@ -38,16 +38,23 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 	InitializeChunk(final_chunk);
 }
 
-// TODO: Refactor this steaming pile of spaghet
-OperatorResultType PipelineExecutor::FlushCachingOperatorsPush() {
+bool PipelineExecutor::TryFlushCachingOperators() {
 	if (!started_flushing) {
 		started_flushing = true;
 		flushing_idx = IsFinished() ? idx_t(finished_processing_idx) : 0;
 	}
 
-	// Main flushing loop -> keep flushing each operator that needs flushing until it's done or an interrupt happens
+	// Go over each operator and keep flushing them using `FinalExecute` until empty
 	while (flushing_idx < pipeline.operators.size()) {
 		if (!pipeline.operators[flushing_idx].get().RequiresFinalExecute()) {
+			flushing_idx++;
+			continue;
+		}
+
+		// This slightly awkward way of increasing the flushing idx is to make the code re-entrant: We need to call this
+		// method again in the case of a Sink returning BLOCKED.
+		if (!should_reflush_current_operator) {
+			should_reflush_current_operator = true;
 			flushing_idx++;
 			continue;
 		}
@@ -58,126 +65,76 @@ OperatorResultType PipelineExecutor::FlushCachingOperatorsPush() {
 
 		OperatorFinalizeResultType finalize_result;
 		OperatorResultType push_result;
-		if (!blocked_on_have_more_output) {
+
+		if (in_process_operators.empty()) {
 			StartOperator(current_operator);
 			finalize_result = current_operator.FinalExecute(context, curr_chunk, *current_operator.op_state,
 																						*intermediate_states[flushing_idx]);
 			EndOperator(current_operator, &curr_chunk);
-
-			push_result = ExecutePushInternal(curr_chunk, flushing_idx + 1);
 		} else {
 			// Reset flag and reflush the last chunk we were flushing.
-			blocked_on_have_more_output = false;
 			finalize_result = OperatorFinalizeResultType::HAVE_MORE_OUTPUT;
-
-			if (finalize_result_on_block == OperatorFinalizeResultType::FINISHED) {
-				// Here we
-				auto &curr_chunk =
-				    flushing_idx >= intermediate_chunks.size() ? final_chunk : *intermediate_chunks[flushing_idx];
-				push_result = ExecutePushInternal(curr_chunk, flushing_idx);
-			} else {
-				push_result = ExecutePushInternal(curr_chunk, flushing_idx + 1);
-			}
 		}
 
-		if (finalize_result == OperatorFinalizeResultType::FINISHED) {
-			flushing_idx++;
+		push_result = ExecutePushInternal(curr_chunk, flushing_idx + 1);
+
+		if (finalize_result == OperatorFinalizeResultType::HAVE_MORE_OUTPUT) {
+			should_reflush_current_operator = true;
+		} else {
+			should_reflush_current_operator = false;
 		}
 
-		// Sink interrupted -> when continuing the pipeline we need to re-sink the final_chunk
 		if (push_result == OperatorResultType::BLOCKED) {
-			finalize_result_on_block = finalize_result;
-			return OperatorResultType::BLOCKED;
-		}
-
-		// Sink is done, no more flushing required!
-		if (push_result == OperatorResultType::FINISHED) {
+			remaining_sink_chunk = true;
+			return false;
+		} else if (push_result == OperatorResultType::FINISHED) {
 			break;
 		}
 	}
-
-	done_flushing = true;
-	return OperatorResultType::FINISHED;
+	return true;
 }
-
-
-// Main state
-// 		exhausted_source
-// 		done_flushing
-
-// Temp state
-//		in_process_operators
-// 		remaining_sink_chunk
-//		blocked_on_have_more_output
 
 PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 	D_ASSERT(pipeline.sink);
 	auto &source_chunk = pipeline.operators.empty() ? final_chunk : *intermediate_chunks[0];
 	for (idx_t i = 0; i < max_chunks; i++) {
-
-		// The reasoning we now also need this is because before in this loop we would always go through FetchFromSource
-		// which now can be interrupted (ambiguity of this sentence is also a TODO...)
-		// TODO: move up? remove call in FetchFromSource?
 		if (context.client.interrupted) {
 			throw InterruptException();
 		}
 
-		// There's 7 ways we can process a chunk in the pipeline here:
-		// 0.  Source exhausted + flushing done + no state		We're done!
-		// 1a. Regular fetch from source into pipeline:         Fetch from source, push through pipeline
-		// 1b. A sink interrupt happened with have more output: Fetch from source, push through pipeline
-		// 2.  Resuming after Sink interrupt:                   Retry pushing the final chunk into the sink
-		// 3.  Flushing operators:                              Flushing a cached chunk through the pipeline into sink
-		// 4a. Fetch had in process ops after Sink interrupt:   Retry pushing the last source chunk through the pipeline
-		// 4b. Flush had in process ops after Sink interrupt:   Retry flushing the pipeline
-
 		OperatorResultType result;
-
-		// Depending on the state of the pipeline, we produce a chunk in 7 different ways.
 		if (exhausted_source && done_flushing && !remaining_sink_chunk && in_process_operators.empty()) {
-			// This pipeline is done:
-			//	- source exhausted
-			//	- intermediate operators flushed with FinalExecute method
-			//  - no remaining state from Sink/Source interrupts
 			break;
 		} else if (remaining_sink_chunk) {
 			// The pipeline was interrupted by the Sink. We should retry sinking the final chunk.
 			result = ExecutePushInternal(final_chunk);
 			remaining_sink_chunk = false;
-		} else if (!in_process_operators.empty()) {
-			if (started_flushing) {
-				// A sink interrupt happened when flushing:
-				result = FlushCachingOperatorsPush();
-			} else {
-				// 4a. Resume after sink interrupt while fetching from source with in process operators
-				D_ASSERT(source_chunk.size() > 0);
-				result = ExecutePushInternal(source_chunk);
-				// We need to reset this flag
-				blocked_on_have_more_output = false;
-			}
+		} else if (!in_process_operators.empty() && !started_flushing) {
+			// The pipeline was interrupted by the Sink when pushing a source chunk through the pipeline. We need to
+			// re-push the same source chunk through the pipeline because there are in_process operators, meaning that
+			// the result for the pipeline
+			D_ASSERT(source_chunk.size() > 0);
+			result = ExecutePushInternal(source_chunk);
 		} else if (exhausted_source && !done_flushing) {
-			// 3. Flushing operators
-			result = FlushCachingOperatorsPush();
-		} else if (!exhausted_source) {
-			SourceResultType source_result;
-			if (!blocked_on_have_more_output) {
-				// 1a. Regular fetch from source into pipeline
-				source_chunk.Reset();
-				source_result = FetchFromSource(source_chunk);
+			// The source was exhausted, try flushing all operators
+			auto flush_completed = TryFlushCachingOperators();
+			if (flush_completed) {
+				done_flushing = true;
+				break;
 			} else {
-				// 1b. We blocked on a have_more_output, need to re-execute the pipeline with same input
-				blocked_on_have_more_output = false;
-				source_result = SourceResultType::HAVE_MORE_OUTPUT;
+				return PipelineExecuteResult::INTERRUPTED;
 			}
+		} else if (!exhausted_source) {
+			// "Regular" path: fetch a chunk from the source and push it through the pipeline
+			source_chunk.Reset();
+			SourceResultType source_result = FetchFromSource(source_chunk);
 
-			// SOURCE INTERRUPT
 			if(source_result == SourceResultType::BLOCKED) {
 				return PipelineExecuteResult::INTERRUPTED;
 			}
 
 			if (source_result == SourceResultType::FINISHED) {
 				exhausted_source = true;
-
 				if (source_chunk.size() == 0) {
 					continue;
 				}
@@ -257,12 +214,6 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t
 			EndOperator(*pipeline.sink, nullptr);
 
 			if (sink_result == SinkResultType::BLOCKED) {
-				if (result == OperatorResultType::HAVE_MORE_OUTPUT) {
-					// When this happens, on resuming we need to:
-					// - re-push the final_chunk into the Sink
-					// - call execute again on the current initial_idx
-					blocked_on_have_more_output = true;
-				}
 				return OperatorResultType::BLOCKED;
 			} else if (sink_result == SinkResultType::FINISHED) {
 				FinishProcessing();

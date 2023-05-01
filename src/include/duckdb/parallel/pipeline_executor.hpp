@@ -38,7 +38,7 @@ public:
 
 	//! Fully execute a pipeline with a source and a sink until the source is completely exhausted
 	PipelineExecuteResult Execute();
-	//! Execute a pipeline with a source and a sink until finished, or until max_chunks have been processed
+	//! Execute a pipeline with a source and a sink until finished, or until max_chunks were processed from the source
 	//! Returns true if execution is finished, false if Execute should be called again
 	PipelineExecuteResult Execute(idx_t max_chunks);
 
@@ -104,12 +104,9 @@ private:
 
 	//! This flag is set when the pipeline gets interrupted by the Sink -> the final_chunk should be re-sink-ed.
 	bool remaining_sink_chunk = false;
-	//! Flag set when a sink interrupt occurs after the pipeline returns HAVE_MORE_OUTPUT -> re-push intermediate
-	//! chunk through pipeline after first re-sinking the final chunk
-	// TODO: can we ensure this through the in_process_operators.size() thingy?
-	bool blocked_on_have_more_output = false;
-	//! When a Sink blocks during the flushing phase, This stores the result of the Finalize call to know how to resume
-	OperatorFinalizeResultType finalize_result_on_block;
+	//! When a Sink blocks during the flushing phase, this flag stores whether the current operator being flushed needs
+	//! to be called again when resuming
+	bool should_reflush_current_operator = true;
 
 	//! Current operator being flushed
 	idx_t flushing_idx;
@@ -134,11 +131,9 @@ private:
 	//! Returns whether or not a new input chunk is needed, or whether or not we are finished
 	OperatorResultType Execute(DataChunk &input, DataChunk &result, idx_t initial_index = 0);
 
-	//! FlushCachedOperators methods push/pull any remaining cached results through the pipeline
-	void FlushCachingOperatorsPull(DataChunk &result);
-
-	//! Flushes a single chunk through the pipeline. May need to be called multiple times to flush all caching operators
-	OperatorResultType FlushCachingOperatorsPush();
+	//! Tries to flush all state from intermediate operators. Will return true if all state is flushed, false in the
+	//! case of a blocked sink.
+	bool TryFlushCachingOperators();
 
 	static bool CanCacheType(const LogicalType &type);
 	void CacheChunk(DataChunk &input, idx_t operator_idx);
