@@ -95,17 +95,20 @@ private:
 	//! Whether or not this pipeline requires keeping track of the batch index of the source
 	bool requires_batch_index = false;
 
-	//! This flag is set when the pipeline gets interrupted by the Sink -> the final_chunk should be re-sink-ed.
-	bool remaining_sink_chunk = false;
-	//! Source has been exhausted, we nee
+	//! Source has indicated it is exhausted
 	bool exhausted_source = false;
-	//! Flushing of caching operators has started
+	//! Flushing of intermediate operators has started
 	bool started_flushing = false;
 	//! Flushing of caching operators is done
 	bool done_flushing = false;
+
+	//! This flag is set when the pipeline gets interrupted by the Sink -> the final_chunk should be re-sink-ed.
+	bool remaining_sink_chunk = false;
 	//! Flag set when a sink interrupt occurs after the pipeline returns HAVE_MORE_OUTPUT -> re-push intermediate
-	//! chunk through pipeline after re-sinking the final chunk
+	//! chunk through pipeline after first re-sinking the final chunk
+	// TODO: can we ensure this through the in_process_operators.size() thingy?
 	bool blocked_on_have_more_output = false;
+	//! When a Sink blocks during the flushing phase, This stores the result of the Finalize call to know how to resume
 	OperatorFinalizeResultType finalize_result_on_block;
 
 	//! Current operator being flushed
@@ -145,7 +148,7 @@ private:
 	int debug_blocked_sink_count = 0;
 	int debug_blocked_source_count = 0;
 	//! Number of times the Sink/Source will block before actually returning data
-	int debug_blocked_target_count = 2;
+	int debug_blocked_target_count = 1;
 #endif
 };
 

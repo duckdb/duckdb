@@ -75,9 +75,6 @@ struct ClientConfig {
 	bool force_no_cross_product = false;
 	//! Force use of IEJoin to implement AsOfJoin, used for testing
 	bool force_asof_iejoin = false;
-	//! Force every sink & source in a pipeline to block asynchronously briefly, used for testing
-	// TODO: move to ci job
-	bool force_async_pipelines = true;
 	//! If this context should also try to use the available replacement scans
 	//! True by default
 	bool use_replacement_scans = true;

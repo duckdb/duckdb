@@ -56,7 +56,6 @@ OperatorResultType PipelineExecutor::FlushCachingOperatorsPush() {
 			flushing_idx + 1 >= intermediate_chunks.size() ? final_chunk : *intermediate_chunks[flushing_idx + 1];
 		auto& current_operator = pipeline.operators[flushing_idx].get();
 
-
 		OperatorFinalizeResultType finalize_result;
 		OperatorResultType push_result;
 		if (!blocked_on_have_more_output) {
@@ -101,15 +100,20 @@ OperatorResultType PipelineExecutor::FlushCachingOperatorsPush() {
 	return OperatorResultType::FINISHED;
 }
 
-// TODO: unspaghet!
+
+// Main state
+// 		exhausted_source
+// 		done_flushing
+
+// Temp state
+//		in_process_operators
+// 		remaining_sink_chunk
+//		blocked_on_have_more_output
+
 PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 	D_ASSERT(pipeline.sink);
 	auto &source_chunk = pipeline.operators.empty() ? final_chunk : *intermediate_chunks[0];
 	for (idx_t i = 0; i < max_chunks; i++) {
-		// TODO: make single switch on state?
-		if (exhausted_source && done_flushing && !remaining_sink_chunk && in_process_operators.empty()) {
-			break;
-		}
 
 		// The reasoning we now also need this is because before in this loop we would always go through FetchFromSource
 		// which now can be interrupted (ambiguity of this sentence is also a TODO...)
@@ -118,21 +122,31 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 			throw InterruptException();
 		}
 
-		// There's 6 ways we can process a chunk in the pipeline here:
+		// There's 7 ways we can process a chunk in the pipeline here:
+		// 0.  Source exhausted + flushing done + no state		We're done!
 		// 1a. Regular fetch from source into pipeline:         Fetch from source, push through pipeline
 		// 1b. A sink interrupt happened with have more output: Fetch from source, push through pipeline
 		// 2.  Resuming after Sink interrupt:                   Retry pushing the final chunk into the sink
 		// 3.  Flushing operators:                              Flushing a cached chunk through the pipeline into sink
 		// 4a. Fetch had in process ops after Sink interrupt:   Retry pushing the last source chunk through the pipeline
 		// 4b. Flush had in process ops after Sink interrupt:   Retry flushing the pipeline
+
 		OperatorResultType result;
-		if (remaining_sink_chunk) {
-			// 2. Resuming after Sink interrupt
+
+		// Depending on the state of the pipeline, we produce a chunk in 7 different ways.
+		if (exhausted_source && done_flushing && !remaining_sink_chunk && in_process_operators.empty()) {
+			// This pipeline is done:
+			//	- source exhausted
+			//	- intermediate operators flushed with FinalExecute method
+			//  - no remaining state from Sink/Source interrupts
+			break;
+		} else if (remaining_sink_chunk) {
+			// The pipeline was interrupted by the Sink. We should retry sinking the final chunk.
 			result = ExecutePushInternal(final_chunk);
 			remaining_sink_chunk = false;
 		} else if (!in_process_operators.empty()) {
 			if (started_flushing) {
-				// 4b. Resume after sink interrupt happened with in process operators
+				// A sink interrupt happened when flushing:
 				result = FlushCachingOperatorsPush();
 			} else {
 				// 4a. Resume after sink interrupt while fetching from source with in process operators
@@ -244,6 +258,9 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t
 
 			if (sink_result == SinkResultType::BLOCKED) {
 				if (result == OperatorResultType::HAVE_MORE_OUTPUT) {
+					// When this happens, on resuming we need to:
+					// - re-push the final_chunk into the Sink
+					// - call execute again on the current initial_idx
 					blocked_on_have_more_output = true;
 				}
 				return OperatorResultType::BLOCKED;
@@ -278,6 +295,7 @@ void PipelineExecutor::PushFinalize() {
 	local_sink_state.reset();
 }
 
+// TODO: Refactoring the StreamingQueryResult to use Push-based execution should eliminate the need for this code
 void PipelineExecutor::ExecutePull(DataChunk &result) {
 	if (IsFinished()) {
 		return;
@@ -296,7 +314,7 @@ void PipelineExecutor::ExecutePull(DataChunk &result) {
 				interrupt_state = InterruptState(done_marker);
 				SourceResultType source_result;
 
-				// Repeatedly try to fetch from the source until it doesn't block. Note that it may block multiple times!
+				// Repeatedly try to fetch from the source until it doesn't block. Note that it may block multiple times
 				while(true) {
 					source_result = FetchFromSource(source_chunk);
 
