@@ -14,6 +14,13 @@ static inline RESULT_TYPE StringCompress(const string_t &input) {
 	RESULT_TYPE result;
 	if (sizeof(RESULT_TYPE) <= string_t::INLINE_LENGTH) {
 		memcpy(&result, input.GetPrefixWriteable(), sizeof(RESULT_TYPE));
+	} else if (input.GetSize() < string_t::INLINE_LENGTH) {
+		static constexpr const idx_t MEMCPY_LENGTH =
+		    sizeof(RESULT_TYPE) < string_t::INLINE_LENGTH ? sizeof(RESULT_TYPE) : string_t::INLINE_LENGTH;
+		static constexpr const idx_t MEMSET_LENGTH = sizeof(RESULT_TYPE) - MEMCPY_LENGTH;
+
+		memcpy(&result, input.GetPrefixWriteable(), MEMCPY_LENGTH);
+		memset(data_ptr_t(&result) + string_t::INLINE_LENGTH, '\0', MEMSET_LENGTH);
 	} else {
 		result = 0;
 		memcpy(&result, input.GetDataUnsafe(), input.GetSize());
@@ -72,23 +79,55 @@ static string StringDecompressFunctionName() {
 	return "__internal_decompress_string";
 }
 
+struct StringDecompressLocalState : public FunctionLocalState {
+public:
+	explicit StringDecompressLocalState(ClientContext &context) : allocator(Allocator::Get(context)) {
+	}
+
+	static unique_ptr<FunctionLocalState> Init(ExpressionState &state, const BoundFunctionExpression &expr,
+	                                           FunctionData *bind_data) {
+		return make_uniq<StringDecompressLocalState>(state.GetContext());
+	}
+
+public:
+	ArenaAllocator allocator;
+};
+
 template <class INPUT_TYPE>
-static inline string_t StringDecompress(const INPUT_TYPE &input, Vector &result_v) {
-	const auto input_swapped = BSwap<INPUT_TYPE>(input);
-	const uint32_t string_size = ((uint8_t *)&input_swapped)[sizeof(INPUT_TYPE) - 1];
+static inline string_t StringDecompress(const INPUT_TYPE &input, ArenaAllocator &allocator) {
 	if (sizeof(INPUT_TYPE) <= string_t::INLINE_LENGTH) {
+		static constexpr const idx_t MEMCPY_LENGTH = sizeof(INPUT_TYPE);
+		static constexpr const idx_t MEMSET_LENGTH = string_t::INLINE_LENGTH - MEMCPY_LENGTH + 1;
+
+		const auto input_swapped = BSwap<INPUT_TYPE>(input);
+		const uint32_t string_size = ((uint8_t *)&input_swapped)[sizeof(INPUT_TYPE) - 1];
+
 		string_t result(string_size);
-		memcpy(result.GetPrefixWriteable(), &input_swapped, sizeof(INPUT_TYPE));
-		memset(result.GetPrefixWriteable() + sizeof(INPUT_TYPE) - 1, '\0',
-		       string_t::INLINE_LENGTH - sizeof(INPUT_TYPE));
+		memcpy(result.GetPrefixWriteable(), &input_swapped, MEMCPY_LENGTH);
+		memset(result.GetPrefixWriteable() + MEMCPY_LENGTH - 1, '\0', MEMSET_LENGTH);
+		return result;
+	}
+
+	const uint32_t string_size = *((uint8_t *)&input);
+	if (string_size <= string_t::INLINE_LENGTH) {
+		static constexpr const idx_t MEMCPY_LENGTH =
+		    sizeof(INPUT_TYPE) < string_t::INLINE_LENGTH ? sizeof(INPUT_TYPE) : string_t::INLINE_LENGTH;
+		static constexpr const idx_t MEMSET_LENGTH = string_t::INLINE_LENGTH - MEMCPY_LENGTH + 1;
+
+		string_t result(string_size);
+		const auto input_swapped = BSwap<INPUT_TYPE>(input);
+		memcpy(result.GetPrefixWriteable(), &input_swapped, MEMCPY_LENGTH);
+		memset(result.GetPrefixWriteable() + MEMCPY_LENGTH - 1, '\0', MEMSET_LENGTH);
 		return result;
 	} else {
-		return StringVector::AddString(result_v, (const char *)&input_swapped, string_size);
+		auto ptr = (INPUT_TYPE *)allocator.Allocate(sizeof(INPUT_TYPE));
+		*ptr = BSwap<INPUT_TYPE>(input);
+		return string_t((const char *)ptr, string_size);
 	}
 }
 
 template <class INPUT_TYPE>
-static inline string_t MiniStringDecompress(const INPUT_TYPE &input, Vector &result_v) {
+static inline string_t MiniStringDecompress(const INPUT_TYPE &input, ArenaAllocator &allocator) {
 	if (sizeof(INPUT_TYPE) <= string_t::INLINE_LENGTH) {
 		const auto min = MinValue<INPUT_TYPE>(1, input);
 		string_t result(min);
@@ -96,25 +135,28 @@ static inline string_t MiniStringDecompress(const INPUT_TYPE &input, Vector &res
 		*result.GetPrefixWriteable() = input - min;
 		return result;
 	} else {
-		char c = input - 1;
-		return StringVector::AddString(result_v, &c, 1);
+		auto ptr = allocator.Allocate(1);
+		*ptr = input - 1;
+		return string_t((const char *)ptr, 1);
 	}
 }
 
 template <>
-inline string_t StringDecompress(const uint8_t &input, Vector &result_v) {
-	return MiniStringDecompress<uint16_t>(input, result_v);
+inline string_t StringDecompress(const uint8_t &input, ArenaAllocator &allocator) {
+	return MiniStringDecompress<uint8_t>(input, allocator);
 }
 
 template <>
-inline string_t StringDecompress(const uint16_t &input, Vector &result_v) {
-	return MiniStringDecompress<uint16_t>(input, result_v);
+inline string_t StringDecompress(const uint16_t &input, ArenaAllocator &allocator) {
+	return MiniStringDecompress<uint16_t>(input, allocator);
 }
 
 template <class INPUT_TYPE>
 static void StringDecompressFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &allocator = ExecuteFunctionState::GetFunctionState(state)->Cast<StringDecompressLocalState>().allocator;
+	allocator.Reset();
 	UnaryExecutor::Execute<INPUT_TYPE, string_t>(args.data[0], result, args.size(), [&](const INPUT_TYPE &input) {
-		return StringDecompress<INPUT_TYPE>(input, result);
+		return StringDecompress<INPUT_TYPE>(input, allocator);
 	});
 }
 
@@ -184,7 +226,8 @@ void CMStringCompressFun::RegisterFunction(BuiltinFunctions &set) {
 
 ScalarFunction CMStringDecompressFun::GetFunction(const LogicalType &input_type) {
 	ScalarFunction result(StringDecompressFunctionName(), {input_type}, LogicalType::VARCHAR,
-	                      GetStringDecompressFunctionSwitch(input_type), CompressedMaterializationFunctions::Bind);
+	                      GetStringDecompressFunctionSwitch(input_type), CompressedMaterializationFunctions::Bind,
+	                      nullptr, nullptr, StringDecompressLocalState::Init);
 	result.serialize = CMStringSerialize<CompressedMaterializationDirection::DECOMPRESS>;
 	result.deserialize = CMStringDeserialize;
 	return result;
