@@ -13,6 +13,7 @@
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb_python/numpy/numpy_scan.hpp"
+#include "duckdb_python/arrow/arrow_export_utils.hpp"
 
 namespace duckdb {
 
@@ -150,25 +151,16 @@ static py::list ConvertToSingleBatch(const string &timezone_config, vector<Logic
 }
 
 static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, const string &timezone_config) {
-	py::gil_scoped_acquire acquire;
-
-	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
-	auto from_batches_func = pyarrow_lib_module.attr("Table").attr("from_batches");
-	auto schema_import_func = pyarrow_lib_module.attr("Schema").attr("_import_from_c");
-	ArrowSchema schema;
-
 	auto types = input.GetTypes();
 	vector<string> names;
 	names.reserve(types.size());
 	for (idx_t i = 0; i < types.size(); i++) {
 		names.push_back(StringUtil::Format("c%d", i));
 	}
-	ArrowConverter::ToArrowSchema(&schema, types, names, timezone_config);
-	auto schema_obj = schema_import_func((uint64_t)&schema);
 
-	py::list single_batch = ConvertToSingleBatch(timezone_config, types, names, input);
-
-	return py::cast<duckdb::pyarrow::Table>(from_batches_func(single_batch, schema_obj));
+	return pyarrow::ToArrowTable(types, names, timezone_config, [&](const string &timezone_config) {
+		return ConvertToSingleBatch(timezone_config, types, names, input);
+	});
 }
 
 static void ConvertPyArrowToDataChunk(const py::object &table, Vector &out, ClientContext &context, idx_t count) {

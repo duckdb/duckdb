@@ -53,11 +53,10 @@ public:
 
 	const vector<string> &GetNames();
 	const vector<LogicalType> &GetTypes();
+	py::list FetchAllArrowChunks(idx_t rows_per_batch);
 
 private:
 	void FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversion &conversion, const char *name);
-
-	py::list FetchAllArrowChunks(idx_t rows_per_batch);
 
 	bool FetchArrowChunk(QueryResult *result, py::list &batches, idx_t rows_per_batch);
 

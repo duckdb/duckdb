@@ -249,8 +249,8 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	}
 }
 
-void ArrowConverter::ToArrowSchema(ArrowSchema *out_schema, vector<LogicalType> &types, vector<string> &names,
-                                   const string &config_timezone) {
+void ArrowConverter::ToArrowSchema(ArrowSchema *out_schema, const vector<LogicalType> &types,
+                                   const vector<string> &names, const string &config_timezone) {
 	D_ASSERT(out_schema);
 	D_ASSERT(types.size() == names.size());
 	idx_t column_count = types.size();

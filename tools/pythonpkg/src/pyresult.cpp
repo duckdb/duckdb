@@ -15,6 +15,7 @@
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb_python/numpy/array_wrapper.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb_python/arrow/arrow_export_utils.hpp"
 
 namespace duckdb {
 
@@ -318,23 +319,12 @@ duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t rows_per_batch) {
 	if (!result) {
 		throw InvalidInputException("There is no query result");
 	}
-	py::gil_scoped_acquire acquire;
-
-	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
-	auto from_batches_func = pyarrow_lib_module.attr("Table").attr("from_batches");
-
-	auto schema_import_func = pyarrow_lib_module.attr("Schema").attr("_import_from_c");
-	ArrowSchema schema;
-
 	timezone_config = QueryResult::GetConfigTimezone(*result);
-	ArrowConverter::ToArrowSchema(&schema, result->types, result->names, timezone_config);
 
-	auto schema_obj = schema_import_func((uint64_t)&schema);
-
-	py::list batches = FetchAllArrowChunks(rows_per_batch);
-
-	// We return an Arrow Table
-	return py::cast<duckdb::pyarrow::Table>(from_batches_func(batches, schema_obj));
+	auto &this_object = *this;
+	return pyarrow::ToArrowTable(result->types, result->names, timezone_config, [&](const string &timezone_config) {
+		return this_object.FetchAllArrowChunks(rows_per_batch);
+	});
 }
 
 duckdb::pyarrow::RecordBatchReader DuckDBPyResult::FetchRecordBatchReader(idx_t rows_per_batch) {
