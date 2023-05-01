@@ -27,7 +27,8 @@ unique_ptr<GlobalSourceState> PhysicalColumnDataScan::GetGlobalSourceState(Clien
 	return make_uniq<PhysicalColumnDataScanState>();
 }
 
-SourceResultType PhysicalColumnDataScan::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+SourceResultType PhysicalColumnDataScan::GetData(ExecutionContext &context, DataChunk &chunk,
+                                                 OperatorSourceInput &input) const {
 	auto &state = input.global_state.Cast<PhysicalColumnDataScanState>();
 	if (collection->Count() == 0) {
 		return SourceResultType::FINISHED;

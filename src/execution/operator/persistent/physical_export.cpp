@@ -96,7 +96,8 @@ unique_ptr<GlobalSourceState> PhysicalExport::GetGlobalSourceState(ClientContext
 	return make_uniq<ExportSourceState>();
 }
 
-SourceResultType PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+SourceResultType PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk,
+                                         OperatorSourceInput &input) const {
 	auto &state = input.global_state.Cast<ExportSourceState>();
 	if (state.finished) {
 		return SourceResultType::FINISHED;

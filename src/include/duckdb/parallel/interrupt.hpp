@@ -14,14 +14,15 @@
 
 namespace duckdb {
 
-//! InterruptMode specifies how operators should block/unblock, note that this will happen transparently to the operator,
-//! as the operator only needs to return a BLOCKED result and call the callback using the InterruptState.
+//! InterruptMode specifies how operators should block/unblock, note that this will happen transparently to the
+//! operator, as the operator only needs to return a BLOCKED result and call the callback using the InterruptState.
 //! NO_INTERRUPTS: No blocking mode is specified, an error will be thrown when the operator blocks. Should only be used
 //!				   when manually calling operators of which is known they will never block.
-//! TASK:		   A weak pointer to a task is provided. On the callback, this task will be signalled. If the Task has been deleted,
+//! TASK:		   A weak pointer to a task is provided. On the callback, this task will be signalled. If the Task has
+//! been deleted,
 //!	               this callback becomes a NOP.
 //! BLOCKING:	   The caller has blocked awaiting an atomic marker that will be set when the operator unblocks.
-enum class InterruptMode : uint8_t { NO_INTERRUPTS, TASK, BLOCKING};
+enum class InterruptMode : uint8_t { NO_INTERRUPTS, TASK, BLOCKING };
 
 //! State required to make the callback after some async operation within an operator source / sink.
 class InterruptState {
@@ -45,4 +46,4 @@ protected:
 	weak_ptr<atomic<bool>> done_marker;
 };
 
-}
+} // namespace duckdb

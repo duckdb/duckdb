@@ -115,7 +115,7 @@ unique_ptr<ProducerToken> TaskScheduler::CreateProducer() {
 	return make_uniq<ProducerToken>(*this, std::move(token));
 }
 
-void TaskScheduler::ScheduleTask(ProducerToken& token, shared_ptr<Task> task) {
+void TaskScheduler::ScheduleTask(ProducerToken &token, shared_ptr<Task> task) {
 	// Enqueue a task for the given producer token and signal any sleeping threads
 	queue->Enqueue(token, std::move(task));
 }
@@ -134,7 +134,7 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 		if (queue->q.try_dequeue(task)) {
 			auto execute_result = task->Execute(TaskExecutionMode::PROCESS_ALL);
 
-			switch(execute_result) {
+			switch (execute_result) {
 			case TaskExecutionResult::TASK_FINISHED:
 			case TaskExecutionResult::TASK_ERROR:
 				task.reset();
@@ -164,7 +164,7 @@ idx_t TaskScheduler::ExecuteTasks(atomic<bool> *marker, idx_t max_tasks) {
 		}
 		auto execute_result = task->Execute(TaskExecutionMode::PROCESS_ALL);
 
-		switch(execute_result) {
+		switch (execute_result) {
 		case TaskExecutionResult::TASK_FINISHED:
 		case TaskExecutionResult::TASK_ERROR:
 			task.reset();
@@ -194,7 +194,7 @@ void TaskScheduler::ExecuteTasks(idx_t max_tasks) {
 		}
 		try {
 			auto execute_result = task->Execute(TaskExecutionMode::PROCESS_ALL);
-			switch(execute_result) {
+			switch (execute_result) {
 			case TaskExecutionResult::TASK_FINISHED:
 			case TaskExecutionResult::TASK_ERROR:
 				task.reset();

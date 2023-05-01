@@ -19,7 +19,7 @@ struct ProducerToken;
 
 enum class TaskExecutionMode : uint8_t { PROCESS_ALL, PROCESS_PARTIAL };
 
-enum class TaskExecutionResult : uint8_t { TASK_FINISHED, TASK_NOT_FINISHED, TASK_ERROR, TASK_BLOCKED};
+enum class TaskExecutionResult : uint8_t { TASK_FINISHED, TASK_NOT_FINISHED, TASK_ERROR, TASK_BLOCKED };
 
 //! Generic parallel task
 class Task : public std::enable_shared_from_this<Task> {
@@ -34,11 +34,11 @@ public:
 	//! In case the task has interrupted, BLOCKED is returned.
 	virtual TaskExecutionResult Execute(TaskExecutionMode mode) = 0;
 
-	//! Descheduling a task ensures the task is not executed, but remains available for rescheduling as long as required,
-	//! generally until some code in an operator calls the InterruptState::Callback() method of a state of
-	//! the InterruptMode::TASK mode.
+	//! Descheduling a task ensures the task is not executed, but remains available for rescheduling as long as
+	//! required, generally until some code in an operator calls the InterruptState::Callback() method of a state of the
+	//! InterruptMode::TASK mode.
 	virtual void Deschedule() {
-	    throw InternalException("Cannot deschedule task of base Task class");
+		throw InternalException("Cannot deschedule task of base Task class");
 	};
 
 	//! Ensures a task is rescheduled to the correct queue

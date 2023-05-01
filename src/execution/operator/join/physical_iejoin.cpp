@@ -930,7 +930,8 @@ unique_ptr<LocalSourceState> PhysicalIEJoin::GetLocalSourceState(ExecutionContex
 	return make_uniq<IEJoinLocalSourceState>(context.client, *this);
 }
 
-SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result, OperatorSourceInput &input) const {
+SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result,
+                                         OperatorSourceInput &input) const {
 	auto &ie_sink = sink_state->Cast<IEJoinGlobalState>();
 	auto &ie_gstate = input.global_state.Cast<IEJoinGlobalSourceState>();
 	auto &ie_lstate = input.local_state.Cast<IEJoinLocalSourceState>();

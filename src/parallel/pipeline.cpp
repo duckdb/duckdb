@@ -39,7 +39,7 @@ public:
 		if (mode == TaskExecutionMode::PROCESS_PARTIAL) {
 			auto res = pipeline_executor->Execute(PARTIAL_CHUNK_COUNT);
 
-			switch(res) {
+			switch (res) {
 			case PipelineExecuteResult::NOT_FINISHED:
 				return TaskExecutionResult::TASK_NOT_FINISHED;
 			case PipelineExecuteResult::INTERRUPTED:
@@ -49,7 +49,7 @@ public:
 			}
 		} else {
 			auto res = pipeline_executor->Execute();
-			switch(res) {
+			switch (res) {
 			case PipelineExecuteResult::NOT_FINISHED:
 				throw InternalException("Execute without limit should not return NOT_FINISHED");
 			case PipelineExecuteResult::INTERRUPTED:

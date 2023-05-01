@@ -13,7 +13,8 @@ namespace duckdb {
 // Source
 //===--------------------------------------------------------------------===//
 
-SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &chunk,
+                                         OperatorSourceInput &input) const {
 	// parse the options
 	auto &config = DBConfig::GetConfig(context.client);
 	AccessMode access_mode = config.options.access_mode;

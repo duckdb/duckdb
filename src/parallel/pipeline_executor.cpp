@@ -60,8 +60,8 @@ bool PipelineExecutor::TryFlushCachingOperators() {
 		}
 
 		auto &curr_chunk =
-			flushing_idx + 1 >= intermediate_chunks.size() ? final_chunk : *intermediate_chunks[flushing_idx + 1];
-		auto& current_operator = pipeline.operators[flushing_idx].get();
+		    flushing_idx + 1 >= intermediate_chunks.size() ? final_chunk : *intermediate_chunks[flushing_idx + 1];
+		auto &current_operator = pipeline.operators[flushing_idx].get();
 
 		OperatorFinalizeResultType finalize_result;
 		OperatorResultType push_result;
@@ -69,7 +69,7 @@ bool PipelineExecutor::TryFlushCachingOperators() {
 		if (in_process_operators.empty()) {
 			StartOperator(current_operator);
 			finalize_result = current_operator.FinalExecute(context, curr_chunk, *current_operator.op_state,
-																						*intermediate_states[flushing_idx]);
+			                                                *intermediate_states[flushing_idx]);
 			EndOperator(current_operator, &curr_chunk);
 		} else {
 			// Reset flag and reflush the last chunk we were flushing.
@@ -129,7 +129,7 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 			source_chunk.Reset();
 			SourceResultType source_result = FetchFromSource(source_chunk);
 
-			if(source_result == SourceResultType::BLOCKED) {
+			if (source_result == SourceResultType::BLOCKED) {
 				return PipelineExecuteResult::INTERRUPTED;
 			}
 
@@ -145,7 +145,7 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 		}
 
 		// SINK INTERRUPT
-		if(result == OperatorResultType::BLOCKED) {
+		if (result == OperatorResultType::BLOCKED) {
 			remaining_sink_chunk = true;
 			return PipelineExecuteResult::INTERRUPTED;
 		}
@@ -207,7 +207,7 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t
 			StartOperator(*pipeline.sink);
 			D_ASSERT(pipeline.sink);
 			D_ASSERT(pipeline.sink->sink_state);
-			OperatorSinkInput sink_input { *pipeline.sink->sink_state, *local_sink_state, interrupt_state };
+			OperatorSinkInput sink_input {*pipeline.sink->sink_state, *local_sink_state, interrupt_state};
 
 			auto sink_result = Sink(sink_chunk, sink_input);
 
@@ -266,16 +266,17 @@ void PipelineExecutor::ExecutePull(DataChunk &result) {
 				SourceResultType source_result;
 
 				// Repeatedly try to fetch from the source until it doesn't block. Note that it may block multiple times
-				while(true) {
+				while (true) {
 					source_result = FetchFromSource(source_chunk);
 
 					// No interrupt happened, all good.
-					if (source_result != SourceResultType::BLOCKED){
+					if (source_result != SourceResultType::BLOCKED) {
 						break;
 					}
 
 					// Busy wait for async callback from source operator TODO: backoff / cv?
-					while(!*done_marker) {};
+					while (!*done_marker) {
+					};
 
 					// Source made callback, reset marker and try again
 					*done_marker = false;
@@ -457,7 +458,7 @@ SinkResultType PipelineExecutor::Sink(DataChunk &chunk, OperatorSinkInput &input
 SourceResultType PipelineExecutor::FetchFromSource(DataChunk &result) {
 	StartOperator(*pipeline.source);
 
-	OperatorSourceInput source_input = { *pipeline.source_state, *local_source_state, interrupt_state };
+	OperatorSourceInput source_input = {*pipeline.source_state, *local_source_state, interrupt_state};
 	auto res = GetData(result, source_input);
 
 	// Ensures Sinks only return empty results when Blocking or Finished

@@ -231,7 +231,8 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 // Source
 //===--------------------------------------------------------------------===//
 
-SourceResultType PhysicalCopyToFile::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+SourceResultType PhysicalCopyToFile::GetData(ExecutionContext &context, DataChunk &chunk,
+                                             OperatorSourceInput &input) const {
 	auto &g = sink_state->Cast<CopyToFunctionGlobalState>();
 
 	chunk.SetCardinality(1);

@@ -4,7 +4,8 @@
 
 namespace duckdb {
 
-SourceResultType PhysicalTransaction::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+SourceResultType PhysicalTransaction::GetData(ExecutionContext &context, DataChunk &chunk,
+                                              OperatorSourceInput &input) const {
 	auto &client = context.client;
 
 	auto type = info->type;

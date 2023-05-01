@@ -2,7 +2,8 @@
 
 namespace duckdb {
 
-SourceResultType PhysicalPragma::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+SourceResultType PhysicalPragma::GetData(ExecutionContext &context, DataChunk &chunk,
+                                         OperatorSourceInput &input) const {
 	auto &client = context.client;
 	FunctionParameters parameters {info.parameters, info.named_parameters};
 	function.function(client, parameters);

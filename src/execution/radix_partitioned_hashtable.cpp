@@ -130,8 +130,8 @@ void RadixPartitionedHashTable::PopulateGroupChunk(DataChunk &group_chunk, DataC
 	group_chunk.Verify();
 }
 
-void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input, DataChunk &payload_input,
-                                     const vector<idx_t> &filter) const {
+void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input,
+                                     DataChunk &payload_input, const vector<idx_t> &filter) const {
 	auto &llstate = input.local_state.Cast<RadixHTLocalState>();
 	auto &gstate = input.global_state.Cast<RadixHTGlobalState>();
 	D_ASSERT(!gstate.is_finalized);
@@ -381,8 +381,8 @@ idx_t RadixPartitionedHashTable::Size(GlobalSinkState &sink_state) const {
 	return count;
 }
 
-SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSinkState &sink_state,
-                                        OperatorSourceInput &input) const {
+SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &chunk,
+                                                    GlobalSinkState &sink_state, OperatorSourceInput &input) const {
 	auto &gstate = sink_state.Cast<RadixHTGlobalState>();
 	auto &state = input.global_state.Cast<RadixHTGlobalSourceState>();
 	auto &lstate = input.local_state.Cast<RadixHTLocalSourceState>();

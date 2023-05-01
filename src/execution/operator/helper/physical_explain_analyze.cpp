@@ -12,7 +12,8 @@ public:
 	string analyzed_plan;
 };
 
-SinkResultType PhysicalExplainAnalyze::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+SinkResultType PhysicalExplainAnalyze::Sink(ExecutionContext &context, DataChunk &chunk,
+                                            OperatorSinkInput &input) const {
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -31,7 +32,8 @@ unique_ptr<GlobalSinkState> PhysicalExplainAnalyze::GetGlobalSinkState(ClientCon
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-SourceResultType PhysicalExplainAnalyze::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+SourceResultType PhysicalExplainAnalyze::GetData(ExecutionContext &context, DataChunk &chunk,
+                                                 OperatorSourceInput &input) const {
 	auto &gstate = sink_state->Cast<ExplainAnalyzeStateGlobalState>();
 
 	chunk.SetValue(0, 0, Value("analyzed_plan"));

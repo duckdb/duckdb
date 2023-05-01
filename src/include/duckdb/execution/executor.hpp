@@ -76,14 +76,13 @@ public:
 	//! Add the task to be rescheduled
 	void AddToBeRescheduled(shared_ptr<Task> task);
 
-
 	//! Returns the progress of the pipelines
 	bool GetPipelinesProgress(double &current_progress);
 
 	void CompletePipeline() {
 		completed_pipelines++;
 	}
-	ProducerToken& GetToken() {
+	ProducerToken &GetToken() {
 		return *producer;
 	}
 	void AddEvent(shared_ptr<Event> event);
@@ -156,6 +155,6 @@ private:
 	shared_ptr<Task> task;
 
 	//! Task that have been descheduled
-	unordered_map<Task*, shared_ptr<Task>> to_be_rescheduled_tasks;
+	unordered_map<Task *, shared_ptr<Task>> to_be_rescheduled_tasks;
 };
 } // namespace duckdb

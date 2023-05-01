@@ -167,7 +167,8 @@ vector<LogicalType> PhysicalNestedLoopJoin::GetJoinTypes() const {
 	return result;
 }
 
-SinkResultType PhysicalNestedLoopJoin::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+SinkResultType PhysicalNestedLoopJoin::Sink(ExecutionContext &context, DataChunk &chunk,
+                                            OperatorSinkInput &input) const {
 	auto &gstate = input.global_state.Cast<NestedLoopJoinGlobalState>();
 	auto &nlj_state = input.local_state.Cast<NestedLoopJoinLocalState>();
 
@@ -445,7 +446,8 @@ unique_ptr<LocalSourceState> PhysicalNestedLoopJoin::GetLocalSourceState(Executi
 	return make_uniq<NestedLoopJoinLocalScanState>(*this, (NestedLoopJoinGlobalScanState &)gstate);
 }
 
-SourceResultType PhysicalNestedLoopJoin::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+SourceResultType PhysicalNestedLoopJoin::GetData(ExecutionContext &context, DataChunk &chunk,
+                                                 OperatorSourceInput &input) const {
 	D_ASSERT(IsRightOuterJoin(join_type));
 	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
 	auto &sink = sink_state->Cast<NestedLoopJoinGlobalState>();

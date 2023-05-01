@@ -49,7 +49,8 @@ unique_ptr<LocalSinkState> PhysicalBlockwiseNLJoin::GetLocalSinkState(ExecutionC
 	return make_uniq<BlockwiseNLJoinLocalState>();
 }
 
-SinkResultType PhysicalBlockwiseNLJoin::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+SinkResultType PhysicalBlockwiseNLJoin::Sink(ExecutionContext &context, DataChunk &chunk,
+                                             OperatorSinkInput &input) const {
 	auto &gstate = input.global_state.Cast<BlockwiseNLJoinGlobalState>();
 	lock_guard<mutex> nl_lock(gstate.lock);
 	gstate.right_chunks.Append(chunk);
@@ -245,7 +246,8 @@ unique_ptr<LocalSourceState> PhysicalBlockwiseNLJoin::GetLocalSourceState(Execut
 	return make_uniq<BlockwiseNLJoinLocalScanState>(*this, (BlockwiseNLJoinGlobalScanState &)gstate);
 }
 
-SourceResultType PhysicalBlockwiseNLJoin::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+SourceResultType PhysicalBlockwiseNLJoin::GetData(ExecutionContext &context, DataChunk &chunk,
+                                                  OperatorSourceInput &input) const {
 	D_ASSERT(IsRightOuterJoin(join_type));
 	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
 	auto &sink = sink_state->Cast<BlockwiseNLJoinGlobalState>();

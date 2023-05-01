@@ -186,7 +186,8 @@ unique_ptr<LocalSinkState> PhysicalUngroupedAggregate::GetLocalSinkState(Executi
 	return make_uniq<UngroupedAggregateLocalState>(*this, children[0]->GetTypes(), gstate, context);
 }
 
-void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, DataChunk &chunk,
+                                              OperatorSinkInput &input) const {
 	auto &sink = input.local_state.Cast<UngroupedAggregateLocalState>();
 	auto &global_sink = input.global_state.Cast<UngroupedAggregateGlobalState>();
 	D_ASSERT(distinct_data);
@@ -228,7 +229,8 @@ void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, DataChu
 	}
 }
 
-SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, DataChunk &chunk,
+                                                OperatorSinkInput &input) const {
 	auto &sink = input.local_state.Cast<UngroupedAggregateLocalState>();
 
 	// perform the aggregation inside the local state
@@ -396,13 +398,15 @@ public:
 				output_chunk.Reset();
 
 				InterruptState interrupt_state;
-				OperatorSourceInput source_input { *global_source_state, *local_source_state, interrupt_state };
-				auto res = radix_table_p->GetData(temp_exec_context, output_chunk, *distinct_state.radix_states[table_idx], source_input);
+				OperatorSourceInput source_input {*global_source_state, *local_source_state, interrupt_state};
+				auto res = radix_table_p->GetData(temp_exec_context, output_chunk,
+				                                  *distinct_state.radix_states[table_idx], source_input);
 				if (res == SourceResultType::FINISHED) {
 					D_ASSERT(output_chunk.size() == 0);
 					break;
 				} else if (res == SourceResultType::BLOCKED) {
-					throw InternalException("Unexpected interrupt from radix table GetData in UngroupedDistinctAggregateFinalizeTask");
+					throw InternalException(
+					    "Unexpected interrupt from radix table GetData in UngroupedDistinctAggregateFinalizeTask");
 				}
 
 				// We dont need to resolve the filter, we already did this in Sink
@@ -550,7 +554,8 @@ void VerifyNullHandling(DataChunk &chunk, AggregateState &state, const vector<un
 #endif
 }
 
-SourceResultType PhysicalUngroupedAggregate::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+SourceResultType PhysicalUngroupedAggregate::GetData(ExecutionContext &context, DataChunk &chunk,
+                                                     OperatorSourceInput &input) const {
 	auto &gstate = sink_state->Cast<UngroupedAggregateGlobalState>();
 	D_ASSERT(gstate.finished);
 

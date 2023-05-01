@@ -146,7 +146,7 @@ public:
 
 	//! The sink method is called constantly with new input, as long as new input is available. Note that this method
 	//! CAN be called in parallel, proper locking is needed when accessing data inside the GlobalSinkState.
-	virtual SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput& input) const;
+	virtual SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const;
 	// The combine is called when a single thread has completed execution of its part of the pipeline, it is the final
 	// time that a specific LocalSinkState is accessible. This method can be called in parallel while other Sink() or
 	// Combine() calls are active on the same GlobalSinkState.

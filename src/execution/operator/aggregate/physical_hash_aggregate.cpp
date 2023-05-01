@@ -251,7 +251,8 @@ unique_ptr<LocalSinkState> PhysicalHashAggregate::GetLocalSinkState(ExecutionCon
 	return make_uniq<HashAggregateLocalState>(*this, context);
 }
 
-void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input, idx_t grouping_idx) const {
+void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input,
+                                                 idx_t grouping_idx) const {
 	auto &sink = input.local_state.Cast<HashAggregateLocalState>();
 	auto &global_sink = input.global_state.Cast<HashAggregateGlobalState>();
 
@@ -337,7 +338,8 @@ void PhysicalHashAggregate::SinkDistinct(ExecutionContext &context, DataChunk &c
 	}
 }
 
-SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, DataChunk &chunk,
+                                           OperatorSinkInput &input) const {
 	auto &llstate = input.local_state.Cast<HashAggregateLocalState>();
 	auto &gstate = input.global_state.Cast<HashAggregateGlobalState>();
 
@@ -383,7 +385,7 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, DataChunk 
 		auto &grouping_gstate = gstate.grouping_states[i];
 		auto &grouping_lstate = llstate.grouping_states[i];
 		InterruptState interrupt_state;
-		OperatorSinkInput sink_input{*grouping_gstate.table_state, *grouping_lstate.table_state, interrupt_state};
+		OperatorSinkInput sink_input {*grouping_gstate.table_state, *grouping_lstate.table_state, interrupt_state};
 
 		auto &grouping = groupings[i];
 		auto &table = grouping.table_data;
@@ -584,13 +586,15 @@ public:
 
 				InterruptState interrupt_state;
 				OperatorSourceInput source_input {*global_source, *local_source, interrupt_state};
-				auto res = radix_table_p->GetData(temp_exec_context, output_chunk, *state.radix_states[table_idx], source_input);
+				auto res = radix_table_p->GetData(temp_exec_context, output_chunk, *state.radix_states[table_idx],
+				                                  source_input);
 
 				if (res == SourceResultType::FINISHED) {
 					D_ASSERT(output_chunk.size() == 0);
 					break;
 				} else if (res == SourceResultType::BLOCKED) {
-					throw InternalException("Unexpected interrupt from radix table GetData in HashDistinctAggregateFinalizeTask");
+					throw InternalException(
+					    "Unexpected interrupt from radix table GetData in HashDistinctAggregateFinalizeTask");
 				}
 
 				auto &grouped_aggregate_data = *data.grouped_aggregate_data[table_idx];
@@ -875,7 +879,8 @@ unique_ptr<LocalSourceState> PhysicalHashAggregate::GetLocalSourceState(Executio
 	return make_uniq<PhysicalHashAggregateLocalSourceState>(context, *this);
 }
 
-SourceResultType PhysicalHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+SourceResultType PhysicalHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk,
+                                                OperatorSourceInput &input) const {
 	auto &sink_gstate = sink_state->Cast<HashAggregateGlobalState>();
 	auto &gstate = input.global_state.Cast<PhysicalHashAggregateGlobalSourceState>();
 	auto &lstate = input.local_state.Cast<PhysicalHashAggregateLocalSourceState>();
@@ -889,7 +894,8 @@ SourceResultType PhysicalHashAggregate::GetData(ExecutionContext &context, DataC
 		auto &grouping_gstate = sink_gstate.grouping_states[radix_idx];
 
 		InterruptState interrupt_state;
-		OperatorSourceInput source_input { *gstate.radix_states[radix_idx], *lstate.radix_states[radix_idx], interrupt_state };
+		OperatorSourceInput source_input {*gstate.radix_states[radix_idx], *lstate.radix_states[radix_idx],
+		                                  interrupt_state};
 		auto res = radix_table.GetData(context, chunk, *grouping_gstate.table_state, source_input);
 		if (chunk.size() != 0) {
 			return SourceResultType::HAVE_MORE_OUTPUT;

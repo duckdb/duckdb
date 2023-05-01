@@ -159,7 +159,8 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 // Source
 //===--------------------------------------------------------------------===//
 
-SourceResultType PhysicalCreateIndex::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+SourceResultType PhysicalCreateIndex::GetData(ExecutionContext &context, DataChunk &chunk,
+                                              OperatorSourceInput &input) const {
 	return SourceResultType::FINISHED;
 }
 

@@ -38,7 +38,7 @@ public:
 
 public:
 	// Sink interface
-	SinkResultType Sink(ExecutionContext &context,  DataChunk &chunk, OperatorSinkInput &input) const override;
+	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 

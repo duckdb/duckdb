@@ -90,8 +90,8 @@ public:
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
 	                                                 GlobalSourceState &gstate) const override;
-//	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-//	             LocalSourceState &lstate) const override;
+	//	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+	//	             LocalSourceState &lstate) const override;
 
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
 
@@ -146,7 +146,8 @@ private:
 	//! Combine the distinct aggregates
 	void CombineDistinct(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const;
 	//! Sink the distinct aggregates for a single grouping
-	void SinkDistinctGrouping(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input, idx_t grouping_idx) const;
+	void SinkDistinctGrouping(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input,
+	                          idx_t grouping_idx) const;
 	//! Sink the distinct aggregates
 	void SinkDistinct(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const;
 	//! Create groups in the main ht for groups that would otherwise get filtered out completely

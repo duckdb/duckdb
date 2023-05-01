@@ -76,7 +76,8 @@ unique_ptr<GlobalSourceState> PhysicalOperator::GetGlobalSourceState(ClientConte
 }
 
 // LCOV_EXCL_START
-SourceResultType PhysicalOperator::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+SourceResultType PhysicalOperator::GetData(ExecutionContext &context, DataChunk &chunk,
+                                           OperatorSourceInput &input) const {
 	throw InternalException("Calling GetData on a node that is not a source!");
 }
 
@@ -94,7 +95,7 @@ double PhysicalOperator::GetProgress(ClientContext &context, GlobalSourceState &
 // Sink
 //===--------------------------------------------------------------------===//
 // LCOV_EXCL_START
-SinkResultType PhysicalOperator::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput& input) const {
+SinkResultType PhysicalOperator::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	throw InternalException("Calling Sink on a node that is not a sink!");
 }
 

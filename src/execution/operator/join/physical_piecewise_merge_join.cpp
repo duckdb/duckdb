@@ -108,7 +108,8 @@ unique_ptr<LocalSinkState> PhysicalPiecewiseMergeJoin::GetLocalSinkState(Executi
 	return make_uniq<MergeJoinLocalState>(context.client, *this, 1);
 }
 
-SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, DataChunk &chunk,
+                                                OperatorSinkInput &input) const {
 	auto &gstate = input.global_state.Cast<MergeJoinGlobalState>();
 	auto &lstate = input.local_state.Cast<MergeJoinLocalState>();
 
@@ -676,7 +677,8 @@ unique_ptr<GlobalSourceState> PhysicalPiecewiseMergeJoin::GetGlobalSourceState(C
 	return make_uniq<PiecewiseJoinScanState>(*this);
 }
 
-SourceResultType PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, DataChunk &result, OperatorSourceInput &input) const {
+SourceResultType PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, DataChunk &result,
+                                                     OperatorSourceInput &input) const {
 	D_ASSERT(IsRightOuterJoin(join_type));
 	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
 	auto &sink = sink_state->Cast<MergeJoinGlobalState>();

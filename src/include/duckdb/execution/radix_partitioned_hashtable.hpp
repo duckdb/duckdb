@@ -41,8 +41,8 @@ public:
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const;
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const;
 
-	void Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input,
-	          DataChunk &aggregate_input_chunk, const vector<idx_t> &filter) const;
+	void Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input, DataChunk &aggregate_input_chunk,
+	          const vector<idx_t> &filter) const;
 	void Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const;
 	bool Finalize(ClientContext &context, GlobalSinkState &gstate_p) const;
 
@@ -53,7 +53,8 @@ public:
 	idx_t Size(GlobalSinkState &sink_state) const;
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const;
 	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context) const;
-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, GlobalSinkState &sink_state, OperatorSourceInput &input) const;
+	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, GlobalSinkState &sink_state,
+	                         OperatorSourceInput &input) const;
 
 	static void SetMultiScan(GlobalSinkState &state);
 	bool ForceSingleHT(GlobalSinkState &state) const;

@@ -5,9 +5,11 @@
 
 namespace duckdb {
 
-InterruptState::InterruptState() : mode(InterruptMode::NO_INTERRUPTS){}
+InterruptState::InterruptState() : mode(InterruptMode::NO_INTERRUPTS) {
+}
 InterruptState::InterruptState(weak_ptr<Task> task) : mode(InterruptMode::TASK), current_task(std::move(task)) {};
-InterruptState::InterruptState(weak_ptr<atomic<bool>> done_marker_p) : mode(InterruptMode::BLOCKING), done_marker(std::move(done_marker_p)) {};
+InterruptState::InterruptState(weak_ptr<atomic<bool>> done_marker_p)
+    : mode(InterruptMode::BLOCKING), done_marker(std::move(done_marker_p)) {};
 
 void InterruptState::Callback() const {
 	if (mode == InterruptMode::TASK) {
@@ -18,7 +20,7 @@ void InterruptState::Callback() const {
 		}
 
 		task->Reschedule();
-	}  else if (mode == InterruptMode::BLOCKING) {
+	} else if (mode == InterruptMode::BLOCKING) {
 		auto marker = done_marker.lock();
 
 		if (!marker) {

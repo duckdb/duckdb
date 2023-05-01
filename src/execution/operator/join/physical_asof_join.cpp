@@ -628,7 +628,8 @@ unique_ptr<LocalSourceState> PhysicalAsOfJoin::GetLocalSourceState(ExecutionCont
 	return make_uniq<AsOfLocalSourceState>(gsink);
 }
 
-SourceResultType PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+SourceResultType PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk &chunk,
+                                           OperatorSourceInput &input) const {
 	D_ASSERT(IsRightOuterJoin(join_type));
 
 	auto &gsource = input.global_state.Cast<AsOfGlobalSourceState>();

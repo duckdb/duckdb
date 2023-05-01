@@ -2,7 +2,8 @@
 
 namespace duckdb {
 
-SourceResultType PhysicalDummyScan::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+SourceResultType PhysicalDummyScan::GetData(ExecutionContext &context, DataChunk &chunk,
+                                            OperatorSourceInput &input) const {
 	// return a single row on the first call to the dummy scan
 	chunk.SetCardinality(1);
 

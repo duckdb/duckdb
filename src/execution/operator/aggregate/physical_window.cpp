@@ -1338,7 +1338,8 @@ unique_ptr<GlobalSourceState> PhysicalWindow::GetGlobalSourceState(ClientContext
 	return make_uniq<WindowGlobalSourceState>(gsink);
 }
 
-SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk,
+                                         OperatorSourceInput &input) const {
 	auto &lsource = input.local_state.Cast<WindowLocalSourceState>();
 	auto &gsource = input.global_state.Cast<WindowGlobalSourceState>();
 	auto &gsink = sink_state->Cast<WindowGlobalSinkState>();

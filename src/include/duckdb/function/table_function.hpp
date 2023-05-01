@@ -187,7 +187,8 @@ typedef OperatorResultType (*table_in_out_function_t)(ExecutionContext &context,
                                                       DataChunk &input, DataChunk &output);
 typedef OperatorFinalizeResultType (*table_in_out_function_final_t)(ExecutionContext &context, TableFunctionInput &data,
                                                                     DataChunk &output);
-typedef void (*table_function_async_t)(ClientContext &context, TableFunctionInput &data, DataChunk &output, InterruptState& interrupt_state);
+typedef void (*table_function_async_t)(ClientContext &context, TableFunctionInput &data, DataChunk &output,
+                                       InterruptState &interrupt_state);
 typedef idx_t (*table_function_get_batch_index_t)(ClientContext &context, const FunctionData *bind_data,
                                                   LocalTableFunctionState *local_state,
                                                   GlobalTableFunctionState *global_state);
