@@ -545,6 +545,13 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 			}
 
 			idx_t error_line;
+			// The line_error must be summed with linenr (All lines emmited from this batch)
+			// But subtracted from the parse_chunk
+			D_ASSERT(line_error + linenr >= parse_chunk.size());
+			line_error = (linenr - parse_chunk.size());
+			line_error += linenr;
+			line_error -= parse_chunk.size();
+
 			if (line_info) {
 				// This must be a parallel read
 				auto parallel_reader = (ParallelCSVReader *)this;
@@ -559,7 +566,7 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 					}
 				}
 			} else {
-				error_line = linenr - (parse_chunk.size() - line_error);
+				error_line = line_error;
 			}
 			if (options.auto_detect) {
 				throw InvalidInputException("%s in column %s, at line %llu.\n\nParser "

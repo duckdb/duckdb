@@ -598,6 +598,7 @@ final_state : {
 			}
 		}
 	}
+	insert_chunk.Print();
 	return true;
 };
 }
