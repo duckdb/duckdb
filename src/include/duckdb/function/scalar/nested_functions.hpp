@@ -139,6 +139,10 @@ struct MapKeysFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct MapConcatFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct MapExtractFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
