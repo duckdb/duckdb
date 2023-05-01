@@ -87,15 +87,14 @@ struct MultiFileReaderOptions {
 		}
 		return true;
 	}
-	
+
 	static bool AutoDetectHivePartitioning(const vector<string> &files) {
 #ifdef WIN_32
-	return AutoDetectHivePartitioningRegex(files);
+		return AutoDetectHivePartitioningRegex(files);
 #else
-	return AutoDetectHivePartitioningSplit(files);
+		return AutoDetectHivePartitioningSplit(files);
 #endif
 	}
-
 };
 
 } // namespace duckdb
