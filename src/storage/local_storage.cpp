@@ -193,10 +193,6 @@ OptimisticDataWriter &LocalTableStorage::CreateOptimisticWriter() {
 }
 
 void LocalTableStorage::Rollback() {
-	optimistic_writer.Rollback();
-	for (auto &writer : optimistic_writers) {
-		writer->Rollback();
-	}
 	optimistic_writers.clear();
 	if (partial_manager) {
 		partial_manager->Clear();

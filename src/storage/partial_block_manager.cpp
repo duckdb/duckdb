@@ -38,6 +38,7 @@ void PartialBlockManager::AllocateBlock(PartialBlockState &state, uint32_t segme
 	state.block_size = Storage::BLOCK_SIZE;
 	state.offset_in_block = 0;
 	state.block_use_count = 1;
+	written_blocks.insert(state.block_id);
 }
 
 bool PartialBlockManager::GetPartialBlock(idx_t segment_size, unique_ptr<PartialBlock> &partial_block) {
@@ -101,6 +102,9 @@ void PartialBlockManager::Clear() {
 		e.second->Clear();
 	}
 	partially_filled_blocks.clear();
+	for (auto &written_block : written_blocks) {
+		block_manager.MarkBlockAsFree(written_block);
+	}
 }
 
 } // namespace duckdb

@@ -99,6 +99,8 @@ protected:
 	//! This is a multimap because there might be outstanding partial blocks with
 	//! the same amount of left-over space
 	multimap<idx_t, unique_ptr<PartialBlock>> partially_filled_blocks;
+	//! The set of blocks allocated through the partial block manager
+	unordered_set<idx_t> written_blocks;
 
 	//! The maximum size (in bytes) at which a partial block will be considered a partial block
 	uint32_t max_partial_block_size;

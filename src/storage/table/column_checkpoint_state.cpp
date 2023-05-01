@@ -180,13 +180,4 @@ void ColumnCheckpointState::WriteDataPointers(RowGroupWriter &writer) {
 	writer.WriteColumnDataPointers(*this);
 }
 
-void ColumnCheckpointState::GetBlockIds(unordered_set<block_id_t> &result) {
-	for (auto &pointer : data_pointers) {
-		if (pointer.block_pointer.block_id == INVALID_BLOCK) {
-			continue;
-		}
-		result.insert(pointer.block_pointer.block_id);
-	}
-}
-
 } // namespace duckdb

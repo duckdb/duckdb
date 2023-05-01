@@ -25,8 +25,6 @@ public:
 	//! Flushes the final row group to disk (if any)
 	void FlushToDisk(RowGroupCollection &row_groups, bool force = false);
 
-	void Rollback();
-
 private:
 	//! Prepare a write to disk
 	bool PrepareWrite();
@@ -36,8 +34,6 @@ private:
 	DataTable &table;
 	//! The partial block manager
 	shared_ptr<PartialBlockManager> partial_manager;
-	//! The set of blocks that have been pre-emptively written to disk
-	unordered_set<block_id_t> written_blocks;
 	//! Whether or not anything has been written so far
 	bool written_anything;
 };

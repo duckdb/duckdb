@@ -13,8 +13,7 @@ OptimisticDataWriter::OptimisticDataWriter(DataTable &table, shared_ptr<PartialB
 }
 
 OptimisticDataWriter::OptimisticDataWriter(DataTable &table, OptimisticDataWriter &parent)
-    : table(table), partial_manager(parent.partial_manager), written_blocks(std::move(parent.written_blocks)),
-      written_anything(parent.written_anything) {
+    : table(table), partial_manager(parent.partial_manager), written_anything(parent.written_anything) {
 }
 
 OptimisticDataWriter::~OptimisticDataWriter() {
@@ -49,12 +48,7 @@ void OptimisticDataWriter::FlushToDisk(RowGroup *row_group) {
 	for (auto &column : table.column_definitions) {
 		compression_types.push_back(column.CompressionType());
 	}
-	auto row_group_pointer = row_group->WriteToDisk(*partial_manager, compression_types);
-
-	// update the set of written blocks
-	for (idx_t col_idx = 0; col_idx < row_group_pointer.statistics.size(); col_idx++) {
-		row_group_pointer.states[col_idx]->GetBlockIds(written_blocks);
-	}
+	row_group->WriteToDisk(*partial_manager, compression_types);
 }
 
 void OptimisticDataWriter::FlushToDisk(RowGroupCollection &row_groups, bool force) {
@@ -69,15 +63,6 @@ void OptimisticDataWriter::FlushToDisk(RowGroupCollection &row_groups, bool forc
 	}
 	// flush the last row group
 	FlushToDisk(row_groups.GetRowGroup(-1));
-}
-
-void OptimisticDataWriter::Rollback() {
-	if (!written_blocks.empty()) {
-		auto &block_manager = table.info->table_io_manager->GetBlockManagerForRowData();
-		for (auto block_id : written_blocks) {
-			block_manager.MarkBlockAsFree(block_id);
-		}
-	}
 }
 
 } // namespace duckdb

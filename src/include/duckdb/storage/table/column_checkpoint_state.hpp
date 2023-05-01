@@ -41,7 +41,6 @@ public:
 
 	virtual void FlushSegment(unique_ptr<ColumnSegment> segment, idx_t segment_size);
 	virtual void WriteDataPointers(RowGroupWriter &writer);
-	virtual void GetBlockIds(unordered_set<block_id_t> &result);
 };
 
 } // namespace duckdb
