@@ -24,6 +24,7 @@
 #include "duckdb/main/relation/setop_relation.hpp"
 #include "duckdb/main/relation/limit_relation.hpp"
 #include "duckdb/main/relation/distinct_relation.hpp"
+#include "duckdb/main/relation/table_relation.hpp"
 
 using namespace duckdb;
 using namespace cpp11;
@@ -244,6 +245,14 @@ static WindowBoundary StringToWindowBoundary(string &window_boundary) {
 	}
 }
 
+bool constant_expression_is_not_null(duckdb::expr_extptr_t expr) {
+	if (expr->type == ExpressionType::VALUE_CONSTANT) {
+		auto const_expr = expr->Cast<ConstantExpression>();
+		return !const_expr.value.IsNull();
+	}
+	return true;
+}
+
 [[cpp11::register]] SEXP rapi_expr_window(duckdb::expr_extptr_t window_function, list partitions, list order_bys,
                                           std::string window_boundary_start, std::string window_boundary_end,
                                           duckdb::expr_extptr_t start_expr, duckdb::expr_extptr_t end_expr,
@@ -273,16 +282,17 @@ static WindowBoundary StringToWindowBoundary(string &window_boundary) {
 	for (expr_extptr_t partition : partitions) {
 		window_expr->partitions.push_back(partition->Copy());
 	}
-	if (start_expr) {
+
+	if (constant_expression_is_not_null(start_expr)) {
 		window_expr->start_expr = start_expr->Copy();
 	}
-	if (end_expr) {
+	if (constant_expression_is_not_null(end_expr)) {
 		window_expr->end_expr = end_expr->Copy();
 	}
-	if (offset_expr) {
+	if (constant_expression_is_not_null(offset_expr)) {
 		window_expr->offset_expr = offset_expr->Copy();
 	}
-	if (default_expr) {
+	if (constant_expression_is_not_null(default_expr)) {
 		window_expr->default_expr = default_expr->Copy();
 	}
 
@@ -449,4 +459,15 @@ static SEXP result_to_df(duckdb::unique_ptr<QueryResult> res) {
 	cpp11::writable::list prot = {rel_a, rel_b};
 
 	return make_external_prot<RelationWrapper>("duckdb_relation", prot, symdiff);
+}
+
+[[cpp11::register]] SEXP rapi_rel_from_table(duckdb::conn_eptr_t con, const std::string schema_name,
+                                             const std::string table_name) {
+	if (!con || !con.get() || !con->conn) {
+		stop("rel_from_df: Invalid connection");
+	}
+	auto desc = make_uniq<TableDescription>();
+	auto rel = con->conn->Table(schema_name, table_name);
+	cpp11::writable::list prot = {};
+	return make_external_prot<RelationWrapper>("duckdb_relation", prot, std::move(rel));
 }

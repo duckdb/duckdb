@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/bind_helpers.hpp"
+#include "duckdb/common/filename_pattern.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/execution/operator/persistent/parallel_csv_reader.hpp"
 #include "duckdb/function/table/read_csv.hpp"
@@ -62,21 +63,22 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	result.names = {"Count"};
 
 	// lookup the format in the catalog
-	auto copy_function =
+	auto &copy_function =
 	    Catalog::GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, stmt.info->format);
-	if (copy_function->function.plan) {
+	if (copy_function.function.plan) {
 		// plan rewrite COPY TO
-		return copy_function->function.plan(*this, stmt);
+		return copy_function.function.plan(*this, stmt);
 	}
 
 	// bind the select statement
 	auto select_node = Bind(*stmt.select_statement);
 
-	if (!copy_function->function.copy_to_bind) {
+	if (!copy_function.function.copy_to_bind) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
 	bool use_tmp_file = true;
-	bool allow_overwrite = false;
+	bool overwrite_or_ignore = false;
+	FilenamePattern filename_pattern;
 	bool user_set_use_tmp_file = false;
 	bool per_thread_output = false;
 	vector<idx_t> partition_cols;
@@ -92,9 +94,17 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 			user_set_use_tmp_file = true;
 			continue;
 		}
-		if (loption == "allow_overwrite") {
-			allow_overwrite =
+		if (loption == "overwrite_or_ignore") {
+			overwrite_or_ignore =
 			    option.second.empty() || option.second[0].CastAs(context, LogicalType::BOOLEAN).GetValue<bool>();
+			continue;
+		}
+		if (loption == "filename_pattern") {
+			if (option.second.empty()) {
+				throw IOException("FILENAME_PATTERN cannot be empty");
+			}
+			filename_pattern.SetFilenamePattern(
+			    option.second[0].CastAs(context, LogicalType::VARCHAR).GetValue<string>());
 			continue;
 		}
 
@@ -128,13 +138,13 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	auto unique_column_names = GetUniqueNames(select_node.names);
 
 	auto function_data =
-	    copy_function->function.copy_to_bind(context, *stmt.info, unique_column_names, select_node.types);
+	    copy_function.function.copy_to_bind(context, *stmt.info, unique_column_names, select_node.types);
 	// now create the copy information
-	auto copy = make_uniq<LogicalCopyToFile>(copy_function->function, std::move(function_data));
+	auto copy = make_uniq<LogicalCopyToFile>(copy_function.function, std::move(function_data));
 	copy->file_path = stmt.info->file_path;
 	copy->use_tmp_file = use_tmp_file;
-	copy->allow_overwrite = allow_overwrite;
-	copy->per_thread_output = per_thread_output;
+	copy->overwrite_or_ignore = overwrite_or_ignore;
+	copy->filename_pattern = filename_pattern;
 	copy->per_thread_output = per_thread_output;
 	copy->partition_output = !partition_cols.empty();
 	copy->partition_columns = std::move(partition_cols);
@@ -177,17 +187,18 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 
 	// lookup the format in the catalog
 	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto copy_function = catalog.GetEntry<CopyFunctionCatalogEntry>(context, DEFAULT_SCHEMA, stmt.info->format);
-	if (!copy_function->function.copy_from_bind) {
+	auto &copy_function = catalog.GetEntry<CopyFunctionCatalogEntry>(context, DEFAULT_SCHEMA, stmt.info->format);
+	if (!copy_function.function.copy_from_bind) {
 		throw NotImplementedException("COPY FROM is not supported for FORMAT \"%s\"", stmt.info->format);
 	}
 	// lookup the table to copy into
 	BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
-	auto table = Catalog::GetEntry<TableCatalogEntry>(context, stmt.info->catalog, stmt.info->schema, stmt.info->table);
+	auto &table =
+	    Catalog::GetEntry<TableCatalogEntry>(context, stmt.info->catalog, stmt.info->schema, stmt.info->table);
 	vector<string> expected_names;
 	if (!bound_insert.column_index_map.empty()) {
 		expected_names.resize(bound_insert.expected_types.size());
-		for (auto &col : table->GetColumns().Physical()) {
+		for (auto &col : table.GetColumns().Physical()) {
 			auto i = col.Physical();
 			if (bound_insert.column_index_map[i] != DConstants::INVALID_INDEX) {
 				expected_names[bound_insert.column_index_map[i]] = col.Name();
@@ -195,14 +206,14 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 		}
 	} else {
 		expected_names.reserve(bound_insert.expected_types.size());
-		for (auto &col : table->GetColumns().Physical()) {
+		for (auto &col : table.GetColumns().Physical()) {
 			expected_names.push_back(col.Name());
 		}
 	}
 
 	auto function_data =
-	    copy_function->function.copy_from_bind(context, *stmt.info, expected_names, bound_insert.expected_types);
-	auto get = make_uniq<LogicalGet>(GenerateTableIndex(), copy_function->function.copy_from_function,
+	    copy_function.function.copy_from_bind(context, *stmt.info, expected_names, bound_insert.expected_types);
+	auto get = make_uniq<LogicalGet>(GenerateTableIndex(), copy_function.function.copy_from_function,
 	                                 std::move(function_data), bound_insert.expected_types, expected_names);
 	for (idx_t i = 0; i < bound_insert.expected_types.size(); i++) {
 		get->column_ids.push_back(i);

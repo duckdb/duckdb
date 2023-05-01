@@ -12,8 +12,8 @@ CreateTableInfo::CreateTableInfo(string catalog_p, string schema_p, string name_
     : CreateInfo(CatalogType::TABLE_ENTRY, std::move(schema_p), std::move(catalog_p)), table(std::move(name_p)) {
 }
 
-CreateTableInfo::CreateTableInfo(SchemaCatalogEntry *schema, string name_p)
-    : CreateTableInfo(schema->catalog->GetName(), schema->name, std::move(name_p)) {
+CreateTableInfo::CreateTableInfo(SchemaCatalogEntry &schema, string name_p)
+    : CreateTableInfo(schema.catalog.GetName(), schema.name, std::move(name_p)) {
 }
 
 void CreateTableInfo::SerializeInternal(Serializer &serializer) const {

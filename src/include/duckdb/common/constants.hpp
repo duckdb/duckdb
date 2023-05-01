@@ -110,6 +110,8 @@ struct PhysicalIndex {
 	}
 };
 
+DUCKDB_API bool IsPowerOfTwo(uint64_t v);
 DUCKDB_API uint64_t NextPowerOfTwo(uint64_t v);
+DUCKDB_API uint64_t PreviousPowerOfTwo(uint64_t v);
 
 } // namespace duckdb

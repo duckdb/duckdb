@@ -73,6 +73,8 @@ struct ClientConfig {
 	bool force_external = false;
 	//! Force disable cross product generation when hyper graph isn't connected, used for testing
 	bool force_no_cross_product = false;
+	//! Force use of IEJoin to implement AsOfJoin, used for testing
+	bool force_asof_iejoin = false;
 	//! Force every sink & source in a pipeline to block asynchronously briefly, used for testing
 	// TODO: move to ci job
 	bool force_async_pipelines = true;
@@ -82,6 +84,8 @@ struct ClientConfig {
 	//! Maximum bits allowed for using a perfect hash table (i.e. the perfect HT can hold up to 2^perfect_ht_threshold
 	//! elements)
 	idx_t perfect_ht_threshold = 12;
+	//! The maximum number of rows to accumulate before sorting ordered aggregates.
+	idx_t ordered_aggregate_threshold = (idx_t(1) << 18);
 
 	//! Callback to create a progress bar display
 	progress_bar_display_create_func_t display_create_func = nullptr;
@@ -94,6 +98,9 @@ struct ClientConfig {
 
 	//! The maximum amount of pivot columns
 	idx_t pivot_limit = 100000;
+
+	//! Whether or not the "/" division operator defaults to integer division or floating point division
+	bool integer_division = false;
 
 	//! Generic options
 	case_insensitive_map_t<Value> set_variables;

@@ -237,10 +237,10 @@ void Vector::Initialize(bool zero_data, idx_t capacity) {
 struct DataArrays {
 	Vector &vec;
 	data_ptr_t data;
-	VectorBuffer *buffer;
+	optional_ptr<VectorBuffer> buffer;
 	idx_t type_size;
 	bool is_nested;
-	DataArrays(Vector &vec, data_ptr_t data, VectorBuffer *buffer, idx_t type_size, bool is_nested)
+	DataArrays(Vector &vec, data_ptr_t data, optional_ptr<VectorBuffer> buffer, idx_t type_size, bool is_nested)
 	    : vec(vec), data(data), buffer(buffer), type_size(type_size), is_nested(is_nested) {
 	}
 };
@@ -456,7 +456,7 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		auto str_compressed = ((string_t *)data)[index];
 		Value result =
 		    FSSTPrimitives::DecompressValue(FSSTVector::GetDecoder(const_cast<Vector &>(*vector)),
-		                                    (unsigned char *)str_compressed.GetDataUnsafe(), str_compressed.GetSize());
+		                                    (unsigned char *)str_compressed.GetData(), str_compressed.GetSize());
 		return result;
 	}
 
@@ -543,11 +543,11 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 	case LogicalTypeId::AGGREGATE_STATE:
 	case LogicalTypeId::BLOB: {
 		auto str = ((string_t *)data)[index];
-		return Value::BLOB((const_data_ptr_t)str.GetDataUnsafe(), str.GetSize());
+		return Value::BLOB((const_data_ptr_t)str.GetData(), str.GetSize());
 	}
 	case LogicalTypeId::BIT: {
 		auto str = ((string_t *)data)[index];
-		return Value::BIT((const_data_ptr_t)str.GetDataUnsafe(), str.GetSize());
+		return Value::BIT((const_data_ptr_t)str.GetData(), str.GetSize());
 	}
 	case LogicalTypeId::MAP: {
 		auto offlen = ((list_entry_t *)data)[index];
@@ -637,7 +637,7 @@ string Vector::ToString(idx_t count) const {
 		for (idx_t i = 0; i < count; i++) {
 			string_t compressed_string = ((string_t *)data)[i];
 			Value val = FSSTPrimitives::DecompressValue(FSSTVector::GetDecoder(const_cast<Vector &>(*this)),
-			                                            (unsigned char *)compressed_string.GetDataUnsafe(),
+			                                            (unsigned char *)compressed_string.GetData(),
 			                                            compressed_string.GetSize());
 			retval += GetValue(i).ToString() + (i == count - 1 ? "" : ", ");
 		}
@@ -924,7 +924,7 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = vdata.sel->get_index(i);
 				auto source = !vdata.validity.RowIsValid(idx) ? NullValue<string_t>() : strings[idx];
-				serializer.WriteStringLen((const_data_ptr_t)source.GetDataUnsafe(), source.GetSize());
+				serializer.WriteStringLen((const_data_ptr_t)source.GetData(), source.GetSize());
 			}
 			break;
 		}
@@ -1321,7 +1321,7 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 			for (idx_t i = 0; i < count; i++) {
 				auto oidx = sel->get_index(i);
 				if (validity.RowIsValid(oidx)) {
-					auto buf = strings[oidx].GetDataUnsafe();
+					auto buf = strings[oidx].GetData();
 					D_ASSERT(*buf >= 0 && *buf < 8);
 					Bit::Verify(strings[oidx]);
 				}
@@ -1351,7 +1351,7 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 			if (vtype != VectorType::FLAT_VECTOR) {
 				continue;
 			}
-			ValidityMask *child_validity;
+			optional_ptr<ValidityMask> child_validity;
 			SelectionVector owned_child_sel;
 			const SelectionVector *child_sel = &owned_child_sel;
 			if (children[child_idx]->GetVectorType() == VectorType::FLAT_VECTOR) {
@@ -1706,7 +1706,7 @@ void FSSTVector::DecompressVector(const Vector &src, Vector &dst, idx_t src_offs
 		string_t compressed_string = ldata[source_idx];
 		if (dst_mask.RowIsValid(target_idx) && compressed_string.GetSize() > 0) {
 			tdata[target_idx] = FSSTPrimitives::DecompressValue(FSSTVector::GetDecoder(src), dst,
-			                                                    (unsigned char *)compressed_string.GetDataUnsafe(),
+			                                                    (unsigned char *)compressed_string.GetData(),
 			                                                    compressed_string.GetSize());
 		} else {
 			tdata[target_idx] = string_t(nullptr, 0);

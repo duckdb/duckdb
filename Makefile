@@ -167,6 +167,9 @@ endif
 ifeq (${DEBUG_MOVE}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DDEBUG_MOVE=1
 endif
+ifeq (${DEBUG_STACKTRACE}, 1)
+	EXTENSIONS:=${EXTENSIONS} -DDEBUG_STACKTRACE=1
+endif
 
 clean:
 	rm -rf build

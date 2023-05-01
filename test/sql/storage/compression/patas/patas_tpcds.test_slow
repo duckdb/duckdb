@@ -251,7 +251,7 @@ CREATE TABLE store(
 	s_zip VARCHAR,
 	s_country VARCHAR,
 	s_gmt_offset ${type},
-	s_tax_precentage ${type}
+	s_tax_percentage ${type}
 );
 
 statement ok

@@ -28,6 +28,7 @@ import java.sql.Time;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.OffsetTime;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Map;
@@ -191,6 +192,8 @@ public class DuckDBResultSet implements ResultSet {
 			return getBigDecimal(columnIndex);
 		case TIME:
 			return getTime(columnIndex);
+		case TIME_WITH_TIME_ZONE:
+			return getOffsetTime(columnIndex);
 		case DATE:
 			return getDate(columnIndex);
 		case TIMESTAMP:
@@ -212,6 +215,10 @@ public class DuckDBResultSet implements ResultSet {
 
 	}
 
+	public OffsetTime getOffsetTime(int columnIndex) throws SQLException {
+		return DuckDBTimestamp.toOffsetTime(getbuf(columnIndex, 8).getLong());
+	}
+
 	public boolean wasNull() throws SQLException {
 		if (isClosed()) {
 			throw new SQLException("ResultSet was closed");
@@ -221,7 +228,11 @@ public class DuckDBResultSet implements ResultSet {
 
 	private boolean check_and_null(int columnIndex) throws SQLException {
 		check(columnIndex);
-		was_null = current_chunk[columnIndex - 1].nullmask[chunk_idx - 1];
+		try {
+			was_null = current_chunk[columnIndex - 1].nullmask[chunk_idx - 1];
+		} catch (ArrayIndexOutOfBoundsException e) {
+			throw new SQLException("No row in context", e);
+		}
 		return was_null;
 	}
 
@@ -1075,27 +1086,45 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public Date getDate(int columnIndex, Calendar cal) throws SQLException {
-		throw new SQLFeatureNotSupportedException("getDate");
+	    return getDate(columnIndex);
 	}
 
 	public Date getDate(String columnLabel, Calendar cal) throws SQLException {
-		throw new SQLFeatureNotSupportedException("getDate");
+	    return getDate(findColumn(columnLabel), cal);
 	}
 
 	public Time getTime(int columnIndex, Calendar cal) throws SQLException {
-		throw new SQLFeatureNotSupportedException("getTime");
+	    return getTime(columnIndex);
 	}
 
 	public Time getTime(String columnLabel, Calendar cal) throws SQLException {
-		throw new SQLFeatureNotSupportedException("getTime");
+	    return getTime(findColumn(columnLabel), cal);
 	}
 
 	public Timestamp getTimestamp(int columnIndex, Calendar cal) throws SQLException {
-		throw new SQLFeatureNotSupportedException("getTimestamp");
+		if (check_and_null(columnIndex)) {
+			return null;
+		}
+		// Our raw data is already a proper count of units since the epoch
+		// So just construct the SQL Timestamp.
+		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP)) {
+			return DuckDBTimestamp.fromMicroInstant(getbuf(columnIndex, 8).getLong());
+		}
+		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_MS)) {
+			return DuckDBTimestamp.fromMilliInstant(getbuf(columnIndex, 8).getLong());
+		}
+		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_NS)) {
+			return DuckDBTimestamp.fromNanoInstant(getbuf(columnIndex, 8).getLong());
+		}
+		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_S)) {
+			return DuckDBTimestamp.fromSecondInstant(getbuf(columnIndex, 8).getLong());
+		}
+		Object o = getObject(columnIndex);
+		return Timestamp.valueOf(o.toString());
 	}
 
 	public Timestamp getTimestamp(String columnLabel, Calendar cal) throws SQLException {
-		throw new SQLFeatureNotSupportedException("getTimestamp");
+	    return getTimestamp(findColumn(columnLabel), cal);
 	}
 
 	public URL getURL(int columnIndex) throws SQLException {
@@ -1464,4 +1493,7 @@ public class DuckDBResultSet implements ResultSet {
 		return iface.isInstance(this);
 	}
 
+	boolean isFinished() {
+		return finished;
+	}
 }

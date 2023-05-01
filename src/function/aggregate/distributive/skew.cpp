@@ -56,7 +56,11 @@ struct SkewnessOperation {
 		}
 		double n = state->n;
 		double temp = 1 / n;
-		double div = (std::sqrt(std::pow(temp * (state->sum_sqr - state->sum * state->sum * temp), 3)));
+		auto p = std::pow(temp * (state->sum_sqr - state->sum * state->sum * temp), 3);
+		if (p < 0) {
+			p = 0; // Shouldn't be below 0 but floating points are weird
+		}
+		double div = std::sqrt(p);
 		if (div == 0) {
 			mask.SetInvalid(idx);
 			return;

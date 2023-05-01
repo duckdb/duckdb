@@ -124,7 +124,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 
 	plan = ExtractAggregateExpressions(std::move(plan), op.expressions, op.groups);
 
-	if (op.groups.empty()) {
+	if (op.groups.empty() && op.grouping_sets.size() <= 1) {
 		// no groups, check if we can use a simple aggregation
 		// special case: aggregate entire columns together
 		bool use_simple_aggregation = true;

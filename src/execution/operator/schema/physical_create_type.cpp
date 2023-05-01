@@ -1,7 +1,8 @@
 #include "duckdb/execution/operator/schema/physical_create_type.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -51,7 +52,7 @@ SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, DataChunk &ch
 			throw InvalidInputException("Attempted to create ENUM type with NULL value!");
 		}
 		result_ptr[gstate.size++] =
-		    StringVector::AddStringOrBlob(gstate.result, src_ptr[idx].GetDataUnsafe(), src_ptr[idx].GetSize());
+		    StringVector::AddStringOrBlob(gstate.result, src_ptr[idx].GetData(), src_ptr[idx].GetSize());
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -84,10 +85,10 @@ SourceResultType PhysicalCreateType::GetData(ExecutionContext &context, DataChun
 	}
 
 	auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
-	auto catalog_entry = catalog.CreateType(context.client, info.get());
+	auto catalog_entry = catalog.CreateType(context.client, *info);
 	D_ASSERT(catalog_entry->type == CatalogType::TYPE_ENTRY);
-	auto catalog_type = (TypeCatalogEntry *)catalog_entry;
-	LogicalType::SetCatalog(info->type, catalog_type);
+	auto &catalog_type = catalog_entry->Cast<TypeCatalogEntry>();
+	EnumType::SetCatalog(info->type, &catalog_type);
 	state.finished = true;
 
 	return SourceResultType::HAVE_MORE_OUTPUT;

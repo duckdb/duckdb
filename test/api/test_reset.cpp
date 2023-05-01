@@ -35,26 +35,27 @@ OptionValuePair &GetValueForOption(const string &name) {
 	    {"debug_checkpoint_abort", {"before_header"}},
 	    {"default_collation", {"nocase"}},
 	    {"default_order", {"desc"}},
-	    {"default_null_order", {"nulls_last"}},
+	    {"default_null_order", {"nulls_first"}},
 	    {"disabled_optimizers", {"extension"}},
 	    {"custom_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 	    {"enable_fsst_vectors", {true}},
 	    {"enable_object_cache", {true}},
 	    {"enable_profiling", {"json"}},
 	    {"enable_progress_bar", {true}},
-	    {"experimental_parallel_csv", {true}},
 	    {"explain_output", {true}},
 	    {"external_threads", {8}},
 	    {"file_search_path", {"test"}},
 	    {"force_compression", {"uncompressed", "Uncompressed"}},
 	    {"home_directory", {"test"}},
+	    {"integer_division", {true}},
 	    {"extension_directory", {"test"}},
 	    {"immediate_transaction_mode", {true}},
 	    {"log_query_path", {"test"}},
 	    {"max_expression_depth", {50}},
 	    {"max_memory", {"4.2GB"}},
 	    {"memory_limit", {"4.2GB"}},
-	    {"null_order", {"nulls_last"}},
+	    {"ordered_aggregate_threshold", {Value::UBIGINT(idx_t(1) << 12)}},
+	    {"null_order", {"nulls_first"}},
 	    {"perfect_ht_threshold", {0}},
 	    {"pivot_limit", {999}},
 	    {"preserve_identifier_case", {false}},
@@ -81,6 +82,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	static unordered_set<string> excluded_options = {
 	    "schema",
 	    "search_path",
+	    "debug_asof_iejoin",
 	    "debug_force_external",
 	    "debug_force_no_cross_product",
 	    "debug_window_mode",
@@ -89,7 +91,8 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "password",
 	    "username",
 	    "user",
-	    "profiling_output", // just an alias
+	    "profiling_output",         // just an alias
+	    "experimental_parallel_csv" // FIXME:deprecated option, should be removed after next release
 	};
 	return excluded_options.count(name) == 1;
 }

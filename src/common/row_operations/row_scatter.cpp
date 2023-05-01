@@ -8,8 +8,8 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/null_value.hpp"
-#include "duckdb/common/types/row_data_collection.hpp"
-#include "duckdb/common/types/row_layout.hpp"
+#include "duckdb/common/types/row/row_data_collection.hpp"
+#include "duckdb/common/types/row/row_layout.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/vector.hpp"
 
@@ -82,7 +82,7 @@ static void ScatterStringVector(UnifiedVectorFormat &col, Vector &rows, data_ptr
 		} else {
 			const auto &str = string_data[col_idx];
 			string_t inserted((const char *)str_locations[i], str.GetSize());
-			memcpy(inserted.GetDataWriteable(), str.GetDataUnsafe(), str.GetSize());
+			memcpy(inserted.GetDataWriteable(), str.GetData(), str.GetSize());
 			str_locations[i] += str.GetSize();
 			inserted.Finalize();
 			Store<string_t>(inserted, row + col_offset);

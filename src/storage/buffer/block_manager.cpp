@@ -1,5 +1,7 @@
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/storage/buffer/buffer_pool.hpp"
 
 namespace duckdb {
 
@@ -31,7 +33,6 @@ void BlockManager::ClearMetaBlockHandles() {
 }
 
 shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, shared_ptr<BlockHandle> old_block) {
-
 	// pin the old block to ensure we have it loaded in memory
 	auto old_handle = buffer_manager.Pin(old_block);
 	D_ASSERT(old_block->state == BlockState::BLOCK_LOADED);
@@ -48,7 +49,7 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, s
 
 	// move the data from the old block into data for the new block
 	new_block->state = BlockState::BLOCK_LOADED;
-	new_block->buffer = CreateBlock(block_id, old_block->buffer.get());
+	new_block->buffer = ConvertBlock(block_id, *old_block->buffer);
 	new_block->memory_usage = old_block->memory_usage;
 	new_block->memory_charge = std::move(old_block->memory_charge);
 
@@ -62,7 +63,7 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, s
 	// persist the new block to disk
 	Write(*new_block->buffer, block_id);
 
-	buffer_manager.buffer_pool.AddToEvictionQueue(new_block);
+	buffer_manager.GetBufferPool().AddToEvictionQueue(new_block);
 
 	return new_block;
 }

@@ -25,7 +25,7 @@ SourceResultType PhysicalAlter::GetData(ExecutionContext &context, DataChunk &ch
 		return SourceResultType::FINISHED;
 	}
 	auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
-	catalog.Alter(context.client, info.get());
+	catalog.Alter(context.client, *info);
 	state.finished = true;
 
 	return SourceResultType::HAVE_MORE_OUTPUT;

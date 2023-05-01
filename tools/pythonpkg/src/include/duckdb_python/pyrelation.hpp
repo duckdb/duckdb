@@ -1,22 +1,23 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb_python/pyresult.hpp
+// duckdb_python/pyrelation.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb_python/pybind_wrapper.hpp"
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb.hpp"
-#include "arrow_array_stream.hpp"
+#include "duckdb_python/arrow/arrow_array_stream.hpp"
 #include "duckdb/main/external_dependencies.hpp"
-#include "duckdb_python/pandas_type.hpp"
-#include "duckdb_python/registered_py_object.hpp"
+#include "duckdb_python/numpy/numpy_type.hpp"
+#include "duckdb_python/pybind11/registered_py_object.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
-#include "duckdb_python/explain_enum.hpp"
+#include "duckdb_python/pybind11/conversions/explain_enum.hpp"
+#include "duckdb_python/pybind11/dataframe.hpp"
 
 namespace duckdb {
 
@@ -24,6 +25,8 @@ struct DuckDBPyConnection;
 
 class PythonDependencies : public ExternalDependency {
 public:
+	explicit PythonDependencies() : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY) {
+	}
 	explicit PythonDependencies(py::function map_function)
 	    : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY), map_function(std::move(map_function)) {};
 	explicit PythonDependencies(unique_ptr<RegisteredObject> py_object)
@@ -58,6 +61,8 @@ public:
 
 	unique_ptr<DuckDBPyRelation> SetAlias(const string &expr);
 
+	unique_ptr<DuckDBPyRelation> ProjectFromExpression(const string &expr);
+	unique_ptr<DuckDBPyRelation> ProjectFromTypes(const py::object &types);
 	unique_ptr<DuckDBPyRelation> Project(const string &expr);
 
 	unique_ptr<DuckDBPyRelation> Filter(const string &expr);
@@ -107,7 +112,7 @@ public:
 
 	string ToSQL();
 
-	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(idx_t chunk_size);
+	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(idx_t rows_per_batch);
 
 	idx_t Length();
 
@@ -123,7 +128,7 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Distinct();
 
-	DataFrame FetchDF(bool date_as_object);
+	PandasDataFrame FetchDF(bool date_as_object);
 
 	Optional<py::tuple> FetchOne();
 
@@ -139,7 +144,7 @@ public:
 
 	py::dict FetchNumpyInternal(bool stream = false, idx_t vectors_per_chunk = 1);
 
-	DataFrame FetchDFChunk(idx_t vectors_per_chunk, bool date_as_object);
+	PandasDataFrame FetchDFChunk(idx_t vectors_per_chunk, bool date_as_object);
 
 	duckdb::pyarrow::Table ToArrowTable(idx_t batch_size);
 
@@ -153,7 +158,7 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Intersect(DuckDBPyRelation *other);
 
-	unique_ptr<DuckDBPyRelation> Map(py::function fun);
+	unique_ptr<DuckDBPyRelation> Map(py::function fun, Optional<py::object> schema);
 
 	unique_ptr<DuckDBPyRelation> Join(DuckDBPyRelation *other, const string &condition, const string &type);
 

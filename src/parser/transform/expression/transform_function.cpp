@@ -13,15 +13,24 @@
 
 namespace duckdb {
 
-void Transformer::TransformWindowDef(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr) {
+void Transformer::TransformWindowDef(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr,
+                                     const char *window_name) {
 	D_ASSERT(window_spec);
 	D_ASSERT(expr);
 
 	// next: partitioning/ordering expressions
 	if (window_spec->partitionClause) {
+		if (window_name && !expr->partitions.empty()) {
+			throw ParserException("Cannot override PARTITION BY clause of window \"%s\"", window_name);
+		}
 		TransformExpressionList(*window_spec->partitionClause, expr->partitions);
 	}
-	TransformOrderBy(window_spec->orderClause, expr->orders);
+	if (window_spec->orderClause) {
+		if (window_name && !expr->orders.empty()) {
+			throw ParserException("Cannot override ORDER BY clause of window \"%s\"", window_name);
+		}
+		TransformOrderBy(window_spec->orderClause, expr->orders);
+	}
 }
 
 void Transformer::TransformWindowFrame(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr) {
@@ -198,6 +207,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			D_ASSERT(window_spec);
 		}
 		auto window_ref = window_spec;
+		auto window_name = window_ref->refname;
 		if (window_ref->refname) {
 			auto it = window_clauses.find(StringUtil::Lower(string(window_spec->refname)));
 			if (it == window_clauses.end()) {
@@ -208,6 +218,9 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		}
 		in_window_definition = true;
 		TransformWindowDef(window_ref, expr.get());
+		if (window_ref != window_spec) {
+			TransformWindowDef(window_spec, expr.get(), window_name);
+		}
 		TransformWindowFrame(window_spec, expr.get());
 		in_window_definition = false;
 		expr->query_location = root->location;
@@ -299,9 +312,9 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			                                               std::move(filter_expr), std::move(order_bys),
 			                                               root->agg_distinct, false, root->export_state);
 			lowercase_name = "list_sort";
-			order_bys.reset();
-			filter_expr.reset();
-			children.clear();
+			order_bys.reset();   // NOLINT
+			filter_expr.reset(); // NOLINT
+			children.clear();    // NOLINT
 			children.emplace_back(std::move(unordered));
 			children.emplace_back(std::move(sense));
 			children.emplace_back(std::move(nulls));

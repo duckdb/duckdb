@@ -160,23 +160,23 @@ void TPCDSExtension::Load(DuckDB &db) {
 
 	// create the dsdgen function
 	auto &catalog = Catalog::GetSystemCatalog(*con.context);
-	catalog.CreateTableFunction(*con.context, &dsdgen_info);
+	catalog.CreateTableFunction(*con.context, dsdgen_info);
 
 	// create the TPCDS pragma that allows us to run the query
 	auto tpcds_func = PragmaFunction::PragmaCall("tpcds", PragmaTpcdsQuery, {LogicalType::BIGINT});
 	CreatePragmaFunctionInfo info(tpcds_func);
-	catalog.CreatePragmaFunction(*con.context, &info);
+	catalog.CreatePragmaFunction(*con.context, info);
 
 	// create the TPCDS_QUERIES function that returns the query
 	TableFunction tpcds_query_func("tpcds_queries", {}, TPCDSQueryFunction, TPCDSQueryBind, TPCDSInit);
 	CreateTableFunctionInfo tpcds_query_info(tpcds_query_func);
-	catalog.CreateTableFunction(*con.context, &tpcds_query_info);
+	catalog.CreateTableFunction(*con.context, tpcds_query_info);
 
 	// create the TPCDS_ANSWERS that returns the query result
 	TableFunction tpcds_query_answer_func("tpcds_answers", {}, TPCDSQueryAnswerFunction, TPCDSQueryAnswerBind,
 	                                      TPCDSInit);
 	CreateTableFunctionInfo tpcds_query_asnwer_info(tpcds_query_answer_func);
-	catalog.CreateTableFunction(*con.context, &tpcds_query_asnwer_info);
+	catalog.CreateTableFunction(*con.context, tpcds_query_asnwer_info);
 
 	con.Commit();
 }

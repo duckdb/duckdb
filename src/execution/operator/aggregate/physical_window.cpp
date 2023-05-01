@@ -2,11 +2,13 @@
 
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sort/partition_state.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
-#include "duckdb/common/types/column_data_consumer.hpp"
-#include "duckdb/common/types/row_data_collection_scanner.hpp"
+#include "duckdb/common/types/column/column_data_consumer.hpp"
+#include "duckdb/common/types/row/row_data_collection_scanner.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -17,7 +19,6 @@
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
-#include "duckdb/common/radix_partitioning.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -140,14 +141,14 @@ static idx_t FindPrevStart(const ValidityMask &mask, const idx_t l, idx_t r, idx
 	return l;
 }
 
-static void PrepareInputExpressions(Expression **exprs, idx_t expr_count, ExpressionExecutor &executor,
+static void PrepareInputExpressions(vector<unique_ptr<Expression>> &exprs, ExpressionExecutor &executor,
                                     DataChunk &chunk) {
-	if (expr_count == 0) {
+	if (exprs.empty()) {
 		return;
 	}
 
 	vector<LogicalType> types;
-	for (idx_t expr_idx = 0; expr_idx < expr_count; ++expr_idx) {
+	for (idx_t expr_idx = 0; expr_idx < exprs.size(); ++expr_idx) {
 		types.push_back(exprs[expr_idx]->return_type);
 		executor.AddExpression(*exprs[expr_idx]);
 	}
@@ -158,15 +159,20 @@ static void PrepareInputExpressions(Expression **exprs, idx_t expr_count, Expres
 	}
 }
 
-static void PrepareInputExpression(Expression *expr, ExpressionExecutor &executor, DataChunk &chunk) {
-	PrepareInputExpressions(&expr, 1, executor, chunk);
+static void PrepareInputExpression(Expression &expr, ExpressionExecutor &executor, DataChunk &chunk) {
+	vector<LogicalType> types;
+	types.push_back(expr.return_type);
+	executor.AddExpression(expr);
+
+	auto &allocator = executor.GetAllocator();
+	chunk.Initialize(allocator, types);
 }
 
 struct WindowInputExpression {
-	WindowInputExpression(Expression *expr_p, ClientContext &context)
+	WindowInputExpression(optional_ptr<Expression> expr_p, ClientContext &context)
 	    : expr(expr_p), ptype(PhysicalType::INVALID), scalar(true), executor(context) {
 		if (expr) {
-			PrepareInputExpression(expr, executor, chunk);
+			PrepareInputExpression(*expr, executor, chunk);
 			ptype = expr->return_type.InternalType();
 			scalar = expr->IsScalar();
 		}
@@ -202,7 +208,7 @@ struct WindowInputExpression {
 		VectorOperations::Copy(source, target, source_offset + 1, source_offset, target_offset);
 	}
 
-	Expression *expr;
+	optional_ptr<Expression> expr;
 	PhysicalType ptype;
 	bool scalar;
 	ExpressionExecutor executor;
@@ -235,7 +241,7 @@ struct WindowInputColumn {
 	}
 
 	template <typename T>
-	inline T GetCell(idx_t i) {
+	inline T GetCell(idx_t i) const {
 		D_ASSERT(target);
 		D_ASSERT(i < count);
 		const auto data = FlatVector::GetData<T>(*target);
@@ -266,15 +272,15 @@ struct WindowBoundariesState {
 		return expr ? expr->IsScalar() : true;
 	}
 
-	WindowBoundariesState(BoundWindowExpression *wexpr, const idx_t input_size)
-	    : type(wexpr->type), input_size(input_size), start_boundary(wexpr->start), end_boundary(wexpr->end),
-	      partition_count(wexpr->partitions.size()), order_count(wexpr->orders.size()),
-	      range_sense(wexpr->orders.empty() ? OrderType::INVALID : wexpr->orders[0].type),
-	      has_preceding_range(wexpr->start == WindowBoundary::EXPR_PRECEDING_RANGE ||
-	                          wexpr->end == WindowBoundary::EXPR_PRECEDING_RANGE),
-	      has_following_range(wexpr->start == WindowBoundary::EXPR_FOLLOWING_RANGE ||
-	                          wexpr->end == WindowBoundary::EXPR_FOLLOWING_RANGE),
-	      needs_peer(BoundaryNeedsPeer(wexpr->end) || wexpr->type == ExpressionType::WINDOW_CUME_DIST) {
+	WindowBoundariesState(BoundWindowExpression &wexpr, const idx_t input_size)
+	    : type(wexpr.type), input_size(input_size), start_boundary(wexpr.start), end_boundary(wexpr.end),
+	      partition_count(wexpr.partitions.size()), order_count(wexpr.orders.size()),
+	      range_sense(wexpr.orders.empty() ? OrderType::INVALID : wexpr.orders[0].type),
+	      has_preceding_range(wexpr.start == WindowBoundary::EXPR_PRECEDING_RANGE ||
+	                          wexpr.end == WindowBoundary::EXPR_PRECEDING_RANGE),
+	      has_following_range(wexpr.start == WindowBoundary::EXPR_FOLLOWING_RANGE ||
+	                          wexpr.end == WindowBoundary::EXPR_FOLLOWING_RANGE),
+	      needs_peer(BoundaryNeedsPeer(wexpr.end) || wexpr.type == ExpressionType::WINDOW_CUME_DIST) {
 	}
 
 	void Update(const idx_t row_idx, WindowInputColumn &range_collection, const idx_t source_offset,
@@ -305,9 +311,9 @@ struct WindowBoundariesState {
 	bool is_peer = false;
 };
 
-static bool WindowNeedsRank(BoundWindowExpression *wexpr) {
-	return wexpr->type == ExpressionType::WINDOW_PERCENT_RANK || wexpr->type == ExpressionType::WINDOW_RANK ||
-	       wexpr->type == ExpressionType::WINDOW_RANK_DENSE || wexpr->type == ExpressionType::WINDOW_CUME_DIST;
+static bool WindowNeedsRank(const BoundWindowExpression &wexpr) {
+	return wexpr.type == ExpressionType::WINDOW_PERCENT_RANK || wexpr.type == ExpressionType::WINDOW_RANK ||
+	       wexpr.type == ExpressionType::WINDOW_RANK_DENSE || wexpr.type == ExpressionType::WINDOW_CUME_DIST;
 }
 
 template <typename T>
@@ -367,7 +373,7 @@ struct WindowColumnIterator {
 	}
 
 private:
-	WindowInputColumn *coll;
+	optional_ptr<WindowInputColumn> coll;
 	pointer pos;
 };
 
@@ -610,7 +616,7 @@ void WindowBoundariesState::Update(const idx_t row_idx, WindowInputColumn &range
 struct WindowExecutor {
 	static bool IsConstantAggregate(const BoundWindowExpression &wexpr);
 
-	WindowExecutor(BoundWindowExpression *wexpr, ClientContext &context, const ValidityMask &partition_mask,
+	WindowExecutor(BoundWindowExpression &wexpr, ClientContext &context, const ValidityMask &partition_mask,
 	               const idx_t count);
 
 	void Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count);
@@ -620,7 +626,7 @@ struct WindowExecutor {
 	              const ValidityMask &order_mask);
 
 	// The function
-	BoundWindowExpression *wexpr;
+	BoundWindowExpression &wexpr;
 
 	// Frame management
 	WindowBoundariesState bounds;
@@ -714,41 +720,36 @@ bool WindowExecutor::IsConstantAggregate(const BoundWindowExpression &wexpr) {
 	return true;
 }
 
-WindowExecutor::WindowExecutor(BoundWindowExpression *wexpr, ClientContext &context, const ValidityMask &partition_mask,
+WindowExecutor::WindowExecutor(BoundWindowExpression &wexpr, ClientContext &context, const ValidityMask &partition_mask,
                                const idx_t count)
     : wexpr(wexpr), bounds(wexpr, count), payload_collection(), payload_executor(context), filter_executor(context),
-      leadlag_offset(wexpr->offset_expr.get(), context), leadlag_default(wexpr->default_expr.get(), context),
-      boundary_start(wexpr->start_expr.get(), context), boundary_end(wexpr->end_expr.get(), context),
-      range((bounds.has_preceding_range || bounds.has_following_range) ? wexpr->orders[0].expression.get() : nullptr,
+      leadlag_offset(wexpr.offset_expr.get(), context), leadlag_default(wexpr.default_expr.get(), context),
+      boundary_start(wexpr.start_expr.get(), context), boundary_end(wexpr.end_expr.get(), context),
+      range((bounds.has_preceding_range || bounds.has_following_range) ? wexpr.orders[0].expression.get() : nullptr,
             context, count)
 
 {
 	// TODO we could evaluate those expressions in parallel
 
 	//	Check for constant aggregate
-	if (IsConstantAggregate(*wexpr)) {
+	if (IsConstantAggregate(wexpr)) {
 		constant_aggregate =
-		    make_uniq<WindowConstantAggregate>(AggregateObject(*wexpr), wexpr->return_type, partition_mask, count);
+		    make_uniq<WindowConstantAggregate>(AggregateObject(wexpr), wexpr.return_type, partition_mask, count);
 	}
 
 	// evaluate the FILTER clause and stuff it into a large mask for compactness and reuse
-	if (wexpr->filter_expr) {
+	if (wexpr.filter_expr) {
 		// 	Start with all invalid and set the ones that pass
 		filter_bits.resize(ValidityMask::ValidityMaskSize(count), 0);
 		filter_mask.Initialize(filter_bits.data());
-		filter_executor.AddExpression(*wexpr->filter_expr);
+		filter_executor.AddExpression(*wexpr.filter_expr);
 		filter_sel.Initialize(STANDARD_VECTOR_SIZE);
 	}
 
 	// TODO: child may be a scalar, don't need to materialize the whole collection then
 
 	// evaluate inner expressions of window functions, could be more complex
-	vector<Expression *> exprs;
-	exprs.reserve(wexpr->children.size());
-	for (auto &child : wexpr->children) {
-		exprs.push_back(child.get());
-	}
-	PrepareInputExpressions(exprs.data(), exprs.size(), payload_executor, payload_chunk);
+	PrepareInputExpressions(wexpr.children, payload_executor, payload_chunk);
 
 	auto types = payload_chunk.GetTypes();
 	if (!types.empty()) {
@@ -762,8 +763,8 @@ void WindowExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const i
 
 	// Set up a validity mask for IGNORE NULLS
 	bool check_nulls = false;
-	if (wexpr->ignore_nulls) {
-		switch (wexpr->type) {
+	if (wexpr.ignore_nulls) {
+		switch (wexpr.type) {
 		case ExpressionType::WINDOW_LEAD:
 		case ExpressionType::WINDOW_LAG:
 		case ExpressionType::WINDOW_FIRST_VALUE:
@@ -780,7 +781,7 @@ void WindowExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const i
 
 	idx_t filtered = 0;
 	SelectionVector *filtering = nullptr;
-	if (wexpr->filter_expr) {
+	if (wexpr.filter_expr) {
 		filtering = &filter_sel;
 		filtered = filter_executor.SelectExpression(input_chunk, filter_sel);
 		for (idx_t f = 0; f < filtered; ++f) {
@@ -788,7 +789,7 @@ void WindowExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const i
 		}
 	}
 
-	if (!wexpr->children.empty()) {
+	if (!wexpr.children.empty()) {
 		payload_chunk.Reset();
 		payload_executor.Execute(input_chunk, payload_chunk);
 		payload_chunk.Verify();
@@ -833,8 +834,8 @@ void WindowExecutor::Finalize(WindowAggregationMode mode) {
 	// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
 	if (constant_aggregate) {
 		constant_aggregate->Finalize();
-	} else if (wexpr->aggregate) {
-		segment_tree = make_uniq<WindowSegmentTree>(AggregateObject(*wexpr), wexpr->return_type, &payload_collection,
+	} else if (wexpr.aggregate) {
+		segment_tree = make_uniq<WindowSegmentTree>(AggregateObject(wexpr), wexpr.return_type, &payload_collection,
 		                                            filter_mask, mode);
 	}
 }
@@ -871,7 +872,7 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 			continue;
 		}
 
-		switch (wexpr->type) {
+		switch (wexpr.type) {
 		case ExpressionType::WINDOW_AGGREGATE: {
 			if (constant_aggregate) {
 				constant_aggregate->Compute(result, output_offset, bounds.window_start, bounds.window_end);
@@ -951,11 +952,11 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 		case ExpressionType::WINDOW_LEAD:
 		case ExpressionType::WINDOW_LAG: {
 			int64_t offset = 1;
-			if (wexpr->offset_expr) {
+			if (wexpr.offset_expr) {
 				offset = leadlag_offset.GetCell<int64_t>(output_offset);
 			}
 			int64_t val_idx = (int64_t)row_idx;
-			if (wexpr->type == ExpressionType::WINDOW_LEAD) {
+			if (wexpr.type == ExpressionType::WINDOW_LEAD) {
 				val_idx += offset;
 			} else {
 				val_idx -= offset;
@@ -974,7 +975,7 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 
 			if (!delta) {
 				CopyCell(payload_collection, 0, val_idx, result, output_offset);
-			} else if (wexpr->default_expr) {
+			} else if (wexpr.default_expr) {
 				leadlag_default.CopyCell(result, output_offset);
 			} else {
 				FlatVector::SetNull(result, output_offset, true);
@@ -1025,7 +1026,7 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 			break;
 		}
 		default:
-			throw InternalException("Window aggregate type %s", ExpressionTypeToString(wexpr->type));
+			throw InternalException("Window aggregate type %s", ExpressionTypeToString(wexpr.type));
 		}
 	}
 
@@ -1091,14 +1092,26 @@ SinkFinalizeType PhysicalWindow::Finalize(Pipeline &pipeline, Event &event, Clie
 //===--------------------------------------------------------------------===//
 class WindowGlobalSourceState : public GlobalSourceState {
 public:
-	explicit WindowGlobalSourceState(WindowGlobalSinkState &gsink) : partition_source(*gsink.global_partition) {
+	explicit WindowGlobalSourceState(WindowGlobalSinkState &gsink) : gsink(*gsink.global_partition), next_bin(0) {
 	}
 
-	PartitionGlobalSourceState partition_source;
+	PartitionGlobalSinkState &gsink;
+	//! The output read position.
+	atomic<idx_t> next_bin;
 
 public:
 	idx_t MaxThreads() override {
-		return partition_source.MaxThreads();
+		// If there is only one partition, we have to process it on one thread.
+		if (!gsink.grouping_data) {
+			return 1;
+		}
+
+		// If there is not a lot of data, process serially.
+		if (gsink.count < STANDARD_ROW_GROUPS_SIZE) {
+			return 1;
+		}
+
+		return gsink.hash_groups.size();
 	}
 };
 
@@ -1110,7 +1123,7 @@ public:
 	using WindowExecutors = vector<WindowExecutorPtr>;
 
 	WindowLocalSourceState(const PhysicalWindow &op_p, ExecutionContext &context, WindowGlobalSourceState &gsource)
-	    : partition_source(gsource.partition_source.gsink), context(context.client), op(op_p) {
+	    : context(context.client), op(op_p), gsink(gsource.gsink) {
 
 		vector<LogicalType> output_types;
 		for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
@@ -1119,52 +1132,158 @@ public:
 			output_types.emplace_back(wexpr.return_type);
 		}
 		output_chunk.Initialize(Allocator::Get(context.client), output_types);
+
+		const auto &input_types = gsink.payload_types;
+		layout.Initialize(input_types);
+		input_chunk.Initialize(gsink.allocator, input_types);
 	}
 
+	void MaterializeSortedData();
 	void GeneratePartition(WindowGlobalSinkState &gstate, const idx_t hash_bin);
 	void Scan(DataChunk &chunk);
 
-	PartitionLocalSourceState partition_source;
+	HashGroupPtr hash_group;
 	ClientContext &context;
 	const PhysicalWindow &op;
 
+	PartitionGlobalSinkState &gsink;
+
+	//! The generated input chunks
+	unique_ptr<RowDataCollection> rows;
+	unique_ptr<RowDataCollection> heap;
+	RowLayout layout;
+	//! The partition boundary mask
+	vector<validity_t> partition_bits;
+	ValidityMask partition_mask;
+	//! The order boundary mask
+	vector<validity_t> order_bits;
+	ValidityMask order_mask;
 	//! The current execution functions
 	WindowExecutors window_execs;
+
+	//! The read partition
+	idx_t hash_bin;
+	//! The read cursor
+	unique_ptr<RowDataCollectionScanner> scanner;
+	//! Buffer for the inputs
+	DataChunk input_chunk;
 	//! Buffer for window results
 	DataChunk output_chunk;
 };
 
+void WindowLocalSourceState::MaterializeSortedData() {
+	auto &global_sort_state = *hash_group->global_sort;
+	if (global_sort_state.sorted_blocks.empty()) {
+		return;
+	}
+
+	// scan the sorted row data
+	D_ASSERT(global_sort_state.sorted_blocks.size() == 1);
+	auto &sb = *global_sort_state.sorted_blocks[0];
+
+	// Free up some memory before allocating more
+	sb.radix_sorting_data.clear();
+	sb.blob_sorting_data = nullptr;
+
+	// Move the sorting row blocks into our RDCs
+	auto &buffer_manager = global_sort_state.buffer_manager;
+	auto &sd = *sb.payload_data;
+
+	// Data blocks are required
+	D_ASSERT(!sd.data_blocks.empty());
+	auto &block = sd.data_blocks[0];
+	rows = make_uniq<RowDataCollection>(buffer_manager, block->capacity, block->entry_size);
+	rows->blocks = std::move(sd.data_blocks);
+	rows->count = std::accumulate(rows->blocks.begin(), rows->blocks.end(), idx_t(0),
+	                              [&](idx_t c, const unique_ptr<RowDataBlock> &b) { return c + b->count; });
+
+	// Heap blocks are optional, but we want both for iteration.
+	if (!sd.heap_blocks.empty()) {
+		auto &block = sd.heap_blocks[0];
+		heap = make_uniq<RowDataCollection>(buffer_manager, block->capacity, block->entry_size);
+		heap->blocks = std::move(sd.heap_blocks);
+		hash_group.reset();
+	} else {
+		heap = make_uniq<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
+	}
+	heap->count = std::accumulate(heap->blocks.begin(), heap->blocks.end(), idx_t(0),
+	                              [&](idx_t c, const unique_ptr<RowDataBlock> &b) { return c + b->count; });
+}
+
 void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, const idx_t hash_bin_p) {
-	const auto count = partition_source.GeneratePartition(hash_bin_p);
-	if (!count) {
+	//	Get rid of any stale data
+	hash_bin = hash_bin_p;
+
+	// There are three types of partitions:
+	// 1. No partition (no sorting)
+	// 2. One partition (sorting, but no hashing)
+	// 3. Multiple partitions (sorting and hashing)
+
+	//	How big is the partition?
+	idx_t count = 0;
+	if (hash_bin < gsink.hash_groups.size() && gsink.hash_groups[hash_bin]) {
+		count = gsink.hash_groups[hash_bin]->count;
+	} else if (gsink.rows && !hash_bin) {
+		count = gsink.count;
+	} else {
+		return;
+	}
+
+	//	Initialise masks to false
+	const auto bit_count = ValidityMask::ValidityMaskSize(count);
+	partition_bits.clear();
+	partition_bits.resize(bit_count, 0);
+	partition_mask.Initialize(partition_bits.data());
+
+	order_bits.clear();
+	order_bits.resize(bit_count, 0);
+	order_mask.Initialize(order_bits.data());
+
+	// Scan the sorted data into new Collections
+	auto external = gsink.external;
+	if (gsink.rows && !hash_bin) {
+		// Simple mask
+		partition_mask.SetValidUnsafe(0);
+		order_mask.SetValidUnsafe(0);
+		//	No partition - align the heap blocks with the row blocks
+		rows = gsink.rows->CloneEmpty(gsink.rows->keep_pinned);
+		heap = gsink.strings->CloneEmpty(gsink.strings->keep_pinned);
+		RowDataCollectionScanner::AlignHeapBlocks(*rows, *heap, *gsink.rows, *gsink.strings, layout);
+		external = true;
+	} else if (hash_bin < gsink.hash_groups.size() && gsink.hash_groups[hash_bin]) {
+		// Overwrite the collections with the sorted data
+		hash_group = std::move(gsink.hash_groups[hash_bin]);
+		hash_group->ComputeMasks(partition_mask, order_mask);
+		MaterializeSortedData();
+	} else {
 		return;
 	}
 
 	// Create the executors for each function
-	auto &partition_mask = partition_source.partition_mask;
 	window_execs.clear();
 	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
 		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 		auto &wexpr = op.select_list[expr_idx]->Cast<BoundWindowExpression>();
-		auto wexec = make_uniq<WindowExecutor>(&wexpr, context, partition_mask, count);
+		auto wexec = make_uniq<WindowExecutor>(wexpr, context, partition_mask, count);
 		window_execs.emplace_back(std::move(wexec));
 	}
 
 	//	First pass over the input without flushing
 	//	TODO: Factor out the constructor data as global state
+	scanner = make_uniq<RowDataCollectionScanner>(*rows, *heap, layout, external, false);
 	idx_t input_idx = 0;
 	while (true) {
-		partition_source.input_chunk.Reset();
-		partition_source.scanner->Scan(partition_source.input_chunk);
-		if (partition_source.input_chunk.size() == 0) {
+		input_chunk.Reset();
+		scanner->Scan(input_chunk);
+		if (input_chunk.size() == 0) {
 			break;
 		}
 
 		//	TODO: Parallelization opportunity
 		for (auto &wexec : window_execs) {
-			wexec->Sink(partition_source.input_chunk, input_idx, partition_source.scanner->Count());
+			wexec->Sink(input_chunk, input_idx, scanner->Count());
 		}
-		input_idx += partition_source.input_chunk.size();
+		input_idx += input_chunk.size();
 	}
 
 	//	TODO: Parallelization opportunity
@@ -1173,25 +1292,22 @@ void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, co
 	}
 
 	// External scanning assumes all blocks are swizzled.
-	partition_source.scanner->ReSwizzle();
+	scanner->ReSwizzle();
 
 	//	Second pass can flush
-	partition_source.scanner->Reset(true);
+	scanner->Reset(true);
 }
 
 void WindowLocalSourceState::Scan(DataChunk &result) {
-	D_ASSERT(partition_source.scanner);
-	if (!partition_source.scanner->Remaining()) {
+	D_ASSERT(scanner);
+	if (!scanner->Remaining()) {
 		return;
 	}
 
-	const auto position = partition_source.scanner->Scanned();
-	auto &input_chunk = partition_source.input_chunk;
+	const auto position = scanner->Scanned();
 	input_chunk.Reset();
-	partition_source.scanner->Scan(input_chunk);
+	scanner->Scan(input_chunk);
 
-	auto &partition_mask = partition_source.partition_mask;
-	auto &order_mask = partition_source.order_mask;
 	output_chunk.Reset();
 	for (idx_t expr_idx = 0; expr_idx < window_execs.size(); ++expr_idx) {
 		auto &executor = *window_execs[expr_idx];
@@ -1224,9 +1340,7 @@ unique_ptr<GlobalSourceState> PhysicalWindow::GetGlobalSourceState(ClientContext
 
 SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
 	auto &lsource = input.local_state.Cast<WindowLocalSourceState>();
-	auto &lpsource = lsource.partition_source;
 	auto &gsource = input.global_state.Cast<WindowGlobalSourceState>();
-	auto &gpsource = gsource.partition_source;
 	auto &gsink = sink_state->Cast<WindowGlobalSinkState>();
 
 	auto &hash_groups = gsink.global_partition->hash_groups;
@@ -1234,17 +1348,17 @@ SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &c
 
 	while (chunk.size() == 0) {
 		//	Move to the next bin if we are done.
-		while (!lpsource.scanner || !lpsource.scanner->Remaining()) {
-			lpsource.scanner.reset();
-			lpsource.rows.reset();
-			lpsource.heap.reset();
-			lpsource.hash_group.reset();
-			auto hash_bin = gpsource.next_bin++;
+		while (!lsource.scanner || !lsource.scanner->Remaining()) {
+			lsource.scanner.reset();
+			lsource.rows.reset();
+			lsource.heap.reset();
+			lsource.hash_group.reset();
+			auto hash_bin = gsource.next_bin++;
 			if (hash_bin >= bin_count) {
 				return chunk.size() > 0 ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED;
 			}
 
-			for (; hash_bin < hash_groups.size(); hash_bin = gpsource.next_bin++) {
+			for (; hash_bin < hash_groups.size(); hash_bin = gsource.next_bin++) {
 				if (hash_groups[hash_bin]) {
 					break;
 				}

@@ -19,17 +19,17 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 	intermediate_chunks.reserve(pipeline.operators.size());
 	intermediate_states.reserve(pipeline.operators.size());
 	for (idx_t i = 0; i < pipeline.operators.size(); i++) {
-		auto prev_operator = i == 0 ? pipeline.source : pipeline.operators[i - 1];
-		auto current_operator = pipeline.operators[i];
+		auto &prev_operator = i == 0 ? *pipeline.source : pipeline.operators[i - 1].get();
+		auto &current_operator = pipeline.operators[i].get();
 
 		auto chunk = make_uniq<DataChunk>();
-		chunk->Initialize(Allocator::Get(context.client), prev_operator->GetTypes());
+		chunk->Initialize(Allocator::Get(context.client), prev_operator.GetTypes());
 		intermediate_chunks.push_back(std::move(chunk));
 
-		auto op_state = current_operator->GetOperatorState(context);
+		auto op_state = current_operator.GetOperatorState(context);
 		intermediate_states.push_back(std::move(op_state));
 
-		if (current_operator->IsSink() && current_operator->sink_state->state == SinkFinalizeType::NO_OUTPUT_POSSIBLE) {
+		if (current_operator.IsSink() && current_operator.sink_state->state == SinkFinalizeType::NO_OUTPUT_POSSIBLE) {
 			// one of the operators has already figured out no output is possible
 			// we can skip executing the pipeline
 			FinishProcessing();
@@ -47,7 +47,7 @@ OperatorResultType PipelineExecutor::FlushCachingOperatorsPush() {
 
 	// Main flushing loop -> keep flushing each operator that needs flushing until it's done or an interrupt happens
 	while (flushing_idx < pipeline.operators.size()) {
-		if (!pipeline.operators[flushing_idx]->RequiresFinalExecute()) {
+		if (!pipeline.operators[flushing_idx].RequiresFinalExecute()) {
 			flushing_idx++;
 			continue;
 		}
@@ -61,7 +61,7 @@ OperatorResultType PipelineExecutor::FlushCachingOperatorsPush() {
 		OperatorResultType push_result;
 		if (!blocked_on_have_more_output) {
 			StartOperator(current_operator);
-			finalize_result = current_operator->FinalExecute(context, curr_chunk, *current_operator->op_state,
+			finalize_result = current_operator.FinalExecute(context, curr_chunk, *current_operator->op_state,
 																						*intermediate_states[flushing_idx]);
 			EndOperator(current_operator, &curr_chunk);
 
@@ -230,15 +230,14 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t
 		}
 		auto &sink_chunk = final_chunk;
 		if (sink_chunk.size() > 0) {
-			StartOperator(pipeline.sink);
-
+			StartOperator(*pipeline.sink);
 			D_ASSERT(pipeline.sink);
 			D_ASSERT(pipeline.sink->sink_state);
 			OperatorSinkInput sink_input { *pipeline.sink->sink_state, *local_sink_state, interrupt_state };
 
 			auto sink_result = Sink(sink_chunk, sink_input);
 
-			EndOperator(pipeline.sink, nullptr);
+			EndOperator(*pipeline.sink, nullptr);
 
 			if (sink_result == SinkResultType::BLOCKED) {
 				if (result == OperatorResultType::HAVE_MORE_OUTPUT) {
@@ -270,7 +269,7 @@ void PipelineExecutor::PushFinalize() {
 
 	// flush all query profiler info
 	for (idx_t i = 0; i < intermediate_states.size(); i++) {
-		intermediate_states[i]->Finalize(pipeline.operators[i], context);
+		intermediate_states[i]->Finalize(pipeline.operators[i].get(), context);
 	}
 	pipeline.executor.Flush(thread);
 	local_sink_state.reset();
@@ -394,13 +393,13 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 			auto &prev_chunk =
 			    current_intermediate == initial_idx + 1 ? input : *intermediate_chunks[current_intermediate - 1];
 			auto operator_idx = current_idx - 1;
-			auto current_operator = pipeline.operators[operator_idx];
+			auto &current_operator = pipeline.operators[operator_idx].get();
 
 			// if current_idx > source_idx, we pass the previous operators' output through the Execute of the current
 			// operator
 			StartOperator(current_operator);
-			auto result = current_operator->Execute(context, prev_chunk, current_chunk, *current_operator->op_state,
-			                                        *intermediate_states[current_intermediate - 1]);
+			auto result = current_operator.Execute(context, prev_chunk, current_chunk, *current_operator.op_state,
+			                                       *intermediate_states[current_intermediate - 1]);
 			EndOperator(current_operator, &current_chunk);
 			if (result == OperatorResultType::HAVE_MORE_OUTPUT) {
 				// more data remains in this operator
@@ -479,7 +478,7 @@ SinkResultType PipelineExecutor::Sink(DataChunk &chunk, OperatorSinkInput &input
 }
 
 SourceResultType PipelineExecutor::FetchFromSource(DataChunk &result) {
-	StartOperator(pipeline.source);
+	StartOperator(*pipeline.source);
 
 	OperatorSourceInput source_input = { *pipeline.source_state, *local_source_state, interrupt_state };
 	auto res = GetData(result, source_input);
@@ -495,24 +494,24 @@ SourceResultType PipelineExecutor::FetchFromSource(DataChunk &result) {
 		local_sink_state->batch_index = next_batch_index;
 	}
 
-	EndOperator(pipeline.source, &result);
+	EndOperator(*pipeline.source, &result);
 
 	return res;
 }
 
 void PipelineExecutor::InitializeChunk(DataChunk &chunk) {
-	PhysicalOperator *last_op = pipeline.operators.empty() ? pipeline.source : pipeline.operators.back();
-	chunk.Initialize(Allocator::DefaultAllocator(), last_op->GetTypes());
+	auto &last_op = pipeline.operators.empty() ? *pipeline.source : pipeline.operators.back().get();
+	chunk.Initialize(Allocator::DefaultAllocator(), last_op.GetTypes());
 }
 
-void PipelineExecutor::StartOperator(PhysicalOperator *op) {
+void PipelineExecutor::StartOperator(PhysicalOperator &op) {
 	if (context.client.interrupted) {
 		throw InterruptException();
 	}
-	context.thread.profiler.StartOperator(op);
+	context.thread.profiler.StartOperator(&op);
 }
 
-void PipelineExecutor::EndOperator(PhysicalOperator *op, DataChunk *chunk) {
+void PipelineExecutor::EndOperator(PhysicalOperator &op, optional_ptr<DataChunk> chunk) {
 	context.thread.profiler.EndOperator(chunk);
 
 	if (chunk) {

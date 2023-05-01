@@ -194,7 +194,7 @@ void PhysicalNestedLoopJoin::Combine(ExecutionContext &context, GlobalSinkState 
 	auto &state = lstate.Cast<NestedLoopJoinLocalState>();
 	auto &client_profiler = QueryProfiler::Get(context.client);
 
-	context.thread.profiler.Flush(this, &state.rhs_executor, "rhs_executor", 1);
+	context.thread.profiler.Flush(*this, state.rhs_executor, "rhs_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
 }
 
@@ -254,8 +254,8 @@ public:
 	OuterJoinMarker left_outer;
 
 public:
-	void Finalize(PhysicalOperator *op, ExecutionContext &context) override {
-		context.thread.profiler.Flush(op, &lhs_executor, "lhs_executor", 0);
+	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
+		context.thread.profiler.Flush(op, lhs_executor, "lhs_executor", 0);
 	}
 };
 

@@ -2,8 +2,11 @@ package org.duckdb;
 
 import java.sql.Timestamp;
 import java.time.ZoneOffset;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.time.OffsetTime;
 import java.time.temporal.ChronoUnit;
 
 public class DuckDBTimestamp {
@@ -38,22 +41,47 @@ public class DuckDBTimestamp {
 
 	public static Timestamp toSqlTimestamp(long timeMicros) {
 		return Timestamp.valueOf(
-			LocalDateTime.ofEpochSecond(micros2seconds(timeMicros)
-				, nanosPartMicros(timeMicros), ZoneOffset.UTC));
+				LocalDateTime.ofEpochSecond(micros2seconds(timeMicros)
+						, nanosPartMicros(timeMicros), ZoneOffset.UTC));
 	}
 
 	public static Timestamp toSqlTimestampNanos(long timeNanos) {
 		return Timestamp.valueOf(
-			LocalDateTime.ofEpochSecond(nanos2seconds(timeNanos)
-				, nanosPartNanos(timeNanos), ZoneOffset.UTC));
+				LocalDateTime.ofEpochSecond(nanos2seconds(timeNanos)
+						, nanosPartNanos(timeNanos), ZoneOffset.UTC));
 	}
+
 	public static LocalDateTime toLocalDateTime(long timeMicros) {
 		return LocalDateTime.ofEpochSecond(micros2seconds(timeMicros)
 				, nanosPartMicros(timeMicros), ZoneOffset.UTC);
 	}
 
+	public static OffsetTime toOffsetTime(long timeMicros) {
+		return OffsetTime.of(toLocalTime(timeMicros), ZoneOffset.UTC);
+	}
+
+	private static LocalTime toLocalTime(long timeMicros) {
+		return LocalTime.ofSecondOfDay(micros2seconds(timeMicros));
+	}
+
 	public static OffsetDateTime toOffsetDateTime(long timeMicros) {
 		return OffsetDateTime.of(toLocalDateTime(timeMicros), ZoneOffset.UTC);
+	}
+
+	public static Timestamp fromSecondInstant(long seconds) {
+		return fromMilliInstant(seconds * 1_000);
+	}
+
+	public static Timestamp fromMilliInstant(long millis) {
+		return new Timestamp(millis);
+	}
+
+	public static Timestamp fromMicroInstant(long micros) {
+		return Timestamp.from(Instant.ofEpochSecond(micros / 1_000_000, nanosPartMicros(micros)));
+	}
+
+	public static Timestamp fromNanoInstant(long nanos) {
+		return Timestamp.from(Instant.ofEpochSecond(nanos / 1_000_000_000, nanosPartNanos(nanos)));
 	}
 
 	public Timestamp toSqlTimestamp() {

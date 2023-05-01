@@ -27,7 +27,7 @@ SourceResultType PhysicalCreateSchema::GetData(ExecutionContext &context, DataCh
 	if (catalog.IsSystemCatalog()) {
 		throw BinderException("Cannot create schema in system catalog");
 	}
-	catalog.CreateSchema(context.client, info.get());
+	catalog.CreateSchema(context.client, *info);
 	state.finished = true;
 
 	return SourceResultType::HAVE_MORE_OUTPUT;

@@ -24,7 +24,7 @@ SourceResultType PhysicalCreateSequence::GetData(ExecutionContext &context, Data
 		return SourceResultType::FINISHED;
 	}
 	auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
-	catalog.CreateSequence(context.client, info.get());
+	catalog.CreateSequence(context.client, *info);
 	state.finished = true;
 
 	return SourceResultType::HAVE_MORE_OUTPUT;

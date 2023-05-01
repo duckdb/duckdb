@@ -9,6 +9,7 @@ add_library_unity(
   glob.cpp
   range.cpp
   repeat.cpp
+  repeat_row.cpp
   copy_csv.cpp
   read_csv.cpp
   system_functions.cpp

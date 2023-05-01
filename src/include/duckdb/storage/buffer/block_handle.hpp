@@ -24,9 +24,9 @@ enum class BlockState : uint8_t { BLOCK_UNLOADED = 0, BLOCK_LOADED = 1 };
 
 struct BufferPoolReservation {
 	idx_t size {0};
+	BufferPool &pool;
 
-	BufferPoolReservation() {
-	}
+	BufferPoolReservation(BufferPool &pool);
 	BufferPoolReservation(const BufferPoolReservation &) = delete;
 	BufferPoolReservation &operator=(const BufferPoolReservation &) = delete;
 
@@ -35,18 +35,17 @@ struct BufferPoolReservation {
 
 	~BufferPoolReservation();
 
-	void Resize(atomic<idx_t> &counter, idx_t new_size);
+	void Resize(idx_t new_size);
 	void Merge(BufferPoolReservation &&src);
 };
 
 struct TempBufferPoolReservation : BufferPoolReservation {
-	atomic<idx_t> &counter;
-	TempBufferPoolReservation(atomic<idx_t> &counter, idx_t size) : counter(counter) {
-		Resize(counter, size);
+	TempBufferPoolReservation(BufferPool &pool, idx_t size) : BufferPoolReservation(pool) {
+		Resize(size);
 	}
 	TempBufferPoolReservation(TempBufferPoolReservation &&) = default;
 	~TempBufferPoolReservation() {
-		Resize(counter, 0);
+		Resize(0);
 	}
 };
 
@@ -55,6 +54,7 @@ class BlockHandle {
 	friend struct BufferEvictionNode;
 	friend class BufferHandle;
 	friend class BufferManager;
+	friend class StandardBufferManager;
 	friend class BufferPool;
 
 public:
@@ -68,6 +68,14 @@ public:
 public:
 	block_id_t BlockId() {
 		return block_id;
+	}
+
+	void ResizeBuffer(idx_t block_size, int64_t memory_delta) {
+		D_ASSERT(buffer);
+		// resize and adjust current memory
+		buffer->Resize(block_size);
+		memory_usage += memory_delta;
+		D_ASSERT(memory_usage == buffer->AllocSize());
 	}
 
 	int32_t Readers() const {

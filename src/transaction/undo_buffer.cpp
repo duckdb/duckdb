@@ -126,9 +126,18 @@ void UndoBuffer::Cleanup() {
 	CleanupState state;
 	UndoBuffer::IteratorState iterator_state;
 	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CleanupEntry(type, data); });
+
+	// possibly vacuum indexes
+	for (const auto &table : state.indexed_tables) {
+		table.second->info->indexes.Scan([&](Index &index) {
+			index.Vacuum();
+			return false;
+		});
+	}
 }
 
-void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, WriteAheadLog *log, transaction_t commit_id) {
+void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, optional_ptr<WriteAheadLog> log,
+                        transaction_t commit_id) {
 	CommitState state(context, commit_id, log);
 	if (log) {
 		// commit WITH write ahead log

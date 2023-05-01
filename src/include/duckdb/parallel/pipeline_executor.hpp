@@ -116,8 +116,8 @@ private:
 	bool debug_blocked_source = false;
 
 private:
-	void StartOperator(PhysicalOperator *op);
-	void EndOperator(PhysicalOperator *op, DataChunk *chunk);
+	void StartOperator(PhysicalOperator &op);
+	void EndOperator(PhysicalOperator &op, optional_ptr<DataChunk> chunk);
 
 	//! Reset the operator index to the first operator
 	void GoToSource(idx_t &current_idx, idx_t initial_idx);

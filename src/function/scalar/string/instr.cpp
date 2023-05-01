@@ -16,7 +16,7 @@ struct InstrOperator {
 		auto location = ContainsFun::Find(haystack, needle);
 		if (location != DConstants::INVALID_INDEX) {
 			auto len = (utf8proc_ssize_t)location;
-			auto str = reinterpret_cast<const utf8proc_uint8_t *>(haystack.GetDataUnsafe());
+			auto str = reinterpret_cast<const utf8proc_uint8_t *>(haystack.GetData());
 			D_ASSERT(len <= (utf8proc_ssize_t)haystack.GetSize());
 			for (++string_position; len > 0; ++string_position) {
 				utf8proc_int32_t codepoint;

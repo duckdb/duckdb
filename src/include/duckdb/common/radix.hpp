@@ -50,7 +50,7 @@ public:
 
 	static inline void EncodeStringDataPrefix(data_ptr_t dataptr, string_t value, idx_t prefix_len) {
 		auto len = value.GetSize();
-		memcpy(dataptr, value.GetDataUnsafe(), MinValue(len, prefix_len));
+		memcpy(dataptr, value.GetData(), MinValue(len, prefix_len));
 		if (len < prefix_len) {
 			memset(dataptr + len, '\0', prefix_len - len);
 		}

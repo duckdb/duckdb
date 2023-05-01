@@ -1,0 +1,95 @@
+# name: test/sql/function/numeric/test_trunc.test
+# description: Truncation test
+# group: [numeric]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE truncme(a DOUBLE, b INTEGER, c UINTEGER)
+
+statement ok
+INSERT INTO truncme VALUES (42.123456, 3, 19), (-3.141592, -7, 5);
+
+# Non-intergral should truncate 
+foreach datatype DOUBLE FLOAT DECIMAL(10,6)
+
+query R
+select trunc(42.12345::${datatype})
+----
+42.000000
+
+query R
+select trunc(-42.12345::${datatype})
+----
+-42.000000
+
+query R
+select trunc(127::${datatype})
+----
+127.000000
+
+query R
+select trunc(-127::${datatype})
+----
+-127.000000
+
+query R
+select trunc(0::${datatype})
+----
+0.000000
+
+query I
+select trunc(a::${datatype}) from truncme
+----
+42.000000
+-3.000000
+
+endloop
+
+# Signed integers should be a NOP
+foreach signed TINYINT SMALLINT INTEGER BIGINT HUGEINT
+
+query R
+select trunc(54::${signed})
+----
+54
+
+query R
+select trunc(-27::${signed})
+----
+-27
+
+query I
+select trunc(b::${signed}) from truncme
+----
+3
+-7
+
+endloop
+
+# Unsigned integers should be a NOP
+foreach unsigned UTINYINT USMALLINT UINTEGER UBIGINT
+
+query R
+select trunc(15::${unsigned})
+----
+15
+
+query I
+select trunc(c::${unsigned}) from truncme
+----
+19
+5
+
+endloop
+
+# Test specials
+foreach special DOUBLE FLOAT
+
+query III
+select trunc('NAN'::${special}), trunc('infinity'::${special}), trunc('-infinity'::${special});
+----
+NAN	infinity	-infinity
+
+endloop

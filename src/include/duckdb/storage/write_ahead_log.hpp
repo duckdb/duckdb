@@ -39,15 +39,15 @@ class TransactionManager;
 class ReplayState {
 public:
 	ReplayState(AttachedDatabase &db, ClientContext &context, Deserializer &source)
-	    : db(db), context(context), catalog(db.GetCatalog()), source(source), current_table(nullptr),
-	      deserialize_only(false), checkpoint_id(INVALID_BLOCK) {
+	    : db(db), context(context), catalog(db.GetCatalog()), source(source), deserialize_only(false),
+	      checkpoint_id(INVALID_BLOCK) {
 	}
 
 	AttachedDatabase &db;
 	ClientContext &context;
 	Catalog &catalog;
 	Deserializer &source;
-	TableCatalogEntry *current_table;
+	optional_ptr<TableCatalogEntry> current_table;
 	bool deserialize_only;
 	block_id_t checkpoint_id;
 

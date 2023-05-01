@@ -1,7 +1,7 @@
 #include "duckdb_python/pyrelation.hpp"
-#include "duckdb_python/pyconnection.hpp"
+#include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
-#include "duckdb_python/pandas_analyzer.hpp"
+#include "duckdb_python/pandas/pandas_analyzer.hpp"
 #include "duckdb_python/python_conversion.hpp"
 #include "duckdb/common/types/decimal.hpp"
 
@@ -306,10 +306,10 @@ LogicalType PandasAnalyzer::GetItemType(py::handle ele, bool &can_convert) {
 		return GetItemType(ele.attr("tolist")(), can_convert);
 	}
 	case PythonObjectType::NdArray: {
-		auto extended_type = ConvertPandasType(ele.attr("dtype"));
+		auto extended_type = ConvertNumpyType(ele.attr("dtype"));
 		LogicalType ltype;
-		ltype = PandasToLogicalType(extended_type);
-		if (extended_type == PandasType::OBJECT) {
+		ltype = NumpyToLogicalType(extended_type);
+		if (extended_type == NumpyNullableType::OBJECT) {
 			LogicalType converted_type = InnerAnalyze(ele, can_convert, false, 1);
 			if (can_convert) {
 				ltype = converted_type;
@@ -345,7 +345,9 @@ LogicalType PandasAnalyzer::InnerAnalyze(py::handle column, bool &can_convert, b
 	// Keys are not guaranteed to start at 0 for Series, use the internal __array__ instead
 	auto pandas_module = py::module::import("pandas");
 	auto pandas_series = pandas_module.attr("core").attr("series").attr("Series");
+
 	if (py::isinstance(column, pandas_series)) {
+		// TODO: check if '_values' is more portable, and behaves the same as '__array__()'
 		column = column.attr("__array__")();
 	}
 	auto row = column.attr("__getitem__");

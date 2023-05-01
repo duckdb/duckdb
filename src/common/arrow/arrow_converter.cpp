@@ -17,7 +17,7 @@ namespace duckdb {
 
 void ArrowConverter::ToArrowArray(DataChunk &input, ArrowArray *out_array) {
 	ArrowAppender appender(input.GetTypes(), input.size());
-	appender.Append(input);
+	appender.Append(input, 0, input.size(), input.size());
 	*out_array = appender.Finalize();
 }
 

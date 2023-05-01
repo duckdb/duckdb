@@ -1,25 +1,26 @@
 import duckdb
-import pandas as pd
 import numpy
+import pytest
+from conftest import NumpyPandas, ArrowPandas
 
 def check_result_list(res):
     for res_item in res:
         assert res_item[0] == res_item[1]
 
-def check_create_table(category):
+def check_create_table(category, pandas):
     conn = duckdb.connect()
 
     conn.execute ("PRAGMA enable_verification")
-    df_in = pd.DataFrame({
-    'x': pd.Categorical(category, ordered=True),
-    'y': pd.Categorical(category, ordered=True),
+    df_in = pandas.DataFrame({
+    'x': pandas.Categorical(category, ordered=True),
+    'y': pandas.Categorical(category, ordered=True),
     'z': category
     })
 
     category.append('bla')
 
-    df_in_diff = pd.DataFrame({
-    'k': pd.Categorical(category, ordered=True),
+    df_in_diff = pandas.DataFrame({
+    'k': pandas.Categorical(category, ordered=True),
     })
 
     df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data")
@@ -60,16 +61,19 @@ def check_create_table(category):
     # We should be able to drop the table without any dependencies
     conn.execute("DROP TABLE t1")
 
+# TODO: extend tests with ArrowPandas
 class TestCategory(object):
 
-    def test_category_string_uint16(self, duckdb_cursor):
+    @pytest.mark.parametrize('pandas', [NumpyPandas()])
+    def test_category_string_uint16(self, duckdb_cursor, pandas):
         category = []
         for i in range (300):
             category.append(str(i))
-        check_create_table(category)
+        check_create_table(category, pandas)
 
-    def test_category_string_uint32(self, duckdb_cursor):
+    @pytest.mark.parametrize('pandas', [NumpyPandas()])
+    def test_category_string_uint32(self, duckdb_cursor, pandas):
         category = []
         for i in range (70000):
             category.append(str(i))
-        check_create_table(category)
+        check_create_table(category, pandas)

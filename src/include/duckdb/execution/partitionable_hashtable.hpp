@@ -17,10 +17,10 @@ struct RadixPartitionInfo {
 	const idx_t n_partitions;
 	const idx_t radix_bits;
 	const hash_t radix_mask;
-	constexpr static idx_t RADIX_SHIFT = 40;
+	const idx_t radix_shift;
 
 	inline hash_t GetHashPartition(hash_t hash) const {
-		return (hash & radix_mask) >> RADIX_SHIFT;
+		return (hash & radix_mask) >> radix_shift;
 	}
 };
 

@@ -1,6 +1,6 @@
 channel|id|sales|returns_|profit
-NULL|NULL|1235226.36|22228.88|-364862.29
-catalog channel|NULL|394281.25|9538.33|-37140.33
+NULL|NULL|1141124.71|22228.88|-324551.05
+catalog channel|NULL|385902.57|9538.33|-37483.05
 catalog channel|catalog_pageAAAAAAAAAAABAAAA|22.10|0.00|-96.00
 catalog channel|catalog_pageAAAAAAAAADABAAAA|372.40|0.00|53.79
 catalog channel|catalog_pageAAAAAAAAAFCBAAAA|626.40|0.00|-322.70
@@ -24,7 +24,7 @@ catalog channel|catalog_pageAAAAAAAACNPAAAAA|2220.63|0.00|18.93
 catalog channel|catalog_pageAAAAAAAACOPAAAAA|9989.74|0.00|-83.60
 catalog channel|catalog_pageAAAAAAAACPPAAAAA|5447.76|0.00|786.97
 catalog channel|catalog_pageAAAAAAAADAABAAAA|1026.12|0.00|-2620.72
-catalog channel|catalog_pageAAAAAAAADBABAAAA|980.56|0.00|334.56
+catalog channel|catalog_pageAAAAAAAADBABAAAA|NULL|0.00|334.56
 catalog channel|catalog_pageAAAAAAAADEABAAAA|306.36|0.00|-275.65
 catalog channel|catalog_pageAAAAAAAADGABAAAA|7812.09|0.00|253.44
 catalog channel|catalog_pageAAAAAAAADGCBAAAA|330.60|0.00|-2791.10
@@ -39,12 +39,11 @@ catalog channel|catalog_pageAAAAAAAAEECBAAAA|3658.50|0.00|2188.00
 catalog channel|catalog_pageAAAAAAAAEFCBAAAA|145.53|0.00|-469.63
 catalog channel|catalog_pageAAAAAAAAEGCBAAAA|9481.50|0.00|1839.00
 catalog channel|catalog_pageAAAAAAAAEHCBAAAA|1307.34|0.00|-2548.26
-catalog channel|catalog_pageAAAAAAAAEKPAAAAA|897.60|0.00|342.72
 catalog channel|catalog_pageAAAAAAAAELPAAAAA|14863.14|0.00|8761.40
 catalog channel|catalog_pageAAAAAAAAEMPAAAAA|209.56|0.00|-2501.94
 catalog channel|catalog_pageAAAAAAAAEOPAAAAA|2343.94|0.00|-2434.00
 catalog channel|catalog_pageAAAAAAAAEPPAAAAA|7316.92|0.00|-1759.63
-catalog channel|catalog_pageAAAAAAAAFAABAAAA|6500.52|0.00|1534.14
+catalog channel|catalog_pageAAAAAAAAFAABAAAA|NULL|0.00|1534.14
 catalog channel|catalog_pageAAAAAAAAFFABAAAA|614.25|0.00|-91.18
 catalog channel|catalog_pageAAAAAAAAFGABAAAA|643.20|0.00|62.10
 catalog channel|catalog_pageAAAAAAAAFGCBAAAA|231.42|0.00|116.10
@@ -99,3 +98,4 @@ catalog channel|catalog_pageAAAAAAAALFCBAAAA|2881.80|0.00|691.20
 catalog channel|catalog_pageAAAAAAAALGABAAAA|747.20|0.00|408.44
 catalog channel|catalog_pageAAAAAAAALHCBAAAA|712.50|0.00|-250.50
 catalog channel|catalog_pageAAAAAAAALKPAAAAA|2395.69|0.00|-2898.62
+catalog channel|catalog_pageAAAAAAAALMPAAAAA|1262.99|0.00|-596.25

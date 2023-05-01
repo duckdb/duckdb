@@ -91,6 +91,9 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath) {
 
 void SQLLogicTestRunner::Reconnect() {
 	con = make_uniq<Connection>(*db);
+	if (original_sqlite_test) {
+		con->Query("SET integer_division=true");
+	}
 	if (enable_verification) {
 		con->EnableQueryVerification();
 	}
@@ -491,6 +494,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				if (TestForceStorage()) {
 					return;
 				}
+			} else if (param == "nothreadsan") {
+#ifdef DUCKDB_THREAD_SANITIZER
+				return;
+#endif
 			} else if (param == "strinline") {
 #ifdef DUCKDB_DEBUG_NO_INLINE
 				return;

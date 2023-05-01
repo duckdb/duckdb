@@ -23,7 +23,7 @@ public:
 	DUCKDB_API ~ArrowAppender();
 
 	//! Append a data chunk to the underlying arrow array
-	DUCKDB_API void Append(DataChunk &input);
+	DUCKDB_API void Append(DataChunk &input, idx_t from, idx_t to, idx_t input_size);
 	//! Returns the underlying arrow array
 	DUCKDB_API ArrowArray Finalize();
 
