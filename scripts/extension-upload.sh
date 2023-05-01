@@ -12,7 +12,7 @@ do
 	ext=`basename $f .duckdb_extension`
 	echo $ext
 	# calculate SHA256 hash of extension binary
-	scripts/compute-hash.sh $f > $f.hash
+	scripts/compute-extension-hash.sh $f > $f.hash
 	# encrypt hash with extension signing private key to create signature
 	openssl pkeyutl -sign -in $f.hash -inkey private.pem -pkeyopt digest:sha256 -out $f.sign
 	# append signature to extension binary

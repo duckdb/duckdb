@@ -26,6 +26,16 @@ static T LoadFunctionFromDLL(void *dll, const string &function_name, const strin
 	return (T)function;
 }
 
+void ComputeSHA256(FileHandle *handle, const idx_t start, const idx_t end, std::string *res) {
+	const idx_t len = end - start;
+	string file_content;
+	file_content.resize(len);
+	handle->Read((void *)file_content.data(), len, start);
+
+	// Invoke MbedTls function to actually compute sha256
+	*res = duckdb_mbedtls::MbedTlsWrapper::ComputeSha256Hash(file_content);
+}
+
 bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileOpener *opener, const string &extension,
                                      ExtensionInitResult &result, string &error) {
 	if (!config.options.enable_external_access) {
@@ -70,14 +80,32 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileOpener *opener, const
 
 		auto signature_offset = handle->GetFileSize() - signature.size();
 
+		const idx_t maxLenChunks = 1024 * 1024;
+		const idx_t numChunks = (signature_offset + maxLenChunks - 1) / maxLenChunks;
+		std::vector<std::string> chunks(numChunks);
+		std::vector<idx_t> splits(numChunks + 1);
+
+		splits.back() = signature_offset;
+		for (idx_t i = 0; i < chunks.size(); i++) {
+			splits[i] = maxLenChunks * i;
+		}
+
+		for (idx_t i = 0; i < numChunks; i++) {
+			ComputeSHA256(handle.get(), splits[i], splits[i + 1], &chunks[i]);
+		}
+
 		string file_content;
-		file_content.resize(signature_offset);
-		handle->Read((void *)file_content.data(), signature_offset, 0);
+		file_content.reserve(256 * numChunks);
+
+		for (auto &chunk : chunks) {
+			file_content += chunk;
+		}
+
+		string hash;
+		ComputeSHA256(handle.get(), 0, file_content.size(), &hash);
 
 		// TODO maybe we should do a stream read / hash update here
 		handle->Read((void *)signature.data(), signature.size(), signature_offset);
-
-		auto hash = duckdb_mbedtls::MbedTlsWrapper::ComputeSha256Hash(file_content);
 
 		bool any_valid = false;
 		for (auto &key : ExtensionHelper::GetPublicKeys()) {
