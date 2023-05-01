@@ -18,7 +18,7 @@ namespace duckdb {
 namespace pyarrow {
 
 py::object ToArrowTable(const vector<LogicalType> &types, const vector<string> &names, const string &timezone_config,
-                        std::function<py::list(const string &timezone_config)> batch_provider) {
+                        py::list batches) {
 	py::gil_scoped_acquire acquire;
 
 	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
@@ -28,8 +28,6 @@ py::object ToArrowTable(const vector<LogicalType> &types, const vector<string> &
 
 	ArrowConverter::ToArrowSchema(&schema, types, names, timezone_config);
 	auto schema_obj = schema_import_func((uint64_t)&schema);
-
-	py::list batches = batch_provider(timezone_config);
 
 	return py::cast<duckdb::pyarrow::Table>(from_batches_func(batches, schema_obj));
 }

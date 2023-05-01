@@ -321,10 +321,7 @@ duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t rows_per_batch) {
 	}
 	timezone_config = QueryResult::GetConfigTimezone(*result);
 
-	auto &this_object = *this;
-	return pyarrow::ToArrowTable(result->types, result->names, timezone_config, [&](const string &timezone_config) {
-		return this_object.FetchAllArrowChunks(rows_per_batch);
-	});
+	return pyarrow::ToArrowTable(result->types, result->names, timezone_config, FetchAllArrowChunks(rows_per_batch));
 }
 
 duckdb::pyarrow::RecordBatchReader DuckDBPyResult::FetchRecordBatchReader(idx_t rows_per_batch) {

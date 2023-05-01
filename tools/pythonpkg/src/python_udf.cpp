@@ -158,9 +158,8 @@ static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, const string 
 		names.push_back(StringUtil::Format("c%d", i));
 	}
 
-	return pyarrow::ToArrowTable(types, names, timezone_config, [&](const string &timezone_config) {
-		return ConvertToSingleBatch(timezone_config, types, names, input);
-	});
+	return pyarrow::ToArrowTable(types, names, timezone_config,
+	                             ConvertToSingleBatch(timezone_config, types, names, input));
 }
 
 static void ConvertPyArrowToDataChunk(const py::object &table, Vector &out, ClientContext &context, idx_t count) {
