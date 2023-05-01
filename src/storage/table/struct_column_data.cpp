@@ -24,6 +24,7 @@ StructColumnData::StructColumnData(BlockManager &block_manager, DataTableInfo &i
 }
 
 void StructColumnData::SetStart(idx_t new_start) {
+	this->start = new_start;
 	for (auto &sub_column : sub_columns) {
 		sub_column->SetStart(new_start);
 	}
