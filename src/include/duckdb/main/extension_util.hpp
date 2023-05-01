@@ -42,8 +42,9 @@ public:
 	DUCKDB_API static void RegisterType(DatabaseInstance &db, string type_name, LogicalType type);
 
 	//! Registers a cast between two types
-	DUCKDB_API static void RegisterCastFunction(DatabaseInstance &db, const LogicalType &source, const LogicalType &target, BoundCastInfo function,
-	                                     int64_t implicit_cast_cost = -1);
+	DUCKDB_API static void RegisterCastFunction(DatabaseInstance &db, const LogicalType &source,
+	                                            const LogicalType &target, BoundCastInfo function,
+	                                            int64_t implicit_cast_cost = -1);
 };
 
 } // namespace duckdb

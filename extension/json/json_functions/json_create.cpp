@@ -516,8 +516,8 @@ static void ToJSONFunction(DataChunk &args, ExpressionState &state, Vector &resu
 }
 
 ScalarFunctionSet JSONFunctions::GetObjectFunction() {
-	ScalarFunction fun("json_object", {}, JSONCommon::JSONType(), ObjectFunction, JSONObjectBind, nullptr,
-	                          nullptr, JSONFunctionLocalState::Init);
+	ScalarFunction fun("json_object", {}, JSONCommon::JSONType(), ObjectFunction, JSONObjectBind, nullptr, nullptr,
+	                   JSONFunctionLocalState::Init);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return ScalarFunctionSet(fun);
@@ -525,7 +525,7 @@ ScalarFunctionSet JSONFunctions::GetObjectFunction() {
 
 ScalarFunctionSet JSONFunctions::GetArrayFunction() {
 	ScalarFunction fun("json_array", {}, JSONCommon::JSONType(), ArrayFunction, JSONArrayBind, nullptr, nullptr,
-	                          JSONFunctionLocalState::Init);
+	                   JSONFunctionLocalState::Init);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return ScalarFunctionSet(fun);
@@ -533,21 +533,21 @@ ScalarFunctionSet JSONFunctions::GetArrayFunction() {
 
 ScalarFunctionSet JSONFunctions::GetToJSONFunction() {
 	ScalarFunction fun("to_json", {}, JSONCommon::JSONType(), ToJSONFunction, ToJSONBind, nullptr, nullptr,
-	                          JSONFunctionLocalState::Init);
+	                   JSONFunctionLocalState::Init);
 	fun.varargs = LogicalType::ANY;
 	return ScalarFunctionSet(fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetArrayToJSONFunction() {
-	ScalarFunction fun("array_to_json", {}, JSONCommon::JSONType(), ToJSONFunction, ArrayToJSONBind, nullptr,
-	                          nullptr, JSONFunctionLocalState::Init);
+	ScalarFunction fun("array_to_json", {}, JSONCommon::JSONType(), ToJSONFunction, ArrayToJSONBind, nullptr, nullptr,
+	                   JSONFunctionLocalState::Init);
 	fun.varargs = LogicalType::ANY;
 	return ScalarFunctionSet(fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetRowToJSONFunction() {
-	ScalarFunction fun("row_to_json", {}, JSONCommon::JSONType(), ToJSONFunction, RowToJSONBind, nullptr,
-	                          nullptr, JSONFunctionLocalState::Init);
+	ScalarFunction fun("row_to_json", {}, JSONCommon::JSONType(), ToJSONFunction, RowToJSONBind, nullptr, nullptr,
+	                   JSONFunctionLocalState::Init);
 	fun.varargs = LogicalType::ANY;
 	return ScalarFunctionSet(fun);
 }

@@ -39,7 +39,6 @@ void ExtensionUtil::RegisterFunction(DatabaseInstance &db, TableFunctionSet func
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateFunction(data, info);
-
 }
 
 void ExtensionUtil::RegisterFunction(DatabaseInstance &db, PragmaFunction function) {
@@ -90,11 +89,11 @@ void ExtensionUtil::RegisterType(DatabaseInstance &db, string type_name, Logical
 	system_catalog.CreateType(data, info);
 }
 
-void
-ExtensionUtil::RegisterCastFunction(DatabaseInstance &db, const LogicalType &source, const LogicalType &target,
-					 BoundCastInfo function, int64_t implicit_cast_cost) {
+void ExtensionUtil::RegisterCastFunction(DatabaseInstance &db, const LogicalType &source, const LogicalType &target,
+                                         BoundCastInfo function, int64_t implicit_cast_cost) {
 	auto &config = DBConfig::GetConfig(db);
 	auto &casts = config.GetCastFunctions();
-	casts.RegisterCastFunction(source, target, std::move(function), implicit_cast_cost);}
-
+	casts.RegisterCastFunction(source, target, std::move(function), implicit_cast_cost);
 }
+
+} // namespace duckdb
