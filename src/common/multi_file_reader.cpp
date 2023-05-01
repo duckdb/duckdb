@@ -7,6 +7,7 @@
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 
@@ -62,18 +63,30 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 		// options.hive_partitioning_auto_detect = false;
 		options.hive_types_auto_detect = false;
 
+		// auto structstring = val.type().ToString(); //del
+		
 		if (val.type().id() != LogicalTypeId::STRUCT) {
 			throw InvalidInputException("'hive_types' only accepts a STRUCT(name : VARCHAR, ...), not %s", val.type().ToString());
 		}
 		// verify that they all the children of the struct value are VARCHAR
-		auto children = StructValue::GetChildren(val);
-		for (auto& child : children) {
+		auto& children = StructValue::GetChildren(val);
+		for (idx_t i = 0; i < children.size(); i++) {
+			auto child = children[i];
 			if (child.type().id() != LogicalType::VARCHAR) {
 				throw InvalidInputException("one of the children... uhhh... is not a VARCHAR: %s", child.type().ToString());
 			}
 			// for every child of the struct, perform TransformStringToLogicalType to get the logical type
-			auto actual_type = TransformStringToLogicalType(child.type().ToString());
+			auto initial_type = child;
+			auto transformed_type = TransformStringToLogicalType(initial_type.ToString());
+			Value def_val;
+			string error;
+			bool success = child.DefaultTryCastAs(LogicalType::SMALLINT, def_val, &error);
+			auto cast_type = child;
 
+			auto& name = StructType::GetChildName(val.type(), i);
+			
+			// add the hivetype to the map
+			options.hive_types[name] = cast_type;
 		}
 		// options.hive_types = StructValue::GetChildren(val);	//case insensitive map?
 	} else {

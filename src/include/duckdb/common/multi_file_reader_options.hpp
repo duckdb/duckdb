@@ -10,8 +10,6 @@
 
 #include "duckdb/common/types.hpp"
 
-#include <iostream>	//lars
-
 namespace duckdb {
 class Serializer;
 class Deserializer;
@@ -22,11 +20,12 @@ struct MultiFileReaderOptions {
 	bool hive_partitioning = false;
 	bool union_by_name = false;
 	bool hive_types_auto_detect = false;
-	std::map<string,Value> hive_types;
+	std::map<string,Value> hive_types;	//case_insensitive_map_t?
 
 	DUCKDB_API void Serialize(Serializer &serializer) const;
 	DUCKDB_API static MultiFileReaderOptions Deserialize(Deserializer &source);
 	DUCKDB_API void AddBatchInfo(BindInfo &bind_info) const;
+
 };
 
 } // namespace duckdb
