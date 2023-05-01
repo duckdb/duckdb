@@ -49,7 +49,8 @@
         "parameters": "part,timestamp",
         "description": "Truncate to specified precision",
         "example": "date_trunc('hour', TIMESTAMPTZ '1992-09-20 20:38:40')",
-        "type": "scalar_function_set"
+        "type": "scalar_function_set",
+        "aliases": ["datetrunc"]
     },
     {
         "name": "day",

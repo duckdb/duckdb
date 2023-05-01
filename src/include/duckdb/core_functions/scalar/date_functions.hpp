@@ -100,6 +100,12 @@ struct DateTruncFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct DatetruncFun {
+	using ALIAS = DateTruncFun;
+
+	static constexpr const char *Name = "datetrunc";
+};
+
 struct DayFun {
 	static constexpr const char *Name = "day";
 	static constexpr const char *Parameters = "ts";
