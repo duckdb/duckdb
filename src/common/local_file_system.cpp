@@ -989,7 +989,7 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 			if (previous_directories.empty()) {
 				result.push_back(splits[i]);
 			} else {
-				if (recursive_search && is_last_chunk) {
+				if (recursive_search || is_last_chunk) {
 					for (auto &prev_directory : previous_directories) {
 						const string filename = JoinPath(prev_directory, splits[i]);
 						if (FileExists(filename) || DirectoryExists(filename)) {
