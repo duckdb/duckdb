@@ -14,13 +14,9 @@ static inline RESULT_TYPE StringCompress(const string_t &input) {
 	RESULT_TYPE result;
 	if (sizeof(RESULT_TYPE) <= string_t::INLINE_LENGTH) {
 		memcpy(&result, input.GetPrefixWriteable(), sizeof(RESULT_TYPE));
-	} else if (input.GetSize() < string_t::INLINE_LENGTH) {
-		static constexpr const idx_t MEMCPY_LENGTH =
-		    sizeof(RESULT_TYPE) < string_t::INLINE_LENGTH ? sizeof(RESULT_TYPE) : string_t::INLINE_LENGTH;
-		static constexpr const idx_t MEMSET_LENGTH = sizeof(RESULT_TYPE) - MEMCPY_LENGTH;
-
-		memcpy(&result, input.GetPrefixWriteable(), MEMCPY_LENGTH);
-		memset(data_ptr_t(&result) + string_t::INLINE_LENGTH, '\0', MEMSET_LENGTH);
+	} else if (input.GetSize() <= string_t::INLINE_LENGTH) {
+		memcpy(&result, input.GetPrefixWriteable(), string_t::INLINE_LENGTH);
+		memset(data_ptr_t(&result) + string_t::INLINE_LENGTH, '\0', sizeof(RESULT_TYPE) - string_t::INLINE_LENGTH);
 	} else {
 		result = 0;
 		memcpy(&result, input.GetDataUnsafe(), input.GetSize());
@@ -110,14 +106,9 @@ static inline string_t StringDecompress(const INPUT_TYPE &input, ArenaAllocator 
 
 	const uint32_t string_size = *((uint8_t *)&input);
 	if (string_size <= string_t::INLINE_LENGTH) {
-		static constexpr const idx_t MEMCPY_LENGTH =
-		    sizeof(INPUT_TYPE) < string_t::INLINE_LENGTH ? sizeof(INPUT_TYPE) : string_t::INLINE_LENGTH;
-		static constexpr const idx_t MEMSET_LENGTH = string_t::INLINE_LENGTH - MEMCPY_LENGTH + 1;
-
 		string_t result(string_size);
 		const auto input_swapped = BSwap<INPUT_TYPE>(input);
-		memcpy(result.GetPrefixWriteable(), &input_swapped, MEMCPY_LENGTH);
-		memset(result.GetPrefixWriteable() + MEMCPY_LENGTH - 1, '\0', MEMSET_LENGTH);
+		memcpy(result.GetPrefixWriteable(), &input_swapped, string_t::INLINE_LENGTH);
 		return result;
 	} else {
 		auto ptr = (INPUT_TYPE *)allocator.Allocate(sizeof(INPUT_TYPE));

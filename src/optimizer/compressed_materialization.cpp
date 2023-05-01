@@ -81,7 +81,7 @@ void CompressedMaterialization::Compress(unique_ptr<LogicalOperator> &op) {
 	root->ResolveOperatorTypes();
 
 	CompressInternal(op);
-	//	RemoveRedundantExpressions(op);
+	RemoveRedundantExpressions(op);
 }
 
 void CompressedMaterialization::CompressInternal(unique_ptr<LogicalOperator> &op) {
@@ -632,6 +632,7 @@ void CompressedMaterialization::RemoveRedundantExpressions(
 					can_remove_current = false;
 					break;
 				}
+				break;
 			}
 			case LogicalOperatorType::LOGICAL_FILTER: {
 				for (auto &expr : current_op.get().expressions) {
