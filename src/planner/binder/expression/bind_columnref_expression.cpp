@@ -388,7 +388,9 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 	return result;
 }
 
-bool ExpressionBinder::QualifyColumnAlias(const ColumnRefExpression &colref){
+bool ExpressionBinder::QualifyColumnAlias(const ColumnRefExpression &colref) {
+	// Only BaseSelectBinder will have a valid col alias map,
+	// otherwise just return false
 	return false;
 }
 
