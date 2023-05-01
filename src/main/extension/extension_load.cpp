@@ -4,6 +4,10 @@
 #include "duckdb/main/error_manager.hpp"
 #include "mbedtls_wrapper.hpp"
 
+#ifndef DUCKDB_NO_THREADS
+#include <thread>
+#endif // DUCKDB_NO_THREADS
+
 #ifdef WASM_LOADABLE_EXTENSIONS
 #include <emscripten.h>
 #endif
@@ -90,9 +94,21 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileOpener *opener, const
 			splits[i] = maxLenChunks * i;
 		}
 
+#ifndef DUCKDB_NO_THREADS
+		std::vector<std::thread> threads;
+		threads.reserve(numChunks);
+		for (idx_t i = 0; i < numChunks; i++) {
+			threads.emplace_back(ComputeSHA256, handle.get(), splits[i], splits[i + 1], &chunks[i]);
+		}
+
+		for (auto &thread : threads) {
+			thread.join();
+		}
+#else
 		for (idx_t i = 0; i < numChunks; i++) {
 			ComputeSHA256(handle.get(), splits[i], splits[i + 1], &chunks[i]);
 		}
+#endif // DUCKDB_NO_THREADS
 
 		string file_content;
 		file_content.reserve(256 * numChunks);
