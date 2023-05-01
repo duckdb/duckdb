@@ -65,7 +65,7 @@ jobs:
       DUCKDB_NODE_BUILD_CACHE: 0
     strategy:
       matrix:
-        node: [ '10', '12', '14', '15', '16', '17', '18', '19' ]
+        node: [ '10', '12', '14', '15', '16', '17', '18', '19', '20' ]
         target_arch: [ x64, arm64 ]
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
@@ -89,6 +89,9 @@ jobs:
             node: 18
             target_arch: x64
           - isRelease: false
+            node: 19
+            target_arch: x64
+          - isRelease: false
             node: 12
             target_arch: arm64
           - isRelease: false
@@ -105,6 +108,9 @@ jobs:
             target_arch: arm64
           - isRelease: false
             node: 18
+            target_arch: arm64
+          - isRelease: false
+            node: 19
             target_arch: arm64
 
     steps:
@@ -164,7 +170,7 @@ jobs:
     strategy:
       matrix:
         target_arch: [ x64, arm64 ]
-        node: [ '10', '12', '14', '15', '16', '17', '18', '19' ]
+        node: [ '10', '12', '14', '15', '16', '17', '18', '19', '20' ]
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
         exclude:
@@ -240,7 +246,7 @@ jobs:
 
     strategy:
       matrix:
-        node: [ '10', '12', '14', '15', '16', '17', '18', '19' ]
+        node: [ '10', '12', '14', '15', '16', '17', '18', '19', '20' ]
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
         exclude:
@@ -256,6 +262,8 @@ jobs:
             node: 17
           - isRelease: false
             node: 18
+          - isRelease: false
+            node: 19
 
     steps:
       - uses: actions/setup-python@v4

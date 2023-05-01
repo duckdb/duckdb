@@ -124,6 +124,8 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 	while (!successfully_read_first_line) {
 		DataChunk first_line_chunk;
 		first_line_chunk.Initialize(allocator, return_types);
+		// Ensure that parse_chunk has no gunk when trying to figure new line
+		parse_chunk.Reset();
 		for (; position_buffer < end_buffer; position_buffer++) {
 			if (StringUtil::CharacterIsNewline((*buffer)[position_buffer])) {
 				bool carriage_return = (*buffer)[position_buffer] == '\r';
@@ -183,6 +185,8 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 	if (verification_positions.beginning_of_first_line == 0) {
 		verification_positions.beginning_of_first_line = position_buffer;
 	}
+	// Ensure that parse_chunk has no gunk when trying to figure new line
+	parse_chunk.Reset();
 
 	verification_positions.end_of_last_line = position_buffer;
 	finished = false;
