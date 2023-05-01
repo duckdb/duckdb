@@ -73,8 +73,8 @@ public:
 		buff = Load<uint32_t>((const_data_ptr_t)&x);
 		if ((buff & (1u << 31)) == 0) { //! +0 and positive numbers
 			buff |= (1u << 31);
-		} else {                        //! negative numbers
-			buff = ~buff;               //! complement 1
+		} else {          //! negative numbers
+			buff = ~buff; //! complement 1
 		}
 
 		return buff;
@@ -103,8 +103,8 @@ public:
 		buff = Load<uint64_t>((const_data_ptr_t)&x);
 		if (buff < (1ull << 63)) { //! +0 and positive numbers
 			buff += (1ull << 63);
-		} else {                   //! negative numbers
-			buff = ~buff;          //! complement 1
+		} else {          //! negative numbers
+			buff = ~buff; //! complement 1
 		}
 		return buff;
 	}

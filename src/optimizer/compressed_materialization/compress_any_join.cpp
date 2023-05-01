@@ -10,7 +10,7 @@ void CompressedMaterialization::CompressAnyJoin(unique_ptr<LogicalOperator> &op)
 	GetReferencedBindings(*join.condition, referenced_bindings);
 
 	// Create info for compression
-	CompressedMaterializationInfo info(*op, {0}, referenced_bindings);
+	CompressedMaterializationInfo info(*op, {1}, referenced_bindings);
 
 	// Create binding mapping
 	const auto bindings = join.GetColumnBindings();

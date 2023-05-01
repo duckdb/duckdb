@@ -8,6 +8,9 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_any_join.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_delim_join.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 
@@ -512,16 +515,24 @@ CompressedMaterialization::FindDecompression(LogicalOperator &compression,
                                              vector<reference<LogicalOperator>> &operators_in_between) {
 	reference<LogicalOperator> current_op = *compression.children[0];
 	while (true) {
-		if (current_op.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
+		switch (current_op.get().type) {
+		case LogicalOperatorType::LOGICAL_PROJECTION: {
 			const auto &projection = current_op.get().Cast<LogicalProjection>();
 			if (decompression_table_indices.find(projection.table_index) != decompression_table_indices.end()) {
 				std::reverse(operators_in_between.begin(), operators_in_between.end()); // Reverse so it's bottom-up
 				return &current_op.get();
 			}
-		} else if (current_op.get().children.size() != 1) {
-			return nullptr; // Cannot find corresponding decompression
+			break;
 		}
-		D_ASSERT(current_op.get().children.size() == 1);
+		case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+		case LogicalOperatorType::LOGICAL_ANY_JOIN:
+		case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+		case LogicalOperatorType::LOGICAL_FILTER:
+		case LogicalOperatorType::LOGICAL_LIMIT:
+			break; // We can go into the 0th child here to search for a decompression
+		default:
+			return nullptr;
+		}
 		operators_in_between.emplace_back(current_op);
 		current_op = *current_op.get().children[0];
 	}
@@ -590,6 +601,37 @@ void CompressedMaterialization::RemoveRedundantExpressions(
 					can_remove_current = false;
 				}
 				break;
+			}
+			case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+			case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
+				const auto &comparison_join = current_op.get().Cast<LogicalComparisonJoin>();
+				if (!comparison_join.left_projection_map.empty()) {
+					can_remove_current = false;
+					break;
+				}
+				for (auto &cond : comparison_join.conditions) {
+					if (UsesBinding(*cond.left, current_binding)) {
+						can_remove_current = false;
+						break;
+					}
+				}
+				if (comparison_join.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+					auto &delim_join = comparison_join.Cast<LogicalDelimJoin>();
+					for (auto &dec : delim_join.duplicate_eliminated_columns) {
+						if (UsesBinding(*dec, current_binding)) {
+							can_remove_current = false;
+							break;
+						}
+					}
+				}
+				break;
+			}
+			case LogicalOperatorType::LOGICAL_ANY_JOIN: {
+				const auto &any_join = current_op.get().Cast<LogicalAnyJoin>();
+				if (UsesBinding(*any_join.condition, current_binding)) {
+					can_remove_current = false;
+					break;
+				}
 			}
 			case LogicalOperatorType::LOGICAL_FILTER: {
 				for (auto &expr : current_op.get().expressions) {

@@ -31,6 +31,7 @@ void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperato
 	// Find all bindings referenced by non-colref expressions in the conditions
 	// These are excluded from compression by projection
 	// But we can try to compress the expression directly
+	column_binding_set_t probe_compress_bindings;
 	column_binding_set_t referenced_bindings;
 	for (const auto &condition : join.conditions) {
 		if (join.conditions.size() == 1 && join.type != LogicalOperatorType::LOGICAL_DELIM_JOIN) {
@@ -56,6 +57,7 @@ void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperato
 						// This will be compressed generically, but we have to merge the stats
 						lhs_it->second->Merge(merged_stats);
 						rhs_it->second->Merge(merged_stats);
+						probe_compress_bindings.insert(lhs_colref.binding);
 						continue;
 					}
 				}
@@ -69,6 +71,15 @@ void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperato
 		auto &delim_join = join.Cast<LogicalDelimJoin>();
 		for (auto &dec : delim_join.duplicate_eliminated_columns) {
 			GetReferencedBindings(*dec, referenced_bindings);
+		}
+	}
+
+	// We mark the probe-side bindings that do not show up in the join condition as "referenced"
+	// We don't want to compress these because they are streamed
+	const auto probe_bindings = op->children[0]->GetColumnBindings();
+	for (auto &binding : probe_bindings) {
+		if (probe_compress_bindings.find(binding) == probe_compress_bindings.end()) {
+			referenced_bindings.insert(binding);
 		}
 	}
 
