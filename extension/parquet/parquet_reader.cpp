@@ -440,12 +440,6 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, Parqu
       parquet_options(parquet_options_p) {
 	auto &fs = FileSystem::GetFileSystem(context_p);
 	file_name = std::move(file_name_p);
-	if (parquet_options.file_options.ignore_missing && !fs.FileExists(file_name)) {
-		//	Since we have to construct this object, create an empty metadata object with no row groups.
-		const auto current_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-		metadata = make_shared<ParquetFileMetadataCache>(make_uniq<FileMetaData>(), current_time);
-		return;
-	}
 	file_handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
 	                          FileSystem::DEFAULT_COMPRESSION, file_opener);
 	if (!file_handle->CanSeek()) {

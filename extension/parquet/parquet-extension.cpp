@@ -303,6 +303,16 @@ public:
 				parquet_options.file_row_number = BooleanValue::Get(kv.second);
 			}
 		}
+		if (parquet_options.file_options.ignore_missing) {
+			string saved = files[0];
+			auto &fs = FileSystem::GetFileSystem(context);
+			auto it =
+			    std::remove_if(files.begin(), files.end(), [&](const string &file) { return !fs.FileExists(file); });
+			files.erase(it, files.end());
+			if (files.empty()) {
+				files.emplace_back(saved);
+			}
+		}
 		return ParquetScanBindInternal(context, std::move(files), return_types, names, parquet_options);
 	}
 
