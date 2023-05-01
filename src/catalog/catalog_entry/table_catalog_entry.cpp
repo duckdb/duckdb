@@ -55,6 +55,8 @@ void TableCatalogEntry::Serialize(Serializer &serializer) const {
 	D_ASSERT(!internal);
 
 	FieldWriter writer(serializer);
+	auto catalog_name = catalog.GetName();
+	writer.WriteString(catalog_name);
 	writer.WriteString(schema.name);
 	writer.WriteString(name);
 	columns.Serialize(writer);
@@ -66,6 +68,7 @@ unique_ptr<CreateTableInfo> TableCatalogEntry::Deserialize(Deserializer &source,
 	auto info = make_uniq<CreateTableInfo>();
 
 	FieldReader reader(source);
+	info->catalog = reader.ReadRequired<string>();
 	info->schema = reader.ReadRequired<string>();
 	info->table = reader.ReadRequired<string>();
 	info->columns = ColumnList::Deserialize(reader);

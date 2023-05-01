@@ -875,6 +875,7 @@ void DuckDBPyRelation::Print() {
 
 string DuckDBPyRelation::Explain(ExplainType type) {
 	AssertRelation();
+	py::gil_scoped_release release;
 	auto res = rel->Explain(type);
 	D_ASSERT(res->type == duckdb::QueryResultType::MATERIALIZED_RESULT);
 	auto &materialized = (duckdb::MaterializedQueryResult &)*res;
