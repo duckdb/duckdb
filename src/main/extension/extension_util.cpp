@@ -1,9 +1,11 @@
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
+#include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/config.hpp"
 
@@ -26,15 +28,44 @@ void ExtensionUtil::RegisterFunction(DatabaseInstance &db, ScalarFunction functi
 
 void ExtensionUtil::RegisterFunction(DatabaseInstance &db, TableFunction function) {
 	D_ASSERT(!function.name.empty());
+	TableFunctionSet set(function.name);
+	set.AddFunction(std::move(function));
+	RegisterFunction(db, std::move(set));
+}
+
+void ExtensionUtil::RegisterFunction(DatabaseInstance &db, TableFunctionSet function) {
+	D_ASSERT(!function.name.empty());
 	CreateTableFunctionInfo info(std::move(function));
+	auto &system_catalog = Catalog::GetSystemCatalog(db);
+	auto data = CatalogTransaction::GetSystemTransaction(db);
+	system_catalog.CreateFunction(data, info);
+
+}
+
+void ExtensionUtil::RegisterFunction(DatabaseInstance &db, PragmaFunction function) {
+	D_ASSERT(!function.name.empty());
+	PragmaFunctionSet set(function.name);
+	set.AddFunction(std::move(function));
+	RegisterFunction(db, std::move(set));
+}
+
+void ExtensionUtil::RegisterFunction(DatabaseInstance &db, PragmaFunctionSet function) {
+	D_ASSERT(!function.name.empty());
+	auto function_name = function.name;
+	CreatePragmaFunctionInfo info(std::move(function_name), std::move(function));
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateFunction(data, info);
 }
 
-void ExtensionUtil::RegisterFunction(DatabaseInstance &db, PragmaFunction function) {
-	D_ASSERT(!function.name.empty());
-	CreatePragmaFunctionInfo info(std::move(function));
+void ExtensionUtil::RegisterFunction(DatabaseInstance &db, CopyFunction function) {
+	CreateCopyFunctionInfo info(std::move(function));
+	auto &system_catalog = Catalog::GetSystemCatalog(db);
+	auto data = CatalogTransaction::GetSystemTransaction(db);
+	system_catalog.CreateCopyFunction(data, info);
+}
+
+void ExtensionUtil::RegisterFunction(DatabaseInstance &db, CreateMacroInfo &info) {
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateFunction(data, info);

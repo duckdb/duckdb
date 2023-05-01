@@ -121,8 +121,8 @@ JSONFunctionLocalState &JSONFunctionLocalState::ResetAndGet(ExpressionState &sta
 	return lstate;
 }
 
-vector<CreateScalarFunctionInfo> JSONFunctions::GetScalarFunctions() {
-	vector<CreateScalarFunctionInfo> functions;
+vector<ScalarFunctionSet> JSONFunctions::GetScalarFunctions() {
+	vector<ScalarFunctionSet> functions;
 
 	// Extract functions
 	AddAliases({"json_extract", "json_extract_path"}, GetExtractFunction(), functions);
@@ -153,14 +153,14 @@ vector<CreateScalarFunctionInfo> JSONFunctions::GetScalarFunctions() {
 	return functions;
 }
 
-vector<CreatePragmaFunctionInfo> JSONFunctions::GetPragmaFunctions() {
-	vector<CreatePragmaFunctionInfo> functions;
+vector<PragmaFunctionSet> JSONFunctions::GetPragmaFunctions() {
+	vector<PragmaFunctionSet> functions;
 	functions.push_back(GetExecuteJsonSerializedSqlPragmaFunction());
 	return functions;
 }
 
-vector<CreateTableFunctionInfo> JSONFunctions::GetTableFunctions() {
-	vector<CreateTableFunctionInfo> functions;
+vector<TableFunctionSet> JSONFunctions::GetTableFunctions() {
+	vector<TableFunctionSet> functions;
 
 	// Reads JSON as string
 	functions.push_back(GetReadJSONObjectsFunction());

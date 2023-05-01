@@ -13,6 +13,7 @@
 #include "duckdb/function/function_set.hpp"
 
 namespace duckdb {
+class CreateMacroInfo;
 class DatabaseInstance;
 
 //! The ExtensionUtil class contains methods that are useful for extensions
@@ -24,8 +25,16 @@ public:
 	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, ScalarFunctionSet function);
 	//! Register a new table function - throw an exception if the function already exists
 	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, TableFunction function);
+	//! Register a new scalar function - throw an exception if the function already exists
+	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, TableFunctionSet function);
 	//! Register a new pragma function - throw an exception if the function already exists
 	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, PragmaFunction function);
+	//! Register a new scalar function - throw an exception if the function already exists
+	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, PragmaFunctionSet function);
+	//! Register a new scalar function - throw an exception if the function already exists
+	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, CopyFunction function);
+	//! Register a new scalar function - throw an exception if the function already exists
+	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, CreateMacroInfo &info);
 	//! Extend an existing function with a new overload
 	DUCKDB_API static void ExtendFunction(DatabaseInstance &db, ScalarFunction function);
 
