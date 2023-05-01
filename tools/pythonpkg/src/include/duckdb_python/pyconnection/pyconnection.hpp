@@ -96,7 +96,7 @@ public:
 
 	shared_ptr<DuckDBPyConnection> Execute(const string &query, py::object params = py::list(), bool many = false);
 
-	shared_ptr<DuckDBPyConnection> Append(const string &name, const PandasDataFrame &value);
+	shared_ptr<DuckDBPyConnection> Append(const string &name, const PandasDataFrame &value, bool by_name);
 
 	shared_ptr<DuckDBPyConnection> RegisterPythonObject(const string &name, const py::object &python_object);
 
