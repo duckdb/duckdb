@@ -38,6 +38,14 @@ class TestDBConfig(object):
             query_failed = True
         assert query_failed == True
 
+    def test_unrecognized_option(self, duckdb_cursor):
+        success = True
+        try:
+            con_regular = duckdb.connect(':memory:', config={'thisoptionisprobablynotthere': '42'})
+        except:
+            success = False
+        assert success==False
+
     def test_incorrect_parameter(self, duckdb_cursor):
         success = True
         try:
