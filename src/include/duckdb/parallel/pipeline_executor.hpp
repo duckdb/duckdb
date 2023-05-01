@@ -111,12 +111,6 @@ private:
 	//! Current operator being flushed
 	idx_t flushing_idx;
 
-	//! Debugging state for force_async_pipelines
-	int debug_blocked_sink_count = 0;
-	int debug_blocked_source_count = 0;
-	//! Number of times each operator will block before actually producing results
-	int debug_blocked_target = 2;
-
 private:
 	void StartOperator(PhysicalOperator &op);
 	void EndOperator(PhysicalOperator &op, optional_ptr<DataChunk> chunk);
@@ -145,6 +139,14 @@ private:
 
 	static bool CanCacheType(const LogicalType &type);
 	void CacheChunk(DataChunk &input, idx_t operator_idx);
+
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+	//! Debugging state: number of times blocked
+	int debug_blocked_sink_count = 0;
+	int debug_blocked_source_count = 0;
+	//! Number of times the Sink/Source will block before actually returning data
+	int debug_blocked_target_count = 2;
+#endif
 };
 
 } // namespace duckdb

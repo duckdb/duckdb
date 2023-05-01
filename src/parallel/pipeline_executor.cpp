@@ -302,7 +302,7 @@ void PipelineExecutor::ExecutePull(DataChunk &result) {
 						break;
 					}
 
-					// Busy wait for async callback from source operator TODO: backoff?
+					// Busy wait for async callback from source operator TODO: backoff / cv?
 					while(!*done_marker) {};
 
 					// Source made callback, reset marker and try again
@@ -443,7 +443,8 @@ void PipelineExecutor::SetTaskForInterrupts(weak_ptr<Task> current_task) {
 
 SourceResultType PipelineExecutor::GetData(DataChunk &chunk, OperatorSourceInput &input) {
 	//! Testing feature to enable async source on every operator
-	if (context.client.config.force_async_pipelines && debug_blocked_source_count < debug_blocked_target) {
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+	if (debug_blocked_source_count < debug_blocked_target_count) {
 		debug_blocked_source_count++;
 
 		auto callback_state = input.interrupt_state;
@@ -455,13 +456,15 @@ SourceResultType PipelineExecutor::GetData(DataChunk &chunk, OperatorSourceInput
 
 		return SourceResultType::BLOCKED;
 	}
+#endif
 
 	return pipeline.source->GetData(context, chunk, input);
 }
 
 SinkResultType PipelineExecutor::Sink(DataChunk &chunk, OperatorSinkInput &input) {
 	//! Testing feature to enable async sink on every operator
-	if (context.client.config.force_async_pipelines && debug_blocked_sink_count < debug_blocked_target) {
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+	if (debug_blocked_sink_count < debug_blocked_target_count) {
 		debug_blocked_sink_count++;
 
 		auto callback_state = input.interrupt_state;
@@ -473,7 +476,7 @@ SinkResultType PipelineExecutor::Sink(DataChunk &chunk, OperatorSinkInput &input
 
 		return SinkResultType::BLOCKED;
 	}
-
+#endif
 	return pipeline.sink->Sink(context, chunk, input);
 }
 
