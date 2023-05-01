@@ -208,6 +208,9 @@ jobs:
     name: Forces every Sink/Source to block
     runs-on: ubuntu-20.04
     needs: linux-debug
+    strategy:
+      matrix:
+        thread_sanitizer: [ 0, 1 ]
     env:
       CC: gcc-10
       CXX: g++-10
@@ -222,6 +225,7 @@ jobs:
       BUILD_JSON: 1
       BUILD_EXCEL: 1
       FORCE_ASYNC_SINK_SOURCE: 1
+      THREADSAN: ${{ matrix.thread_sanitizer }}
 
     steps:
     - uses: actions/checkout@v3
