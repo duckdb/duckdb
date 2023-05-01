@@ -70,6 +70,12 @@ struct DatePartFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct DatepartFun {
+	using ALIAS = DatePartFun;
+
+	static constexpr const char *Name = "datepart";
+};
+
 struct DateSubFun {
 	static constexpr const char *Name = "date_sub";
 	static constexpr const char *Parameters = "part,startdate,enddate";
@@ -77,6 +83,12 @@ struct DateSubFun {
 	static constexpr const char *Example = "date_sub('hour', TIMESTAMPTZ '1992-09-30 23:59:59', TIMESTAMPTZ '1992-10-01 01:58:00')";
 
 	static ScalarFunctionSet GetFunctions();
+};
+
+struct DatesubFun {
+	using ALIAS = DateSubFun;
+
+	static constexpr const char *Name = "datesub";
 };
 
 struct DateTruncFun {
