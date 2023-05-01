@@ -161,6 +161,33 @@ unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(AttachInfo
 	return attached_database;
 }
 
+void DatabaseInstance::CreateDatabase(const string &database_type) {
+	AttachInfo info;
+	info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path);
+	info.path = config.options.database_path;
+
+	auto attached_database = CreateAttachedDatabase(info, database_type, config.options.access_mode);
+	auto initial_database = attached_database.get();
+	{
+		Connection con(*this);
+		con.BeginTransaction();
+		db_manager->AddDatabase(*con.context, std::move(attached_database));
+		con.Commit();
+	}
+
+	// initialize the database
+	initial_database->Initialize();
+}
+
+void ThrowExtensionSetUnrecognizedOptions(const unordered_map<string, Value> &unrecognized_options) {
+	auto unrecognized_options_iter = unrecognized_options.begin();
+	string unrecognized_option_keys = unrecognized_options_iter->first;
+	for (; unrecognized_options_iter == unrecognized_options.end(); ++unrecognized_options_iter) {
+		unrecognized_option_keys = "," + unrecognized_options_iter->first;
+	}
+	throw InvalidInputException("Unrecognized configuration property \"%s\"", unrecognized_option_keys);
+}
+
 void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_config) {
 	DBConfig default_config;
 	DBConfig *config_ptr = &default_config;
@@ -203,27 +230,24 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	// initialize the system catalog
 	db_manager->InitializeSystemCatalog();
 
+	bool extension_will_create_default_db =
+	    (database_type.empty()) ? false : ExtensionHelper::IsStorageExtension(database_type, config);
+
+	if (!extension_will_create_default_db) {
+		CreateDatabase("");
+	}
+
 	if (!database_type.empty()) {
 		// if we are opening an extension database - load the extension
 		ExtensionHelper::LoadExternalExtension(*this, nullptr, database_type);
 	}
 
+	if (!config.options.unrecognized_options.empty()) {
+		ThrowExtensionSetUnrecognizedOptions(config.options.unrecognized_options);
+	}
+
 	if (!db_manager->HasDefaultDatabase()) {
-		AttachInfo info;
-		info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path);
-		info.path = config.options.database_path;
-
-		auto attached_database = CreateAttachedDatabase(info, database_type, config.options.access_mode);
-		auto initial_database = attached_database.get();
-		{
-			Connection con(*this);
-			con.BeginTransaction();
-			db_manager->AddDatabase(*con.context, std::move(attached_database));
-			con.Commit();
-		}
-
-		// initialize the database
-		initial_database->Initialize();
+		CreateDatabase(database_type);
 	}
 
 	// only increase thread count after storage init because we get races on catalog otherwise
