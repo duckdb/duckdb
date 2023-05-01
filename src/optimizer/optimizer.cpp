@@ -148,6 +148,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 		cse_optimizer.VisitOperator(*plan);
 	});
 
+	// creates projection maps so unused columns are projected out early
 	RunOptimizer(OptimizerType::COLUMN_LIFETIME, [&]() {
 		ColumnLifetimeAnalyzer column_lifetime(true);
 		column_lifetime.VisitOperator(*plan);
@@ -161,15 +162,22 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 		statistics_map = propagator.GetStatisticsMap();
 	});
 
+	// remove duplicate aggregates
+	RunOptimizer(OptimizerType::COMMON_AGGREGATE, [&]() {
+		CommonAggregateOptimizer common_aggregate;
+		common_aggregate.VisitOperator(*plan);
+	});
+
+	// creates projection maps so unused columns are projected out early
+	RunOptimizer(OptimizerType::COLUMN_LIFETIME, [&]() {
+		ColumnLifetimeAnalyzer column_lifetime(true);
+		column_lifetime.VisitOperator(*plan);
+	});
+
 	// compress data based on statistics for materializing operators
 	RunOptimizer(OptimizerType::COMPRESSED_MATERIALIZATION, [&]() {
 		CompressedMaterialization compressed_materialization(context, binder, std::move(statistics_map));
 		compressed_materialization.Compress(plan);
-	});
-
-	RunOptimizer(OptimizerType::COMMON_AGGREGATE, [&]() {
-		CommonAggregateOptimizer common_aggregate;
-		common_aggregate.VisitOperator(*plan);
 	});
 
 	// transform ORDER BY + LIMIT to TopN
