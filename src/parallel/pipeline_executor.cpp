@@ -101,6 +101,7 @@ OperatorResultType PipelineExecutor::FlushCachingOperatorsPush() {
 	return OperatorResultType::FINISHED;
 }
 
+// TODO: unspaghet!
 PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 	D_ASSERT(pipeline.sink);
 	auto &source_chunk = pipeline.operators.empty() ? final_chunk : *intermediate_chunks[0];
@@ -160,10 +161,12 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 				return PipelineExecuteResult::INTERRUPTED;
 			}
 
-			// TODO check source result type instead of source chunk size
-			if (source_chunk.size() == 0) {
+			if (source_result == SourceResultType::FINISHED) {
 				exhausted_source = true;
-				continue;
+
+				if (source_chunk.size() == 0) {
+					continue;
+				}
 			}
 			result = ExecutePushInternal(source_chunk);
 		} else {
@@ -283,7 +286,7 @@ void PipelineExecutor::ExecutePull(DataChunk &result) {
 	try {
 		D_ASSERT(!pipeline.sink);
 		auto &source_chunk = pipeline.operators.empty() ? result : *intermediate_chunks[0];
-		while (result.size() == 0) {
+		while (result.size() == 0 && !exhausted_source) {
 			if (in_process_operators.empty()) {
 				source_chunk.Reset();
 
@@ -309,9 +312,11 @@ void PipelineExecutor::ExecutePull(DataChunk &result) {
 					*done_marker = false;
 				}
 
-				if (source_chunk.size() == 0) {
-//					D_ASSERT(res == SourceResultType::FINISHED);
-					break;
+				if (source_result == SourceResultType::FINISHED) {
+					exhausted_source = true;
+					if (source_chunk.size() == 0) {
+						break;
+					}
 				}
 			}
 			if (!pipeline.operators.empty()) {
@@ -485,8 +490,9 @@ SourceResultType PipelineExecutor::FetchFromSource(DataChunk &result) {
 
 	OperatorSourceInput source_input = { *pipeline.source_state, *local_source_state, interrupt_state };
 	auto res = GetData(result, source_input);
+
+	// Ensures Sinks only return empty results when Blocking or Finished
 	D_ASSERT(res != SourceResultType::BLOCKED || result.size() == 0);
-	D_ASSERT(res != SourceResultType::FINISHED || result.size() == 0);
 
 	if (result.size() != 0 && requires_batch_index) {
 		auto next_batch_index =

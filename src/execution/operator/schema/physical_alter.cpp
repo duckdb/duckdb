@@ -7,28 +7,11 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-class AlterSourceState : public GlobalSourceState {
-public:
-	AlterSourceState() : finished(false) {
-	}
-
-	bool finished;
-};
-
-unique_ptr<GlobalSourceState> PhysicalAlter::GetGlobalSourceState(ClientContext &context) const {
-	return make_uniq<AlterSourceState>();
-}
-
 SourceResultType PhysicalAlter::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
-	auto &state = input.global_state.Cast<AlterSourceState>();
-	if (state.finished) {
-		return SourceResultType::FINISHED;
-	}
 	auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
 	catalog.Alter(context.client, *info);
-	state.finished = true;
 
-	return SourceResultType::HAVE_MORE_OUTPUT;
+	return SourceResultType::FINISHED;
 }
 
 } // namespace duckdb

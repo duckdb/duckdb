@@ -464,7 +464,7 @@ SinkFinalizeType PhysicalInsert::Finalize(Pipeline &pipeline, Event &event, Clie
 //===--------------------------------------------------------------------===//
 class InsertSourceState : public GlobalSourceState {
 public:
-	explicit InsertSourceState(const PhysicalInsert &op) : finished(false) {
+	explicit InsertSourceState(const PhysicalInsert &op) {
 		if (op.return_chunk) {
 			D_ASSERT(op.sink_state);
 			auto &g = op.sink_state->Cast<InsertGlobalState>();
@@ -473,7 +473,6 @@ public:
 	}
 
 	ColumnDataScanState scan_state;
-	bool finished;
 };
 
 unique_ptr<GlobalSourceState> PhysicalInsert::GetGlobalSourceState(ClientContext &context) const {
@@ -483,14 +482,10 @@ unique_ptr<GlobalSourceState> PhysicalInsert::GetGlobalSourceState(ClientContext
 SourceResultType PhysicalInsert::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
 	auto &state = input.global_state.Cast<InsertSourceState>();
 	auto &insert_gstate = sink_state->Cast<InsertGlobalState>();
-	if (state.finished) {
-		return SourceResultType::FINISHED;
-	}
 	if (!return_chunk) {
 		chunk.SetCardinality(1);
 		chunk.SetValue(0, 0, Value::BIGINT(insert_gstate.insert_count));
-		state.finished = true;
-		return SourceResultType::HAVE_MORE_OUTPUT;
+		return SourceResultType::FINISHED;
 	}
 
 	insert_gstate.return_collection.Scan(state.scan_state, chunk);

@@ -11,23 +11,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-class DropSourceState : public GlobalSourceState {
-public:
-	DropSourceState() : finished(false) {
-	}
-
-	bool finished;
-};
-
-unique_ptr<GlobalSourceState> PhysicalDrop::GetGlobalSourceState(ClientContext &context) const {
-	return make_uniq<DropSourceState>();
-}
-
 SourceResultType PhysicalDrop::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
-	auto &state = input.global_state.Cast<DropSourceState>();
-	if (state.finished) {
-		return SourceResultType::FINISHED;
-	}
 	switch (info->type) {
 	case CatalogType::PREPARED_STATEMENT: {
 		// DEALLOCATE silently ignores errors
@@ -61,9 +45,8 @@ SourceResultType PhysicalDrop::GetData(ExecutionContext &context, DataChunk &chu
 		break;
 	}
 	}
-	state.finished = true;
 
-	return SourceResultType::HAVE_MORE_OUTPUT;
+	return SourceResultType::FINISHED;
 }
 
 } // namespace duckdb

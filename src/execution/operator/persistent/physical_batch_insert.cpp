@@ -391,29 +391,14 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-class BatchInsertSourceState : public GlobalSourceState {
-public:
-	explicit BatchInsertSourceState() : finished(false) {
-	}
-
-	bool finished;
-};
-
-unique_ptr<GlobalSourceState> PhysicalBatchInsert::GetGlobalSourceState(ClientContext &context) const {
-	return make_uniq<BatchInsertSourceState>();
-}
 
 SourceResultType PhysicalBatchInsert::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
-	auto &state = input.global_state.Cast<BatchInsertSourceState>();
 	auto &insert_gstate = sink_state->Cast<BatchInsertGlobalState>();
-	if (state.finished) {
-		return SourceResultType::FINISHED;
-	}
+
 	chunk.SetCardinality(1);
 	chunk.SetValue(0, 0, Value::BIGINT(insert_gstate.insert_count));
-	state.finished = true;
 
-	return SourceResultType::HAVE_MORE_OUTPUT;
+	return SourceResultType::FINISHED;
 }
 
 } // namespace duckdb

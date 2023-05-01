@@ -48,7 +48,7 @@ SourceResultType PhysicalTransaction::GetData(ExecutionContext &context, DataChu
 		throw NotImplementedException("Unrecognized transaction type!");
 	}
 
-	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
+	return SourceResultType::FINISHED;
 }
 
 } // namespace duckdb

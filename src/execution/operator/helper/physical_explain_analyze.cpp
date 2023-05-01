@@ -31,31 +31,14 @@ unique_ptr<GlobalSinkState> PhysicalExplainAnalyze::GetGlobalSinkState(ClientCon
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-class ExplainAnalyzeState : public GlobalSourceState {
-public:
-	ExplainAnalyzeState() : finished(false) {
-	}
-
-	bool finished;
-};
-
-unique_ptr<GlobalSourceState> PhysicalExplainAnalyze::GetGlobalSourceState(ClientContext &context) const {
-	return make_uniq<ExplainAnalyzeState>();
-}
-
 SourceResultType PhysicalExplainAnalyze::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
-	auto &state = (ExplainAnalyzeState &)input.global_state;
 	auto &gstate = sink_state->Cast<ExplainAnalyzeStateGlobalState>();
-	if (state.finished) {
-		return SourceResultType::FINISHED;
-	}
+
 	chunk.SetValue(0, 0, Value("analyzed_plan"));
 	chunk.SetValue(1, 0, Value(gstate.analyzed_plan));
 	chunk.SetCardinality(1);
 
-	state.finished = true;
-
-	return SourceResultType::HAVE_MORE_OUTPUT;
+	return SourceResultType::FINISHED;
 }
 
 } // namespace duckdb

@@ -152,7 +152,7 @@ void PhysicalUpdate::Combine(ExecutionContext &context, GlobalSinkState &gstate,
 //===--------------------------------------------------------------------===//
 class UpdateSourceState : public GlobalSourceState {
 public:
-	explicit UpdateSourceState(const PhysicalUpdate &op) : finished(false) {
+	explicit UpdateSourceState(const PhysicalUpdate &op) {
 		if (op.return_chunk) {
 			D_ASSERT(op.sink_state);
 			auto &g = op.sink_state->Cast<UpdateGlobalState>();
@@ -161,7 +161,6 @@ public:
 	}
 
 	ColumnDataScanState scan_state;
-	bool finished;
 };
 
 unique_ptr<GlobalSourceState> PhysicalUpdate::GetGlobalSourceState(ClientContext &context) const {
@@ -171,14 +170,10 @@ unique_ptr<GlobalSourceState> PhysicalUpdate::GetGlobalSourceState(ClientContext
 SourceResultType PhysicalUpdate::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
 	auto &state = input.global_state.Cast<UpdateSourceState>();
 	auto &g = sink_state->Cast<UpdateGlobalState>();
-	if (state.finished) {
-		return SourceResultType::FINISHED;
-	}
 	if (!return_chunk) {
 		chunk.SetCardinality(1);
 		chunk.SetValue(0, 0, Value::BIGINT(g.updated_count));
-		state.finished = true;
-		return SourceResultType::HAVE_MORE_OUTPUT;
+		return SourceResultType::FINISHED;
 	}
 
 	g.return_collection.Scan(state.scan_state, chunk);

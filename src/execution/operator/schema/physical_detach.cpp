@@ -11,28 +11,11 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-class DetachSourceState : public GlobalSourceState {
-public:
-	DetachSourceState() : finished(false) {
-	}
-
-	bool finished;
-};
-
-unique_ptr<GlobalSourceState> PhysicalDetach::GetGlobalSourceState(ClientContext &context) const {
-	return make_uniq<DetachSourceState>();
-}
-
 SourceResultType PhysicalDetach::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
-	auto &state = input.global_state.Cast<DetachSourceState>();
-	if (state.finished) {
-		return SourceResultType::FINISHED;
-	}
 	auto &db_manager = DatabaseManager::Get(context.client);
 	db_manager.DetachDatabase(context.client, info->name, info->if_not_found);
-	state.finished = true;
 
-	return SourceResultType::HAVE_MORE_OUTPUT;
+	return SourceResultType::FINISHED;
 }
 
 } // namespace duckdb

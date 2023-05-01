@@ -536,18 +536,6 @@ SinkFinalizeType PhysicalUngroupedAggregate::Finalize(Pipeline &pipeline, Event 
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-class UngroupedAggregateState : public GlobalSourceState {
-public:
-	UngroupedAggregateState() : finished(false) {
-	}
-
-	bool finished;
-};
-
-unique_ptr<GlobalSourceState> PhysicalUngroupedAggregate::GetGlobalSourceState(ClientContext &context) const {
-	return make_uniq<UngroupedAggregateState>();
-}
-
 void VerifyNullHandling(DataChunk &chunk, AggregateState &state, const vector<unique_ptr<Expression>> &aggregates) {
 #ifdef DEBUG
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
@@ -564,11 +552,7 @@ void VerifyNullHandling(DataChunk &chunk, AggregateState &state, const vector<un
 
 SourceResultType PhysicalUngroupedAggregate::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
 	auto &gstate = sink_state->Cast<UngroupedAggregateGlobalState>();
-	auto &state = (UngroupedAggregateState &)input.global_state;
 	D_ASSERT(gstate.finished);
-	if (state.finished) {
-		return SourceResultType::FINISHED;
-	}
 
 	// initialize the result chunk with the aggregate values
 	chunk.SetCardinality(1);
@@ -580,9 +564,8 @@ SourceResultType PhysicalUngroupedAggregate::GetData(ExecutionContext &context, 
 		aggregate.function.finalize(state_vector, aggr_input_data, chunk.data[aggr_idx], 1, 0);
 	}
 	VerifyNullHandling(chunk, gstate.state, aggregates);
-	state.finished = true;
 
-	return SourceResultType::HAVE_MORE_OUTPUT;
+	return SourceResultType::FINISHED;
 }
 
 string PhysicalUngroupedAggregate::ParamsToString() const {

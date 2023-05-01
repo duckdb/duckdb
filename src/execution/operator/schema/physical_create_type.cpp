@@ -60,24 +60,7 @@ SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, DataChunk &ch
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-class CreateTypeSourceState : public GlobalSourceState {
-public:
-	CreateTypeSourceState() : finished(false) {
-	}
-
-	bool finished;
-};
-
-unique_ptr<GlobalSourceState> PhysicalCreateType::GetGlobalSourceState(ClientContext &context) const {
-	return make_uniq<CreateTypeSourceState>();
-}
-
 SourceResultType PhysicalCreateType::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
-	auto &state = input.global_state.Cast<CreateTypeSourceState>();
-	if (state.finished) {
-		return SourceResultType::FINISHED;
-	}
-
 	if (IsSink()) {
 		D_ASSERT(info->type == LogicalType::INVALID);
 		auto &g_sink_state = sink_state->Cast<CreateTypeGlobalState>();
@@ -89,9 +72,8 @@ SourceResultType PhysicalCreateType::GetData(ExecutionContext &context, DataChun
 	D_ASSERT(catalog_entry->type == CatalogType::TYPE_ENTRY);
 	auto &catalog_type = catalog_entry->Cast<TypeCatalogEntry>();
 	EnumType::SetCatalog(info->type, &catalog_type);
-	state.finished = true;
 
-	return SourceResultType::HAVE_MORE_OUTPUT;
+	return SourceResultType::FINISHED;
 }
 
 } // namespace duckdb

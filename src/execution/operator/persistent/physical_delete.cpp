@@ -69,7 +69,7 @@ unique_ptr<LocalSinkState> PhysicalDelete::GetLocalSinkState(ExecutionContext &c
 //===--------------------------------------------------------------------===//
 class DeleteSourceState : public GlobalSourceState {
 public:
-	explicit DeleteSourceState(const PhysicalDelete &op) : finished(false) {
+	explicit DeleteSourceState(const PhysicalDelete &op) {
 		if (op.return_chunk) {
 			D_ASSERT(op.sink_state);
 			auto &g = op.sink_state->Cast<DeleteGlobalState>();
@@ -78,7 +78,6 @@ public:
 	}
 
 	ColumnDataScanState scan_state;
-	bool finished;
 };
 
 unique_ptr<GlobalSourceState> PhysicalDelete::GetGlobalSourceState(ClientContext &context) const {
@@ -88,15 +87,10 @@ unique_ptr<GlobalSourceState> PhysicalDelete::GetGlobalSourceState(ClientContext
 SourceResultType PhysicalDelete::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
 	auto &state = input.global_state.Cast<DeleteSourceState>();
 	auto &g = sink_state->Cast<DeleteGlobalState>();
-	if (state.finished) {
-		return SourceResultType::FINISHED;
-	}
-
 	if (!return_chunk) {
 		chunk.SetCardinality(1);
 		chunk.SetValue(0, 0, Value::BIGINT(g.deleted_count));
-		state.finished = true;
-		return SourceResultType::HAVE_MORE_OUTPUT;
+		return SourceResultType::FINISHED;
 	}
 
 	g.return_collection.Scan(state.scan_state, chunk);
