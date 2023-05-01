@@ -14,8 +14,9 @@ namespace duckdb {
 RegexOptimizationRule::RegexOptimizationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	auto func = make_uniq<FunctionExpressionMatcher>();
 	func->function = make_uniq<SpecificFunctionMatcher>("regexp_matches");
-	func->policy = SetMatcher::Policy::SOME;
+	func->policy = SetMatcher::Policy::PARTIAL_ORDERED;
 	func->matchers.push_back(make_uniq<ExpressionMatcher>());
+	func->matchers.push_back(make_uniq<ConstantExpressionMatcher>());
 	func->matchers.push_back(make_uniq<ConstantExpressionMatcher>());
 
 	root = std::move(func);
@@ -133,8 +134,8 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		D_ASSERT(root.children.size() == 2);
 	}
 
-	auto like_expression =
-	    make_uniq<BoundFunctionExpression>(root.return_type, LikeFun::GetFunction(), std::move(root.children), nullptr);
+	auto like_expression = make_uniq<BoundFunctionExpression>(root.return_type, LikeFun::GetLikeFunction(),
+	                                                          std::move(root.children), nullptr);
 	auto parameter = make_uniq<BoundConstantExpression>(Value(std::move(like_string.like_string)));
 	like_expression->children[1] = std::move(parameter);
 	return std::move(like_expression);

@@ -23,6 +23,8 @@ public:
 		UNORDERED,
 		//! Only some entries have to be matched, the order of the matches does not matter
 		SOME,
+		//! The provided entries must match in order.
+		PARTIAL_ORDERED,
 		//! Not initialized
 		INVALID
 	};
@@ -74,6 +76,18 @@ public:
 			}
 			// now entries have to match in order
 			for (idx_t i = 0; i < matchers.size(); i++) {
+				if (!matchers[i]->Match(entries[i], bindings)) {
+					return false;
+				}
+			}
+			return true;
+		} else if (policy == Policy::PARTIAL_ORDERED) {
+			// partial ordered policy, if too many entries are provided, return false
+			if (matchers.size() < entries.size()) {
+				return false;
+			}
+			// now provided entries have to match in order
+			for (idx_t i = 0; i < entries.size(); i++) {
 				if (!matchers[i]->Match(entries[i], bindings)) {
 					return false;
 				}

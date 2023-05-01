@@ -504,8 +504,7 @@ static void RegularLikeFunction(DataChunk &input, ExpressionState &state, Vector
 }
 void LikeFun::RegisterFunction(BuiltinFunctions &set) {
 	// like
-	set.AddFunction(ScalarFunction("~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                               RegularLikeFunction<LikeOperator, false>, LikeBindFunction));
+	set.AddFunction(GetLikeFunction());
 	// not like
 	set.AddFunction(ScalarFunction("!~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                               RegularLikeFunction<NotLikeOperator, true>, LikeBindFunction));
@@ -522,7 +521,7 @@ void LikeFun::RegisterFunction(BuiltinFunctions &set) {
 	                               nullptr, ILikePropagateStats<NotILikeOperatorASCII>));
 }
 
-ScalarFunction LikeFun::GetFunction() {
+ScalarFunction LikeFun::GetLikeFunction() {
 	return ScalarFunction("~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                      RegularLikeFunction<LikeOperator, false>, LikeBindFunction);
 }

@@ -194,4 +194,16 @@ select count(s) from test where regexp_matches(s, 'aaa.', 's');
 ----
 1
 
+# when regexp_matches arguments are incorrect, an error is produced
+statement error
+select count(s) from test where regexp_matches(s);
+----
+Binder Error
+
+# when regexp_matches arguments are incorrect, an error is produced
+statement error
+select count(s) from test where regexp_matches('aaa');
+----
+Binder Error
+
 
