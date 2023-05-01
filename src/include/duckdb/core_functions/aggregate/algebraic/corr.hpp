@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/function/aggregate/algebraic/corr.hpp
+// duckdb/core_functions/aggregate/algebraic/corr.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,8 +9,8 @@
 #pragma once
 
 #include "duckdb/function/aggregate_function.hpp"
-#include "covar.hpp"
-#include "stddev.hpp"
+#include "duckdb/core_functions/aggregate/algebraic/covar.hpp"
+#include "duckdb/core_functions/aggregate/algebraic/stddev.hpp"
 
 namespace duckdb {
 

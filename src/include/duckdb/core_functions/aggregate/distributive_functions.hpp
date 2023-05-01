@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// aggregate/distributive_functions.hpp
+// duckdb/core_functions/aggregate/distributive_functions.hpp
 //
 //
 //===----------------------------------------------------------------------===//

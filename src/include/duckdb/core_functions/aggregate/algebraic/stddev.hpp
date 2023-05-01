@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/function/aggregate/algebraic/stddev.hpp
+// duckdb/core_functions/aggregate/algebraic/stddev.hpp
 //
 //
 //===----------------------------------------------------------------------===//

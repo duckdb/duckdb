@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// aggregate/regression_functions.hpp
+// duckdb/core_functions/aggregate/regression_functions.hpp
 //
 //
 //===----------------------------------------------------------------------===//

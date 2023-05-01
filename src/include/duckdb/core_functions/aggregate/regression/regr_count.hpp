@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/function/aggregate/regression/regr_count.hpp
+// duckdb/core_functions/aggregate/regression/regr_count.hpp
 //
 //
 //===----------------------------------------------------------------------===//

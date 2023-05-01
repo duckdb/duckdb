@@ -8,7 +8,7 @@ scalar_functions = ['bit', 'blob', 'date', 'enum', 'generic', 'list', 'map', 'ma
 header = '''//===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// {HEADER}_functions.hpp
+// duckdb/core_functions/{HEADER}_functions.hpp
 //
 //
 //===----------------------------------------------------------------------===//

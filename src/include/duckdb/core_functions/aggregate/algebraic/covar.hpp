@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/function/aggregate/algebraic/covar.hpp
+// duckdb/core_functions/aggregate/algebraic/covar.hpp
 //
 //
 //===----------------------------------------------------------------------===//
