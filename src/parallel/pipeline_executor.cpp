@@ -117,8 +117,9 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 			throw InterruptException();
 		}
 
-		// There's 4 ways we can process a chunk in the pipeline here:
-		// 1.  Regular fetch from source into pipeline:         Fetch from source, push through pipeline
+		// There's 6 ways we can process a chunk in the pipeline here:
+		// 1a. Regular fetch from source into pipeline:         Fetch from source, push through pipeline
+		// 1b. A sink interrupt happened with have more output: Fetch from source, push through pipeline
 		// 2.  Resuming after Sink interrupt:                   Retry pushing the final chunk into the sink
 		// 3.  Flushing operators:                              Flushing a cached chunk through the pipeline into sink
 		// 4a. Fetch had in process ops after Sink interrupt:   Retry pushing the last source chunk through the pipeline
@@ -136,18 +137,20 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 				// 4a. Resume after sink interrupt while fetching from source with in process operators
 				D_ASSERT(source_chunk.size() > 0);
 				result = ExecutePushInternal(source_chunk);
+				// We need to reset this flag
 				blocked_on_have_more_output = false;
 			}
 		} else if (exhausted_source && !done_flushing) {
 			// 3. Flushing operators
 			result = FlushCachingOperatorsPush();
 		} else if (!exhausted_source) {
-			// 1. Regular fetch from source into pipeline
 			SourceResultType source_result;
 			if (!blocked_on_have_more_output) {
+				// 1a. Regular fetch from source into pipeline
 				source_chunk.Reset();
 				source_result = FetchFromSource(source_chunk);
 			} else {
+				// 1b. We blocked on a have_more_output, need to re-execute the pipeline with same input
 				blocked_on_have_more_output = false;
 				source_result = SourceResultType::HAVE_MORE_OUTPUT;
 			}
