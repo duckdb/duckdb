@@ -91,6 +91,7 @@ static void ConvertPyArrowToDataChunk(const py::object &table, Vector &out, Clie
 	if (result.size() != count) {
 		throw InvalidInputException("Returned pyarrow table should have %d tuples, found %d", count, result.size());
 	}
+	out.SetAuxiliary(result.data[0].GetAuxiliary());
 	VectorOperations::Cast(context, result.data[0], out, count);
 }
 
@@ -229,7 +230,7 @@ public:
 	}
 
 public:
-	const string &name;
+	string name;
 	vector<LogicalType> parameters;
 	LogicalType return_type;
 	LogicalType varargs = LogicalTypeId::INVALID;

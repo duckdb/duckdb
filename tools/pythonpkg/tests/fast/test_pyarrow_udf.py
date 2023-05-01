@@ -26,10 +26,9 @@ class TestPyArrowUDF(object):
         res = con.sql('select plus_one(i) from range_table tbl(i)').fetchall()
         assert len(res) == 5000
 
-        # FIXME: this is dependent on the duckdb vector size
-        # which we can get through `duckdb.__standard_vector_size__`
-        res = con.sql('select i, plus_one(i) from test_vector_types(NULL::BIGINT, false) t(i), range(2000)')
-        assert len(res) == 22000
+        vector_size = duckdb.__standard_vector_size__
+        res = con.sql(f'select i, plus_one(i) from test_vector_types(NULL::BIGINT, false) t(i), range({vector_size})')
+        assert len(res) == (vector_size * 11)
 
     # NOTE: This only works up to duckdb.__standard_vector_size__,
     # because we process up to STANDARD_VECTOR_SIZE tuples at a time
@@ -43,6 +42,37 @@ class TestPyArrowUDF(object):
         con.register_scalar_udf('sort_table', sort_table, [BIGINT], BIGINT, vectorized=True)
         res = con.sql("select 100-i as original, sort_table(original) from range(100) tbl(i)").fetchall()
         assert res[0] == (100, 1)
+
+    @pytest.mark.parametrize('types', [
+        (int, 42),
+        #(str, 'long_string_test')
+    ])
+    def test_type_coverage(self, types):
+        type = types[0]
+        value = types[1]
+
+        # Create a function that returns its input
+        def test_base(x):
+            return x
+
+        import types
+        test_function = types.FunctionType(
+            test_base.__code__,
+            test_base.__globals__,
+            test_base.__name__,
+            test_base.__defaults__,
+            test_base.__closure__
+        )
+        # Add annotations for the return type and 'x'
+        test_function.__annotations__ = {
+            'return': type,
+            'x': type
+        }
+
+        con = duckdb.connect()
+        con.register_scalar_udf('test', test_function, vectorized=True)
+        res = con.execute("select test(?)", [value]).fetchall()
+        assert res[0][0] == value
 
     def test_varargs(self):
         def variable_args(*args):
