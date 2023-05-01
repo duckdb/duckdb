@@ -15,11 +15,11 @@ ExecutorTask::~ExecutorTask() {
 
 void ExecutorTask::Deschedule() {
 	executor.AddToBeRescheduled(shared_from_this());
-};
+}
 
 void ExecutorTask::Reschedule() {
 	executor.RescheduleTask(shared_from_this());
-};
+}
 
 TaskExecutionResult ExecutorTask::Execute(TaskExecutionMode mode) {
 	try {

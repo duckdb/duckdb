@@ -34,8 +34,9 @@ public:
 	//! In case the task has interrupted, BLOCKED is returned.
 	virtual TaskExecutionResult Execute(TaskExecutionMode mode) = 0;
 
-	//! Descheduling a task ensures the task remains available for rescheduling as long as required, generally until some
-	//! external event calls the relevant callback for this task for it to be rescheduled.
+	//! Descheduling a task ensures the task is not executed, but remains available for rescheduling as long as required,
+	//! generally until some code in an operator calls the InterruptState::Callback() method of a state of
+	//! the InterruptMode::TASK mode.
 	virtual void Deschedule() {
 	    throw InternalException("Cannot deschedule task of base Task class");
 	};

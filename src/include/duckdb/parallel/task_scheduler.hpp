@@ -39,12 +39,6 @@ struct ProducerToken {
 	mutex producer_lock;
 };
 
-struct HugeIntHash {
-	std::size_t operator()(const hugeint_t &k) const {
-		return Hash(k);
-	}
-};
-
 //! The TaskScheduler is responsible for managing tasks and threads
 class TaskScheduler {
 	// timeout for semaphore wait, default 5ms
