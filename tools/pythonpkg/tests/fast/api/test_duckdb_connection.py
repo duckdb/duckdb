@@ -19,6 +19,18 @@ class TestDuckDBConnection(object):
         # cleanup
         duckdb.execute("drop table integers")
 
+    def test_default_connection_from_connect(self):
+        duckdb.sql('create or replace table connect_default_connect (i integer)')
+        con = duckdb.connect(':default:')
+        con.sql('select i from connect_default_connect')
+        duckdb.sql('drop table connect_default_connect')
+        with pytest.raises(duckdb.Error):
+            con.sql('select i from connect_default_connect')
+
+        # not allowed with additional options
+        with pytest.raises(duckdb.InvalidInputException, match='Default connection fetching is only allowed without additional options'):
+            con = duckdb.connect(':default:', read_only=True)
+
     def test_arrow(self):
         pyarrow = pytest.importorskip("pyarrow")
         duckdb.execute("select [1,2,3]")

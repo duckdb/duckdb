@@ -36,6 +36,7 @@ tpcds_table_def GetTDefByNumber(int table_id) {
 	def.name = tdef->name;
 	def.fl_child = tdef->flags & FL_CHILD ? 1 : 0;
 	def.fl_small = tdef->flags & FL_SMALL ? 1 : 0;
+	def.first_column = tdef->nFirstColumn;
 	return def;
 }
 

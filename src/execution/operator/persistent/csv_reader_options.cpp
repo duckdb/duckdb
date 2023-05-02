@@ -175,6 +175,8 @@ void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value 
 		}
 	} else if (loption == "null_padding") {
 		null_padding = ParseBoolean(value, loption);
+	} else if (loption == "allow_quoted_nulls") {
+		allow_quoted_nulls = ParseBoolean(value, loption);
 	} else {
 		throw BinderException("Unrecognized option for CSV reader \"%s\"", loption);
 	}

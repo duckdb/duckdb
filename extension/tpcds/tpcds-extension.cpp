@@ -1,14 +1,11 @@
 #define DUCKDB_EXTENSION_MAIN
-
 #include "tpcds-extension.hpp"
 
 #include "dsdgen.hpp"
 
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
-#include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #endif
@@ -147,8 +144,7 @@ static string PragmaTpcdsQuery(ClientContext &context, const FunctionParameters 
 }
 
 void TPCDSExtension::Load(DuckDB &db) {
-	Connection con(db);
-	con.BeginTransaction();
+	auto &db_instance = *db.instance;
 
 	TableFunction dsdgen_func("dsdgen", {}, DsdgenFunction, DsdgenBind);
 	dsdgen_func.named_parameters["sf"] = LogicalType::DOUBLE;
@@ -156,29 +152,20 @@ void TPCDSExtension::Load(DuckDB &db) {
 	dsdgen_func.named_parameters["keys"] = LogicalType::BOOLEAN;
 	dsdgen_func.named_parameters["schema"] = LogicalType::VARCHAR;
 	dsdgen_func.named_parameters["suffix"] = LogicalType::VARCHAR;
-	CreateTableFunctionInfo dsdgen_info(dsdgen_func);
-
-	// create the dsdgen function
-	auto &catalog = Catalog::GetSystemCatalog(*con.context);
-	catalog.CreateTableFunction(*con.context, dsdgen_info);
+	ExtensionUtil::RegisterFunction(db_instance, dsdgen_func);
 
 	// create the TPCDS pragma that allows us to run the query
 	auto tpcds_func = PragmaFunction::PragmaCall("tpcds", PragmaTpcdsQuery, {LogicalType::BIGINT});
-	CreatePragmaFunctionInfo info(tpcds_func);
-	catalog.CreatePragmaFunction(*con.context, info);
+	ExtensionUtil::RegisterFunction(db_instance, tpcds_func);
 
 	// create the TPCDS_QUERIES function that returns the query
 	TableFunction tpcds_query_func("tpcds_queries", {}, TPCDSQueryFunction, TPCDSQueryBind, TPCDSInit);
-	CreateTableFunctionInfo tpcds_query_info(tpcds_query_func);
-	catalog.CreateTableFunction(*con.context, tpcds_query_info);
+	ExtensionUtil::RegisterFunction(db_instance, tpcds_query_func);
 
 	// create the TPCDS_ANSWERS that returns the query result
 	TableFunction tpcds_query_answer_func("tpcds_answers", {}, TPCDSQueryAnswerFunction, TPCDSQueryAnswerBind,
 	                                      TPCDSInit);
-	CreateTableFunctionInfo tpcds_query_asnwer_info(tpcds_query_answer_func);
-	catalog.CreateTableFunction(*con.context, tpcds_query_asnwer_info);
-
-	con.Commit();
+	ExtensionUtil::RegisterFunction(db_instance, tpcds_query_answer_func);
 }
 
 std::string TPCDSExtension::GetQuery(int query) {

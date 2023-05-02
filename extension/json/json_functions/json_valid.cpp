@@ -16,12 +16,12 @@ static void GetValidFunctionInternal(ScalarFunctionSet &set, const LogicalType &
 	                               nullptr, JSONFunctionLocalState::Init));
 }
 
-CreateScalarFunctionInfo JSONFunctions::GetValidFunction() {
+ScalarFunctionSet JSONFunctions::GetValidFunction() {
 	ScalarFunctionSet set("json_valid");
 	GetValidFunctionInternal(set, LogicalType::VARCHAR);
 	GetValidFunctionInternal(set, JSONCommon::JSONType());
 
-	return CreateScalarFunctionInfo(set);
+	return set;
 }
 
 } // namespace duckdb

@@ -312,7 +312,8 @@ private:
 	void TransformExpressionList(duckdb_libpgquery::PGList &list, vector<unique_ptr<ParsedExpression>> &result);
 
 	//! Transform a Postgres PARTITION BY/ORDER BY specification into lists of expressions
-	void TransformWindowDef(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr);
+	void TransformWindowDef(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr,
+	                        const char *window_name = nullptr);
 	//! Transform a Postgres window frame specification into frame expressions
 	void TransformWindowFrame(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr);
 
