@@ -3211,10 +3211,17 @@ public class TestDuckDBJDBC {
 
 	public static void test_list() throws Exception {
 		try (Connection connection = DriverManager.getConnection("jdbc:duckdb:");
-			 PreparedStatement statement = connection.prepareStatement("select [1]")) {
-			ResultSet rs = statement.executeQuery();
-			assertTrue(rs.next());
-			assertEquals(Arrays.asList((Object[])rs.getArray(1).getArray()), Arrays.asList(1));
+			 Statement statement = connection.createStatement()) {
+			try (ResultSet rs = statement.executeQuery("select [1]")) {
+				assertTrue(rs.next());
+				assertEquals(Arrays.asList((Object[])rs.getArray(1).getArray()), Arrays.asList(1));
+			}
+			try (ResultSet rs = statement.executeQuery("select unnest([[1], [42, 69]])")) {
+				assertTrue(rs.next());
+				assertEquals(Arrays.asList((Object[])rs.getArray(1).getArray()), Arrays.asList(1));
+				assertTrue(rs.next());
+				assertEquals(Arrays.asList((Object[])rs.getArray(1).getArray()), Arrays.asList(42, 69));
+			}
 		}
 	}
 

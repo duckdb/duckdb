@@ -830,22 +830,27 @@ jobject ProcessVector(JNIEnv *env, Connection* conn_ref, Vector &vec, idx_t row_
 		case LogicalTypeId::UUID:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(hugeint_t));
 			break;
-		case LogicalTypeId::LIST:
+		case LogicalTypeId::LIST: {
 			varlen_data = env->NewObjectArray(row_count, J_DuckVector, nullptr);
+
+			auto list_entries = FlatVector::GetData<list_entry_t>(vec);
+
+			auto list_size = ListVector::GetListSize(vec);
+			auto &list_vector = ListVector::GetEntry(vec);
+
 			for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 				if (FlatVector::IsNull(vec, row_idx)) {
 					continue;
 				}
-				auto lst = vec.GetValue(row_idx);
-				auto &children = ListValue::GetChildren(lst);
-				auto vector = new Vector(ListType::GetChildType(vec.GetType()));
-				for (idx_t i = 0; i < children.size(); i++) {
-					vector->SetValue(i, children[i]);
-				}
-				auto j_obj = ProcessVector(env, conn_ref, *vector, children.size());
+
+				// TODO: apply offset
+				auto offset = list_entries[row_idx].offset;
+				auto j_obj = ProcessVector(env, conn_ref, list_vector, list_entries[row_idx].length);
+
 				env->SetObjectArrayElement(varlen_data, row_idx, j_obj);
 			}
 			break;
+		}
 		default: {
 			Vector string_vec(LogicalType::VARCHAR);
 			VectorOperations::Cast(*conn_ref->context, vec, string_vec, row_count);
