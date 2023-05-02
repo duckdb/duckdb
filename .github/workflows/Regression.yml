@@ -142,13 +142,11 @@ jobs:
     - name: Build
       shell: bash
       run: |
-# Build without DISABLE_MEMORY_SAFETY into 'safe'
         make
         mkdir -p safe/build
         mv build safe/build
         cp -r benchmark safe/
 
-# Build with DISABLE_MEMORY_SAFETY into 'unsafe'
         DISABLE_MEMORY_SAFETY=1 make
         mkdir -p unsafe/build
         mv build unsafe/build
