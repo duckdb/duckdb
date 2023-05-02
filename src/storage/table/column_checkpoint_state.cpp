@@ -22,9 +22,9 @@ unique_ptr<BaseStatistics> ColumnCheckpointState::GetStatistics() {
 	return std::move(global_stats);
 }
 
-PartialBlockForCheckpoint::PartialBlockForCheckpoint(ColumnData &data, ColumnSegment &segment, BlockManager &block_manager,
-						  PartialBlockState state)
-	: PartialBlock(state), block_manager(block_manager), block(segment.block) {
+PartialBlockForCheckpoint::PartialBlockForCheckpoint(ColumnData &data, ColumnSegment &segment,
+                                                     BlockManager &block_manager, PartialBlockState state)
+    : PartialBlock(state), block_manager(block_manager), block(segment.block) {
 	AddSegmentToTail(data, segment, 0);
 }
 
@@ -62,7 +62,7 @@ void PartialBlockForCheckpoint::Flush(idx_t free_space_left) {
 	if (state.block_id == INVALID_BLOCK) {
 		state.block_id = block_manager.GetFreeBlockId();
 	}
-	for(idx_t i = 0; i < segments.size(); i++) {
+	for (idx_t i = 0; i < segments.size(); i++) {
 		auto &segment = segments[i];
 		segment.data.IncrementVersion();
 		if (i == 0) {
@@ -93,14 +93,14 @@ void PartialBlockForCheckpoint::Merge(PartialBlock &other_p, idx_t offset, idx_t
 
 	// now copy over all of the segments to the new block
 	// move over the uninitialized regions
-	for(auto &region : other.uninitialized_regions) {
+	for (auto &region : other.uninitialized_regions) {
 		region.start += offset;
 		region.end += offset;
 		uninitialized_regions.push_back(region);
 	}
 
 	// move over the segments
-	for(auto &segment : other.segments) {
+	for (auto &segment : other.segments) {
 		AddSegmentToTail(segment.data, segment.segment, segment.offset_in_block + offset);
 	}
 	other.uninitialized_regions.clear();

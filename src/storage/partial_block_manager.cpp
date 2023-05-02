@@ -2,9 +2,10 @@
 
 namespace duckdb {
 
-PartialBlockManager::PartialBlockManager(BlockManager &block_manager, CheckpointType checkpoint_type, uint32_t max_partial_block_size,
-                                         uint32_t max_use_count)
-    : block_manager(block_manager), checkpoint_type(checkpoint_type), max_partial_block_size(max_partial_block_size), max_use_count(max_use_count) {
+PartialBlockManager::PartialBlockManager(BlockManager &block_manager, CheckpointType checkpoint_type,
+                                         uint32_t max_partial_block_size, uint32_t max_use_count)
+    : block_manager(block_manager), checkpoint_type(checkpoint_type), max_partial_block_size(max_partial_block_size),
+      max_use_count(max_use_count) {
 }
 PartialBlockManager::~PartialBlockManager() {
 }
@@ -34,7 +35,8 @@ PartialBlockAllocation PartialBlockManager::GetBlockAllocation(uint32_t segment_
 }
 
 bool PartialBlockManager::HasBlockAllocation(uint32_t segment_size) {
-	return segment_size <= max_partial_block_size && partially_filled_blocks.lower_bound(segment_size) != partially_filled_blocks.end();
+	return segment_size <= max_partial_block_size &&
+	       partially_filled_blocks.lower_bound(segment_size) != partially_filled_blocks.end();
 }
 
 void PartialBlockManager::AllocateBlock(PartialBlockState &state, uint32_t segment_size) {
@@ -104,7 +106,8 @@ void PartialBlockManager::Merge(PartialBlockManager &other) {
 	if (&other == this) {
 		throw InternalException("Cannot merge into itself");
 	}
-	// for each partially filled block in the other manager, check if we can merge it into an existing block in this manager
+	// for each partially filled block in the other manager, check if we can merge it into an existing block in this
+	// manager
 	for (auto &e : other.partially_filled_blocks) {
 		if (!e.second) {
 			throw InternalException("Empty partially filled block found");
@@ -125,7 +128,7 @@ void PartialBlockManager::Merge(PartialBlockManager &other) {
 		}
 	}
 	// copy over the written blocks
-	for(auto &block_id : other.written_blocks) {
+	for (auto &block_id : other.written_blocks) {
 		AddWrittenBlock(block_id);
 	}
 	other.written_blocks.clear();
@@ -148,7 +151,7 @@ void PartialBlockManager::FlushPartialBlocks() {
 
 void PartialBlockManager::Rollback() {
 	partially_filled_blocks.clear();
-	for(auto &block_id : written_blocks) {
+	for (auto &block_id : written_blocks) {
 		block_manager.MarkBlockAsFree(block_id);
 	}
 }

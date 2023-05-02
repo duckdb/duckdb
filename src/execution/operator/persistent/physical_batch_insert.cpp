@@ -256,16 +256,6 @@ public:
 	optional_ptr<OptimisticDataWriter> writer;
 	bool written_to_disk;
 
-	void FlushToDisk() {
-		if (!current_collection) {
-			return;
-		}
-		if (!written_to_disk && current_collection->GetTotalRows() < LocalStorage::MERGE_THRESHOLD) {
-			return;
-		}
-		writer->FlushToDisk(*current_collection, true);
-	}
-
 	void CreateNewCollection(DuckTableEntry &table, const vector<LogicalType> &insert_types) {
 		auto &table_info = table.GetStorage().info;
 		auto &block_manager = TableIOManager::Get(table.GetStorage()).GetBlockManagerForRowData();
@@ -311,7 +301,6 @@ void PhysicalBatchInsert::NextBatch(ExecutionContext &context, GlobalSinkState &
 		// batch index has changed: move the old collection to the global state and create a new collection
 		TransactionData tdata(0, 0);
 		lstate.current_collection->FinalizeAppend(tdata, lstate.current_append_state);
-		lstate.FlushToDisk();
 		gstate.AddCollection(context.client, lstate.current_index, lstate.partition_info.min_batch_index.GetIndex(),
 		                     std::move(lstate.current_collection), lstate.writer, &lstate.written_to_disk);
 		lstate.CreateNewCollection(table, insert_types);
@@ -359,7 +348,6 @@ void PhysicalBatchInsert::Combine(ExecutionContext &context, GlobalSinkState &gs
 	if (!lstate.current_collection) {
 		return;
 	}
-	lstate.FlushToDisk();
 	{
 		lock_guard<mutex> l(gstate.lock);
 		gstate.table.GetStorage().FinalizeOptimisticWriter(context.client, *lstate.writer);

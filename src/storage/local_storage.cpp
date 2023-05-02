@@ -97,11 +97,6 @@ void LocalTableStorage::CheckFlushToDisk() {
 	optimistic_writer.CheckFlushToDisk(*row_groups);
 }
 
-void LocalTableStorage::FlushToDisk() {
-	optimistic_writer.FlushToDisk(*row_groups, true);
-	optimistic_writer.FinalFlush();
-}
-
 PreservedError LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source,
                                                   TableIndexList &index_list, const vector<LogicalType> &table_types,
                                                   row_t &start_row) {
@@ -191,7 +186,7 @@ OptimisticDataWriter &LocalTableStorage::CreateOptimisticWriter() {
 void LocalTableStorage::FinalizeOptimisticWriter(OptimisticDataWriter &writer) {
 	// remove the writer from the set of optimistic writers
 	unique_ptr<OptimisticDataWriter> owned_writer;
-	for(idx_t i = 0; i < optimistic_writers.size(); i++) {
+	for (idx_t i = 0; i < optimistic_writers.size(); i++) {
 		if (optimistic_writers[i].get() == &writer) {
 			owned_writer = std::move(optimistic_writers[i]);
 			optimistic_writers.erase(optimistic_writers.begin() + i);
@@ -205,7 +200,7 @@ void LocalTableStorage::FinalizeOptimisticWriter(OptimisticDataWriter &writer) {
 }
 
 void LocalTableStorage::Rollback() {
-	for(auto &writer : optimistic_writers) {
+	for (auto &writer : optimistic_writers) {
 		writer->Rollback();
 	}
 	optimistic_writers.clear();
@@ -424,8 +419,6 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 	if ((append_state.row_start == 0 || storage.row_groups->GetTotalRows() >= MERGE_THRESHOLD) &&
 	    storage.deleted_rows == 0) {
 		// table is currently empty OR we are bulk appending: move over the storage directly
-		// first flush any out-standing storage nodes
-		storage.FlushToDisk();
 		// now append to the indexes (if there are any)
 		// FIXME: we should be able to merge the transaction-local index directly into the main table index
 		// as long we just rewrite some row-ids

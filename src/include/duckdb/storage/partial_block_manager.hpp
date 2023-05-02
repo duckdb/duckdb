@@ -67,10 +67,7 @@ struct PartialBlockAllocation {
 	unique_ptr<PartialBlock> partial_block;
 };
 
-enum class CheckpointType {
-	FULL_CHECKPOINT,
-	APPEND_TO_TABLE
-};
+enum class CheckpointType { FULL_CHECKPOINT, APPEND_TO_TABLE };
 
 //! Enables sharing blocks across some scope. Scope is whatever we want to share
 //! blocks across. It may be an entire checkpoint or just a single row group.
@@ -86,7 +83,8 @@ public:
 	static constexpr const idx_t MAX_BLOCK_MAP_SIZE = 1u << 31;
 
 public:
-	PartialBlockManager(BlockManager &block_manager, CheckpointType checkpoint_type, uint32_t max_partial_block_size = DEFAULT_MAX_PARTIAL_BLOCK_SIZE,
+	PartialBlockManager(BlockManager &block_manager, CheckpointType checkpoint_type,
+	                    uint32_t max_partial_block_size = DEFAULT_MAX_PARTIAL_BLOCK_SIZE,
 	                    uint32_t max_use_count = DEFAULT_MAX_USE_COUNT);
 	virtual ~PartialBlockManager();
 
@@ -127,7 +125,6 @@ protected:
 
 	bool HasBlockAllocation(uint32_t segment_size);
 	void AddWrittenBlock(block_id_t block);
-
 };
 
 } // namespace duckdb

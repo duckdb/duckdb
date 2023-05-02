@@ -422,11 +422,11 @@ void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 
 	auto append_count = lstate.local_collection->GetTotalRows();
 
+	lock_guard<mutex> lock(gstate.lock);
+	gstate.insert_count += append_count;
+	gstate.insert_count += lstate.update_count;
 	if (append_count < RowGroup::ROW_GROUP_SIZE) {
 		// we have few rows - append to the local storage directly
-		lock_guard<mutex> lock(gstate.lock);
-		gstate.insert_count += append_count;
-		gstate.insert_count += lstate.update_count;
 		auto &table = gstate.table;
 		auto &storage = table.GetStorage();
 		storage.InitializeLocalAppend(gstate.append_state, context.client);
@@ -438,9 +438,7 @@ void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 		storage.FinalizeLocalAppend(gstate.append_state);
 	} else {
 		// we have written rows to disk optimistically - merge directly into the transaction-local storage
-		lock_guard<mutex> lock(gstate.lock);
 		gstate.table.GetStorage().FinalizeOptimisticWriter(context.client, *lstate.writer);
-		gstate.insert_count += lstate.update_count;
 		gstate.table.GetStorage().LocalMerge(context.client, *lstate.local_collection);
 	}
 }

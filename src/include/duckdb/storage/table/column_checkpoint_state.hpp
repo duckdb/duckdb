@@ -46,8 +46,9 @@ public:
 
 struct PartialBlockForCheckpoint : public PartialBlock {
 	struct PartialColumnSegment {
-		PartialColumnSegment(ColumnData &data, ColumnSegment &segment, uint32_t offset_in_block) :
-			data(data), segment(segment), offset_in_block(offset_in_block) {}
+		PartialColumnSegment(ColumnData &data, ColumnSegment &segment, uint32_t offset_in_block)
+		    : data(data), segment(segment), offset_in_block(offset_in_block) {
+		}
 
 		ColumnData &data;
 		ColumnSegment &segment;
@@ -82,7 +83,6 @@ public:
 	void Flush(idx_t free_space_left) override;
 
 	void Merge(PartialBlock &other, idx_t offset, idx_t other_size) override;
-
 
 	void AddSegmentToTail(ColumnData &data, ColumnSegment &segment, uint32_t offset_in_block);
 };

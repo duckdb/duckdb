@@ -10,9 +10,6 @@ OptimisticDataWriter::OptimisticDataWriter(DataTable &table) : table(table) {
 
 OptimisticDataWriter::OptimisticDataWriter(DataTable &table, OptimisticDataWriter &parent)
     : table(table), partial_manager(std::move(parent.partial_manager)) {
-	if (partial_manager) {
-		partial_manager->FlushPartialBlocks();
-	}
 }
 
 OptimisticDataWriter::~OptimisticDataWriter() {
@@ -54,20 +51,6 @@ void OptimisticDataWriter::FlushToDisk(RowGroup *row_group) {
 	row_group->WriteToDisk(*partial_manager, compression_types);
 }
 
-void OptimisticDataWriter::FlushToDisk(RowGroupCollection &row_groups, bool force) {
-	if (!partial_manager) {
-		if (!force) {
-			// no partial manager - nothing to flush
-			return;
-		}
-		if (!PrepareWrite()) {
-			return;
-		}
-	}
-	// flush the last row group
-	FlushToDisk(row_groups.GetRowGroup(-1));
-}
-
 void OptimisticDataWriter::Merge(OptimisticDataWriter &other) {
 	if (!other.partial_manager) {
 		return;
@@ -78,15 +61,6 @@ void OptimisticDataWriter::Merge(OptimisticDataWriter &other) {
 	}
 	partial_manager->Merge(*other.partial_manager);
 	other.partial_manager.reset();
-}
-
-void OptimisticDataWriter::FinalFlush() {
-	if (!partial_manager) {
-		return;
-	}
-	// then flush the partial manager
-	partial_manager->FlushPartialBlocks();
-	partial_manager.reset();
 }
 
 void OptimisticDataWriter::Rollback() {
