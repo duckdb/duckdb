@@ -1,0 +1,28 @@
+# name: test/optimizer/regex_to_like_optimizer.test
+# description: Test regex to like Optimization Rules
+# group: [optimizer]
+
+statement ok
+CREATE TABLE test(word VARCHAR);
+
+statement ok
+INSERT INTO test VALUES ('BIGSmall'), ('bIGSmall'), ('BbBbsss');
+
+# must match [Bb]S
+query II
+select word, regexp_matches(word, '(?i)b.*(?-i)[S]') from test; 
+----
+BIGSmall	true
+bIGSmall	true
+BbBbsss	false
+
+# must match[Bb]s
+query II
+select word, regexp_matches(word, '(?i)[b].*(?-i)[s]') from test;
+----
+BIGSmall	false
+bIGSmall	false
+BbBbsss	true
+
+
+

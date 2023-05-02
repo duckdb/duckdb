@@ -32,6 +32,7 @@ struct LikeString {
 static LikeString GetLikeString(duckdb_re2::Regexp *regexp, bool contains = false) {
 	D_ASSERT(regexp->op() == duckdb_re2::kRegexpLiteralString || regexp->op() == duckdb_re2::kRegexpLiteral);
 	LikeString ret;
+	// case insensitivity may be on now, but it can also turn off.
 	if (regexp->op() == duckdb_re2::kRegexpLiteralString) {
 		auto nrunes = (idx_t)regexp->nrunes();
 		auto runes = regexp->runes();
@@ -136,6 +137,11 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 	auto &constant_expr = bindings[2].get().Cast<BoundConstantExpression>();
 	D_ASSERT(root.children.size() == 2 || root.children.size() == 3);
 	auto regexp_bind_data = root.bind_info.get()->Cast<RegexpMatchesBindData>();
+
+	auto constant_value = ExpressionExecutor::EvaluateScalar(GetContext(), constant_expr);
+	D_ASSERT(constant_value.type() == constant_expr.return_type);
+	auto patt_str = StringValue::Get(constant_value);
+
 	duckdb_re2::RE2::Options parsed_options = regexp_bind_data.options;
 
 	if (constant_expr.value.IsNull()) {
@@ -147,9 +153,9 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		return nullptr;
 	}
 
-	auto constant_value = ExpressionExecutor::EvaluateScalar(GetContext(), constant_expr);
+	constant_value = ExpressionExecutor::EvaluateScalar(GetContext(), constant_expr);
 	D_ASSERT(constant_value.type() == constant_expr.return_type);
-	auto patt_str = StringValue::Get(constant_value);
+	patt_str = StringValue::Get(constant_value);
 
 	duckdb_re2::RE2 pattern(patt_str, parsed_options);
 	if (!pattern.ok()) {
@@ -157,6 +163,12 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 	}
 
 	LikeString like_string;
+	if (pattern.Regexp()->parse_flags() & duckdb_re2::Regexp::FoldCase ||
+	    pattern.Regexp()->parse_flags() & !duckdb_re2::Regexp::OneLine) {
+		// parse flags can turn on and off within a regex match, return no optimization
+		// TODO: logic to attempt the optimization, then if the parse flags change, then abort
+		return nullptr;
+	}
 	// check for a like string. If we can convert it to a like string, the like string
 	// optimizer will further optimize suffix and prefix things.
 	if (pattern.Regexp()->op() == duckdb_re2::kRegexpLiteralString ||

@@ -47,8 +47,9 @@ query I nosort correct_result
 select regexp_matches(word, '[A-A]') from test;
 ----
 
+
 # case-insensitive
-query I nosort correct_result
+query II nosort correct_result
 select regexp_matches(word, '(?i)[A-A]') from test;
 ----
 
@@ -56,6 +57,7 @@ select regexp_matches(word, '(?i)[A-A]') from test;
 query I nosort correct_result
 select regexp_matches(word, '(?s)[A-A]') from test;
 ----
+
 
 # multi-line mode
 query I nosort correct_result
