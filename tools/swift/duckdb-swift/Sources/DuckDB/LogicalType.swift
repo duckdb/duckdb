@@ -25,7 +25,7 @@
 @_implementationOnly import Cduckdb
 import Foundation
 
-final class LogicalType {
+public final class LogicalType {
   
   private let ptr = UnsafeMutablePointer<duckdb_logical_type?>.allocate(capacity: 1)
   
@@ -37,13 +37,16 @@ final class LogicalType {
     duckdb_destroy_logical_type(ptr)
     ptr.deallocate()
   }
-  
-  var dataType: DatabaseType {
+
+  /// The primitive type represented by this logical type.
+  public var dataType: DatabaseType {
     let ctypeid = duckdb_get_type_id(ptr.pointee)
     return ctypeid.asTypeID
   }
-  
-  var underlyingDataType: DatabaseType {
+
+  /// The primitive type representing the internal storage type, which is equivalent
+  /// to ``dataType``, except for when the type is an enum.
+  public var underlyingDataType: DatabaseType {
     guard dataType == .enum else { return dataType }
     let ctypeid = duckdb_enum_internal_type(ptr.pointee)
     return ctypeid.asTypeID
@@ -52,14 +55,16 @@ final class LogicalType {
 
 // MARK: - Decimal
 
-extension LogicalType {
-  
+public extension LogicalType {
+
+  /// Properties associated with a decimal type
   struct DecimalProperties {
     let width: UInt8
     let scale: UInt8
     let storageType: DatabaseType
   }
-  
+
+  /// Properties associated with a decimal type. For all other types, returns `nil`
   var decimalProperties: DecimalProperties? {
     guard dataType == .decimal else { return nil }
     let internalStorageType = duckdb_decimal_internal_type(ptr.pointee)
@@ -73,19 +78,86 @@ extension LogicalType {
 
 // MARK: - Struct
 
-extension LogicalType {
+public extension LogicalType {
   
   static let structCompatibleTypes = [DatabaseType.struct, .map]
-  
-  var structMemberNames: [String]? {
+
+  /// Properties associated with a struct type
+  struct StructMemberProperties {
+    let name: String
+    let type: LogicalType
+  }
+
+  /// Properties associated with a struct type. For all other types, returns `nil`
+  var structMemberProperties: [StructMemberProperties]? {
     guard Self.structCompatibleTypes.contains(dataType) else { return nil }
     let memberCount = duckdb_struct_type_child_count(ptr.pointee)
-    var names = [String]()
+    var properties = [StructMemberProperties]()
+    properties.reserveCapacity(Int(memberCount))
     for i in 0..<memberCount {
       let cStr = duckdb_struct_type_child_name(ptr.pointee, i)!
-      names.append(String(cString: cStr))
+      properties.append(StructMemberProperties(
+        name: String(cString: cStr),
+        type: LogicalType { duckdb_struct_type_child_type(ptr.pointee, i) }
+      ))
       duckdb_free(cStr)
     }
-    return names
+    return properties
+  }
+}
+
+// MARK: Union
+
+public extension LogicalType {
+
+  /// Properties associated with a union type
+  struct UnionMemberProperties {
+    let name: String
+    let type: LogicalType
+  }
+
+  /// Properties associated with a union type. For all other types, returns `nil`
+  var unionMemberProperties: [UnionMemberProperties]? {
+    guard dataType == .union else { return nil }
+    let memberCount = duckdb_union_type_member_count(ptr.pointee)
+    var properties = [UnionMemberProperties]()
+    properties.reserveCapacity(Int(memberCount))
+    for i in 0..<memberCount {
+      let cStr = duckdb_union_type_member_name(ptr.pointee, i)!
+      properties.append(UnionMemberProperties(
+        name: String(cString: cStr),
+        type: LogicalType { duckdb_union_type_member_type(ptr.pointee, i) }
+      ))
+      duckdb_free(cStr)
+    }
+    return properties
+  }
+}
+
+// MARK: - List
+
+public extension LogicalType {
+
+  /// Child type of a list type. For all other types, returns `nil`
+  var listChildType: LogicalType? {
+    guard dataType == .list else { return nil }
+    return LogicalType { duckdb_list_type_child_type(ptr.pointee) }
+  }
+}
+
+// MARK: - Map
+
+public extension LogicalType {
+
+  /// Key type of a map type. For all other types, returns `nil`
+  var mapKeyType: LogicalType? {
+    guard dataType == .map else { return nil }
+    return LogicalType { duckdb_map_type_key_type(ptr.pointee) }
+  }
+
+  /// Value type of a map type. For all other types, returns `nil`
+  var mapValueType: LogicalType? {
+    guard dataType == .map else { return nil }
+    return LogicalType { duckdb_map_type_value_type(ptr.pointee) }
   }
 }

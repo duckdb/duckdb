@@ -115,6 +115,10 @@ public final class ResultSet: Sendable {
     let dataType = duckdb_column_type(ptr, index)
     return DatabaseType(rawValue: dataType.rawValue)
   }
+
+  func columnLogicalType(at index: DBInt) -> LogicalType {
+    return LogicalType { duckdb_column_logical_type(ptr, index) }
+  }
   
   func withCResult<T>(_ body: (UnsafeMutablePointer<duckdb_result>) throws -> T) rethrows -> T {
     try body(ptr)
