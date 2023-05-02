@@ -32,7 +32,7 @@ public:
 
 	static shared_ptr<DuckDBPyConnection>
 	RegisterScalarUDF(const string &name, const py::function &udf, const py::object &arguments = py::none(),
-	                  const shared_ptr<DuckDBPyType> &return_type = nullptr, bool vectorized = false,
+	                  const shared_ptr<DuckDBPyType> &return_type = nullptr, PythonUDFType type = PythonUDFType::NATIVE,
 	                  FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
 	                  PythonExceptionHandling exception_handling = PythonExceptionHandling::FORWARD_ERROR,
 	                  shared_ptr<DuckDBPyConnection> conn = nullptr);

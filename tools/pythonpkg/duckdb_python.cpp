@@ -10,10 +10,12 @@
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/pybind11/exceptions.hpp"
 #include "duckdb_python/typing.hpp"
+#include "duckdb_python/functional.hpp"
 #include "duckdb_python/connection_wrapper.hpp"
 #include "duckdb_python/pybind11/conversions/pyconnection_default.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb_python/pybind11/conversions/exception_handling_enum.hpp"
+#include "duckdb_python/pybind11/conversions/python_udf_type_enum.hpp"
 
 #include "duckdb.hpp"
 
@@ -73,7 +75,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	m.def("register_scalar_udf", &PyConnectionWrapper::RegisterScalarUDF,
 	      "Register a scalar UDF so it can be used in queries", py::arg("name"), py::arg("function"),
 	      py::arg("return_type") = py::none(), py::arg("parameters") = py::none(), py::kw_only(),
-	      py::arg("vectorized") = false, py::arg("null_handling") = 0, py::arg("exception_handling") = 0,
+	      py::arg("type") = PythonUDFType::NATIVE, py::arg("null_handling") = 0, py::arg("exception_handling") = 0,
 	      py::arg("connection") = py::none());
 
 	m.def("unregister_udf", &PyConnectionWrapper::UnregisterUDF, "Remove a previously registered function",
@@ -266,12 +268,22 @@ static void InitializeConnectionMethods(py::module_ &m) {
 }
 
 PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
+
+	py::enum_<duckdb::ExplainType>(m, "ExplainType")
+	    .value("STANDARD", duckdb::ExplainType::EXPLAIN_STANDARD)
+	    .value("ANALYZE", duckdb::ExplainType::EXPLAIN_ANALYZE)
+	    .export_values();
+
+	py::enum_<duckdb::PythonExceptionHandling>(m, "PythonExceptionHandling")
+	    .value("DEFAULT", duckdb::PythonExceptionHandling::FORWARD_ERROR)
+	    .value("RETURN_NULL", duckdb::PythonExceptionHandling::RETURN_NULL)
+	    .export_values();
+
+	DuckDBPyTyping::Initialize(m);
+	DuckDBPyFunctional::Initialize(m);
 	DuckDBPyRelation::Initialize(m);
 	DuckDBPyConnection::Initialize(m);
-	DuckDBPyTyping::Initialize(m);
 	PythonObject::Initialize();
-
-	InitializeConnectionMethods(m);
 
 	py::options pybind_opts;
 
@@ -287,20 +299,7 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	m.attr("threadsafety") = 1;
 	m.attr("paramstyle") = "qmark";
 
-	py::enum_<duckdb::ExplainType>(m, "ExplainType")
-	    .value("STANDARD", duckdb::ExplainType::EXPLAIN_STANDARD)
-	    .value("ANALYZE", duckdb::ExplainType::EXPLAIN_ANALYZE)
-	    .export_values();
-
-	py::enum_<duckdb::FunctionNullHandling>(m, "FunctionNullHandling")
-	    .value("DEFAULT", duckdb::FunctionNullHandling::DEFAULT_NULL_HANDLING)
-	    .value("SPECIAL", duckdb::FunctionNullHandling::SPECIAL_HANDLING)
-	    .export_values();
-
-	py::enum_<duckdb::PythonExceptionHandling>(m, "PythonExceptionHandling")
-	    .value("DEFAULT", duckdb::PythonExceptionHandling::FORWARD_ERROR)
-	    .value("RETURN_NULL", duckdb::PythonExceptionHandling::RETURN_NULL)
-	    .export_values();
+	InitializeConnectionMethods(m);
 
 	RegisterExceptions(m);
 

@@ -5,6 +5,7 @@
 # to help the sanity of maintainers.
 
 from .typing import DuckDBPyType
+from .functional import FunctionNullHandling, PythonUDFType
 
 # We also run this in python3.7, where this is needed
 from typing_extensions import Literal
@@ -37,7 +38,6 @@ STANDARD: ExplainType
 ANALYZE: ExplainType
 DEFAULT: PythonExceptionHandling
 RETURN_NULL: PythonExceptionHandling
-SPECIAL: FunctionNullHandling
 
 __interactive__: bool
 __jupyter__: bool
@@ -75,18 +75,6 @@ class PythonExceptionHandling:
     def __index__(self) -> int: ...
     @property
     def __members__(self) -> Dict[str, PythonExceptionHandling]: ...
-    @property
-    def name(self) -> str: ...
-    @property
-    def value(self) -> int: ...
-
-class FunctionNullHandling:
-    DEFAULT: FunctionNullHandling
-    SPECIAL: FunctionNullHandling
-    def __int__(self) -> int: ...
-    def __index__(self) -> int: ...
-    @property
-    def __members__(self) -> Dict[str, FunctionNullHandling]: ...
     @property
     def name(self) -> str: ...
     @property

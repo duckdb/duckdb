@@ -21,6 +21,7 @@
 #include "duckdb_python/pybind11/registered_py_object.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb_python/pybind11/conversions/exception_handling_enum.hpp"
+#include "duckdb_python/pybind11/conversions/python_udf_type_enum.hpp"
 
 namespace duckdb {
 
@@ -95,15 +96,10 @@ public:
 
 	shared_ptr<DuckDBPyConnection>
 	RegisterScalarUDF(const string &name, const py::function &udf, const py::object &arguments = py::none(),
-	                  const shared_ptr<DuckDBPyType> &return_type = nullptr, bool varargs = false,
+	                  const shared_ptr<DuckDBPyType> &return_type = nullptr, PythonUDFType type = PythonUDFType::NATIVE,
 	                  FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
 	                  PythonExceptionHandling exception_handling = PythonExceptionHandling::FORWARD_ERROR);
 
-	shared_ptr<DuckDBPyConnection>
-	RegisterVectorizedUDF(const string &name, const py::function &udf, const py::object &arguments = py::none(),
-	                      const shared_ptr<DuckDBPyType> &return_type = nullptr, bool varargs = false,
-	                      FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
-	                      PythonExceptionHandling exception_handling = PythonExceptionHandling::FORWARD_ERROR);
 	shared_ptr<DuckDBPyConnection> UnregisterUDF(const string &name);
 
 	shared_ptr<DuckDBPyConnection> ExecuteMany(const string &query, py::object params = py::list());

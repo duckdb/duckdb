@@ -121,7 +121,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	m.def("register_scalar_udf", &DuckDBPyConnection::RegisterScalarUDF,
 	      "Register a scalar UDF so it can be used in queries", py::arg("name"), py::arg("function"),
 	      py::arg("return_type") = py::none(), py::arg("parameters") = py::none(), py::kw_only(),
-	      py::arg("vectorized") = false, py::arg("null_handling") = 0, py::arg("exception_handling") = 0);
+	      py::arg("type") = PythonUDFType::NATIVE, py::arg("null_handling") = 0, py::arg("exception_handling") = 0);
 
 	m.def("unregister_udf", &DuckDBPyConnection::UnregisterUDF, "Remove a previously registered function",
 	      py::arg("name"));
@@ -324,7 +324,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterUDF(const string &n
 
 shared_ptr<DuckDBPyConnection>
 DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::function &udf, const py::object &parameters_p,
-                                      const shared_ptr<DuckDBPyType> &return_type_p, bool vectorized,
+                                      const shared_ptr<DuckDBPyType> &return_type_p, PythonUDFType type,
                                       FunctionNullHandling null_handling, PythonExceptionHandling exception_handling) {
 	if (!connection) {
 		throw ConnectionException("Connection already closed!");
@@ -336,8 +336,8 @@ DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::function &ud
 		                              "functions by the same name is not supported yet, please unregister it first",
 		                              name);
 	}
-	auto scalar_function =
-	    CreateScalarUDF(name, udf, parameters_p, return_type_p, vectorized, null_handling, exception_handling);
+	auto scalar_function = CreateScalarUDF(name, udf, parameters_p, return_type_p, type == PythonUDFType::ARROW,
+	                                       null_handling, exception_handling);
 	CreateScalarFunctionInfo info(scalar_function);
 
 	context.RegisterFunction(info);
