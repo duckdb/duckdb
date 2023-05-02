@@ -87,7 +87,7 @@ public:
 			}
 
 			new_collection->FinalizeAppend(TransactionData(0, 0), append_state);
-			writer.FlushToDisk(*new_collection);
+//			writer.FlushToDisk(*new_collection);
 		}
 		current_collections.clear();
 		return new_collection;
@@ -361,7 +361,10 @@ void PhysicalBatchInsert::Combine(ExecutionContext &context, GlobalSinkState &gs
 		return;
 	}
 	lstate.FlushToDisk();
-	lstate.writer->FinalFlush();
+	{
+		lock_guard<mutex> l(gstate.lock);
+		gstate.table.GetStorage().FinalizeOptimisticWriter(context.client, *lstate.writer);
+	}
 
 	TransactionData tdata(0, 0);
 	lstate.current_collection->FinalizeAppend(tdata, lstate.current_append_state);
@@ -410,7 +413,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 	for (auto &merger : mergers) {
 		final_collections.push_back(merger->Flush(writer));
 	}
-	writer.FinalFlush();
+	storage.FinalizeOptimisticWriter(context, writer);
 
 	// finally, merge the row groups into the local storage
 	for (auto &collection : final_collections) {

@@ -65,6 +65,7 @@ public:
 
 	//! Creates an optimistic writer for this table
 	OptimisticDataWriter &CreateOptimisticWriter();
+	void FinalizeOptimisticWriter(OptimisticDataWriter &writer);
 };
 
 class LocalTableManager {
@@ -122,6 +123,7 @@ public:
 	void LocalMerge(DataTable &table, RowGroupCollection &collection);
 	//! Create an optimistic writer for the specified table
 	OptimisticDataWriter &CreateOptimisticWriter(DataTable &table);
+	void FinalizeOptimisticWriter(DataTable &table, OptimisticDataWriter &writer);
 
 	//! Delete a set of rows from the local storage
 	idx_t Delete(DataTable &table, Vector &row_ids, idx_t count);

@@ -23,9 +23,11 @@ public:
 	//! Flushes a specific row group to disk
 	void FlushToDisk(RowGroup *row_group);
 	//! Flushes the final row group to disk (if any)
-	void FlushToDisk(RowGroupCollection &row_groups, bool force = false);
+	void FlushToDisk(RowGroupCollection &row_groups, bool force);
 	//! Final flush: flush the partial block manager to disk
 	void FinalFlush();
+	//! Merge the partially written blocks from one optimistic writer into another
+	void Merge(OptimisticDataWriter &other);
 	//! Rollback
 	void Rollback();
 

@@ -97,7 +97,7 @@ void LocalTableStorage::CheckFlushToDisk() {
 }
 
 void LocalTableStorage::FlushToDisk() {
-	optimistic_writer.FlushToDisk(*row_groups);
+	optimistic_writer.FlushToDisk(*row_groups, true);
 	optimistic_writer.FinalFlush();
 }
 
@@ -185,6 +185,22 @@ OptimisticDataWriter &LocalTableStorage::CreateOptimisticWriter() {
 	auto writer = make_uniq<OptimisticDataWriter>(table_ref.get());
 	optimistic_writers.push_back(std::move(writer));
 	return *optimistic_writers.back();
+}
+
+void LocalTableStorage::FinalizeOptimisticWriter(OptimisticDataWriter &writer) {
+	// remove the writer from the set of optimistic writers
+	unique_ptr<OptimisticDataWriter> owned_writer;
+	for(idx_t i = 0; i < optimistic_writers.size(); i++) {
+		if (optimistic_writers[i].get() == &writer) {
+			owned_writer = std::move(optimistic_writers[i]);
+			optimistic_writers.erase(optimistic_writers.begin() + i);
+			break;
+		}
+	}
+	if (!owned_writer) {
+		throw InternalException("Error in FinalizeOptimisticWriter - could not find writer");
+	}
+	optimistic_writer.Merge(*owned_writer);
 }
 
 void LocalTableStorage::Rollback() {
@@ -353,6 +369,11 @@ void LocalStorage::LocalMerge(DataTable &table, RowGroupCollection &collection) 
 OptimisticDataWriter &LocalStorage::CreateOptimisticWriter(DataTable &table) {
 	auto &storage = table_manager.GetOrCreateStorage(table);
 	return storage.CreateOptimisticWriter();
+}
+
+void LocalStorage::FinalizeOptimisticWriter(DataTable &table, OptimisticDataWriter &writer) {
+	auto &storage = table_manager.GetOrCreateStorage(table);
+	storage.FinalizeOptimisticWriter(writer);
 }
 
 bool LocalStorage::ChangesMade() noexcept {

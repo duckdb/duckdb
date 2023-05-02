@@ -27,7 +27,7 @@ bool OptimisticDataWriter::PrepareWrite() {
 	// allocate the partial block-manager if none is allocated yet
 	if (!partial_manager) {
 		auto &block_manager = table.info->table_io_manager->GetBlockManagerForRowData();
-		partial_manager = make_uniq<PartialBlockManager>(block_manager);
+		partial_manager = make_uniq<PartialBlockManager>(block_manager, CheckpointType::APPEND_TO_TABLE);
 	}
 	return true;
 }
@@ -68,6 +68,18 @@ void OptimisticDataWriter::FlushToDisk(RowGroupCollection &row_groups, bool forc
 	FlushToDisk(row_groups.GetRowGroup(-1));
 }
 
+void OptimisticDataWriter::Merge(OptimisticDataWriter &other) {
+	if (!other.partial_manager) {
+		return;
+	}
+	if (!partial_manager) {
+		partial_manager = std::move(other.partial_manager);
+		return;
+	}
+	partial_manager->Merge(*other.partial_manager);
+	other.partial_manager.reset();
+}
+
 void OptimisticDataWriter::FinalFlush() {
 	if (!partial_manager) {
 		return;
@@ -79,7 +91,7 @@ void OptimisticDataWriter::FinalFlush() {
 
 void OptimisticDataWriter::Rollback() {
 	if (partial_manager) {
-		partial_manager->Clear();
+		partial_manager->Rollback();
 		partial_manager.reset();
 	}
 }
