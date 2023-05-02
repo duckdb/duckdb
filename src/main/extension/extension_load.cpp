@@ -131,8 +131,6 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileOpener *o
 	string error;
 	ExtensionInitResult result;
 	if (!TryInitialLoad(config, opener, extension, result, error)) {
-		throw IOException(error);
-	} else {
 		if (!ExtensionHelper::AllowAutoInstall(extension)) {
 			throw IOException(error);
 		}
