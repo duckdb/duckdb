@@ -46,20 +46,21 @@ void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
 	op_state.reset();
 	sink_state.reset();
 
-	auto child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, this);
-	child_meta_pipeline->Build(*children[0]);
+	auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
+	child_meta_pipeline.Build(*children[0]);
 
 	auto &state = meta_pipeline.GetState();
 
 	for (auto &cte_scan : cte_scans) {
-		state.cte_dependencies[cte_scan] = child_meta_pipeline->GetBasePipeline().get();
+		state.cte_dependencies.insert(
+		    make_pair(cte_scan, reference<Pipeline>(*child_meta_pipeline.GetBasePipeline())));
 	}
 
 	children[1]->BuildPipelines(current, meta_pipeline);
 }
 
-vector<const PhysicalOperator *> PhysicalCTE::GetSources() const {
-	return {this};
+vector<const_reference<PhysicalOperator>> PhysicalCTE::GetSources() const {
+	return {*this};
 }
 
 string PhysicalCTE::ParamsToString() const {

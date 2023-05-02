@@ -40,7 +40,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op
 			auto chunk_scan = make_uniq<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::CTE_SCAN,
 			                                                    op.estimated_cardinality, op.cte_index);
 
-			materialized_cte->second.push_back(chunk_scan.get());
+			materialized_cte->second.push_back(*chunk_scan.get());
 
 			auto cte = recursive_cte_tables.find(op.cte_index);
 			if (cte == recursive_cte_tables.end()) {
