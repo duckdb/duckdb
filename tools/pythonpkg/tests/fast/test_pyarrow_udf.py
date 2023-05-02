@@ -10,6 +10,26 @@ import datetime
 
 from duckdb.typing import *
 
+def make_annotated_function(type):
+    # Create a function that returns its input
+    def test_base(x):
+        return x
+
+    import types
+    test_function = types.FunctionType(
+        test_base.__code__,
+        test_base.__globals__,
+        test_base.__name__,
+        test_base.__defaults__,
+        test_base.__closure__
+    )
+    # Add annotations for the return type and 'x'
+    test_function.__annotations__ = {
+        'return': type,
+        'x': type
+    }
+    return test_function
+
 class TestPyArrowUDF(object):
 
     def test_basic_use(self):
@@ -70,29 +90,23 @@ class TestPyArrowUDF(object):
         type = test_type[0]
         value = test_type[1]
 
-        # Create a function that returns its input
-        def test_base(x):
-            return x
-
-        import types
-        test_function = types.FunctionType(
-            test_base.__code__,
-            test_base.__globals__,
-            test_base.__name__,
-            test_base.__defaults__,
-            test_base.__closure__
-        )
-        # Add annotations for the return type and 'x'
-        test_function.__annotations__ = {
-            'return': type,
-            'x': type
-        }
+        test_function = make_annotated_function(type)
 
         con = duckdb.connect()
         con.register_scalar_udf('test', test_function, vectorized=True)
-        print(test_type)
+
+        # Single value
         res = con.execute(f"select test(?::{str(type)})", [value]).fetchall()
         assert res[0][0] == value
+
+        # NULLs
+        res = con.execute(f"select res from (select ?, test(NULL::{str(type)}) as res)", [value]).fetchall()
+        assert res[0][0] == None
+
+        # Multiple chunks
+        size = duckdb.__standard_vector_size__ * 3
+        res = con.execute(f"select test(x) from repeat(?::{str(type)}, {size}) as tbl(x)", [value]).fetchall()
+        assert(len(res) == size)
 
     def test_varargs(self):
         def variable_args(*args):
