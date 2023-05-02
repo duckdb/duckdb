@@ -13,12 +13,6 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/common/atomic.hpp"
-#include "duckdb/common/printer.hpp"
-#include "duckdb/common/types/hash.hpp"
-
-#include <list>
-#include <unordered_map>
-#include <chrono>
 
 namespace duckdb {
 

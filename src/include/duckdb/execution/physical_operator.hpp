@@ -15,7 +15,6 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
-#include "duckdb/parallel/task.hpp"
 #include "duckdb/execution/physical_operator_states.hpp"
 #include "duckdb/common/enums/order_preservation_type.hpp"
 

@@ -55,8 +55,8 @@ bool PipelineExecutor::TryFlushCachingOperators() {
 
 		// This slightly awkward way of increasing the flushing idx is to make the code re-entrant: We need to call this
 		// method again in the case of a Sink returning BLOCKED.
-		if (!should_reflush_current_operator && in_process_operators.empty()) {
-			should_reflush_current_operator = true;
+		if (!should_flush_current_idx && in_process_operators.empty()) {
+			should_flush_current_idx = true;
 			flushing_idx++;
 			continue;
 		}
@@ -81,9 +81,9 @@ bool PipelineExecutor::TryFlushCachingOperators() {
 		push_result = ExecutePushInternal(curr_chunk, flushing_idx + 1);
 
 		if (finalize_result == OperatorFinalizeResultType::HAVE_MORE_OUTPUT) {
-			should_reflush_current_operator = true;
+			should_flush_current_idx = true;
 		} else {
-			should_reflush_current_operator = false;
+			should_flush_current_idx = false;
 		}
 
 		if (push_result == OperatorResultType::BLOCKED) {

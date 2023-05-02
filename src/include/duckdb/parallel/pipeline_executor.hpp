@@ -21,13 +21,14 @@
 namespace duckdb {
 class Executor;
 
-//! The result of a pipeline execute call
+//! The result of executing a PipelineExecutor
 enum class PipelineExecuteResult {
-	//! Pipeline is fully executed: the source is completely exhausted
+	//! PipelineExecutor is fully executed: the source is completely exhausted
 	FINISHED,
-	//! Pipeline is not yet fully executed and can be called again immediately
+	//! PipelineExecutor is not yet fully executed and can be called again immediately
 	NOT_FINISHED,
-	//! The pipeline was interrupted and should be descheduled
+	//! The PipelineExecutor was interrupted and should not be called again until the interrupt is handled as specified
+	//! in the InterruptMode
 	INTERRUPTED
 };
 
@@ -59,7 +60,7 @@ public:
 	//! This flushes profiler states
 	void PullFinalize();
 
-	//! Registers the task in the interrupt_state to ensure Source/Sink interrupts will block the correct Task
+	//! Registers the task in the interrupt_state to allow Source/Sink operators to block the task
 	void SetTaskForInterrupts(weak_ptr<Task> current_task);
 
 private:
@@ -104,12 +105,11 @@ private:
 
 	//! This flag is set when the pipeline gets interrupted by the Sink -> the final_chunk should be re-sink-ed.
 	bool remaining_sink_chunk = false;
-	//! When a Sink blocks during the flushing phase, this flag stores whether the current operator being flushed needs
-	//! to be called again when resuming
-	bool should_reflush_current_operator = true;
 
 	//! Current operator being flushed
 	idx_t flushing_idx;
+	//! Whether the current flushing_idx should be flushed: this needs to be stored to make flushing code re-entrant
+	bool should_flush_current_idx = true;
 
 private:
 	void StartOperator(PhysicalOperator &op);

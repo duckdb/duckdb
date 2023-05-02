@@ -24,7 +24,6 @@ class BaseStatistics;
 class DependencyList;
 class LogicalGet;
 class TableFilterSet;
-class InterruptState;
 
 struct TableFunctionInfo {
 	DUCKDB_API virtual ~TableFunctionInfo();
