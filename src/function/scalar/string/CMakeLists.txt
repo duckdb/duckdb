@@ -1,39 +1,18 @@
 add_subdirectory(regexp)
 add_library_unity(
-  duckdb_func_string
+  duckdb_func_string_main
   OBJECT
-  ascii.cpp
-  bar.cpp
-  chr.cpp
-  reverse.cpp
   caseconvert.cpp
   concat.cpp
   length.cpp
   like.cpp
-  md5.cpp
   nfc_normalize.cpp
-  printf.cpp
   regexp.cpp
   substring.cpp
-  instr.cpp
-  pad.cpp
   prefix.cpp
-  repeat.cpp
-  replace.cpp
   strip_accents.cpp
   suffix.cpp
-  translate.cpp
-  trim.cpp
-  left_right.cpp
-  contains.cpp
-  starts_with.cpp
-  string_split.cpp
-  mismatches.cpp
-  levenshtein.cpp
-  damerau_levenshtein.cpp
-  jaccard.cpp
-  jaro_winkler.cpp
-  hex.cpp)
+  contains.cpp)
 set(ALL_OBJECT_FILES
-    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_string>
+    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_string_main>
     PARENT_SCOPE)
