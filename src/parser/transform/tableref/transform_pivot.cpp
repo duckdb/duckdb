@@ -59,6 +59,9 @@ PivotColumn Transformer::TransformPivotColumn(duckdb_libpgquery::PGPivot *pivot)
 			col.entries.push_back(std::move(entry));
 		}
 	}
+	if (pivot->subquery) {
+		col.subquery = TransformSelectNode(reinterpret_cast<duckdb_libpgquery::PGSelectStmt *>(pivot->subquery));
+	}
 	if (pivot->pivot_enum) {
 		col.pivot_enum = pivot->pivot_enum;
 	}
