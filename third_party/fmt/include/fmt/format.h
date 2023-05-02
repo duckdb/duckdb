@@ -1128,7 +1128,7 @@ inline double promote_float(float value) { return value; }
 
 template <typename Spec, typename Handler>
 FMT_CONSTEXPR void handle_int_type_spec(const Spec& specs, Handler&& handler) {
-  if (specs.thousands == ',') {
+  if (specs.thousands != '\0') {
     handler.on_num();
     return;
   }
@@ -1161,11 +1161,13 @@ FMT_CONSTEXPR void handle_int_type_spec(const Spec& specs, Handler&& handler) {
 template <typename ErrorHandler = error_handler, typename Char>
 FMT_CONSTEXPR float_specs parse_float_type_spec(
     const basic_format_specs<Char>& specs, ErrorHandler&& eh = {}) {
+
   auto result = float_specs();
+    if (specs.thousands != '\0') {
+      eh.on_error("Thousand separators are not supported for floating point numbers");
+      return result;
+    }
   result.trailing_zeros = specs.alt;
-  if (specs.thousands == ',') {
-    result.locale = true;
-  }
   switch (specs.type) {
   case 0:
     result.format = float_format::general;
@@ -1513,7 +1515,7 @@ template <typename Range> class basic_writer {
     void on_num() {
       std::string groups = grouping<char_type>(writer.locale_);
       if (groups.empty()) return on_dec();
-      auto sep = thousands_sep<char_type>(writer.locale_);
+      auto sep = specs.thousands;
       if (!sep) return on_dec();
       int num_digits = count_digits(abs_value);
       int size = num_digits;
@@ -1971,6 +1973,10 @@ template <typename Char> class specs_setter {
   FMT_CONSTEXPR void on_plus() { specs_.sign = sign::plus; }
   FMT_CONSTEXPR void on_minus() { specs_.sign = sign::minus; }
   FMT_CONSTEXPR void on_space() { specs_.sign = sign::space; }
+  FMT_CONSTEXPR void on_comma() { specs_.thousands = ','; }
+  FMT_CONSTEXPR void on_underscore() { specs_.thousands = '_'; }
+  FMT_CONSTEXPR void on_single_quote() { specs_.thousands = '\''; }
+  FMT_CONSTEXPR void on_thousands(char sep) { specs_.thousands = sep; }
   FMT_CONSTEXPR void on_hash() { specs_.alt = true; }
 
   FMT_CONSTEXPR void on_zero() {
@@ -2381,6 +2387,24 @@ FMT_CONSTEXPR const Char* parse_format_specs(const Char* begin, const Char* end,
     break;
   case ' ':
     handler.on_space();
+    ++begin;
+    break;
+  case ',':
+    handler.on_comma();
+    ++begin;
+    break;
+  case '_':
+    handler.on_underscore();
+    ++begin;
+    break;
+  case '\'':
+    handler.on_single_quote();
+    ++begin;
+    break;
+  case 't':
+    ++begin;
+    if (begin == end) return begin;
+    handler.on_thousands(*begin);
     ++begin;
     break;
   }

@@ -396,6 +396,12 @@ void basic_printf_context<OutputIt, Char>::parse_flags(format_specs& specs,
     case ',':
       specs.thousands = ',';
       break;
+    case '\'':
+      specs.thousands = '\'';
+      break;
+    case '_':
+      specs.thousands = '_';
+      break;
     default:
       return;
     }
@@ -475,6 +481,7 @@ OutputIt basic_printf_context<OutputIt, Char>::format() {
     if (arg_index == 0) on_error("argument index out of range");
 
     // Parse precision.
+	bool empty_precision = false;
     if (it != end && *it == '.') {
       ++it;
       c = it != end ? *it : 0;
@@ -487,6 +494,7 @@ OutputIt basic_printf_context<OutputIt, Char>::format() {
             static_cast<int>(visit_format_arg(internal::printf_precision_handler(), get_arg()));
       } else {
         specs.precision = 0;
+		empty_precision = true;
       }
     }
 
@@ -557,6 +565,9 @@ OutputIt basic_printf_context<OutputIt, Char>::format() {
         break;
       }
     }
+	if (specs.type == 'd' && empty_precision) {
+		specs.thousands = '.';
+	}
 
     start = it;
 
