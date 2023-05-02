@@ -192,7 +192,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("all_varchar") = py::none(), py::arg("normalize_names") = py::none(), py::arg("filename") = py::none());
 
 	m.def("append", &PyConnectionWrapper::Append, "Append the passed DataFrame to the named table",
-	      py::arg("table_name"), py::arg("df"), py::arg("connection") = py::none())
+	      py::arg("table_name"), py::arg("df"), py::kw_only(), py::arg("by_name") = false,
+	      py::arg("connection") = py::none())
 	    .def("register", &PyConnectionWrapper::RegisterPythonObject,
 	         "Register the passed Python Object value for querying with a view", py::arg("view_name"),
 	         py::arg("python_object"), py::arg("connection") = py::none())

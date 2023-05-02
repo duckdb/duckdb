@@ -7,11 +7,8 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/scalar_function.hpp"
-#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
-#include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
-
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/function/pragma_function.hpp"
+#include "duckdb/main/extension_util.hpp"
 
 namespace duckdb {
 
@@ -49,8 +46,8 @@ static void stem_function(DataChunk &args, ExpressionState &state, Vector &resul
 }
 
 void FTSExtension::Load(DuckDB &db) {
+	auto &db_instance = *db.instance;
 	ScalarFunction stem_func("stem", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, stem_function);
-	CreateScalarFunctionInfo stem_info(stem_func);
 
 	auto create_fts_index_func = PragmaFunction::PragmaCall(
 	    "create_fts_index", create_fts_index_query, {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR);
@@ -60,19 +57,13 @@ void FTSExtension::Load(DuckDB &db) {
 	create_fts_index_func.named_parameters["strip_accents"] = LogicalType::BOOLEAN;
 	create_fts_index_func.named_parameters["lower"] = LogicalType::BOOLEAN;
 	create_fts_index_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
-	CreatePragmaFunctionInfo create_fts_index_info(create_fts_index_func);
 
 	auto drop_fts_index_func =
 	    PragmaFunction::PragmaCall("drop_fts_index", drop_fts_index_query, {LogicalType::VARCHAR});
-	CreatePragmaFunctionInfo drop_fts_index_info(drop_fts_index_func);
 
-	Connection conn(db);
-	conn.BeginTransaction();
-	auto &catalog = Catalog::GetSystemCatalog(*conn.context);
-	catalog.CreateFunction(*conn.context, stem_info);
-	catalog.CreatePragmaFunction(*conn.context, create_fts_index_info);
-	catalog.CreatePragmaFunction(*conn.context, drop_fts_index_info);
-	conn.Commit();
+	ExtensionUtil::RegisterFunction(db_instance, stem_func);
+	ExtensionUtil::RegisterFunction(db_instance, create_fts_index_func);
+	ExtensionUtil::RegisterFunction(db_instance, drop_fts_index_func);
 }
 
 std::string FTSExtension::Name() {

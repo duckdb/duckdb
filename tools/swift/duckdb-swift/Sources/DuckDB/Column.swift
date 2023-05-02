@@ -84,9 +84,14 @@ public struct Column<DataType> {
     DataType.self
   }
   
-  /// The underlying database type of the column
+  /// The underlying primitive database type of the column
   public var underlyingDatabaseType: DatabaseType {
     result.columnDataType(at: columnIndex)
+  }
+
+  /// The underlying logical type of the column
+  public var underlyingLogicalType: LogicalType {
+    result.columnLogicalType(at: columnIndex)
   }
 }
 

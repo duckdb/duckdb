@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/function/scalar/strftime.hpp"
+#include "duckdb/function/scalar/strftime_format.hpp"
 #include "json_common.hpp"
 
 namespace duckdb {

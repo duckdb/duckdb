@@ -7,6 +7,9 @@
 #include "duckdb/catalog/default/default_schemas.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/main/attached_database.hpp"
+#ifndef DISABLE_CORE_FUNCTIONS_EXTENSION
+#include "duckdb/core_functions/core_functions.hpp"
+#endif
 
 namespace duckdb {
 
@@ -22,7 +25,7 @@ void DuckCatalog::Initialize(bool load_builtin) {
 	// first initialize the base system catalogs
 	// these are never written to the WAL
 	// we start these at 1 because deleted entries default to 0
-	CatalogTransaction data(GetDatabase(), 1, 1);
+	auto data = CatalogTransaction::GetSystemTransaction(GetDatabase());
 
 	// create the default schema
 	CreateSchemaInfo info;
@@ -34,6 +37,10 @@ void DuckCatalog::Initialize(bool load_builtin) {
 		// initialize default functions
 		BuiltinFunctions builtin(data, *this);
 		builtin.Initialize();
+
+#ifndef DISABLE_CORE_FUNCTIONS_EXTENSION
+		CoreFunctions::RegisterFunctions(*this, data);
+#endif
 	}
 
 	Verify();

@@ -8,8 +8,11 @@ import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.util.ArrayList;
+import java.time.OffsetTime;
 import java.time.OffsetDateTime;
 import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.util.UUID;
 
 import org.duckdb.DuckDBResultSet.DuckDBBlobResult;
 
@@ -142,37 +145,54 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 	}
 
 	public String getColumnClassName(int column) throws SQLException {
-		switch (getColumnType(column)) {
-		case Types.BOOLEAN:
-			return Boolean.class.toString();
-		case Types.TINYINT:
-			return Byte.class.toString();
-		case Types.SMALLINT:
-			return Short.class.toString();
-		case Types.INTEGER:
-			return Integer.class.toString();
-		case Types.BIGINT:
-			return Long.class.toString();
-		case Types.FLOAT:
-			return Float.class.toString();
-		case Types.DOUBLE:
-			return Double.class.toString();
-		case Types.VARCHAR:
-			return String.class.toString();
-		case Types.TIME:
-			return Time.class.toString();
-		case Types.DATE:
-			return Date.class.toString();
-		case Types.TIMESTAMP:
-			return Timestamp.class.toString();
-		case Types.TIMESTAMP_WITH_TIMEZONE:
-			return OffsetDateTime.class.toString();
-		case Types.BLOB:
-			return DuckDBBlobResult.class.toString();
-		case Types.DECIMAL:
-			return BigDecimal.class.toString();
+		switch (column_types[column - 1]) {
+		case BOOLEAN:
+			return Boolean.class.getName();
+		case TINYINT:
+			return Byte.class.getName();
+		case SMALLINT:
+			return Short.class.getName();
+		case INTEGER:
+			return Integer.class.getName();
+		case BIGINT:
+			return Long.class.getName();
+		case HUGEINT:
+			return BigInteger.class.getName();
+		case UTINYINT:
+			return Short.class.getName();
+		case USMALLINT:
+			return Integer.class.getName();
+		case UINTEGER:
+			return Long.class.getName();
+		case UBIGINT:
+			return BigInteger.class.getName();
+		case FLOAT:
+			return Float.class.getName();
+		case DOUBLE:
+			return Double.class.getName();
+		case DECIMAL:
+			return BigDecimal.class.getName();
+		case TIME:
+			return Time.class.getName();
+		case TIME_WITH_TIME_ZONE:
+			return OffsetTime.class.getName();
+		case DATE:
+			return Date.class.getName();
+		case TIMESTAMP:
+		case TIMESTAMP_NS:
+		case TIMESTAMP_S:
+		case TIMESTAMP_MS:
+			return Timestamp.class.getName();
+		case TIMESTAMP_WITH_TIME_ZONE:
+			return OffsetDateTime.class.getName();
+		case JSON:
+			return JsonNode.class.getName();
+		case BLOB:
+			return DuckDBResultSet.DuckDBBlobResult.class.getName();
+		case UUID:
+			return UUID.class.getName();
 		default:
-			throw new SQLException("Unknown type " + getColumnTypeName(column));
+			return String.class.getName();
 		}
 	}
 

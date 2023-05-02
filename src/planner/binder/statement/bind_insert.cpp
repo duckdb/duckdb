@@ -9,6 +9,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/planner/operator/logical_dummy_scan.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression_binder/returning_binder.hpp"
@@ -409,7 +410,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	AddCTEMap(stmt.cte_map);
 
 	vector<LogicalIndex> named_column_map;
-	if (!stmt.columns.empty()) {
+	if (!stmt.columns.empty() || stmt.default_values) {
 		// insertion statement specifies column list
 
 		// create a mapping of (list index) -> (column index)
@@ -448,11 +449,10 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 	// bind the default values
 	BindDefaultValues(table.GetColumns(), insert->bound_defaults);
-	if (!stmt.select_statement) {
+	if (!stmt.select_statement && !stmt.default_values) {
 		result.plan = std::move(insert);
 		return result;
 	}
-
 	// Exclude the generated columns from this amount
 	idx_t expected_columns = stmt.columns.empty() ? table.GetColumns().PhysicalColumnCount() : stmt.columns.size();
 
@@ -488,14 +488,19 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	}
 
 	// parse select statement and add to logical plan
-	auto select_binder = Binder::CreateBinder(context, this);
-	auto root_select = select_binder->Bind(*stmt.select_statement);
-	MoveCorrelatedExpressions(*select_binder);
+	unique_ptr<LogicalOperator> root;
+	if (stmt.select_statement) {
+		auto select_binder = Binder::CreateBinder(context, this);
+		auto root_select = select_binder->Bind(*stmt.select_statement);
+		MoveCorrelatedExpressions(*select_binder);
 
-	CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), !stmt.columns.empty(),
-	                               table.name.c_str());
+		CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), !stmt.columns.empty(),
+		                               table.name.c_str());
 
-	auto root = CastLogicalOperatorToTypes(root_select.types, insert->expected_types, std::move(root_select.plan));
+		root = CastLogicalOperatorToTypes(root_select.types, insert->expected_types, std::move(root_select.plan));
+	} else {
+		root = make_uniq<LogicalDummyScan>(GenerateTableIndex());
+	}
 	insert->AddChild(std::move(root));
 
 	BindOnConflictClause(*insert, table, stmt);

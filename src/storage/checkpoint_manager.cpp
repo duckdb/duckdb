@@ -338,27 +338,29 @@ void CheckpointWriter::WriteIndex(IndexCatalogEntry &index_catalog) {
 
 void CheckpointReader::ReadIndex(ClientContext &context, MetaBlockReader &reader) {
 
-	// Deserialize the index meta data
+	// deserialize the index metadata
 	auto info = IndexCatalogEntry::Deserialize(reader, context);
 
-	// Create index in the catalog
+	// create the index in the catalog
 	auto &schema_catalog = catalog.GetSchema(context, info->schema);
 	auto &table_catalog = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, info->schema, info->table->table_name)
 	                          .Cast<DuckTableEntry>();
 	auto &index_catalog = schema_catalog.CreateIndex(context, *info, table_catalog)->Cast<DuckIndexEntry>();
 	index_catalog.info = table_catalog.GetStorage().info;
-	// Here we just gotta read the root node
+
+	// we deserialize the index lazily, i.e., we do not need to load any node information
+	// except the root block id and offset
 	auto root_block_id = reader.Read<block_id_t>();
 	auto root_offset = reader.Read<uint32_t>();
 
-	// create an adaptive radix tree around the expressions
+	// obtain the expressions of the ART from the index metadata
 	vector<unique_ptr<Expression>> unbound_expressions;
 	vector<unique_ptr<ParsedExpression>> parsed_expressions;
-
 	for (auto &p_exp : info->parsed_expressions) {
 		parsed_expressions.push_back(p_exp->Copy());
 	}
 
+	// bind the parsed expressions
 	auto binder = Binder::CreateBinder(context);
 	auto &table_ref = info->table->Cast<TableRef>();
 	auto bound_table = binder->Bind(table_ref);
@@ -370,8 +372,7 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetaBlockReader &reader
 	}
 
 	if (parsed_expressions.empty()) {
-		// If no parsed_expressions are present, this means this is a PK/FK index, so we create the necessary bound
-		// column refs
+		// this is a PK/FK index: we create the necessary bound column ref expressions
 		unbound_expressions.reserve(info->column_ids.size());
 		for (idx_t key_nr = 0; key_nr < info->column_ids.size(); key_nr++) {
 			auto &col = table_catalog.GetColumn(LogicalIndex(info->column_ids[key_nr]));
@@ -380,17 +381,18 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetaBlockReader &reader
 		}
 	}
 
+	// create the index and add it to the storage
 	switch (info->index_type) {
 	case IndexType::ART: {
 		auto &storage = table_catalog.GetStorage();
 		auto art = make_uniq<ART>(info->column_ids, TableIOManager::Get(storage), std::move(unbound_expressions),
-		                          info->constraint_type, storage.db, true, root_block_id, root_offset);
+		                          info->constraint_type, storage.db, root_block_id, root_offset);
 		index_catalog.index = art.get();
 		storage.info->indexes.AddIndex(std::move(art));
 		break;
 	}
 	default:
-		throw InternalException("Can't read this index type");
+		throw InternalException("Unknown index type for ReadIndex");
 	}
 }
 

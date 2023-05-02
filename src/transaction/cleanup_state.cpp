@@ -52,15 +52,21 @@ void CleanupState::CleanupDelete(DeleteInfo &info) {
 	auto version_table = info.table;
 	D_ASSERT(version_table->info->cardinality >= info.count);
 	version_table->info->cardinality -= info.count;
+
 	if (version_table->info->indexes.Empty()) {
 		// this table has no indexes: no cleanup to be done
 		return;
 	}
+
 	if (current_table != version_table) {
 		// table for this entry differs from previous table: flush and switch to the new table
 		Flush();
 		current_table = version_table;
 	}
+
+	// possibly vacuum any indexes in this table later
+	indexed_tables[current_table->info->table] = current_table;
+
 	count = 0;
 	for (idx_t i = 0; i < info.count; i++) {
 		row_numbers[count++] = info.vinfo->start + info.rows[i];
