@@ -396,7 +396,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 
 		auto new_row_group = lstate.local_collection->Append(lstate.insert_chunk, lstate.local_append_state);
 		if (new_row_group) {
-			lstate.writer->CheckFlushToDisk(*lstate.local_collection);
+			lstate.writer->WriteNewRowGroup(*lstate.local_collection);
 		}
 	}
 

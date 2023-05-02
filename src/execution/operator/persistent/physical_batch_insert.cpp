@@ -81,7 +81,7 @@ public:
 					}
 					auto new_row_group = new_collection->Append(scan_chunk, append_state);
 					if (new_row_group) {
-						writer.CheckFlushToDisk(*new_collection);
+						writer.WriteNewRowGroup(*new_collection);
 					}
 				}
 			}
@@ -107,6 +107,8 @@ struct RowGroupBatchEntry {
 };
 
 class BatchInsertGlobalState : public GlobalSinkState {
+public:
+	static constexpr const idx_t BATCH_FLUSH_THRESHOLD = LocalStorage::MERGE_THRESHOLD * 5;
 public:
 	explicit BatchInsertGlobalState(DuckTableEntry &table) : table(table), insert_count(0) {
 	}
@@ -147,7 +149,7 @@ public:
 			// not flushed - add to set of indexes to flush
 			total_count += entry.total_rows;
 		}
-		if (total_count >= LocalStorage::MERGE_THRESHOLD * 5) {
+		if (total_count >= BATCH_FLUSH_THRESHOLD) {
 			merge = true;
 		}
 		if (merge && total_count > 0) {
@@ -197,7 +199,7 @@ public:
 
 			// add the collection to the batch index
 			auto batch_type =
-			    new_count < LocalStorage::MERGE_THRESHOLD ? RowGroupBatchType::NOT_FLUSHED : RowGroupBatchType::FLUSHED;
+			    new_count < BATCH_FLUSH_THRESHOLD ? RowGroupBatchType::NOT_FLUSHED : RowGroupBatchType::FLUSHED;
 			RowGroupBatchEntry new_entry(batch_index, std::move(current_collection), batch_type);
 
 			auto it = std::lower_bound(
@@ -331,8 +333,17 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkSt
 
 	auto new_row_group = lstate.current_collection->Append(lstate.insert_chunk, lstate.current_append_state);
 	if (new_row_group) {
-		lstate.writer->CheckFlushToDisk(*lstate.current_collection);
-		lstate.written_to_disk = true;
+		if (!lstate.written_to_disk) {
+			// we have not written to disk yet - only write if we exceed the merge threshold
+			if (lstate.current_collection->GetTotalRows() >= BatchInsertGlobalState::BATCH_FLUSH_THRESHOLD) {
+				// very large batch - flush to disk
+				lstate.writer->WriteAllButLastRowGroup(*lstate.current_collection);
+				lstate.written_to_disk = true;
+			}
+		} else {
+			// we have already written to disk - flush the next row group as well
+			lstate.writer->WriteNewRowGroup(*lstate.current_collection);
+		}
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }

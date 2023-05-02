@@ -89,12 +89,12 @@ idx_t LocalTableStorage::EstimatedSize() {
 	return appended_rows * row_size;
 }
 
-void LocalTableStorage::CheckFlushToDisk() {
+void LocalTableStorage::WriteNewRowGroup() {
 	if (deleted_rows != 0) {
 		// we have deletes - we cannot merge row groups
 		return;
 	}
-	optimistic_writer.CheckFlushToDisk(*row_groups);
+	optimistic_writer.WriteNewRowGroup(*row_groups);
 }
 
 void LocalTableStorage::ClearBlocks() {
@@ -345,7 +345,7 @@ void LocalStorage::Append(LocalAppendState &state, DataChunk &chunk) {
 
 	//! Check if we should pre-emptively flush blocks to disk
 	if (new_row_group) {
-		storage->CheckFlushToDisk();
+		storage->WriteNewRowGroup();
 	}
 }
 

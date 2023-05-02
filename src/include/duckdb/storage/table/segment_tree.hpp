@@ -67,6 +67,10 @@ public:
 		auto l = Lock();
 		return MoveSegments(l);
 	}
+	idx_t GetSegmentCount() {
+		auto l = Lock();
+		return nodes.size();
+	}
 	//! Gets a pointer to the nth segment. Negative numbers start from the back.
 	T *GetSegmentByIndex(int64_t index) {
 		auto l = Lock();

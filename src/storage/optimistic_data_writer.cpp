@@ -29,7 +29,18 @@ bool OptimisticDataWriter::PrepareWrite() {
 	return true;
 }
 
-void OptimisticDataWriter::CheckFlushToDisk(RowGroupCollection &row_groups) {
+void OptimisticDataWriter::WriteAllButLastRowGroup(RowGroupCollection &row_groups) {
+	if (!PrepareWrite()) {
+		return;
+	}
+	auto row_group_count = row_groups.RowGroupCount();
+	for(idx_t i = 0; i + 1 < row_group_count; i++) {
+		auto row_group = row_groups.GetRowGroup(i);
+		FlushToDisk(row_group);
+	}
+}
+
+void OptimisticDataWriter::WriteNewRowGroup(RowGroupCollection &row_groups) {
 	// we finished writing a complete row group
 	if (!PrepareWrite()) {
 		return;
