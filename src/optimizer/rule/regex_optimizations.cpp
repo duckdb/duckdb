@@ -164,7 +164,7 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 
 	LikeString like_string;
 	if (pattern.Regexp()->parse_flags() & duckdb_re2::Regexp::FoldCase ||
-	    pattern.Regexp()->parse_flags() & !duckdb_re2::Regexp::OneLine) {
+	    !(pattern.Regexp()->parse_flags() & duckdb_re2::Regexp::OneLine)) {
 		// parse flags can turn on and off within a regex match, return no optimization
 		// TODO: logic to attempt the optimization, then if the parse flags change, then abort
 		return nullptr;
