@@ -10,12 +10,14 @@ public:
 	std::string Name() override;
 };
 
-struct RegisterCache {
-	static void RegisterFunction(duckdb::Connection &conn, duckdb::Catalog &catalog);
+struct CacheRemoteFile {
+	static void CacheRemoteFileFunction(duckdb::DataChunk &args, duckdb::ExpressionState &state,
+	                                    duckdb::Vector &result);
 };
 
-struct UnregisterCache {
-	static void RegisterFunction(duckdb::Connection &conn, duckdb::Catalog &catalog);
+struct DeleteCachedFile {
+	static void DeleteCachedFileFunction(duckdb::DataChunk &args, duckdb::ExpressionState &state,
+	                                     duckdb::Vector &result);
 };
 
 } // namespace duckdb

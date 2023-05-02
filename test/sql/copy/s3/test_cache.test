@@ -1,34 +1,34 @@
 # name: test/sql/copy/s3/test_cache.test
-# description: Test both register and unregister functions
+# description: Test both cache_remote_file and delete_cached_file functions
 # group: [s3]
 
 require httpfs
 
-# Can't unregister if it has not yet been registered
+# Can't delete_cached_file if it has not yet been cache_remote_file
 statement error
-SELECT unregister('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c');
+SELECT delete_cached_file('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c');
 ----
 The URL: https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c is not yet cached, nothing to remove.
 
 # Need a valid URL
 statement error
-SELECT register('bla');
+SELECT cache_remote_file('bla');
 ----
 File System can't handle this URL
 
 statement error
-SELECT register('https://bla.com');
+SELECT cache_remote_file('https://bla.com');
 ----
 URL needs to contain a '/' after the host
 
 query I
-SELECT register('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c');
+SELECT cache_remote_file('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c');
 ----
 true
 
-# Can't double-register
+# Can't double-cache_remote_file
 statement error
-SELECT register('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c');
+SELECT cache_remote_file('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c');
 ----
 The URL: https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c is already cached
 
@@ -94,7 +94,7 @@ SELECT * from read_csv_auto('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41
 2021	UE 27	UE 27	21.894190365821018	193930.95399999994	885764.4460000001
 
 query I
-SELECT unregister('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c');
+SELECT delete_cached_file('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c');
 ----
 true
 
@@ -108,7 +108,7 @@ explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https
 analyzed_plan	<REGEX>:.*GET: 1.*
 
 query I
-SELECT register('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet');
+SELECT cache_remote_file('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet');
 ----
 true
 
@@ -133,7 +133,7 @@ SELECT count(*) FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckd
 1000
 
 query I
-SELECT unregister('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet');
+SELECT delete_cached_file('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet');
 ----
 true
 
@@ -170,7 +170,7 @@ statement ok
 PRAGMA verify_parallelism
 
 query I
-SELECT register('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet');
+SELECT cache_remote_file('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet');
 ----
 true
 
@@ -192,12 +192,12 @@ statement ok
 COPY (from user_info limit 100) TO 's3://test-bucket/row-user-data_1.parquet' (FORMAT PARQUET,  ROW_GROUP_SIZE 2048);
 
 query I
-SELECT register('s3://test-bucket/row-user-data.parquet');
+SELECT cache_remote_file('s3://test-bucket/row-user-data.parquet');
 ----
 true
 
 query I
-SELECT register('s3://test-bucket/row-user-data_1.parquet');
+SELECT cache_remote_file('s3://test-bucket/row-user-data_1.parquet');
 ----
 true
 
@@ -218,7 +218,7 @@ SELECT count(*) FROM PARQUET_SCAN('s3://test-bucket/row-user-data_1.parquet')
 100
 
 query I
-SELECT unregister('s3://test-bucket/row-user-data.parquet');
+SELECT delete_cached_file('s3://test-bucket/row-user-data.parquet');
 ----
 true
 
@@ -246,7 +246,7 @@ explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('s3://
 analyzed_plan	<REGEX>:.*GET: 2.*
 
 query I
-SELECT register('s3://test-bucket/row-user-data.parquet');
+SELECT cache_remote_file('s3://test-bucket/row-user-data.parquet');
 ----
 true
 

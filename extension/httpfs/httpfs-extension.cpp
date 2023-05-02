@@ -2,7 +2,7 @@
 
 #include "duckdb.hpp"
 #include "httpfs-extension.hpp"
-
+#include "duckdb/main/extension_util.hpp"
 #include "s3fs.hpp"
 
 namespace duckdb {
@@ -58,12 +58,14 @@ static void LoadInternal(DatabaseInstance &instance) {
 
 void HTTPFsExtension::Load(DuckDB &db) {
 	LoadInternal(*db.instance);
-	Connection con(db);
-	con.BeginTransaction();
-	auto &catalog = Catalog::GetSystemCatalog(*con.context);
-	RegisterCache::RegisterFunction(con, catalog);
-	UnregisterCache::RegisterFunction(con, catalog);
-	con.Commit();
+	// Cache Remote File Function
+	auto cache_remote_file = ScalarFunction("cache_remote_file", {duckdb::LogicalType::VARCHAR},
+	                                        duckdb::LogicalType::BOOLEAN, CacheRemoteFile::CacheRemoteFileFunction);
+	ExtensionUtil::RegisterFunction(*db.instance, cache_remote_file);
+	// Delete Cached File Function
+	auto delete_cached_file = ScalarFunction("delete_cached_file", {duckdb::LogicalType::VARCHAR},
+	                                         duckdb::LogicalType::BOOLEAN, DeleteCachedFile::DeleteCachedFileFunction);
+	ExtensionUtil::RegisterFunction(*db.instance, delete_cached_file);
 }
 std::string HTTPFsExtension::Name() {
 	return "httpfs";

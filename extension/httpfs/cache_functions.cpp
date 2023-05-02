@@ -7,7 +7,8 @@
 
 namespace duckdb {
 
-void RegisterCacheFunction(duckdb::DataChunk &args, duckdb::ExpressionState &state, duckdb::Vector &result) {
+void CacheRemoteFile::CacheRemoteFileFunction(duckdb::DataChunk &args, duckdb::ExpressionState &state,
+                                              duckdb::Vector &result) {
 	D_ASSERT(args.ColumnCount() == 1);
 	auto &url_vector = args.data[0];
 	auto &context = state.GetContext();
@@ -44,16 +45,8 @@ void RegisterCacheFunction(duckdb::DataChunk &args, duckdb::ExpressionState &sta
 	result.SetValue(0, true);
 }
 
-void RegisterCache::RegisterFunction(duckdb::Connection &conn, duckdb::Catalog &catalog) {
-	duckdb::ScalarFunctionSet register_cache("register");
-	register_cache.AddFunction(
-	    ScalarFunction({duckdb::LogicalType::VARCHAR}, duckdb::LogicalType::BOOLEAN, RegisterCacheFunction));
-
-	duckdb::CreateScalarFunctionInfo register_cache_info(register_cache);
-	catalog.CreateFunction(*conn.context, register_cache_info);
-}
-
-void UnregisterCacheFunction(duckdb::DataChunk &args, duckdb::ExpressionState &state, duckdb::Vector &result) {
+void DeleteCachedFile::DeleteCachedFileFunction(duckdb::DataChunk &args, duckdb::ExpressionState &state,
+                                                duckdb::Vector &result) {
 	D_ASSERT(args.ColumnCount() == 1);
 	auto &url_vector = args.data[0];
 	auto &context = state.GetContext();
@@ -69,15 +62,6 @@ void UnregisterCacheFunction(duckdb::DataChunk &args, duckdb::ExpressionState &s
 	// TODO; should we just return false for URLs we can't unregister instead of throwing errors?
 	result.SetVectorType(duckdb::VectorType::CONSTANT_VECTOR);
 	result.SetValue(0, true);
-}
-
-void UnregisterCache::RegisterFunction(duckdb::Connection &conn, duckdb::Catalog &catalog) {
-	duckdb::ScalarFunctionSet unregister_cache("unregister");
-	unregister_cache.AddFunction(
-	    ScalarFunction({duckdb::LogicalType::VARCHAR}, duckdb::LogicalType::BOOLEAN, UnregisterCacheFunction));
-
-	duckdb::CreateScalarFunctionInfo unregister_cache_info(unregister_cache);
-	catalog.CreateFunction(*conn.context, unregister_cache_info);
 }
 
 } // namespace duckdb
