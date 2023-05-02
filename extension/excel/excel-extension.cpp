@@ -4,10 +4,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/scalar_function.hpp"
-#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
-#include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "excel-extension.hpp"
 #include "nf_calendar.h"
 #include "nf_localedata.h"
@@ -62,22 +59,15 @@ static void NumberFormatFunction(DataChunk &args, ExpressionState &state, Vector
 }
 
 void EXCELExtension::Load(DuckDB &db) {
-	Connection con(db);
-	con.BeginTransaction();
-
-	auto &catalog = Catalog::GetSystemCatalog(*con.context);
+	auto &db_instance = *db.instance;
 
 	ScalarFunction text_func("text", {LogicalType::DOUBLE, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                         NumberFormatFunction);
-	CreateScalarFunctionInfo text_info(text_func);
-	catalog.CreateFunction(*con.context, text_info);
+	ExtensionUtil::RegisterFunction(db_instance, text_func);
 
 	ScalarFunction excel_text_func("excel_text", {LogicalType::DOUBLE, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                               NumberFormatFunction);
-	CreateScalarFunctionInfo excel_text_info(excel_text_func);
-	catalog.CreateFunction(*con.context, excel_text_info);
-
-	con.Commit();
+	ExtensionUtil::RegisterFunction(db_instance, excel_text_func);
 }
 
 std::string EXCELExtension::Name() {
