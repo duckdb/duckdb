@@ -15,7 +15,7 @@ class PartialBlockManager;
 
 class OptimisticDataWriter {
 public:
-	OptimisticDataWriter(DataTable &table, shared_ptr<PartialBlockManager> partial_manager);
+	OptimisticDataWriter(DataTable &table);
 	OptimisticDataWriter(DataTable &table, OptimisticDataWriter &parent);
 	~OptimisticDataWriter();
 
@@ -24,6 +24,10 @@ public:
 	void FlushToDisk(RowGroup *row_group);
 	//! Flushes the final row group to disk (if any)
 	void FlushToDisk(RowGroupCollection &row_groups, bool force = false);
+	//! Final flush: flush the partial block manager to disk
+	void FinalFlush();
+	//! Rollback
+	void Rollback();
 
 private:
 	//! Prepare a write to disk
@@ -32,10 +36,8 @@ private:
 private:
 	//! The table
 	DataTable &table;
-	//! The partial block manager
-	shared_ptr<PartialBlockManager> partial_manager;
-	//! Whether or not anything has been written so far
-	bool written_anything;
+	//! The partial block manager (if we created one yet)
+	unique_ptr<PartialBlockManager> partial_manager;
 };
 
 } // namespace duckdb

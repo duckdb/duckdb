@@ -12,7 +12,6 @@ PartialBlockManager::~PartialBlockManager() {
 // Partial Blocks
 //===--------------------------------------------------------------------===//
 PartialBlockAllocation PartialBlockManager::GetBlockAllocation(uint32_t segment_size) {
-	lock_guard<mutex> l(lock);
 	PartialBlockAllocation allocation;
 	allocation.block_manager = &block_manager;
 	allocation.allocation_size = segment_size;
@@ -56,7 +55,6 @@ bool PartialBlockManager::GetPartialBlock(idx_t segment_size, unique_ptr<Partial
 }
 
 void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation &&allocation) {
-	lock_guard<mutex> l(lock);
 	auto &state = allocation.partial_block->state;
 	if (state.block_use_count < max_use_count) {
 		auto unaligned_size = allocation.allocation_size + state.offset_in_block;
@@ -89,7 +87,6 @@ void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation &&allocati
 }
 
 void PartialBlockManager::FlushPartialBlocks() {
-	lock_guard<mutex> l(lock);
 	for (auto &e : partially_filled_blocks) {
 		e.second->Flush(e.first);
 	}
@@ -97,7 +94,6 @@ void PartialBlockManager::FlushPartialBlocks() {
 }
 
 void PartialBlockManager::Clear() {
-	lock_guard<mutex> l(lock);
 	for (auto &e : partially_filled_blocks) {
 		e.second->Clear();
 	}

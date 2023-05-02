@@ -5,15 +5,14 @@
 
 namespace duckdb {
 
-OptimisticDataWriter::OptimisticDataWriter(DataTable &table, shared_ptr<PartialBlockManager> partial_manager_p)
-    : table(table), partial_manager(std::move(partial_manager_p)), written_anything(false) {
-	if (!partial_manager) {
-		throw InternalException("Cannot create an optimistic data writer without a partial block manager");
-	}
+OptimisticDataWriter::OptimisticDataWriter(DataTable &table) : table(table) {
 }
 
 OptimisticDataWriter::OptimisticDataWriter(DataTable &table, OptimisticDataWriter &parent)
-    : table(table), partial_manager(parent.partial_manager), written_anything(parent.written_anything) {
+    : table(table), partial_manager(std::move(parent.partial_manager)) {
+	if (partial_manager) {
+		partial_manager->FlushPartialBlocks();
+	}
 }
 
 OptimisticDataWriter::~OptimisticDataWriter() {
@@ -25,7 +24,11 @@ bool OptimisticDataWriter::PrepareWrite() {
 		return false;
 	}
 	// we should! write the second-to-last row group to disk
-	written_anything = true;
+	// allocate the partial block-manager if none is allocated yet
+	if (!partial_manager) {
+		auto &block_manager = table.info->table_io_manager->GetBlockManagerForRowData();
+		partial_manager = make_uniq<PartialBlockManager>(block_manager);
+	}
 	return true;
 }
 
@@ -52,9 +55,9 @@ void OptimisticDataWriter::FlushToDisk(RowGroup *row_group) {
 }
 
 void OptimisticDataWriter::FlushToDisk(RowGroupCollection &row_groups, bool force) {
-	if (!written_anything) {
+	if (!partial_manager) {
 		if (!force) {
-			// nothing has been written yet - return
+			// no partial manager - nothing to flush
 			return;
 		}
 		if (!PrepareWrite()) {
@@ -63,6 +66,22 @@ void OptimisticDataWriter::FlushToDisk(RowGroupCollection &row_groups, bool forc
 	}
 	// flush the last row group
 	FlushToDisk(row_groups.GetRowGroup(-1));
+}
+
+void OptimisticDataWriter::FinalFlush() {
+	if (!partial_manager) {
+		return;
+	}
+	// then flush the partial manager
+	partial_manager->FlushPartialBlocks();
+	partial_manager.reset();
+}
+
+void OptimisticDataWriter::Rollback() {
+	if (partial_manager) {
+		partial_manager->Clear();
+		partial_manager.reset();
+	}
 }
 
 } // namespace duckdb

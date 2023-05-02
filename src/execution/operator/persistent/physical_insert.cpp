@@ -434,6 +434,7 @@ void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 		// we have many rows - flush the row group collection to disk (if required) and merge into the transaction-local
 		// state
 		lstate.writer->FlushToDisk(*lstate.local_collection);
+		lstate.writer->FinalFlush();
 
 		lock_guard<mutex> lock(gstate.lock);
 		gstate.insert_count += append_count;

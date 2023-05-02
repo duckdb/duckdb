@@ -271,8 +271,8 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 		AppendTransientSegment(l, start);
 	}
 	auto segment = data.GetLastSegment(l);
-	if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
-		// no transient segments yet
+	if (segment->segment_type == ColumnSegmentType::PERSISTENT || !segment->function.get().init_append) {
+		// we cannot append to this segment - append a new segment
 		auto total_rows = segment->start + segment->count;
 		AppendTransientSegment(l, total_rows);
 		state.current = data.GetLastSegment(l);

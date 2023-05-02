@@ -48,7 +48,7 @@ RowGroup::RowGroup(RowGroupCollection &collection, RowGroupPointer &&pointer)
 void RowGroup::MoveToCollection(RowGroupCollection &collection, idx_t new_start) {
 	this->collection = collection;
 	this->start = new_start;
-	for (auto &column : GetColumns()) {
+	for(auto &column : GetColumns()) {
 		column->SetStart(new_start);
 	}
 	if (version_info) {

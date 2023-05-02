@@ -252,7 +252,7 @@ public:
 			return;
 		}
 		idx_t offset = nodes[0].node->start;
-		for (auto &entry : nodes) {
+		for(auto &entry : nodes) {
 			if (entry.node->start != offset) {
 				throw InternalException("In SegmentTree::Reinitialize - gap found between nodes!");
 			}
