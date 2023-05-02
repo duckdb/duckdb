@@ -108,6 +108,32 @@ class TestPyArrowUDF(object):
         res = con.execute(f"select test(x) from repeat(?::{str(type)}, {size}) as tbl(x)", [value]).fetchall()
         assert(len(res) == size)
 
+        # Mixed NULL/NON-NULL
+        size = duckdb.__standard_vector_size__ * 3
+        con.execute("select setseed(0.1337)").fetchall()
+        actual = con.execute(f"""
+            select test(
+                case when (x > 0.5) then
+                    ?::{str(type)}
+                else
+                    NULL
+                end
+            ) from (select random() as x from range({size}))
+        """, [value]).fetchall()
+
+        con.execute("select setseed(0.1337)").fetchall()
+        expected = con.execute(f"""
+            select
+                case when (x > 0.5) then
+                    ?::{str(type)}
+                else
+                    NULL
+                end
+            from (select random() as x from range({size}))
+        """, [value]).fetchall()
+        assert expected == actual
+
+
     def test_varargs(self):
         def variable_args(*args):
             # We return a chunked array here, but internally we convert this into a Table
