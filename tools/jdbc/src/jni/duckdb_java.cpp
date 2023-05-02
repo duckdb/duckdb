@@ -62,7 +62,6 @@ static jclass J_DuckVector;
 static jmethodID J_DuckVector_init;
 static jfieldID J_DuckVector_constlen;
 static jfieldID J_DuckVector_varlen;
-static jmethodID J_DuckVector_getObject;
 
 static jclass J_ByteBuffer;
 
@@ -185,8 +184,6 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 	J_DuckVector_init = env->GetMethodID(J_DuckVector, "<init>", "(Ljava/lang/String;I[Z)V");
 	J_DuckVector_constlen = env->GetFieldID(J_DuckVector, "constlen_data", "Ljava/nio/ByteBuffer;");
 	J_DuckVector_varlen = env->GetFieldID(J_DuckVector, "varlen_data", "[Ljava/lang/Object;");
-	J_DuckVector_getObject = env->GetMethodID(J_DuckVector, "getObject", "(I)Ljava/lang/Object;");
-	D_ASSERT(J_DuckVector_getObject);
 
 	tmpLocalRef = env->FindClass("java/nio/ByteBuffer");
 	J_ByteBuffer = (jclass)env->NewGlobalRef(tmpLocalRef);
