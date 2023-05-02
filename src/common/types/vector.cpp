@@ -731,8 +731,11 @@ void Vector::Flatten(idx_t count) {
 		auto old_buffer = std::move(buffer);
 		auto old_data = data;
 		buffer = VectorBuffer::CreateStandardVector(type, MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count));
-		// The old buffer might be relying on the auxiliary data, keep it alive
-		buffer->MoveAuxiliaryData(*old_buffer);
+		if (old_buffer) {
+			D_ASSERT(buffer->GetAuxiliaryData() == nullptr);
+			// The old buffer might be relying on the auxiliary data, keep it alive
+			buffer->MoveAuxiliaryData(*old_buffer);
+		}
 		data = buffer->GetData();
 		vector_type = VectorType::FLAT_VECTOR;
 		if (is_null) {
