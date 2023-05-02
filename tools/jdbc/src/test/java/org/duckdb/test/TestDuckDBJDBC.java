@@ -3214,7 +3214,7 @@ public class TestDuckDBJDBC {
 			 PreparedStatement statement = connection.prepareStatement("select [1]")) {
 			ResultSet rs = statement.executeQuery();
 			assertTrue(rs.next());
-			assertEquals(Arrays.toString((Object[])rs.getArray(1).getArray()), "[1]");
+			assertEquals(Arrays.asList((Object[])rs.getArray(1).getArray()), Arrays.asList(1));
 		}
 	}
 

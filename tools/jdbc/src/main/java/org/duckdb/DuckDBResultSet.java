@@ -386,15 +386,7 @@ public class DuckDBResultSet implements ResultSet {
 		if (check_and_null(columnIndex)) {
 			return 0;
 		}
-		if (isType(columnIndex, DuckDBColumnType.BIGINT)
-			   || isType(columnIndex, DuckDBColumnType.TIMESTAMP)) {
-			return getbuf(columnIndex, 8).getLong();
-		}
-		Object o = getObject(columnIndex);
-		if (o instanceof Number) {
-			return ((Number) o).longValue();
-		}
-		return Long.parseLong(o.toString());
+		return current_chunk[columnIndex - 1].getLong(chunk_idx - 1);
 	}
 
 	public BigInteger getHugeint(int columnIndex) throws SQLException {

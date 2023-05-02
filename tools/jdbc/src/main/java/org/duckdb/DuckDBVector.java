@@ -23,6 +23,8 @@ public class DuckDBVector {
 		switch (duckdb_type) {
 		case INTEGER:
 			return getInt(columnIndex);
+		case BIGINT:
+			return getLong(columnIndex);
 		default:
 			throw new SQLFeatureNotSupportedException(duckdb_type.toString());
 		}
@@ -33,6 +35,17 @@ public class DuckDBVector {
 		buf.order(ByteOrder.LITTLE_ENDIAN);
 		buf.position(columnIndex * typeWidth);
 		return buf;
+	}
+
+	public long getLong(int columnIndex) throws SQLException {
+		if (duckdb_type == DuckDBColumnType.BIGINT || duckdb_type == DuckDBColumnType.TIMESTAMP) {
+			return getbuf(columnIndex, 8).getLong();
+		}
+		Object o = getObject(columnIndex);
+		if (o instanceof Number) {
+			return ((Number) o).longValue();
+		}
+		return Long.parseLong(o.toString());
 	}
 
 	public int getInt(int columnIndex) throws SQLException {
