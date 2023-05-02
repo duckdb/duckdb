@@ -18,7 +18,8 @@ public:
 
 public:
 	BoundCTERef(idx_t bind_index, idx_t cte_index, bool materialized_cte)
-	    : BoundTableRef(TableReferenceType::CTE), bind_index(bind_index), cte_index(cte_index), materialized_cte(materialized_cte) {
+	    : BoundTableRef(TableReferenceType::CTE), bind_index(bind_index), cte_index(cte_index),
+	      materialized_cte(materialized_cte) {
 	}
 
 	//! The set of columns bound to this base table reference

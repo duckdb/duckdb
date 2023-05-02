@@ -13,7 +13,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundCTENode &node) {
 	auto cte_query = CreatePlan(*node.query);
 	auto cte_child = CreatePlan(*node.child);
 
-	auto root = make_uniq<LogicalCTE>(node.ctename, node.setop_index, node.types.size(), std::move(cte_query), std::move(cte_child));
+	auto root = make_uniq<LogicalCTE>(node.ctename, node.setop_index, node.types.size(), std::move(cte_query),
+	                                  std::move(cte_child));
 
 	// check if there are any unplanned subqueries left in either child
 	has_unplanned_subqueries =

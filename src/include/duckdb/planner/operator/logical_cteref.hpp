@@ -19,8 +19,10 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_CTE_REF;
 
 public:
-	LogicalCTERef(idx_t table_index, idx_t cte_index, vector<LogicalType> types, vector<string> colnames, bool materialized_cte)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_CTE_REF), table_index(table_index), cte_index(cte_index), materialized_cte(materialized_cte) {
+	LogicalCTERef(idx_t table_index, idx_t cte_index, vector<LogicalType> types, vector<string> colnames,
+	              bool materialized_cte)
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_CTE_REF), table_index(table_index), cte_index(cte_index),
+	      materialized_cte(materialized_cte) {
 		D_ASSERT(types.size() > 0);
 		chunk_types = types;
 		bound_columns = colnames;

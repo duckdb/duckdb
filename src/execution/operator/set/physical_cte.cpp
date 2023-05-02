@@ -52,8 +52,7 @@ void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
 	auto &state = meta_pipeline.GetState();
 
 	for (auto &cte_scan : cte_scans) {
-		state.cte_dependencies.insert(
-		    make_pair(cte_scan, reference<Pipeline>(*child_meta_pipeline.GetBasePipeline())));
+		state.cte_dependencies.insert(make_pair(cte_scan, reference<Pipeline>(*child_meta_pipeline.GetBasePipeline())));
 	}
 
 	children[1]->BuildPipelines(current, meta_pipeline);
