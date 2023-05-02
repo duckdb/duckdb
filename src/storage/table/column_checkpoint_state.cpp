@@ -108,8 +108,7 @@ void PartialBlockForCheckpoint::Merge(PartialBlock &other_p, idx_t offset, idx_t
 	for (auto &segment : other.segments) {
 		AddSegmentToTail(segment.data, segment.segment, segment.offset_in_block + offset);
 	}
-	other.uninitialized_regions.clear();
-	Clear();
+	other.Clear();
 }
 
 void PartialBlockForCheckpoint::AddSegmentToTail(ColumnData &data, ColumnSegment &segment, uint32_t offset_in_block) {
