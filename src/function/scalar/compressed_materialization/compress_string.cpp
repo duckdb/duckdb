@@ -9,7 +9,7 @@ static string StringCompressFunctionName(const LogicalType &result_type) {
 }
 
 template <class RESULT_TYPE>
-static inline RESULT_TYPE StringCompress(const string_t &input) {
+static inline RESULT_TYPE StringCompressInternal(const string_t &input) {
 	D_ASSERT(input.GetSize() < sizeof(RESULT_TYPE));
 	RESULT_TYPE result;
 	if (sizeof(RESULT_TYPE) <= string_t::INLINE_LENGTH) {
@@ -23,6 +23,11 @@ static inline RESULT_TYPE StringCompress(const string_t &input) {
 	}
 	((uint8_t *)&result)[sizeof(RESULT_TYPE) - 1] = input.GetSize();
 	return BSwap<RESULT_TYPE>(result);
+}
+
+template <class RESULT_TYPE>
+static inline RESULT_TYPE StringCompress(const string_t &input) {
+	return StringCompressInternal<RESULT_TYPE>(input);
 }
 
 template <class RESULT_TYPE>
@@ -125,6 +130,8 @@ static inline string_t MiniStringDecompress(const INPUT_TYPE &input, ArenaAlloca
 		memset(result.GetPrefixWriteable(), '\0', string_t::INLINE_BYTES);
 		*result.GetPrefixWriteable() = input - min;
 		return result;
+	} else if (input == 0) {
+		return string_t(uint32_t(0));
 	} else {
 		auto ptr = allocator.Allocate(1);
 		*ptr = input - 1;
