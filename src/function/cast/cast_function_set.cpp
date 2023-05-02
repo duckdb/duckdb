@@ -160,7 +160,7 @@ public:
 	}
 
 private:
-	unordered_map<LogicalTypeId, type_map_t<unordered_map<LogicalTypeId, type_map_t<MapCastNode>>>> casts;
+	type_id_map_t<type_map_t<type_id_map_t<type_map_t<MapCastNode>>>> casts;
 };
 
 int64_t CastFunctionSet::ImplicitCastCost(const LogicalType &source, const LogicalType &target) {

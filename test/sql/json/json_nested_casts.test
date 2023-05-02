@@ -126,3 +126,57 @@ query I
 SELECT '{"duck":42}'::JSON::MAP(VARCHAR, INTEGER)
 ----
 {duck=42}
+
+# also implicitly
+statement ok
+CREATE TABLE structs (v STRUCT(duck INTEGER))
+
+statement ok
+CREATE TABLE lists (v VARCHAR[])
+
+statement ok
+CREATE table maps (v MAP(VARCHAR, INTEGER))
+
+statement ok
+INSERT INTO structs VALUES ('{"duck":42}'::JSON)
+
+statement ok
+INSERT INTO lists VALUES ('["duck"]'::JSON)
+
+statement ok
+INSERT INTO maps VALUES ('{"duck":42}'::JSON)
+
+query I
+SELECT * FROM structs
+----
+{'duck': 42}
+
+query I
+SELECT * FROM lists
+----
+[duck]
+
+query I
+SELECT * FROM maps
+----
+{duck=42}
+
+statement ok
+CREATE TABLE jsons (j JSON)
+
+statement ok
+INSERT INTO jsons SELECT * FROM structs
+
+statement ok
+INSERT INTO jsons SELECT * FROM lists
+
+statement ok
+INSERT INTO jsons SELECT * FROM maps
+
+# and back
+query I
+SELECT * FROM jsons
+----
+{"duck":42}
+["duck"]
+{"duck":42}
