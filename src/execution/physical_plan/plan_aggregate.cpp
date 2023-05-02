@@ -83,39 +83,54 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 		// we have a min and a max value for the stats: use that to figure out how many bits we have
 		// we add two here, one for the NULL value, and one to make the computation one-indexed
 		// (e.g. if min and max are the same, we still need one entry in total)
-		uint64_t range;
+		hugeint_t range_h;
 		switch (group_type.InternalType()) {
 		case PhysicalType::INT8:
-			range = uint64_t(NumericStats::GetMax<int8_t>(nstats)) - int64_t(NumericStats::GetMin<int8_t>(nstats));
+			range_h = Hugeint::Convert(NumericStats::GetMax<int8_t>(nstats)) -
+			          Hugeint::Convert(NumericStats::GetMin<int8_t>(nstats));
 			break;
 		case PhysicalType::INT16:
-			range = int64_t(NumericStats::GetMax<int16_t>(nstats)) - int64_t(NumericStats::GetMin<int16_t>(nstats));
+			range_h = Hugeint::Convert(NumericStats::GetMax<int16_t>(nstats)) -
+			          Hugeint::Convert(NumericStats::GetMin<int16_t>(nstats));
 			break;
 		case PhysicalType::INT32:
-			range = int64_t(NumericStats::GetMax<int32_t>(nstats)) - int64_t(NumericStats::GetMin<int32_t>(nstats));
+			range_h = Hugeint::Convert(NumericStats::GetMax<int32_t>(nstats)) -
+			          Hugeint::Convert(NumericStats::GetMin<int32_t>(nstats));
 			break;
 		case PhysicalType::INT64:
-			range = int64_t(NumericStats::GetMax<int64_t>(nstats)) - int64_t(NumericStats::GetMin<int64_t>(nstats));
+			range_h = Hugeint::Convert(NumericStats::GetMax<int64_t>(nstats)) -
+			          Hugeint::Convert(NumericStats::GetMin<int64_t>(nstats));
 			break;
 		case PhysicalType::UINT8:
-			range = int64_t(NumericStats::GetMax<uint8_t>(nstats)) - int64_t(NumericStats::GetMin<uint8_t>(nstats));
+			range_h = Hugeint::Convert(NumericStats::GetMax<uint8_t>(nstats)) -
+			          Hugeint::Convert(NumericStats::GetMin<uint8_t>(nstats));
 			break;
 		case PhysicalType::UINT16:
-			range = int64_t(NumericStats::GetMax<uint16_t>(nstats)) - int64_t(NumericStats::GetMin<uint16_t>(nstats));
+			range_h = Hugeint::Convert(NumericStats::GetMax<uint16_t>(nstats)) -
+			          Hugeint::Convert(NumericStats::GetMin<uint16_t>(nstats));
 			break;
 		case PhysicalType::UINT32:
-			range = int64_t(NumericStats::GetMax<uint32_t>(nstats)) - int64_t(NumericStats::GetMin<uint32_t>(nstats));
+			range_h = Hugeint::Convert(NumericStats::GetMax<uint32_t>(nstats)) -
+			          Hugeint::Convert(NumericStats::GetMin<uint32_t>(nstats));
 			break;
 		case PhysicalType::UINT64:
-			range = int64_t(NumericStats::GetMax<uint64_t>(nstats)) - int64_t(NumericStats::GetMin<uint64_t>(nstats));
+			range_h = Hugeint::Convert(NumericStats::GetMax<uint64_t>(nstats)) -
+			          Hugeint::Convert(NumericStats::GetMin<uint64_t>(nstats));
 			break;
 		default:
 			throw InternalException("Unsupported type for perfect hash (should be caught before)");
 		}
+
+		uint64_t range;
+		if (!Hugeint::TryCast(range_h, range)) {
+			return false;
+		}
+
 		// bail out on any range bigger than 2^32
 		if (range >= NumericLimits<int32_t>::Maximum()) {
 			return false;
 		}
+
 		range += 2;
 		// figure out how many bits we need
 		idx_t required_bits = RequiredBitsForValue(range);

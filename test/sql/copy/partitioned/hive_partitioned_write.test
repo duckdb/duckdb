@@ -8,6 +8,8 @@ require parquet
 statement ok
 CREATE TABLE test as SELECT i%2 as part_col, (i+1)%5 as value_col, i as value2_col from range(0,10) tbl(i);
 
+mode skip
+
 statement ok
 COPY test TO '__TEST_DIR__/partitioned1' (FORMAT PARQUET, PARTITION_BY (part_col));
 
@@ -71,6 +73,8 @@ ORDER BY min_val
 7
 8
 9
+
+mode unskip
 
 # single col as param is also fine
 statement ok

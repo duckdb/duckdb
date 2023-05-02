@@ -15,10 +15,12 @@
 #include <vector>
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -31,8 +33,6 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
-#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
-#include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/storage/table/row_group.hpp"
 #endif
 
@@ -203,6 +203,15 @@ public:
 		return ParquetScanBindInternal(context, std::move(files), expected_types, expected_names, parquet_options);
 	}
 
+	static inline unique_ptr<BaseStatistics> GetPartitionColumnStats(const BaseStatistics &orig_stats,
+	                                                                 const LogicalType &actual_type) {
+		D_ASSERT(actual_type == LogicalType::VARCHAR);
+		auto correct_type_stats = BaseStatistics::CreateEmpty(LogicalType::VARCHAR);
+		correct_type_stats.CopyBase(orig_stats);
+		// We don't know min/max or max length
+		return correct_type_stats.ToUnique();
+	}
+
 	static unique_ptr<BaseStatistics> ParquetScanStats(ClientContext &context, const FunctionData *bind_data_p,
 	                                                   column_t column_index) {
 		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
@@ -211,17 +220,34 @@ public:
 			return nullptr;
 		}
 
+		// a side-effect of hive-partitioned reads is that the partitioning column becomes a VARCHAR
+		// but the statistics we read might be of another type, so we need to correct for that
+		bool is_partitioning_column = false;
+		for (const auto &hive_partitioning_index : bind_data.reader_bind.hive_partitioning_indexes) {
+			if (column_index == hive_partitioning_index.index) {
+				is_partitioning_column = true;
+				break;
+			}
+		}
+
 		// NOTE: we do not want to parse the Parquet metadata for the sole purpose of getting column statistics
 
 		auto &config = DBConfig::GetConfig(context);
 		if (bind_data.files.size() < 2) {
+			unique_ptr<BaseStatistics> file_stats;
 			if (bind_data.initial_reader) {
 				// most common path, scanning single parquet file
-				return bind_data.initial_reader->ReadStatistics(bind_data.names[column_index]);
+				file_stats = bind_data.initial_reader->ReadStatistics(bind_data.names[column_index]);
 			} else if (!config.options.object_cache_enable) {
 				// our initial reader was reset
 				return nullptr;
 			}
+
+			if (file_stats && is_partitioning_column) {
+				file_stats = GetPartitionColumnStats(*file_stats, bind_data.types[column_index]);
+			}
+
+			return file_stats;
 		} else if (config.options.object_cache_enable) {
 			// multiple files, object cache enabled: merge statistics
 			unique_ptr<BaseStatistics> overall_stats;
@@ -257,6 +283,11 @@ public:
 					overall_stats = std::move(file_stats);
 				}
 			}
+
+			if (overall_stats && is_partitioning_column) {
+				overall_stats = GetPartitionColumnStats(*overall_stats, bind_data.types[column_index]);
+			}
+
 			// success!
 			return overall_stats;
 		}
