@@ -4,6 +4,10 @@
 #include "duckdb/main/error_manager.hpp"
 #include "mbedtls_wrapper.hpp"
 
+#ifndef DUCKDB_NO_THREADS
+#include <thread>
+#endif // DUCKDB_NO_THREADS
+
 #ifdef WASM_LOADABLE_EXTENSIONS
 #include <emscripten.h>
 #endif
@@ -24,6 +28,16 @@ static T LoadFunctionFromDLL(void *dll, const string &function_name, const strin
 		throw IOException("File \"%s\" did not contain function \"%s\": %s", filename, function_name, GetDLError());
 	}
 	return (T)function;
+}
+
+void ComputeSHA256(FileHandle *handle, const idx_t start, const idx_t end, std::string *res) {
+	const idx_t len = end - start;
+	string file_content;
+	file_content.resize(len);
+	handle->Read((void *)file_content.data(), len, start);
+
+	// Invoke MbedTls function to actually compute sha256
+	*res = duckdb_mbedtls::MbedTlsWrapper::ComputeSha256Hash(file_content);
 }
 
 bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileOpener *opener, const string &extension,
@@ -70,14 +84,44 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileOpener *opener, const
 
 		auto signature_offset = handle->GetFileSize() - signature.size();
 
+		const idx_t maxLenChunks = 1024 * 1024;
+		const idx_t numChunks = (signature_offset + maxLenChunks - 1) / maxLenChunks;
+		std::vector<std::string> chunks(numChunks);
+		std::vector<idx_t> splits(numChunks + 1);
+
+		splits.back() = signature_offset;
+		for (idx_t i = 0; i < chunks.size(); i++) {
+			splits[i] = maxLenChunks * i;
+		}
+
+#ifndef DUCKDB_NO_THREADS
+		std::vector<std::thread> threads;
+		threads.reserve(numChunks);
+		for (idx_t i = 0; i < numChunks; i++) {
+			threads.emplace_back(ComputeSHA256, handle.get(), splits[i], splits[i + 1], &chunks[i]);
+		}
+
+		for (auto &thread : threads) {
+			thread.join();
+		}
+#else
+		for (idx_t i = 0; i < numChunks; i++) {
+			ComputeSHA256(handle.get(), splits[i], splits[i + 1], &chunks[i]);
+		}
+#endif // DUCKDB_NO_THREADS
+
 		string file_content;
-		file_content.resize(signature_offset);
-		handle->Read((void *)file_content.data(), signature_offset, 0);
+		file_content.reserve(256 * numChunks);
+
+		for (auto &chunk : chunks) {
+			file_content += chunk;
+		}
+
+		string hash;
+		ComputeSHA256(handle.get(), 0, file_content.size(), &hash);
 
 		// TODO maybe we should do a stream read / hash update here
 		handle->Read((void *)signature.data(), signature.size(), signature_offset);
-
-		auto hash = duckdb_mbedtls::MbedTlsWrapper::ComputeSha256Hash(file_content);
 
 		bool any_valid = false;
 		for (auto &key : ExtensionHelper::GetPublicKeys()) {
