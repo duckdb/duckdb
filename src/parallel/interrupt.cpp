@@ -45,10 +45,9 @@ void InterruptDoneSignalState::Signal() {
 }
 
 void InterruptDoneSignalState::Await() {
-	while (!done) {
-		std::unique_lock<std::mutex> lck(lock);
-		cv.wait(lck, [&]() { return done; });
-	}
+	std::unique_lock<std::mutex> lck(lock);
+	cv.wait(lck, [&]() { return done; });
+
 	// Reset after signal received
 	done = false;
 }

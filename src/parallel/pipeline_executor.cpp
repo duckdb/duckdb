@@ -416,7 +416,7 @@ SourceResultType PipelineExecutor::GetData(DataChunk &chunk, OperatorSourceInput
 	if (debug_blocked_source_count < debug_blocked_target_count) {
 		debug_blocked_source_count++;
 
-		auto callback_state = input.interrupt_state;
+		auto& callback_state = input.interrupt_state;
 		std::thread rewake_thread([callback_state] {
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 			callback_state.Callback();
@@ -436,7 +436,7 @@ SinkResultType PipelineExecutor::Sink(DataChunk &chunk, OperatorSinkInput &input
 	if (debug_blocked_sink_count < debug_blocked_target_count) {
 		debug_blocked_sink_count++;
 
-		auto callback_state = input.interrupt_state;
+		auto& callback_state = input.interrupt_state;
 		std::thread rewake_thread([callback_state] {
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 			callback_state.Callback();

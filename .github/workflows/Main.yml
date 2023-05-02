@@ -207,7 +207,7 @@ jobs:
  force-blocking-sink-source:
     name: Forces every Sink/Source to block
     runs-on: ubuntu-20.04
-    needs: linux-debug
+#    needs: linux-debug TODO: revert
     strategy:
       matrix:
         thread_sanitizer: [ 0, 1 ]
