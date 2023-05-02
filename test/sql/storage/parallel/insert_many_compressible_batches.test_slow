@@ -73,3 +73,38 @@ query I
 SELECT COUNT(DISTINCT block_id)<=3 FROM pragma_storage_info('integers_batched_load');
 ----
 true
+
+query III
+SELECT COUNT(*), COUNT(i), SUM(i) FROM integers_batched_load
+----
+50000000	50000000	1000
+
+# now with NULL values
+statement ok
+CREATE TABLE integers_batched_load_nulls(i INTEGER)
+
+statement ok
+BEGIN TRANSACTION
+
+loop i 0 50
+
+query I
+INSERT INTO integers_batched_load_nulls SELECT CASE WHEN i%50000=0 THEN 1 ELSE NULL END AS i FROM range(1000000) tbl(i);
+----
+1000000
+
+endloop
+
+statement ok
+COMMIT
+
+# NULLs are not RLE compressed yet - even with block colocation this takes a high number of blocks
+query I
+SELECT COUNT(DISTINCT block_id)<=35 FROM pragma_storage_info('integers_batched_load_nulls');
+----
+true
+
+query III
+SELECT COUNT(*), COUNT(i), SUM(i) FROM integers_batched_load_nulls
+----
+50000000	1000	1000

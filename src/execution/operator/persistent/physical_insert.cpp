@@ -372,13 +372,13 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 		}
 
 		idx_t updated_tuples = OnConflictHandling(table, context, lstate);
+		gstate.insert_count += lstate.insert_chunk.size();
+		gstate.insert_count += updated_tuples;
 		storage.LocalAppend(gstate.append_state, table, context.client, lstate.insert_chunk, true);
 
 		if (return_chunk) {
 			gstate.return_collection.Append(lstate.insert_chunk);
 		}
-		gstate.insert_count += lstate.insert_chunk.size();
-		gstate.insert_count += updated_tuples;
 	} else {
 		D_ASSERT(!return_chunk);
 		// parallel append
@@ -392,7 +392,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 			lstate.local_collection->InitializeAppend(lstate.local_append_state);
 			lstate.writer = &gstate.table.GetStorage().CreateOptimisticWriter(context.client);
 		}
-		lstate.update_count += OnConflictHandling(table, context, lstate);
+		OnConflictHandling(table, context, lstate);
 
 		auto new_row_group = lstate.local_collection->Append(lstate.insert_chunk, lstate.local_append_state);
 		if (new_row_group) {
@@ -424,7 +424,6 @@ void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 
 	lock_guard<mutex> lock(gstate.lock);
 	gstate.insert_count += append_count;
-	gstate.insert_count += lstate.update_count;
 	if (append_count < RowGroup::ROW_GROUP_SIZE) {
 		// we have few rows - append to the local storage directly
 		auto &table = gstate.table;
