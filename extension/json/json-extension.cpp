@@ -7,8 +7,8 @@
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "json_common.hpp"
 #include "json_functions.hpp"
@@ -36,7 +36,9 @@ void JSONExtension::Load(DuckDB &db) {
 	catalog.CreateType(context, type_info);
 
 	// JSON casts
-	JSONFunctions::RegisterCastFunctions(DBConfig::GetConfig(context).GetCastFunctions());
+	JSONFunctions::RegisterSimpleCastFunctions(DBConfig::GetConfig(context).GetCastFunctions());
+	JSONFunctions::RegisterJSONCreateCastFunctions(DBConfig::GetConfig(context).GetCastFunctions());
+	JSONFunctions::RegisterJSONTransformCastFunctions(DBConfig::GetConfig(context).GetCastFunctions());
 
 	// JSON scalar functions
 	for (auto &fun : JSONFunctions::GetScalarFunctions()) {

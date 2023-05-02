@@ -2,6 +2,8 @@
 
 #include "duckdb/common/types.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "json_functions.hpp"
 #include "json_scan.hpp"
@@ -77,8 +79,8 @@ static LogicalType StructureStringToType(yyjson_val *val, ClientContext &context
 	}
 }
 
-static duckdb::unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, ScalarFunction &bound_function,
-                                                          vector<duckdb::unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, ScalarFunction &bound_function,
+                                                  vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();
@@ -468,7 +470,7 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 }
 
 static bool TransformObjectInternal(yyjson_val *objects[], yyjson_alc *alc, Vector &result, const idx_t count,
-                                    const LogicalType &type, JSONTransformOptions &options) {
+                                    JSONTransformOptions &options) {
 	// Get child vectors and names
 	auto &child_vs = StructVector::GetEntries(result);
 	vector<string> child_names;
@@ -476,7 +478,7 @@ static bool TransformObjectInternal(yyjson_val *objects[], yyjson_alc *alc, Vect
 	child_names.reserve(child_vs.size());
 	child_vectors.reserve(child_vs.size());
 	for (idx_t child_i = 0; child_i < child_vs.size(); child_i++) {
-		child_names.push_back(StructType::GetChildName(type, child_i));
+		child_names.push_back(StructType::GetChildName(result.GetType(), child_i));
 		child_vectors.push_back(child_vs[child_i].get());
 	}
 
@@ -546,6 +548,67 @@ static bool TransformArray(yyjson_val *arrays[], yyjson_alc *alc, Vector &result
 		}
 	}
 	return success;
+}
+
+static bool TransformObjectToMap(yyjson_val *objects[], yyjson_alc *alc, Vector &result, const idx_t count,
+                                 JSONTransformOptions &options) {
+	// Pre-allocate list vector
+	idx_t list_size = 0;
+	for (idx_t i = 0; i < count; i++) {
+		const auto &obj = objects[i];
+		if (!obj || !unsafe_yyjson_is_obj(obj)) {
+			continue;
+		}
+		list_size += unsafe_yyjson_get_len(obj);
+	}
+	ListVector::Reserve(result, list_size);
+	ListVector::SetListSize(result, list_size);
+
+	auto list_entries = FlatVector::GetData<list_entry_t>(result);
+	auto list_validity = FlatVector::Validity(result);
+
+	auto keys = (yyjson_val **)alc->malloc(alc->ctx, sizeof(yyjson_val *) * list_size);
+	auto vals = (yyjson_val **)alc->malloc(alc->ctx, sizeof(yyjson_val *) * list_size);
+
+	bool success = true;
+	idx_t list_offset = 0;
+
+	size_t idx, max;
+	yyjson_val *key, *val;
+	for (idx_t i = 0; i < count; i++) {
+		const auto &obj = objects[i];
+		if (obj) {
+			if (!unsafe_yyjson_is_obj(obj) && options.strict_cast) {
+				options.error_message =
+				    StringUtil::Format("Expected OBJECT, but got %s: %s", JSONCommon::ValTypeToString(obj),
+				                       JSONCommon::ValToString(obj, 50));
+				options.object_index = i;
+				success = false;
+				break;
+			}
+
+			auto &list_entry = list_entries[i];
+			list_entry.offset = list_offset;
+			list_entry.length = unsafe_yyjson_get_len(obj);
+
+			yyjson_obj_foreach(obj, idx, max, key, val) {
+				keys[list_offset] = key;
+				vals[list_offset] = val;
+				list_offset++;
+			}
+		} else {
+			list_validity.SetInvalid(i);
+		}
+	}
+
+	if (!success) {
+		return false;
+	}
+
+	if (!JSONTransform::Transform(keys, alc, MapVector::GetKeys(result), list_size, options)) {
+		return false;
+	}
+	return JSONTransform::Transform(vals, alc, MapVector::GetValues(result), list_size, options);
 }
 
 bool TransformToJSON(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count) {
@@ -635,27 +698,26 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 	case LogicalTypeId::BLOB:
 		return TransformToString(vals, alc, result, count);
 	case LogicalTypeId::STRUCT:
-		return TransformObjectInternal(vals, alc, result, count, result_type, options);
+		return TransformObjectInternal(vals, alc, result, count, options);
 	case LogicalTypeId::LIST:
 		return TransformArray(vals, alc, result, count, options);
+	case LogicalTypeId::MAP:
+		return TransformObjectToMap(vals, alc, result, count, options);
 	default:
 		throw InternalException("Unexpected type at JSON Transform %s", result_type.ToString());
 	}
 }
 
 template <bool strict>
-static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
-	auto alc = lstate.json_allocator.GetYYJSONAllocator();
-
-	const auto count = args.size();
-	auto &input = args.data[0];
+static bool TransformFunctionInternal(Vector &input, const idx_t count, Vector &result, yyjson_alc *alc,
+                                      JSONTransformOptions &options) {
 	UnifiedVectorFormat input_data;
 	input.ToUnifiedFormat(count, input_data);
 	auto inputs = (string_t *)input_data.data;
+
 	// Read documents
-	yyjson_doc *docs[STANDARD_VECTOR_SIZE];
-	yyjson_val *vals[STANDARD_VECTOR_SIZE];
+	auto docs = (yyjson_doc **)alc->malloc(alc->ctx, sizeof(yyjson_doc *) * count);
+	auto vals = (yyjson_val **)alc->malloc(alc->ctx, sizeof(yyjson_val *) * count);
 	auto &result_validity = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = input_data.sel->get_index(i);
@@ -669,14 +731,22 @@ static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &r
 		}
 	}
 
-	JSONTransformOptions options(strict, strict, strict, false);
-
-	if (!JSONTransform::Transform(vals, alc, result, count, options)) {
-		throw InvalidInputException(options.error_message);
+	auto success = JSONTransform::Transform(vals, alc, result, count, options);
+	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	return success;
+}
+
+template <bool strict>
+static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
+	auto alc = lstate.json_allocator.GetYYJSONAllocator();
+
+	JSONTransformOptions options(strict, strict, strict, false);
+	if (!TransformFunctionInternal<strict>(args.data[0], args.size(), result, alc, options)) {
+		throw InvalidInputException(options.error_message);
 	}
 }
 
@@ -702,6 +772,33 @@ CreateScalarFunctionInfo JSONFunctions::GetTransformStrictFunction() {
 	GetTransformStrictFunctionInternal(set, LogicalType::VARCHAR);
 	GetTransformStrictFunctionInternal(set, JSONCommon::JSONType());
 	return CreateScalarFunctionInfo(set);
+}
+
+static bool JSONToNestedCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	auto &lstate = parameters.local_state->Cast<JSONFunctionLocalState>();
+	lstate.json_allocator.Reset();
+	auto alc = lstate.json_allocator.GetYYJSONAllocator();
+
+	JSONTransformOptions options(true, true, true, false);
+	return TransformFunctionInternal<true>(source, count, result, alc, options);
+}
+
+BoundCastInfo JSONToNestedCastBind(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
+	return BoundCastInfo(JSONToNestedCast, nullptr, JSONFunctionLocalState::InitCastLocalState);
+}
+
+void JSONFunctions::RegisterJSONTransformCastFunctions(CastFunctionSet &casts) {
+	const auto struct_type = LogicalType::STRUCT({{"any", LogicalType::ANY}});
+	auto json_to_struct_cost = casts.ImplicitCastCost(LogicalType::VARCHAR, struct_type) - 2;
+	casts.RegisterCastFunction(JSONCommon::JSONType(), struct_type, JSONToNestedCastBind, json_to_struct_cost);
+
+	const auto list_type = LogicalType::LIST(LogicalType::ANY);
+	auto json_to_list_cost = casts.ImplicitCastCost(LogicalType::VARCHAR, list_type) - 2;
+	casts.RegisterCastFunction(JSONCommon::JSONType(), list_type, JSONToNestedCastBind, json_to_list_cost);
+
+	const auto map_type = LogicalType::MAP(LogicalType::ANY, LogicalType::ANY);
+	auto json_to_map_cost = casts.ImplicitCastCost(LogicalType::VARCHAR, map_type) - 2;
+	casts.RegisterCastFunction(JSONCommon::JSONType(), map_type, JSONToNestedCastBind, json_to_map_cost);
 }
 
 } // namespace duckdb

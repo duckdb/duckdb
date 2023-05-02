@@ -95,3 +95,34 @@ query I
 SELECT '42'::UNION(u VARCHAR)::JSON
 ----
 42
+
+# we support our nested to and from JSON (just calls to_json and from_json - well tested)
+query I
+SELECT {duck: 42}::JSON
+----
+{"duck":42}
+
+query I
+SELECT '{"duck":42}'::JSON::STRUCT(duck INTEGER)
+----
+{'duck': 42}
+
+query I
+SELECT ['duck']::JSON
+----
+["duck"]
+
+query I
+SELECT '["duck"]'::JSON::VARCHAR[]
+----
+[duck]
+
+query I
+SELECT MAP(['duck'], [42])::JSON
+----
+{"duck":42}
+
+query I
+SELECT '{"duck":42}'::JSON::MAP(VARCHAR, INTEGER)
+----
+{duck=42}
