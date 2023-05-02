@@ -14,11 +14,13 @@ ExecutorTask::~ExecutorTask() {
 }
 
 void ExecutorTask::Deschedule() {
-	executor.AddToBeRescheduled(shared_from_this());
+	auto this_ptr = shared_from_this();
+	executor.AddToBeRescheduled(this_ptr);
 }
 
 void ExecutorTask::Reschedule() {
-	executor.RescheduleTask(shared_from_this());
+	auto this_ptr = shared_from_this();
+	executor.RescheduleTask(this_ptr);
 }
 
 TaskExecutionResult ExecutorTask::Execute(TaskExecutionMode mode) {

@@ -386,7 +386,7 @@ void Executor::WorkOnTasks() {
 	}
 }
 
-void Executor::RescheduleTask(shared_ptr<Task> task) {
+void Executor::RescheduleTask(shared_ptr<Task>& task) {
 	// This function will spin lock until the task provided is added to the to_be_rescheduled_tasks
 	while (true) {
 		lock_guard<mutex> l(executor_lock);
@@ -403,7 +403,7 @@ void Executor::RescheduleTask(shared_ptr<Task> task) {
 	}
 }
 
-void Executor::AddToBeRescheduled(shared_ptr<Task> task) {
+void Executor::AddToBeRescheduled(shared_ptr<Task>& task) {
 	lock_guard<mutex> l(executor_lock);
 	if (cancelled) {
 		return;

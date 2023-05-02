@@ -71,10 +71,10 @@ public:
 	void Flush(ThreadContext &context);
 
 	//! Reschedules a task that was blocked
-	void RescheduleTask(shared_ptr<Task> task);
+	void RescheduleTask(shared_ptr<Task>& task);
 
 	//! Add the task to be rescheduled
-	void AddToBeRescheduled(shared_ptr<Task> task);
+	void AddToBeRescheduled(shared_ptr<Task>& task);
 
 	//! Returns the progress of the pipelines
 	bool GetPipelinesProgress(double &current_progress);
