@@ -9,12 +9,15 @@ PhysicalPivot::PhysicalPivot(vector<LogicalType> types_p, unique_ptr<PhysicalOpe
       bound_pivot(std::move(bound_pivot_p)) {
 	children.push_back(std::move(child));
 	for (idx_t p = 0; p < bound_pivot.pivot_values.size(); p++) {
-		// Insert the value only if it doesn't already exist in the map
-		(void)pivot_map.insert(std::make_pair(bound_pivot.pivot_values.get(p), bound_pivot.group_count + p));
+		auto entry = pivot_map.find(bound_pivot.pivot_values[p]);
+		if (entry != pivot_map.end()) {
+			continue;
+		}
+		pivot_map[bound_pivot.pivot_values[p]] = bound_pivot.group_count + p;
 	}
 	// extract the empty aggregate expressions
 	for (auto &aggr_expr : bound_pivot.aggregates) {
-		auto &aggr = aggr_expr->Cast<BoundAggregateExpression>();
+		auto &aggr = (BoundAggregateExpression &)*aggr_expr;
 		// for each aggregate, initialize an empty aggregate state and finalize it immediately
 		auto state = unique_ptr<data_t[]>(new data_t[aggr.function.state_size()]);
 		aggr.function.initialize(state.get());
@@ -30,7 +33,7 @@ OperatorResultType PhysicalPivot::Execute(ExecutionContext &context, DataChunk &
                                           GlobalOperatorState &gstate, OperatorState &state) const {
 	// copy the groups as-is
 	for (idx_t i = 0; i < bound_pivot.group_count; i++) {
-		chunk.data.get(i).Reference(input.data.get(i));
+		chunk.data[i].Reference(input.data[i]);
 	}
 	auto pivot_column_lists = FlatVector::GetData<list_entry_t>(input.data.back());
 	auto &pivot_column_values = ListVector::GetEntry(input.data.back());
@@ -41,8 +44,8 @@ OperatorResultType PhysicalPivot::Execute(ExecutionContext &context, DataChunk &
 	// so we need to alternate the empty_aggregate that we use
 	idx_t aggregate = 0;
 	for (idx_t c = bound_pivot.group_count; c < chunk.ColumnCount(); c++) {
-		chunk.data.get(c).Reference(empty_aggregates.get(aggregate));
-		chunk.data.get(c).Flatten(input.size());
+		chunk.data[c].Reference(empty_aggregates[aggregate]);
+		chunk.data[c].Flatten(input.size());
 		aggregate++;
 		if (aggregate >= empty_aggregates.size()) {
 			aggregate = 0;
@@ -62,13 +65,12 @@ OperatorResultType PhysicalPivot::Execute(ExecutionContext &context, DataChunk &
 			}
 			auto column_idx = entry->second;
 			for (idx_t aggr = 0; aggr < empty_aggregates.size(); aggr++) {
-				auto pivot_value_lists =
-				    FlatVector::GetData<list_entry_t>(input.data.get(bound_pivot.group_count + aggr));
-				auto &pivot_value_child = ListVector::GetEntry(input.data.get(bound_pivot.group_count + aggr));
+				auto pivot_value_lists = FlatVector::GetData<list_entry_t>(input.data[bound_pivot.group_count + aggr]);
+				auto &pivot_value_child = ListVector::GetEntry(input.data[bound_pivot.group_count + aggr]);
 				if (list.offset != pivot_value_lists[r].offset || list.length != pivot_value_lists[r].length) {
 					throw InternalException("Pivot - unaligned lists between values and columns!?");
 				}
-				chunk.data.get(column_idx + aggr).SetValue(r, pivot_value_child.GetValue(list.offset + l));
+				chunk.data[column_idx + aggr].SetValue(r, pivot_value_child.GetValue(list.offset + l));
 			}
 		}
 	}
