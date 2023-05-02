@@ -59,12 +59,12 @@ static void LoadInternal(DatabaseInstance &instance) {
 void HTTPFsExtension::Load(DuckDB &db) {
 	LoadInternal(*db.instance);
 	// Cache Remote File Function
-	auto cache_remote_file = ScalarFunction("cache_remote_file", {duckdb::LogicalType::VARCHAR},
-	                                        duckdb::LogicalType::BOOLEAN, CacheRemoteFile::CacheRemoteFileFunction);
+	auto cache_remote_file =
+	    TableFunction("cache_remote_file", {LogicalType::VARCHAR}, CacheRemoteFile::Function, CacheRemoteFile::Bind);
 	ExtensionUtil::RegisterFunction(*db.instance, cache_remote_file);
 	// Delete Cached File Function
-	auto delete_cached_file = ScalarFunction("delete_cached_file", {duckdb::LogicalType::VARCHAR},
-	                                         duckdb::LogicalType::BOOLEAN, DeleteCachedFile::DeleteCachedFileFunction);
+	auto delete_cached_file = TableFunction("delete_cached_file", {duckdb::LogicalType::VARCHAR},
+	                                        DeleteCachedFile::Function, DeleteCachedFile::Bind);
 	ExtensionUtil::RegisterFunction(*db.instance, delete_cached_file);
 }
 std::string HTTPFsExtension::Name() {

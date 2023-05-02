@@ -6,29 +6,28 @@ require httpfs
 
 # Can't delete_cached_file if it has not yet been cache_remote_file
 statement error
-SELECT delete_cached_file('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c');
+CALL delete_cached_file('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c');
 ----
 The URL: https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c is not yet cached, nothing to remove.
 
 # Need a valid URL
 statement error
-SELECT cache_remote_file('bla');
+CALL cache_remote_file('bla');
 ----
 HTTPFS can't handle this URL
 
 statement error
-SELECT cache_remote_file('https://bla.com');
+CALL cache_remote_file('https://bla.com');
 ----
 URL needs to contain a '/' after the host
 
-query I
-SELECT cache_remote_file('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c');
-----
-true
+statement ok
+CALL cache_remote_file('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c');
+
 
 # Can't double-cache_remote_file
 statement error
-SELECT cache_remote_file('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c');
+CALL cache_remote_file('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c');
 ----
 The URL: https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c is already cached
 
@@ -93,10 +92,8 @@ SELECT * from read_csv_auto('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41
 2021	Suède	Sweden	1.497679952802663	471.085	31454.317
 2021	UE 27	UE 27	21.894190365821018	193930.95399999994	885764.4460000001
 
-query I
-SELECT delete_cached_file('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c');
-----
-true
+statement ok
+CALL delete_cached_file('https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6890c');
 
 require parquet
 
@@ -107,10 +104,8 @@ explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https
 ----
 analyzed_plan	<REGEX>:.*GET: 1.*
 
-query I
-SELECT cache_remote_file('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet');
-----
-true
+statement ok
+CALL cache_remote_file('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet');
 
 query II
 explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
@@ -132,10 +127,8 @@ SELECT count(*) FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckd
 ----
 1000
 
-query I
-SELECT delete_cached_file('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet');
-----
-true
+statement ok
+CALL delete_cached_file('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
 
 query I
 SELECT count(*) FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
@@ -169,10 +162,8 @@ PRAGMA threads=10
 statement ok
 PRAGMA verify_parallelism
 
-query I
-SELECT cache_remote_file('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet');
-----
-true
+statement ok
+CALL cache_remote_file('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet');
 
 statement ok
 create table user_info as SELECT * FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
@@ -191,15 +182,11 @@ COPY (from user_info) TO 's3://test-bucket/row-user-data.parquet' (FORMAT PARQUE
 statement ok
 COPY (from user_info limit 100) TO 's3://test-bucket/row-user-data_1.parquet' (FORMAT PARQUET,  ROW_GROUP_SIZE 2048);
 
-query I
-SELECT cache_remote_file('s3://test-bucket/row-user-data.parquet');
-----
-true
+statement ok
+CALL cache_remote_file('s3://test-bucket/row-user-data.parquet');
 
-query I
-SELECT cache_remote_file('s3://test-bucket/row-user-data_1.parquet');
-----
-true
+statement ok
+CALL cache_remote_file('s3://test-bucket/row-user-data_1.parquet');
 
 query II
 explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet')
@@ -217,10 +204,8 @@ SELECT count(*) FROM PARQUET_SCAN('s3://test-bucket/row-user-data_1.parquet')
 ----
 100
 
-query I
+statement ok
 SELECT delete_cached_file('s3://test-bucket/row-user-data.parquet');
-----
-true
 
 query I
 SELECT count(*) FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet')
@@ -245,10 +230,8 @@ explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('s3://
 ----
 analyzed_plan	<REGEX>:.*GET: 2.*
 
-query I
-SELECT cache_remote_file('s3://test-bucket/row-user-data.parquet');
-----
-true
+statement ok
+CALL cache_remote_file('s3://test-bucket/row-user-data.parquet');
 
 query I
 SELECT count(*) FROM (SELECT * FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet') union all select * from PARQUET_SCAN('s3://test-bucket/row-user-data_1.parquet')) as t
