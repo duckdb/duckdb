@@ -124,16 +124,14 @@ struct TableFunctionInput {
 public:
 	TableFunctionInput(optional_ptr<const FunctionData> bind_data_p,
 	                   optional_ptr<LocalTableFunctionState> local_state_p,
-	                   optional_ptr<GlobalTableFunctionState> global_state_p,
-	                   optional_ptr<InterruptState> interrupt_state_p)
-	    : bind_data(bind_data_p), local_state(local_state_p), global_state(global_state_p), interrupt_state(interrupt_state_p) {
+	                   optional_ptr<GlobalTableFunctionState> global_state_p)
+	    : bind_data(bind_data_p), local_state(local_state_p), global_state(global_state_p){
 	}
 
 public:
 	optional_ptr<const FunctionData> bind_data;
 	optional_ptr<LocalTableFunctionState> local_state;
 	optional_ptr<GlobalTableFunctionState> global_state;
-	optional_ptr<InterruptState> interrupt_state;
 };
 
 enum ScanType { TABLE, PARQUET };

@@ -56,7 +56,7 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
                                                        GlobalOperatorState &gstate_p, OperatorState &state_p) const {
 	auto &gstate = gstate_p.Cast<TableInOutGlobalState>();
 	auto &state = state_p.Cast<TableInOutLocalState>();
-	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get(), nullptr);
+	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
 	if (projected_input.empty()) {
 		// straightforward case - no need to project input
 		return function.in_out_function(context, data, input, chunk);
@@ -107,7 +107,7 @@ OperatorFinalizeResultType PhysicalTableInOutFunction::FinalExecute(ExecutionCon
 	if (!projected_input.empty()) {
 		throw InternalException("FinalExecute not supported for project_input");
 	}
-	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get(), nullptr);
+	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
 	return function.in_out_function_final(context, data, chunk);
 }
 
