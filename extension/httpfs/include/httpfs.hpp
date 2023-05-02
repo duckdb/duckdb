@@ -123,6 +123,8 @@ public:
 	bool FileExists(const string &filename) override;
 	void Seek(FileHandle &handle, idx_t location) override;
 	bool CanHandleFile(const string &fpath) override;
+	//! Checks if URL is valid in terms of string construction
+	static bool ValidURL(const string &fpath);
 	bool CanSeek() override {
 		return true;
 	}

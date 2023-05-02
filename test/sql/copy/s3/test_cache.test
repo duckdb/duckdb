@@ -14,7 +14,7 @@ The URL: https://www.data.gouv.fr/fr/datasets/r/6d186965-f41b-41f3-9b23-88241cc6
 statement error
 SELECT cache_remote_file('bla');
 ----
-File System can't handle this URL
+HTTPFS can't handle this URL
 
 statement error
 SELECT cache_remote_file('https://bla.com');

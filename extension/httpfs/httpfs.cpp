@@ -488,6 +488,10 @@ bool HTTPFileSystem::FileExists(const string &filename) {
 }
 
 bool HTTPFileSystem::CanHandleFile(const string &fpath) {
+	return ValidURL(fpath);
+}
+
+bool HTTPFileSystem::ValidURL(const string &fpath) {
 	return fpath.rfind("https://", 0) == 0 || fpath.rfind("http://", 0) == 0;
 }
 

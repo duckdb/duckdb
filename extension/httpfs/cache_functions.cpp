@@ -3,6 +3,8 @@
 #include "httpfs-extension.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "httpfs.hpp"
+#include "s3fs.hpp"
+
 #include "duckdb/common/http_state.hpp"
 
 namespace duckdb {
@@ -27,8 +29,7 @@ void CacheRemoteFile::CacheRemoteFileFunction(duckdb::DataChunk &args, duckdb::E
 		if (url_cache.find(url) != url_cache.end()) {
 			throw InvalidInputException("The URL: %s is already cached", url);
 		}
-
-		if (url.rfind("s3://", 0) == 0 || url.rfind("https://", 0) == 0 || url.rfind("http://", 0) == 0) {
+		if (HTTPFileSystem::ValidURL(url) || S3FileSystem::ValidURL(url)) {
 			// this is an HTTP URL
 			client_config.set_variables["force_download"] = true_value;
 			auto fh = fs.OpenFile(url.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK,
@@ -37,7 +38,7 @@ void CacheRemoteFile::CacheRemoteFileFunction(duckdb::DataChunk &args, duckdb::E
 			url_cache[url] = hfh->state->cached_files[url];
 			client_config.set_variables["force_download"] = force_download;
 		} else {
-			throw InvalidInputException("File System can't handle this URL");
+			throw InvalidInputException("HTTPFS can't handle this URL");
 		}
 	}
 	// TODO; should we just return false for URLs we can't register instead of throwing errors?

@@ -202,6 +202,8 @@ public:
 
 	static string UrlEncode(const string &input, bool encode_slash = false);
 	static string UrlDecode(string input);
+	//! Checks if URL is valid in terms of string construction
+	static bool ValidURL(const string &fpath);
 
 	// Uploads the contents of write_buffer to S3.
 	// Note: caller is responsible to not call this method twice on the same buffer

@@ -810,6 +810,10 @@ void S3FileHandle::Initialize(FileOpener *opener) {
 }
 
 bool S3FileSystem::CanHandleFile(const string &fpath) {
+	return ValidURL(fpath);
+}
+
+bool S3FileSystem::ValidURL(const string &fpath) {
 	return fpath.rfind("s3://", 0) == 0;
 }
 
