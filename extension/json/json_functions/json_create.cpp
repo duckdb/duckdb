@@ -591,41 +591,41 @@ static void ToJSONFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	ToJSONFunctionInternal(info.const_struct_names, args.data[0], args.size(), result, alc);
 }
 
-CreateScalarFunctionInfo JSONFunctions::GetObjectFunction() {
-	auto fun = ScalarFunction("json_object", {}, JSONCommon::JSONType(), ObjectFunction, JSONObjectBind, nullptr,
-	                          nullptr, JSONFunctionLocalState::Init);
+ScalarFunctionSet JSONFunctions::GetObjectFunction() {
+	ScalarFunction fun("json_object", {}, JSONCommon::JSONType(), ObjectFunction, JSONObjectBind, nullptr, nullptr,
+	                   JSONFunctionLocalState::Init);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	return CreateScalarFunctionInfo(fun);
+	return ScalarFunctionSet(fun);
 }
 
-CreateScalarFunctionInfo JSONFunctions::GetArrayFunction() {
-	auto fun = ScalarFunction("json_array", {}, JSONCommon::JSONType(), ArrayFunction, JSONArrayBind, nullptr, nullptr,
-	                          JSONFunctionLocalState::Init);
+ScalarFunctionSet JSONFunctions::GetArrayFunction() {
+	ScalarFunction fun("json_array", {}, JSONCommon::JSONType(), ArrayFunction, JSONArrayBind, nullptr, nullptr,
+	                   JSONFunctionLocalState::Init);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	return CreateScalarFunctionInfo(fun);
+	return ScalarFunctionSet(fun);
 }
 
-CreateScalarFunctionInfo JSONFunctions::GetToJSONFunction() {
-	auto fun = ScalarFunction("to_json", {}, JSONCommon::JSONType(), ToJSONFunction, ToJSONBind, nullptr, nullptr,
-	                          JSONFunctionLocalState::Init);
+ScalarFunctionSet JSONFunctions::GetToJSONFunction() {
+	ScalarFunction fun("to_json", {}, JSONCommon::JSONType(), ToJSONFunction, ToJSONBind, nullptr, nullptr,
+	                   JSONFunctionLocalState::Init);
 	fun.varargs = LogicalType::ANY;
-	return CreateScalarFunctionInfo(fun);
+	return ScalarFunctionSet(fun);
 }
 
-CreateScalarFunctionInfo JSONFunctions::GetArrayToJSONFunction() {
-	auto fun = ScalarFunction("array_to_json", {}, JSONCommon::JSONType(), ToJSONFunction, ArrayToJSONBind, nullptr,
-	                          nullptr, JSONFunctionLocalState::Init);
+ScalarFunctionSet JSONFunctions::GetArrayToJSONFunction() {
+	ScalarFunction fun("array_to_json", {}, JSONCommon::JSONType(), ToJSONFunction, ArrayToJSONBind, nullptr, nullptr,
+	                   JSONFunctionLocalState::Init);
 	fun.varargs = LogicalType::ANY;
-	return CreateScalarFunctionInfo(fun);
+	return ScalarFunctionSet(fun);
 }
 
-CreateScalarFunctionInfo JSONFunctions::GetRowToJSONFunction() {
-	auto fun = ScalarFunction("row_to_json", {}, JSONCommon::JSONType(), ToJSONFunction, RowToJSONBind, nullptr,
-	                          nullptr, JSONFunctionLocalState::Init);
+ScalarFunctionSet JSONFunctions::GetRowToJSONFunction() {
+	ScalarFunction fun("row_to_json", {}, JSONCommon::JSONType(), ToJSONFunction, RowToJSONBind, nullptr, nullptr,
+	                   JSONFunctionLocalState::Init);
 	fun.varargs = LogicalType::ANY;
-	return CreateScalarFunctionInfo(fun);
+	return ScalarFunctionSet(fun);
 }
 
 struct NestedToJSONCastData : public BoundCastData {

@@ -32,7 +32,7 @@
 /// only contain ``DatabaseType/integer`` values.
 ///
 /// DuckDB also supports columns of composite types. For example, it is possible
-/// to define an array of integers (`INT[]`), which can be cast to `[Int]`
+/// to define an array of integers (`INT[]`), which can be cast to `[Int32]`
 /// within Swift using ``Column/cast(to:)-4376d``. It is also possible to
 /// define database types as arbitrary structs (`ROW(i INTEGER, j VARCHAR)`),
 /// which can be cast to their `Decodable` matching Swift type in the same way.
