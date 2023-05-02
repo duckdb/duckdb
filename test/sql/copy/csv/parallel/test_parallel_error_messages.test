@@ -30,163 +30,89 @@ SELECT * FROM read_csv('data/csv/wrongtype.csv', parallel=false, sep=',', column
 ----
 line 7
 
-# copy a file that starts with a bunch of numbers, and then has alternating numbers and strings
-statement ok
-COPY (
-SELECT i, 'world' FROM range(10000) t(i)
-UNION ALL
-SELECT i, 'world' FROM (
-	SELECT i, r FROM (
-		SELECT * FROM range(33) t(i)
-		UNION ALL
-		SELECT 'hello'
-	) t(i), range(100) r(r) ORDER BY r
-)) TO '__TEST_DIR__/mixedtypes.csv' (HEADER);
-
 # the first error is on line 10001
 statement error
-SELECT * FROM read_csv('__TEST_DIR__/mixedtypes.csv', parallel=false, sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True)
+SELECT * FROM read_csv('data/csv/error/mixedtypes.csv', parallel=false, sep=',', columns={'h1': int, 'h2': varchar}, header=True)
 ----
 line 10001
 
 # the first error is on line 10001
 statement error
-SELECT * FROM read_csv('__TEST_DIR__/mixedtypes.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True)
+SELECT * FROM read_csv('data/csv/error/mixedtypes.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True)
 ----
 line 10001
 
 statement error
-SELECT * FROM read_csv('__TEST_DIR__/mixedtypes.csv', parallel=false, sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True)
+SELECT * FROM read_csv('data/csv/error/mixedtypes.csv', parallel=false, sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True)
 ----
 line 10001
 
-statement ok
-COPY (
-SELECT i, 'world' FROM range(1) t(i)
-UNION ALL
-SELECT i, 'world' FROM (
-	SELECT i, r FROM (
-		SELECT * FROM range(33) t(i)
-		UNION ALL
-		SELECT 'h
-e
-l
-l
-o'
-	) t(i), range(100) r(r) ORDER BY r
-)) TO '__TEST_DIR__/quotednewlines.csv' (HEADER);
-
-statement ok
-SELECT * FROM read_csv('__TEST_DIR__/quotednewlines.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': varchar, 'h2': varchar}, header=True)
-
-# quoted newlines that match the CSV schema should not be supported
-statement ok
-COPY (
-SELECT i, 'world' FROM range(10000) t(i)
-UNION ALL
-SELECT i, 'h
-1,e
-2,l
-3,l
-4,o' FROM range(100) t(i)
-) TO '__TEST_DIR__/quotednewlines.csv' (HEADER);
-
 statement error
-SELECT * FROM read_csv('__TEST_DIR__/quotednewlines.csv', parallel=true, sep=',', buffer_size=200, columns={'h1': int, 'h2': varchar}, header=True)
+SELECT * FROM read_csv('data/csv/error/quotednewlines.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': varchar, 'h2': varchar}, header=True)
 ----
 not supported for multithreading
 
-statement ok
-COPY (
-SELECT '1' , 'world' FROM range(3000) t(i)
-UNION ALL
-SELECT 'bla', 'world'
-UNION ALL
-SELECT '1', 'world' FROM range(100) t(i)
-) TO '__TEST_DIR__/csv_error.csv' (HEADER);
+statement error
+SELECT * FROM read_csv('data/csv/error/quotednewlines.csv', parallel=true, sep=',', buffer_size=200, columns={'h1': int, 'h2': varchar}, header=True)
+----
+not supported for multithreading
 
 # Let's do an All-Type error testing
 foreach type bool int bigint hugeint float double 'decimal(4,1)' 'decimal(8,1)' 'decimal(12,1)' 'decimal(18,1)'
 
 # the first error is on line 3000
 statement error
-SELECT * FROM read_csv('__TEST_DIR__/csv_error.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': ${type}, 'h2': varchar}, header=True)
+SELECT * FROM read_csv('data/csv/error/csv_error.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': ${type}, 'h2': varchar}, header=True)
 ----
 line 3001
 
 # the first error is on line 3000
 statement error
-SELECT * FROM read_csv('__TEST_DIR__/csv_error.csv', parallel=false, sep=',', buffer_size=100, columns={'h1': ${type}, 'h2': varchar}, header=True)
+SELECT * FROM read_csv('data/csv/error/csv_error.csv', parallel=false, sep=',', buffer_size=100, columns={'h1': ${type}, 'h2': varchar}, header=True)
 ----
 line 3001
 
 endloop
 
-statement ok
-COPY (
-SELECT '2008-01-01' , 'worlds' FROM range(3000) t(i)
-UNION ALL
-SELECT 'bla', 'worlds'
-UNION ALL
-SELECT '2008-01-01', 'worlds' FROM range(100) t(i)
-) TO '__TEST_DIR__/date.csv' (HEADER);
 
 # the first error is on line 3000
 statement error
-SELECT * FROM read_csv('__TEST_DIR__/date.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': date, 'h2': varchar}, header=True)
+SELECT * FROM read_csv('data/csv/error/date.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': date, 'h2': varchar}, header=True)
 ----
 line 3001
 
 # the first error is on line 3000
 statement error
-SELECT * FROM read_csv('__TEST_DIR__/date.csv', parallel=false, sep=',', buffer_size=100, columns={'h1': date, 'h2': varchar}, header=True)
-----
-line 3001
-
-statement ok
-COPY (
-SELECT '00:01:01' , 'worlds' FROM range(3000) t(i)
-UNION ALL
-SELECT 'bla', 'worlds'
-UNION ALL
-SELECT '00:01:01', 'worlds' FROM range(100) t(i)
-) TO '__TEST_DIR__/time.csv' (HEADER);
-
-# the first error is on line 3000
-statement error
-SELECT * FROM read_csv('__TEST_DIR__/time.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': time, 'h2': varchar}, header=True)
+SELECT * FROM read_csv('data/csv/error/date.csv', parallel=false, sep=',', buffer_size=100, columns={'h1': date, 'h2': varchar}, header=True)
 ----
 line 3001
 
 # the first error is on line 3000
 statement error
-SELECT * FROM read_csv('__TEST_DIR__/time.csv', parallel=false, sep=',', buffer_size=100, columns={'h1': time, 'h2': varchar}, header=True)
-----
-line 3001
-
-statement ok
-COPY (
-SELECT '2020-01-01 00:01:01' , 'worlds' FROM range(3000) t(i)
-UNION ALL
-SELECT 'bla', 'worlds'
-UNION ALL
-SELECT '2020-01-01 00:01:01', 'worlds' FROM range(100) t(i)
-) TO '__TEST_DIR__/time.csv' (HEADER);
-
-# the first error is on line 3000
-statement error
-SELECT * FROM read_csv('__TEST_DIR__/time.csv', parallel=true, sep=',', buffer_size=200, columns={'h1': timestamp, 'h2': varchar}, header=True)
+SELECT * FROM read_csv('data/csv/error/time.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': time, 'h2': varchar}, header=True)
 ----
 line 3001
 
 # the first error is on line 3000
 statement error
-SELECT * FROM read_csv('__TEST_DIR__/time.csv', parallel=false, sep=',', columns={'h1': timestamp, 'h2': varchar}, header=True)
+SELECT * FROM read_csv('data/csv/error/time.csv', parallel=false, sep=',', buffer_size=100, columns={'h1': time, 'h2': varchar}, header=True)
 ----
 line 3001
 
 # the first error is on line 3000
 statement error
-SELECT * FROM read_csv('__TEST_DIR__/time.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': timestamp, 'h2': varchar}, header=True)
+SELECT * FROM read_csv('data/csv/error/timestamp.csv', parallel=true, sep=',', buffer_size=200, columns={'h1': timestamp, 'h2': varchar}, header=True)
+----
+line 3001
+
+# the first error is on line 3000
+statement error
+SELECT * FROM read_csv('data/csv/error/timestamp.csv', parallel=false, sep=',', columns={'h1': timestamp, 'h2': varchar}, header=True)
+----
+line 3001
+
+# the first error is on line 3000
+statement error
+SELECT * FROM read_csv('data/csv/error/timestamp.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': timestamp, 'h2': varchar}, header=True)
 ----
 line 3001
