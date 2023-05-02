@@ -142,6 +142,13 @@ void PartialBlockManager::AddWrittenBlock(block_id_t block) {
 	}
 }
 
+void PartialBlockManager::ClearBlocks() {
+	for (auto &e : partially_filled_blocks) {
+		e.second->Clear();
+	}
+	partially_filled_blocks.clear();
+}
+
 void PartialBlockManager::FlushPartialBlocks() {
 	for (auto &e : partially_filled_blocks) {
 		e.second->Flush(e.first);

@@ -63,6 +63,13 @@ void OptimisticDataWriter::Merge(OptimisticDataWriter &other) {
 	other.partial_manager.reset();
 }
 
+void OptimisticDataWriter::ClearBlocks() {
+	if (partial_manager) {
+		partial_manager->ClearBlocks();
+		partial_manager.reset();
+	}
+}
+
 void OptimisticDataWriter::Rollback() {
 	if (partial_manager) {
 		partial_manager->Rollback();

@@ -97,6 +97,10 @@ void LocalTableStorage::CheckFlushToDisk() {
 	optimistic_writer.CheckFlushToDisk(*row_groups);
 }
 
+void LocalTableStorage::ClearBlocks() {
+	optimistic_writer.ClearBlocks();
+}
+
 PreservedError LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source,
                                                   TableIndexList &index_list, const vector<LogicalType> &table_types,
                                                   row_t &start_row) {
@@ -419,6 +423,10 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 	if ((append_state.row_start == 0 || storage.row_groups->GetTotalRows() >= MERGE_THRESHOLD) &&
 	    storage.deleted_rows == 0) {
 		// table is currently empty OR we are bulk appending: move over the storage directly
+		// first we clear any remaining partially written blocks
+		// we don't force flush these to disk - that is because they might still be combined later on
+		// so force flushing the remaining partially empty blocks can waste space
+		storage.ClearBlocks();
 		// now append to the indexes (if there are any)
 		// FIXME: we should be able to merge the transaction-local index directly into the main table index
 		// as long we just rewrite some row-ids

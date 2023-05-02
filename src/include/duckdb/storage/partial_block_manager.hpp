@@ -46,6 +46,7 @@ struct PartialBlock {
 public:
 	virtual void AddUninitializedRegion(idx_t start, idx_t end) = 0;
 	virtual void Flush(idx_t free_space_left) = 0;
+	virtual void Clear() {}
 	virtual void Merge(PartialBlock &other, idx_t offset, idx_t other_size);
 
 public:
@@ -99,6 +100,9 @@ public:
 	void Merge(PartialBlockManager &other);
 	//! Register a partially filled block that is filled with "segment_size" entries
 	void RegisterPartialBlock(PartialBlockAllocation &&allocation);
+
+	//! Clear remaining blocks without writing them to disk
+	void ClearBlocks();
 
 	//! Rollback all data written by this partial block manager
 	void Rollback();

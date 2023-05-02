@@ -76,6 +76,11 @@ void PartialBlockForCheckpoint::Flush(idx_t free_space_left) {
 			segment.segment.MarkAsPersistent(block, segment.offset_in_block);
 		}
 	}
+	Clear();
+}
+
+void PartialBlockForCheckpoint::Clear() {
+	uninitialized_regions.clear();
 	block.reset();
 	segments.clear();
 }
@@ -104,8 +109,7 @@ void PartialBlockForCheckpoint::Merge(PartialBlock &other_p, idx_t offset, idx_t
 		AddSegmentToTail(segment.data, segment.segment, segment.offset_in_block + offset);
 	}
 	other.uninitialized_regions.clear();
-	other.segments.clear();
-	other.block.reset();
+	Clear();
 }
 
 void PartialBlockForCheckpoint::AddSegmentToTail(ColumnData &data, ColumnSegment &segment, uint32_t offset_in_block) {

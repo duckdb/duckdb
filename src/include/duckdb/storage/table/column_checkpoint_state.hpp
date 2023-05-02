@@ -82,6 +82,8 @@ public:
 
 	void Flush(idx_t free_space_left) override;
 
+	void Clear() override;
+
 	void Merge(PartialBlock &other, idx_t offset, idx_t other_size) override;
 
 	void AddSegmentToTail(ColumnData &data, ColumnSegment &segment, uint32_t offset_in_block);

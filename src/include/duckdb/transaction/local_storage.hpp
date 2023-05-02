@@ -53,6 +53,7 @@ public:
 	void InitializeScan(CollectionScanState &state, optional_ptr<TableFilterSet> table_filters = nullptr);
 	//! Check if we should flush the previously written row-group to disk
 	void CheckFlushToDisk();
+	void ClearBlocks();
 	void Rollback();
 	idx_t EstimatedSize();
 
