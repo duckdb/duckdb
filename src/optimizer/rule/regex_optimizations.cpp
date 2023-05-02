@@ -52,6 +52,10 @@ static LikeString GetLikeString(duckdb_re2::Regexp *regexp, bool contains = fals
 		}
 	} else {
 		auto rune = regexp->rune();
+		if (iscntrl(rune)) {
+			ret.exists = false;
+			return ret;
+		}
 		auto chr = toascii(rune);
 		// if a character is equal to the escaped character return that there is no escaped like string.
 		if (!contains && (chr == '%' || chr == '_' || chr == ret.escaped_character[0])) {
