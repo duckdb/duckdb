@@ -87,7 +87,6 @@ public:
 			}
 
 			new_collection->FinalizeAppend(TransactionData(0, 0), append_state);
-//			writer.FlushToDisk(*new_collection);
 		}
 		current_collections.clear();
 		return new_collection;

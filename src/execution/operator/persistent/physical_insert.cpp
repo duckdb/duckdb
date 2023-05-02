@@ -437,10 +437,7 @@ void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 		});
 		storage.FinalizeLocalAppend(gstate.append_state);
 	} else {
-		// we have many rows - flush the row group collection to disk (if required) and merge into the transaction-local
-		// state
-//		lstate.writer->FlushToDisk(*lstate.local_collection);
-
+		// we have written rows to disk optimistically - merge directly into the transaction-local storage
 		lock_guard<mutex> lock(gstate.lock);
 		gstate.table.GetStorage().FinalizeOptimisticWriter(context.client, *lstate.writer);
 		gstate.insert_count += lstate.update_count;

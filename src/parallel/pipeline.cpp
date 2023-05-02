@@ -271,7 +271,7 @@ void Pipeline::ClearSource() {
 
 idx_t Pipeline::RegisterNewBatchIndex() {
 	lock_guard<mutex> l(batch_lock);
-	idx_t minimum = batch_indexes.empty() ? 0 : *batch_indexes.begin();
+	idx_t minimum = batch_indexes.empty() ? base_batch_index : *batch_indexes.begin();
 	batch_indexes.insert(minimum);
 	return minimum;
 }
