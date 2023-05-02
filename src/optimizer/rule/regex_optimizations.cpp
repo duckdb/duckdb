@@ -23,9 +23,47 @@ RegexOptimizationRule::RegexOptimizationRule(ExpressionRewriter &rewriter) : Rul
 }
 
 struct LikeString {
-	bool exists = true;
+	bool exists = false;
+	bool escaped = false;
+	string escaped_character = "\\";
 	string like_string = "";
 };
+
+static LikeString GetEscapedLikeString(duckdb_re2::Regexp *regexp) {
+	D_ASSERT(regexp->op() == duckdb_re2::kRegexpLiteralString || regexp->op() == duckdb_re2::kRegexpLiteral);
+	LikeString ret;
+	if (regexp->op() == duckdb_re2::kRegexpLiteralString) {
+		auto nrunes = (idx_t)regexp->nrunes();
+		auto runes = regexp->runes();
+		for (idx_t i = 0; i < nrunes; i++) {
+			auto chr = toascii(runes[i]);
+			// if a character is equal to the escaped character return that there is no escaped like string.
+			if (chr == '\\') {
+				return ret;
+			}
+			if (chr == '%' || chr == '_') {
+				ret.escaped = true;
+				ret.like_string += ret.escaped_character;
+			}
+			ret.like_string += toascii(runes[i]);
+		}
+	} else {
+		auto rune = regexp->rune();
+		auto chr = toascii(rune);
+		// if a character is equal to the escaped character return that there is no escaped like string.
+		if (chr == '\\') {
+			return ret;
+		}
+		if (chr == '%' || chr == '_') {
+			ret.escaped = true;
+			ret.like_string += ret.escaped_character;
+		}
+		ret.like_string += toascii(rune);
+	}
+	// escape min and max from LIKE wild cards.
+	ret.exists = true;
+	return ret;
+}
 
 static LikeString LikeMatchExists(duckdb_re2::RE2 &pattern) {
 	LikeString ret = LikeString();
@@ -50,18 +88,23 @@ static LikeString LikeMatchExists(duckdb_re2::RE2 &pattern) {
 				ret.like_string += "%";
 				break;
 			}
-			ret.exists = false;
 			return ret;
 		case duckdb_re2::kRegexpLiteralString:
-		case duckdb_re2::kRegexpLiteral:
+		case duckdb_re2::kRegexpLiteral: {
 			if (cur_sub_index == 0) {
 				ret.like_string += "%";
 			}
-			ret.like_string += subs[cur_sub_index]->ToString();
+			LikeString escaped_like_string = GetEscapedLikeString(subs[cur_sub_index]);
+			if (!escaped_like_string.exists) {
+				return escaped_like_string;
+			}
+			ret.like_string += escaped_like_string.like_string;
+			ret.escaped = escaped_like_string.escaped;
 			if (cur_sub_index + 1 == num_subs) {
 				ret.like_string += "%";
 			}
 			break;
+		}
 		case duckdb_re2::kRegexpEndText:
 		case duckdb_re2::kRegexpEmptyMatch:
 		case duckdb_re2::kRegexpBeginText: {
@@ -70,11 +113,11 @@ static LikeString LikeMatchExists(duckdb_re2::RE2 &pattern) {
 		default:
 			// some other regexp op that doesn't have an equivalent to a like string
 			// return false;
-			ret.exists = false;
 			return ret;
 		}
 		cur_sub_index += 1;
 	}
+	ret.exists = true;
 	return ret;
 }
 
@@ -104,26 +147,22 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		return nullptr; // this should fail somewhere else
 	}
 
-	if (pattern.Regexp()->op() == duckdb_re2::kRegexpLiteralString ||
-	    pattern.Regexp()->op() == duckdb_re2::kRegexpLiteral) {
-		string min;
-		string max;
-		pattern.PossibleMatchRange(&min, &max, patt_str.size() + 1);
-		if (min != max) {
-			return nullptr;
-		}
-		auto parameter = make_uniq<BoundConstantExpression>(Value(std::move(min)));
-		auto contains = make_uniq<BoundFunctionExpression>(root.return_type, ContainsFun::GetFunction(),
-		                                                   std::move(root.children), nullptr);
-		contains->children[1] = std::move(parameter);
-		return std::move(contains);
-	} else if (pattern.Regexp()->op() != duckdb_re2::kRegexpConcat) {
-		return nullptr;
-	}
 	LikeString like_string;
 	// check for a like string. If we can convert it to a like string, the like string
 	// optimizer will further optimize suffix and prefix things.
-	like_string = LikeMatchExists(pattern);
+	if (pattern.Regexp()->op() == duckdb_re2::kRegexpConcat) {
+		like_string = LikeMatchExists(pattern);
+	} else if (pattern.Regexp()->op() == duckdb_re2::kRegexpLiteralString ||
+	           pattern.Regexp()->op() == duckdb_re2::kRegexpLiteral) {
+		LikeString escaped_like_string = GetEscapedLikeString(pattern.Regexp());
+		if (!escaped_like_string.exists) {
+			return nullptr;
+		}
+		like_string.like_string = "%" + escaped_like_string.like_string + "%";
+		like_string.escaped = escaped_like_string.escaped;
+		like_string.exists = true;
+	}
+
 	if (!like_string.exists) {
 		return nullptr;
 	}
@@ -134,6 +173,15 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		D_ASSERT(root.children.size() == 2);
 	}
 
+	if (like_string.escaped) {
+		auto like_escape_expression = make_uniq<BoundFunctionExpression>(root.return_type, LikeEscapeFun::GetLikeEscapeFun(),
+		                                                          std::move(root.children), nullptr);
+		auto parameter = make_uniq<BoundConstantExpression>(Value(std::move(like_string.like_string)));
+		auto escape = make_uniq<BoundConstantExpression>(Value(std::move(like_string.escaped_character)));
+		like_escape_expression->children[1] = std::move(parameter);
+		like_escape_expression->children.push_back(std::move(escape));
+		return std::move(like_escape_expression);
+	}
 	auto like_expression = make_uniq<BoundFunctionExpression>(root.return_type, LikeFun::GetLikeFunction(),
 	                                                          std::move(root.children), nullptr);
 	auto parameter = make_uniq<BoundConstantExpression>(Value(std::move(like_string.like_string)));

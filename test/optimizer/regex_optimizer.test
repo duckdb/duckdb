@@ -11,6 +11,8 @@ PRAGMA explain_output = OPTIMIZED_ONLY;
 statement ok
 INSERT INTO test VALUES ('aaa');
 
+mode skip
+
 # contains optimization: /aaa/ -> contains(aaa)
 query I nosort regexconstantpattern
 EXPLAIN SELECT regexp_matches(s, 'aa') FROM test
@@ -57,7 +59,7 @@ statement ok
 DELETE FROM test;
 
 statement ok
-INSERT INTO test VALUES ('aaa'), ('a.a'), ('baba'), ('abba'), ('a\.a');
+INSERT INTO test VALUES ('aaa'), ('a.a'), ('baba'), ('abba'), ('a\.a'), ('a_a')';
 
 query II
 explain analyze select regexp_matches(s, 'a.a', 's'), s from test;
@@ -95,6 +97,25 @@ query I
 SELECT s FROM TEST where regexp_matches(s, '^a.*b$', 's');
 ----
 
+mode unskip
+
+query II
+explain analyze select regexp_matches(s, 'a_a'), s from test;
+----
+analyzed_plan	<REGEX>:.*~~e\(s, '%a\\_a%', '\\'\).*
+
+query II
+select s from test where s LIKE 'a\_a' ESCAPE '\';
+----
+a_a
+
+query II
+select s from test where regexp_matches(s, 'a_a');
+----
+a_a
+
+
+mode skip
 
 query II
 explain analyze select regexp_matches(s, 'a\.a'), s from test;

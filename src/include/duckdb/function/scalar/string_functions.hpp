@@ -90,6 +90,7 @@ struct LikeFun {
 };
 
 struct LikeEscapeFun {
+	static ScalarFunction GetLikeEscapeFun();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
