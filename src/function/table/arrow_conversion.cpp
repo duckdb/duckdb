@@ -225,7 +225,7 @@ static void ArrowToDuckDBBlob(Vector &vector, ArrowArray &array, ArrowScanLocalS
 }
 
 static void ArrowToDuckDBMapVerify(Vector &vector, idx_t count) {
-	auto valid_check = CheckMapValidity(vector, count);
+	auto valid_check = MapVector::CheckMapValidity(vector, count);
 	switch (valid_check) {
 	case MapInvalidReason::VALID:
 		break;

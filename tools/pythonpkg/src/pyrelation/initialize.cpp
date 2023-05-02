@@ -210,7 +210,8 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	             py::arg("replace") = true);
 
 	relation_module
-	    .def("map", &DuckDBPyRelation::Map, py::arg("map_function"), "Calls the passed function on the relation")
+	    .def("map", &DuckDBPyRelation::Map, py::arg("map_function"), py::kw_only(), py::arg("schema") = py::none(),
+	         "Calls the passed function on the relation")
 	    .def("show", &DuckDBPyRelation::Print, "Display a summary of the data")
 	    .def("__str__", &DuckDBPyRelation::ToString)
 	    .def("__repr__", &DuckDBPyRelation::ToString);

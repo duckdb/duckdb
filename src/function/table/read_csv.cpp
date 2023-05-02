@@ -27,7 +27,7 @@ unique_ptr<CSVFileHandle> ReadCSV::OpenCSV(const string &file_path, FileCompress
 	if (file_handle->CanSeek()) {
 		file_handle->Reset();
 	}
-	return make_uniq<CSVFileHandle>(std::move(file_handle));
+	return make_uniq<CSVFileHandle>(std::move(file_handle), false);
 }
 
 void ReadCSVData::FinalizeRead(ClientContext &context) {
@@ -259,6 +259,7 @@ public:
 	                       idx_t rows_to_skip, bool force_parallelism_p, vector<column_t> column_ids_p)
 	    : file_handle(std::move(file_handle_p)), system_threads(system_threads_p), buffer_size(buffer_size_p),
 	      force_parallelism(force_parallelism_p), column_ids(std::move(column_ids_p)) {
+		file_handle->DisableReset();
 		current_file_path = files_path_p[0];
 		estimated_linenr = rows_to_skip;
 		file_size = file_handle->FileSize();
