@@ -400,6 +400,11 @@ bool JoinOrderOptimizer::EmitCSG(JoinRelationSet &node) {
 	}
 
 	unordered_set<idx_t> new_exclusion_set = exclusion_set;
+	for (idx_t i = 0; i < neighbors.size(); ++i) {
+		D_ASSERT(new_exclusion_set.find(neighbors[i]) == new_exclusion_set.end());
+		new_exclusion_set.insert(neighbors[i]);
+	}
+
 	for (auto neighbor : neighbors) {
 		// since the GetNeighbors only returns the smallest element in a list, the entry might not be connected to
 		// (only!) this neighbor,  hence we have to do a connectedness check before we can emit it
@@ -410,10 +415,12 @@ bool JoinOrderOptimizer::EmitCSG(JoinRelationSet &node) {
 				return false;
 			}
 		}
-		new_exclusion_set.insert(neighbor);
+
 		if (!EnumerateCmpRecursive(node, neighbor_relation, new_exclusion_set)) {
 			return false;
 		}
+
+		new_exclusion_set.erase(neighbor);
 	}
 	return true;
 }
@@ -481,7 +488,16 @@ bool JoinOrderOptimizer::EnumerateCSGRecursive(JoinRelationSet &node, unordered_
 	for (idx_t i = 0; i < neighbors.size(); i++) {
 		// Reset the exclusion set so that the algorithm considers all combinations
 		// of the exclusion_set with a subset of neighbors.
-		// new_exclusion_set = exclusion_set;
+
+		// FIXME(lokax): This looks like there is a problem with duplicated enumeration
+		// But simply remove 'new_exclusion_set = exclusion_set' will result in a segfault
+		// Because the small subset will be enumerated first, then the large subset,
+		// and then the small subset.
+		// eg. We already get best JoinNode{R1, R2, R3}, then the JoinNode in plans[R1, R2] will be updated, resulting
+		// in the appearance of wild pointers for the children of JoinNode{R1, R2, R3} Maybe we should get all subsets
+		// of neighbors and traverse from small to large subsets And new_exclusion_set will be (exclusion_set U all
+		// neighbors)
+		new_exclusion_set = exclusion_set;
 		new_exclusion_set.insert(neighbors[i]);
 		// updated the set of excluded entries with this neighbor
 		if (!EnumerateCSGRecursive(union_sets[i], new_exclusion_set)) {
