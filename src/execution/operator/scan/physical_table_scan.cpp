@@ -79,7 +79,7 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 	auto &gstate = input.global_state.Cast<TableScanGlobalSourceState>();
 	auto &state = input.local_state.Cast<TableScanLocalSourceState>();
 
-	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
+	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get(), &input.interrupt_state);
 	function.function(context.client, data, chunk);
 
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;

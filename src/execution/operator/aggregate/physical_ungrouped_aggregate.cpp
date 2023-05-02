@@ -12,6 +12,7 @@
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/parallel/interrupt.hpp"
 #include <functional>
 #include "duckdb/execution/operator/aggregate/distinct_aggregate_data.hpp"
 

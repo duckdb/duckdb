@@ -124,14 +124,16 @@ struct TableFunctionInput {
 public:
 	TableFunctionInput(optional_ptr<const FunctionData> bind_data_p,
 	                   optional_ptr<LocalTableFunctionState> local_state_p,
-	                   optional_ptr<GlobalTableFunctionState> global_state_p)
-	    : bind_data(bind_data_p), local_state(local_state_p), global_state(global_state_p) {
+	                   optional_ptr<GlobalTableFunctionState> global_state_p,
+	                   optional_ptr<InterruptState> interrupt_state_p)
+	    : bind_data(bind_data_p), local_state(local_state_p), global_state(global_state_p), interrupt_state(interrupt_state_p) {
 	}
 
 public:
 	optional_ptr<const FunctionData> bind_data;
 	optional_ptr<LocalTableFunctionState> local_state;
 	optional_ptr<GlobalTableFunctionState> global_state;
+	optional_ptr<InterruptState> interrupt_state;
 };
 
 enum ScanType { TABLE, PARQUET };
@@ -187,8 +189,6 @@ typedef OperatorResultType (*table_in_out_function_t)(ExecutionContext &context,
                                                       DataChunk &input, DataChunk &output);
 typedef OperatorFinalizeResultType (*table_in_out_function_final_t)(ExecutionContext &context, TableFunctionInput &data,
                                                                     DataChunk &output);
-typedef void (*table_function_async_t)(ClientContext &context, TableFunctionInput &data, DataChunk &output,
-                                       InterruptState &interrupt_state);
 typedef idx_t (*table_function_get_batch_index_t)(ClientContext &context, const FunctionData *bind_data,
                                                   LocalTableFunctionState *local_state,
                                                   GlobalTableFunctionState *global_state);
@@ -245,10 +245,6 @@ public:
 	table_in_out_function_t in_out_function;
 	//! The table in-out final function (if this is an in-out function)
 	table_in_out_function_final_t in_out_function_final;
-	//! (Optional) An asynchronous variant of the table function, e.g. for allowing async I/O. The async_function will
-	//! be called instead of the regular table_function wheres possible. However, providing both `function` and
-	//! `async_function` is currently required.
-	table_function_async_t async_function;
 	//! (Optional) statistics function
 	//! Returns the statistics of a specified column
 	table_statistics_t statistics;
