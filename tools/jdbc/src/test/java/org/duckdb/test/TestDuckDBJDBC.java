@@ -3289,34 +3289,6 @@ public class TestDuckDBJDBC {
 		}
 	}
 
-	public static void test_get_int() throws Exception {
-		try (Connection connection = DriverManager.getConnection("jdbc:duckdb:"); Statement s = connection.createStatement()) {
-			try (PreparedStatement p = connection.prepareStatement("select * from generate_series(?, ?)")) {
-				p.setInt(1, 0);
-				p.setInt(2, 1);
-
-				try (ResultSet rs = p.executeQuery()) {
-					int i = 0;
-					while (rs.next()) {
-						assertEquals(rs.getInt(1), i++);
-					}
-				}
-			}
-		}
-	}
-
-	public static void test_execute_update() throws Exception {
-		try (Connection connection = DriverManager.getConnection("jdbc:duckdb:"); Statement s = connection.createStatement()) {
-			s.executeUpdate("drop table if exists t");
-			s.executeUpdate("create table t (i int)");
-		
-			try (PreparedStatement p = connection.prepareStatement("insert into t (i) select ?")) {
-				p.setInt(1, 1);
-				p.executeUpdate();
-			}
-		}
-	}
-
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();

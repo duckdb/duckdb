@@ -1070,7 +1070,7 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public Clob getClob(String columnLabel) throws SQLException {
-		return getClob(findColumn(columnLabel));
+		throw new SQLFeatureNotSupportedException("getClob");
 	}
 
 	public Array getArray(String columnLabel) throws SQLException {
