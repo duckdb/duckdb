@@ -25,7 +25,7 @@ public:
 	vector<string> names;
 
 public:
-	static unique_ptr<PhysicalResultCollector> GetResultCollector(ClientContext &context, PreparedStatementDat&data);
+	static unique_ptr<PhysicalResultCollector> GetResultCollector(ClientContext &context, PreparedStatementData &data);
 
 public:
 	//! The final method used to fetch the query result from this operator
