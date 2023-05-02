@@ -14,6 +14,7 @@
 #include "duckdb/function/function.hpp"
 #include "duckdb_python/numpy/numpy_scan.hpp"
 #include "duckdb_python/arrow/arrow_export_utils.hpp"
+#include "duckdb/common/types/arrow_aux_data.hpp"
 
 namespace duckdb {
 
@@ -76,6 +77,9 @@ static void ConvertPyArrowToDataChunk(const py::object &table, Vector &out, Clie
 		    "The returned table from a pyarrow scalar udf should only contain one column, found %d",
 		    return_types.size());
 	}
+	// if (return_types[0] != out.GetType()) {
+	//	throw InvalidInputException("The type of the returned array (%s) does not match the expected type: '%s'", )
+	//}
 
 	DataChunk result;
 	// Reserve for STANDARD_VECTOR_SIZE instead of count, in case the returned table contains too many tuples
@@ -91,7 +95,7 @@ static void ConvertPyArrowToDataChunk(const py::object &table, Vector &out, Clie
 	if (result.size() != count) {
 		throw InvalidInputException("Returned pyarrow table should have %d tuples, found %d", count, result.size());
 	}
-	out.SetAuxiliary(result.data[0].GetAuxiliary());
+
 	VectorOperations::Cast(context, result.data[0], out, count);
 }
 

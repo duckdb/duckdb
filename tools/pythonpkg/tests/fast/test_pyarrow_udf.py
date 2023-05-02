@@ -45,7 +45,7 @@ class TestPyArrowUDF(object):
 
     @pytest.mark.parametrize('types', [
         (int, 42),
-        #(str, 'long_string_test')
+        (str, 'long_string_test')
     ])
     def test_type_coverage(self, types):
         type = types[0]

@@ -10,7 +10,7 @@ class TestScalarUDF(object):
         def passthrough(x):
             return x
         
-        duckdb.register_scalar('default_conn_passthrough', passthrough, [BIGINT], BIGINT)
+        duckdb.register_scalar_udf('default_conn_passthrough', passthrough, [BIGINT], BIGINT)
         res = duckdb.sql('select default_conn_passthrough(5)').fetchall()
         assert res == [(5,)]
 
@@ -21,7 +21,7 @@ class TestScalarUDF(object):
             return x + 1
 
         con = duckdb.connect()
-        con.register_scalar('plus_one', plus_one, [BIGINT], BIGINT)
+        con.register_scalar_udf('plus_one', plus_one, [BIGINT], BIGINT)
         assert [(6,)] == con.sql('select plus_one(5)').fetchall()
 
         range_table = con.table_function('range', [5000])
@@ -38,7 +38,7 @@ class TestScalarUDF(object):
             return x
 
         con = duckdb.connect()
-        con.register_scalar('passthrough', passthrough, [BIGINT], BIGINT)
+        con.register_scalar_udf('passthrough', passthrough, [BIGINT], BIGINT)
         assert con.sql('select passthrough(i) from range(5000) tbl(i)').fetchall() == con.sql('select * from range(5000)').fetchall()
 
     def test_execute(self):
@@ -46,7 +46,7 @@ class TestScalarUDF(object):
             return x % 2
 
         con = duckdb.connect()
-        con.register_scalar('modulo_op', func, [BIGINT], TINYINT)
+        con.register_scalar_udf('modulo_op', func, [BIGINT], TINYINT)
         res = con.execute('select modulo_op(?)', [5]).fetchall()
         assert res == [(1,)]
 
@@ -55,7 +55,7 @@ class TestScalarUDF(object):
             return x
 
         con = duckdb.connect()
-        con.register_scalar('casts_from_string', takes_string, [VARCHAR], BIGINT)
+        con.register_scalar_udf('casts_from_string', takes_string, [VARCHAR], BIGINT)
 
         res = con.sql("select casts_from_string('42')").fetchall()
         assert res == [(42,)]
@@ -68,7 +68,7 @@ class TestScalarUDF(object):
             return a + b
 
         con = duckdb.connect()
-        con.register_scalar('py_concatenate', concatenate, None, VARCHAR)
+        con.register_scalar_udf('py_concatenate', concatenate, None, VARCHAR)
         res = con.sql("""
             select py_concatenate('5','3');
         """).fetchall()
@@ -82,7 +82,7 @@ class TestScalarUDF(object):
             return sum
 
         con = duckdb.connect()
-        con.register_scalar('add_nums', add_nums)
+        con.register_scalar_udf('add_nums', add_nums)
         res = con.sql("""
             select add_nums(5,3,2,1);
         """).fetchall()
@@ -94,7 +94,7 @@ class TestScalarUDF(object):
             return amount
 
         con = duckdb.connect()
-        con.register_scalar('varargs', variable_args, None, BIGINT, varargs=True)
+        con.register_scalar_udf('varargs', variable_args, None, BIGINT)
         res = con.sql("""select varargs('5', '3', '2', 1, 0.12345)""").fetchall()
         assert res == [(5,)]
 
@@ -103,7 +103,7 @@ class TestScalarUDF(object):
             return x
         con = duckdb.connect()
         # create first version of the function
-        con.register_scalar('func', func, [BIGINT], BIGINT)
+        con.register_scalar_udf('func', func, [BIGINT], BIGINT)
 
         # create relation that uses the function
         rel1 = con.sql('select func(3)')
@@ -112,15 +112,15 @@ class TestScalarUDF(object):
             return x
 
         with pytest.raises(duckdb.NotImplementedException, match="A function by the name of 'func' is already registered, registering multiple functions by the same name is not supported yet, please unregister it first"):
-            con.register_scalar('func', other_func, [VARCHAR], VARCHAR)
+            con.register_scalar_udf('func', other_func, [VARCHAR], VARCHAR)
 
-        con.unregister_function('func')
+        con.unregister_udf('func')
 
         with pytest.raises(duckdb.InvalidInputException, match='Catalog Error: Scalar Function with name func does not exist!'):
             # Attempted to execute the relation using the 'func' function, but it was deleted
             rel1.fetchall()
 
-        con.register_scalar('func', other_func, [VARCHAR], VARCHAR)
+        con.register_scalar_udf('func', other_func, [VARCHAR], VARCHAR)
         # create relation that uses the new version
         rel2 = con.sql("select func('test')")
 
@@ -137,7 +137,7 @@ class TestScalarUDF(object):
                 return 5
             return x
         con = duckdb.connect()
-        con.register_scalar('null_test', five_if_null, [BIGINT], BIGINT, null_handling = "SPECIAL")
+        con.register_scalar_udf('null_test', five_if_null, [BIGINT], BIGINT, null_handling = "SPECIAL")
         res = con.sql('select null_test(NULL)').fetchall()
         assert res == [(5,)]
 
@@ -146,19 +146,19 @@ class TestScalarUDF(object):
             raise AttributeError("test")
 
         con = duckdb.connect()
-        con.register_scalar('forward_error', throws, [BIGINT], BIGINT, exception_handling='default')
+        con.register_scalar_udf('forward_error', throws, [BIGINT], BIGINT, exception_handling='default')
         res = con.sql('select forward_error(5)')
         with pytest.raises(duckdb.InvalidInputException, match='Python exception occurred while executing the UDF'):
             res.fetchall()
 
-        con.register_scalar('return_null', throws, [BIGINT], BIGINT, exception_handling='return_null')
+        con.register_scalar_udf('return_null', throws, [BIGINT], BIGINT, exception_handling='return_null')
         res = con.sql('select return_null(5)').fetchall()
         assert res == [(None,)]
 
     def test_non_callable(self):
         con = duckdb.connect()
         with pytest.raises(TypeError):
-            con.register_scalar('func', 5, [BIGINT], BIGINT)
+            con.register_scalar_udf('func', 5, [BIGINT], BIGINT)
 
         class MyCallable:
             def __init__(self):
@@ -168,7 +168,7 @@ class TestScalarUDF(object):
                 return x
 
         my_callable = MyCallable()
-        con.register_scalar('func', my_callable, [BIGINT], BIGINT)
+        con.register_scalar_udf('func', my_callable, [BIGINT], BIGINT)
         res = con.sql('select func(5)').fetchall()
         assert res == [(5,)]
 
@@ -180,14 +180,14 @@ class TestScalarUDF(object):
 
         con = duckdb.connect()
         range_table = con.table_function('range', [5000])
-        con.register_scalar("append_field", add_extra_column, [duckdb.struct_type({'a': BIGINT, 'b': BIGINT})], duckdb.struct_type({'a': BIGINT, 'b': BIGINT, 'c': BIGINT}))
+        con.register_scalar_udf("append_field", add_extra_column, [duckdb.struct_type({'a': BIGINT, 'b': BIGINT})], duckdb.struct_type({'a': BIGINT, 'b': BIGINT, 'c': BIGINT}))
 
         res = con.sql("""
             select append_field({'a': i::BIGINT, 'b': 3::BIGINT}) from range_table tbl(i)
         """)
         # added extra column to the struct
         assert len(res.fetchone()[0].keys()) == 3
-        # FIXME: this is needed, otherwise the old transaction is still active when we try to start a new transaction inside of 'register_scalar', which means the call would fail
+        # FIXME: this is needed, otherwise the old transaction is still active when we try to start a new transaction inside of 'register_scalar_udf', which means the call would fail
         res.fetchall()
 
         def swap_keys(dict):
@@ -198,7 +198,7 @@ class TestScalarUDF(object):
                 result[item] = dict[item]
             return result
 
-        con.register_scalar('swap_keys', swap_keys, [con.struct_type({'a': BIGINT, 'b': VARCHAR})], con.struct_type({'a': VARCHAR, 'b': BIGINT}))
+        con.register_scalar_udf('swap_keys', swap_keys, [con.struct_type({'a': BIGINT, 'b': VARCHAR})], con.struct_type({'a': VARCHAR, 'b': BIGINT}))
         res = con.sql("""
         select swap_keys({'a': 42, 'b': 'answer_to_life'})
         """).fetchall()
