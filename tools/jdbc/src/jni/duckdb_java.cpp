@@ -726,15 +726,6 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 
 	return vec_array;
 }
-
-jobject ProcessValue(JNIEnv *env, Connection *conn_ref, const Value &child_value) {
-	auto vector = new Vector(child_value); // TODO: DuckVector should own this
-	int n_elements = 1;
-	vector->Flatten(n_elements);
-	auto jobj = ProcessVector(env, conn_ref, *vector, n_elements);
-	return env->CallObjectMethod(jobj, J_DuckVector_getObject, 0);
-}
-
 jobject ProcessVector(JNIEnv *env, Connection* conn_ref, Vector &vec, idx_t row_count) {
 		auto type_str = env->NewStringUTF(vec.GetType().ToString().c_str());
 		// construct nullmask
