@@ -548,7 +548,6 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 			// The line_error must be summed with linenr (All lines emmited from this batch)
 			// But subtracted from the parse_chunk
 			D_ASSERT(line_error + linenr >= parse_chunk.size());
-//			line_error = (linenr - parse_chunk.size());
 			line_error += linenr;
 			line_error -= parse_chunk.size();
 

@@ -366,10 +366,10 @@ add_row : {
 	if (try_add_line) {
 		bool success = column == insert_chunk.ColumnCount();
 		if (success) {
-            idx_t cur_linenr = linenr;
+			idx_t cur_linenr = linenr;
 			AddRow(insert_chunk, column, error_message, buffer->local_batch_index);
 			success = Flush(insert_chunk, buffer->local_batch_index, true);
-            linenr = cur_linenr;
+			linenr = cur_linenr;
 		}
 		reached_remainder_state = false;
 		parse_chunk.Reset();
@@ -561,10 +561,10 @@ final_state : {
 				if (try_add_line) {
 					bool success = column == return_types.size();
 					if (success) {
-                        auto cur_linenr = linenr;
+						auto cur_linenr = linenr;
 						AddRow(insert_chunk, column, error_message, buffer->local_batch_index);
 						success = Flush(insert_chunk, buffer->local_batch_index);
-                        linenr = cur_linenr;
+						linenr = cur_linenr;
 					}
 					parse_chunk.Reset();
 					reached_remainder_state = false;
