@@ -62,15 +62,9 @@
 
 // Check if relaxed C++14 constexpr is supported.
 // GCC doesn't allow throw in constexpr until version 6 (bug 67371).
-#ifndef FMT_USE_CONSTEXPR
-#  define FMT_USE_CONSTEXPR                                           \
-    (FMT_HAS_FEATURE(cxx_relaxed_constexpr) || FMT_MSC_VER >= 1910 || \
-     (FMT_GCC_VERSION >= 600 && __cplusplus >= 201402L)) &&           \
-        !FMT_NVCC
-#endif
 #if FMT_USE_CONSTEXPR
-#  define FMT_CONSTEXPR constexpr
-#  define FMT_CONSTEXPR_DECL constexpr
+#  define FMT_CONSTEXPR inline
+#  define FMT_CONSTEXPR_DECL
 #else
 #  define FMT_CONSTEXPR inline
 #  define FMT_CONSTEXPR_DECL
@@ -420,7 +414,7 @@ template <typename S>
 struct is_compile_string : std::is_base_of<compile_string, S> {};
 
 template <typename S, FMT_ENABLE_IF(is_compile_string<S>::value)>
-constexpr basic_string_view<typename S::char_type> to_string_view(const S& s) {
+FMT_CONSTEXPR basic_string_view<typename S::char_type> to_string_view(const S& s) {
   return s;
 }
 
