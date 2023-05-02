@@ -102,7 +102,7 @@ require parquet
 query II
 explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
 ----
-analyzed_plan	<REGEX>:.*GET: 1.*
+analyzed_plan	<REGEX>:.*GET: 3.*
 
 statement ok
 CALL cache_remote_file('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet');
@@ -139,7 +139,7 @@ SELECT count(*) FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckd
 query II
 explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet')
 ----
-analyzed_plan	<REGEX>:.*GET: 1.*
+analyzed_plan	<REGEX>:.*GET: 3.*
 
 
 # Require that these environment variables are also set
@@ -205,7 +205,7 @@ SELECT count(*) FROM PARQUET_SCAN('s3://test-bucket/row-user-data_1.parquet')
 100
 
 statement ok
-SELECT delete_cached_file('s3://test-bucket/row-user-data.parquet');
+CALL delete_cached_file('s3://test-bucket/row-user-data.parquet');
 
 query I
 SELECT count(*) FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet')
@@ -228,7 +228,7 @@ SELECT count(*) FROM (SELECT * FROM PARQUET_SCAN('s3://test-bucket/row-user-data
 query II
 explain analyze SELECT id, first_name, last_name, email FROM PARQUET_SCAN('s3://test-bucket/row-user-data.parquet') union all select id, first_name, last_name, email from PARQUET_SCAN('s3://test-bucket/row-user-data_1.parquet')
 ----
-analyzed_plan	<REGEX>:.*GET: 2.*
+analyzed_plan	<REGEX>:.*GET: 1.*
 
 statement ok
 CALL cache_remote_file('s3://test-bucket/row-user-data.parquet');

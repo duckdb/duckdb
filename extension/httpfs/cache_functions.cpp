@@ -42,11 +42,19 @@ void CacheRemoteFile::Function(ClientContext &context, TableFunctionInput &data,
 	if (HTTPFileSystem::ValidURL(url) || S3FileSystem::ValidURL(url)) {
 		// this is an HTTP URL
 		client_config.set_variables["force_download"] = true_value;
-		auto fh = fs.OpenFile(url.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK,
-		                      FileCompressionType::AUTO_DETECT, FileSystem::GetFileOpener(context));
+		unique_ptr<FileHandle> fh;
+		try {
+			fh = fs.OpenFile(url.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK,
+			                 FileCompressionType::AUTO_DETECT, FileSystem::GetFileOpener(context));
+		} catch (const Exception &e) {
+			// Exception caught, reset configuration and re-throwing it
+			client_config.set_variables["force_download"] = force_download;
+			throw e;
+		}
+		client_config.set_variables["force_download"] = force_download;
 		auto hfh = (HTTPFileHandle *)fh.get();
 		url_cache[url] = hfh->state->cached_files[url];
-		client_config.set_variables["force_download"] = force_download;
+
 	} else {
 		throw InvalidInputException("HTTPFS can't handle this URL");
 	}
