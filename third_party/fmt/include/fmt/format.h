@@ -1529,7 +1529,7 @@ template <typename Range> class basic_writer {
       if (group == groups.cend())
         size += sep_size * ((num_digits - 1) / groups.back());
       writer.write_int(size, get_prefix(), specs,
-                       num_writer{abs_value, size, groups, sep});
+                       num_writer{abs_value, size, groups, static_cast<char_type>(sep)});
     }
 
     FMT_NORETURN void on_error(std::string error) {
