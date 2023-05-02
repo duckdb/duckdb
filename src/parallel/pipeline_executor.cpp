@@ -40,6 +40,8 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 
 bool PipelineExecutor::TryFlushCachingOperators() {
 	if (!started_flushing) {
+		// Remainder of this method assumes any in process operators are from flushing
+		D_ASSERT(in_process_operators.empty());
 		started_flushing = true;
 		flushing_idx = IsFinished() ? idx_t(finished_processing_idx) : 0;
 	}
@@ -53,7 +55,7 @@ bool PipelineExecutor::TryFlushCachingOperators() {
 
 		// This slightly awkward way of increasing the flushing idx is to make the code re-entrant: We need to call this
 		// method again in the case of a Sink returning BLOCKED.
-		if (!should_reflush_current_operator) {
+		if (!should_reflush_current_operator && in_process_operators.empty()) {
 			should_reflush_current_operator = true;
 			flushing_idx++;
 			continue;
