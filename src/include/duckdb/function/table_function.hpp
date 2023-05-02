@@ -125,7 +125,7 @@ public:
 	TableFunctionInput(optional_ptr<const FunctionData> bind_data_p,
 	                   optional_ptr<LocalTableFunctionState> local_state_p,
 	                   optional_ptr<GlobalTableFunctionState> global_state_p)
-	    : bind_data(bind_data_p), local_state(local_state_p), global_state(global_state_p){
+	    : bind_data(bind_data_p), local_state(local_state_p), global_state(global_state_p) {
 	}
 
 public:
