@@ -29,19 +29,22 @@ struct LikeString {
 	string like_string = "";
 };
 
-static LikeString GetEscapedLikeString(duckdb_re2::Regexp *regexp) {
+static LikeString GetLikeString(duckdb_re2::Regexp *regexp, bool contains = false) {
 	D_ASSERT(regexp->op() == duckdb_re2::kRegexpLiteralString || regexp->op() == duckdb_re2::kRegexpLiteral);
 	LikeString ret;
 	if (regexp->op() == duckdb_re2::kRegexpLiteralString) {
 		auto nrunes = (idx_t)regexp->nrunes();
 		auto runes = regexp->runes();
 		for (idx_t i = 0; i < nrunes; i++) {
-			auto chr = toascii(runes[i]);
-			// if a character is equal to the escaped character return that there is no escaped like string.
-			if (chr == '\\') {
+			// don't bother trying to convert regex with control characters to like. Let
+			// RE2 handle that
+			if (iscntrl(runes[i])) {
+				ret.exists = false;
 				return ret;
 			}
-			if (chr == '%' || chr == '_') {
+			auto chr = toascii(runes[i]);
+			// if a character is equal to the escaped character and the like string is already escaped`
+			if (!contains && (chr == '%' || chr == '_' || chr == ret.escaped_character[0])) {
 				ret.escaped = true;
 				ret.like_string += ret.escaped_character;
 			}
@@ -51,21 +54,18 @@ static LikeString GetEscapedLikeString(duckdb_re2::Regexp *regexp) {
 		auto rune = regexp->rune();
 		auto chr = toascii(rune);
 		// if a character is equal to the escaped character return that there is no escaped like string.
-		if (chr == '\\') {
-			return ret;
-		}
-		if (chr == '%' || chr == '_') {
+		if (!contains && (chr == '%' || chr == '_' || chr == ret.escaped_character[0])) {
 			ret.escaped = true;
 			ret.like_string += ret.escaped_character;
 		}
 		ret.like_string += toascii(rune);
 	}
-	// escape min and max from LIKE wild cards.
+	D_ASSERT(ret.like_string.size() >= 1);
 	ret.exists = true;
 	return ret;
 }
 
-static LikeString LikeMatchExists(duckdb_re2::RE2 &pattern) {
+static LikeString LikeMatchFromRegex(duckdb_re2::RE2 &pattern) {
 	LikeString ret = LikeString();
 	auto num_subs = pattern.Regexp()->nsub();
 	auto subs = pattern.Regexp()->sub();
@@ -91,10 +91,15 @@ static LikeString LikeMatchExists(duckdb_re2::RE2 &pattern) {
 			return ret;
 		case duckdb_re2::kRegexpLiteralString:
 		case duckdb_re2::kRegexpLiteral: {
+			// if this is the only matching op, we should have directly called
+			// GetEscapedLikeString
+			D_ASSERT(!(cur_sub_index == 0 && cur_sub_index + 1 == num_subs));
 			if (cur_sub_index == 0) {
 				ret.like_string += "%";
 			}
-			LikeString escaped_like_string = GetEscapedLikeString(subs[cur_sub_index]);
+			// if the kRegexpLiteral or kRegexpLiteralString is the only op to match
+			// the string can directly be converted into a contains
+			LikeString escaped_like_string = GetLikeString(subs[cur_sub_index], false);
 			if (!escaped_like_string.exists) {
 				return escaped_like_string;
 			}
@@ -150,17 +155,21 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 	LikeString like_string;
 	// check for a like string. If we can convert it to a like string, the like string
 	// optimizer will further optimize suffix and prefix things.
-	if (pattern.Regexp()->op() == duckdb_re2::kRegexpConcat) {
-		like_string = LikeMatchExists(pattern);
-	} else if (pattern.Regexp()->op() == duckdb_re2::kRegexpLiteralString ||
-	           pattern.Regexp()->op() == duckdb_re2::kRegexpLiteral) {
-		LikeString escaped_like_string = GetEscapedLikeString(pattern.Regexp());
+	if (pattern.Regexp()->op() == duckdb_re2::kRegexpLiteralString ||
+	    pattern.Regexp()->op() == duckdb_re2::kRegexpLiteral) {
+		// convert to contains.
+		LikeString escaped_like_string = GetLikeString(pattern.Regexp(), true);
 		if (!escaped_like_string.exists) {
 			return nullptr;
 		}
-		like_string.like_string = "%" + escaped_like_string.like_string + "%";
-		like_string.escaped = escaped_like_string.escaped;
-		like_string.exists = true;
+		auto parameter = make_uniq<BoundConstantExpression>(Value(std::move(escaped_like_string.like_string)));
+		auto contains = make_uniq<BoundFunctionExpression>(root.return_type, ContainsFun::GetFunction(),
+		                                                   std::move(root.children), nullptr);
+		contains->children[1] = std::move(parameter);
+
+		return std::move(contains);
+	} else if (pattern.Regexp()->op() == duckdb_re2::kRegexpConcat) {
+		like_string = LikeMatchFromRegex(pattern);
 	}
 
 	if (!like_string.exists) {
@@ -174,8 +183,8 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 	}
 
 	if (like_string.escaped) {
-		auto like_escape_expression = make_uniq<BoundFunctionExpression>(root.return_type, LikeEscapeFun::GetLikeEscapeFun(),
-		                                                          std::move(root.children), nullptr);
+		auto like_escape_expression = make_uniq<BoundFunctionExpression>(
+		    root.return_type, LikeEscapeFun::GetLikeEscapeFun(), std::move(root.children), nullptr);
 		auto parameter = make_uniq<BoundConstantExpression>(Value(std::move(like_string.like_string)));
 		auto escape = make_uniq<BoundConstantExpression>(Value(std::move(like_string.escaped_character)));
 		like_escape_expression->children[1] = std::move(parameter);

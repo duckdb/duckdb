@@ -11,8 +11,6 @@ PRAGMA explain_output = OPTIMIZED_ONLY;
 statement ok
 INSERT INTO test VALUES ('aaa');
 
-mode skip
-
 # contains optimization: /aaa/ -> contains(aaa)
 query I nosort regexconstantpattern
 EXPLAIN SELECT regexp_matches(s, 'aa') FROM test
@@ -59,7 +57,7 @@ statement ok
 DELETE FROM test;
 
 statement ok
-INSERT INTO test VALUES ('aaa'), ('a.a'), ('baba'), ('abba'), ('a\.a'), ('a_a')';
+INSERT INTO test VALUES ('aaa'), ('a.a'), ('baba'), ('abba'), ('a\.a'), ('a_a');
 
 query II
 explain analyze select regexp_matches(s, 'a.a', 's'), s from test;
@@ -72,6 +70,7 @@ select s from test where regexp_matches(s, 'a.a', 's');
 aaa
 a.a
 baba
+a_a
 
 
 query II
@@ -87,6 +86,7 @@ a.a
 baba
 abba
 a\.a
+a_a
 
 query II
 explain analyze SELECT regexp_matches(s, '^a.*b$', 's'), s FROM TEST;
@@ -97,25 +97,25 @@ query I
 SELECT s FROM TEST where regexp_matches(s, '^a.*b$', 's');
 ----
 
-mode unskip
-
 query II
 explain analyze select regexp_matches(s, 'a_a'), s from test;
 ----
-analyzed_plan	<REGEX>:.*~~e\(s, '%a\\_a%', '\\'\).*
+analyzed_plan	<REGEX>:.*contains\(s, 'a_a'\).*
 
 query II
-select s from test where s LIKE 'a\_a' ESCAPE '\';
+explain analyze select regexp_matches(s, 'a%a'), s from test;
 ----
-a_a
+analyzed_plan	<REGEX>:.*contains\(s, 'a%a'\).*
 
 query II
+explain analyze select regexp_matches(s, 'a\\a'), s from test;
+----
+analyzed_plan	<REGEX>:.*contains\(s, 'a\\a'\).*
+
+query I
 select s from test where regexp_matches(s, 'a_a');
 ----
 a_a
-
-
-mode skip
 
 query II
 explain analyze select regexp_matches(s, 'a\.a'), s from test;
@@ -139,6 +139,7 @@ aaa
 a.a
 abba
 a\.a
+a_a
 
 query II
 explain analyze SELECT regexp_matches(s, 'a$'), s FROM TEST;
@@ -153,6 +154,7 @@ a.a
 baba
 abba
 a\.a
+a_a
 
 query II
 explain analyze SELECT regexp_matches(s, 'aaa.'), s FROM TEST;
@@ -213,7 +215,7 @@ select count(s) from test where regexp_matches(s, 'aaa.');
 query I
 select count(s) from test where regexp_matches(s, 'aaa.', 's');
 ----
-1
+1 
 
 # when regexp_matches arguments are incorrect, an error is produced
 statement error
@@ -227,4 +229,25 @@ select count(s) from test where regexp_matches('aaa');
 ----
 Binder Error
 
+# we escape like special character when we convert to a like string
+query II
+explain analyze select regexp_matches(s, '^a%%a.*', 's'), s from test;
+----
+analyzed_plan	<REGEX>:.*like_escape\(s, 'a\\%\\%a%', '.*
+
+query II
+explain analyze select regexp_matches(s, '^a%%a.*', 's'), s from test;
+----
+analyzed_plan	<REGEX>:.*\\'\).*
+
+# we escape like special character when we convert to a like string
+query II
+explain analyze select regexp_matches(s, '^a__a.', 's'), s from test;
+----
+analyzed_plan	<REGEX>:.*like_escape\(s, 'a\\_\\_a_%', .*
+
+query II
+explain analyze select regexp_matches(s, '^a__a.', 's'), s from test;
+----
+analyzed_plan	<REGEX>:.*'\\'\).*
 

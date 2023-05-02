@@ -522,7 +522,7 @@ void LikeFun::RegisterFunction(BuiltinFunctions &set) {
 }
 
 ScalarFunction LikeFun::GetLikeFunction() {
-	return ScalarFunction("like_escape", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
+	return ScalarFunction("~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                      RegularLikeFunction<LikeOperator, false>, LikeBindFunction);
 }
 
@@ -540,7 +540,7 @@ void LikeEscapeFun::RegisterFunction(BuiltinFunctions &set) {
 }
 
 ScalarFunction LikeEscapeFun::GetLikeEscapeFun() {
-	return ScalarFunction("~~e", {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
+	return ScalarFunction("like_escape", {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
 	                      LogicalType::BOOLEAN, LikeEscapeFunction<LikeEscapeOperator>);
 }
 } // namespace duckdb
