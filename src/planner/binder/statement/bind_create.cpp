@@ -612,9 +612,6 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, std::move(stmt.info), &schema);
 		if (create_type_info.query) {
 			// CREATE TYPE mood AS ENUM (SELECT 'happy')
-			auto &select_stmt = create_type_info.query->Cast<SelectStatement>();
-			auto &query_node = *select_stmt.node;
-
 			auto query_obj = Bind(*create_type_info.query);
 			auto query = std::move(query_obj.plan);
 
