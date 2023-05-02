@@ -363,7 +363,7 @@ template <typename OutputIt, typename Char> class basic_printf_context {
 
   basic_format_parse_context<Char>& parse_context() { return parse_ctx_; }
 
-  FMT_CONSTEXPR void on_error(const char* message) {
+  FMT_CONSTEXPR void on_error(std::string message) {
     parse_ctx_.on_error(message);
   }
 
@@ -392,6 +392,9 @@ void basic_printf_context<OutputIt, Char>::parse_flags(format_specs& specs,
       break;
     case '#':
       specs.alt = true;
+      break;
+    case ',':
+      specs.thousands = ',';
       break;
     default:
       return;

@@ -1,0 +1,54 @@
+# name: test/sql/function/string/test_format_improvements.test
+# description: Test format extensions
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+# thousands separator
+query I
+select printf('%,d', 123456789)
+----
+123,456,789
+
+query I
+select format('{:d}', 123456789)
+----
+123456789
+
+# L prints a thousands separator as well
+query I
+select format('{:L}', 123456789)
+----
+123,456,789
+
+query I
+select format('{0:d} {0:L}', 123456789)
+----
+123456789 123,456,789
+
+statement error
+select format('{1}', 123456789)
+----
+Argument index "1" out of range
+
+statement error
+select format('{L}', 123456789)
+----
+Argument with name
+
+# better error messages
+statement error
+select printf('%:', 123456789)
+----
+Invalid type specifier ":"
+
+statement error
+select printf('%:', 123456789.123)
+----
+Invalid type specifier ":"
+
+statement error
+select printf('%:', 'str')
+----
+Invalid type specifier ":"

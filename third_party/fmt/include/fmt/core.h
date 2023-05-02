@@ -323,6 +323,10 @@ template <typename Char> class basic_string_view {
     size_ -= n;
   }
 
+  std::string to_string() {
+	  return std::string((char *) data(), size());
+  }
+
   // Lexicographically compare this string reference to other.
   int compare(basic_string_view other) const {
     size_t str_size = size_ < other.size_ ? size_ : other.size_;
@@ -442,7 +446,7 @@ struct error_handler {
   FMT_CONSTEXPR error_handler(const error_handler&) = default;
 
   // This function is intentionally not constexpr to give a compile-time error.
-  FMT_NORETURN FMT_API void on_error(const char* message);
+  FMT_NORETURN FMT_API void on_error(std::string message);
 };
 }  // namespace internal
 
@@ -520,7 +524,7 @@ class basic_format_parse_context : private ErrorHandler {
 
   FMT_CONSTEXPR void check_arg_id(basic_string_view<Char>) {}
 
-  FMT_CONSTEXPR void on_error(const char* message) {
+  FMT_CONSTEXPR void on_error(std::string message) {
     ErrorHandler::on_error(message);
   }
 
@@ -1158,7 +1162,7 @@ template <typename OutputIt, typename Char> class basic_format_context {
   format_arg arg(basic_string_view<char_type> name);
 
   internal::error_handler error_handler() { return {}; }
-  void on_error(const char* message) { error_handler().on_error(message); }
+  void on_error(std::string message) { error_handler().on_error(message); }
 
   // Returns an iterator to the beginning of the output range.
   iterator out() { return out_; }

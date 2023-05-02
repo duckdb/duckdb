@@ -951,6 +951,7 @@ template <typename Char> struct basic_format_specs {
   sign_t sign : 3;
   bool alt : 1;  // Alternate form ('#').
   internal::fill_t<Char> fill;
+  char thousands;
 
   constexpr basic_format_specs()
       : width(0),
@@ -959,7 +960,8 @@ template <typename Char> struct basic_format_specs {
         align(align::none),
         sign(sign::none),
         alt(false),
-        fill(internal::fill_t<Char>::make()) {}
+        fill(internal::fill_t<Char>::make()),
+        thousands('\0'){}
 };
 
 using format_specs = basic_format_specs<char>;
@@ -1124,9 +1126,13 @@ int snprintf_float(T value, int precision, float_specs specs,
 template <typename T> T promote_float(T value) { return value; }
 inline double promote_float(float value) { return value; }
 
-template <typename Handler>
-FMT_CONSTEXPR void handle_int_type_spec(char spec, Handler&& handler) {
-  switch (spec) {
+template <typename Spec, typename Handler>
+FMT_CONSTEXPR void handle_int_type_spec(const Spec& specs, Handler&& handler) {
+  if (specs.thousands == ',') {
+    handler.on_num();
+    return;
+  }
+  switch (specs.type) {
   case 0:
   case 'd':
     handler.on_dec();
@@ -1143,10 +1149,12 @@ FMT_CONSTEXPR void handle_int_type_spec(char spec, Handler&& handler) {
     handler.on_oct();
     break;
   case 'n':
+  case 'l':
+  case 'L':
     handler.on_num();
     break;
   default:
-    handler.on_error();
+    handler.on_error("Invalid type specifier \"" + std::string(1, specs.type) + "\" for formatting a value of type int");
   }
 }
 
@@ -1155,6 +1163,9 @@ FMT_CONSTEXPR float_specs parse_float_type_spec(
     const basic_format_specs<Char>& specs, ErrorHandler&& eh = {}) {
   auto result = float_specs();
   result.trailing_zeros = specs.alt;
+  if (specs.thousands == ',') {
+    result.locale = true;
+  }
   switch (specs.type) {
   case 0:
     result.format = float_format::general;
@@ -1193,10 +1204,12 @@ FMT_CONSTEXPR float_specs parse_float_type_spec(
     result.format = float_format::hex;
     break;
   case 'n':
+  case 'l':
+  case 'L':
     result.locale = true;
     break;
   default:
-    eh.on_error("invalid type specifier");
+    eh.on_error("Invalid type specifier \"" + std::string(1, specs.type) + "\" for formatting a value of type float");
     break;
   }
   return result;
@@ -1219,17 +1232,17 @@ FMT_CONSTEXPR void handle_cstring_type_spec(Char spec, Handler&& handler) {
   else if (spec == 'p')
     handler.on_pointer();
   else
-    handler.on_error("invalid type specifier");
+    handler.on_error("Invalid type specifier \"" + std::string(1, spec) + "\" for formatting a value of type string");
 }
 
 template <typename Char, typename ErrorHandler>
 FMT_CONSTEXPR void check_string_type_spec(Char spec, ErrorHandler&& eh) {
-  if (spec != 0 && spec != 's') eh.on_error("invalid type specifier");
+  if (spec != 0 && spec != 's') eh.on_error("Invalid type specifier \"" + std::string(1, spec) + "\" for formatting a value of type string");
 }
 
 template <typename Char, typename ErrorHandler>
 FMT_CONSTEXPR void check_pointer_type_spec(Char spec, ErrorHandler&& eh) {
-  if (spec != 0 && spec != 'p') eh.on_error("invalid type specifier");
+  if (spec != 0 && spec != 'p') eh.on_error("Invalid type specifier \"" + std::string(1, spec) + "\" for formatting a value of type pointer");
 }
 
 template <typename ErrorHandler> class int_type_checker : private ErrorHandler {
@@ -1242,8 +1255,8 @@ template <typename ErrorHandler> class int_type_checker : private ErrorHandler {
   FMT_CONSTEXPR void on_oct() {}
   FMT_CONSTEXPR void on_num() {}
 
-  FMT_CONSTEXPR void on_error() {
-    ErrorHandler::on_error("invalid type specifier");
+  FMT_CONSTEXPR void on_error(std::string error) {
+    ErrorHandler::on_error(error);
   }
 };
 
@@ -1517,8 +1530,8 @@ template <typename Range> class basic_writer {
                        num_writer{abs_value, size, groups, sep});
     }
 
-    FMT_NORETURN void on_error() {
-      FMT_THROW(duckdb::Exception("invalid type specifier"));
+    FMT_NORETURN void on_error(std::string error) {
+      FMT_THROW(duckdb::Exception(error));
     }
   };
 
@@ -1597,7 +1610,7 @@ template <typename Range> class basic_writer {
 
   template <typename T, typename Spec>
   void write_int(T value, const Spec& spec) {
-    handle_int_type_spec(spec.type, int_writer<T, Spec>(*this, value, spec));
+    handle_int_type_spec(spec, int_writer<T, Spec>(*this, value, spec));
   }
 
   template <typename T, FMT_ENABLE_IF(std::is_floating_point<T>::value)>
@@ -2066,7 +2079,7 @@ struct auto_id {};
 template <typename Context>
 FMT_CONSTEXPR typename Context::format_arg get_arg(Context& ctx, int id) {
   auto arg = ctx.arg(id);
-  if (!arg) ctx.on_error("argument index out of range");
+  if (!arg) ctx.on_error("Argument index \"" + std::to_string(id) + "\" out of range");
   return arg;
 }
 
@@ -2092,7 +2105,7 @@ class specs_handler : public specs_setter<typename Context::char_type> {
         get_arg(arg_id), context_.error_handler());
   }
 
-  void on_error(const char* message) { context_.on_error(message); }
+  void on_error(std::string message) { context_.on_error(message); }
 
  private:
   // This is only needed for compatibility with gcc 4.4.
@@ -2176,7 +2189,7 @@ class dynamic_specs_handler
     specs_.precision_ref = make_arg_ref(arg_id);
   }
 
-  FMT_CONSTEXPR void on_error(const char* message) {
+  FMT_CONSTEXPR void on_error(std::string message) {
     context_.on_error(message);
   }
 
@@ -2242,7 +2255,7 @@ template <typename SpecHandler, typename Char> struct width_adapter {
     handler.on_dynamic_width(id);
   }
 
-  FMT_CONSTEXPR void on_error(const char* message) {
+  FMT_CONSTEXPR void on_error(std::string message) {
     handler.on_error(message);
   }
 
@@ -2259,7 +2272,7 @@ template <typename SpecHandler, typename Char> struct precision_adapter {
     handler.on_dynamic_precision(id);
   }
 
-  FMT_CONSTEXPR void on_error(const char* message) {
+  FMT_CONSTEXPR void on_error(std::string message) {
     handler.on_error(message);
   }
 
@@ -2420,7 +2433,7 @@ template <typename Handler, typename Char> struct id_adapter {
   FMT_CONSTEXPR void operator()(basic_string_view<Char> id) {
     handler.on_arg_id(id);
   }
-  FMT_CONSTEXPR void on_error(const char* message) {
+  FMT_CONSTEXPR void on_error(std::string message) {
     handler.on_error(message);
   }
   Handler& handler;
@@ -2524,7 +2537,7 @@ class format_string_checker {
     return arg_id_ < num_args ? parse_funcs_[arg_id_](context_) : begin;
   }
 
-  FMT_CONSTEXPR void on_error(const char* message) {
+  FMT_CONSTEXPR void on_error(std::string message) {
     context_.on_error(message);
   }
 
@@ -2889,7 +2902,7 @@ typename basic_format_context<Range, Char>::format_arg
 basic_format_context<Range, Char>::arg(basic_string_view<char_type> name) {
   map_.init(args_);
   format_arg arg = map_.find(name);
-  if (arg.type() == internal::none_type) this->on_error("argument not found");
+  if (arg.type() == internal::none_type) this->on_error("Argument with name \"" + name.to_string() + "\" not found, did you mean to use it as a format specifier (e.g. {:" + name.to_string() + "}");
   return arg;
 }
 
