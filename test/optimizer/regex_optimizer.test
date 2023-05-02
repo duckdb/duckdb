@@ -251,3 +251,8 @@ explain analyze select regexp_matches(s, '^a__a.', 's'), s from test;
 ----
 analyzed_plan	<REGEX>:.*'\\'\).*
 
+query II
+explain analyze select regexp_matches(s, 'a.b.*cd\\', 's'), s from test;
+----
+analyzed_plan	<REGEX>:.*like_escape\(s, '%a_b%cd\\\\%'.*
+
