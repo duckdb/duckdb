@@ -5,6 +5,8 @@ pd = pytest.importorskip("pandas")
 pa = pytest.importorskip("pyarrow")
 from typing import Union
 import pyarrow.compute as pc
+import uuid
+import datetime
 
 from duckdb.typing import *
 
@@ -43,13 +45,30 @@ class TestPyArrowUDF(object):
         res = con.sql("select 100-i as original, sort_table(original) from range(100) tbl(i)").fetchall()
         assert res[0] == (100, 1)
 
-    @pytest.mark.parametrize('types', [
-        (int, 42),
-        (str, 'long_string_test')
+    @pytest.mark.parametrize('test_type', [
+        (TINYINT, -42),
+        (SMALLINT, -512),
+        (INTEGER, -131072),
+        (BIGINT, -17179869184),
+        (UTINYINT, 254),
+        (USMALLINT, 65535),
+        (UINTEGER, 4294967295),
+        (UBIGINT, 18446744073709551615),
+        (HUGEINT, 18446744073709551616),
+        (VARCHAR, 'long_string_test'),
+        (UUID, uuid.UUID('ffffffff-ffff-ffff-ffff-ffffffffffff')),
+        (FLOAT, 0.12246409803628922),
+        (DOUBLE, 123142.12312416293784721232344),
+        (DATE, datetime.date(2005, 3, 11)),
+        (TIMESTAMP, datetime.datetime(2009, 2, 13, 11, 5, 53)),
+        (TIME, datetime.time(14, 1, 12)),
+        (BLOB, b'\xF6\x96\xB0\x85'),
+        (INTERVAL, datetime.timedelta(days=30969, seconds=999, microseconds=999999)),
+        (BOOLEAN, True),
     ])
-    def test_type_coverage(self, types):
-        type = types[0]
-        value = types[1]
+    def test_type_coverage(self, test_type):
+        type = test_type[0]
+        value = test_type[1]
 
         # Create a function that returns its input
         def test_base(x):
@@ -71,7 +90,8 @@ class TestPyArrowUDF(object):
 
         con = duckdb.connect()
         con.register_scalar_udf('test', test_function, vectorized=True)
-        res = con.execute("select test(?)", [value]).fetchall()
+        print(test_type)
+        res = con.execute(f"select test(?::{str(type)})", [value]).fetchall()
         assert res[0][0] == value
 
     def test_varargs(self):
