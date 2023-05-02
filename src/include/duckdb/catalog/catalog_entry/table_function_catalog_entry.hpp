@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/catalog/standard_entry.hpp"
+#include "duckdb/catalog/catalog_entry/function_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
@@ -16,7 +16,7 @@
 namespace duckdb {
 
 //! A table function in the catalog
-class TableFunctionCatalogEntry : public StandardEntry {
+class TableFunctionCatalogEntry : public FunctionEntry {
 public:
 	static constexpr const CatalogType Type = CatalogType::TABLE_FUNCTION_ENTRY;
 	static constexpr const char *Name = "table function";

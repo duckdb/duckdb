@@ -92,22 +92,15 @@ void BuiltinFunctions::Initialize() {
 	RegisterTableFunctions();
 	RegisterArrowFunctions();
 
-	RegisterAlgebraicAggregates();
 	RegisterDistributiveAggregates();
-	RegisterNestedAggregates();
-	RegisterHolisticAggregates();
-	RegisterRegressiveAggregates();
 
 	RegisterCompressedMaterializationFunctions();
-	RegisterDateFunctions();
-	RegisterEnumFunctions();
+
 	RegisterGenericFunctions();
-	RegisterMathFunctions();
 	RegisterOperators();
 	RegisterSequenceFunctions();
 	RegisterStringFunctions();
 	RegisterNestedFunctions();
-	RegisterTrigonometricsFunctions();
 
 	RegisterPragmaFunctions();
 
