@@ -16,18 +16,6 @@
 
 namespace duckdb {
 
-namespace {
-struct __vector_utils {
-	static inline void AssertIndexInBounds(idx_t index, idx_t size) {
-#ifndef DUCKDB_CLANG_TIDY
-		if (DUCKDB_UNLIKELY(index >= size)) {
-			throw InternalException("Attempted to access index %ld within vector of size %ld", index, size);
-		}
-#endif
-	}
-};
-} // namespace
-
 template <class _Tp, class _Allocator = std::allocator<_Tp>>
 class vector : public std::vector<_Tp, _Allocator> {
 public:
@@ -36,6 +24,16 @@ public:
 	using size_type = typename original::size_type;
 	using const_reference = typename original::const_reference;
 	using reference = typename original::reference;
+
+	static inline void AssertIndexInBounds(idx_t index, idx_t size) {
+#if defined(DUCKDB_DEBUG_NO_SAFETY) || defined(DUCKDB_CLANG_TIDY)
+		return;
+#else
+		if (DUCKDB_UNLIKELY(index >= size)) {
+			throw InternalException("Attempted to access index %ld within vector of size %ld", index, size);
+		}
+#endif
+	}
 
 #ifdef DUCKDB_CLANG_TIDY
 	// This is necessary to tell clang-tidy that it reinitializes the variable after a move
@@ -55,7 +53,7 @@ public:
 	template <bool UNSAFE = true>
 	inline typename original::reference get(typename original::size_type __n) {
 		if (!UNSAFE) {
-			__vector_utils::AssertIndexInBounds(__n, original::size());
+			AssertIndexInBounds(__n, original::size());
 		}
 		return original::operator[](__n);
 	}
@@ -63,7 +61,7 @@ public:
 	template <bool UNSAFE = true>
 	inline typename original::const_reference get(typename original::size_type __n) const {
 		if (!UNSAFE) {
-			__vector_utils::AssertIndexInBounds(__n, original::size());
+			AssertIndexInBounds(__n, original::size());
 		}
 		return original::operator[](__n);
 	}
