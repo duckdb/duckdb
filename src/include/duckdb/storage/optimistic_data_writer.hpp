@@ -31,8 +31,6 @@ public:
 	void Merge(OptimisticDataWriter &other);
 	//! Rollback
 	void Rollback();
-	//! Clear partially written blocks without writing them to disk
-	void ClearBlocks();
 
 private:
 	//! Prepare a write to disk
