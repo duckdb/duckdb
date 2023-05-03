@@ -1,0 +1,18 @@
+[
+    {
+        "name": "histogram",
+        "parameters": "arg",
+        "description": "Returns a LIST of STRUCTs with the fields bucket and count.",
+        "example": "histogram(A)",
+        "type": "aggregate_function_set",
+        "extra_functions": ["static AggregateFunction GetHistogramUnorderedMap(LogicalType &type);"]
+    },
+    {
+        "name": "list",
+        "parameters": "arg",
+        "description": "Returns a LIST containing all the values of a column.",
+        "example": "list(A)",
+        "type": "aggregate_function",
+        "aliases": ["array_agg"]
+    }
+]

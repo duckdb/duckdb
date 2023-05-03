@@ -28,7 +28,7 @@ inline void TupleDataValueStore(const string_t &source, const data_ptr_t &row_lo
 	if (source.IsInlined()) {
 		Store<string_t>(source, row_location + offset_in_row);
 	} else {
-		memcpy(heap_location, source.GetDataUnsafe(), source.GetSize());
+		memcpy(heap_location, source.GetData(), source.GetSize());
 		Store<string_t>(string_t((const char *)heap_location, source.GetSize()), row_location + offset_in_row);
 		heap_location += source.GetSize();
 	}
@@ -44,7 +44,7 @@ template <>
 inline void TupleDataWithinListValueStore(const string_t &source, const data_ptr_t &location,
                                           data_ptr_t &heap_location) {
 	Store<uint32_t>(source.GetSize(), location);
-	memcpy(heap_location, source.GetDataUnsafe(), source.GetSize());
+	memcpy(heap_location, source.GetData(), source.GetSize());
 	heap_location += source.GetSize();
 }
 

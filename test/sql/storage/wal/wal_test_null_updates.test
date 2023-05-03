@@ -2,6 +2,9 @@
 # description: Test updates with storage and null values
 # group: [wal]
 
+statement ok
+SET default_null_order='nulls_first';
+
 require skip_reload
 
 
@@ -28,9 +31,9 @@ UPDATE test SET b=b+1 WHERE a=11
 query II
 SELECT a, b FROM test ORDER BY a
 ----
-NULL	22
 11	23
 12	21
+NULL	22
 
 query I
 UPDATE test SET b=b+1 WHERE a=11
@@ -40,9 +43,9 @@ UPDATE test SET b=b+1 WHERE a=11
 query II
 SELECT a, b FROM test ORDER BY a
 ----
-NULL	22
 11	24
 12	21
+NULL	22
 
 statement ok
 UPDATE test SET b=NULL WHERE a=11
@@ -50,15 +53,15 @@ UPDATE test SET b=NULL WHERE a=11
 query II
 SELECT a, b FROM test ORDER BY a
 ----
-NULL	22
 11	NULL
 12	21
+NULL	22
 
 restart
 
 query II
 SELECT a, b FROM test ORDER BY a
 ----
-NULL	22
 11	NULL
 12	21
+NULL	22

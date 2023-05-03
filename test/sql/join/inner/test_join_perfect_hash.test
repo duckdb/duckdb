@@ -3,6 +3,9 @@
 # group: [inner]
 
 statement ok
+SET default_null_order='nulls_first';
+
+statement ok
 PRAGMA enable_verification
 
 foreach type <numeric> DECIMAL(4,0) DECIMAL(8,0) DECIMAL(16,0) DECIMAL(32,0)

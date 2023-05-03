@@ -183,6 +183,9 @@ void AssignSharedPointer(shared_ptr<T> &target, const shared_ptr<T> &source) {
 template<typename T>
 using reference = std::reference_wrapper<T>;
 
+template<typename T>
+using const_reference = std::reference_wrapper<const T>;
+
 //! Returns whether or not two reference wrappers refer to the same object
 template<class T>
 bool RefersToSameObject(const reference<T> &A, const reference<T> &B) {

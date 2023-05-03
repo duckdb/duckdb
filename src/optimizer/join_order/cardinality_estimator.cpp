@@ -15,8 +15,7 @@ namespace duckdb {
 static optional_ptr<TableCatalogEntry> GetCatalogTableEntry(LogicalOperator &op) {
 	D_ASSERT(op.type == LogicalOperatorType::LOGICAL_GET);
 	auto &get = op.Cast<LogicalGet>();
-	TableCatalogEntry *entry = get.GetTable();
-	return entry;
+	return get.GetTable();
 }
 
 // The filter was made on top of a logical sample or other projection,

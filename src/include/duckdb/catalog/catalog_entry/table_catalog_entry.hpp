@@ -48,7 +48,7 @@ public:
 
 public:
 	//! Create a TableCatalogEntry and initialize storage for it
-	DUCKDB_API TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTableInfo &info);
+	DUCKDB_API TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info);
 
 public:
 	DUCKDB_API bool HasGeneratedColumns() const;
@@ -69,7 +69,6 @@ public:
 	DUCKDB_API ColumnList &GetColumnsMutable();
 	//! Returns the underlying storage of the table
 	virtual DataTable &GetStorage();
-	virtual DataTable *GetStoragePtr();
 	//! Returns a list of the bound constraints of the table
 	virtual const vector<unique_ptr<BoundConstraint>> &GetBoundConstraints();
 
@@ -94,7 +93,7 @@ public:
 	//! Returns the scan function that can be used to scan the given table
 	virtual TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) = 0;
 
-	virtual bool IsDuckTable() {
+	virtual bool IsDuckTable() const {
 		return false;
 	}
 

@@ -66,7 +66,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	// extract a table or view from the catalog
 	BindSchemaOrCatalog(ref.catalog_name, ref.schema_name);
 	auto table_or_view = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, ref.catalog_name, ref.schema_name,
-	                                       ref.table_name, true, error_context);
+	                                       ref.table_name, OnEntryNotFound::RETURN_NULL, error_context);
 	// we still didn't find the table
 	if (GetBindingMode() == BindingMode::EXTRACT_NAMES) {
 		if (!table_or_view || table_or_view->type == CatalogType::TABLE_ENTRY) {
@@ -111,16 +111,16 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 
 		// could not find an alternative: bind again to get the error
 		table_or_view = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, ref.catalog_name, ref.schema_name,
-		                                  ref.table_name, false, error_context);
+		                                  ref.table_name, OnEntryNotFound::THROW_EXCEPTION, error_context);
 	}
 	switch (table_or_view->type) {
 	case CatalogType::TABLE_ENTRY: {
 		// base table: create the BoundBaseTableRef node
 		auto table_index = GenerateTableIndex();
-		auto table = (TableCatalogEntry *)table_or_view;
+		auto &table = table_or_view->Cast<TableCatalogEntry>();
 
 		unique_ptr<FunctionData> bind_data;
-		auto scan_function = table->GetScanFunction(context, bind_data);
+		auto scan_function = table.GetScanFunction(context, bind_data);
 		auto alias = ref.alias.empty() ? ref.table_name : ref.alias;
 		// TODO: bundle the type and name vector in a struct (e.g PackedColumnMetadata)
 		vector<LogicalType> table_types;
@@ -129,7 +129,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 
 		vector<LogicalType> return_types;
 		vector<string> return_names;
-		for (auto &col : table->GetColumns().Logical()) {
+		for (auto &col : table.GetColumns().Logical()) {
 			table_types.push_back(col.Type());
 			table_names.push_back(col.Name());
 			return_types.push_back(col.Type());
@@ -140,24 +140,24 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		auto logical_get = make_uniq<LogicalGet>(table_index, scan_function, std::move(bind_data),
 		                                         std::move(return_types), std::move(return_names));
 		bind_context.AddBaseTable(table_index, alias, table_names, table_types, logical_get->column_ids,
-		                          logical_get->GetTable());
+		                          logical_get->GetTable().get());
 		return make_uniq_base<BoundTableRef, BoundBaseTableRef>(table, std::move(logical_get));
 	}
 	case CatalogType::VIEW_ENTRY: {
 		// the node is a view: get the query that the view represents
-		auto view_catalog_entry = (ViewCatalogEntry *)table_or_view;
+		auto &view_catalog_entry = table_or_view->Cast<ViewCatalogEntry>();
 		// We need to use a new binder for the view that doesn't reference any CTEs
 		// defined for this binder so there are no collisions between the CTEs defined
 		// for the view and for the current query
 		bool inherit_ctes = false;
 		auto view_binder = Binder::CreateBinder(context, this, inherit_ctes);
 		view_binder->can_contain_nulls = true;
-		SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(view_catalog_entry->query->Copy()));
+		SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(view_catalog_entry.query->Copy()));
 		subquery.alias = ref.alias.empty() ? ref.table_name : ref.alias;
 		subquery.column_name_alias =
-		    BindContext::AliasColumnNames(subquery.alias, view_catalog_entry->aliases, ref.column_name_alias);
+		    BindContext::AliasColumnNames(subquery.alias, view_catalog_entry.aliases, ref.column_name_alias);
 		// bind the child subquery
-		view_binder->AddBoundView(*view_catalog_entry);
+		view_binder->AddBoundView(view_catalog_entry);
 		auto bound_child = view_binder->Bind(subquery);
 		if (!view_binder->correlated_columns.empty()) {
 			throw BinderException("Contents of view were altered - view bound correlated columns");
@@ -167,11 +167,11 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		// verify that the types and names match up with the expected types and names
 		auto &bound_subquery = bound_child->Cast<BoundSubqueryRef>();
 		if (GetBindingMode() != BindingMode::EXTRACT_NAMES &&
-		    bound_subquery.subquery->types != view_catalog_entry->types) {
+		    bound_subquery.subquery->types != view_catalog_entry.types) {
 			throw BinderException("Contents of view were altered: types don't match!");
 		}
 		bind_context.AddView(bound_subquery.subquery->GetRootIndex(), subquery.alias, subquery,
-		                     *bound_subquery.subquery, view_catalog_entry);
+		                     *bound_subquery.subquery, &view_catalog_entry);
 		return bound_child;
 	}
 	default:

@@ -175,7 +175,7 @@ struct ICUTableRange {
 		range.AddFunction(TableFunction({LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL},
 		                                ICUTableRangeFunction, Bind<false>, Init));
 		CreateTableFunctionInfo range_func_info(range);
-		catalog.AddFunction(context, &range_func_info);
+		catalog.AddFunction(context, range_func_info);
 
 		// generate_series: similar to range, but inclusive instead of exclusive bounds on the RHS
 		TableFunctionSet generate_series("generate_series");
@@ -183,7 +183,7 @@ struct ICUTableRange {
 		    TableFunction({LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL},
 		                  ICUTableRangeFunction, Bind<true>, Init));
 		CreateTableFunctionInfo generate_series_func_info(generate_series);
-		catalog.AddFunction(context, &generate_series_func_info);
+		catalog.AddFunction(context, generate_series_func_info);
 	}
 };
 

@@ -19,7 +19,7 @@ static void CheckPath(const Value &path_val, string &path, size_t &len) {
 	}
 	auto path_str = path_str_val.GetValueUnsafe<string_t>();
 	len = path_str.GetSize();
-	auto ptr = path_str.GetDataUnsafe();
+	auto ptr = path_str.GetData();
 	// Empty strings and invalid $ paths yield an error
 	if (len == 0) {
 		throw InvalidInputException("Empty JSON path");
@@ -121,8 +121,8 @@ JSONFunctionLocalState &JSONFunctionLocalState::ResetAndGet(ExpressionState &sta
 	return lstate;
 }
 
-vector<CreateScalarFunctionInfo> JSONFunctions::GetScalarFunctions() {
-	vector<CreateScalarFunctionInfo> functions;
+vector<ScalarFunctionSet> JSONFunctions::GetScalarFunctions() {
+	vector<ScalarFunctionSet> functions;
 
 	// Extract functions
 	AddAliases({"json_extract", "json_extract_path"}, GetExtractFunction(), functions);
@@ -153,14 +153,14 @@ vector<CreateScalarFunctionInfo> JSONFunctions::GetScalarFunctions() {
 	return functions;
 }
 
-vector<CreatePragmaFunctionInfo> JSONFunctions::GetPragmaFunctions() {
-	vector<CreatePragmaFunctionInfo> functions;
+vector<PragmaFunctionSet> JSONFunctions::GetPragmaFunctions() {
+	vector<PragmaFunctionSet> functions;
 	functions.push_back(GetExecuteJsonSerializedSqlPragmaFunction());
 	return functions;
 }
 
-vector<CreateTableFunctionInfo> JSONFunctions::GetTableFunctions() {
-	vector<CreateTableFunctionInfo> functions;
+vector<TableFunctionSet> JSONFunctions::GetTableFunctions() {
+	vector<TableFunctionSet> functions;
 
 	// Reads JSON as string
 	functions.push_back(GetReadJSONObjectsFunction());
@@ -213,7 +213,7 @@ static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastP
 	bool success = true;
 	UnaryExecutor::ExecuteWithNulls<string_t, string_t>(
 	    source, result, count, [&](string_t input, ValidityMask &mask, idx_t idx) {
-		    auto data = (char *)(input.GetDataUnsafe());
+		    auto data = (char *)(input.GetData());
 		    auto length = input.GetSize();
 		    yyjson_read_err error;
 

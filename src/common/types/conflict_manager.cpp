@@ -5,7 +5,8 @@
 
 namespace duckdb {
 
-ConflictManager::ConflictManager(VerifyExistenceType lookup_type, idx_t input_size, ConflictInfo *conflict_info)
+ConflictManager::ConflictManager(VerifyExistenceType lookup_type, idx_t input_size,
+                                 optional_ptr<ConflictInfo> conflict_info)
     : lookup_type(lookup_type), input_size(input_size), conflict_info(conflict_info), conflicts(input_size, false),
       mode(ConflictManagerMode::THROW) {
 }

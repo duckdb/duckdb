@@ -16,7 +16,7 @@ struct DuckDBColumnsData : public GlobalTableFunctionState {
 	DuckDBColumnsData() : offset(0), column_offset(0) {
 	}
 
-	vector<optional_ptr<CatalogEntry>> entries;
+	vector<reference<CatalogEntry>> entries;
 	idx_t offset;
 	idx_t column_offset;
 };
@@ -83,7 +83,8 @@ unique_ptr<GlobalTableFunctionState> DuckDBColumnsInit(ClientContext &context, T
 	// scan all the schemas for tables and views and collect them
 	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto &schema : schemas) {
-		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+		schema.get().Scan(context, CatalogType::TABLE_ENTRY,
+		                  [&](CatalogEntry &entry) { result->entries.push_back(entry); });
 	}
 	return std::move(result);
 }
@@ -190,13 +191,13 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 
 		idx_t col = 0;
 		// database_name, VARCHAR
-		output.SetValue(col++, index, entry.catalog->GetName());
+		output.SetValue(col++, index, entry.catalog.GetName());
 		// database_oid, BIGINT
-		output.SetValue(col++, index, Value::BIGINT(entry.catalog->GetOid()));
+		output.SetValue(col++, index, Value::BIGINT(entry.catalog.GetOid()));
 		// schema_name, VARCHAR
-		output.SetValue(col++, index, entry.schema->name);
+		output.SetValue(col++, index, entry.schema.name);
 		// schema_oid, BIGINT
-		output.SetValue(col++, index, Value::BIGINT(entry.schema->oid));
+		output.SetValue(col++, index, Value::BIGINT(entry.schema.oid));
 		// table_name, VARCHAR
 		output.SetValue(col++, index, entry.name);
 		// table_oid, BIGINT
@@ -298,7 +299,7 @@ void DuckDBColumnsFunction(ClientContext &context, TableFunctionInput &data_p, D
 	idx_t column_offset = data.column_offset;
 	idx_t index = 0;
 	while (next < data.entries.size() && index < STANDARD_VECTOR_SIZE) {
-		auto column_helper = ColumnHelper::Create(*data.entries[next]);
+		auto column_helper = ColumnHelper::Create(data.entries[next].get());
 		idx_t columns = column_helper->NumColumns();
 
 		// Check to see if we are going to exceed the maximum index for a DataChunk

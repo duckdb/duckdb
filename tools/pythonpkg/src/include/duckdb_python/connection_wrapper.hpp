@@ -1,6 +1,6 @@
 #pragma once
 
-#include "duckdb_python/pyconnection.hpp"
+#include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/python_objects.hpp"
 
@@ -14,14 +14,17 @@ public:
 	static shared_ptr<DuckDBPyConnection> ExecuteMany(const string &query, py::object params = py::list(),
 	                                                  shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> DistinctDF(const DataFrame &df, shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static unique_ptr<DuckDBPyRelation> DistinctDF(const PandasDataFrame &df,
+	                                               shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> QueryDF(const DataFrame &df, const string &view_name, const string &sql_query,
-	                                            shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static unique_ptr<DuckDBPyRelation> QueryDF(const PandasDataFrame &df, const string &view_name,
+	                                            const string &sql_query, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static void WriteCsvDF(const DataFrame &df, const string &file, shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static void WriteCsvDF(const PandasDataFrame &df, const string &file,
+	                       shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> AggregateDF(const DataFrame &df, const string &expr, const string &groups = "",
+	static unique_ptr<DuckDBPyRelation> AggregateDF(const PandasDataFrame &df, const string &expr,
+	                                                const string &groups = "",
 	                                                shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static shared_ptr<DuckDBPyConnection> Execute(const string &query, py::object params = py::list(),
@@ -41,7 +44,7 @@ public:
 	                                           shared_ptr<DuckDBPyConnection> conn = nullptr);
 	static shared_ptr<DuckDBPyType> Type(const string &type_str, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static shared_ptr<DuckDBPyConnection> Append(const string &name, DataFrame value,
+	static shared_ptr<DuckDBPyConnection> Append(const string &name, PandasDataFrame value, bool by_name,
 	                                             shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static shared_ptr<DuckDBPyConnection> RegisterPythonObject(const string &name, py::object python_object,
@@ -127,10 +130,10 @@ public:
 
 	static py::dict FetchNumpy(shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static DataFrame FetchDF(bool date_as_object, shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static PandasDataFrame FetchDF(bool date_as_object, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static DataFrame FetchDFChunk(const idx_t vectors_per_chunk = 1, bool date_as_object = false,
-	                              shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static PandasDataFrame FetchDFChunk(const idx_t vectors_per_chunk = 1, bool date_as_object = false,
+	                                    shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static duckdb::pyarrow::Table FetchArrow(idx_t rows_per_batch, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
@@ -148,7 +151,8 @@ public:
 	static py::list ListFilesystems(shared_ptr<DuckDBPyConnection> conn);
 	static bool FileSystemIsRegistered(const string &name, shared_ptr<DuckDBPyConnection> conn);
 
-	static unique_ptr<DuckDBPyRelation> FromDF(const DataFrame &df, shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static unique_ptr<DuckDBPyRelation> FromDF(const PandasDataFrame &df,
+	                                           shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static unique_ptr<DuckDBPyRelation> FromSubstrait(py::bytes &proto, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
@@ -158,19 +162,19 @@ public:
 	static unique_ptr<DuckDBPyRelation> FromParquetDefault(const string &filename,
 	                                                       shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> ProjectDf(const DataFrame &df, const string &expr,
+	static unique_ptr<DuckDBPyRelation> ProjectDf(const PandasDataFrame &df, const string &expr,
 	                                              shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> AliasDF(const DataFrame &df, const string &expr,
+	static unique_ptr<DuckDBPyRelation> AliasDF(const PandasDataFrame &df, const string &expr,
 	                                            shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> FilterDf(const DataFrame &df, const string &expr,
+	static unique_ptr<DuckDBPyRelation> FilterDf(const PandasDataFrame &df, const string &expr,
 	                                             shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> LimitDF(const DataFrame &df, int64_t n,
+	static unique_ptr<DuckDBPyRelation> LimitDF(const PandasDataFrame &df, int64_t n,
 	                                            shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> OrderDf(const DataFrame &df, const string &expr,
+	static unique_ptr<DuckDBPyRelation> OrderDf(const PandasDataFrame &df, const string &expr,
 	                                            shared_ptr<DuckDBPyConnection> conn = nullptr);
 };
 } // namespace duckdb

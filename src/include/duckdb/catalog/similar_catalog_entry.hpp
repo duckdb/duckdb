@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
 class SchemaCatalogEntry;
@@ -20,7 +21,7 @@ struct SimilarCatalogEntry {
 	//! The distance to the given name.
 	idx_t distance = idx_t(-1);
 	//! The schema of the entry.
-	SchemaCatalogEntry *schema = nullptr;
+	optional_ptr<SchemaCatalogEntry> schema;
 
 	DUCKDB_API bool Found() const {
 		return !name.empty();

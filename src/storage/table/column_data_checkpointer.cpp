@@ -14,7 +14,10 @@ ColumnDataCheckpointer::ColumnDataCheckpointer(ColumnData &col_data_p, RowGroup 
       intermediate(is_validity ? LogicalType::BOOLEAN : GetType(), true, is_validity),
       checkpoint_info(checkpoint_info_p) {
 	auto &config = DBConfig::GetConfig(GetDatabase());
-	compression_functions = config.GetCompressionFunctions(GetType().InternalType());
+	auto functions = config.GetCompressionFunctions(GetType().InternalType());
+	for (auto &func : functions) {
+		compression_functions.push_back(&func.get());
+	}
 }
 
 DatabaseInstance &ColumnDataCheckpointer::GetDatabase() {
@@ -58,13 +61,14 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 	}
 }
 
-CompressionType ForceCompression(vector<CompressionFunction *> &compression_functions,
+CompressionType ForceCompression(vector<optional_ptr<CompressionFunction>> &compression_functions,
                                  CompressionType compression_type) {
 	// On of the force_compression flags has been set
 	// check if this compression method is available
 	bool found = false;
 	for (idx_t i = 0; i < compression_functions.size(); i++) {
-		if (compression_functions[i]->type == compression_type) {
+		auto &compression_function = *compression_functions[i];
+		if (compression_function.type == compression_type) {
 			found = true;
 			break;
 		}
@@ -74,10 +78,11 @@ CompressionType ForceCompression(vector<CompressionFunction *> &compression_func
 		// clear all other compression methods
 		// except the uncompressed method, so we can fall back on that
 		for (idx_t i = 0; i < compression_functions.size(); i++) {
-			if (compression_functions[i]->type == CompressionType::COMPRESSION_UNCOMPRESSED) {
+			auto &compression_function = *compression_functions[i];
+			if (compression_function.type == CompressionType::COMPRESSION_UNCOMPRESSED) {
 				continue;
 			}
-			if (compression_functions[i]->type != compression_type) {
+			if (compression_function.type != compression_type) {
 				compression_functions[i] = nullptr;
 			}
 		}
@@ -225,7 +230,7 @@ void ColumnDataCheckpointer::WritePersistentSegments() {
 		pointer.block_pointer.offset = segment->GetBlockOffset();
 		pointer.row_start = segment->start;
 		pointer.tuple_count = segment->count;
-		pointer.compression_type = segment->function->type;
+		pointer.compression_type = segment->function.get().type;
 
 		// merge the persistent stats into the global column stats
 		state.global_stats->Merge(segment->stats.statistics);
@@ -248,6 +253,13 @@ void ColumnDataCheckpointer::Checkpoint(vector<SegmentNode<ColumnSegment>> nodes
 		// there are changes: rewrite the set of columns
 		WriteToDisk();
 	}
+}
+
+CompressionFunction &ColumnDataCheckpointer::GetCompressionFunction(CompressionType compression_type) {
+	auto &db = GetDatabase();
+	auto &column_type = GetType();
+	auto &config = DBConfig::GetConfig(db);
+	return *config.GetCompressionFunction(compression_type, column_type.InternalType());
 }
 
 } // namespace duckdb

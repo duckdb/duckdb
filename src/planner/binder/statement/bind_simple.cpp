@@ -18,14 +18,15 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	result.types = {LogicalType::BOOLEAN};
 	BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
 	auto entry = Catalog::GetEntry(context, stmt.info->GetCatalogType(), stmt.info->catalog, stmt.info->schema,
-	                               stmt.info->name, stmt.info->if_exists);
+	                               stmt.info->name, stmt.info->if_not_found);
 	if (entry) {
+		auto &catalog = entry->ParentCatalog();
 		if (!entry->temporary) {
 			// we can only alter temporary tables/views in read-only mode
-			properties.modified_databases.insert(entry->catalog->GetName());
+			properties.modified_databases.insert(catalog.GetName());
 		}
-		stmt.info->catalog = entry->catalog->GetName();
-		stmt.info->schema = ((StandardEntry *)entry)->schema->name;
+		stmt.info->catalog = catalog.GetName();
+		stmt.info->schema = entry->ParentSchema().name;
 	}
 	result.plan = make_uniq<LogicalSimple>(LogicalOperatorType::LOGICAL_ALTER, std::move(stmt.info));
 	properties.return_type = StatementReturnType::NOTHING;

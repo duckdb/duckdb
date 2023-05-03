@@ -117,31 +117,32 @@ void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, Global
 	vector<reference<CatalogEntry>> macros;
 
 	auto schema_list = Catalog::GetSchemas(ccontext, info->catalog);
-	for (auto &schema : schema_list) {
-		if (!schema->internal) {
-			schemas.push_back(*schema);
+	for (auto &schema_p : schema_list) {
+		auto &schema = schema_p.get();
+		if (!schema.internal) {
+			schemas.push_back(schema);
 		}
-		schema->Scan(context.client, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
-			if (entry->internal) {
+		schema.Scan(context.client, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.internal) {
 				return;
 			}
-			if (entry->type != CatalogType::TABLE_ENTRY) {
-				views.push_back(*entry);
+			if (entry.type != CatalogType::TABLE_ENTRY) {
+				views.push_back(entry);
 			}
 		});
-		schema->Scan(context.client, CatalogType::SEQUENCE_ENTRY,
-		             [&](CatalogEntry *entry) { sequences.push_back(*entry); });
-		schema->Scan(context.client, CatalogType::TYPE_ENTRY,
-		             [&](CatalogEntry *entry) { custom_types.push_back(*entry); });
-		schema->Scan(context.client, CatalogType::INDEX_ENTRY, [&](CatalogEntry *entry) { indexes.push_back(*entry); });
-		schema->Scan(context.client, CatalogType::MACRO_ENTRY, [&](CatalogEntry *entry) {
-			if (!entry->internal && entry->type == CatalogType::MACRO_ENTRY) {
-				macros.push_back(*entry);
+		schema.Scan(context.client, CatalogType::SEQUENCE_ENTRY,
+		            [&](CatalogEntry &entry) { sequences.push_back(entry); });
+		schema.Scan(context.client, CatalogType::TYPE_ENTRY,
+		            [&](CatalogEntry &entry) { custom_types.push_back(entry); });
+		schema.Scan(context.client, CatalogType::INDEX_ENTRY, [&](CatalogEntry &entry) { indexes.push_back(entry); });
+		schema.Scan(context.client, CatalogType::MACRO_ENTRY, [&](CatalogEntry &entry) {
+			if (!entry.internal && entry.type == CatalogType::MACRO_ENTRY) {
+				macros.push_back(entry);
 			}
 		});
-		schema->Scan(context.client, CatalogType::TABLE_MACRO_ENTRY, [&](CatalogEntry *entry) {
-			if (!entry->internal && entry->type == CatalogType::TABLE_MACRO_ENTRY) {
-				macros.push_back(*entry);
+		schema.Scan(context.client, CatalogType::TABLE_MACRO_ENTRY, [&](CatalogEntry &entry) {
+			if (!entry.internal && entry.type == CatalogType::TABLE_MACRO_ENTRY) {
+				macros.push_back(entry);
 			}
 		});
 	}
@@ -197,15 +198,15 @@ void PhysicalExport::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeli
 	// EXPORT has an optional child
 	// we only need to schedule child pipelines if there is a child
 	auto &state = meta_pipeline.GetState();
-	state.SetPipelineSource(current, this);
+	state.SetPipelineSource(current, *this);
 	if (children.empty()) {
 		return;
 	}
 	PhysicalOperator::BuildPipelines(current, meta_pipeline);
 }
 
-vector<const PhysicalOperator *> PhysicalExport::GetSources() const {
-	return {this};
+vector<const_reference<PhysicalOperator>> PhysicalExport::GetSources() const {
+	return {*this};
 }
 
 } // namespace duckdb

@@ -107,7 +107,7 @@ jobs:
         run: >
           apt-get update -y -qq
 
-          apt-get install -y -qq gcc-aarch64-linux-gnu g++-aarch64-linux-gnu 
+          apt-get install -y -qq gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
           curl -L https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u345-b01/OpenJDK8U-jdk_x64_linux_hotspot_8u345b01.tar.gz | tar xvz
       - name: Build

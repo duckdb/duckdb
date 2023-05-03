@@ -35,6 +35,10 @@ BlockPointer MetaBlockWriter::GetBlockPointer() {
 }
 
 void MetaBlockWriter::Flush() {
+	if (offset < block->size) {
+		// clear remaining bytes of block (if any)
+		memset(block->buffer + offset, 0, block->size - offset);
+	}
 	AdvanceBlock();
 	block = nullptr;
 }

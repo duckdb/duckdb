@@ -1,11 +1,10 @@
 #include "duckdb_python/pyrelation.hpp"
+#include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pytype.hpp"
-#include "duckdb_python/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb_python/vector_conversion.hpp"
-#include "duckdb_python/pandas_type.hpp"
+#include "duckdb_python/numpy/numpy_type.hpp"
 #include "duckdb/main/relation/query_relation.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/main/relation/view_relation.hpp"
@@ -416,7 +415,7 @@ void DuckDBPyRelation::ExecuteOrThrow(bool stream_result) {
 	result = make_uniq<DuckDBPyResult>(std::move(query_result));
 }
 
-DataFrame DuckDBPyRelation::FetchDF(bool date_as_object) {
+PandasDataFrame DuckDBPyRelation::FetchDF(bool date_as_object) {
 	if (!result) {
 		if (!rel) {
 			return py::none();
@@ -532,7 +531,7 @@ py::dict DuckDBPyRelation::FetchNumpyInternal(bool stream, idx_t vectors_per_chu
 }
 
 //! Should this also keep track of when the result is empty and set result->result_closed accordingly?
-DataFrame DuckDBPyRelation::FetchDFChunk(idx_t vectors_per_chunk, bool date_as_object) {
+PandasDataFrame DuckDBPyRelation::FetchDFChunk(idx_t vectors_per_chunk, bool date_as_object) {
 	if (!result) {
 		if (!rel) {
 			return py::none();
@@ -845,12 +844,16 @@ void DuckDBPyRelation::Create(const string &table) {
 	PyExecuteRelation(create);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Map(py::function fun) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Map(py::function fun, Optional<py::object> schema) {
 	AssertRelation();
 	vector<Value> params;
 	params.emplace_back(Value::POINTER((uintptr_t)fun.ptr()));
+	params.emplace_back(Value::POINTER((uintptr_t)schema.ptr()));
 	auto relation = make_uniq<DuckDBPyRelation>(rel->TableFunction("python_map_function", params));
-	relation->rel->extra_dependencies = make_uniq<PythonDependencies>(fun);
+	auto rel_dependency = make_uniq<PythonDependencies>();
+	rel_dependency->map_function = std::move(fun);
+	rel_dependency->py_object_list.push_back(std::move(make_uniq<RegisteredObject>(std::move(schema))));
+	relation->rel->extra_dependencies = std::move(rel_dependency);
 	return relation;
 }
 
@@ -876,6 +879,7 @@ void DuckDBPyRelation::Print() {
 
 string DuckDBPyRelation::Explain(ExplainType type) {
 	AssertRelation();
+	py::gil_scoped_release release;
 	auto res = rel->Explain(type);
 	D_ASSERT(res->type == duckdb::QueryResultType::MATERIALIZED_RESULT);
 	auto &materialized = (duckdb::MaterializedQueryResult &)*res;

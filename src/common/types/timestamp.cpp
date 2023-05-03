@@ -102,7 +102,7 @@ TimestampCastResult Timestamp::TryConvertTimestamp(const char *str, idx_t len, t
 	}
 	if (tz.GetSize() == 3) {
 		// we can ONLY handle UTC without ICU being loaded
-		auto tz_ptr = tz.GetDataUnsafe();
+		auto tz_ptr = tz.GetData();
 		if ((tz_ptr[0] == 'u' || tz_ptr[0] == 'U') && (tz_ptr[1] == 't' || tz_ptr[1] == 'T') &&
 		    (tz_ptr[2] == 'c' || tz_ptr[2] == 'C')) {
 			return TimestampCastResult::SUCCESS;

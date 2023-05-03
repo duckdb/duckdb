@@ -18,17 +18,17 @@ void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &
 	// check for each object in the sources if they were not deleted yet
 	for (auto &dep : dependencies.set) {
 		auto &dependency = dep.get();
-		CatalogEntry *catalog_entry;
-		if (dependency.catalog != object.catalog) {
+		if (&dependency.ParentCatalog() != &object.ParentCatalog()) {
 			throw DependencyException(
 			    "Error adding dependency for object \"%s\" - dependency \"%s\" is in catalog "
 			    "\"%s\", which does not match the catalog \"%s\".\nCross catalog dependencies are not supported.",
-			    object.name, dependency.name, dependency.catalog->GetName(), object.catalog->GetName());
+			    object.name, dependency.name, dependency.ParentCatalog().GetName(), object.ParentCatalog().GetName());
 		}
 		if (!dependency.set) {
 			throw InternalException("Dependency has no set");
 		}
-		if (!dependency.set->GetEntryInternal(transaction, dependency.name, nullptr, catalog_entry)) {
+		auto catalog_entry = dependency.set->GetEntryInternal(transaction, dependency.name, nullptr);
+		if (!catalog_entry) {
 			throw InternalException("Dependency has already been deleted?");
 		}
 	}
@@ -58,9 +58,8 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 		if (mapping_value == nullptr) {
 			continue;
 		}
-		CatalogEntry *dependency_entry;
-
-		if (!catalog_set.GetEntryInternal(transaction, mapping_value->index, dependency_entry)) {
+		auto dependency_entry = catalog_set.GetEntryInternal(transaction, mapping_value->index);
+		if (!dependency_entry) {
 			// the dependent object was already deleted, no conflict
 			continue;
 		}
@@ -89,8 +88,8 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 		// look up the entry in the catalog set
 		auto &entry = dep.entry.get();
 		auto &catalog_set = *entry.set;
-		CatalogEntry *dependency_entry;
-		if (!catalog_set.GetEntryInternal(transaction, entry.name, nullptr, dependency_entry)) {
+		auto dependency_entry = catalog_set.GetEntryInternal(transaction, entry.name, nullptr);
+		if (!dependency_entry) {
 			// the dependent object was already deleted, no conflict
 			continue;
 		}
@@ -138,7 +137,7 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 	if (new_obj.type == CatalogType::TABLE_ENTRY) {
 		auto &table = new_obj.Cast<TableCatalogEntry>();
 		for (auto &column : table.GetColumns().Logical()) {
-			auto user_type_catalog = LogicalType::GetCatalog(column.Type());
+			auto user_type_catalog = EnumType::GetCatalog(column.Type());
 			if (user_type_catalog) {
 				to_add.push_back(*user_type_catalog);
 			}

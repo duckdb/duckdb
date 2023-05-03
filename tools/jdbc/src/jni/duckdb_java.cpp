@@ -351,6 +351,33 @@ JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1schema
 	return env->NewStringUTF(entry.schema.c_str());
 }
 
+static void set_catalog_search_path(JNIEnv *env, jobject conn_ref_buf, CatalogSearchEntry search_entry,
+                                    bool is_set_schema) {
+	auto conn_ref = get_connection(env, conn_ref_buf);
+	if (!conn_ref) {
+		return;
+	}
+
+	try {
+		conn_ref->context->RunFunctionInTransaction(
+		    [&]() { ClientData::Get(*conn_ref->context).catalog_search_path->Set(search_entry, is_set_schema); });
+	} catch (const exception &e) {
+		env->ThrowNew(J_SQLException, e.what());
+	}
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1schema(JNIEnv *env, jclass, jobject conn_ref_buf,
+                                                                              jstring schema) {
+	set_catalog_search_path(env, conn_ref_buf, CatalogSearchEntry(INVALID_CATALOG, jstring_to_string(env, schema)),
+	                        true);
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1catalog(JNIEnv *env, jclass,
+                                                                               jobject conn_ref_buf, jstring catalog) {
+	set_catalog_search_path(env, conn_ref_buf, CatalogSearchEntry(jstring_to_string(env, catalog), DEFAULT_SCHEMA),
+	                        false);
+}
+
 JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1catalog(JNIEnv *env, jclass,
                                                                                   jobject conn_ref_buf) {
 	auto conn_ref = get_connection(env, conn_ref_buf);
@@ -758,6 +785,7 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 		case LogicalTypeId::DOUBLE:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(double));
 			break;
+		case LogicalTypeId::TIME_TZ:
 		case LogicalTypeId::TIMESTAMP_SEC:
 		case LogicalTypeId::TIMESTAMP_MS:
 		case LogicalTypeId::TIMESTAMP:
@@ -784,7 +812,7 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 					continue;
 				}
 				auto &d_str = ((string_t *)FlatVector::GetData(vec))[row_idx];
-				auto j_obj = env->NewDirectByteBuffer((void *)d_str.GetDataUnsafe(), d_str.GetSize());
+				auto j_obj = env->NewDirectByteBuffer((void *)d_str.GetData(), d_str.GetSize());
 				env->SetObjectArrayElement(varlen_data, row_idx, j_obj);
 			}
 			break;
@@ -804,7 +832,7 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 					continue;
 				}
 				auto d_str = ((string_t *)FlatVector::GetData(vec))[row_idx];
-				auto j_str = decode_charbuffer_to_jstring(env, d_str.GetDataUnsafe(), d_str.GetSize());
+				auto j_str = decode_charbuffer_to_jstring(env, d_str.GetData(), d_str.GetSize());
 				env->SetObjectArrayElement(varlen_data, row_idx, j_str);
 			}
 			break;
@@ -1077,7 +1105,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1create_1extens
 
 	auto &catalog_name = DatabaseManager::GetDefaultDatabase(*connection->context);
 	auto &catalog = Catalog::GetCatalog(*connection->context, catalog_name);
-	catalog.CreateType(*connection->context, &info);
+	catalog.CreateType(*connection->context, info);
 
 	connection->Commit();
 }

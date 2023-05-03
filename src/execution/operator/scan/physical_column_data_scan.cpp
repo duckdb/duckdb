@@ -6,6 +6,13 @@
 
 namespace duckdb {
 
+PhysicalColumnDataScan::PhysicalColumnDataScan(vector<LogicalType> types, PhysicalOperatorType op_type,
+                                               idx_t estimated_cardinality,
+                                               unique_ptr<ColumnDataCollection> owned_collection_p)
+    : PhysicalOperator(op_type, std::move(types), estimated_cardinality), collection(owned_collection_p.get()),
+      owned_collection(std::move(owned_collection_p)) {
+}
+
 class PhysicalColumnDataScanState : public GlobalSourceState {
 public:
 	explicit PhysicalColumnDataScanState() : initialized(false) {
@@ -23,7 +30,6 @@ unique_ptr<GlobalSourceState> PhysicalColumnDataScan::GetGlobalSourceState(Clien
 void PhysicalColumnDataScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                                      LocalSourceState &lstate) const {
 	auto &state = gstate.Cast<PhysicalColumnDataScanState>();
-	D_ASSERT(collection);
 	if (collection->Count() == 0) {
 		return;
 	}
@@ -42,17 +48,17 @@ void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &met
 	auto &state = meta_pipeline.GetState();
 	switch (type) {
 	case PhysicalOperatorType::DELIM_SCAN: {
-		auto entry = state.delim_join_dependencies.find(this);
+		auto entry = state.delim_join_dependencies.find(*this);
 		D_ASSERT(entry != state.delim_join_dependencies.end());
 		// this chunk scan introduces a dependency to the current pipeline
 		// namely a dependency on the duplicate elimination pipeline to finish
-		auto delim_dependency = entry->second->shared_from_this();
+		auto delim_dependency = entry->second.get().shared_from_this();
 		auto delim_sink = state.GetPipelineSink(*delim_dependency);
 		D_ASSERT(delim_sink);
 		D_ASSERT(delim_sink->type == PhysicalOperatorType::DELIM_JOIN);
-		auto &delim_join = (PhysicalDelimJoin &)*delim_sink;
+		auto &delim_join = delim_sink->Cast<PhysicalDelimJoin>();
 		current.AddDependency(delim_dependency);
-		state.SetPipelineSource(current, (PhysicalOperator *)delim_join.distinct.get());
+		state.SetPipelineSource(current, (PhysicalOperator &)*delim_join.distinct);
 		return;
 	}
 	case PhysicalOperatorType::RECURSIVE_CTE_SCAN:
@@ -64,7 +70,7 @@ void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &met
 		break;
 	}
 	D_ASSERT(children.empty());
-	state.SetPipelineSource(current, this);
+	state.SetPipelineSource(current, *this);
 }
 
 } // namespace duckdb
