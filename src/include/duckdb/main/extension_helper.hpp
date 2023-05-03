@@ -56,8 +56,6 @@ public:
 
 	static const vector<string> GetPublicKeys();
 
-	static void StorageInit(string &extension, DBConfig &config);
-
 	// Returns extension name, or empty string if not a replacement open path
 	static string ExtractExtensionPrefixFromPath(const string &path);
 
