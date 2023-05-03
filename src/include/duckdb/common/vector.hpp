@@ -16,10 +16,10 @@
 
 namespace duckdb {
 
-template <class _Tp, class _Allocator = std::allocator<_Tp>>
-class vector : public std::vector<_Tp, _Allocator> {
+template <class _Tp>
+class vector : public std::vector<_Tp, std::allocator<_Tp>> {
 public:
-	using original = std::vector<_Tp, _Allocator>;
+	using original = std::vector<_Tp, std::allocator<_Tp>>;
 	using original::original;
 	using size_type = typename original::size_type;
 	using const_reference = typename original::const_reference;
