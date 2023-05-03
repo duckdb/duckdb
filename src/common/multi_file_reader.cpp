@@ -63,9 +63,7 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 		options.hive_partitioning = true;
 		// turn off the auto_detection
 		// options.hive_partitioning_auto_detect = false;	// not (yet) implemented, different PR
-		options.hive_types_auto_detect = false;	// not (yet) implemented
-
-		// auto structstring = val.type().ToString(); //del
+		// options.hive_types_auto_detect = false;	// not (yet) pmplemented
 		
 		if (val.type().id() != LogicalTypeId::STRUCT) {
 			throw InvalidInputException("'hive_types' only accepts a STRUCT(name : VARCHAR, ...), not %s", val.type().ToString());
@@ -78,8 +76,7 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 				throw InvalidInputException("one of the children... uhhh... is not a VARCHAR: %s", child.type().ToString());
 			}
 			// for every child of the struct, perform TransformStringToLogicalType to get the logical type
-			auto initial_type = child;
-			auto transformed_type = TransformStringToLogicalType(initial_type.ToString(), context);
+			auto transformed_type = TransformStringToLogicalType(child.ToString(), context);
 			auto& name = StructType::GetChildName(val.type(), i);
 			
 			// add the hivetype to the map
