@@ -291,6 +291,7 @@ if(NOT CLANG_TIDY AND OS_NAME STREQUAL "linux")
   set(JEMALLOC_DEFAULT_BUILD TRUE)
 endif()
 
+option(BUILD_CORE_FUNCTIONS_EXTENSION "Build the core functions." TRUE)
 option(BUILD_ICU_EXTENSION "Build the ICU extension." FALSE)
 option(BUILD_PARQUET_EXTENSION "Build the Parquet extension." FALSE)
 option(BUILD_TPCH_EXTENSION "Build the TPC-H extension." FALSE)

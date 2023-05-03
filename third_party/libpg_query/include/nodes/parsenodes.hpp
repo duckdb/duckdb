@@ -1171,6 +1171,7 @@ typedef struct PGPivot {
 	PGList *pivot_columns;  /* The column names to pivot on */
 	PGList *unpivot_columns;/* The column names to unpivot */
 	PGList *pivot_value;    /* The set of pivot values */
+	PGNode *subquery;       /* Subquery to fetch valid pivot values (if any) */
 	char *pivot_enum;       /* The enum to fetch the unique values from */
 } PGPivot;
 

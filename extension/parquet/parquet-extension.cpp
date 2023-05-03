@@ -34,6 +34,7 @@
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/storage/table/row_group.hpp"
+#include "duckdb/main/extension_util.hpp"
 #endif
 
 namespace duckdb {
@@ -368,7 +369,8 @@ public:
 				continue;
 			}
 			MultiFileReader::InitializeReader(*reader, bind_data.parquet_options.file_options, bind_data.reader_bind,
-			                                  bind_data.types, bind_data.names, input.column_ids, input.filters);
+			                                  bind_data.types, bind_data.names, input.column_ids, input.filters,
+			                                  bind_data.files[0]);
 		}
 
 		result->column_ids = input.column_ids;
@@ -560,9 +562,9 @@ public:
 				shared_ptr<ParquetReader> reader;
 				try {
 					reader = make_shared<ParquetReader>(context, file, pq_options);
-					MultiFileReader::InitializeReader(*reader, bind_data.parquet_options.file_options,
-					                                  bind_data.reader_bind, bind_data.types, bind_data.names,
-					                                  parallel_state.column_ids, parallel_state.filters);
+					MultiFileReader::InitializeReader(
+					    *reader, bind_data.parquet_options.file_options, bind_data.reader_bind, bind_data.types,
+					    bind_data.names, parallel_state.column_ids, parallel_state.filters, bind_data.files.front());
 				} catch (...) {
 					parallel_lock.lock();
 					parallel_state.error_opening_file = true;
@@ -687,20 +689,23 @@ unique_ptr<TableRef> ParquetScanReplacement(ClientContext &context, const string
 }
 
 void ParquetExtension::Load(DuckDB &db) {
+	auto &db_instance = *db.instance;
 	auto &fs = db.GetFileSystem();
 	fs.RegisterSubSystem(FileCompressionType::ZSTD, make_uniq<ZStdFileSystem>());
 
 	auto scan_fun = ParquetScanFunction::GetFunctionSet();
-	CreateTableFunctionInfo cinfo(scan_fun);
-	cinfo.name = "read_parquet";
-	CreateTableFunctionInfo pq_scan = cinfo;
-	pq_scan.name = "parquet_scan";
+	scan_fun.name = "read_parquet";
+	ExtensionUtil::RegisterFunction(db_instance, scan_fun);
+	scan_fun.name = "parquet_scan";
+	ExtensionUtil::RegisterFunction(db_instance, scan_fun);
 
+	// parquet_metadata
 	ParquetMetaDataFunction meta_fun;
-	CreateTableFunctionInfo meta_cinfo(MultiFileReader::CreateFunctionSet(meta_fun));
+	ExtensionUtil::RegisterFunction(db_instance, MultiFileReader::CreateFunctionSet(meta_fun));
 
+	// parquet_schema
 	ParquetSchemaFunction schema_fun;
-	CreateTableFunctionInfo schema_cinfo(MultiFileReader::CreateFunctionSet(schema_fun));
+	ExtensionUtil::RegisterFunction(db_instance, MultiFileReader::CreateFunctionSet(schema_fun));
 
 	CopyFunction function("parquet");
 	function.copy_to_bind = ParquetWriteBind;
@@ -714,24 +719,7 @@ void ParquetExtension::Load(DuckDB &db) {
 	function.copy_from_function = scan_fun.functions[0];
 
 	function.extension = "parquet";
-	CreateCopyFunctionInfo info(function);
-
-	Connection con(db);
-	con.BeginTransaction();
-	auto &context = *con.context;
-	auto &catalog = Catalog::GetSystemCatalog(context);
-
-	if (catalog.GetEntry<TableFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "parquet_scan",
-	                                                OnEntryNotFound::RETURN_NULL)) {
-		throw InvalidInputException("Parquet extension is either already loaded or built-in");
-	}
-
-	catalog.CreateCopyFunction(context, info);
-	catalog.CreateTableFunction(context, cinfo);
-	catalog.CreateTableFunction(context, pq_scan);
-	catalog.CreateTableFunction(context, meta_cinfo);
-	catalog.CreateTableFunction(context, schema_cinfo);
-	con.Commit();
+	ExtensionUtil::RegisterFunction(db_instance, function);
 
 	auto &config = DBConfig::GetConfig(*db.instance);
 	config.replacement_scans.emplace_back(ParquetScanReplacement);

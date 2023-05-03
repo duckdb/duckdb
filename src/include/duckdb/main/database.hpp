@@ -60,6 +60,7 @@ public:
 
 private:
 	void Initialize(const char *path, DBConfig *config);
+	void CreateDatabase(const string &database_type);
 
 	void Configure(DBConfig &config);
 

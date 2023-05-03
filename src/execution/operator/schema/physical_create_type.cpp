@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/common/string_map_set.hpp"
 
 namespace duckdb {
 
@@ -21,6 +22,7 @@ public:
 	Vector result;
 	idx_t size = 0;
 	idx_t capacity = STANDARD_VECTOR_SIZE;
+	string_set_t found_strings;
 };
 
 unique_ptr<GlobalSinkState> PhysicalCreateType::GetGlobalSinkState(ClientContext &context) const {
@@ -52,8 +54,15 @@ SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, GlobalSinkSta
 		if (!sdata.validity.RowIsValid(idx)) {
 			throw InvalidInputException("Attempted to create ENUM type with NULL value!");
 		}
-		result_ptr[gstate.size++] =
-		    StringVector::AddStringOrBlob(gstate.result, src_ptr[idx].GetData(), src_ptr[idx].GetSize());
+		auto str = src_ptr[idx];
+		auto entry = gstate.found_strings.find(src_ptr[idx]);
+		if (entry != gstate.found_strings.end()) {
+			// entry was already found - skip
+			continue;
+		}
+		auto owned_string = StringVector::AddStringOrBlob(gstate.result, str.GetData(), str.GetSize());
+		gstate.found_strings.insert(owned_string);
+		result_ptr[gstate.size++] = owned_string;
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }

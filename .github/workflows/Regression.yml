@@ -171,7 +171,7 @@ jobs:
       shell: bash
       run: |
         sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-        pip install numpy pytest pandas mypy psutil pyarrow
+        pip install numpy pytest pandas mypy psutil "pyarrow<=11.0.0"
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
