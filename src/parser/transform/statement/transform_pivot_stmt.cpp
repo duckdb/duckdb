@@ -18,33 +18,45 @@
 
 namespace duckdb {
 
-void Transformer::AddPivotEntry(string enum_name, unique_ptr<SelectNode> base, unique_ptr<ParsedExpression> column) {
+void Transformer::AddPivotEntry(string enum_name, unique_ptr<SelectNode> base, unique_ptr<ParsedExpression> column,
+                                unique_ptr<QueryNode> subquery) {
 	if (parent) {
-		parent->AddPivotEntry(std::move(enum_name), std::move(base), std::move(column));
+		parent->AddPivotEntry(std::move(enum_name), std::move(base), std::move(column), std::move(subquery));
 		return;
 	}
 	auto result = make_uniq<CreatePivotEntry>();
 	result->enum_name = std::move(enum_name);
 	result->base = std::move(base);
 	result->column = std::move(column);
+	result->subquery = std::move(subquery);
 
 	pivot_entries.push_back(std::move(result));
 }
 
 bool Transformer::HasPivotEntries() {
-	if (parent) {
-		return parent->HasPivotEntries();
-	}
-	return !pivot_entries.empty();
+	return !GetPivotEntries().empty();
 }
 
 idx_t Transformer::PivotEntryCount() {
-	if (parent) {
-		return parent->PivotEntryCount();
-	}
-	return pivot_entries.size();
+	return GetPivotEntries().size();
 }
 
+vector<unique_ptr<Transformer::CreatePivotEntry>> &Transformer::GetPivotEntries() {
+	if (parent) {
+		return parent->GetPivotEntries();
+	}
+	return pivot_entries;
+}
+
+void Transformer::PivotEntryCheck(const string &type) {
+	auto &entries = GetPivotEntries();
+	if (!entries.empty()) {
+		throw ParserException(
+		    "PIVOT statements with pivot elements extracted from the data cannot be used in %ss.\nIn order to use "
+		    "PIVOT in a %s the PIVOT values must be manually specified, e.g.:\nPIVOT ... ON %s IN (val1, val2, ...)",
+		    type, type, entries[0]->column->ToString());
+	}
+}
 unique_ptr<SQLStatement> Transformer::GenerateCreateEnumStmt(unique_ptr<CreatePivotEntry> entry) {
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateTypeInfo>();
@@ -57,23 +69,30 @@ unique_ptr<SQLStatement> Transformer::GenerateCreateEnumStmt(unique_ptr<CreatePi
 	info->on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
 
 	// generate the query that will result in the enum creation
-	auto select_node = std::move(entry->base);
-	auto columnref = entry->column->Copy();
-	auto cast = make_uniq<CastExpression>(LogicalType::VARCHAR, std::move(columnref));
-	select_node->select_list.push_back(std::move(cast));
+	unique_ptr<QueryNode> subselect;
+	if (!entry->subquery) {
+		auto select_node = std::move(entry->base);
+		auto columnref = entry->column->Copy();
+		auto cast = make_uniq<CastExpression>(LogicalType::VARCHAR, std::move(columnref));
+		select_node->select_list.push_back(std::move(cast));
 
-	auto is_not_null = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, std::move(entry->column));
-	select_node->where_clause = std::move(is_not_null);
+		auto is_not_null =
+		    make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, std::move(entry->column));
+		select_node->where_clause = std::move(is_not_null);
 
-	// order by the column
-	select_node->modifiers.push_back(make_uniq<DistinctModifier>());
-	auto modifier = make_uniq<OrderModifier>();
-	modifier->orders.emplace_back(OrderType::ASCENDING, OrderByNullType::ORDER_DEFAULT,
-	                              make_uniq<ConstantExpression>(Value::INTEGER(1)));
-	select_node->modifiers.push_back(std::move(modifier));
+		// order by the column
+		select_node->modifiers.push_back(make_uniq<DistinctModifier>());
+		auto modifier = make_uniq<OrderModifier>();
+		modifier->orders.emplace_back(OrderType::ASCENDING, OrderByNullType::ORDER_DEFAULT,
+		                              make_uniq<ConstantExpression>(Value::INTEGER(1)));
+		select_node->modifiers.push_back(std::move(modifier));
+		subselect = std::move(select_node);
+	} else {
+		subselect = std::move(entry->subquery);
+	}
 
 	auto select = make_uniq<SelectStatement>();
-	select->node = std::move(select_node);
+	select->node = std::move(subselect);
 	info->query = std::move(select);
 	info->type = LogicalType::INVALID;
 
@@ -150,7 +169,7 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 		auto new_select = make_uniq<SelectNode>();
 		ExtractCTEsRecursive(new_select->cte_map);
 		new_select->from_table = source->Copy();
-		AddPivotEntry(enum_name, std::move(new_select), col.pivot_expressions[0]->Copy());
+		AddPivotEntry(enum_name, std::move(new_select), col.pivot_expressions[0]->Copy(), std::move(col.subquery));
 		col.pivot_enum = enum_name;
 	}
 

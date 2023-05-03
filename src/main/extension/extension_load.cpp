@@ -19,7 +19,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 typedef void (*ext_init_fun_t)(DatabaseInstance &);
 typedef const char *(*ext_version_fun_t)(void);
-typedef void (*ext_storage_init_t)(DBConfig &);
+typedef bool (*ext_is_storage_t)(void);
 
 template <class T>
 static T LoadFunctionFromDLL(void *dll, const string &function_name, const string &filename) {
@@ -201,7 +201,18 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileOpener *o
 	string error;
 	ExtensionInitResult result;
 	if (!TryInitialLoad(config, opener, extension, result, error)) {
-		throw IOException(error);
+		if (!ExtensionHelper::AllowAutoInstall(extension)) {
+			throw IOException(error);
+		}
+		// the extension load failed - try installing the extension
+		if (!config.file_system) {
+			throw InternalException("Attempting to install an extension without a file system");
+		}
+		ExtensionHelper::InstallExtension(config, *config.file_system, extension, false);
+		// try loading again
+		if (!TryInitialLoad(config, nullptr, extension, result, error)) {
+			throw IOException(error);
+		}
 	}
 	return result;
 }
@@ -249,38 +260,6 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileOpener *op
 
 void ExtensionHelper::LoadExternalExtension(ClientContext &context, const string &extension) {
 	LoadExternalExtension(DatabaseInstance::GetDatabase(context), FileSystem::GetFileOpener(context), extension);
-}
-
-void ExtensionHelper::StorageInit(string &extension, DBConfig &config) {
-	extension = ExtensionHelper::ApplyExtensionAlias(extension);
-	ExtensionInitResult res;
-	string error;
-	if (!TryInitialLoad(config, nullptr, extension, res, error)) {
-		if (!ExtensionHelper::AllowAutoInstall(extension)) {
-			throw IOException(error);
-		}
-		// the extension load failed - try installing the extension
-		if (!config.file_system) {
-			throw InternalException("Attempting to install an extension without a file system");
-		}
-		ExtensionHelper::InstallExtension(config, *config.file_system, extension, false);
-		// try loading again
-		if (!TryInitialLoad(config, nullptr, extension, res, error)) {
-			throw IOException(error);
-		}
-	}
-	auto storage_fun_name = res.basename + "_storage_init";
-
-	ext_storage_init_t storage_init_fun;
-	storage_init_fun = LoadFunctionFromDLL<ext_storage_init_t>(res.lib_hdl, storage_fun_name, res.filename);
-
-	try {
-		(*storage_init_fun)(config);
-	} catch (std::exception &e) {
-		throw InvalidInputException(
-		    "Storage initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"", storage_fun_name,
-		    res.filename, e.what());
-	}
 }
 
 string ExtensionHelper::ExtractExtensionPrefixFromPath(const string &path) {
