@@ -250,7 +250,7 @@ void ColumnDataCheckpointer::Checkpoint(vector<SegmentNode<ColumnSegment>> nodes
 		// no changes: only need to write the metadata for this column
 		WritePersistentSegments();
 	} else {
-		// there are changes: rewrite the set of columns
+		// there are changes: rewrite the set of columns);
 		WriteToDisk();
 	}
 }

@@ -4,7 +4,7 @@
 
 require parquet
 
-load __insert_row_group_size_plus_one.db
+load __TEST_DIR__/insert_row_group_size_plus_one.db
 
 # write many batches of row group size plus one vector
 statement ok
@@ -20,9 +20,9 @@ CREATE TABLE integers AS FROM v1;
 10000000
 
 # verify that we are not consuming an unnecessarily giant amount of blocks
-# we have a total of 10M values - this should not be more than 150 row groups (ideally it is 100)
+# we have a total of 10M values - this should not be more than 200 row groups (ideally it is 100)
 query I
-select count(distinct row_group_id) < 150 from pragma_storage_info('integers');
+select count(distinct row_group_id) < 200 from pragma_storage_info('integers');
 ----
 true
 

@@ -85,8 +85,8 @@ public:
 					}
 				}
 			}
-
 			new_collection->FinalizeAppend(TransactionData(0, 0), append_state);
+			writer.WriteLastRowGroup(*new_collection);
 		}
 		current_collections.clear();
 		return new_collection;
@@ -108,7 +108,7 @@ struct RowGroupBatchEntry {
 
 class BatchInsertGlobalState : public GlobalSinkState {
 public:
-	static constexpr const idx_t BATCH_FLUSH_THRESHOLD = LocalStorage::MERGE_THRESHOLD * 5;
+	static constexpr const idx_t BATCH_FLUSH_THRESHOLD = LocalStorage::MERGE_THRESHOLD * 3;
 
 public:
 	explicit BatchInsertGlobalState(DuckTableEntry &table) : table(table), insert_count(0) {
@@ -192,16 +192,19 @@ public:
 			    "Batch index of the added collection (%llu) is smaller than the min batch index (%llu)", batch_index,
 			    min_batch_index);
 		}
+		auto new_count = current_collection->GetTotalRows();
+		auto batch_type =
+		    new_count < RowGroup::ROW_GROUP_SIZE ? RowGroupBatchType::NOT_FLUSHED : RowGroupBatchType::FLUSHED;
+		if (batch_type == RowGroupBatchType::FLUSHED && writer) {
+			writer->WriteLastRowGroup(*current_collection);
+		}
 		optional_idx merged_batch_index;
 		vector<unique_ptr<RowGroupCollection>> merge_collections;
 		{
 			lock_guard<mutex> l(lock);
-			auto new_count = current_collection->GetTotalRows();
 			insert_count += new_count;
 
 			// add the collection to the batch index
-			auto batch_type =
-			    new_count < BATCH_FLUSH_THRESHOLD ? RowGroupBatchType::NOT_FLUSHED : RowGroupBatchType::FLUSHED;
 			RowGroupBatchEntry new_entry(batch_index, std::move(current_collection), batch_type);
 
 			auto it = std::lower_bound(
@@ -248,7 +251,7 @@ class BatchInsertLocalState : public LocalSinkState {
 public:
 	BatchInsertLocalState(ClientContext &context, const vector<LogicalType> &types,
 	                      const vector<unique_ptr<Expression>> &bound_defaults)
-	    : default_executor(context, bound_defaults), written_to_disk(false) {
+	    : default_executor(context, bound_defaults), written_to_disk(false), written_rows(0) {
 		insert_chunk.Initialize(Allocator::Get(context), types);
 	}
 
@@ -259,6 +262,7 @@ public:
 	unique_ptr<RowGroupCollection> current_collection;
 	optional_ptr<OptimisticDataWriter> writer;
 	bool written_to_disk;
+	idx_t written_rows;
 
 	void CreateNewCollection(DuckTableEntry &table, const vector<LogicalType> &insert_types) {
 		auto &table_info = table.GetStorage().info;
@@ -267,6 +271,7 @@ public:
 		current_collection->InitializeEmpty();
 		current_collection->InitializeAppend(current_append_state);
 		written_to_disk = false;
+		written_rows = 0;
 	}
 };
 
@@ -333,19 +338,12 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkSt
 
 	table.GetStorage().VerifyAppendConstraints(table, context.client, lstate.insert_chunk);
 
+	lstate.written_rows += lstate.insert_chunk.size();
 	auto new_row_group = lstate.current_collection->Append(lstate.insert_chunk, lstate.current_append_state);
 	if (new_row_group) {
-		if (!lstate.written_to_disk) {
-			// we have not written to disk yet - only write if we exceed the merge threshold
-			if (lstate.current_collection->GetTotalRows() >= BatchInsertGlobalState::BATCH_FLUSH_THRESHOLD) {
-				// very large batch - flush to disk
-				lstate.writer->WriteAllButLastRowGroup(*lstate.current_collection);
-				lstate.written_to_disk = true;
-			}
-		} else {
-			// we have already written to disk - flush the next row group as well
-			lstate.writer->WriteNewRowGroup(*lstate.current_collection);
-		}
+		// we have already written to disk - flush the next row group as well
+		lstate.writer->WriteNewRowGroup(*lstate.current_collection);
+		lstate.written_to_disk = true;
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }

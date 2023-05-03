@@ -98,7 +98,7 @@ void LocalTableStorage::WriteNewRowGroup() {
 }
 
 void LocalTableStorage::ClearBlocks() {
-	optimistic_writer.ClearBlocks();
+	optimistic_writer.FinalFlush();
 }
 
 PreservedError LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source,

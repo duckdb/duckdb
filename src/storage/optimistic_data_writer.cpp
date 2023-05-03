@@ -52,9 +52,23 @@ void OptimisticDataWriter::WriteNewRowGroup(RowGroupCollection &row_groups) {
 	FlushToDisk(row_group);
 }
 
+void OptimisticDataWriter::WriteLastRowGroup(RowGroupCollection &row_groups) {
+	// we finished writing a complete row group
+	if (!PrepareWrite()) {
+		return;
+	}
+	// flush second-to-last row group
+	auto row_group = row_groups.GetRowGroup(-1);
+	if (!row_group) {
+		return;
+	}
+	FlushToDisk(row_group);
+}
+
 void OptimisticDataWriter::FlushToDisk(RowGroup *row_group) {
-	// flush the specified row group
-	D_ASSERT(row_group);
+	if (!row_group) {
+		throw InternalException("FlushToDisk called without a RowGroup");
+	}
 	//! The set of column compression types (if any)
 	vector<CompressionType> compression_types;
 	D_ASSERT(compression_types.empty());
@@ -74,6 +88,13 @@ void OptimisticDataWriter::Merge(OptimisticDataWriter &other) {
 	}
 	partial_manager->Merge(*other.partial_manager);
 	other.partial_manager.reset();
+}
+
+void OptimisticDataWriter::FinalFlush() {
+	if (partial_manager) {
+		partial_manager->FlushPartialBlocks();
+		partial_manager.reset();
+	}
 }
 
 void OptimisticDataWriter::ClearBlocks() {
