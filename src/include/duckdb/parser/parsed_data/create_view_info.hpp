@@ -16,7 +16,7 @@ class SchemaCatalogEntry;
 
 struct CreateViewInfo : public CreateInfo {
 	CreateViewInfo();
-	CreateViewInfo(SchemaCatalogEntry *schema, string view_name);
+	CreateViewInfo(SchemaCatalogEntry &schema, string view_name);
 	CreateViewInfo(string catalog_p, string schema_p, string view_name);
 
 	//! Table name to insert to

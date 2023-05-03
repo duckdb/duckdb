@@ -2,6 +2,9 @@
 # description: Test Bool operator
 # group: [aggregates]
 
+statement ok
+SET default_null_order='nulls_first';
+
 # Corner Cases
 statement error
 select bool_or(0)

@@ -66,7 +66,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	// extract a table or view from the catalog
 	BindSchemaOrCatalog(ref.catalog_name, ref.schema_name);
 	auto table_or_view = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, ref.catalog_name, ref.schema_name,
-	                                       ref.table_name, true, error_context);
+	                                       ref.table_name, OnEntryNotFound::RETURN_NULL, error_context);
 	// we still didn't find the table
 	if (GetBindingMode() == BindingMode::EXTRACT_NAMES) {
 		if (!table_or_view || table_or_view->type == CatalogType::TABLE_ENTRY) {
@@ -111,7 +111,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 
 		// could not find an alternative: bind again to get the error
 		table_or_view = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, ref.catalog_name, ref.schema_name,
-		                                  ref.table_name, false, error_context);
+		                                  ref.table_name, OnEntryNotFound::THROW_EXCEPTION, error_context);
 	}
 	switch (table_or_view->type) {
 	case CatalogType::TABLE_ENTRY: {
@@ -140,7 +140,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		auto logical_get = make_uniq<LogicalGet>(table_index, scan_function, std::move(bind_data),
 		                                         std::move(return_types), std::move(return_names));
 		bind_context.AddBaseTable(table_index, alias, table_names, table_types, logical_get->column_ids,
-		                          logical_get->GetTable());
+		                          logical_get->GetTable().get());
 		return make_uniq_base<BoundTableRef, BoundBaseTableRef>(table, std::move(logical_get));
 	}
 	case CatalogType::VIEW_ENTRY: {

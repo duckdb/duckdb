@@ -8,10 +8,9 @@
 
 #pragma once
 
-#include "duckdb_python/pybind_wrapper.hpp"
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb_python/python_object_container.hpp"
 
 namespace duckdb {
 
@@ -29,7 +28,6 @@ public:
 public:
 	bool LoadSucceeded() const;
 	bool IsLoaded() const;
-	bool IsInstance(py::handle object) const;
 	py::handle operator()(void) const;
 	void LoadModule(const string &name, PythonImportCache &cache);
 	void LoadAttribute(const string &name, PythonImportCache &cache, PythonImportCacheItem &source);

@@ -8,10 +8,11 @@
 
 #pragma once
 
-#include "array_wrapper.hpp"
+#include "duckdb_python/numpy/array_wrapper.hpp"
 #include "duckdb.hpp"
-#include "duckdb_python/pybind_wrapper.hpp"
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb_python/python_objects.hpp"
+#include "duckdb_python/pybind11/dataframe.hpp"
 
 namespace duckdb {
 
@@ -30,11 +31,11 @@ public:
 
 	py::dict FetchNumpyInternal(bool stream = false, idx_t vectors_per_chunk = 1);
 
-	DataFrame FetchDF(bool date_as_object);
+	PandasDataFrame FetchDF(bool date_as_object);
 
 	duckdb::pyarrow::Table FetchArrowTable(idx_t rows_per_batch);
 
-	DataFrame FetchDFChunk(idx_t vectors_per_chunk, bool date_as_object);
+	PandasDataFrame FetchDFChunk(idx_t vectors_per_chunk, bool date_as_object);
 
 	py::dict FetchPyTorch();
 
@@ -60,10 +61,10 @@ private:
 
 	bool FetchArrowChunk(QueryResult *result, py::list &batches, idx_t rows_per_batch);
 
-	DataFrame FrameFromNumpy(bool date_as_object, const py::handle &o);
+	PandasDataFrame FrameFromNumpy(bool date_as_object, const py::handle &o);
 
-	void ChangeToTZType(DataFrame &df);
-	void ChangeDateToDatetime(DataFrame &df);
+	void ChangeToTZType(PandasDataFrame &df);
+	void ChangeDateToDatetime(PandasDataFrame &df);
 	unique_ptr<DataChunk> FetchNext(QueryResult &result);
 	unique_ptr<DataChunk> FetchNextRaw(QueryResult &result);
 

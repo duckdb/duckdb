@@ -158,11 +158,8 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 				vector<unique_ptr<ParsedExpression>> order_list;
 				order_binders[0]->ExpandStarExpression(std::move(order_node.expression), order_list);
 
-				auto type =
-				    order_node.type == OrderType::ORDER_DEFAULT ? config.options.default_order_type : order_node.type;
-				auto null_order = order_node.null_order == OrderByNullType::ORDER_DEFAULT
-				                      ? config.options.default_null_order
-				                      : order_node.null_order;
+				auto type = config.ResolveOrder(order_node.type);
+				auto null_order = config.ResolveNullOrder(type, order_node.null_order);
 				for (auto &order_expr : order_list) {
 					auto bound_expr = BindOrderExpression(order_binder, std::move(order_expr));
 					if (!bound_expr) {

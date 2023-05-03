@@ -118,6 +118,7 @@ LocalTableStorage::LocalTableStorage(DataTable &table)
 	row_groups = make_shared<RowGroupCollection>(table.info, TableIOManager::Get(table).GetBlockManagerForRowData(),
 	                                             types, MAX_ROW_ID, 0);
 	row_groups->InitializeEmpty();
+
 	table.info->indexes.Scan([&](Index &index) {
 		D_ASSERT(index.type == IndexType::ART);
 		auto &art = index.Cast<ART>();
@@ -129,7 +130,7 @@ LocalTableStorage::LocalTableStorage(DataTable &table)
 				unbound_expressions.push_back(expr->Copy());
 			}
 			indexes.AddIndex(make_uniq<ART>(art.column_ids, art.table_io_manager, std::move(unbound_expressions),
-			                                art.constraint_type, art.db, true));
+			                                art.constraint_type, art.db));
 		}
 		return false;
 	});
@@ -520,6 +521,12 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 		storage.AppendToIndexes(transaction, append_state, append_count, true);
 	}
 	transaction.PushAppend(table, append_state.row_start, append_count);
+
+	// possibly vacuum any excess index data
+	table.info->indexes.Scan([&](Index &index) {
+		index.Vacuum();
+		return false;
+	});
 }
 
 void LocalStorage::Commit(LocalStorage::CommitState &commit_state, DuckTransaction &transaction) {
@@ -531,7 +538,6 @@ void LocalStorage::Commit(LocalStorage::CommitState &commit_state, DuckTransacti
 		auto table = entry.first;
 		auto storage = entry.second.get();
 		Flush(table, *storage);
-
 		entry.second.reset();
 	}
 }

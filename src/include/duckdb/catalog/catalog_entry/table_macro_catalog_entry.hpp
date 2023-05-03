@@ -21,7 +21,7 @@ public:
 	static constexpr const char *Name = "table macro function";
 
 public:
-	TableMacroCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateMacroInfo *info);
+	TableMacroCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateMacroInfo &info);
 
 public:
 	//! Serialize the meta information of the ScalarMacroCatalogEntry

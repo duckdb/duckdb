@@ -2,6 +2,9 @@
 # description: Test moving ICU date part functions
 # group: [timestamp]
 
+statement ok
+SET default_null_order='nulls_first';
+
 require icu
 
 # Normalise the testing locale
@@ -694,6 +697,22 @@ SELECT ts, LAST_DAY(ts), LAST_DAY(ts::TIMESTAMP) FROM timestamps;
 infinity	NULL	NULL
 -infinity	NULL	NULL
 NULL	NULL	NULL
+
+# dayname/monthname
+query II
+SELECT dayname(ts), monthname(ts) from timestamps;
+----
+Wednesday	March
+Tuesday	July
+Thursday	December
+Monday	February
+Friday	November
+Monday	November
+Monday	November
+Friday	December
+NULL	NULL
+NULL	NULL
+NULL	NULL
 
 #
 # Fractional Time Zones

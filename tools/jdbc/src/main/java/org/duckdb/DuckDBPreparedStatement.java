@@ -151,6 +151,14 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 			close();
 			throw e;
 		}
+
+		if (returnsChangedRows) {
+			if (select_result.next()) {
+				update_result = select_result.getInt(1);
+			}
+			select_result.close();
+		}
+
 		return returnsResultSet;
 	}
 
@@ -169,13 +177,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 			throw new SQLException("executeUpdate() can only be used with queries that return nothing (eg, a DDL statement), or update rows");
 		}
 		execute();
-		update_result = 0;
-		if (select_result.next()) {
-			update_result = select_result.getInt(1);
-		}
-		select_result.close();
-
-		return update_result;
+		return getUpdateCount();
 	}
 
 	@Override
@@ -379,7 +381,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 			throw new SQLException("Prepare something first");
 		}
 
-		if (!returnsChangedRows || update_result == 0) {
+		if (returnsResultSet || select_result.isFinished()) {
 			return -1;
 		}
 		return update_result;

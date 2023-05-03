@@ -25,7 +25,7 @@ public:
 
 public:
 	//! Create an IndexCatalogEntry and initialize storage for it
-	IndexCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateIndexInfo *info);
+	IndexCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info);
 
 	optional_ptr<Index> index;
 	string sql;

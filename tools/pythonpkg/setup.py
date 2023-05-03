@@ -286,7 +286,7 @@ setup(
     license='MIT',
     data_files = data_files,
     packages=[
-		'pyduckdb',
+        'pyduckdb',
         'duckdb-stubs'
     ],
     include_package_data=True,

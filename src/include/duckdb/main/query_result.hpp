@@ -20,7 +20,7 @@ enum class QueryResultType : uint8_t { MATERIALIZED_RESULT, STREAM_RESULT, PENDI
 
 //! A set of properties from the client context that can be used to interpret the query result
 struct ClientProperties {
-	string timezone;
+	string time_zone;
 };
 
 class BaseQueryResult {

@@ -1,0 +1,64 @@
+# name: test/sql/create/big_create_table_as.test_slow
+# description: Test large CREATE TABLE AS statements
+# group: [create]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+CREATE TABLE integers AS SELECT * FROM range(1000000) tbl(i);
+----
+1000000
+
+query I
+CREATE TABLE integers2 AS SELECT * FROM integers;
+----
+1000000
+
+query II
+SELECT COUNT(*), SUM(i) FROM integers2
+----
+1000000	499999500000
+
+
+query I
+SELECT * FROM integers2 LIMIT 5
+----
+0
+1
+2
+3
+4
+
+query I
+SELECT * FROM integers2 LIMIT 5 OFFSET 77777
+----
+77777
+77778
+77779
+77780
+77781
+
+# batch insert
+query I
+INSERT INTO integers2 SELECT i + 1000000 FROM integers;
+----
+1000000
+
+query I
+SELECT * FROM integers2 LIMIT 5 OFFSET 1000000
+----
+1000000
+1000001
+1000002
+1000003
+1000004
+
+query I
+SELECT * FROM integers2 LIMIT 5 OFFSET 1077777
+----
+1077777
+1077778
+1077779
+1077780
+1077781

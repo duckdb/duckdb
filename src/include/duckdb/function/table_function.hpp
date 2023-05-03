@@ -14,6 +14,7 @@
 #include "duckdb/planner/bind_context.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 #include <functional>
 
@@ -26,6 +27,17 @@ class TableFilterSet;
 
 struct TableFunctionInfo {
 	DUCKDB_API virtual ~TableFunctionInfo();
+
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return (TARGET &)*this;
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return (const TARGET &)*this;
+	}
 };
 
 struct GlobalTableFunctionState {
@@ -70,7 +82,7 @@ struct LocalTableFunctionState {
 struct TableFunctionBindInput {
 	TableFunctionBindInput(vector<Value> &inputs, named_parameter_map_t &named_parameters,
 	                       vector<LogicalType> &input_table_types, vector<string> &input_table_names,
-	                       TableFunctionInfo *info)
+	                       optional_ptr<TableFunctionInfo> info)
 	    : inputs(inputs), named_parameters(named_parameters), input_table_types(input_table_types),
 	      input_table_names(input_table_names), info(info) {
 	}
@@ -79,19 +91,19 @@ struct TableFunctionBindInput {
 	named_parameter_map_t &named_parameters;
 	vector<LogicalType> &input_table_types;
 	vector<string> &input_table_names;
-	TableFunctionInfo *info;
+	optional_ptr<TableFunctionInfo> info;
 };
 
 struct TableFunctionInitInput {
-	TableFunctionInitInput(const FunctionData *bind_data_p, const vector<column_t> &column_ids_p,
-	                       const vector<idx_t> &projection_ids_p, TableFilterSet *filters_p)
+	TableFunctionInitInput(optional_ptr<const FunctionData> bind_data_p, const vector<column_t> &column_ids_p,
+	                       const vector<idx_t> &projection_ids_p, optional_ptr<TableFilterSet> filters_p)
 	    : bind_data(bind_data_p), column_ids(column_ids_p), projection_ids(projection_ids_p), filters(filters_p) {
 	}
 
-	const FunctionData *bind_data;
+	optional_ptr<const FunctionData> bind_data;
 	const vector<column_t> &column_ids;
 	const vector<idx_t> projection_ids;
-	TableFilterSet *filters;
+	optional_ptr<TableFilterSet> filters;
 
 	bool CanRemoveFilterColumns() const {
 		if (projection_ids.empty()) {
@@ -109,15 +121,16 @@ struct TableFunctionInitInput {
 
 struct TableFunctionInput {
 public:
-	TableFunctionInput(const FunctionData *bind_data_p, LocalTableFunctionState *local_state_p,
-	                   GlobalTableFunctionState *global_state_p)
+	TableFunctionInput(optional_ptr<const FunctionData> bind_data_p,
+	                   optional_ptr<LocalTableFunctionState> local_state_p,
+	                   optional_ptr<GlobalTableFunctionState> global_state_p)
 	    : bind_data(bind_data_p), local_state(local_state_p), global_state(global_state_p) {
 	}
 
 public:
-	const FunctionData *bind_data;
-	LocalTableFunctionState *local_state;
-	GlobalTableFunctionState *global_state;
+	optional_ptr<const FunctionData> bind_data;
+	optional_ptr<LocalTableFunctionState> local_state;
+	optional_ptr<GlobalTableFunctionState> global_state;
 };
 
 enum ScanType { TABLE, PARQUET };
@@ -127,21 +140,21 @@ public:
 	explicit BindInfo(ScanType type_p) : type(type_p) {};
 	unordered_map<string, Value> options;
 	ScanType type;
-	void InsertOption(string name, Value value) {
+	void InsertOption(const string &name, Value value) {
 		if (options.find(name) != options.end()) {
 			throw InternalException("This option already exists");
 		}
-		options[name] = value;
+		options[name] = std::move(value);
 	}
 	template <class T>
-	T GetOption(string name) {
+	T GetOption(const string &name) {
 		if (options.find(name) == options.end()) {
 			throw InternalException("This option does not exist");
 		}
 		return options[name].GetValue<T>();
 	}
 	template <class T>
-	vector<T> GetOptionList(string name) {
+	vector<T> GetOptionList(const string &name) {
 		if (options.find(name) == options.end()) {
 			throw InternalException("This option does not exist");
 		}
