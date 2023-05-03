@@ -253,6 +253,9 @@ static void SetVectorString(Vector &vector, idx_t size, char *cdata, T *offsets)
 		}
 		auto cptr = cdata + offsets[row_idx];
 		auto str_len = offsets[row_idx + 1] - offsets[row_idx];
+		if (str_len > NumericLimits<uint32_t>::Maximum()) { // LCOV_EXCL_START
+			throw ConversionException("DuckDB does not support Strings over 4GB");
+		} // LCOV_EXCL_STOP
 		strings[row_idx] = string_t(cptr, str_len);
 	}
 }
@@ -406,9 +409,6 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLoca
 		auto original_type = arrow_convert_data[col_idx]->variable_sz_type[arrow_convert_idx.variable_sized_index++];
 		auto cdata = (char *)array.buffers[2];
 		if (original_type.first == ArrowVariableSizeType::SUPER_SIZE) {
-			if (((uint64_t *)array.buffers[1])[array.length] > NumericLimits<uint32_t>::Maximum()) { // LCOV_EXCL_START
-				throw ConversionException("DuckDB does not support Strings over 4GB");
-			} // LCOV_EXCL_STOP
 			auto offsets = (uint64_t *)array.buffers[1] + array.offset + scan_state.chunk_offset;
 			if (nested_offset != -1) {
 				offsets = (uint64_t *)array.buffers[1] + array.offset + nested_offset;
