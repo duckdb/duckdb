@@ -854,7 +854,6 @@ jobject ProcessVector(JNIEnv *env, Connection* conn_ref, Vector &vec, idx_t row_
 					continue;
 				}
 
-				// TODO: apply offset
 				auto offset = list_entries[row_idx].offset;
 				auto limit = list_entries[row_idx].length;
 
