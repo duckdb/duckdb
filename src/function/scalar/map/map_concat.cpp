@@ -64,6 +64,9 @@ static void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &r
 		vector<MapKeyIndexPair> index_to_map;
 		vector<Value> keys_list;
 		for (idx_t map_idx = 0; map_idx < map_count; map_idx++) {
+			if (args.data[map_idx].GetType().id() == LogicalTypeId::SQLNULL) {
+				continue;
+			}
 			auto &map_format = map_formats[map_idx];
 			auto &keys = MapVector::GetKeys(args.data[map_idx]);
 
@@ -125,7 +128,7 @@ static unique_ptr<FunctionData> MapConcatBind(ClientContext &context, ScalarFunc
 
 	auto arg_count = arguments.size();
 	if (arg_count < 2) {
-		throw InvalidInputException("The provided amount of arguments is incorrect, needs 2 or more");
+		throw InvalidInputException("The provided amount of arguments is incorrect, please provide 2 or more maps");
 	}
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {

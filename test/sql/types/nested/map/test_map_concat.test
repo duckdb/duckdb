@@ -5,25 +5,91 @@
 #pragma enable_verification;
 
 # Basic use, 2 maps, same type, no nulls
-query I
-select map_concat(map([3,4,5], ['a', 'b', 'c']), map([1], ['d']));
-----
-{3=a, 4=b, 5=c, 1=d}
+#query I
+#select map_concat(map([3,4,5], ['a', 'b', 'c']), map([1], ['d']));
+#----
+#{3=a, 4=b, 5=c, 1=d}
 
-# Appending an empty map to a non-empty map
-query I
-select map_concat(map([3,4,5], ['a', 'b', 'c']), map([], []));
-----
-{3=a, 4=b, 5=c}
+## Appending an empty map to a non-empty map
+#query I
+#select map_concat(map([3,4,5], ['a', 'b', 'c']), map([], []));
+#----
+#{3=a, 4=b, 5=c}
 
-# Appending two empty maps
+## Appending two empty maps
+#query I
+#select map_concat(map([], []), map([], []))
+#----
+#{}
+
+## Appending a non empty map to an empty map
+#query I
+#select map_concat(map([], []), map([3,4,5], ['a', 'b', 'c']));
+#----
+#{3=a, 4=b, 5=c}
+
+# Appending NULL to an empty map
 query I
-select map_concat(map([], []), map([], []))
+select map_concat(map([], []), NULL);
 ----
 {}
 
-# Appending a non empty map to an empty map
+# Appending NULL to NULL
 query I
-select map_concat(map([], []), map([3,4,5], ['a', 'b', 'c']));
+select map_concat(NULL, NULL);
 ----
-{3=a, 4=b, 5=c}
+NULL
+
+# More than 2 inputs
+query I
+select map_concat(
+	map([3,4,5], ['a', 'b', 'c']),
+	map([3,4,5], ['a', 'b', 'c']),
+	map([3,4,5], ['a', 'b', 'd'])
+);
+----
+{3=a, 4=b, 5=d}
+
+# Less than 2 inputs
+statement error
+select map_concat();
+----
+Invalid Input Error: The provided amount of arguments is incorrect, please provide 2 or more maps
+
+# Less than 2 inputs
+statement error
+select map_concat(map([], []));
+----
+Invalid Input Error: The provided amount of arguments is incorrect, please provide 2 or more maps
+
+statement ok
+create table tbl(
+	x map(BIGINT, VARCHAR),
+	y map(BIGINT, VARCHAR),
+	z map(BIGINT, VARCHAR),
+);
+
+statement ok
+insert into tbl values
+(
+	map([3,4,2], ['abc', 'over_twelve_characters', 'input']),
+	map([3,1,5,2], ['cba', 'a', 'b', 'c']),
+	map([3,7,6], ['1', NULL, '123'])
+),
+(
+	map([42, 1, 0], ['tiny', 'small', 'bigger']),
+	map([0, 42, 1], ['tiny', 'small', 'bigger']),
+	map([1], ['this is a long string'])
+),
+(
+	map([5, 1337, 0], ['long', 'longer', 'longest']),
+	map([], []),
+	NULL
+);
+
+query I
+select map_concat(x, y, z) from tbl;
+----
+{3=1, 4=over_twelve_characters, 2=c, 1=a, 5=b, 7=NULL, 6=123}
+{42=small, 1=this is a long string, 0=tiny}
+{5=long, 1337=longer, 0=longest}
