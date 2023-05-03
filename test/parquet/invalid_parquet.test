@@ -1,0 +1,23 @@
+# name: test/parquet/invalid_parquet.test
+# description: Test Parquet Reader with files on data/parquet-testing/invalid/
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+# unsupported format
+
+statement error
+SELECT * FROM parquet_scan('data/parquet-testing/invalid/invalid.parquet') limit 50;
+----
+Invalid Input Error: Invalid unicode (byte sequence mismatch) detected in segment statistics update
+
+statement ok
+pragma disable_optimizer
+
+statement error
+SELECT * FROM parquet_scan('data/parquet-testing/invalid/invalid.parquet') limit 50;
+----
+Invalid Input Error: Invalid string encoding found in Parquet file: value "TREL\xC3" is not valid UTF8!

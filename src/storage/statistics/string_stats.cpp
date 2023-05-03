@@ -140,7 +140,7 @@ void StringStats::Update(BaseStatistics &stats, const string_t &value) {
 		if (unicode == UnicodeType::UNICODE) {
 			string_data.has_unicode = true;
 		} else if (unicode == UnicodeType::INVALID) {
-			throw InternalException(
+			throw InvalidInputException(
 			    ErrorManager::InvalidUnicodeError(string((char *)data, size), "segment statistics update"));
 		}
 	}
