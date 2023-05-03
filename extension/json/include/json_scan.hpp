@@ -10,7 +10,7 @@
 
 #include "buffered_json_reader.hpp"
 #include "duckdb/common/mutex.hpp"
-#include "duckdb/function/scalar/strftime.hpp"
+#include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "json_transform.hpp"
 

@@ -698,6 +698,22 @@ infinity	NULL	NULL
 -infinity	NULL	NULL
 NULL	NULL	NULL
 
+# dayname/monthname
+query II
+SELECT dayname(ts), monthname(ts) from timestamps;
+----
+Wednesday	March
+Tuesday	July
+Thursday	December
+Monday	February
+Friday	November
+Monday	November
+Monday	November
+Friday	December
+NULL	NULL
+NULL	NULL
+NULL	NULL
+
 #
 # Fractional Time Zones
 #
