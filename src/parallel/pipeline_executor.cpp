@@ -318,10 +318,15 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 void PipelineExecutor::FetchFromSource(DataChunk &result) {
 	StartOperator(*pipeline.source);
 	pipeline.source->GetData(context, result, *pipeline.source_state, *local_source_state);
-	if (result.size() != 0 && requires_batch_index) {
-		auto next_batch_index =
-		    pipeline.source->GetBatchIndex(context, result, *pipeline.source_state, *local_source_state);
-		next_batch_index += pipeline.base_batch_index;
+	if (requires_batch_index) {
+		idx_t next_batch_index;
+		if (result.size() == 0) {
+			next_batch_index = NumericLimits<int64_t>::Maximum();
+		} else {
+			next_batch_index =
+			    pipeline.source->GetBatchIndex(context, result, *pipeline.source_state, *local_source_state);
+			next_batch_index += pipeline.base_batch_index;
+		}
 		auto &partition_info = local_sink_state->partition_info;
 		if (next_batch_index != partition_info.batch_index.GetIndex()) {
 			// batch index has changed - update it

@@ -149,9 +149,10 @@ public:
 			}
 			// not flushed - add to set of indexes to flush
 			total_count += entry.total_rows;
-		}
-		if (total_count >= BATCH_FLUSH_THRESHOLD) {
-			merge = true;
+			if (total_count >= BATCH_FLUSH_THRESHOLD) {
+				merge = true;
+				break;
+			}
 		}
 		if (merge && total_count > 0) {
 			D_ASSERT(current_idx > start_index);
@@ -360,15 +361,17 @@ void PhysicalBatchInsert::Combine(ExecutionContext &context, GlobalSinkState &gs
 	if (!lstate.current_collection) {
 		return;
 	}
+
+	if (lstate.current_collection->GetTotalRows() > 0) {
+		TransactionData tdata(0, 0);
+		lstate.current_collection->FinalizeAppend(tdata, lstate.current_append_state);
+		gstate.AddCollection(context.client, lstate.current_index, lstate.partition_info.min_batch_index.GetIndex(),
+		                     std::move(lstate.current_collection));
+	}
 	{
 		lock_guard<mutex> l(gstate.lock);
 		gstate.table.GetStorage().FinalizeOptimisticWriter(context.client, *lstate.writer);
 	}
-
-	TransactionData tdata(0, 0);
-	lstate.current_collection->FinalizeAppend(tdata, lstate.current_append_state);
-	gstate.AddCollection(context.client, lstate.current_index, lstate.partition_info.min_batch_index.GetIndex(),
-	                     std::move(lstate.current_collection));
 }
 
 SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
