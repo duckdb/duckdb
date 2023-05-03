@@ -52,11 +52,14 @@ struct MultiFileReaderOptions {
 		if (files.empty()) {
 			return false;
 		}
+
+		const string delim = FileSystem::PathSeparator();
+		
 		std::unordered_set<string> uset;
 		idx_t splits_size;
 		{
 			//	front file
-			auto splits = StringUtil::Split(files.front(), "/");
+			auto splits = StringUtil::Split(files.front(), delim);
 			splits_size = splits.size();
 			if (splits.size() < 2) {
 				return false;
@@ -72,7 +75,7 @@ struct MultiFileReaderOptions {
 			return false;
 		}
 		for (auto &file : files) {
-			auto splits = StringUtil::Split(file, "/");
+			auto splits = StringUtil::Split(file, delim);
 			if (splits.size() != splits_size) {
 				return false;
 			}
@@ -89,12 +92,13 @@ struct MultiFileReaderOptions {
 	}
 
 	static bool AutoDetectHivePartitioning(const vector<string> &files) {
-
-#ifdef __linux__
 		return AutoDetectHivePartitioningSplit(files);
-#else
-		return AutoDetectHivePartitioningRegex(files);
-#endif
+
+// #ifdef __linux__
+// 		return AutoDetectHivePartitioningSplit(files);
+// #else
+// 		return AutoDetectHivePartitioningRegex(files);
+// #endif
 	}
 };
 
