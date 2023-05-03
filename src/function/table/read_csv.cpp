@@ -680,11 +680,11 @@ static void ParallelReadCSVFunction(ClientContext &context, TableFunctionInput &
 			}
 			csv_global_state.UpdateLinesRead(*csv_local_state.csv_reader->buffer, csv_local_state.csv_reader->file_idx);
 			auto has_next = csv_global_state.Next(context, bind_data, csv_local_state.csv_reader);
-			if (csv_local_state.csv_reader){
-                csv_local_state.csv_reader->linenr = 0;
-            }
+			if (csv_local_state.csv_reader) {
+				csv_local_state.csv_reader->linenr = 0;
+			}
 
-            if (!has_next) {
+			if (!has_next) {
 				csv_global_state.DecrementThread();
 				break;
 			}

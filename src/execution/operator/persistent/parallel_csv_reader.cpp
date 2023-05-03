@@ -548,6 +548,7 @@ final_state : {
 				finished = true;
 			}
 		}
+		buffer->lines_read += insert_chunk.size();
 		return true;
 	}
 	// If this is the last buffer, we have to read the last value
