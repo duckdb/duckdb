@@ -49,6 +49,7 @@ add_library_unity(
   random_engine.cpp
   serializer.cpp
   string_util.cpp
+  enum_util.cpp
   symbols.cpp
   tree_renderer.cpp
   types.cpp

@@ -28,7 +28,7 @@
 #include "duckdb/parser/parser.hpp"
 
 #include "duckdb/common/serializer/format_deserializer.hpp"
-#include "duckdb/common/serializer/enum_util.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/serializer/format_serializer.hpp"
 
 #include <cmath>

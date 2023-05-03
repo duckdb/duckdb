@@ -11,14 +11,18 @@ import clang.cindex
 # Dont generate serialization for these enums
 blacklist = ["RegexOptions", "Flags"]
 
-enum_util_header_file = os.path.join("..", "src", "include", "duckdb", "common", "serializer", "enum_util.hpp")
-enum_util_source_file = os.path.join("..", "src", "common", "serializer", "enum_util.cpp")
+enum_util_header_file = os.path.join("..", "src", "include", "duckdb", "common", "enum_util.hpp")
+enum_util_source_file = os.path.join("..", "src", "common", "enum_util.cpp")
 
 
 # get all the headers
 hpp_files = []
 for root, dirs, files in os.walk(os.path.join("..", "src")):
     for file in files:
+        # Dont include the generated header itself recursively
+        if file == "enum_util.hpp":
+            continue
+
         if file.endswith(".hpp"):
             hpp_files.append(os.path.join(root, file))
 
@@ -67,7 +71,7 @@ header = """//------------------------------------------------------------------
 //
 // Note: The generated code will only work properly if the enum is a top level item in the duckdb namespace
 // If the enum is nested in a class, or in another namespace, the generated code will not compile.
-// You should move the enum to the duckdb namespae, manually write a specialization or add it to the blacklist
+// You should move the enum to the duckdb namespace, manually write a specialization or add it to the blacklist
 //-------------------------------------------------------------------------\n\n
 """
 
@@ -81,7 +85,7 @@ with open(enum_util_header_file, "w") as f:
     
     f.write("namespace duckdb {\n\n")
     
-    f.write("""struct EnumUtils {
+    f.write("""struct EnumUtil {
     // String -> Enum
     template <class T>
     static T StringToEnum(const char *value) = delete;
@@ -98,12 +102,12 @@ with open(enum_util_header_file, "w") as f:
     
     # Forward declare all enum serialization functions
     for _, enum_name, enum_type, _ in enums:
-        f.write(f"template<>\nconst char* EnumUtils::EnumToString<{enum_name}>({enum_name} value);\n\n")
+        f.write(f"template<>\nconst char* EnumUtil::EnumToString<{enum_name}>({enum_name} value);\n\n")
     f.write("\n")
     
     # Forward declare all enum dserialization functions
     for _, enum_name, enum_type, _ in enums:
-        f.write(f"template<>\n{enum_name} EnumUtils::StringToEnum<{enum_name}>(const char *value);\n\n")
+        f.write(f"template<>\n{enum_name} EnumUtil::StringToEnum<{enum_name}>(const char *value);\n\n")
     f.write("\n")
 
     f.write("}\n")
@@ -112,7 +116,7 @@ with open(enum_util_header_file, "w") as f:
 with open(enum_util_source_file, "w") as f:
     f.write(header)
 
-    f.write('#include "duckdb/common/serializer/enum_util.hpp"\n')
+    f.write('#include "duckdb/common/enum_util.hpp"\n')
 
     # Write the includes
     for enum_path, _, _, _ in enums:
@@ -123,7 +127,7 @@ with open(enum_util_source_file, "w") as f:
 
     for _, enum_name, enum_type, enum_members in enums:
         # Write the enum from string
-        f.write(f"template<>\nconst char* EnumUtils::EnumToString<{enum_name}>({enum_name} value) {{\n")
+        f.write(f"template<>\nconst char* EnumUtil::EnumToString<{enum_name}>({enum_name} value) {{\n")
         f.write("switch(value) {\n")
         for member in enum_members:
             f.write(f"case {enum_name}::{member}: return \"{member}\";\n")
@@ -132,7 +136,7 @@ with open(enum_util_source_file, "w") as f:
         f.write("}\n\n")
 
         # Write the string to enum
-        f.write(f"template<>\n{enum_name} EnumUtils::StringToEnum<{enum_name}>(const char *value) {{\n")
+        f.write(f"template<>\n{enum_name} EnumUtil::StringToEnum<{enum_name}>(const char *value) {{\n")
         for member in enum_members:
             f.write(f'if (StringUtil::Equals(value, "{member}")) {{ return {enum_name}::{member}; }}\n')
         f.write('throw NotImplementedException(StringUtil::Format("Enum value: \'%s\' not implemented", value));\n')
