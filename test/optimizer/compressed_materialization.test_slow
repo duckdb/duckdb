@@ -64,6 +64,34 @@ explain select distinct i, j from test order by i, j
 ----
 logical_opt	<REGEX>:(.*__internal_compress.*){2}
 
+# taken from third_party/sqllogictest/test/index/orderby_nosort/10/slt_good_27.test
+# the problem was that statistics propagation created an index join after "filter_prune" happened
+statement ok
+CREATE TABLE tab3(pk INTEGER PRIMARY KEY, col0 INTEGER, col1 FLOAT, col2 TEXT, col3 INTEGER, col4 FLOAT, col5 TEXT)
+
+statement ok
+INSERT INTO tab3 VALUES
+    (0,461,479.93,'idmdh',456,464.90,'nczyk'),
+    (1,473,482.60,'bguxh',460,466.25,'oseln'),
+    (2,474,484.45,'bnzmd',461,467.13,'kvwna'),
+    (3,475,485.1,'obtlj',462,468.73,'jkjbo'),
+    (4,477,486.62,'gjtbr',463,469.9,'bhers'),
+    (5,479,489.59,'bkxfm',464,470.29,'aklru'),
+    (6,481,495.30,'owirt',466,471.55,'lysig'),
+    (7,482,496.31,'yergm',467,473.31,'rkpxn'),
+    (8,484,497.51,'fszui',468,474.44,'ztexm'),
+    (9,486,498.24,'eueji',469,477.28,'amvcc')
+
+statement ok
+CREATE UNIQUE INDEX idx_tab3_4 ON tab3 (col3)
+
+query I
+SELECT pk FROM tab3 WHERE col0 IN (SELECT col3 FROM tab3 WHERE (col1 > 93.79)) ORDER BY 1 DESC
+----
+0
+
+# and of course some tpch stuff
+
 require tpch
 
 statement ok

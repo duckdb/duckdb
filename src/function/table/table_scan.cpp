@@ -278,6 +278,12 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 		return;
 	}
 	if (!get.table_filters.filters.empty()) {
+		// if there were filters before we can't convert this to an index scan
+		return;
+	}
+	if (!get.projection_ids.empty()) {
+		// if columns were pruned by RemoveUnusedColumns we can't convert this to an index scan,
+		// because index scan does not support filter_prune (yet)
 		return;
 	}
 	if (filters.empty()) {
