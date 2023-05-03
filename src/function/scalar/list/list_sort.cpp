@@ -1,5 +1,5 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
-#include "duckdb/common/serializer/enum_serializer.hpp"
+#include "duckdb/common/serializer/enum_util.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -251,7 +251,7 @@ static OrderByNullType GetNullOrder(ClientContext &context, vector<unique_ptr<Ex
 	}
 	Value null_order_value = ExpressionExecutor::EvaluateScalar(context, *arguments[idx]);
 	auto null_order_name = StringUtil::Upper(null_order_value.ToString());
-	const auto null_order_arg = EnumSerializer::StringToEnum<OrderByNullType>(null_order_name.c_str());
+	const auto null_order_arg = EnumUtil::StringToEnum<OrderByNullType>(null_order_name.c_str());
 	switch (null_order_arg) {
 	case OrderByNullType::NULLS_FIRST:
 	case OrderByNullType::NULLS_LAST:
@@ -283,7 +283,7 @@ static unique_ptr<FunctionData> ListNormalSortBind(ClientContext &context, Scala
 		Value order_value = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 
 		const auto order_name = StringUtil::Upper(order_value.ToString());
-		const auto order_arg = EnumSerializer::StringToEnum<OrderType>(order_name.c_str());
+		const auto order_arg = EnumUtil::StringToEnum<OrderType>(order_name.c_str());
 		switch (order_arg) {
 		case OrderType::ASCENDING:
 		case OrderType::DESCENDING:

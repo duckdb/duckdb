@@ -1,16 +1,16 @@
 #include "duckdb/common/enums/expression_type.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/serializer/enum_serializer.hpp"
+#include "duckdb/common/serializer/enum_util.hpp"
 
 namespace duckdb {
 
 string ExpressionTypeToString(ExpressionType type) {
-	return EnumSerializer::EnumToString(type);
+	return EnumUtil::EnumToString(type);
 }
 
 string ExpressionClassToString(ExpressionClass type) {
-	return EnumSerializer::EnumToString(type);
+	return EnumUtil::EnumToString(type);
 }
 
 string ExpressionTypeToOperator(ExpressionType type) {

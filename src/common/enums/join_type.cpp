@@ -1,10 +1,10 @@
 #include "duckdb/common/enums/join_type.hpp"
-#include "duckdb/common/serializer/enum_serializer.hpp"
+#include "duckdb/common/serializer/enum_util.hpp"
 
 namespace duckdb {
 
 string JoinTypeToString(JoinType type) {
-	return EnumSerializer::EnumToString(type);
+	return EnumUtil::EnumToString(type);
 }
 
 bool IsLeftOuterJoin(JoinType type) {
