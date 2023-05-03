@@ -16,6 +16,12 @@ FROM read_parquet('../file.parquet', hive_partitioning=1, hive_types={'date':'no
 ----
 Catalog Error:
 
+#	bad logical type
+statement error
+FROM read_parquet('../file.parquet', hive_partitioning=1, hive_types={'date':'', 'ref':'smallint'});
+----
+Catalog Error:
+
 #	the old way, provides the expected output
 query IIII
 select * exclude(date,dist), date::Date date, dist::SMALLINT dist FROM read_parquet('../file.parquet', hive_partitioning=1);
