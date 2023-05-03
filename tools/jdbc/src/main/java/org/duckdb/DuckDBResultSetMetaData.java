@@ -47,14 +47,14 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 	}
 
 	public static DuckDBColumnType TypeNameToType(String type_name) {
-		if (type_name.startsWith("DECIMAL")) {
+		if (type_name.endsWith("[]")) {
+			return DuckDBColumnType.LIST;
+		} else if (type_name.startsWith("DECIMAL")) {
 			return DuckDBColumnType.DECIMAL;
 		} else if (type_name.equals("TIME WITH TIME ZONE")) {
 			return DuckDBColumnType.TIME_WITH_TIME_ZONE;
 		} else if (type_name.equals("TIMESTAMP WITH TIME ZONE")) {
 			return DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE;
-		} else if (type_name.endsWith("[]")) {
-			return DuckDBColumnType.LIST;
 		} else if (type_name.startsWith("STRUCT")) {
 			return DuckDBColumnType.STRUCT;
 		} else if (type_name.startsWith("MAP")) {
