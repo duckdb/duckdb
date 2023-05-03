@@ -173,3 +173,45 @@ statement ok
 CREATE OR REPLACE VIEW v3 AS FROM v1 WHERE (i//10000)%2=0 OR (i>200000 AND i < 400000) OR (i>600000 AND i < 800000);
 
 endloop
+
+
+statement ok
+CREATE TABLE integers4(i INTEGER)
+
+# mix batches transaction
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO integers4 FROM '__TEST_DIR__/mix_batches_small.parquet'
+
+statement ok
+INSERT INTO integers4 FROM '__TEST_DIR__/mix_batches_large.parquet'
+
+statement ok
+INSERT INTO integers4 FROM '__TEST_DIR__/mix_batches_odd.parquet'
+
+statement ok
+INSERT INTO integers4 FROM '__TEST_DIR__/mix_batches_odd_again.parquet'
+
+statement ok
+COMMIT
+
+query I
+select count(distinct row_group_id) < 20 from pragma_storage_info('integers4');
+----
+true
+
+query IIIII
+SELECT SUM(i), MIN(i), MAX(i), COUNT(i), COUNT(*) FROM integers4
+----
+499999500000	0	999999	1000000	1000000
+
+query I
+SELECT * FROM integers4 LIMIT 5 OFFSET 99998
+----
+99998
+99999
+100000
+100001
+100002
