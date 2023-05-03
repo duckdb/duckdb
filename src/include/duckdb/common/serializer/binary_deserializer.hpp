@@ -11,7 +11,7 @@ public:
 		deserializer.OnObjectBegin();
 		auto result = T::FormatDeserialize(deserializer);
 		deserializer.OnObjectEnd();
-		return std::move(result);
+		return result;
 	}
 
 private:
