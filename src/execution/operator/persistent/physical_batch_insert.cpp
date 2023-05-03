@@ -251,7 +251,7 @@ class BatchInsertLocalState : public LocalSinkState {
 public:
 	BatchInsertLocalState(ClientContext &context, const vector<LogicalType> &types,
 	                      const vector<unique_ptr<Expression>> &bound_defaults)
-	    : default_executor(context, bound_defaults), written_to_disk(false), written_rows(0) {
+	    : default_executor(context, bound_defaults), written_to_disk(false) {
 		insert_chunk.Initialize(Allocator::Get(context), types);
 	}
 
@@ -262,7 +262,6 @@ public:
 	unique_ptr<RowGroupCollection> current_collection;
 	optional_ptr<OptimisticDataWriter> writer;
 	bool written_to_disk;
-	idx_t written_rows;
 
 	void CreateNewCollection(DuckTableEntry &table, const vector<LogicalType> &insert_types) {
 		auto &table_info = table.GetStorage().info;
@@ -271,7 +270,6 @@ public:
 		current_collection->InitializeEmpty();
 		current_collection->InitializeAppend(current_append_state);
 		written_to_disk = false;
-		written_rows = 0;
 	}
 };
 
@@ -338,7 +336,6 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkSt
 
 	table.GetStorage().VerifyAppendConstraints(table, context.client, lstate.insert_chunk);
 
-	lstate.written_rows += lstate.insert_chunk.size();
 	auto new_row_group = lstate.current_collection->Append(lstate.insert_chunk, lstate.current_append_state);
 	if (new_row_group) {
 		// we have already written to disk - flush the next row group as well
