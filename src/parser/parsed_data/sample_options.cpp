@@ -7,7 +7,16 @@
 namespace duckdb {
 
 string SampleMethodToString(SampleMethod method) {
-	return EnumUtil::EnumToString(method);
+	switch (method) {
+	case SampleMethod::SYSTEM_SAMPLE:
+		return "System";
+	case SampleMethod::BERNOULLI_SAMPLE:
+		return "Bernoulli";
+	case SampleMethod::RESERVOIR_SAMPLE:
+		return "Reservoir";
+	default:
+		return "Unknown";
+	}
 }
 
 void SampleOptions::Serialize(Serializer &serializer) {

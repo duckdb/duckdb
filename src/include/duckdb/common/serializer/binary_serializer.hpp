@@ -5,15 +5,15 @@
 namespace duckdb {
 
 struct BinarySerializer : public FormatSerializer {
-	
+
 private:
 	struct State {
 		// how many fields are present in the object
 		uint32_t field_count;
 		// the size of the object
-		uint64_t size;       
+		uint64_t size;
 		// the offset of the object start in the buffer
-		uint64_t offset; 
+		uint64_t offset;
 	};
 
 	const char *current_tag;
@@ -21,7 +21,7 @@ private:
 	vector<data_t> data;
 	vector<State> stack;
 
-	template<class T>
+	template <class T>
 	void Write(T element) {
 		static_assert(std::is_trivially_destructible<T>(), "Write element must be trivially destructible");
 		WriteData((const_data_ptr_t)&element, sizeof(T));
@@ -36,8 +36,7 @@ private:
 	}
 
 public:
-
-	template<class T>
+	template <class T>
 	static vector<data_t> Serialize(T &obj) {
 		BinarySerializer serializer;
 		serializer.OnObjectBegin();

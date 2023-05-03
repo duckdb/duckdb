@@ -244,14 +244,40 @@ static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunct
 	return make_uniq<ListSortBindData>(order, null_order, bound_function.return_type, child_type, context);
 }
 
-template <class T>
-static T GetOrder(ClientContext &context, Expression &expr) {
+static OrderType GetOrderType(ClientContext &context, Expression &expr) {
 	if (!expr.IsFoldable()) {
 		throw InvalidInputException("Sorting order must be a constant");
 	}
 	Value order_value = ExpressionExecutor::EvaluateScalar(context, expr);
 	auto order_name = StringUtil::Upper(order_value.ToString());
-	return EnumUtil::StringToEnum<T>(order_name.c_str());
+	auto str = order_name.c_str();
+	if (StringUtil::Equals(str, "ORDER_DEFAULT") || StringUtil::Equals(str, "DEFAULT")) {
+		return OrderType::ORDER_DEFAULT;
+	} else if (StringUtil::Equals(str, "ASCENDING") || StringUtil::Equals(str, "ASC")) {
+		return OrderType::ASCENDING;
+	} else if (StringUtil::Equals(str, "DESCENDING") || StringUtil::Equals(str, "DESC")) {
+		return OrderType::DESCENDING;
+	} else {
+		throw InvalidInputException("Unknown sorting order: %s", order_name.c_str());
+	}
+}
+
+static OrderByNullType GetOrderByNullType(ClientContext &context, Expression &expr) {
+	if (!expr.IsFoldable()) {
+		throw InvalidInputException("Sorting order must be a constant");
+	}
+	Value order_value = ExpressionExecutor::EvaluateScalar(context, expr);
+	auto order_name = StringUtil::Upper(order_value.ToString());
+	auto str = order_name.c_str();
+	if (StringUtil::Equals(str, "ORDER_DEFAULT") || StringUtil::Equals(str, "DEFAULT")) {
+		return OrderByNullType::ORDER_DEFAULT;
+	} else if (StringUtil::Equals(str, "NULLS_FIRST") || StringUtil::Equals(str, "NULLS FIRST")) {
+		return OrderByNullType::NULLS_FIRST;
+	} else if (StringUtil::Equals(str, "NULLS_LAST") || StringUtil::Equals(str, "NULLS LAST")) {
+		return OrderByNullType::NULLS_LAST;
+	} else {
+		throw InvalidInputException("Unknown null sorting order: %s", order_name.c_str());
+	}
 }
 
 static unique_ptr<FunctionData> ListNormalSortBind(ClientContext &context, ScalarFunction &bound_function,
@@ -262,11 +288,11 @@ static unique_ptr<FunctionData> ListNormalSortBind(ClientContext &context, Scala
 
 	// get the sorting order
 	if (arguments.size() >= 2) {
-		order = GetOrder<OrderType>(context, *arguments[1]);
+		order = GetOrderType(context, *arguments[1]);
 	}
 	// get the null sorting order
 	if (arguments.size() == 3) {
-		null_order = GetOrder<OrderByNullType>(context, *arguments[2]);
+		null_order = GetOrderByNullType(context, *arguments[2]);
 	}
 	auto &config = DBConfig::GetConfig(context);
 	order = config.ResolveOrder(order);
@@ -280,7 +306,7 @@ static unique_ptr<FunctionData> ListReverseSortBind(ClientContext &context, Scal
 	auto null_order = OrderByNullType::ORDER_DEFAULT;
 
 	if (arguments.size() == 2) {
-		null_order = GetOrder<OrderByNullType>(context, *arguments[1]);
+		null_order = GetOrderByNullType(context, *arguments[1]);
 	}
 	auto &config = DBConfig::GetConfig(context);
 	order = config.ResolveOrder(order);

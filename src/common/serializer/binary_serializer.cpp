@@ -158,6 +158,3 @@ void BinarySerializer::WriteDataPtr(const_data_ptr_t ptr, idx_t count) {
 }
 
 } // namespace duckdb
-
-
-

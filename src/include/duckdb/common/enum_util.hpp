@@ -8,7 +8,6 @@
 // You should move the enum to the duckdb namespace, manually write a specialization or add it to the blacklist
 //-------------------------------------------------------------------------
 
-
 #pragma once
 
 #include <stdint.h>
@@ -16,13 +15,13 @@
 namespace duckdb {
 
 struct EnumUtil {
-    // String -> Enum
-    template <class T>
-    static T StringToEnum(const char *value) = delete;
+	// String -> Enum
+	template <class T>
+	static T StringToEnum(const char *value) = delete;
 
-    // Enum -> String
-    template <class T>
-    static const char *EnumToString(T value) = delete;
+	// Enum -> String
+	template <class T>
+	static const char *EnumToString(T value) = delete;
 };
 
 enum class TaskExecutionMode : uint8_t;
@@ -251,685 +250,682 @@ enum class QueryResultType : uint8_t;
 
 enum class CAPIResultSetType : uint8_t;
 
+template <>
+const char *EnumUtil::EnumToString<TaskExecutionMode>(TaskExecutionMode value);
 
-template<>
-const char* EnumUtil::EnumToString<TaskExecutionMode>(TaskExecutionMode value);
+template <>
+const char *EnumUtil::EnumToString<TaskExecutionResult>(TaskExecutionResult value);
 
-template<>
-const char* EnumUtil::EnumToString<TaskExecutionResult>(TaskExecutionResult value);
+template <>
+const char *EnumUtil::EnumToString<DistinctType>(DistinctType value);
 
-template<>
-const char* EnumUtil::EnumToString<DistinctType>(DistinctType value);
+template <>
+const char *EnumUtil::EnumToString<TableFilterType>(TableFilterType value);
 
-template<>
-const char* EnumUtil::EnumToString<TableFilterType>(TableFilterType value);
+template <>
+const char *EnumUtil::EnumToString<BindingMode>(BindingMode value);
 
-template<>
-const char* EnumUtil::EnumToString<BindingMode>(BindingMode value);
+template <>
+const char *EnumUtil::EnumToString<TableColumnType>(TableColumnType value);
 
-template<>
-const char* EnumUtil::EnumToString<TableColumnType>(TableColumnType value);
+template <>
+const char *EnumUtil::EnumToString<AggregateType>(AggregateType value);
 
-template<>
-const char* EnumUtil::EnumToString<AggregateType>(AggregateType value);
+template <>
+const char *EnumUtil::EnumToString<AggregateOrderDependent>(AggregateOrderDependent value);
 
-template<>
-const char* EnumUtil::EnumToString<AggregateOrderDependent>(AggregateOrderDependent value);
+template <>
+const char *EnumUtil::EnumToString<FunctionNullHandling>(FunctionNullHandling value);
 
-template<>
-const char* EnumUtil::EnumToString<FunctionNullHandling>(FunctionNullHandling value);
+template <>
+const char *EnumUtil::EnumToString<FunctionSideEffects>(FunctionSideEffects value);
 
-template<>
-const char* EnumUtil::EnumToString<FunctionSideEffects>(FunctionSideEffects value);
+template <>
+const char *EnumUtil::EnumToString<MacroType>(MacroType value);
 
-template<>
-const char* EnumUtil::EnumToString<MacroType>(MacroType value);
+template <>
+const char *EnumUtil::EnumToString<ArrowVariableSizeType>(ArrowVariableSizeType value);
 
-template<>
-const char* EnumUtil::EnumToString<ArrowVariableSizeType>(ArrowVariableSizeType value);
+template <>
+const char *EnumUtil::EnumToString<ArrowDateTimeType>(ArrowDateTimeType value);
 
-template<>
-const char* EnumUtil::EnumToString<ArrowDateTimeType>(ArrowDateTimeType value);
+template <>
+const char *EnumUtil::EnumToString<StrTimeSpecifier>(StrTimeSpecifier value);
 
-template<>
-const char* EnumUtil::EnumToString<StrTimeSpecifier>(StrTimeSpecifier value);
+template <>
+const char *EnumUtil::EnumToString<SimplifiedTokenType>(SimplifiedTokenType value);
 
-template<>
-const char* EnumUtil::EnumToString<SimplifiedTokenType>(SimplifiedTokenType value);
+template <>
+const char *EnumUtil::EnumToString<KeywordCategory>(KeywordCategory value);
 
-template<>
-const char* EnumUtil::EnumToString<KeywordCategory>(KeywordCategory value);
+template <>
+const char *EnumUtil::EnumToString<ResultModifierType>(ResultModifierType value);
 
-template<>
-const char* EnumUtil::EnumToString<ResultModifierType>(ResultModifierType value);
+template <>
+const char *EnumUtil::EnumToString<ConstraintType>(ConstraintType value);
 
-template<>
-const char* EnumUtil::EnumToString<ConstraintType>(ConstraintType value);
+template <>
+const char *EnumUtil::EnumToString<ForeignKeyType>(ForeignKeyType value);
 
-template<>
-const char* EnumUtil::EnumToString<ForeignKeyType>(ForeignKeyType value);
+template <>
+const char *EnumUtil::EnumToString<ParserExtensionResultType>(ParserExtensionResultType value);
 
-template<>
-const char* EnumUtil::EnumToString<ParserExtensionResultType>(ParserExtensionResultType value);
+template <>
+const char *EnumUtil::EnumToString<QueryNodeType>(QueryNodeType value);
 
-template<>
-const char* EnumUtil::EnumToString<QueryNodeType>(QueryNodeType value);
+template <>
+const char *EnumUtil::EnumToString<SequenceInfo>(SequenceInfo value);
 
-template<>
-const char* EnumUtil::EnumToString<SequenceInfo>(SequenceInfo value);
+template <>
+const char *EnumUtil::EnumToString<AlterScalarFunctionType>(AlterScalarFunctionType value);
 
-template<>
-const char* EnumUtil::EnumToString<AlterScalarFunctionType>(AlterScalarFunctionType value);
+template <>
+const char *EnumUtil::EnumToString<AlterTableType>(AlterTableType value);
 
-template<>
-const char* EnumUtil::EnumToString<AlterTableType>(AlterTableType value);
+template <>
+const char *EnumUtil::EnumToString<AlterViewType>(AlterViewType value);
 
-template<>
-const char* EnumUtil::EnumToString<AlterViewType>(AlterViewType value);
+template <>
+const char *EnumUtil::EnumToString<AlterTableFunctionType>(AlterTableFunctionType value);
 
-template<>
-const char* EnumUtil::EnumToString<AlterTableFunctionType>(AlterTableFunctionType value);
+template <>
+const char *EnumUtil::EnumToString<AlterType>(AlterType value);
 
-template<>
-const char* EnumUtil::EnumToString<AlterType>(AlterType value);
+template <>
+const char *EnumUtil::EnumToString<PragmaType>(PragmaType value);
 
-template<>
-const char* EnumUtil::EnumToString<PragmaType>(PragmaType value);
+template <>
+const char *EnumUtil::EnumToString<OnCreateConflict>(OnCreateConflict value);
 
-template<>
-const char* EnumUtil::EnumToString<OnCreateConflict>(OnCreateConflict value);
+template <>
+const char *EnumUtil::EnumToString<TransactionType>(TransactionType value);
 
-template<>
-const char* EnumUtil::EnumToString<TransactionType>(TransactionType value);
+template <>
+const char *EnumUtil::EnumToString<SampleMethod>(SampleMethod value);
 
-template<>
-const char* EnumUtil::EnumToString<SampleMethod>(SampleMethod value);
+template <>
+const char *EnumUtil::EnumToString<ExplainType>(ExplainType value);
 
-template<>
-const char* EnumUtil::EnumToString<ExplainType>(ExplainType value);
+template <>
+const char *EnumUtil::EnumToString<OnConflictAction>(OnConflictAction value);
 
-template<>
-const char* EnumUtil::EnumToString<OnConflictAction>(OnConflictAction value);
+template <>
+const char *EnumUtil::EnumToString<WindowBoundary>(WindowBoundary value);
 
-template<>
-const char* EnumUtil::EnumToString<WindowBoundary>(WindowBoundary value);
+template <>
+const char *EnumUtil::EnumToString<DataFileType>(DataFileType value);
 
-template<>
-const char* EnumUtil::EnumToString<DataFileType>(DataFileType value);
+template <>
+const char *EnumUtil::EnumToString<StatsInfo>(StatsInfo value);
 
-template<>
-const char* EnumUtil::EnumToString<StatsInfo>(StatsInfo value);
+template <>
+const char *EnumUtil::EnumToString<StatisticsType>(StatisticsType value);
 
-template<>
-const char* EnumUtil::EnumToString<StatisticsType>(StatisticsType value);
+template <>
+const char *EnumUtil::EnumToString<ColumnSegmentType>(ColumnSegmentType value);
 
-template<>
-const char* EnumUtil::EnumToString<ColumnSegmentType>(ColumnSegmentType value);
+template <>
+const char *EnumUtil::EnumToString<ChunkInfoType>(ChunkInfoType value);
 
-template<>
-const char* EnumUtil::EnumToString<ChunkInfoType>(ChunkInfoType value);
+template <>
+const char *EnumUtil::EnumToString<BitpackingMode>(BitpackingMode value);
 
-template<>
-const char* EnumUtil::EnumToString<BitpackingMode>(BitpackingMode value);
+template <>
+const char *EnumUtil::EnumToString<BlockState>(BlockState value);
 
-template<>
-const char* EnumUtil::EnumToString<BlockState>(BlockState value);
+template <>
+const char *EnumUtil::EnumToString<VerificationType>(VerificationType value);
 
-template<>
-const char* EnumUtil::EnumToString<VerificationType>(VerificationType value);
+template <>
+const char *EnumUtil::EnumToString<FileLockType>(FileLockType value);
 
-template<>
-const char* EnumUtil::EnumToString<FileLockType>(FileLockType value);
+template <>
+const char *EnumUtil::EnumToString<FileBufferType>(FileBufferType value);
 
-template<>
-const char* EnumUtil::EnumToString<FileBufferType>(FileBufferType value);
+template <>
+const char *EnumUtil::EnumToString<ExceptionFormatValueType>(ExceptionFormatValueType value);
 
-template<>
-const char* EnumUtil::EnumToString<ExceptionFormatValueType>(ExceptionFormatValueType value);
+template <>
+const char *EnumUtil::EnumToString<ExtraTypeInfoType>(ExtraTypeInfoType value);
 
-template<>
-const char* EnumUtil::EnumToString<ExtraTypeInfoType>(ExtraTypeInfoType value);
+template <>
+const char *EnumUtil::EnumToString<PhysicalType>(PhysicalType value);
 
-template<>
-const char* EnumUtil::EnumToString<PhysicalType>(PhysicalType value);
+template <>
+const char *EnumUtil::EnumToString<LogicalTypeId>(LogicalTypeId value);
 
-template<>
-const char* EnumUtil::EnumToString<LogicalTypeId>(LogicalTypeId value);
+template <>
+const char *EnumUtil::EnumToString<OutputStream>(OutputStream value);
 
-template<>
-const char* EnumUtil::EnumToString<OutputStream>(OutputStream value);
+template <>
+const char *EnumUtil::EnumToString<TimestampCastResult>(TimestampCastResult value);
 
-template<>
-const char* EnumUtil::EnumToString<TimestampCastResult>(TimestampCastResult value);
+template <>
+const char *EnumUtil::EnumToString<ConflictManagerMode>(ConflictManagerMode value);
 
-template<>
-const char* EnumUtil::EnumToString<ConflictManagerMode>(ConflictManagerMode value);
+template <>
+const char *EnumUtil::EnumToString<LookupResultType>(LookupResultType value);
 
-template<>
-const char* EnumUtil::EnumToString<LookupResultType>(LookupResultType value);
+template <>
+const char *EnumUtil::EnumToString<MapInvalidReason>(MapInvalidReason value);
 
-template<>
-const char* EnumUtil::EnumToString<MapInvalidReason>(MapInvalidReason value);
+template <>
+const char *EnumUtil::EnumToString<UnionInvalidReason>(UnionInvalidReason value);
 
-template<>
-const char* EnumUtil::EnumToString<UnionInvalidReason>(UnionInvalidReason value);
+template <>
+const char *EnumUtil::EnumToString<VectorBufferType>(VectorBufferType value);
 
-template<>
-const char* EnumUtil::EnumToString<VectorBufferType>(VectorBufferType value);
+template <>
+const char *EnumUtil::EnumToString<VectorAuxiliaryDataType>(VectorAuxiliaryDataType value);
 
-template<>
-const char* EnumUtil::EnumToString<VectorAuxiliaryDataType>(VectorAuxiliaryDataType value);
+template <>
+const char *EnumUtil::EnumToString<PartitionedColumnDataType>(PartitionedColumnDataType value);
 
-template<>
-const char* EnumUtil::EnumToString<PartitionedColumnDataType>(PartitionedColumnDataType value);
+template <>
+const char *EnumUtil::EnumToString<ColumnDataAllocatorType>(ColumnDataAllocatorType value);
 
-template<>
-const char* EnumUtil::EnumToString<ColumnDataAllocatorType>(ColumnDataAllocatorType value);
+template <>
+const char *EnumUtil::EnumToString<ColumnDataScanProperties>(ColumnDataScanProperties value);
 
-template<>
-const char* EnumUtil::EnumToString<ColumnDataScanProperties>(ColumnDataScanProperties value);
+template <>
+const char *EnumUtil::EnumToString<PartitionedTupleDataType>(PartitionedTupleDataType value);
 
-template<>
-const char* EnumUtil::EnumToString<PartitionedTupleDataType>(PartitionedTupleDataType value);
+template <>
+const char *EnumUtil::EnumToString<TupleDataPinProperties>(TupleDataPinProperties value);
 
-template<>
-const char* EnumUtil::EnumToString<TupleDataPinProperties>(TupleDataPinProperties value);
+template <>
+const char *EnumUtil::EnumToString<PartitionSortStage>(PartitionSortStage value);
 
-template<>
-const char* EnumUtil::EnumToString<PartitionSortStage>(PartitionSortStage value);
+template <>
+const char *EnumUtil::EnumToString<PhysicalOperatorType>(PhysicalOperatorType value);
 
-template<>
-const char* EnumUtil::EnumToString<PhysicalOperatorType>(PhysicalOperatorType value);
+template <>
+const char *EnumUtil::EnumToString<VectorType>(VectorType value);
 
-template<>
-const char* EnumUtil::EnumToString<VectorType>(VectorType value);
+template <>
+const char *EnumUtil::EnumToString<AccessMode>(AccessMode value);
 
-template<>
-const char* EnumUtil::EnumToString<AccessMode>(AccessMode value);
+template <>
+const char *EnumUtil::EnumToString<FileGlobOptions>(FileGlobOptions value);
 
-template<>
-const char* EnumUtil::EnumToString<FileGlobOptions>(FileGlobOptions value);
+template <>
+const char *EnumUtil::EnumToString<WALType>(WALType value);
 
-template<>
-const char* EnumUtil::EnumToString<WALType>(WALType value);
+template <>
+const char *EnumUtil::EnumToString<JoinType>(JoinType value);
 
-template<>
-const char* EnumUtil::EnumToString<JoinType>(JoinType value);
+template <>
+const char *EnumUtil::EnumToString<FileCompressionType>(FileCompressionType value);
 
-template<>
-const char* EnumUtil::EnumToString<FileCompressionType>(FileCompressionType value);
+template <>
+const char *EnumUtil::EnumToString<ProfilerPrintFormat>(ProfilerPrintFormat value);
 
-template<>
-const char* EnumUtil::EnumToString<ProfilerPrintFormat>(ProfilerPrintFormat value);
+template <>
+const char *EnumUtil::EnumToString<StatementType>(StatementType value);
 
-template<>
-const char* EnumUtil::EnumToString<StatementType>(StatementType value);
+template <>
+const char *EnumUtil::EnumToString<StatementReturnType>(StatementReturnType value);
 
-template<>
-const char* EnumUtil::EnumToString<StatementReturnType>(StatementReturnType value);
+template <>
+const char *EnumUtil::EnumToString<OrderPreservationType>(OrderPreservationType value);
 
-template<>
-const char* EnumUtil::EnumToString<OrderPreservationType>(OrderPreservationType value);
+template <>
+const char *EnumUtil::EnumToString<DebugInitialize>(DebugInitialize value);
 
-template<>
-const char* EnumUtil::EnumToString<DebugInitialize>(DebugInitialize value);
+template <>
+const char *EnumUtil::EnumToString<CatalogType>(CatalogType value);
 
-template<>
-const char* EnumUtil::EnumToString<CatalogType>(CatalogType value);
+template <>
+const char *EnumUtil::EnumToString<SetScope>(SetScope value);
 
-template<>
-const char* EnumUtil::EnumToString<SetScope>(SetScope value);
+template <>
+const char *EnumUtil::EnumToString<TableScanType>(TableScanType value);
 
-template<>
-const char* EnumUtil::EnumToString<TableScanType>(TableScanType value);
+template <>
+const char *EnumUtil::EnumToString<SetType>(SetType value);
 
-template<>
-const char* EnumUtil::EnumToString<SetType>(SetType value);
+template <>
+const char *EnumUtil::EnumToString<ExpressionType>(ExpressionType value);
 
-template<>
-const char* EnumUtil::EnumToString<ExpressionType>(ExpressionType value);
+template <>
+const char *EnumUtil::EnumToString<ExpressionClass>(ExpressionClass value);
 
-template<>
-const char* EnumUtil::EnumToString<ExpressionClass>(ExpressionClass value);
+template <>
+const char *EnumUtil::EnumToString<PendingExecutionResult>(PendingExecutionResult value);
 
-template<>
-const char* EnumUtil::EnumToString<PendingExecutionResult>(PendingExecutionResult value);
+template <>
+const char *EnumUtil::EnumToString<WindowAggregationMode>(WindowAggregationMode value);
 
-template<>
-const char* EnumUtil::EnumToString<WindowAggregationMode>(WindowAggregationMode value);
+template <>
+const char *EnumUtil::EnumToString<SubqueryType>(SubqueryType value);
 
-template<>
-const char* EnumUtil::EnumToString<SubqueryType>(SubqueryType value);
+template <>
+const char *EnumUtil::EnumToString<OrderType>(OrderType value);
 
-template<>
-const char* EnumUtil::EnumToString<OrderType>(OrderType value);
+template <>
+const char *EnumUtil::EnumToString<OrderByNullType>(OrderByNullType value);
 
-template<>
-const char* EnumUtil::EnumToString<OrderByNullType>(OrderByNullType value);
+template <>
+const char *EnumUtil::EnumToString<DefaultOrderByNullType>(DefaultOrderByNullType value);
 
-template<>
-const char* EnumUtil::EnumToString<DefaultOrderByNullType>(DefaultOrderByNullType value);
+template <>
+const char *EnumUtil::EnumToString<DatePartSpecifier>(DatePartSpecifier value);
 
-template<>
-const char* EnumUtil::EnumToString<DatePartSpecifier>(DatePartSpecifier value);
+template <>
+const char *EnumUtil::EnumToString<OnEntryNotFound>(OnEntryNotFound value);
 
-template<>
-const char* EnumUtil::EnumToString<OnEntryNotFound>(OnEntryNotFound value);
+template <>
+const char *EnumUtil::EnumToString<LogicalOperatorType>(LogicalOperatorType value);
 
-template<>
-const char* EnumUtil::EnumToString<LogicalOperatorType>(LogicalOperatorType value);
+template <>
+const char *EnumUtil::EnumToString<OperatorResultType>(OperatorResultType value);
 
-template<>
-const char* EnumUtil::EnumToString<OperatorResultType>(OperatorResultType value);
+template <>
+const char *EnumUtil::EnumToString<OperatorFinalizeResultType>(OperatorFinalizeResultType value);
 
-template<>
-const char* EnumUtil::EnumToString<OperatorFinalizeResultType>(OperatorFinalizeResultType value);
+template <>
+const char *EnumUtil::EnumToString<SinkResultType>(SinkResultType value);
 
-template<>
-const char* EnumUtil::EnumToString<SinkResultType>(SinkResultType value);
+template <>
+const char *EnumUtil::EnumToString<SinkFinalizeType>(SinkFinalizeType value);
 
-template<>
-const char* EnumUtil::EnumToString<SinkFinalizeType>(SinkFinalizeType value);
+template <>
+const char *EnumUtil::EnumToString<JoinRefType>(JoinRefType value);
 
-template<>
-const char* EnumUtil::EnumToString<JoinRefType>(JoinRefType value);
+template <>
+const char *EnumUtil::EnumToString<UndoFlags>(UndoFlags value);
 
-template<>
-const char* EnumUtil::EnumToString<UndoFlags>(UndoFlags value);
+template <>
+const char *EnumUtil::EnumToString<SetOperationType>(SetOperationType value);
 
-template<>
-const char* EnumUtil::EnumToString<SetOperationType>(SetOperationType value);
+template <>
+const char *EnumUtil::EnumToString<OptimizerType>(OptimizerType value);
 
-template<>
-const char* EnumUtil::EnumToString<OptimizerType>(OptimizerType value);
+template <>
+const char *EnumUtil::EnumToString<CompressionType>(CompressionType value);
 
-template<>
-const char* EnumUtil::EnumToString<CompressionType>(CompressionType value);
+template <>
+const char *EnumUtil::EnumToString<AggregateHandling>(AggregateHandling value);
 
-template<>
-const char* EnumUtil::EnumToString<AggregateHandling>(AggregateHandling value);
+template <>
+const char *EnumUtil::EnumToString<TableReferenceType>(TableReferenceType value);
 
-template<>
-const char* EnumUtil::EnumToString<TableReferenceType>(TableReferenceType value);
+template <>
+const char *EnumUtil::EnumToString<RelationType>(RelationType value);
 
-template<>
-const char* EnumUtil::EnumToString<RelationType>(RelationType value);
+template <>
+const char *EnumUtil::EnumToString<FilterPropagateResult>(FilterPropagateResult value);
 
-template<>
-const char* EnumUtil::EnumToString<FilterPropagateResult>(FilterPropagateResult value);
+template <>
+const char *EnumUtil::EnumToString<IndexType>(IndexType value);
 
-template<>
-const char* EnumUtil::EnumToString<IndexType>(IndexType value);
+template <>
+const char *EnumUtil::EnumToString<ExplainOutputType>(ExplainOutputType value);
 
-template<>
-const char* EnumUtil::EnumToString<ExplainOutputType>(ExplainOutputType value);
+template <>
+const char *EnumUtil::EnumToString<NType>(NType value);
 
-template<>
-const char* EnumUtil::EnumToString<NType>(NType value);
+template <>
+const char *EnumUtil::EnumToString<VerifyExistenceType>(VerifyExistenceType value);
 
-template<>
-const char* EnumUtil::EnumToString<VerifyExistenceType>(VerifyExistenceType value);
+template <>
+const char *EnumUtil::EnumToString<ParserMode>(ParserMode value);
 
-template<>
-const char* EnumUtil::EnumToString<ParserMode>(ParserMode value);
+template <>
+const char *EnumUtil::EnumToString<ErrorType>(ErrorType value);
 
-template<>
-const char* EnumUtil::EnumToString<ErrorType>(ErrorType value);
+template <>
+const char *EnumUtil::EnumToString<AppenderType>(AppenderType value);
 
-template<>
-const char* EnumUtil::EnumToString<AppenderType>(AppenderType value);
+template <>
+const char *EnumUtil::EnumToString<CheckpointAbort>(CheckpointAbort value);
 
-template<>
-const char* EnumUtil::EnumToString<CheckpointAbort>(CheckpointAbort value);
+template <>
+const char *EnumUtil::EnumToString<ExtensionLoadResult>(ExtensionLoadResult value);
 
-template<>
-const char* EnumUtil::EnumToString<ExtensionLoadResult>(ExtensionLoadResult value);
+template <>
+const char *EnumUtil::EnumToString<QueryResultType>(QueryResultType value);
 
-template<>
-const char* EnumUtil::EnumToString<QueryResultType>(QueryResultType value);
+template <>
+const char *EnumUtil::EnumToString<CAPIResultSetType>(CAPIResultSetType value);
 
-template<>
-const char* EnumUtil::EnumToString<CAPIResultSetType>(CAPIResultSetType value);
-
-
-template<>
+template <>
 TaskExecutionMode EnumUtil::StringToEnum<TaskExecutionMode>(const char *value);
 
-template<>
+template <>
 TaskExecutionResult EnumUtil::StringToEnum<TaskExecutionResult>(const char *value);
 
-template<>
+template <>
 DistinctType EnumUtil::StringToEnum<DistinctType>(const char *value);
 
-template<>
+template <>
 TableFilterType EnumUtil::StringToEnum<TableFilterType>(const char *value);
 
-template<>
+template <>
 BindingMode EnumUtil::StringToEnum<BindingMode>(const char *value);
 
-template<>
+template <>
 TableColumnType EnumUtil::StringToEnum<TableColumnType>(const char *value);
 
-template<>
+template <>
 AggregateType EnumUtil::StringToEnum<AggregateType>(const char *value);
 
-template<>
+template <>
 AggregateOrderDependent EnumUtil::StringToEnum<AggregateOrderDependent>(const char *value);
 
-template<>
+template <>
 FunctionNullHandling EnumUtil::StringToEnum<FunctionNullHandling>(const char *value);
 
-template<>
+template <>
 FunctionSideEffects EnumUtil::StringToEnum<FunctionSideEffects>(const char *value);
 
-template<>
+template <>
 MacroType EnumUtil::StringToEnum<MacroType>(const char *value);
 
-template<>
+template <>
 ArrowVariableSizeType EnumUtil::StringToEnum<ArrowVariableSizeType>(const char *value);
 
-template<>
+template <>
 ArrowDateTimeType EnumUtil::StringToEnum<ArrowDateTimeType>(const char *value);
 
-template<>
+template <>
 StrTimeSpecifier EnumUtil::StringToEnum<StrTimeSpecifier>(const char *value);
 
-template<>
+template <>
 SimplifiedTokenType EnumUtil::StringToEnum<SimplifiedTokenType>(const char *value);
 
-template<>
+template <>
 KeywordCategory EnumUtil::StringToEnum<KeywordCategory>(const char *value);
 
-template<>
+template <>
 ResultModifierType EnumUtil::StringToEnum<ResultModifierType>(const char *value);
 
-template<>
+template <>
 ConstraintType EnumUtil::StringToEnum<ConstraintType>(const char *value);
 
-template<>
+template <>
 ForeignKeyType EnumUtil::StringToEnum<ForeignKeyType>(const char *value);
 
-template<>
+template <>
 ParserExtensionResultType EnumUtil::StringToEnum<ParserExtensionResultType>(const char *value);
 
-template<>
+template <>
 QueryNodeType EnumUtil::StringToEnum<QueryNodeType>(const char *value);
 
-template<>
+template <>
 SequenceInfo EnumUtil::StringToEnum<SequenceInfo>(const char *value);
 
-template<>
+template <>
 AlterScalarFunctionType EnumUtil::StringToEnum<AlterScalarFunctionType>(const char *value);
 
-template<>
+template <>
 AlterTableType EnumUtil::StringToEnum<AlterTableType>(const char *value);
 
-template<>
+template <>
 AlterViewType EnumUtil::StringToEnum<AlterViewType>(const char *value);
 
-template<>
+template <>
 AlterTableFunctionType EnumUtil::StringToEnum<AlterTableFunctionType>(const char *value);
 
-template<>
+template <>
 AlterType EnumUtil::StringToEnum<AlterType>(const char *value);
 
-template<>
+template <>
 PragmaType EnumUtil::StringToEnum<PragmaType>(const char *value);
 
-template<>
+template <>
 OnCreateConflict EnumUtil::StringToEnum<OnCreateConflict>(const char *value);
 
-template<>
+template <>
 TransactionType EnumUtil::StringToEnum<TransactionType>(const char *value);
 
-template<>
+template <>
 SampleMethod EnumUtil::StringToEnum<SampleMethod>(const char *value);
 
-template<>
+template <>
 ExplainType EnumUtil::StringToEnum<ExplainType>(const char *value);
 
-template<>
+template <>
 OnConflictAction EnumUtil::StringToEnum<OnConflictAction>(const char *value);
 
-template<>
+template <>
 WindowBoundary EnumUtil::StringToEnum<WindowBoundary>(const char *value);
 
-template<>
+template <>
 DataFileType EnumUtil::StringToEnum<DataFileType>(const char *value);
 
-template<>
+template <>
 StatsInfo EnumUtil::StringToEnum<StatsInfo>(const char *value);
 
-template<>
+template <>
 StatisticsType EnumUtil::StringToEnum<StatisticsType>(const char *value);
 
-template<>
+template <>
 ColumnSegmentType EnumUtil::StringToEnum<ColumnSegmentType>(const char *value);
 
-template<>
+template <>
 ChunkInfoType EnumUtil::StringToEnum<ChunkInfoType>(const char *value);
 
-template<>
+template <>
 BitpackingMode EnumUtil::StringToEnum<BitpackingMode>(const char *value);
 
-template<>
+template <>
 BlockState EnumUtil::StringToEnum<BlockState>(const char *value);
 
-template<>
+template <>
 VerificationType EnumUtil::StringToEnum<VerificationType>(const char *value);
 
-template<>
+template <>
 FileLockType EnumUtil::StringToEnum<FileLockType>(const char *value);
 
-template<>
+template <>
 FileBufferType EnumUtil::StringToEnum<FileBufferType>(const char *value);
 
-template<>
+template <>
 ExceptionFormatValueType EnumUtil::StringToEnum<ExceptionFormatValueType>(const char *value);
 
-template<>
+template <>
 ExtraTypeInfoType EnumUtil::StringToEnum<ExtraTypeInfoType>(const char *value);
 
-template<>
+template <>
 PhysicalType EnumUtil::StringToEnum<PhysicalType>(const char *value);
 
-template<>
+template <>
 LogicalTypeId EnumUtil::StringToEnum<LogicalTypeId>(const char *value);
 
-template<>
+template <>
 OutputStream EnumUtil::StringToEnum<OutputStream>(const char *value);
 
-template<>
+template <>
 TimestampCastResult EnumUtil::StringToEnum<TimestampCastResult>(const char *value);
 
-template<>
+template <>
 ConflictManagerMode EnumUtil::StringToEnum<ConflictManagerMode>(const char *value);
 
-template<>
+template <>
 LookupResultType EnumUtil::StringToEnum<LookupResultType>(const char *value);
 
-template<>
+template <>
 MapInvalidReason EnumUtil::StringToEnum<MapInvalidReason>(const char *value);
 
-template<>
+template <>
 UnionInvalidReason EnumUtil::StringToEnum<UnionInvalidReason>(const char *value);
 
-template<>
+template <>
 VectorBufferType EnumUtil::StringToEnum<VectorBufferType>(const char *value);
 
-template<>
+template <>
 VectorAuxiliaryDataType EnumUtil::StringToEnum<VectorAuxiliaryDataType>(const char *value);
 
-template<>
+template <>
 PartitionedColumnDataType EnumUtil::StringToEnum<PartitionedColumnDataType>(const char *value);
 
-template<>
+template <>
 ColumnDataAllocatorType EnumUtil::StringToEnum<ColumnDataAllocatorType>(const char *value);
 
-template<>
+template <>
 ColumnDataScanProperties EnumUtil::StringToEnum<ColumnDataScanProperties>(const char *value);
 
-template<>
+template <>
 PartitionedTupleDataType EnumUtil::StringToEnum<PartitionedTupleDataType>(const char *value);
 
-template<>
+template <>
 TupleDataPinProperties EnumUtil::StringToEnum<TupleDataPinProperties>(const char *value);
 
-template<>
+template <>
 PartitionSortStage EnumUtil::StringToEnum<PartitionSortStage>(const char *value);
 
-template<>
+template <>
 PhysicalOperatorType EnumUtil::StringToEnum<PhysicalOperatorType>(const char *value);
 
-template<>
+template <>
 VectorType EnumUtil::StringToEnum<VectorType>(const char *value);
 
-template<>
+template <>
 AccessMode EnumUtil::StringToEnum<AccessMode>(const char *value);
 
-template<>
+template <>
 FileGlobOptions EnumUtil::StringToEnum<FileGlobOptions>(const char *value);
 
-template<>
+template <>
 WALType EnumUtil::StringToEnum<WALType>(const char *value);
 
-template<>
+template <>
 JoinType EnumUtil::StringToEnum<JoinType>(const char *value);
 
-template<>
+template <>
 FileCompressionType EnumUtil::StringToEnum<FileCompressionType>(const char *value);
 
-template<>
+template <>
 ProfilerPrintFormat EnumUtil::StringToEnum<ProfilerPrintFormat>(const char *value);
 
-template<>
+template <>
 StatementType EnumUtil::StringToEnum<StatementType>(const char *value);
 
-template<>
+template <>
 StatementReturnType EnumUtil::StringToEnum<StatementReturnType>(const char *value);
 
-template<>
+template <>
 OrderPreservationType EnumUtil::StringToEnum<OrderPreservationType>(const char *value);
 
-template<>
+template <>
 DebugInitialize EnumUtil::StringToEnum<DebugInitialize>(const char *value);
 
-template<>
+template <>
 CatalogType EnumUtil::StringToEnum<CatalogType>(const char *value);
 
-template<>
+template <>
 SetScope EnumUtil::StringToEnum<SetScope>(const char *value);
 
-template<>
+template <>
 TableScanType EnumUtil::StringToEnum<TableScanType>(const char *value);
 
-template<>
+template <>
 SetType EnumUtil::StringToEnum<SetType>(const char *value);
 
-template<>
+template <>
 ExpressionType EnumUtil::StringToEnum<ExpressionType>(const char *value);
 
-template<>
+template <>
 ExpressionClass EnumUtil::StringToEnum<ExpressionClass>(const char *value);
 
-template<>
+template <>
 PendingExecutionResult EnumUtil::StringToEnum<PendingExecutionResult>(const char *value);
 
-template<>
+template <>
 WindowAggregationMode EnumUtil::StringToEnum<WindowAggregationMode>(const char *value);
 
-template<>
+template <>
 SubqueryType EnumUtil::StringToEnum<SubqueryType>(const char *value);
 
-template<>
+template <>
 OrderType EnumUtil::StringToEnum<OrderType>(const char *value);
 
-template<>
+template <>
 OrderByNullType EnumUtil::StringToEnum<OrderByNullType>(const char *value);
 
-template<>
+template <>
 DefaultOrderByNullType EnumUtil::StringToEnum<DefaultOrderByNullType>(const char *value);
 
-template<>
+template <>
 DatePartSpecifier EnumUtil::StringToEnum<DatePartSpecifier>(const char *value);
 
-template<>
+template <>
 OnEntryNotFound EnumUtil::StringToEnum<OnEntryNotFound>(const char *value);
 
-template<>
+template <>
 LogicalOperatorType EnumUtil::StringToEnum<LogicalOperatorType>(const char *value);
 
-template<>
+template <>
 OperatorResultType EnumUtil::StringToEnum<OperatorResultType>(const char *value);
 
-template<>
+template <>
 OperatorFinalizeResultType EnumUtil::StringToEnum<OperatorFinalizeResultType>(const char *value);
 
-template<>
+template <>
 SinkResultType EnumUtil::StringToEnum<SinkResultType>(const char *value);
 
-template<>
+template <>
 SinkFinalizeType EnumUtil::StringToEnum<SinkFinalizeType>(const char *value);
 
-template<>
+template <>
 JoinRefType EnumUtil::StringToEnum<JoinRefType>(const char *value);
 
-template<>
+template <>
 UndoFlags EnumUtil::StringToEnum<UndoFlags>(const char *value);
 
-template<>
+template <>
 SetOperationType EnumUtil::StringToEnum<SetOperationType>(const char *value);
 
-template<>
+template <>
 OptimizerType EnumUtil::StringToEnum<OptimizerType>(const char *value);
 
-template<>
+template <>
 CompressionType EnumUtil::StringToEnum<CompressionType>(const char *value);
 
-template<>
+template <>
 AggregateHandling EnumUtil::StringToEnum<AggregateHandling>(const char *value);
 
-template<>
+template <>
 TableReferenceType EnumUtil::StringToEnum<TableReferenceType>(const char *value);
 
-template<>
+template <>
 RelationType EnumUtil::StringToEnum<RelationType>(const char *value);
 
-template<>
+template <>
 FilterPropagateResult EnumUtil::StringToEnum<FilterPropagateResult>(const char *value);
 
-template<>
+template <>
 IndexType EnumUtil::StringToEnum<IndexType>(const char *value);
 
-template<>
+template <>
 ExplainOutputType EnumUtil::StringToEnum<ExplainOutputType>(const char *value);
 
-template<>
+template <>
 NType EnumUtil::StringToEnum<NType>(const char *value);
 
-template<>
+template <>
 VerifyExistenceType EnumUtil::StringToEnum<VerifyExistenceType>(const char *value);
 
-template<>
+template <>
 ParserMode EnumUtil::StringToEnum<ParserMode>(const char *value);
 
-template<>
+template <>
 ErrorType EnumUtil::StringToEnum<ErrorType>(const char *value);
 
-template<>
+template <>
 AppenderType EnumUtil::StringToEnum<AppenderType>(const char *value);
 
-template<>
+template <>
 CheckpointAbort EnumUtil::StringToEnum<CheckpointAbort>(const char *value);
 
-template<>
+template <>
 ExtensionLoadResult EnumUtil::StringToEnum<ExtensionLoadResult>(const char *value);
 
-template<>
+template <>
 QueryResultType EnumUtil::StringToEnum<QueryResultType>(const char *value);
 
-template<>
+template <>
 CAPIResultSetType EnumUtil::StringToEnum<CAPIResultSetType>(const char *value);
 
-
-}
+} // namespace duckdb

@@ -5,14 +5,15 @@ namespace duckdb {
 
 class BinaryDeserializer : public FormatDeserializer {
 public:
-	template<class T>
+	template <class T>
 	static unique_ptr<T> Deserialize(data_ptr_t ptr, idx_t length) {
 		BinaryDeserializer deserializer(ptr, length);
 		deserializer.OnObjectBegin();
 		auto result = T::FormatDeserialize(deserializer);
 		deserializer.OnObjectEnd();
 		return std::move(result);
-	} 
+	}
+
 private:
 	explicit BinaryDeserializer(data_ptr_t ptr, idx_t length) : ptr(ptr), end_ptr(ptr + length) {
 		deserialize_enum_from_string = false;
@@ -31,7 +32,6 @@ private:
 	data_ptr_t end_ptr;
 	vector<State> stack;
 
-
 	template <class T>
 	T ReadPrimitive() {
 		T value;
@@ -45,8 +45,7 @@ private:
 		}
 		memcpy(buffer, ptr, read_size);
 		ptr += read_size;
-	}	
-
+	}
 
 	// Set the 'tag' of the property to read
 	void SetTag(const char *tag) final;
@@ -92,4 +91,3 @@ private:
 };
 
 } // namespace duckdb
-
