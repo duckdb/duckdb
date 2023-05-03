@@ -192,7 +192,7 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 void MultiFileReader::CreateNameMapping(const string &file_name, const vector<LogicalType> &local_types,
                                         const vector<string> &local_names, const vector<LogicalType> &global_types,
                                         const vector<string> &global_names, const vector<column_t> &global_column_ids,
-                                        MultiFileReaderData &reader_data) {
+                                        MultiFileReaderData &reader_data, const string &initial_file) {
 	D_ASSERT(global_types.size() == global_names.size());
 	D_ASSERT(local_types.size() == local_names.size());
 	// we have expected types: create a map of name -> column index
@@ -229,11 +229,12 @@ void MultiFileReader::CreateNameMapping(const string &file_name, const vector<Lo
 				}
 				candidate_names += local_name;
 			}
-			throw IOException(StringUtil::Format(
-			    "Failed to read file \"%s\": schema mismatch in glob: column \"%s\" was read from "
-			    "the original file, but could not be found in file \"%s\".\nCandidate names: %s\nIf you are trying to "
-			    "read files with different schemas, try setting union_by_name=True",
-			    file_name, global_name, file_name, candidate_names));
+			throw IOException(
+			    StringUtil::Format("Failed to read file \"%s\": schema mismatch in glob: column \"%s\" was read from "
+			                       "the original file \"%s\", but could not be found in file \"%s\".\nCandidate names: "
+			                       "%s\nIf you are trying to "
+			                       "read files with different schemas, try setting union_by_name=True",
+			                       file_name, global_name, initial_file, file_name, candidate_names));
 		}
 		// we found the column in the local file - check if the types are the same
 		auto local_id = entry->second;
@@ -254,8 +255,10 @@ void MultiFileReader::CreateNameMapping(const string &file_name, const vector<Lo
 void MultiFileReader::CreateMapping(const string &file_name, const vector<LogicalType> &local_types,
                                     const vector<string> &local_names, const vector<LogicalType> &global_types,
                                     const vector<string> &global_names, const vector<column_t> &global_column_ids,
-                                    optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data) {
-	CreateNameMapping(file_name, local_types, local_names, global_types, global_names, global_column_ids, reader_data);
+                                    optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data,
+                                    const string &initial_file) {
+	CreateNameMapping(file_name, local_types, local_names, global_types, global_names, global_column_ids, reader_data,
+	                  initial_file);
 	if (filters) {
 		reader_data.filter_map.resize(global_types.size());
 		for (idx_t c = 0; c < reader_data.column_mapping.size(); c++) {

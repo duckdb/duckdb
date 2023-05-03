@@ -10,7 +10,7 @@
 
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
-#include "duckdb/function/scalar/strftime.hpp"
+#include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/map.hpp"

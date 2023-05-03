@@ -3,13 +3,12 @@
 
 #include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 #include "duckdb/catalog/default/default_functions.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/parser/parsed_data/create_type_info.hpp"
-#include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/function/copy_function.hpp"
 #include "json_common.hpp"
 #include "json_functions.hpp"
 
@@ -23,34 +22,27 @@ static DefaultMacro json_macros[] = {
     {nullptr, nullptr, {nullptr}, nullptr}};
 
 void JSONExtension::Load(DuckDB &db) {
-	Connection con(db);
-	con.BeginTransaction();
-	auto &context = *con.context;
-	auto &catalog = Catalog::GetSystemCatalog(context);
-
+	auto &db_instance = *db.instance;
 	// JSON type
 	auto json_type = JSONCommon::JSONType();
-	CreateTypeInfo type_info(JSONCommon::JSON_TYPE_NAME, json_type);
-	type_info.temporary = true;
-	type_info.internal = true;
-	catalog.CreateType(context, type_info);
+	ExtensionUtil::RegisterType(db_instance, JSONCommon::JSON_TYPE_NAME, std::move(json_type));
 
 	// JSON casts
-	JSONFunctions::RegisterCastFunctions(DBConfig::GetConfig(context).GetCastFunctions());
+	JSONFunctions::RegisterCastFunctions(DBConfig::GetConfig(db_instance).GetCastFunctions());
 
 	// JSON scalar functions
 	for (auto &fun : JSONFunctions::GetScalarFunctions()) {
-		catalog.CreateFunction(context, fun);
+		ExtensionUtil::RegisterFunction(db_instance, fun);
 	}
 
 	// JSON table functions
 	for (auto &fun : JSONFunctions::GetTableFunctions()) {
-		catalog.CreateTableFunction(context, fun);
+		ExtensionUtil::RegisterFunction(db_instance, fun);
 	}
 
 	// JSON pragma functions
 	for (auto &fun : JSONFunctions::GetPragmaFunctions()) {
-		catalog.CreatePragmaFunction(context, fun);
+		ExtensionUtil::RegisterFunction(db_instance, fun);
 	}
 
 	// JSON replacement scan
@@ -59,15 +51,13 @@ void JSONExtension::Load(DuckDB &db) {
 
 	// JSON copy function
 	auto copy_fun = JSONFunctions::GetJSONCopyFunction();
-	catalog.CreateCopyFunction(context, copy_fun);
+	ExtensionUtil::RegisterFunction(db_instance, std::move(copy_fun));
 
 	// JSON macro's
 	for (idx_t index = 0; json_macros[index].name != nullptr; index++) {
 		auto info = DefaultFunctionGenerator::CreateInternalMacroInfo(json_macros[index]);
-		catalog.CreateFunction(context, *info);
+		ExtensionUtil::RegisterFunction(db_instance, *info);
 	}
-
-	con.Commit();
 }
 
 std::string JSONExtension::Name() {

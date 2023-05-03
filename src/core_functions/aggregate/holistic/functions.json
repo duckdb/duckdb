@@ -1,0 +1,52 @@
+[
+    {
+        "name": "approx_quantile",
+        "parameters": "x,pos",
+        "description": "Computes the approximate quantile using T-Digest.",
+        "example": "approx_quantile(A,0.5)",
+        "type": "aggregate_function_set"
+    },
+    {
+        "name": "mad",
+        "parameters": "x",
+        "description": "Returns the median absolute deviation for the values within x. NULL values are ignored. Temporal types return a positive INTERVAL.\t",
+        "example": "MEDIAN(ABS(x-MEDIAN(x)))",
+        "type": "aggregate_function_set"
+    },
+    {
+        "name": "median",
+        "parameters": "x",
+        "description": "Returns the middle value of the set. NULL values are ignored. For even value counts, quantitiative values are averaged and ordinal values return the lower value.",
+        "example": "QUANTILE_CONT(x, 0.5)",
+        "type": "aggregate_function_set"
+    },
+    {
+        "name": "mode",
+        "parameters": "x",
+        "description": "Returns the most frequent value for the values within x. NULL values are ignored.",
+        "example": "",
+        "type": "aggregate_function_set"
+    },
+    {
+        "name": "quantile_disc",
+        "parameters": "x,pos",
+        "description": "Returns the exact quantile number between 0 and 1 . If pos is a LIST of FLOATs, then the result is a LIST of the corresponding exact quantiles.",
+        "example": "",
+        "type": "aggregate_function_set",
+        "aliases": ["quantile"]
+    },
+    {
+        "name": "quantile_cont",
+        "parameters": "x,pos",
+        "description": "Returns the intepolated quantile number between 0 and 1 . If pos is a LIST of FLOATs, then the result is a LIST of the corresponding intepolated quantiles.\t",
+        "example": "",
+        "type": "aggregate_function_set"
+    },
+    {
+        "name": "reservoir_quantile",
+        "parameters": "x,quantile,sample_size",
+        "description": "Gives the approximate quantile using reservoir sampling, the sample size is optional and uses 8192 as a default size.",
+        "example": "reservoir_quantile(A,0.5,1024)",
+        "type": "aggregate_function_set"
+    }
+]

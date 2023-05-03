@@ -2793,7 +2793,6 @@ public class TestDuckDBJDBC {
 			assertNull(functions.getObject("FUNCTION_CAT"));
 			assertEquals(DuckDBConnection.DEFAULT_SCHEMA, functions.getString("FUNCTION_SCHEM"));
 			assertEquals("string_split", functions.getString("FUNCTION_NAME"));
-			assertNull(functions.getString("REMARKS"));
 			assertEquals(DatabaseMetaData.functionNoTable, functions.getInt("FUNCTION_TYPE"));
 
 			assertFalse(functions.next());
@@ -2804,14 +2803,12 @@ public class TestDuckDBJDBC {
 			assertNull(functions.getObject("FUNCTION_CAT"));
 			assertEquals(DuckDBConnection.DEFAULT_SCHEMA, functions.getString("FUNCTION_SCHEM"));
 			assertEquals("read_csv_auto", functions.getString("FUNCTION_NAME"));
-			assertNull(functions.getString("REMARKS"));
 			assertEquals(DatabaseMetaData.functionReturnsTable, functions.getInt("FUNCTION_TYPE"));
 
 			assertTrue(functions.next());
 			assertNull(functions.getObject("FUNCTION_CAT"));
 			assertEquals(DuckDBConnection.DEFAULT_SCHEMA, functions.getString("FUNCTION_SCHEM"));
 			assertEquals("read_csv_auto", functions.getString("FUNCTION_NAME"));
-			assertNull(functions.getString("REMARKS"));
 			assertEquals(DatabaseMetaData.functionReturnsTable, functions.getInt("FUNCTION_TYPE"));
 
 			assertFalse(functions.next());

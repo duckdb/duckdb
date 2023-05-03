@@ -139,7 +139,7 @@ static void GetContainsFunctionInternal(ScalarFunctionSet &set, const LogicalTyp
 	                               JSONFunctionLocalState::Init));
 }
 
-CreateScalarFunctionInfo JSONFunctions::GetContainsFunction() {
+ScalarFunctionSet JSONFunctions::GetContainsFunction() {
 	ScalarFunctionSet set("json_contains");
 	GetContainsFunctionInternal(set, LogicalType::VARCHAR, LogicalType::VARCHAR);
 	GetContainsFunctionInternal(set, LogicalType::VARCHAR, JSONCommon::JSONType());
@@ -147,7 +147,7 @@ CreateScalarFunctionInfo JSONFunctions::GetContainsFunction() {
 	GetContainsFunctionInternal(set, JSONCommon::JSONType(), JSONCommon::JSONType());
 	// TODO: implement json_contains that accepts path argument as well
 
-	return CreateScalarFunctionInfo(std::move(set));
+	return set;
 }
 
 } // namespace duckdb
