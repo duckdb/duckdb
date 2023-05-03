@@ -101,9 +101,6 @@ a	b	c	d
 
 
 
-
-
-
 # same tests with parquet
 require parquet
 
