@@ -204,7 +204,11 @@ struct ICUDatePart : public ICUDateFunc {
 	}
 
 	static string_t MonthName(icu::Calendar *calendar, const uint64_t micros) {
-		return Date::MONTH_NAMES[ExtractMonth(calendar, micros) - 1];
+		const auto mm = ExtractMonth(calendar, micros) - 1;
+		if (mm == 12) {
+			return "Undecember";
+		}
+		return Date::MONTH_NAMES[mm];
 	}
 
 	static string_t DayName(icu::Calendar *calendar, const uint64_t micros) {

@@ -734,3 +734,32 @@ SELECT DATE_PART(['timezone', 'timezone_hour', 'timezone_minute'], '2021-12-22':
 ----
 {'timezone': -12600, 'timezone_hour': -3, 'timezone_minute': -30}
 
+
+#
+# 13 month Calendars
+#
+
+# Year 5872 was a leap year
+statement ok
+SET Calendar = 'hebrew';
+
+query III
+SELECT year(ts), month(ts), monthname(ts)
+FROM range('2021-09-01'::TIMESTAMPTZ, '2022-09-30'::TIMESTAMPTZ, INTERVAL 1 DAY) tbl(ts)
+GROUP BY ALL
+ORDER BY ALL;
+----
+2021	9	September
+2021	10	October
+2021	11	November
+2021	12	December
+2021	13	Undecember
+2022	1	January
+2022	2	February
+2022	3	March
+2022	4	April
+2022	5	May
+2022	6	June
+2022	7	July
+2022	8	August
+2022	9	September
