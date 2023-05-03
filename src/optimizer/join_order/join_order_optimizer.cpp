@@ -799,8 +799,9 @@ GenerateJoinRelation JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<Logical
 		// FILTER on top of GET, add estimated properties to both
 		auto &filter_props = *result_operator->estimated_props;
 		auto &child_operator = *result_operator->children[0];
-		child_operator.estimated_props = make_uniq<EstimatedProperties>(
-		    filter_props.GetCardinality<double>() / CardinalityEstimator::DEFAULT_SELECTIVITY, filter_props.GetCost());
+		child_operator.estimated_props = make_uniq<EstimatedProperties>(filter_props.GetCardinality<double>() /
+		                                                                    CardinalityEstimator::DEFAULT_SELECTIVITY,
+		                                                                filter_props.GetCost<double>());
 		child_operator.estimated_cardinality = child_operator.estimated_props->GetCardinality<idx_t>();
 		child_operator.has_estimated_cardinality = true;
 	}

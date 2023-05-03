@@ -79,7 +79,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	case LogicalOperatorType::LOGICAL_TRANSACTION:
 	case LogicalOperatorType::LOGICAL_SET:
 	case LogicalOperatorType::LOGICAL_PRAGMA:
-		return std::move(plan_p);
+		return plan_p;
 	default:
 		break;
 	}
