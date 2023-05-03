@@ -171,7 +171,7 @@ bool DistinctAggregateCollectionInfo::AnyDistinct() const {
 	return !indices.empty();
 }
 
-const vector<idx_t> &DistinctAggregateCollectionInfo::Indices() const {
+const vector<idx_t, false> &DistinctAggregateCollectionInfo::Indices() const {
 	return this->indices;
 }
 

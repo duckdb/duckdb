@@ -16,7 +16,7 @@
 
 namespace duckdb {
 
-template <class _Tp>
+template <class _Tp, bool SAFE = true>
 class vector : public std::vector<_Tp, std::allocator<_Tp>> {
 public:
 	using original = std::vector<_Tp, std::allocator<_Tp>>;
@@ -49,50 +49,53 @@ public:
 	vector() = default;
 	vector(original &&other) : original(std::move(other)) {
 	}
+	template <bool _SAFE>
+	vector(vector<_Tp, _SAFE> &&other) : original(std::move(other)) {
+	}
 
-	template <bool UNSAFE = true>
+	template <bool _SAFE = false>
 	inline typename original::reference get(typename original::size_type __n) {
-		if (!UNSAFE) {
+		if (_SAFE) {
 			AssertIndexInBounds(__n, original::size());
 		}
 		return original::operator[](__n);
 	}
 
-	template <bool UNSAFE = true>
+	template <bool _SAFE = false>
 	inline typename original::const_reference get(typename original::size_type __n) const {
-		if (!UNSAFE) {
+		if (_SAFE) {
 			AssertIndexInBounds(__n, original::size());
 		}
 		return original::operator[](__n);
 	}
 
 	typename original::reference operator[](typename original::size_type __n) {
-		return get<false>(__n);
+		return get<SAFE>(__n);
 	}
 	typename original::const_reference operator[](typename original::size_type __n) const {
-		return get<false>(__n);
+		return get<SAFE>(__n);
 	}
 
 	typename original::reference front() {
-		return get<false>(0);
+		return get<SAFE>(0);
 	}
 
 	typename original::const_reference front() const {
-		return get<false>(0);
+		return get<SAFE>(0);
 	}
 
 	typename original::reference back() {
 		if (original::empty()) {
 			throw InternalException("'back' called on an empty vector!");
 		}
-		return get<false>(original::size() - 1);
+		return get<SAFE>(original::size() - 1);
 	}
 
 	typename original::const_reference back() const {
 		if (original::empty()) {
 			throw InternalException("'back' called on an empty vector!");
 		}
-		return get<false>(original::size() - 1);
+		return get<SAFE>(original::size() - 1);
 	}
 };
 
