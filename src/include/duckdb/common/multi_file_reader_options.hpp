@@ -45,7 +45,7 @@ struct MultiFileReaderOptions {
 				}
 			}
 		}
-		return true;
+		return !partitions.empty();
 	}
 
 	static bool AutoDetectHivePartitioningSplit(const vector<string> &files) {
