@@ -77,6 +77,14 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &i
 	bind_data->Finalize();
 	bind_data->is_simple = bind_data->options.delimiter.size() == 1 && bind_data->options.escape.size() == 1 &&
 	                       bind_data->options.quote.size() == 1;
+	if (bind_data->is_simple) {
+		bind_data->requires_quotes = unique_ptr<bool[]>(new bool[256]);
+		memset(bind_data->requires_quotes.get(), 0, sizeof(bool) * 256);
+		bind_data->requires_quotes['\n'] = true;
+		bind_data->requires_quotes['\r'] = true;
+		bind_data->requires_quotes[bind_data->options.delimiter[0]] = true;
+		bind_data->requires_quotes[bind_data->options.quote[0]] = true;
+	}
 	return std::move(bind_data);
 }
 
@@ -144,8 +152,8 @@ static bool RequiresQuotes(WriteCSVData &csv_data, const char *str, idx_t len) {
 	if (csv_data.is_simple) {
 		// simple CSV: check for newlines, quotes and delimiter all at once
 		for (idx_t i = 0; i < len; i++) {
-			if (str[i] == '\n' || str[i] == '\r' || str[i] == options.quote[0] || str[i] == options.delimiter[0]) {
-				// newline, write a quoted string
+			if (csv_data.requires_quotes[str[i]]) {
+				// this byte requires quotes - write a quoted string
 				return true;
 			}
 		}
