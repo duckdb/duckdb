@@ -27,39 +27,16 @@ struct MultiFileReaderOptions {
 	DUCKDB_API static MultiFileReaderOptions Deserialize(Deserializer &source);
 	DUCKDB_API void AddBatchInfo(BindInfo &bind_info) const;
 
-	static bool AutoDetectHivePartitioningRegex(const vector<string> &files) {
-
+	static bool AutoDetectHivePartitioning(const vector<string> &files) {
 		if (files.empty()) {
 			return false;
 		}
-		duckdb_re2::RE2 regex(HivePartitioning::REGEX_STRING);
-		const auto partitions = HivePartitioning::Parse(files.front(), regex);
-		for (auto &f : files) {
-			auto scheme = HivePartitioning::Parse(f, regex);
-			if (scheme.size() != partitions.size()) {
-				return false;
-			}
-			for (auto &i : scheme) {
-				if (partitions.find(i.first) == partitions.end()) {
-					return false;
-				}
-			}
-		}
-		return !partitions.empty();
-	}
-
-	static bool AutoDetectHivePartitioningSplit(const vector<string> &files) {
-		if (files.empty()) {
-			return false;
-		}
-
-		const string delim = FileSystem::PathSeparator();
 
 		std::unordered_set<string> uset;
 		idx_t splits_size;
 		{
 			//	front file
-			auto splits = StringUtil::Split(files.front(), delim);
+			auto splits = StringUtil::Split(files.front(), FileSystem::PathSeparator());
 			splits_size = splits.size();
 			if (splits.size() < 2) {
 				return false;
@@ -75,7 +52,7 @@ struct MultiFileReaderOptions {
 			return false;
 		}
 		for (auto &file : files) {
-			auto splits = StringUtil::Split(file, delim);
+			auto splits = StringUtil::Split(file, FileSystem::PathSeparator());
 			if (splits.size() != splits_size) {
 				return false;
 			}
@@ -89,16 +66,6 @@ struct MultiFileReaderOptions {
 			}
 		}
 		return true;
-	}
-
-	static bool AutoDetectHivePartitioning(const vector<string> &files) {
-		return AutoDetectHivePartitioningSplit(files);
-
-		// #ifdef __linux__
-		// 		return AutoDetectHivePartitioningSplit(files);
-		// #else
-		// 		return AutoDetectHivePartitioningRegex(files);
-		// #endif
 	}
 };
 
