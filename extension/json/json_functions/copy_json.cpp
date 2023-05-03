@@ -101,7 +101,7 @@ static duckdb::unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context,
 	bind_data->InitializeFormats();
 
 	bind_data->transform_options = JSONTransformOptions(true, true, true, true);
-	bind_data->transform_options.from_file = true;
+	bind_data->transform_options.delay_error = true;
 
 	return std::move(bind_data);
 }

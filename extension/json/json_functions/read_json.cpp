@@ -223,7 +223,7 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 	transform_options.error_duplicate_key = !bind_data.ignore_errors;
 	transform_options.error_missing_key = false;
 	transform_options.error_unknown_key = bind_data.auto_detect && !bind_data.ignore_errors;
-	transform_options.from_file = true;
+	transform_options.delay_error = true;
 
 	return result;
 }

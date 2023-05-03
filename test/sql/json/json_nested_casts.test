@@ -127,7 +127,46 @@ SELECT '{"duck":42}'::JSON::MAP(VARCHAR, INTEGER)
 ----
 {duck=42}
 
-# also implicitly
+# casting should be strict
+statement error
+SELECT '{"duck":42}'::JSON::STRUCT(goose INTEGER)
+----
+Conversion Error
+
+statement error
+SELECT '["a", "b", "c"]'::JSON::INT[]
+----
+Conversion Error
+
+statement error
+SELECT '{"duck":42}'::JSON::MAP(INTEGER, INTEGER)
+----
+Conversion Error
+
+# however, when we encounter a conversion error in a nested type with TRY, only that becomes NULL
+query I
+SELECT TRY_CAST('{"duck":42}'::JSON AS STRUCT(goose INTEGER))
+----
+{'goose': NULL}
+
+query I
+SELECT TRY_CAST('["a", "b", "c"]'::JSON AS INT[])
+----
+[NULL, NULL, NULL]
+
+# map keys cannot be NULL
+statement error
+SELECT TRY_CAST('{"duck":42}'::JSON AS MAP(INTEGER, INTEGER))
+----
+Conversion Error
+
+# but values can
+query I
+SELECT TRY_CAST('{"42":"duck"}'::JSON AS MAP(INTEGER, INTEGER))
+----
+{42=NULL}
+
+# we can also cast implicitly to our types
 statement ok
 CREATE TABLE structs (v STRUCT(duck INTEGER))
 
@@ -161,6 +200,7 @@ SELECT * FROM maps
 ----
 {duck=42}
 
+# and back to JSON
 statement ok
 CREATE TABLE jsons (j JSON)
 
@@ -173,7 +213,6 @@ INSERT INTO jsons SELECT * FROM lists
 statement ok
 INSERT INTO jsons SELECT * FROM maps
 
-# and back
 query I
 SELECT * FROM jsons
 ----
