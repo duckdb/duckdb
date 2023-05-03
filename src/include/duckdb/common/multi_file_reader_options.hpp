@@ -54,7 +54,7 @@ struct MultiFileReaderOptions {
 		}
 
 		const string delim = FileSystem::PathSeparator();
-		
+
 		std::unordered_set<string> uset;
 		idx_t splits_size;
 		{
@@ -94,11 +94,11 @@ struct MultiFileReaderOptions {
 	static bool AutoDetectHivePartitioning(const vector<string> &files) {
 		return AutoDetectHivePartitioningSplit(files);
 
-// #ifdef __linux__
-// 		return AutoDetectHivePartitioningSplit(files);
-// #else
-// 		return AutoDetectHivePartitioningRegex(files);
-// #endif
+		// #ifdef __linux__
+		// 		return AutoDetectHivePartitioningSplit(files);
+		// #else
+		// 		return AutoDetectHivePartitioningRegex(files);
+		// #endif
 	}
 };
 
