@@ -15,7 +15,8 @@
 namespace duckdb {
 
 LocalTableStorage::LocalTableStorage(DataTable &table)
-    : table_ref(table), allocator(Allocator::Get(table.db)), deleted_rows(0), optimistic_writer(table) {
+    : table_ref(table), allocator(Allocator::Get(table.db)), deleted_rows(0), optimistic_writer(table),
+      merged_storage(false) {
 	auto types = table.GetTypes();
 	row_groups = make_shared<RowGroupCollection>(table.info, TableIOManager::Get(table).GetBlockManagerForRowData(),
 	                                             types, MAX_ROW_ID, 0);
@@ -42,7 +43,8 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, 
                                      idx_t changed_idx, const LogicalType &target_type,
                                      const vector<column_t> &bound_columns, Expression &cast_expr)
     : table_ref(new_dt), allocator(Allocator::Get(new_dt.db)), deleted_rows(parent.deleted_rows),
-      optimistic_writer(new_dt, parent.optimistic_writer), optimistic_writers(std::move(parent.optimistic_writers)) {
+      optimistic_writer(new_dt, parent.optimistic_writer), optimistic_writers(std::move(parent.optimistic_writers)),
+      merged_storage(parent.merged_storage) {
 	row_groups = parent.row_groups->AlterType(context, changed_idx, target_type, bound_columns, cast_expr);
 	parent.row_groups.reset();
 	indexes.Move(parent.indexes);
@@ -50,7 +52,8 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, 
 
 LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &parent, idx_t drop_idx)
     : table_ref(new_dt), allocator(Allocator::Get(new_dt.db)), deleted_rows(parent.deleted_rows),
-      optimistic_writer(new_dt, parent.optimistic_writer), optimistic_writers(std::move(parent.optimistic_writers)) {
+      optimistic_writer(new_dt, parent.optimistic_writer), optimistic_writers(std::move(parent.optimistic_writers)),
+      merged_storage(parent.merged_storage) {
 	row_groups = parent.row_groups->RemoveColumn(drop_idx);
 	parent.row_groups.reset();
 	indexes.Move(parent.indexes);
@@ -59,7 +62,8 @@ LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &paren
 LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, LocalTableStorage &parent,
                                      ColumnDefinition &new_column, optional_ptr<Expression> default_value)
     : table_ref(new_dt), allocator(Allocator::Get(new_dt.db)), deleted_rows(parent.deleted_rows),
-      optimistic_writer(new_dt, parent.optimistic_writer), optimistic_writers(std::move(parent.optimistic_writers)) {
+      optimistic_writer(new_dt, parent.optimistic_writer), optimistic_writers(std::move(parent.optimistic_writers)),
+      merged_storage(parent.merged_storage) {
 	row_groups = parent.row_groups->AddColumn(context, new_column, default_value.get());
 	parent.row_groups.reset();
 	indexes.Move(parent.indexes);
@@ -97,7 +101,10 @@ void LocalTableStorage::WriteNewRowGroup() {
 	optimistic_writer.WriteNewRowGroup(*row_groups);
 }
 
-void LocalTableStorage::ClearBlocks() {
+void LocalTableStorage::FlushBlocks() {
+	if (!merged_storage && row_groups->GetTotalRows() > RowGroup::ROW_GROUP_SIZE) {
+		optimistic_writer.WriteLastRowGroup(*row_groups);
+	}
 	optimistic_writer.FinalFlush();
 }
 
@@ -365,6 +372,7 @@ void LocalStorage::LocalMerge(DataTable &table, RowGroupCollection &collection) 
 		}
 	}
 	storage.row_groups->MergeStorage(collection);
+	storage.merged_storage = true;
 }
 
 OptimisticDataWriter &LocalStorage::CreateOptimisticWriter(DataTable &table) {
@@ -424,10 +432,8 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 	if ((append_state.row_start == 0 || storage.row_groups->GetTotalRows() >= MERGE_THRESHOLD) &&
 	    storage.deleted_rows == 0) {
 		// table is currently empty OR we are bulk appending: move over the storage directly
-		// first we clear any remaining partially written blocks
-		// we don't force flush these to disk - that is because they might still be combined later on
-		// so force flushing the remaining partially empty blocks can waste space
-		storage.ClearBlocks();
+		// first flush any outstanding blocks
+		storage.FlushBlocks();
 		// now append to the indexes (if there are any)
 		// FIXME: we should be able to merge the transaction-local index directly into the main table index
 		// as long we just rewrite some row-ids

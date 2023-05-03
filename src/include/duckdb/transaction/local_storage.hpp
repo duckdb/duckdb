@@ -48,12 +48,14 @@ public:
 	OptimisticDataWriter optimistic_writer;
 	//! The set of all optimistic data writers associated with this table
 	vector<unique_ptr<OptimisticDataWriter>> optimistic_writers;
+	//! Whether or not storage was merged
+	bool merged_storage = false;
 
 public:
 	void InitializeScan(CollectionScanState &state, optional_ptr<TableFilterSet> table_filters = nullptr);
 	//! Write a new row group to disk (if possible)
 	void WriteNewRowGroup();
-	void ClearBlocks();
+	void FlushBlocks();
 	void Rollback();
 	idx_t EstimatedSize();
 
