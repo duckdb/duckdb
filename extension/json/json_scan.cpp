@@ -1,10 +1,10 @@
 #include "json_scan.hpp"
 
+#include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/common/multi_file_reader.hpp"
 
 namespace duckdb {
 
@@ -59,11 +59,15 @@ unique_ptr<FunctionData> JSONScanData::Bind(ClientContext &context, TableFunctio
 }
 
 void JSONScanData::InitializeFormats() {
+	InitializeFormats(auto_detect);
+}
+
+void JSONScanData::InitializeFormats(bool auto_detect_p) {
 	// Set defaults for date/timestamp formats if we need to
-	if (!auto_detect && date_format.empty()) {
+	if (!auto_detect_p && date_format.empty()) {
 		date_format = "%Y-%m-%d";
 	}
-	if (!auto_detect && timestamp_format.empty()) {
+	if (!auto_detect_p && timestamp_format.empty()) {
 		timestamp_format = "%Y-%m-%dT%H:%M:%S.%fZ";
 	}
 
@@ -75,7 +79,7 @@ void JSONScanData::InitializeFormats() {
 		date_format_map.AddFormat(LogicalTypeId::TIMESTAMP, timestamp_format);
 	}
 
-	if (auto_detect) {
+	if (auto_detect_p) {
 		static const unordered_map<LogicalTypeId, vector<const char *>, LogicalTypeIdHash> FORMAT_TEMPLATES = {
 		    {LogicalTypeId::DATE, {"%m-%d-%Y", "%m-%d-%y", "%d-%m-%Y", "%d-%m-%y", "%Y-%m-%d", "%y-%m-%d"}},
 		    {LogicalTypeId::TIMESTAMP,

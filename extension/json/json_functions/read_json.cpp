@@ -262,10 +262,12 @@ static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p,
 	}
 
 	if (!success) {
-		string hint = gstate.bind_data.auto_detect
-		                  ? "\nTry increasing 'sample_size', reducing 'maximum_depth', specifying 'columns' manually, "
-		                    "specifying 'lines' or 'json_format' manually, or setting 'ignore_errors' to true."
-		                  : "\n Try specifying 'lines' or 'json_format' manually, or setting 'ignore_errors' to true.";
+		string hint =
+		    gstate.bind_data.auto_detect
+		        ? "\nTry increasing 'sample_size', reducing 'maximum_depth', specifying 'columns', 'lines' or "
+		          "'json_format' manually, or setting 'ignore_errors' to true."
+		        : "\nTry setting 'auto_detect' to true, specifying 'lines' or 'json_format' manually, or setting "
+		          "'ignore_errors' to true.";
 		lstate.ThrowTransformError(lstate.transform_options.object_index,
 		                           lstate.transform_options.error_message + hint);
 	}

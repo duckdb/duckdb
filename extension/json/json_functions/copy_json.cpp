@@ -105,13 +105,11 @@ static duckdb::unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context,
 	if (it != info.options.end()) {
 		// Wrap this with auto detect true/false so we can detect date/timestamp formats
 		// Note that auto_detect for names/types is not actually true because these are already know when we COPY
-		bind_data->auto_detect = true;
-		bind_data->InitializeFormats();
-		bind_data->auto_detect = false;
-
+		bind_data->InitializeFormats(true);
 		bind_data->options.format = JSONFormat::AUTO_DETECT;
 		bind_data->record_type = JSONRecordType::AUTO;
 		JSONScan::AutoDetect(context, *bind_data, expected_types, expected_names);
+		bind_data->auto_detect = true;
 	} else {
 		bind_data->InitializeFormats();
 	}
